@@ -1,0 +1,110 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &1
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a5e6fedc2472449cead18ef23b5cb30d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.2D.Animation.Runtime::UnityEngine.U2D.Animation.SpriteLibrarySourceAsset
+  m_Library:
+  - m_Name: 01
+    m_Hash: 255927350
+    m_CategoryList: []
+    m_OverrideEntries:
+    - m_Name: Eyebrow_L_frowned
+      m_Hash: 113423793
+      m_Sprite: {fileID: 21300000, guid: dfdfceb4b84537b4eaa9e06aaab194d7, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 21300000, guid: dfdfceb4b84537b4eaa9e06aaab194d7, type: 3}
+    - m_Name: Eyebrow_L_normal
+      m_Hash: 665372995
+      m_Sprite: {fileID: 21300000, guid: 64da3537532b909439ea4864a5e1fd07, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 21300000, guid: 64da3537532b909439ea4864a5e1fd07, type: 3}
+    - m_Name: Eyebrow_L_raised
+      m_Hash: 396076560
+      m_Sprite: {fileID: 21300000, guid: baf9d0499bc32f44392ce0debaae23e5, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 21300000, guid: baf9d0499bc32f44392ce0debaae23e5, type: 3}
+    - m_Name: Eyebrow_L_worried
+      m_Hash: 314738186
+      m_Sprite: {fileID: 21300000, guid: 1a96c0c2f813d464a878ffd498c0bd9a, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 21300000, guid: 1a96c0c2f813d464a878ffd498c0bd9a, type: 3}
+    - m_Name: Eyebrow_R_frowned
+      m_Hash: 583019602
+      m_Sprite: {fileID: 21300000, guid: 4b2dbbe87fddb924da91cf44e1ec0361, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 21300000, guid: 4b2dbbe87fddb924da91cf44e1ec0361, type: 3}
+    - m_Name: Eyebrow_R_normal
+      m_Hash: 244968026
+      m_Sprite: {fileID: 21300000, guid: e9af3ba6086a35441bf1f2b606a18a40, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 21300000, guid: e9af3ba6086a35441bf1f2b606a18a40, type: 3}
+    - m_Name: Eyebrow_R_raised
+      m_Hash: 1051362569
+      m_Sprite: {fileID: 21300000, guid: e0fd7ea9bfb92484ca32a690861ba2ec, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 21300000, guid: e0fd7ea9bfb92484ca32a690861ba2ec, type: 3}
+    - m_Name: Eyebrow_R_worried
+      m_Hash: 918560745
+      m_Sprite: {fileID: 21300000, guid: abcd8020ca1368c419224fbfdb931c61, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 21300000, guid: abcd8020ca1368c419224fbfdb931c61, type: 3}
+    m_FromMain: 0
+    m_EntryOverrideCount: 8
+  - m_Name: 02
+    m_Hash: 373847436
+    m_CategoryList: []
+    m_OverrideEntries:
+    - m_Name: Eyebrow_L_frowned
+      m_Hash: 113423793
+      m_Sprite: {fileID: 21300000, guid: 9d790f21761054e4f90283274960791f, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 21300000, guid: 9d790f21761054e4f90283274960791f, type: 3}
+    - m_Name: Eyebrow_L_normal
+      m_Hash: 665372995
+      m_Sprite: {fileID: 21300000, guid: 8b37ed2ddb127174cae82ac26e440f03, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 21300000, guid: 8b37ed2ddb127174cae82ac26e440f03, type: 3}
+    - m_Name: Eyebrow_L_raised
+      m_Hash: 396076560
+      m_Sprite: {fileID: 21300000, guid: 5c96296e1caf3694eac2840a64f17202, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 21300000, guid: 5c96296e1caf3694eac2840a64f17202, type: 3}
+    - m_Name: Eyebrow_L_worried
+      m_Hash: 314738186
+      m_Sprite: {fileID: 21300000, guid: 4e151a990b3777c45af383132c7568d0, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 21300000, guid: 4e151a990b3777c45af383132c7568d0, type: 3}
+    - m_Name: Eyebrow_R_frowned
+      m_Hash: 583019602
+      m_Sprite: {fileID: 21300000, guid: d1478e286e9a5ff42a0a166b68342253, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 21300000, guid: d1478e286e9a5ff42a0a166b68342253, type: 3}
+    - m_Name: Eyebrow_R_normal
+      m_Hash: 244968026
+      m_Sprite: {fileID: 21300000, guid: 088c9d05ab4cfec4eb4539bb7bcf9631, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 21300000, guid: 088c9d05ab4cfec4eb4539bb7bcf9631, type: 3}
+    - m_Name: Eyebrow_R_raised
+      m_Hash: 1051362569
+      m_Sprite: {fileID: 21300000, guid: b0279d4ff03a8994eb7d8fea0c8e9850, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 21300000, guid: b0279d4ff03a8994eb7d8fea0c8e9850, type: 3}
+    - m_Name: Eyebrow_R_worried
+      m_Hash: 918560745
+      m_Sprite: {fileID: 21300000, guid: 007671e245b518c498063c9c3c9dd5a1, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 21300000, guid: 007671e245b518c498063c9c3c9dd5a1, type: 3}
+    m_FromMain: 0
+    m_EntryOverrideCount: 8
+  m_PrimaryLibraryGUID: 
+  m_ModificationHash: 639007331279031758
+  m_Version: 1

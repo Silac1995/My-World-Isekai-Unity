@@ -1,0 +1,36 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6a53a8ea7c34e4247a64da40d12f61ff, type: 3}
+  m_Name: Humanoid_Sprites_Libraries
+  m_EditorClassIdentifier: Assembly-CSharp::BaseSpritesLibrarySO
+  body_HairLibrary: {fileID: 7108339969198208228, guid: b323d30b8a5aa694586ff7bc0d3a3541, type: 3}
+  body_EyebrowsLibrary: {fileID: 7108339969198208228, guid: d03ff39d0aff54643a3c09995624484f, type: 3}
+  body_EyesLibrary: {fileID: 7108339969198208228, guid: 5a850aed14865ae46ae74755038792e5, type: 3}
+  body_FaceLibrary: {fileID: 7108339969198208228, guid: 72cdab0b53493f24283ca6cfc9ec1094, type: 3}
+  body_NoseLibrary: {fileID: 7108339969198208228, guid: 2cd5769c6d1d70b489095919b417be3b, type: 3}
+  body_MouthLibrary: {fileID: 7108339969198208228, guid: b961951dfa7fd4549934b9e722eef809, type: 3}
+  body_EarsLibrary: {fileID: 7108339969198208228, guid: 181e823f07e35e74ca2bf31b3486aeff, type: 3}
+  body_FeetLibrary: {fileID: 7108339969198208228, guid: c7818c3536d715b498f9aab5fd0ea910, type: 3}
+  body_HandsLibrary: {fileID: 7108339969198208228, guid: a8d14df8ad04d6c4ea89caaee84d18f0, type: 3}
+  body_ChestLibrary: {fileID: 7108339969198208228, guid: 2f17cd18b2ab24f4b9af32a1c876f610, type: 3}
+  underwear_UpperLibrary: {fileID: 0}
+  underwear_LowerLibrary: {fileID: 0}
+  clothing_HatLibrary: {fileID: 0}
+  clothing_UpperLibrary: {fileID: 7108339969198208228, guid: 48f02b820b1ea544d858945ff32a59bc, type: 3}
+  clothing_LowerLibrary: {fileID: 0}
+  clothing_GlovesLibrary: {fileID: 0}
+  clothing_ShoesLibrary: {fileID: 0}
+  armor_HeadLibrary: {fileID: 0}
+  armor_UpperLibrary: {fileID: 0}
+  armor_LowerLibrary: {fileID: 0}
+  armor_GlovesLibrary: {fileID: 0}
+  armor_BootsLibrary: {fileID: 0}

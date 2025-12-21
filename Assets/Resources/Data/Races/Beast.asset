@@ -1,0 +1,22 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e7c5b95f215d44248bcce89ad7d2f873, type: 3}
+  m_Name: Beast
+  m_EditorClassIdentifier: Assembly-CSharp::RaceSO
+  raceName: Beast
+  bonusHealth: 50
+  bonusSpeed: 10
+  character_prefabs:
+  - {fileID: 5456933137695734175, guid: 7b374d387037c9647bef899d050bac5c, type: 3}
+  - {fileID: 5722855078630121073, guid: 0ac29b0de8149704287ff029d3a05e46, type: 3}
+  characterVisualPresets:
+  - {fileID: 11400000, guid: 49106f1462f17c841a95c08c06b41d68, type: 2}

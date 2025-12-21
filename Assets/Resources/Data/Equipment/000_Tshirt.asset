@@ -1,0 +1,45 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e39e8124bd1794948b3f5b3d0ffdb147, type: 3}
+  m_Name: 000_Tshirt
+  m_EditorClassIdentifier: Assembly-CSharp::EquipmentSO
+  armor:
+    baseValue: 50
+    currentValue: 0
+  health:
+    baseValue: 300
+    currentValue: 0
+  stamina:
+    baseValue: 0
+    currentValue: 0
+  mana:
+    baseValue: 0
+    currentValue: 0
+  initiative:
+    baseValue: 0
+    currentValue: 0
+  strength:
+    baseValue: 0
+    currentValue: 0
+  agility:
+    baseValue: 0
+    currentValue: 0
+  dexterity:
+    baseValue: 0
+    currentValue: 0
+  intelligence:
+    baseValue: 0
+    currentValue: 0
+  endurance:
+    baseValue: 0
+    currentValue: 0
+  category_name: 01_tshirt

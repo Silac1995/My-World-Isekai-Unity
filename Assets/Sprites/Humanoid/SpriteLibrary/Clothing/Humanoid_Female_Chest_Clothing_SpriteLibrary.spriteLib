@@ -1,0 +1,54 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &1
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a5e6fedc2472449cead18ef23b5cb30d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.2D.Animation.Runtime::UnityEngine.U2D.Animation.SpriteLibrarySourceAsset
+  m_Library:
+  - m_Name: 01_tshirt
+    m_Hash: 167135771
+    m_CategoryList: []
+    m_OverrideEntries:
+    - m_Name: Torso
+      m_Hash: 647926657
+      m_Sprite: {fileID: 21300000, guid: 3958634f7cebd144a87f47d80238e89c, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 21300000, guid: 3958634f7cebd144a87f47d80238e89c, type: 3}
+    - m_Name: Torso_behind
+      m_Hash: 1016847961
+      m_Sprite: {fileID: 21300000, guid: 0e12ca9ae345c7d45bd632b8b642736b, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 21300000, guid: 0e12ca9ae345c7d45bd632b8b642736b, type: 3}
+    - m_Name: Upperarm_L
+      m_Hash: 402823694
+      m_Sprite: {fileID: 21300000, guid: 6fa73feaebc12f34486f7613ba981dc2, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 21300000, guid: 6fa73feaebc12f34486f7613ba981dc2, type: 3}
+    - m_Name: Upperarm_R
+      m_Hash: 571320173
+      m_Sprite: {fileID: 21300000, guid: 3b5182b0d82dc514da94b41fdc298a08, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 21300000, guid: 3b5182b0d82dc514da94b41fdc298a08, type: 3}
+    - m_Name: Breast_large_L
+      m_Hash: 273702668
+      m_Sprite: {fileID: 21300000, guid: 80ed2701c77000c43a879febaf03bd5d, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 21300000, guid: 80ed2701c77000c43a879febaf03bd5d, type: 3}
+    - m_Name: Breast_large_R
+      m_Hash: 710894191
+      m_Sprite: {fileID: 21300000, guid: 5ff3f2e82b10cf54a97b2924d92f56aa, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 21300000, guid: 5ff3f2e82b10cf54a97b2924d92f56aa, type: 3}
+    m_FromMain: 0
+    m_EntryOverrideCount: 6
+  m_PrimaryLibraryGUID: 
+  m_ModificationHash: 639007385364139552
+  m_Version: 1

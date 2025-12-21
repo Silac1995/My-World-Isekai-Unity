@@ -1,0 +1,104 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &1
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a5e6fedc2472449cead18ef23b5cb30d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.2D.Animation.Runtime::UnityEngine.U2D.Animation.SpriteLibrarySourceAsset
+  m_Library:
+  - m_Name: 01_female_small
+    m_Hash: 449805727
+    m_CategoryList: []
+    m_OverrideEntries:
+    - m_Name: Breast_L
+      m_Hash: 557684785
+      m_Sprite: {fileID: 21300000, guid: 5a0fb75e5647c7b40a35a5cc7cec4a29, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 21300000, guid: 5a0fb75e5647c7b40a35a5cc7cec4a29, type: 3}
+    - m_Name: Breast_R
+      m_Hash: 456303954
+      m_Sprite: {fileID: 21300000, guid: 81f2a7375e9fb5f48962c39c60eeee05, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 21300000, guid: 81f2a7375e9fb5f48962c39c60eeee05, type: 3}
+    m_FromMain: 0
+    m_EntryOverrideCount: 2
+  - m_Name: 02_female_medium
+    m_Hash: 871328338
+    m_CategoryList: []
+    m_OverrideEntries:
+    - m_Name: Breast_L
+      m_Hash: 557684785
+      m_Sprite: {fileID: 21300000, guid: 5fcde444b553fc246949eee45cf45a33, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 21300000, guid: 5fcde444b553fc246949eee45cf45a33, type: 3}
+    - m_Name: Breast_R
+      m_Hash: 456303954
+      m_Sprite: {fileID: 21300000, guid: 0b2e44cf844e27a4791b072eb7a7f374, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 21300000, guid: 0b2e44cf844e27a4791b072eb7a7f374, type: 3}
+    m_FromMain: 0
+    m_EntryOverrideCount: 2
+  - m_Name: 03_female_large
+    m_Hash: 395279007
+    m_CategoryList: []
+    m_OverrideEntries:
+    - m_Name: Breast_L
+      m_Hash: 557684785
+      m_Sprite: {fileID: 21300000, guid: 4adca3b5cca852b40bdf9e91dc4ec291, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 21300000, guid: 4adca3b5cca852b40bdf9e91dc4ec291, type: 3}
+    - m_Name: Breast_R
+      m_Hash: 456303954
+      m_Sprite: {fileID: 21300000, guid: 9ca25015207f10b468dc2abc680fd422, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 21300000, guid: 9ca25015207f10b468dc2abc680fd422, type: 3}
+    m_FromMain: 0
+    m_EntryOverrideCount: 2
+  - m_Name: 04_female_large
+    m_Hash: 843239519
+    m_CategoryList: []
+    m_OverrideEntries:
+    - m_Name: Breast_L
+      m_Hash: 557684785
+      m_Sprite: {fileID: 21300000, guid: c3ccb3894eb85b4449163980d0723cc7, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 21300000, guid: c3ccb3894eb85b4449163980d0723cc7, type: 3}
+    - m_Name: Breast_R
+      m_Hash: 456303954
+      m_Sprite: {fileID: 21300000, guid: 90f897801faad8b4bba48f26616e3748, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 21300000, guid: 90f897801faad8b4bba48f26616e3748, type: 3}
+    m_FromMain: 0
+    m_EntryOverrideCount: 2
+  - m_Name: 05_female_anna
+    m_Hash: 1046639202
+    m_CategoryList: []
+    m_OverrideEntries:
+    - m_Name: Breast_L
+      m_Hash: 557684785
+      m_Sprite: {fileID: 21300000, guid: 080f29d9e528b2342915ed442a778642, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 21300000, guid: 080f29d9e528b2342915ed442a778642, type: 3}
+    - m_Name: Breast_R
+      m_Hash: 456303954
+      m_Sprite: {fileID: 21300000, guid: 0e32f1d84c045014f8921683f4e0e8ed, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 21300000, guid: 0e32f1d84c045014f8921683f4e0e8ed, type: 3}
+    m_FromMain: 0
+    m_EntryOverrideCount: 2
+  - m_Name: 01_male
+    m_Hash: 883149195
+    m_CategoryList: []
+    m_OverrideEntries: []
+    m_FromMain: 0
+    m_EntryOverrideCount: 0
+  m_PrimaryLibraryGUID: 
+  m_ModificationHash: 639007413071719949
+  m_Version: 1
