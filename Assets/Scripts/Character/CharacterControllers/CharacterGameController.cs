@@ -5,9 +5,9 @@ public abstract class CharacterGameController : MonoBehaviour
 {
     [SerializeField] protected CharacterVisual characterVisual;
 
-    protected Character character;
-    protected Animator animator;
-    protected NavMeshAgent agent;
+    [SerializeField] protected Character character;
+    [SerializeField] protected Animator animator;
+    [SerializeField] protected NavMeshAgent agent;
 
     // IA
     protected IAIBehaviour currentBehaviour;
@@ -25,17 +25,10 @@ public abstract class CharacterGameController : MonoBehaviour
         if (agent == null)
             agent = gameObject.AddComponent<NavMeshAgent>();
 
-        InitializeAnimator();
+        if (!character.IsAlive())
+            enabled = false;
 
-        //if (!character.IsAlive())
-        //    enabled = false;
-    }
-
-    public void InitializeAnimator()
-    {
-        animator = GetComponentInChildren<Animator>();
-        if (animator == null)
-            Debug.LogWarning("Animator introuvable !");
+        agent.speed = character != null ? character.MovementSpeed : 3.5f;
     }
 
     // Tout le monde appelle Move à chaque frame
@@ -80,6 +73,7 @@ public abstract class CharacterGameController : MonoBehaviour
 
     public void SetBehaviour(IAIBehaviour behaviour)
     {
+        Debug.Log($"SetBehaviour");
         currentBehaviour = behaviour;
     }
 }

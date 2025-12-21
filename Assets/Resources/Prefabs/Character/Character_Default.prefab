@@ -16,6 +16,7 @@ GameObject:
   - component: {fileID: 2677209831397210094}
   - component: {fileID: 4447047040555525631}
   - component: {fileID: 7849920087381694904}
+  - component: {fileID: 3369343900060323110}
   - component: {fileID: 8530357501166543435}
   - component: {fileID: 4916404909723457133}
   m_Layer: 0
@@ -130,48 +131,81 @@ MonoBehaviour:
   character: {fileID: 2536622428659117900}
   equipment: {fileID: 8408755073701722020}
   health:
-    rid: -2
+    baseValue: 0
+    currentValue: 0
+    currentAmount: 0
   stamina:
-    rid: -2
+    baseValue: 0
+    currentValue: 0
+    currentAmount: 0
   mana:
-    rid: -2
+    baseValue: 0
+    currentValue: 0
+    currentAmount: 0
   initiative:
-    rid: -2
+    baseValue: 0
+    currentValue: 0
+    currentAmount: 0
   strength:
-    rid: -2
+    baseValue: 0
+    currentValue: 0
+    maxValue: 0
   agility:
-    rid: -2
+    baseValue: 0
+    currentValue: 0
+    maxValue: 0
   dexterity:
-    rid: -2
+    baseValue: 0
+    currentValue: 0
+    maxValue: 0
   intelligence:
-    rid: -2
+    baseValue: 0
+    currentValue: 0
+    maxValue: 0
   endurance:
-    rid: -2
+    baseValue: 0
+    currentValue: 0
+    maxValue: 0
   physicalPower:
-    rid: -2
+    baseValue: 0
+    currentValue: 0
+    minValue: 0
   speed:
-    rid: -2
+    baseValue: 0
+    currentValue: 0
+    minValue: 0
   dodgeChance:
-    rid: -2
+    baseValue: 0
+    currentValue: 0
+    minValue: 0
   accuracy:
-    rid: -2
+    baseValue: 0
+    currentValue: 0
+    minValue: 0
   castingSpeed:
-    rid: -2
+    baseValue: 0
+    currentValue: 0
+    minValue: 0
   magicalPower:
-    rid: -2
+    baseValue: 0
+    currentValue: 0
+    minValue: 0
   manaRegenRate:
-    rid: -2
+    baseValue: 0
+    currentValue: 0
+    minValue: 0
   staminaRegenRate:
-    rid: -2
+    baseValue: 0
+    currentValue: 0
+    minValue: 0
   criticalHitChance:
-    rid: -2
+    baseValue: 0
+    currentValue: 0
+    minValue: 0
   moveSpeed:
-    rid: -2
-  references:
-    version: 2
-    RefIds:
-    - rid: -2
-      type: {class: , ns: , asm: }
+    baseValue: 0
+    currentValue: 0
+    minValue: 0
 --- !u!114 &2677209831397210094
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -219,6 +253,20 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4e9985bd37d700a44b4c020ab481c469, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerInteractionDetector
+  selfCharacter: {fileID: 2536622428659117900}
+--- !u!114 &3369343900060323110
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4281310202761960642}
+  m_Enabled: 0
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f58d4bac4d1004c4fbd0ab52a3cded27, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NPCInteractionDetector
+  selfCharacter: {fileID: 2536622428659117900}
 --- !u!114 &8530357501166543435
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -232,6 +280,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NPCController
   characterVisual: {fileID: 4467461276411840628}
+  character: {fileID: 2536622428659117900}
+  animator: {fileID: 0}
+  agent: {fileID: 4447047040555525631}
   walkRadius: 50
   minWaitTime: 0.5
   maxWaitTime: 3
@@ -248,6 +299,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerController
   characterVisual: {fileID: 4467461276411840628}
+  character: {fileID: 2536622428659117900}
+  animator: {fileID: 0}
+  agent: {fileID: 4447047040555525631}
   rotationSpeed: 10
 --- !u!1 &5246753746272467509
 GameObject:
@@ -413,6 +467,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 6179432398992828966}
     m_Modifications:
+    - target: {fileID: 166918518228373884, guid: 7811fb49a5ed47d46aa18885225e4434, type: 3}
+      propertyPath: character
+      value: 
+      objectReference: {fileID: 2536622428659117900}
     - target: {fileID: 577104256496347909, guid: 7811fb49a5ed47d46aa18885225e4434, type: 3}
       propertyPath: m_SizeDelta.x
       value: 193.812
@@ -581,10 +639,22 @@ PrefabInstance:
       propertyPath: m_AnchorMax.y
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 6920854313842129804, guid: 7811fb49a5ed47d46aa18885225e4434, type: 3}
+      propertyPath: character
+      value: 
+      objectReference: {fileID: 2536622428659117900}
     - target: {fileID: 6980098281728119678, guid: 7811fb49a5ed47d46aa18885225e4434, type: 3}
       propertyPath: m_Name
       value: CharacterUI_prefab
       objectReference: {fileID: 0}
+    - target: {fileID: 7395728883728697911, guid: 7811fb49a5ed47d46aa18885225e4434, type: 3}
+      propertyPath: character
+      value: 
+      objectReference: {fileID: 2536622428659117900}
+    - target: {fileID: 7749525115659672319, guid: 7811fb49a5ed47d46aa18885225e4434, type: 3}
+      propertyPath: character
+      value: 
+      objectReference: {fileID: 2536622428659117900}
     - target: {fileID: 8205807418570391399, guid: 7811fb49a5ed47d46aa18885225e4434, type: 3}
       propertyPath: m_AnchorMax.y
       value: 0
@@ -737,6 +807,10 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 9136434367137043347, guid: e6c547ea9c2f5a14783afa3d58700597, type: 3}
+      propertyPath: character
+      value: 
+      objectReference: {fileID: 2536622428659117900}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []

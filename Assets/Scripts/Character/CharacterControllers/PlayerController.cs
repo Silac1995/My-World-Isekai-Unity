@@ -8,7 +8,6 @@ public class PlayerController : CharacterGameController
 
     private void Awake()
     {
-        Initialize();
 
         if (animator != null)
             animator.updateMode = AnimatorUpdateMode.Fixed;

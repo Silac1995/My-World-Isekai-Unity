@@ -1,40 +1,47 @@
 using System;
 using System.Collections.Generic;
+using Unity.VisualScripting.Antlr3.Runtime.Misc;
 using UnityEngine;
 
 [System.Serializable]
 public class CharacterStats : MonoBehaviour
 {
+    [Header("References")]
     [SerializeField] private Character character;
     [SerializeField] private CharacterEquipment equipment;
 
-    // === Primary Stats ===
-    [SerializeReference] private CharacterHealth health;
-    [SerializeReference] private CharacterStamina stamina;
-    [SerializeReference] private CharacterMana mana;
-    [SerializeReference] private CharacterInitiative initiative;
+    [Space(10)]
+    [Header("Primary Stats")]
+    [SerializeField] private CharacterHealth health;
+    [SerializeField] private CharacterStamina stamina;
+    [SerializeField] private CharacterMana mana;
+    [SerializeField] private CharacterInitiative initiative;
 
-    // === Secondary Stats ===
-    [SerializeReference] private CharacterStrength strength;
-    [SerializeReference] private CharacterAgility agility;
-    [SerializeReference] private CharacterDexterity dexterity;
-    [SerializeReference] private CharacterIntelligence intelligence;
-    [SerializeReference] private CharacterEndurance endurance;
+    [Space(10)]
+    [Header("Secondary Stats")]
+    [SerializeField] private CharacterStrength strength;
+    [SerializeField] private CharacterAgility agility;
+    [SerializeField] private CharacterDexterity dexterity;
+    [SerializeField] private CharacterIntelligence intelligence;
+    [SerializeField] private CharacterEndurance endurance;
 
-    // === Tertiary Stats ===
-    [SerializeReference] private PhysicalPower physicalPower;
-    [SerializeReference] private Speed speed;
-    [SerializeReference] private DodgeChance dodgeChance;
-    [SerializeReference] private Accuracy accuracy;
-    [SerializeReference] private CastingSpeed castingSpeed;
-    [SerializeReference] private MagicalPower magicalPower;
-    [SerializeReference] private ManaRegenRate manaRegenRate;
-    [SerializeReference] private StaminaRegenRate staminaRegenRate;
-    [SerializeReference] private CriticalHitChance criticalHitChance;
-    [SerializeReference] private MoveSpeed moveSpeed;
+    [Space(10)]
+    [Header("Tertiary Stats")]
+    [SerializeField] private PhysicalPower physicalPower;
+    [SerializeField] private Speed speed;
+    [SerializeField] private DodgeChance dodgeChance;
+    [SerializeField] private Accuracy accuracy;
+    [SerializeField] private CastingSpeed castingSpeed;
+    [SerializeField] private MagicalPower magicalPower;
+    [SerializeField] private ManaRegenRate manaRegenRate;
+    [SerializeField] private StaminaRegenRate staminaRegenRate;
+    [SerializeField] private CriticalHitChance criticalHitChance;
+    [SerializeField] private MoveSpeed moveSpeed;
 
-    // === Status Effects ===
+    [Space(10)]
+    [Header("Status Effects")]
     [SerializeReference] private List<CharacterStatusEffectInstance> characterStatusEffectInstance = new();
+
 
     // === Getters publics ===
 
@@ -64,47 +71,56 @@ public class CharacterStats : MonoBehaviour
 
     public List<CharacterStatusEffectInstance> CharacterStatusEffectInstance => characterStatusEffectInstance;
 
-    // === Constructeur ===
-    public CharacterStats(
-        Character character,
-        float health = 1,
-        float mana = 1,
-        float stamina = 1,
-        float initiative = 1,
-        float strength = 1,
-        float agility = 1,
-        float dexterity = 1,
-        float intelligence = 1,
-        float endurance = 1
-    )
+    private void Awake()
     {
-        this.character = character;
+        CreateStats();
+        RecalculateTertiaryStats();
+    }
 
+    private void CreateStats()
+    {
         // Primary
-        this.health = new CharacterHealth(this, health);
-        this.mana = new CharacterMana(this, mana);
-        this.stamina = new CharacterStamina(this, stamina);
-        this.initiative = new CharacterInitiative(this, initiative);
+        health = new CharacterHealth(this, 1f);
+        mana = new CharacterMana(this, 1f);
+        stamina = new CharacterStamina(this, 1f);
+        initiative = new CharacterInitiative(this, 1f);
 
         // Secondary
-        this.strength = new CharacterStrength(this, strength);
-        this.agility = new CharacterAgility(this, agility);
-        this.dexterity = new CharacterDexterity(this, dexterity);
-        this.intelligence = new CharacterIntelligence(this, intelligence);
-        this.endurance = new CharacterEndurance(this, endurance);
+        strength = new CharacterStrength(this, 1f);
+        agility = new CharacterAgility(this, 1f);
+        dexterity = new CharacterDexterity(this, 1f);
+        intelligence = new CharacterIntelligence(this, 1f);
+        endurance = new CharacterEndurance(this, 1f);
 
-        // Tertiary
-        this.physicalPower = new PhysicalPower(this, 0f);
-        this.speed = new Speed(this, 0f);
-        this.dodgeChance = new DodgeChance(this, 0f);
-        this.accuracy = new Accuracy(this, 0f);
-        this.castingSpeed = new CastingSpeed(this, 0f);
-        this.magicalPower = new MagicalPower(this, 0f);
-        this.manaRegenRate = new ManaRegenRate(this, 0f);
-        this.staminaRegenRate = new StaminaRegenRate(this, 0f);
-        this.criticalHitChance = new CriticalHitChance(this, 0f);
-        this.moveSpeed = new MoveSpeed(this);
+        // Tertiary (toujours dérivées)
+        physicalPower = new PhysicalPower(this);
+        speed = new Speed(this);
+        dodgeChance = new DodgeChance(this);
+        accuracy = new Accuracy(this);
+        castingSpeed = new CastingSpeed(this);
+        magicalPower = new MagicalPower(this);
+        manaRegenRate = new ManaRegenRate(this);
+        staminaRegenRate = new StaminaRegenRate(this);
+        criticalHitChance = new CriticalHitChance(this);
+        moveSpeed = new MoveSpeed(this, 1f);
     }
+
+    public void InitializeStats(float health, float mana, float strength, float agility)
+    {
+
+        // Primary
+        Health.SetBaseValue(health);
+        Mana.SetBaseValue(mana);
+
+        // Secondary
+        Strength.SetBaseValue(strength);
+        Agility.SetBaseValue(agility);
+
+        // Recalcul des stats dérivées
+        RecalculateTertiaryStats();
+    }
+
+
 
     public void AddCharacterStatusEffects(CharacterStatusEffectInstance effect)
     {

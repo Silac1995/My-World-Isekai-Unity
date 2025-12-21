@@ -3,7 +3,7 @@ using UnityEngine;
 [System.Serializable]
 public abstract class CharacterPrimaryStats : CharacterBaseStats
 {
-    protected float currentAmount; // Valeur actuelle de la stat (ex : PV restants)
+    [SerializeField] protected float currentAmount; // Valeur actuelle de la stat (ex : PV restants)
 
     public float MaxValue => CurrentValue;
 

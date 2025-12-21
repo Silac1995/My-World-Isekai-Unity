@@ -31,30 +31,9 @@ public class SpawnManager : MonoBehaviour
 
     public Character SpawnCharacter(Vector3 pos, float health, float mana, float str, float agi, RaceSO race, GameObject visualPrefab, bool isPlayer)
     {
-        if (Instance == null)
-        {
-            Debug.LogError("SpawnManager.Instance est null. Assure-toi que le SpawnManager est initialisé avant d'appeler SpawnCharacter.", this);
-            return null;
-        }
-
-        if (race == null)
-        {
-            Debug.LogError("RaceData est null. Fournis une RaceData valide.", this);
-            return null;
-        }
-        if (visualPrefab == null)
-        {
-            Debug.LogError("visualPrefab est null. Fournis un prefab visuel valide.", this);
-            return null;
-        }
 
         // Utiliser spawnGameObject.transform.position si pos est (0, 0, 0) et spawnGameObject est assigné
         Vector3 spawnPos = pos == Vector3.zero && spawnGameObject != null ? spawnGameObject.transform.position : pos;
-        if (spawnPos == Vector3.zero)
-        {
-            Debug.LogWarning("Position de spawn est (0, 0, 0). Vérifie la valeur de pos ou spawnGameObject.", this);
-        }
-        Debug.Log($"Instantiation du personnage à la position : {spawnPos}", this);
 
         GameObject characterPrefabObj = Instantiate(visualPrefab, spawnPos, Quaternion.identity);
         if (characterPrefabObj == null)
@@ -73,21 +52,6 @@ public class SpawnManager : MonoBehaviour
 
         // Vérifier la position après instantiation
         Debug.Log($"Position après instantiation : {characterPrefabObj.transform.position}", this);
-
-        // Configurer CharacterInteractable sur l'enfant
-        CharacterInteractable interactable = characterPrefabObj.GetComponentInChildren<CharacterInteractable>();
-        if (interactable != null)
-        {
-            if (interactable.Character == null)
-            {
-                interactable.Character = character;
-                Debug.Log($"Assignation du composant Character à CharacterInteractable sur {characterPrefabObj.name}.", this);
-            }
-        }
-        else
-        {
-            Debug.LogWarning($"Aucun CharacterInteractable trouvé sur les enfants de {characterPrefabObj.name}.", this);
-        }
 
         if (!SetupInteractionDetector(characterPrefabObj, isPlayer))
         {
@@ -139,64 +103,30 @@ public class SpawnManager : MonoBehaviour
             return false;
         }
 
+        Character character = obj.GetComponent<Character>();
+        if (character == null)
+        {
+            Debug.LogError("Le composant Character est manquant.", this);
+            return false;
+        }
+
         if (isPlayer)
         {
-            PlayerController controller = obj.AddComponent<PlayerController>();
-            if (controller == null)
-            {
-                Debug.LogError("Échec de l'ajout du composant PlayerController.", this);
-                return false;
-            }
-
-            PlayerInteractionDetector detector = obj.GetComponent<PlayerInteractionDetector>() ?? obj.AddComponent<PlayerInteractionDetector>();
-            if (detector == null)
-            {
-                Debug.LogError("Échec de l'ajout du composant PlayerInteractionDetector.", this);
-                return false;
-            }
-
+            character.SwitchToPlayer();
         }
         else
         {
-            NPCController controller = obj.GetComponent<NPCController>();
-            if (controller == null)
-            {
-                Debug.LogError("Échec de l'ajout du composant NPCController.", this);
-                return false;
-            }
-
-            NPCInteractionDetector detector = obj.GetComponent<NPCInteractionDetector>() ?? obj.AddComponent<NPCInteractionDetector>();
-            if (detector == null)
-            {
-                Debug.LogError("Échec de l'ajout du composant NPCInteractionDetector.", this);
-                return false;
-            }
+            character.SwitchToNPC();
         }
 
         return true;
     }
 
+
     private bool InitializeCharacter(GameObject obj, RaceSO race, GameObject visualPrefab, float health, float mana, float str, float agi)
     {
-        if (obj == null)
-        {
-            Debug.LogError("L'objet passé à InitializeCharacter est null.", this);
-            return false;
-        }
-
         Character character = obj.GetComponent<Character>();
-        if (character == null)
-        {
-            Debug.LogError("Le composant Character est manquant sur le characterPrefab.", this);
-            return false;
-        }
-        // Trouver l'enfant nommé "Visual" et l'assigner à visualRoot
         Transform visual = obj.transform.Find("Visual");
-        if (visual == null)
-        {
-            Debug.LogError("Aucun Transform nommé 'Visual' trouvé comme enfant du prefab. Assignation impossible.", this);
-            return false;
-        }
 
         character.AssignVisualRoot(visual);
         Debug.Log(character.VisualRoot, this);
@@ -207,8 +137,6 @@ public class SpawnManager : MonoBehaviour
             Debug.Log($"Position après InitializeStats : {obj.transform.position}", this);
             character.InitializeAll();
             Debug.Log($"Position après InitializeAll : {obj.transform.position}", this);
-            character.InitializeAnimator();
-            Debug.Log($"Position après InitializeAnimator : {obj.transform.position}", this);
             character.InitializeSpriteRenderers();
             Debug.Log($"Position après InitializeSpriteRenderers : {obj.transform.position}", this);
             character.CharacterVisual.BodyPartsController.EyesController.Initialize();

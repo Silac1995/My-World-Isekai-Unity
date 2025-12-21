@@ -6,7 +6,7 @@ public class StatBar : MonoBehaviour, ICharacterUIElement
     [SerializeField] private Slider bar;
     public Slider Bar => bar;
 
-    private Character character;
+    [SerializeField] private Character character;
     public Character Character => character;
 
     private System.Func<float> getCurrentValue;
@@ -14,8 +14,6 @@ public class StatBar : MonoBehaviour, ICharacterUIElement
 
     public void Initialize(Character character)
     {
-        this.character = character;
-
         // Définit les fonctions selon le type de barre
         switch (gameObject.name.ToLower())
         {

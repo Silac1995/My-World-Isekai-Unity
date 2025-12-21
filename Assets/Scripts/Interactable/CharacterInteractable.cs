@@ -2,14 +2,12 @@ using UnityEngine;
 
 public class CharacterInteractable : InteractableObject
 {
-    [SerializeField] private Character character; //self character
-    public Character Character { get; set; }
+    [SerializeField] private Character character;
 
-    public void Awake()
-    {
-        character = GetComponentInParent<Character>();
-    }
+    public Character Character => character;
+
     public override void Interact()
     {
+        // Interaction avec ce Character
     }
 }

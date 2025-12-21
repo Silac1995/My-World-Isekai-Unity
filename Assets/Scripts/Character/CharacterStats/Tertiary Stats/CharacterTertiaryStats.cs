@@ -3,9 +3,9 @@ using UnityEngine;
 [System.Serializable]
 public abstract class CharacterTertiaryStats : CharacterBaseStats
 {
-    private float minValue = 1f;
+    [SerializeField] private float minValue = 1f;
 
-    protected CharacterTertiaryStats(CharacterStats characterStats, float baseValue = 0f)
+    protected CharacterTertiaryStats(CharacterStats characterStats, float baseValue = 1f)
         : base(characterStats, baseValue)
     {
         currentValue = Mathf.Max(baseValue, minValue);

@@ -62,6 +62,11 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 8054544555105576412, guid: bd7cd42284a491e438bbb3eac46cfca5, type: 3}
   m_PrefabInstance: {fileID: 6792298818119435430}
   m_PrefabAsset: {fileID: 0}
+--- !u!95 &5365839274522062071 stripped
+Animator:
+  m_CorrespondingSourceObject: {fileID: 1455891580143183953, guid: bd7cd42284a491e438bbb3eac46cfca5, type: 3}
+  m_PrefabInstance: {fileID: 6792298818119435430}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1001 &8129189969094288733
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -86,6 +91,10 @@ PrefabInstance:
       propertyPath: spritesLibrary
       value: 
       objectReference: {fileID: 11400000, guid: 936522298b89d6046a9e1b3f3b22f868, type: 2}
+    - target: {fileID: 4916404909723457133, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
+      propertyPath: animator
+      value: 
+      objectReference: {fileID: 5365839274522062071}
     - target: {fileID: 6179432398992828966, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0
@@ -142,6 +151,10 @@ PrefabInstance:
       propertyPath: m_AnchorMax.y
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 8530357501166543435, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
+      propertyPath: animator
+      value: 
+      objectReference: {fileID: 5365839274522062071}
     - target: {fileID: 9197436005975429803, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       propertyPath: m_AnchorMax.y
       value: 0

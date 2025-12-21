@@ -5,7 +5,7 @@ using System.Linq;
 public class PlayerInteractionDetector : CharacterInteractionDetector
 {
     private GameObject interactionPromptPrefab;
-    private List<InteractableObject> nearbyInteractables = new List<InteractableObject>();
+    [SerializeField] private List<InteractableObject> nearbyInteractables = new List<InteractableObject>();
     private GameObject currentPromptUI;
 
     protected override void Awake()
@@ -22,15 +22,16 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
 
         if (Input.GetKeyDown(KeyCode.E) && currentTarget != null)
         {
+            Debug.Log($"Interaction avec {currentTarget}.", this);
             try
             {
                 if (currentTarget.TryGetComponent(out CharacterInteractable characterInteractable))
                 {
-                    if (characterInteractable.Character == null)
-                    {
-                        Debug.LogWarning($"CharacterInteractable sur {currentTarget.name} a un champ 'character' null.", this);
-                        return;
-                    }
+                    //if (characterInteractable.Character == null)
+                    //{
+                    //    Debug.LogWarning($"CharacterInteractable sur {currentTarget.name} a un champ 'character' null.", this);
+                    //    return;
+                    //}
                     currentTarget.Interact();
                     Character.CharacterInteraction.PerformInteraction(new InteractionAskToFollow(), characterInteractable.Character);
                     Debug.Log($"Interaction avec {characterInteractable.Character.name}.", this);

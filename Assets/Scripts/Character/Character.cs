@@ -83,29 +83,19 @@ public class Character : MonoBehaviour
 
     public void InitializeAll()
     {
-        if (controller == null)
-        {
-            controller = GetComponent<CharacterGameController>() ?? gameObject.AddComponent<CharacterGameController>();
-        }
-        controller.Initialize();
         AdjustCapsuleCollider();
     }
 
     public void InitializeStats(float health, float mana, float strength, float agility)
     {
-        stats = new CharacterStats(this, health, mana, strength, agility);
+        stats.InitializeStats(health, mana, strength, agility);
     }
 
     public void InitializeRace(RaceSO raceData)
     {
         race = raceData ?? throw new System.ArgumentNullException(nameof(raceData));
         Stats.MoveSpeed.IncreaseBaseValue(race.bonusSpeed);
-    }
-
-    public void InitializeAnimator()
-    {
-        if (controller != null)
-            controller.InitializeAnimator();
+        controller.Initialize();
     }
 
     public void InitializeSpriteRenderers()
@@ -153,15 +143,6 @@ public class Character : MonoBehaviour
     }
 
     public bool IsPlayer() => controller is PlayerController;
-
-    public void SetController<T>() where T : CharacterGameController
-    {
-        if (controller != null)
-            Destroy(controller);
-
-        controller = gameObject.AddComponent<T>();
-        controller.Initialize();
-    }
 
     public virtual void Die()
     {
@@ -213,7 +194,6 @@ public class Character : MonoBehaviour
 
     public bool IsAlive()
     {
-        if (Stats.Health.CurrentAmount <= 0) return false;
         return true;
     }
 
@@ -285,66 +265,78 @@ public class Character : MonoBehaviour
     // switch to npc/player
     public void SwitchToPlayerController()
     {
-        // Désactive le NPCController s'il existe
+        // Désactive le NPCController
         NPCController npcCtrl = GetComponent<NPCController>();
         if (npcCtrl != null)
         {
             npcCtrl.enabled = false;
         }
 
-        // Désactive NavMeshAgent (IA) si présent
+        // Désactive NavMeshAgent
         NavMeshAgent agent = GetComponent<NavMeshAgent>();
         if (agent != null)
         {
             agent.enabled = false;
         }
 
-        // Active le PlayerController s'il existe
+        // Active le PlayerController
         PlayerController playerCtrl = GetComponent<PlayerController>();
         if (playerCtrl != null)
         {
             playerCtrl.enabled = true;
             playerCtrl.Initialize();
+            controller = playerCtrl;
+        }
+        else
+        {
+            Debug.LogError("PlayerController manquant", this);
         }
 
-        // Rigidbody doit rester actif pour le contrôle du joueur
+        // Rigidbody pour contrôle joueur
         if (rb != null)
         {
             rb.isKinematic = false;
         }
     }
+
     public void SwitchToNPCController()
     {
-        // Désactive le PlayerController s'il existe
+        // Désactive le PlayerController
         PlayerController playerCtrl = GetComponent<PlayerController>();
         if (playerCtrl != null)
         {
             playerCtrl.enabled = false;
         }
 
-        // Active le NPCController s'il existe
+        // Active le NPCController
         NPCController npcCtrl = GetComponent<NPCController>();
         if (npcCtrl != null)
         {
             npcCtrl.enabled = true;
             npcCtrl.Initialize();
+            controller = npcCtrl;
+        }
+        else
+        {
+            Debug.LogError("NPCController manquant", this);
         }
 
-        // Active le NavMeshAgent si présent
+        // Active le NavMeshAgent
         NavMeshAgent agent = GetComponent<NavMeshAgent>();
         if (agent != null)
         {
             agent.enabled = true;
             agent.updatePosition = true;
-            agent.updateRotation = false; // rotation gérée manuellement dans NPCController
+            agent.updateRotation = false;
         }
 
-        // Rigidbody en kinematic pour éviter les conflits physiques avec l'IA
+        // Rigidbody en kinematic pour IA
         if (rb != null)
         {
             rb.isKinematic = true;
         }
     }
+
 
     public void SwitchToPlayerInteractionDetector()
     {

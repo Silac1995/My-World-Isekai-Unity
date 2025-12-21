@@ -3,7 +3,7 @@ using UnityEngine;
 [System.Serializable]
 public abstract class CharacterSecondaryStats : CharacterBaseStats
 {
-    private float maxValue = 100f;
+    [SerializeField] private float maxValue = 100f;
 
     protected CharacterSecondaryStats(CharacterStats characterStats, float baseValue = 1)
         : base(characterStats, baseValue)

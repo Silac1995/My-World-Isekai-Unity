@@ -3,7 +3,7 @@ using UnityEngine;
 public abstract class CharacterInteractionDetector : MonoBehaviour
 {
     protected InteractableObject currentTarget;
-    private Character selfCharacter; // Référence au Character local
+    [SerializeField] private Character selfCharacter; // Référence au Character local
     public Character Character => selfCharacter;
 
     protected virtual void Awake()

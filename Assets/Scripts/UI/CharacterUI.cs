@@ -28,29 +28,6 @@ public class CharacterUI : MonoBehaviour
 
     private void Awake()
     {
-        if (character == null)
-        {
-            character = GetComponentInParent<Character>();
-            if (character == null)
-            {
-                Debug.LogError("Character non trouvé dans le parent.", this);
-                enabled = false;
-                return;
-            }
-        }
-
-        if (nameText == null)
-        {
-            Debug.LogWarning("TextMeshPro pour le nom du personnage non assigné. Recherche automatique...");
-            nameText = GetComponentInChildren<TextMeshProUGUI>();
-        }
-
-        if (nameText == null)
-        {
-            Debug.LogError("Aucun TextMeshPro trouvé pour afficher le nom.", this);
-        }
-
-        //InitializeElements();
         UpdateNameText();
     }
 
@@ -77,14 +54,6 @@ public class CharacterUI : MonoBehaviour
         }
     }
 
-    private void InitializeElements()
-    {
-        ICharacterUIElement[] uiElements = GetComponentsInChildren<ICharacterUIElement>(true);
-        foreach (var element in uiElements)
-        {
-            element.Initialize(character);
-        }
-    }
 
     private void UpdateNameText()
     {

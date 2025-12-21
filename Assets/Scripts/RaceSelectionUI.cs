@@ -102,7 +102,7 @@ public class RaceSelectionUI : MonoBehaviour
         {
             Character character = SpawnManager.Instance.SpawnCharacter(
                 pos: pos,
-                health: 100f,           // ajuste ou passe via UI
+                health: 50f,           // ajuste ou passe via UI
                 mana: 50f,              // ajuste
                 str: 10f, // exemple
                 agi: 10f,   // exemple
