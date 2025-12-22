@@ -12,34 +12,48 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e39e8124bd1794948b3f5b3d0ffdb147, type: 3}
   m_Name: 000_Tshirt
   m_EditorClassIdentifier: Assembly-CSharp::EquipmentSO
+  itemId: 000
+  itemName: T-shirt
+  description: Simple t-shirt
+  icon: {fileID: 0}
+  category_name: 01_tshirt
   armor:
     baseValue: 50
     currentValue: 0
+    currentAmount: 0
   health:
     baseValue: 300
     currentValue: 0
+    currentAmount: 0
   stamina:
     baseValue: 0
     currentValue: 0
+    currentAmount: 0
   mana:
     baseValue: 0
     currentValue: 0
+    currentAmount: 0
   initiative:
     baseValue: 0
     currentValue: 0
+    currentAmount: 0
   strength:
     baseValue: 0
     currentValue: 0
+    maxValue: 0
   agility:
     baseValue: 0
     currentValue: 0
+    maxValue: 0
   dexterity:
     baseValue: 0
     currentValue: 0
+    maxValue: 0
   intelligence:
     baseValue: 0
     currentValue: 0
+    maxValue: 0
   endurance:
     baseValue: 0
     currentValue: 0
-  category_name: 01_tshirt
+    maxValue: 0

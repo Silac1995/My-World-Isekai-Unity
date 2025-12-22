@@ -1,7 +1,7 @@
 using UnityEngine;
 
 [CreateAssetMenu(fileName = "Equipment", menuName = "Scriptable Objects/Equipment")]
-public class EquipmentSO : ScriptableObject
+public class EquipmentSO : ItemSO
 {
     [Header("Category")]
     public string category_name;

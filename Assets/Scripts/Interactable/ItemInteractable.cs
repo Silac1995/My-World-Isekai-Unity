@@ -2,6 +2,7 @@ using UnityEngine;
 
 public class ItemInteractable : InteractableObject
 {
+    [SerializeField] private ItemInstance _instance;
     public override void Interact()
     {
         Debug.Log("Item ramassé !");

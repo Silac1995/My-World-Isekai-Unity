@@ -5,7 +5,10 @@ public class SpawnManager : MonoBehaviour
     public static SpawnManager Instance { get; private set; }
 
     [SerializeField] private GameObject spawnGameObject;
+    [SerializeField] private GameObject itemPrefab;
     private const string INTERACTION_PROMPT_PATH = "UI/InteractionPrompt";
+
+
 
     private void Awake()
     {
@@ -28,6 +31,32 @@ public class SpawnManager : MonoBehaviour
             Debug.Log($"Position de spawnGameObject : {spawnGameObject.transform.position}", this);
         }
     }
+
+
+    public void SpawnItem(ItemSO itemData, Vector3 pos = default)
+    {
+        // 1. Calcul de la position de spawn selon ta logique
+        Vector3 spawnPos = (pos == Vector3.zero && spawnGameObject != null)
+                           ? spawnGameObject.transform.position
+                           : pos;
+
+        // 2. Faire apparaître (Instantiate) le prefab à la position calculée
+        GameObject newObject = Instantiate(itemPrefab, spawnPos, Quaternion.identity);
+
+        // 3. Récupérer le composant ItemInstance sur l'objet créé
+        ItemInstance script = newObject.GetComponent<ItemInstance>();
+
+        // 4. Appeler la méthode d'initialisation
+        if (script != null)
+        {
+            script.InitializeItem(itemData);
+        }
+        else
+        {
+            Debug.LogError("Le prefab WorldItem n'a pas de script ItemInstance attaché !");
+        }
+    }
+
 
     public Character SpawnCharacter(Vector3 pos, float health, float mana, float str, float agi, RaceSO race, GameObject visualPrefab, bool isPlayer)
     {

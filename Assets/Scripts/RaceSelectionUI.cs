@@ -11,13 +11,14 @@ public class RaceSelectionUI : MonoBehaviour
     [SerializeField] private TMP_InputField spawnNumberInput;
     [SerializeField] private Toggle isPlayerToggle;
     [SerializeField] private Button spawnButton;
+    [SerializeField] private Button spawnItem;
 
     [Header("Prefabs & Managers")]
     [SerializeField] private Transform spawnPoint;
 
-    [SerializeField] private List<RaceSO> availableRaces = new List<RaceSO>();
-    [SerializeField] private RaceSO selectedRace;
-    [SerializeField] private GameObject selectedCharacterDefaultPrefab;
+    private List<RaceSO> availableRaces = new List<RaceSO>();
+    private RaceSO selectedRace;
+    private GameObject selectedCharacterDefaultPrefab;
 
     private void Start()
     {
@@ -39,7 +40,16 @@ public class RaceSelectionUI : MonoBehaviour
             }
         }
 
+        spawnItem.onClick.AddListener(OnSpawnItemClicked);
         spawnButton.onClick.AddListener(SpawnCharacters);
+    }
+    private void OnSpawnItemClicked()
+    {
+        ItemSO itemToSpawn = Resources.Load<ItemSO>("Data/Item/Equipment/000_Tshirt");
+        Vector3 pos = spawnPoint != null ? spawnPoint.position : Vector3.zero;
+
+        // Le SpawnManager utilise son propre prefab déjà assigné dans l'éditeur
+        SpawnManager.Instance.SpawnItem(itemToSpawn, pos);
     }
 
     private void LoadRaces()
