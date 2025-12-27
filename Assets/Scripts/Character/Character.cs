@@ -1,10 +1,6 @@
-﻿using NUnit.Framework.Constraints;
-using System;
-using System.Collections.Generic;
-using Unity.VisualScripting;
+﻿using System;
 using UnityEngine;
 using UnityEngine.AI;
-using UnityEngine.TextCore.Text;
 
 [RequireComponent(typeof(CapsuleCollider), typeof(Rigidbody))]
 public class Character : MonoBehaviour
@@ -32,24 +28,28 @@ public class Character : MonoBehaviour
 
     private Transform visualRoot;
     private GameObject currentVisualInstance;
+    private NavMeshAgent cachedNavMeshAgent;
     private static BattleManager battleManagerPrefab;
+    private static GameObject worldItemPrefab;
     private BattleManager battleManager;
     private CharacterInteraction characterInteraction;
-    
+    private bool isDead;
+    private const string BATTLE_MANAGER_PATH = "Prefabs/BattleManagerPrefab";
+    private const string WORLD_ITEM_PATH = "Prefabs/WorldItem";
+    private const float DROP_DISTANCE = 1.5f;
 
-    // public events
-    public event Action<Character> OnDeath; // Événement déclenché à la mort
+    public event Action<Character> OnDeath;
 
     // Properties
     public string CharacterName
     {
-        get { return characterName; }
-        set { characterName = value; }
+        get => characterName;
+        set => characterName = value;
     }
-    public float MovementSpeed => stats.MoveSpeed.CurrentValue;
-    public Rigidbody Rigidbody => rb ?? throw new System.NullReferenceException($"Rigidbody missing on {gameObject.name}");
-    public CapsuleCollider Collider => col ?? throw new System.NullReferenceException($"CapsuleCollider missing on {gameObject.name}");
-    public CharacterStats Stats => stats;
+    public float MovementSpeed => stats?.MoveSpeed.CurrentValue ?? 0f;
+    public Rigidbody Rigidbody => rb ?? throw new NullReferenceException($"Rigidbody missing on {gameObject.name}");
+    public CapsuleCollider Collider => col ?? throw new NullReferenceException($"CapsuleCollider missing on {gameObject.name}");
+    public CharacterStats Stats => stats ?? throw new NullReferenceException($"CharacterStats missing on {gameObject.name}");
     public RaceSO Race => race;
     public Transform VisualRoot => visualRoot;
     public GameObject CurrentVisualInstance => currentVisualInstance;
@@ -57,22 +57,28 @@ public class Character : MonoBehaviour
     public CharacterVisual CharacterVisual => characterVisual;
     public BattleManager BattleManager => battleManager;
     public CharacterActions CharacterActions => characterActions;
-    public CharacterInteraction CharacterInteraction => characterInteraction;
+    public CharacterInteraction CharacterInteraction => characterInteraction ?? throw new NullReferenceException($"CharacterInteraction not initialized on {gameObject.name}");
     public CharacterBio CharacterBio => characterBio;
     public CharacterEquipment CharacterEquipment => equipment;
 
     protected virtual void Awake()
     {
-        // Sécurité : vérifie quand même
         if (rb == null || col == null)
         {
             Debug.LogError($"{name} a des références manquantes !");
             enabled = false;
             return;
         }
-        battleManagerPrefab = Resources.Load<BattleManager>("Prefabs/BattleManagerPrefab");
 
+        if (battleManagerPrefab == null)
+            battleManagerPrefab = Resources.Load<BattleManager>(BATTLE_MANAGER_PATH);
+        
+        if (worldItemPrefab == null)
+            worldItemPrefab = Resources.Load<GameObject>(WORLD_ITEM_PATH);
+
+        cachedNavMeshAgent = GetComponent<NavMeshAgent>();
         characterInteraction = new CharacterInteraction(this);
+        isDead = false;
 
         InitializeComponents();
     }
@@ -90,14 +96,31 @@ public class Character : MonoBehaviour
 
     public void InitializeStats(float health, float mana, float strength, float agility)
     {
+        if (stats == null)
+        {
+            Debug.LogError($"{name} : CharacterStats not assigned!", this);
+            return;
+        }
+
         stats.InitializeStats(health, mana, strength, agility);
     }
 
     public void InitializeRace(RaceSO raceData)
     {
-        race = raceData ?? throw new System.ArgumentNullException(nameof(raceData));
+        race = raceData ?? throw new ArgumentNullException(nameof(raceData));
+        
+        if (stats == null)
+        {
+            Debug.LogError($"{name} : Cannot initialize race without stats!", this);
+            return;
+        }
+
         Stats.MoveSpeed.IncreaseBaseValue(race.bonusSpeed);
-        controller.Initialize();
+        
+        if (controller != null)
+            controller.Initialize();
+        else
+            Debug.LogWarning($"{name} : Controller not assigned when initializing race.", this);
     }
 
     public void InitializeSpriteRenderers()
@@ -108,19 +131,26 @@ public class Character : MonoBehaviour
 
     public void AssignVisualRoot(Transform root)
     {
-        visualRoot = root ?? throw new System.ArgumentNullException(nameof(root), $"Attempting to assign null visualRoot on {name}");
+        visualRoot = root ?? throw new ArgumentNullException(nameof(root), $"Attempting to assign null visualRoot on {name}");
+    }
+
+    public void AssignVisualInstance(GameObject visualInstance)
+    {
+        currentVisualInstance = visualInstance;
     }
 
     private void AdjustCapsuleCollider()
     {
-        if (currentVisualInstance == null) return;
+        if (currentVisualInstance == null)
+        {
+            Debug.LogWarning($"{name} : currentVisualInstance not assigned, skipping collider adjustment.", this);
+            return;
+        }
 
-        // Chercher un CapsuleCollider dans le gameobject Visual ou ses enfants
         CapsuleCollider visualCollider = currentVisualInstance.GetComponentInChildren<CapsuleCollider>();
 
         if (visualCollider != null && col != null)
         {
-            // Copier tous les paramètres du collider enfant vers le collider parent
             col.center = visualCollider.center;
             col.radius = visualCollider.radius;
             col.height = visualCollider.height;
@@ -128,344 +158,283 @@ public class Character : MonoBehaviour
             col.isTrigger = visualCollider.isTrigger;
             col.material = visualCollider.material;
 
-            Debug.Log($"Copied collider parameters from {visualCollider.gameObject.name} to {gameObject.name}");
-
-            // Détruire le collider enfant
             if (Application.isPlaying)
-            {
                 Destroy(visualCollider);
-            }
             else
-            {
                 DestroyImmediate(visualCollider);
-            }
-
-            Debug.Log($"Destroyed child collider on {visualCollider.gameObject.name}");
         }
     }
 
     public bool IsPlayer() => controller is PlayerController;
 
+    public bool IsAlive() => !isDead;
+
     public virtual void Die()
     {
+        if (isDead)
+            return;
+
+        isDead = true;
         Debug.Log($"{name} is dead.");
         OnDeath?.Invoke(this);
 
-        // Désactivation collider & rigidbody
-        if (col != null) col.enabled = false;
-        if (rb != null) rb.isKinematic = true;
+        if (col != null)
+            col.enabled = false;
+        if (rb != null)
+            rb.isKinematic = true;
 
-        // Déclenche animation morte si besoin
-        Controller.enabled = false;
-        Controller.Animator.SetBool("isDead", true);
+        if (Controller != null)
+        {
+            Controller.enabled = false;
+            if (Controller.Animator != null)
+                Controller.Animator.SetBool("isDead", true);
+        }
     }
 
     public void TakeDamage(float damage = 1)
     {
-        if (!IsAlive()) return;
+        if (!IsAlive() || stats == null)
+            return;
 
-        Stats.Health.CurrentAmount -= damage;
-        Debug.Log($"{name} took {damage} damage, remaining health: {Stats.Health.CurrentAmount}");
+        stats.Health.CurrentAmount -= damage;
+        Debug.Log($"{name} took {damage} damage, remaining health: {stats.Health.CurrentAmount}");
 
-        if (Stats.Health.CurrentAmount <= 0)
-        {
+        if (stats.Health.CurrentAmount <= 0)
             Die();
-        }
     }
+
     [ContextMenu("Take Damage")]
     public void TakeDamage()
     {
         TakeDamage(50f);
     }
 
-    public bool IsInBattle()
-    {
-        if (battleManager == null) return false;
-        return true;
-    }
+    public bool IsInBattle() => battleManager != null;
+
     public void JoinBattle(BattleManager manager)
     {
         if (manager == null)
             throw new ArgumentNullException(nameof(manager));
         battleManager = manager;
     }
+
     public void LeaveBattle()
     {
         battleManager = null;
     }
 
-    public bool IsAlive()
+    public void StartFight(Character target)
     {
-        return true;
+        if (!ValidateFightStart(target))
+            return;
+
+        BattleManager newBattleManager = CreateBattleManager();
+        if (newBattleManager == null)
+            return;
+
+        InitializeBattle(newBattleManager, target);
     }
 
-    public void StartFight(Character target)
+    private bool ValidateFightStart(Character target)
     {
         if (!IsAlive())
         {
             Debug.LogWarning($"{CharacterName} is dead and cannot start a fight.");
-            return;
+            return false;
         }
 
         if (target == null)
         {
             Debug.LogError("Target character is null.");
-            return;
+            return false;
         }
 
         if (!target.IsAlive())
         {
             Debug.LogWarning($"{target.CharacterName} is dead and cannot be targeted for a fight.");
-            return;
+            return false;
         }
 
         if (IsInBattle())
         {
             Debug.LogWarning($"{CharacterName} is already in a battle and cannot start another one.");
-            return;
+            return false;
         }
 
         if (target.IsInBattle())
         {
             Debug.LogWarning($"{target.CharacterName} is already in a battle and cannot be targeted for a new fight.");
-            return;
+            return false;
         }
 
+        return true;
+    }
+
+    private BattleManager CreateBattleManager()
+    {
         if (battleManagerPrefab == null)
         {
             Debug.LogError("BattleManagerPrefab is not assigned! Please assign it before starting fights.");
-            return;
+            return null;
         }
 
         GameObject battleManagerGO = Instantiate(battleManagerPrefab.gameObject);
-        BattleManager battleManager = battleManagerGO.GetComponent<BattleManager>();
+        BattleManager manager = battleManagerGO.GetComponent<BattleManager>();
 
-        if (battleManager == null)
+        if (manager == null)
         {
             Debug.LogError("The instantiated BattleManagerPrefab does not have a BattleManager component.");
-            return;
+            Destroy(battleManagerGO);
+            return null;
         }
 
+        return manager;
+    }
+
+    private void InitializeBattle(BattleManager manager, Character target)
+    {
         BattleTeam team1 = new BattleTeam();
         BattleTeam team2 = new BattleTeam();
 
         team1.AddCharacter(this);
         team2.AddCharacter(target);
 
-        battleManager.AddTeam(team1);
-        battleManager.AddTeam(team2);
+        manager.AddTeam(team1);
+        manager.AddTeam(team2);
+        manager.Initialize(this, target);
 
-        battleManager.Initialize(this, target);
-
-        JoinBattle(battleManager);
-        target.JoinBattle(battleManager);
+        JoinBattle(manager);
+        target.JoinBattle(manager);
 
         Debug.Log($"Fight started between {CharacterName} and {target.CharacterName}");
     }
 
-
-    // switch to npc/player
-    public void SwitchToPlayerController()
-    {
-        // Désactive le NPCController
-        NPCController npcCtrl = GetComponent<NPCController>();
-        if (npcCtrl != null)
-        {
-            npcCtrl.enabled = false;
-        }
-
-        // Désactive NavMeshAgent
-        NavMeshAgent agent = GetComponent<NavMeshAgent>();
-        if (agent != null)
-        {
-            agent.enabled = false;
-        }
-
-        // Active le PlayerController
-        PlayerController playerCtrl = GetComponent<PlayerController>();
-        if (playerCtrl != null)
-        {
-            playerCtrl.enabled = true;
-            playerCtrl.Initialize();
-            controller = playerCtrl;
-        }
-        else
-        {
-            Debug.LogError("PlayerController manquant", this);
-        }
-
-        // Rigidbody pour contrôle joueur
-        if (rb != null)
-        {
-            rb.isKinematic = false;
-        }
-    }
-
-    public void SwitchToNPCController()
-    {
-        // Désactive le PlayerController
-        PlayerController playerCtrl = GetComponent<PlayerController>();
-        if (playerCtrl != null)
-        {
-            playerCtrl.enabled = false;
-        }
-
-        // Active le NPCController
-        NPCController npcCtrl = GetComponent<NPCController>();
-        if (npcCtrl != null)
-        {
-            npcCtrl.enabled = true;
-            npcCtrl.Initialize();
-            controller = npcCtrl;
-        }
-        else
-        {
-            Debug.LogError("NPCController manquant", this);
-        }
-
-        // Active le NavMeshAgent
-        NavMeshAgent agent = GetComponent<NavMeshAgent>();
-        if (agent != null)
-        {
-            agent.enabled = true;
-            agent.updatePosition = true;
-            agent.updateRotation = false;
-        }
-
-        // Rigidbody en kinematic pour IA
-        if (rb != null)
-        {
-            rb.isKinematic = true;
-        }
-    }
-
-
-    public void SwitchToPlayerInteractionDetector()
-    {
-        // Désactive le NPCInteractionDetector s'il existe
-        NPCInteractionDetector npcDetector = GetComponent<NPCInteractionDetector>();
-        if (npcDetector != null)
-        {
-            npcDetector.enabled = false;
-        }
-
-        // Active le PlayerInteractionDetector s'il existe
-        PlayerInteractionDetector playerDetector = GetComponent<PlayerInteractionDetector>();
-        if (playerDetector != null)
-        {
-            playerDetector.enabled = true;
-        }
-        else
-        {
-            // Crée le composant si jamais il est manquant
-            playerDetector = gameObject.AddComponent<PlayerInteractionDetector>();
-        }
-    }
-
-    public void SwitchToNPCInteractionDetector()
-    {
-        // Désactive le PlayerInteractionDetector s'il existe
-        PlayerInteractionDetector playerDetector = GetComponent<PlayerInteractionDetector>();
-        if (playerDetector != null)
-        {
-            playerDetector.enabled = false;
-        }
-
-        // Active le NPCInteractionDetector s'il existe
-        NPCInteractionDetector npcDetector = GetComponent<NPCInteractionDetector>();
-        if (npcDetector != null)
-        {
-            npcDetector.enabled = true;
-        }
-        else
-        {
-            // Crée le composant si jamais il est manquant
-            npcDetector = gameObject.AddComponent<NPCInteractionDetector>();
-        }
-    }
-
-
-    [ContextMenu("Switch To Player")]
     public void SwitchToPlayer()
     {
-        // Switch controller
-        SwitchToPlayerController();
-
-        // Switch interaction detector
-        SwitchToPlayerInteractionDetector();
+        SwitchController<PlayerController>(GetComponent<NPCController>());
+        SwitchInteractionDetector<PlayerInteractionDetector, NPCInteractionDetector>();
     }
 
-    [ContextMenu("Switch To NPC")]
     public void SwitchToNPC()
     {
-        // Switch controller
-        SwitchToNPCController();
-
-        // Switch interaction detector
-        SwitchToNPCInteractionDetector();
+        SwitchController<NPCController>(GetComponent<PlayerController>());
+        SwitchInteractionDetector<NPCInteractionDetector, PlayerInteractionDetector>();
     }
 
-    public bool IsFree()
+    [ContextMenu("Switch To Player")]
+    public void SwitchToPlayerContext() => SwitchToPlayer();
+
+    [ContextMenu("Switch To NPC")]
+    public void SwitchToNPCContext() => SwitchToNPC();
+
+    private void SwitchController<TTarget>(CharacterGameController toDisable) where TTarget : CharacterGameController
     {
-        return !IsInBattle() && !CharacterInteraction.IsInInteraction();
+        if (toDisable != null)
+            toDisable.enabled = false;
+
+        TTarget target = GetComponent<TTarget>();
+        if (target != null)
+        {
+            target.enabled = true;
+            target.Initialize();
+            controller = target;
+        }
+        else
+        {
+            Debug.LogError($"{typeof(TTarget).Name} missing", this);
+            return;
+        }
+
+        bool isNPCMode = typeof(TTarget) == typeof(NPCController);
+        ConfigureRigidbodyForMode(isNPCMode);
+        ConfigureNavMeshAgentForMode(isNPCMode);
     }
 
+    private void ConfigureRigidbodyForMode(bool isNPCMode)
+    {
+        if (rb != null)
+            rb.isKinematic = isNPCMode;
+    }
 
-    //Action on item
+    private void ConfigureNavMeshAgentForMode(bool isNPCMode)
+    {
+        if (cachedNavMeshAgent == null)
+            return;
+
+        cachedNavMeshAgent.enabled = isNPCMode;
+
+        if (isNPCMode)
+        {
+            cachedNavMeshAgent.updatePosition = true;
+            cachedNavMeshAgent.updateRotation = false;
+        }
+    }
+
+    private void SwitchInteractionDetector<TTarget, TDisable>()
+        where TTarget : MonoBehaviour
+        where TDisable : MonoBehaviour
+    {
+        TDisable toDisable = GetComponent<TDisable>();
+        if (toDisable != null)
+            toDisable.enabled = false;
+
+        TTarget target = GetComponent<TTarget>();
+        if (target != null)
+        {
+            target.enabled = true;
+        }
+        else
+        {
+            gameObject.AddComponent<TTarget>();
+        }
+    }
+
+    public bool IsFree() => !IsInBattle() && !CharacterInteraction.IsInInteraction();
+
     public void UseConsumable(ConsumableInstance consumable)
     {
-
+        // TODO: Implémenter
     }
 
     public void EquipGear(EquipmentInstance equipment)
     {
-
+        // TODO: Implémenter
     }
 
     public void DropItem(ItemInstance itemToDrop)
     {
-        if (itemToDrop == null) return;
+        if (itemToDrop == null || stats == null)
+            return;
 
-        // 1. Chargement dynamique du prefab depuis Resources
-        GameObject worldItemPrefab = Resources.Load<GameObject>("Prefabs/WorldItem");
         if (worldItemPrefab == null)
         {
             Debug.LogError("[Character] Drop impossible : Prefab 'WorldItem' introuvable dans Resources/Prefabs");
             return;
         }
 
-        // 2. Calcul de la position devant le personnage
-        Vector3 dropPos = transform.position + (transform.forward * 1.5f);
+        Vector3 dropPos = transform.position + (transform.forward * DROP_DISTANCE);
         dropPos.y = transform.position.y;
 
-        // 3. Instanciation
         GameObject go = Instantiate(worldItemPrefab, dropPos, Quaternion.identity);
         go.name = $"WorldItem_{itemToDrop.ItemSO.ItemName}";
 
-        // 4. Initialisation du composant WorldItem (Essentiel pour ton ItemInteractable)
-        // On utilise GetComponentsInChildren au cas où le script est sur un enfant du prefab
         WorldItem worldItem = go.GetComponentInChildren<WorldItem>();
 
         if (worldItem != null)
         {
-            // On injecte l'instance. C'est ce qui remplira le "get" de ton ItemInteractable
             worldItem.Initialize(itemToDrop);
 
-            // 5. Application visuelle (Couleur)
-            if (itemToDrop is EquipmentInstance equipment && equipment.HaveCustomizedColor())
+            if (itemToDrop is EquipmentInstance equipmentInstance && equipmentInstance.HaveCustomizedColor())
             {
                 MeshRenderer visualRenderer = go.GetComponentInChildren<MeshRenderer>();
                 if (visualRenderer != null)
-                {
-                    visualRenderer.material.color = equipment.CustomizedColor;
-                }
+                    visualRenderer.material.color = equipmentInstance.CustomizedColor;
             }
 
             Debug.Log($"<color=green>[Drop Success]</color> {itemToDrop.ItemSO.ItemName} initialisé au sol.");
         }
         else
         {
-            // Si on arrive ici, l'interaction renverra l'erreur [FATAL] car WorldItem est absent
             Debug.LogError($"[Drop Error] Le prefab {go.name} n'a pas de composant WorldItem !");
         }
     }
