@@ -1,10 +1,13 @@
 using UnityEngine;
+using static UnityEditor.Progress;
 
 [CreateAssetMenu(fileName = "Equipment", menuName = "Scriptable Objects/Equipment")]
 public class EquipmentSO : ItemSO
 {
-    [Header("Category")]
-    public string category_name;
+    [SerializeField] private EquipmentType equipmentType;
+    [SerializeField] private EquipmentLayerEnum equipmentLayer;
+    public EquipmentType EquipmentType => equipmentType;
+    public EquipmentLayerEnum EquipmentLayer => equipmentLayer;
 
     // === Primary Stats ===
     [Header("Primary Stats")]
@@ -21,4 +24,13 @@ public class EquipmentSO : ItemSO
     public CharacterDexterity dexterity;
     public CharacterIntelligence intelligence;
     public CharacterEndurance endurance;
+
+    // On force le type EquipmentInstance
+    public override System.Type InstanceType => typeof(EquipmentInstance);
+    public override ItemInstance CreateInstance()
+    {
+        return new EquipmentInstance(this);
+    }
+
+
 }

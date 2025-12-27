@@ -33,27 +33,90 @@ public class SpawnManager : MonoBehaviour
     }
 
 
-    public void SpawnItem(ItemSO itemData, Vector3 pos = default)
+    // Dans SpawnManager.cs
+    public ItemInstance SpawnItem(ItemSO data, Vector3 pos)
     {
-        // 1. Calcul de la position de spawn selon ta logique
-        Vector3 spawnPos = (pos == Vector3.zero && spawnGameObject != null)
-                           ? spawnGameObject.transform.position
-                           : pos;
+        GameObject go = Instantiate(itemPrefab, pos, Quaternion.identity);
+        go.name = $"WorldItem_{data.ItemName}";
 
-        // 2. Faire apparaître (Instantiate) le prefab à la position calculée
-        GameObject newObject = Instantiate(itemPrefab, spawnPos, Quaternion.identity);
-
-        // 3. Récupérer le composant ItemInstance sur l'objet créé
-        ItemInstance script = newObject.GetComponent<ItemInstance>();
-
-        // 4. Appeler la méthode d'initialisation
-        if (script != null)
+        // 1. Création de l'instance de donnée
+        ItemInstance instance = data switch
         {
-            script.InitializeItem(itemData);
+            EquipmentSO e => new EquipmentInstance(e),
+            _ => new ItemInstance(data)
+        };
+
+        // 2. Logique de couleur personnalisée (si c'est un équipement)
+        if (instance is EquipmentInstance equipment)
+        {
+            // On génère une couleur aléatoire
+            Color randomColor = Random.ColorHSV(0f, 1f, 0.5f, 1f, 0.5f, 1f);
+            equipment.SetCustomizedColor(randomColor);
+
+            // On applique cette couleur au visuel de l'objet au sol
+            // On cherche le renderer dans les enfants (là où se trouve le mesh)
+            MeshRenderer visualRenderer = go.GetComponentInChildren<MeshRenderer>();
+            if (visualRenderer != null)
+            {
+                // Utilisation de .material (crée une instance unique pour cet objet)
+                visualRenderer.material.color = randomColor;
+            }
+        }
+
+        // 3. Liaison avec le composant WorldItem
+        WorldItem worldItem = go.GetComponentInChildren<WorldItem>();
+        if (worldItem != null)
+        {
+            worldItem.Initialize(instance);
+            Debug.Log($"<color=green>[Spawn]</color> Setup réussi pour {instance.ItemSO.ItemName} avec couleur appliquée.");
         }
         else
         {
-            Debug.LogError("Le prefab WorldItem n'a pas de script ItemInstance attaché !");
+            Debug.LogError($"<color=red>[Spawn Error]</color> WorldItem introuvable sur le prefab {go.name} !");
+        }
+
+        return instance;
+    }
+
+    /// <summary>
+    /// Spawne un item dans le monde à partir d'une instance existante (conserve les couleurs, durabilité, etc.)
+    /// </summary>
+    public void SpawnCopyOfItem(ItemInstance existingInstance, Vector3 pos)
+    {
+        if (existingInstance == null)
+        {
+            Debug.LogError("[SpawnManager] Impossible de copier une instance nulle.");
+            return;
+        }
+
+        // 1. Instanciation du prefab de base
+        GameObject go = Instantiate(itemPrefab, pos, Quaternion.identity);
+        go.name = $"WorldItem_{existingInstance.ItemSO.ItemName}_Copy";
+
+        // 2. Liaison avec le composant WorldItem
+        WorldItem worldItem = go.GetComponentInChildren<WorldItem>();
+        if (worldItem != null)
+        {
+            // On initialise avec l'instance EXACTE (pas une nouvelle)
+            worldItem.Initialize(existingInstance);
+
+            // 3. Application visuelle des propriétés de l'instance
+            // Si c'est un équipement et qu'il a une couleur personnalisée, on l'applique au mesh/sprite
+            if (existingInstance is EquipmentInstance equipment && equipment.HaveCustomizedColor())
+            {
+                // Note: J'utilise MeshRenderer car c'est ce que tu as utilisé dans SpawnItem
+                MeshRenderer visualRenderer = go.GetComponentInChildren<MeshRenderer>();
+                if (visualRenderer != null)
+                {
+                    visualRenderer.material.color = equipment.CustomizedColor;
+                }
+            }
+
+            Debug.Log($"<color=cyan>[Spawn Copy]</color> Copie de {existingInstance.ItemSO.ItemName} créée avec succès.");
+        }
+        else
+        {
+            Debug.LogError($"[Spawn Error] WorldItem introuvable sur le prefab pour la copie de {go.name}");
         }
     }
 

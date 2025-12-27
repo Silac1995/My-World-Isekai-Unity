@@ -12,17 +12,20 @@ public class RaceSelectionUI : MonoBehaviour
     [SerializeField] private Toggle isPlayerToggle;
     [SerializeField] private Button spawnButton;
     [SerializeField] private Button spawnItem;
+    [SerializeField] private TMP_Dropdown itemsSOList;
 
     [Header("Prefabs & Managers")]
     [SerializeField] private Transform spawnPoint;
 
     private List<RaceSO> availableRaces = new List<RaceSO>();
+    private List<ItemSO> availableItems = new List<ItemSO>();
     private RaceSO selectedRace;
     private GameObject selectedCharacterDefaultPrefab;
 
     private void Start()
     {
         LoadRaces();
+        LoadItems(); // Appeler le chargement des items
 
         raceDropdown.onValueChanged.AddListener(OnRaceSelected);
         characterDefaultPrefab_dropdown.onValueChanged.AddListener(OnPrefabSelected);
@@ -43,13 +46,45 @@ public class RaceSelectionUI : MonoBehaviour
         spawnItem.onClick.AddListener(OnSpawnItemClicked);
         spawnButton.onClick.AddListener(SpawnCharacters);
     }
+    private void LoadItems()
+    {
+        // Charge TOUS les ItemSO dans Data/Item et ses sous-dossiers
+        ItemSO[] items = Resources.LoadAll<ItemSO>("Data/Item");
+
+        availableItems.Clear();
+        availableItems.AddRange(items);
+
+        itemsSOList.ClearOptions();
+        List<string> options = new List<string>();
+
+        foreach (ItemSO item in availableItems)
+        {
+            // On affiche le nom de l'item (ou ItemId si tu préfères)
+            options.Add(item.ItemName);
+        }
+
+        itemsSOList.AddOptions(options);
+        itemsSOList.RefreshShownValue();
+    }
+
     private void OnSpawnItemClicked()
     {
-        ItemSO itemToSpawn = Resources.Load<ItemSO>("Data/Item/Equipment/000_Tshirt");
+        // On vérifie qu'il y a des items et que l'index est valide
+        if (availableItems.Count == 0 || itemsSOList.value >= availableItems.Count)
+        {
+            Debug.LogWarning("Aucun item sélectionné ou liste vide.");
+            return;
+        }
+
+        // On récupère l'item correspondant à la sélection du Dropdown
+        ItemSO itemToSpawn = availableItems[itemsSOList.value];
+
         Vector3 pos = spawnPoint != null ? spawnPoint.position : Vector3.zero;
 
-        // Le SpawnManager utilise son propre prefab déjà assigné dans l'éditeur
+        // Spawn via le manager
         SpawnManager.Instance.SpawnItem(itemToSpawn, pos);
+
+        Debug.Log($"Spawn de l'item : {itemToSpawn.ItemName} à la position {pos}");
     }
 
     private void LoadRaces()

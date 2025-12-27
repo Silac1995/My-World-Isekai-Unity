@@ -10,6 +10,7 @@ public class CameraFollow : MonoBehaviour
     [SerializeField] private float rotationX = 2f;
 
     [SerializeField] private Transform target;
+    [SerializeField] private Character character;
     [SerializeField] private PlayerUI playerUI;
     [SerializeField] new GameObject gameObject; // Hides inherited Component.gameObject
 
@@ -37,11 +38,11 @@ public class CameraFollow : MonoBehaviour
 
         if (newGameObject != null)
         {
-            SetTarget(newGameObject.transform);
+            SetTarget(newGameObject.transform, newGameObject); 
         }
         else
         {
-            SetTarget(null);
+            SetTarget(null, null);
         }
 
         if (playerUI != null)
@@ -50,8 +51,19 @@ public class CameraFollow : MonoBehaviour
         }
     }
 
-    public void SetTarget(Transform newTarget)
+    public void SetTarget(Transform newTarget, GameObject go)
     {
         target = newTarget;
+        if (go != null)
+        {
+            character = go.GetComponent<Character>();
+
+            // Mise à jour de l'UI d'équipement
+            CharacterEquipmentUI uiEquip = Object.FindFirstObjectByType<CharacterEquipmentUI>();
+            if (uiEquip != null)
+            {
+                uiEquip.SetupUI(character);
+            }
+        }
     }
 }

@@ -22,29 +22,42 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
 
         if (Input.GetKeyDown(KeyCode.E) && currentTarget != null)
         {
-            Debug.Log($"Interaction avec {currentTarget}.", this);
             try
             {
-                if (currentTarget.TryGetComponent(out CharacterInteractable characterInteractable))
+                // --- CAS 1 : PERSONNAGE ---
+                if (currentTarget.TryGetComponent(out CharacterInteractable charInteractable))
                 {
-                    //if (characterInteractable.Character == null)
-                    //{
-                    //    Debug.LogWarning($"CharacterInteractable sur {currentTarget.name} a un champ 'character' null.", this);
-                    //    return;
-                    //}
                     currentTarget.Interact();
-                    Character.CharacterInteraction.PerformInteraction(new InteractionAskToFollow(), characterInteractable.Character);
-                    Debug.Log($"Interaction avec {characterInteractable.Character.name}.", this);
+                    Character?.CharacterInteraction?.PerformInteraction(new InteractionAskToFollow(), charInteractable.Character);
                 }
-                else
+
+                // --- CAS 2 : ITEM ---
+                else if (currentTarget is ItemInteractable itemInteractable)
                 {
+                    ItemInstance instance = itemInteractable.ItemInstance;
+
                     currentTarget.Interact();
-                    Debug.Log($"Interaction avec l'objet générique {currentTarget.name}.", this);
+                    // Sécurités
+                    if (instance?.ItemSO == null) return;
+
+                    if (instance is EquipmentInstance equipment)
+                    {
+                        if (Character?.CharacterEquipment != null)
+                        {
+                            // 1. On équipe
+                            Character.CharacterEquipment.Equip(equipment);
+
+                            // 2. On détruit le prefab complet (la racine)
+                            // On utilise itemInteractable.transform.root pour être sûr de supprimer 
+                            // l'objet parent WorldItem_NomItem et pas juste l'enfant.
+                            Destroy(itemInteractable.transform.root.gameObject);
+                        }
+                    }
                 }
             }
             catch (System.Exception ex)
             {
-                Debug.LogError($"Erreur lors de l'interaction avec {currentTarget.name} : {ex.Message}", this);
+                Debug.LogError($"[Interaction] Erreur sur {currentTarget.name}: {ex.Message}");
             }
         }
     }
@@ -99,8 +112,22 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
                 return;
             }
 
-            currentPromptUI = Instantiate(interactionPromptPrefab);
+            // 1. Trouver l'objet parent dans la scène
+            GameObject parentObj = GameObject.Find("WorldUIManager");
+
+            if (parentObj != null)
+            {
+                // 2. Instancier en passant le Transform du parent
+                // Le prefab sera automatiquement placé comme enfant de WorldUIManager
+                currentPromptUI = Instantiate(interactionPromptPrefab, parentObj.transform);
+            }
+            else
+            {
+                Debug.LogError("WorldUIManager non trouvé dans la scène !");
+            }
+
             InteractionPromptUI promptUIComponent = currentPromptUI.GetComponent<InteractionPromptUI>();
+
             if (promptUIComponent == null)
             {
                 Debug.LogError("Le prefab interactionPromptPrefab n'a pas de composant InteractionPromptUI.", this);
@@ -130,7 +157,7 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
             if (!nearbyInteractables.Contains(interactable))
             {
                 nearbyInteractables.Add(interactable);
-                Debug.Log($"Ajout de {interactable.name} à la liste des interactables.", this);
+                //Debug.Log($"Ajout de {interactable.name} à la liste des interactables.", this);
             }
         }
     }
@@ -142,7 +169,7 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
             if (nearbyInteractables.Contains(interactable))
             {
                 nearbyInteractables.Remove(interactable);
-                Debug.Log($"Retrait de {interactable.name} de la liste des interactables.", this);
+                //Debug.Log($"Retrait de {interactable.name} de la liste des interactables.", this);
 
                 if (interactable == currentTarget)
                 {

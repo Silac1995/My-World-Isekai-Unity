@@ -9,21 +9,22 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e39e8124bd1794948b3f5b3d0ffdb147, type: 3}
-  m_Name: 000_Tshirt
-  m_EditorClassIdentifier: Assembly-CSharp::EquipmentSO
-  category_name: 01_tshirt
-  itemId: 000
-  itemName: T-shirt
-  description: Simple t-shirt
+  m_Script: {fileID: 11500000, guid: ce1414146f5a8ca4b85b233cd12285fb, type: 3}
+  m_Name: 001_Bag
+  m_EditorClassIdentifier: Assembly-CSharp::BagSO
+  category_name: 001_bag
+  itemId: 001
+  itemName: Bag
+  description: a bag
   icon: {fileID: 0}
-  equipmentType: 1
+  equipmentType: 5
+  equipmentLayer: 3
   armor:
-    baseValue: 50
+    baseValue: 0
     currentValue: 0
     currentAmount: 0
   health:
-    baseValue: 300
+    baseValue: 0
     currentValue: 0
     currentAmount: 0
   stamina:
@@ -58,3 +59,4 @@ MonoBehaviour:
     baseValue: 0
     currentValue: 0
     maxValue: 0
+  capacity: 5

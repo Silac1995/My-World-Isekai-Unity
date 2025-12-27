@@ -28,6 +28,7 @@ public class Character : MonoBehaviour
     [SerializeField] private CharacterActions characterActions;
     [SerializeField] private CharacterVisual characterVisual;
     [SerializeField] private CharacterGameController controller;
+    [SerializeField] private CharacterEquipment equipment;
 
     private Transform visualRoot;
     private GameObject currentVisualInstance;
@@ -58,6 +59,7 @@ public class Character : MonoBehaviour
     public CharacterActions CharacterActions => characterActions;
     public CharacterInteraction CharacterInteraction => characterInteraction;
     public CharacterBio CharacterBio => characterBio;
+    public CharacterEquipment CharacterEquipment => equipment;
 
     protected virtual void Awake()
     {
@@ -408,4 +410,63 @@ public class Character : MonoBehaviour
         return !IsInBattle() && !CharacterInteraction.IsInInteraction();
     }
 
+
+    //Action on item
+    public void UseConsumable(ConsumableInstance consumable)
+    {
+
+    }
+
+    public void EquipGear(EquipmentInstance equipment)
+    {
+
+    }
+
+    public void DropItem(ItemInstance itemToDrop)
+    {
+        if (itemToDrop == null) return;
+
+        // 1. Chargement dynamique du prefab depuis Resources
+        GameObject worldItemPrefab = Resources.Load<GameObject>("Prefabs/WorldItem");
+        if (worldItemPrefab == null)
+        {
+            Debug.LogError("[Character] Drop impossible : Prefab 'WorldItem' introuvable dans Resources/Prefabs");
+            return;
+        }
+
+        // 2. Calcul de la position devant le personnage
+        Vector3 dropPos = transform.position + (transform.forward * 1.5f);
+        dropPos.y = transform.position.y;
+
+        // 3. Instanciation
+        GameObject go = Instantiate(worldItemPrefab, dropPos, Quaternion.identity);
+        go.name = $"WorldItem_{itemToDrop.ItemSO.ItemName}";
+
+        // 4. Initialisation du composant WorldItem (Essentiel pour ton ItemInteractable)
+        // On utilise GetComponentsInChildren au cas où le script est sur un enfant du prefab
+        WorldItem worldItem = go.GetComponentInChildren<WorldItem>();
+
+        if (worldItem != null)
+        {
+            // On injecte l'instance. C'est ce qui remplira le "get" de ton ItemInteractable
+            worldItem.Initialize(itemToDrop);
+
+            // 5. Application visuelle (Couleur)
+            if (itemToDrop is EquipmentInstance equipment && equipment.HaveCustomizedColor())
+            {
+                MeshRenderer visualRenderer = go.GetComponentInChildren<MeshRenderer>();
+                if (visualRenderer != null)
+                {
+                    visualRenderer.material.color = equipment.CustomizedColor;
+                }
+            }
+
+            Debug.Log($"<color=green>[Drop Success]</color> {itemToDrop.ItemSO.ItemName} initialisé au sol.");
+        }
+        else
+        {
+            // Si on arrive ici, l'interaction renverra l'erreur [FATAL] car WorldItem est absent
+            Debug.LogError($"[Drop Error] Le prefab {go.name} n'a pas de composant WorldItem !");
+        }
+    }
 }

@@ -98,6 +98,7 @@ SpriteAtlas:
     - 4f3847a67007d864694d33923a64eeee: 21300000
     - e9af3ba6086a35441bf1f2b606a18a40: 21300000
     - 2a1fe4073ced53f4ba11c7ab3458ef36: 21300000
+    - feed07279d71e174f9e4b11e64b57729: 7482667652216324306
     - a9ebb037cf3aa254f84840c1a59e8bef: 21300000
     - 64da3537532b909439ea4864a5e1fd07: 21300000
     - 81f2a7375e9fb5f48962c39c60eeee05: 21300000
@@ -201,6 +202,7 @@ SpriteAtlas:
   - {fileID: 21300000, guid: 4f3847a67007d864694d33923a64eeee, type: 3}
   - {fileID: 21300000, guid: e9af3ba6086a35441bf1f2b606a18a40, type: 3}
   - {fileID: 21300000, guid: 2a1fe4073ced53f4ba11c7ab3458ef36, type: 3}
+  - {fileID: 7482667652216324306, guid: feed07279d71e174f9e4b11e64b57729, type: 3}
   - {fileID: 21300000, guid: a9ebb037cf3aa254f84840c1a59e8bef, type: 3}
   - {fileID: 21300000, guid: 64da3537532b909439ea4864a5e1fd07, type: 3}
   - {fileID: 21300000, guid: 81f2a7375e9fb5f48962c39c60eeee05, type: 3}
@@ -303,6 +305,7 @@ SpriteAtlas:
   - Breast_L_02
   - Eyebrow_R_normal
   - ear_L
+  - Square
   - Breast_R_01
   - Eyebrow_L_normal
   - Breast_R_01

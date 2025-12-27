@@ -4,6 +4,7 @@ using UnityEngine;
 public abstract class ItemSO : ScriptableObject
 {
     [Header("Item Info")]
+    [SerializeField] private string category_name;
     [SerializeField] private string itemId;
     [SerializeField] private string itemName;
     [SerializeField, TextArea] private string description;
@@ -13,4 +14,12 @@ public abstract class ItemSO : ScriptableObject
     public string ItemName => itemName;
     public string Description => description;
     public Sprite Icon => icon;
+    public string CategoryName => category_name;
+
+    public abstract System.Type InstanceType { get; }
+
+    public virtual ItemInstance CreateInstance()
+    {
+        return new ItemInstance(this);
+    }
 }
