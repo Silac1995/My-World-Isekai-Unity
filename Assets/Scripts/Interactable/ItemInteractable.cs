@@ -1,6 +1,5 @@
 using NUnit.Framework.Internal.Execution;
 using UnityEngine;
-using static UnityEditor.Progress;
 
 public class ItemInteractable : InteractableObject
 {

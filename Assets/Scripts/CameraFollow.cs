@@ -3,52 +3,60 @@
 public class CameraFollow : MonoBehaviour
 {
     [Header("Camera Position")]
-    [SerializeField] private float fixedYPosition = 15f;
-    [SerializeField] private float fixedZPosition = 60f;
+    [SerializeField] private float fixedYPosition = 20f;
+    [SerializeField] private float minZPosition = 70f;
+    [SerializeField] private float offsetZ = -13f;
 
     [Header("Camera Rotation")]
-    [SerializeField] private float rotationX = 2f;
+    // Le Range crée un curseur entre 0 et 90 degrés dans l'inspecteur
+    [Range(0f, 90f)]
+    [SerializeField] private float rotationX = 26f;
 
     [SerializeField] private Transform target;
     [SerializeField] private Character character;
     [SerializeField] private PlayerUI playerUI;
-    [SerializeField] new GameObject gameObject; // Hides inherited Component.gameObject
+
+    private GameObject targetGameObject;
+
+    private void Start()
+    {
+        // Optionnel : Forcer les valeurs au lancement du jeu
+        fixedYPosition = 20f;
+        minZPosition = 70f;
+        offsetZ = -13f;
+        rotationX = 26f;
+    }
 
     private void LateUpdate()
     {
         if (target == null) return;
 
-        // Follow target on X, lock Y and Z
-        Vector3 newPosition = new Vector3(
+        // Calcul de la position Z avec offset et limite minimum
+        float desiredZ = target.position.z + offsetZ;
+        float clampedZ = Mathf.Max(desiredZ, minZPosition);
+
+        // Application de la position
+        transform.position = new Vector3(
             target.position.x,
-            fixedYPosition,   // fixed Y
-            fixedZPosition    // fixed Z
+            fixedYPosition,
+            clampedZ
         );
 
-        transform.position = newPosition;
-
-        // Fixed rotation X = 2°, no changes
-        transform.rotation = Quaternion.Euler(2f, 0f, 0f);
+        // Utilisation de la variable rotationX pour permettre le changement via l'inspecteur
+        transform.rotation = Quaternion.Euler(rotationX, 0f, 0f);
     }
 
-
+    // ... Reste de tes méthodes SetGameObject et SetTarget identiques ...
     public void SetGameObject(GameObject newGameObject)
     {
-        this.gameObject = newGameObject;
-
+        this.targetGameObject = newGameObject;
         if (newGameObject != null)
-        {
-            SetTarget(newGameObject.transform, newGameObject); 
-        }
+            SetTarget(newGameObject.transform, newGameObject);
         else
-        {
             SetTarget(null, null);
-        }
 
         if (playerUI != null)
-        {
             playerUI.Initialize(newGameObject);
-        }
     }
 
     public void SetTarget(Transform newTarget, GameObject go)
@@ -57,13 +65,8 @@ public class CameraFollow : MonoBehaviour
         if (go != null)
         {
             character = go.GetComponent<Character>();
-
-            // Mise à jour de l'UI d'équipement
             CharacterEquipmentUI uiEquip = Object.FindFirstObjectByType<CharacterEquipmentUI>();
-            if (uiEquip != null)
-            {
-                uiEquip.SetupUI(character);
-            }
+            if (uiEquip != null) uiEquip.SetupUI(character);
         }
     }
 }

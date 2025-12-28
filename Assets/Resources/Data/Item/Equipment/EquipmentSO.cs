@@ -1,5 +1,4 @@
 using UnityEngine;
-using static UnityEditor.Progress;
 
 [CreateAssetMenu(fileName = "Equipment", menuName = "Scriptable Objects/Equipment")]
 public class EquipmentSO : ItemSO
