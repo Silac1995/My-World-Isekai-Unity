@@ -36,8 +36,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: -9.809418, y: 3.4832811}
-  m_SizeDelta: {x: 190, y: 122}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 70, y: 42}
   m_Pivot: {x: 0, y: 0}
 --- !u!223 &709263677483743324
 Canvas:
@@ -59,7 +59,7 @@ Canvas:
   m_VertexColorAlwaysGammaSpace: 0
   m_AdditionalShaderChannelsFlag: 25
   m_UpdateRectTransformForStandalone: 0
-  m_SortingLayerID: 0
+  m_SortingLayerID: 1921352221
   m_SortingOrder: 0
   m_TargetDisplay: 0
 --- !u!114 &6364930491839461331
@@ -149,7 +149,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   promptText: {fileID: 5750059534906191201}
-  offset: {x: 0, y: 2, z: 0}
 --- !u!114 &6866620577760075404
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -196,8 +195,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: -100, y: 0}
-  m_SizeDelta: {x: 200, y: 50}
+  m_AnchoredPosition: {x: -20, y: -6.0667915}
+  m_SizeDelta: {x: 40, y: 10}
   m_Pivot: {x: 0, y: 0}
 --- !u!222 &3161343837385637658
 CanvasRenderer:
@@ -254,8 +253,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 36
-  m_fontSizeBase: 36
+  m_fontSize: 6.81
+  m_fontSizeBase: 6.81
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18

@@ -4,15 +4,17 @@ using TMPro;
 public class InteractionPromptUI : MonoBehaviour
 {
     [SerializeField] private TextMeshProUGUI promptText;
-    [SerializeField] private Vector3 offset = new Vector3(0, 2f, 0); // Augmente la hauteur
-
     private Transform target;
+    private Collider targetCollider;
 
     public void SetTarget(Transform followTarget)
     {
         target = followTarget;
+        // On récupère le collider principal (celui du corps)
+        targetCollider = followTarget.GetComponentInChildren<Collider>();
+
         if (promptText != null)
-            promptText.text = "Press E";
+            promptText.text = "Press [E]";
     }
 
     private void LateUpdate()
@@ -23,15 +25,25 @@ public class InteractionPromptUI : MonoBehaviour
             return;
         }
 
-        // Positionner le prompt avec l'offset dans l'espace monde
-        transform.position = target.position + offset;
+        Vector3 targetPos;
 
-        // Faire face à la caméra, en ignorant la rotation Y
-        Vector3 directionToCamera = Camera.main.transform.position - transform.position;
-        directionToCamera.y = 0;
-        if (directionToCamera != Vector3.zero)
+        if (targetCollider != null)
         {
-            transform.rotation = Quaternion.LookRotation(-directionToCamera, Vector3.up);
+            // Utilise le centre géométrique exact du collider (X, Y, Z)
+            targetPos = targetCollider.bounds.center;
+        }
+        else
+        {
+            // Fallback : position du pivot si pas de collider
+            targetPos = target.position;
+        }
+
+        transform.position = targetPos;
+
+        // Toujours face à la caméra
+        if (Camera.main != null)
+        {
+            transform.rotation = Quaternion.LookRotation(transform.position - Camera.main.transform.position);
         }
     }
 }

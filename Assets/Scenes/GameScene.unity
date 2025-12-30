@@ -1617,6 +1617,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   spawnGameObject: {fileID: 1546354848}
   itemPrefab: {fileID: 4548420132521322343, guid: 343995e2a429e0549b3b405efd643698, type: 3}
+  interactionPromptPrefab: {fileID: 5061019214615508109, guid: fddc61452bf665749af40f04d627bf08, type: 3}
 --- !u!1 &300773306
 GameObject:
   m_ObjectHideFlags: 0
@@ -10797,9 +10798,9 @@ SceneRoots:
   - {fileID: 961739753}
   - {fileID: 231686116}
   - {fileID: 1575275824}
+  - {fileID: 51381988}
   - {fileID: 1144193956}
   - {fileID: 806726613}
-  - {fileID: 51381988}
   - {fileID: 203844589}
   - {fileID: 1364653639}
   - {fileID: 229524923}

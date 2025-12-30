@@ -12,7 +12,7 @@ TagManager:
   - BattleZone
   - Water
   - UI
-  - 
+  - UI_World
   - 
   - 
   - 
@@ -44,6 +44,9 @@ TagManager:
     locked: 0
   - name: Characters
     uniqueID: 3320766967
+    locked: 0
+  - name: UI_World
+    uniqueID: 2471337577
     locked: 0
   m_RenderingLayers:
   - Default

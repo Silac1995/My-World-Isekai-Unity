@@ -3,61 +3,64 @@ using UnityEngine;
 
 public class CharacterUI : MonoBehaviour
 {
-    [SerializeField] private Vector3 offset = new Vector3(0, 2f, 0); // Position au-dessus du perso
-
+    [Header("Targeting")]
     [SerializeField] private Character character;
-    public Character Character => character;
+    [SerializeField] private bool useColliderTop = true; // Se place automatiquement au sommet du perso
+    [SerializeField] private Transform manualAnchor;    // Ou utilise une ancre placée à la main
 
     [Header("UI Elements")]
-    [SerializeField] private StatBar healthBar;
-    public StatBar HealthBar => healthBar;
+    [SerializeField] private TextMeshProUGUI nameText;
 
-    [SerializeField] private StatBar staminaBar;
-    public StatBar StaminaBar => staminaBar;
-
-    [SerializeField] private StatBar manaBar;
-    public StatBar ManaBar => manaBar;
-
-    [SerializeField] private StatBar initiativeBar;
-    public StatBar InitiativeBar => initiativeBar;
-
-    [Header("Character Name")]
-    [SerializeField] private TextMeshProUGUI nameText; // Assigné dans l’Inspector
-
+    private Collider targetCollider;
     private string lastCharacterName;
 
-    private void Awake()
+    private void Start()
     {
-        UpdateNameText();
+        if (character != null)
+        {
+            targetCollider = character.GetComponentInChildren<Collider>();
+            UpdateNameText();
+        }
     }
 
     private void LateUpdate()
     {
-        if (character == null || Camera.main == null)
-            return;
+        if (character == null || Camera.main == null) return;
 
-        // Position UI
-        transform.position = character.transform.position + offset;
-
-        // Orientation vers caméra (axe Y fixe)
-        Vector3 directionToCamera = Camera.main.transform.position - transform.position;
-        directionToCamera.y = 0f;
-        if (directionToCamera != Vector3.zero)
+        // --- 1. CALCUL DE LA POSITION ---
+        Vector3 targetPos;
+        if (manualAnchor != null)
         {
-            transform.rotation = Quaternion.LookRotation(-directionToCamera, Vector3.up);
+            targetPos = manualAnchor.position;
+        }
+        else if (useColliderTop && targetCollider != null)
+        {
+            // Se place au sommet du collider
+            targetPos = new Vector3(targetCollider.bounds.center.x, targetCollider.bounds.max.y, targetCollider.bounds.center.z);
+        }
+        else
+        {
+            // Fallback sur le transform + offset simple
+            targetPos = character.transform.position + Vector3.up * 2f;
         }
 
-        // Mise à jour du nom si changement
+        transform.position = targetPos;
+
+        // --- 2. BILLBOARD (FACE À LA CAMÉRA) ---
+        // On copie la rotation de la caméra pour que le texte soit TOUJOURS 
+        // parfaitement parallèle à l'écran du joueur (standard en UI World Space)
+        transform.rotation = Camera.main.transform.rotation;
+
+        // --- 3. MISE À JOUR DU NOM ---
         if (character.CharacterName != lastCharacterName)
         {
             UpdateNameText();
         }
     }
 
-
     private void UpdateNameText()
     {
-        if (nameText != null)
+        if (nameText != null && character != null)
         {
             lastCharacterName = character.CharacterName;
             nameText.text = lastCharacterName;
