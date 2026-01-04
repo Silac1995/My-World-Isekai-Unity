@@ -4,13 +4,13 @@ using UnityEngine.AI;
 public abstract class CharacterGameController : MonoBehaviour
 {
     [SerializeField] protected CharacterVisual characterVisual;
-
     [SerializeField] protected Character character;
     [SerializeField] protected Animator animator;
     [SerializeField] protected NavMeshAgent agent;
 
-    // IA
+    // IA - Propriété publique pour la lecture (utile pour le UI_CharacterDebugScript !)
     protected IAIBehaviour currentBehaviour;
+    public IAIBehaviour CurrentBehaviour => currentBehaviour;
 
     public Character Character => character;
     public Animator Animator => animator;
@@ -25,15 +25,22 @@ public abstract class CharacterGameController : MonoBehaviour
         if (agent == null)
             agent = gameObject.AddComponent<NavMeshAgent>();
 
-        if (!character.IsAlive())
+        // IMPORTANT : Si tu utilises un rig 2D, assure-toi que l'agent 
+        // n'essaie pas de faire tourner le transform lui-même.
+        agent.updateRotation = false;
+        agent.updateUpAxis = false;
+
+        if (character != null && !character.IsAlive())
             enabled = false;
 
         agent.speed = character != null ? character.MovementSpeed : 3.5f;
     }
 
-    // Tout le monde appelle Move à chaque frame
     protected virtual void Update()
     {
+        // On exécute le comportement avant de calculer les mouvements/animations
+        currentBehaviour?.Act(character);
+
         Move();
         UpdateAnimations();
         UpdateFlip();
@@ -42,7 +49,10 @@ public abstract class CharacterGameController : MonoBehaviour
     protected virtual void UpdateAnimations()
     {
         if (animator != null && agent != null)
+        {
+            // magnitude > 0.1f suffit pour détecter le mouvement sur le NavMesh
             animator.SetBool("isWalking", agent.velocity.magnitude > 0.1f);
+        }
     }
 
     protected virtual void UpdateFlip()
@@ -55,25 +65,28 @@ public abstract class CharacterGameController : MonoBehaviour
     {
         if (agent != null && !agent.isOnNavMesh)
         {
-            // Corrige la position sur le NavMesh si possible
             if (NavMesh.SamplePosition(transform.position, out NavMeshHit hit, 5f, NavMesh.AllAreas))
             {
-                float offset = 0.5f; // ou une valeur paramétrable si pivot au milieu
+                float offset = 0.5f;
                 transform.position = hit.position + Vector3.up * offset;
-
                 agent.Warp(transform.position);
-                Debug.Log($"Personnage repositionné sur le NavMesh : {transform.position}");
             }
         }
-
-        // Applique le comportement IA si défini
-        currentBehaviour?.Act(character);
     }
-
 
     public void SetBehaviour(IAIBehaviour behaviour)
     {
-        Debug.Log($"SetBehaviour");
+        // 1. APPEL DE EXIT : On prévient l'ancien comportement qu'il s'arrête
+        // C'est ici que la coroutine de Wander sera stoppée
+        if (currentBehaviour != null)
+        {
+            currentBehaviour.Exit(character);
+        }
+
+        string behaviourName = behaviour != null ? behaviour.GetType().Name : "None";
+        Debug.Log($"{gameObject.name} change de comportement pour : {behaviourName}");
+
+        // 2. CHANGEMENT : On assigne le nouveau
         currentBehaviour = behaviour;
     }
 }

@@ -389,7 +389,7 @@ public class Character : MonoBehaviour
         }
     }
 
-    public bool IsFree() => !IsInBattle() && !CharacterInteraction.IsInInteraction();
+    public bool IsFree() => !IsInBattle() && !CharacterInteraction.IsInteracting;
 
     public void UseConsumable(ConsumableInstance consumable)
     {

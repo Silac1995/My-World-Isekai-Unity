@@ -30,4 +30,14 @@ public class FollowTargetBehaviour : IAIBehaviour
             agent.ResetPath(); // stoppe le NPC quand il est proche
         }
     }
+    public void Exit(Character self)
+    {
+        // On arrête proprement l'agent pour qu'il ne continue pas vers la cible
+        if (agent != null && agent.isOnNavMesh)
+        {
+            agent.ResetPath();
+        }
+
+        Debug.Log($"{self.CharacterName} arrête de suivre sa cible.");
+    }
 }

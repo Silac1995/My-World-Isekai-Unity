@@ -10,6 +10,7 @@ public class WanderBehaviour : IAIBehaviour
     private float maxWait;
     private Vector3 currentDestination;
     private bool waiting = false;
+    private Coroutine currentWaitCoroutine;
 
     public WanderBehaviour(NPCController npcController)
     {
@@ -33,7 +34,26 @@ public class WanderBehaviour : IAIBehaviour
         // Si on a atteint la destination, attendre un peu puis choisir une nouvelle
         if (!agent.pathPending && agent.remainingDistance <= agent.stoppingDistance)
         {
-            npcController.StartCoroutine(WaitAndPickNew());
+            if (!waiting) // On vérifie pour ne pas lancer 50 coroutines
+                currentWaitCoroutine = npcController.StartCoroutine(WaitAndPickNew());
+        }
+    }
+    public void Exit(Character selfCharacter)
+    {
+        // 1. On stoppe la coroutine de wait immédiatement
+        if (npcController != null && currentWaitCoroutine != null)
+        {
+            npcController.StopCoroutine(currentWaitCoroutine);
+            currentWaitCoroutine = null;
+        }
+
+        waiting = false;
+
+        // 2. On vide le chemin de l'agent pour éviter le "sursaut" de mouvement
+        if (npcController.Agent != null && npcController.Agent.isOnNavMesh)
+        {
+            npcController.Agent.ResetPath();
+            npcController.Agent.velocity = Vector3.zero;
         }
     }
 

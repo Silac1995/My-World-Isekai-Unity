@@ -1,105 +1,101 @@
+using System;
 using UnityEngine;
 
 public class CharacterInteraction
 {
-    private Character character;
-    private Character currentInteractionTarget;
+    private readonly Character characterInitiator;
+
+    // Propriété publique pour savoir avec qui on interagit
+    public Character CurrentTarget { get; private set; }
+
+    // Raccourci pour vérifier l'état
+    public bool IsInteracting => CurrentTarget != null;
 
     public CharacterInteraction(Character character)
     {
-        this.character = character;
+        this.characterInitiator = character;
     }
 
-    /// <summary>
-    /// Starts an interaction with the given target character without performing an action yet.
-    /// </summary>
     public void StartInteractionWith(Character target)
     {
-        if (target == null)
+        if (target == null || CurrentTarget == target) return;
+
+        // On vérifie que l'initiateur et la cible sont libres
+        if (!characterInitiator.IsFree() || !target.IsFree())
         {
-            Debug.LogWarning($"{character.name} tried to start interaction, but target is null.");
+            Debug.LogWarning($"{characterInitiator.CharacterName} ou {target.CharacterName} est occupé.");
             return;
         }
 
-        if (!character.IsFree())
-        {
-            Debug.LogWarning($"{character.name} cannot start interaction because they are busy.");
-            return;
-        }
+        // Établissement de la connexion
+        CurrentTarget = target;
 
-        if (!target.IsFree())
-        {
-            Debug.LogWarning($"{target.name} cannot be interacted with because they are busy.");
-            return;
-        }
+        // On définit la cible chez l'autre sans logique complexe pour éviter la récursion
+        target.CharacterInteraction.SetInteractionTargetInternal(characterInitiator);
 
-        currentInteractionTarget = target;
-        target.CharacterInteraction.currentInteractionTarget = character;
-
-        Debug.Log($"{character.CharacterName} started interaction with {target.CharacterName}.");
+        Debug.Log($"{characterInitiator.CharacterName} (Initiator) a commencé une interaction avec {target.CharacterName}.");
     }
 
-
-    /// <summary>
-    /// Executes a given interaction action with a target character.
-    /// </summary>
     public void PerformInteraction(ICharacterInteractionAction action, Character target)
     {
-        if (action == null || target == null)
-        {
-            Debug.LogWarning($"{character.name} interaction failed: action or target is null.");
-            return;
-        }
+        if (action == null || target == null) return;
 
         StartInteractionWith(target);
-        action.Execute(character, target);
+
+        // On n'exécute l'action que si l'interaction a bien été établie
+        if (CurrentTarget == target)
+        {
+            action.Execute(characterInitiator, target);
+        }
     }
 
-    /// <summary>
-    /// Returns true if currently interacting with a character.
-    /// </summary>
-    public bool IsInInteraction()
-    {
-        return currentInteractionTarget != null;
-    }
-
-    /// <summary>
-    /// Returns the character currently being interacted with.
-    /// </summary>
-    public Character GetCharacterInteractionWith()
-    {
-        return currentInteractionTarget;
-    }
-
-    /// <summary>
-    /// Ends the current interaction and also tells the target to end theirs.
-    /// </summary>
     public void EndInteraction()
     {
-        if (currentInteractionTarget != null)
+        if (CurrentTarget == null) return;
+
+        Character previousTarget = CurrentTarget;
+        CurrentTarget = null;
+
+        // --- Logique de remise en état (Behaviour) ---
+        // On nettoie le comportement du personnage local (celui qui possède ce script)
+        ResetBehaviourToDefault(characterInitiator);
+
+        Debug.Log($"{characterInitiator.CharacterName} a terminé l'interaction.");
+
+        // --- Synchronisation avec l'autre personnage ---
+        if (previousTarget.CharacterInteraction.CurrentTarget == characterInitiator)
         {
-            Debug.Log($"{character.name} stopped interacting with {currentInteractionTarget.name}.");
-
-            // Tell the other character to end interaction too
-            if (currentInteractionTarget.CharacterInteraction.IsInInteraction() &&
-                currentInteractionTarget.CharacterInteraction.GetCharacterInteractionWith() == character)
-            {
-                currentInteractionTarget.CharacterInteraction.ForceEndInteractionOnly();
-            }
-
-            currentInteractionTarget = null;
+            previousTarget.CharacterInteraction.EndInteraction();
         }
     }
 
-    /// <summary>
-    /// Ends this character's interaction without calling back to the other (used internally to avoid recursion).
-    /// </summary>
-    private void ForceEndInteractionOnly()
+    private void ResetBehaviourToDefault(Character character)
     {
-        if (currentInteractionTarget != null)
+        // 1. On nettoie l'action en cours
+        character.CharacterActions.ClearCurrentAction();
+
+        // 2. On remet le comportement par défaut
+        var controller = character.GetComponent<CharacterGameController>();
+        if (controller == null) return;
+
+        if (character.TryGetComponent<NPCController>(out var npc))
         {
-            Debug.Log($"{character.name} stopped interacting with {currentInteractionTarget.name} (forced end).");
-            currentInteractionTarget = null;
+            controller.SetBehaviour(new WanderBehaviour(npc));
         }
+        else
+        {
+            controller.SetBehaviour(new IdleBehaviour());
+        }
+    }
+
+    // Utilisé pour lier l'interaction du côté de la cible
+    internal void SetInteractionTargetInternal(Character target)
+    {
+        CurrentTarget = target;
+    }
+
+    internal void PerformInteraction(InteractBehaviour interactBehaviour, Character character)
+    {
+        throw new NotImplementedException();
     }
 }

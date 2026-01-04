@@ -27,8 +27,28 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
                 // --- CAS 1 : PERSONNAGE ---
                 if (currentTarget.TryGetComponent(out CharacterInteractable charInteractable))
                 {
-                    currentTarget.Interact();
-                    Character?.CharacterInteraction?.PerformInteraction(new InteractionAskToFollow(), charInteractable.Character);
+                    Character targetChar = charInteractable.Character;
+                    if (targetChar == null) return;
+
+                    // Vérifier si on est déjà en interaction avec ce personnage précis
+                    if (Character.CharacterInteraction.IsInteracting &&
+                        Character.CharacterInteraction.CurrentTarget == targetChar)
+                    {
+                        // On annule l'interaction
+                        Character.CharacterInteraction.EndInteraction();
+
+                        Debug.Log($"Interaction avec {targetChar.CharacterName} annulée.");
+                    }
+                    else
+                    {
+                        // Sinon, on démarre l'interaction normalement
+                        currentTarget.Interact();
+                        var startAction = new CharacterStartInteraction(Character, targetChar);
+                        Character.CharacterActions.PerformAction(startAction);
+
+                        // Si tu veux toujours que "E" fasse suivre par défaut après le start :
+                        // Character.CharacterInteraction.PerformInteraction(new InteractionAskToFollow(), targetChar);
+                    }
                 }
 
                 // --- CAS 2 : ITEM ---
