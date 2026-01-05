@@ -5,11 +5,10 @@ public abstract class InteractableObject : MonoBehaviour
     [Header("Interaction")]
     public string interactionPrompt = "Press E to interact";
 
-    // Optionnel pour le survol UI
-    public virtual void OnCharacterEnter() { }
+    // On passe le Character qui déclenche l'action
+    public abstract void Interact(Character interactor);
 
-    public virtual void OnCharacterExit() { }
-
-    // Appelé quand le joueur appuie sur E
-    public abstract void Interact();
+    // On peut aussi mettre à jour les méthodes de survol pour savoir qui survole
+    public virtual void OnCharacterEnter(Character interactor) { }
+    public virtual void OnCharacterExit(Character interactor) { }
 }

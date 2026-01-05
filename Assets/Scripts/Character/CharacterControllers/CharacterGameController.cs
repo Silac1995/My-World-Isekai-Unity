@@ -76,15 +76,22 @@ public abstract class CharacterGameController : MonoBehaviour
 
     public void SetBehaviour(IAIBehaviour behaviour)
     {
+        // Sécurité : Si c'est le joueur, on refuse généralement le changement de comportement IA
+        // Sauf si tu prévois des comportements spécifiques comme "Stun" ou "Cinématique"
+        if (character != null && character.IsPlayer())
+        {
+            Debug.Log($"<color=yellow>[AI]</color> Changement de comportement ignoré pour le Joueur ({gameObject.name}).");
+            return;
+        }
+
         // 1. APPEL DE EXIT : On prévient l'ancien comportement qu'il s'arrête
-        // C'est ici que la coroutine de Wander sera stoppée
         if (currentBehaviour != null)
         {
             currentBehaviour.Exit(character);
         }
 
         string behaviourName = behaviour != null ? behaviour.GetType().Name : "None";
-        Debug.Log($"{gameObject.name} change de comportement pour : {behaviourName}");
+        Debug.Log($"<color=cyan>[AI]</color> {gameObject.name} change de comportement pour : {behaviourName}");
 
         // 2. CHANGEMENT : On assigne le nouveau
         currentBehaviour = behaviour;

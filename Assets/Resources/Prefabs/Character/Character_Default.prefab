@@ -1,5 +1,77 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
+--- !u!1 &2965803382657509719
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 215557950362507917}
+  - component: {fileID: 3273106316842190247}
+  - component: {fileID: 5591531300363831708}
+  m_Layer: 0
+  m_Name: Interaction
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &215557950362507917
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2965803382657509719}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 6179432398992828966}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &3273106316842190247
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2965803382657509719}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e324887878c9e2e42b8da3491c9a0b15, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CharacterInteraction
+  _character: {fileID: 2536622428659117900}
+  _currentTarget: {fileID: 0}
+  _interactionZone: {fileID: 5591531300363831708}
+  _interactionActionPrefab: {fileID: 7422820631460187334, guid: 8ddcc839afed96c409131b535aab38ac, type: 3}
+--- !u!136 &5591531300363831708
+CapsuleCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2965803382657509719}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 1
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 2
+  m_Radius: 0.5
+  m_Height: 1
+  m_Direction: 1
+  m_Center: {x: 0, y: 0, z: 0}
 --- !u!1 &4281310202761960642
 GameObject:
   m_ObjectHideFlags: 0
@@ -14,7 +86,6 @@ GameObject:
   - component: {fileID: 2536622428659117900}
   - component: {fileID: 3158310397905717539}
   - component: {fileID: 2677209831397210094}
-  - component: {fileID: 7133391882816314211}
   - component: {fileID: 4447047040555525631}
   - component: {fileID: 7849920087381694904}
   - component: {fileID: 3369343900060323110}
@@ -45,6 +116,7 @@ Transform:
   - {fileID: 7548370862418862157}
   - {fileID: 2146869985690736942}
   - {fileID: 4629397348468206407}
+  - {fileID: 215557950362507917}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!54 &3937668831498777898
@@ -119,7 +191,7 @@ MonoBehaviour:
   _characterVisual: {fileID: 4467461276411840628}
   _controller: {fileID: 8530357501166543435}
   _equipment: {fileID: 8408755073701722020}
-  _characterInteraction: {fileID: 7133391882816314211}
+  _characterInteraction: {fileID: 3273106316842190247}
 --- !u!114 &3158310397905717539
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -223,20 +295,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _character: {fileID: 2536622428659117900}
---- !u!114 &7133391882816314211
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4281310202761960642}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e324887878c9e2e42b8da3491c9a0b15, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::CharacterInteraction
-  _character: {fileID: 2536622428659117900}
-  _currentTarget: {fileID: 0}
 --- !u!195 &4447047040555525631
 NavMeshAgent:
   m_ObjectHideFlags: 0
@@ -910,6 +968,10 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 9136434367137043347, guid: e6c547ea9c2f5a14783afa3d58700597, type: 3}
       propertyPath: character
+      value: 
+      objectReference: {fileID: 2536622428659117900}
+    - target: {fileID: 9136434367137043347, guid: e6c547ea9c2f5a14783afa3d58700597, type: 3}
+      propertyPath: _character
       value: 
       objectReference: {fileID: 2536622428659117900}
     m_RemovedComponents: []

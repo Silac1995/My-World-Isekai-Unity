@@ -24,7 +24,7 @@ public class ItemInteractable : InteractableObject
         }
     }
 
-    public override void Interact()
+    public override void Interact(Character interactor)
     {
         if (ItemInstance == null)
         {

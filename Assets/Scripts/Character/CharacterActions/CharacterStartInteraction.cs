@@ -2,49 +2,55 @@ using UnityEngine;
 
 public class CharacterStartInteraction : CharacterAction
 {
-    private Character target;
+    private Character _target;
 
     public CharacterStartInteraction(Character character, Character target) : base(character)
     {
-        this.target = target ?? throw new System.ArgumentNullException(nameof(target));
+        _target = target ?? throw new System.ArgumentNullException(nameof(target));
     }
 
     public override void PerformAction()
     {
-        // 1. Sécurité supplémentaire
-        if (target == null) return;
+        if (_target == null) return;
 
-        // 2. Faire face à l'autre personnage
-        // On utilise la nouvelle méthode FaceTarget du CharacterVisual
-        if (character.CharacterVisual != null)
+        // 1. Visuel : Se faire face (Synchronisé pour tous les joueurs)
+        character.CharacterVisual?.FaceTarget(_target.transform.position);
+        _target.CharacterVisual?.FaceTarget(character.transform.position);
+
+        // 2. Logique : Créer le lien
+        character.CharacterInteraction.StartInteractionWith(_target);
+
+        // 3. IA : Stopper les mouvements (Wander -> Interact)
+        _target.Controller?.SetBehaviour(new InteractBehaviour());
+        character.Controller?.SetBehaviour(new InteractBehaviour());
+
+        // 4. UI : Affichage LOCAL (Seulement pour le joueur qui contrôle 'character')
+        if (character.IsPlayer())
         {
-            character.CharacterVisual.FaceTarget(target.transform.position);
+            ShowInteractionUI();
         }
 
-        if (target.CharacterVisual != null)
+        Debug.Log($"<color=cyan>[Action]</color> {character.CharacterName} interagit avec {_target.CharacterName}");
+    }
+
+    private void ShowInteractionUI()
+    {
+        GameObject prefabUI = _target.CharacterInteraction.InteractionActionPrefab;
+        if (prefabUI == null) return;
+
+        // On cherche le WorldUIManager dans la scène
+        GameObject worldCanvas = GameObject.Find("WorldUIManager");
+        if (worldCanvas == null)
         {
-            target.CharacterVisual.FaceTarget(character.transform.position);
+            Debug.LogError("WorldUIManager non trouvé ! L'UI sera instanciée sans parent.");
         }
 
-        // 3. Logique de lien via CharacterInteraction
-        character.CharacterInteraction.StartInteractionWith(target);
+        // Instanciation dans le WorldUIManager
+        GameObject uiInstance = Object.Instantiate(prefabUI, worldCanvas != null ? worldCanvas.transform : null);
 
-        // 4. Changement de Behaviour pour la cible
-        var targetController = target.GetComponent<CharacterGameController>();
-        if (targetController != null)
+        if (uiInstance.TryGetComponent(out UI_InteractionCharacterScript uiScript))
         {
-            targetController.SetBehaviour(new InteractBehaviour());
+            uiScript.Initialize(character, _target);
         }
-
-        // 5. Changement de Behaviour pour l'initiateur
-        var sourceController = character.GetComponent<CharacterGameController>();
-        if (sourceController != null)
-        {
-            sourceController.SetBehaviour(new InteractBehaviour());
-        }
-
-        Debug.Log($"{character.CharacterName} et {target.CharacterName} se font désormais face.");
-
-        // UI_InteractionMenu.Show(character, target);
     }
 }

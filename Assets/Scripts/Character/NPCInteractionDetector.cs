@@ -42,7 +42,7 @@ public class NPCInteractionDetector : CharacterInteractionDetector
                 else
                 {
                     // Interaction avec un InteractableObject générique (si souhaité)
-                    currentTarget.Interact();
+                    currentTarget.Interact(Character);
                     Debug.Log($"NPC interagit avec l'objet générique {currentTarget.name}.", this);
                 }
                 lastInteractionTime = Time.time;

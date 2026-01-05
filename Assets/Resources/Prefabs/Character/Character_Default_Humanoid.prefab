@@ -100,6 +100,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 215557950362507917, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 5.59
+      objectReference: {fileID: 0}
     - target: {fileID: 1625456642069661774, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       propertyPath: m_AnchorMax.y
       value: 0
@@ -112,6 +116,10 @@ PrefabInstance:
       propertyPath: equipment
       value: 
       objectReference: {fileID: 315613733655778041}
+    - target: {fileID: 3273106316842190247, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
+      propertyPath: _interactionZone
+      value: 
+      objectReference: {fileID: 4416257873846381761}
     - target: {fileID: 4281310202761960642, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       propertyPath: m_Name
       value: Character_Default_Humanoid
@@ -124,6 +132,22 @@ PrefabInstance:
       propertyPath: animator
       value: 
       objectReference: {fileID: 5365839274522062071}
+    - target: {fileID: 5483542709161238176, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
+      propertyPath: m_Radius
+      value: 2.47
+      objectReference: {fileID: 0}
+    - target: {fileID: 5591531300363831708, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
+      propertyPath: m_Height
+      value: 9.7
+      objectReference: {fileID: 0}
+    - target: {fileID: 5591531300363831708, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
+      propertyPath: m_Radius
+      value: 9.8
+      objectReference: {fileID: 0}
+    - target: {fileID: 5591531300363831708, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
+      propertyPath: m_Direction
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 6179432398992828966, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0
@@ -245,12 +269,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5e2ae5a8e3d3e1549aab6695a7ba1eff, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ArmorLayer
-  head: {fileID: 0}
-  chest: {fileID: 0}
-  gloves: {fileID: 0}
-  legs: {fileID: 0}
-  boots: {fileID: 0}
-  bag: {fileID: 0}
   headSockets: []
   chestSockets: []
   glovesSockets: []
@@ -269,12 +287,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 843ddc6d22a4a8c46833e5247e82bd58, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ClothingLayer
-  head: {fileID: 0}
-  chest: {fileID: 0}
-  gloves: {fileID: 0}
-  legs: {fileID: 0}
-  boots: {fileID: 0}
-  bag: {fileID: 0}
   headSockets: []
   chestSockets:
   - {fileID: 5673009136164904555}
@@ -298,18 +310,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 55ee1f50c0562fd4d9196c7a7c779835, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::UnderwearLayer
-  head: {fileID: 0}
-  chest: {fileID: 0}
-  gloves: {fileID: 0}
-  legs: {fileID: 0}
-  boots: {fileID: 0}
-  bag: {fileID: 0}
   headSockets: []
   chestSockets: []
   glovesSockets: []
   legsSockets: []
   bootsSockets: []
   bagSockets: []
+--- !u!136 &4416257873846381761 stripped
+CapsuleCollider:
+  m_CorrespondingSourceObject: {fileID: 5591531300363831708, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
+  m_PrefabInstance: {fileID: 8129189969094288733}
+  m_PrefabAsset: {fileID: 0}
 --- !u!114 &6558434741305961598 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 3158310397905717539, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}

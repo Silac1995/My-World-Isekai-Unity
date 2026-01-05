@@ -34,7 +34,7 @@ public abstract class CharacterInteractionDetector : MonoBehaviour
             currentTarget = interactable;
             if (currentTarget != null)
             {
-                currentTarget.OnCharacterEnter();
+                currentTarget.OnCharacterEnter(selfCharacter);
                 Debug.Log($"Cible détectée : {interactable.name}", this);
             }
             else
@@ -50,7 +50,7 @@ public abstract class CharacterInteractionDetector : MonoBehaviour
         {
             if (currentTarget != null)
             {
-                currentTarget.OnCharacterExit();
+                currentTarget.OnCharacterExit(selfCharacter);
                 Debug.Log($"Cible {interactable.name} sortie.", this);
             }
             currentTarget = null;

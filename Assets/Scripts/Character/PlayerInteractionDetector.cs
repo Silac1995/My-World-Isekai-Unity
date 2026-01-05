@@ -25,30 +25,26 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
             try
             {
                 // --- CAS 1 : PERSONNAGE ---
-                if (currentTarget.TryGetComponent(out CharacterInteractable charInteractable))
+                if (currentTarget is CharacterInteractable charInteractable)
                 {
                     Character targetChar = charInteractable.Character;
                     if (targetChar == null) return;
 
-                    // Vérifier si on est déjà en interaction avec ce personnage précis
+                    // 1. Vérifier si on veut fermer une interaction existante
                     if (Character.CharacterInteraction.IsInteracting &&
                         Character.CharacterInteraction.CurrentTarget == targetChar)
                     {
-                        // On annule l'interaction
+                        Debug.Log($"<color=orange>[Interaction]</color> Fermeture manuelle avec {targetChar.CharacterName}");
                         Character.CharacterInteraction.EndInteraction();
-
-                        Debug.Log($"Interaction avec {targetChar.CharacterName} annulée.");
+                        return;
                     }
-                    else
-                    {
-                        // Sinon, on démarre l'interaction normalement
-                        currentTarget.Interact();
-                        var startAction = new CharacterStartInteraction(Character, targetChar);
-                        Character.CharacterActions.PerformAction(startAction);
 
-                        // Si tu veux toujours que "E" fasse suivre par défaut après le start :
-                        // Character.CharacterInteraction.PerformInteraction(new InteractionAskToFollow(), targetChar);
-                    }
+                    // 2. Lancer l'interaction
+                    // C'est maintenant CharacterInteractable.Interact qui va créer 
+                    // et lancer la CharacterStartInteraction.
+                    currentTarget.Interact(Character);
+
+                    Debug.Log($"<color=cyan>[Interaction]</color> Signal envoyé à l'interactable de {targetChar.CharacterName}");
                 }
 
                 // --- CAS 2 : ITEM ---
@@ -56,20 +52,17 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
                 {
                     ItemInstance instance = itemInteractable.ItemInstance;
 
-                    currentTarget.Interact();
-                    // Sécurités
+                    // Appel de la nouvelle signature
+                    currentTarget.Interact(Character);
+
                     if (instance?.ItemSO == null) return;
 
                     if (instance is EquipmentInstance equipment)
                     {
                         if (Character?.CharacterEquipment != null)
                         {
-                            // 1. On équipe
                             Character.CharacterEquipment.Equip(equipment);
-
-                            // 2. On détruit le prefab complet (la racine)
-                            // On utilise itemInteractable.transform.root pour être sûr de supprimer 
-                            // l'objet parent WorldItem_NomItem et pas juste l'enfant.
+                            // On détruit la racine (le WorldItem)
                             Destroy(itemInteractable.transform.root.gameObject);
                         }
                     }
@@ -77,7 +70,7 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
             }
             catch (System.Exception ex)
             {
-                Debug.LogError($"[Interaction] Erreur sur {currentTarget.name}: {ex.Message}");
+                Debug.LogError($"<color=red>[Interaction Error]</color> Sur {currentTarget.name}: {ex.Message}");
             }
         }
     }
@@ -90,7 +83,7 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
         {
             if (currentTarget != null)
             {
-                currentTarget.OnCharacterExit();
+                currentTarget.OnCharacterExit(Character);
                 currentTarget = null;
             }
             if (currentPromptUI != null)
@@ -115,7 +108,7 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
         {
             if (currentTarget != null)
             {
-                currentTarget.OnCharacterExit();
+                currentTarget.OnCharacterExit(Character);
                 if (currentPromptUI != null)
                 {
                     Destroy(currentPromptUI);
@@ -124,7 +117,7 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
             }
 
             currentTarget = closest;
-            currentTarget.OnCharacterEnter();
+            currentTarget.OnCharacterEnter(Character);
 
             if (interactionPromptPrefab == null)
             {
@@ -193,7 +186,7 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
 
                 if (interactable == currentTarget)
                 {
-                    currentTarget.OnCharacterExit();
+                    currentTarget.OnCharacterExit(Character);
                     currentTarget = null;
                     if (currentPromptUI != null)
                     {
