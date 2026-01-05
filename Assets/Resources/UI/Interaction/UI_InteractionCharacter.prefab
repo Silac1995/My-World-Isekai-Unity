@@ -172,7 +172,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: -302.15466, y: 90.20148}
+  m_AnchoredPosition: {x: -172.86299, y: 0}
   m_SizeDelta: {x: 260, y: 130}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &886894145151513079
@@ -342,19 +342,30 @@ PrefabInstance:
     m_AddedComponents:
     - targetCorrespondingSourceObject: {fileID: 4250764810196444769, guid: 716a6e4c95944ee408e83d8e2099d87c, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 3978617254989845876}
+      addedObject: {fileID: 7665381404241210224}
   m_SourcePrefab: {fileID: 100100000, guid: 716a6e4c95944ee408e83d8e2099d87c, type: 3}
 --- !u!224 &5866717887978853559 stripped
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 906398689905720848, guid: 716a6e4c95944ee408e83d8e2099d87c, type: 3}
   m_PrefabInstance: {fileID: 6773106094938876583}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &5899618392653412580 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 874067420869481027, guid: 716a6e4c95944ee408e83d8e2099d87c, type: 3}
+  m_PrefabInstance: {fileID: 6773106094938876583}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4e29b1a8efbd4b44bb3f3716e73f07ff, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Button
 --- !u!1 &7422820631460187334 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 4250764810196444769, guid: 716a6e4c95944ee408e83d8e2099d87c, type: 3}
   m_PrefabInstance: {fileID: 6773106094938876583}
   m_PrefabAsset: {fileID: 0}
---- !u!114 &3978617254989845876
+--- !u!114 &7665381404241210224
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -366,8 +377,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: dba010020223ac14baa938286f1aa412, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::UI_InteractionCharacterScript
-  closeButton: {fileID: 0}
-  followButton: {fileID: 0}
+  closeButton: {fileID: 5899618392653412580}
+  character: {fileID: 0}
+  followButton: {fileID: 3302610496172660859}
   targetNameText: {fileID: 0}
   _offset: {x: 0, y: 2.5, z: 0}
   _targetCharacter: {fileID: 0}

@@ -64,13 +64,14 @@ public class CharacterInteraction : MonoBehaviour
         if (_currentTarget == null) return;
 
         Character previousTarget = _currentTarget;
-        CurrentTarget = null;
+        _currentTarget = null;
 
+        // Cet événement va prévenir TOUS ceux qui écoutent (dont l'UI) que c'est fini
         OnInteractionStateChanged?.Invoke(previousTarget, false);
 
         ResetBehaviourToDefault(_character);
 
-        // Sécurité pour éviter une boucle infinie de EndInteraction
+        // Sécurité pour la cible
         if (previousTarget.CharacterInteraction.CurrentTarget == _character)
         {
             previousTarget.CharacterInteraction.EndInteraction();
@@ -83,6 +84,16 @@ public class CharacterInteraction : MonoBehaviour
         var controller = character.GetComponent<CharacterGameController>();
         if (controller == null) return;
 
+        // --- LA CORRECTION EST ICI ---
+        // Si le comportement actuel est déjà "FollowTargetBehaviour", 
+        // on ne veut SURTOUT PAS le remettre en Wander.
+        if (controller.CurrentBehaviour is FollowTargetBehaviour)
+        {
+            Debug.Log($"<color=green>[Interaction]</color> {character.CharacterName} est en mode Follow, on ne reset pas son comportement.");
+            return;
+        }
+
+        // Sinon, on remet le comportement par défaut
         if (character.TryGetComponent<NPCController>(out var npc))
         {
             controller.SetBehaviour(new WanderBehaviour(npc));
@@ -98,5 +109,29 @@ public class CharacterInteraction : MonoBehaviour
         CurrentTarget = target;
         // On déclenche aussi l'event pour le partenaire afin que ses oreilles bougent aussi !
         OnInteractionStateChanged?.Invoke(target, true);
+    }
+
+    /// <summary>
+    /// Exécute une action d'interaction spécifique sur la cible actuelle.
+    /// </summary>
+    /// <param name="action">L'action à exécuter (ex: InteractionAskToFollow).</param>
+    public void PerformInteraction(ICharacterInteractionAction action)
+    {
+        if (action == null)
+        {
+            Debug.LogWarning($"<color=red>[Interaction]</color> Tentative d'exécuter une action nulle sur {_character.CharacterName}");
+            return;
+        }
+
+        if (_currentTarget == null)
+        {
+            Debug.LogWarning($"<color=orange>[Interaction]</color> {_character.CharacterName} essaie d'exécuter {action.GetType().Name} mais n'a pas de cible !");
+            return;
+        }
+
+        Debug.Log($"<color=green>[Interaction]</color> {_character.CharacterName} exécute {action.GetType().Name} sur {_currentTarget.CharacterName}");
+
+        // Exécution de l'interface
+        action.Execute(_character, _currentTarget);
     }
 }
