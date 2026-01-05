@@ -25,6 +25,7 @@ public class Character : MonoBehaviour
     [SerializeField] private CharacterGameController _controller;
     [SerializeField] private CharacterEquipment _equipment;
     [SerializeField] private CharacterInteraction _characterInteraction;
+    [SerializeField] private CharacterRelation _characterRelation;
     #endregion
 
     #region Private Fields
@@ -62,6 +63,7 @@ public class Character : MonoBehaviour
     public CharacterActions CharacterActions => _characterActions;
     public CharacterInteraction CharacterInteraction => _characterInteraction ?? throw new NullReferenceException($"CharacterInteraction non initialisé sur {gameObject.name}");
     public CharacterEquipment CharacterEquipment => _equipment;
+    public CharacterRelation CharacterRelation => _characterRelation;
 
     public Transform VisualRoot => _visualRoot;
     public GameObject CurrentVisualInstance => _currentVisualInstance;

@@ -72,6 +72,52 @@ CapsuleCollider:
   m_Height: 1
   m_Direction: 1
   m_Center: {x: 0, y: 0, z: 0}
+--- !u!1 &4064236070124105173
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 8052248722467460333}
+  - component: {fileID: 6939122470468663269}
+  m_Layer: 0
+  m_Name: Relation
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &8052248722467460333
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4064236070124105173}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 6179432398992828966}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &6939122470468663269
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4064236070124105173}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ed61d997ab6127642b9df9f7e1bec0ce, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CharacterRelation
+  _character: {fileID: 2536622428659117900}
+  _relationships: []
 --- !u!1 &4281310202761960642
 GameObject:
   m_ObjectHideFlags: 0
@@ -111,12 +157,13 @@ Transform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 1
   m_Children:
+  - {fileID: 215557950362507917}
+  - {fileID: 8052248722467460333}
   - {fileID: 1385890570874089402}
   - {fileID: 2098499672776739634}
   - {fileID: 7548370862418862157}
   - {fileID: 2146869985690736942}
   - {fileID: 4629397348468206407}
-  - {fileID: 215557950362507917}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!54 &3937668831498777898
@@ -192,6 +239,7 @@ MonoBehaviour:
   _controller: {fileID: 8530357501166543435}
   _equipment: {fileID: 8408755073701722020}
   _characterInteraction: {fileID: 3273106316842190247}
+  _characterRelation: {fileID: 6939122470468663269}
 --- !u!114 &3158310397905717539
 MonoBehaviour:
   m_ObjectHideFlags: 0

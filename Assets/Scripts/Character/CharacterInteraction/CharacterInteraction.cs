@@ -57,6 +57,26 @@ public class CharacterInteraction : MonoBehaviour
         OnInteractionStateChanged?.Invoke(target, true);
 
         target.CharacterInteraction.SetInteractionTargetInternal(_character);
+
+        // --- GESTION DE LA RELATION ET DE LA RENCONTRE ---
+
+        // 1. On s'assure que la relation existe (AddRelationship gère déjà la réciprocité)
+        Relationship rel = _character.CharacterRelation.AddRelationship(target);
+
+        // 2. On passe le statut à "Met" (Rencontré) pour le personnage actuel
+        if (rel != null)
+        {
+            rel.SetAsMet();
+        }
+
+        // 3. On fait de même pour le partenaire (réciprocité du "HasMet")
+        Relationship targetRel = target.CharacterRelation.GetRelationshipWith(_character);
+        if (targetRel != null)
+        {
+            targetRel.SetAsMet();
+        }
+
+        Debug.Log($"<color=cyan>[Relation]</color> {_character.CharacterName} et {target.CharacterName} se sont officiellement rencontrés.");
     }
 
     public void EndInteraction()
