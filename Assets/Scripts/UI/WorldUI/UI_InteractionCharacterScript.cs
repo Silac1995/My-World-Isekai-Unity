@@ -5,6 +5,7 @@ public class UI_InteractionCharacterScript : UI_InteractionScript
 {
     [Header("Character Actions")]
     [SerializeField] private Button followButton;
+    [SerializeField] private Button talkButton;
     [SerializeField] private TMPro.TextMeshProUGUI targetNameText;
 
     [Header("Settings")]
@@ -32,13 +33,17 @@ public class UI_InteractionCharacterScript : UI_InteractionScript
         if (targetNameText != null)
             targetNameText.text = target.CharacterName;
 
+        // --- Listeners des boutons ---
         if (followButton != null)
             followButton.onClick.AddListener(OnFollowClicked);
+
+        if (talkButton != null)
+            talkButton.onClick.AddListener(OnTalkClicked); // Nouvel ajout
 
         initiator.CharacterInteraction.OnInteractionStateChanged += HandleInteractionChanged;
         target.CharacterInteraction.OnInteractionStateChanged += HandleInteractionChanged;
 
-        Debug.Log($"<color=cyan>[UI]</color> Initialisée pour suivre {target.CharacterName}");
+        Debug.Log($"<color=cyan>[UI]</color> Initialisée pour {initiator.CharacterName} interagissant avec {target.CharacterName}");
     }
 
     private void Update()
@@ -109,5 +114,23 @@ public class UI_InteractionCharacterScript : UI_InteractionScript
         }
 
         Close();
+    }
+
+    // --- Logique du bouton Talk ---
+    private void OnTalkClicked()
+    {
+        Debug.Log("<color=green>[UI]</color> Bouton Talk cliqué.");
+        if (character != null && _targetCharacter != null)
+        {
+            // On crée l'action de discussion
+            ICharacterInteractionAction talkAction = new InteractionTalk();
+
+            // On l'exécute (ce qui augmentera la relation de +1 des deux côtés)
+            character.CharacterInteraction.PerformInteraction(talkAction);
+
+            // Optionnel : Tu peux choisir de ne pas appeler Close() ici 
+            // pour que le joueur puisse continuer à interagir.
+            // Si tu veux que l'UI se ferme, ajoute : Close();
+        }
     }
 }
