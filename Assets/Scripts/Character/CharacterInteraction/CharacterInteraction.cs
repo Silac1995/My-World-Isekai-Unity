@@ -1,69 +1,50 @@
 using System;
 using UnityEngine;
 
-public class CharacterInteraction
+public class CharacterInteraction : MonoBehaviour
 {
-    private readonly Character characterInitiator;
+    [SerializeField] private Character _character;
+    [SerializeField] private Character _currentTarget;
 
-    // Propriété publique pour savoir avec qui on interagit
-    public Character CurrentTarget { get; private set; }
+    // Définition de l'évenement
+    // On passe le partenaire de l'interaction (Target) et un booléen (IsStarting)
+    public event Action<Character, bool> OnInteractionStateChanged;
 
-    // Raccourci pour vérifier l'état
-    public bool IsInteracting => CurrentTarget != null;
-
-    public CharacterInteraction(Character character)
+    public Character CurrentTarget
     {
-        this.characterInitiator = character;
+        get => _currentTarget;
+        private set => _currentTarget = value;
     }
+
+    public bool IsInteracting => _currentTarget != null;
 
     public void StartInteractionWith(Character target)
     {
-        if (target == null || CurrentTarget == target) return;
+        if (target == null || _currentTarget == target) return;
 
-        // On vérifie que l'initiateur et la cible sont libres
-        if (!characterInitiator.IsFree() || !target.IsFree())
-        {
-            Debug.LogWarning($"{characterInitiator.CharacterName} ou {target.CharacterName} est occupé.");
-            return;
-        }
+        if (!_character.IsFree() || !target.IsFree()) return;
 
-        // Établissement de la connexion
         CurrentTarget = target;
 
-        // On définit la cible chez l'autre sans logique complexe pour éviter la récursion
-        target.CharacterInteraction.SetInteractionTargetInternal(characterInitiator);
+        // Déclenchement de l'événement (true = début)
+        OnInteractionStateChanged?.Invoke(target, true);
 
-        Debug.Log($"{characterInitiator.CharacterName} (Initiator) a commencé une interaction avec {target.CharacterName}.");
-    }
-
-    public void PerformInteraction(ICharacterInteractionAction action, Character target)
-    {
-        if (action == null || target == null) return;
-
-        StartInteractionWith(target);
-
-        // On n'exécute l'action que si l'interaction a bien été établie
-        if (CurrentTarget == target)
-        {
-            action.Execute(characterInitiator, target);
-        }
+        target.CharacterInteraction.SetInteractionTargetInternal(_character);
     }
 
     public void EndInteraction()
     {
-        if (CurrentTarget == null) return;
+        if (_currentTarget == null) return;
 
-        Character previousTarget = CurrentTarget;
+        Character previousTarget = _currentTarget;
         CurrentTarget = null;
 
-        // --- Logique de remise en état (Behaviour) ---
-        // On nettoie le comportement du personnage local (celui qui possède ce script)
-        ResetBehaviourToDefault(characterInitiator);
+        // Déclenchement de l'événement (false = fin)
+        OnInteractionStateChanged?.Invoke(previousTarget, false);
 
-        Debug.Log($"{characterInitiator.CharacterName} a terminé l'interaction.");
+        ResetBehaviourToDefault(_character);
 
-        // --- Synchronisation avec l'autre personnage ---
-        if (previousTarget.CharacterInteraction.CurrentTarget == characterInitiator)
+        if (previousTarget.CharacterInteraction.CurrentTarget == _character)
         {
             previousTarget.CharacterInteraction.EndInteraction();
         }
@@ -71,10 +52,8 @@ public class CharacterInteraction
 
     private void ResetBehaviourToDefault(Character character)
     {
-        // 1. On nettoie l'action en cours
         character.CharacterActions.ClearCurrentAction();
 
-        // 2. On remet le comportement par défaut
         var controller = character.GetComponent<CharacterGameController>();
         if (controller == null) return;
 
@@ -88,14 +67,8 @@ public class CharacterInteraction
         }
     }
 
-    // Utilisé pour lier l'interaction du côté de la cible
     internal void SetInteractionTargetInternal(Character target)
     {
         CurrentTarget = target;
-    }
-
-    internal void PerformInteraction(InteractBehaviour interactBehaviour, Character character)
-    {
-        throw new NotImplementedException();
     }
 }

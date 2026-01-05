@@ -127,9 +127,7 @@ public class SpawnManager : MonoBehaviour
             if (cameraFollow != null) cameraFollow.SetGameObject(characterPrefabObj);
         }
 
-        character.CharacterVisual.RandomizeBreastSprites(4);
-        character.CharacterVisual.RandomizeHairSprites(2);
-        character.CharacterVisual.RandomizeCharacterSize();
+        character.CharacterVisual.ResizeCharacter(10);
 
         return character;
     }
@@ -156,7 +154,6 @@ public class SpawnManager : MonoBehaviour
             character.InitializeStats(health, mana, str, agi);
             character.InitializeRace(race);
             character.InitializeAll();
-            character.InitializeSpriteRenderers();
             character.CharacterVisual.BodyPartsController.EyesController.Initialize();
         }
         catch (System.Exception ex)
@@ -174,7 +171,7 @@ public class SpawnManager : MonoBehaviour
 
         try
         {
-            cv.HairColor = Random.ColorHSV();
+            cv.ApplyColor(CharacterVisual.VisualPart.Hair, Random.ColorHSV());
             cv.BodyPartsController.EyesController.SetAllPupilsColor(Random.ColorHSV());
             cv.SkinColor = ColorUtils.HexToColor("E6CEBD");
         }

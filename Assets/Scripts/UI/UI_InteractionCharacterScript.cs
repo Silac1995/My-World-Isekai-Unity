@@ -24,7 +24,7 @@ public class UI_InteractionCharacterScript : UI_InteractionScript
 
     private void OnTalkClicked()
     {
-        Debug.Log($"Dialogue entre {characterInitiator.CharacterName} et {targetCharacter.CharacterName}");
+        Debug.Log($"Dialogue entre {character.CharacterName} et {targetCharacter.CharacterName}");
         Close();
     }
 }

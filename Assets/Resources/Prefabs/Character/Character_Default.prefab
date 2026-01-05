@@ -14,6 +14,7 @@ GameObject:
   - component: {fileID: 2536622428659117900}
   - component: {fileID: 3158310397905717539}
   - component: {fileID: 2677209831397210094}
+  - component: {fileID: 7133391882816314211}
   - component: {fileID: 4447047040555525631}
   - component: {fileID: 7849920087381694904}
   - component: {fileID: 3369343900060323110}
@@ -108,16 +109,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3244fac3036c53948b0080368868d48b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  characterName: Unnamed
-  stats: {fileID: 3158310397905717539}
-  race: {fileID: 0}
-  rb: {fileID: 3937668831498777898}
-  col: {fileID: 6020922162625289283}
-  bodyPartsController: {fileID: 1007890653781899237}
-  characterActions: {fileID: 2677209831397210094}
-  characterVisual: {fileID: 4467461276411840628}
-  controller: {fileID: 8530357501166543435}
-  equipment: {fileID: 0}
+  _characterName: Unnamed
+  _stats: {fileID: 3158310397905717539}
+  _race: {fileID: 0}
+  _rb: {fileID: 3937668831498777898}
+  _col: {fileID: 6020922162625289283}
+  _bodyPartsController: {fileID: 1007890653781899237}
+  _characterActions: {fileID: 2677209831397210094}
+  _characterVisual: {fileID: 4467461276411840628}
+  _controller: {fileID: 8530357501166543435}
+  _equipment: {fileID: 8408755073701722020}
+  _characterInteraction: {fileID: 7133391882816314211}
 --- !u!114 &3158310397905717539
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -220,7 +222,21 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6856d573fe0f6ee43a91c183d8ab04ad, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  character: {fileID: 2536622428659117900}
+  _character: {fileID: 2536622428659117900}
+--- !u!114 &7133391882816314211
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4281310202761960642}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e324887878c9e2e42b8da3491c9a0b15, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CharacterInteraction
+  _character: {fileID: 2536622428659117900}
+  _currentTarget: {fileID: 0}
 --- !u!195 &4447047040555525631
 NavMeshAgent:
   m_ObjectHideFlags: 0

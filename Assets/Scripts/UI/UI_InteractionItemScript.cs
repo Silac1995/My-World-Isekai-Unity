@@ -23,8 +23,8 @@ public class UI_InteractionItem : UI_InteractionScript
 
     private void OnPickUpClicked()
     {
-        Debug.Log($"{characterInitiator.CharacterName} ramasse {targetItem.name}");
-        // Logique réseau future : characterInitiator.RequestPickUp(targetItem);
+        Debug.Log($"{character.CharacterName} ramasse {targetItem.name}");
+        // Logique réseau future : character.RequestPickUp(targetItem);
         Close();
     }
 }

@@ -5,299 +5,193 @@ using UnityEngine.AI;
 [RequireComponent(typeof(CapsuleCollider), typeof(Rigidbody))]
 public class Character : MonoBehaviour
 {
+    #region Serialized Fields
     [Header("Basic Info")]
-    [SerializeField] private string characterName;
-    [SerializeField] private CharacterBio characterBio;
+    [SerializeField] private string _characterName;
+    [SerializeField] private CharacterBio _characterBio;
 
-    [Header("Stats")]
-    [SerializeField] private CharacterStats stats;
+    [Header("Stats & Race")]
+    [SerializeField] private CharacterStats _stats;
+    [SerializeField] private RaceSO _race;
 
-    [Header("Race")]
-    [SerializeField] private RaceSO race;
+    [Header("Components")]
+    [SerializeField] private Rigidbody _rb;
+    [SerializeField] private CapsuleCollider _col;
 
-    [Header("RigidBody & Collider")]
-    [SerializeField] private Rigidbody rb;
-    [SerializeField] private CapsuleCollider col;
+    [Header("Sub-Systems")]
+    [SerializeField] private CharacterBodyPartsController _bodyPartsController;
+    [SerializeField] private CharacterActions _characterActions;
+    [SerializeField] private CharacterVisual _characterVisual;
+    [SerializeField] private CharacterGameController _controller;
+    [SerializeField] private CharacterEquipment _equipment;
+    [SerializeField] private CharacterInteraction _characterInteraction;
+    #endregion
 
-    [Header("Scripts")]
-    [SerializeField] private CharacterBodyPartsController bodyPartsController;
-    [SerializeField] private CharacterActions characterActions;
-    [SerializeField] private CharacterVisual characterVisual;
-    [SerializeField] private CharacterGameController controller;
-    [SerializeField] private CharacterEquipment equipment;
+    #region Private Fields
+    private Transform _visualRoot;
+    private GameObject _currentVisualInstance;
+    private NavMeshAgent _cachedNavMeshAgent;
+    private BattleManager _battleManager;
+    private bool _isDead;
 
-    private Transform visualRoot;
-    private GameObject currentVisualInstance;
-    private NavMeshAgent cachedNavMeshAgent;
-    private static BattleManager battleManagerPrefab;
-    private static GameObject worldItemPrefab;
-    private BattleManager battleManager;
-    private CharacterInteraction characterInteraction;
-    private bool isDead;
+    // Ressources statiques partagées
+    private static BattleManager _battleManagerPrefab;
+    private static GameObject _worldItemPrefab;
+
     private const string BATTLE_MANAGER_PATH = "Prefabs/BattleManagerPrefab";
     private const string WORLD_ITEM_PATH = "Prefabs/WorldItem";
     private const float DROP_DISTANCE = 1.5f;
+    #endregion
 
+    #region Events
     public event Action<Character> OnDeath;
+    #endregion
 
-    // Properties
-    public string CharacterName
-    {
-        get => characterName;
-        set => characterName = value;
-    }
-    public float MovementSpeed => stats?.MoveSpeed.CurrentValue ?? 0f;
-    public Rigidbody Rigidbody => rb ?? throw new NullReferenceException($"Rigidbody missing on {gameObject.name}");
-    public CapsuleCollider Collider => col ?? throw new NullReferenceException($"CapsuleCollider missing on {gameObject.name}");
-    public CharacterStats Stats => stats ?? throw new NullReferenceException($"CharacterStats missing on {gameObject.name}");
-    public RaceSO Race => race;
-    public Transform VisualRoot => visualRoot;
-    public GameObject CurrentVisualInstance => currentVisualInstance;
-    public CharacterGameController Controller => controller;
-    public CharacterVisual CharacterVisual => characterVisual;
-    public BattleManager BattleManager => battleManager;
-    public CharacterActions CharacterActions => characterActions;
-    public CharacterInteraction CharacterInteraction => characterInteraction ?? throw new NullReferenceException($"CharacterInteraction not initialized on {gameObject.name}");
-    public CharacterBio CharacterBio => characterBio;
-    public CharacterEquipment CharacterEquipment => equipment;
+    #region Properties
+    public string CharacterName { get => _characterName; set => _characterName = value; }
+    public CharacterBio CharacterBio => _characterBio;
+    public CharacterStats Stats => _stats ?? throw new NullReferenceException($"Stats manquantes sur {gameObject.name}");
+    public RaceSO Race => _race;
 
+    public float MovementSpeed => _stats?.MoveSpeed.CurrentValue ?? 0f;
+    public Rigidbody Rigidbody => _rb;
+    public CapsuleCollider Collider => _col;
+
+    public CharacterGameController Controller => _controller;
+    public CharacterVisual CharacterVisual => _characterVisual;
+    public CharacterActions CharacterActions => _characterActions;
+    public CharacterInteraction CharacterInteraction => _characterInteraction ?? throw new NullReferenceException($"CharacterInteraction non initialisé sur {gameObject.name}");
+    public CharacterEquipment CharacterEquipment => _equipment;
+
+    public Transform VisualRoot => _visualRoot;
+    public GameObject CurrentVisualInstance => _currentVisualInstance;
+    public BattleManager BattleManager => _battleManager;
+    #endregion
+
+    #region Unity Lifecycle
     protected virtual void Awake()
     {
-        if (rb == null || col == null)
-        {
-            Debug.LogError($"{name} a des références manquantes !");
-            enabled = false;
-            return;
-        }
+        if (!ValidateRequiredComponents()) return;
 
-        if (battleManagerPrefab == null)
-            battleManagerPrefab = Resources.Load<BattleManager>(BATTLE_MANAGER_PATH);
-        
-        if (worldItemPrefab == null)
-            worldItemPrefab = Resources.Load<GameObject>(WORLD_ITEM_PATH);
+        LoadResources();
 
-        cachedNavMeshAgent = GetComponent<NavMeshAgent>();
-        characterInteraction = new CharacterInteraction(this);
-        isDead = false;
+        _cachedNavMeshAgent = GetComponent<NavMeshAgent>();
+        _isDead = false;
 
-        InitializeComponents();
+        InitializeRigidbody();
     }
+    #endregion
 
-    private void InitializeComponents()
+    #region Initialization
+    private void LoadResources()
     {
-        rb.freezeRotation = true;
-        rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
+        if (_battleManagerPrefab == null)
+            _battleManagerPrefab = Resources.Load<BattleManager>(BATTLE_MANAGER_PATH);
+
+        if (_worldItemPrefab == null)
+            _worldItemPrefab = Resources.Load<GameObject>(WORLD_ITEM_PATH);
     }
 
-    public void InitializeAll()
+    private bool ValidateRequiredComponents()
     {
-        AdjustCapsuleCollider();
+        if (_rb != null && _col != null) return true;
+
+        Debug.LogError($"{name} : Références Rigidbody ou Collider manquantes !");
+        enabled = false;
+        return false;
     }
+
+    private void InitializeRigidbody()
+    {
+        _rb.freezeRotation = true;
+        _rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
+    }
+
+    public void InitializeAll() => AdjustCapsuleCollider();
 
     public void InitializeStats(float health, float mana, float strength, float agility)
     {
-        if (stats == null)
-        {
-            Debug.LogError($"{name} : CharacterStats not assigned!", this);
-            return;
-        }
-
-        stats.InitializeStats(health, mana, strength, agility);
+        if (_stats == null) return;
+        _stats.InitializeStats(health, mana, strength, agility);
     }
 
     public void InitializeRace(RaceSO raceData)
     {
-        race = raceData ?? throw new ArgumentNullException(nameof(raceData));
-        
-        if (stats == null)
-        {
-            Debug.LogError($"{name} : Cannot initialize race without stats!", this);
-            return;
-        }
+        _race = raceData ?? throw new ArgumentNullException(nameof(raceData));
+        Stats.MoveSpeed.IncreaseBaseValue(_race.bonusSpeed);
 
-        Stats.MoveSpeed.IncreaseBaseValue(race.bonusSpeed);
-        
-        if (controller != null)
-            controller.Initialize();
-        else
-            Debug.LogWarning($"{name} : Controller not assigned when initializing race.", this);
+        if (_controller != null) _controller.Initialize();
     }
+    #endregion
 
-    public void InitializeSpriteRenderers()
-    {
-        if (characterVisual != null)
-            characterVisual.InitializeSpriteRenderers();
-    }
-
-    public void AssignVisualRoot(Transform root)
-    {
-        visualRoot = root ?? throw new ArgumentNullException(nameof(root), $"Attempting to assign null visualRoot on {name}");
-    }
-
-    public void AssignVisualInstance(GameObject visualInstance)
-    {
-        currentVisualInstance = visualInstance;
-    }
+    #region Visuals & Collider
+    public void AssignVisualRoot(Transform root) => _visualRoot = root;
+    public void AssignVisualInstance(GameObject instance) => _currentVisualInstance = instance;
 
     private void AdjustCapsuleCollider()
     {
-        if (currentVisualInstance == null)
-        {
-            Debug.LogWarning($"{name} : currentVisualInstance not assigned, skipping collider adjustment.", this);
-            return;
-        }
+        if (_currentVisualInstance == null || _col == null) return;
 
-        CapsuleCollider visualCollider = currentVisualInstance.GetComponentInChildren<CapsuleCollider>();
+        CapsuleCollider visualCol = _currentVisualInstance.GetComponentInChildren<CapsuleCollider>();
+        if (visualCol == null) return;
 
-        if (visualCollider != null && col != null)
-        {
-            col.center = visualCollider.center;
-            col.radius = visualCollider.radius;
-            col.height = visualCollider.height;
-            col.direction = visualCollider.direction;
-            col.isTrigger = visualCollider.isTrigger;
-            col.material = visualCollider.material;
+        _col.center = visualCol.center;
+        _col.radius = visualCol.radius;
+        _col.height = visualCol.height;
+        _col.direction = visualCol.direction;
+        _col.isTrigger = visualCol.isTrigger;
+        _col.material = visualCol.material;
 
-            if (Application.isPlaying)
-                Destroy(visualCollider);
-            else
-                DestroyImmediate(visualCollider);
-        }
+        if (Application.isPlaying) Destroy(visualCol);
+        else DestroyImmediate(visualCol);
     }
+    #endregion
 
-    public bool IsPlayer() => controller is PlayerController;
-
-    public bool IsAlive() => !isDead;
+    #region Health & Status
+    public bool IsAlive() => !_isDead;
+    public bool IsPlayer() => _controller is PlayerController;
+    public bool IsFree() => IsAlive() && !IsInBattle() && !_characterInteraction.IsInteracting;
 
     public virtual void Die()
     {
-        if (isDead)
-            return;
+        if (_isDead) return;
 
-        isDead = true;
-        Debug.Log($"{name} is dead.");
+        _isDead = true;
         OnDeath?.Invoke(this);
 
-        if (col != null)
-            col.enabled = false;
-        if (rb != null)
-            rb.isKinematic = true;
+        if (_col != null) _col.enabled = false;
+        if (_rb != null) _rb.isKinematic = true;
 
-        if (Controller != null)
+        if (_controller != null)
         {
-            Controller.enabled = false;
-            if (Controller.Animator != null)
-                Controller.Animator.SetBool("isDead", true);
+            _controller.enabled = false;
+            if (_controller.Animator != null) _controller.Animator.SetBool("isDead", true);
         }
     }
 
     public void TakeDamage(float damage = 1)
     {
-        if (!IsAlive() || stats == null)
-            return;
+        if (!IsAlive() || _stats == null) return;
 
-        stats.Health.CurrentAmount -= damage;
-        Debug.Log($"{name} took {damage} damage, remaining health: {stats.Health.CurrentAmount}");
-
-        if (stats.Health.CurrentAmount <= 0)
-            Die();
+        _stats.Health.CurrentAmount -= damage;
+        if (_stats.Health.CurrentAmount <= 0) Die();
     }
+    #endregion
 
-    [ContextMenu("Take Damage")]
-    public void TakeDamage()
-    {
-        TakeDamage(50f);
-    }
+    #region Battle Logic
+    public bool IsInBattle() => _battleManager != null;
 
-    public bool IsInBattle() => battleManager != null;
-
-    public void JoinBattle(BattleManager manager)
-    {
-        if (manager == null)
-            throw new ArgumentNullException(nameof(manager));
-        battleManager = manager;
-    }
-
-    public void LeaveBattle()
-    {
-        battleManager = null;
-    }
+    public void JoinBattle(BattleManager manager) => _battleManager = manager;
+    public void LeaveBattle() => _battleManager = null;
 
     public void StartFight(Character target)
     {
-        if (!ValidateFightStart(target))
-            return;
+        if (!ValidateFight(target)) return;
 
-        BattleManager newBattleManager = CreateBattleManager();
-        if (newBattleManager == null)
-            return;
+        BattleManager manager = Instantiate(_battleManagerPrefab);
 
-        InitializeBattle(newBattleManager, target);
-    }
-
-    private bool ValidateFightStart(Character target)
-    {
-        if (!IsAlive())
-        {
-            Debug.LogWarning($"{CharacterName} is dead and cannot start a fight.");
-            return false;
-        }
-
-        if (target == null)
-        {
-            Debug.LogError("Target character is null.");
-            return false;
-        }
-
-        if (!target.IsAlive())
-        {
-            Debug.LogWarning($"{target.CharacterName} is dead and cannot be targeted for a fight.");
-            return false;
-        }
-
-        if (IsInBattle())
-        {
-            Debug.LogWarning($"{CharacterName} is already in a battle and cannot start another one.");
-            return false;
-        }
-
-        if (target.IsInBattle())
-        {
-            Debug.LogWarning($"{target.CharacterName} is already in a battle and cannot be targeted for a new fight.");
-            return false;
-        }
-
-        return true;
-    }
-
-    private BattleManager CreateBattleManager()
-    {
-        if (battleManagerPrefab == null)
-        {
-            Debug.LogError("BattleManagerPrefab is not assigned! Please assign it before starting fights.");
-            return null;
-        }
-
-        GameObject battleManagerGO = Instantiate(battleManagerPrefab.gameObject);
-        BattleManager manager = battleManagerGO.GetComponent<BattleManager>();
-
-        if (manager == null)
-        {
-            Debug.LogError("The instantiated BattleManagerPrefab does not have a BattleManager component.");
-            Destroy(battleManagerGO);
-            return null;
-        }
-
-        return manager;
-    }
-
-    private void InitializeBattle(BattleManager manager, Character target)
-    {
-        BattleTeam team1 = new BattleTeam();
-        BattleTeam team2 = new BattleTeam();
-
-        team1.AddCharacter(this);
-        team2.AddCharacter(target);
+        BattleTeam team1 = new BattleTeam(); team1.AddCharacter(this);
+        BattleTeam team2 = new BattleTeam(); team2.AddCharacter(target);
 
         manager.AddTeam(team1);
         manager.AddTeam(team2);
@@ -305,10 +199,15 @@ public class Character : MonoBehaviour
 
         JoinBattle(manager);
         target.JoinBattle(manager);
-
-        Debug.Log($"Fight started between {CharacterName} and {target.CharacterName}");
     }
 
+    private bool ValidateFight(Character target)
+    {
+        return IsAlive() && target != null && target.IsAlive() && !IsInBattle() && !target.IsInBattle();
+    }
+    #endregion
+
+    #region Context Switching (Player/NPC)
     public void SwitchToPlayer()
     {
         SwitchController<PlayerController>(GetComponent<NPCController>());
@@ -321,75 +220,63 @@ public class Character : MonoBehaviour
         SwitchInteractionDetector<NPCInteractionDetector, PlayerInteractionDetector>();
     }
 
-    [ContextMenu("Switch To Player")]
-    public void SwitchToPlayerContext() => SwitchToPlayer();
-
-    [ContextMenu("Switch To NPC")]
-    public void SwitchToNPCContext() => SwitchToNPC();
-
     private void SwitchController<TTarget>(CharacterGameController toDisable) where TTarget : CharacterGameController
     {
-        if (toDisable != null)
-            toDisable.enabled = false;
+        if (toDisable != null) toDisable.enabled = false;
 
         TTarget target = GetComponent<TTarget>();
         if (target != null)
         {
             target.enabled = true;
             target.Initialize();
-            controller = target;
-        }
-        else
-        {
-            Debug.LogError($"{typeof(TTarget).Name} missing", this);
-            return;
+            _controller = target;
         }
 
-        bool isNPCMode = typeof(TTarget) == typeof(NPCController);
-        ConfigureRigidbodyForMode(isNPCMode);
-        ConfigureNavMeshAgentForMode(isNPCMode);
+        bool isNPC = typeof(TTarget) == typeof(NPCController);
+        if (_rb != null) _rb.isKinematic = isNPC;
+        ConfigureNavMesh(isNPC);
     }
 
-    private void ConfigureRigidbodyForMode(bool isNPCMode)
+    private void ConfigureNavMesh(bool enabled)
     {
-        if (rb != null)
-            rb.isKinematic = isNPCMode;
-    }
-
-    private void ConfigureNavMeshAgentForMode(bool isNPCMode)
-    {
-        if (cachedNavMeshAgent == null)
-            return;
-
-        cachedNavMeshAgent.enabled = isNPCMode;
-
-        if (isNPCMode)
+        if (_cachedNavMeshAgent == null) return;
+        _cachedNavMeshAgent.enabled = enabled;
+        if (enabled)
         {
-            cachedNavMeshAgent.updatePosition = true;
-            cachedNavMeshAgent.updateRotation = false;
+            _cachedNavMeshAgent.updatePosition = true;
+            _cachedNavMeshAgent.updateRotation = false;
         }
     }
 
-    private void SwitchInteractionDetector<TTarget, TDisable>()
-        where TTarget : MonoBehaviour
-        where TDisable : MonoBehaviour
+    private void SwitchInteractionDetector<TTarget, TDisable>() where TTarget : MonoBehaviour where TDisable : MonoBehaviour
     {
         TDisable toDisable = GetComponent<TDisable>();
-        if (toDisable != null)
-            toDisable.enabled = false;
+        if (toDisable != null) toDisable.enabled = false;
 
-        TTarget target = GetComponent<TTarget>();
-        if (target != null)
+        TTarget target = GetComponent<TTarget>() ?? gameObject.AddComponent<TTarget>();
+        (target as MonoBehaviour).enabled = true;
+    }
+    #endregion
+
+    #region Inventory & Items
+    public void DropItem(ItemInstance itemToDrop)
+    {
+        if (itemToDrop == null || _worldItemPrefab == null) return;
+
+        Vector3 dropPos = transform.position + (transform.forward * DROP_DISTANCE);
+        GameObject go = Instantiate(_worldItemPrefab, dropPos, Quaternion.identity);
+        go.name = $"WorldItem_{itemToDrop.ItemSO.ItemName}";
+
+        WorldItem worldItem = go.GetComponentInChildren<WorldItem>();
+        if (worldItem != null) worldItem.Initialize(itemToDrop);
+        if (itemToDrop is EquipmentInstance equipmentInstance && equipmentInstance.HaveCustomizedColor())
         {
-            target.enabled = true;
-        }
-        else
-        {
-            gameObject.AddComponent<TTarget>();
+            MeshRenderer visualRenderer = go.GetComponentInChildren<MeshRenderer>();
+            if (visualRenderer != null)
+                visualRenderer.material.color = equipmentInstance.CustomizedColor;
         }
     }
-
-    public bool IsFree() => !IsInBattle() && !CharacterInteraction.IsInteracting;
+    #endregion
 
     public void UseConsumable(ConsumableInstance consumable)
     {
@@ -401,41 +288,9 @@ public class Character : MonoBehaviour
         // TODO: Implémenter
     }
 
-    public void DropItem(ItemInstance itemToDrop)
-    {
-        if (itemToDrop == null || stats == null)
-            return;
-
-        if (worldItemPrefab == null)
-        {
-            Debug.LogError("[Character] Drop impossible : Prefab 'WorldItem' introuvable dans Resources/Prefabs");
-            return;
-        }
-
-        Vector3 dropPos = transform.position + (transform.forward * DROP_DISTANCE);
-        dropPos.y = transform.position.y;
-
-        GameObject go = Instantiate(worldItemPrefab, dropPos, Quaternion.identity);
-        go.name = $"WorldItem_{itemToDrop.ItemSO.ItemName}";
-
-        WorldItem worldItem = go.GetComponentInChildren<WorldItem>();
-
-        if (worldItem != null)
-        {
-            worldItem.Initialize(itemToDrop);
-
-            if (itemToDrop is EquipmentInstance equipmentInstance && equipmentInstance.HaveCustomizedColor())
-            {
-                MeshRenderer visualRenderer = go.GetComponentInChildren<MeshRenderer>();
-                if (visualRenderer != null)
-                    visualRenderer.material.color = equipmentInstance.CustomizedColor;
-            }
-
-            Debug.Log($"<color=green>[Drop Success]</color> {itemToDrop.ItemSO.ItemName} initialisé au sol.");
-        }
-        else
-        {
-            Debug.LogError($"[Drop Error] Le prefab {go.name} n'a pas de composant WorldItem !");
-        }
-    }
+    #region Context Menus
+    [ContextMenu("Take 50 Damage")] public void DebugTakeDamage() => TakeDamage(50f);
+    [ContextMenu("Switch To Player")] public void DebugToPlayer() => SwitchToPlayer();
+    [ContextMenu("Switch To NPC")] public void DebugToNPC() => SwitchToNPC();
+    #endregion
 }

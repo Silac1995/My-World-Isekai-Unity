@@ -6,7 +6,7 @@ public abstract class UI_InteractionScript : MonoBehaviour
     [Header("Base UI")]
     [SerializeField] protected Button closeButton;
 
-    protected Character characterInitiator; // Le personnage qui déclenche l'interaction
+    protected Character character; // Le personnage qui déclenche l'interaction
 
     protected virtual void Awake()
     {
@@ -16,7 +16,7 @@ public abstract class UI_InteractionScript : MonoBehaviour
 
     public virtual void Initialize(Character initiator)
     {
-        this.characterInitiator = initiator;
+        this.character = initiator;
     }
 
     public void Close()

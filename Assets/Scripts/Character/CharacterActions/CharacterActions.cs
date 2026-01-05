@@ -2,19 +2,19 @@ using UnityEngine;
 
 public class CharacterActions : MonoBehaviour
 {
-    [SerializeField] private Character character;
-    public Character Character => character;
+    [SerializeField] private Character _character;
+    public Character Character => _character;
 
     // Nouvelle variable pour suivre l'action en cours
-    private CharacterAction currentAction;
-    public CharacterAction CurrentAction => currentAction;
+    private CharacterAction _currentAction;
+    public CharacterAction CurrentAction => _currentAction;
 
     private void Awake()
     {
-        if (character == null)
+        if (_character == null)
         {
-            character = GetComponent<Character>();
-            if (character == null)
+            _character = GetComponent<Character>();
+            if (_character == null)
             {
                 Debug.LogError("Character non trouvé dans CharacterActions.", this);
                 enabled = false;
@@ -31,9 +31,9 @@ public class CharacterActions : MonoBehaviour
         }
 
         // 1. Vérifie si on ne fait pas déjà quelque chose
-        if (currentAction != null)
+        if (_currentAction != null)
         {
-            Debug.Log($"{Character.CharacterName} est déjà occupé avec {currentAction.GetType().Name}.");
+            Debug.Log($"{Character.CharacterName} est déjà occupé avec {_currentAction.GetType().Name}.");
             return;
         }
 
@@ -45,10 +45,10 @@ public class CharacterActions : MonoBehaviour
         }
 
         // 3. Assigne et exécute
-        currentAction = action;
+        _currentAction = action;
 
         // On exécute l'action
-        // Note : Il faudra prévoir un moyen dans CharacterAction de remettre currentAction à null quand c'est fini !
+        // Note : Il faudra prévoir un moyen dans CharacterAction de remettre _currentAction à null quand c'est fini !
         action.PerformAction();
 
         Debug.Log($"{Character.CharacterName} exécute {action.GetType().Name}.");
@@ -57,7 +57,7 @@ public class CharacterActions : MonoBehaviour
     // Méthode pour libérer le personnage (à appeler à la fin de l'animation ou de l'action)
     public void ClearCurrentAction()
     {
-        currentAction = null;
+        _currentAction = null;
     }
 
     private bool CanPerform(CharacterAction action)
