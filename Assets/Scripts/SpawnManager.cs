@@ -6,7 +6,6 @@ public class SpawnManager : MonoBehaviour
 
     [SerializeField] private GameObject spawnGameObject;
     [SerializeField] private GameObject itemPrefab;
-    [SerializeField] private GameObject interactionPromptPrefab; // Utilisé directement maintenant
 
     private void Awake()
     {
