@@ -22,6 +22,7 @@ MonoBehaviour:
   body_FeetLibrary: {fileID: 7108339969198208228, guid: c7818c3536d715b498f9aab5fd0ea910, type: 3}
   body_HandsLibrary: {fileID: 7108339969198208228, guid: a8d14df8ad04d6c4ea89caaee84d18f0, type: 3}
   body_ChestLibrary: {fileID: 7108339969198208228, guid: 2f17cd18b2ab24f4b9af32a1c876f610, type: 3}
+  body_NipplesLibrary: {fileID: 7108339969198208228, guid: 2f5a0a9ec72ca1b429db7de4139f3c34, type: 3}
   underwear_UpperLibrary: {fileID: 0}
   underwear_LowerLibrary: {fileID: 0}
   clothing_HatLibrary: {fileID: 0}

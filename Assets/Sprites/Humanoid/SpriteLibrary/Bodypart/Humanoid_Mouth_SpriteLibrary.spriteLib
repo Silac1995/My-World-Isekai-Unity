@@ -19,26 +19,26 @@ MonoBehaviour:
     m_OverrideEntries:
     - m_Name: Mouth_normal
       m_Hash: 768484765
-      m_Sprite: {fileID: 21300000, guid: 07d47d83fdb4e4c44929e3259cdace5e, type: 3}
+      m_Sprite: {fileID: 1773522686, guid: 07d47d83fdb4e4c44929e3259cdace5e, type: 3}
       m_FromMain: 0
-      m_SpriteOverride: {fileID: 21300000, guid: 07d47d83fdb4e4c44929e3259cdace5e, type: 3}
+      m_SpriteOverride: {fileID: 1773522686, guid: 07d47d83fdb4e4c44929e3259cdace5e, type: 3}
     - m_Name: Mouth_smile
       m_Hash: 95481787
-      m_Sprite: {fileID: 21300000, guid: 7e5b71d1657124f489ba1ddd841c5daa, type: 3}
+      m_Sprite: {fileID: -881418815, guid: 7e5b71d1657124f489ba1ddd841c5daa, type: 3}
       m_FromMain: 0
-      m_SpriteOverride: {fileID: 21300000, guid: 7e5b71d1657124f489ba1ddd841c5daa, type: 3}
+      m_SpriteOverride: {fileID: -881418815, guid: 7e5b71d1657124f489ba1ddd841c5daa, type: 3}
     - m_Name: Mouth_talk_01
       m_Hash: 913031270
-      m_Sprite: {fileID: 21300000, guid: 5274b114b53b84e4c840ee130dc6632c, type: 3}
+      m_Sprite: {fileID: 61443510, guid: 5274b114b53b84e4c840ee130dc6632c, type: 3}
       m_FromMain: 0
-      m_SpriteOverride: {fileID: 21300000, guid: 5274b114b53b84e4c840ee130dc6632c, type: 3}
+      m_SpriteOverride: {fileID: 61443510, guid: 5274b114b53b84e4c840ee130dc6632c, type: 3}
     - m_Name: Mouth_talk_02
       m_Hash: 794989020
-      m_Sprite: {fileID: 21300000, guid: bad1fd33f6b482d48acad299ee85e69b, type: 3}
+      m_Sprite: {fileID: -499018661, guid: bad1fd33f6b482d48acad299ee85e69b, type: 3}
       m_FromMain: 0
-      m_SpriteOverride: {fileID: 21300000, guid: bad1fd33f6b482d48acad299ee85e69b, type: 3}
+      m_SpriteOverride: {fileID: -499018661, guid: bad1fd33f6b482d48acad299ee85e69b, type: 3}
     m_FromMain: 0
     m_EntryOverrideCount: 4
   m_PrimaryLibraryGUID: 
-  m_ModificationHash: 639007368172045228
+  m_ModificationHash: 639034802612063683
   m_Version: 1

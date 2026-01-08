@@ -19,14 +19,14 @@ MonoBehaviour:
     m_OverrideEntries:
     - m_Name: Breast_L
       m_Hash: 557684785
-      m_Sprite: {fileID: 21300000, guid: 5a0fb75e5647c7b40a35a5cc7cec4a29, type: 3}
+      m_Sprite: {fileID: 1665751494, guid: 82d2efbb8e665e84694c0fed0300693e, type: 3}
       m_FromMain: 0
-      m_SpriteOverride: {fileID: 21300000, guid: 5a0fb75e5647c7b40a35a5cc7cec4a29, type: 3}
+      m_SpriteOverride: {fileID: 1665751494, guid: 82d2efbb8e665e84694c0fed0300693e, type: 3}
     - m_Name: Breast_R
       m_Hash: 456303954
-      m_Sprite: {fileID: 21300000, guid: 81f2a7375e9fb5f48962c39c60eeee05, type: 3}
+      m_Sprite: {fileID: 360306826, guid: 6e919e1073a9e884898cf294a823d7dc, type: 3}
       m_FromMain: 0
-      m_SpriteOverride: {fileID: 21300000, guid: 81f2a7375e9fb5f48962c39c60eeee05, type: 3}
+      m_SpriteOverride: {fileID: 360306826, guid: 6e919e1073a9e884898cf294a823d7dc, type: 3}
     m_FromMain: 0
     m_EntryOverrideCount: 2
   - m_Name: 02_female_medium
@@ -100,5 +100,5 @@ MonoBehaviour:
     m_FromMain: 0
     m_EntryOverrideCount: 0
   m_PrimaryLibraryGUID: 
-  m_ModificationHash: 639007413071719949
+  m_ModificationHash: 639034984580215661
   m_Version: 1

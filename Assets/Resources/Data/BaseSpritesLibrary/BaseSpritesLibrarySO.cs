@@ -16,6 +16,7 @@ public class BaseSpritesLibrarySO : ScriptableObject
     [SerializeField] private SpriteLibraryAsset body_FeetLibrary;
     [SerializeField] private SpriteLibraryAsset body_HandsLibrary;
     [SerializeField] private SpriteLibraryAsset body_ChestLibrary; //can be either male chest or bewbs
+    [SerializeField] private SpriteLibraryAsset body_NipplesLibrary; //can be either male chest or bewbs
 
     // Underwear
     [SerializeField] private SpriteLibraryAsset underwear_UpperLibrary;
@@ -46,6 +47,7 @@ public class BaseSpritesLibrarySO : ScriptableObject
     public SpriteLibraryAsset Body_FeetLibrary => body_FeetLibrary;
     public SpriteLibraryAsset Body_HandsLibrary => body_HandsLibrary;
     public SpriteLibraryAsset Body_ChestLibrary => body_ChestLibrary;
+    public SpriteLibraryAsset Body_NipplesLibrary => body_NipplesLibrary;
 
     public SpriteLibraryAsset Underwear_UpperLibrary => underwear_UpperLibrary;
     public SpriteLibraryAsset Underwear_LowerLibrary => underwear_LowerLibrary;

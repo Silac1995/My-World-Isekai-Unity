@@ -19,14 +19,14 @@ MonoBehaviour:
     m_OverrideEntries:
     - m_Name: Ear_L
       m_Hash: 9912412
-      m_Sprite: {fileID: 21300000, guid: 2a1fe4073ced53f4ba11c7ab3458ef36, type: 3}
+      m_Sprite: {fileID: 1110186646, guid: 2a1fe4073ced53f4ba11c7ab3458ef36, type: 3}
       m_FromMain: 0
-      m_SpriteOverride: {fileID: 21300000, guid: 2a1fe4073ced53f4ba11c7ab3458ef36, type: 3}
+      m_SpriteOverride: {fileID: 1110186646, guid: 2a1fe4073ced53f4ba11c7ab3458ef36, type: 3}
     - m_Name: Ear_R
       m_Hash: 983072063
-      m_Sprite: {fileID: 21300000, guid: edc9e548e942ccd40a104c4340519bb7, type: 3}
+      m_Sprite: {fileID: 506509301, guid: edc9e548e942ccd40a104c4340519bb7, type: 3}
       m_FromMain: 0
-      m_SpriteOverride: {fileID: 21300000, guid: edc9e548e942ccd40a104c4340519bb7, type: 3}
+      m_SpriteOverride: {fileID: 506509301, guid: edc9e548e942ccd40a104c4340519bb7, type: 3}
     m_FromMain: 0
     m_EntryOverrideCount: 2
   - m_Name: 02_elf
@@ -35,32 +35,16 @@ MonoBehaviour:
     m_OverrideEntries:
     - m_Name: Ear_L
       m_Hash: 9912412
-      m_Sprite: {fileID: 21300000, guid: 96030015940fb3e4987319a5c16e93e8, type: 3}
+      m_Sprite: {fileID: -389112885, guid: 96030015940fb3e4987319a5c16e93e8, type: 3}
       m_FromMain: 0
-      m_SpriteOverride: {fileID: 21300000, guid: 96030015940fb3e4987319a5c16e93e8, type: 3}
+      m_SpriteOverride: {fileID: -389112885, guid: 96030015940fb3e4987319a5c16e93e8, type: 3}
     - m_Name: Ear_R
       m_Hash: 983072063
-      m_Sprite: {fileID: 21300000, guid: 68d91ada7100f994f8902d8e90da7906, type: 3}
+      m_Sprite: {fileID: 1461456039, guid: 68d91ada7100f994f8902d8e90da7906, type: 3}
       m_FromMain: 0
-      m_SpriteOverride: {fileID: 21300000, guid: 68d91ada7100f994f8902d8e90da7906, type: 3}
-    m_FromMain: 0
-    m_EntryOverrideCount: 2
-  - m_Name: 03_elf
-    m_Hash: 601002657
-    m_CategoryList: []
-    m_OverrideEntries:
-    - m_Name: Ear_L
-      m_Hash: 9912412
-      m_Sprite: {fileID: -2079486362, guid: b41420fae0e171f46ba684752a9b64f8, type: 3}
-      m_FromMain: 0
-      m_SpriteOverride: {fileID: -2079486362, guid: b41420fae0e171f46ba684752a9b64f8, type: 3}
-    - m_Name: Ear_R
-      m_Hash: 983072063
-      m_Sprite: {fileID: 378970908, guid: 716f28085905abc4a9227d02bf6804c1, type: 3}
-      m_FromMain: 0
-      m_SpriteOverride: {fileID: 378970908, guid: 716f28085905abc4a9227d02bf6804c1, type: 3}
+      m_SpriteOverride: {fileID: 1461456039, guid: 68d91ada7100f994f8902d8e90da7906, type: 3}
     m_FromMain: 0
     m_EntryOverrideCount: 2
   m_PrimaryLibraryGUID: 
-  m_ModificationHash: 639034282596856947
+  m_ModificationHash: 639034736712581871
   m_Version: 1

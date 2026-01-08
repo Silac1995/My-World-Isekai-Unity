@@ -19,11 +19,11 @@ MonoBehaviour:
     m_OverrideEntries:
     - m_Name: Nose
       m_Hash: 550421485
-      m_Sprite: {fileID: 21300000, guid: 00e0daff600c5fe4db8c49e145660ff7, type: 3}
+      m_Sprite: {fileID: -963676379, guid: 00e0daff600c5fe4db8c49e145660ff7, type: 3}
       m_FromMain: 0
-      m_SpriteOverride: {fileID: 21300000, guid: 00e0daff600c5fe4db8c49e145660ff7, type: 3}
+      m_SpriteOverride: {fileID: -963676379, guid: 00e0daff600c5fe4db8c49e145660ff7, type: 3}
     m_FromMain: 0
     m_EntryOverrideCount: 1
   m_PrimaryLibraryGUID: 
-  m_ModificationHash: 639007333101068043
+  m_ModificationHash: 639034905450477062
   m_Version: 1
