@@ -13030,7 +13030,7 @@ ScriptedImporter:
   tileTemplate: {instanceID: 0}
   padding: 4
   spriteSizeExpand: 0
-  skeletonAssetReferenceID: 
+  skeletonAssetReferenceID: 00000000000000000000000000000000
   pipeline: {instanceID: 0}
   pipelineVersion: 
   spriteCategoryList:
