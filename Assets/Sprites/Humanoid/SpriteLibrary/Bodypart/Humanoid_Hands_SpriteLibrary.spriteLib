@@ -17,28 +17,48 @@ MonoBehaviour:
     m_Hash: 811842104
     m_CategoryList: []
     m_OverrideEntries:
-    - m_Name: Hand_L_fist
-      m_Hash: 610016844
-      m_Sprite: {fileID: 21300000, guid: 1545029ade22a834ea2b808f5f58acf1, type: 3}
+    - m_Name: Thumb_R_normal
+      m_Hash: 912648161
+      m_Sprite: {fileID: 0}
       m_FromMain: 0
-      m_SpriteOverride: {fileID: 21300000, guid: 1545029ade22a834ea2b808f5f58acf1, type: 3}
-    - m_Name: Hand_L_normal
-      m_Hash: 396375051
-      m_Sprite: {fileID: 21300000, guid: b00990367cf821d4780f7bc47f8ef8c1, type: 3}
+      m_SpriteOverride: {fileID: 0}
+    - m_Name: Fingers_R_normal
+      m_Hash: 623731932
+      m_Sprite: {fileID: 0}
       m_FromMain: 0
-      m_SpriteOverride: {fileID: 21300000, guid: b00990367cf821d4780f7bc47f8ef8c1, type: 3}
-    - m_Name: Hand_R_fist
-      m_Hash: 494960039
-      m_Sprite: {fileID: 21300000, guid: 2906eb2c5899e5c499a8de616e5d9735, type: 3}
+      m_SpriteOverride: {fileID: 0}
+    - m_Name: Thumb_L_normal
+      m_Hash: 525649144
+      m_Sprite: {fileID: 0}
       m_FromMain: 0
-      m_SpriteOverride: {fileID: 21300000, guid: 2906eb2c5899e5c499a8de616e5d9735, type: 3}
-    - m_Name: Hand_R_normal
-      m_Hash: 1049696018
-      m_Sprite: {fileID: 21300000, guid: b344fd9dcd31f9748bc021435870881d, type: 3}
+      m_SpriteOverride: {fileID: 0}
+    - m_Name: Fingers_L_normal
+      m_Hash: 203179973
+      m_Sprite: {fileID: 0}
       m_FromMain: 0
-      m_SpriteOverride: {fileID: 21300000, guid: b344fd9dcd31f9748bc021435870881d, type: 3}
+      m_SpriteOverride: {fileID: 0}
+    - m_Name: Thumb_R_fist
+      m_Hash: 630517840
+      m_Sprite: {fileID: 0}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 0}
+    - m_Name: Fingers_R_fist
+      m_Hash: 919024727
+      m_Sprite: {fileID: 0}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 0}
+    - m_Name: Thumb_L_fist
+      m_Hash: 474518459
+      m_Sprite: {fileID: 0}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 0}
+    - m_Name: Fingers_L_fist
+      m_Hash: 253450172
+      m_Sprite: {fileID: 0}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 0}
     m_FromMain: 0
-    m_EntryOverrideCount: 4
+    m_EntryOverrideCount: 8
   m_PrimaryLibraryGUID: 
-  m_ModificationHash: 639007332572126018
+  m_ModificationHash: 639035537807658687
   m_Version: 1
