@@ -1,6 +1,6 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
---- !u!1001 &6792298818119435430
+--- !u!1001 &5705932228741429790
 PrefabInstance:
   m_ObjectHideFlags: 0
   serializedVersion: 2
@@ -57,40 +57,15 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: bd7cd42284a491e438bbb3eac46cfca5, type: 3}
---- !u!1 &1285617700872801027 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 5734342045979037605, guid: bd7cd42284a491e438bbb3eac46cfca5, type: 3}
-  m_PrefabInstance: {fileID: 6792298818119435430}
+--- !u!95 &1386967207533847594 stripped
+Animator:
+  m_CorrespondingSourceObject: {fileID: 6634071025317207604, guid: bd7cd42284a491e438bbb3eac46cfca5, type: 3}
+  m_PrefabInstance: {fileID: 5705932228741429790}
   m_PrefabAsset: {fileID: 0}
---- !u!1 &2815169387123958094 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 8742166846557611496, guid: bd7cd42284a491e438bbb3eac46cfca5, type: 3}
-  m_PrefabInstance: {fileID: 6792298818119435430}
-  m_PrefabAsset: {fileID: 0}
---- !u!4 &3568093699513475450 stripped
+--- !u!4 &2371416475757584322 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 8054544555105576412, guid: bd7cd42284a491e438bbb3eac46cfca5, type: 3}
-  m_PrefabInstance: {fileID: 6792298818119435430}
-  m_PrefabAsset: {fileID: 0}
---- !u!95 &5365839274522062071 stripped
-Animator:
-  m_CorrespondingSourceObject: {fileID: 1455891580143183953, guid: bd7cd42284a491e438bbb3eac46cfca5, type: 3}
-  m_PrefabInstance: {fileID: 6792298818119435430}
-  m_PrefabAsset: {fileID: 0}
---- !u!1 &5673009136164904555 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 1223153948382665421, guid: bd7cd42284a491e438bbb3eac46cfca5, type: 3}
-  m_PrefabInstance: {fileID: 6792298818119435430}
-  m_PrefabAsset: {fileID: 0}
---- !u!1 &6098947117070336008 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 783846097206265006, guid: bd7cd42284a491e438bbb3eac46cfca5, type: 3}
-  m_PrefabInstance: {fileID: 6792298818119435430}
-  m_PrefabAsset: {fileID: 0}
---- !u!1 &7155725134660608225 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 4399218390239487047, guid: bd7cd42284a491e438bbb3eac46cfca5, type: 3}
-  m_PrefabInstance: {fileID: 6792298818119435430}
+  m_PrefabInstance: {fileID: 5705932228741429790}
   m_PrefabAsset: {fileID: 0}
 --- !u!1001 &8129189969094288733
 PrefabInstance:
@@ -131,7 +106,7 @@ PrefabInstance:
     - target: {fileID: 4916404909723457133, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       propertyPath: animator
       value: 
-      objectReference: {fileID: 5365839274522062071}
+      objectReference: {fileID: 1386967207533847594}
     - target: {fileID: 5483542709161238176, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       propertyPath: m_Radius
       value: 2.47
@@ -219,7 +194,7 @@ PrefabInstance:
     - target: {fileID: 8530357501166543435, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       propertyPath: animator
       value: 
-      objectReference: {fileID: 5365839274522062071}
+      objectReference: {fileID: 1386967207533847594}
     - target: {fileID: 9197436005975429803, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       propertyPath: m_AnchorMax.y
       value: 0
@@ -229,7 +204,7 @@ PrefabInstance:
     m_AddedGameObjects:
     - targetCorrespondingSourceObject: {fileID: 1385890570874089402, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 3568093699513475450}
+      addedObject: {fileID: 2371416475757584322}
     m_AddedComponents:
     - targetCorrespondingSourceObject: {fileID: 8637028065392131947, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       insertIndex: -1
@@ -289,11 +264,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ClothingLayer
   headSockets: []
   chestSockets:
-  - {fileID: 5673009136164904555}
-  - {fileID: 7155725134660608225}
-  - {fileID: 6098947117070336008}
-  - {fileID: 1285617700872801027}
-  - {fileID: 2815169387123958094}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
   glovesSockets: []
   legsSockets: []
   bootsSockets: []

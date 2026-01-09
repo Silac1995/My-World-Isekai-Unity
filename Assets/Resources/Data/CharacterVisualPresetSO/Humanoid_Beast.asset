@@ -12,5 +12,5 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 075faa854c84d264eab105f639392b98, type: 3}
   m_Name: Humanoid_Beast
   m_EditorClassIdentifier: Assembly-CSharp::CharacterVisualPresetSO
-  characterDefaultPrefab: {fileID: 0}
+  characterDefaultPrefab: {fileID: 5456933137695734175, guid: 7b374d387037c9647bef899d050bac5c, type: 3}
   characterSpritePrefab: {fileID: 0}

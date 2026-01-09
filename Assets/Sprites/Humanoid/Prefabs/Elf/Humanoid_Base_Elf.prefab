@@ -8,9 +8,25 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 2220723318663145039, guid: bd7cd42284a491e438bbb3eac46cfca5, type: 3}
+      propertyPath: m_SpriteHash
+      value: 358537936
+      objectReference: {fileID: 0}
+    - target: {fileID: 3500096641107365955, guid: bd7cd42284a491e438bbb3eac46cfca5, type: 3}
+      propertyPath: m_Sprite
+      value: 
+      objectReference: {fileID: 1461456039, guid: 68d91ada7100f994f8902d8e90da7906, type: 3}
+    - target: {fileID: 3714830264386349964, guid: bd7cd42284a491e438bbb3eac46cfca5, type: 3}
+      propertyPath: m_SpriteHash
+      value: 793896883
+      objectReference: {fileID: 0}
+    - target: {fileID: 5956068454679868687, guid: bd7cd42284a491e438bbb3eac46cfca5, type: 3}
+      propertyPath: m_Sprite
+      value: 
+      objectReference: {fileID: -389112885, guid: 96030015940fb3e4987319a5c16e93e8, type: 3}
     - target: {fileID: 6499675164524823510, guid: bd7cd42284a491e438bbb3eac46cfca5, type: 3}
       propertyPath: m_Name
-      value: Humanoid_Base Variant
+      value: Humanoid_Base_Elf
       objectReference: {fileID: 0}
     - target: {fileID: 8054544555105576412, guid: bd7cd42284a491e438bbb3eac46cfca5, type: 3}
       propertyPath: m_LocalPosition.x
