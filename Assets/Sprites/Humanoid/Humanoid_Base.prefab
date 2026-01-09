@@ -120,6 +120,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Skin_Thigh_L
       objectReference: {fileID: 0}
+    - target: {fileID: 5327039248812752927, guid: 87bec8f974b0b2444a18b56b04f0c292, type: 3}
+      propertyPath: m_Name
+      value: EyeBase_L
+      objectReference: {fileID: 0}
     - target: {fileID: 5383005342439292417, guid: 87bec8f974b0b2444a18b56b04f0c292, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0

@@ -54,6 +54,7 @@ public class CharacterEye
         this.eyesCategory = eyesCategory;
         this.eyebrowsCategory = eyebrowsCategory;
 
+        // Récupération des composants
         eyeBaseRenderer = eyeBase?.GetComponent<SpriteRenderer>();
         eyeBaseResolver = eyeBase?.GetComponent<SpriteResolver>();
         eyeScleraRenderer = eyeSclera?.GetComponent<SpriteRenderer>();
@@ -64,10 +65,15 @@ public class CharacterEye
         eyeBaseSpriteLibrary = eyeBase?.GetComponent<SpriteLibrary>();
         eyebrowsBaseSpriteLibrary = eyeBrow?.GetComponent<SpriteLibrary>();
 
-        // Fixe toutes les catégories à eyesCategory, sauf eyebrows
-        eyeBaseResolver.SetCategoryAndLabel(eyesCategory, EyeLabel);
-        eyeScleraResolver.SetCategoryAndLabel(eyesCategory, EyeLabel+"_sclera");
-        eyePupilResolver.SetCategoryAndLabel(eyesCategory, EyeLabel+"_pupil");
+        // --- FIX : On vérifie chaque resolver AVANT de l'utiliser ---
+        if (eyeBaseResolver != null)
+            eyeBaseResolver.SetCategoryAndLabel(this.eyesCategory, this.eyeLabel);
+
+        if (eyeScleraResolver != null)
+            eyeScleraResolver.SetCategoryAndLabel(this.eyesCategory, this.eyeLabel + "_sclera");
+
+        if (eyePupilResolver != null)
+            eyePupilResolver.SetCategoryAndLabel(this.eyesCategory, this.eyeLabel + "_pupil");
 
         CheckIfCanClose();
     }

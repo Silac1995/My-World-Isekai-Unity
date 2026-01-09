@@ -54,61 +54,73 @@ public class EyesController : MonoBehaviour
     {
         eyes.Clear();
 
-        Transform[] allChildren = GetComponentsInChildren<Transform>(true);
+        // On cible le conteneur des sprites (ex: Humanoid_Base)
+        Transform spritesContainer = (transform.childCount > 0) ? transform.GetChild(0) : transform;
 
-        foreach (Transform child in allChildren)
+        // Dictionnaires pour coupler les pièces par côté
+        var bases = new Dictionary<string, GameObject>();
+        var pupils = new Dictionary<string, GameObject>();
+        var scleras = new Dictionary<string, GameObject>();
+        var eyebrows = new Dictionary<string, GameObject>();
+
+        // On récupère uniquement les objets ayant un SpriteRenderer (on ignore les os/bones)
+        SpriteRenderer[] allRenderers = spritesContainer.GetComponentsInChildren<SpriteRenderer>(true);
+
+        if (debugMode) Debug.Log($"<color=cyan>[EyesController]</color> Scanning {allRenderers.Length} sprites in {spritesContainer.name}...");
+
+        foreach (SpriteRenderer renderer in allRenderers)
         {
-            string lowerName = child.name.ToLower();
+            GameObject part = renderer.gameObject;
+            string lowerName = part.name.ToLower();
+            string side = "";
 
-            if (!lowerName.Contains("eye_"))
-                continue;
+            // Détection du côté (flexible : gère _L, _l, Eye_L, etc.)
+            if (lowerName.Contains("_l")) side = "L";
+            else if (lowerName.Contains("_r")) side = "R";
 
-            // Déduction du label
-            string eyeLabel;
-            if (lowerName.Contains("eye_l"))
-                eyeLabel = "Eye_L";
-            else if (lowerName.Contains("eye_r"))
-                eyeLabel = "Eye_R";
-            else
-                eyeLabel = "Eye_R";  // défaut demandé
-            // Déduction du label
-            string eyebrowLabel;
-            if (lowerName.Contains("eye_l"))
-                eyebrowLabel = "Eyebrow_L";
-            else if (lowerName.Contains("eye_r"))
-                eyebrowLabel = "Eyebrow_R";
-            else
-                eyebrowLabel = "Eye_R";  // défaut demandé
-            
+            if (string.IsNullOrEmpty(side)) continue;
 
-            // Recherche des sous-parties
-            Transform eyebrow = FindChildIgnoreCase(child, "eyebrow");
-            Transform eyeBase = FindChildIgnoreCase(child, "eyebase");
-            Transform eyeSclera = FindChildIgnoreCase(child, "eyesclera");
-            Transform eyePupil = FindChildIgnoreCase(child, "eyepupil");
+            // Tri des pièces par mots-clés
+            if (lowerName.Contains("eyebase") || lowerName.Contains("eye_base")) bases[side] = part;
+            else if (lowerName.Contains("pupil")) pupils[side] = part;
+            else if (lowerName.Contains("sclera")) scleras[side] = part;
+            else if (lowerName.Contains("eyebrow")) eyebrows[side] = part;
+        }
 
-            if (eyebrow != null && eyeBase != null && eyeSclera != null)
+        // Assemblage final avec Debugs de vérification
+        string[] sides = { "L", "R" };
+        foreach (string s in sides)
+        {
+            if (bases.ContainsKey(s))
             {
+                // Construction des labels pour la Sprite Library
+                string eyeLabel = $"Eye_{s}";
+                string eyebrowLabel = $"Eyebrow_{s}";
+
                 CharacterEye newEye = new CharacterEye(
-                    eyebrow.gameObject,
-                    eyeBase.gameObject,
-                    eyeSclera.gameObject,
-                    eyePupil != null ? eyePupil.gameObject : null,
+                    eyebrows.ContainsKey(s) ? eyebrows[s] : null,
+                    bases[s],
+                    scleras.ContainsKey(s) ? scleras[s] : null,
+                    pupils.ContainsKey(s) ? pupils[s] : null,
                     eyeLabel,
-                    eyebrowLabel
+                    eyebrowLabel,
+                    spriteLibraryEyesCategory,
+                    "01"
                 );
 
                 eyes.Add(newEye);
 
-                Debug.Log($"EyesController: Added eye '{child.name}' with label '{eyeLabel}'");
+                if (debugMode)
+                    Debug.Log($"<color=green>[EyesController]</color> Eye <b>{s}</b> assembled successfully. " +
+                              $"(Sclera: {scleras.ContainsKey(s)}, Pupil: {pupils.ContainsKey(s)})");
             }
-            else
+            else if (debugMode)
             {
-                Debug.LogWarning($"EyesController: Eye '{child.name}' is missing one or more parts (Eyebrow/EyeBase/EyeSclera)");
+                Debug.LogWarning($"<color=yellow>[EyesController]</color> Side <b>{s}</b> was skipped (no EyeBase found).");
             }
         }
 
-        Debug.Log($"EyesController: Total eyes found = {eyes.Count}");
+        if (debugMode) Debug.Log($"<color=cyan>[EyesController]</color> Initialization finished. Total eyes: {eyes.Count}");
     }
 
 

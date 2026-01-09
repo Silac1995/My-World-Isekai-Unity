@@ -145,19 +145,33 @@ public class SpawnManager : MonoBehaviour
     private bool InitializeCharacter(GameObject obj, RaceSO race, GameObject visualPrefab, float health, float mana, float str, float agi)
     {
         Character character = obj.GetComponent<Character>();
-        Transform visual = obj.transform.Find("Visual");
-
-        character.AssignVisualRoot(visual);
-        try
+        if (character == null)
         {
-            character.InitializeStats(health, mana, str, agi);
-            character.InitializeRace(race);
-            character.InitializeAll();
+            Debug.LogError("SpawnManager: Composant Character introuvable sur l'objet !");
+            return false;
+        }
+
+        Transform visual = obj.transform.Find("Visual");
+        character.AssignVisualRoot(visual);
+
+        character.InitializeStats(health, mana, str, agi);
+        character.InitializeRace(race);
+        character.InitializeAll();
+
+        // On décompose pour trouver où ça bloque
+        if (character.CharacterVisual != null &&
+            character.CharacterVisual.BodyPartsController != null &&
+            character.CharacterVisual.BodyPartsController.EyesController != null)
+        {
             character.CharacterVisual.BodyPartsController.EyesController.Initialize();
         }
-        catch (System.Exception ex)
+        else
         {
-            Debug.LogError($"Erreur lors de l'initialisation : {ex.Message}");
+            // Ce log va te dire EXACTEMENT ce qui manque dans l'inspecteur
+            Debug.LogError($"SpawnManager: Problème de hiérarchie sur {obj.name}. " +
+                $"Visual: {character.CharacterVisual != null}, " +
+                $"BodyParts: {character.CharacterVisual?.BodyPartsController != null}, " +
+                $"Eyes: {character.CharacterVisual?.BodyPartsController?.EyesController != null}");
         }
 
         return true;
