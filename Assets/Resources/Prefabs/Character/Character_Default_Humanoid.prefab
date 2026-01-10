@@ -57,14 +57,44 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: bd7cd42284a491e438bbb3eac46cfca5, type: 3}
+--- !u!1 &154409542264652019 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 5551559039349455597, guid: bd7cd42284a491e438bbb3eac46cfca5, type: 3}
+  m_PrefabInstance: {fileID: 5705932228741429790}
+  m_PrefabAsset: {fileID: 0}
 --- !u!95 &1386967207533847594 stripped
 Animator:
   m_CorrespondingSourceObject: {fileID: 6634071025317207604, guid: bd7cd42284a491e438bbb3eac46cfca5, type: 3}
   m_PrefabInstance: {fileID: 5705932228741429790}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &1593239832406762645 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 6427718651487346315, guid: bd7cd42284a491e438bbb3eac46cfca5, type: 3}
+  m_PrefabInstance: {fileID: 5705932228741429790}
+  m_PrefabAsset: {fileID: 0}
 --- !u!4 &2371416475757584322 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 8054544555105576412, guid: bd7cd42284a491e438bbb3eac46cfca5, type: 3}
+  m_PrefabInstance: {fileID: 5705932228741429790}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1 &2495949946649979791 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 7893946351240597905, guid: bd7cd42284a491e438bbb3eac46cfca5, type: 3}
+  m_PrefabInstance: {fileID: 5705932228741429790}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1 &4587120422565875367 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 8108505290949751993, guid: bd7cd42284a491e438bbb3eac46cfca5, type: 3}
+  m_PrefabInstance: {fileID: 5705932228741429790}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1 &8964474415501261024 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 3695131877163811582, guid: bd7cd42284a491e438bbb3eac46cfca5, type: 3}
+  m_PrefabInstance: {fileID: 5705932228741429790}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1 &9123314664826610467 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 3581220941454104893, guid: bd7cd42284a491e438bbb3eac46cfca5, type: 3}
   m_PrefabInstance: {fileID: 5705932228741429790}
   m_PrefabAsset: {fileID: 0}
 --- !u!1001 &8129189969094288733
@@ -264,11 +294,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ClothingLayer
   headSockets: []
   chestSockets:
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
+  - {fileID: 1593239832406762645}
+  - {fileID: 154409542264652019}
+  - {fileID: 2495949946649979791}
+  - {fileID: 9123314664826610467}
+  - {fileID: 4587120422565875367}
+  - {fileID: 8964474415501261024}
   glovesSockets: []
   legsSockets: []
   bootsSockets: []
