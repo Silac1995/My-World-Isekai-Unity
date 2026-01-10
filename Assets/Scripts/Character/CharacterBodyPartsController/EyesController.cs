@@ -97,7 +97,9 @@ public class EyesController : MonoBehaviour
                 string eyeLabel = $"Eye_{s}";
                 string eyebrowLabel = $"Eyebrow_{s}";
 
+                // Dans ta méthode RetrieveEyeGameObjects, au moment du "new" :
                 CharacterEye newEye = new CharacterEye(
+                    bodyPartsController, // On passe la référence ici
                     eyebrows.ContainsKey(s) ? eyebrows[s] : null,
                     bases[s],
                     scleras.ContainsKey(s) ? scleras[s] : null,

@@ -184,6 +184,7 @@ public class SpawnManager : MonoBehaviour
 
         try
         {
+            cv.BodyPartsController.HairController.SetGlobalHairColor(Random.ColorHSV());
             cv.ApplyColor(CharacterVisual.VisualPart.Hair, Random.ColorHSV());
             cv.BodyPartsController.EyesController.SetAllPupilsColor(Random.ColorHSV());
             cv.SkinColor = ColorUtils.HexToColor("E6CEBD");

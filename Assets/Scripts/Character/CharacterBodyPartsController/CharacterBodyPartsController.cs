@@ -5,7 +5,9 @@ public class CharacterBodyPartsController : MonoBehaviour
     [Header("References")]
     [SerializeField] private Character character;
     [SerializeField] private EyesController eyesController;
+    [SerializeField] private HairController _hairController;
     public EyesController EyesController => eyesController;
+    public HairController HairController => _hairController;
 
 
     public void InitializeSpriteLibrariesToEveryBodyController()

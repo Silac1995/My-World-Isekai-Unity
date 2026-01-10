@@ -2,7 +2,7 @@
 using UnityEngine.U2D.Animation;
 
 [System.Serializable]
-public class CharacterEye
+public class CharacterEye : CharacterBodyPart
 {
     [Header("Eye GameObjects")]
     [SerializeField] private GameObject eyeBrow;
@@ -43,7 +43,9 @@ public class CharacterEye
     public bool IsCurrentlyClosed { get => isCurrentlyClosed; set => isCurrentlyClosed = value; }
     public bool CanEyeClose { get => canEyeClose; set => canEyeClose = value; }
 
-    public CharacterEye(GameObject eyeBrow, GameObject eyeBase, GameObject eyeSclera, GameObject eyePupil, string eyeLabel, string eyebrowLabel, string eyesCategory = "01", string eyebrowsCategory = "01")
+    // Constructeur mis à jour avec l'héritage et le controller
+    public CharacterEye(CharacterBodyPartsController controller, GameObject eyeBrow, GameObject eyeBase, GameObject eyeSclera, GameObject eyePupil, string eyeLabel, string eyebrowLabel, string eyesCategory = "01", string eyebrowsCategory = "01")
+        : base(controller) // Appelle le constructeur de CharacterBodyPart
     {
         this.eyeBrow = eyeBrow;
         this.eyeBase = eyeBase;
@@ -54,7 +56,7 @@ public class CharacterEye
         this.eyesCategory = eyesCategory;
         this.eyebrowsCategory = eyebrowsCategory;
 
-        // Récupération des composants
+        // Cache des composants
         eyeBaseRenderer = eyeBase?.GetComponent<SpriteRenderer>();
         eyeBaseResolver = eyeBase?.GetComponent<SpriteResolver>();
         eyeScleraRenderer = eyeSclera?.GetComponent<SpriteRenderer>();
@@ -65,15 +67,10 @@ public class CharacterEye
         eyeBaseSpriteLibrary = eyeBase?.GetComponent<SpriteLibrary>();
         eyebrowsBaseSpriteLibrary = eyeBrow?.GetComponent<SpriteLibrary>();
 
-        // --- FIX : On vérifie chaque resolver AVANT de l'utiliser ---
-        if (eyeBaseResolver != null)
-            eyeBaseResolver.SetCategoryAndLabel(this.eyesCategory, this.eyeLabel);
-
-        if (eyeScleraResolver != null)
-            eyeScleraResolver.SetCategoryAndLabel(this.eyesCategory, this.eyeLabel + "_sclera");
-
-        if (eyePupilResolver != null)
-            eyePupilResolver.SetCategoryAndLabel(this.eyesCategory, this.eyeLabel + "_pupil");
+        // Initialisation sécurisée
+        if (eyeBaseResolver != null) eyeBaseResolver.SetCategoryAndLabel(this.eyesCategory, this.eyeLabel);
+        if (eyeScleraResolver != null) eyeScleraResolver.SetCategoryAndLabel(this.eyesCategory, this.eyeLabel + "_sclera");
+        if (eyePupilResolver != null) eyePupilResolver.SetCategoryAndLabel(this.eyesCategory, this.eyeLabel + "_pupil");
 
         CheckIfCanClose();
     }
@@ -127,12 +124,15 @@ public class CharacterEye
     public void SetEyebrow(string categoryName)
     {
         this.eyebrowsCategory = categoryName;
-        eyeBrowResolver.SetCategoryAndLabel(this.eyebrowsCategory, this.eyebrowState);
+        if (eyeBrowResolver != null) // Sécurité
+            eyeBrowResolver.SetCategoryAndLabel(this.eyebrowsCategory, this.eyebrowState);
     }
+
     public void SetEyebrowState(string labelString)
     {
         eyebrowState = labelString;
-        eyeBrowResolver.SetCategoryAndLabel(this.eyebrowsCategory, this.eyebrowLabel + this.eyebrowState);
+        if (eyeBrowResolver != null) // Sécurité
+            eyeBrowResolver.SetCategoryAndLabel(this.eyebrowsCategory, this.eyebrowLabel + this.eyebrowState);
     }
 
 }

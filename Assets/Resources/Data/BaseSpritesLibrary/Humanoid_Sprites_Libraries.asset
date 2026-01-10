@@ -27,7 +27,7 @@ MonoBehaviour:
   underwear_LowerLibrary: {fileID: 0}
   clothing_HatLibrary: {fileID: 0}
   clothing_UpperLibrary: {fileID: 7108339969198208228, guid: 48f02b820b1ea544d858945ff32a59bc, type: 3}
-  clothing_LowerLibrary: {fileID: 0}
+  clothing_LowerLibrary: {fileID: 7108339969198208228, guid: b8faecbc49b85d443b8558449dd87c2f, type: 3}
   clothing_GlovesLibrary: {fileID: 0}
   clothing_ShoesLibrary: {fileID: 0}
   armor_HeadLibrary: {fileID: 0}

@@ -1,0 +1,59 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &1
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a5e6fedc2472449cead18ef23b5cb30d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.2D.Animation.Runtime::UnityEngine.U2D.Animation.SpriteLibrarySourceAsset
+  m_Library:
+  - m_Name: 01_jeans
+    m_Hash: 926824373
+    m_CategoryList: []
+    m_OverrideEntries:
+    - m_Name: Thigh_R
+      m_Hash: 570470064
+      m_Sprite: {fileID: 2043281797, guid: 34d02d9c4d38abb4d8985ef8a33f8e10, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 2043281797, guid: 34d02d9c4d38abb4d8985ef8a33f8e10, type: 3}
+    - m_Name: Shin_R
+      m_Hash: 784058518
+      m_Sprite: {fileID: -39353686, guid: 92b127ae4372da34c91559ec4d8cbe0e, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: -39353686, guid: 92b127ae4372da34c91559ec4d8cbe0e, type: 3}
+    - m_Name: Thigh_L
+      m_Hash: 403674067
+      m_Sprite: {fileID: -1884770667, guid: 180120c5b39759c4e84b5ac4e2484983, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: -1884770667, guid: 180120c5b39759c4e84b5ac4e2484983, type: 3}
+    - m_Name: Shin_L
+      m_Hash: 347403765
+      m_Sprite: {fileID: 332477108, guid: 9772689b3ea68bd428a7688f8f49a5f4, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 332477108, guid: 9772689b3ea68bd428a7688f8f49a5f4, type: 3}
+    - m_Name: Hips
+      m_Hash: 517015057
+      m_Sprite: {fileID: 719415794, guid: 84370218e35340e458e4e4eb3404fe83, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 719415794, guid: 84370218e35340e458e4e4eb3404fe83, type: 3}
+    - m_Name: Butt_R
+      m_Hash: 226747263
+      m_Sprite: {fileID: 742420786, guid: d2a6260e19e6898439ca7eeaddeb50aa, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 742420786, guid: d2a6260e19e6898439ca7eeaddeb50aa, type: 3}
+    - m_Name: Butt_L
+      m_Hash: 931978780
+      m_Sprite: {fileID: -378187346, guid: 19fb46c00493abd4b900468ad3da5035, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: -378187346, guid: 19fb46c00493abd4b900468ad3da5035, type: 3}
+    m_FromMain: 0
+    m_EntryOverrideCount: 7
+  m_PrimaryLibraryGUID: 
+  m_ModificationHash: 639036424252707710
+  m_Version: 1
