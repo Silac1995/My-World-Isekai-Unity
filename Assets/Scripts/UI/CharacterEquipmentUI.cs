@@ -20,6 +20,7 @@ public class CharacterEquipmentUI : MonoBehaviour
     [SerializeField] private TextMeshProUGUI glovesText;
     [SerializeField] private TextMeshProUGUI pantsText;
     [SerializeField] private TextMeshProUGUI bootsText;
+    [SerializeField] private TextMeshProUGUI bagText;
 
     [Header("Unequip Buttons")]
     [SerializeField] private Button unequipHeadButton;
@@ -27,6 +28,7 @@ public class CharacterEquipmentUI : MonoBehaviour
     [SerializeField] private Button unequipGlovesButton;
     [SerializeField] private Button unequipPantsButton;
     [SerializeField] private Button unequipBootsButton;
+    [SerializeField] private Button unequipBagButton;
 
     private List<EquipmentLayer> availableLayers = new List<EquipmentLayer>();
 
@@ -55,6 +57,8 @@ public class CharacterEquipmentUI : MonoBehaviour
         unequipGlovesButton?.onClick.AddListener(() => UnequipFromCurrentLayer(EquipmentType.Gloves));
         unequipPantsButton?.onClick.AddListener(() => UnequipFromCurrentLayer(EquipmentType.Pants));
         unequipBootsButton?.onClick.AddListener(() => UnequipFromCurrentLayer(EquipmentType.Boots));
+        unequipBagButton?.onClick.AddListener(() => UnequipFromCurrentLayer(EquipmentType.Bag));
+
         // AJOUTE CECI : Si tu as déjà glissé un perso dans l'inspecteur, on l'initialise
         if (character != null)
         {
@@ -158,19 +162,31 @@ public class CharacterEquipmentUI : MonoBehaviour
     {
         if (currentLayer == null) return;
 
-        // Mise à jour des textes
+        // Mise à jour des textes standards
         headgearText.text = GetEquipmentName(EquipmentType.Helmet);
         armorText.text = GetEquipmentName(EquipmentType.Armor);
         glovesText.text = GetEquipmentName(EquipmentType.Gloves);
         pantsText.text = GetEquipmentName(EquipmentType.Pants);
         bootsText.text = GetEquipmentName(EquipmentType.Boots);
 
-        // Optionnel : Désactive les boutons si le slot est vide
+        // --- AJOUT POUR LE SAC ---
+        if (bagText != null)
+        {
+            bagText.text = GetEquipmentName(EquipmentType.Bag);
+        }
+
+        // Mise à jour de l'état des boutons
         ToggleButtonState(unequipHeadButton, EquipmentType.Helmet);
         ToggleButtonState(unequipArmorButton, EquipmentType.Armor);
         ToggleButtonState(unequipGlovesButton, EquipmentType.Gloves);
         ToggleButtonState(unequipPantsButton, EquipmentType.Pants);
         ToggleButtonState(unequipBootsButton, EquipmentType.Boots);
+
+        // --- AJOUT POUR LE BOUTON SAC ---
+        if (unequipBagButton != null)
+        {
+            ToggleButtonState(unequipBagButton, EquipmentType.Bag);
+        }
     }
 
     private string GetEquipmentName(EquipmentType type)

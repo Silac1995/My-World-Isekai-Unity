@@ -613,6 +613,10 @@ PrefabInstance:
       value: 1
       objectReference: {fileID: 0}
     - target: {fileID: -1429620951777756459, guid: 9c6fbf50fb4c3e4469a6564d0ab60a76, type: 3}
+      propertyPath: m_WasSpriteAssigned
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: -1429620951777756459, guid: 9c6fbf50fb4c3e4469a6564d0ab60a76, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
       objectReference: {fileID: -876546973899608171, guid: 2d92f20263de6f142ab007d4720101c7, type: 3}
@@ -780,6 +784,10 @@ PrefabInstance:
       propertyPath: m_BoneTransforms.Array.size
       value: 1
       objectReference: {fileID: 0}
+    - target: {fileID: 380567256187806834, guid: 9c6fbf50fb4c3e4469a6564d0ab60a76, type: 3}
+      propertyPath: 'm_BoneTransforms.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2212199219427939287}
     - target: {fileID: 420828070712497730, guid: 9c6fbf50fb4c3e4469a6564d0ab60a76, type: 3}
       propertyPath: m_Name
       value: Skin_Thumb_R

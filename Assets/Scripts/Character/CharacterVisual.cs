@@ -20,8 +20,8 @@ public class CharacterVisual : MonoBehaviour
     public enum VisualPart { Skin, Hair, RightEye, LeftEye, RightSclera, LeftSclera }
     public enum ResolverPart { Breasts, Eyes, Hair }
 
-    private const float MIN_SIZE = 95f;
-    private const float MAX_SIZE = 105f;
+    private const float MIN_SIZE = 98f;
+    private const float MAX_SIZE = 102f;
     private const float NORMAL_SIZE = 100f;
 
     #region Properties

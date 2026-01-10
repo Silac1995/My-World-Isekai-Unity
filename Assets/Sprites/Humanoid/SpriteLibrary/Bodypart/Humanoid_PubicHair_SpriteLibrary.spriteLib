@@ -24,6 +24,17 @@ MonoBehaviour:
       m_SpriteOverride: {fileID: 1529531287, guid: 9cfaa2b7768477640bfa212c75f3dc44, type: 3}
     m_FromMain: 0
     m_EntryOverrideCount: 1
+  - m_Name: 00
+    m_Hash: 944116896
+    m_CategoryList: []
+    m_OverrideEntries:
+    - m_Name: Hair
+      m_Hash: 1019596327
+      m_Sprite: {fileID: 0}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 0}
+    m_FromMain: 0
+    m_EntryOverrideCount: 1
   m_PrimaryLibraryGUID: 
-  m_ModificationHash: 639036550076995877
+  m_ModificationHash: 639036707913762930
   m_Version: 1

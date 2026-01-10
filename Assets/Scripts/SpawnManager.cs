@@ -36,17 +36,18 @@ public class SpawnManager : MonoBehaviour
         GameObject go = Instantiate(itemPrefab, pos, Quaternion.identity);
         go.name = $"WorldItem_{data.ItemName}";
 
-        ItemInstance instance = data switch
-        {
-            EquipmentSO e => new EquipmentInstance(e),
-            _ => new ItemInstance(data)
-        };
+        // --- SOLUTION : Utiliser le polymorphisme ---
+        // Cette ligne appellera automatiquement le CreateInstance() de BagSO si data est un sac,
+        // ou celui de EquipmentSO si c'est une armure, etc.
+        ItemInstance instance = data.CreateInstance();
 
+        // La logique de couleur reste la même car BagInstance hérite de EquipmentInstance
         if (instance is EquipmentInstance equipment)
         {
             Color randomColor = Random.ColorHSV(0f, 1f, 0.5f, 1f, 0.5f, 1f);
-            equipment.SetCustomizedColor(randomColor);
+            equipment.SetPrimaryColor(randomColor);
 
+            // Attention : Utilise un SpriteRenderer si tu es en 2D, ou garde MeshRenderer pour la 3D
             MeshRenderer visualRenderer = go.GetComponentInChildren<MeshRenderer>();
             if (visualRenderer != null)
             {
@@ -58,11 +59,7 @@ public class SpawnManager : MonoBehaviour
         if (worldItem != null)
         {
             worldItem.Initialize(instance);
-            Debug.Log($"<color=green>[Spawn]</color> Setup réussi pour {instance.ItemSO.ItemName}");
-        }
-        else
-        {
-            Debug.LogError($"<color=red>[Spawn Error]</color> WorldItem introuvable sur le prefab {go.name} !");
+            Debug.Log($"<color=green>[Spawn]</color> Setup réussi pour {instance.ItemSO.ItemName} (Type: {instance.GetType().Name})");
         }
 
         return instance;
@@ -80,12 +77,16 @@ public class SpawnManager : MonoBehaviour
         {
             worldItem.Initialize(existingInstance);
 
-            if (existingInstance is EquipmentInstance equipment && equipment.HaveCustomizedColor())
+            // Pattern matching ici aussi pour éviter l'erreur d'assignation
+            if (existingInstance is EquipmentInstance equipment)
             {
-                MeshRenderer visualRenderer = go.GetComponentInChildren<MeshRenderer>();
-                if (visualRenderer != null)
+                if (equipment.HavePrimaryColor())
                 {
-                    visualRenderer.material.color = equipment.CustomizedColor;
+                    SpriteRenderer visualRenderer = go.GetComponentInChildren<SpriteRenderer>();
+                    if (visualRenderer != null)
+                    {
+                        visualRenderer.color = equipment.PrimaryColor;
+                    }
                 }
             }
         }
@@ -126,7 +127,8 @@ public class SpawnManager : MonoBehaviour
             if (cameraFollow != null) cameraFollow.SetGameObject(characterPrefabObj);
         }
 
-        character.CharacterVisual.ResizeCharacter(10);
+        float randomSize = Random.Range(0f, 200f);
+        character.CharacterVisual.ResizeCharacter(randomSize);
 
         return character;
     }

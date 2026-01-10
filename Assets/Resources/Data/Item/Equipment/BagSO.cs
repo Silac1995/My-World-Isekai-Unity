@@ -4,14 +4,19 @@ using UnityEngine;
 public class BagSO : EquipmentSO
 {
     [Header("Bag Configuration")]
-    [SerializeField] private int capacity = 1;
+    [SerializeField] private int capacity = 10;
     public int Capacity => capacity;
 
-    // On force le type BagInstance
     public override System.Type InstanceType => typeof(BagInstance);
 
     public override ItemInstance CreateInstance()
     {
-        return new BagInstance(this);
+        // ERREUR POSSIBLE ICI : Assure-toi de bien créer un BagInstance et non un EquipmentInstance
+        BagInstance newInstance = new BagInstance(this);
+
+        // On initialise les slots (très important pour ton stockage !)
+        newInstance.InitializeBagCapacity(this.capacity);
+
+        return newInstance;
     }
 }

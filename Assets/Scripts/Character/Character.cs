@@ -265,17 +265,25 @@ public class Character : MonoBehaviour
     {
         if (itemToDrop == null || _worldItemPrefab == null) return;
 
-        Vector3 dropPos = transform.position + (transform.forward * DROP_DISTANCE);
+        // Utilisation de transform.right ou transform.up si tu es en 2D pure
+        Vector3 dropPos = transform.position + (transform.up * DROP_DISTANCE);
         GameObject go = Instantiate(_worldItemPrefab, dropPos, Quaternion.identity);
         go.name = $"WorldItem_{itemToDrop.ItemSO.ItemName}";
 
         WorldItem worldItem = go.GetComponentInChildren<WorldItem>();
         if (worldItem != null) worldItem.Initialize(itemToDrop);
-        if (itemToDrop is EquipmentInstance equipmentInstance && equipmentInstance.HaveCustomizedColor())
+
+        // Correction : Utilisation du pattern matching direct
+        if (itemToDrop is EquipmentInstance equipmentInstance)
         {
-            MeshRenderer visualRenderer = go.GetComponentInChildren<MeshRenderer>();
-            if (visualRenderer != null)
-                visualRenderer.material.color = equipmentInstance.CustomizedColor;
+            // On vérifie les couleurs personnalisées
+            if (equipmentInstance.HavePrimaryColor())
+            {
+                // Note : Pour tes sprites 2D, utilise SpriteRenderer au lieu de MeshRenderer
+                SpriteRenderer visualRenderer = go.GetComponentInChildren<SpriteRenderer>();
+                if (visualRenderer != null)
+                    visualRenderer.color = equipmentInstance.PrimaryColor;
+            }
         }
     }
     #endregion

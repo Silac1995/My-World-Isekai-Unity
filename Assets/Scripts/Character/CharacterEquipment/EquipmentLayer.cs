@@ -29,31 +29,23 @@ public class EquipmentLayer : MonoBehaviour
 
     public void Equip(EquipmentInstance newInstance)
     {
-        // --- SECURITÉ DOUBLON ---
-        if (IsAlreadyEquipped(newInstance))
-        {
-            Debug.Log($"[EquipmentLayer] {newInstance.ItemSO.ItemName} est déjà porté sur {gameObject.name}.");
-            return;
-        }
+        if (newInstance == null) return;
 
         EquipmentSO data = newInstance.ItemSO as EquipmentSO;
-        if (data == null)
-        {
-            Debug.LogError($"[EquipmentLayer] L'objet {newInstance.CustomizedName} n'a pas de EquipmentSO valide !");
-            return;
-        }
+        if (data == null) return;
 
         EquipmentType type = data.EquipmentType;
 
-        Debug.Log($"<color=green>[Equip]</color> Tentative d'équipement de <b>{data.ItemName}</b> dans le slot <b>{type}</b> dans le gameobject <b>{gameObject.name}</b>");
-
+        // --- LOGIQUE DE SET ---
         Unequip(type);
         SetInstance(type, newInstance);
 
+        // --- LOGIQUE VISUELLE ---
         List<GameObject> targetList = GetSocketList(type);
+
         if (targetList == null || targetList.Count == 0)
         {
-            Debug.LogWarning($"[EquipmentLayer] Aucun Socket trouvé pour le type {type} sur {gameObject.name} !");
+            Debug.LogWarning($"[EquipmentLayer] Aucun socket trouvé pour le type {type} sur {gameObject.name}");
             return;
         }
 
@@ -63,28 +55,21 @@ public class EquipmentLayer : MonoBehaviour
 
             socket.SetActive(true);
 
-            // 1. Gestion du visuel (SpriteResolver)
+            // 1. Mise à jour du Sprite (Catégorie du sac dans la Library)
             if (socket.TryGetComponent(out SpriteResolver resolver))
             {
-                string currentLabel = resolver.GetLabel();
-                resolver.SetCategoryAndLabel(data.CategoryName, currentLabel);
+                // On utilise le CategoryName défini dans le BagSO/EquipmentSO
+                resolver.SetCategoryAndLabel(data.CategoryName, resolver.GetLabel());
             }
 
-            // 2. Gestion de la couleur personnalisée (SpriteRenderer)
+            // 2. Application de la couleur
             if (socket.TryGetComponent(out SpriteRenderer sRenderer))
             {
-                if (newInstance.HaveCustomizedColor())
-                {
-                    sRenderer.color = newInstance.CustomizedColor;
-                    Debug.Log($"[Visual] Couleur personnalisée appliquée au socket : {socket.name}");
-                }
-                else
-                {
-                    // On remet en blanc si l'item n'a pas de couleur spéciale
-                    sRenderer.color = Color.white;
-                }
+                // On vérifie si c'est une instance de sac pour la couleur ou une instance normale
+                sRenderer.color = newInstance.HavePrimaryColor() ? newInstance.PrimaryColor : Color.white;
             }
         }
+
         RefreshAllVisuals();
     }
 
@@ -139,13 +124,11 @@ public class EquipmentLayer : MonoBehaviour
 
     private void SetInstance(EquipmentType type, EquipmentInstance inst)
     {
-        // 1. Mise à jour du dictionnaire pour IsAlreadyEquipped
         if (inst == null)
             currentEquipment.Remove(type);
         else
             currentEquipment[type] = inst;
 
-        // 2. Mise à jour des variables pour l'inspecteur
         switch (type)
         {
             case EquipmentType.Helmet: head = inst; break;
@@ -153,7 +136,12 @@ public class EquipmentLayer : MonoBehaviour
             case EquipmentType.Gloves: gloves = inst; break;
             case EquipmentType.Pants: legs = inst; break;
             case EquipmentType.Boots: boots = inst; break;
-            case EquipmentType.Bag: bag = inst as BagInstance; break;
+            case EquipmentType.Bag:
+                bag = inst as BagInstance;
+                if (bag == null && inst != null)
+                    Debug.LogError($"[CRITICAL] Le cast vers BagInstance a échoué pour {inst.ItemSO.ItemName} !");
+                break;
+
         }
     }
 
@@ -189,7 +177,7 @@ public class EquipmentLayer : MonoBehaviour
             if (hasItem && socket.TryGetComponent(out SpriteRenderer sRenderer))
             {
                 // Appliquer la couleur si elle existe, sinon blanc
-                sRenderer.color = currentItem.HaveCustomizedColor() ? currentItem.CustomizedColor : Color.white;
+                sRenderer.color = currentItem.HavePrimaryColor() ? currentItem.PrimaryColor: Color.white;
 
                 if (socket.TryGetComponent(out SpriteResolver resolver))
                 {

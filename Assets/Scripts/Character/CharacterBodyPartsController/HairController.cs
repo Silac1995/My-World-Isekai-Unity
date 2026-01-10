@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.U2D.Animation;
 
 public class HairController : MonoBehaviour
 {
@@ -8,6 +9,9 @@ public class HairController : MonoBehaviour
     [Header("Hair Data")]
     [SerializeField] private CharacterHair characterHair;
     [SerializeField] private CharacterPubicHair characterPubicHair;
+    [SerializeField] private SpriteLibraryAsset _spriteLibraryAssetsHair;
+    [SerializeField] private SpriteLibraryAsset _spriteLibraryAssetsPubicHair;
+    
 
     [Header("Settings")]
     [SerializeField] private string spriteLibraryHairCategory = "01";
@@ -19,6 +23,9 @@ public class HairController : MonoBehaviour
     public void Initialize()
     {
         RetrieveHairObjects();
+        CharacterVisual cv = GetComponent<CharacterVisual>();
+        _spriteLibraryAssetsHair = cv.SpritesLibrary.Body_EyesLibrary;
+        _spriteLibraryAssetsPubicHair = cv.SpritesLibrary.Body_EyebrowsLibrary;
     }
 
     private void RetrieveHairObjects()
