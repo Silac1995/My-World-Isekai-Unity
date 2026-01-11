@@ -8,18 +8,46 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 120037102847330699, guid: 9667320e55f13044da8a5d2d9321096f, type: 3}
+      propertyPath: m_SpriteLibraryAsset
+      value: 
+      objectReference: {fileID: 7108339969198208228, guid: 94c9a00f733974444a844f0f4a2e6e87, type: 3}
     - target: {fileID: 438168048036876002, guid: 9667320e55f13044da8a5d2d9321096f, type: 3}
       propertyPath: m_Name
       value: Bag
+      objectReference: {fileID: 0}
+    - target: {fileID: 902290550792379219, guid: 9667320e55f13044da8a5d2d9321096f, type: 3}
+      propertyPath: m_Sprite
+      value: 
+      objectReference: {fileID: -1107964689, guid: e04d06f5ad79df74ca1bf99a73211394, type: 3}
+    - target: {fileID: 902290550792379219, guid: 9667320e55f13044da8a5d2d9321096f, type: 3}
+      propertyPath: m_WasSpriteAssigned
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1481049542739845885, guid: 9667320e55f13044da8a5d2d9321096f, type: 3}
+      propertyPath: m_Sprite
+      value: 
+      objectReference: {fileID: 1871863361, guid: 522cd472561bd4e4c90f5a6a7e77c5c3, type: 3}
+    - target: {fileID: 1481049542739845885, guid: 9667320e55f13044da8a5d2d9321096f, type: 3}
+      propertyPath: m_WasSpriteAssigned
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 2420251438166049129, guid: 9667320e55f13044da8a5d2d9321096f, type: 3}
       propertyPath: m_SortingOrder
       value: 2
       objectReference: {fileID: 0}
+    - target: {fileID: 2841347668961722606, guid: 9667320e55f13044da8a5d2d9321096f, type: 3}
+      propertyPath: m_SpriteLibraryAsset
+      value: 
+      objectReference: {fileID: 7108339969198208228, guid: 94c9a00f733974444a844f0f4a2e6e87, type: 3}
     - target: {fileID: 3518998449118664345, guid: 9667320e55f13044da8a5d2d9321096f, type: 3}
       propertyPath: m_SortingOrder
       value: 3
       objectReference: {fileID: 0}
+    - target: {fileID: 4142114656484292184, guid: 9667320e55f13044da8a5d2d9321096f, type: 3}
+      propertyPath: m_SpriteLibraryAsset
+      value: 
+      objectReference: {fileID: 7108339969198208228, guid: 94c9a00f733974444a844f0f4a2e6e87, type: 3}
     - target: {fileID: 7132892494771676005, guid: 9667320e55f13044da8a5d2d9321096f, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0
@@ -60,6 +88,22 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 7398191339834394478, guid: 9667320e55f13044da8a5d2d9321096f, type: 3}
+      propertyPath: m_BoneTransforms.Array.size
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 8266383990131215665, guid: 9667320e55f13044da8a5d2d9321096f, type: 3}
+      propertyPath: m_Sprite
+      value: 
+      objectReference: {fileID: 375967295, guid: 77d8a389e4215e14883c165a1843eead, type: 3}
+    - target: {fileID: 8266383990131215665, guid: 9667320e55f13044da8a5d2d9321096f, type: 3}
+      propertyPath: m_WasSpriteAssigned
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 8849619358004242570, guid: 9667320e55f13044da8a5d2d9321096f, type: 3}
+      propertyPath: m_SpriteLibraryAsset
+      value: 
+      objectReference: {fileID: 7108339969198208228, guid: 94c9a00f733974444a844f0f4a2e6e87, type: 3}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []

@@ -75,6 +75,11 @@ GameObject:
   m_CorrespondingSourceObject: {fileID: 262962556695160703, guid: b74182ade6e88b64abfbad5d0003a907, type: 3}
   m_PrefabInstance: {fileID: 402888566639178403}
   m_PrefabAsset: {fileID: 0}
+--- !u!4 &711567073983150889 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 885141493301971338, guid: b74182ade6e88b64abfbad5d0003a907, type: 3}
+  m_PrefabInstance: {fileID: 402888566639178403}
+  m_PrefabAsset: {fileID: 0}
 --- !u!114 &712343891456020742 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 897793002078987173, guid: b74182ade6e88b64abfbad5d0003a907, type: 3}
@@ -538,6 +543,82 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 1726437756154119689, guid: b845f76b3fb47e34a9b372a27afda993, type: 3}
+      propertyPath: m_RootBone
+      value: 
+      objectReference: {fileID: 711567073983150889}
+    - target: {fileID: 1726437756154119689, guid: b845f76b3fb47e34a9b372a27afda993, type: 3}
+      propertyPath: m_Bounds.m_Center.x
+      value: -0.63973224
+      objectReference: {fileID: 0}
+    - target: {fileID: 1726437756154119689, guid: b845f76b3fb47e34a9b372a27afda993, type: 3}
+      propertyPath: m_Bounds.m_Center.y
+      value: 7.7157307
+      objectReference: {fileID: 0}
+    - target: {fileID: 1726437756154119689, guid: b845f76b3fb47e34a9b372a27afda993, type: 3}
+      propertyPath: m_Bounds.m_Extent.x
+      value: 1.322955
+      objectReference: {fileID: 0}
+    - target: {fileID: 1726437756154119689, guid: b845f76b3fb47e34a9b372a27afda993, type: 3}
+      propertyPath: m_Bounds.m_Extent.y
+      value: 1.4794853
+      objectReference: {fileID: 0}
+    - target: {fileID: 1726437756154119689, guid: b845f76b3fb47e34a9b372a27afda993, type: 3}
+      propertyPath: 'm_BoneTransforms.Array.data[0]'
+      value: 
+      objectReference: {fileID: 711567073983150889}
+    - target: {fileID: 2959713693551500881, guid: b845f76b3fb47e34a9b372a27afda993, type: 3}
+      propertyPath: m_RootBone
+      value: 
+      objectReference: {fileID: 711567073983150889}
+    - target: {fileID: 2959713693551500881, guid: b845f76b3fb47e34a9b372a27afda993, type: 3}
+      propertyPath: m_Bounds.m_Center.x
+      value: -0.6217773
+      objectReference: {fileID: 0}
+    - target: {fileID: 2959713693551500881, guid: b845f76b3fb47e34a9b372a27afda993, type: 3}
+      propertyPath: m_Bounds.m_Center.y
+      value: 7.709935
+      objectReference: {fileID: 0}
+    - target: {fileID: 2959713693551500881, guid: b845f76b3fb47e34a9b372a27afda993, type: 3}
+      propertyPath: m_Bounds.m_Extent.x
+      value: 1.2750001
+      objectReference: {fileID: 0}
+    - target: {fileID: 2959713693551500881, guid: b845f76b3fb47e34a9b372a27afda993, type: 3}
+      propertyPath: m_Bounds.m_Extent.y
+      value: 1.47072
+      objectReference: {fileID: 0}
+    - target: {fileID: 2959713693551500881, guid: b845f76b3fb47e34a9b372a27afda993, type: 3}
+      propertyPath: 'm_BoneTransforms.Array.data[0]'
+      value: 
+      objectReference: {fileID: 711567073983150889}
+    - target: {fileID: 4135337654955087806, guid: b845f76b3fb47e34a9b372a27afda993, type: 3}
+      propertyPath: m_RootBone
+      value: 
+      objectReference: {fileID: 711567073983150889}
+    - target: {fileID: 6425866746912115354, guid: b845f76b3fb47e34a9b372a27afda993, type: 3}
+      propertyPath: m_RootBone
+      value: 
+      objectReference: {fileID: 711567073983150889}
+    - target: {fileID: 6425866746912115354, guid: b845f76b3fb47e34a9b372a27afda993, type: 3}
+      propertyPath: m_Bounds.m_Center.x
+      value: -0.63276744
+      objectReference: {fileID: 0}
+    - target: {fileID: 6425866746912115354, guid: b845f76b3fb47e34a9b372a27afda993, type: 3}
+      propertyPath: m_Bounds.m_Center.y
+      value: 7.810261
+      objectReference: {fileID: 0}
+    - target: {fileID: 6425866746912115354, guid: b845f76b3fb47e34a9b372a27afda993, type: 3}
+      propertyPath: m_Bounds.m_Extent.x
+      value: 1.26774
+      objectReference: {fileID: 0}
+    - target: {fileID: 6425866746912115354, guid: b845f76b3fb47e34a9b372a27afda993, type: 3}
+      propertyPath: m_Bounds.m_Extent.y
+      value: 1.3313448
+      objectReference: {fileID: 0}
+    - target: {fileID: 6425866746912115354, guid: b845f76b3fb47e34a9b372a27afda993, type: 3}
+      propertyPath: 'm_BoneTransforms.Array.data[0]'
+      value: 
+      objectReference: {fileID: 711567073983150889}
     - target: {fileID: 8595825409667026821, guid: b845f76b3fb47e34a9b372a27afda993, type: 3}
       propertyPath: m_Name
       value: Bag
