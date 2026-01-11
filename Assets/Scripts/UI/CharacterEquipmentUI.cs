@@ -1,247 +1,209 @@
-using UnityEngine;
 using TMPro;
+using UnityEngine;
+using UnityEngine.TextCore.Text;
 using UnityEngine.UI;
-using System.Collections.Generic;
-using System.Linq;
 
 public class CharacterEquipmentUI : MonoBehaviour
 {
     [Header("References")]
-    [SerializeField] private Character character;
-    private EquipmentLayer currentLayer; // Le layer actuellement sélectionné (Armor, Clothing ou Underwear)
+    [SerializeField] private Character _character;
+    private EquipmentLayer _currentLayer;
 
-    [Header("General UI")]
-    [SerializeField] private TextMeshProUGUI characterNameText;
-    [SerializeField] private TMP_Dropdown layerDropdown;
-
-    [Header("Equipment Slot Texts")]
-    [SerializeField] private TextMeshProUGUI headgearText;
-    [SerializeField] private TextMeshProUGUI armorText;
-    [SerializeField] private TextMeshProUGUI glovesText;
-    [SerializeField] private TextMeshProUGUI pantsText;
-    [SerializeField] private TextMeshProUGUI bootsText;
-    [SerializeField] private TextMeshProUGUI bagText;
+    [Header("Layer Selection")]
+    [SerializeField] private Button _buttonArmorLayer;
+    [SerializeField] private Button _buttonClothingLayer;
+    [SerializeField] private Button _buttonUnderwearLayer;
+    [SerializeField] private TextMeshProUGUI _selectedEquipmentLayer;
 
     [Header("Unequip Buttons")]
-    [SerializeField] private Button unequipHeadButton;
-    [SerializeField] private Button unequipArmorButton;
-    [SerializeField] private Button unequipGlovesButton;
-    [SerializeField] private Button unequipPantsButton;
-    [SerializeField] private Button unequipBootsButton;
-    [SerializeField] private Button unequipBagButton;
+    [SerializeField] private Button _unequipHeadButton;
+    [SerializeField] private Button _unequipArmorButton;
+    [SerializeField] private Button _unequipGlovesButton;
+    [SerializeField] private Button _unequipPantsButton;
+    [SerializeField] private Button _unequipBootsButton;
+    [SerializeField] private Button _unequipBagButton;
 
-    private List<EquipmentLayer> availableLayers = new List<EquipmentLayer>();
-
-    private void Update()
-    {
-        // Si tu appuies sur F1, on force la recherche
-        if (Input.GetKeyDown(KeyCode.F1))
-        {
-            Debug.Log("Force SetupUI...");
-            // On cherche le premier Character dans la scène pour tester
-            Character testChar = Object.FindFirstObjectByType<Character>();
-            if (testChar != null) SetupUI(testChar);
-        }
-    }
     private void Start()
     {
-        // 1. Abonnement au changement du Dropdown
-        if (layerDropdown != null)
-        {
-            layerDropdown.onValueChanged.AddListener(OnDropdownLayerChanged);
-        }
+        _buttonArmorLayer?.onClick.AddListener(() => SwitchLayer(WearableLayerEnum.Armor));
+        _buttonClothingLayer?.onClick.AddListener(() => SwitchLayer(WearableLayerEnum.Clothing));
+        _buttonUnderwearLayer?.onClick.AddListener(() => SwitchLayer(WearableLayerEnum.Underwear));
 
-        // 2. Abonnement des boutons de déséquipement mis à jour
-        // On passe maintenant par la méthode générique qui utilise CharacterEquipment
-        unequipHeadButton?.onClick.AddListener(() => RequestUnequip(WearableType.Helmet));
-        unequipArmorButton?.onClick.AddListener(() => RequestUnequip(WearableType.Armor));
-        unequipGlovesButton?.onClick.AddListener(() => RequestUnequip(WearableType.Gloves));
-        unequipPantsButton?.onClick.AddListener(() => RequestUnequip(WearableType.Pants));
-        unequipBootsButton?.onClick.AddListener(() => RequestUnequip(WearableType.Boots));
-        unequipBagButton?.onClick.AddListener(() => RequestUnequip(WearableType.Bag));
+        _unequipHeadButton?.onClick.AddListener(() => RequestUnequip(WearableType.Helmet));
+        _unequipArmorButton?.onClick.AddListener(() => RequestUnequip(WearableType.Armor));
+        _unequipGlovesButton?.onClick.AddListener(() => RequestUnequip(WearableType.Gloves));
+        _unequipPantsButton?.onClick.AddListener(() => RequestUnequip(WearableType.Pants));
+        _unequipBootsButton?.onClick.AddListener(() => RequestUnequip(WearableType.Boots));
+        _unequipBagButton?.onClick.AddListener(() => RequestUnequip(WearableType.Bag));
 
-        if (character != null) SetupUI(character);
+        if (_character != null) SetupUI(_character);
     }
-
     /// <summary>
-    /// Appelé par la caméra ou le manager pour lier l'UI à un personnage précis
+    /// Initialise la fenêtre avec le personnage cible.
     /// </summary>
-    public void SetupUI(Character newCharacter)
+    public void Initialize(Character target)
     {
-        if (newCharacter == null)
+        if (target == null)
         {
-            Debug.LogWarning("[UI] SetupUI appelé avec un personnage NUL");
+            Debug.LogError("[UI] Tentative d'initialisation avec un Character nul.");
             return;
         }
 
-        character = newCharacter;
+        _character = target;
 
-        // On force la recherche sur TOUTE la hiérarchie du perso
-        availableLayers = character.GetComponentsInChildren<EquipmentLayer>(true).ToList();
+        // On nettoie les anciens listeners pour éviter les doublons (important si le prefab est réutilisé)
+        RemoveAllButtonListeners();
 
-        Debug.Log($"[UI] Tentative de Setup pour {character.name}. Couches trouvées : {availableLayers.Count}");
+        // On ré-abonne les boutons
+        SetupButtonEvents();
 
-        if (availableLayers.Count > 0)
-        {
-            PopulateLayerDropdown();
-            currentLayer = availableLayers[0];
-            UpdateUI();
-        }
-        else
-        {
-            Debug.LogError($"[UI] {character.name} n'a aucun composant EquipmentLayer sur lui ou ses enfants !");
-        }
+        // On affiche la couche par défaut
+        SwitchLayer(WearableLayerEnum.Armor);
+
+        Debug.Log($"<color=green>[UI]</color> Fenêtre d'équipement initialisée pour : {_character.CharacterName}");
+    }
+    private void SetupButtonEvents()
+    {
+        // Couches
+        _buttonArmorLayer?.onClick.AddListener(() => SwitchLayer(WearableLayerEnum.Armor));
+        _buttonClothingLayer?.onClick.AddListener(() => SwitchLayer(WearableLayerEnum.Clothing));
+        _buttonUnderwearLayer?.onClick.AddListener(() => SwitchLayer(WearableLayerEnum.Underwear));
+
+        // Déséquipement
+        _unequipHeadButton?.onClick.AddListener(() => RequestUnequip(WearableType.Helmet));
+        _unequipArmorButton?.onClick.AddListener(() => RequestUnequip(WearableType.Armor));
+        _unequipGlovesButton?.onClick.AddListener(() => RequestUnequip(WearableType.Gloves));
+        _unequipPantsButton?.onClick.AddListener(() => RequestUnequip(WearableType.Pants));
+        _unequipBootsButton?.onClick.AddListener(() => RequestUnequip(WearableType.Boots));
+        _unequipBagButton?.onClick.AddListener(() => RequestUnequip(WearableType.Bag));
     }
 
-    private void PopulateLayerDropdown()
+    private void RemoveAllButtonListeners()
     {
-        if (layerDropdown == null) return;
-
-        layerDropdown.ClearOptions();
-        List<string> options = new List<string>();
-
-        if (availableLayers.Count == 0)
-        {
-            Debug.LogError("Attention : Aucun EquipmentLayer trouvé sur " + character.name);
-            options.Add("Aucun Layer trouvé");
-        }
-        else
-        {
-            foreach (var layer in availableLayers)
-            {
-                options.Add(layer.GetType().Name);
-                Debug.Log("Layer ajouté au dropdown : " + layer.GetType().Name);
-            }
-        }
-
-        layerDropdown.AddOptions(options);
-        layerDropdown.RefreshShownValue();
+        _buttonArmorLayer?.onClick.RemoveAllListeners();
+        _buttonClothingLayer?.onClick.RemoveAllListeners();
+        _buttonUnderwearLayer?.onClick.RemoveAllListeners();
+        _unequipHeadButton?.onClick.RemoveAllListeners();
+        _unequipArmorButton?.onClick.RemoveAllListeners();
+        _unequipGlovesButton?.onClick.RemoveAllListeners();
+        _unequipPantsButton?.onClick.AddListener(() => RequestUnequip(WearableType.Pants));
+        _unequipBootsButton?.onClick.RemoveAllListeners();
+        _unequipBagButton?.onClick.RemoveAllListeners();
     }
 
-    private void OnDropdownLayerChanged(int index)
+    public void SetupUI(Character newCharacter)
     {
-        if (index >= 0 && index < availableLayers.Count)
-        {
-            currentLayer = availableLayers[index];
-            UpdateUI();
-            Debug.Log($"<color=orange>[UI]</color> Couche active : {currentLayer.GetType().Name}");
-        }
+        if (newCharacter == null) return;
+        _character = newCharacter;
+        SwitchLayer(WearableLayerEnum.Armor);
     }
 
     /// <summary>
-    /// Envoie une requête de déséquipement au CharacterEquipment global.
+    /// Change la couche d'équipement affichée (Armor, Clothing, Underwear)
     /// </summary>
-    private void RequestUnequip(WearableType slotType)
+    private void SwitchLayer(WearableLayerEnum layerType)
     {
-        if (character == null || character.CharacterEquipment == null) return;
+        if (_character == null || _character.CharacterEquipment == null) return;
 
-        // 1. On détermine le LayerEnum basé sur le nom du layer actuel (ou son type)
-        // On pourrait aussi stocker l'enum directement dans le composant EquipmentLayer
-        WearableLayerEnum layerEnum = GetEnumFromCurrentLayer();
+        switch (layerType)
+        {
+            case WearableLayerEnum.Armor: _currentLayer = _character.CharacterEquipment.ArmorLayer; break;
+            case WearableLayerEnum.Clothing: _currentLayer = _character.CharacterEquipment.ClothingLayer; break;
+            case WearableLayerEnum.Underwear: _currentLayer = _character.CharacterEquipment.UnderwearLayer; break;
+        }
 
-        // 2. On appelle la méthode centralisée que tu as implémentée
-        character.CharacterEquipment.Unequip(layerEnum, slotType);
+        if (_selectedEquipmentLayer != null)
+            _selectedEquipmentLayer.text = layerType.ToString() + " Layer";
 
-        // 3. On rafraîchit l'UI
         UpdateUI();
     }
+
     /// <summary>
-    /// Helper pour convertir le layer sélectionné dans le dropdown en EquipmentLayerEnum
+    /// Change la couleur du titre selon la catégorie sélectionnée
     /// </summary>
-    private WearableLayerEnum GetEnumFromCurrentLayer()
+    private void UpdateLayerTextColor(WearableLayerEnum layerType)
     {
-        if (currentLayer is ArmorLayer) return WearableLayerEnum.Armor;
-        if (currentLayer is ClothingLayer) return WearableLayerEnum.Clothing;
-        if (currentLayer is UnderwearLayer) return WearableLayerEnum.Underwear;
+        if (_selectedEquipmentLayer == null) return;
 
-        return WearableLayerEnum.Clothing; // Valeur par défaut
-    }
-    /// <summary>
-    /// Déséquipe l'objet uniquement sur la couche sélectionnée dans le dropdown
-    /// </summary>
-    private void UnequipFromCurrentLayer(WearableType type)
-    {
-        if (currentLayer == null || character == null) return;
-
-        // 1. On récupère d'abord l'instance de l'objet porté
-        EquipmentInstance itemToDrop = currentLayer.GetInstance(type);
-
-        if (itemToDrop != null)
+        switch (layerType)
         {
-            // 2. On le retire du personnage (visuels et données)
-            currentLayer.Unequip(type);
-
-            // 3. On demande au personnage de créer l'objet dans le monde
-            character.DropItem(itemToDrop);
-
-            // 4. On rafraîchit l'UI
-            UpdateUI();
-
-            Debug.Log($"[UI] {itemToDrop.ItemSO.ItemName} a été retiré et jeté au sol.");
+            case WearableLayerEnum.Armor:
+                _selectedEquipmentLayer.color = new Color(0.8f, 0.2f, 0.2f); // Rouge/Acier
+                break;
+            case WearableLayerEnum.Clothing:
+                _selectedEquipmentLayer.color = new Color(0.2f, 0.8f, 0.2f); // Vert/Tissu
+                break;
+            case WearableLayerEnum.Underwear:
+                _selectedEquipmentLayer.color = new Color(0.2f, 0.6f, 1f);   // Bleu/Sous-vêtements
+                break;
         }
+    }
+
+    private void RequestUnequip(WearableType slotType)
+    {
+        if (_character == null || _character.CharacterEquipment == null) return;
+
+        if (slotType == WearableType.Bag)
+            _character.CharacterEquipment.Unequip(WearableLayerEnum.Bag, slotType);
+        else
+            _character.CharacterEquipment.Unequip(GetEnumFromCurrentLayer(), slotType);
+
+        UpdateUI();
     }
 
     public void UpdateUI()
     {
-        if (character == null || character.CharacterEquipment == null || currentLayer == null) return;
+        if (_character == null || _character.CharacterEquipment == null || _currentLayer == null) return;
 
-        // Mise à jour des textes
-        headgearText.text = GetEquipmentName(WearableType.Helmet);
-        armorText.text = GetEquipmentName(WearableType.Armor);
-        glovesText.text = GetEquipmentName(WearableType.Gloves);
-        pantsText.text = GetEquipmentName(WearableType.Pants);
-        bootsText.text = GetEquipmentName(WearableType.Boots);
+        // Mise à jour visuelle des slots de la couche actuelle
+        UpdateSlotButtonState(_unequipHeadButton, WearableType.Helmet);
+        UpdateSlotButtonState(_unequipArmorButton, WearableType.Armor);
+        UpdateSlotButtonState(_unequipGlovesButton, WearableType.Gloves);
+        UpdateSlotButtonState(_unequipPantsButton, WearableType.Pants);
+        UpdateSlotButtonState(_unequipBootsButton, WearableType.Boots);
 
-        // --- LOGIQUE SPÉCIFIQUE POUR LE SAC ---
-        // Le sac est maintenant global dans CharacterEquipment, on ne le cherche plus dans le currentLayer
-        if (bagText != null)
+        // Mise à jour spécifique du sac (Global)
+        if (_unequipBagButton != null)
         {
-            // On accède à l'underscore _bag via une propriété publique Bag si tu l'as créée, 
-            // ou on adapte GetEquipmentName pour regarder dans CharacterEquipment
-            bagText.text = GetGlobalBagName();
-        }
-
-        // Mise à jour de l'état des boutons
-        ToggleButtonState(unequipHeadButton, WearableType.Helmet);
-        ToggleButtonState(unequipArmorButton, WearableType.Armor);
-        ToggleButtonState(unequipGlovesButton, WearableType.Gloves);
-        ToggleButtonState(unequipPantsButton, WearableType.Pants);
-        ToggleButtonState(unequipBootsButton, WearableType.Boots);
-
-        // État du bouton sac
-        if (unequipBagButton != null)
-        {
-            // On vérifie si CharacterEquipment a un sac
-            unequipBagButton.interactable = character.CharacterEquipment.HasBagEquipped();
+            var bag = _character.CharacterEquipment.GetBagInstance();
+            UpdateSlotText(_unequipBagButton, bag);
+            _unequipBagButton.interactable = (bag != null);
         }
     }
 
-    private string GetGlobalBagName()
+    /// <summary>
+    /// Gère à la fois l'état interactif et le texte du bouton
+    /// </summary>
+    private void UpdateSlotButtonState(Button btn, WearableType type)
     {
-        // On demande directement au manager global
-        var bag = character.CharacterEquipment.GetBagInstance();
-        return bag != null ? bag.ItemSO.ItemName : "<color=#888888>Vide</color>";
+        if (btn == null) return;
+
+        EquipmentInstance item = _currentLayer.GetInstance(type);
+
+        // 1. On change le texte ("None" ou nom de l'item)
+        UpdateSlotText(btn, item);
+
+        // 2. On active/désactive le bouton
+        btn.interactable = (item != null);
     }
 
-    private string GetEquipmentName(WearableType type)
+    private void UpdateSlotText(Button btn, ItemInstance item)
     {
-        EquipmentInstance inst = currentLayer.GetInstance(type);
-        if (inst != null && inst.ItemSO != null)
+        TextMeshProUGUI btnText = btn.GetComponentInChildren<TextMeshProUGUI>();
+        if (btnText != null)
         {
-            return inst.ItemSO.ItemName;
+            // Si l'item existe, on affiche son nom, sinon "None"
+            btnText.text = (item != null) ? item.ItemSO.ItemName : "None";
+
+            // Optionnel : On change la couleur si c'est vide pour que ce soit plus lisible
+            btnText.color = (item != null) ? Color.white : new Color(1, 1, 1, 0.5f);
         }
-        return "<color=#888888>Vide</color>";
     }
 
-    private void ToggleButtonState(Button btn, WearableType type)
+    private WearableLayerEnum GetEnumFromCurrentLayer()
     {
-        if (btn != null)
-        {
-            // On désactive l'interaction du bouton s'il n'y a rien à déséquiper
-            btn.interactable = currentLayer.GetInstance(type) != null;
-        }
+        if (_currentLayer is ArmorLayer) return WearableLayerEnum.Armor;
+        if (_currentLayer is UnderwearLayer) return WearableLayerEnum.Underwear;
+        return WearableLayerEnum.Clothing;
     }
-
-    // Utilisé pour forcer un rafraîchissement externe (après un ramassage par exemple)
-    public void Refresh() => UpdateUI();
 }
