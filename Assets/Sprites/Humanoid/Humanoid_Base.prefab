@@ -2305,7 +2305,7 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 701887742015545142, guid: ec24aed44e58bf64c858f8287ee6dc1b, type: 3}
       propertyPath: m_Name
-      value: female_humanoid_BaseSprite4
+      value: Sprite
       objectReference: {fileID: 0}
     - target: {fileID: 1834516435280512853, guid: ec24aed44e58bf64c858f8287ee6dc1b, type: 3}
       propertyPath: m_LocalPosition.x

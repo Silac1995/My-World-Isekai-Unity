@@ -4,8 +4,10 @@ using UnityEngine;
 public class WearableSO : EquipmentSO
 {
     [Header("Base Equipment Settings")]
-    [SerializeField] readonly private EquipmentCategory _equipmentCategory = EquipmentCategory.Wearable;
-    [SerializeField] private WearableLayerEnum _equipmentLayer;
+    [SerializeField] readonly protected EquipmentCategory _equipmentCategory = EquipmentCategory.Wearable;
+
+    // On le met en protected pour que BagSO y ait accès
+    [SerializeField] protected WearableLayerEnum _equipmentLayer;
 
     public WearableLayerEnum EquipmentLayer => _equipmentLayer;
     [Header("Wearable Specifics")]
