@@ -51,20 +51,15 @@ public class CharacterEquipmentUI : MonoBehaviour
             layerDropdown.onValueChanged.AddListener(OnDropdownLayerChanged);
         }
 
-        // 2. Abonnement des boutons de déséquipement
-        unequipHeadButton?.onClick.AddListener(() => UnequipFromCurrentLayer(EquipmentType.Helmet));
-        unequipArmorButton?.onClick.AddListener(() => UnequipFromCurrentLayer(EquipmentType.Armor));
-        unequipGlovesButton?.onClick.AddListener(() => UnequipFromCurrentLayer(EquipmentType.Gloves));
-        unequipPantsButton?.onClick.AddListener(() => UnequipFromCurrentLayer(EquipmentType.Pants));
-        unequipBootsButton?.onClick.AddListener(() => UnequipFromCurrentLayer(EquipmentType.Boots));
-        unequipBagButton?.onClick.AddListener(() => UnequipFromCurrentLayer(EquipmentType.Bag));
+        // 2. Abonnement des boutons de déséquipement mis à jour
+        // On passe maintenant par la méthode générique qui utilise CharacterEquipment
+        unequipHeadButton?.onClick.AddListener(() => RequestUnequip(EquipmentType.Helmet));
+        unequipArmorButton?.onClick.AddListener(() => RequestUnequip(EquipmentType.Armor));
+        unequipGlovesButton?.onClick.AddListener(() => RequestUnequip(EquipmentType.Gloves));
+        unequipPantsButton?.onClick.AddListener(() => RequestUnequip(EquipmentType.Pants));
+        unequipBootsButton?.onClick.AddListener(() => RequestUnequip(EquipmentType.Boots));
+        unequipBagButton?.onClick.AddListener(() => RequestUnequip(EquipmentType.Bag));
 
-        // AJOUTE CECI : Si tu as déjà glissé un perso dans l'inspecteur, on l'initialise
-        if (character != null)
-        {
-            SetupUI(character);
-        }
-        // 3. Initialisation si un perso est déjà assigné
         if (character != null) SetupUI(character);
     }
 
@@ -134,6 +129,34 @@ public class CharacterEquipmentUI : MonoBehaviour
     }
 
     /// <summary>
+    /// Envoie une requête de déséquipement au CharacterEquipment global.
+    /// </summary>
+    private void RequestUnequip(EquipmentType slotType)
+    {
+        if (character == null || character.CharacterEquipment == null) return;
+
+        // 1. On détermine le LayerEnum basé sur le nom du layer actuel (ou son type)
+        // On pourrait aussi stocker l'enum directement dans le composant EquipmentLayer
+        EquipmentLayerEnum layerEnum = GetEnumFromCurrentLayer();
+
+        // 2. On appelle la méthode centralisée que tu as implémentée
+        character.CharacterEquipment.Unequip(layerEnum, slotType);
+
+        // 3. On rafraîchit l'UI
+        UpdateUI();
+    }
+    /// <summary>
+    /// Helper pour convertir le layer sélectionné dans le dropdown en EquipmentLayerEnum
+    /// </summary>
+    private EquipmentLayerEnum GetEnumFromCurrentLayer()
+    {
+        if (currentLayer is ArmorLayer) return EquipmentLayerEnum.Armor;
+        if (currentLayer is ClothingLayer) return EquipmentLayerEnum.Clothing;
+        if (currentLayer is UnderwearLayer) return EquipmentLayerEnum.Underwear;
+
+        return EquipmentLayerEnum.Clothing; // Valeur par défaut
+    }
+    /// <summary>
     /// Déséquipe l'objet uniquement sur la couche sélectionnée dans le dropdown
     /// </summary>
     private void UnequipFromCurrentLayer(EquipmentType type)
@@ -160,19 +183,22 @@ public class CharacterEquipmentUI : MonoBehaviour
 
     public void UpdateUI()
     {
-        if (currentLayer == null) return;
+        if (character == null || character.CharacterEquipment == null || currentLayer == null) return;
 
-        // Mise à jour des textes standards
+        // Mise à jour des textes
         headgearText.text = GetEquipmentName(EquipmentType.Helmet);
         armorText.text = GetEquipmentName(EquipmentType.Armor);
         glovesText.text = GetEquipmentName(EquipmentType.Gloves);
         pantsText.text = GetEquipmentName(EquipmentType.Pants);
         bootsText.text = GetEquipmentName(EquipmentType.Boots);
 
-        // --- AJOUT POUR LE SAC ---
+        // --- LOGIQUE SPÉCIFIQUE POUR LE SAC ---
+        // Le sac est maintenant global dans CharacterEquipment, on ne le cherche plus dans le currentLayer
         if (bagText != null)
         {
-            bagText.text = GetEquipmentName(EquipmentType.Bag);
+            // On accède à l'underscore _bag via une propriété publique Bag si tu l'as créée, 
+            // ou on adapte GetEquipmentName pour regarder dans CharacterEquipment
+            bagText.text = GetGlobalBagName();
         }
 
         // Mise à jour de l'état des boutons
@@ -182,11 +208,19 @@ public class CharacterEquipmentUI : MonoBehaviour
         ToggleButtonState(unequipPantsButton, EquipmentType.Pants);
         ToggleButtonState(unequipBootsButton, EquipmentType.Boots);
 
-        // --- AJOUT POUR LE BOUTON SAC ---
+        // État du bouton sac
         if (unequipBagButton != null)
         {
-            ToggleButtonState(unequipBagButton, EquipmentType.Bag);
+            // On vérifie si CharacterEquipment a un sac
+            unequipBagButton.interactable = character.CharacterEquipment.HasBagEquipped();
         }
+    }
+
+    private string GetGlobalBagName()
+    {
+        // On demande directement au manager global
+        var bag = character.CharacterEquipment.GetBagInstance();
+        return bag != null ? bag.ItemSO.ItemName : "<color=#888888>Vide</color>";
     }
 
     private string GetEquipmentName(EquipmentType type)

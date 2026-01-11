@@ -511,6 +511,10 @@ PrefabInstance:
       value: 4
       objectReference: {fileID: 0}
     - target: {fileID: 8408755073701722020, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
+      propertyPath: _bagSockets.Array.size
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 8408755073701722020, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       propertyPath: 'bagSockets.Array.data[0]'
       value: 
       objectReference: {fileID: 6919311944454468251}
@@ -526,6 +530,14 @@ PrefabInstance:
       propertyPath: 'bagSockets.Array.data[3]'
       value: 
       objectReference: {fileID: 8943340471016957374}
+    - target: {fileID: 8408755073701722020, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
+      propertyPath: '_bagSockets.Array.data[0]'
+      value: 
+      objectReference: {fileID: 4347531602231438054}
+    - target: {fileID: 8408755073701722020, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
+      propertyPath: '_bagSockets.Array.data[1]'
+      value: 
+      objectReference: {fileID: 6933214420710799589}
     - target: {fileID: 8530357501166543435, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       propertyPath: animator
       value: 
@@ -587,13 +599,6 @@ MonoBehaviour:
   glovesSockets: []
   legsSockets: []
   bootsSockets: []
-  bagSockets:
-  - {fileID: 4347531602231438054}
-  - {fileID: 6919311944454468251}
-  - {fileID: 5906188052953974618}
-  - {fileID: 3194554125100643373}
-  - {fileID: 8943340471016957374}
-  - {fileID: 6933214420710799589}
 --- !u!114 &6907833288458611216
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -624,13 +629,6 @@ MonoBehaviour:
   - {fileID: 2991788976598537167}
   - {fileID: 9202388699123799474}
   bootsSockets: []
-  bagSockets:
-  - {fileID: 6919311944454468251}
-  - {fileID: 5906188052953974618}
-  - {fileID: 3194554125100643373}
-  - {fileID: 8943340471016957374}
-  - {fileID: 4347531602231438054}
-  - {fileID: 6933214420710799589}
 --- !u!114 &3227628555279927972
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -648,13 +646,6 @@ MonoBehaviour:
   glovesSockets: []
   legsSockets: []
   bootsSockets: []
-  bagSockets:
-  - {fileID: 4347531602231438054}
-  - {fileID: 6933214420710799589}
-  - {fileID: 6919311944454468251}
-  - {fileID: 5906188052953974618}
-  - {fileID: 3194554125100643373}
-  - {fileID: 8943340471016957374}
 --- !u!1 &4035394106473422696 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 5246753746272467509, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}

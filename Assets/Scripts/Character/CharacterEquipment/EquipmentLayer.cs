@@ -10,7 +10,6 @@ public class EquipmentLayer : MonoBehaviour
     [SerializeField] protected EquipmentInstance gloves;
     [SerializeField] protected EquipmentInstance legs;
     [SerializeField] protected EquipmentInstance boots;
-    [SerializeField] protected BagInstance bag; // Ajouté
 
     [Header("Sockets (2D Animation Containers)")]
     [SerializeField] protected List<GameObject> headSockets;
@@ -18,7 +17,6 @@ public class EquipmentLayer : MonoBehaviour
     [SerializeField] protected List<GameObject> glovesSockets;
     [SerializeField] protected List<GameObject> legsSockets;
     [SerializeField] protected List<GameObject> bootsSockets;
-    [SerializeField] protected List<GameObject> bagSockets; // Ajouté
 
     protected System.Collections.Generic.Dictionary<EquipmentType, EquipmentInstance> currentEquipment = new();
 
@@ -107,7 +105,6 @@ public class EquipmentLayer : MonoBehaviour
         EquipmentType.Gloves => glovesSockets,
         EquipmentType.Pants => legsSockets,
         EquipmentType.Boots => bootsSockets,
-        EquipmentType.Bag => bagSockets, // Ajouté
         _ => null
     };
 
@@ -118,7 +115,6 @@ public class EquipmentLayer : MonoBehaviour
         EquipmentType.Gloves => gloves,
         EquipmentType.Pants => legs,
         EquipmentType.Boots => boots,
-        EquipmentType.Bag => bag, // Ajouté
         _ => null
     };
 
@@ -136,12 +132,6 @@ public class EquipmentLayer : MonoBehaviour
             case EquipmentType.Gloves: gloves = inst; break;
             case EquipmentType.Pants: legs = inst; break;
             case EquipmentType.Boots: boots = inst; break;
-            case EquipmentType.Bag:
-                bag = inst as BagInstance;
-                if (bag == null && inst != null)
-                    Debug.LogError($"[CRITICAL] Le cast vers BagInstance a échoué pour {inst.ItemSO.ItemName} !");
-                break;
-
         }
     }
 
