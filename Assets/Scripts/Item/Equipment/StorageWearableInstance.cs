@@ -15,10 +15,11 @@ public abstract class StorageWearableInstance : WearableInstance
     /// <summary>
     /// Initialise l'inventaire. Cette méthode est commune à tous les objets de stockage.
     /// </summary>
-    public virtual void InitializeStorage(int capacity)
+    public virtual void InitializeStorage(int miscCapacity, int weaponCapacity)
     {
-        // On passe 'this' en tant que StorageWearableInstance
-        _inventory = new Inventory(this, capacity);
-        Debug.Log($"<color=cyan>[Storage]</color> {ItemSO.ItemName} initialisé avec {capacity} slots.");
+        // On utilise les noms explicites pour plus de clarté
+        _inventory = new Inventory(this, miscCapacity, weaponCapacity);
+        Debug.Log($"<color=cyan>[Storage]</color> {ItemSO.ItemName} : " +
+                  $"{miscCapacity} Misc Slots, {weaponCapacity} Weapon Slots.");
     }
 }

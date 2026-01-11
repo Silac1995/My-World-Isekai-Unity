@@ -1,22 +1,32 @@
 using UnityEngine;
 
 [System.Serializable]
-public class ItemSlot
+public abstract class ItemSlot
 {
-    [SerializeField] private ItemInstance _itemInstance;
+    [SerializeField] protected ItemInstance _itemInstance;
 
-    // Propriété pour lire ou modifier l'instance de l'item dans le slot
     public ItemInstance ItemInstance
     {
         get => _itemInstance;
-        set => _itemInstance = value;
+        set
+        {
+            if (value == null || CanAcceptItem(value))
+                _itemInstance = value;
+            else
+                Debug.LogWarning($"[Slot] Tentative d'insertion invalide : {value.GetType().Name}");
+        }
     }
 
-    // Une petite méthode utilitaire souvent pratique pour les slots
-    public bool IsEmpty => _itemInstance == null;
-
-    public void ClearSlot()
+    /// <summary>
+    /// Vérifie si le slot est vide (ne contient aucune instance d'item).
+    /// </summary>
+    public bool IsEmpty()
     {
-        _itemInstance = null;
+        return _itemInstance == null;
     }
+
+    public void ClearSlot() => _itemInstance = null;
+
+    // Méthode abstraite que chaque sous-classe doit définir
+    public abstract bool CanAcceptItem(ItemInstance item);
 }

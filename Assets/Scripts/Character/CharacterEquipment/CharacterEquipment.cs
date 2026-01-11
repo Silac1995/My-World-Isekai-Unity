@@ -232,4 +232,26 @@ public class CharacterEquipment : MonoBehaviour
                 return null;
         }
     }
+
+    /// <summary>
+    /// Vérifie si le personnage possède actuellement un conteneur équipé (Sac).
+    /// </summary>
+    public bool HaveInventory()
+    {
+        // On vérifie si le sac existe ET s'il possède bien un inventaire initialisé
+        return _bag != null && _bag.Inventory != null;
+    }
+
+    /// <summary>
+    /// Retourne l'inventaire du sac équipé. Renvoie null si aucun sac n'est présent.
+    /// </summary>
+    public Inventory GetInventory()
+    {
+        if (!HaveInventory())
+        {
+            return null;
+        }
+
+        return _bag.Inventory;
+    }
 }

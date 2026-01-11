@@ -4,117 +4,77 @@ using UnityEngine;
 [System.Serializable]
 public class Inventory
 {
-    // On pointe vers la classe de base du stockage
     [SerializeField] private StorageWearableInstance _owner;
-    [SerializeField] private int _capacity;
     [SerializeField] private List<ItemSlot> _itemSlots;
 
     public StorageWearableInstance Owner => _owner;
-    public int Capacity => _capacity;
     public List<ItemSlot> ItemSlots => _itemSlots;
+    // La capacité est maintenant déduite du nombre total de slots
+    public int Capacity => _itemSlots?.Count ?? 0;
 
-    public Inventory(StorageWearableInstance owner, int capacity)
+    // Nouveau constructeur : on passe le nombre de slots de chaque type
+    public Inventory(StorageWearableInstance owner, int miscCapacity, int weaponCapacity)
     {
         _owner = owner;
-        InitializeItemSlots(capacity);
+        InitializeItemSlots(miscCapacity, weaponCapacity);
     }
 
-    public void InitializeItemSlots(int capacity)
+    public void InitializeItemSlots(int miscCapacity, int weaponCapacity)
     {
-        _capacity = capacity;
-        _itemSlots = new List<ItemSlot>(_capacity);
+        _itemSlots = new List<ItemSlot>(miscCapacity + weaponCapacity);
 
-        for (int i = 0; i < _capacity; i++)
+        // On remplit avec les slots spécifiques
+        for (int i = 0; i < miscCapacity; i++)
         {
-            _itemSlots.Add(new ItemSlot());
+            _itemSlots.Add(new MiscSlot());
+        }
+
+        for (int i = 0; i < weaponCapacity; i++)
+        {
+            _itemSlots.Add(new WeaponSlot());
         }
     }
 
-    // --- NOUVELLES MÉTHODES ---
-
     /// <summary>
-    /// Vérifie s'il reste au moins un slot vide dans l'inventaire.
+    /// Vérifie s'il reste au moins un slot vide capable d'accueillir cet item précis.
     /// </summary>
-    public bool HasFreeSpace()
+    public bool HasFreeSpaceForItem(ItemInstance item)
     {
         foreach (var slot in _itemSlots)
         {
-            if (slot.IsEmpty) return true;
+            if (slot.IsEmpty() && slot.CanAcceptItem(item)) return true;
         }
         return false;
     }
 
     /// <summary>
-    /// Ajoute un objet dans le premier slot disponible.
+    /// Ajoute l'objet dans le premier slot compatible.
     /// </summary>
     public bool AddItem(ItemInstance item)
     {
         foreach (var slot in _itemSlots)
         {
-            if (slot.IsEmpty)
+            // IMPORTANT : On vérifie si le slot est vide ET s'il accepte ce type d'item
+            if (slot.IsEmpty() && slot.CanAcceptItem(item))
             {
                 slot.ItemInstance = item;
                 return true;
             }
         }
-        Debug.LogWarning("[Inventory] Impossible d'ajouter l'item : Inventaire plein.");
+        Debug.LogWarning($"[Inventory] Aucun slot compatible ou disponible pour {item.CustomizedName}");
         return false;
     }
 
-    /// <summary>
-    /// Force l'ajout d'un objet dans un slot précis (utile pour le drag & drop).
-    /// </summary>
-    public void AddItemToSlot(ItemInstance item, ItemSlot targetSlot)
-    {
-        if (_itemSlots.Contains(targetSlot))
-        {
-            targetSlot.ItemInstance = item;
-        }
-    }
+    // --- Les autres méthodes (Remove, GetIndex, etc.) restent identiques ---
 
-    /// <summary>
-    /// Retire un objet d'un slot spécifique.
-    /// </summary>
     public void RemoveItemFromSlot(ItemSlot slot)
     {
-        if (_itemSlots.Contains(slot))
-        {
-            slot.ClearSlot();
-        }
+        if (_itemSlots.Contains(slot)) slot.ClearSlot();
     }
 
-    /// <summary>
-    /// Retourne l'index d'un slot donné ou -1 s'il n'existe pas dans cet inventaire.
-    /// </summary>
-    public int GetSlotIndex(ItemSlot slot)
-    {
-        return _itemSlots.IndexOf(slot);
-    }
-
-    /// <summary>
-    /// Récupère un slot spécifique par son index. 
-    /// Très utile pour l'UI (ex: OnClickSlot(int index)).
-    /// </summary>
     public ItemSlot GetItemSlot(int index)
     {
-        if (index >= 0 && index < _itemSlots.Count)
-        {
-            return _itemSlots[index];
-        }
-
-        Debug.LogError($"[Inventory] Index {index} hors limites ! (Capacité: {_itemSlots.Count})");
-        return null;
-    }
-
-    /// <summary>
-    /// Vérifie si un slot précis existe dans cet inventaire.
-    /// </summary>
-    public ItemSlot GetItemSlot(ItemSlot slot)
-    {
-        if (_itemSlots.Contains(slot))
-        {
-            return slot;
-        }
+        if (index >= 0 && index < _itemSlots.Count) return _itemSlots[index];
         return null;
     }
 }

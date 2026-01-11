@@ -5,16 +5,17 @@ public class BagInstance : StorageWearableInstance
 {
     public BagSO BagData => ItemSO as BagSO;
 
-    public BagInstance(ItemSO data) : base(data)
-    {
-    }
+    public BagInstance(ItemSO data) : base(data) { }
 
-    public void InitializeBagCapacity(int customCapacity = 0)
+    public void InitializeBagCapacity(int bonusMiscCapacity = 0)
     {
         if (BagData != null)
         {
-            int finalCapacity = (customCapacity > 0) ? customCapacity : BagData.Capacity;
-            InitializeStorage(finalCapacity);
+            // On calcule le total pour les Misc, les Weapons restent fixes selon le SO
+            int finalMisc = BagData.MiscCapacity + bonusMiscCapacity;
+
+            // On appelle la méthode parente avec les deux valeurs
+            InitializeStorage(finalMisc, BagData.WeaponCapacity);
         }
     }
 }

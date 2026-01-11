@@ -7,7 +7,6 @@ public class PlayerUI : MonoBehaviour
     [SerializeField] private GameObject character; // Privé mais visible dans l'inspecteur
 
     [Header("UI Components")]
-    [SerializeField] private Slider healthBar;
     [SerializeField] private TextMeshProUGUI playerName;
 
     private Character characterComponent;
@@ -61,20 +60,8 @@ public class PlayerUI : MonoBehaviour
             playerName.text = "";
         }
 
-        if (healthBar != null)
-        {
-            healthBar.value = 0f;
-        }
     }
 
-    // Méthode exemple pour mettre à jour la barre de vie
-    private void UpdateHealthBar(float currentHealth, float maxHealth)
-    {
-        if (healthBar != null)
-        {
-            healthBar.value = currentHealth / maxHealth;
-        }
-    }
 
     // Nettoyage des événements
     private void CleanupEvents()

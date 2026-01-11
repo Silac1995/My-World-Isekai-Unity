@@ -18,8 +18,6 @@ public abstract class ItemSO : ScriptableObject
 
     public abstract System.Type InstanceType { get; }
 
-    public virtual ItemInstance CreateInstance()
-    {
-        return new ItemInstance(this);
-    }
+    // On change 'virtual' en 'abstract' et on retire le corps de la méthode
+    public abstract ItemInstance CreateInstance();
 }

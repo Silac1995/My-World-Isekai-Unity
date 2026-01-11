@@ -59,4 +59,5 @@ MonoBehaviour:
     maxValue: 0
   _equipmentLayer: 3
   _wearableType: 5
-  _capacity: 10
+  _miscCapacity: 5
+  _weaponCapacity: 1
