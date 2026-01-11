@@ -36,22 +36,39 @@ public class SpawnManager : MonoBehaviour
         GameObject go = Instantiate(itemPrefab, pos, Quaternion.identity);
         go.name = $"WorldItem_{data.ItemName}";
 
-        // --- SOLUTION : Utiliser le polymorphisme ---
-        // Cette ligne appellera automatiquement le CreateInstance() de BagSO si data est un sac,
-        // ou celui de EquipmentSO si c'est une armure, etc.
+        // CreateInstance() génère le bon type (BagInstance, WeaponInstance, etc.)
         ItemInstance instance = data.CreateInstance();
 
-        // La logique de couleur reste la même car BagInstance hérite de EquipmentInstance
         if (instance is EquipmentInstance equipment)
         {
-            Color randomColor = Random.ColorHSV(0f, 1f, 0.5f, 1f, 0.5f, 1f);
-            equipment.SetPrimaryColor(randomColor);
+            // On génère les couleurs aléatoires
+            Color randomPrimary = Random.ColorHSV(0f, 1f, 0.5f, 1f, 0.5f, 1f);
+            Color randomSecondary = Random.ColorHSV(0f, 1f, 0.3f, 0.8f, 0.3f, 0.8f);
 
-            // Attention : Utilise un SpriteRenderer si tu es en 2D, ou garde MeshRenderer pour la 3D
+            equipment.SetPrimaryColor(randomPrimary);
+
+            if (equipment is WearableInstance wearable)
+            {
+                wearable.SetSecondaryColor(randomSecondary);
+            }
+
+            // --- APPLICATION VISUELLE SUR L'OBJET AU SOL ---
+            // On récupère tous les renderers de l'objet qui vient d'apparaître
+            SpriteRenderer[] sRenderers = go.GetComponentsInChildren<SpriteRenderer>();
+            foreach (var sRenderer in sRenderers)
+            {
+                if (sRenderer.gameObject.name == "Color_Primary")
+                    sRenderer.color = randomPrimary;
+                else if (sRenderer.gameObject.name == "Color_Secondary")
+                    sRenderer.color = randomSecondary;
+                // On ne touche pas à Color_Main ni Line ici non plus !
+            }
+
+            // Si tu utilises quand même des MeshRenderers pour certains items 3D
             MeshRenderer visualRenderer = go.GetComponentInChildren<MeshRenderer>();
             if (visualRenderer != null)
             {
-                visualRenderer.material.color = randomColor;
+                visualRenderer.material.color = randomPrimary;
             }
         }
 
@@ -59,7 +76,7 @@ public class SpawnManager : MonoBehaviour
         if (worldItem != null)
         {
             worldItem.Initialize(instance);
-            Debug.Log($"<color=green>[Spawn]</color> Setup réussi pour {instance.ItemSO.ItemName} (Type: {instance.GetType().Name})");
+            Debug.Log($"<color=green>[Spawn]</color> {instance.ItemSO.ItemName} créé avec succès.");
         }
 
         return instance;

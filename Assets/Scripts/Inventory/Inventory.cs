@@ -4,17 +4,18 @@ using UnityEngine;
 [System.Serializable]
 public class Inventory
 {
-    [SerializeField] private BagInstance _bagInstance;
+    // On pointe vers la classe de base du stockage
+    [SerializeField] private StorageWearableInstance _owner;
     [SerializeField] private int _capacity;
     [SerializeField] private List<ItemSlot> _itemSlots;
 
-    public BagInstance BagInstance => _bagInstance;
+    public StorageWearableInstance Owner => _owner;
     public int Capacity => _capacity;
     public List<ItemSlot> ItemSlots => _itemSlots;
 
-    public Inventory(BagInstance bagInstance, int capacity)
+    public Inventory(StorageWearableInstance owner, int capacity)
     {
-        _bagInstance = bagInstance;
+        _owner = owner;
         InitializeItemSlots(capacity);
     }
 

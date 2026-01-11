@@ -17,8 +17,6 @@ MonoBehaviour:
   itemName: Bag
   description: a bag
   icon: {fileID: 0}
-  equipmentType: 5
-  equipmentLayer: 3
   armor:
     baseValue: 0
     currentValue: 0
@@ -59,4 +57,6 @@ MonoBehaviour:
     baseValue: 0
     currentValue: 0
     maxValue: 0
-  capacity: 5
+  _equipmentLayer: 3
+  _wearableType: 5
+  _capacity: 10

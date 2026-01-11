@@ -146,23 +146,35 @@ public class CharacterEquipment : MonoBehaviour
             if (shouldActuallyShow)
             {
                 // 1. Mise à jour des Sprites (Resolvers)
-                // On en boucle aussi au cas où il y en aurait plusieurs
                 SpriteResolver[] resolvers = socket.GetComponentsInChildren<SpriteResolver>();
                 foreach (var res in resolvers)
                 {
                     res.SetCategoryAndLabel(_bag.ItemSO.CategoryName, res.GetLabel());
                 }
 
-                // 2. Mise à jour de TOUTES les couleurs
-                // On récupère TOUS les SpriteRenderers (corps, lanières, etc.)
+                // 2. Mise à jour sélective des couleurs Primary et Secondary uniquement
                 SpriteRenderer[] renderers = socket.GetComponentsInChildren<SpriteRenderer>();
-
-                Color targetColor = _bag.HavePrimaryColor() ? _bag.PrimaryColor : Color.white;
 
                 foreach (SpriteRenderer sRenderer in renderers)
                 {
-                    sRenderer.color = targetColor;
-                    // Debug.Log($"[Visual] Couleur appliquée sur {sRenderer.gameObject.name}");
+                    string goName = sRenderer.gameObject.name;
+
+                    // On ne modifie QUE les GameObjects nommés spécifiquement
+                    if (goName == "Color_Primary")
+                    {
+                        if (_bag.HavePrimaryColor())
+                        {
+                            sRenderer.color = _bag.PrimaryColor;
+                        }
+                    }
+                    else if (goName == "Color_Secondary")
+                    {
+                        if (_bag.HaveSecondaryColor())
+                        {
+                            sRenderer.color = _bag.SecondaryColor;
+                        }
+                    }
+                    // Color_Main, MainColor et Line sont ignorés et gardent leur couleur d'origine
                 }
             }
         }
