@@ -1,21 +1,22 @@
 using UnityEngine;
 
+[System.Serializable]
 public class ItemSlot
 {
-    private ItemInstance itemInstance;
+    [SerializeField] private ItemInstance _itemInstance;
 
     // Propriété pour lire ou modifier l'instance de l'item dans le slot
     public ItemInstance ItemInstance
     {
-        get => itemInstance;
-        set => itemInstance = value;
+        get => _itemInstance;
+        set => _itemInstance = value;
     }
 
     // Une petite méthode utilitaire souvent pratique pour les slots
-    public bool IsEmpty => itemInstance == null;
+    public bool IsEmpty => _itemInstance == null;
 
     public void ClearSlot()
     {
-        itemInstance = null;
+        _itemInstance = null;
     }
 }
