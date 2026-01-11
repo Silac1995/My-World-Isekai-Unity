@@ -18,7 +18,7 @@ MonoBehaviour:
   description: a bag
   icon: {fileID: 0}
   equipmentType: 5
-  equipmentLayer: 0
+  equipmentLayer: 3
   armor:
     baseValue: 0
     currentValue: 0

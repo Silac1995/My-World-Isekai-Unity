@@ -13,6 +13,32 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Unity.2D.Animation.Runtime::UnityEngine.U2D.Animation.SpriteLibrarySourceAsset
   m_Library:
+  - m_Name: 00
+    m_Hash: 944116896
+    m_CategoryList: []
+    m_OverrideEntries:
+    - m_Name: Bag_Line
+      m_Hash: 478936708
+      m_Sprite: {fileID: 0}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 0}
+    - m_Name: Bag_Color_Main
+      m_Hash: 463460253
+      m_Sprite: {fileID: 0}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 0}
+    - m_Name: Bag_Color_Primary
+      m_Hash: 142114377
+      m_Sprite: {fileID: 0}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 0}
+    - m_Name: Bag_Color_Secondary
+      m_Hash: 542357492
+      m_Sprite: {fileID: 0}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 0}
+    m_FromMain: 0
+    m_EntryOverrideCount: 4
   - m_Name: 01
     m_Hash: 255927350
     m_CategoryList: []
@@ -38,7 +64,7 @@ MonoBehaviour:
       m_FromMain: 0
       m_SpriteOverride: {fileID: 1871863361, guid: 522cd472561bd4e4c90f5a6a7e77c5c3, type: 3}
     m_FromMain: 0
-    m_EntryOverrideCount: 4
+    m_EntryOverrideCount: 0
   m_PrimaryLibraryGUID: 62b464d4ce9bc6b44816daec71f264d1
-  m_ModificationHash: 639036852264940840
+  m_ModificationHash: 639037188836534156
   m_Version: 1

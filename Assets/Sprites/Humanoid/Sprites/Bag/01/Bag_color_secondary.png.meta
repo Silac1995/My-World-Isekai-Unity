@@ -114,7 +114,7 @@ TextureImporter:
       bones:
       - name: bone_torso
         guid: f1873e2e96e2a014ebe548b9f694a2bc
-        position: {x: 142.40204, y: 6.188773, z: 0}
+        position: {x: 181, y: 120, z: 0}
         rotation: {x: 0, y: 0, z: 0.7071068, w: 0.7071068}
         length: 147.82362
         parentId: -1
