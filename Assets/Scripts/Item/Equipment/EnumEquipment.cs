@@ -1,5 +1,9 @@
-// Fichier : EquipmentSlotType.cs
-public enum EquipmentType
+public enum EquipmentCategory
+{
+    Weapon,
+    Wearable
+}
+public enum WearableType
 {
     Helmet,
     Armor,
@@ -9,10 +13,20 @@ public enum EquipmentType
     Bag
 }
 
-public enum EquipmentLayerEnum
+public enum WearableLayerEnum
 {
     Clothing,
     Armor,
     Underwear,
     Bag
+}
+
+// Spécificité pour les armes
+public enum WeaponType
+{
+    Sword,
+    Spear,
+    Axe,
+    Bow,
+    Staff
 }

@@ -1,8 +1,10 @@
 using UnityEngine;
 
 [CreateAssetMenu(fileName = "BagSO", menuName = "Scriptable Objects/BagSO")]
-public class BagSO : EquipmentSO
+public class BagSO : WearableSO
 {
+    [SerializeField] readonly private EquipmentCategory _equipmentCategory = EquipmentCategory.Wearable;
+    [SerializeField] readonly private WearableLayerEnum _equipmentLayer = WearableLayerEnum.Bag;
     [Header("Bag Configuration")]
     [SerializeField] private int capacity = 10;
     public int Capacity => capacity;

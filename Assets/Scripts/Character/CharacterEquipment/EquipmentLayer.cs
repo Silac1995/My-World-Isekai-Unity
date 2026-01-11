@@ -18,7 +18,7 @@ public class EquipmentLayer : MonoBehaviour
     [SerializeField] protected List<GameObject> legsSockets;
     [SerializeField] protected List<GameObject> bootsSockets;
 
-    protected System.Collections.Generic.Dictionary<EquipmentType, EquipmentInstance> currentEquipment = new();
+    protected System.Collections.Generic.Dictionary<WearableType, EquipmentInstance> currentEquipment = new();
 
     private void Start()
     {
@@ -29,10 +29,10 @@ public class EquipmentLayer : MonoBehaviour
     {
         if (newInstance == null) return;
 
-        EquipmentSO data = newInstance.ItemSO as EquipmentSO;
+        WearableSO data = newInstance.ItemSO as WearableSO;
         if (data == null) return;
 
-        EquipmentType type = data.EquipmentType;
+        WearableType type = data.WearableType;
 
         // --- LOGIQUE DE SET ---
         Unequip(type);
@@ -71,7 +71,7 @@ public class EquipmentLayer : MonoBehaviour
         RefreshAllVisuals();
     }
 
-    public void Unequip(EquipmentType type)
+    public void Unequip(WearableType type)
     {
         EquipmentInstance oldItem = GetInstance(type);
 
@@ -85,7 +85,7 @@ public class EquipmentLayer : MonoBehaviour
         RefreshAllVisuals();
     }
 
-    private void ToggleSockets(EquipmentType type, bool isActive)
+    private void ToggleSockets(WearableType type, bool isActive)
     {
         List<GameObject> targetList = GetSocketList(type);
         if (targetList == null) return;
@@ -98,27 +98,27 @@ public class EquipmentLayer : MonoBehaviour
 
     // --- Helpers de recherche ---
 
-    private List<GameObject> GetSocketList(EquipmentType type) => type switch
+    private List<GameObject> GetSocketList(WearableType type) => type switch
     {
-        EquipmentType.Helmet => headSockets,
-        EquipmentType.Armor => chestSockets,
-        EquipmentType.Gloves => glovesSockets,
-        EquipmentType.Pants => legsSockets,
-        EquipmentType.Boots => bootsSockets,
+        WearableType.Helmet => headSockets,
+        WearableType.Armor => chestSockets,
+        WearableType.Gloves => glovesSockets,
+        WearableType.Pants => legsSockets,
+        WearableType.Boots => bootsSockets,
         _ => null
     };
 
-    public EquipmentInstance GetInstance(EquipmentType type) => type switch
+    public EquipmentInstance GetInstance(WearableType type) => type switch
     {
-        EquipmentType.Helmet => head,
-        EquipmentType.Armor => chest,
-        EquipmentType.Gloves => gloves,
-        EquipmentType.Pants => legs,
-        EquipmentType.Boots => boots,
+        WearableType.Helmet => head,
+        WearableType.Armor => chest,
+        WearableType.Gloves => gloves,
+        WearableType.Pants => legs,
+        WearableType.Boots => boots,
         _ => null
     };
 
-    private void SetInstance(EquipmentType type, EquipmentInstance inst)
+    private void SetInstance(WearableType type, EquipmentInstance inst)
     {
         if (inst == null)
             currentEquipment.Remove(type);
@@ -127,11 +127,11 @@ public class EquipmentLayer : MonoBehaviour
 
         switch (type)
         {
-            case EquipmentType.Helmet: head = inst; break;
-            case EquipmentType.Armor: chest = inst; break;
-            case EquipmentType.Gloves: gloves = inst; break;
-            case EquipmentType.Pants: legs = inst; break;
-            case EquipmentType.Boots: boots = inst; break;
+            case WearableType.Helmet: head = inst; break;
+            case WearableType.Armor: chest = inst; break;
+            case WearableType.Gloves: gloves = inst; break;
+            case WearableType.Pants: legs = inst; break;
+            case WearableType.Boots: boots = inst; break;
         }
     }
 
@@ -144,13 +144,13 @@ public class EquipmentLayer : MonoBehaviour
         Debug.Log($"<color=cyan>[Refresh]</color> Rafraîchissement visuel complet pour <b>{gameObject.name}</b>");
 
         // On boucle sur toutes les valeurs de l'Enum EquipmentType
-        foreach (EquipmentType type in System.Enum.GetValues(typeof(EquipmentType)))
+        foreach (WearableType type in System.Enum.GetValues(typeof(WearableType)))
         {
             RefreshSlotVisual(type);
         }
     }
 
-    private void RefreshSlotVisual(EquipmentType type)
+    private void RefreshSlotVisual(WearableType type)
     {
         EquipmentInstance currentItem = GetInstance(type);
         List<GameObject> sockets = GetSocketList(type);
@@ -179,12 +179,12 @@ public class EquipmentLayer : MonoBehaviour
 
     public bool IsAlreadyEquipped(EquipmentInstance newInstance)
     {
-        if (newInstance.ItemSO is EquipmentSO data)
+        if (newInstance.ItemSO is WearableSO data)
         {
             // On vérifie si le slot (ex: Helmet) contient déjà cette instance précise
-            if (currentEquipment.ContainsKey(data.EquipmentType))
+            if (currentEquipment.ContainsKey(data.WearableType))
             {
-                return currentEquipment[data.EquipmentType] == newInstance;
+                return currentEquipment[data.WearableType] == newInstance;
             }
         }
         return false;

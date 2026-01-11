@@ -1,13 +1,8 @@
 using UnityEngine;
 
 [CreateAssetMenu(fileName = "Equipment", menuName = "Scriptable Objects/Equipment")]
-public class EquipmentSO : ItemSO
+public abstract class EquipmentSO : ItemSO
 {
-    [SerializeField] private EquipmentType equipmentType;
-    [SerializeField] private EquipmentLayerEnum equipmentLayer;
-    public EquipmentType EquipmentType => equipmentType;
-    public EquipmentLayerEnum EquipmentLayer => equipmentLayer;
-
     // === Primary Stats ===
     [Header("Primary Stats")]
     public CharacterArmor armor;
@@ -23,13 +18,5 @@ public class EquipmentSO : ItemSO
     public CharacterDexterity dexterity;
     public CharacterIntelligence intelligence;
     public CharacterEndurance endurance;
-
-    // On force le type EquipmentInstance
-    public override System.Type InstanceType => typeof(EquipmentInstance);
-    public override ItemInstance CreateInstance()
-    {
-        return new EquipmentInstance(this);
-    }
-
 
 }

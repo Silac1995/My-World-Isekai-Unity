@@ -47,27 +47,53 @@ public class CharacterEquipment : MonoBehaviour
 
     public void Equip(ItemInstance itemInstance)
     {
-        // 1. CAS PARTICULIER : LE SAC
-        if (itemInstance is BagInstance bagInstance)
+        // 1. GESTION DES ARMES
+        if (itemInstance is WeaponInstance weapon)
         {
-            EquipBag(bagInstance);
+            EquipWeapon(weapon);
             return;
         }
 
-        // 2. CAS GÉNÉRAL : LES COUCHES D'ÉQUIPEMENT
-        if (itemInstance is EquipmentInstance equipmentInstance &&
-            equipmentInstance.ItemSO is EquipmentSO equipmentData)
+        // 2. GESTION DES WEARABLES (Sacs inclus)
+        if (itemInstance is WearableInstance wearable)
         {
-            EquipmentLayer targetLayer = GetTargetLayer(equipmentData.EquipmentLayer);
-
-            if (targetLayer != null)
+            // On récupère le SO typé (WearableSO ou BagSO qui en hérite)
+            if (wearable.ItemSO is WearableSO data)
             {
-                if (targetLayer.IsAlreadyEquipped(equipmentInstance)) return;
+                // --- CAS PARTICULIER : LE SAC ---
+                // On vérifie soit le type d'enum, soit la classe de l'instance
+                if (data.WearableType == WearableType.Bag || wearable is BagInstance)
+                {
+                    if (wearable is BagInstance bag)
+                    {
+                        EquipBag(bag);
+                    }
+                    else
+                    {
+                        Debug.LogError($"[Equip] L'item {data.ItemName} est marqué comme Bag mais l'instance n'est pas un BagInstance!");
+                    }
+                    return;
+                }
 
-                Debug.Log($"<color=green>[Equip]</color> Envoi de {equipmentData.ItemName} vers {equipmentData.EquipmentLayer}");
-                targetLayer.Equip(equipmentInstance);
+                // --- CAS GÉNÉRAL : COUCHES D'ÉQUIPEMENT ---
+                EquipmentLayer targetLayer = GetTargetLayer(data.EquipmentLayer);
+
+                if (targetLayer != null)
+                {
+                    if (targetLayer.IsAlreadyEquipped(wearable)) return;
+
+                    Debug.Log($"<color=green>[Equip]</color> {data.ItemName} vers {data.EquipmentLayer}");
+                    targetLayer.Equip(wearable);
+                }
             }
         }
+    }
+
+    // Petite méthode pour préparer la suite (Gestion des mains gauche/droite par ex)
+    private void EquipWeapon(WeaponInstance weapon)
+    {
+        Debug.Log($"<color=red>[Equip-Weapon]</color> {weapon.ItemSO.ItemName} équipée !");
+        // Ta logique d'équipement d'arme viendra ici (ex: weaponLayer.Equip(weapon))
     }
 
     private void EquipBag(BagInstance newBag)
@@ -150,9 +176,9 @@ public class CharacterEquipment : MonoBehaviour
     /// <param name="slotType">La partie du corps à libérer (Helmet, Armor, Boots, etc.).</param>
     /// 
 
-    public void Unequip(EquipmentLayerEnum layerType, EquipmentType slotType)
+    public void Unequip(WearableLayerEnum layerType, WearableType slotType)
     {
-        if (slotType == EquipmentType.Bag || layerType == EquipmentLayerEnum.Bag)
+        if (slotType == WearableType.Bag || layerType == WearableLayerEnum.Bag)
         {
             UnequipBag();
             return;
@@ -178,17 +204,17 @@ public class CharacterEquipment : MonoBehaviour
     }
 
     // Logique basée sur l'Enum EquipmentLayerEnum
-    private EquipmentLayer GetTargetLayer(EquipmentLayerEnum layerType)
+    private EquipmentLayer GetTargetLayer(WearableLayerEnum layerType)
     {
         switch (layerType)
         {
-            case EquipmentLayerEnum.Underwear:
+            case WearableLayerEnum.Underwear:
                 return underwearLayer;
-            case EquipmentLayerEnum.Clothing:
+            case WearableLayerEnum.Clothing:
                 return clothingLayer;
-            case EquipmentLayerEnum.Armor:
+            case WearableLayerEnum.Armor:
                 return armorLayer;
-            case EquipmentLayerEnum.Bag:
+            case WearableLayerEnum.Bag:
                 return null; // Le sac n'a pas de composant EquipmentLayer dédié
             default:
                 return null;

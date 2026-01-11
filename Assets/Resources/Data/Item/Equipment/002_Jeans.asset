@@ -9,21 +9,20 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e39e8124bd1794948b3f5b3d0ffdb147, type: 3}
-  m_Name: 000_Tshirt
-  m_EditorClassIdentifier: Assembly-CSharp::EquipmentSO
-  category_name: 01_tshirt
-  itemId: 000
-  itemName: T-shirt
-  description: Simple t-shirt
+  m_Script: {fileID: 11500000, guid: 785a2d90e61956447ac34860eb9cdd98, type: 3}
+  m_Name: 002_Jeans
+  m_EditorClassIdentifier: Assembly-CSharp::WearableSO
+  category_name: 
+  itemId: 
+  itemName: 
+  description: 
   icon: {fileID: 0}
-  equipmentType: 1
   armor:
-    baseValue: 50
+    baseValue: 0
     currentValue: 0
     currentAmount: 0
   health:
-    baseValue: 300
+    baseValue: 0
     currentValue: 0
     currentAmount: 0
   stamina:
@@ -58,3 +57,5 @@ MonoBehaviour:
     baseValue: 0
     currentValue: 0
     maxValue: 0
+  _equipmentLayer: 0
+  _wearableType: 0

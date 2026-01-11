@@ -1,19 +1,16 @@
 using UnityEngine;
 
-public class EquipmentInstance : ItemInstance
+public abstract class EquipmentInstance : ItemInstance
 {
-    // Correction ici : on appelle le constructeur de ItemInstance avec : base(data)
-    public EquipmentInstance(ItemSO data) : base(data)
+    // On rend le constructeur protégé car on ne peut plus instancier un "Equipement" pur
+    protected EquipmentInstance(ItemSO data) : base(data)
     {
-        // Tu n'as plus besoin de faire this.ItemSO = data;
-        // C'est déjà géré par la classe parente !
-
-        // Initialise tes stats spécifiques ici
-        Debug.Log("Equipement créé avec succès");
+        Debug.Log($"<color=white>[Equipment]</color> Base de l'équipement {ItemSO.ItemName} initialisée.");
     }
 
-    public void EquipToCharacter(Character character)
+    // Cette méthode peut être surchargée si l'équipement a une logique spéciale au moment du clic
+    public virtual void EquipToCharacter(Character character)
     {
-        character?.EquipGear(this);
+        character?.CharacterEquipment.Equip(this);
     }
 }

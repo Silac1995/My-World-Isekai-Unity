@@ -1,13 +1,16 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class BagInstance : EquipmentInstance
+public class BagInstance : WearableInstance
 {
+
     [Header("Runtime Storage")]
     [SerializeField] private Inventory _inventory;
 
     // Getter pour accéder à l'inventaire global du sac
     public Inventory Inventory => _inventory;
+    // Permet d'accéder aux données spécifiques du BagSO (comme la capacité)
+    public BagSO BagData => ItemSO as BagSO;
 
     public BagInstance(ItemSO data) : base(data)
     {
