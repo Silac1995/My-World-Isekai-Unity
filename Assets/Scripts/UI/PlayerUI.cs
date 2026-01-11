@@ -49,21 +49,27 @@ public class PlayerUI : MonoBehaviour
 
     public void ToggleEquipmentUI()
     {
+        // 1. Si l'instance n'existe pas, on la crée
         if (_equipmentUIInstance == null && _equipmentUIPrefab != null)
         {
             _equipmentUIInstance = Instantiate(_equipmentUIPrefab, this.transform);
 
-            // On récupère le script sur l'instance et on l'initialise
             var equipmentUIScript = _equipmentUIInstance.GetComponent<CharacterEquipmentUI>();
             if (equipmentUIScript != null)
             {
-                equipmentUIScript.Initialize(characterComponent); // characterComponent est celui du PlayerUI
+                equipmentUIScript.Initialize(characterComponent);
             }
+
+            // FORCE l'affichage au premier clic après l'instanciation
+            _equipmentUIInstance.SetActive(true);
+            return; // On sort pour éviter que la ligne suivante ne le désactive
         }
 
+        // 2. Si l'instance existe déjà, on inverse simplement son état
         if (_equipmentUIInstance != null)
         {
-            _equipmentUIInstance.SetActive(!_equipmentUIInstance.activeSelf);
+            bool nextState = !_equipmentUIInstance.activeSelf;
+            _equipmentUIInstance.SetActive(nextState);
         }
     }
 

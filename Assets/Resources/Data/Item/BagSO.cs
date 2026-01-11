@@ -16,7 +16,7 @@ public class BagSO : StorageWearableSO
     public override ItemInstance CreateInstance()
     {
         BagInstance newInstance = new BagInstance(this);
-        newInstance.InitializeBagCapacity(this.MiscCapacity);
+        newInstance.InitializeBagCapacity(0);
         return newInstance;
     }
 }

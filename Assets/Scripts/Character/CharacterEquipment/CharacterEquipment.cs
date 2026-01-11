@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.U2D.Animation;
@@ -5,6 +6,8 @@ using UnityEngine.U2D.Animation;
 public class CharacterEquipment : MonoBehaviour
 {
     [SerializeField] private Character character;
+    // Cet événement sera déclenché chaque fois qu'un équipement change
+    public event Action OnEquipmentChanged;
 
     public Character Character
     {
@@ -51,6 +54,7 @@ public class CharacterEquipment : MonoBehaviour
         if (itemInstance is WeaponInstance weapon)
         {
             EquipWeapon(weapon);
+            OnEquipmentChanged?.Invoke();
             return;
         }
 
@@ -67,6 +71,7 @@ public class CharacterEquipment : MonoBehaviour
                     if (wearable is BagInstance bag)
                     {
                         EquipBag(bag);
+                        OnEquipmentChanged?.Invoke();
                     }
                     else
                     {
@@ -84,6 +89,7 @@ public class CharacterEquipment : MonoBehaviour
 
                     Debug.Log($"<color=green>[Equip]</color> {data.ItemName} vers {data.EquipmentLayer}");
                     targetLayer.Equip(wearable);
+                    OnEquipmentChanged?.Invoke();
                 }
             }
         }
@@ -193,6 +199,7 @@ public class CharacterEquipment : MonoBehaviour
         if (slotType == WearableType.Bag || layerType == WearableLayerEnum.Bag)
         {
             UnequipBag();
+            OnEquipmentChanged?.Invoke();
             return;
         }
 
@@ -207,6 +214,7 @@ public class CharacterEquipment : MonoBehaviour
 
             // 2. On vide le slot (visuel + data)
             targetLayer.Unequip(slotType);
+            OnEquipmentChanged?.Invoke();
 
             // 3. On fait tomber l'instance qu'on a sauvegardée
             character.DropItem(instanceToDrop);

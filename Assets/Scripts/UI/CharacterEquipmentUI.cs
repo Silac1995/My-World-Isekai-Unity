@@ -5,6 +5,9 @@ using UnityEngine.UI;
 
 public class CharacterEquipmentUI : MonoBehaviour
 {
+    [SerializeField] private Button _buttonClose;
+    [SerializeField] private UI_Inventory _ui_inventory;
+
     [Header("References")]
     [SerializeField] private Character _character;
     private EquipmentLayer _currentLayer;
@@ -25,6 +28,9 @@ public class CharacterEquipmentUI : MonoBehaviour
 
     private void Start()
     {
+        // Ajout du listener pour le bouton fermer
+        _buttonClose?.onClick.AddListener(CloseUI);
+
         _buttonArmorLayer?.onClick.AddListener(() => SwitchLayer(WearableLayerEnum.Armor));
         _buttonClothingLayer?.onClick.AddListener(() => SwitchLayer(WearableLayerEnum.Clothing));
         _buttonUnderwearLayer?.onClick.AddListener(() => SwitchLayer(WearableLayerEnum.Underwear));
@@ -43,27 +49,32 @@ public class CharacterEquipmentUI : MonoBehaviour
     /// </summary>
     public void Initialize(Character target)
     {
-        if (target == null)
-        {
-            Debug.LogError("[UI] Tentative d'initialisation avec un Character nul.");
-            return;
-        }
+        if (target == null) return;
+
+        // ... (ton code de désabonnement existant) ...
 
         _character = target;
 
-        // On nettoie les anciens listeners pour éviter les doublons (important si le prefab est réutilisé)
+        // --- MISE À JOUR ICI ---
+        // On initialise l'inventaire en même temps que le reste
+        if (_ui_inventory != null)
+        {
+            _ui_inventory.Initialize(_character.CharacterEquipment.GetInventory());
+        }
+
+        // On s'abonne à l'événement
+        if (_character.CharacterEquipment != null)
+        {
+            _character.CharacterEquipment.OnEquipmentChanged += UpdateUI;
+        }
+
         RemoveAllButtonListeners();
-
-        // On ré-abonne les boutons
         SetupButtonEvents();
-
-        // On affiche la couche par défaut
         SwitchLayer(WearableLayerEnum.Armor);
-
-        Debug.Log($"<color=green>[UI]</color> Fenêtre d'équipement initialisée pour : {_character.CharacterName}");
     }
     private void SetupButtonEvents()
     {
+        _buttonClose?.onClick.AddListener(CloseUI);
         // Couches
         _buttonArmorLayer?.onClick.AddListener(() => SwitchLayer(WearableLayerEnum.Armor));
         _buttonClothingLayer?.onClick.AddListener(() => SwitchLayer(WearableLayerEnum.Clothing));
@@ -80,6 +91,8 @@ public class CharacterEquipmentUI : MonoBehaviour
 
     private void RemoveAllButtonListeners()
     {
+        _buttonClose?.onClick.RemoveAllListeners(); // On nettoie aussi le bouton close
+        _buttonArmorLayer?.onClick.RemoveAllListeners();
         _buttonArmorLayer?.onClick.RemoveAllListeners();
         _buttonClothingLayer?.onClick.RemoveAllListeners();
         _buttonUnderwearLayer?.onClick.RemoveAllListeners();
@@ -155,19 +168,28 @@ public class CharacterEquipmentUI : MonoBehaviour
     {
         if (_character == null || _character.CharacterEquipment == null || _currentLayer == null) return;
 
-        // Mise à jour visuelle des slots de la couche actuelle
+        // 1. Mise à jour des boutons de déséquipement (Head, Armor, etc.)
         UpdateSlotButtonState(_unequipHeadButton, WearableType.Helmet);
         UpdateSlotButtonState(_unequipArmorButton, WearableType.Armor);
         UpdateSlotButtonState(_unequipGlovesButton, WearableType.Gloves);
         UpdateSlotButtonState(_unequipPantsButton, WearableType.Pants);
         UpdateSlotButtonState(_unequipBootsButton, WearableType.Boots);
 
-        // Mise à jour spécifique du sac (Global)
+        // 2. Mise à jour du bouton Sac
         if (_unequipBagButton != null)
         {
             var bag = _character.CharacterEquipment.GetBagInstance();
             UpdateSlotText(_unequipBagButton, bag);
             _unequipBagButton.interactable = (bag != null);
+        }
+
+        // 3. REFRESH DE L'INVENTAIRE
+        // Dès que l'équipement change, on rafraîchit la grille d'objets
+        if (_ui_inventory != null)
+        {
+            // On récupère l'inventaire actuel (car si on a changé de sac, l'instance a changé)
+            _ui_inventory.Initialize(_character.CharacterEquipment.GetInventory());
+            Debug.Log("<color=yellow>[UI_Sync]</color> Équipement modifié -> Refresh de la grille d'inventaire.");
         }
     }
 
@@ -205,5 +227,21 @@ public class CharacterEquipmentUI : MonoBehaviour
         if (_currentLayer is ArmorLayer) return WearableLayerEnum.Armor;
         if (_currentLayer is UnderwearLayer) return WearableLayerEnum.Underwear;
         return WearableLayerEnum.Clothing;
+    }
+    /// <summary>
+    /// Ferme la fenêtre d'interface
+    /// </summary>
+    public void CloseUI()
+    {
+        this.gameObject.SetActive(false);
+    }
+
+
+    private void OnDestroy()
+    {
+        if (_character != null && _character.CharacterEquipment != null)
+        {
+            _character.CharacterEquipment.OnEquipmentChanged -= UpdateUI;
+        }
     }
 }

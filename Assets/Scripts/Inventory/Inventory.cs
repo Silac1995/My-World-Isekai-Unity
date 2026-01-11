@@ -4,18 +4,18 @@ using UnityEngine;
 [System.Serializable]
 public class Inventory
 {
-    [SerializeField] private StorageWearableInstance _owner;
+    [SerializeField] private StorageWearableInstance _storageWearableInstance;
     [SerializeField] private List<ItemSlot> _itemSlots;
 
-    public StorageWearableInstance Owner => _owner;
+    public StorageWearableInstance Owner => _storageWearableInstance;
     public List<ItemSlot> ItemSlots => _itemSlots;
     // La capacité est maintenant déduite du nombre total de slots
     public int Capacity => _itemSlots?.Count ?? 0;
 
     // Nouveau constructeur : on passe le nombre de slots de chaque type
-    public Inventory(StorageWearableInstance owner, int miscCapacity, int weaponCapacity)
+    public Inventory(StorageWearableInstance storageWearableInstance, int miscCapacity, int weaponCapacity)
     {
-        _owner = owner;
+        _storageWearableInstance = storageWearableInstance;
         InitializeItemSlots(miscCapacity, weaponCapacity);
     }
 
