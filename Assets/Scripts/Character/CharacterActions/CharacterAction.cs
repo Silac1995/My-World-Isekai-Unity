@@ -3,9 +3,9 @@ using System;
 public abstract class CharacterAction
 {
     protected Character character;
-    public Action OnActionFinished;
+    public System.Action OnActionFinished;
 
-    public float Duration { get; protected set; }
+    public float Duration { get; set; }
 
     protected CharacterAction(Character character, float duration = 0f)
     {
@@ -13,9 +13,11 @@ public abstract class CharacterAction
         this.Duration = duration;
     }
 
+    // Nouvelle méthode de validation
+    public virtual bool CanExecute() => true;
+
     public abstract void OnStart();
     public abstract void OnApplyEffect();
 
-    // On change 'protected' par 'public' pour que le Controller puisse l'appeler
     public void Finish() => OnActionFinished?.Invoke();
 }

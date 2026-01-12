@@ -13,8 +13,15 @@ public class CharacterPickUpItem : CharacterAction
 
     public override void OnStart()
     {
-        var animator = character.CharacterVisual.CharacterAnimator.Animator;
-        if (animator != null) animator.SetTrigger("Trigger_pickUpItem");
+        var animHandler = character.CharacterVisual?.CharacterAnimator;
+        if (animHandler?.Animator != null)
+        {
+            animHandler.Animator.SetTrigger("Trigger_pickUpItem");
+
+            // On attend la fin de la frame pour que l'Animator passe sur le nouvel état
+            // Ou plus simplement, on définit une durée basée sur le clip connu
+            this.Duration = animHandler.GetClipDuration("Pickup");
+        }
     }
 
     public override void OnApplyEffect()
@@ -33,5 +40,21 @@ public class CharacterPickUpItem : CharacterAction
         {
             Debug.LogWarning("Ramassage échoué : l'objet reste au sol.");
         }
+    }
+    public override bool CanExecute()
+    {
+        // On vérifie si le personnage a un inventaire
+        var inventory = character.CharacterEquipment.GetInventory();
+
+        if (inventory == null)
+        {
+            Debug.LogWarning($"[Action] {character.CharacterName} n'a pas de sac pour ramasser.");
+            return false;
+        }
+
+        // Tu peux même ajouter une vérification de place disponible ici
+        // if (!inventory.HasFreeSpaceForItem(_item)) return false;
+
+        return true;
     }
 }

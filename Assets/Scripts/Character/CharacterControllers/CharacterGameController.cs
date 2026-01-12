@@ -52,10 +52,22 @@ public abstract class CharacterGameController : MonoBehaviour
 
     protected virtual void UpdateAnimations()
     {
-        // On utilise la propriété Animator qui fait le pont avec CharacterVisual
         if (Animator != null && agent != null)
         {
-            Animator.SetBool("isWalking", agent.velocity.magnitude > 0.1f);
+            bool isMoving = agent.velocity.magnitude > 0.1f;
+            Animator.SetBool("isWalking", isMoving);
+
+            // --- NOUVEAU : ANNULATION DE L'ACTION ---
+            if (isMoving && character.CharacterActions.CurrentAction != null)
+            {
+                // Si le perso bouge et qu'une action est en cours, on l'arrête.
+                character.CharacterActions.ClearCurrentAction();
+
+                // On reset aussi le trigger d'animation pour éviter qu'elle ne se 
+                // déclenche plus tard si le trigger était resté "armé"
+                Animator.ResetTrigger("Trigger_pickUpItem");
+                Debug.Log("<color=orange>[Controller]</color> Action annulée par le mouvement.");
+            }
         }
     }
 

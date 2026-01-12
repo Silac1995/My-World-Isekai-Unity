@@ -10,6 +10,29 @@ public class CharacterAnimator : MonoBehaviour
 
     public Animator Animator => _animator;
 
+    public float GetCurrentClipDuration()
+    {
+        if (Animator == null) return 0f;
+
+        // On récupère les infos de l'état actuel sur la couche 0 (Base Layer)
+        AnimatorStateInfo stateInfo = Animator.GetCurrentAnimatorStateInfo(0);
+        return stateInfo.length;
+    }
+
+    // Plus précis : récupérer la durée d'un clip par son nom dans l'Animator
+    public float GetClipDuration(string stateName)
+    {
+        if (Animator == null) return 0f;
+
+        RuntimeAnimatorController ac = Animator.runtimeAnimatorController;
+        foreach (AnimationClip clip in ac.animationClips)
+        {
+            if (clip.name.Contains(stateName)) // Ou une vérification plus stricte
+                return clip.length;
+        }
+        return 0f;
+    }
+
     //public void Initialize()
     //{
     //    if (_animator == null) _animator = GetComponent<Animator>();

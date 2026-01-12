@@ -4,69 +4,83 @@ using UnityEngine;
 public class CharacterActions : MonoBehaviour
 {
     [SerializeField] private Character _character;
-    public Character Character => _character;
-
-    // Nouvelle variable pour suivre l'action en cours
     private CharacterAction _currentAction;
-    public CharacterAction CurrentAction => _currentAction;
+    private Coroutine _actionRoutine; // Référence pour éviter les accumulations
 
-    private void Awake()
-    {
-        if (_character == null)
-        {
-            _character = GetComponent<Character>();
-            if (_character == null)
-            {
-                Debug.LogError("Character non trouvé dans CharacterActions.", this);
-                enabled = false;
-            }
-        }
-    }
+    public CharacterAction CurrentAction => _currentAction;
 
     public void ExecuteAction(CharacterAction action)
     {
         if (action == null) return;
 
         // 1. Vérifie si on est déjà occupé
-        if (_currentAction != null)
+        if (_currentAction != null) return;
+
+        // 2. NOUVEAU : Vérifie si l'action est possible selon ses propres règles
+        if (!action.CanExecute())
         {
-            Debug.Log($"{_character.CharacterName} est déjà occupé.");
+            Debug.Log($"<color=red>[Actions]</color> {action.GetType().Name} impossible à exécuter.");
             return;
         }
 
         _currentAction = action;
+        _currentAction.OnActionFinished += CleanupAction;
 
-        // 2. On s'abonne pour libérer le slot à la fin
-        _currentAction.OnActionFinished += () => _currentAction = null;
-
-        // 3. On lance le début de l'action (Animation, etc.)
         _currentAction.OnStart();
-
-        // 4. On lance le chrono pour l'effet et la fin
-        StartCoroutine(ActionTimerRoutine(_currentAction));
+        _actionRoutine = StartCoroutine(ActionTimerRoutine(_currentAction));
     }
 
     private IEnumerator ActionTimerRoutine(CharacterAction action)
     {
-        // On attend la durée définie dans l'action (ex: 1.2s)
+        // On attend la durée prévue
         yield return new WaitForSeconds(action.Duration);
 
-        // On applique l'effet (ex: AddItem)
+        // On applique l'effet
         action.OnApplyEffect();
 
-        // On déclenche le callback de fin
+        // On termine l'action (ce qui déclenchera CleanupAction via l'event)
         action.Finish();
     }
 
-    // Méthode pour libérer le personnage (à appeler à la fin de l'animation ou de l'action)
-    public void ClearCurrentAction()
+    private void CleanupAction()
     {
+        // On nettoie les références pour libérer la mémoire et permettre la suite
+        if (_currentAction != null)
+        {
+            _currentAction.OnActionFinished -= CleanupAction; // Important : se désabonner
+        }
+
         _currentAction = null;
+        _actionRoutine = null; // La coroutine est finie, on oublie la référence
     }
 
-    private bool CanPerform(CharacterAction action)
+    // Remplace ou ajoute cette méthode dans CharacterActions.cs
+    public void ClearCurrentAction()
     {
-        // return !Character.IsStunned && Character.IsAlive;
-        return true;
+        // 1. On arrête la coroutine pour éviter qu'OnApplyEffect ne s'exécute
+        if (_actionRoutine != null)
+        {
+            StopCoroutine(_actionRoutine);
+            _actionRoutine = null;
+        }
+
+        // 2. On se désabonne pour éviter les fuites de mémoire
+        if (_currentAction != null)
+        {
+            _currentAction.OnActionFinished -= CleanupAction;
+        }
+
+        // 3. On libère le slot
+        _currentAction = null;
+
+        Debug.Log($"<color=orange>[Actions]</color> Action forcée à l'arrêt pour {_character.CharacterName}");
+    }
+
+    // Si le personnage est détruit, on s'assure que tout s'arrête
+    private void OnDisable()
+    {
+        StopAllCoroutines();
+        _currentAction = null;
+        _actionRoutine = null;
     }
 }
