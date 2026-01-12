@@ -64,7 +64,8 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
                     else
                     {
                         // Même logique pour l'équipement si tu veux
-                        Character.CharacterEquipment.Equip((EquipmentInstance)instance);
+                        CharacterEquipAction equipAction = new CharacterEquipAction(Character, (EquipmentInstance)instance);
+                        Character.CharacterActions.ExecuteAction(equipAction);
                         Destroy(itemInteractable.RootGameObject);
                     }
                 }

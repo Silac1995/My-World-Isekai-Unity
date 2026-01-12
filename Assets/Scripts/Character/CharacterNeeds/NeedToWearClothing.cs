@@ -41,11 +41,28 @@ public class NeedToWearClothing : CharacterNeed
             GameObject rootObject = targetInteractable.RootGameObject;
 
             Action atArrival = () => {
-                if (equip != null && rootObject != null)
+                if (targetInteractable == null) return;
+
+                // On essaie de "réserver" la collecte
+                if (targetInteractable.TryCollect())
                 {
-                    Debug.Log($"<color=green>[Arrival]</color> {npc.name} s'équipe de {equip.ItemSO.ItemName}");
-                    npc.Character.CharacterEquipment.Equip(equip);
-                    UnityEngine.Object.Destroy(rootObject);
+                    // SI TRUE : On est le premier !
+                    Debug.Log($"<color=green>[WINNER]</color> {npc.name} a ramassé l'objet en premier !");
+
+                    if (equip != null)
+                    {
+                        npc.Character.CharacterEquipment.Equip(equip);
+                    }
+
+                    if (rootObject != null)
+                    {
+                        UnityEngine.Object.Destroy(rootObject);
+                    }
+                }
+                else
+                {
+                    // SI FALSE : Quelqu'un d'autre l'a pris durant cette frame ou la précédente
+                    Debug.Log($"<color=red>[LOSER]</color> {npc.name} a touché l'objet mais un autre a été plus rapide !");
                 }
             };
 

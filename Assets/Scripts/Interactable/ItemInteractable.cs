@@ -6,6 +6,15 @@ public class ItemInteractable : InteractableObject
     [SerializeField] private WorldItem _worldItem;
 
     // On sécurise l'accès au WorldItem
+    private bool _wasCollected = false;
+
+    public bool TryCollect()
+    {
+        if (_wasCollected) return false; // Trop tard !
+
+        _wasCollected = true;
+        return true; // Gagné !
+    }
     public WorldItem WorldItem
     {
         get
