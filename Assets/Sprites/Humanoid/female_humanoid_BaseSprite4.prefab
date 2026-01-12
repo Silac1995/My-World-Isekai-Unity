@@ -2399,7 +2399,7 @@ SortingGroup:
   m_Enabled: 1
   m_SortingLayerID: -974200329
   m_SortingLayer: 1
-  m_SortingOrder: 1
+  m_SortingOrder: 9
   m_SortAtRoot: 0
 --- !u!1 &6439657214377550509 stripped
 GameObject:
@@ -2732,7 +2732,7 @@ SortingGroup:
   m_Enabled: 1
   m_SortingLayerID: -974200329
   m_SortingLayer: 1
-  m_SortingOrder: 1
+  m_SortingOrder: 8
   m_SortAtRoot: 0
 --- !u!1 &8515452362750878362 stripped
 GameObject:

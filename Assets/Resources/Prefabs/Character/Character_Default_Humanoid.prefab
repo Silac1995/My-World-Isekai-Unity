@@ -8,6 +8,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 7199851819169467111}
     m_Modifications:
+    - target: {fileID: 1985571240773706847, guid: b74182ade6e88b64abfbad5d0003a907, type: 3}
+      propertyPath: m_SortingOrder
+      value: 9
+      objectReference: {fileID: 0}
     - target: {fileID: 2750089682294006633, guid: b74182ade6e88b64abfbad5d0003a907, type: 3}
       propertyPath: m_Name
       value: Humanoid_Base
@@ -51,6 +55,10 @@ PrefabInstance:
     - target: {fileID: 7154720235545125042, guid: b74182ade6e88b64abfbad5d0003a907, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8266678639950862498, guid: b74182ade6e88b64abfbad5d0003a907, type: 3}
+      propertyPath: m_SortingOrder
+      value: 8
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

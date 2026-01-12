@@ -71,9 +71,19 @@ public class PlayerController : CharacterGameController
     }
     protected override void UpdateAnimations()
     {
-        // uniquement pour le joueur, animation basée sur input
+        // On considère que le joueur bouge s'il appuie sur une touche OU si le corps bouge
+        bool isMoving = inputDir.magnitude > 0.1f || character.Rigidbody.linearVelocity.magnitude > 0.1f;
+
+        if (isMoving && character.CharacterActions.CurrentAction != null)
+        {
+            character.CharacterActions.ClearCurrentAction();
+        }
+
         if (Animator != null)
-            Animator.SetBool("isWalking", inputDir.magnitude > 0.1f && !isCrouching);
+        {
+            // On n'oublie pas la condition de l'accroupissement que tu avais
+            Animator.SetBool("isWalking", isMoving && !isCrouching);
+        }
     }
 
     // Ajoute ceci dans ton PlayerController

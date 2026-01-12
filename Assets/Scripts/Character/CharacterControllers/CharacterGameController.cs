@@ -52,22 +52,18 @@ public abstract class CharacterGameController : MonoBehaviour
 
     protected virtual void UpdateAnimations()
     {
-        if (Animator != null && agent != null)
+        // On vérifie le mouvement de l'agent (IA) ET du Rigidbody (Joueur)
+        bool isMoving = (agent != null && agent.velocity.magnitude > 0.1f) ||
+                        (character.Rigidbody != null && character.Rigidbody.linearVelocity.magnitude > 0.1f);
+
+        if (isMoving && character.CharacterActions.CurrentAction != null)
         {
-            bool isMoving = agent.velocity.magnitude > 0.1f;
+            character.CharacterActions.ClearCurrentAction();
+        }
+
+        if (Animator != null)
+        {
             Animator.SetBool("isWalking", isMoving);
-
-            // --- NOUVEAU : ANNULATION DE L'ACTION ---
-            if (isMoving && character.CharacterActions.CurrentAction != null)
-            {
-                // Si le perso bouge et qu'une action est en cours, on l'arrête.
-                character.CharacterActions.ClearCurrentAction();
-
-                // On reset aussi le trigger d'animation pour éviter qu'elle ne se 
-                // déclenche plus tard si le trigger était resté "armé"
-                Animator.ResetTrigger("Trigger_pickUpItem");
-                Debug.Log("<color=orange>[Controller]</color> Action annulée par le mouvement.");
-            }
         }
     }
 

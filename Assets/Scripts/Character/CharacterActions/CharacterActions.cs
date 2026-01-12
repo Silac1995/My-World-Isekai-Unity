@@ -57,23 +57,29 @@ public class CharacterActions : MonoBehaviour
     // Remplace ou ajoute cette méthode dans CharacterActions.cs
     public void ClearCurrentAction()
     {
-        // 1. On arrête la coroutine pour éviter qu'OnApplyEffect ne s'exécute
         if (_actionRoutine != null)
         {
             StopCoroutine(_actionRoutine);
             _actionRoutine = null;
         }
 
-        // 2. On se désabonne pour éviter les fuites de mémoire
         if (_currentAction != null)
         {
+            // --- LA CORRECTION EST ICI ---
+            // On demande à l'animator de supprimer le trigger s'il n'a pas encore été consommé
+            var animator = _character.CharacterVisual?.CharacterAnimator?.Animator;
+            if (animator != null)
+            {
+                animator.ResetTrigger("Trigger_pickUpItem");
+                // Si tu as d'autres actions, tu peux aussi reset leurs triggers ici
+                // animator.ResetTrigger("Trigger_Sit"); 
+            }
+
             _currentAction.OnActionFinished -= CleanupAction;
         }
 
-        // 3. On libère le slot
         _currentAction = null;
-
-        Debug.Log($"<color=orange>[Actions]</color> Action forcée à l'arrêt pour {_character.CharacterName}");
+        Debug.Log("<color=orange>[Actions]</color> Action et Animation annulées.");
     }
 
     // Si le personnage est détruit, on s'assure que tout s'arrête
