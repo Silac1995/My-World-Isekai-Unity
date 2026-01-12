@@ -1,30 +1,37 @@
+using System;
 using System.Collections;
 using UnityEngine;
 
 public class CharacterActions : MonoBehaviour
 {
     [SerializeField] private Character _character;
+
+    public Action<CharacterAction> OnActionStarted;
+    public Action OnActionCanceled;
+    private float _actionStartTime; // Pour calculer la progression
+
     private CharacterAction _currentAction;
     private Coroutine _actionRoutine; // Référence pour éviter les accumulations
 
     public CharacterAction CurrentAction => _currentAction;
 
+    public float GetActionProgress()
+    {
+        if (_currentAction == null || _currentAction.Duration <= 0) return 0f;
+        float elapsed = Time.time - _actionStartTime;
+        return Mathf.Clamp01(elapsed / _currentAction.Duration);
+    }
+
     public void ExecuteAction(CharacterAction action)
     {
-        if (action == null) return;
-
-        // 1. Vérifie si on est déjà occupé
-        if (_currentAction != null) return;
-
-        // 2. NOUVEAU : Vérifie si l'action est possible selon ses propres règles
-        if (!action.CanExecute())
-        {
-            Debug.Log($"<color=red>[Actions]</color> {action.GetType().Name} impossible à exécuter.");
-            return;
-        }
+        if (action == null || _currentAction != null) return;
+        if (!action.CanExecute()) return;
 
         _currentAction = action;
+        _actionStartTime = Time.time; // On enregistre le début
         _currentAction.OnActionFinished += CleanupAction;
+
+        OnActionStarted?.Invoke(_currentAction); // On prévient l'UI
 
         _currentAction.OnStart();
         _actionRoutine = StartCoroutine(ActionTimerRoutine(_currentAction));
@@ -44,14 +51,16 @@ public class CharacterActions : MonoBehaviour
 
     private void CleanupAction()
     {
-        // On nettoie les références pour libérer la mémoire et permettre la suite
         if (_currentAction != null)
         {
-            _currentAction.OnActionFinished -= CleanupAction; // Important : se désabonner
+            _currentAction.OnActionFinished -= CleanupAction;
         }
 
         _currentAction = null;
-        _actionRoutine = null; // La coroutine est finie, on oublie la référence
+        _actionRoutine = null;
+
+        // Ajoute ceci pour que l'UI sache qu'il faut se cacher même si c'est une réussite
+        OnActionCanceled?.Invoke();
     }
 
     // Remplace ou ajoute cette méthode dans CharacterActions.cs
@@ -73,6 +82,7 @@ public class CharacterActions : MonoBehaviour
                 animator.ResetTrigger("Trigger_pickUpItem");
                 // Si tu as d'autres actions, tu peux aussi reset leurs triggers ici
                 // animator.ResetTrigger("Trigger_Sit"); 
+                OnActionCanceled?.Invoke(); // On prévient l'UI pour cacher la barre
             }
 
             _currentAction.OnActionFinished -= CleanupAction;
