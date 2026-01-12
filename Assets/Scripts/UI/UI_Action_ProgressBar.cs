@@ -39,7 +39,7 @@ public class UI_Action_ProgressBar : MonoBehaviour
     {
         // On devient visible seulement quand l'action commence
         gameObject.SetActive(true);
-
+        
         if (_actionNameText != null)
             _actionNameText.text = action.GetType().Name.Replace("Character", "");
     }
