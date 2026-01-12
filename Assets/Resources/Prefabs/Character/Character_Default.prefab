@@ -158,12 +158,13 @@ Transform:
   m_ConstrainProportionsScale: 1
   m_Children:
   - {fileID: 215557950362507917}
+  - {fileID: 2098499672776739634}
   - {fileID: 8052248722467460333}
   - {fileID: 1385890570874089402}
-  - {fileID: 2098499672776739634}
   - {fileID: 7548370862418862157}
   - {fileID: 2146869985690736942}
   - {fileID: 4629397348468206407}
+  - {fileID: 3661421223759161407}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!54 &3937668831498777898
@@ -406,7 +407,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::NPCController
   characterVisual: {fileID: 4467461276411840628}
   character: {fileID: 2536622428659117900}
-  animator: {fileID: 0}
   agent: {fileID: 4447047040555525631}
   walkRadius: 50
   minWaitTime: 0.5
@@ -425,7 +425,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerController
   characterVisual: {fileID: 4467461276411840628}
   character: {fileID: 2536622428659117900}
-  animator: {fileID: 0}
   agent: {fileID: 4447047040555525631}
   rotationSpeed: 10
 --- !u!1 &5246753746272467509
@@ -479,6 +478,7 @@ MonoBehaviour:
   visualRoot: {fileID: 1385890570874089402}
   bodyPartsController: {fileID: 1007890653781899237}
   spritesLibrary: {fileID: 0}
+  _characterAnimator: {fileID: 0}
 --- !u!210 &2233661854281345482
 SortingGroup:
   m_ObjectHideFlags: 0
@@ -517,6 +517,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   character: {fileID: 2536622428659117900}
   eyesController: {fileID: 6566596457304981575}
+  _hairController: {fileID: 0}
 --- !u!114 &6566596457304981575
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -539,6 +540,51 @@ MonoBehaviour:
   maxBlinkInterval: 5
   blinkDuration: 0.15
   debugMode: 1
+--- !u!1 &6078244054854696647
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 3661421223759161407}
+  - component: {fileID: 908669152878556868}
+  m_Layer: 0
+  m_Name: CharacterNeeds
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &3661421223759161407
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6078244054854696647}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 6179432398992828966}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &908669152878556868
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6078244054854696647}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0edce19ba03f5fa46869b9a505a10907, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CharacterNeeds
+  _character: {fileID: 2536622428659117900}
 --- !u!1 &8637028065392131947
 GameObject:
   m_ObjectHideFlags: 0
@@ -587,6 +633,7 @@ MonoBehaviour:
   underwearLayer: {fileID: 0}
   clothingLayer: {fileID: 0}
   armorLayer: {fileID: 0}
+  _bagSockets: []
 --- !u!1001 &2837313653771678447
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1022,6 +1069,18 @@ PrefabInstance:
       propertyPath: _character
       value: 
       objectReference: {fileID: 2536622428659117900}
+    - target: {fileID: 9136434367137043347, guid: e6c547ea9c2f5a14783afa3d58700597, type: 3}
+      propertyPath: _rootgameObject
+      value: 
+      objectReference: {fileID: 4281310202761960642}
+    - target: {fileID: 9136434367137043347, guid: e6c547ea9c2f5a14783afa3d58700597, type: 3}
+      propertyPath: _interactionZone
+      value: 
+      objectReference: {fileID: 6020922162625289283}
+    - target: {fileID: 9136434367137043347, guid: e6c547ea9c2f5a14783afa3d58700597, type: 3}
+      propertyPath: _characterGameObject
+      value: 
+      objectReference: {fileID: 4281310202761960642}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []

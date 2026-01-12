@@ -1,30 +1,48 @@
 using UnityEngine;
 
+[System.Serializable]
 public class CharacterBio
 {
-    private Character character;
-    public Character Character => character;
+    [SerializeField] private Character _character;
+    [SerializeField] private CharacterGender _characterGender;
+    [SerializeField] private int _age;
+    [SerializeField] private float _weight;
+    [SerializeField] private float _height;
 
-    private CharacterGender characterGender;
-    public CharacterGender Gender => characterGender;
+    // Propriétés publiques
+    public Character Character => _character;
+    public CharacterGender Gender => _characterGender;
+    public int Age => _age;
+    public float Weight => _weight;
+    public float Height => _height;
 
-    private int age;
-    public int Age => age;
+    public bool IsMale => _characterGender is CharacterGenderMale;
+    public bool IsFemale => _characterGender is CharacterGenderFemale;
 
-    private float weight;
-    public float Weight => weight;
+    // Constructeur demandé
+    public CharacterBio(Character character, GenderType type, int age = 1)
+    {
+        _character = character;
+        _age = age;
 
-    private float height;
-    public float Height => height;
+        // Initialisation du genre basée sur l'enum
+        if (type == GenderType.Male)
+            SetGenderToMale();
+        else
+            SetGenderToFemale();
+
+        // Valeurs par défaut pour le reste
+        _weight = 3.5f; // Poids bébé par défaut
+        _height = 0.5f; // Taille bébé par défaut
+    }
 
     public void SetGenderToMale()
     {
-        characterGender = new CharacterGenderMale();
+        _characterGender = new CharacterGenderMale();
     }
 
     public void SetGenderToFemale()
     {
-        characterGender = new CharacterGenderFemale();
+        _characterGender = new CharacterGenderFemale();
     }
-
 }

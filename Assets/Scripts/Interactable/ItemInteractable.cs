@@ -3,38 +3,36 @@ using UnityEngine;
 
 public class ItemInteractable : InteractableObject
 {
-    // On récupère le script WorldItem qui sert de conteneur
-    private WorldItem _worldItem;
-    public WorldItem WorldItem => _worldItem;
+    [SerializeField] private WorldItem _worldItem;
+
+    // On sécurise l'accès au WorldItem
+    public WorldItem WorldItem
+    {
+        get
+        {
+            if (_worldItem == null) _worldItem = GetComponentInParent<WorldItem>();
+            return _worldItem;
+        }
+    }
 
     public ItemInstance ItemInstance
     {
         get
         {
-            // On cherche d'abord si on a déjà une référence
-            if (_worldItem == null)
-            {
-                // On cherche sur le parent en priorité !
-                _worldItem = GetComponentInParent<WorldItem>();
-
-                // Si vraiment pas de parent, on cherche sur soi-même
-                if (_worldItem == null) _worldItem = GetComponent<WorldItem>();
-            }
-            return (_worldItem != null) ? _worldItem.ItemInstance : null;
+            // Si on ne trouve pas le WorldItem, on renvoie null proprement au lieu de spammer l'erreur fatale tout de suite
+            if (WorldItem == null) return null;
+            return WorldItem.ItemInstance;
         }
     }
 
     public override void Interact(Character interactor)
     {
-        if (ItemInstance == null)
+        var instance = ItemInstance;
+        if (instance == null)
         {
-            Debug.LogError($"[FATAL] Aucun ItemInstance trouvé via WorldItem sur {name}.");
+            Debug.LogWarning($"[Interaction] Pas d'instance sur {name}. L'objet est peut-être déjà ramassé.");
             return;
         }
-
-        // Affiche le nom de l'item ET le nom de sa classe technique (ex: EquipmentInstance)
-        Debug.Log($"[INTERACT] Objet : {ItemInstance.ItemSO.ItemName} | Type de classe : <color=yellow>{ItemInstance.GetType().Name}</color>");
-
-        // Ta logique d'interaction...
+        Debug.Log($"[INTERACT] Objet : {instance.ItemSO.ItemName} | Type : {instance.GetType().Name}");
     }
 }

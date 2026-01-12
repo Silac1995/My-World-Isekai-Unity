@@ -7,50 +7,19 @@ public class NPCInteractionDetector : CharacterInteractionDetector
 
     private void Update()
     {
-        if (currentTarget == null)
-        {
-            return;
-        }
+        if (_currentInteractableObjectTarget == null) return;
 
-        // Rotation vers la cible
-        Vector3 direction = currentTarget.transform.position - transform.position;
+        // On garde la rotation vers la cible (c'est joli visuellement)
+        Vector3 direction = _currentInteractableObjectTarget.transform.position - transform.position;
         direction.y = 0f;
-
         if (direction.magnitude > 0.1f)
         {
             Quaternion lookRotation = Quaternion.LookRotation(direction);
             transform.rotation = Quaternion.Slerp(transform.rotation, lookRotation, Time.deltaTime * 3f);
-            //Debug.Log($"NPC tourne vers {currentTarget.name}.", this);
         }
 
-        // Interaction avec la cible (avec cooldown)
-        if (Time.time - lastInteractionTime > interactionCooldown)
-        {
-            try
-            {
-                // Vérifier si la cible est un CharacterInteractable
-                if (currentTarget.TryGetComponent(out CharacterInteractable characterInteractable))
-                {
-                    if (characterInteractable.Character == null)
-                    {
-                        Debug.LogWarning($"CharacterInteractable sur {currentTarget.name} a un champ 'character' null.", this);
-                        return;
-                    }
-                    //currentTarget.Interact();
-                    //Debug.Log($"NPC interagit avec {characterInteractable.Character.name}.", this);
-                }
-                else
-                {
-                    // Interaction avec un InteractableObject générique (si souhaité)
-                    currentTarget.Interact(Character);
-                    Debug.Log($"NPC interagit avec l'objet générique {currentTarget.name}.", this);
-                }
-                lastInteractionTime = Time.time;
-            }
-            catch (System.Exception ex)
-            {
-                Debug.LogError($"Erreur lors de l'interaction avec {currentTarget.name} : {ex.Message}", this);
-            }
-        }
+        // --- SUPPRIME OU COMMENTE LA LOGIQUE D'INTERACTION AUTOMATIQUE ICI ---
+        // Un NPC ne doit pas "décider" d'interagir juste parce qu'il touche un trigger,
+        // c'est son IA (Need/Behaviour) qui doit donner l'ordre.
     }
 }

@@ -262,4 +262,57 @@ public class CharacterEquipment : MonoBehaviour
 
         return _bag.Inventory;
     }
+
+    /// <summary>
+    /// Vérifie si le torse/poitrine du personnage est exposé.
+    /// Retourne True si aucun vêtement de type "Shirt" n'est équipé dans les 3 couches.
+    /// </summary>
+    public bool IsChestExposed()
+    {
+        bool hasUnderwearShirt = underwearLayer != null && underwearLayer.GetInstance(WearableType.Armor) != null;
+        bool hasClothingShirt = clothingLayer != null && clothingLayer.GetInstance(WearableType.Armor) != null;
+        bool hasArmorShirt = armorLayer != null && armorLayer.GetInstance(WearableType.Armor) != null;
+
+        // Exposé si aucune couche n'a de Shirt
+        return !hasUnderwearShirt && !hasClothingShirt && !hasArmorShirt;
+    }
+
+    /// <summary>
+    /// Vérifie si les parties intimes inférieures sont exposées.
+    /// Retourne True si aucun vêtement de type "Pants" n'est équipé dans les 3 couches.
+    /// Note : C'est techniquement identique à ta logique actuelle de IsNaked().
+    /// </summary>
+    public bool IsGroinExposed()
+    {
+        // On réutilise la logique des Pants
+        bool hasUnderwearPants = underwearLayer != null && underwearLayer.GetInstance(WearableType.Pants) != null;
+        bool hasClothingPants = clothingLayer != null && clothingLayer.GetInstance(WearableType.Pants) != null;
+        bool hasArmorPants = armorLayer != null && armorLayer.GetInstance(WearableType.Pants) != null;
+
+        return !hasUnderwearPants && !hasClothingPants && !hasArmorPants;
+    }
+
+    /// <summary>
+    /// Vérifie la nudité totale (Haut et Bas).
+    /// </summary>
+    public bool IsFullyNaked()
+    {
+        return IsChestExposed() && IsGroinExposed();
+    }
+
+    /// <summary>
+    /// Vérifie si le personnage est "nu" au niveau des jambes.
+    /// Retourne True si aucun pantalon n'est équipé dans les 3 couches (Underwear, Clothing, Armor).
+    /// </summary>
+    public bool IsNaked()
+    {
+        // On vérifie le slot Pants dans chaque couche.
+        // Si l'une des couches retourne une instance non nulle, le perso n'est pas nu.
+        bool hasUnderwearPants = underwearLayer != null && underwearLayer.GetInstance(WearableType.Pants) != null;
+        bool hasClothingPants = clothingLayer != null && clothingLayer.GetInstance(WearableType.Pants) != null;
+        bool hasArmorPants = armorLayer != null && armorLayer.GetInstance(WearableType.Pants) != null;
+
+        // Le personnage est nu s'il n'a AUCUN des trois
+        return !hasUnderwearPants && !hasClothingPants && !hasArmorPants;
+    }
 }

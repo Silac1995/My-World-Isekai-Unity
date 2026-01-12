@@ -13,13 +13,18 @@ public class CharacterPickUpItem : CharacterAction
 
     public override void OnStart()
     {
+        // Empêche le NPC de pousser l'objet physiquement pendant qu'il le ramasse
+        var rb = _worldObject.GetComponent<Rigidbody>();
+        if (rb != null)
+        {
+            rb.isKinematic = true; // L'objet ne bougera plus par la physique
+        }
+
+        // Lance l'animation
         var animHandler = character.CharacterVisual?.CharacterAnimator;
         if (animHandler?.Animator != null)
         {
             animHandler.Animator.SetTrigger("Trigger_pickUpItem");
-
-            // On attend la fin de la frame pour que l'Animator passe sur le nouvel état
-            // Ou plus simplement, on définit une durée basée sur le clip connu
             this.Duration = animHandler.GetClipDuration("Pickup");
         }
     }

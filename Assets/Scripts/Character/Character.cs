@@ -8,6 +8,7 @@ public class Character : MonoBehaviour
     #region Serialized Fields
     [Header("Basic Info")]
     [SerializeField] private string _characterName;
+    [SerializeField] private GenderType _startingGender;
     [SerializeField] private CharacterBio _characterBio;
 
     [Header("Stats & Race")]
@@ -75,11 +76,18 @@ public class Character : MonoBehaviour
     {
         if (!ValidateRequiredComponents()) return;
 
-        LoadResources();
+        // --- INITIALISATION DE LA BIO ---
+        // Si la bio n'est pas déjà assignée (ou pour s'assurer que le Character est lié)
+        if (_characterBio == null || _characterBio.Character == null)
+        {
+            // On utilise le constructeur qu'on a créé
+            _characterBio = new CharacterBio(this, _startingGender, 1);
+            Debug.Log($"<color=white>[Bio]</color> Bio initialisée pour {_characterName} ({_startingGender})");
+        }
 
+        LoadResources();
         _cachedNavMeshAgent = GetComponent<NavMeshAgent>();
         _isDead = false;
-
         InitializeRigidbody();
     }
     #endregion

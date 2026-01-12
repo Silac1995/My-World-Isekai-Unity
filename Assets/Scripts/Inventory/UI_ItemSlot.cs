@@ -23,16 +23,20 @@ public class UI_ItemSlot : MonoBehaviour
     {
         if (_itemName == null) return;
 
-        // On vérifie si le slot contient un item
+        // 1. On vérifie si le slot contient un item
         if (_itemSlot != null && _itemSlot.ItemInstance != null)
         {
-            // On affiche le nom de l'item (ItemSO)
             _itemName.text = _itemSlot.ItemInstance.CustomizedName;
+        }
+        // 2. Si le slot est vide, on affiche son type/catégorie
+        else if (_itemSlot != null)
+        {
+            // On affiche la catégorie (ex: "Emplacement Tête") en gris
+            _itemName.text = $"<color=#888888>{_itemSlot}</color>";
         }
         else
         {
-            // Si le slot est vide
-            _itemName.text = "<color=#888888>Vide</color>";
+            _itemName.text = "";
         }
     }
 }

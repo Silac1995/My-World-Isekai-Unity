@@ -1,6 +1,7 @@
 using UnityEngine;
 
+[System.Serializable]
 public class CharacterGenderMale : CharacterGender
 {
-    public override string Gender => "Male";
+    public override string GenderName => "Male";
 }

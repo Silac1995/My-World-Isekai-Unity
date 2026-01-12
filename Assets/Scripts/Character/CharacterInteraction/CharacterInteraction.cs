@@ -8,6 +8,8 @@ public class CharacterInteraction : MonoBehaviour
     [SerializeField] private Collider _interactionZone;
     [SerializeField] private GameObject _interactionActionPrefab;
 
+    public Collider InteractionZone => _interactionZone;
+
     public event Action<Character, bool> OnInteractionStateChanged;
 
     public Character CurrentTarget

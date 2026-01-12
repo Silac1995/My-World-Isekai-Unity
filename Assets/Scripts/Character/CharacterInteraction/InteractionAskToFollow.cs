@@ -4,30 +4,24 @@ public class InteractionAskToFollow : ICharacterInteractionAction
 {
     public void Execute(Character source, Character target)
     {
-        if (source == null || target == null)
-        {
-            Debug.LogWarning("AskToFollow failed: source or target is null.");
-            return;
-        }
+        if (source == null || target == null) return;
 
         var npcController = target.GetComponent<NPCController>();
-        if (npcController == null)
-        {
-            Debug.LogWarning($"Target {target.name} is not an NPC, cannot follow.");
-            return;
-        }
+        if (npcController == null) return;
 
-        // Vérifie si le NPC tente de se suivre lui-même
         if (source == target)
         {
-            Debug.LogWarning($"{target.name} ne peut pas se suivre lui-même ! Remise en Wander.");
-            // Remet le comportement par défaut (wander)
-            npcController.SetBehaviour(new WanderBehaviour(npcController));
+            // Si on veut qu'il arrête de nous suivre, on pourrait faire un Pop 
+            // ou un Reset de la pile vers le Wander.
+            npcController.ResetStackTo(new WanderBehaviour(npcController));
             return;
         }
 
-        // Changer le comportement du NPC pour Follow
-        npcController.SetBehaviour(new FollowTargetBehaviour(source, target.Controller.Agent));
+        // On utilise Push pour ajouter le comportement de suivi au sommet.
+        // Désormais, si une interruption (faim, objet à ramasser) survient, 
+        // on fera un Push par-dessus, et au Pop, il reviendra à ce Follow.
+        npcController.PushBehaviour(new FollowTargetBehaviour(source, target.Controller.Agent));
+
         Debug.Log($"{target.CharacterName} is now following {source.CharacterName}");
     }
 }

@@ -68,6 +68,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ItemInteractable
   interactionPrompt: Press E to interact
+  _interactionZone: {fileID: 0}
+  _rootgameObject: {fileID: 0}
   _worldItem: {fileID: 0}
 --- !u!114 &5338702556448574448
 MonoBehaviour:
@@ -81,10 +83,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ab90092754a06e3489d6fb3f18adbbd2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WorldItem
-  itemInstance:
-    itemSO: {fileID: 0}
-    customizedName: 
-    customizedColor: {r: 0, g: 0, b: 0, a: 0}
 --- !u!1 &4548420132521322343
 GameObject:
   m_ObjectHideFlags: 0
@@ -184,6 +182,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ItemInteractable
   interactionPrompt: Press E to interact
+  _interactionZone: {fileID: 89890989459208856}
+  _rootgameObject: {fileID: 4548420132521322343}
   _worldItem: {fileID: 0}
 --- !u!1 &7867894663199386094
 GameObject:

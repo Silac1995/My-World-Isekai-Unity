@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
 
@@ -7,9 +8,14 @@ public abstract class CharacterGameController : MonoBehaviour
     [SerializeField] protected Character character;
     [SerializeField] protected NavMeshAgent agent;
 
+    // La pile de comportements
+    private Stack<IAIBehaviour> _behavioursStack = new Stack<IAIBehaviour>();
+
+    // Propriété pour obtenir le comportement actuel (le sommet de la pile)
+    public IAIBehaviour CurrentBehaviour => _behavioursStack.Count > 0 ? _behavioursStack.Peek() : null;
+
     // IA - Propriété publique pour la lecture
     protected IAIBehaviour currentBehaviour;
-    public IAIBehaviour CurrentBehaviour => currentBehaviour;
 
     public Character Character => character;
 
@@ -43,11 +49,82 @@ public abstract class CharacterGameController : MonoBehaviour
 
     protected virtual void Update()
     {
+        // 1. Priorité aux Actions (ton système actuel)
+        if (character.CharacterActions.CurrentAction != null)
+        {
+            StopMovement(); // Méthode pour isoler l'arrêt de l'agent
+            return;
+        }
+
+        // 2. Exécution du comportement au sommet de la pile
+        CurrentBehaviour?.Act(character);
+
+        // Si une action est en cours, on met l'IA en pause
+        if (character != null && character.CharacterActions != null && character.CharacterActions.CurrentAction != null)
+        {
+            // On stoppe le mouvement de l'agent pour que le NPC reste sur place durant l'action
+            if (agent != null && agent.isOnNavMesh && !agent.isStopped)
+            {
+                agent.isStopped = true;
+                agent.velocity = Vector3.zero;
+            }
+
+            // On ne traite pas le 'Act' du behaviour car l'action est prioritaire
+            // On passe directement à la mise à jour des animations/visuels
+            UpdateAnimations();
+            UpdateFlip();
+            return;
+        }
+
+        // Si on arrive ici, aucune action n'est en cours : on réactive l'agent
+        if (agent != null && agent.isOnNavMesh && agent.isStopped)
+        {
+            agent.isStopped = false;
+        }
+
+        // Exécution normale du comportement IA
         currentBehaviour?.Act(character);
 
         Move();
         UpdateAnimations();
         UpdateFlip();
+    }
+
+    // Ajoute un nouveau comportement et met en pause le précédent
+    public void PushBehaviour(IAIBehaviour newBehaviour)
+    {
+        _behavioursStack.Push(newBehaviour);
+        Debug.Log($"<color=cyan>[AI Stack]</color> Push: {newBehaviour.GetType().Name}");
+    }
+
+    // Termine le comportement actuel et revient au précédent
+    public void PopBehaviour()
+    {
+        if (_behavioursStack.Count > 0)
+        {
+            IAIBehaviour old = _behavioursStack.Pop();
+            old.Exit(character);
+            Debug.Log($"<color=orange>[AI Stack]</color> Pop: {old.GetType().Name}. Retour à: {(CurrentBehaviour != null ? CurrentBehaviour.GetType().Name : "Rien")}");
+        }
+    }
+    public void ResetStackTo(IAIBehaviour baseBehaviour)
+    {
+        // On nettoie tout avant de mettre le nouveau comportement de base
+        while (_behavioursStack.Count > 0)
+        {
+            IAIBehaviour old = _behavioursStack.Pop();
+            old.Exit(character);
+        }
+        PushBehaviour(baseBehaviour);
+    }
+
+    private void StopMovement()
+    {
+        if (agent != null && agent.isOnNavMesh)
+        {
+            agent.isStopped = true;
+            agent.velocity = Vector3.zero;
+        }
     }
 
     protected virtual void UpdateAnimations()

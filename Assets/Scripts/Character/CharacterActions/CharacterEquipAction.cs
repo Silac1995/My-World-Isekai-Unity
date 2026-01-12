@@ -25,7 +25,7 @@ public class CharacterEquipAction : CharacterAction
     public override void OnApplyEffect()
     {
         // 2. La logique métier s'exécute APRÈS le délai de 0.8s
-        character.EquipGear(_equipment);
+        character.CharacterEquipment.Equip(_equipment);
 
         // On met à jour l'Animator si c'est une arme pour changer le style de combat
         // (comme on en a discuté avec le CombatStyleSO)

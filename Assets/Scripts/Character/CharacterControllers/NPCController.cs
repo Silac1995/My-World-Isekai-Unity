@@ -28,9 +28,8 @@ public class NPCController : CharacterGameController
     public override void Initialize()
     {
         base.Initialize();
-
-        // Comportement par défaut = Wander
-        SetBehaviour(new WanderBehaviour(this));
+        // On initialise la pile avec le Wander par défaut
+        ResetStackTo(new WanderBehaviour(this));
 
         if (agent != null)
         {

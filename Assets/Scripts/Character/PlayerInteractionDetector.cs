@@ -4,7 +4,7 @@ using System.Linq;
 
 public class PlayerInteractionDetector : CharacterInteractionDetector
 {
-    private GameObject interactionPromptPrefab;
+    [SerializeField] private GameObject interactionPromptPrefab;
     [SerializeField] private List<InteractableObject> nearbyInteractables = new List<InteractableObject>();
     private GameObject currentPromptUI;
 
@@ -20,12 +20,12 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
     {
         UpdateClosestTarget();
 
-        if (Input.GetKeyDown(KeyCode.E) && currentTarget != null)
+        if (Input.GetKeyDown(KeyCode.E) && _currentInteractableObjectTarget != null)
         {
             try
             {
                 // --- CAS 1 : PERSONNAGE ---
-                if (currentTarget is CharacterInteractable charInteractable)
+                if (_currentInteractableObjectTarget is CharacterInteractable charInteractable)
                 {
                     Character targetChar = charInteractable.Character;
                     if (targetChar == null) return;
@@ -42,13 +42,13 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
                     // 2. Lancer l'interaction
                     // C'est maintenant CharacterInteractable.Interact qui va créer 
                     // et lancer la CharacterStartInteraction.
-                    currentTarget.Interact(Character);
+                    _currentInteractableObjectTarget.Interact(Character);
 
                     Debug.Log($"<color=cyan>[Interaction]</color> Signal envoyé à l'interactable de {targetChar.CharacterName}");
                 }
 
                 // --- CAS 2 : ITEM ---
-                else if (currentTarget is ItemInteractable itemInteractable)
+                else if (_currentInteractableObjectTarget is ItemInteractable itemInteractable)
                 {
                     ItemInstance instance = itemInteractable.ItemInstance;
                     if (instance == null) return;
@@ -56,7 +56,7 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
                     if (!(instance is EquipmentInstance))
                     {
                         // On passe le root du gameobject (le WorldItem complet) à l'action
-                        GameObject rootToDestroy = itemInteractable.transform.root.gameObject;
+                        GameObject rootToDestroy = itemInteractable.RootGameObject;
 
                         CharacterPickUpItem pickUpAction = new CharacterPickUpItem(Character, instance, rootToDestroy);
                         Character.CharacterActions.ExecuteAction(pickUpAction);
@@ -65,13 +65,13 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
                     {
                         // Même logique pour l'équipement si tu veux
                         Character.CharacterEquipment.Equip((EquipmentInstance)instance);
-                        Destroy(itemInteractable.transform.root.gameObject);
+                        Destroy(itemInteractable.RootGameObject);
                     }
                 }
             }
             catch (System.Exception ex)
             {
-                Debug.LogError($"<color=red>[Interaction Error]</color> Sur {currentTarget.name}: {ex.Message}");
+                Debug.LogError($"<color=red>[Interaction Error]</color> Sur {_currentInteractableObjectTarget.name}: {ex.Message}");
             }
         }
     }
@@ -82,10 +82,10 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
 
         if (nearbyInteractables.Count == 0)
         {
-            if (currentTarget != null)
+            if (_currentInteractableObjectTarget != null)
             {
-                currentTarget.OnCharacterExit(Character);
-                currentTarget = null;
+                _currentInteractableObjectTarget.OnCharacterExit(Character);
+                _currentInteractableObjectTarget = null;
             }
             if (currentPromptUI != null)
             {
@@ -105,11 +105,11 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
             return;
         }
 
-        if (closest != currentTarget)
+        if (closest != _currentInteractableObjectTarget)
         {
-            if (currentTarget != null)
+            if (_currentInteractableObjectTarget != null)
             {
-                currentTarget.OnCharacterExit(Character);
+                _currentInteractableObjectTarget.OnCharacterExit(Character);
                 if (currentPromptUI != null)
                 {
                     Destroy(currentPromptUI);
@@ -117,8 +117,8 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
                 }
             }
 
-            currentTarget = closest;
-            currentTarget.OnCharacterEnter(Character);
+            _currentInteractableObjectTarget = closest;
+            _currentInteractableObjectTarget.OnCharacterEnter(Character);
 
             if (interactionPromptPrefab == null)
             {
@@ -150,10 +150,10 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
                 return;
             }
 
-            promptUIComponent.SetTarget(currentTarget.transform);
-            string targetName = currentTarget.TryGetComponent(out CharacterInteractable characterInteractable) && characterInteractable.Character != null
+            promptUIComponent.SetTarget(_currentInteractableObjectTarget.transform);
+            string targetName = _currentInteractableObjectTarget.TryGetComponent(out CharacterInteractable characterInteractable) && characterInteractable.Character != null
                 ? characterInteractable.Character.name
-                : currentTarget.name;
+                : _currentInteractableObjectTarget.name;
             //Debug.Log($"Prompt affiché sur {targetName}", this);
         }
     }
@@ -185,10 +185,10 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
                 nearbyInteractables.Remove(interactable);
                 //Debug.Log($"Retrait de {interactable.name} de la liste des interactables.", this);
 
-                if (interactable == currentTarget)
+                if (interactable == _currentInteractableObjectTarget)
                 {
-                    currentTarget.OnCharacterExit(Character);
-                    currentTarget = null;
+                    _currentInteractableObjectTarget.OnCharacterExit(Character);
+                    _currentInteractableObjectTarget = null;
                     if (currentPromptUI != null)
                     {
                         Destroy(currentPromptUI);
