@@ -51,20 +51,21 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
                 else if (currentTarget is ItemInteractable itemInteractable)
                 {
                     ItemInstance instance = itemInteractable.ItemInstance;
+                    if (instance == null) return;
 
-                    // Appel de la nouvelle signature
-                    currentTarget.Interact(Character);
-
-                    if (instance?.ItemSO == null) return;
-
-                    if (instance is EquipmentInstance equipment)
+                    if (!(instance is EquipmentInstance))
                     {
-                        if (Character?.CharacterEquipment != null)
-                        {
-                            Character.CharacterEquipment.Equip(equipment);
-                            // On détruit la racine (le WorldItem)
-                            Destroy(itemInteractable.transform.root.gameObject);
-                        }
+                        // On passe le root du gameobject (le WorldItem complet) à l'action
+                        GameObject rootToDestroy = itemInteractable.transform.root.gameObject;
+
+                        CharacterPickUpItem pickUpAction = new CharacterPickUpItem(Character, instance, rootToDestroy);
+                        Character.CharacterActions.ExecuteAction(pickUpAction);
+                    }
+                    else
+                    {
+                        // Même logique pour l'équipement si tu veux
+                        Character.CharacterEquipment.Equip((EquipmentInstance)instance);
+                        Destroy(itemInteractable.transform.root.gameObject);
                     }
                 }
             }

@@ -3,16 +3,19 @@ using System;
 public abstract class CharacterAction
 {
     protected Character character;
-    // On ajoute un callback pour prévenir quand c'est fini
-    public Action OnComplete;
+    public Action OnActionFinished;
 
-    protected CharacterAction(Character character)
+    public float Duration { get; protected set; }
+
+    protected CharacterAction(Character character, float duration = 0f)
     {
         this.character = character;
+        this.Duration = duration;
     }
 
-    public abstract void PerformAction();
+    public abstract void OnStart();
+    public abstract void OnApplyEffect();
 
-    // Méthode utilitaire pour terminer proprement
-    protected void Finish() => OnComplete?.Invoke();
+    // On change 'protected' par 'public' pour que le Controller puisse l'appeler
+    public void Finish() => OnActionFinished?.Invoke();
 }

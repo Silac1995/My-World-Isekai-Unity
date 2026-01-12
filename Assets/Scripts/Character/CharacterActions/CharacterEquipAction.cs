@@ -2,25 +2,32 @@ using UnityEngine;
 
 public class CharacterEquipAction : CharacterAction
 {
-    private EquipmentInstance equipment;
+    private EquipmentInstance _equipment;
 
-    public CharacterEquipAction(Character character, EquipmentInstance equipment) : base(character)
+    // On ajoute un délai de 0.8s pour l'action d'équipement
+    public CharacterEquipAction(Character character, EquipmentInstance equipment)
+        : base(character, 0.8f)
     {
-        this.equipment = equipment ?? throw new System.ArgumentNullException(nameof(equipment));
+        _equipment = equipment ?? throw new System.ArgumentNullException(nameof(equipment));
     }
 
-    public override void PerformAction()
+    public override void OnStart()
     {
-        // On vérifie une dernière fois si l'équipement est valide
-        if (equipment == null || equipment.ItemSO == null)
-        {
-            Debug.LogWarning($"{character.CharacterName} tente d'équiper un objet invalide.");
-            return;
-        }
+        if (_equipment == null) { Finish(); return; }
 
-        // On appelle la méthode de logique sur le Character
-        character.EquipGear(equipment);
+        // 1. On lance une animation de "Prepare" ou on joue un son d'armure
+        var animator = character.CharacterVisual?.CharacterAnimator?.Animator;
+        if (animator != null) animator.SetTrigger("Trigger_Equip");
 
-        Debug.Log($"{character.CharacterName} a équipé : {equipment.CustomizedName}");
+        Debug.Log($"{character.CharacterName} prépare l'équipement de : {_equipment.CustomizedName}");
+    }
+
+    public override void OnApplyEffect()
+    {
+        // 2. La logique métier s'exécute APRÈS le délai de 0.8s
+        character.EquipGear(_equipment);
+
+        // On met à jour l'Animator si c'est une arme pour changer le style de combat
+        // (comme on en a discuté avec le CombatStyleSO)
     }
 }

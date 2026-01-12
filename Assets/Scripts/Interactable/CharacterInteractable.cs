@@ -19,6 +19,6 @@ public class CharacterInteractable : InteractableObject
         var startAction = new CharacterStartInteraction(interactor, _character);
 
         // On demande au système d'actions de l'initiateur d'exécuter l'interaction
-        interactor.CharacterActions.PerformAction(startAction);
+        interactor.CharacterActions.ExecuteAction(startAction);
     }
 }

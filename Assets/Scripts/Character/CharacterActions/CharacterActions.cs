@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 
 public class CharacterActions : MonoBehaviour
@@ -22,36 +23,39 @@ public class CharacterActions : MonoBehaviour
         }
     }
 
-    public void PerformAction(CharacterAction action)
+    public void ExecuteAction(CharacterAction action)
     {
-        if (action == null)
-        {
-            Debug.LogWarning("Tentative de perform une action nulle.", this);
-            return;
-        }
+        if (action == null) return;
 
-        // 1. Vérifie si on ne fait pas déjà quelque chose
+        // 1. Vérifie si on est déjà occupé
         if (_currentAction != null)
         {
-            Debug.Log($"{Character.CharacterName} est déjà occupé avec {_currentAction.GetType().Name}.");
-            return;
-        }
-
-        // 2. Vérifie les conditions (stun, mort, etc.)
-        if (!CanPerform(action))
-        {
-            Debug.Log($"{Character.CharacterName} ne peut pas effectuer {action.GetType().Name}.");
+            Debug.Log($"{_character.CharacterName} est déjà occupé.");
             return;
         }
 
         _currentAction = action;
 
-        // On s'abonne à la fin de l'action avant de la lancer
-        action.OnComplete += () => _currentAction = null;
+        // 2. On s'abonne pour libérer le slot à la fin
+        _currentAction.OnActionFinished += () => _currentAction = null;
 
-        action.PerformAction();
+        // 3. On lance le début de l'action (Animation, etc.)
+        _currentAction.OnStart();
 
-        Debug.Log($"{Character.CharacterName} exécute {action.GetType().Name}.");
+        // 4. On lance le chrono pour l'effet et la fin
+        StartCoroutine(ActionTimerRoutine(_currentAction));
+    }
+
+    private IEnumerator ActionTimerRoutine(CharacterAction action)
+    {
+        // On attend la durée définie dans l'action (ex: 1.2s)
+        yield return new WaitForSeconds(action.Duration);
+
+        // On applique l'effet (ex: AddItem)
+        action.OnApplyEffect();
+
+        // On déclenche le callback de fin
+        action.Finish();
     }
 
     // Méthode pour libérer le personnage (à appeler à la fin de l'animation ou de l'action)

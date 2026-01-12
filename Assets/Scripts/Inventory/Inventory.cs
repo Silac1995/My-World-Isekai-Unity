@@ -52,16 +52,42 @@ public class Inventory
     /// </summary>
     public bool AddItem(ItemInstance item)
     {
+        if (item == null) return false;
+
+        // Sécurité si la liste n'a pas été initialisée
+        if (_itemSlots == null) return false;
+
         foreach (var slot in _itemSlots)
         {
-            // IMPORTANT : On vérifie si le slot est vide ET s'il accepte ce type d'item
             if (slot.IsEmpty() && slot.CanAcceptItem(item))
             {
                 slot.ItemInstance = item;
+                Debug.Log($"[Inventory] {item.CustomizedName} ajouté au slot {slot.GetType().Name}");
                 return true;
             }
         }
-        Debug.LogWarning($"[Inventory] Aucun slot compatible ou disponible pour {item.CustomizedName}");
+
+        Debug.LogWarning($"[Inventory] Inventaire plein ou aucun slot compatible pour {item.CustomizedName}");
+        return false;
+    }
+
+    /// <summary>
+    /// Retire un item spécifique de l'inventaire s'il s'y trouve.
+    /// </summary>
+    public bool RemoveItem(ItemInstance item)
+    {
+        if (item == null || _itemSlots == null) return false;
+
+        foreach (var slot in _itemSlots)
+        {
+            if (slot.ItemInstance == item)
+            {
+                slot.ClearSlot();
+                Debug.Log($"[Inventory] {item.CustomizedName} retiré de l'inventaire.");
+                return true;
+            }
+        }
+
         return false;
     }
 
