@@ -5,28 +5,32 @@ public abstract class CharacterGameController : MonoBehaviour
 {
     [SerializeField] protected CharacterVisual characterVisual;
     [SerializeField] protected Character character;
-    [SerializeField] protected Animator animator;
     [SerializeField] protected NavMeshAgent agent;
 
-    // IA - Propriété publique pour la lecture (utile pour le UI_CharacterDebugScript !)
+    // IA - Propriété publique pour la lecture
     protected IAIBehaviour currentBehaviour;
     public IAIBehaviour CurrentBehaviour => currentBehaviour;
 
     public Character Character => character;
-    public Animator Animator => animator;
+
+    // On passe maintenant par le CharacterVisual pour récupérer l'Animator
+    public Animator Animator => (characterVisual != null && characterVisual.CharacterAnimator != null)
+                                 ? characterVisual.CharacterAnimator.Animator
+                                 : null;
+
     public NavMeshAgent Agent => agent;
 
     public virtual void Initialize()
     {
         character = GetComponent<Character>();
+
+        // On s'assure de bien récupérer le visual qui contient le CharacterAnimator
         characterVisual = GetComponentInChildren<CharacterVisual>();
 
         agent = GetComponent<NavMeshAgent>();
         if (agent == null)
             agent = gameObject.AddComponent<NavMeshAgent>();
 
-        // IMPORTANT : Si tu utilises un rig 2D, assure-toi que l'agent 
-        // n'essaie pas de faire tourner le transform lui-même.
         agent.updateRotation = false;
         agent.updateUpAxis = false;
 
@@ -34,11 +38,11 @@ public abstract class CharacterGameController : MonoBehaviour
             enabled = false;
 
         agent.speed = character != null ? character.MovementSpeed : 3.5f;
+
     }
 
     protected virtual void Update()
     {
-        // On exécute le comportement avant de calculer les mouvements/animations
         currentBehaviour?.Act(character);
 
         Move();
@@ -48,10 +52,10 @@ public abstract class CharacterGameController : MonoBehaviour
 
     protected virtual void UpdateAnimations()
     {
-        if (animator != null && agent != null)
+        // On utilise la propriété Animator qui fait le pont avec CharacterVisual
+        if (Animator != null && agent != null)
         {
-            // magnitude > 0.1f suffit pour détecter le mouvement sur le NavMesh
-            animator.SetBool("isWalking", agent.velocity.magnitude > 0.1f);
+            Animator.SetBool("isWalking", agent.velocity.magnitude > 0.1f);
         }
     }
 
@@ -76,15 +80,12 @@ public abstract class CharacterGameController : MonoBehaviour
 
     public void SetBehaviour(IAIBehaviour behaviour)
     {
-        // Sécurité : Si c'est le joueur, on refuse généralement le changement de comportement IA
-        // Sauf si tu prévois des comportements spécifiques comme "Stun" ou "Cinématique"
         if (character != null && character.IsPlayer())
         {
             Debug.Log($"<color=yellow>[AI]</color> Changement de comportement ignoré pour le Joueur ({gameObject.name}).");
             return;
         }
 
-        // 1. APPEL DE EXIT : On prévient l'ancien comportement qu'il s'arrête
         if (currentBehaviour != null)
         {
             currentBehaviour.Exit(character);
@@ -93,7 +94,6 @@ public abstract class CharacterGameController : MonoBehaviour
         string behaviourName = behaviour != null ? behaviour.GetType().Name : "None";
         Debug.Log($"<color=cyan>[AI]</color> {gameObject.name} change de comportement pour : {behaviourName}");
 
-        // 2. CHANGEMENT : On assigne le nouveau
         currentBehaviour = behaviour;
     }
 }

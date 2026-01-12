@@ -9,8 +9,8 @@ public class PlayerController : CharacterGameController
     private void Awake()
     {
 
-        if (animator != null)
-            animator.updateMode = AnimatorUpdateMode.Fixed;
+        if (Animator != null)
+            Animator.updateMode = AnimatorUpdateMode.Fixed;
 
         if (character?.Rigidbody != null)
             character.Rigidbody.interpolation = RigidbodyInterpolation.Interpolate;
@@ -24,9 +24,9 @@ public class PlayerController : CharacterGameController
         inputDir = new Vector3(h, 0f, v).normalized;
         isCrouching = Input.GetKey(KeyCode.C);
 
-        if (animator != null)
+        if (Animator != null)
         {
-            animator.SetBool("isWalking", inputDir.magnitude > 0.1f && !isCrouching);
+            Animator.SetBool("isWalking", inputDir.magnitude > 0.1f && !isCrouching);
         }
 
         base.Update(); // appelle Move() (IA) si défini
@@ -72,8 +72,8 @@ public class PlayerController : CharacterGameController
     protected override void UpdateAnimations()
     {
         // uniquement pour le joueur, animation basée sur input
-        if (animator != null)
-            animator.SetBool("isWalking", inputDir.magnitude > 0.1f && !isCrouching);
+        if (Animator != null)
+            Animator.SetBool("isWalking", inputDir.magnitude > 0.1f && !isCrouching);
     }
 
     // Ajoute ceci dans ton PlayerController

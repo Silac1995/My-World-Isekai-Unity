@@ -44,11 +44,11 @@ public class CharacterActions : MonoBehaviour
             return;
         }
 
-        // 3. Assigne et exécute
         _currentAction = action;
 
-        // On exécute l'action
-        // Note : Il faudra prévoir un moyen dans CharacterAction de remettre _currentAction à null quand c'est fini !
+        // On s'abonne à la fin de l'action avant de la lancer
+        action.OnComplete += () => _currentAction = null;
+
         action.PerformAction();
 
         Debug.Log($"{Character.CharacterName} exécute {action.GetType().Name}.");
