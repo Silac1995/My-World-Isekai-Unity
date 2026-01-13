@@ -52,8 +52,28 @@ MonoBehaviour:
       m_Sprite: {fileID: -378187346, guid: 19fb46c00493abd4b900468ad3da5035, type: 3}
       m_FromMain: 0
       m_SpriteOverride: {fileID: -378187346, guid: 19fb46c00493abd4b900468ad3da5035, type: 3}
+    - m_Name: Line
+      m_Hash: 824581064
+      m_Sprite: {fileID: 719415794, guid: 84370218e35340e458e4e4eb3404fe83, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 719415794, guid: 84370218e35340e458e4e4eb3404fe83, type: 3}
+    - m_Name: Color_Main
+      m_Hash: 764435150
+      m_Sprite: {fileID: 719415794, guid: 84370218e35340e458e4e4eb3404fe83, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 719415794, guid: 84370218e35340e458e4e4eb3404fe83, type: 3}
+    - m_Name: Color_Primary
+      m_Hash: 940578241
+      m_Sprite: {fileID: -1884770667, guid: 180120c5b39759c4e84b5ac4e2484983, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: -1884770667, guid: 180120c5b39759c4e84b5ac4e2484983, type: 3}
+    - m_Name: Color_Secondary
+      m_Hash: 157904143
+      m_Sprite: {fileID: 2043281797, guid: 34d02d9c4d38abb4d8985ef8a33f8e10, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 2043281797, guid: 34d02d9c4d38abb4d8985ef8a33f8e10, type: 3}
     m_FromMain: 0
-    m_EntryOverrideCount: 7
+    m_EntryOverrideCount: 11
   m_PrimaryLibraryGUID: 
-  m_ModificationHash: 639036424252707710
+  m_ModificationHash: 639039377976052431
   m_Version: 1

@@ -176,6 +176,7 @@ SpriteAtlas:
     - bc71a2f7bfb3e314389532b333b70dbb: -1115194183
     - 84370218e35340e458e4e4eb3404fe83: 719415794
     - d1478e286e9a5ff42a0a166b68342253: -1398334222
+    - 8b475338d5fab1945a90ab98948b9448: 862176329
     - edc9e548e942ccd40a104c4340519bb7: 506509301
     - a2658b684fbf216448b1bc73ee13d701: -1042857454
     - 0e32f1d84c045014f8921683f4e0e8ed: 21300000
@@ -392,6 +393,7 @@ SpriteAtlas:
   - {fileID: -1115194183, guid: bc71a2f7bfb3e314389532b333b70dbb, type: 3}
   - {fileID: 719415794, guid: 84370218e35340e458e4e4eb3404fe83, type: 3}
   - {fileID: -1398334222, guid: d1478e286e9a5ff42a0a166b68342253, type: 3}
+  - {fileID: 862176329, guid: 8b475338d5fab1945a90ab98948b9448, type: 3}
   - {fileID: 506509301, guid: edc9e548e942ccd40a104c4340519bb7, type: 3}
   - {fileID: -1042857454, guid: a2658b684fbf216448b1bc73ee13d701, type: 3}
   - {fileID: 21300000, guid: 0e32f1d84c045014f8921683f4e0e8ed, type: 3}
@@ -607,6 +609,7 @@ SpriteAtlas:
   - Eye_R_Closed_0
   - Hips_0
   - Eyebrow_R_frowned_0
+  - Blade_0
   - ear_R_0
   - nipple_L_0
   - Breast_R_04

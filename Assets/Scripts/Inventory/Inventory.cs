@@ -9,10 +9,8 @@ public class Inventory
 
     public StorageWearableInstance Owner => _storageWearableInstance;
     public List<ItemSlot> ItemSlots => _itemSlots;
-    // La capacité est maintenant déduite du nombre total de slots
     public int Capacity => _itemSlots?.Count ?? 0;
 
-    // Nouveau constructeur : on passe le nombre de slots de chaque type
     public Inventory(StorageWearableInstance storageWearableInstance, int miscCapacity, int weaponCapacity)
     {
         _storageWearableInstance = storageWearableInstance;
@@ -23,7 +21,6 @@ public class Inventory
     {
         _itemSlots = new List<ItemSlot>(miscCapacity + weaponCapacity);
 
-        // On remplit avec les slots spécifiques
         for (int i = 0; i < miscCapacity; i++)
         {
             _itemSlots.Add(new MiscSlot());
@@ -35,9 +32,6 @@ public class Inventory
         }
     }
 
-    /// <summary>
-    /// Vérifie s'il reste au moins un slot vide capable d'accueillir cet item précis.
-    /// </summary>
     public bool HasFreeSpaceForItem(ItemInstance item)
     {
         foreach (var slot in _itemSlots)
@@ -48,33 +42,67 @@ public class Inventory
     }
 
     /// <summary>
-    /// Ajoute l'objet dans le premier slot compatible.
+    /// Ajoute l'objet en passant le Character pour les mises à jour visuelles.
     /// </summary>
-    public bool AddItem(ItemInstance item)
+    public bool AddItem(ItemInstance item, Character character)
     {
-        if (item == null) return false;
+        if (item == null || _itemSlots == null) return false;
 
-        // Sécurité si la liste n'a pas été initialisée
-        if (_itemSlots == null) return false;
+        if (item.ItemSO is WeaponSO)
+        {
+            return AddWeaponItem(item, character);
+        }
+        else
+        {
+            return AddMiscItem(item, character);
+        }
+    }
 
+    public bool AddMiscItem(ItemInstance item, Character character)
+    {
         foreach (var slot in _itemSlots)
         {
-            if (slot.IsEmpty() && slot.CanAcceptItem(item))
+            if (slot is MiscSlot && slot.IsEmpty() && slot.CanAcceptItem(item))
             {
                 slot.ItemInstance = item;
-                Debug.Log($"[Inventory] {item.CustomizedName} ajouté au slot {slot.GetType().Name}");
+                Debug.Log($"[Inventory] Misc ajouté : {item.CustomizedName}");
                 return true;
             }
         }
-
-        Debug.LogWarning($"[Inventory] Inventaire plein ou aucun slot compatible pour {item.CustomizedName}");
         return false;
     }
 
+    public bool AddWeaponItem(ItemInstance item, Character character)
+    {
+        foreach (var slot in _itemSlots)
+        {
+            if (slot is WeaponSlot && slot.IsEmpty() && slot.CanAcceptItem(item))
+            {
+                slot.ItemInstance = item;
+
+                // On utilise le paramètre character pour mettre à jour le visuel
+                UpdateWeaponVisuals(character);
+
+                Debug.Log($"[Inventory] Arme ajoutée : {item.CustomizedName}");
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void UpdateWeaponVisuals(Character character)
+    {
+        if (character != null && character.CharacterEquipment != null)
+        {
+            // Appelle la logique que nous avons créée pour le sac
+            character.CharacterEquipment.UpdateWeaponVisualOnBag();
+        }
+    }
+
     /// <summary>
-    /// Retire un item spécifique de l'inventaire s'il s'y trouve.
+    /// Retire un item et notifie le Character (utile si on retire une arme par exemple).
     /// </summary>
-    public bool RemoveItem(ItemInstance item)
+    public bool RemoveItem(ItemInstance item, Character character)
     {
         if (item == null || _itemSlots == null) return false;
 
@@ -82,20 +110,29 @@ public class Inventory
         {
             if (slot.ItemInstance == item)
             {
+                bool isWeapon = item.ItemSO is WeaponSO;
                 slot.ClearSlot();
-                Debug.Log($"[Inventory] {item.CustomizedName} retiré de l'inventaire.");
+
+                if (isWeapon)
+                    UpdateWeaponVisuals(character);
+
+                Debug.Log($"[Inventory] {item.CustomizedName} retiré.");
                 return true;
             }
         }
-
         return false;
     }
 
-    // --- Les autres méthodes (Remove, GetIndex, etc.) restent identiques ---
-
-    public void RemoveItemFromSlot(ItemSlot slot)
+    public void RemoveItemFromSlot(ItemSlot slot, Character character)
     {
-        if (_itemSlots.Contains(slot)) slot.ClearSlot();
+        if (_itemSlots.Contains(slot))
+        {
+            bool wasWeapon = slot.ItemInstance?.ItemSO is WeaponSO;
+            slot.ClearSlot();
+
+            if (wasWeapon)
+                UpdateWeaponVisuals(character);
+        }
     }
 
     public ItemSlot GetItemSlot(int index)

@@ -38,33 +38,33 @@ MonoBehaviour:
       m_FromMain: 0
       m_SpriteOverride: {fileID: 0}
     m_FromMain: 0
-    m_EntryOverrideCount: 4
+    m_EntryOverrideCount: 0
   - m_Name: 01
     m_Hash: 255927350
     m_CategoryList: []
     m_OverrideEntries:
-    - m_Name: Bag_Line
-      m_Hash: 478936708
+    - m_Name: Line
+      m_Hash: 824581064
       m_Sprite: {fileID: -1107964689, guid: e04d06f5ad79df74ca1bf99a73211394, type: 3}
       m_FromMain: 0
       m_SpriteOverride: {fileID: -1107964689, guid: e04d06f5ad79df74ca1bf99a73211394, type: 3}
-    - m_Name: Bag_Color_Main
-      m_Hash: 463460253
+    - m_Name: Color_Main
+      m_Hash: 764435150
       m_Sprite: {fileID: 0}
       m_FromMain: 0
       m_SpriteOverride: {fileID: 0}
-    - m_Name: Bag_Color_Primary
-      m_Hash: 142114377
+    - m_Name: Color_Primary
+      m_Hash: 940578241
       m_Sprite: {fileID: 375967295, guid: 77d8a389e4215e14883c165a1843eead, type: 3}
       m_FromMain: 0
       m_SpriteOverride: {fileID: 375967295, guid: 77d8a389e4215e14883c165a1843eead, type: 3}
-    - m_Name: Bag_Color_Secondary
-      m_Hash: 542357492
+    - m_Name: Color_Secondary
+      m_Hash: 157904143
       m_Sprite: {fileID: 1871863361, guid: 522cd472561bd4e4c90f5a6a7e77c5c3, type: 3}
       m_FromMain: 0
       m_SpriteOverride: {fileID: 1871863361, guid: 522cd472561bd4e4c90f5a6a7e77c5c3, type: 3}
     m_FromMain: 0
     m_EntryOverrideCount: 0
   m_PrimaryLibraryGUID: 62b464d4ce9bc6b44816daec71f264d1
-  m_ModificationHash: 639037188836534156
+  m_ModificationHash: 639039378478241213
   m_Version: 1

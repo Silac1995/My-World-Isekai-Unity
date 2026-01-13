@@ -36,6 +36,9 @@ public class BaseSpritesLibrarySO : ScriptableObject
     [SerializeField] private SpriteLibraryAsset armor_GlovesLibrary;
     [SerializeField] private SpriteLibraryAsset armor_BootsLibrary;
 
+    // Weapons
+    [SerializeField] private SpriteLibraryAsset weapon_swordsLibrary;
+
     // Public Getters
     public SpriteLibraryAsset Body_HairLibrary => body_HairLibrary;
     public SpriteLibraryAsset Body_EyebrowsLibrary => body_EyebrowsLibrary;
@@ -63,5 +66,7 @@ public class BaseSpritesLibrarySO : ScriptableObject
     public SpriteLibraryAsset Armor_LowerLibrary => armor_LowerLibrary;
     public SpriteLibraryAsset Armor_GlovesLibrary => armor_GlovesLibrary;
     public SpriteLibraryAsset Armor_BootsLibrary => armor_BootsLibrary;
+
+    public SpriteLibraryAsset Weapon_SwordsLibrary => weapon_swordsLibrary;
 
 }

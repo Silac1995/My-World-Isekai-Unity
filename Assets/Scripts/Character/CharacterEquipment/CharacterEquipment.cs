@@ -21,6 +21,7 @@ public class CharacterEquipment : MonoBehaviour
     [SerializeReference] private ArmorLayer armorLayer;
     // --- NOUVELLES VARIABLES POUR LE SAC ---
     [Header("Global Accessories")]
+    [SerializeField] private Bag _bagScript;
     [SerializeField] private BagInstance _bag;
     [SerializeField] private List<GameObject> _bagSockets;
 
@@ -30,6 +31,7 @@ public class CharacterEquipment : MonoBehaviour
     public ArmorLayer ArmorLayer => armorLayer;
     public bool HasBagEquipped() => _bag != null;
     public BagInstance GetBagInstance() => _bag;
+    public Bag BagScript => _bagScript;
 
     private void Start()
     {
@@ -141,50 +143,142 @@ public class CharacterEquipment : MonoBehaviour
     {
         if (_bagSockets == null || _bagSockets.Count == 0) return;
 
+        // --- ÉTAPE DE NETTOYAGE ---
+        // Avant d'afficher le nouveau sac, on s'assure que l'ancien nettoie ses armes
+        if (!show || _bag == null)
+        {
+            ClearAllWeaponVisualsOnBag();
+            _bagScript = null;
+        }
+
         bool shouldActuallyShow = show && _bag != null;
 
         foreach (GameObject socket in _bagSockets)
         {
             if (socket == null) continue;
 
+            // Si on cache le sac, on désactive le socket
             socket.SetActive(shouldActuallyShow);
 
             if (shouldActuallyShow)
             {
-                // 1. Mise à jour des Sprites (Resolvers)
-                SpriteResolver[] resolvers = socket.GetComponentsInChildren<SpriteResolver>();
-                foreach (var res in resolvers)
+                // On récupère le nouveau script de sac
+                _bagScript = socket.GetComponent<Bag>();
+
+                if (_bagScript != null)
                 {
-                    res.SetCategoryAndLabel(_bag.ItemSO.CategoryName, res.GetLabel());
-                }
+                    _bagScript.RefreshAnchors();
 
-                // 2. Mise à jour sélective des couleurs Primary et Secondary uniquement
-                SpriteRenderer[] renderers = socket.GetComponentsInChildren<SpriteRenderer>();
-
-                foreach (SpriteRenderer sRenderer in renderers)
-                {
-                    string goName = sRenderer.gameObject.name;
-
-                    // On ne modifie QUE les GameObjects nommés spécifiquement
-                    if (goName == "Color_Primary")
+                    // Initialisation des sprites du sac (Resolvers)
+                    SpriteResolver[] resolvers = socket.GetComponentsInChildren<SpriteResolver>();
+                    foreach (var res in resolvers)
                     {
-                        if (_bag.HavePrimaryColor())
-                        {
-                            sRenderer.color = _bag.PrimaryColor;
-                        }
+                        res.SetCategoryAndLabel(_bag.ItemSO.CategoryName, res.GetLabel());
                     }
-                    else if (goName == "Color_Secondary")
-                    {
-                        if (_bag.HaveSecondaryColor())
-                        {
-                            sRenderer.color = _bag.SecondaryColor;
-                        }
-                    }
-                    // Color_Main, MainColor et Line sont ignorés et gardent leur couleur d'origine
+
+                    // Initialisation des couleurs
+                    ApplyBagColors(socket);
                 }
             }
         }
+
+        // Une fois le nouveau sac prêt, on affiche les armes qu'il contient
+        if (shouldActuallyShow)
+        {
+            UpdateWeaponVisualOnBag();
+        }
     }
+
+    // Extraction de la logique de couleur pour plus de clarté
+    private void ApplyBagColors(GameObject socket)
+    {
+        SpriteRenderer[] renderers = socket.GetComponentsInChildren<SpriteRenderer>();
+        foreach (SpriteRenderer sRenderer in renderers)
+        {
+            string goName = sRenderer.gameObject.name;
+            if (goName == "Color_Primary" && _bag.HavePrimaryColor())
+                sRenderer.color = _bag.PrimaryColor;
+            else if (goName == "Color_Secondary" && _bag.HaveSecondaryColor())
+                sRenderer.color = _bag.SecondaryColor;
+        }
+    }
+    /// <summary>
+    /// Détruit tous les visuels d'armes actuellement fixés sur le sac.
+    /// </summary>
+    public void ClearAllWeaponVisualsOnBag()
+    {
+        if (_bagScript == null) return;
+
+        List<Transform> anchors = _bagScript.GetAllWeaponAnchors();
+        foreach (Transform anchor in anchors)
+        {
+            if (anchor == null) continue;
+            foreach (Transform child in anchor)
+            {
+                Destroy(child.gameObject);
+            }
+        }
+    }
+    /// <summary>
+    /// Rafraîchit l'affichage des armes sur le sac en utilisant les anchors détectés.
+    /// </summary>
+    public void UpdateWeaponVisualOnBag()
+    {
+        // 1. Sécurités de base
+        if (_bagScript == null || !HaveInventory()) return;
+
+        // 2. On récupère la liste des slots d'armes de l'inventaire
+        // On filtre pour n'avoir que les armes
+        List<ItemInstance> weaponsInInventory = new List<ItemInstance>();
+        foreach (var slot in GetInventory().ItemSlots)
+        {
+            if (slot is WeaponSlot && !slot.IsEmpty())
+            {
+                weaponsInInventory.Add(slot.ItemInstance);
+            }
+        }
+
+        // 3. On récupère les points d'ancrage visuels sur le prefab du sac
+        List<Transform> anchors = _bagScript.GetAllWeaponAnchors();
+
+        // 4. Nettoyage et Instanciation
+        for (int i = 0; i < anchors.Count; i++)
+        {
+            Transform anchor = anchors[i];
+
+            // On détruit l'ancien visuel s'il existe
+            foreach (Transform child in anchor)
+            {
+                Destroy(child.gameObject);
+            }
+
+            // Si on a une arme correspondante dans l'inventaire pour cet index d'anchor
+            if (i < weaponsInInventory.Count)
+            {
+                CreateWeaponVisual(weaponsInInventory[i], anchor);
+            }
+        }
+    }
+
+    private void CreateWeaponVisual(ItemInstance weapon, Transform anchor)
+    {
+        GameObject visualPrefab = weapon.ItemPrefab;
+        if (visualPrefab == null) return;
+
+        // 1. Instanciation SANS parent d'abord (très important pour le calcul de matrice propre)
+        GameObject instantiatedWeapon = Instantiate(visualPrefab);
+        instantiatedWeapon.name = "Visual_" + weapon.ItemSO.ItemName;
+
+        // 2. Initialisation des visuels (Sprites/Library)
+        weapon.InitializePrefab(instantiatedWeapon);
+
+        // 3. On laisse le Bag gérer le parentage ET le skinning d'un seul bloc
+        if (_bagScript != null)
+        {
+            _bagScript.InitializeWeaponBones(instantiatedWeapon, anchor);
+        }
+    }
+
 
     /// <summary>
     /// Retire un équipement spécifique en fonction de sa couche (Layer) et de son emplacement (Slot).
@@ -315,4 +409,6 @@ public class CharacterEquipment : MonoBehaviour
         // Le personnage est nu s'il n'a AUCUN des trois
         return !hasUnderwearPants && !hasClothingPants && !hasArmorPants;
     }
+
+
 }

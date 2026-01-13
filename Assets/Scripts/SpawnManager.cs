@@ -33,45 +33,31 @@ public class SpawnManager : MonoBehaviour
 
     public ItemInstance SpawnItem(ItemSO data, Vector3 pos)
     {
+        // 1. Instanciation du prefab physique (le WorldItem container)
         GameObject go = Instantiate(itemPrefab, pos, Quaternion.identity);
         go.name = $"WorldItem_{data.ItemName}";
 
-        // CreateInstance() génère le bon type (BagInstance, WeaponInstance, etc.)
+        // 2. Création de la donnée (Instance)
         ItemInstance instance = data.CreateInstance();
 
+        // 3. Gestion spécifique pour les équipements (Couleurs aléatoires)
         if (instance is EquipmentInstance equipment)
         {
-            // On génère les couleurs aléatoires
             Color randomPrimary = Random.ColorHSV(0f, 1f, 0.5f, 1f, 0.5f, 1f);
-            Color randomSecondary = Random.ColorHSV(0f, 1f, 0.3f, 0.8f, 0.3f, 0.8f);
-
             equipment.SetPrimaryColor(randomPrimary);
 
             if (equipment is WearableInstance wearable)
             {
+                Color randomSecondary = Random.ColorHSV(0f, 1f, 0.3f, 0.8f, 0.3f, 0.8f);
                 wearable.SetSecondaryColor(randomSecondary);
-            }
-
-            // --- APPLICATION VISUELLE SUR L'OBJET AU SOL ---
-            // On récupère tous les renderers de l'objet qui vient d'apparaître
-            SpriteRenderer[] sRenderers = go.GetComponentsInChildren<SpriteRenderer>();
-            foreach (var sRenderer in sRenderers)
-            {
-                if (sRenderer.gameObject.name == "Color_Primary")
-                    sRenderer.color = randomPrimary;
-                else if (sRenderer.gameObject.name == "Color_Secondary")
-                    sRenderer.color = randomSecondary;
-                // On ne touche pas à Color_Main ni Line ici non plus !
-            }
-
-            // Si tu utilises quand même des MeshRenderers pour certains items 3D
-            MeshRenderer visualRenderer = go.GetComponentInChildren<MeshRenderer>();
-            if (visualRenderer != null)
-            {
-                visualRenderer.material.color = randomPrimary;
             }
         }
 
+        // 4. --- NOUVELLE LOGIQUE VISUELLE CENTRALISÉE ---
+        // On utilise la méthode de l'instance pour tout configurer d'un coup !
+        instance.InitializeWorldPrefab(go);
+
+        // 5. Liaison avec le composant WorldItem pour l'interaction
         WorldItem worldItem = go.GetComponentInChildren<WorldItem>();
         if (worldItem != null)
         {
@@ -86,26 +72,19 @@ public class SpawnManager : MonoBehaviour
     {
         if (existingInstance == null) return;
 
+        // 1. On utilise le prefab du monde défini dans le SO de l'instance
         GameObject go = Instantiate(itemPrefab, pos, Quaternion.identity);
-        go.name = $"WorldItem_{existingInstance.ItemSO.ItemName}_Copy";
+        go.name = $"WorldItem_{existingInstance.CustomizedName}_Copy";
 
+        // 2. --- LOGIQUE VISUELLE ---
+        // On applique les propriétés (couleurs, library) de l'instance existante au nouvel objet
+        existingInstance.InitializeWorldPrefab(go);
+
+        // 3. Initialisation de l'interaction
         WorldItem worldItem = go.GetComponentInChildren<WorldItem>();
         if (worldItem != null)
         {
             worldItem.Initialize(existingInstance);
-
-            // Pattern matching ici aussi pour éviter l'erreur d'assignation
-            if (existingInstance is EquipmentInstance equipment)
-            {
-                if (equipment.HavePrimaryColor())
-                {
-                    SpriteRenderer visualRenderer = go.GetComponentInChildren<SpriteRenderer>();
-                    if (visualRenderer != null)
-                    {
-                        visualRenderer.color = equipment.PrimaryColor;
-                    }
-                }
-            }
         }
     }
 

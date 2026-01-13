@@ -23,7 +23,7 @@ public class CharacterDropItem : CharacterAction
     public override void OnApplyEffect()
     {
         // C'est ici qu'on retire l'item de l'inventaire et qu'on le fait apparaître au sol
-        if (character.CharacterEquipment.GetInventory().RemoveItem(_itemInstance))
+        if (character.CharacterEquipment.GetInventory().RemoveItem(_itemInstance, character))
         {
             // Code pour faire apparaître l'objet physique dans le monde à la position du perso
             // ItemManager.Instance?.SpawnWorldItem(_itemInstance, character.transform.position);

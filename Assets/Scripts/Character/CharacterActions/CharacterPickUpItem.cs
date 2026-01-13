@@ -44,7 +44,7 @@ public class CharacterPickUpItem : CharacterAction
     {
         var inventory = character.CharacterEquipment.GetInventory();
 
-        if (inventory != null && inventory.AddItem(_item))
+        if (inventory != null && inventory.AddItem(_item, character))
         {
             // Le ramassage a réussi, on détruit l'objet au sol
             if (_worldObject != null)
@@ -59,7 +59,7 @@ public class CharacterPickUpItem : CharacterAction
     }
     public override bool CanExecute()
     {
-        // On vérifie si le personnage a un inventaire
+        // 1. On vérifie si le personnage a un inventaire
         var inventory = character.CharacterEquipment.GetInventory();
 
         if (inventory == null)
@@ -68,8 +68,13 @@ public class CharacterPickUpItem : CharacterAction
             return false;
         }
 
-        // Tu peux même ajouter une vérification de place disponible ici
-        // if (!inventory.HasFreeSpaceForItem(_item)) return false;
+        // 2. Vérification de la place disponible selon le type d'item
+        if (!inventory.HasFreeSpaceForItem(_item))
+        {
+            Debug.LogWarning($"[Action] Pas de place dans l'inventaire pour {_item.CustomizedName}.");
+            // Optionnel : Tu pourrais ici déclencher un message UI "Inventaire Plein"
+            return false;
+        }
 
         return true;
     }

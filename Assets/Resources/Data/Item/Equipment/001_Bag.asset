@@ -13,10 +13,13 @@ MonoBehaviour:
   m_Name: 001_Bag
   m_EditorClassIdentifier: Assembly-CSharp::BagSO
   category_name: 01
+  _spriteLibrary: {fileID: 7108339969198208228, guid: 94c9a00f733974444a844f0f4a2e6e87, type: 3}
   itemId: 001
   itemName: Bag
   description: a bag
   icon: {fileID: 0}
+  item_prefab: {fileID: 5368253223231017792, guid: 3a4b4877e6aa64b40857f3c3704c8a91, type: 3}
+  worldItem_prefab: {fileID: 0}
   armor:
     baseValue: 0
     currentValue: 0

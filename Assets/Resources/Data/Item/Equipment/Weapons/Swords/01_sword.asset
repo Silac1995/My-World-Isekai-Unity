@@ -9,16 +9,16 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 785a2d90e61956447ac34860eb9cdd98, type: 3}
-  m_Name: 001_Tshirt
-  m_EditorClassIdentifier: Assembly-CSharp::WearableSO
-  category_name: 01_tshirt
-  _spriteLibrary: {fileID: 7108339969198208228, guid: 48f02b820b1ea544d858945ff32a59bc, type: 3}
+  m_Script: {fileID: 11500000, guid: 41d76192e21655d478d1643661be5f4f, type: 3}
+  m_Name: 01_sword
+  m_EditorClassIdentifier: Assembly-CSharp::WeaponSO
+  category_name: 01
+  _spriteLibrary: {fileID: 7108339969198208228, guid: 6bc524ae5449aff4086f41bf3fcecafa, type: 3}
   itemId: 
-  itemName: T-shirt
-  description: A simple T-shirt
+  itemName: a sword
+  description: 
   icon: {fileID: 0}
-  item_prefab: {fileID: 5368253223231017792, guid: 3a4b4877e6aa64b40857f3c3704c8a91, type: 3}
+  item_prefab: {fileID: 7827050173259622472, guid: b4484bb9cf3b23f4ca51ec8121aa286e, type: 3}
   worldItem_prefab: {fileID: 0}
   armor:
     baseValue: 0
@@ -60,5 +60,4 @@ MonoBehaviour:
     baseValue: 0
     currentValue: 0
     maxValue: 0
-  _equipmentLayer: 0
-  _wearableType: 1
+  _weaponType: 0

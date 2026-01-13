@@ -1,2 +1,35 @@
 fileFormatVersion: 2
 guid: 6a53a8ea7c34e4247a64da40d12f61ff
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences:
+  - body_HairLibrary: {instanceID: 0}
+  - body_EyebrowsLibrary: {instanceID: 0}
+  - body_EyesLibrary: {instanceID: 0}
+  - body_FaceLibrary: {instanceID: 0}
+  - body_NoseLibrary: {instanceID: 0}
+  - body_MouthLibrary: {instanceID: 0}
+  - body_EarsLibrary: {instanceID: 0}
+  - body_FeetLibrary: {instanceID: 0}
+  - body_HandsLibrary: {instanceID: 0}
+  - body_ChestLibrary: {instanceID: 0}
+  - body_NipplesLibrary: {instanceID: 0}
+  - underwear_UpperLibrary: {instanceID: 0}
+  - underwear_LowerLibrary: {instanceID: 0}
+  - clothing_HatLibrary: {instanceID: 0}
+  - clothing_UpperLibrary: {instanceID: 0}
+  - clothing_LowerLibrary: {instanceID: 0}
+  - clothing_GlovesLibrary: {instanceID: 0}
+  - clothing_ShoesLibrary: {instanceID: 0}
+  - armor_HeadLibrary: {instanceID: 0}
+  - armor_UpperLibrary: {instanceID: 0}
+  - armor_LowerLibrary: {instanceID: 0}
+  - armor_GlovesLibrary: {instanceID: 0}
+  - armor_BootsLibrary: {instanceID: 0}
+  - weapon_swordsLibrary: {fileID: 7108339969198208228, guid: 6bc524ae5449aff4086f41bf3fcecafa, type: 3}
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

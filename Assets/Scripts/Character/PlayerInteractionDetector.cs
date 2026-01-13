@@ -53,20 +53,27 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
                     ItemInstance instance = itemInteractable.ItemInstance;
                     if (instance == null) return;
 
-                    if (!(instance is EquipmentInstance))
-                    {
-                        // On passe le root du gameobject (le WorldItem complet) à l'action
-                        GameObject rootToDestroy = itemInteractable.RootGameObject;
+                    GameObject rootToDestroy = itemInteractable.RootGameObject;
 
-                        CharacterPickUpItem pickUpAction = new CharacterPickUpItem(Character, instance, rootToDestroy);
-                        Character.CharacterActions.ExecuteAction(pickUpAction);
+                    // A. ÉQUIPEMENT PORTABLE (Vêtements, sacs...)
+                    if (instance is WearableInstance wearable)
+                    {
+                        CharacterEquipAction equipAction = new CharacterEquipAction(Character, wearable);
+                        Character.CharacterActions.ExecuteAction(equipAction);
+
+                        // On détruit l'objet au sol car il est maintenant sur le personnage
+                        if (rootToDestroy != null) Destroy(rootToDestroy);
+                        Debug.Log($"[Equip] {wearable.CustomizedName} porté.");
                     }
+                    // B. ARME OU OBJET DIVERS (On ramasse dans l'inventaire)
                     else
                     {
-                        // Même logique pour l'équipement si tu veux
-                        CharacterEquipAction equipAction = new CharacterEquipAction(Character, (EquipmentInstance)instance);
-                        Character.CharacterActions.ExecuteAction(equipAction);
-                        Destroy(itemInteractable.RootGameObject);
+                        // On traite ici les WeaponInstance et les ItemInstance simples (nourriture, ressources...)
+                        CharacterPickUpItem pickUpAction = new CharacterPickUpItem(Character, instance, rootToDestroy);
+                        Character.CharacterActions.ExecuteAction(pickUpAction);
+
+                        // Note : C'est CharacterPickUpItem.OnApplyEffect qui gérera le Destroy(rootToDestroy) 
+                        // SEULEMENT si l'ajout à l'inventaire réussit.
                     }
                 }
             }
