@@ -362,7 +362,7 @@ NavMeshAgent:
   m_AgentTypeID: 0
   m_Radius: 0.5
   m_Speed: 3.5
-  m_Acceleration: 9999
+  m_Acceleration: 8
   avoidancePriority: 50
   m_AngularSpeed: 120
   m_StoppingDistance: 0
@@ -408,7 +408,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 4281310202761960642}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 15e157fd7a7d4414c81edfc3e15fbddd, type: 3}
   m_Name: 
@@ -418,11 +418,11 @@ MonoBehaviour:
   agent: {fileID: 4447047040555525631}
   groundLayer:
     serializedVersion: 2
-    m_Bits: 1
+    m_Bits: 4294967295
   groundCheckOffset: 0.1
   walkRadius: 50
-  minWaitTime: 0.5
-  maxWaitTime: 3
+  minWaitTime: 2
+  maxWaitTime: 7
 --- !u!114 &4916404909723457133
 MonoBehaviour:
   m_ObjectHideFlags: 0

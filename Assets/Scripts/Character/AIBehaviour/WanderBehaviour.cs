@@ -4,75 +4,77 @@ using System.Collections;
 
 public class WanderBehaviour : IAIBehaviour
 {
-    private NPCController npcController;
-    private float walkRadius;
-    private float minWait;
-    private float maxWait;
-    private Vector3 currentDestination;
-    private bool waiting = false;
-    private Coroutine currentWaitCoroutine;
+    private NPCController _npcController;
+    private float _walkRadius;
+    private float _minWait;
+    private float _maxWait;
+    private bool _isWaiting = false;
+    private Coroutine _currentWaitCoroutine;
 
     public WanderBehaviour(NPCController npcController)
     {
-        this.npcController = npcController;
-        this.walkRadius = npcController.WalkRadius;
-        this.minWait = npcController.MinWaitTime;
-        this.maxWait = npcController.MaxWaitTime;
-        PickNewDestination();
+        _npcController = npcController;
+        _walkRadius = npcController.WalkRadius;
+        _minWait = npcController.MinWaitTime;
+        _maxWait = npcController.MaxWaitTime;
+
+        // On ne lance pas PickNewDestination ici, on laisse Act s'en charger 
+        // ou on lance l'attente initiale.
     }
 
     public void Act(Character selfCharacter)
     {
-        if (npcController == null || npcController.Agent == null)
+        if (_npcController == null || _npcController.Agent == null || _isWaiting)
             return;
 
-        var agent = npcController.Agent;
+        var agent = _npcController.Agent;
 
-        if (waiting)
-            return;
-
-        // Si on a atteint la destination, attendre un peu puis choisir une nouvelle
-        if (!agent.pathPending && agent.remainingDistance <= agent.stoppingDistance)
+        // Si l'agent n'a pas de destination (au début ou après un ResetPath)
+        // OU s'il est arrivé à destination
+        if (!agent.pathPending && (!agent.hasPath || agent.remainingDistance <= agent.stoppingDistance))
         {
-            if (!waiting) // On vérifie pour ne pas lancer 50 coroutines
-                currentWaitCoroutine = npcController.StartCoroutine(WaitAndPickNew());
-        }
-    }
-    public void Exit(Character selfCharacter)
-    {
-        // 1. On stoppe la coroutine de wait immédiatement
-        if (npcController != null && currentWaitCoroutine != null)
-        {
-            npcController.StopCoroutine(currentWaitCoroutine);
-            currentWaitCoroutine = null;
-        }
-
-        waiting = false;
-
-        // 2. On vide le chemin de l'agent pour éviter le "sursaut" de mouvement
-        if (npcController.Agent != null && npcController.Agent.isOnNavMesh)
-        {
-            npcController.Agent.ResetPath();
-            npcController.Agent.velocity = Vector3.zero;
-        }
-    }
-
-    private void PickNewDestination()
-    {
-        Vector3 randomDirection = Random.insideUnitSphere * walkRadius + npcController.transform.position;
-        if (NavMesh.SamplePosition(randomDirection, out NavMeshHit hit, walkRadius, NavMesh.AllAreas))
-        {
-            currentDestination = hit.position;
-            npcController.Agent.SetDestination(currentDestination);
+            _currentWaitCoroutine = _npcController.StartCoroutine(WaitAndPickNew());
         }
     }
 
     private IEnumerator WaitAndPickNew()
     {
-        waiting = true;
-        float waitTime = Random.Range(minWait, maxWait);
+        _isWaiting = true;
+
+        float waitTime = Random.Range(_minWait, _maxWait);
+        // Debug.Log($"[Wander] Pause de {waitTime}s...");
         yield return new WaitForSeconds(waitTime);
+
         PickNewDestination();
-        waiting = false;
+        _isWaiting = false;
+        _currentWaitCoroutine = null;
     }
+
+    private void PickNewDestination()
+    {
+        if (_npcController == null || _npcController.Agent == null) return;
+
+        Vector3 randomDirection = Random.insideUnitSphere * _walkRadius + _npcController.transform.position;
+        if (NavMesh.SamplePosition(randomDirection, out NavMeshHit hit, _walkRadius, NavMesh.AllAreas))
+        {
+            _npcController.Agent.SetDestination(hit.position);
+        }
+    }
+
+    public void Exit(Character selfCharacter)
+    {
+        if (_npcController != null && _currentWaitCoroutine != null)
+        {
+            _npcController.StopCoroutine(_currentWaitCoroutine);
+            _currentWaitCoroutine = null;
+        }
+
+        _isWaiting = false;
+
+        if (_npcController?.Agent != null && _npcController.Agent.isOnNavMesh)
+        {
+            _npcController.Agent.ResetPath();
+        }
+    }
+
 }

@@ -53,41 +53,23 @@ public abstract class CharacterGameController : MonoBehaviour
 
     protected virtual void Update()
     {
-        // 1. Priorité aux Actions (ton système actuel)
+        // 1. Si une action est en cours, on stoppe tout et on met à jour le visuel
         if (character.CharacterActions.CurrentAction != null)
         {
-            StopMovement(); // Méthode pour isoler l'arrêt de l'agent
-            return;
-        }
-
-        // 2. Exécution du comportement au sommet de la pile
-        CurrentBehaviour?.Act(character);
-
-        // Si une action est en cours, on met l'IA en pause
-        if (character != null && character.CharacterActions != null && character.CharacterActions.CurrentAction != null)
-        {
-            // On stoppe le mouvement de l'agent pour que le NPC reste sur place durant l'action
-            if (agent != null && agent.isOnNavMesh && !agent.isStopped)
-            {
-                agent.isStopped = true;
-                agent.velocity = Vector3.zero;
-            }
-
-            // On ne traite pas le 'Act' du behaviour car l'action est prioritaire
-            // On passe directement à la mise à jour des animations/visuels
+            StopMovement();
             UpdateAnimations();
             UpdateFlip();
             return;
         }
 
-        // Si on arrive ici, aucune action n'est en cours : on réactive l'agent
+        // 2. Sinon, on exécute l'IA (CurrentBehaviour utilise ta nouvelle Stack)
+        CurrentBehaviour?.Act(character);
+
+        // 3. On remet l'agent en marche s'il était stoppé
         if (agent != null && agent.isOnNavMesh && agent.isStopped)
         {
             agent.isStopped = false;
         }
-
-        // Exécution normale du comportement IA
-        currentBehaviour?.Act(character);
 
         Move();
         UpdateAnimations();
@@ -164,8 +146,13 @@ public abstract class CharacterGameController : MonoBehaviour
 
     protected virtual void UpdateFlip()
     {
-        if (characterVisual != null && agent != null && agent.velocity.sqrMagnitude > 0.01f)
+        if (characterVisual == null) return;
+
+        // On priorise la vélocité réelle de l'agent pour le flip
+        if (agent != null && agent.velocity.sqrMagnitude > 0.01f)
+        {
             characterVisual.UpdateFlip(agent.velocity);
+        }
     }
 
     public virtual void Move()

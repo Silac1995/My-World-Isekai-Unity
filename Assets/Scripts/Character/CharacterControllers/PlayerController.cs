@@ -31,41 +31,44 @@ public class PlayerController : CharacterGameController
 
     public override void Move()
     {
-        if (currentBehaviour != null)
+        if (character != null && !character.IsPlayer() || CurrentBehaviour != null)
         {
             base.Move();
             return;
         }
 
-        // 1. Si on ne bouge pas, on s'assure que la vitesse du Rigidbody est nulle
-        // Cela évite la "glissade infinie"
-        if (character == null || isCrouching || inputDir.magnitude < 0.1f)
-        {
-            if (character != null && character.Rigidbody != null)
-            {
-                // On stoppe les forces de mouvement mais on garde la gravité (vitesse Y)
-                character.Rigidbody.linearVelocity = new Vector3(0, character.Rigidbody.linearVelocity.y, 0);
-                character.Rigidbody.angularVelocity = Vector3.zero;
-            }
-            return;
-        }
+        Rigidbody rb = character.Rigidbody;
+        if (rb == null) return;
 
-        // 2. Calcul du mouvement
+        // Calcul de la direction SANS faire tourner le transform
         Vector3 moveDir = Quaternion.Euler(0f, Camera.main.transform.eulerAngles.y, 0f) * inputDir;
 
-        // Utilisation de fixedDeltaTime si on est en physique
-        float deltaTime = Time.inFixedTimeStep ? Time.fixedDeltaTime : Time.deltaTime;
-        Vector3 move = moveDir * character.MovementSpeed * deltaTime;
+        if (moveDir.magnitude > 0.1f && !isCrouching)
+        {
+            Vector3 targetVelocity = moveDir * character.MovementSpeed;
 
-        Rigidbody rb = character.Rigidbody;
-        rb.MovePosition(rb.position + move);
+            // On applique la vélocité
+            Vector3 newVel = Vector3.Lerp(rb.linearVelocity,
+                new Vector3(targetVelocity.x, rb.linearVelocity.y, targetVelocity.z),
+                Time.deltaTime * 10f);
 
-        // 3. Rotation
-        Quaternion targetRot = Quaternion.LookRotation(moveDir, Vector3.up);
-        rb.MoveRotation(Quaternion.Slerp(rb.rotation, targetRot, rotationSpeed * deltaTime));
+            rb.linearVelocity = newVel;
 
-        characterVisual?.UpdateFlip(moveDir);
+            // C'est SEULEMENT ici qu'on gère le regard (gauche/droite) via le scale
+            characterVisual?.UpdateFlip(moveDir);
+        }
+        else
+        {
+            Vector3 stopVel = rb.linearVelocity;
+            stopVel.x = Mathf.Lerp(stopVel.x, 0, Time.deltaTime * 15f);
+            stopVel.z = Mathf.Lerp(stopVel.z, 0, Time.deltaTime * 15f);
+            rb.linearVelocity = stopVel;
+        }
+
+        // SÉCURITÉ : On force la rotation à zéro pour éviter que la physique ne le fasse pivoter
+        rb.rotation = Quaternion.identity;
     }
+
     protected override void UpdateAnimations()
     {
         if (Animator == null) return;

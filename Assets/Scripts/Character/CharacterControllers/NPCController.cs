@@ -4,8 +4,8 @@ public class NPCController : CharacterGameController
 {
     [Header("Wander Settings")]
     [SerializeField] private float walkRadius = 50f;
-    [SerializeField] private float minWaitTime = 0.5f;
-    [SerializeField] private float maxWaitTime = 3f;
+    [SerializeField] private float minWaitTime = 2f;
+    [SerializeField] private float maxWaitTime = 7f;
     public float WalkRadius
     {
         get => walkRadius;
@@ -28,14 +28,18 @@ public class NPCController : CharacterGameController
     public override void Initialize()
     {
         base.Initialize();
-        // On initialise la pile avec le Wander par défaut
-        ResetStackTo(new WanderBehaviour(this));
 
-        if (agent != null)
+        if (agent != null && character != null)
         {
-            agent.updateRotation = false;
-            agent.acceleration = 9999f;
-            agent.speed = character != null ? character.MovementSpeed : 3.5f;
+            // On synchronise la vitesse de l'agent avec celle définie dans le Character
+            agent.speed = character.MovementSpeed;
+
+            // On booste l'accélération pour que le NPC atteigne sa vitesse instantanément 
+            // comme le ferait un joueur (évite l'effet de démarrage lourd)
+            agent.acceleration = 50f;
+            agent.angularSpeed = 0f; // On gère la rotation nous-mêmes ou via le flip
         }
+
+        ResetStackTo(new WanderBehaviour(this));
     }
 }
