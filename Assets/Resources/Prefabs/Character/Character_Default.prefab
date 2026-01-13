@@ -416,6 +416,10 @@ MonoBehaviour:
   characterVisual: {fileID: 4467461276411840628}
   character: {fileID: 2536622428659117900}
   agent: {fileID: 4447047040555525631}
+  groundLayer:
+    serializedVersion: 2
+    m_Bits: 1
+  groundCheckOffset: 0.1
   walkRadius: 50
   minWaitTime: 0.5
   maxWaitTime: 3
@@ -434,6 +438,10 @@ MonoBehaviour:
   characterVisual: {fileID: 4467461276411840628}
   character: {fileID: 2536622428659117900}
   agent: {fileID: 4447047040555525631}
+  groundLayer:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  groundCheckOffset: 0.1
   rotationSpeed: 10
 --- !u!1 &5246753746272467509
 GameObject:

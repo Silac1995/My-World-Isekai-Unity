@@ -5,27 +5,38 @@ public class CharacterPickUpItem : CharacterAction
     private ItemInstance _item;
     private GameObject _worldObject; // On stocke l'objet à détruire
 
-    public CharacterPickUpItem(Character character, ItemInstance item, GameObject worldObject) : base(character, 0.5f)
+    public CharacterPickUpItem(Character character, ItemInstance item, GameObject worldObject) : base(character, 3f)
     {
         _item = item;
         _worldObject = worldObject;
+
+        // On récupère la durée ici, AVANT le OnStart
+        var animHandler = character.CharacterVisual?.CharacterAnimator;
+        if (animHandler != null)
+        {
+            float duration = animHandler.GetCachedDuration("Female_Humanoid_Pickup_from_ground_00");
+            if (duration > 0)
+            {
+                this.Duration = duration;
+            }
+        }
     }
 
     public override void OnStart()
     {
-        // Empêche le NPC de pousser l'objet physiquement pendant qu'il le ramasse
-        var rb = _worldObject.GetComponent<Rigidbody>();
-        if (rb != null)
-        {
-            rb.isKinematic = true; // L'objet ne bougera plus par la physique
-        }
-
-        // Lance l'animation
         var animHandler = character.CharacterVisual?.CharacterAnimator;
         if (animHandler?.Animator != null)
         {
-            animHandler.Animator.SetTrigger("Trigger_pickUpItem");
-            this.Duration = animHandler.GetClipDuration("Pickup");
+            // 1. Utilisation du Hash pour le Trigger (PickUpItem)
+            animHandler.Animator.SetTrigger(CharacterAnimator.ActionTrigger);
+
+        }
+
+        // Sécurité physique sur l'objet au sol
+        if (_worldObject != null)
+        {
+            var rb = _worldObject.GetComponent<Rigidbody>();
+            if (rb != null) rb.isKinematic = true;
         }
     }
 

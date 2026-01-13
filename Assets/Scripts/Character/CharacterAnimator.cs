@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 public class CharacterAnimator : MonoBehaviour
@@ -5,10 +6,47 @@ public class CharacterAnimator : MonoBehaviour
     [SerializeField] private CharacterVisual _characterVisual;
     [SerializeField] private Animator _animator;
 
+    // --- CENTRALISATION DES HASHES ---
+    // On les met en 'public static readonly' pour que tout le monde puisse les lire
+    // sans avoir besoin de faire un Animator.StringToHash() ailleurs.
+    public static readonly int IsGrounded = Animator.StringToHash("isGrounded");
+    public static readonly int VelocityX = Animator.StringToHash("velocityX");
+    public static readonly int ActionTrigger = Animator.StringToHash("Trigger_pickUpItem");
+    public static readonly int IsDoingAction = Animator.StringToHash("isDoingAction");
+    private Dictionary<string, float> _clipDurations = new Dictionary<string, float>();
+
     // Référence vers l'Override Controller actuel pour pouvoir le modifier
     private AnimatorOverrideController _overrideController;
 
     public Animator Animator => _animator;
+
+    private void Awake()
+    {
+        // Sécurité : on récupère l'animator s'il manque
+        if (_animator == null) _animator = GetComponent<Animator>();
+
+        // INDISPENSABLE : On remplit le dictionnaire au lancement
+        CacheClipDurations();
+    }
+
+    public void CacheClipDurations()
+    {
+        if (_animator == null) return; // Utilise la variable privée _animator ici
+        _clipDurations.Clear();
+
+        foreach (AnimationClip clip in _animator.runtimeAnimatorController.animationClips)
+        {
+            // Debug.Log($"Clip mis en cache : {clip.name} | {clip.length}s");
+            _clipDurations[clip.name] = clip.length;
+        }
+    }
+
+    // Méthode simple pour mettre à jour la vitesse
+    public void SetVelocity(float speed)
+    {
+        if (_animator != null)
+            _animator.SetFloat(VelocityX, speed);
+    }
 
     public float GetCurrentClipDuration()
     {
@@ -19,17 +57,11 @@ public class CharacterAnimator : MonoBehaviour
         return stateInfo.length;
     }
 
-    // Plus précis : récupérer la durée d'un clip par son nom dans l'Animator
-    public float GetClipDuration(string stateName)
+    public float GetCachedDuration(string clipName)
     {
-        if (Animator == null) return 0f;
+        if (_clipDurations.TryGetValue(clipName, out float duration))
+            return duration;
 
-        RuntimeAnimatorController ac = Animator.runtimeAnimatorController;
-        foreach (AnimationClip clip in ac.animationClips)
-        {
-            if (clip.name.Contains(stateName)) // Ou une vérification plus stricte
-                return clip.length;
-        }
         return 0f;
     }
 

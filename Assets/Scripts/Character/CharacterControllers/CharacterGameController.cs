@@ -17,6 +17,10 @@ public abstract class CharacterGameController : MonoBehaviour
     // IA - Propriété publique pour la lecture
     protected IAIBehaviour currentBehaviour;
 
+    [Header("Ground Detection")]
+    [SerializeField] protected LayerMask groundLayer; // À régler sur "Default" ou "Ground" dans l'Inspector
+    [SerializeField] protected float groundCheckOffset = 0.1f; // Distance supplémentaire sous les pieds
+
     public Character Character => character;
 
     // On passe maintenant par le CharacterVisual pour récupérer l'Animator
@@ -129,18 +133,32 @@ public abstract class CharacterGameController : MonoBehaviour
 
     protected virtual void UpdateAnimations()
     {
-        // On vérifie le mouvement de l'agent (IA) ET du Rigidbody (Joueur)
-        bool isMoving = (agent != null && agent.velocity.magnitude > 0.1f) ||
-                        (character.Rigidbody != null && character.Rigidbody.linearVelocity.magnitude > 0.1f);
+        if (Animator == null) return;
 
-        if (isMoving && character.CharacterActions.CurrentAction != null)
+        bool grounded = IsGrounded();
+        float speed = 0f;
+
+        // Détection de la vitesse selon le type de déplacement
+        if (agent != null && agent.isOnNavMesh)
         {
-            character.CharacterActions.ClearCurrentAction();
+            speed = agent.velocity.magnitude;
+        }
+        else if (character.Rigidbody != null)
+        {
+            speed = character.Rigidbody.linearVelocity.magnitude;
         }
 
-        if (Animator != null)
+        // Zone morte pour éviter les tremblements
+        if (speed < 0.15f) speed = 0f;
+
+        // Utilisation des Hashes
+        Animator.SetFloat(CharacterAnimator.VelocityX, speed);
+        Animator.SetBool(CharacterAnimator.IsGrounded, grounded);
+
+        // Sécurité IsDoingAction : Si aucune action n'est dans le CharacterActions
+        if (character.CharacterActions.CurrentAction == null)
         {
-            Animator.SetBool("isWalking", isMoving);
+            Animator.SetBool(CharacterAnimator.IsDoingAction, false);
         }
     }
 
@@ -179,5 +197,22 @@ public abstract class CharacterGameController : MonoBehaviour
         Debug.Log($"<color=cyan>[AI]</color> {gameObject.name} change de comportement pour : {behaviourName}");
 
         currentBehaviour = behaviour;
+    }
+
+    protected bool IsGrounded()
+    {
+        // On part du centre du collider (ou du transform)
+        Vector3 origin = transform.position + Vector3.up * 0.1f;
+
+        // On tire vers le bas. La distance doit être un poil plus longue 
+        // que la distance entre le centre et le bas du perso.
+        float distance = 0.2f;
+
+        bool hit = Physics.Raycast(origin, Vector3.down, distance, groundLayer);
+
+        // Debug visuel pour voir le rayon dans la scène
+        Debug.DrawRay(origin, Vector3.down * distance, hit ? Color.green : Color.red);
+
+        return hit;
     }
 }

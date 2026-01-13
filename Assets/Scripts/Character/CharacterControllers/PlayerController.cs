@@ -24,10 +24,6 @@ public class PlayerController : CharacterGameController
         inputDir = new Vector3(h, 0f, v).normalized;
         isCrouching = Input.GetKey(KeyCode.C);
 
-        if (Animator != null)
-        {
-            Animator.SetBool("isWalking", inputDir.magnitude > 0.1f && !isCrouching);
-        }
 
         base.Update(); // appelle Move() (IA) si défini
     }
@@ -72,18 +68,28 @@ public class PlayerController : CharacterGameController
     }
     protected override void UpdateAnimations()
     {
-        // On considère que le joueur bouge s'il appuie sur une touche OU si le corps bouge
-        bool isMoving = inputDir.magnitude > 0.1f || character.Rigidbody.linearVelocity.magnitude > 0.1f;
+        if (Animator == null) return;
 
-        if (isMoving && character.CharacterActions.CurrentAction != null)
-        {
-            character.CharacterActions.ClearCurrentAction();
-        }
+        // 1. On utilise l'inputDir car c'est la source la plus fiable pour le joueur
+        float moveSpeed = inputDir.magnitude * character.MovementSpeed;
 
-        if (Animator != null)
+        // 2. On vérifie le sol (Augmente la distance du rayon dans IsGrounded si besoin)
+        bool grounded = IsGrounded();
+
+        // 3. Zone morte
+        float finalSpeed = (moveSpeed < 0.1f || isCrouching) ? 0f : moveSpeed;
+
+        // 4. On envoie au Hash
+        Animator.SetFloat(CharacterAnimator.VelocityX, finalSpeed);
+        Animator.SetBool(CharacterAnimator.IsGrounded, grounded);
+
+        // Debug pour voir ce qui bloque
+         //Debug.Log($"Player Anim: Speed {finalSpeed} | Grounded {grounded}");
+
+        // Gestion du nettoyage d'action
+        if (character.CharacterActions.CurrentAction == null)
         {
-            // On n'oublie pas la condition de l'accroupissement que tu avais
-            Animator.SetBool("isWalking", isMoving && !isCrouching);
+            Animator.SetBool(CharacterAnimator.IsDoingAction, false);
         }
     }
 

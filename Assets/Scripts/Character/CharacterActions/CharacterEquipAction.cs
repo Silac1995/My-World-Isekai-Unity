@@ -15,19 +15,25 @@ public class CharacterEquipAction : CharacterAction
     {
         if (_equipment == null) { Finish(); return; }
 
-        // 1. On lance une animation de "Prepare" ou on joue un son d'armure
         var animator = character.CharacterVisual?.CharacterAnimator?.Animator;
-        if (animator != null) animator.SetTrigger("Trigger_Equip");
+        if (animator != null)
+        {
+            // On lance la boucle
+            animator.SetBool(CharacterAnimator.IsDoingAction, true);
+        }
 
-        Debug.Log($"{character.CharacterName} prépare l'équipement de : {_equipment.CustomizedName}");
+        Debug.Log($"{character.CharacterName} prépare l'équipement...");
     }
 
     public override void OnApplyEffect()
     {
-        // 2. La logique métier s'exécute APRÈS le délai de 0.8s
         character.CharacterEquipment.Equip(_equipment);
 
-        // On met à jour l'Animator si c'est une arme pour changer le style de combat
-        // (comme on en a discuté avec le CombatStyleSO)
+        // On coupe la boucle ici car l'effet est appliqué et l'action se termine
+        var animator = character.CharacterVisual?.CharacterAnimator?.Animator;
+        if (animator != null)
+        {
+            animator.SetBool(CharacterAnimator.IsDoingAction, false);
+        }
     }
 }
