@@ -20,6 +20,7 @@ public class Character : MonoBehaviour
     [SerializeField] private CapsuleCollider _col;
 
     [Header("Sub-Systems")]
+    [SerializeField] private CharacterInteractable _characterInteractable;
     [SerializeField] private CharacterBodyPartsController _bodyPartsController;
     [SerializeField] private CharacterActions _characterActions;
     [SerializeField] private CharacterVisual _characterVisual;
@@ -65,6 +66,7 @@ public class Character : MonoBehaviour
     public CharacterInteraction CharacterInteraction => _characterInteraction ?? throw new NullReferenceException($"CharacterInteraction non initialisé sur {gameObject.name}");
     public CharacterEquipment CharacterEquipment => _equipment;
     public CharacterRelation CharacterRelation => _characterRelation;
+    public CharacterInteractable CharacterInteractable => _characterInteractable;
 
     public Transform VisualRoot => _visualRoot;
     public GameObject CurrentVisualInstance => _currentVisualInstance;
@@ -140,20 +142,16 @@ public class Character : MonoBehaviour
 
     private void AdjustCapsuleCollider()
     {
-        if (_currentVisualInstance == null || _col == null) return;
+        if (_characterVisual == null || _col == null) return;
 
-        CapsuleCollider visualCol = _currentVisualInstance.GetComponentInChildren<CapsuleCollider>();
-        if (visualCol == null) return;
+        // On exécute le calcul précis basé sur les sprites
+        _characterVisual.ResizeColliderToSprite();
 
-        _col.center = visualCol.center;
-        _col.radius = visualCol.radius;
-        _col.height = visualCol.height;
-        _col.direction = visualCol.direction;
-        _col.isTrigger = visualCol.isTrigger;
-        _col.material = visualCol.material;
-
-        if (Application.isPlaying) Destroy(visualCol);
-        else DestroyImmediate(visualCol);
+        // On s'assure que le Rigidbody n'est pas endormi pour appliquer le changement
+        if (_rb != null && !_rb.isKinematic)
+        {
+            _rb.WakeUp();
+        }
     }
     #endregion
 

@@ -146,7 +146,7 @@ public class SpawnManager : MonoBehaviour
 
         float randomSize = Random.Range(0f, 200f);
         character.CharacterVisual.ResizeCharacter(randomSize);
-
+        character.CharacterVisual.RequestAutoResize();
         return character;
     }
 

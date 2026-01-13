@@ -32,6 +32,7 @@ public class PlayerController : CharacterGameController
         base.Update(); // appelle Move() (IA) si défini
     }
 
+
     public override void Move()
     {
         if (currentBehaviour != null)

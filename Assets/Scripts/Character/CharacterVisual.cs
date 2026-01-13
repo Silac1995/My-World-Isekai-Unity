@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System.Collections;
+using System.Collections.Generic;
 
 using UnityEngine;
 
@@ -23,6 +24,7 @@ public class CharacterVisual : MonoBehaviour
 
 
     private Character character;
+    private Coroutine _resizeCoroutine;
 
     private bool isFacingRight = true;
 
@@ -342,32 +344,52 @@ public class CharacterVisual : MonoBehaviour
 
 
 
-    [ContextMenu("Resize Collider")]
-
-    public void ResizeColliderToSprite()
-
+    // Appelle ça à la fin de ton SpawnCharacter
+    public void RequestAutoResize()
     {
+        if (_resizeCoroutine != null)
+            StopCoroutine(_resizeCoroutine);
 
+        _resizeCoroutine = StartCoroutine(ResizeRoutine());
+    }
+
+    private IEnumerator ResizeRoutine()
+    {
+        // On attend que Unity ait fini de calculer les sprites et le rendu
+        yield return new WaitForEndOfFrame();
+
+        ResizeColliderToSprite();
+
+        _resizeCoroutine = null;
+    }
+
+    [ContextMenu("Resize Collider")]
+    public void ResizeColliderToSprite()
+    {
         CapsuleCollider col = GetComponentInParent<CapsuleCollider>();
-
-        SpriteRenderer[] srs = GetComponentsInChildren<SpriteRenderer>();
-
+        SpriteRenderer[] srs = GetComponentsInChildren<SpriteRenderer>(false);
         if (srs.Length == 0 || col == null) return;
 
-
-
+        // 1. Calcul des limites visuelles (Bounds)
         Bounds b = srs[0].bounds;
+        foreach (var sr in srs) b.Encapsulate(sr.bounds);
 
-        for (int i = 1; i < srs.Length; i++) b.Encapsulate(srs[i].bounds);
+        // 2. Réinitialisation de la position locale
+        // On force le visuel à être pile sur le pivot du parent (0,0,0)
+        transform.localPosition = Vector3.zero;
 
+        // 3. Calcul de la hauteur
+        // On mesure la distance entre le bas réel du sprite et le haut réel du sprite
+        float height = b.size.y;
+        col.height = height;
+        col.radius = 0.75f;
 
+        // 4. Positionnement du Collider
+        // On le place pour qu'il commence à 0 et monte vers le haut
+        // On ne se base plus sur les bounds pour le centre, mais sur la hauteur pure
+        col.center = new Vector3(0, height / 2f, 0);
 
-        col.height = b.size.y;
-
-        col.radius = Mathf.Max(b.size.x, b.size.z) / 2f;
-
-        col.center = transform.InverseTransformPoint(b.center);
-
+        Debug.Log("<color=white>[Visual]</color> Offset supprimé. Pivot forcé à (0,0,0).");
     }
 
     #endregion

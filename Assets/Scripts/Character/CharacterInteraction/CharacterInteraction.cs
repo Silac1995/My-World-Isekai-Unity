@@ -83,17 +83,30 @@ public class CharacterInteraction : MonoBehaviour
 
     public void EndInteraction()
     {
+        // 1. Condition de sortie immédiate : si déjà nul, on ne fait rien
         if (_currentTarget == null) return;
 
-        Character previousTarget = _currentTarget;
-        _currentTarget = null;
+        Debug.Log($"<color=yellow>[Interaction]</color> Fin de l'interaction entre {_character.CharacterName} et {_currentTarget.CharacterName}");
 
-        // Cet événement va prévenir TOUS ceux qui écoutent (dont l'UI) que c'est fini
+        // 2. Sauvegarde de la référence et nettoyage immédiat
+        Character previousTarget = _currentTarget;
+        _currentTarget = null; // IMPORTANT : On met à null AVANT d'appeler quoi que ce soit d'autre
+
+        // 3. Libération du flag "Busy" du personnage local
+        if (_character.CharacterInteractable != null)
+        {
+            _character.CharacterInteractable.Release();
+        }
+
+        // 4. Notification pour l'UI et les autres systèmes
         OnInteractionStateChanged?.Invoke(previousTarget, false);
 
+        // 5. Reset du comportement (Wander/Idle)
         ResetBehaviourToDefault(_character);
 
-        // Sécurité pour la cible
+        // 6. NETTOYAGE DE LA CIBLE (Réciprocité sécurisée)
+        // On vérifie si la cible nous pointe encore. 
+        // Comme on a mis NOTRE _currentTarget à null, l'appel suivant s'arrêtera à l'étape 1.
         if (previousTarget.CharacterInteraction.CurrentTarget == _character)
         {
             previousTarget.CharacterInteraction.EndInteraction();

@@ -156,8 +156,7 @@ public abstract class CharacterGameController : MonoBehaviour
         {
             if (NavMesh.SamplePosition(transform.position, out NavMeshHit hit, 5f, NavMesh.AllAreas))
             {
-                float offset = 0.5f;
-                transform.position = hit.position + Vector3.up * offset;
+                transform.position = hit.position;
                 agent.Warp(transform.position);
             }
         }
