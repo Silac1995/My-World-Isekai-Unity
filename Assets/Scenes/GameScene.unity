@@ -844,7 +844,7 @@ Transform:
   m_GameObject: {fileID: 229524920}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: 55, y: 0, z: 71.3}
   m_LocalScale: {x: 11.204806, y: 4.5978, z: 4.5978}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -909,7 +909,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   spawnGameObject: {fileID: 1546354848}
-  itemPrefab: {fileID: 4548420132521322343, guid: 343995e2a429e0549b3b405efd643698, type: 3}
+  _defaultItemPrefab: {fileID: 718778511601405242, guid: d05bd27244da29941a5703671cff1688, type: 3}
 --- !u!1 &300773306
 GameObject:
   m_ObjectHideFlags: 0
