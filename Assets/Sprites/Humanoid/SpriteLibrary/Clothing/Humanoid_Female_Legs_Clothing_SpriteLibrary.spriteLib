@@ -72,8 +72,148 @@ MonoBehaviour:
       m_Sprite: {fileID: 2043281797, guid: 34d02d9c4d38abb4d8985ef8a33f8e10, type: 3}
       m_FromMain: 0
       m_SpriteOverride: {fileID: 2043281797, guid: 34d02d9c4d38abb4d8985ef8a33f8e10, type: 3}
+    - m_Name: Hips_Line
+      m_Hash: 119029163
+      m_Sprite: {fileID: 1390173919, guid: a53bfd811be9ec74cab36cf9ae6ff0f6, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 1390173919, guid: a53bfd811be9ec74cab36cf9ae6ff0f6, type: 3}
+    - m_Name: Hips_Color_Main
+      m_Hash: 1012330670
+      m_Sprite: {fileID: 869201328, guid: 18261737b9ca8d44d9a9c05d4b207d4e, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 869201328, guid: 18261737b9ca8d44d9a9c05d4b207d4e, type: 3}
+    - m_Name: Hips_Color_Primary
+      m_Hash: 371780886
+      m_Sprite: {fileID: 423267183, guid: 687eea0653e081d4f99218fa2eac0b93, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 423267183, guid: 687eea0653e081d4f99218fa2eac0b93, type: 3}
+    - m_Name: Hips_Color_Secondary
+      m_Hash: 880159425
+      m_Sprite: {fileID: 0}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 0}
+    - m_Name: Thigh_R_Line
+      m_Hash: 112919764
+      m_Sprite: {fileID: -2069572392, guid: 4b18854fc0864604eaa739da68b97f77, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: -2069572392, guid: 4b18854fc0864604eaa739da68b97f77, type: 3}
+    - m_Name: Thigh_R_Color_Main
+      m_Hash: 873417105
+      m_Sprite: {fileID: 0}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 0}
+    - m_Name: Thigh_R_Color_Primary
+      m_Hash: 514831122
+      m_Sprite: {fileID: 1247551137, guid: b9938f8c941f49d4d987d120af1e38c2, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 1247551137, guid: b9938f8c941f49d4d987d120af1e38c2, type: 3}
+    - m_Name: Thigh_R_Color_Secondary
+      m_Hash: 482974641
+      m_Sprite: {fileID: 0}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 0}
+    - m_Name: Shin_R_Line
+      m_Hash: 61892439
+      m_Sprite: {fileID: 2139154456, guid: 3fe6bab60c5e3664a84c67d7738d11f2, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 2139154456, guid: 3fe6bab60c5e3664a84c67d7738d11f2, type: 3}
+    - m_Name: Shin_R_Color_Main
+      m_Hash: 853340624
+      m_Sprite: {fileID: 0}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 0}
+    - m_Name: Shin_R_Color_Primary
+      m_Hash: 473035581
+      m_Sprite: {fileID: 797375186, guid: 122d56b411af8c94d9ea8c3a6b941f73, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 797375186, guid: 122d56b411af8c94d9ea8c3a6b941f73, type: 3}
+    - m_Name: Shin_R_Color_Secondary
+      m_Hash: 940155090
+      m_Sprite: {fileID: 0}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 0}
+    - m_Name: Thigh_L_Line
+      m_Hash: 1063741247
+      m_Sprite: {fileID: 904339174, guid: b26a81a02502c7941b9a56107c268a2a, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 904339174, guid: b26a81a02502c7941b9a56107c268a2a, type: 3}
+    - m_Name: Thigh_L_Color_Main
+      m_Hash: 287733619
+      m_Sprite: {fileID: 0}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 0}
+    - m_Name: Thigh_L_Color_Primary
+      m_Hash: 935212072
+      m_Sprite: {fileID: -425673769, guid: 355e167557f2c0249a08b0734dac2b1a, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: -425673769, guid: 355e167557f2c0249a08b0734dac2b1a, type: 3}
+    - m_Name: Thigh_L_Color_Secondary
+      m_Hash: 180157018
+      m_Sprite: {fileID: 0}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 0}
+    - m_Name: Shin_L_Line
+      m_Hash: 980157628
+      m_Sprite: {fileID: -277823159, guid: 1027005526f8dc942a82867a934f4564, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: -277823159, guid: 1027005526f8dc942a82867a934f4564, type: 3}
+    - m_Name: Shin_L_Color_Main
+      m_Hash: 401985330
+      m_Sprite: {fileID: 0}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 0}
+    - m_Name: Shin_L_Color_Primary
+      m_Hash: 891319303
+      m_Sprite: {fileID: 923075380, guid: 47b4ec6465ef2b946840e2b8156beaee, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 923075380, guid: 47b4ec6465ef2b946840e2b8156beaee, type: 3}
+    - m_Name: Shin_L_Color_Secondary
+      m_Hash: 779927865
+      m_Sprite: {fileID: 0}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 0}
+    - m_Name: Butt_R_Line
+      m_Hash: 242024129
+      m_Sprite: {fileID: -979762379, guid: 4bba1122c6eb4344f913414fe8dff2b5, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: -979762379, guid: 4bba1122c6eb4344f913414fe8dff2b5, type: 3}
+    - m_Name: Butt_R_Color_Main
+      m_Hash: 28300445
+      m_Sprite: {fileID: 0}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 0}
+    - m_Name: Butt_R_Color_Primary
+      m_Hash: 93068732
+      m_Sprite: {fileID: 2030895144, guid: cec7e14e28312164c88b876c84ad51b0, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 2030895144, guid: cec7e14e28312164c88b876c84ad51b0, type: 3}
+    - m_Name: Butt_R_Color_Secondary
+      m_Hash: 488873754
+      m_Sprite: {fileID: 0}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 0}
+    - m_Name: Butt_L_Line
+      m_Hash: 934321450
+      m_Sprite: {fileID: -1114020790, guid: f3b8c509de99c6d47b16b838c2b38795, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: -1114020790, guid: f3b8c509de99c6d47b16b838c2b38795, type: 3}
+    - m_Name: Butt_L_Color_Main
+      m_Hash: 612821631
+      m_Sprite: {fileID: 0}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 0}
+    - m_Name: Butt_L_Color_Primary
+      m_Hash: 748526214
+      m_Sprite: {fileID: 1248513625, guid: aec020a9c54adec4cbe60df27338e88c, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 1248513625, guid: aec020a9c54adec4cbe60df27338e88c, type: 3}
+    - m_Name: Butt_L_Color_Secondary
+      m_Hash: 190250737
+      m_Sprite: {fileID: 0}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 0}
     m_FromMain: 0
-    m_EntryOverrideCount: 11
+    m_EntryOverrideCount: 39
   m_PrimaryLibraryGUID: 
-  m_ModificationHash: 639039377976052431
+  m_ModificationHash: 639039923867322424
   m_Version: 1

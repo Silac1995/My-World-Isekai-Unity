@@ -5,7 +5,7 @@ public class SpawnManager : MonoBehaviour
     public static SpawnManager Instance { get; private set; }
 
     [SerializeField] private GameObject spawnGameObject;
-    [SerializeField] private GameObject itemPrefab;
+    [SerializeField] private GameObject _defaultItemPrefab;
 
     private void Awake()
     {
@@ -33,36 +33,56 @@ public class SpawnManager : MonoBehaviour
 
     public ItemInstance SpawnItem(ItemSO data, Vector3 pos)
     {
-        // 1. Instanciation du prefab physique (le WorldItem container)
-        GameObject go = Instantiate(itemPrefab, pos, Quaternion.identity);
-        go.name = $"WorldItem_{data.ItemName}";
+        // 1. On instancie TOUJOURS le prefab par défaut (la "coquille" WorldItem)
+        if (_defaultItemPrefab == null)
+        {
+            Debug.LogError("[SpawnManager] Le _defaultItemPrefab n'est pas assigné !");
+            return null;
+        }
 
-        // 2. Création de la donnée (Instance)
+        GameObject worldItemGo = Instantiate(_defaultItemPrefab, pos, Quaternion.identity);
+
+        // 2. On renomme l'objet pour la hiérarchie
+        worldItemGo.name = $"WorldItem_{data.ItemName}";
+
+        // 3. Création de la donnée (Instance)
         ItemInstance instance = data.CreateInstance();
 
-        // 3. Gestion spécifique pour les équipements (Couleurs aléatoires)
+        // 4. Gestion des couleurs aléatoires pour les équipements
         if (instance is EquipmentInstance equipment)
         {
-            Color randomPrimary = Random.ColorHSV(0f, 1f, 0.5f, 1f, 0.5f, 1f);
-            equipment.SetPrimaryColor(randomPrimary);
-
+            equipment.SetPrimaryColor(Random.ColorHSV(0f, 1f, 0.5f, 1f, 0.5f, 1f));
             if (equipment is WearableInstance wearable)
             {
-                Color randomSecondary = Random.ColorHSV(0f, 1f, 0.3f, 0.8f, 0.3f, 0.8f);
-                wearable.SetSecondaryColor(randomSecondary);
+                wearable.SetSecondaryColor(Random.ColorHSV(0f, 1f, 0.3f, 0.8f, 0.3f, 0.8f));
             }
         }
 
-        // 4. --- NOUVELLE LOGIQUE VISUELLE CENTRALISÉE ---
-        // On utilise la méthode de l'instance pour tout configurer d'un coup !
-        instance.InitializeWorldPrefab(go);
-
-        // 5. Liaison avec le composant WorldItem pour l'interaction
-        WorldItem worldItem = go.GetComponentInChildren<WorldItem>();
-        if (worldItem != null)
+        // 5. Liaison avec le script WorldItem
+        if (worldItemGo.TryGetComponent(out WorldItem worldItemComponent))
         {
-            worldItem.Initialize(instance);
-            Debug.Log($"<color=green>[Spawn]</color> {instance.ItemSO.ItemName} créé avec succès.");
+            worldItemComponent.Initialize(instance);
+
+            // --- NOUVELLE LOGIQUE D'ÉJECTION ---
+            if (worldItemGo.TryGetComponent(out Rigidbody rb))
+            {
+                // On calcule une direction aléatoire sur le plan horizontal (X, Z)
+                float randomX = Random.Range(-1f, 1f);
+                float randomZ = Random.Range(-1f, 1f);
+
+                // On définit la force : une poussée vers le haut (Y) et un peu sur les côtés
+                // Ajuste le 5f (hauteur) et le 2f (dispersion) selon tes besoins
+                Vector3 ejectForce = new Vector3(randomX * 2f, 5f, randomZ * 2f);
+
+                // On applique l'impulsion
+                rb.AddForce(ejectForce, ForceMode.Impulse);
+
+                // Optionnel : Ajoute un petit torque (rotation) pour que l'objet tourne sur lui-même en tombant
+                rb.AddTorque(new Vector3(Random.Range(-10, 10), Random.Range(-10, 10), Random.Range(-10, 10)));
+            }
+            // ------------------------------------
+
+            Debug.Log($"<color=green>[Spawn]</color> {instance.ItemSO.ItemName} éjecté !");
         }
 
         return instance;
@@ -72,18 +92,20 @@ public class SpawnManager : MonoBehaviour
     {
         if (existingInstance == null) return;
 
-        // 1. On utilise le prefab du monde défini dans le SO de l'instance
-        GameObject go = Instantiate(itemPrefab, pos, Quaternion.identity);
+        // On récupère le prefab depuis le SO de l'instance existante
+        GameObject prefabToSpawn = existingInstance.ItemSO.ItemPrefab != null
+                                    ? existingInstance.ItemSO.ItemPrefab
+                                    : _defaultItemPrefab;
+
+        GameObject go = Instantiate(prefabToSpawn, pos, Quaternion.identity);
         go.name = $"WorldItem_{existingInstance.CustomizedName}_Copy";
 
-        // 2. --- LOGIQUE VISUELLE ---
-        // On applique les propriétés (couleurs, library) de l'instance existante au nouvel objet
+        // On applique les propriétés sauvegardées (couleurs, library)
         existingInstance.InitializeWorldPrefab(go);
 
-        // 3. Initialisation de l'interaction
-        WorldItem worldItem = go.GetComponentInChildren<WorldItem>();
-        if (worldItem != null)
+        if (go.TryGetComponent(out WorldItem worldItem) || go.GetComponentInChildren<WorldItem>() != null)
         {
+            if (worldItem == null) worldItem = go.GetComponentInChildren<WorldItem>();
             worldItem.Initialize(existingInstance);
         }
     }

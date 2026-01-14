@@ -51,15 +51,24 @@ public class Bag : MonoBehaviour
     public void RefreshAnchors()
     {
         _anchors.Clear();
-        Transform container = _inventoryContainer != null ? _inventoryContainer : transform;
 
-        Transform[] allChildren = container.GetComponentsInChildren<Transform>(true);
+        // On scanne TOUT l'objet du sac (y compris les enfants de Line, etc.)
+        // On utilise true pour inclure même ce qui est désactivé
+        Transform[] allChildren = GetComponentsInChildren<Transform>(true);
+
         foreach (Transform child in allChildren)
         {
+            // On cherche spécifiquement ton bone
             if (child.name.Contains("bone_weaponAnchor"))
             {
                 _anchors.Add(new BagAnchor { anchorKey = "Weapon", transform = child });
+                Debug.Log($"<color=cyan>[Bag]</color> Anchor trouvé dans la hiérarchie : {child.name}");
             }
+        }
+
+        if (_anchors.Count == 0)
+        {
+            Debug.LogWarning($"<color=red>[Bag]</color> Aucun 'bone_weaponAnchor' trouvé dans {gameObject.name}. Vérifie la hiérarchie !");
         }
     }
 

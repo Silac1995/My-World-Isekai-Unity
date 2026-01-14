@@ -11,14 +11,15 @@ public class EquipmentLayer : MonoBehaviour
     [SerializeField] protected EquipmentInstance legs;
     [SerializeField] protected EquipmentInstance boots;
 
-    [Header("Sockets (2D Animation Containers)")]
-    [SerializeField] protected List<GameObject> headSockets;
-    [SerializeField] protected List<GameObject> chestSockets;
-    [SerializeField] protected List<GameObject> glovesSockets;
-    [SerializeField] protected List<GameObject> legsSockets;
-    [SerializeField] protected List<GameObject> bootsSockets;
+    [Header("Sockets (Handlers)")]
+    // On remplace les listes par des GameObjects uniques
+    [SerializeField] protected GameObject headSocket;
+    [SerializeField] protected GameObject chestSocket;
+    [SerializeField] protected GameObject glovesSocket;
+    [SerializeField] protected GameObject legsSocket;
+    [SerializeField] protected GameObject bootsSocket;
 
-    protected System.Collections.Generic.Dictionary<WearableType, EquipmentInstance> currentEquipment = new();
+    protected Dictionary<WearableType, EquipmentInstance> currentEquipment = new();
 
     private void Start()
     {
@@ -34,77 +35,85 @@ public class EquipmentLayer : MonoBehaviour
 
         WearableType type = data.WearableType;
 
-        // --- LOGIQUE DE SET ---
+        // 1. Logique de données
         Unequip(type);
         SetInstance(type, newInstance);
 
-        // --- LOGIQUE VISUELLE ---
-        List<GameObject> targetList = GetSocketList(type);
-
-        if (targetList == null || targetList.Count == 0)
-        {
-            Debug.LogWarning($"[EquipmentLayer] Aucun socket trouvé pour le type {type} sur {gameObject.name}");
-            return;
-        }
-
-        foreach (GameObject socket in targetList)
-        {
-            if (socket == null) continue;
-
-            socket.SetActive(true);
-
-            // 1. Mise à jour du Sprite (Catégorie du sac dans la Library)
-            if (socket.TryGetComponent(out SpriteResolver resolver))
-            {
-                // On utilise le CategoryName défini dans le BagSO/EquipmentSO
-                resolver.SetCategoryAndLabel(data.CategoryName, resolver.GetLabel());
-            }
-
-            // 2. Application de la couleur
-            if (socket.TryGetComponent(out SpriteRenderer sRenderer))
-            {
-                // On vérifie si c'est une instance de sac pour la couleur ou une instance normale
-                sRenderer.color = newInstance.HavePrimaryColor() ? newInstance.PrimaryColor : Color.white;
-            }
-        }
-
-        RefreshAllVisuals();
+        // 2. Logique Visuelle
+        RefreshSlotVisual(type);
     }
 
     public void Unequip(WearableType type)
     {
-        EquipmentInstance oldItem = GetInstance(type);
-
-        if (oldItem != null)
-        {
-            Debug.Log($"<color=orange>[Unequip]</color> Retrait de <b>{oldItem.ItemSO.ItemName}</b> du slot <b>{type}</b>");
-        }
-
         SetInstance(type, null);
-        ToggleSockets(type, false);
-        RefreshAllVisuals();
+
+        GameObject socket = GetSocket(type);
+        if (socket != null) socket.SetActive(false);
+
+        // Pas besoin de rafraîchir tout le visuel ici, le SetActive(false) suffit
+    }
+    private void RefreshSlotVisual(WearableType type)
+    {
+        EquipmentInstance currentItem = GetInstance(type);
+        GameObject socket = GetSocket(type);
+
+        if (socket == null) return;
+
+        bool hasItem = currentItem != null;
+        socket.SetActive(hasItem);
+
+        if (hasItem)
+        {
+            // On cherche le handler de base. Peu importe que ce soit Chest ou Pants !
+            if (socket.TryGetComponent(out WearableHandlerBase handler))
+            {
+                handler.Initialize(currentItem.ItemSO.SpriteLibraryAsset);
+                handler.SetLibraryCategory(currentItem.ItemSO.CategoryName);
+
+                if (currentItem.HavePrimaryColor())
+                    handler.SetPrimaryColor(currentItem.PrimaryColor);
+
+                if (currentItem.HaveSecondaryColor())
+                    handler.SetSecondaryColor(currentItem.SecondaryColor);
+            }
+            else
+            {
+                // Sécurité pour les items sans script Handler (ex: chapeau simple)
+                ApplyGenericVisuals(socket, currentItem);
+            }
+        }
     }
 
-    private void ToggleSockets(WearableType type, bool isActive)
+    private void ApplyGenericVisuals(GameObject socket, EquipmentInstance item)
     {
-        List<GameObject> targetList = GetSocketList(type);
-        if (targetList == null) return;
-
-        foreach (GameObject socket in targetList)
+        // On traite le parent et ses enfants Line/Color_Main/etc.
+        SpriteResolver[] resolvers = socket.GetComponentsInChildren<SpriteResolver>(true);
+        foreach (var res in resolvers)
         {
-            if (socket != null) socket.SetActive(isActive);
+            res.SetCategoryAndLabel(item.ItemSO.CategoryName, res.GetLabel());
+            res.ResolveSpriteToSpriteRenderer();
+        }
+
+        // Application de la couleur sur les enfants spécifiques
+        if (item.HavePrimaryColor())
+        {
+            foreach (Transform child in socket.transform)
+            {
+                if (child.name == "Color_Primary" && child.TryGetComponent(out SpriteRenderer sr))
+                    sr.color = item.PrimaryColor;
+            }
         }
     }
 
     // --- Helpers de recherche ---
 
-    private List<GameObject> GetSocketList(WearableType type) => type switch
+    private GameObject GetSocket(WearableType type) => type switch
     {
-        WearableType.Helmet => headSockets,
-        WearableType.Armor => chestSockets,
-        WearableType.Gloves => glovesSockets,
-        WearableType.Pants => legsSockets,
-        WearableType.Boots => bootsSockets,
+        WearableType.Helmet => headSocket,
+        WearableType.Armor => chestSocket,
+        WearableType.Gloves => glovesSocket,
+        WearableType.Pants => legsSocket,
+        WearableType.Boots => bootsSocket,
         _ => null
     };
 
@@ -147,33 +156,6 @@ public class EquipmentLayer : MonoBehaviour
         foreach (WearableType type in System.Enum.GetValues(typeof(WearableType)))
         {
             RefreshSlotVisual(type);
-        }
-    }
-
-    private void RefreshSlotVisual(WearableType type)
-    {
-        EquipmentInstance currentItem = GetInstance(type);
-        List<GameObject> sockets = GetSocketList(type);
-
-        if (sockets == null || sockets.Count == 0) return;
-
-        bool hasItem = currentItem != null;
-
-        foreach (GameObject socket in sockets)
-        {
-            if (socket == null) continue;
-            socket.SetActive(hasItem);
-
-            if (hasItem && socket.TryGetComponent(out SpriteRenderer sRenderer))
-            {
-                // Appliquer la couleur si elle existe, sinon blanc
-                sRenderer.color = currentItem.HavePrimaryColor() ? currentItem.PrimaryColor: Color.white;
-
-                if (socket.TryGetComponent(out SpriteResolver resolver))
-                {
-                    resolver.SetCategoryAndLabel(currentItem.ItemSO.CategoryName, resolver.GetLabel());
-                }
-            }
         }
     }
 

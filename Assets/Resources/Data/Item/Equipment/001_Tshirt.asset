@@ -18,7 +18,7 @@ MonoBehaviour:
   itemName: T-shirt
   description: A simple T-shirt
   icon: {fileID: 0}
-  item_prefab: {fileID: 5368253223231017792, guid: 3a4b4877e6aa64b40857f3c3704c8a91, type: 3}
+  item_prefab: {fileID: 1527462700077157027, guid: 8d117ca148151b641a97428bf03f09ff, type: 3}
   worldItem_prefab: {fileID: 0}
   armor:
     baseValue: 0

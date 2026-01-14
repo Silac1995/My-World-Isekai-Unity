@@ -67,8 +67,128 @@ MonoBehaviour:
       m_Sprite: {fileID: -1707368033, guid: 5ff3f2e82b10cf54a97b2924d92f56aa, type: 3}
       m_FromMain: 0
       m_SpriteOverride: {fileID: -1707368033, guid: 5ff3f2e82b10cf54a97b2924d92f56aa, type: 3}
+    - m_Name: Torso_Line
+      m_Hash: 819559723
+      m_Sprite: {fileID: -114115488, guid: dc4226791e2734543a9598fbffe3fb44, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: -114115488, guid: dc4226791e2734543a9598fbffe3fb44, type: 3}
+    - m_Name: Torso_Color_Main
+      m_Hash: 364955209
+      m_Sprite: {fileID: 0}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 0}
+    - m_Name: Torso_Color_Primary
+      m_Hash: 720735390
+      m_Sprite: {fileID: 1873009631, guid: 15379dabdc0bc0a46bc719c711c867ad, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 1873009631, guid: 15379dabdc0bc0a46bc719c711c867ad, type: 3}
+    - m_Name: Torso_Color_Secondary
+      m_Hash: 1033459089
+      m_Sprite: {fileID: -296700788, guid: 35279fdb2f1a9c543aada600eb6931ce, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: -296700788, guid: 35279fdb2f1a9c543aada600eb6931ce, type: 3}
+    - m_Name: Upperarm_L_Line
+      m_Hash: 5347397
+      m_Sprite: {fileID: 1962298137, guid: 13f372b664a18294db52389487cd2182, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 1962298137, guid: 13f372b664a18294db52389487cd2182, type: 3}
+    - m_Name: Upperarm_L_Color_Main
+      m_Hash: 193764232
+      m_Sprite: {fileID: 0}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 0}
+    - m_Name: Upperarm_L_Color_Primary
+      m_Hash: 182935189
+      m_Sprite: {fileID: -971953273, guid: 1c661a79d1f04f041a1e59cbe0cf27fc, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: -971953273, guid: 1c661a79d1f04f041a1e59cbe0cf27fc, type: 3}
+    - m_Name: Upperarm_L_Color_Secondary
+      m_Hash: 917561264
+      m_Sprite: {fileID: 429138810, guid: 41aeecf4a59c32a4287e1172ccab0d50, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 429138810, guid: 41aeecf4a59c32a4287e1172ccab0d50, type: 3}
+    - m_Name: Upperarm_R_Line
+      m_Hash: 965606318
+      m_Sprite: {fileID: 310986620, guid: c43c6ebb977f1f4499f383baa103c04d, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 310986620, guid: c43c6ebb977f1f4499f383baa103c04d, type: 3}
+    - m_Name: Upperarm_R_Color_Main
+      m_Hash: 782607722
+      m_Sprite: {fileID: 0}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 0}
+    - m_Name: Upperarm_R_Color_Primary
+      m_Hash: 603380143
+      m_Sprite: {fileID: -1700720490, guid: 78bd3323f1bbaa240b1d51cce59d2303, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: -1700720490, guid: 78bd3323f1bbaa240b1d51cce59d2303, type: 3}
+    - m_Name: Upperarm_R_Color_Secondary
+      m_Hash: 549830235
+      m_Sprite: {fileID: 183467173, guid: ff70ae7633a7730438ba486931a83615, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 183467173, guid: ff70ae7633a7730438ba486931a83615, type: 3}
+    - m_Name: Breast_Large_L_Line
+      m_Hash: 80903743
+      m_Sprite: {fileID: -1361574153, guid: 5f4a37a2a49701f4b97f5b358dac9765, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: -1361574153, guid: 5f4a37a2a49701f4b97f5b358dac9765, type: 3}
+    - m_Name: Breast_Large_L_Color_Main
+      m_Hash: 527511001
+      m_Sprite: {fileID: 0}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 0}
+    - m_Name: Breast_Large_L_Color_Primary
+      m_Hash: 369794457
+      m_Sprite: {fileID: 1463824736, guid: 4a133acf578cd7f4f95c99e96d1ca1f3, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 1463824736, guid: 4a133acf578cd7f4f95c99e96d1ca1f3, type: 3}
+    - m_Name: Breast_Large_L_Color_Secondary
+      m_Hash: 409476955
+      m_Sprite: {fileID: 0}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 0}
+    - m_Name: Breast_Large_R_Line
+      m_Hash: 1024335316
+      m_Sprite: {fileID: 170864523, guid: de5f4808b8fd62a4885e7035c9474a22, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 170864523, guid: de5f4808b8fd62a4885e7035c9474a22, type: 3}
+    - m_Name: Breast_Large_R_Color_Main
+      m_Hash: 978850619
+      m_Sprite: {fileID: 0}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 0}
+    - m_Name: Breast_Large_R_Color_Primary
+      m_Hash: 1058740899
+      m_Sprite: {fileID: 1883872325, guid: 924a5fa5912a4e04792ab2fc12c7a35f, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 1883872325, guid: 924a5fa5912a4e04792ab2fc12c7a35f, type: 3}
+    - m_Name: Breast_Large_R_Color_Secondary
+      m_Hash: 236814000
+      m_Sprite: {fileID: 0}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 0}
+    - m_Name: Torso_behind_Line
+      m_Hash: 759654696
+      m_Sprite: {fileID: 113531293, guid: 9102216573b6d8f4f9fa0287f9ede0d0, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 113531293, guid: 9102216573b6d8f4f9fa0287f9ede0d0, type: 3}
+    - m_Name: Torso_behind_Color_Main
+      m_Hash: 1070575313
+      m_Sprite: {fileID: 0}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 0}
+    - m_Name: Torso_behind_Color_Primary
+      m_Hash: 611228098
+      m_Sprite: {fileID: 1873009631, guid: 15379dabdc0bc0a46bc719c711c867ad, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 1873009631, guid: 15379dabdc0bc0a46bc719c711c867ad, type: 3}
+    - m_Name: Torso_behind_Color_Secondary
+      m_Hash: 105541049
+      m_Sprite: {fileID: 0}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 0}
     m_FromMain: 0
-    m_EntryOverrideCount: 10
+    m_EntryOverrideCount: 34
   m_PrimaryLibraryGUID: 
-  m_ModificationHash: 639039377466066305
+  m_ModificationHash: 639039852233656404
   m_Version: 1
