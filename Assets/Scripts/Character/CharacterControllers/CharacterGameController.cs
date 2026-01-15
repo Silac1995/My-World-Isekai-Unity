@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.AI;
 
@@ -201,5 +202,13 @@ public abstract class CharacterGameController : MonoBehaviour
         Debug.DrawRay(origin, Vector3.down * distance, hit ? Color.green : Color.red);
 
         return hit;
+    }
+    /// <summary>
+    /// Vérifie si un comportement d'un certain type est présent dans la pile.
+    /// Exemple : HasBehaviour<MoveToTargetBehaviour>()
+    /// </summary>
+    public bool HasBehaviour<T>() where T : IAIBehaviour
+    {
+        return _behavioursStack.Any(b => b is T);
     }
 }
