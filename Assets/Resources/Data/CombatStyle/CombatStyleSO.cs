@@ -1,16 +1,33 @@
+using System.Collections.Generic;
 using UnityEngine;
+
+[System.Serializable]
+public struct StyleLevelData
+{
+    public int MinLevel;
+    // On utilise RuntimeAnimatorController pour accepter les Overrides OU les Controllers classiques
+    public RuntimeAnimatorController CombatController;
+}
 
 public abstract class CombatStyleSO : ScriptableObject
 {
-    [Header("Identity")]
     [SerializeField] private string _styleName;
+    [SerializeField] private List<StyleLevelData> _levels = new List<StyleLevelData>();
 
-    [Header("Visuals")]
-    [SerializeField] private AnimatorOverrideController _styleOverride;
-
-    // Propriété abstraite : chaque enfant DOIT dire quel type d'arme il gère
     public abstract WeaponType WeaponType { get; }
-
     public string StyleName => _styleName;
-    public AnimatorOverrideController StyleOverride => _styleOverride;
+
+
+    public RuntimeAnimatorController GetCombatController(int level)
+    {
+        if (_levels.Count == 0) return null;
+
+        StyleLevelData bestMatch = _levels[0];
+        foreach (var data in _levels)
+        {
+            if (level >= data.MinLevel) bestMatch = data;
+            else break;
+        }
+        return bestMatch.CombatController;
+    }
 }

@@ -1,11 +1,17 @@
-
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.U2D.Animation;
 
-[CreateAssetMenu(fileName = "BaseSpriteBone", menuName = "Scriptable Objects/BaseSpriteBone")]
+[CreateAssetMenu(fileName = "RigType", menuName = "Scriptable Objects/Rig Type")]
 public class RigTypeSO : ScriptableObject
 {
-    //[SerializeField] public List<GameObject> prefabs = new List<GameObject>();
     [SerializeField] public BaseSpritesLibrarySO baseSpritesLibrary;
+
+    [Header("Available Combat Styles")]
+    [SerializeField] private List<CombatStyleSO> _availableStyles = new List<CombatStyleSO>();
+
+    // Permet de filtrer les styles par type d'arme pour ce Rig
+    public List<CombatStyleSO> GetStylesForWeapon(WeaponType weaponType)
+    {
+        return _availableStyles.FindAll(style => style.WeaponType == weaponType);
+    }
 }

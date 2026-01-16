@@ -2584,7 +2584,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: e27d5cf29adb1564d81049bb6b75ec6c, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: 
+  m_EditorClassIdentifier: Assembly-CSharp::CameraFollow
   fixedYPosition: 20
   minZPosition: 70
   offsetZ: -14

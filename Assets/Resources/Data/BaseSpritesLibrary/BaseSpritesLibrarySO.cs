@@ -5,6 +5,9 @@ using UnityEngine.U2D.Animation;
 [CreateAssetMenu(fileName = "BaseSpriteLibraries", menuName = "Scriptable Objects/Base Sprite Libraries")]
 public class BaseSpritesLibrarySO : ScriptableObject
 {
+    [Header("Animations")]
+    [SerializeField] private RuntimeAnimatorController _defaultAnimatorController;
+    public RuntimeAnimatorController DefaultAnimatorController => _defaultAnimatorController;
     // Body Parts
     [SerializeField] private SpriteLibraryAsset body_HairLibrary;
     [SerializeField] private SpriteLibraryAsset body_EyebrowsLibrary;

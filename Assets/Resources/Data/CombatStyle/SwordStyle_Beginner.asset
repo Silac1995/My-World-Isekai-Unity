@@ -12,6 +12,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5f09bf60e92c9a04daeeafb08555e0f5, type: 3}
   m_Name: SwordStyle_Beginner
   m_EditorClassIdentifier: Assembly-CSharp::SwordStyleSO
-  _weaponType: 0
   _styleName: 
-  _styleOverride: {fileID: 0}
+  _levels:
+  - MinLevel: 0
+    CombatController: {fileID: 0}
+  - MinLevel: 0
+    CombatController: {fileID: 0}
+  _info: 'Weapon Type: Sword'

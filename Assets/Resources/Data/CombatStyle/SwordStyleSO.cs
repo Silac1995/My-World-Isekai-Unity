@@ -1,6 +1,6 @@
 using UnityEngine;
 
-[CreateAssetMenu(fileName = "SwordStyleSO", menuName = "Scriptable Objects/Animation/Sword Style")]
+[CreateAssetMenu(fileName = "SwordStyleSO", menuName = "Scriptable Objects/Combat Style/Sword Style")]
 public class SwordStyleSO : CombatStyleSO
 {
     // C'est la source de vérité pour ton code

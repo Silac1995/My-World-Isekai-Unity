@@ -160,11 +160,12 @@ Transform:
   - {fileID: 215557950362507917}
   - {fileID: 2098499672776739634}
   - {fileID: 8052248722467460333}
+  - {fileID: 2146869985690736942}
+  - {fileID: 3661421223759161407}
+  - {fileID: 1436431929447272827}
   - {fileID: 1385890570874089402}
   - {fileID: 7548370862418862157}
-  - {fileID: 2146869985690736942}
   - {fileID: 4629397348468206407}
-  - {fileID: 3661421223759161407}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!54 &3937668831498777898
@@ -238,6 +239,7 @@ MonoBehaviour:
     _height: 0
   _stats: {fileID: 3158310397905717539}
   _race: {fileID: 0}
+  rigType: {fileID: 0}
   _rb: {fileID: 3937668831498777898}
   _col: {fileID: 6020922162625289283}
   _characterInteractable: {fileID: 2250644852099470049}
@@ -248,6 +250,7 @@ MonoBehaviour:
   _equipment: {fileID: 8408755073701722020}
   _characterInteraction: {fileID: 3273106316842190247}
   _characterRelation: {fileID: 6939122470468663269}
+  _characterCombat: {fileID: 1098445929855123690}
 --- !u!114 &3158310397905717539
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -588,6 +591,52 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CharacterNeeds
   _character: {fileID: 2536622428659117900}
+--- !u!1 &7270013103786579797
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1436431929447272827}
+  - component: {fileID: 1098445929855123690}
+  m_Layer: 0
+  m_Name: CharacterCombat
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1436431929447272827
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7270013103786579797}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: -0.26625, y: 0.39925, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 6179432398992828966}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1098445929855123690
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7270013103786579797}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1dba3f9b5a9c4624ca7d45544f3a7db9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: '::'
+  _character: {fileID: 2536622428659117900}
+  _knownStyles: []
 --- !u!1 &8637028065392131947
 GameObject:
   m_ObjectHideFlags: 0
@@ -599,7 +648,7 @@ GameObject:
   - component: {fileID: 2146869985690736942}
   - component: {fileID: 8408755073701722020}
   m_Layer: 0
-  m_Name: Gear
+  m_Name: Equipment
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -633,6 +682,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CharacterEquipment
   character: {fileID: 2536622428659117900}
+  _weapon:
+    _itemSO: {fileID: 0}
+    _customizedName: 
+    _primaryColor: {r: 0, g: 0, b: 0, a: 0}
+    _secondaryColor: {r: 0, g: 0, b: 0, a: 0}
   underwearLayer: {fileID: 0}
   clothingLayer: {fileID: 0}
   armorLayer: {fileID: 0}

@@ -14,6 +14,7 @@ public class Character : MonoBehaviour
     [Header("Stats & Race")]
     [SerializeField] private CharacterStats _stats;
     [SerializeField] private RaceSO _race;
+    [SerializeField] private RigTypeSO rigType;
 
     [Header("Components")]
     [SerializeField] private Rigidbody _rb;
@@ -28,6 +29,7 @@ public class Character : MonoBehaviour
     [SerializeField] private CharacterEquipment _equipment;
     [SerializeField] private CharacterInteraction _characterInteraction;
     [SerializeField] private CharacterRelation _characterRelation;
+    [SerializeField] private CharacterCombat _characterCombat;
     #endregion
 
     #region Private Fields
@@ -67,10 +69,12 @@ public class Character : MonoBehaviour
     public CharacterEquipment CharacterEquipment => _equipment;
     public CharacterRelation CharacterRelation => _characterRelation;
     public CharacterInteractable CharacterInteractable => _characterInteractable;
+    public CharacterCombat CharacterCombat => _characterCombat;
 
     public Transform VisualRoot => _visualRoot;
     public GameObject CurrentVisualInstance => _currentVisualInstance;
     public BattleManager BattleManager => _battleManager;
+    public RigTypeSO RigType => rigType;
     #endregion
 
     #region Unity Lifecycle

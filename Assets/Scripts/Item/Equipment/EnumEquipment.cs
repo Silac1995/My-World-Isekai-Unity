@@ -28,5 +28,6 @@ public enum WeaponType
     Spear,
     Axe,
     Bow,
-    Staff
+    Staff,
+    None
 }

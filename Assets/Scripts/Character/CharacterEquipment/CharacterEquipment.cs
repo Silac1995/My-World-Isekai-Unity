@@ -15,6 +15,12 @@ public class CharacterEquipment : MonoBehaviour
         set => character = value;
     }
 
+    [Header("Combat")]
+    [SerializeField] private WeaponInstance _weapon;
+
+    // Getter public pour accéder à l'arme actuelle
+    public WeaponInstance CurrentWeapon => _weapon;
+
     // Tes couches assignées manuellement via [SerializeReference]
     [SerializeReference] private UnderwearLayer underwearLayer;
     [SerializeReference] private ClothingLayer clothingLayer;
@@ -55,6 +61,9 @@ public class CharacterEquipment : MonoBehaviour
         // 1. GESTION DES ARMES
         if (itemInstance is WeaponInstance weapon)
         {
+            // On vérifie si c'est déjà l'arme équipée pour éviter les calculs inutiles
+            if (_weapon == weapon) return;
+
             EquipWeapon(weapon);
             OnEquipmentChanged?.Invoke();
             return;
@@ -100,8 +109,42 @@ public class CharacterEquipment : MonoBehaviour
     // Petite méthode pour préparer la suite (Gestion des mains gauche/droite par ex)
     private void EquipWeapon(WeaponInstance weapon)
     {
+        // Si une arme était déjà là, on peut gérer son retrait (ex: la remettre en inventaire ou au sol)
+        if (_weapon != null)
+        {
+            // Optionnel : character.DropItem(_weapon); ou retour inventaire
+        }
+
+        _weapon = weapon;
         Debug.Log($"<color=red>[Equip-Weapon]</color> {weapon.ItemSO.ItemName} équipée !");
-        // Ta logique d'équipement d'arme viendra ici (ex: weaponLayer.Equip(weapon))
+
+        // LIEN AVEC LE SYSTÈME DE COMBAT
+        // On récupère le composant CharacterCombat pour mettre à jour le style et l'animator
+        CharacterCombat combat = GetComponent<CharacterCombat>();
+        if (combat != null)
+        {
+            combat.OnWeaponChanged(_weapon);
+        }
+    }
+    /// <summary>
+    /// Déséquipe l'arme actuelle et repasse en mode civil.
+    /// </summary>
+    public void UnequipWeapon()
+    {
+        if (_weapon == null) return;
+
+        // On fait tomber l'arme au sol
+        character.DropItem(_weapon);
+        _weapon = null;
+
+        // On informe le combat pour remettre l'animator civil
+        CharacterCombat combat = GetComponent<CharacterCombat>();
+        if (combat != null)
+        {
+            combat.OnWeaponChanged(null);
+        }
+
+        OnEquipmentChanged?.Invoke();
     }
 
     private void EquipBag(BagInstance newBag)

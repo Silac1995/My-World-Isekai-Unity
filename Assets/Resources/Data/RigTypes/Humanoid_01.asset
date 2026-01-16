@@ -12,7 +12,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 14b2d41f8b11e114e8e48dbd6f4e8c88, type: 3}
   m_Name: Humanoid_01
   m_EditorClassIdentifier: 
-  prefabs:
-  - {fileID: 1797025105733559187, guid: b3e15a71eac7c57499005b763ef23817, type: 3}
-  - {fileID: 7468040179101344262, guid: b2aadf8921b70b445a59d8a4cd434785, type: 3}
   baseSpritesLibrary: {fileID: 11400000, guid: 936522298b89d6046a9e1b3f3b22f868, type: 2}
+  _availableStyles:
+  - {fileID: 11400000, guid: d898e4dd5914e7c48864fa96ae52048c, type: 2}
