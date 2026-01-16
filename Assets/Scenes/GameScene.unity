@@ -2585,10 +2585,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e27d5cf29adb1564d81049bb6b75ec6c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  fixedYPosition: 15
+  fixedYPosition: 20
   minZPosition: 70
-  offsetZ: -13
-  rotationX: 32
+  offsetZ: -14
+  rotationX: 18
   target: {fileID: 0}
   character: {fileID: 0}
   playerUI: {fileID: 806726612}

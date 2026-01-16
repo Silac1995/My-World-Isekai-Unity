@@ -3,14 +3,14 @@
 public class CameraFollow : MonoBehaviour
 {
     [Header("Camera Position")]
-    [SerializeField] private float fixedYPosition = 24.5f;
+    [SerializeField] private float fixedYPosition = 20F;
     [SerializeField] private float minZPosition = 70f;
     [SerializeField] private float offsetZ = -14f;
 
     [Header("Camera Rotation")]
     // Le Range crée un curseur entre 0 et 90 degrés dans l'inspecteur
     [Range(0f, 90f)]
-    [SerializeField] private float rotationX = 26f;
+    [SerializeField] private float rotationX = 18f;
 
     [SerializeField] private Transform target;
     [SerializeField] private Character character;
@@ -20,11 +20,6 @@ public class CameraFollow : MonoBehaviour
 
     private void Start()
     {
-        // Optionnel : Forcer les valeurs au lancement du jeu
-        fixedYPosition = 24.5f;
-        minZPosition = 70f;
-        offsetZ = -14f;
-        rotationX = 26f;
         
     }
 
