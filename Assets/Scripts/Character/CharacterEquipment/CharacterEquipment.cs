@@ -17,8 +17,8 @@ public class CharacterEquipment : MonoBehaviour
 
     [Header("Combat")]
     [SerializeField] private WeaponInstance _weapon;
+    [SerializeField] private GameObject _weaponSocket; // Le point d'attache visuel de l'arme
 
-    // Getter public pour accéder à l'arme actuelle
     public WeaponInstance CurrentWeapon => _weapon;
 
     // Tes couches assignées manuellement via [SerializeReference]
@@ -41,12 +41,53 @@ public class CharacterEquipment : MonoBehaviour
 
     private void Start()
     {
-        // On initialise le visuel du sac dès le début
-        // Si _bag est null dans l'inspecteur, il cachera les sockets.
-        // Si tu as mis un sac par défaut dans l'inspecteur, il l'affichera correctement.
         UpdateBagVisual(_bag != null);
+        UpdateWeaponVisual(); // Cette méthode gère déjà le cas null proprement maintenant
     }
 
+    /// <summary>
+    /// Met à jour l'état visuel du socket d'arme et informe le système de combat.
+    /// </summary>
+    private void UpdateWeaponVisual()
+    {
+        // On considère qu'on a une arme UNIQUEMENT si l'instance ET son SO existent
+        bool hasValidWeapon = _weapon != null && _weapon.ItemSO != null;
+
+        // 1. GESTION DU SOCKET VISUEL
+        if (_weaponSocket != null)
+        {
+            // Si l'arme est invalide ou absente, on DISABLE le socket
+            _weaponSocket.SetActive(hasValidWeapon);
+
+            if (hasValidWeapon)
+            {
+                SyncWeaponVisualToSocket();
+            }
+        }
+
+        // 2. GESTION DE LA LOGIQUE DE COMBAT
+        if (character != null)
+        {
+            CharacterCombat combat = character.CharacterCombat;
+            if (combat != null)
+            {
+                // On envoie l'arme (sera null si invalide, ce qui remettra l'animator en Civil)
+                combat.OnWeaponChanged(hasValidWeapon ? _weapon : null);
+            }
+        }
+    }
+
+    private void SyncWeaponVisualToSocket()
+    {
+        // Double sécurité : on vérifie le SO avant d'accéder à CategoryName
+        if (_weapon == null || _weapon.ItemSO == null) return;
+
+        SpriteResolver[] resolvers = _weaponSocket.GetComponentsInChildren<SpriteResolver>();
+        foreach (var res in resolvers)
+        {
+            res.SetCategoryAndLabel(_weapon.ItemSO.CategoryName, res.GetLabel());
+        }
+    }
     /// <summary>
     /// Force la désactivation visuelle de tous les sockets du sac.
     /// Utile si tu veux vider le visuel sans toucher à la donnée.
@@ -61,10 +102,12 @@ public class CharacterEquipment : MonoBehaviour
         // 1. GESTION DES ARMES
         if (itemInstance is WeaponInstance weapon)
         {
-            // On vérifie si c'est déjà l'arme équipée pour éviter les calculs inutiles
+            // On vérifie si c'est déjà l'arme équipée
             if (_weapon == weapon) return;
 
+            // Utilisation de la méthode dédiée
             EquipWeapon(weapon);
+
             OnEquipmentChanged?.Invoke();
             return;
         }
@@ -109,22 +152,12 @@ public class CharacterEquipment : MonoBehaviour
     // Petite méthode pour préparer la suite (Gestion des mains gauche/droite par ex)
     private void EquipWeapon(WeaponInstance weapon)
     {
-        // Si une arme était déjà là, on peut gérer son retrait (ex: la remettre en inventaire ou au sol)
-        if (_weapon != null)
-        {
-            // Optionnel : character.DropItem(_weapon); ou retour inventaire
-        }
-
+        // 1. Mise à jour de la donnée
         _weapon = weapon;
         Debug.Log($"<color=red>[Equip-Weapon]</color> {weapon.ItemSO.ItemName} équipée !");
 
-        // LIEN AVEC LE SYSTÈME DE COMBAT
-        // On récupère le composant CharacterCombat pour mettre à jour le style et l'animator
-        CharacterCombat combat = GetComponent<CharacterCombat>();
-        if (combat != null)
-        {
-            combat.OnWeaponChanged(_weapon);
-        }
+        // 2. Mise à jour de TOUTE la chaîne (Visuel + Animator)
+        UpdateWeaponVisual();
     }
     /// <summary>
     /// Déséquipe l'arme actuelle et repasse en mode civil.
@@ -133,17 +166,10 @@ public class CharacterEquipment : MonoBehaviour
     {
         if (_weapon == null) return;
 
-        // On fait tomber l'arme au sol
         character.DropItem(_weapon);
         _weapon = null;
 
-        // On informe le combat pour remettre l'animator civil
-        CharacterCombat combat = GetComponent<CharacterCombat>();
-        if (combat != null)
-        {
-            combat.OnWeaponChanged(null);
-        }
-
+        UpdateWeaponVisual(); // Désactive le socket + remet l'animator civil
         OnEquipmentChanged?.Invoke();
     }
 

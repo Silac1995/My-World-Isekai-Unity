@@ -68,11 +68,12 @@ public class CharacterCombat : MonoBehaviour
 
     public void RefreshCurrentAnimator()
     {
+        // Si character.CharacterEquipment._weapon est null, weaponData sera null
         WeaponInstance weapon = _character.CharacterEquipment.CurrentWeapon;
 
         if (weapon == null || weapon.ItemSO is not WeaponSO weaponData)
         {
-            ApplyCivilAnimator();
+            ApplyCivilAnimator(); // Le perso est "nu" ou mains nues
             return;
         }
 
