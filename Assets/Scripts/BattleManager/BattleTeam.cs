@@ -2,34 +2,22 @@ using System.Collections.Generic;
 
 public class BattleTeam
 {
-    private List<Character> charactersList = new List<Character>();
-    public List<Character> CharacterList => charactersList;
+    private List<Character> _charactersList = new List<Character>();
+    public List<Character> CharacterList => _charactersList;
 
     public void AddCharacter(Character character)
     {
-        if (character == null)
-            throw new System.ArgumentNullException(nameof(character), "Character cannot be null.");
-
-        if (!charactersList.Contains(character))
-            charactersList.Add(character);
+        if (character != null && !_charactersList.Contains(character))
+            _charactersList.Add(character);
     }
 
-    public bool RemoveCharacter(Character character)
+    public bool IsTeamEliminated()
     {
-        if (character == null)
-            throw new System.ArgumentNullException(nameof(character), "Character cannot be null.");
-
-        return charactersList.Remove(character);
-    }
-
-    public void InitializeToBattleManager(BattleManager manager)
-    {
-        if (manager == null)
-            throw new System.ArgumentNullException(nameof(manager), "BattleManager cannot be null.");
-
-        foreach (var character in charactersList)
+        if (_charactersList.Count == 0) return true;
+        foreach (var c in _charactersList)
         {
-            character.JoinBattle(manager);
+            if (c != null && c.IsAlive()) return false;
         }
+        return true;
     }
 }

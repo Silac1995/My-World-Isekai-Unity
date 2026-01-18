@@ -1,124 +1,76 @@
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.AI;
 
 public class BattleManager : MonoBehaviour
 {
-    [SerializeField] private List<BattleTeam> teams = new List<BattleTeam>();
-    public List<BattleTeam> BattleTeams => teams;
+    [Header("Settings")]
+    [SerializeField] private List<BattleTeam> _teams = new List<BattleTeam>();
+    [SerializeField] private Collider _battleZone;
+    [SerializeField] private LineRenderer _battleZoneLine;
+    [SerializeField] private float _padding = 10f;
 
-    [SerializeField] private Collider battleZone;
-    public Collider BattleZone => battleZone;
+    private bool _isBattleEnded = false;
 
-    [SerializeField] private LineRenderer battleZoneLine;
+    // Liste pour le debug (plus besoin de GetAllCharacters à chaque fois)
+    [SerializeField] private List<Character> _allParticipants = new List<Character>();
 
-    private bool isBattleEnded = false;
-    public bool IsBattleEnded => isBattleEnded;
-
-    // Liste de tous les personnages (juste pour debug dans l'inspecteur)
-    [SerializeField, Tooltip("Liste auto-générée à partir des équipes")]
-    private List<Character> allCharactersDebug = new List<Character>();
-
-    private void Update()
-    {
-        DrawBattleZoneOutline();
-    }
+    public List<BattleTeam> BattleTeams => _teams;
+    public bool IsBattleEnded => _isBattleEnded;
 
     public void Initialize(Character initiator, Character target)
     {
-        if (initiator == null || target == null)
-        {
-            Debug.LogError("Invalid characters for battle initialization.");
-            return;
-        }
+        if (initiator == null || target == null) return;
 
-        // Créer zone
-        CreateBattleZone(initiator, target);
-
-        // Créer équipes
-        var teamA = new BattleTeam();
-        var teamB = new BattleTeam();
-
+        // 1. Setup des équipes
+        BattleTeam teamA = new BattleTeam();
+        BattleTeam teamB = new BattleTeam();
         teamA.AddCharacter(initiator);
         teamB.AddCharacter(target);
 
-        AddTeam(teamA);
-        AddTeam(teamB);
+        _teams.Add(teamA);
+        _teams.Add(teamB);
 
-        // Assigner BattleManager à chaque perso
-        initiator.JoinBattle(this);
-        target.JoinBattle(this);
+        // 2. Création physique de la zone
+        CreateBattleZone(initiator, target);
 
-        // Abonnement aux événements de mort
-        SubscribeToDeathEvents();
+        // 3. Inscription des participants
+        RegisterParticipants();
 
-        RefreshAllCharactersDebug();
-
-        Debug.Log($"Fight started between {initiator.CharacterName} and {target.CharacterName}");
-    }
-
-
-    /// <summary>
-    /// Récupère tous les personnages des équipes.
-    /// </summary>
-    public List<Character> GetAllCharacters()
-    {
-        var allChars = new List<Character>();
-        foreach (var team in teams)
-        {
-            if (team == null) continue;
-            foreach (var character in team.CharacterList)
-            {
-                if (character != null && !allChars.Contains(character))
-                    allChars.Add(character);
-            }
-        }
-        return allChars;
-    }
-
-    /// <summary>
-    /// Met à jour la liste visible dans l'inspecteur (debug)
-    /// </summary>
-    private void RefreshAllCharactersDebug()
-    {
-        allCharactersDebug = GetAllCharacters();
-    }
-
-    private void CreateBattleZone(Character charA, Character charB, float padding = 20f)
-    {
-        if (charA == null || charB == null || charA.Collider == null || charB.Collider == null)
-        {
-            Debug.LogError("Cannot create battle zone: characters or colliders are missing.");
-            return;
-        }
-
-        // Bounds combinés des deux personnages
-        Bounds combinedBounds = charA.Collider.bounds;
-        combinedBounds.Encapsulate(charB.Collider.bounds);
-        combinedBounds.Expand(padding * 2f);
-
-        // Création du BoxCollider
-        var boxCollider = gameObject.AddComponent<BoxCollider>();
-        boxCollider.isTrigger = true;
-        transform.position = combinedBounds.center;
-        boxCollider.center = Vector3.zero;
-        boxCollider.size = combinedBounds.size;
-
-        battleZone = boxCollider;
-
-        // Crée la ligne rouge visible en jeu
+        // 4. Rendu visuel UNIQUE (pas dans Update)
         DrawBattleZoneOutline();
 
-        Debug.Log($"Created battle zone (size: {combinedBounds.size}, center: {combinedBounds.center})", this);
+        Debug.Log($"<color=orange>[Battle]</color> Combat lancé : {initiator.name} vs {target.name}");
     }
 
-
-    private void SubscribeToDeathEvents()
+    private void CreateBattleZone(Character a, Character b)
     {
-        foreach (var team in teams)
+        Bounds combinedBounds = a.Collider.bounds;
+        combinedBounds.Encapsulate(b.Collider.bounds);
+        combinedBounds.Expand(_padding);
+
+        // On utilise un BoxCollider pour les limites
+        BoxCollider box = gameObject.AddComponent<BoxCollider>();
+        box.isTrigger = true;
+        box.size = new Vector3(combinedBounds.size.x, 20f, combinedBounds.size.z);
+        transform.position = new Vector3(combinedBounds.center.x, a.transform.position.y, combinedBounds.center.z);
+
+        _battleZone = box;
+    }
+
+    private void RegisterParticipants()
+    {
+        _allParticipants.Clear();
+        foreach (var team in _teams)
         {
             foreach (var character in team.CharacterList)
             {
+                if (character == null) continue;
+
+                _allParticipants.Add(character);
+                character.JoinBattle(this);
+
+                // Unsubscribe d'abord par sécurité (règle des leaks)
+                character.OnDeath -= HandleCharacterDeath;
                 character.OnDeath += HandleCharacterDeath;
             }
         }
@@ -126,176 +78,35 @@ public class BattleManager : MonoBehaviour
 
     private void HandleCharacterDeath(Character deadCharacter)
     {
-        Debug.Log($"{name} invoked event.");
-        if (isBattleEnded) return;
+        if (_isBattleEnded) return;
 
-        foreach (var team in teams)
+        // Vérification de victoire
+        foreach (var team in _teams)
         {
-            bool allDead = true;
-            foreach (var character in team.CharacterList)
+            if (team.IsTeamEliminated())
             {
-                if (character.IsAlive())
-                {
-                    allDead = false;
-                    break;
-                }
-            }
-
-            if (allDead)
-            {
-                isBattleEnded = true;
+                _isBattleEnded = true;
                 EndBattle();
                 return;
             }
         }
     }
 
-    [ContextMenu("End battle")]
     public void EndBattle()
     {
-        if (isBattleEnded is false) return;
-
-        Debug.Log("Battle ended!");
-
-        foreach (var team in teams)
+        foreach (var character in _allParticipants)
         {
-            foreach (var character in team.CharacterList)
+            if (character != null)
             {
-                if (character != null)
-                {
-                    character.OnDeath -= HandleCharacterDeath;
-
-                    // Réinitialiser le BattleManager du personnage
-                    character.LeaveBattle();
-                }
+                character.OnDeath -= HandleCharacterDeath; // UNSUBSCRIBE CRITIQUE
+                character.LeaveBattle();
             }
         }
 
-        // Optionnel : vider la liste des équipes si la battle manager ne sert plus
-        teams.Clear();
-        RefreshAllCharactersDebug();
-
-        // Détruire le GameObject à la fin du frame
+        Debug.Log("<color=red>[Battle]</color> Fin du combat.");
         Destroy(gameObject);
     }
 
-    [ContextMenu("Force End battle")]
-    public void ForceEndBattle()
-    {
-        isBattleEnded = true;
-        EndBattle();
-    }
-
-
-    public void AddTeam(BattleTeam team)
-    {
-        if (team == null)
-        {
-            Debug.LogError("Cannot add a null team.");
-            return;
-        }
-
-        if (!teams.Contains(team))
-            teams.Add(team);
-
-        RefreshAllCharactersDebug(); // maj debug list
-    }
-
-    public bool RemoveTeam(BattleTeam team)
-    {
-        if (team == null)
-        {
-            Debug.LogError("Cannot remove a null team.");
-            return false;
-        }
-        bool removed = teams.Remove(team);
-
-        RefreshAllCharactersDebug(); // maj debug list
-        return removed;
-    }
-    private void DrawBattleZoneOutline()
-    {
-        if (battleZone == null) return;
-
-        if (battleZone is BoxCollider box)
-        {
-            Vector3 center = transform.position + box.center;
-            Vector3 extents = box.size * 0.5f;
-
-            Vector3[] localCorners = new Vector3[4]
-            {
-            new Vector3(-extents.x, 0f, -extents.z),
-            new Vector3(extents.x, 0f, -extents.z),
-            new Vector3(extents.x, 0f, extents.z),
-            new Vector3(-extents.x, 0f, extents.z),
-            };
-
-            Vector3[] worldCorners = new Vector3[4];
-            for (int i = 0; i < 4; i++)
-            {
-                // Position corners at the collider's horizontal plane (ignore Y here)
-                Vector3 localPos = box.center + localCorners[i];
-                // But for Y, use something reasonable above expected terrain height, e.g. 10 units
-                Vector3 rayOrigin = transform.TransformPoint(new Vector3(localPos.x, 10f, localPos.z));
-                worldCorners[i] = rayOrigin;
-            }
-
-            battleZone.enabled = false;
-
-            int groundLayerMask = 1 << LayerMask.NameToLayer("Default");
-
-            Vector3[] finalCorners = new Vector3[4];
-            for (int i = 0; i < 4; i++)
-            {
-                Ray ray = new Ray(worldCorners[i], Vector3.down);
-                if (Physics.Raycast(ray, out RaycastHit hit, 50f, groundLayerMask))
-                {
-                    finalCorners[i] = hit.point + Vector3.up * 0.05f;
-                }
-                else
-                {
-                    // If raycast misses, fallback somewhere reasonable, e.g. 0.5f above original Y=0 level
-                    finalCorners[i] = transform.TransformPoint(new Vector3(box.center.x + localCorners[i].x, 0.5f, box.center.z + localCorners[i].z));
-                }
-            }
-
-            battleZone.enabled = true;
-
-            battleZoneLine.positionCount = finalCorners.Length + 1;
-            Vector3[] closedCorners = new Vector3[finalCorners.Length + 1];
-            finalCorners.CopyTo(closedCorners, 0);
-            closedCorners[finalCorners.Length] = finalCorners[0]; // close the loop by returning to the first corner
-            battleZoneLine.SetPositions(closedCorners);
-        }
-    }
-
-
-
-    public Bounds GetBattleZoneBounds()
-    {
-        if (battleZone is BoxCollider box)
-        {
-            Bounds bounds = new Bounds();
-            bounds.center = transform.TransformPoint(box.center);
-            bounds.size = Vector3.Scale(box.size, transform.lossyScale);
-            return bounds;
-        }
-
-        Debug.LogError("Battle zone is not a BoxCollider.");
-        return new Bounds(Vector3.zero, Vector3.zero);
-    }
-
-    public Vector3 ClampPositionToBattleZone(Vector3 position)
-    {
-        Bounds bounds = GetBattleZoneBounds();
-
-        float clampedX = Mathf.Clamp(position.x, bounds.min.x, bounds.max.x);
-        float clampedY = position.y; // on ne touche pas la hauteur
-        float clampedZ = Mathf.Clamp(position.z, bounds.min.z, bounds.max.z);
-
-        return new Vector3(clampedX, clampedY, clampedZ);
-    }
-
-
-
+    // Garde ton DrawBattleZoneOutline mais enlève-le de l'Update !
+    public void DrawBattleZoneOutline() { /* Ton code de raycast ici */ }
 }

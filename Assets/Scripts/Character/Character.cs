@@ -200,17 +200,14 @@ public class Character : MonoBehaviour
     {
         if (!ValidateFight(target)) return;
 
+        // 1. Instanciation du manager
         BattleManager manager = Instantiate(_battleManagerPrefab);
 
-        BattleTeam team1 = new BattleTeam(); team1.AddCharacter(this);
-        BattleTeam team2 = new BattleTeam(); team2.AddCharacter(target);
-
-        manager.AddTeam(team1);
-        manager.AddTeam(team2);
+        // 2. Initialisation (Le manager va créer les équipes et s'auto-configurer)
+        // Note : On ne fait plus AddTeam ici car Initialize s'en occupe
         manager.Initialize(this, target);
 
-        JoinBattle(manager);
-        target.JoinBattle(manager);
+        Debug.Log($"<color=orange>[Battle]</color> {CharacterName} a provoqué {target.CharacterName} !");
     }
 
     private bool ValidateFight(Character target)
