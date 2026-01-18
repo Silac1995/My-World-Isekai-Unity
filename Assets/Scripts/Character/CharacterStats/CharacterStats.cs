@@ -141,8 +141,16 @@ public class CharacterStats : MonoBehaviour
 
     public void RecalculateTertiaryStats()
     {
-        // TO DO
-        physicalPower.Reset(); // Ajouter d'autres recalculs ici }
+        // Exemple de logique de calcul dérivée :
+        // Puissance Physique = Force * 2 + Agilité * 0.5
+        physicalPower.SetBaseValue(strength.CurrentValue * 2f + agility.CurrentValue * 0.5f);
 
+        // Vitesse de déplacement = Base + (Agilité / 10)
+        moveSpeed.SetBaseValue(moveSpeed.BaseValue + (agility.CurrentValue * 0.1f));
+
+        // Esquive = Agilité * 0.8
+        dodgeChance.SetBaseValue(agility.CurrentValue * 0.8f);
+
+        Debug.Log("<color=green>[Stats]</color> Statistiques tertiaires recalculées.");
     }
 }
