@@ -524,6 +524,7 @@ MonoBehaviour:
   character: {fileID: 2536622428659117900}
   eyesController: {fileID: 6566596457304981575}
   _hairController: {fileID: 0}
+  _earsController: {fileID: 0}
 --- !u!114 &6566596457304981575
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -637,6 +638,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: '::'
   _character: {fileID: 2536622428659117900}
   _knownStyles: []
+  _battleManager: {fileID: 0}
+  _battleManagerPrefab: {fileID: 7708501793112527945, guid: 51209fa04a478a445980530b546d4dab, type: 3}
 --- !u!1 &8637028065392131947
 GameObject:
   m_ObjectHideFlags: 0
@@ -687,6 +690,7 @@ MonoBehaviour:
     _customizedName: 
     _primaryColor: {r: 0, g: 0, b: 0, a: 0}
     _secondaryColor: {r: 0, g: 0, b: 0, a: 0}
+  _weaponSocket: {fileID: 0}
   underwearLayer: {fileID: 0}
   clothingLayer: {fileID: 0}
   armorLayer: {fileID: 0}

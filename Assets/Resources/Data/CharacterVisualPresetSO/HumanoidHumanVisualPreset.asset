@@ -16,4 +16,4 @@ MonoBehaviour:
   _characterSpritePrefab: {fileID: 0}
   _earCategory: 01_human
   _hasTail: 0
-  _defaultSkinColor: {r: 1, g: 1, b: 1, a: 1}
+  _defaultSkinColor: {r: 0.9019608, g: 0.80784315, b: 0.7411765, a: 1}

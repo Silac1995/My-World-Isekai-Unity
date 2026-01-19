@@ -48,7 +48,7 @@ public class NeedToWearClothing : CharacterNeed
         if (_character.CharacterEquipment.IsGroinExposed()) missingTypes.Add(WearableType.Pants);
         if (_character.CharacterEquipment.IsChestExposed()) missingTypes.Add(WearableType.Armor);
 
-        Debug.Log($"<color=white>[Need]</color> {npc.name} cherche : {string.Join(" & ", missingTypes)}");
+        //Debug.Log($"<color=white>[Need]</color> {npc.name} cherche : {string.Join(" & ", missingTypes)}");
 
         // 2. On cherche l'item le plus proche parmi les types manquants
         ItemInteractable targetInteractable = FindClosestWearable(npc.transform.position, missingTypes);

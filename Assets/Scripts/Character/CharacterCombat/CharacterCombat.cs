@@ -9,9 +9,85 @@ public class CharacterCombat : MonoBehaviour
     [Header("Expertise & Memory")]
     [SerializeField] private List<CombatStyleExpertise> _knownStyles = new List<CombatStyleExpertise>();
 
-    // Ce dictionnaire sauvegarde le DERNIER style sélectionné pour CHAQUE type d'arme.
-    // Il ne sera pas vidé lors d'un switch d'arme.
+    // --- NOUVEAUX CHAMPS DÉPLACÉS ---
+    [SerializeField] private BattleManager _currentBattleManager; // Type changé en BattleManager
+    [SerializeField] private GameObject _battleManagerPrefab;
+
     private Dictionary<WeaponType, CombatStyleExpertise> _selectedStyles = new Dictionary<WeaponType, CombatStyleExpertise>();
+
+    #region Battle Logic
+    // Propriété corrigée pour correspondre au type
+    public bool IsInBattle => _currentBattleManager != null;
+    public BattleManager BattleManager => _currentBattleManager;
+
+    public void JoinBattle(BattleManager manager) => _currentBattleManager = manager;
+    public void LeaveBattle() => _currentBattleManager = null;
+
+    public void StartFight(Character target)
+    {
+        if (!ValidateFight(target)) return;
+
+        // 1. Instanciation du prefab
+        GameObject instanceGo = Instantiate(_battleManagerPrefab);
+        BattleManager manager = instanceGo.GetComponent<BattleManager>();
+
+        if (manager == null)
+        {
+            Debug.LogError("<color=red>[Battle]</color> Le prefab n'a pas le script BattleManager !");
+            Destroy(instanceGo);
+            return;
+        }
+
+        // 2. Assigne le script BattleManager (et non le GameObject)
+        this._currentBattleManager = manager;
+
+        // 3. Initialisation (Le manager s'occupera d'appeler JoinBattle sur la cible)
+        manager.Initialize(_character, target);
+
+        Debug.Log($"<color=orange>[Battle]</color> {_character.CharacterName} a provoqué {target.CharacterName} !");
+    }
+
+    private bool ValidateFight(Character target)
+    {
+        // 1. Vérification de la cible nulle
+        if (target == null)
+        {
+            Debug.LogWarning("<color=red>[Battle]</color> Impossible de combattre : La cible est null.");
+            return false;
+        }
+
+        // 2. Vérification de l'état de vie
+        if (!_character.IsAlive())
+        {
+            Debug.LogWarning($"<color=orange>[Battle]</color> {_character.CharacterName} ne peut pas attaquer car il est MORT.");
+            return false;
+        }
+
+        if (!target.IsAlive())
+        {
+            Debug.LogWarning($"<color=orange>[Battle]</color> {_character.CharacterName} ne peut pas attaquer {target.CharacterName} car la cible est déjà MORTE.");
+            return false;
+        }
+
+        // 3. Vérification de l'état de combat (pour éviter les doublons de BattleManager)
+        if (IsInBattle)
+        {
+            Debug.LogWarning($"<color=yellow>[Battle]</color> {_character.CharacterName} est déjà engagé dans un combat.");
+            return false;
+        }
+
+        if (target.CharacterCombat.IsInBattle)
+        {
+            Debug.LogWarning($"<color=yellow>[Battle]</color> {target.CharacterName} est déjà occupé dans un autre combat.");
+            return false;
+        }
+
+        // Si tout est OK
+        Debug.Log($"<color=green>[Battle]</color> Validation réussie : Combat entre {_character.CharacterName} et {target.CharacterName} possible.");
+        return true;
+    }
+    #endregion
+
 
     /// <summary>
     /// Sélectionne et SAUVEGARDE un style pour un type d'arme.

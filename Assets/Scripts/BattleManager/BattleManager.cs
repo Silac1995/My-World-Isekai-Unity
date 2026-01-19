@@ -67,9 +67,16 @@ public class BattleManager : MonoBehaviour
                 if (character == null) continue;
 
                 _allParticipants.Add(character);
-                character.JoinBattle(this);
 
-                // Unsubscribe d'abord par sécurité (règle des leaks)
+                // On assigne le BattleManager directement au sous-système Combat
+                // C'est cette ligne qui remplit le slot du Target !
+                if (character.CharacterCombat != null)
+                {
+                    character.CharacterCombat.JoinBattle(this);
+                    Debug.Log($"<color=white>[Battle]</color> {character.CharacterName} a rejoint le combat via son CharacterCombat.");
+                }
+
+                // Gestion de la mort
                 character.OnDeath -= HandleCharacterDeath;
                 character.OnDeath += HandleCharacterDeath;
             }
@@ -99,7 +106,7 @@ public class BattleManager : MonoBehaviour
             if (character != null)
             {
                 character.OnDeath -= HandleCharacterDeath; // UNSUBSCRIBE CRITIQUE
-                character.LeaveBattle();
+                character.CharacterCombat.LeaveBattle();
             }
         }
 

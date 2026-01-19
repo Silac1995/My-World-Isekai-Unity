@@ -36,11 +36,9 @@ public class Character : MonoBehaviour
     private Transform _visualRoot;
     private GameObject _currentVisualInstance;
     private NavMeshAgent _cachedNavMeshAgent;
-    private BattleManager _battleManager;
     private bool _isDead;
 
     // Ressources statiques partagées
-    private static BattleManager _battleManagerPrefab;
     private static GameObject _worldItemPrefab;
 
     private const string BATTLE_MANAGER_PATH = "Prefabs/BattleManagerPrefab";
@@ -73,7 +71,6 @@ public class Character : MonoBehaviour
 
     public Transform VisualRoot => _visualRoot;
     public GameObject CurrentVisualInstance => _currentVisualInstance;
-    public BattleManager BattleManager => _battleManager;
     public RigTypeSO RigType => rigType;
     #endregion
 
@@ -101,8 +98,6 @@ public class Character : MonoBehaviour
     #region Initialization
     private void LoadResources()
     {
-        if (_battleManagerPrefab == null)
-            _battleManagerPrefab = Resources.Load<BattleManager>(BATTLE_MANAGER_PATH);
 
         if (_worldItemPrefab == null)
             _worldItemPrefab = Resources.Load<GameObject>(WORLD_ITEM_PATH);
@@ -162,7 +157,7 @@ public class Character : MonoBehaviour
     #region Health & Status
     public bool IsAlive() => !_isDead;
     public bool IsPlayer() => _controller is PlayerController;
-    public bool IsFree() => IsAlive() && !IsInBattle() && !_characterInteraction.IsInteracting;
+    public bool IsFree() => IsAlive() && !CharacterCombat.IsInBattle && !_characterInteraction.IsInteracting;
 
     public virtual void Die()
     {
@@ -187,32 +182,6 @@ public class Character : MonoBehaviour
 
         _stats.Health.CurrentAmount -= damage;
         if (_stats.Health.CurrentAmount <= 0) Die();
-    }
-    #endregion
-
-    #region Battle Logic
-    public bool IsInBattle() => _battleManager != null;
-
-    public void JoinBattle(BattleManager manager) => _battleManager = manager;
-    public void LeaveBattle() => _battleManager = null;
-
-    public void StartFight(Character target)
-    {
-        if (!ValidateFight(target)) return;
-
-        // 1. Instanciation du manager
-        BattleManager manager = Instantiate(_battleManagerPrefab);
-
-        // 2. Initialisation (Le manager va créer les équipes et s'auto-configurer)
-        // Note : On ne fait plus AddTeam ici car Initialize s'en occupe
-        manager.Initialize(this, target);
-
-        Debug.Log($"<color=orange>[Battle]</color> {CharacterName} a provoqué {target.CharacterName} !");
-    }
-
-    private bool ValidateFight(Character target)
-    {
-        return IsAlive() && target != null && target.IsAlive() && !IsInBattle() && !target.IsInBattle();
     }
     #endregion
 

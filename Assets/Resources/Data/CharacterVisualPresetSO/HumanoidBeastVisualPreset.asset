@@ -10,10 +10,10 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 7b8007068ff4f834cb6f112e48780cae, type: 3}
-  m_Name: HumanoidElfVisualPreset
+  m_Name: HumanoidBeastVisualPreset
   m_EditorClassIdentifier: Assembly-CSharp::HumanoidVisualPresetSO
   _characterDefaultPrefab: {fileID: 0}
   _characterSpritePrefab: {fileID: 0}
   _earCategory: 02_elf
   _hasTail: 0
-  _defaultSkinColor: {r: 0.9339623, g: 0.8798071, b: 0.8414472, a: 1}
+  _defaultSkinColor: {r: 0.5801887, g: 0.60162663, b: 0.7735849, a: 1}

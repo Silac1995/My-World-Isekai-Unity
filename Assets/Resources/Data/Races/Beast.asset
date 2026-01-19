@@ -18,5 +18,4 @@ MonoBehaviour:
   character_prefabs:
   - {fileID: 5456933137695734175, guid: 7b374d387037c9647bef899d050bac5c, type: 3}
   - {fileID: 5722855078630121073, guid: 0ac29b0de8149704287ff029d3a05e46, type: 3}
-  characterVisualPresets:
-  - {fileID: 11400000, guid: 49106f1462f17c841a95c08c06b41d68, type: 2}
+  characterVisualPreset: {fileID: 11400000, guid: 36ff85c4179d2e14c871d2af710bdac5, type: 2}

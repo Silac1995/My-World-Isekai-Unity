@@ -6,6 +6,7 @@ public class UI_InteractionCharacterScript : UI_InteractionScript
     [Header("Character Actions")]
     [SerializeField] private Button followButton;
     [SerializeField] private Button talkButton;
+    [SerializeField] private Button _fightButton;
     [SerializeField] private TMPro.TextMeshProUGUI targetNameText;
 
     [Header("Settings")]
@@ -15,14 +16,10 @@ public class UI_InteractionCharacterScript : UI_InteractionScript
 
     protected override void Awake()
     {
-        // On appelle base.Awake() pour s'assurer que le closeButton est bien écouté
         base.Awake();
-
-        // Vérification immédiate si le bouton est assigné
-        if (closeButton == null)
-            Debug.LogError($"<color=red>[UI Error]</color> closeButton n'est pas assigné dans l'inspecteur sur {gameObject.name}");
-        else
-            Debug.Log($"<color=green>[UI]</color> closeButton détecté et prêt sur {gameObject.name}");
+        // Vérification du bouton Fight
+        if (_fightButton == null)
+            Debug.LogWarning($"<color=orange>[UI]</color> _fightButton n'est pas assigné sur {gameObject.name}");
     }
 
     public void Initialize(Character initiator, Character target)
@@ -38,12 +35,16 @@ public class UI_InteractionCharacterScript : UI_InteractionScript
             followButton.onClick.AddListener(OnFollowClicked);
 
         if (talkButton != null)
-            talkButton.onClick.AddListener(OnTalkClicked); // Nouvel ajout
+            talkButton.onClick.AddListener(OnTalkClicked);
+
+        // Ajout du listener pour le combat
+        if (_fightButton != null)
+            _fightButton.onClick.AddListener(OnFightClicked);
 
         initiator.CharacterInteraction.OnInteractionStateChanged += HandleInteractionChanged;
         target.CharacterInteraction.OnInteractionStateChanged += HandleInteractionChanged;
 
-        Debug.Log($"<color=cyan>[UI]</color> Initialisée pour {initiator.CharacterName} interagissant avec {target.CharacterName}");
+        Debug.Log($"<color=cyan>[UI]</color> Initialisée pour {initiator.CharacterName} vs {target.CharacterName}");
     }
 
     private void Update()
@@ -132,5 +133,23 @@ public class UI_InteractionCharacterScript : UI_InteractionScript
             // pour que le joueur puisse continuer à interagir.
             // Si tu veux que l'UI se ferme, ajoute : Close();
         }
+    }
+
+    private void OnFightClicked()
+    {
+        Debug.Log("<color=red>[UI]</color> Bouton Fight cliqué !");
+        if (character != null && _targetCharacter != null)
+        {
+            // On crée l'action de combat (Assure-toi que cette classe existe)
+            // ICharacterInteractionAction fightAction = new InteractionFight();
+            // character.CharacterInteraction.PerformInteraction(fightAction);
+
+            // Si tu n'as pas encore la classe InteractionFight, tu peux tester avec un log :
+            Debug.Log($"Le combat commence entre {character.CharacterName} et {_targetCharacter.CharacterName}");
+            character.CharacterCombat.StartFight(_targetCharacter);
+        }
+
+        // Généralement, lancer un combat ferme l'interface d'interaction
+        Close();
     }
 }

@@ -17,5 +17,4 @@ MonoBehaviour:
   bonusSpeed: 7.5
   character_prefabs:
   - {fileID: 5456933137695734175, guid: 7b374d387037c9647bef899d050bac5c, type: 3}
-  characterVisualPresets:
-  - {fileID: 11400000, guid: 3cedfb242ea31f84d903c48050f3005b, type: 2}
+  characterVisualPreset: {fileID: 11400000, guid: 76b9198ddbeeaf8489478847bd6d4377, type: 2}
