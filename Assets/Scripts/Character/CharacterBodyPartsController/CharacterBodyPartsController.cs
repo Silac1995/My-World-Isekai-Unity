@@ -6,18 +6,25 @@ public class CharacterBodyPartsController : MonoBehaviour
     [SerializeField] private Character character;
     [SerializeField] private EyesController eyesController;
     [SerializeField] private HairController _hairController;
+    [SerializeField] private EarsController _earsController; // AJOUT
+
     public EyesController EyesController => eyesController;
     public HairController HairController => _hairController;
+    public EarsController EarsController => _earsController; // AJOUT
 
-
-    public void InitializeSpriteLibrariesToEveryBodyController()
-    {
-        EyesController.InitializeSpriteLibraries();
-
-    }
     void Start()
     {
         ValidateReferences();
+    }
+    public void InitializeAllBodyParts()
+    {
+
+        // On lance le scan des GameObjects pour chaque membre
+        if (EyesController != null) EyesController.Initialize();
+        if (HairController != null) HairController.Initialize();
+        if (EarsController != null) EarsController.Initialize(); // <--- C'est ça qui manque !
+
+        Debug.Log("<color=white>[BodyParts]</color> All body parts initialized.");
     }
 
     private void ValidateReferences()
@@ -35,9 +42,14 @@ public class CharacterBodyPartsController : MonoBehaviour
         {
             Debug.LogError($"CharacterBodyPartsController on {gameObject.name}: EyesController reference is missing! Please assign it in the Inspector.");
         }
+        if (_earsController == null)
+        {
+            Debug.LogError($"CharacterBodyPartsController on {gameObject.name}: EarsController is missing!");
+        }
         else
         {
             Debug.Log($"CharacterBodyPartsController: EyesController on '{eyesController.gameObject.name}' successfully assigned.");
         }
     }
+
 }

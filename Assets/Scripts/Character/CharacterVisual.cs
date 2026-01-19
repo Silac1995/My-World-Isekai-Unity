@@ -64,6 +64,67 @@ public class CharacterVisual : MonoBehaviour
 
     public CharacterAnimator CharacterAnimator => _characterAnimator;
 
+    // Dans CharacterVisual.cs
+
+    public void ApplyPresetFromRace(RaceSO race)
+    {
+        Debug.Log($"<color=white>---> [CharacterVisual]</color> Entrée dans ApplyPresetFromRace pour {race?.raceName ?? "NULL"}");
+
+        if (race == null)
+        {
+            Debug.LogError("[CharacterVisual] RaceSO passé est null !");
+            return;
+        }
+
+        // VERIFICATION CRITIQUE : Vérifie le nom exact dans ton script RaceSO
+        if (race.characterVisualPreset == null)
+        {
+            Debug.LogWarning($"[CharacterVisual] Aucun preset trouvé dans le SO de la race {race.raceName}. Vérifiez l'inspecteur.");
+            return;
+        }
+
+        ApplyVisualPreset(race.characterVisualPreset);
+    }
+
+    public void ApplyVisualPreset(CharacterVisualPresetSO preset)
+    {
+        Debug.Log($"<color=cyan>[CharacterVisual]</color> Tentative d'application du preset: {preset.name}");
+
+        if (preset is HumanoidVisualPresetSO humanoid)
+        {
+            ApplyHumanoidSettings(humanoid);
+        }
+        else
+        {
+            Debug.LogWarning($"[CharacterVisual] Le preset {preset.name} n'est pas de type Humanoid.");
+        }
+    }
+
+    private void ApplyHumanoidSettings(HumanoidVisualPresetSO preset)
+    {
+        if (bodyPartsController == null) return;
+
+        // 1. SÉCURITÉ : On s'assure que les dictionnaires de renderers sont prêts
+        if (partRenderers == null || partRenderers[VisualPart.Skin].Count == 0)
+        {
+            InitializeSpriteRenderers();
+        }
+
+        // 2. Initialisation des membres (Ears, etc.)
+        bodyPartsController.InitializeAllBodyParts();
+
+        // 3. Application de la couleur de peau
+        Debug.Log($"<color=orange>[Visual]</color> Application SkinColor: {preset.DefaultSkinColor}");
+        this.SkinColor = preset.DefaultSkinColor;
+
+        // 4. Application des oreilles (qui marchent déjà)
+        if (bodyPartsController.EarsController != null)
+        {
+            bodyPartsController.EarsController.SetEarsCategory(preset.EarCategory);
+            // On force aussi la couleur sur les oreilles spécifiquement
+            bodyPartsController.EarsController.SetEarsColor(preset.DefaultSkinColor);
+        }
+    }
 
 
     public bool IsFacingRight

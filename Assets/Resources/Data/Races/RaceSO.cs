@@ -13,6 +13,6 @@ public class RaceSO : ScriptableObject
 
     [Header("Visual Prefabs")]
     //public List<RigTypeSO> rigTypes = new List<RigTypeSO>();
-    public List<GameObject> character_prefabs = new List<GameObject>();
-    public List<CharacterVisualPresetSO> characterVisualPresets = new List<CharacterVisualPresetSO>();
+    public List<GameObject> character_prefabs = new List<GameObject>(); // Prefabs différents pour la race. Exemple: Race_Variant0, Race_Variant1, etc.
+    public CharacterVisualPresetSO characterVisualPreset;
 }

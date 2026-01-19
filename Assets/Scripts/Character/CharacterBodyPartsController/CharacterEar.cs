@@ -2,31 +2,31 @@ using UnityEngine;
 using UnityEngine.U2D.Animation;
 
 [System.Serializable]
-public class CharacterHair : CharacterBodyPart
+public class CharacterEar : CharacterBodyPart
 {
-    [SerializeField] protected GameObject _hairObject;
-    [SerializeField] protected SpriteRenderer _renderer;
-    [SerializeField] protected SpriteResolver _resolver;
-    [SerializeField] protected string _category;
-    [SerializeField] protected string _label;
+    [SerializeField] private GameObject _earObject;
+    [SerializeField] private SpriteRenderer _renderer;
+    [SerializeField] private SpriteResolver _resolver;
+    [SerializeField] private string _category;
+    [SerializeField] private string _label;
 
-    public CharacterHair(CharacterBodyPartsController controller, GameObject obj, string category, string label)
+    public CharacterEar(CharacterBodyPartsController controller, GameObject obj, string category, string label)
         : base(controller)
     {
-        _hairObject = obj;
+        _earObject = obj;
         _category = category;
         _label = label;
 
-        if (_hairObject != null)
+        if (_earObject != null)
         {
-            _renderer = _hairObject.GetComponent<SpriteRenderer>();
-            _resolver = _hairObject.GetComponent<SpriteResolver>();
+            _renderer = _earObject.GetComponent<SpriteRenderer>();
+            _resolver = _earObject.GetComponent<SpriteResolver>();
         }
 
         InitializeSprite();
     }
 
-    public virtual void InitializeSprite()
+    public void InitializeSprite()
     {
         if (_resolver != null)
         {
@@ -44,9 +44,11 @@ public class CharacterHair : CharacterBodyPart
         if (_resolver == null) return;
 
         _category = newCategory;
-        // On récupère le label actuel proprement
-        string currentLabel = _resolver.GetLabel();
-        _resolver.SetCategoryAndLabel(_category, currentLabel);
+        // On utilise _label (qui est Ear_L ou Ear_R) plutôt que GetLabel()
+        _resolver.SetCategoryAndLabel(_category, _label);
+
+        // Force la mise à jour immédiate pour éviter les décalages de frame
+        _resolver.ResolveSpriteToSpriteRenderer();
     }
 
     public void SetLabel(string newLabel)

@@ -1,13 +1,14 @@
 using UnityEngine;
 
-[CreateAssetMenu(fileName = "CharacterVisualPresetSO", menuName = "Scriptable Objects/CharacterVisualPresetSO")]
-public class CharacterVisualPresetSO : ScriptableObject
+public abstract class CharacterVisualPresetSO : ScriptableObject
 {
-    [SerializeField] public GameObject characterDefaultPrefab;
-    [SerializeField] public GameObject characterSpritePrefab;
+    [SerializeField] private GameObject _characterDefaultPrefab;
+    [SerializeField] private GameObject _characterSpritePrefab;
 
-    public bool HasVisualPrefab()
-    {
-        return characterSpritePrefab != null;
-    }
+    public GameObject CharacterSpritePrefab => _characterSpritePrefab;
+
+    public bool HasVisualPrefab() => _characterSpritePrefab != null;
+
+    // On peut ajouter une méthode abstraite pour forcer l'application
+    // public abstract void ApplyTo(CharacterVisual visual);
 }

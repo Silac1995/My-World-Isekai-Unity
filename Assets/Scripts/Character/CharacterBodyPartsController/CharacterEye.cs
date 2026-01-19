@@ -135,4 +135,36 @@ public class CharacterEye : CharacterBodyPart
             eyeBrowResolver.SetCategoryAndLabel(this.eyebrowsCategory, this.eyebrowLabel + this.eyebrowState);
     }
 
+    // À ajouter dans CharacterEye
+    public void SetEyesCategory(string newCategory)
+    {
+        if (eyeBaseResolver == null) return;
+
+        eyesCategory = newCategory;
+
+        // On synchronise tous les morceaux sur la nouvelle catégorie
+        // en gardant leurs labels respectifs via GetLabel()
+        eyeBaseResolver.SetCategoryAndLabel(eyesCategory, eyeBaseResolver.GetLabel());
+
+        if (eyeScleraResolver != null)
+            eyeScleraResolver.SetCategoryAndLabel(eyesCategory, eyeScleraResolver.GetLabel());
+
+        if (eyePupilResolver != null)
+            eyePupilResolver.SetCategoryAndLabel(eyesCategory, eyePupilResolver.GetLabel());
+    }
+
+    public void SetEyeLabel(string newLabel)
+    {
+        eyeLabel = newLabel;
+
+        // On change le label de base et on met à jour les resolvers liés
+        if (eyeBaseResolver != null)
+            eyeBaseResolver.SetCategoryAndLabel(eyesCategory, eyeLabel);
+
+        if (eyeScleraResolver != null)
+            eyeScleraResolver.SetCategoryAndLabel(eyesCategory, eyeLabel + "_sclera");
+
+        if (eyePupilResolver != null)
+            eyePupilResolver.SetCategoryAndLabel(eyesCategory, eyeLabel + "_pupil");
+    }
 }

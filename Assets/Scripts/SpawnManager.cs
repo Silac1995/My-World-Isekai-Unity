@@ -148,6 +148,7 @@ public class SpawnManager : MonoBehaviour
         float randomSize = Random.Range(0f, 200f);
         character.CharacterVisual.ResizeCharacter(randomSize);
         character.CharacterVisual.RequestAutoResize();
+        character.CharacterVisual.ApplyPresetFromRace(race);
         return character;
     }
 
@@ -183,7 +184,7 @@ public class SpawnManager : MonoBehaviour
             character.CharacterVisual.BodyPartsController != null &&
             character.CharacterVisual.BodyPartsController.EyesController != null)
         {
-            character.CharacterVisual.BodyPartsController.EyesController.Initialize();
+            character.CharacterVisual.BodyPartsController.InitializeAllBodyParts();
         }
         else
         {

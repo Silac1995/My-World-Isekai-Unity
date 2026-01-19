@@ -1790,6 +1790,10 @@ PrefabInstance:
       value: 5.59
       objectReference: {fileID: 0}
     - target: {fileID: 1007890653781899237, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
+      propertyPath: _earsController
+      value: 
+      objectReference: {fileID: 8814623054072574737}
+    - target: {fileID: 1007890653781899237, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       propertyPath: _hairController
       value: 
       objectReference: {fileID: 1641562415796598567}
@@ -1987,6 +1991,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 5246753746272467509, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1641562415796598567}
+    - targetCorrespondingSourceObject: {fileID: 5246753746272467509, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 8814623054072574737}
   m_SourcePrefab: {fileID: 100100000, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
 --- !u!114 &315613733655778041 stripped
 MonoBehaviour:
@@ -2106,6 +2113,22 @@ MonoBehaviour:
   spriteLibraryHairCategory: 01
   spriteLibraryPubicHairCategory: 01
   debugMode: 1
+--- !u!114 &8814623054072574737
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4035394106473422696}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 882e76c4eb0609941844059702fc605f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::EarsController
+  _bodyPartsController: {fileID: 9019601751347794616}
+  _ears: []
+  _spriteLibraryCategory: 01
+  _debugMode: 1
 --- !u!136 &4416257873846381761 stripped
 CapsuleCollider:
   m_CorrespondingSourceObject: {fileID: 5591531300363831708, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
