@@ -9,19 +9,21 @@ public class InteractionAskToFollow : ICharacterInteractionAction
         var npcController = target.GetComponent<NPCController>();
         if (npcController == null) return;
 
-        if (source == target)
+        // 1. Si on demande d'arrêter (il suit déjà)
+        if (npcController.HasBehaviour<FollowTargetBehaviour>())
         {
-            // Si on veut qu'il arrête de nous suivre, on pourrait faire un Pop 
-            // ou un Reset de la pile vers le Wander.
             npcController.ResetStackTo(new WanderBehaviour(npcController));
+            source.CharacterInteraction.EndInteraction();
             return;
         }
 
-        // On utilise Push pour ajouter le comportement de suivi au sommet.
-        // Désormais, si une interruption (faim, objet à ramasser) survient, 
-        // on fera un Push par-dessus, et au Pop, il reviendra à ce Follow.
-        npcController.PushBehaviour(new FollowTargetBehaviour(source, target.Controller.Agent));
+        // 2. On termine l'interaction d'abord pour vider le InteractBehaviour de la pile
+        source.CharacterInteraction.EndInteraction();
 
-        Debug.Log($"{target.CharacterName} is now following {source.CharacterName}");
+        // 3. On Push le Follow MAINTENANT. 
+        // Comme l'interaction est finie, personne ne viendra faire un Pop par dessus.
+        npcController.PushBehaviour(new FollowTargetBehaviour(source, target.Controller.Agent, 3f));
+
+        Debug.Log($"<color=green>[AI]</color> {target.CharacterName} suit maintenant {source.CharacterName}");
     }
 }

@@ -83,25 +83,37 @@ public class CharacterInteraction : MonoBehaviour
 
     public void EndInteraction()
     {
-        // Sécurité : Si on n'interagit avec personne, on ne fait rien
         if (_currentTarget == null) return;
 
         Character previousTarget = _currentTarget;
-
-        // 1. On libère les deux IA (elles reprennent leur comportement précédent)
-        _character.Controller?.PopBehaviour();
-        previousTarget.Controller?.PopBehaviour();
-
-        // 2. On casse le lien logique
         _currentTarget = null;
 
-        // 3. Libération du flag interactable
-        _character.CharacterInteractable?.Release();
+        // --- LOGIQUE DE NETTOYAGE INTELLIGENTE ---
 
-        // 4. Notification UI / Event
+        // On ne "Pop" le comportement du NPC que s'il est encore dans un état d'attente/interaction
+        // S'il a déjà commencé à suivre ou faire autre chose, on le laisse tranquille.
+        if (previousTarget.Controller != null)
+        {
+            var current = previousTarget.Controller.CurrentBehaviour;
+
+            // Si le comportement actuel est une interaction ou un Idle temporaire, on l'enlève
+            if (current is InteractBehaviour || current is IdleBehaviour)
+            {
+                previousTarget.Controller.PopBehaviour();
+            }
+        }
+
+        // Le joueur, lui, peut toujours Pop son comportement d'interaction
+        if (_character.Controller != null)
+        {
+            if (_character.Controller.CurrentBehaviour is InteractBehaviour)
+                _character.Controller.PopBehaviour();
+        }
+
+        _character.CharacterInteractable?.Release();
         OnInteractionStateChanged?.Invoke(previousTarget, false);
 
-        // 5. Réciprocité : On force l'autre à fermer aussi son interaction
+        // Réciprocité : On ferme l'autre côté sans boucle infinie
         if (previousTarget.CharacterInteraction.CurrentTarget == _character)
         {
             previousTarget.CharacterInteraction.EndInteraction();

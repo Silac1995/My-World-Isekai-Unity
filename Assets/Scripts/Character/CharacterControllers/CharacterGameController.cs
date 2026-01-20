@@ -66,15 +66,11 @@ public abstract class CharacterGameController : MonoBehaviour
         if (CurrentBehaviour != null && CurrentBehaviour.IsFinished)
         {
             PopBehaviour();
-            return; // On attend la frame suivante ou on continue
+            return;
         }
 
-        // Réactivation de l'agent (logique précédente)
-        if (!character.IsPlayer() && agent != null && agent.isOnNavMesh)
-        {
-            if (!(CurrentBehaviour is InteractBehaviour))
-                agent.isStopped = false;
-        }
+        // --- SUPPRESSION DU BLOC "agent.isStopped = false" ---
+        // On laisse le CurrentBehaviour piloter l'agent lui-même.
 
         CurrentBehaviour?.Act(character);
 
