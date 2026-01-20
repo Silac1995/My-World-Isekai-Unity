@@ -31,7 +31,9 @@ public class PlayerController : CharacterGameController
 
     public override void Move()
     {
-        if (character != null && !character.IsPlayer() || CurrentBehaviour != null)
+        // Si ce n'est pas le joueur (cas rare où ce script serait ailleurs), 
+        // on utilise la logique de base.
+        if (!character.IsPlayer())
         {
             base.Move();
             return;
@@ -40,21 +42,20 @@ public class PlayerController : CharacterGameController
         Rigidbody rb = character.Rigidbody;
         if (rb == null) return;
 
-        // Calcul de la direction SANS faire tourner le transform
+        // --- CORRECTION ---
+        // On retire la vérification du CurrentBehaviour pour laisser 
+        // les inputs clavier prioritaires quoi qu'il arrive.
+
         Vector3 moveDir = Quaternion.Euler(0f, Camera.main.transform.eulerAngles.y, 0f) * inputDir;
 
         if (moveDir.magnitude > 0.1f && !isCrouching)
         {
             Vector3 targetVelocity = moveDir * character.MovementSpeed;
-
-            // On applique la vélocité
             Vector3 newVel = Vector3.Lerp(rb.linearVelocity,
                 new Vector3(targetVelocity.x, rb.linearVelocity.y, targetVelocity.z),
                 Time.deltaTime * 10f);
 
             rb.linearVelocity = newVel;
-
-            // C'est SEULEMENT ici qu'on gère le regard (gauche/droite) via le scale
             characterVisual?.UpdateFlip(moveDir);
         }
         else
@@ -65,7 +66,6 @@ public class PlayerController : CharacterGameController
             rb.linearVelocity = stopVel;
         }
 
-        // SÉCURITÉ : On force la rotation à zéro pour éviter que la physique ne le fasse pivoter
         rb.rotation = Quaternion.identity;
     }
 

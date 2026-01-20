@@ -8,6 +8,8 @@ public class MoveToTargetBehaviour : IAIBehaviour
     private Vector3 _targetPosition;
     private float _stoppingDistance;
     private Action _onArrived;
+    private bool _isFinished = false;
+    public bool IsFinished => _isFinished;
 
     // Constructeur 1 : Cible physique (GameObject)
     public MoveToTargetBehaviour(NPCController controller, GameObject target, float stopDist, Action onArrived)
@@ -85,25 +87,27 @@ public class MoveToTargetBehaviour : IAIBehaviour
 
     private void StopAndArrive(Character character)
     {
-        Debug.Log($"<color=green>[IA]</color> Arrivée confirmée sur {(_targetGameObject != null ? _targetGameObject.name : "destination")}");
-
+        Debug.Log($"<color=green>[IA]</color> Arrivée confirmée.");
         if (_controller.Agent.isOnNavMesh)
         {
-            _controller.Agent.isStopped = true;
             _controller.Agent.ResetPath();
             _controller.Agent.velocity = Vector3.zero;
         }
 
         _onArrived?.Invoke();
-        _controller.PopBehaviour();
+
+        // AU LIEU DE PopBehaviour directement, on utilise le flag :
+        _isFinished = true;
     }
 
     public void Exit(Character character)
     {
-        if (_controller.Agent.isOnNavMesh)
+        // On nettoie juste le chemin pour ne pas que le NPC 
+        // "glisse" vers l'ancienne destination au démarrage du prochain behaviour.
+        if (_controller.Agent != null && _controller.Agent.isOnNavMesh)
         {
-            _controller.Agent.isStopped = false; // Important pour le prochain Behaviour
             _controller.Agent.ResetPath();
         }
     }
+    public void Terminate() => _isFinished = true;
 }

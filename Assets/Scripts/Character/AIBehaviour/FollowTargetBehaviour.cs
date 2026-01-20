@@ -3,41 +3,42 @@ using UnityEngine.AI;
 
 public class FollowTargetBehaviour : IAIBehaviour
 {
-    private Character targetCharacter;
-    private NavMeshAgent agent;
-    private float followDistance;
+    private Character _target;
+    private NavMeshAgent _agent;
+    private float _followDist;
+    private bool _isFinished = false;
 
-    public FollowTargetBehaviour(Character target, NavMeshAgent agent, float followDistance = 30f)
+    public bool IsFinished => _isFinished;
+
+    public FollowTargetBehaviour(Character target, NavMeshAgent agent, float dist = 3f)
     {
-        this.targetCharacter = target;
-        this.agent = agent;
-        this.followDistance = followDistance;
+        _target = target;
+        _agent = agent;
+        _followDist = dist;
     }
+
+    public void Terminate() => _isFinished = true;
 
     public void Act(Character self)
     {
-        if (targetCharacter == null || agent == null)
-            return;
+        if (_target == null || _isFinished) return;
 
-        float distance = Vector3.Distance(agent.transform.position, targetCharacter.transform.position);
+        float dist = Vector3.Distance(self.transform.position, _target.transform.position);
 
-        if (distance > followDistance)
+        if (dist > _followDist)
         {
-            agent.SetDestination(targetCharacter.transform.position);
+            _agent.isStopped = false;
+            _agent.SetDestination(_target.transform.position);
         }
         else
         {
-            agent.ResetPath(); // stoppe le NPC quand il est proche
+            _agent.isStopped = true;
+            _agent.velocity = Vector3.zero;
         }
     }
+
     public void Exit(Character self)
     {
-        // On arrête proprement l'agent pour qu'il ne continue pas vers la cible
-        if (agent != null && agent.isOnNavMesh)
-        {
-            agent.ResetPath();
-        }
-
-        Debug.Log($"{self.CharacterName} arrête de suivre sa cible.");
+        if (_agent != null && _agent.isOnNavMesh) _agent.ResetPath();
     }
 }

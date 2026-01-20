@@ -28,25 +28,63 @@ public class CharacterActions : MonoBehaviour
         if (!action.CanExecute()) return;
 
         _currentAction = action;
-        _actionStartTime = Time.time; // On enregistre le début
+        _actionStartTime = Time.time;
         _currentAction.OnActionFinished += CleanupAction;
 
-        OnActionStarted?.Invoke(_currentAction); // On prévient l'UI
+        OnActionStarted?.Invoke(_currentAction);
 
+        // 1. On lance l'initialisation de l'action
         _currentAction.OnStart();
-        _actionRoutine = StartCoroutine(ActionTimerRoutine(_currentAction));
+
+        // 2. GESTION DU FLUX (Instantané vs Temporisé)
+        if (action.Duration <= 0)
+        {
+            // On exécute tout de suite sans créer de Coroutine (économie de mémoire)
+            try
+            {
+                action.OnApplyEffect();
+                action.Finish();
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[CharacterActions] Erreur Action Instantanée: {e.Message}");
+                CleanupAction();
+            }
+        }
+        else
+        {
+            // On ne crée la coroutine que si nécessaire
+            _actionRoutine = StartCoroutine(ActionTimerRoutine(_currentAction));
+        }
     }
 
     private IEnumerator ActionTimerRoutine(CharacterAction action)
     {
+        if (action == null) yield break;
+
         // On attend la durée prévue
-        yield return new WaitForSeconds(action.Duration);
+        if (action.Duration > 0)
+        {
+            yield return new WaitForSeconds(action.Duration);
+        }
 
-        // On applique l'effet
-        action.OnApplyEffect();
+        // --- SÉCURITÉ ---
+        // Si l'action a été annulée ou terminée entre temps (ClearCurrentAction), on arrête tout.
+        if (_currentAction != action) yield break;
 
-        // On termine l'action (ce qui déclenchera CleanupAction via l'event)
-        action.Finish();
+        try
+        {
+            // On applique l'effet
+            action.OnApplyEffect();
+
+            // On termine l'action (ce qui déclenchera CleanupAction via l'event)
+            action.Finish();
+        }
+        catch (Exception e)
+        {
+            Debug.LogError($"[CharacterActions] Erreur durant l'exécution de l'action: {e.Message}");
+            CleanupAction();
+        }
     }
 
     private void CleanupAction()
@@ -59,7 +97,13 @@ public class CharacterActions : MonoBehaviour
         _currentAction = null;
         _actionRoutine = null;
 
-        // Ajoute ceci pour que l'UI sache qu'il faut se cacher même si c'est une réussite
+        // --- RÉACTIVATION DE L'AGENT ---
+        // Si l'action qui vient de finir avait stoppé l'agent, on le libère ici
+        if (!_character.IsPlayer() && _character.Controller?.Agent != null)
+        {
+            _character.Controller.Agent.isStopped = false;
+        }
+
         OnActionCanceled?.Invoke();
     }
 
@@ -74,22 +118,18 @@ public class CharacterActions : MonoBehaviour
 
         if (_currentAction != null)
         {
-            // --- LA CORRECTION EST ICI ---
-            // On demande à l'animator de supprimer le trigger s'il n'a pas encore été consommé
+            _currentAction.OnActionFinished -= CleanupAction; // Désabonnement important
+
             var animator = _character.CharacterVisual?.CharacterAnimator?.Animator;
             if (animator != null)
             {
                 animator.ResetTrigger("Trigger_pickUpItem");
-                // Si tu as d'autres actions, tu peux aussi reset leurs triggers ici
-                // animator.ResetTrigger("Trigger_Sit"); 
-                OnActionCanceled?.Invoke(); // On prévient l'UI pour cacher la barre
             }
 
-            _currentAction.OnActionFinished -= CleanupAction;
+            OnActionCanceled?.Invoke();
         }
 
         _currentAction = null;
-        Debug.Log("<color=orange>[Actions]</color> Action et Animation annulées.");
     }
 
     // Si le personnage est détruit, on s'assure que tout s'arrête

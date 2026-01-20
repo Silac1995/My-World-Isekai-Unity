@@ -1821,6 +1821,22 @@ PrefabInstance:
       propertyPath: _interactionZone
       value: 
       objectReference: {fileID: 4416257873846381761}
+    - target: {fileID: 3432712253947114883, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3432712253947114883, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
+      propertyPath: m_AnchorMin.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3432712253947114883, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
+      propertyPath: m_AnchoredPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3432712253947114883, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 4281310202761960642, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       propertyPath: m_Name
       value: Character_Default_Humanoid
@@ -1849,6 +1865,26 @@ PrefabInstance:
       propertyPath: m_EditorClassIdentifier
       value: Assembly-CSharp::CharacterVisual
       objectReference: {fileID: 0}
+    - target: {fileID: 4629397348468206407, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
+      propertyPath: m_LocalScale.x
+      value: 0.03
+      objectReference: {fileID: 0}
+    - target: {fileID: 4629397348468206407, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
+      propertyPath: m_LocalScale.y
+      value: 0.03
+      objectReference: {fileID: 0}
+    - target: {fileID: 4629397348468206407, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
+      propertyPath: m_LocalScale.z
+      value: 0.03
+      objectReference: {fileID: 0}
+    - target: {fileID: 4629397348468206407, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
+      propertyPath: m_AnchoredPosition.x
+      value: 2.9999998
+      objectReference: {fileID: 0}
+    - target: {fileID: 4629397348468206407, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: 11.006903
+      objectReference: {fileID: 0}
     - target: {fileID: 4916404909723457133, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       propertyPath: animator
       value: 
@@ -1859,7 +1895,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 5517525453739334567, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       propertyPath: m_IsActive
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 5591531300363831708, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       propertyPath: m_Height
@@ -1929,6 +1965,22 @@ PrefabInstance:
       propertyPath: m_AnchorMax.y
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 7436536170041264632, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7436536170041264632, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
+      propertyPath: m_AnchorMin.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7436536170041264632, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
+      propertyPath: m_AnchoredPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7436536170041264632, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 8408755073701722020, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       propertyPath: _bagScript
       value: 
@@ -1965,6 +2017,22 @@ PrefabInstance:
       propertyPath: animator
       value: 
       objectReference: {fileID: 3855441886611549694}
+    - target: {fileID: 8818048272814395601, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8818048272814395601, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
+      propertyPath: m_AnchorMin.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8818048272814395601, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
+      propertyPath: m_AnchoredPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8818048272814395601, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 9197436005975429803, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       propertyPath: m_AnchorMax.y
       value: 0
@@ -2127,6 +2195,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::EarsController
   _bodyPartsController: {fileID: 9019601751347794616}
   _ears: []
+  _spriteLibraryAssetsEars: {fileID: 0}
   _spriteLibraryCategory: 01
   _debugMode: 1
 --- !u!136 &4416257873846381761 stripped

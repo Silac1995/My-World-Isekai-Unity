@@ -30,6 +30,7 @@ public class Character : MonoBehaviour
     [SerializeField] private CharacterInteraction _characterInteraction;
     [SerializeField] private CharacterRelation _characterRelation;
     [SerializeField] private CharacterCombat _characterCombat;
+    [SerializeField] private CharacterNeeds _characterNeeds;
     #endregion
 
     #region Private Fields
@@ -68,6 +69,7 @@ public class Character : MonoBehaviour
     public CharacterRelation CharacterRelation => _characterRelation;
     public CharacterInteractable CharacterInteractable => _characterInteractable;
     public CharacterCombat CharacterCombat => _characterCombat;
+    public CharacterNeeds CharacterNeeds => _characterNeeds;
 
     public Transform VisualRoot => _visualRoot;
     public GameObject CurrentVisualInstance => _currentVisualInstance;

@@ -25,17 +25,23 @@ public class CharacterStartInteraction : CharacterAction
         // 2. Logique : Créer le lien
         character.CharacterInteraction.StartInteractionWith(_target);
 
-        // 3. IA : Stopper les mouvements
-        _target.Controller?.SetBehaviour(new InteractBehaviour());
-        character.Controller?.SetBehaviour(new InteractBehaviour());
+        // --- CORRECTION ICI ---
+        // On ne bloque l'IA que pour les PNJs. 
+        // Le joueur doit rester libre de ses mouvements (le CheckInteractionDistance s'occupera de couper si il s'éloigne)
 
-        // 4. UI : Affichage LOCAL
-        if (character.IsPlayer())
+        if (!_target.IsPlayer())
         {
-            ShowInteractionUI();
+            _target.Controller?.PushBehaviour(new InteractBehaviour());
         }
 
-        Debug.Log($"<color=cyan>[Action]</color> {character.CharacterName} interagit avec {_target.CharacterName}");
+        if (!character.IsPlayer())
+        {
+            character.Controller?.PushBehaviour(new InteractBehaviour());
+        }
+
+        if (character.IsPlayer()) ShowInteractionUI();
+
+        Finish();
     }
 
     // OBLIGATOIRE : Même si c'est vide, on doit l'implémenter

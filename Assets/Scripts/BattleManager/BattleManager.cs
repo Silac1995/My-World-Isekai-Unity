@@ -115,5 +115,37 @@ public class BattleManager : MonoBehaviour
     }
 
     // Garde ton DrawBattleZoneOutline mais enlève-le de l'Update !
-    public void DrawBattleZoneOutline() { /* Ton code de raycast ici */ }
+    public void DrawBattleZoneOutline()
+    {
+        if (_battleZoneLine == null || _battleZone == null) return;
+
+        BoxCollider box = _battleZone as BoxCollider;
+        if (box == null) return;
+
+        // Configuration de base du LineRenderer
+        _battleZoneLine.useWorldSpace = true;
+        _battleZoneLine.loop = true;
+        _battleZoneLine.positionCount = 4;
+
+        // Calcul des coins basés sur le BoxCollider
+        Vector3 center = box.transform.position;
+        Vector3 size = box.size;
+
+        // On trace un rectangle au niveau du sol (y)
+        float x = size.x / 2f;
+        float z = size.z / 2f;
+        float y = center.y; // Ajuste légèrement (+0.05f) si la ligne clignote avec le sol
+
+        Vector3[] corners = new Vector3[4]
+        {
+        center + new Vector3(-x, 0, -z),
+        center + new Vector3(x, 0, -z),
+        center + new Vector3(x, 0, z),
+        center + new Vector3(-x, 0, z)
+        };
+
+        _battleZoneLine.SetPositions(corners);
+
+        Debug.Log("<color=cyan>[Battle]</color> Outline de combat dessinée au sol.");
+    }
 }

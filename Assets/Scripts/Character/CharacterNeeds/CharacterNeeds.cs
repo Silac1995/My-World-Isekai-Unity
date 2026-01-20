@@ -5,6 +5,7 @@ public class CharacterNeeds : MonoBehaviour
 {
     [SerializeField] private Character _character;
     private List<CharacterNeed> _allNeeds = new List<CharacterNeed>();
+    public List<CharacterNeed> AllNeeds => _allNeeds;
 
     private void Start()
     {

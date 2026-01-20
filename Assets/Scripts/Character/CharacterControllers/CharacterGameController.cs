@@ -54,7 +54,6 @@ public abstract class CharacterGameController : MonoBehaviour
 
     protected virtual void Update()
     {
-        // 1. Si une action est en cours, on stoppe tout et on met à jour le visuel
         if (character.CharacterActions.CurrentAction != null)
         {
             StopMovement();
@@ -63,23 +62,53 @@ public abstract class CharacterGameController : MonoBehaviour
             return;
         }
 
-        // 2. Sinon, on exécute l'IA (CurrentBehaviour utilise ta nouvelle Stack)
-        CurrentBehaviour?.Act(character);
-
-        // 3. On remet l'agent en marche s'il était stoppé
-        if (agent != null && agent.isOnNavMesh && agent.isStopped)
+        // --- GESTION DE LA TERMINAISON AUTOMATIQUE ---
+        if (CurrentBehaviour != null && CurrentBehaviour.IsFinished)
         {
-            agent.isStopped = false;
+            PopBehaviour();
+            return; // On attend la frame suivante ou on continue
         }
+
+        // Réactivation de l'agent (logique précédente)
+        if (!character.IsPlayer() && agent != null && agent.isOnNavMesh)
+        {
+            if (!(CurrentBehaviour is InteractBehaviour))
+                agent.isStopped = false;
+        }
+
+        CurrentBehaviour?.Act(character);
 
         Move();
         UpdateAnimations();
         UpdateFlip();
     }
 
-    // Ajoute un nouveau comportement et met en pause le précédent
+    // Modifier SetBehaviour pour qu'il soit compatible avec ta pile
+    public void SetBehaviour(IAIBehaviour behaviour)
+    {
+        if (character != null && character.IsPlayer()) return;
+
+        // Si on veut vraiment "forcer" un comportement unique, on Reset la pile
+        // Mais pour une interaction, on préfère PUSH pour revenir au Wander après
+        PushBehaviour(behaviour);
+    }
+
     public void PushBehaviour(IAIBehaviour newBehaviour)
     {
+        // 1. PROTECTION JOUEUR : On ne touche à rien
+        if (character.IsPlayer())
+        {
+            _behavioursStack.Push(newBehaviour);
+            return;
+        }
+
+        // 2. LOGIQUE NPC : On ne force plus le isStopped ici !
+        // On laisse le behaviour décider s'il doit bouger ou non.
+        if (agent != null && agent.isOnNavMesh)
+        {
+            // On ne fait rien par défaut, MoveToTarget s'occupera de piloter l'agent.
+        }
+
         _behavioursStack.Push(newBehaviour);
         Debug.Log($"<color=cyan>[AI Stack]</color> Push: {newBehaviour.GetType().Name}");
     }
@@ -87,22 +116,56 @@ public abstract class CharacterGameController : MonoBehaviour
     // Termine le comportement actuel et revient au précédent
     public void PopBehaviour()
     {
+        if (character.IsPlayer())
+        {
+            if (_behavioursStack.Count > 0) _behavioursStack.Pop();
+            return;
+        }
+
         if (_behavioursStack.Count > 0)
         {
             IAIBehaviour old = _behavioursStack.Pop();
-            old.Exit(character);
-            Debug.Log($"<color=orange>[AI Stack]</color> Pop: {old.GetType().Name}. Retour à: {(CurrentBehaviour != null ? CurrentBehaviour.GetType().Name : "Rien")}");
+            old.Exit(character); // L'exit nettoie le chemin
+            Debug.Log($"<color=orange>[AI Stack]</color> Pop: {old.GetType().Name}.");
+        }
+
+        // --- ICI ON RÉACTIVE PROPREMENT ---
+        if (agent != null && agent.isOnNavMesh)
+        {
+            // On force l'arrêt des commandes précédentes
+            agent.velocity = Vector3.zero;
+            // On autorise à nouveau le mouvement
+            agent.isStopped = false;
+        }
+
+        if (_behavioursStack.Count == 0)
+        {
+            if (character.TryGetComponent<NPCController>(out var npc))
+            {
+                ResetStackTo(new WanderBehaviour(npc));
+            }
+        }
+        else
+        {
+            // On force le comportement restant à reprendre la main immédiatement
+            CurrentBehaviour?.Act(character);
         }
     }
     public void ResetStackTo(IAIBehaviour baseBehaviour)
     {
-        // On nettoie tout avant de mettre le nouveau comportement de base
         while (_behavioursStack.Count > 0)
         {
             IAIBehaviour old = _behavioursStack.Pop();
             old.Exit(character);
         }
-        PushBehaviour(baseBehaviour);
+
+        // On libère l'agent AVANT de push le nouveau comportement
+        if (agent != null && agent.isOnNavMesh)
+        {
+            agent.isStopped = false;
+        }
+
+        _behavioursStack.Push(baseBehaviour);
     }
 
     private void StopMovement()
@@ -168,25 +231,6 @@ public abstract class CharacterGameController : MonoBehaviour
         }
     }
 
-    public void SetBehaviour(IAIBehaviour behaviour)
-    {
-        if (character != null && character.IsPlayer())
-        {
-            Debug.Log($"<color=yellow>[AI]</color> Changement de comportement ignoré pour le Joueur ({gameObject.name}).");
-            return;
-        }
-
-        if (currentBehaviour != null)
-        {
-            currentBehaviour.Exit(character);
-        }
-
-        string behaviourName = behaviour != null ? behaviour.GetType().Name : "None";
-        Debug.Log($"<color=cyan>[AI]</color> {gameObject.name} change de comportement pour : {behaviourName}");
-
-        currentBehaviour = behaviour;
-    }
-
     protected bool IsGrounded()
     {
         // On part du centre du collider (ou du transform)
@@ -210,5 +254,12 @@ public abstract class CharacterGameController : MonoBehaviour
     public bool HasBehaviour<T>() where T : IAIBehaviour
     {
         return _behavioursStack.Any(b => b is T);
+    }
+
+    // À ajouter dans CharacterGameController.cs
+    public List<string> GetBehaviourStackNames()
+    {
+        // ToArray() crée une copie de la pile, du sommet vers le bas
+        return _behavioursStack.Select(b => b.GetType().Name).ToList();
     }
 }

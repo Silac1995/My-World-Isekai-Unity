@@ -4,33 +4,29 @@ using UnityEngine.AI;
 public class InteractBehaviour : IAIBehaviour
 {
     private bool _hasStoppedAgent = false;
+    private bool _isFinished = false;
+    public bool IsFinished => _isFinished;
+
+    public void Terminate() => _isFinished = true;
 
     public void Act(Character self)
     {
         Character target = self.CharacterInteraction.CurrentTarget;
 
-        // Si la cible disparaît ou si l'interaction est rompue, 
-        // le Controller s'occupera de changer le Behaviour.
-        if (target == null) return;
+        // Si la cible disparaît, on se termine
+        if (target == null)
+        {
+            _isFinished = true;
+            return;
+        }
 
-        // 1. Logique visuelle : Le personnage fait face à sa cible
+        if (self.Controller.Agent != null && self.Controller.Agent.isOnNavMesh)
+        {
+            self.Controller.Agent.isStopped = true;
+        }
+
         Vector3 direction = target.transform.position - self.transform.position;
-        if (self.CharacterVisual != null)
-        {
-            self.CharacterVisual.UpdateFlip(direction);
-        }
-
-        // 2. Logique de mouvement : On stoppe l'agent une seule fois
-        if (!_hasStoppedAgent)
-        {
-            var agent = self.GetComponent<NavMeshAgent>();
-            if (agent != null && agent.isOnNavMesh)
-            {
-                agent.ResetPath();
-                agent.velocity = Vector3.zero; // Stop immédiat pour le rig
-            }
-            _hasStoppedAgent = true;
-        }
+        self.CharacterVisual?.UpdateFlip(direction);
     }
 
     public void Exit(Character self)

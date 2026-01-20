@@ -10,6 +10,8 @@ public class WanderBehaviour : IAIBehaviour
     private float _maxWait;
     private bool _isWaiting = false;
     private Coroutine _currentWaitCoroutine;
+    private bool _isFinished = false;
+    public bool IsFinished => _isFinished;
 
     public WanderBehaviour(NPCController npcController)
     {
@@ -77,4 +79,5 @@ public class WanderBehaviour : IAIBehaviour
         }
     }
 
+    public void Terminate() => _isFinished = true;
 }
