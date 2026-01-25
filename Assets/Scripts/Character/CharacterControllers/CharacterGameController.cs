@@ -256,4 +256,11 @@ public abstract class CharacterGameController : MonoBehaviour
         // ToArray() crée une copie de la pile, du sommet vers le bas
         return _behavioursStack.Select(b => b.GetType().Name).ToList();
     }
+    /// <summary>
+    /// Récupère le comportement actuel s'il est du type demandé.
+    /// </summary>
+    public T GetCurrentBehaviour<T>() where T : class, IAIBehaviour
+    {
+        return CurrentBehaviour as T;
+    }
 }

@@ -6,20 +6,27 @@ public class CombatBehaviour : IAIBehaviour
     private BattleManager _battleManager;
     private Character _currentTarget;
     private bool _isFinished = false;
-
-    // On récupère la zone de combat (le BoxCollider créé par le BattleManager)
     private Collider _battleZone;
 
+    public Character Target => _currentTarget;
     public bool IsFinished => _isFinished;
+    public bool HasTarget => _currentTarget != null && _currentTarget.IsAlive();
 
     public CombatBehaviour(BattleManager battleManager, Character target)
     {
         _battleManager = battleManager;
         _currentTarget = target;
+    }
 
-        // On récupère la zone via le manager
-        // Note: Dans ton BattleManager, _battleZone est privé, assure-toi d'ajouter un getter si besoin
-        // ou d'utiliser BattleManager.GetComponent<BoxCollider>()
+    // --- NOUVEAU : Setter de cible ---
+    public void SetCurrentTarget(Character target)
+    {
+        _currentTarget = target;
+
+        if (target == null)
+        {
+            Debug.Log("<color=gray>[Combat]</color> Cible réinitialisée (null).");
+        }
     }
 
     public void Terminate() => _isFinished = true;
@@ -28,51 +35,44 @@ public class CombatBehaviour : IAIBehaviour
     {
         if (_battleManager == null || _isFinished) return;
 
-
-        // 1. Vérification de la cible
-        if (_currentTarget == null || !_currentTarget.IsAlive())
+        // 1. Utilisation de la nouvelle vérification
+        if (!HasTarget)
         {
-            // Si la cible meurt, le combat n'est pas forcément fini (il reste peut-être d'autres ennemis)
-            // Mais pour ce comportement spécifique, on s'arrête si on n'a plus rien à taper
+            // On stoppe l'agent s'il n'y a plus de cible pour éviter qu'il continue 
+            // de courir vers la dernière position connue
+            if (self.Controller.Agent != null && self.Controller.Agent.isOnNavMesh)
+            {
+                self.Controller.Agent.isStopped = true;
+            }
             return;
         }
 
         NavMeshAgent agent = self.Controller.Agent;
         if (agent == null || !agent.isOnNavMesh) return;
+
+        // On s'assure que l'agent est actif (notre sécurité du Push)
         if (agent.isStopped)
             agent.isStopped = false;
 
         // 2. Logique de mouvement vers la cible
-        // On définit la destination vers l'ennemi
         agent.SetDestination(_currentTarget.transform.position);
 
-        // 3. CONTRAINTE DE ZONE (La "BattleZone")
-        // On récupère le collider du manager pour vérifier si on est dedans
+        // 3. CONTRAINTE DE ZONE
         if (_battleZone == null) _battleZone = _battleManager.GetComponent<BoxCollider>();
 
         if (_battleZone != null)
         {
-            // Si la position actuelle du personnage est HORS de la zone
             if (!_battleZone.bounds.Contains(self.transform.position))
             {
-                // On trouve le point le plus proche à l'intérieur des limites de la zone
                 Vector3 clampedPosition = _battleZone.ClosestPoint(self.transform.position);
-
-                // On force l'agent à rester sur ce point
                 agent.SetDestination(clampedPosition);
-
-                Debug.LogWarning($"<color=red>[Combat]</color> {self.CharacterName} tente de fuir la zone !");
             }
         }
 
-        // 4. Logique d'attaque (Visuel/Distance)
+        // 4. Logique d'attaque / Flip
         float dist = Vector3.Distance(self.transform.position, _currentTarget.transform.position);
-        if (dist < 2f) // Distance de corps à corps
+        if (dist < 2f)
         {
-            // Ici tu pourrais déclencher une attaque auto ou un timer d'attaque
-            // self.CharacterCombat.TryAttack(_currentTarget);
-
-            // On regarde la cible
             Vector3 dir = _currentTarget.transform.position - self.transform.position;
             self.CharacterVisual?.UpdateFlip(dir);
         }

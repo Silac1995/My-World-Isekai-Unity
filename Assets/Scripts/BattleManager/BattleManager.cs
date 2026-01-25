@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 public class BattleManager : MonoBehaviour
@@ -101,7 +102,7 @@ public class BattleManager : MonoBehaviour
     {
         if (_isBattleEnded) return;
 
-        // Vérification de victoire
+        // 1. Vérifier si le combat est terminé (une équipe entière est éliminée)
         foreach (var team in _teams)
         {
             if (team.IsTeamEliminated())
@@ -111,6 +112,42 @@ public class BattleManager : MonoBehaviour
                 return;
             }
         }
+
+        // 2. Si le combat continue, on redirige ceux qui tapaient le mort
+        RedirectAttackers(deadCharacter);
+    }
+
+    private void RedirectAttackers(Character deadTarget)
+    {
+        foreach (var participant in _allParticipants)
+        {
+            if (participant == null || !participant.IsAlive()) continue;
+
+            // On récupère le comportement de combat s'il existe
+            var combatBehaviour = participant.Controller.GetCurrentBehaviour<CombatBehaviour>();
+
+            if (combatBehaviour != null)
+            {
+                // On vérifie si l'IA n'a plus de cible OU si sa cible actuelle est celle qui vient de mourir
+                // On utilise une propriété Target que nous allons ajouter au CombatBehaviour
+                if (!combatBehaviour.HasTarget || combatBehaviour.Target == deadTarget)
+                {
+                    BattleTeam enemyTeam = GetEnemyTeamOf(participant);
+                    Character nextTarget = enemyTeam?.GetRandomMember();
+
+                    // On donne la nouvelle cible au comportement
+                    combatBehaviour.SetCurrentTarget(nextTarget);
+
+                    Debug.Log($"<color=yellow>[Battle]</color> {participant.CharacterName} a perdu sa cible ({deadTarget.CharacterName}) et se tourne vers {nextTarget?.CharacterName}");
+                }
+            }
+        }
+    }
+
+    // Petite méthode utilitaire pour trouver l'équipe adverse
+    private BattleTeam GetEnemyTeamOf(Character c)
+    {
+        return _teams.FirstOrDefault(team => !team.ContainsCharacter(c));
     }
 
     public void EndBattle()
