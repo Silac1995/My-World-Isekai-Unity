@@ -121,15 +121,6 @@ TextureImporter:
         color:
           serializedVersion: 2
           rgba: 4278190335
-      - name: bone_handWeapon_R
-        guid: 80533b116c197044d9e39f62e2a50a32
-        position: {x: 75, y: 634, z: 0}
-        rotation: {x: 0, y: 0, z: 0.7071068, w: -0.7071068}
-        length: 34.119648
-        parentId: -1
-        color:
-          serializedVersion: 2
-          rgba: 4278255615
       spriteID: f008c61e89c0f80458fa7198b15e57fb
       internalID: 862176329
       vertices:

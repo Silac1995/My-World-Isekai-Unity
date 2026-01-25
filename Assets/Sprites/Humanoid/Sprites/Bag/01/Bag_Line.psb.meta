@@ -111,7 +111,7 @@ ScriptedImporter:
     spriteBone:
     - name: bone_torso
       guid: 6fe07cc7c7cf35b419a8d94a924aa418
-      position: {x: 181, y: 120, z: 0}
+      position: {x: 181, y: 250, z: 0}
       rotation: {x: 0, y: 0, z: 0.7071068, w: 0.7071068}
       length: 56.118088
       parentId: -1
@@ -120,9 +120,9 @@ ScriptedImporter:
         rgba: 4278190335
     - name: bone_weaponAnchor
       guid: 10e90f9a91511894fba32197c27fa488
-      position: {x: 147, y: 125.999985, z: 0}
-      rotation: {x: 0, y: 0, z: 0.99691737, w: 0.078459136}
-      length: 30.70803
+      position: {x: -2.99999, y: 135.99998, z: 0}
+      rotation: {x: 0, y: 0, z: 1, w: 0}
+      length: 34.14997
       parentId: 0
       color:
         serializedVersion: 2
@@ -558,9 +558,9 @@ ScriptedImporter:
     spriteBone:
     - name: bone_weaponAnchor
       guid: 10e90f9a91511894fba32197c27fa488
-      position: {x: 19, y: 241, z: 0}
-      rotation: {x: 0, y: 0, z: 0.76040596, w: -0.64944804}
-      length: 30.708038
+      position: {x: 9, y: 221, z: 0}
+      rotation: {x: 0, y: 0, z: 0.7071068, w: -0.7071068}
+      length: 34.14997
       parentId: -1
       color:
         serializedVersion: 2
@@ -896,7 +896,7 @@ ScriptedImporter:
     bones:
     - name: bone_torso
       guid: 6fe07cc7c7cf35b419a8d94a924aa418
-      position: {x: 181, y: 120, z: 0}
+      position: {x: 181, y: 250, z: 0}
       rotation: {x: 0, y: 0, z: 0.7071068, w: 0.7071068}
       length: 56.118088
       parentId: -1
@@ -905,9 +905,9 @@ ScriptedImporter:
         rgba: 4278190335
     - name: bone_weaponAnchor
       guid: 10e90f9a91511894fba32197c27fa488
-      position: {x: 147, y: 125.99998, z: 0}
-      rotation: {x: 0, y: 0, z: 0.99691737, w: 0.07845911}
-      length: 30.708035
+      position: {x: -2.999989, y: 135.99998, z: 0}
+      rotation: {x: 0, y: 0, z: 1, w: 0}
+      length: 34.14997
       parentId: 0
       color:
         serializedVersion: 2

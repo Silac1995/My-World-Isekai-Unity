@@ -60,23 +60,37 @@ public class BattleManager : MonoBehaviour
     private void RegisterParticipants()
     {
         _allParticipants.Clear();
-        foreach (var team in _teams)
+
+        for (int i = 0; i < _teams.Count; i++)
         {
-            foreach (var character in team.CharacterList)
+            BattleTeam currentTeam = _teams[i];
+            // L'adversaire est l'autre équipe (0 -> 1, 1 -> 0)
+            BattleTeam opponentTeam = _teams[(i + 1) % _teams.Count];
+
+            foreach (var character in currentTeam.CharacterList)
             {
                 if (character == null) continue;
 
                 _allParticipants.Add(character);
 
-                // On assigne le BattleManager directement au sous-système Combat
-                // C'est cette ligne qui remplit le slot du Target !
                 if (character.CharacterCombat != null)
                 {
                     character.CharacterCombat.JoinBattle(this);
-                    Debug.Log($"<color=white>[Battle]</color> {character.CharacterName} a rejoint le combat via son CharacterCombat.");
+
+                    // On ne force pas le comportement de combat si c'est le Joueur
+                    if (!character.IsPlayer())
+                    {
+                        Character randomEnemy = opponentTeam.GetRandomMember();
+                        if (randomEnemy != null)
+                        {
+                            character.Controller.PushBehaviour(new CombatBehaviour(this, randomEnemy));
+                        }
+                    }
+
+                    Debug.Log($"<color=white>[Battle]</color> {character.CharacterName} a rejoint le combat.");
                 }
 
-                // Gestion de la mort
+                // Gestion de la mort pour vérifier la fin du combat
                 character.OnDeath -= HandleCharacterDeath;
                 character.OnDeath += HandleCharacterDeath;
             }

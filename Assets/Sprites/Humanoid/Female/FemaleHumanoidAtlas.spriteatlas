@@ -154,6 +154,8 @@ SpriteAtlas:
     - bad1fd33f6b482d48acad299ee85e69b: -499018661
     - 07d47d83fdb4e4c44929e3259cdace5e: -407396364
     - 07d47d83fdb4e4c44929e3259cdace5e: 1773522686
+    - b8c802d302ca798439e2ab8e57e942d0: 7073135815514525084
+    - b8c802d302ca798439e2ab8e57e942d0: 2027103119244463670
     - e00e85f38970a314ca0b037310e899be: 1174878066
     - 5274b114b53b84e4c840ee130dc6632c: 61443510
     - 5274b114b53b84e4c840ee130dc6632c: -243486467
@@ -401,6 +403,8 @@ SpriteAtlas:
   - {fileID: -499018661, guid: bad1fd33f6b482d48acad299ee85e69b, type: 3}
   - {fileID: -407396364, guid: 07d47d83fdb4e4c44929e3259cdace5e, type: 3}
   - {fileID: 1773522686, guid: 07d47d83fdb4e4c44929e3259cdace5e, type: 3}
+  - {fileID: 7073135815514525084, guid: b8c802d302ca798439e2ab8e57e942d0, type: 3}
+  - {fileID: 2027103119244463670, guid: b8c802d302ca798439e2ab8e57e942d0, type: 3}
   - {fileID: 1174878066, guid: e00e85f38970a314ca0b037310e899be, type: 3}
   - {fileID: 61443510, guid: 5274b114b53b84e4c840ee130dc6632c, type: 3}
   - {fileID: -243486467, guid: 5274b114b53b84e4c840ee130dc6632c, type: 3}
@@ -647,6 +651,8 @@ SpriteAtlas:
   - Mouth_talk_02_0
   - Mouth_normal_1
   - Mouth_normal_0
+  - Weapon
+  - Bag
   - Eye_L_pupil_0
   - Mouth_talk_01_0
   - Mouth_talk_01_1

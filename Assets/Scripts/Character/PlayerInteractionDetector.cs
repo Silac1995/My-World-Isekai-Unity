@@ -24,27 +24,30 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
         {
             try
             {
-                // --- CAS 1 : PERSONNAGE ---
+                // 1. SI C'EST UN PERSONNAGE, ON VÉRIFIE LES ÉTATS
                 if (_currentInteractableObjectTarget is CharacterInteractable charInteractable)
                 {
                     Character targetChar = charInteractable.Character;
                     if (targetChar == null) return;
 
-                    // 1. Vérifier si on veut fermer une interaction existante
+                    // VÉRIFICATION CRITIQUE : 
+                    // On ne peut pas interagir si le joueur n'est pas libre OU si la cible n'est pas libre
+                    if (!Character.IsFree() || !targetChar.IsFree())
+                    {
+                        Debug.LogWarning($"<color=yellow>[Interaction]</color> Interaction impossible : " +
+                            $"{(!Character.IsFree() ? "Le joueur est occupé" : "La cible est en combat/interaction")}");
+                        return; // On stoppe tout ici, l'interaction ne se lance même pas
+                    }
+
+                    // --- Reste de ta logique actuelle ---
                     if (Character.CharacterInteraction.IsInteracting &&
                         Character.CharacterInteraction.CurrentTarget == targetChar)
                     {
-                        Debug.Log($"<color=orange>[Interaction]</color> Fermeture manuelle avec {targetChar.CharacterName}");
                         Character.CharacterInteraction.EndInteraction();
                         return;
                     }
 
-                    // 2. Lancer l'interaction
-                    // C'est maintenant CharacterInteractable.Interact qui va créer 
-                    // et lancer la CharacterStartInteraction.
                     _currentInteractableObjectTarget.Interact(Character);
-
-                    Debug.Log($"<color=cyan>[Interaction]</color> Signal envoyé à l'interactable de {targetChar.CharacterName}");
                 }
 
                 // --- CAS 2 : ITEM ---

@@ -91,18 +91,16 @@ public abstract class CharacterGameController : MonoBehaviour
 
     public void PushBehaviour(IAIBehaviour newBehaviour)
     {
-        // 1. PROTECTION JOUEUR : On ne touche à rien
         if (character.IsPlayer())
         {
             _behavioursStack.Push(newBehaviour);
             return;
         }
 
-        // 2. LOGIQUE NPC : On ne force plus le isStopped ici !
-        // On laisse le behaviour décider s'il doit bouger ou non.
+        // Réactiver l'agent pour le nouveau comportement
         if (agent != null && agent.isOnNavMesh)
         {
-            // On ne fait rien par défaut, MoveToTarget s'occupera de piloter l'agent.
+            agent.isStopped = false; // On débloque l'agent pour qu'il puisse écouter le nouveau Behaviour
         }
 
         _behavioursStack.Push(newBehaviour);
