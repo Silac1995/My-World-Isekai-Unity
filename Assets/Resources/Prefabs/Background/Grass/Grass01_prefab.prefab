@@ -12,6 +12,10 @@ PrefabInstance:
       propertyPath: m_Sprite
       value: 
       objectReference: {fileID: -1188418781, guid: 5f9dd4886bed9364197114762de20469, type: 3}
+    - target: {fileID: 2452949198656604268, guid: d1a07e3dd57c6104cb553748e1665ec5, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: -876546973899608171, guid: cadad5a44155a6248aa5019b1b613a33, type: 3}
     - target: {fileID: 3820159942579529521, guid: d1a07e3dd57c6104cb553748e1665ec5, type: 3}
       propertyPath: m_Name
       value: Grass01_prefab
@@ -56,7 +60,8 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
-    m_RemovedComponents: []
+    m_RemovedComponents:
+    - {fileID: 0}
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents: []
