@@ -76,6 +76,11 @@ public class Character : MonoBehaviour
     public RigTypeSO RigType => rigType;
     #endregion
 
+
+    void Update()
+    {
+        Shader.SetGlobalVector("_Body", _rb.position);
+    }
     #region Unity Lifecycle
     protected virtual void Awake()
     {

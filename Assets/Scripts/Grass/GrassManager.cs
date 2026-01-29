@@ -2,7 +2,7 @@ using UnityEngine;
 
 public class GrassManager : MonoBehaviour
 {
-    [Range(0f, 200f)]
+    [Range(0f, 50f)]
     [SerializeField] private float _windStrength = 1.0f;
 
     // Le nom doit être exactement celui dans le Reference du Blackboard du Shader

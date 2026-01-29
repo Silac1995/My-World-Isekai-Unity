@@ -12,7 +12,7 @@ GameObject:
   - component: {fileID: 2452949198656604268}
   - component: {fileID: 8167965686892852371}
   - component: {fileID: 8194441564441163222}
-  - component: {fileID: 6743968334168821887}
+  - component: {fileID: -5372694569975935680}
   m_Layer: 7
   m_Name: Grass00_prefab
   m_TagString: Untagged
@@ -126,7 +126,7 @@ SortingGroup:
   m_SortingLayer: 1
   m_SortingOrder: 0
   m_SortAtRoot: 0
---- !u!114 &6743968334168821887
+--- !u!114 &-5372694569975935680
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -138,5 +138,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6b80d1e7831c0004db7e079757adf6e4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GrassElement
-  _bendRotation: 30
+  _bendStrength: 5
   _restoreSpeed: 5
+  _detectionRadius: 1.2
+  _colorTransitionSpeed: 2
+  _triggerLayer:
+    serializedVersion: 2
+    m_Bits: 256
