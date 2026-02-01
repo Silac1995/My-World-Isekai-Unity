@@ -14,6 +14,7 @@ public class CharacterAnimator : MonoBehaviour
     public static readonly int ActionTrigger = Animator.StringToHash("Trigger_pickUpItem");
     public static readonly int IsDoingAction = Animator.StringToHash("isDoingAction");
     private Dictionary<string, float> _clipDurations = new Dictionary<string, float>();
+    public static readonly int IsWalking = Animator.StringToHash("isWalking"); // AJOUTE CECI
 
     // Référence vers l'Override Controller actuel pour pouvoir le modifier
     private AnimatorOverrideController _overrideController;
