@@ -88,32 +88,27 @@ public class CharacterInteraction : MonoBehaviour
         Character previousTarget = _currentTarget;
         _currentTarget = null;
 
-        // --- LOGIQUE DE NETTOYAGE INTELLIGENTE ---
-
-        // On ne "Pop" le comportement du NPC que s'il est encore dans un état d'attente/interaction
-        // S'il a déjà commencé à suivre ou faire autre chose, on le laisse tranquille.
+        // --- LA CORRECTION ---
+        // On ne Pop QUE si le comportement au sommet est bien une interaction.
+        // Si c'est déjà un FollowTargetBehaviour, on ne touche à rien !
         if (previousTarget.Controller != null)
         {
-            var current = previousTarget.Controller.CurrentBehaviour;
-
-            // Si le comportement actuel est une interaction ou un Idle temporaire, on l'enlève
-            if (current is InteractBehaviour || current is IdleBehaviour)
+            if (previousTarget.Controller.CurrentBehaviour is InteractBehaviour)
             {
                 previousTarget.Controller.PopBehaviour();
             }
         }
 
-        // Le joueur, lui, peut toujours Pop son comportement d'interaction
         if (_character.Controller != null)
         {
             if (_character.Controller.CurrentBehaviour is InteractBehaviour)
                 _character.Controller.PopBehaviour();
         }
+        // ----------------------
 
         _character.CharacterInteractable?.Release();
         OnInteractionStateChanged?.Invoke(previousTarget, false);
 
-        // Réciprocité : On ferme l'autre côté sans boucle infinie
         if (previousTarget.CharacterInteraction.CurrentTarget == _character)
         {
             previousTarget.CharacterInteraction.EndInteraction();

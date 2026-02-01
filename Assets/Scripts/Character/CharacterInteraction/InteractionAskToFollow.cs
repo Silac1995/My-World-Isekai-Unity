@@ -17,12 +17,12 @@ public class InteractionAskToFollow : ICharacterInteractionAction
             return;
         }
 
-        // 2. On termine l'interaction d'abord pour vider le InteractBehaviour de la pile
+        // 2. On termine l'interaction (nettoie les behaviours d'interaction)
         source.CharacterInteraction.EndInteraction();
 
-        // 3. On Push le Follow MAINTENANT. 
-        // Comme l'interaction est finie, personne ne viendra faire un Pop par dessus.
-        npcController.PushBehaviour(new FollowTargetBehaviour(source, target.Controller.Agent, 3f));
+        // 3. LA CORRECTION : On suit 'source' (le joueur), pas 'target' !
+        // On utilise SetBehaviour pour être sûr de vider tout résidu qui forcerait un Stop.
+        npcController.SetBehaviour(new FollowTargetBehaviour(source, 3f));
 
         Debug.Log($"<color=green>[AI]</color> {target.CharacterName} suit maintenant {source.CharacterName}");
     }

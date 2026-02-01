@@ -8,6 +8,7 @@ public class CharacterMovement : MonoBehaviour
     [SerializeField] private float _acceleration = 50f;
     [SerializeField] private float _groundCheckDistance = 0.2f;
     [SerializeField] private LayerMask _groundLayer;
+    [SerializeField] Character _character;
 
     [Header("References")]
     [SerializeField] private Rigidbody _rb;
@@ -39,14 +40,13 @@ public class CharacterMovement : MonoBehaviour
     {
         if (_isStopped) return;
 
-        // Si l'agent est actif et a une destination, on le laisse piloter
+        // SECURITÉ : On vérifie isOnNavMesh avant de lire isStopped
         if (_agent != null && _agent.isOnNavMesh && !_agent.isStopped)
         {
-            // L'agent gère sa propre vélocité, mais on peut la lisser ici si besoin
+            // L'agent gère sa propre vélocité
         }
         else
         {
-            // Sinon, on applique le mouvement manuel (Joueur ou Direction forcée)
             ApplyPhysicalMovement();
         }
     }
@@ -80,17 +80,70 @@ public class CharacterMovement : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Définit une destination en utilisant la vitesse par défaut du personnage.
+    /// </summary>
+    public void SetDestination(Vector3 target)
+    {
+        if (_character != null)
+        {
+            // On force la vitesse de l'agent AVANT de définir la destination
+            if (_agent != null) _agent.speed = _character.MovementSpeed;
+            SetDestination(target, _character.MovementSpeed);
+        }
+        else
+        {
+            SetDestination(target, 3.5f);
+        }
+    }
+
+    /// <summary>
+    /// Définit une destination avec une vitesse spécifique.
+    /// </summary>
+    public void SetDestination(Vector3 target, float speed)
+    {
+        if (_agent != null && _agent.isOnNavMesh)
+        {
+            _isStopped = false;
+            _agent.isStopped = false; // On s'assure qu'il n'est pas stoppé
+            _agent.speed = speed;
+            _agent.SetDestination(target);
+
+            // Debug pour vérifier dans la console
+            // Debug.Log($"{gameObject.name} se dirige vers {target} à une vitesse de {speed}");
+        }
+    }
+
+    // Propriété de confort pour savoir si on bouge horizontalement
+    public bool IsMovingHorizontally => GetVelocity().magnitude > 0.1f;
+
     public void Stop()
     {
         _isStopped = true;
-        if (_agent != null && _agent.isOnNavMesh) _agent.isStopped = true;
+        // SECURITÉ : On ne touche à l'agent que s'il est prêt
+        if (_agent != null && _agent.isOnNavMesh)
+        {
+            _agent.isStopped = true;
+        }
         _rb.linearVelocity = Vector3.zero;
     }
 
     public void Resume()
     {
         _isStopped = false;
-        if (_agent != null && _agent.isOnNavMesh) _agent.isStopped = false;
+        if (_agent != null && _agent.isOnNavMesh)
+        {
+            _agent.isStopped = false;
+        }
+    }
+    public void ForceResume()
+    {
+        _isStopped = false;
+        if (_agent != null && _agent.isOnNavMesh)
+        {
+            _agent.isStopped = false;
+            _agent.ResetPath(); // On vide les vieux résidus de l'interaction
+        }
     }
 
     public bool IsGrounded()
@@ -101,10 +154,13 @@ public class CharacterMovement : MonoBehaviour
 
     public void Warp(Vector3 position)
     {
-        if (_agent != null && NavMesh.SamplePosition(position, out NavMeshHit hit, 5f, NavMesh.AllAreas))
+        if (_agent != null)
         {
-            transform.position = hit.position;
-            _agent.Warp(hit.position);
+            // On place l'objet
+            transform.position = position;
+            // On force l'agent à se reconnecter au NavMesh à cet endroit
+            _agent.Warp(position);
+            _agent.enabled = true; // On s'assure qu'il est actif
         }
     }
 
@@ -124,4 +180,6 @@ public class CharacterMovement : MonoBehaviour
 
         return Vector3.zero;
     }
+
+
 }

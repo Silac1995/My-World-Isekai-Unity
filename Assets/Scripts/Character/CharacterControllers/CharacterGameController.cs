@@ -35,14 +35,22 @@ public abstract class CharacterGameController : MonoBehaviour
             return;
         }
 
-        if (CurrentBehaviour != null && CurrentBehaviour.IsFinished)
+        if (CurrentBehaviour != null)
         {
-            PopBehaviour();
-            return;
-        }
+            if (CurrentBehaviour.IsFinished)
+            {
+                PopBehaviour();
+                return;
+            }
 
-        CurrentBehaviour?.Act(_character);
-        _characterMovement.Resume();
+            // L'IA gère son propre Resume/Stop
+            CurrentBehaviour.Act(_character);
+        }
+        else
+        {
+            // CAS DU JOUEUR : Pas de behaviour, donc on autorise le mouvement manuel
+            _characterMovement.Resume();
+        }
 
         UpdateAnimations();
         UpdateFlip();
@@ -76,11 +84,24 @@ public abstract class CharacterGameController : MonoBehaviour
 
     public void ResetStackTo(IAIBehaviour baseBehaviour)
     {
+        // 1. On vide proprement la pile actuelle
         while (_behavioursStack.Count > 0)
         {
             IAIBehaviour old = _behavioursStack.Pop();
             old.Exit(_character);
         }
+
+        // 2. NETTOYAGE CRUCIAL : On force l'arrêt physique et du NavMesh
+        if (_characterMovement != null)
+        {
+            _characterMovement.Stop();
+            // On s'assure que l'agent n'a plus de destination résiduelle
+            if (Agent != null && Agent.isOnNavMesh)
+            {
+                Agent.ResetPath();
+            }
+        }
+
         _characterMovement.Resume();
         _behavioursStack.Push(baseBehaviour);
     }
