@@ -6,17 +6,24 @@ public class CharacterNeeds : MonoBehaviour
     [SerializeField] private Character _character;
     private List<CharacterNeed> _allNeeds = new List<CharacterNeed>();
     public List<CharacterNeed> AllNeeds => _allNeeds;
+    // Ton nouvel attribut privé
+    private NeedSocial _socialNeed;
 
     private void Start()
     {
-        // On enregistre tous les besoins possibles
+        // Initialisation du besoin social
+        _socialNeed = new NeedSocial(_character);
+        _allNeeds.Add(_socialNeed);
+
         _allNeeds.Add(new NeedToWearClothing(_character));
-        // _allNeeds.Add(new NeedHunger(_character)); // Exemple futur
     }
 
     private void Update()
     {
-        // On ne vérifie pas à chaque frame pour les NPCs (optimisation multi)
+        // 1. Mise à jour "physique" des besoins (la barre descend)
+        _socialNeed.UpdateValue();
+
+        // 2. Évaluation de l'IA (toutes les 30 frames)
         if (Time.frameCount % 30 != 0) return;
 
         EvaluateNeeds();
@@ -43,7 +50,7 @@ public class CharacterNeeds : MonoBehaviour
             }
         }
 
-        // Si on a trouvé un besoin critique et que l'IA ne fait rien d'important
+        // Si le besoin le plus urgent est le social, Resolve va lancer un Follow
         if (mostUrgent != null && npc.CurrentBehaviour is WanderBehaviour)
         {
             mostUrgent.Resolve(npc);
