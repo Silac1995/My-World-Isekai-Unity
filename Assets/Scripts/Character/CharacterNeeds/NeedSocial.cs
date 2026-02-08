@@ -8,6 +8,11 @@ public class NeedSocial : CharacterNeed
     private float _decreaseRate = 0.5f; // Perte par seconde
     private float _lowThreshold = 30f;  // Seuil critique
 
+    private float _socialTimer = 0f;
+    private const float _tickInterval = 1f; // Toutes les 5 secondes
+    private float _socialLossPerTick = 30f; // Valeur à perdre toutes les 5s
+
+
     public NeedSocial(Character character, float startValue = 80f) : base(character)
     {
         _currentValue = startValue;
@@ -17,8 +22,14 @@ public class NeedSocial : CharacterNeed
 
     public void UpdateValue()
     {
-        // On diminue le besoin social au fil du temps
-        DecreaseValue(_decreaseRate * Time.deltaTime);
+        _socialTimer += Time.deltaTime;
+
+        if (_socialTimer >= _tickInterval)
+        {
+            DecreaseValue(_socialLossPerTick);
+            _socialTimer = 0f; // Reset le timer
+                               // Debug.Log($"Social décrémenté. Valeur actuelle : {_currentValue}");
+        }
     }
 
     public void IncreaseValue(float amount) => _currentValue = Mathf.Clamp(_currentValue + amount, 0, _maxValue);
@@ -31,15 +42,15 @@ public class NeedSocial : CharacterNeed
 
     public override bool IsActive()
     {
-        // Actif si la barre est basse ET qu'on n'est pas déjà en train d'interagir
+        // L'IA ne doit essayer de résoudre le besoin que s'il est bas
         return NeedsSocialInteraction() && !_character.CharacterInteraction.IsInteracting;
     }
 
     public override float GetUrgency()
     {
-        if (!IsActive()) return 0f;
-        // Plus la barre est proche de 0, plus l'urgence est proche de 100
-        return (1f - (_currentValue / _maxValue)) * 100f;
+        // Pour le DEBUG : On affiche la "faim sociale" même si le besoin n'est pas encore critique
+        // (100 - currentValue) donne le pourcentage de manque
+        return 100f - _currentValue;
     }
 
     public override void Resolve(NPCController npc)

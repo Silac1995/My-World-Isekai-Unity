@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -8,6 +9,7 @@ public class CharacterNeeds : MonoBehaviour
     public List<CharacterNeed> AllNeeds => _allNeeds;
     // Ton nouvel attribut privé
     private NeedSocial _socialNeed;
+    private Coroutine _socialCoroutine;
 
     private void Start()
     {
@@ -20,12 +22,7 @@ public class CharacterNeeds : MonoBehaviour
 
     private void Update()
     {
-        // 1. Mise à jour "physique" des besoins (la barre descend)
-        _socialNeed.UpdateValue();
-
-        // 2. Évaluation de l'IA (toutes les 30 frames)
         if (Time.frameCount % 30 != 0) return;
-
         EvaluateNeeds();
     }
 
@@ -54,6 +51,35 @@ public class CharacterNeeds : MonoBehaviour
         if (mostUrgent != null && npc.CurrentBehaviour is WanderBehaviour)
         {
             mostUrgent.Resolve(npc);
+        }
+    }
+
+    
+
+    private void OnEnable()
+    {
+        _socialCoroutine = StartCoroutine(SocialTickCoroutine());
+    }
+
+    private void OnDisable()
+    {
+        if (_socialCoroutine != null)
+        {
+            StopCoroutine(_socialCoroutine);
+            _socialCoroutine = null;
+        }
+    }
+
+    private IEnumerator SocialTickCoroutine()
+    {
+        while (true)
+        {
+            yield return new WaitForSeconds(5f);
+            if (_socialNeed != null)
+            {
+                _socialNeed.DecreaseValue(2.5f);
+                // Debug.Log($"Tick Social : {_character.CharacterName}");
+            }
         }
     }
 }
