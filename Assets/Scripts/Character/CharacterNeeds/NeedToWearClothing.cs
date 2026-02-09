@@ -94,19 +94,17 @@ public class NeedToWearClothing : CharacterNeed
 
     private ItemInteractable FindClosestWearable(Vector3 currentPosition, List<WearableType> typesToFind)
     {
-        if (typesToFind.Count == 0) return null;
+        var awareness = _character.CharacterAwareness;
+        if (awareness == null) return null;
 
-        return UnityEngine.Object.FindObjectsByType<ItemInteractable>(FindObjectsSortMode.None)
-            .Where(interactable =>
-            {
-                if (interactable.ItemInstance is WearableInstance wearable && wearable.ItemSO is WearableSO data)
-                {
-                    // Est-ce que le type de cet item est dans notre liste de besoins ?
-                    return typesToFind.Contains(data.WearableType);
-                }
+        // On récupère uniquement les ITEM interactables dans la zone
+        return awareness.GetVisibleInteractables<ItemInteractable>()
+            .Where(item => {
+                if (item.ItemInstance is WearableInstance w)
+                    return typesToFind.Contains(((WearableSO)w.ItemSO).WearableType);
                 return false;
             })
-            .OrderBy(interactable => Vector3.Distance(currentPosition, interactable.transform.position))
+            .OrderBy(item => Vector3.Distance(currentPosition, item.transform.position))
             .FirstOrDefault();
     }
 }
