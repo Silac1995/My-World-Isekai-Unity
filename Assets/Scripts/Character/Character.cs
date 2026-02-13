@@ -100,7 +100,6 @@ public class Character : MonoBehaviour
         LoadResources();
         _cachedNavMeshAgent = GetComponent<NavMeshAgent>();
         _isDead = false;
-        InitializeRigidbody();
     }
     #endregion
 
@@ -119,12 +118,6 @@ public class Character : MonoBehaviour
         Debug.LogError($"{name} : Références Rigidbody ou Collider manquantes !");
         enabled = false;
         return false;
-    }
-
-    private void InitializeRigidbody()
-    {
-        _rb.freezeRotation = true;
-        _rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
     }
 
     public void InitializeAll() => AdjustCapsuleCollider();

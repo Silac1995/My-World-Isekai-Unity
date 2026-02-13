@@ -26,8 +26,6 @@ public class CharacterMovement : MonoBehaviour
         if (_rb == null) _rb = GetComponent<Rigidbody>();
         if (_agent == null) _agent = GetComponent<NavMeshAgent>();
 
-        // Configuration pour éviter que le sprite 2D ne bascule dans le décor 3D
-        _rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
 
         if (_agent != null)
         {
