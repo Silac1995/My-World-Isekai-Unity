@@ -26,6 +26,7 @@ public class NPCController : CharacterGameController
                 agent.angularSpeed = 0f;
             }
         }
+        Agent.updateRotation = false;
 
         ResetStackTo(new WanderBehaviour(this));
     }

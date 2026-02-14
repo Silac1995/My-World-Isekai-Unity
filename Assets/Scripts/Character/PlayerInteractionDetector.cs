@@ -171,33 +171,38 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
 
     protected override void OnTriggerEnter(Collider other)
     {
-        if (other.gameObject == gameObject)
+        // --- LA CORRECTION EST ICI ---
+        // On vérifie si le collider qui a détecté l'entrée est bien l'InteractionZone du joueur
+        // Si c'est l'Awareness ou un autre collider enfant, on ignore.
+        if (InteractionZone != null && !InteractionZone.bounds.Intersects(other.bounds))
         {
-            Debug.Log("Collision avec soi-même ignorée.", this);
             return;
         }
+        // -----------------------------
+
+        if (other.gameObject == gameObject) return;
 
         if (other.TryGetComponent(out InteractableObject interactable))
         {
             if (!nearbyInteractables.Contains(interactable))
             {
                 nearbyInteractables.Add(interactable);
-                //Debug.Log($"Ajout de {interactable.name} à la liste des interactables.", this);
             }
         }
     }
 
     protected override void OnTriggerExit(Collider other)
     {
+        // On applique la même logique pour la sortie
         if (other.TryGetComponent(out InteractableObject interactable))
         {
             if (nearbyInteractables.Contains(interactable))
             {
                 nearbyInteractables.Remove(interactable);
-                //Debug.Log($"Retrait de {interactable.name} de la liste des interactables.", this);
 
                 if (interactable == _currentInteractableObjectTarget)
                 {
+                    // Nettoyage UI...
                     _currentInteractableObjectTarget.OnCharacterExit(Character);
                     _currentInteractableObjectTarget = null;
                     if (currentPromptUI != null)

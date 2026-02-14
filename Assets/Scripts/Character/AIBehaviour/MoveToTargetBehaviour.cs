@@ -39,25 +39,24 @@ public class MoveToTargetBehaviour : IAIBehaviour
             return;
         }
 
-        var detector = character.GetComponent<NPCInteractionDetector>();
+        // On récupère le detector via le controller
+        var detector = _controller.GetComponent<CharacterInteractionDetector>();
 
-        // --- LOGIQUE POUR CIBLE GAMEOBJECT ---
         if (_targetGameObject != null)
         {
-            // On récupère l'interactable (sur l'objet ou ses enfants)
             var targetInteractable = _targetGameObject.GetComponentInChildren<InteractableObject>();
 
+            // ON UTILISE TES MÉTHODES ICI
             if (detector != null && targetInteractable != null)
             {
-                // On vérifie si les zones d'interaction se touchent (Overlap)
-                if (detector.IsInContactWith(targetInteractable))
+                // IsOverlapping utilise bounds.Intersects, c'est parfait et précis.
+                if (detector.IsOverlapping(targetInteractable))
                 {
                     StopAndArrive(character);
                     return;
                 }
             }
 
-            // Mise à jour de la destination vers la position actuelle de l'objet
             UpdateAgentDestination(_targetGameObject.transform.position);
         }
         // --- LOGIQUE POUR POSITION FIXE ---

@@ -66,44 +66,24 @@ public abstract class CharacterInteractionDetector : MonoBehaviour
         if (target == null || target.InteractionZone == null || InteractionZone == null)
             return false;
 
-        // On utilise ComputePenetration pour savoir si les deux triggers s'imbriquent.
-        // Cette méthode est plus précise que bounds.Intersects pour les zones rotatées ou complexes.
-        bool isOverlapping = Physics.ComputePenetration(
-            InteractionZone, InteractionZone.transform.position, InteractionZone.transform.rotation,
-            target.InteractionZone, target.InteractionZone.transform.position, target.InteractionZone.transform.rotation,
-            out Vector3 direction, out float distance
-        );
-
-        // Si la distance est positive, il y a imbrication
-        return isOverlapping;
+        // Utilise CheckSphere ou simplement la distance entre les centres si ce sont des sphères
+        // Ou reste sur bounds.Intersects qui est purement mathématique et ne réveille pas la physique
+        return InteractionZone.bounds.Intersects(target.InteractionZone.bounds);
     }
 
     protected virtual void OnTriggerEnter(Collider other)
     {
-        if (selfCharacter == null)
-        {
-            Debug.LogError("selfCharacter est null. Assure-toi qu'un composant Character est attaché.", this);
-            return;
-        }
+        // --- FILTRE CRUCIAL ---
+        // Si ce n'est pas l'InteractionZone qui touche l'objet, on ignore.
+        if (InteractionZone != null && !InteractionZone.bounds.Intersects(other.bounds)) return;
+        // ----------------------
 
-        if (other.gameObject == selfCharacter.gameObject)
-        {
-            Debug.Log("Collision avec soi-même ignorée.", this);
-            return;
-        }
+        if (other.gameObject == selfCharacter.gameObject) return;
 
         if (other.TryGetComponent(out InteractableObject interactable))
         {
             _currentInteractableObjectTarget = interactable;
-            if (_currentInteractableObjectTarget != null)
-            {
-                _currentInteractableObjectTarget.OnCharacterEnter(selfCharacter);
-                //Debug.Log($"Cible détectée : {interactable.name}", this);
-            }
-            else
-            {
-                Debug.LogError("InteractableObject détecté, mais currentTarget est null.", this);
-            }
+            _currentInteractableObjectTarget.OnCharacterEnter(selfCharacter);
         }
     }
 
