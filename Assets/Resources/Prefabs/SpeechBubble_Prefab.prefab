@@ -297,3 +297,4 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Speech
   _textElement: {fileID: 2764597977016531007}
+  _typingSpeed: 0.04

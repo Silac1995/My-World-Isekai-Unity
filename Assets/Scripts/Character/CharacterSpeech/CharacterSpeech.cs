@@ -5,6 +5,7 @@ public class CharacterSpeech : MonoBehaviour
 {
     [SerializeField] private Character _character;
     [SerializeField] private GameObject _speechBubblePrefab; // Ton objet déjà présent dans la hiérarchie
+    [SerializeField] private CharacterBodyPartsController _bodyPartsController;
 
     private Coroutine _hideCoroutine;
     private Coroutine _testCoroutine;
@@ -49,34 +50,31 @@ public class CharacterSpeech : MonoBehaviour
     {
         if (_speechBubblePrefab == null) return;
 
-        // Arrêt du timer de disparition précédent si on parle à nouveau
-        if (_hideCoroutine != null)
-        {
-            StopCoroutine(_hideCoroutine);
-        }
+        if (_hideCoroutine != null) StopCoroutine(_hideCoroutine);
 
-        // Mise à jour du texte via le script Speech attaché au prefab
+        // 1. On active la bouche
+        _bodyPartsController?.MouthController?.StartTalking();
+
+        // 2. On lance le texte défilant
         if (_speechBubblePrefab.TryGetComponent<Speech>(out var speechScript))
         {
-            speechScript.Setup(_character, message);
+            _speechBubblePrefab.SetActive(true);
+
+            // On passe une Action (Callback) qui s'exécute quand le texte est fini
+            speechScript.Setup(_character, message, () => {
+                // Le texte est fini : on arrête la bouche
+                _bodyPartsController?.MouthController?.StopTalking();
+
+                // Et on lance le chrono pour faire disparaître la bulle
+                _hideCoroutine = StartCoroutine(HideSpeechAfterDelay(duration));
+            });
         }
-
-        // Activation visuelle
-        _speechBubblePrefab.SetActive(true);
-
-        // Lancement du nouveau timer
-        _hideCoroutine = StartCoroutine(HideSpeechAfterDelay(duration));
     }
 
     private IEnumerator HideSpeechAfterDelay(float delay)
     {
         yield return new WaitForSeconds(delay);
-
-        if (_speechBubblePrefab != null)
-        {
-            _speechBubblePrefab.SetActive(false);
-        }
-
+        if (_speechBubblePrefab != null) _speechBubblePrefab.SetActive(false);
         _hideCoroutine = null;
     }
 }

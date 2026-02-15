@@ -6,11 +6,13 @@ public class CharacterBodyPartsController : MonoBehaviour
     [SerializeField] private Character character;
     [SerializeField] private EyesController eyesController;
     [SerializeField] private HairController _hairController;
-    [SerializeField] private EarsController _earsController; // AJOUT
+    [SerializeField] private EarsController _earsController;
+    [SerializeField] private MouthController _mouthController;
 
     public EyesController EyesController => eyesController;
     public HairController HairController => _hairController;
-    public EarsController EarsController => _earsController; // AJOUT
+    public EarsController EarsController => _earsController;
+    public MouthController MouthController => _mouthController;
 
     void Start()
     {
@@ -22,7 +24,8 @@ public class CharacterBodyPartsController : MonoBehaviour
         // On lance le scan des GameObjects pour chaque membre
         if (EyesController != null) EyesController.Initialize();
         if (HairController != null) HairController.Initialize();
-        if (EarsController != null) EarsController.Initialize(); // <--- C'est ça qui manque !
+        if (EarsController != null) EarsController.Initialize();
+        if (MouthController != null) MouthController.Initialize();
 
         Debug.Log("<color=white>[BodyParts]</color> All body parts initialized.");
     }
@@ -45,6 +48,14 @@ public class CharacterBodyPartsController : MonoBehaviour
         if (_earsController == null)
         {
             Debug.LogError($"CharacterBodyPartsController on {gameObject.name}: EarsController is missing!");
+        }
+        if(_hairController == null)
+        {
+            Debug.LogError($"CharacterBodyPartsController on {gameObject.name}: HairController is missing!");
+        }
+        if(_mouthController == null)
+        {
+                Debug.LogError($"CharacterBodyPartsController on {gameObject.name}: MouthController is missing!");
         }
         else
         {

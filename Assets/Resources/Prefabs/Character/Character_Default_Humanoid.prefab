@@ -345,6 +345,11 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 993658241644206397, guid: b74182ade6e88b64abfbad5d0003a907, type: 3}
   m_PrefabInstance: {fileID: 402888566639178403}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &685365087006501904 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 870812032694361779, guid: b74182ade6e88b64abfbad5d0003a907, type: 3}
+  m_PrefabInstance: {fileID: 402888566639178403}
+  m_PrefabAsset: {fileID: 0}
 --- !u!4 &711567073983150889 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 885141493301971338, guid: b74182ade6e88b64abfbad5d0003a907, type: 3}
@@ -1813,6 +1818,10 @@ PrefabInstance:
       propertyPath: _hairController
       value: 
       objectReference: {fileID: 1641562415796598567}
+    - target: {fileID: 1007890653781899237, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
+      propertyPath: _mouthController
+      value: 
+      objectReference: {fileID: 2885815791812827100}
     - target: {fileID: 1499034854403634377, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       propertyPath: m_SizeDelta.y
       value: 70
@@ -2053,6 +2062,10 @@ PrefabInstance:
       propertyPath: _speechBubblePrefab
       value: 
       objectReference: {fileID: 5465662920935134443}
+    - target: {fileID: 5778136573146001682, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
+      propertyPath: _bodyPartsController
+      value: 
+      objectReference: {fileID: 9019601751347794616}
     - target: {fileID: 5955514400556626450, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       propertyPath: m_Height
       value: 0
@@ -2247,6 +2260,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 5246753746272467509, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       insertIndex: -1
       addedObject: {fileID: 8814623054072574737}
+    - targetCorrespondingSourceObject: {fileID: 5246753746272467509, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 2885815791812827100}
   m_SourcePrefab: {fileID: 100100000, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
 --- !u!114 &315613733655778041 stripped
 MonoBehaviour:
@@ -2383,6 +2399,24 @@ MonoBehaviour:
   _spriteLibraryAssetsEars: {fileID: 0}
   _spriteLibraryCategory: 01
   _debugMode: 1
+--- !u!114 &2885815791812827100
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4035394106473422696}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: aa0a10c55e08d5b45966c762efa4cc21, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MouthController
+  _bodyPartsController: {fileID: 9019601751347794616}
+  _characterMouth:
+    _bodyPartsController: {fileID: 9019601751347794616}
+    _mouthObject: {fileID: 685365087006501904}
+    _mouthCategory: 01
+  _talkingSpeed: 0.12
 --- !u!65 &4207761057859573151 stripped
 BoxCollider:
   m_CorrespondingSourceObject: {fileID: 5383023488254193858, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
