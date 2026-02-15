@@ -11,22 +11,32 @@ public class CharacterSpeech : MonoBehaviour
     [Header("Voice Settings")]
     [SerializeField] private AudioSource _audioSource;
     [SerializeField] private VoiceSO _voiceSO;
+    [Range(0.75f, 1.25f)][SerializeField] private float _voicePitch = 1.0f;
 
     private Coroutine _hideCoroutine;
     private Coroutine _testCoroutine;
 
     private readonly string[] _randomPhrases = {
-        "Tiens, un bug ? Ah non, c'est une feature.",
-        "Je me sens... observé par un script.",
-        "Vivement le mode multijoueur !",
-        "Est-ce que mes sprites sont bien alignés ?",
-        "42 est la réponse, mais quelle était la question ?"
+        "Battle System, WHEN!?.",
+        "I can't wait to get a home.",
+        "42 is the answer, but what was the question?",
+        "I wish I had hair...",
+        "Je suis français, oui oui."
     };
 
     private void Start()
     {
+        // On s'assure que la bulle est éteinte
         if (_speechBubblePrefab != null) _speechBubblePrefab.SetActive(false);
+
+        // Randomisation du pitch pour l'identité unique du NPC
+        // On varie autour de la valeur actuelle pour garder une base si tu l'as réglée
+        _voicePitch = Random.Range(0.75f, 1.25f);
+
+        // Lancement de la routine de parole automatique
         _testCoroutine = StartCoroutine(RandomTalkRoutine());
+
+        Debug.Log($"<color=cyan>[Speech]</color> {gameObject.name} initialized with pitch: {_voicePitch:F2}");
     }
 
     private void OnDisable()
@@ -65,7 +75,8 @@ public class CharacterSpeech : MonoBehaviour
         {
             _speechBubblePrefab.SetActive(true);
 
-            speechScript.Setup(_character, message, _audioSource, _voiceSO, () => {
+            // On passe maintenant _voicePitch au Setup de la bulle
+            speechScript.Setup(_character, message, _audioSource, _voiceSO, _voicePitch, () => {
                 _bodyPartsController?.MouthController?.StopTalking();
                 _hideCoroutine = StartCoroutine(HideSpeechAfterDelay(duration));
             });

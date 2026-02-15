@@ -12,45 +12,36 @@ public class Speech : MonoBehaviour
 
     private Coroutine _typeRoutine;
 
-    public void Setup(Character owner, string message, AudioSource source, VoiceSO voice, System.Action onComplete = null)
+    public void Setup(Character owner, string message, AudioSource source, VoiceSO voice, float characterPitch, System.Action onComplete = null)
     {
         _character = owner;
-
         if (_typeRoutine != null) StopCoroutine(_typeRoutine);
-        // On lance la coroutine en lui passant la source et le SO
-        _typeRoutine = StartCoroutine(TypeMessage(message, source, voice, onComplete));
+        _typeRoutine = StartCoroutine(TypeMessage(message, source, voice, characterPitch, onComplete));
     }
 
-    private IEnumerator TypeMessage(string message, AudioSource source, VoiceSO voice, System.Action onComplete)
+    private IEnumerator TypeMessage(string message, AudioSource source, VoiceSO voice, float characterPitch, System.Action onComplete)
     {
         _textElement.text = "";
-        int charCount = 0; // Compteur de caractères affichés
-        int soundFrequency = 2; // On joue un son tous les 3 caractères
+        int charCount = 0;
 
         foreach (char letter in message.ToCharArray())
         {
             _textElement.text += letter;
             charCount++;
 
-            // Logique audio :
-            // 1. Ce n'est pas un espace
-            // 2. Le modulo du compteur correspond à notre fréquence
-            if (letter != ' ' && charCount % soundFrequency == 0)
+            if (letter != ' ' && charCount % 3 == 0 && voice != null && source != null)
             {
-                if (voice != null && source != null)
+                AudioClip clipToPlay = voice.GetRandomClip();
+                if (clipToPlay != null)
                 {
-                    AudioClip clipToPlay = voice.GetRandomClip();
-                    if (clipToPlay != null)
-                    {
-                        source.pitch = Random.Range(voice.MinPitch, voice.MaxPitch);
-                        source.PlayOneShot(clipToPlay);
-                    }
+                    // On applique le pitch unique du personnage
+                    // Optionnel : on ajoute un tout petit offset pour le réalisme
+                    source.pitch = characterPitch + Random.Range(-0.05f, 0.05f);
+                    source.PlayOneShot(clipToPlay);
                 }
             }
-
             yield return new WaitForSeconds(_typingSpeed);
         }
-
         _typeRoutine = null;
         onComplete?.Invoke();
     }
