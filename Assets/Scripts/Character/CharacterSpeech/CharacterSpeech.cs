@@ -1,11 +1,16 @@
 using UnityEngine;
 using System.Collections;
+using Random = UnityEngine.Random; // <-- Ajoute ça ici
 
 public class CharacterSpeech : MonoBehaviour
 {
     [SerializeField] private Character _character;
-    [SerializeField] private GameObject _speechBubblePrefab; // Ton objet déjà présent dans la hiérarchie
+    [SerializeField] private GameObject _speechBubblePrefab;
     [SerializeField] private CharacterBodyPartsController _bodyPartsController;
+
+    [Header("Voice Settings")]
+    [SerializeField] private AudioSource _audioSource;
+    [SerializeField] private VoiceSO _voiceSO;
 
     private Coroutine _hideCoroutine;
     private Coroutine _testCoroutine;
@@ -20,16 +25,12 @@ public class CharacterSpeech : MonoBehaviour
 
     private void Start()
     {
-        // On s'assure qu'il est éteint au début
         if (_speechBubblePrefab != null) _speechBubblePrefab.SetActive(false);
-
-        // Lancement du test de 5 secondes
         _testCoroutine = StartCoroutine(RandomTalkRoutine());
     }
 
     private void OnDisable()
     {
-        // Nettoyage rigoureux des coroutines
         if (_testCoroutine != null) StopCoroutine(_testCoroutine);
         if (_hideCoroutine != null) StopCoroutine(_hideCoroutine);
         _testCoroutine = null;
@@ -40,9 +41,15 @@ public class CharacterSpeech : MonoBehaviour
     {
         while (true)
         {
-            yield return new WaitForSeconds(5f);
-            string randomText = _randomPhrases[Random.Range(0, _randomPhrases.Length)];
-            Say(randomText);
+            // On génère un délai aléatoire entre 3 et 10 secondes
+            float randomWait = Random.Range(3f, 10f);
+            yield return new WaitForSeconds(randomWait);
+
+            if (_randomPhrases.Length > 0)
+            {
+                string randomText = _randomPhrases[Random.Range(0, _randomPhrases.Length)];
+                Say(randomText);
+            }
         }
     }
 
@@ -52,20 +59,14 @@ public class CharacterSpeech : MonoBehaviour
 
         if (_hideCoroutine != null) StopCoroutine(_hideCoroutine);
 
-        // 1. On active la bouche
         _bodyPartsController?.MouthController?.StartTalking();
 
-        // 2. On lance le texte défilant
         if (_speechBubblePrefab.TryGetComponent<Speech>(out var speechScript))
         {
             _speechBubblePrefab.SetActive(true);
 
-            // On passe une Action (Callback) qui s'exécute quand le texte est fini
-            speechScript.Setup(_character, message, () => {
-                // Le texte est fini : on arrête la bouche
+            speechScript.Setup(_character, message, _audioSource, _voiceSO, () => {
                 _bodyPartsController?.MouthController?.StopTalking();
-
-                // Et on lance le chrono pour faire disparaître la bulle
                 _hideCoroutine = StartCoroutine(HideSpeechAfterDelay(duration));
             });
         }
