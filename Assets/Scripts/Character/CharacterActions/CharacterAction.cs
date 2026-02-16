@@ -19,5 +19,11 @@ public abstract class CharacterAction
     public abstract void OnStart();
     public abstract void OnApplyEffect();
 
+    /// <summary>
+    /// Appelé quand l'action est annulée (ex: ClearCurrentAction).
+    /// Permet de désabonner des événements pour éviter les memory leaks.
+    /// </summary>
+    public virtual void OnCancel() { }
+
     public void Finish() => OnActionFinished?.Invoke();
 }

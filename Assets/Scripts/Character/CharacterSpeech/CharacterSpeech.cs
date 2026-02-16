@@ -11,7 +11,7 @@ public class CharacterSpeech : MonoBehaviour
     [Header("Voice Settings")]
     [SerializeField] private AudioSource _audioSource;
     [SerializeField] private VoiceSO _voiceSO;
-    [Range(0.75f, 1.25f)][SerializeField] private float _voicePitch = 1.0f;
+    [Range(0.85f, 1.25f)][SerializeField] private float _voicePitch = 1.0f;
 
     private Coroutine _hideCoroutine;
     private Coroutine _testCoroutine;
@@ -31,7 +31,7 @@ public class CharacterSpeech : MonoBehaviour
 
         // Randomisation du pitch pour l'identité unique du NPC
         // On varie autour de la valeur actuelle pour garder une base si tu l'as réglée
-        _voicePitch = Random.Range(0.75f, 1.25f);
+        _voicePitch = Random.Range(0.85f, 1.25f);
 
         // Lancement de la routine de parole automatique
         _testCoroutine = StartCoroutine(RandomTalkRoutine());

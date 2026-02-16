@@ -119,6 +119,7 @@ public class CharacterActions : MonoBehaviour
         if (_currentAction != null)
         {
             _currentAction.OnActionFinished -= CleanupAction; // Désabonnement important
+            _currentAction.OnCancel(); // Permet à l'action de se désabonner (évite memory leaks)
 
             var animator = _character.CharacterVisual?.CharacterAnimator?.Animator;
             if (animator != null)
