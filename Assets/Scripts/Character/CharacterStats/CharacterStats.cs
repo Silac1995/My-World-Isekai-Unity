@@ -38,6 +38,9 @@ public class CharacterStats : MonoBehaviour
     [SerializeField] private CriticalHitChance criticalHitChance;
     [SerializeField] private MoveSpeed moveSpeed;
 
+    // Constantes pour les stats tertiaires de base
+    private const float BASE_MOVE_SPEED = 5f; // Vitesse de d√©placement de base
+
     [Space(10)]
     [Header("Status Effects")]
     [SerializeReference] private List<CharacterStatusEffectInstance> characterStatusEffectInstance = new();
@@ -92,7 +95,7 @@ public class CharacterStats : MonoBehaviour
         intelligence = new CharacterIntelligence(this, 1f);
         endurance = new CharacterEndurance(this, 1f);
 
-        // Tertiary (toujours dÈrivÈes)
+        // Tertiary (toujours dÔøΩrivÔøΩes)
         physicalPower = new PhysicalPower(this);
         speed = new Speed(this);
         dodgeChance = new DodgeChance(this);
@@ -102,7 +105,7 @@ public class CharacterStats : MonoBehaviour
         manaRegenRate = new ManaRegenRate(this);
         staminaRegenRate = new StaminaRegenRate(this);
         criticalHitChance = new CriticalHitChance(this);
-        moveSpeed = new MoveSpeed(this, 1f);
+        moveSpeed = new MoveSpeed(this, BASE_MOVE_SPEED);
     }
 
     public void InitializeStats(float health, float mana, float strength, float agility)
@@ -116,7 +119,7 @@ public class CharacterStats : MonoBehaviour
         Strength.SetBaseValue(strength);
         Agility.SetBaseValue(agility);
 
-        // Recalcul des stats dÈrivÈes
+        // Recalcul des stats dÔøΩrivÔøΩes
         RecalculateTertiaryStats();
     }
 
@@ -141,16 +144,18 @@ public class CharacterStats : MonoBehaviour
 
     public void RecalculateTertiaryStats()
     {
-        // Exemple de logique de calcul dÈrivÈe :
-        // Puissance Physique = Force * 2 + AgilitÈ * 0.5
+        // Puissance Physique = Force * 2 + Agilit√© * 0.5
         physicalPower.SetBaseValue(strength.CurrentValue * 2f + agility.CurrentValue * 0.5f);
 
-        // Vitesse de dÈplacement = Base + (AgilitÈ / 10)
-        moveSpeed.SetBaseValue(moveSpeed.BaseValue + (agility.CurrentValue * 0.1f));
+        // ‚ùå AVANT (accumule √† chaque appel)
+        // moveSpeed.SetBaseValue(moveSpeed.BaseValue + (agility.CurrentValue * 0.1f));
 
-        // Esquive = AgilitÈ * 0.8
+        // ‚úÖ APR√àS (recalcule depuis la base)
+        moveSpeed.SetBaseValue(BASE_MOVE_SPEED + (agility.CurrentValue * 0.1f));
+
+        // Esquive = Agilit√© * 0.8
         dodgeChance.SetBaseValue(agility.CurrentValue * 0.8f);
 
-        Debug.Log("<color=green>[Stats]</color> Statistiques tertiaires recalculÈes.");
+        Debug.Log("<color=green>[Stats]</color> Statistiques tertiaires recalcul√©es.");
     }
 }
