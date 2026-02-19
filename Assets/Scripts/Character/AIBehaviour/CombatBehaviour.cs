@@ -1,4 +1,4 @@
-using UnityEngine;
+ï»¿using UnityEngine;
 using UnityEngine.AI;
 
 public class CombatBehaviour : IAIBehaviour
@@ -18,15 +18,9 @@ public class CombatBehaviour : IAIBehaviour
         _currentTarget = target;
     }
 
-    // --- NOUVEAU : Setter de cible ---
     public void SetCurrentTarget(Character target)
     {
         _currentTarget = target;
-
-        if (target == null)
-        {
-            Debug.Log("<color=gray>[Combat]</color> Cible réinitialisée (null).");
-        }
     }
 
     public void Terminate() => _isFinished = true;
@@ -35,41 +29,34 @@ public class CombatBehaviour : IAIBehaviour
     {
         if (_battleManager == null || _isFinished) return;
 
-        // 1. Utilisation de la nouvelle vérification
+        var movement = self.CharacterMovement;
+        if (movement == null) return;
+
         if (!HasTarget)
         {
-            // On stoppe l'agent s'il n'y a plus de cible pour éviter qu'il continue 
-            // de courir vers la dernière position connue
-            if (self.Controller.Agent != null && self.Controller.Agent.isOnNavMesh)
-            {
-                self.Controller.Agent.isStopped = true;
-            }
+            movement.Stop();
             return;
         }
 
-        NavMeshAgent agent = self.Controller.Agent;
-        if (agent == null || !agent.isOnNavMesh) return;
+        // On s'assure que le mouvement est actif
+        movement.Resume();
 
-        // On s'assure que l'agent est actif (notre sécurité du Push)
-        if (agent.isStopped)
-            agent.isStopped = false;
+        Vector3 destination = _currentTarget.transform.position;
 
-        // 2. Logique de mouvement vers la cible
-        agent.SetDestination(_currentTarget.transform.position);
-
-        // 3. CONTRAINTE DE ZONE
+        // CONTRAINTE DE ZONE
         if (_battleZone == null) _battleZone = _battleManager.GetComponent<BoxCollider>();
 
         if (_battleZone != null)
         {
             if (!_battleZone.bounds.Contains(self.transform.position))
             {
-                Vector3 clampedPosition = _battleZone.ClosestPoint(self.transform.position);
-                agent.SetDestination(clampedPosition);
+                destination = _battleZone.ClosestPoint(self.transform.position);
             }
         }
+        
+        movement.SetDestination(destination);
 
-        // 4. Logique d'attaque / Flip
+        // Flip
         float dist = Vector3.Distance(self.transform.position, _currentTarget.transform.position);
         if (dist < 2f)
         {
@@ -80,10 +67,7 @@ public class CombatBehaviour : IAIBehaviour
 
     public void Exit(Character self)
     {
-        if (self.Controller.Agent != null && self.Controller.Agent.isOnNavMesh)
-        {
-            self.Controller.Agent.ResetPath();
-        }
+        self.CharacterMovement?.ResetPath();
         Debug.Log($"<color=orange>[AI]</color> {self.CharacterName} sort du mode Combat.");
     }
 }

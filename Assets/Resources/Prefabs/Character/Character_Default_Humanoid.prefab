@@ -268,6 +268,14 @@ PrefabInstance:
       propertyPath: m_IsActive
       value: 1
       objectReference: {fileID: 0}
+    - target: {fileID: 6665485954805740741, guid: b74182ade6e88b64abfbad5d0003a907, type: 3}
+      propertyPath: _animator
+      value: 
+      objectReference: {fileID: 3855441886611549694}
+    - target: {fileID: 6665485954805740741, guid: b74182ade6e88b64abfbad5d0003a907, type: 3}
+      propertyPath: _characterVisual
+      value: 
+      objectReference: {fileID: 5561720589277719849}
     - target: {fileID: 6804696224223432944, guid: b74182ade6e88b64abfbad5d0003a907, type: 3}
       propertyPath: m_IsActive
       value: 0
@@ -426,6 +434,17 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 5865631969301238776, guid: b74182ade6e88b64abfbad5d0003a907, type: 3}
   m_PrefabInstance: {fileID: 402888566639178403}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &6419820990378083942 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 6665485954805740741, guid: b74182ade6e88b64abfbad5d0003a907, type: 3}
+  m_PrefabInstance: {fileID: 402888566639178403}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 01538b4193fd8d340af13af6c33e2945, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CharacterAnimator
 --- !u!4 &7108646215449446394 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 7435905971849934169, guid: b74182ade6e88b64abfbad5d0003a907, type: 3}
@@ -1989,7 +2008,7 @@ PrefabInstance:
     - target: {fileID: 4467461276411840628, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       propertyPath: _characterAnimator
       value: 
-      objectReference: {fileID: 5666442504436755211}
+      objectReference: {fileID: 6419820990378083942}
     - target: {fileID: 4467461276411840628, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       propertyPath: bodyPartsController
       value: 
@@ -2256,9 +2275,6 @@ PrefabInstance:
       insertIndex: -1
       addedObject: {fileID: 3227628555279927972}
     - targetCorrespondingSourceObject: {fileID: 5246753746272467509, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
-      insertIndex: 2
-      addedObject: {fileID: 5666442504436755211}
-    - targetCorrespondingSourceObject: {fileID: 5246753746272467509, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1641562415796598567}
     - targetCorrespondingSourceObject: {fileID: 5246753746272467509, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
@@ -2340,20 +2356,6 @@ GameObject:
   m_CorrespondingSourceObject: {fileID: 5246753746272467509, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
   m_PrefabInstance: {fileID: 8129189969094288733}
   m_PrefabAsset: {fileID: 0}
---- !u!114 &5666442504436755211
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4035394106473422696}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 01538b4193fd8d340af13af6c33e2945, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::CharacterAnimator
-  _characterVisual: {fileID: 5561720589277719849}
-  _animator: {fileID: 3855441886611549694}
 --- !u!114 &1641562415796598567
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -470,6 +470,7 @@ MonoBehaviour:
   _characterInteractable: {fileID: 2250644852099470049}
   _bodyPartsController: {fileID: 1007890653781899237}
   _characterActions: {fileID: 2677209831397210094}
+  _characterMovement: {fileID: 6790967677183771991}
   _characterVisual: {fileID: 4467461276411840628}
   _controller: {fileID: 8530357501166543435}
   _equipment: {fileID: 8408755073701722020}
@@ -797,6 +798,7 @@ SortingGroup:
   m_SortingLayer: 1
   m_SortingOrder: 0
   m_SortAtRoot: 0
+  m_Sort3DAs2D: 0
 --- !u!114 &1007890653781899237
 MonoBehaviour:
   m_ObjectHideFlags: 0

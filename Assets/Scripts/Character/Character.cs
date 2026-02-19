@@ -24,6 +24,7 @@ public class Character : MonoBehaviour
     [SerializeField] private CharacterInteractable _characterInteractable;
     [SerializeField] private CharacterBodyPartsController _bodyPartsController;
     [SerializeField] private CharacterActions _characterActions;
+    [SerializeField] private CharacterMovement _characterMovement;
     [SerializeField] private CharacterVisual _characterVisual;
     [SerializeField] private CharacterGameController _controller;
     [SerializeField] private CharacterEquipment _equipment;
@@ -63,6 +64,7 @@ public class Character : MonoBehaviour
     public CapsuleCollider Collider => _col;
 
     public CharacterGameController Controller => _controller;
+    public CharacterMovement CharacterMovement => _characterMovement;
     public CharacterVisual CharacterVisual => _characterVisual;
     public CharacterActions CharacterActions => _characterActions;
     public CharacterInteraction CharacterInteraction => _characterInteraction ?? throw new NullReferenceException($"CharacterInteraction non initialisé sur {gameObject.name}");
@@ -98,6 +100,7 @@ public class Character : MonoBehaviour
         }
 
         LoadResources();
+        if (_characterMovement == null) _characterMovement = GetComponent<CharacterMovement>();
         _cachedNavMeshAgent = GetComponent<NavMeshAgent>();
         _isDead = false;
     }

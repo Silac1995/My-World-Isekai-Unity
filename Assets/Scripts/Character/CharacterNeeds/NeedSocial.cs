@@ -9,7 +9,7 @@ public class NeedSocial : CharacterNeed
 
     private float _socialTimer = 0f;
     private const float _tickInterval = 1f;
-    private float _socialLossPerTick = 30f;
+    private float _socialLossPerTick = 300f;
 
     public NeedSocial(Character character, float startValue = 80f) : base(character)
     {
@@ -44,25 +44,25 @@ public class NeedSocial : CharacterNeed
 
     public override bool Resolve(NPCController npc)
     {
-        // Si on est déjà en train de bouger vers quelqu'un ou de le suivre, on ne fait rien
         if (npc.HasBehaviour<FollowTargetBehaviour>() || npc.HasBehaviour<MoveToTargetBehaviour>()) return false;
 
-        // On cherche un partenaire uniquement via l'Awareness
         Character target = FindClosestSocialPartner(npc.transform.position);
 
         if (target != null)
         {
-            Debug.Log($"<color=cyan>[Need Social]</color> {npc.name} voit {target.CharacterName} via son Awareness et va lui parler.");
+            Debug.Log($"<color=cyan>[Need Social]</color> {npc.name} voit {target.CharacterName} et s'approche.");
 
-            // On utilise MoveToTargetBehaviour pour aller physiquement jusqu'à la cible
-            npc.PushBehaviour(new MoveToTargetBehaviour(npc, target.gameObject, 1.5f, () =>
+            npc.PushBehaviour(new MoveToTargetBehaviour(npc, target.gameObject, 7f, () =>
             {
                 if (target == null) return;
 
-                npc.Character.CharacterInteraction.StartInteractionWith(target);
-                npc.Character.CharacterInteraction.PerformInteraction(new InteractionTalk());
-                npc.Character.CharacterInteraction.EndInteraction();
-                IncreaseValue(50f); 
+                // On lance l'interaction avec un callback qui s'exécutera UNE FOIS POSITIONNÉ (10f X, Align Z)
+                npc.Character.CharacterInteraction.StartInteractionWith(target, () => 
+                {
+                    npc.Character.CharacterInteraction.PerformInteraction(new InteractionTalk());
+                    npc.Character.CharacterInteraction.EndInteraction();
+                    IncreaseValue(50f); 
+                });
             }));
             return true;
         }
@@ -83,3 +83,4 @@ public class NeedSocial : CharacterNeed
             .FirstOrDefault();
     }
 }
+

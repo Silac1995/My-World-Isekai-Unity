@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.AI;
 using System.Collections;
 
@@ -11,6 +11,13 @@ public class WanderBehaviour : IAIBehaviour
     private bool _isWaiting = false;
     private Coroutine _currentWaitCoroutine;
     private bool _isFinished = false;
+
+    // --- DETECTION DE BORDURE (EDGE AVOIDANCE) ---
+    private float _edgePressureTimer = 0f;
+    private const float MAX_EDGE_PRESSURE_TIME = 3f; // Temps max à raser un mur
+    private const float EDGE_DETECTION_DIST = 3.0f;  // Distance pour détecter un bord
+    private const float FORCE_NEW_DEST_DIST = 1.2f;  // Distance pour forcer un changement si bloqué
+
     public bool IsFinished => _isFinished;
 
     public WanderBehaviour(NPCController npcController)
@@ -19,47 +26,89 @@ public class WanderBehaviour : IAIBehaviour
         _walkRadius = npcController.WalkRadius;
         _minWait = npcController.MinWaitTime;
         _maxWait = npcController.MaxWaitTime;
-
-        // On ne lance pas PickNewDestination ici, on laisse Act s'en charger 
-        // ou on lance l'attente initiale.
     }
 
     public void Act(Character selfCharacter)
     {
-        if (_npcController == null || _npcController.Agent == null || _isWaiting)
-            return;
+        var movement = selfCharacter.CharacterMovement;
+        if (movement == null || _isFinished) return;
 
-        var agent = _npcController.Agent;
+        if (_isWaiting) return;
 
-        // Si l'agent n'a pas de destination (au d�but ou apr�s un ResetPath)
-        // OU s'il est arriv� � destination
-        if (!agent.pathPending && (!agent.hasPath || agent.remainingDistance <= agent.stoppingDistance))
+        // 1. ARRIVÉE NORMALE
+        if (!movement.PathPending && (!movement.HasPath || movement.RemainingDistance <= movement.StoppingDistance + 0.5f))
         {
-            _currentWaitCoroutine = _npcController.StartCoroutine(WaitAndPickNew());
+            StartWaitCoroutine(selfCharacter);
+            return;
+        }
+
+        // 2. DÉTECTION DE "PROXIMITÉ EDGE" (Anti-glissade)
+        // Si on est très près d'un bord et qu'on bouge peu (vitesse faible ou collision répétée)
+        if (NavMesh.FindClosestEdge(selfCharacter.transform.position, out NavMeshHit hit, NavMesh.AllAreas))
+        {
+            if (hit.distance < FORCE_NEW_DEST_DIST)
+            {
+                _edgePressureTimer += Time.deltaTime;
+                if (_edgePressureTimer > MAX_EDGE_PRESSURE_TIME)
+                {
+                    Debug.Log($"<color=orange>[Wander]</color> {selfCharacter.name} semble longer un bord. Changement de direction forcé.");
+                    StartWaitCoroutine(selfCharacter);
+                }
+            }
+            else
+            {
+                _edgePressureTimer = 0f;
+            }
         }
     }
 
-    private IEnumerator WaitAndPickNew()
+    private void StartWaitCoroutine(Character self)
+    {
+        if (_isWaiting) return;
+        _currentWaitCoroutine = _npcController.StartCoroutine(WaitAndPickNew(self));
+    }
+
+    private IEnumerator WaitAndPickNew(Character self)
     {
         _isWaiting = true;
+        _edgePressureTimer = 0f;
 
         float waitTime = Random.Range(_minWait, _maxWait);
-        // Debug.Log($"[Wander] Pause de {waitTime}s...");
         yield return new WaitForSeconds(waitTime);
 
-        PickNewDestination();
+        PickNewDestination(self);
         _isWaiting = false;
         _currentWaitCoroutine = null;
     }
 
-    private void PickNewDestination()
+    private void PickNewDestination(Character self)
     {
-        if (_npcController == null || _npcController.Agent == null) return;
+        var movement = self.CharacterMovement;
+        if (movement == null) return;
 
-        Vector3 randomDirection = Random.insideUnitSphere * _walkRadius + _npcController.transform.position;
-        if (NavMesh.SamplePosition(randomDirection, out NavMeshHit hit, _walkRadius, NavMesh.AllAreas))
+        // --- LOGIQUE DE "REBOND" NATUREL ---
+        Vector3 finalDirectionBias = Vector3.zero;
+
+        // On regarde si on est près d'un bord
+        if (NavMesh.FindClosestEdge(self.transform.position, out NavMeshHit edgeHit, NavMesh.AllAreas))
         {
-            _npcController.Agent.SetDestination(hit.position);
+            if (edgeHit.distance < EDGE_DETECTION_DIST)
+            {
+                // On crée un vecteur qui part du mur vers l'intérieur (la normale)
+                finalDirectionBias = edgeHit.normal * _walkRadius * 0.5f; 
+            }
+        }
+
+        // JITTER + BIAIS
+        Vector2 randomCircle = Random.insideUnitCircle * _walkRadius;
+        Vector3 randomPos = new Vector3(randomCircle.x, 0, randomCircle.y) + self.transform.position;
+        
+        // On additionne le biais pour "pousser" la recherche vers l'espace libre
+        Vector3 biasedPos = randomPos + finalDirectionBias;
+
+        if (NavMesh.SamplePosition(biasedPos, out NavMeshHit hit, _walkRadius, NavMesh.AllAreas))
+        {
+            movement.SetDestination(hit.position);
         }
     }
 
@@ -72,11 +121,8 @@ public class WanderBehaviour : IAIBehaviour
         }
 
         _isWaiting = false;
-
-        if (_npcController?.Agent != null && _npcController.Agent.isOnNavMesh)
-        {
-            _npcController.Agent.ResetPath();
-        }
+        _edgePressureTimer = 0f;
+        selfCharacter.CharacterMovement?.ResetPath();
     }
 
     public void Terminate() => _isFinished = true;

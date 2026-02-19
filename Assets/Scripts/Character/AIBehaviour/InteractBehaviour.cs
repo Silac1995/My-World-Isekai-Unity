@@ -1,9 +1,7 @@
-using UnityEngine;
-using UnityEngine.AI;
+ï»¿using UnityEngine;
 
 public class InteractBehaviour : IAIBehaviour
 {
-    private bool _hasStoppedAgent = false;
     private bool _isFinished = false;
     public bool IsFinished => _isFinished;
 
@@ -13,17 +11,13 @@ public class InteractBehaviour : IAIBehaviour
     {
         Character target = self.CharacterInteraction.CurrentTarget;
 
-        // Si la cible disparaît, on se termine
         if (target == null)
         {
             _isFinished = true;
             return;
         }
 
-        if (self.Controller.Agent != null && self.Controller.Agent.isOnNavMesh)
-        {
-            self.Controller.Agent.isStopped = true;
-        }
+        self.CharacterMovement?.Stop();
 
         Vector3 direction = target.transform.position - self.transform.position;
         self.CharacterVisual?.UpdateFlip(direction);
@@ -31,9 +25,6 @@ public class InteractBehaviour : IAIBehaviour
 
     public void Exit(Character self)
     {
-        // On s'assure que les flags sont réinitialisés
-        _hasStoppedAgent = false;
-
-        Debug.Log($"{self.CharacterName} sort de l'état d'interaction.");
+        Debug.Log($"{self.CharacterName} sort de l'Ã©tat d'interaction.");
     }
 }
