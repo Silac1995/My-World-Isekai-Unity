@@ -1,13 +1,14 @@
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using System.Linq;
 
 public class CharacterNeeds : MonoBehaviour
 {
     [SerializeField] private Character _character;
     private List<CharacterNeed> _allNeeds = new List<CharacterNeed>();
     public List<CharacterNeed> AllNeeds => _allNeeds;
-    // Ton nouvel attribut priv�
+    
     private NeedSocial _socialNeed;
     private Coroutine _socialCoroutine;
 
@@ -29,32 +30,27 @@ public class CharacterNeeds : MonoBehaviour
     private void EvaluateNeeds()
     {
         var npc = _character.Controller as NPCController;
-        if (npc == null) return;
+        if (npc == null || !npc.enabled) return;
 
-        CharacterNeed mostUrgent = null;
-        float maxUrgency = 0f;
+        // Seul le WanderBehaviour peut être interrompu par un besoin
+        if (!(npc.CurrentBehaviour is WanderBehaviour)) return;
 
-        foreach (var need in _allNeeds)
+        // 1. Filtrer les besoins actifs et les trier par urgence décroissante
+        var sortedActiveNeeds = _allNeeds
+            .Where(n => n.IsActive())
+            .OrderByDescending(n => n.GetUrgency())
+            .ToList();
+
+        // 2. Tenter de résoudre chaque besoin, dans l'ordre, jusqu'à ce qu'un réussisse
+        foreach (var need in sortedActiveNeeds)
         {
-            if (need.IsActive())
+            if (need.Resolve(npc))
             {
-                float urgency = need.GetUrgency();
-                if (urgency > maxUrgency)
-                {
-                    maxUrgency = urgency;
-                    mostUrgent = need;
-                }
+                Debug.Log($"<color=orange>[Needs]</color> {npc.name} résout le besoin : {need.GetType().Name} (Urgence: {need.GetUrgency()})");
+                break; // On a trouvé une action à faire, on arrête de chercher pour ce cycle
             }
         }
-
-        // Si le besoin le plus urgent est le social, Resolve va lancer un Follow
-        if (mostUrgent != null && npc.CurrentBehaviour is WanderBehaviour)
-        {
-            mostUrgent.Resolve(npc);
-        }
     }
-
-    
 
     private void OnEnable()
     {
@@ -78,7 +74,6 @@ public class CharacterNeeds : MonoBehaviour
             if (_socialNeed != null)
             {
                 _socialNeed.DecreaseValue(2.5f);
-                // Debug.Log($"Tick Social : {_character.CharacterName}");
             }
         }
     }

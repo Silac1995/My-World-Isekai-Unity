@@ -1,4 +1,4 @@
-public abstract class CharacterNeed
+﻿public abstract class CharacterNeed
 {
     protected Character _character;
 
@@ -13,6 +13,7 @@ public abstract class CharacterNeed
     // Quelle est l'urgence ? (0 = rien, 100 = vital)
     public abstract float GetUrgency();
 
-    // Quelle action ou behaviour ce besoin doit-il d�clencher ?
-    public abstract void Resolve(NPCController npc);
+    // Quelle action ou behaviour ce besoin doit-il déclencher ?
+    // Retourne true si une action a été effectivement lancée.
+    public abstract bool Resolve(NPCController npc);
 }

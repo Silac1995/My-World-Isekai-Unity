@@ -23,7 +23,7 @@ public class CharacterInteraction : MonoBehaviour
 
     private void Update()
     {
-        // On ne vÈrifie que si on est en train d'interagir
+        // On ne v√©rifie que si on est en train d'interagir
         if (IsInteracting)
         {
             CheckInteractionDistance();
@@ -34,13 +34,13 @@ public class CharacterInteraction : MonoBehaviour
     {
         if (_currentTarget == null || _interactionZone == null) return;
 
-        // On rÈcupËre le collider de la cible
+        // On r√©cup√®re le collider de la cible
         Collider targetCollider = _currentTarget.CharacterInteraction._interactionZone;
 
         if (targetCollider == null) return;
 
-        // VÈrifie si les deux colliders s'intersectent toujours
-        // Bounds.Intersects est trËs efficace pour Áa
+        // V√©rifie si les deux colliders s'intersectent toujours
+        // Bounds.Intersects est tr√®s efficace pour √ßa
         bool isStillTouching = _interactionZone.bounds.Intersects(targetCollider.bounds);
 
         if (!isStillTouching)
@@ -62,23 +62,34 @@ public class CharacterInteraction : MonoBehaviour
 
         // --- GESTION DE LA RELATION ET DE LA RENCONTRE ---
 
-        // 1. On s'assure que la relation existe (AddRelationship gËre dÈj‡ la rÈciprocitÈ)
+        // 1. On s'assure que la relation existe (AddRelationship g√®re d√©j√† la r√©ciprocit√©)
         Relationship rel = _character.CharacterRelation.AddRelationship(target);
 
-        // 2. On passe le statut ‡ "Met" (RencontrÈ) pour le personnage actuel
+        // 2. On passe le statut √† "Met" (Rencontr√©) pour le personnage actuel
         if (rel != null)
         {
             rel.SetAsMet();
         }
 
-        // 3. On fait de mÍme pour le partenaire (rÈciprocitÈ du "HasMet")
+        // 3. On fait de m√™me pour le partenaire (r√©ciprocit√© du "HasMet")
         Relationship targetRel = target.CharacterRelation.GetRelationshipWith(_character);
         if (targetRel != null)
         {
             targetRel.SetAsMet();
         }
 
-        Debug.Log($"<color=cyan>[Relation]</color> {_character.CharacterName} et {target.CharacterName} se sont officiellement rencontrÈs.");
+        // --- PAUSE DES COMPORTEMENTS (InteractBehaviour) ---
+        if (_character.Controller != null)
+        {
+            _character.Controller.PushBehaviour(new InteractBehaviour());
+        }
+
+        if (target.Controller != null)
+        {
+            target.Controller.PushBehaviour(new InteractBehaviour());
+        }
+
+        Debug.Log($"<color=cyan>[Relation]</color> {_character.CharacterName} et {target.CharacterName} se sont officiellement rencontr√©s.");
     }
 
     public void EndInteraction()
@@ -90,7 +101,7 @@ public class CharacterInteraction : MonoBehaviour
 
         // --- LA CORRECTION ---
         // On ne Pop QUE si le comportement au sommet est bien une interaction.
-        // Si c'est dÈj‡ un FollowTargetBehaviour, on ne touche ‡ rien !
+        // Si c'est d√©j√† un FollowTargetBehaviour, on ne touche √† rien !
         if (previousTarget.Controller != null)
         {
             if (previousTarget.Controller.CurrentBehaviour is InteractBehaviour)
@@ -122,7 +133,7 @@ public class CharacterInteraction : MonoBehaviour
         if (controller == null) return;
 
         // --- LA CORRECTION EST ICI ---
-        // Si le comportement actuel est dÈj‡ "FollowTargetBehaviour", 
+        // Si le comportement actuel est d√©j√† "FollowTargetBehaviour", 
         // on ne veut SURTOUT PAS le remettre en Wander.
         if (controller.CurrentBehaviour is FollowTargetBehaviour)
         {
@@ -130,7 +141,7 @@ public class CharacterInteraction : MonoBehaviour
             return;
         }
 
-        // Sinon, on remet le comportement par dÈfaut
+        // Sinon, on remet le comportement par d√©faut
         if (character.TryGetComponent<NPCController>(out var npc))
         {
             controller.SetBehaviour(new WanderBehaviour(npc));
@@ -144,31 +155,31 @@ public class CharacterInteraction : MonoBehaviour
     internal void SetInteractionTargetInternal(Character target)
     {
         CurrentTarget = target;
-        // On dÈclenche aussi l'event pour le partenaire afin que ses oreilles bougent aussi !
+        // On d√©clenche aussi l'event pour le partenaire afin que ses oreilles bougent aussi !
         OnInteractionStateChanged?.Invoke(target, true);
     }
 
     /// <summary>
-    /// ExÈcute une action d'interaction spÈcifique sur la cible actuelle.
+    /// Ex√©cute une action d'interaction sp√©cifique sur la cible actuelle.
     /// </summary>
-    /// <param name="action">L'action ‡ exÈcuter (ex: InteractionAskToFollow).</param>
+    /// <param name="action">L'action √† ex√©cuter (ex: InteractionAskToFollow).</param>
     public void PerformInteraction(ICharacterInteractionAction action)
     {
         if (action == null)
         {
-            Debug.LogWarning($"<color=red>[Interaction]</color> Tentative d'exÈcuter une action nulle sur {_character.CharacterName}");
+            Debug.LogWarning($"<color=red>[Interaction]</color> Tentative d'ex√©cuter une action nulle sur {_character.CharacterName}");
             return;
         }
 
         if (_currentTarget == null)
         {
-            Debug.LogWarning($"<color=orange>[Interaction]</color> {_character.CharacterName} essaie d'exÈcuter {action.GetType().Name} mais n'a pas de cible !");
+            Debug.LogWarning($"<color=orange>[Interaction]</color> {_character.CharacterName} essaie d'ex√©cuter {action.GetType().Name} mais n'a pas de cible !");
             return;
         }
 
-        Debug.Log($"<color=green>[Interaction]</color> {_character.CharacterName} exÈcute {action.GetType().Name} sur {_currentTarget.CharacterName}");
+        Debug.Log($"<color=green>[Interaction]</color> {_character.CharacterName} ex√©cute {action.GetType().Name} sur {_currentTarget.CharacterName}");
 
-        // ExÈcution de l'interface
+        // Ex√©cution de l'interface
         action.Execute(_character, _currentTarget);
     }
 }

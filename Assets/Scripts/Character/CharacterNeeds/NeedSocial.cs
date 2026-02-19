@@ -1,4 +1,4 @@
-using UnityEngine;
+ï»¿using UnityEngine;
 using System.Linq;
 
 public class NeedSocial : CharacterNeed
@@ -42,33 +42,43 @@ public class NeedSocial : CharacterNeed
         return 100f - _currentValue;
     }
 
-    public override void Resolve(NPCController npc)
+    public override bool Resolve(NPCController npc)
     {
-        if (npc.HasBehaviour<FollowTargetBehaviour>() || npc.HasBehaviour<MoveToTargetBehaviour>()) return;
+        // Si on est dÃ©jÃ  en train de bouger vers quelqu'un ou de le suivre, on ne fait rien
+        if (npc.HasBehaviour<FollowTargetBehaviour>() || npc.HasBehaviour<MoveToTargetBehaviour>()) return false;
 
         // On cherche un partenaire uniquement via l'Awareness
         Character target = FindClosestSocialPartner(npc.transform.position);
 
         if (target != null)
         {
-            Debug.Log($"<color=cyan>[Need Social]</color> {npc.name} voit {target.CharacterName} et va lui parler.");
-            npc.PushBehaviour(new FollowTargetBehaviour(target, 2.0f));
+            Debug.Log($"<color=cyan>[Need Social]</color> {npc.name} voit {target.CharacterName} via son Awareness et va lui parler.");
+
+            // On utilise MoveToTargetBehaviour pour aller physiquement jusqu'Ã  la cible
+            npc.PushBehaviour(new MoveToTargetBehaviour(npc, target.gameObject, 1.5f, () =>
+            {
+                if (target == null) return;
+
+                npc.Character.CharacterInteraction.StartInteractionWith(target);
+                npc.Character.CharacterInteraction.PerformInteraction(new InteractionTalk());
+                npc.Character.CharacterInteraction.EndInteraction();
+                IncreaseValue(50f); 
+            }));
+            return true;
         }
+        return false;
     }
 
     private Character FindClosestSocialPartner(Vector3 currentPosition)
     {
-        // 1. Récupérer le composant Awareness sur le personnage
         var awareness = _character.GetComponentInChildren<CharacterAwareness>();
         if (awareness == null) return null;
 
-        // 2. Utiliser ta méthode générique pour trouver les CharacterInteractable dans le collider
         var nearbyPartners = awareness.GetVisibleInteractables<CharacterInteractable>();
 
-        // 3. Filtrer et trier par distance
         return nearbyPartners
-            .Select(interactable => interactable.Character) // On récupère le Character lié
-            .Where(c => c != null && c.IsAlive())           // On vérifie qu'il est vivant
+            .Select(interactable => interactable.Character)
+            .Where(c => c != null && c.IsAlive())
             .OrderBy(c => Vector3.Distance(currentPosition, c.transform.position))
             .FirstOrDefault();
     }
