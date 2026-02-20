@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using Unity.VisualScripting.Antlr3.Runtime.Misc;
 using UnityEngine;
@@ -39,7 +39,7 @@ public class CharacterStats : MonoBehaviour
     [SerializeField] private MoveSpeed moveSpeed;
 
     // Constantes pour les stats tertiaires de base
-    private const float BASE_MOVE_SPEED = 5f; // Vitesse de déplacement de base
+    private const float BASE_MOVE_SPEED = 5f; // Vitesse de d??placement de base
 
     [Space(10)]
     [Header("Status Effects")]
@@ -95,7 +95,7 @@ public class CharacterStats : MonoBehaviour
         intelligence = new CharacterIntelligence(this, 1f);
         endurance = new CharacterEndurance(this, 1f);
 
-        // Tertiary (toujours d�riv�es)
+        // Tertiary (toujours d???riv???es)
         physicalPower = new PhysicalPower(this);
         speed = new Speed(this);
         dodgeChance = new DodgeChance(this);
@@ -119,7 +119,7 @@ public class CharacterStats : MonoBehaviour
         Strength.SetBaseValue(strength);
         Agility.SetBaseValue(agility);
 
-        // Recalcul des stats d�riv�es
+        // Recalcul des stats d???riv???es
         RecalculateTertiaryStats();
     }
 
@@ -144,18 +144,31 @@ public class CharacterStats : MonoBehaviour
 
     public void RecalculateTertiaryStats()
     {
-        // Puissance Physique = Force * 2 + Agilité * 0.5
+        // Puissance Physique = Force * 2 + Agilit?? * 0.5
         physicalPower.SetBaseValue(strength.CurrentValue * 2f + agility.CurrentValue * 0.5f);
 
-        // ❌ AVANT (accumule à chaque appel)
+        // ??? AVANT (accumule ?? chaque appel)
         // moveSpeed.SetBaseValue(moveSpeed.BaseValue + (agility.CurrentValue * 0.1f));
 
-        // ✅ APRÈS (recalcule depuis la base)
+        // ??? APR??S (recalcule depuis la base)
         moveSpeed.SetBaseValue(BASE_MOVE_SPEED + (agility.CurrentValue * 0.1f));
 
-        // Esquive = Agilité * 0.8
+        // Esquive = Agilit?? * 0.8
         dodgeChance.SetBaseValue(agility.CurrentValue * 0.8f);
 
-        Debug.Log("<color=green>[Stats]</color> Statistiques tertiaires recalculées.");
+        Debug.Log("<color=green>[Stats]</color> Statistiques tertiaires recalcul??es.");
+    }
+
+    public float GetSecondaryStatValue(SecondaryStatType statType)
+    {
+        switch (statType)
+        {
+            case SecondaryStatType.Strength: return strength.Value;
+            case SecondaryStatType.Agility: return agility.Value;
+            case SecondaryStatType.Dexterity: return dexterity.Value;
+            case SecondaryStatType.Intelligence: return intelligence.Value;
+            case SecondaryStatType.Endurance: return endurance.Value;
+            default: return 1f;
+        }
     }
 }
