@@ -243,6 +243,8 @@ public class CharacterCombat : MonoBehaviour
         // On demande au visuel le point au bord du sprite dans cette direction.
         // En passant une direction purement horizontale, GetVisualExtremity renverra center.y pour la hauteur.
         Vector3 spawnPos = _character.CharacterVisual.GetVisualExtremity(faceDir);
+        // On aligne sur l'axe Z r?el du personnage pour ?viter les d?calages de sprites
+        spawnPos.z = transform.position.z;
         
         _activeCombatStyleInstance = Instantiate(_currentCombatStyleExpertise.Style.Prefab, spawnPos, transform.rotation, transform);
         _activeCombatStyleInstance.GetComponent<CombatStyleAttack>()?.Initialize(_character, _bonusMeleeMaxTargets);
