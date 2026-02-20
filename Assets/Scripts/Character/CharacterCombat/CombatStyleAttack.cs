@@ -1,11 +1,11 @@
-﻿using UnityEngine;
+using UnityEngine;
 
 [RequireComponent(typeof(Collider))]
 public class CombatStyleAttack : MonoBehaviour
 {
     [Header("Settings")]
     [SerializeField] private int _maxTargets = 1;
-    [SerializeField] private float _damage = 10f;
+    [SerializeField] private float _damage = 1f;
 
     [Header("Components")]
     [SerializeField] private Character _character;
@@ -19,6 +19,16 @@ public class CombatStyleAttack : MonoBehaviour
     public Character Character => _character;
     public CombatStyleSO CombatStyleSO => _combatStyleSO;
     public Collider HitCollider => _hitCollider;
+
+    private float GetDamage()
+    {
+        if (_character == null || _character.Stats == null || _combatStyleSO == null)
+            return _damage;
+
+        float physicalDamage = _character.Stats.PhysicalPower.Value;
+        float scalingStatValue = _character.Stats.GetSecondaryStatValue(_combatStyleSO.ScalingStat);
+        return physicalDamage + (_combatStyleSO.StatMultiplier * scalingStatValue);
+    }
 
     public void Initialize(Character character, int additionalTargets)
     {
@@ -46,9 +56,10 @@ public class CombatStyleAttack : MonoBehaviour
 
             if (target == null || _hitTargets.Contains(target)) continue;
 
-            // Application des dégâts
+            // Application des dégâts: Physical Power + (StatMultiplier * ScalingStat)
+            float damage = GetDamage();
             _hitTargets.Add(target);
-            target.TakeDamage(_damage);
+            target.TakeDamage(damage);
 
             // --- AUTO-COMBAT ---
             // Si le lanceur n'est pas déjà en combat, on initie le combat automatiquement avec la première cible frappée
@@ -57,7 +68,7 @@ public class CombatStyleAttack : MonoBehaviour
                 _character.CharacterCombat.StartFight(target);
             }
 
-            Debug.Log($"<color=red>[Combat]</color> {_character.CharacterName} a frappé {target.CharacterName} (PROXIMITÉ) pour {_damage} dégâts.");
+            Debug.Log($"<color=red>[Combat]</color> {_character.CharacterName} a frappé {target.CharacterName} (PROXIMITÉ) pour {damage} dégâts.");
 
             // Si on a atteint la limite après cet ajout, on arrête tout
             if (_hitTargets.Count >= _finalMaxTargets) break;

@@ -17,7 +17,13 @@ public abstract class CharacterPrimaryStats : CharacterBaseStats
         : base(characterStats, baseValue)
     {
         Reset();
-        currentAmount = baseValue;
+        currentAmount = CurrentValue;
+    }
+
+    public new void SetBaseValue(float value)
+    {
+        base.SetBaseValue(value);
+        currentAmount = CurrentValue;
     }
 
     public void LoseCurrentAmount(float value)
