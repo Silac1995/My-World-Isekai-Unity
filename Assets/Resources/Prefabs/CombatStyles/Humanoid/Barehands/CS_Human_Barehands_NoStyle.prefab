@@ -80,6 +80,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9c07b023d52a6fb429b666920ab896f5, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CombatStyle
+  _maxTargets: 1
+  _damage: 10
   _character: {fileID: 0}
   _combatStyleSO: {fileID: 11400000, guid: 00670eeccc2b50b44b1581abbb41034c, type: 2}
   _hitCollider: {fileID: -4447083724872414719}
@@ -93,10 +95,10 @@ BoxCollider:
   m_Material: {fileID: 0}
   m_IncludeLayers:
     serializedVersion: 2
-    m_Bits: 0
+    m_Bits: 256
   m_ExcludeLayers:
     serializedVersion: 2
-    m_Bits: 0
+    m_Bits: 767
   m_LayerOverridePriority: 0
   m_IsTrigger: 1
   m_ProvidesContacts: 0

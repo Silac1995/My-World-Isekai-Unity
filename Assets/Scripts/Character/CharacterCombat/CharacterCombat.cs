@@ -10,6 +10,7 @@ public class CharacterCombat : MonoBehaviour
     [SerializeField] private List<CombatStyleExpertise> _knownStyles = new List<CombatStyleExpertise>();
     [SerializeField] private CombatStyleExpertise _currentCombatStyleExpertise;
     [SerializeField] private bool _isCombatMode = false;
+    [SerializeField] private int _bonusMeleeMaxTargets = 0;
 
     // --- NOUVEAUX CHAMPS DÉPLACÉS ---
     [SerializeField] private BattleManager _currentBattleManager;
@@ -37,7 +38,7 @@ public class CharacterCombat : MonoBehaviour
 
     #region Battle Logic
     public bool IsInBattle => _currentBattleManager != null;
-    public BattleManager BattleManager => _currentBattleManager;
+    public BattleManager CurrentBattleManager => _currentBattleManager;
 
     public void JoinBattle(BattleManager manager)
     {
@@ -55,6 +56,18 @@ public class CharacterCombat : MonoBehaviour
 
     public void StartFight(Character target)
     {
+        // On permet de rejoindre un combat existant
+        if (target != null && target.CharacterCombat.IsInBattle)
+        {
+            // Vérification de base pour l'initiateur
+            if (IsInBattle) return;
+            if (!_character.IsAlive()) return;
+
+            target.CharacterCombat.CurrentBattleManager.AddParticipant(_character, target);
+            this._currentBattleManager = target.CharacterCombat.CurrentBattleManager;
+            return;
+        }
+
         if (!ValidateFight(target)) return;
 
         GameObject instanceGo = Instantiate(_battleManagerPrefab);
@@ -99,13 +112,10 @@ public class CharacterCombat : MonoBehaviour
             return false;
         }
 
-        if (target.CharacterCombat.IsInBattle)
-        {
-            Debug.LogWarning($"<color=yellow>[Battle]</color> {target.CharacterName} est déjà occupé dans un autre combat.");
-            return false;
-        }
+        // Suppression de la restriction : on peut maintenant rejoindre un combat existant
+        // Cette validation n'est appelée que pour un NOUVEAU combat
 
-        Debug.Log($"<color=green>[Battle]</color> Validation réussie : Combat entre {_character.CharacterName} et {target.CharacterName} possible.");
+        Debug.Log($"<color=green>[Battle]</color> Validation réussie : Nouveau combat entre {_character.CharacterName} et {target.CharacterName} possible.");
         return true;
     }
     #endregion
@@ -235,7 +245,7 @@ public class CharacterCombat : MonoBehaviour
         Vector3 spawnPos = _character.CharacterVisual.GetVisualExtremity(faceDir);
         
         _activeCombatStyleInstance = Instantiate(_currentCombatStyleExpertise.Style.Prefab, spawnPos, transform.rotation, transform);
-        _activeCombatStyleInstance.GetComponent<CombatStyleAttack>()?.Initialize(_character);
+        _activeCombatStyleInstance.GetComponent<CombatStyleAttack>()?.Initialize(_character, _bonusMeleeMaxTargets);
     }
 
     /// <summary>
@@ -248,6 +258,22 @@ public class CharacterCombat : MonoBehaviour
         {
             Destroy(_activeCombatStyleInstance);
             _activeCombatStyleInstance = null;
+        }
+    }
+    #endregion
+
+    #region HP Management
+    public void TakeDamage(float amount)
+    {
+        _character.TakeDamage(amount);
+    }
+
+    public void Heal(float amount)
+    {
+        if (_character.Stats != null && _character.Stats.Health != null)
+        {
+            _character.Stats.Health.GainCurrentAmount(amount);
+            Debug.Log($"<color=green>[Combat]</color> {_character.CharacterName} a été soigné de {amount} HP.");
         }
     }
     #endregion

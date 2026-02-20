@@ -6,6 +6,8 @@ public class BattleManager : MonoBehaviour
 {
     [Header("Settings")]
     [SerializeField] private List<BattleTeam> _teams = new List<BattleTeam>();
+    [SerializeField] private BattleTeam _battleTeamInitiator;
+    [SerializeField] private BattleTeam _battleTeamTarget;
     [SerializeField] private Collider _battleZone;
     [SerializeField] private LineRenderer _battleZoneLine;
     [SerializeField] private float _padding = 30f;
@@ -23,13 +25,13 @@ public class BattleManager : MonoBehaviour
         if (initiator == null || target == null) return;
 
         // 1. Setup des équipes
-        BattleTeam teamA = new BattleTeam();
-        BattleTeam teamB = new BattleTeam();
-        teamA.AddCharacter(initiator);
-        teamB.AddCharacter(target);
+        _battleTeamInitiator = new BattleTeam();
+        _battleTeamTarget = new BattleTeam();
+        _battleTeamInitiator.AddCharacter(initiator);
+        _battleTeamTarget.AddCharacter(target);
 
-        _teams.Add(teamA);
-        _teams.Add(teamB);
+        _teams.Add(_battleTeamInitiator);
+        _teams.Add(_battleTeamTarget);
 
         // 2. Création physique de la zone
         CreateBattleZone(initiator, target);
@@ -77,55 +79,83 @@ public class BattleManager : MonoBehaviour
     {
         _allParticipants.Clear();
 
-        for (int i = 0; i < _teams.Count; i++)
+        foreach (var team in _teams)
         {
-            BattleTeam currentTeam = _teams[i];
-            // L'adversaire est l'autre équipe (0 -> 1, 1 -> 0)
-            BattleTeam opponentTeam = _teams[(i + 1) % _teams.Count];
-
-            foreach (var character in currentTeam.CharacterList)
+            foreach (var character in team.CharacterList)
             {
                 if (character == null) continue;
-
-                _allParticipants.Add(character);
-
-                if (character.CharacterCombat != null)
-                {
-                    character.CharacterCombat.JoinBattle(this);
-
-                    // On ne force pas le comportement de combat si c'est le Joueur
-                    if (!character.IsPlayer())
-                    {
-                        Character randomEnemy = opponentTeam.GetClosestMember(character.transform.position);
-                        if (randomEnemy != null)
-                        {
-                            character.Controller.PushBehaviour(new CombatBehaviour(this, randomEnemy));
-                        }
-                    }
-
-                    Debug.Log($"<color=white>[Battle]</color> {character.CharacterName} a rejoint le combat.");
-                }
-
-                // Gestion de la mort pour vérifier la fin du combat
-                character.OnDeath -= HandleCharacterDeath;
-                character.OnDeath += HandleCharacterDeath;
+                RegisterCharacter(character);
             }
         }
+    }
+
+    private void RegisterCharacter(Character character)
+    {
+        if (_allParticipants.Contains(character)) return;
+
+        _allParticipants.Add(character);
+
+        if (character.CharacterCombat != null)
+        {
+            character.CharacterCombat.JoinBattle(this);
+
+            if (!character.IsPlayer())
+            {
+                BattleTeam opponentTeam = GetEnemyTeamOf(character);
+                Character closestEnemy = opponentTeam?.GetClosestMember(character.transform.position);
+                if (closestEnemy != null)
+                    character.Controller.PushBehaviour(new CombatBehaviour(this, closestEnemy));
+            }
+        }
+
+        character.OnDeath -= HandleCharacterDeath;
+        character.OnDeath += HandleCharacterDeath;
+
+        UpdateBattleZoneWith(character);
+        Debug.Log($"<color=white>[Battle]</color> {character.CharacterName} a rejoint le combat.");
+    }
+
+    public void AddParticipant(Character newParticipant, Character target)
+    {
+        if (newParticipant == null || target == null || _isBattleEnded) return;
+
+        // On trouve l'équipe de la cible et on met le nouveau dans l'équipe adverse
+        BattleTeam targetTeam = _teams.FirstOrDefault(t => t.ContainsCharacter(target));
+        if (targetTeam == null) return;
+
+        BattleTeam enemyTeam = _teams.FirstOrDefault(t => t != targetTeam);
+        if (enemyTeam == null) return;
+
+        enemyTeam.AddCharacter(newParticipant);
+        RegisterCharacter(newParticipant);
+    }
+
+    private void UpdateBattleZoneWith(Character character)
+    {
+        if (_battleZone == null) return;
+        BoxCollider box = _battleZone as BoxCollider;
+        if (box == null) return;
+
+        Bounds bounds = box.bounds;
+        bounds.Encapsulate(character.Collider.bounds);
+        
+        // On recentre et redimensionne
+        box.size = new Vector3(bounds.size.x + _padding * 2f, 20f, bounds.size.z + _padding * 2f);
+        transform.position = new Vector3(bounds.center.x, transform.position.y, bounds.center.z);
+
+        DrawBattleZoneOutline();
     }
 
     private void HandleCharacterDeath(Character deadCharacter)
     {
         if (_isBattleEnded) return;
 
-        // 1. Vérifier si le combat est terminé (une équipe entière est éliminée)
-        foreach (var team in _teams)
+        // 1. Vérifier si le combat est terminé (UNE des deux équipes principales est éliminée)
+        if (_battleTeamInitiator.IsTeamEliminated() || _battleTeamTarget.IsTeamEliminated())
         {
-            if (team.IsTeamEliminated())
-            {
-                _isBattleEnded = true;
-                EndBattle();
-                return;
-            }
+            _isBattleEnded = true;
+            EndBattle();
+            return;
         }
 
         // 2. Si le combat continue, on redirige ceux qui tapaient le mort

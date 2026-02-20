@@ -176,6 +176,7 @@ public class Character : MonoBehaviour
 
         if (_controller != null)
         {
+            _controller.ClearBehaviours();
             _controller.enabled = false;
             if (_controller.Animator != null) _controller.Animator.SetBool("isDead", true);
         }

@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+ï»¿using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using UnityEngine.AI;
@@ -12,7 +12,7 @@ public abstract class CharacterGameController : MonoBehaviour
     private Stack<IAIBehaviour> _behavioursStack = new Stack<IAIBehaviour>();
     public IAIBehaviour CurrentBehaviour => _behavioursStack.Count > 0 ? _behavioursStack.Peek() : null;
 
-    // --- PROPRIÉTÉS DE COMPATIBILITÉ (Pour corriger tes erreurs) ---
+    // --- PROPRI?T?S DE COMPATIBILIT? (Pour corriger tes erreurs) ---
     public Character Character => _character;
     public NavMeshAgent Agent => _characterMovement != null ? _characterMovement.Agent : null;
     public CharacterMovement CharacterMovement => _characterMovement;
@@ -43,7 +43,7 @@ public abstract class CharacterGameController : MonoBehaviour
                 return;
             }
 
-            // L'IA gère son propre Resume/Stop
+            // L'IA g?re son propre Resume/Stop
             CurrentBehaviour.Act(_character);
         }
         else
@@ -56,7 +56,7 @@ public abstract class CharacterGameController : MonoBehaviour
         UpdateFlip();
     }
 
-    // --- MÉTHODES REQUISES PAR TES BEHAVIOURS ET INTERACTIONS ---
+    // --- M?THODES REQUISES PAR TES BEHAVIOURS ET INTERACTIONS ---
 
     public void SetBehaviour(IAIBehaviour behaviour) => ResetStackTo(behaviour);
 
@@ -82,7 +82,7 @@ public abstract class CharacterGameController : MonoBehaviour
         }
     }
 
-    public void ResetStackTo(IAIBehaviour baseBehaviour)
+    public void ClearBehaviours()
     {
         // 1. On vide proprement la pile actuelle
         while (_behavioursStack.Count > 0)
@@ -91,17 +91,21 @@ public abstract class CharacterGameController : MonoBehaviour
             old.Exit(_character);
         }
 
-        // 2. NETTOYAGE CRUCIAL : On force l'arrêt physique et du NavMesh
+        // 2. On force l'arret physique et du NavMesh
         if (_characterMovement != null)
         {
             _characterMovement.Stop();
-            // On s'assure que l'agent n'a plus de destination résiduelle
+            // On s'assure que l'agent n'a plus de destination residuelle
             if (Agent != null && Agent.isOnNavMesh)
             {
                 Agent.ResetPath();
             }
         }
+    }
 
+    public void ResetStackTo(IAIBehaviour baseBehaviour)
+    {
+        ClearBehaviours();
         _characterMovement.Resume();
         _behavioursStack.Push(baseBehaviour);
     }
@@ -118,24 +122,24 @@ public abstract class CharacterGameController : MonoBehaviour
     {
         if (Animator == null || _characterMovement == null) return;
 
-        // Récupération de la vitesse physique réelle
+        // R?cup?ration de la vitesse physique r?elle
         Vector3 velocity = _characterMovement.GetVelocity();
 
         // On calcule la magnitude sur le plan horizontal (X, Z)
         float speed = new Vector3(velocity.x, 0, velocity.z).magnitude;
 
-        // Appliquer une zone morte pour éviter que l'animator ne tremble
+        // Appliquer une zone morte pour ?viter que l'animator ne tremble
         // Mais attention : si ta condition est "Greater than 0", 
-        // il faut que speed soit bien à 0 quand on s'arrête.
+        // il faut que speed soit bien ? 0 quand on s'arr?te.
         if (speed < 0.1f) speed = 0f;
 
-        // Envoi à l'Animator : utilise exactement le hash VelocityX
+        // Envoi ? l'Animator : utilise exactement le hash VelocityX
         Animator.SetFloat(CharacterAnimator.VelocityX, speed);
 
         // Sol
         Animator.SetBool(CharacterAnimator.IsGrounded, _characterMovement.IsGrounded());
 
-        // Sécurité Action
+        // S?curit? Action
         if (_character.CharacterActions.CurrentAction == null)
         {
             Animator.SetBool(CharacterAnimator.IsDoingAction, false);
