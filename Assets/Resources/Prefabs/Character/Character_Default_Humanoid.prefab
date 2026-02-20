@@ -273,6 +273,10 @@ PrefabInstance:
       value: 
       objectReference: {fileID: 3855441886611549694}
     - target: {fileID: 6665485954805740741, guid: b74182ade6e88b64abfbad5d0003a907, type: 3}
+      propertyPath: _characterCombat
+      value: 
+      objectReference: {fileID: 9218545130317129143}
+    - target: {fileID: 6665485954805740741, guid: b74182ade6e88b64abfbad5d0003a907, type: 3}
       propertyPath: _characterVisual
       value: 
       objectReference: {fileID: 5561720589277719849}
@@ -2491,6 +2495,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: bcdb2b063ef915247a6cf1e9c28860e2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+--- !u!114 &9218545130317129143 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 1098445929855123690, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
+  m_PrefabInstance: {fileID: 8129189969094288733}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1dba3f9b5a9c4624ca7d45544f3a7db9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: '::'
 --- !u!1001 &8737662506013097700
 PrefabInstance:
   m_ObjectHideFlags: 0

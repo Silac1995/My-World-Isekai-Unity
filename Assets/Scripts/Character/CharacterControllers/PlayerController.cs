@@ -25,6 +25,11 @@ public class PlayerController : CharacterGameController
             _character.CharacterCombat.ToggleCombatMode();
         }
 
+        if (Input.GetKeyDown(KeyCode.K))
+        {
+            _character.CharacterCombat.MeleeAttack();
+        }
+
         base.Update();
 
         // Appeler explicitement Move() ici si tu veux que l'input soit traité à chaque frame

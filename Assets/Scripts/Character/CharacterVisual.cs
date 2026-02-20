@@ -453,6 +453,24 @@ public class CharacterVisual : MonoBehaviour
         Debug.Log("<color=white>[Visual]</color> Offset supprimé. Pivot forcé à (0,0,0).");
     }
 
+    public Vector3 GetVisualExtremity(Vector3 direction)
+    {
+        SpriteRenderer[] srs = GetComponentsInChildren<SpriteRenderer>(false);
+        if (srs.Length == 0) return transform.position;
+
+        Bounds b = srs[0].bounds;
+        foreach (var sr in srs) b.Encapsulate(sr.bounds);
+
+        Vector3 center = b.center;
+        Vector3 extents = b.extents;
+
+        return new Vector3(
+            center.x + (direction.x > 0 ? extents.x : (direction.x < 0 ? -extents.x : 0)),
+            center.y + (direction.y > 0 ? extents.y : (direction.y < 0 ? -extents.y : 0)),
+            center.z + (direction.z > 0 ? extents.z : (direction.z < 0 ? -extents.z : 0))
+        );
+    }
+
     #endregion
 
 }

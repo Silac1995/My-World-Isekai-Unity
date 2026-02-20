@@ -16,6 +16,7 @@ public class CharacterCombat : MonoBehaviour
     [SerializeField] private GameObject _battleManagerPrefab;
 
     private Dictionary<WeaponType, CombatStyleExpertise> _selectedStyles = new Dictionary<WeaponType, CombatStyleExpertise>();
+    private GameObject _activeCombatStyleInstance;
 
     public CombatStyleExpertise CurrentCombatStyleExpertise => _currentCombatStyleExpertise;
     public bool IsCombatMode => _isCombatMode;
@@ -198,4 +199,56 @@ public class CharacterCombat : MonoBehaviour
                 _character.RigType.baseSpritesLibrary.DefaultAnimatorController;
         }
     }
+
+    #region Attack System Methods
+    public void Attack()
+    {
+        MeleeAttack();
+    }
+
+    public void MeleeAttack()
+    {
+        if (!_isCombatMode)
+        {
+            _isCombatMode = true;
+            RefreshCurrentAnimator();
+        }
+
+        _character.CharacterVisual.CharacterAnimator.PlayMeleeAttack();
+    }
+
+    /// <summary>
+    /// Appelé via Animation Event au début de la phase active de l'attaque.
+    /// Fait apparaître le prefab de style de combat (hitbox).
+    /// </summary>
+    public void SpawnCombatStyleAttackInstance()
+    {
+        if (_currentCombatStyleExpertise == null || _currentCombatStyleExpertise.Style == null) return;
+        if (_currentCombatStyleExpertise.Style.Prefab == null) return;
+
+        // Positionnement : Extremité de la direction du regard (X) et milieu du sprite (Y)
+        // On récupère la direction via le booléen IsFacingRight car le transform ne tourne pas (scale flip)
+        Vector3 faceDir = _character.CharacterVisual.IsFacingRight ? Vector3.right : Vector3.left;
+        
+        // On demande au visuel le point au bord du sprite dans cette direction.
+        // En passant une direction purement horizontale, GetVisualExtremity renverra center.y pour la hauteur.
+        Vector3 spawnPos = _character.CharacterVisual.GetVisualExtremity(faceDir);
+        
+        _activeCombatStyleInstance = Instantiate(_currentCombatStyleExpertise.Style.Prefab, spawnPos, transform.rotation, transform);
+        _activeCombatStyleInstance.GetComponent<CombatStyleAttack>()?.Initialize(_character);
+    }
+
+    /// <summary>
+    /// Appelé via Animation Event à la fin de la phase active de l'attaque.
+    /// Détruit le prefab de style de combat.
+    /// </summary>
+    public void DespawnCombatStyleAttackInstance()
+    {
+        if (_activeCombatStyleInstance != null)
+        {
+            Destroy(_activeCombatStyleInstance);
+            _activeCombatStyleInstance = null;
+        }
+    }
+    #endregion
 }

@@ -359,7 +359,7 @@ GameObject:
   - component: {fileID: 4916404909723457133}
   m_Layer: 8
   m_Name: Character_Default
-  m_TagString: Player
+  m_TagString: Character
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -1009,6 +1009,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: '::'
   _character: {fileID: 2536622428659117900}
   _knownStyles: []
+  _currentCombatStyleExpertise:
+    _style: {fileID: 0}
+    _level: 0
+    _experience: 0
+  _isCombatMode: 0
   _currentBattleManager: {fileID: 0}
   _battleManagerPrefab: {fileID: 7708501793112527945, guid: 51209fa04a478a445980530b546d4dab, type: 3}
 --- !u!1 &8637028065392131947

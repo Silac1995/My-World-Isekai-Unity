@@ -1,7 +1,7 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 [RequireComponent(typeof(Collider))]
-public class CombatStyle : MonoBehaviour
+public class CombatStyleAttack : MonoBehaviour
 {
     [SerializeField] private Character _character;
     [SerializeField] private CombatStyleSO _combatStyleSO;
@@ -16,3 +16,4 @@ public class CombatStyle : MonoBehaviour
         _character = character;
     }
 }
+

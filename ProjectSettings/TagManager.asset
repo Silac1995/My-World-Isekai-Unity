@@ -5,6 +5,7 @@ TagManager:
   serializedVersion: 3
   tags:
   - Character Sprite
+  - Character
   layers:
   - Default
   - TransparentFX

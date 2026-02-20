@@ -6,8 +6,31 @@ public class CharacterAnimator : MonoBehaviour
     [SerializeField] private CharacterVisual _characterVisual;
     [SerializeField] private Animator _animator;
     [SerializeField] private RuntimeAnimatorController _civilAnimatorController;
+    [SerializeField] private CharacterCombat _characterCombat;
 
         public RuntimeAnimatorController CivilAnimatorController => _civilAnimatorController;
+
+    #region Animation Methods
+    public void PlayMeleeAttack()
+    {
+        if (_animator != null)
+            _animator.SetTrigger("Trigger_meleeAttack");
+    }
+    #endregion
+
+    #region Animation Events Bridge
+    public void AE_SpawnCombatStyleAttackInstance()
+    {
+        if (_characterCombat != null)
+            _characterCombat.SpawnCombatStyleAttackInstance();
+    }
+
+    public void AE_DespawnCombatStyleAttackInstance()
+    {
+        if (_characterCombat != null)
+            _characterCombat.DespawnCombatStyleAttackInstance();
+    }
+    #endregion
 
     public void SetCivilAnimatorController(RuntimeAnimatorController controller)
     {
