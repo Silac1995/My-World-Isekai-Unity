@@ -2446,7 +2446,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CharacterAnimator
   _characterVisual: {fileID: 0}
-  _animator: {fileID: 0}
+  _animator: {fileID: 3464991032284585821}
+--- !u!95 &3464991032284585821 stripped
+Animator:
+  m_CorrespondingSourceObject: {fileID: 1670812888686200070, guid: ec24aed44e58bf64c858f8287ee6dc1b, type: 3}
+  m_PrefabInstance: {fileID: 2826560188460669531}
+  m_PrefabAsset: {fileID: 0}
 --- !u!4 &3542239350071314191 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 1590186764274556244, guid: ec24aed44e58bf64c858f8287ee6dc1b, type: 3}

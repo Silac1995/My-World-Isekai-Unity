@@ -12,7 +12,7 @@ public class BattleTeam
     }
 
     /// <summary>
-    /// Vérifie si le personnage donné appartient à cette équipe (est un allié).
+    /// VÃ©rifie si le personnage donnÃ© appartient Ã  cette Ã©quipe (est un alliÃ©).
     /// </summary>
     public bool ContainsCharacter(Character character)
     {
@@ -28,6 +28,26 @@ public class BattleTeam
 
         int randomIndex = UnityEngine.Random.Range(0, aliveMembers.Count);
         return aliveMembers[randomIndex];
+    }
+
+    public Character GetClosestMember(UnityEngine.Vector3 position)
+    {
+        Character closest = null;
+        float minDistance = float.MaxValue;
+
+        foreach (var c in _charactersList)
+        {
+            if (c == null || !c.IsAlive()) continue;
+
+            float distance = UnityEngine.Vector3.Distance(position, c.transform.position);
+            if (distance < minDistance)
+            {
+                minDistance = distance;
+                closest = c;
+            }
+        }
+
+        return closest;
     }
 
     public bool IsTeamEliminated()

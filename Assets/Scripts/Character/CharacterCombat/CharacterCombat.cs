@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+ï»¿using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
@@ -8,26 +8,54 @@ public class CharacterCombat : MonoBehaviour
 
     [Header("Expertise & Memory")]
     [SerializeField] private List<CombatStyleExpertise> _knownStyles = new List<CombatStyleExpertise>();
+    [SerializeField] private CombatStyleExpertise _currentCombatStyleExpertise;
+    [SerializeField] private bool _isCombatMode = false;
 
-    // --- NOUVEAUX CHAMPS DÉPLACÉS ---
-    [SerializeField] private BattleManager _currentBattleManager; // Type changé en BattleManager
+    // --- NOUVEAUX CHAMPS DÃ‰PLACÃ‰S ---
+    [SerializeField] private BattleManager _currentBattleManager;
     [SerializeField] private GameObject _battleManagerPrefab;
 
     private Dictionary<WeaponType, CombatStyleExpertise> _selectedStyles = new Dictionary<WeaponType, CombatStyleExpertise>();
 
+    public CombatStyleExpertise CurrentCombatStyleExpertise => _currentCombatStyleExpertise;
+    public bool IsCombatMode => _isCombatMode;
+
+    private void Awake()
+    {
+        // Chargement du style par dÃ©faut Ã  mains nues
+        CombatStyleSO defaultStyle = Resources.Load<CombatStyleSO>("Data/CombatStyle/Barehands_NoStyle");
+        if (defaultStyle != null)
+        {
+            // On l'ajoute seulement s'il n'est pas dÃ©jÃ  prÃ©sent
+            if (!_knownStyles.Any(e => e.Style == defaultStyle))
+            {
+                _knownStyles.Add(new CombatStyleExpertise(defaultStyle));
+            }
+        }
+    }
+
     #region Battle Logic
-    // Propriété corrigée pour correspondre au type
     public bool IsInBattle => _currentBattleManager != null;
     public BattleManager BattleManager => _currentBattleManager;
 
-    public void JoinBattle(BattleManager manager) => _currentBattleManager = manager;
-    public void LeaveBattle() => _currentBattleManager = null;
+    public void JoinBattle(BattleManager manager)
+    {
+        _currentBattleManager = manager;
+        _isCombatMode = true;
+        RefreshCurrentAnimator();
+    }
+
+    public void LeaveBattle()
+    {
+        _currentBattleManager = null;
+        _isCombatMode = false;
+        RefreshCurrentAnimator();
+    }
 
     public void StartFight(Character target)
     {
         if (!ValidateFight(target)) return;
 
-        // 1. Instanciation du prefab
         GameObject instanceGo = Instantiate(_battleManagerPrefab);
         BattleManager manager = instanceGo.GetComponent<BattleManager>();
 
@@ -38,25 +66,20 @@ public class CharacterCombat : MonoBehaviour
             return;
         }
 
-        // 2. Assigne le script BattleManager (et non le GameObject)
         this._currentBattleManager = manager;
-
-        // 3. Initialisation (Le manager s'occupera d'appeler JoinBattle sur la cible)
         manager.Initialize(_character, target);
 
-        Debug.Log($"<color=orange>[Battle]</color> {_character.CharacterName} a provoqué {target.CharacterName} !");
+        Debug.Log($"<color=orange>[Battle]</color> {_character.CharacterName} a provoquÃ© {target.CharacterName} !");
     }
 
     private bool ValidateFight(Character target)
     {
-        // 1. Vérification de la cible nulle
         if (target == null)
         {
             Debug.LogWarning("<color=red>[Battle]</color> Impossible de combattre : La cible est null.");
             return false;
         }
 
-        // 2. Vérification de l'état de vie
         if (!_character.IsAlive())
         {
             Debug.LogWarning($"<color=orange>[Battle]</color> {_character.CharacterName} ne peut pas attaquer car il est MORT.");
@@ -65,76 +88,65 @@ public class CharacterCombat : MonoBehaviour
 
         if (!target.IsAlive())
         {
-            Debug.LogWarning($"<color=orange>[Battle]</color> {_character.CharacterName} ne peut pas attaquer {target.CharacterName} car la cible est déjà MORTE.");
+            Debug.LogWarning($"<color=orange>[Battle]</color> {_character.CharacterName} ne peut pas attaquer {target.CharacterName} car la cible est dÃ©jÃ  MORTE.");
             return false;
         }
 
-        // 3. Vérification de l'état de combat (pour éviter les doublons de BattleManager)
         if (IsInBattle)
         {
-            Debug.LogWarning($"<color=yellow>[Battle]</color> {_character.CharacterName} est déjà engagé dans un combat.");
+            Debug.LogWarning($"<color=yellow>[Battle]</color> {_character.CharacterName} est dÃ©jÃ  engagÃ© dans un combat.");
             return false;
         }
 
         if (target.CharacterCombat.IsInBattle)
         {
-            Debug.LogWarning($"<color=yellow>[Battle]</color> {target.CharacterName} est déjà occupé dans un autre combat.");
+            Debug.LogWarning($"<color=yellow>[Battle]</color> {target.CharacterName} est dÃ©jÃ  occupÃ© dans un autre combat.");
             return false;
         }
 
-        // Si tout est OK
-        Debug.Log($"<color=green>[Battle]</color> Validation réussie : Combat entre {_character.CharacterName} et {target.CharacterName} possible.");
+        Debug.Log($"<color=green>[Battle]</color> Validation rÃ©ussie : Combat entre {_character.CharacterName} et {target.CharacterName} possible.");
         return true;
     }
     #endregion
 
+    public void ToggleCombatMode()
+    {
+        _isCombatMode = !_isCombatMode;
+        RefreshCurrentAnimator();
+        Debug.Log($"<color=cyan>[Combat]</color> Mode Combat : {(_isCombatMode ? "ACTIVÃ‰" : "DÃ‰SACTIVÃ‰")}");
+    }
 
-    /// <summary>
-    /// Sélectionne et SAUVEGARDE un style pour un type d'arme.
-    /// </summary>
     public void SelectStyle(CombatStyleSO styleToSelect)
     {
         CombatStyleExpertise expertise = _knownStyles.FirstOrDefault(e => e.Style == styleToSelect);
 
         if (expertise != null)
         {
-            // On enregistre le choix pour ce type d'arme (ex: Sword -> Style B)
             _selectedStyles[styleToSelect.WeaponType] = expertise;
-
-            // On rafraîchit l'animator immédiatement au cas où on tient l'arme en main
             RefreshCurrentAnimator();
-
-            Debug.Log($"<color=green>[Combat]</color> Style {styleToSelect.StyleName} sauvegardé pour {styleToSelect.WeaponType}");
+            Debug.Log($"<color=green>[Combat]</color> Style {styleToSelect.StyleName} sauvegardÃ© pour {styleToSelect.WeaponType}");
         }
     }
 
-    /// <summary>
-    /// Point d'entrée lors d'un changement d'arme.
-    /// </summary>
     public void OnWeaponChanged(WeaponInstance weapon)
     {
-        if (weapon == null || weapon.ItemSO is not WeaponSO weaponData)
+        WeaponType type = WeaponType.Barehands;
+            
+        if (weapon != null && weapon.ItemSO is WeaponSO weaponData)
         {
-            ApplyCivilAnimator();
-            return;
+            type = weaponData.WeaponType;
         }
 
-        WeaponType type = weaponData.WeaponType;
-
-        // 1. On vérifie si on a déjà un choix sauvegardé pour cette arme
         if (!_selectedStyles.ContainsKey(type))
         {
-            // 2. Si c'est la première fois, on fait une sélection automatique initiale
             AutoSelectInitialStyle(type);
         }
 
-        // 3. On applique l'animator basé sur ce qui est dans le dictionnaire
         RefreshCurrentAnimator();
     }
 
     private void AutoSelectInitialStyle(WeaponType type)
     {
-        // On prend le premier style connu pour cette arme
         var firstMatch = _knownStyles.FirstOrDefault(e => e.GetWeaponType() == type);
         if (firstMatch != null)
         {
@@ -144,30 +156,42 @@ public class CharacterCombat : MonoBehaviour
 
     public void RefreshCurrentAnimator()
     {
-        // Si character.CharacterEquipment._weapon est null, weaponData sera null
-        WeaponInstance weapon = _character.CharacterEquipment.CurrentWeapon;
-
-        if (weapon == null || weapon.ItemSO is not WeaponSO weaponData)
+        if (!_isCombatMode)
         {
-            ApplyCivilAnimator(); // Le perso est "nu" ou mains nues
+            _currentCombatStyleExpertise = null;
+            ApplyCivilAnimator();
             return;
         }
 
-        // Ici, on utilise la sauvegarde du dictionnaire.
-        // Si tu as sélectionné "Style B" pour l'épée, c'est ce qui ressortira, 
-        // même après avoir utilisé une lance entre temps.
-        if (_selectedStyles.TryGetValue(weaponData.WeaponType, out var expertise))
+        WeaponInstance weapon = _character.CharacterEquipment.CurrentWeapon;
+        WeaponType type = WeaponType.Barehands;
+
+        if (weapon != null && weapon.ItemSO is WeaponSO weaponData)
         {
+            type = weaponData.WeaponType;
+        }
+
+        if (_selectedStyles.TryGetValue(type, out var expertise))
+        {
+            _currentCombatStyleExpertise = expertise;
             _character.CharacterVisual.CharacterAnimator.Animator.runtimeAnimatorController = expertise.GetCurrentAnimator();
         }
         else
         {
+            _currentCombatStyleExpertise = null;
             ApplyCivilAnimator();
         }
     }
 
     private void ApplyCivilAnimator()
     {
+        var anim = _character.CharacterVisual.CharacterAnimator;
+        if (anim.CivilAnimatorController != null)
+        {
+            anim.Animator.runtimeAnimatorController = anim.CivilAnimatorController;
+            return;
+        }
+
         if (_character.RigType?.baseSpritesLibrary?.DefaultAnimatorController != null)
         {
             _character.CharacterVisual.CharacterAnimator.Animator.runtimeAnimatorController =

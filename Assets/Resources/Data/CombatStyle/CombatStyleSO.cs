@@ -12,10 +12,12 @@ public struct StyleLevelData
 public abstract class CombatStyleSO : ScriptableObject
 {
     [SerializeField] private string _styleName;
+    [SerializeField] private GameObject _prefab;
     [SerializeField] private List<StyleLevelData> _levels = new List<StyleLevelData>();
 
     public abstract WeaponType WeaponType { get; }
     public string StyleName => _styleName;
+    public GameObject Prefab => _prefab;
 
 
     public RuntimeAnimatorController GetCombatController(int level)

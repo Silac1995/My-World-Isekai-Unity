@@ -20,6 +20,11 @@ public class PlayerController : CharacterGameController
         _inputDir = new Vector3(h, 0f, v).normalized;
         _isCrouching = Input.GetKey(KeyCode.C);
 
+        if (Input.GetKeyDown(KeyCode.J))
+        {
+            _character.CharacterCombat.ToggleCombatMode();
+        }
+
         base.Update();
 
         // Appeler explicitement Move() ici si tu veux que l'input soit traité à chaque frame

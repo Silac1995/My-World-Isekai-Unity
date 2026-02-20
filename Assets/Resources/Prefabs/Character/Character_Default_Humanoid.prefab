@@ -276,6 +276,10 @@ PrefabInstance:
       propertyPath: _characterVisual
       value: 
       objectReference: {fileID: 5561720589277719849}
+    - target: {fileID: 6665485954805740741, guid: b74182ade6e88b64abfbad5d0003a907, type: 3}
+      propertyPath: _civilAnimatorController
+      value: 
+      objectReference: {fileID: 9100000, guid: a11bcd76acbe52e428ec47fb36aeddca, type: 2}
     - target: {fileID: 6804696224223432944, guid: b74182ade6e88b64abfbad5d0003a907, type: 3}
       propertyPath: m_IsActive
       value: 0

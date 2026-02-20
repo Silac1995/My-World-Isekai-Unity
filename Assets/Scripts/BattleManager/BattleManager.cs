@@ -8,11 +8,11 @@ public class BattleManager : MonoBehaviour
     [SerializeField] private List<BattleTeam> _teams = new List<BattleTeam>();
     [SerializeField] private Collider _battleZone;
     [SerializeField] private LineRenderer _battleZoneLine;
-    [SerializeField] private float _padding = 10f;
+    [SerializeField] private float _padding = 30f;
 
     private bool _isBattleEnded = false;
 
-    // Liste pour le debug (plus besoin de GetAllCharacters � chaque fois)
+    // Liste pour le debug (plus besoin de GetAllCharacters Ã  chaque fois)
     [SerializeField] private List<Character> _allParticipants = new List<Character>();
 
     public List<BattleTeam> BattleTeams => _teams;
@@ -22,7 +22,7 @@ public class BattleManager : MonoBehaviour
     {
         if (initiator == null || target == null) return;
 
-        // 1. Setup des �quipes
+        // 1. Setup des Ã©quipes
         BattleTeam teamA = new BattleTeam();
         BattleTeam teamB = new BattleTeam();
         teamA.AddCharacter(initiator);
@@ -31,7 +31,7 @@ public class BattleManager : MonoBehaviour
         _teams.Add(teamA);
         _teams.Add(teamB);
 
-        // 2. Cr�ation physique de la zone
+        // 2. CrÃ©ation physique de la zone
         CreateBattleZone(initiator, target);
 
         // 3. Inscription des participants
@@ -40,19 +40,30 @@ public class BattleManager : MonoBehaviour
         // 4. Rendu visuel UNIQUE (pas dans Update)
         DrawBattleZoneOutline();
 
-        Debug.Log($"<color=orange>[Battle]</color> Combat lanc� : {initiator.name} vs {target.name}");
+        Debug.Log($"<color=orange>[Battle]</color> Combat lancÃ© : {initiator.name} vs {target.name}");
     }
 
-    private void CreateBattleZone(Character a, Character b)
+        private void CreateBattleZone(Character a, Character b)
     {
+        // On s'assure que le manager est neutre en rotation/scale pour que les calculs de Bounds (AABB) matchent
+        transform.rotation = Quaternion.identity;
+        transform.localScale = Vector3.one;
+
         Bounds combinedBounds = a.Collider.bounds;
         combinedBounds.Encapsulate(b.Collider.bounds);
-        combinedBounds.Expand(_padding);
+        
+        // Expand(x) ajoute x/2 de chaque côté. Pour avoir une "marge" de 30, on Expand de 60.
+        combinedBounds.Expand(_padding * 2f);
 
         // On utilise un BoxCollider pour les limites
-        BoxCollider box = gameObject.AddComponent<BoxCollider>();
+        BoxCollider box = gameObject.GetComponent<BoxCollider>();
+        if (box == null) box = gameObject.AddComponent<BoxCollider>();
+        
         box.isTrigger = true;
+        // On fixe la hauteur à 20f pour la zone de détection
         box.size = new Vector3(combinedBounds.size.x, 20f, combinedBounds.size.z);
+        
+        // On centre le pivot du manager sur le centre des bounds
         transform.position = new Vector3(combinedBounds.center.x, a.transform.position.y, combinedBounds.center.z);
 
         _battleZone = box;
@@ -65,7 +76,7 @@ public class BattleManager : MonoBehaviour
         for (int i = 0; i < _teams.Count; i++)
         {
             BattleTeam currentTeam = _teams[i];
-            // L'adversaire est l'autre �quipe (0 -> 1, 1 -> 0)
+            // L'adversaire est l'autre Ã©quipe (0 -> 1, 1 -> 0)
             BattleTeam opponentTeam = _teams[(i + 1) % _teams.Count];
 
             foreach (var character in currentTeam.CharacterList)
@@ -81,7 +92,7 @@ public class BattleManager : MonoBehaviour
                     // On ne force pas le comportement de combat si c'est le Joueur
                     if (!character.IsPlayer())
                     {
-                        Character randomEnemy = opponentTeam.GetRandomMember();
+                        Character randomEnemy = opponentTeam.GetClosestMember(character.transform.position);
                         if (randomEnemy != null)
                         {
                             character.Controller.PushBehaviour(new CombatBehaviour(this, randomEnemy));
@@ -91,7 +102,7 @@ public class BattleManager : MonoBehaviour
                     Debug.Log($"<color=white>[Battle]</color> {character.CharacterName} a rejoint le combat.");
                 }
 
-                // Gestion de la mort pour v�rifier la fin du combat
+                // Gestion de la mort pour vÃ©rifier la fin du combat
                 character.OnDeath -= HandleCharacterDeath;
                 character.OnDeath += HandleCharacterDeath;
             }
@@ -102,7 +113,7 @@ public class BattleManager : MonoBehaviour
     {
         if (_isBattleEnded) return;
 
-        // 1. V�rifier si le combat est termin� (une �quipe enti�re est �limin�e)
+        // 1. VÃ©rifier si le combat est terminÃ© (une Ã©quipe entiÃ¨re est Ã©liminÃ©e)
         foreach (var team in _teams)
         {
             if (team.IsTeamEliminated())
@@ -123,17 +134,17 @@ public class BattleManager : MonoBehaviour
         {
             if (participant == null || !participant.IsAlive()) continue;
 
-            // On r�cup�re le comportement de combat s'il existe
+            // On rÃ©cupÃ¨re le comportement de combat s'il existe
             var combatBehaviour = participant.Controller.GetCurrentBehaviour<CombatBehaviour>();
 
             if (combatBehaviour != null)
             {
-                // On v�rifie si l'IA n'a plus de cible OU si sa cible actuelle est celle qui vient de mourir
-                // On utilise une propri�t� Target que nous allons ajouter au CombatBehaviour
+                // On vÃ©rifie si l'IA n'a plus de cible OU si sa cible actuelle est celle qui vient de mourir
+                // On utilise une propriÃ©tÃ© Target que nous allons ajouter au CombatBehaviour
                 if (!combatBehaviour.HasTarget || combatBehaviour.Target == deadTarget)
                 {
                     BattleTeam enemyTeam = GetEnemyTeamOf(participant);
-                    Character nextTarget = enemyTeam?.GetRandomMember();
+                    Character nextTarget = enemyTeam?.GetClosestMember(participant.transform.position);
 
                     // On donne la nouvelle cible au comportement
                     combatBehaviour.SetCurrentTarget(nextTarget);
@@ -144,7 +155,7 @@ public class BattleManager : MonoBehaviour
         }
     }
 
-    // Petite m�thode utilitaire pour trouver l'�quipe adverse
+    // Petite mÃ©thode utilitaire pour trouver l'Ã©quipe adverse
     private BattleTeam GetEnemyTeamOf(Character c)
     {
         return _teams.FirstOrDefault(team => !team.ContainsCharacter(c));
@@ -165,7 +176,7 @@ public class BattleManager : MonoBehaviour
         Destroy(gameObject);
     }
 
-    // Garde ton DrawBattleZoneOutline mais enl�ve-le de l'Update !
+    // Garde ton DrawBattleZoneOutline mais enlÃ¨ve-le de l'Update !
     public void DrawBattleZoneOutline()
     {
         if (_battleZoneLine == null || _battleZone == null) return;
@@ -178,14 +189,14 @@ public class BattleManager : MonoBehaviour
         _battleZoneLine.loop = true;
         _battleZoneLine.positionCount = 4;
 
-        // Calcul des coins bas�s sur le BoxCollider
+        // Calcul des coins basÃ©s sur le BoxCollider
         Vector3 center = box.transform.position;
         Vector3 size = box.size;
 
         // On trace un rectangle au niveau du sol (y)
         float x = size.x / 2f;
         float z = size.z / 2f;
-        float y = center.y; // Ajuste l�g�rement (+0.05f) si la ligne clignote avec le sol
+        float y = center.y; // Ajuste lÃ©gÃ¨rement (+0.05f) si la ligne clignote avec le sol
 
         Vector3[] corners = new Vector3[4]
         {
@@ -197,6 +208,6 @@ public class BattleManager : MonoBehaviour
 
         _battleZoneLine.SetPositions(corners);
 
-        Debug.Log("<color=cyan>[Battle]</color> Outline de combat dessin�e au sol.");
+        Debug.Log("<color=cyan>[Battle]</color> Outline de combat dessinÃ©e au sol.");
     }
 }

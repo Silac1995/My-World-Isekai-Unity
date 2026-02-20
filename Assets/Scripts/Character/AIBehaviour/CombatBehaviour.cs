@@ -8,6 +8,17 @@ public class CombatBehaviour : IAIBehaviour
     private bool _isFinished = false;
     private Collider _battleZone;
 
+    // Aesthetic & Natural Movement
+    private Vector3 _currentDestination;
+    private float _lastMoveTime;
+    private float _moveInterval;
+    
+    // Safety & Stability
+    private const float MIN_DISTANCE = 3f;      // Danger: Too close
+    private const float MAX_DISTANCE = 15f;     // Danger: Too far
+    private const float IDEAL_MIN = 6f;         // Buffer zone start
+    private const float IDEAL_MAX = 12f;        // Buffer zone end
+
     public Character Target => _currentTarget;
     public bool IsFinished => _isFinished;
     public bool HasTarget => _currentTarget != null && _currentTarget.IsAlive();
@@ -16,11 +27,19 @@ public class CombatBehaviour : IAIBehaviour
     {
         _battleManager = battleManager;
         _currentTarget = target;
+        _moveInterval = Random.Range(1f, 3f);
+        _lastMoveTime = Time.time;
+        
+        if (target != null)
+            _currentDestination = CalculateSafeDestination(target.transform.position, Vector3.zero);
     }
 
     public void SetCurrentTarget(Character target)
     {
         _currentTarget = target;
+        _lastMoveTime = Time.time;
+        if (target != null)
+            _currentDestination = CalculateSafeDestination(target.transform.position, Vector3.zero);
     }
 
     public void Terminate() => _isFinished = true;
@@ -38,31 +57,70 @@ public class CombatBehaviour : IAIBehaviour
             return;
         }
 
-        // On s'assure que le mouvement est actif
         movement.Resume();
 
-        Vector3 destination = _currentTarget.transform.position;
+        float distToTarget = Vector3.Distance(self.transform.position, _currentTarget.transform.position);
+        
+        bool tooClose = distToTarget < MIN_DISTANCE;
+        bool tooFar = distToTarget > MAX_DISTANCE;
+        bool timerExpired = Time.time - _lastMoveTime > _moveInterval;
 
-        // CONTRAINTE DE ZONE
+        // Stability check: Only update path if we aren't already moving or if it's been a while
+        bool canUpdate = Time.time - _lastMoveTime > 1.5f;
+
+        if (canUpdate && (tooClose || tooFar || timerExpired))
+        {
+            // If too close, we prioritize moving away in a logical direction
+            if (tooClose)
+            {
+                _currentDestination = CalculateEscapeDestination(self.transform.position, _currentTarget.transform.position);
+            }
+            else
+            {
+                _currentDestination = CalculateSafeDestination(_currentTarget.transform.position, self.transform.position);
+            }
+
+            _moveInterval = Random.Range(4f, 8f); // High wait for "lazy" feel
+            _lastMoveTime = Time.time;
+        }
+
+        // BATTLE ZONE CONSTRAINT
         if (_battleZone == null) _battleZone = _battleManager.GetComponent<BoxCollider>();
 
-        if (_battleZone != null)
+        Vector3 finalPos = _currentDestination;
+        if (_battleZone != null && !_battleZone.bounds.Contains(finalPos))
         {
-            if (!_battleZone.bounds.Contains(self.transform.position))
-            {
-                destination = _battleZone.ClosestPoint(self.transform.position);
-            }
+            finalPos = _battleZone.ClosestPoint(finalPos);
         }
         
-        movement.SetDestination(destination);
-
-        // Flip
-        float dist = Vector3.Distance(self.transform.position, _currentTarget.transform.position);
-        if (dist < 2f)
+        // Only update movement if the destination is significantly different to avoid NavMesh jitter
+        if (Vector3.Distance(movement.Destination, finalPos) > 0.5f)
         {
-            Vector3 dir = _currentTarget.transform.position - self.transform.position;
-            self.CharacterVisual?.UpdateFlip(dir);
+            movement.SetDestination(finalPos);
         }
+
+        // Face target
+        Vector3 dirToTarget = _currentTarget.transform.position - self.transform.position;
+        self.CharacterVisual?.UpdateFlip(dirToTarget);
+    }
+
+    private Vector3 CalculateSafeDestination(Vector3 targetPos, Vector3 selfPos)
+    {
+        // Try to stay in the middle of current angle or pick new one
+        float angle = Random.Range(0f, Mathf.PI * 2f);
+        float radius = Random.Range(IDEAL_MIN, IDEAL_MAX); 
+        Vector3 offset = new Vector3(Mathf.Cos(angle) * radius, 0, Mathf.Sin(angle) * radius);
+        return targetPos + offset;
+    }
+
+    private Vector3 CalculateEscapeDestination(Vector3 selfPos, Vector3 targetPos)
+    {
+        // Move directly away from target to resolve "pushing"
+        Vector3 dirAway = (selfPos - targetPos).normalized;
+        if (dirAway.sqrMagnitude < 0.01f) dirAway = Vector3.forward;
+        
+        float radius = Random.Range(IDEAL_MIN, IDEAL_MIN + 2f); // Just enough to be safe
+        return targetPos + dirAway * radius;
     }
 
     public void Exit(Character self)

@@ -1,4 +1,4 @@
-public enum EquipmentCategory
+ï»¿public enum EquipmentCategory
 {
     Weapon,
     Wearable
@@ -21,7 +21,7 @@ public enum WearableLayerEnum
     Bag
 }
 
-// Spécificité pour les armes
+// Specificite pour les armes
 public enum WeaponType
 {
     Sword,
@@ -29,5 +29,6 @@ public enum WeaponType
     Axe,
     Bow,
     Staff,
+    Barehands,
     None
 }
