@@ -23,7 +23,7 @@ public class CharacterCombat : MonoBehaviour
     private Dictionary<WeaponType, CombatStyleExpertise> _selectedStyles = new Dictionary<WeaponType, CombatStyleExpertise>();
     private GameObject _activeCombatStyleInstance;
     private float _lastCombatActionTime;
-    private const float COMBAT_MODE_TIMEOUT = 10f;
+    private const float COMBAT_MODE_TIMEOUT = 7f;
 
     public CombatStyleExpertise CurrentCombatStyleExpertise => _currentCombatStyleExpertise;
     public bool IsCombatMode => _isCombatMode;
@@ -83,12 +83,14 @@ public class CharacterCombat : MonoBehaviour
     /// Point d'entrée centralisé pour toute action de combat (Attaque, Item, Capacité).
     /// Exécute l'action et consomme l'initiative SEULEMENT si l'action a pu démarrer.
     /// </summary>
-    public void ExecuteAction(System.Func<bool> combatAction)
+    public bool ExecuteAction(System.Func<bool> combatAction)
     {
         if (combatAction != null && combatAction.Invoke())
         {
             ConsumeInitiative();
+            return true;
         }
+        return false;
     }
 
     public void UpdateInitiativeTick()
@@ -111,14 +113,17 @@ public class CharacterCombat : MonoBehaviour
     public void LeaveBattle()
     {
         _currentBattleManager = null;
-        _isCombatMode = false;
+        
+        // On ne coupe plus le mode combat immédiatement.
+        // On reset le timer pour que la persistence (7s) commence AU MOMENT où on quitte la bataille.
+        _lastCombatActionTime = Time.time;
 
         if (_character.Controller != null && _character.Controller.GetCurrentBehaviour<CombatBehaviour>() != null)
         {
             _character.Controller.PopBehaviour();
         }
 
-        RefreshCurrentAnimator();
+        // On ne Refresh plus ici, l'Update s'en chargera après le délai
     }
 
     public void StartFight(Character target)
@@ -189,6 +194,14 @@ public class CharacterCombat : MonoBehaviour
 
     public void ToggleCombatMode()
     {
+        // --- S?CURIT? : On ne change pas de mode pendant une action ---
+        // Cela ?viterait de reset l'Animator en plein milieu d'un coup d'?p?e
+        if (_character.CharacterActions.CurrentAction != null)
+        {
+            Debug.LogWarning($"<color=yellow>[Combat]</color> Impossible de changer de mode : Une action est en cours.");
+            return;
+        }
+
         _isCombatMode = !_isCombatMode;
         if (_isCombatMode) _lastCombatActionTime = Time.time;
         
@@ -236,6 +249,9 @@ public class CharacterCombat : MonoBehaviour
 
     public void RefreshCurrentAnimator()
     {
+        // --- S?CURIT? : On ne touche pas ? l'Animator pendant une action ---
+        if (_character.CharacterActions.CurrentAction != null) return;
+
         if (!_isCombatMode)
         {
             _currentCombatStyleExpertise = null;
@@ -254,7 +270,16 @@ public class CharacterCombat : MonoBehaviour
         if (_selectedStyles.TryGetValue(type, out var expertise))
         {
             _currentCombatStyleExpertise = expertise;
-            _character.CharacterVisual.CharacterAnimator.Animator.runtimeAnimatorController = expertise.GetCurrentAnimator();
+            
+            var anim = _character.CharacterVisual.CharacterAnimator.Animator;
+            var targetController = expertise.GetCurrentAnimator();
+            
+            // --- SÉCURITÉ : On ne change le contrôleur que s'il est différent ---
+            // Ré-assigner le même contrôleur force Unity à reset l'Animator (et donc l'animation en cours).
+            if (anim.runtimeAnimatorController != targetController)
+            {
+                anim.runtimeAnimatorController = targetController;
+            }
         }
         else
         {
@@ -265,17 +290,22 @@ public class CharacterCombat : MonoBehaviour
 
     private void ApplyCivilAnimator()
     {
-        var anim = _character.CharacterVisual.CharacterAnimator;
-        if (anim.CivilAnimatorController != null)
+        var animHandler = _character.CharacterVisual.CharacterAnimator;
+        var anim = animHandler.Animator;
+        RuntimeAnimatorController targetController = null;
+
+        if (animHandler.CivilAnimatorController != null)
         {
-            anim.Animator.runtimeAnimatorController = anim.CivilAnimatorController;
-            return;
+            targetController = animHandler.CivilAnimatorController;
+        }
+        else if (_character.RigType?.baseSpritesLibrary?.DefaultAnimatorController != null)
+        {
+            targetController = _character.RigType.baseSpritesLibrary.DefaultAnimatorController;
         }
 
-        if (_character.RigType?.baseSpritesLibrary?.DefaultAnimatorController != null)
+        if (targetController != null && anim.runtimeAnimatorController != targetController)
         {
-            _character.CharacterVisual.CharacterAnimator.Animator.runtimeAnimatorController =
-                _character.RigType.baseSpritesLibrary.DefaultAnimatorController;
+            anim.runtimeAnimatorController = targetController;
         }
     }
 
@@ -285,8 +315,14 @@ public class CharacterCombat : MonoBehaviour
         return MeleeAttack();
     }
 
+    private float _lastMeleeAttackCallTime;
+
     public bool MeleeAttack()
     {
+        // S?curit? : Pas plus d'un appel par 0.2s (pour ?viter les doubles clicks/AI transients)
+        if (Time.time - _lastMeleeAttackCallTime < 0.2f) return false;
+        _lastMeleeAttackCallTime = Time.time;
+
         _lastCombatActionTime = Time.time;
         if (!_isCombatMode)
         {

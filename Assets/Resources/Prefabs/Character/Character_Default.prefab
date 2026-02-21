@@ -479,6 +479,7 @@ MonoBehaviour:
   _characterCombat: {fileID: 1098445929855123690}
   _characterNeeds: {fileID: 908669152878556868}
   _characterAwareness: {fileID: 6695407739293885907}
+  _characterSpeech: {fileID: 5778136573146001682}
 --- !u!114 &3158310397905717539
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -650,6 +651,7 @@ MonoBehaviour:
   walkRadius: 50
   minWaitTime: 2
   maxWaitTime: 7
+  scanInterval: 4
 --- !u!114 &4916404909723457133
 MonoBehaviour:
   m_ObjectHideFlags: 0

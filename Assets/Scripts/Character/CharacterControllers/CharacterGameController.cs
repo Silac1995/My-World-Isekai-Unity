@@ -9,11 +9,13 @@ public abstract class CharacterGameController : MonoBehaviour
     [SerializeField] protected Character _character;
     [SerializeField] protected CharacterMovement _characterMovement;
     protected bool _wasDoingAction;
+    protected float _actionCooldownTimer;
+    private const float ACTION_RESUME_DELAY = 0.10f;
 
     private Stack<IAIBehaviour> _behavioursStack = new Stack<IAIBehaviour>();
     public IAIBehaviour CurrentBehaviour => _behavioursStack.Count > 0 ? _behavioursStack.Peek() : null;
 
-    // --- PROPRI?T?S DE COMPATIBILIT? (Pour corriger tes erreurs) ---
+    // --- PROPRIÉTÉS DE COMPATIBILITÉ (Pour corriger tes erreurs) ---
     public Character Character => _character;
     public NavMeshAgent Agent => _characterMovement != null ? _characterMovement.Agent : null;
     public CharacterMovement CharacterMovement => _characterMovement;
@@ -24,6 +26,29 @@ public abstract class CharacterGameController : MonoBehaviour
     public virtual void Initialize()
     {
         if (_character != null && !_character.IsAlive()) enabled = false;
+        
+        // --- NOUVEAU : Tracking immédiat du début d'action ---
+        // On n'attend pas l'Update pour savoir qu'on fait quelque chose
+        if (_character != null)
+        {
+            _character.CharacterActions.OnActionStarted -= HandleActionStarted;
+            _character.CharacterActions.OnActionStarted += HandleActionStarted;
+        }
+    }
+
+    private void HandleActionStarted(CharacterAction action)
+    {
+        _wasDoingAction = true;
+        _actionCooldownTimer = ACTION_RESUME_DELAY;
+        _characterMovement.Stop();
+    }
+
+    protected virtual void OnDestroy()
+    {
+        if (_character != null && _character.CharacterActions != null)
+        {
+            _character.CharacterActions.OnActionStarted -= HandleActionStarted;
+        }
     }
 
     protected virtual void Update()
@@ -31,6 +56,7 @@ public abstract class CharacterGameController : MonoBehaviour
         if (_character.CharacterActions.CurrentAction != null)
         {
             _wasDoingAction = true;
+            _actionCooldownTimer = ACTION_RESUME_DELAY;
             _characterMovement.Stop();
 
             UpdateAnimations();
@@ -38,15 +64,27 @@ public abstract class CharacterGameController : MonoBehaviour
             return;
         }
 
-        // --- NOUVEAU : Cleanup précis après l'action ---
+        // --- NOUVEAU : Cleanup et décompte après l'action ---
         if (_wasDoingAction)
         {
-            _wasDoingAction = false;
-            _characterMovement.Resume();
-            
-            // On nettoie les drapeaux et triggers pour éviter les répétitions
+            // On nettoie les drapeaux et triggers dès la fin de l'action pour éviter les pile-ups
             Animator.SetBool(CharacterAnimator.IsDoingAction, false);
             _character.CharacterVisual?.CharacterAnimator?.ResetActionTriggers();
+
+            _actionCooldownTimer -= Time.deltaTime;
+
+            if (_actionCooldownTimer <= 0)
+            {
+                _wasDoingAction = false;
+                _characterMovement.Resume();
+            }
+            else
+            {
+                // Pendant le délai "de grâce", on reste immobile
+                _characterMovement.Stop();
+                UpdateAnimations();
+                return;
+            }
         }
 
         if (CurrentBehaviour != null)
@@ -71,7 +109,7 @@ public abstract class CharacterGameController : MonoBehaviour
 
     public void PushBehaviour(IAIBehaviour newBehaviour)
     {
-        _characterMovement.Resume();
+        SafeResume();
         _behavioursStack.Push(newBehaviour);
     }
 
@@ -83,7 +121,7 @@ public abstract class CharacterGameController : MonoBehaviour
             old.Exit(_character);
         }
 
-        _characterMovement.Resume();
+        SafeResume();
 
         if (_behavioursStack.Count == 0 && _character.TryGetComponent<NPCController>(out var npc))
         {
@@ -93,18 +131,16 @@ public abstract class CharacterGameController : MonoBehaviour
 
     public void ClearBehaviours()
     {
-        // 1. On vide proprement la pile actuelle
+        // ... (existing code)
         while (_behavioursStack.Count > 0)
         {
             IAIBehaviour old = _behavioursStack.Pop();
             old.Exit(_character);
         }
 
-        // 2. On force l'arret physique et du NavMesh
         if (_characterMovement != null)
         {
             _characterMovement.Stop();
-            // On s'assure que l'agent n'a plus de destination residuelle
             if (Agent != null && Agent.isOnNavMesh)
             {
                 Agent.ResetPath();
@@ -115,8 +151,21 @@ public abstract class CharacterGameController : MonoBehaviour
     public void ResetStackTo(IAIBehaviour baseBehaviour)
     {
         ClearBehaviours();
-        _characterMovement.Resume();
+        SafeResume();
         _behavioursStack.Push(baseBehaviour);
+    }
+
+    private void SafeResume()
+    {
+        // Une s?curit? de fer : on ne Resume() QUE si on n'est pas en train de faire qqc 
+        // ET qu'on a fini le petit temps de settling.
+        if (_character.CharacterActions.CurrentAction != null || _wasDoingAction) 
+        {
+            _characterMovement.Stop(); // On double-lock en s?curit?
+            return;
+        }
+        
+        _characterMovement.Resume();
     }
 
     public bool HasBehaviour<T>() where T : IAIBehaviour => _behavioursStack.Any(b => b is T);
@@ -133,16 +182,21 @@ public abstract class CharacterGameController : MonoBehaviour
 
         // R?cup?ration de la vitesse physique r?elle
         Vector3 velocity = _characterMovement.GetVelocity();
-
-        // On calcule la magnitude sur le plan horizontal (X, Z)
         float speed = new Vector3(velocity.x, 0, velocity.z).magnitude;
 
-        // Appliquer une zone morte pour ?viter que l'animator ne tremble
-        // Mais attention : si ta condition est "Greater than 0", 
-        // il faut que speed soit bien ? 0 quand on s'arr?te.
-        if (speed < 0.1f) speed = 0f;
+        // --- S?CURIT? ANIMATION : On force le calme pendant les actions ---
+        // On ne laisse jamais la vitesse physique (qui peut mettre une frame ? s'arr?ter) 
+        // interrompre une animation d'attaque ou le d?lai de repos.
+        if (_wasDoingAction || _character.CharacterActions.CurrentAction != null)
+        {
+            speed = 0f;
+        }
+        else if (speed < 0.1f) 
+        {
+            speed = 0f;
+        }
 
-        // Envoi ? l'Animator : utilise exactement le hash VelocityX
+        // Envoi ? l'Animator
         Animator.SetFloat(CharacterAnimator.VelocityX, speed);
 
         // Sol

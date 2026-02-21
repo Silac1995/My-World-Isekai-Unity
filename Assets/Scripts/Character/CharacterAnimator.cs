@@ -11,8 +11,15 @@ public class CharacterAnimator : MonoBehaviour
         public RuntimeAnimatorController CivilAnimatorController => _civilAnimatorController;
 
     #region Animation Methods
+    private float _lastAttackTime;
+
     public void PlayMeleeAttack()
     {
+        // --- S?CURIT? TEMPORELLE ---
+        // On interdit deux d?clenchements en moins de 0.2s pour ?viter les ghost-triggers
+        if (Time.time - _lastAttackTime < 0.2f) return;
+        _lastAttackTime = Time.time;
+
         SetTriggerSafely(MeleeAttackTrigger);
     }
 
@@ -44,12 +51,21 @@ public class CharacterAnimator : MonoBehaviour
     #region Animation Events Bridge
     public void AE_SpawnCombatStyleAttackInstance()
     {
+        // --- BREAKTHROUGH FIX : On consomme le trigger ICI ---
+        // C'est le moment o? l'attaque "commence" r?ellement son effet. 
+        // En resettant ici, on garantit que l'Animator ne pourra JAMAIS relancer l'animation 
+        // une deuxi?me fois juste apr?s, car le trigger sera d?j? mort.
+        ResetActionTriggers();
+
         if (_characterCombat != null)
             _characterCombat.SpawnCombatStyleAttackInstance();
     }
 
     public void AE_DespawnCombatStyleAttackInstance()
     {
+        // S?curit? suppl?mentaire en fin d'animation
+        ResetActionTriggers();
+
         if (_characterCombat != null)
             _characterCombat.DespawnCombatStyleAttackInstance();
     }

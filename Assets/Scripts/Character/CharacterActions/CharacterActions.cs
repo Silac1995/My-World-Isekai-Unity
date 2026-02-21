@@ -99,13 +99,6 @@ public class CharacterActions : MonoBehaviour
         _currentAction = null;
         _actionRoutine = null;
 
-        // --- RÉACTIVATION DE L'AGENT ---
-        // Si l'action qui vient de finir avait stoppé l'agent, on le libère ici
-        if (!_character.IsPlayer() && _character.Controller?.Agent != null)
-        {
-            _character.Controller.Agent.isStopped = false;
-        }
-
         OnActionCanceled?.Invoke();
     }
 

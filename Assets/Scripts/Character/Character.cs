@@ -33,6 +33,7 @@ public class Character : MonoBehaviour
     [SerializeField] private CharacterCombat _characterCombat;
     [SerializeField] private CharacterNeeds _characterNeeds;
     [SerializeField] private CharacterAwareness _characterAwareness;
+    [SerializeField] private CharacterSpeech _characterSpeech;
     #endregion
 
     #region Private Fields
@@ -74,6 +75,7 @@ public class Character : MonoBehaviour
     public CharacterCombat CharacterCombat => _characterCombat;
     public CharacterNeeds CharacterNeeds => _characterNeeds;
     public CharacterAwareness CharacterAwareness => _characterAwareness;
+    public CharacterSpeech CharacterSpeech => _characterSpeech;
 
     public Transform VisualRoot => _visualRoot;
     public GameObject CurrentVisualInstance => _currentVisualInstance;
@@ -101,6 +103,7 @@ public class Character : MonoBehaviour
 
         LoadResources();
         if (_characterMovement == null) _characterMovement = GetComponent<CharacterMovement>();
+        if (_characterSpeech == null) _characterSpeech = GetComponentInChildren<CharacterSpeech>();
         _cachedNavMeshAgent = GetComponent<NavMeshAgent>();
         _isDead = false;
     }
