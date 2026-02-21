@@ -11,7 +11,7 @@ public class CharacterActions : MonoBehaviour
     private float _actionStartTime; // Pour calculer la progression
 
     private CharacterAction _currentAction;
-    private Coroutine _actionRoutine; // Référence pour éviter les accumulations
+    private Coroutine _actionRoutine; // RÃ©fÃ©rence pour Ã©viter les accumulations
 
     public CharacterAction CurrentAction => _currentAction;
 
@@ -22,10 +22,10 @@ public class CharacterActions : MonoBehaviour
         return Mathf.Clamp01(elapsed / _currentAction.Duration);
     }
 
-    public void ExecuteAction(CharacterAction action)
+    public bool ExecuteAction(CharacterAction action)
     {
-        if (action == null || _currentAction != null) return;
-        if (!action.CanExecute()) return;
+        if (action == null || _currentAction != null) return false;
+        if (!action.CanExecute()) return false;
 
         _currentAction = action;
         _actionStartTime = Time.time;
@@ -36,10 +36,10 @@ public class CharacterActions : MonoBehaviour
         // 1. On lance l'initialisation de l'action
         _currentAction.OnStart();
 
-        // 2. GESTION DU FLUX (Instantané vs Temporisé)
+        // 2. GESTION DU FLUX (InstantanÃ© vs TemporisÃ©)
         if (action.Duration <= 0)
         {
-            // On exécute tout de suite sans créer de Coroutine (économie de mémoire)
+            // On exÃ©cute tout de suite sans crÃ©er de Coroutine (Ã©conomie de mÃ©moire)
             try
             {
                 action.OnApplyEffect();
@@ -47,29 +47,31 @@ public class CharacterActions : MonoBehaviour
             }
             catch (Exception e)
             {
-                Debug.LogError($"[CharacterActions] Erreur Action Instantanée: {e.Message}");
+                Debug.LogError($"[CharacterActions] Erreur Action InstantanÃ©e: {e.Message}");
                 CleanupAction();
             }
         }
         else
         {
-            // On ne crée la coroutine que si nécessaire
+            // On ne crÃ©e la coroutine que si nÃ©cessaire
             _actionRoutine = StartCoroutine(ActionTimerRoutine(_currentAction));
         }
+
+        return true;
     }
 
     private IEnumerator ActionTimerRoutine(CharacterAction action)
     {
         if (action == null) yield break;
 
-        // On attend la durée prévue
+        // On attend la durÃ©e prÃ©vue
         if (action.Duration > 0)
         {
             yield return new WaitForSeconds(action.Duration);
         }
 
-        // --- SÉCURITÉ ---
-        // Si l'action a été annulée ou terminée entre temps (ClearCurrentAction), on arrête tout.
+        // --- SÃ‰CURITÃ‰ ---
+        // Si l'action a Ã©tÃ© annulÃ©e ou terminÃ©e entre temps (ClearCurrentAction), on arrÃªte tout.
         if (_currentAction != action) yield break;
 
         try
@@ -77,12 +79,12 @@ public class CharacterActions : MonoBehaviour
             // On applique l'effet
             action.OnApplyEffect();
 
-            // On termine l'action (ce qui déclenchera CleanupAction via l'event)
+            // On termine l'action (ce qui dÃ©clenchera CleanupAction via l'event)
             action.Finish();
         }
         catch (Exception e)
         {
-            Debug.LogError($"[CharacterActions] Erreur durant l'exécution de l'action: {e.Message}");
+            Debug.LogError($"[CharacterActions] Erreur durant l'exÃ©cution de l'action: {e.Message}");
             CleanupAction();
         }
     }
@@ -97,8 +99,8 @@ public class CharacterActions : MonoBehaviour
         _currentAction = null;
         _actionRoutine = null;
 
-        // --- RÉACTIVATION DE L'AGENT ---
-        // Si l'action qui vient de finir avait stoppé l'agent, on le libère ici
+        // --- RÃ‰ACTIVATION DE L'AGENT ---
+        // Si l'action qui vient de finir avait stoppÃ© l'agent, on le libÃ¨re ici
         if (!_character.IsPlayer() && _character.Controller?.Agent != null)
         {
             _character.Controller.Agent.isStopped = false;
@@ -107,7 +109,7 @@ public class CharacterActions : MonoBehaviour
         OnActionCanceled?.Invoke();
     }
 
-    // Remplace ou ajoute cette méthode dans CharacterActions.cs
+    // Remplace ou ajoute cette mÃ©thode dans CharacterActions.cs
     public void ClearCurrentAction()
     {
         if (_actionRoutine != null)
@@ -118,8 +120,8 @@ public class CharacterActions : MonoBehaviour
 
         if (_currentAction != null)
         {
-            _currentAction.OnActionFinished -= CleanupAction; // Désabonnement important
-            _currentAction.OnCancel(); // Permet à l'action de se désabonner (évite memory leaks)
+            _currentAction.OnActionFinished -= CleanupAction; // DÃ©sabonnement important
+            _currentAction.OnCancel(); // Permet Ã  l'action de se dÃ©sabonner (Ã©vite memory leaks)
 
             var animator = _character.CharacterVisual?.CharacterAnimator?.Animator;
             if (animator != null)
@@ -133,7 +135,7 @@ public class CharacterActions : MonoBehaviour
         _currentAction = null;
     }
 
-    // Si le personnage est détruit, on s'assure que tout s'arrête
+    // Si le personnage est dÃ©truit, on s'assure que tout s'arrÃªte
     private void OnDisable()
     {
         StopAllCoroutines();

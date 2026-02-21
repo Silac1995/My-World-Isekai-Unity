@@ -53,6 +53,18 @@ public class CharacterCombat : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Point d'entrée centralisé pour toute action de combat (Attaque, Item, Capacité).
+    /// Exécute l'action et consomme l'initiative SEULEMENT si l'action a pu démarrer.
+    /// </summary>
+    public void ExecuteAction(System.Func<bool> combatAction)
+    {
+        if (combatAction != null && combatAction.Invoke())
+        {
+            ConsumeInitiative();
+        }
+    }
+
     public void UpdateInitiativeTick()
     {
         if (_character.Stats == null || _character.Stats.Initiative == null) return;
@@ -75,9 +87,9 @@ public class CharacterCombat : MonoBehaviour
         _currentBattleManager = null;
         _isCombatMode = false;
 
-        if (_controller != null && _controller.GetCurrentBehaviour<CombatBehaviour>() != null)
+        if (_character.Controller != null && _character.Controller.GetCurrentBehaviour<CombatBehaviour>() != null)
         {
-            _controller.PopBehaviour();
+            _character.Controller.PopBehaviour();
         }
 
         RefreshCurrentAnimator();
@@ -240,12 +252,12 @@ public class CharacterCombat : MonoBehaviour
     }
 
     #region Attack System Methods
-    public void Attack()
+    public bool Attack()
     {
-        MeleeAttack();
+        return MeleeAttack();
     }
 
-    public void MeleeAttack()
+    public bool MeleeAttack()
     {
         if (!_isCombatMode)
         {
@@ -253,7 +265,7 @@ public class CharacterCombat : MonoBehaviour
             RefreshCurrentAnimator();
         }
 
-        _character.CharacterVisual.CharacterAnimator.PlayMeleeAttack();
+        return _character.CharacterActions.ExecuteAction(new CharacterMeleeAttackAction(_character));
     }
 
     /// <summary>

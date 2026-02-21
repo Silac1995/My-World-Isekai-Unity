@@ -73,8 +73,7 @@ public class CombatBehaviour : IAIBehaviour
             {
                 // On s'arrête et on tape
                 movement.Stop();
-                self.CharacterCombat.Attack();
-                self.CharacterCombat.ConsumeInitiative();
+                self.CharacterCombat.ExecuteAction(() => self.CharacterCombat.Attack());
                 
                 // On force une petite pause dans le mouvement pour éviter de glisser pendant l'anim
                 _lastMoveTime = Time.time;

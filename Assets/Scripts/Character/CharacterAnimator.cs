@@ -86,4 +86,16 @@ public class CharacterAnimator : MonoBehaviour
             return duration;
         return 0f;
     }
+
+    public float GetMeleeAttackDuration()
+    {
+        foreach (var pair in _clipDurations)
+        {
+            if (pair.Key.Contains("MeleeAttack"))
+            {
+                return pair.Value;
+            }
+        }
+        return 0.8f; // Fallback par défaut
+    }
 }

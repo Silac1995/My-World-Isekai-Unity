@@ -31,7 +31,7 @@ public abstract class CharacterGameController : MonoBehaviour
         {
             _characterMovement.Stop();
             UpdateAnimations();
-            UpdateFlip();
+            // On ne flip pas pendant une action pour éviter de glitcher l'animation d'attaque (ou autre)
             return;
         }
 

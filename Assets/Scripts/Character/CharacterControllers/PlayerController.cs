@@ -27,7 +27,10 @@ public class PlayerController : CharacterGameController
 
         if (Input.GetKeyDown(KeyCode.K))
         {
-            _character.CharacterCombat.MeleeAttack();
+            if (!_character.CharacterCombat.IsInBattle || _character.CharacterCombat.IsReadyToAct)
+            {
+                _character.CharacterCombat.ExecuteAction(() => _character.CharacterCombat.MeleeAttack());
+            }
         }
 
         base.Update();
