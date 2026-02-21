@@ -153,7 +153,7 @@ public class BattleManager : MonoBehaviour
         if (newParticipant == null || target == null || _isBattleEnded) return;
 
         // On trouve l'équipe de la cible et on met le nouveau dans l'équipe adverse
-        BattleTeam targetTeam = _teams.FirstOrDefault(t => t.ContainsCharacter(target));
+        BattleTeam targetTeam = _teams.FirstOrDefault(t => t.IsAlly(target));
         if (targetTeam == null) return;
 
         BattleTeam enemyTeam = _teams.FirstOrDefault(t => t != targetTeam);
@@ -232,7 +232,13 @@ public class BattleManager : MonoBehaviour
     // Petite méthode utilitaire pour trouver l'équipe adverse
     private BattleTeam GetEnemyTeamOf(Character c)
     {
-        return _teams.FirstOrDefault(team => !team.ContainsCharacter(c));
+        return _teams.FirstOrDefault(team => !team.IsAlly(c));
+    }
+
+    public bool AreOpponents(Character a, Character b)
+    {
+        BattleTeam teamA = _teams.FirstOrDefault(t => t.IsAlly(a));
+        return teamA != null && teamA.IsOpponent(b, this);
     }
 
     public void EndBattle()

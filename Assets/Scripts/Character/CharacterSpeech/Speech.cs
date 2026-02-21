@@ -8,7 +8,7 @@ public class Speech : MonoBehaviour
 {
     private Character _character;
     [SerializeField] private TextMeshProUGUI _textElement;
-    [SerializeField] private float _typingSpeed = 0.04f; // Vitesse de défilement
+    [SerializeField] private float _typingSpeed = 0.06f; // Vitesse de dï¿½filement
 
     private Coroutine _typeRoutine;
 
@@ -35,7 +35,7 @@ public class Speech : MonoBehaviour
                 if (clipToPlay != null)
                 {
                     // On applique le pitch unique du personnage
-                    // Optionnel : on ajoute un tout petit offset pour le réalisme
+                    // Optionnel : on ajoute un tout petit offset pour le rï¿½alisme
                     source.pitch = characterPitch + Random.Range(-0.05f, 0.05f);
                     source.PlayOneShot(clipToPlay);
                 }

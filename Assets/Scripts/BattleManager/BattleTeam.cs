@@ -1,4 +1,5 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
+using System.Linq;
 
 public class BattleTeam
 {
@@ -14,11 +15,23 @@ public class BattleTeam
     /// <summary>
     /// Vérifie si le personnage donné appartient à cette équipe (est un allié).
     /// </summary>
-    public bool ContainsCharacter(Character character)
+    public bool IsAlly(Character character)
     {
         if (character == null) return false;
         return _charactersList.Contains(character);
     }
+
+    /// <summary>
+    /// Vérifie si le personnage fait partie d'une équipe ADVERSE dans le même combat.
+    /// </summary>
+    public bool IsOpponent(Character character, BattleManager manager)
+    {
+        if (character == null || manager == null) return false;
+        // On vérifie si n'importe quelle AUTRE équipe de ce manager contient le personnage
+        return manager.BattleTeams.Any(team => team != this && team.IsAlly(character));
+    }
+
+    public bool ContainsCharacter(Character character) => IsAlly(character);
 
     public Character GetRandomMember()
     {

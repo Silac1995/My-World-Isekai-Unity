@@ -1,4 +1,5 @@
 ﻿using UnityEngine;
+using System.Linq;
 
 [RequireComponent(typeof(Collider))]
 public class CombatStyleAttack : MonoBehaviour
@@ -37,7 +38,6 @@ public class CombatStyleAttack : MonoBehaviour
         _hitTargets.Clear();
         _potentialTargets.Clear();
 
-        // Application du multiplicateur de stat si disponible
         if (_character != null && _character.Stats != null && _combatStyleSO != null)
         {
             float statValue = _character.Stats.GetSecondaryStatValue(_combatStyleSO.ScalingStat);
@@ -49,27 +49,39 @@ public class CombatStyleAttack : MonoBehaviour
 
     private void Update()
     {
-        // Si on n'a plus de place pour des cibles ou personne en vue, on sort
         if (_hitTargets.Count >= _finalMaxTargets || _potentialTargets.Count == 0) return;
 
-        // On trie les cibles potentielles par distance par rapport au lanceur de l'attaque
+        // --- TRI PAR PRIORITÉ ET DISTANCE ---
         _potentialTargets.Sort((a, b) => 
-            Vector3.Distance(_character.transform.position, a.transform.position)
-            .CompareTo(Vector3.Distance(_character.transform.position, b.transform.position))
-        );
+        {
+            bool aIsOpponent = false;
+            bool bIsOpponent = false;
 
-        // On traite les cibles dans l'ordre de proximité
+            if (_character != null && _character.CharacterCombat != null && _character.CharacterCombat.IsInBattle)
+            {
+                var bm = _character.CharacterCombat.CurrentBattleManager;
+                aIsOpponent = bm.AreOpponents(_character, a);
+                bIsOpponent = bm.AreOpponents(_character, b);
+            }
+
+            // Priorité aux opposants r?els dans la bataille
+            if (aIsOpponent && !bIsOpponent) return -1;
+            if (!aIsOpponent && bIsOpponent) return 1;
+
+            // Secondaire : Distance
+            float distA = Vector3.Distance(_character.transform.position, a.transform.position);
+            float distB = Vector3.Distance(_character.transform.position, b.transform.position);
+            return distA.CompareTo(distB);
+        });
+
         for (int i = 0; i < _potentialTargets.Count; i++)
         {
             Character target = _potentialTargets[i];
 
             if (target == null || _hitTargets.Contains(target)) continue;
 
-            // Application des dégâts: Physical Power + (StatMultiplier * ScalingStat) + ±30% Variance
             float damage = GetDamage() * Random.Range(0.7f, 1.3f);
 
-            // --- PÉNALITÉ D'ATTAQUE SURPRISE ---
-            // Si le lanceur n'est pas encore en combat, on réduit les dégâts à 20%
             if (_character.CharacterCombat != null && !_character.CharacterCombat.IsInBattle)
             {
                 damage *= 0.2f;
@@ -78,36 +90,28 @@ public class CombatStyleAttack : MonoBehaviour
             _hitTargets.Add(target);
             target.CharacterCombat.TakeDamage(damage);
 
-            // --- AUTO-COMBAT ---
-            // Si le lanceur n'est pas déjà en combat, on initie le combat automatiquement avec la première cible frappée
             if (_character.CharacterCombat != null && !_character.CharacterCombat.IsInBattle)
             {
                 _character.CharacterCombat.StartFight(target);
             }
 
-            Debug.Log($"<color=red>[Combat]</color> {_character.CharacterName} a frappé {target.CharacterName} (PROXIMITÉ) pour {damage} dégâts.");
+            Debug.Log($"<color=red>[Combat]</color> {_character.CharacterName} a frappé {target.CharacterName} (Priorité: {(_character.CharacterCombat.IsInBattle ? _character.CharacterCombat.CurrentBattleManager.AreOpponents(_character, target) : "N/A")}) pour {damage} dégâts.");
 
-            // Si on a atteint la limite après cet ajout, on arrête tout
             if (_hitTargets.Count >= _finalMaxTargets) break;
         }
 
-        // On vide la liste des potentiels pour ne pas les retraiter
         _potentialTargets.Clear();
     }
 
     private void OnTriggerEnter(Collider other)
     {
-        // On récupère le Character sur l'objet touché
         Character target = other.GetComponentInParent<Character>();
         
-        // Validations de base
         if (target == null) return;
         if (target == _character) return;
         if (!target.IsAlive()) return;
         if (_hitTargets.Contains(target) || _potentialTargets.Contains(target)) return;
 
-        // On l'ajoute aux potentiels pour tri par distance dans l'Update
         _potentialTargets.Add(target);
     }
 }
-

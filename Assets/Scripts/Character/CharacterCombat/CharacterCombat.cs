@@ -209,6 +209,13 @@ public class CharacterCombat : MonoBehaviour
         Debug.Log($"<color=cyan>[Combat]</color> Mode Combat : {(_isCombatMode ? "ACTIV?" : "D?SACTIV?")}");
     }
 
+    public void ForceExitCombatMode()
+    {
+        _isCombatMode = false;
+        _currentBattleManager = null;
+        RefreshCurrentAnimator();
+    }
+
     public void SelectStyle(CombatStyleSO styleToSelect)
     {
         CombatStyleExpertise expertise = _knownStyles.FirstOrDefault(e => e.Style == styleToSelect);

@@ -49,21 +49,39 @@ public class NeedSocial : CharacterNeed
     {
         if (npc.HasBehaviour<FollowTargetBehaviour>() || npc.HasBehaviour<MoveToTargetBehaviour>()) return false;
 
-        Character target = FindClosestSocialPartner(npc.transform.position);
+        Character target = FindBestSocialPartner(npc.transform.position);
 
         if (target != null)
         {
             // --- DÉCISION DE L'ACTION ---
             int relationScore = 0;
+            bool hasPositiveRelation = false;
+
             if (_character.CharacterRelation != null)
             {
                 var rel = _character.CharacterRelation.GetRelationshipWith(target);
-                if (rel != null) relationScore = rel.RelationValue;
+                if (rel != null)
+                {
+                    relationScore = rel.RelationValue;
+                    hasPositiveRelation = relationScore > 0;
+                }
             }
 
-            ICharacterInteractionAction actionToPerform = npc.DetermineSocialAction(relationScore);
+            ICharacterInteractionAction actionToPerform;
+            
+            if (hasPositiveRelation)
+            {
+                // Priorité aux gens qu'on aime : logique standard
+                actionToPerform = npc.DetermineSocialAction(relationScore);
+            }
+            else
+            {
+                // Désespoir social : on va voir n'importe qui et on a 60% de chance d'être gentil
+                // pour satisfaire notre besoin coûte que coûte.
+                actionToPerform = (Random.value < 0.6f) ? new InteractionTalk() : (ICharacterInteractionAction)new InteractionInsult();
+            }
 
-            Debug.Log($"<color=cyan>[Need Social]</color> {npc.name} choisit de {(actionToPerform is InteractionTalk ? "parler" : "insulter")} {target.CharacterName} (Score: {relationScore}) pour satisfaire son besoin.");
+            Debug.Log($"<color=cyan>[Need Social]</color> {npc.name} engage {target.CharacterName} par besoin (Positif: {hasPositiveRelation}, Score: {relationScore}, Action: {actionToPerform.GetType().Name}).");
 
             npc.PushBehaviour(new MoveToTargetBehaviour(npc, target.gameObject, 7f, () =>
             {
@@ -81,7 +99,7 @@ public class NeedSocial : CharacterNeed
         return false;
     }
 
-    private Character FindClosestSocialPartner(Vector3 currentPosition)
+    private Character FindBestSocialPartner(Vector3 currentPosition)
     {
         var awareness = _character.GetComponentInChildren<CharacterAwareness>();
         if (awareness == null) return null;
@@ -93,16 +111,15 @@ public class NeedSocial : CharacterNeed
 
         if (nearbyPartners.Count == 0) return null;
 
-        // --- PRIORITÉ AUX AMIS ---
-        // On cherche s'il y a des amis dans le lot
-        var friends = nearbyPartners
-            .Where(c => _character.CharacterRelation != null && _character.CharacterRelation.IsFriend(c))
+        // --- PRIORITÉ AUX RELATIONS POSITIVES ---
+        var positivePartners = nearbyPartners
+            .Where(c => _character.CharacterRelation != null && _character.CharacterRelation.GetRelationshipWith(c)?.RelationValue > 0)
             .OrderBy(c => Vector3.Distance(currentPosition, c.transform.position))
             .FirstOrDefault();
 
-        if (friends != null) return friends;
+        if (positivePartners != null) return positivePartners;
 
-        // Sinon, on prend le plus proche (Neutre ou Ennemi)
+        // --- SINON DÉSESPOIR : PRENDRE LE PLUS PROCHE (Neutre ou Négatif) ---
         return nearbyPartners
             .OrderBy(c => Vector3.Distance(currentPosition, c.transform.position))
             .FirstOrDefault();

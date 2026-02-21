@@ -114,20 +114,29 @@ public class NPCController : CharacterGameController
     public ICharacterInteractionAction DetermineSocialAction(int relationValue)
     {
         float roll = Random.value;
+        float talkChance = 0.5f;
 
-        // Friend+ (>= 40) : 100% Talk
-        if (relationValue >= 40) 
+        if (relationValue >= 40) // Friend+
+        {
+            talkChance = 0.9f;
+        }
+        else if (relationValue >= 0) // Neutral
+        {
+            // De 60% (à 0) à 90% (à 40)
+            talkChance = 0.6f + (relationValue / 40f) * 0.3f;
+        }
+        else if (relationValue > -10) // Negative
+        {
+            talkChance = 0.4f;
+        }
+        else // Enemy
+        {
+            talkChance = 0.25f;
+        }
+
+        if (roll < talkChance)
             return new InteractionTalk();
-        
-        // Enemy (<= -10) : 80% Insult / 20% Talk
-        if (relationValue <= -10)
-            return (roll < 0.8f) ? new InteractionInsult() : (ICharacterInteractionAction)new InteractionTalk();
-        
-        // Negative (< 0) : 60% Insult / 40% Talk
-        if (relationValue < 0)
-            return (roll < 0.6f) ? new InteractionInsult() : (ICharacterInteractionAction)new InteractionTalk();
-        
-        // Neutral (0-39) : 50% / 50%
-        return (roll < 0.5f) ? new InteractionTalk() : (ICharacterInteractionAction)new InteractionInsult();
+        else
+            return new InteractionInsult();
     }
 }

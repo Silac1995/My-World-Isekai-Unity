@@ -174,14 +174,26 @@ public class Character : MonoBehaviour
         _isDead = true;
         OnDeath?.Invoke(this);
 
+        // 1. Désactivation physique
         if (_col != null) _col.enabled = false;
         if (_rb != null) _rb.isKinematic = true;
 
+        // 2. Arrêt des systèmes actifs
+        if (_characterMovement != null) _characterMovement.Stop();
+        if (_characterActions != null) _characterActions.ClearCurrentAction();
+        if (_characterCombat != null) _characterCombat.ForceExitCombatMode();
+
+        // 3. Désactivation du cerveau
         if (_controller != null)
         {
             _controller.ClearBehaviours();
             _controller.enabled = false;
-            if (_controller.Animator != null) _controller.Animator.SetBool("isDead", true);
+        }
+
+        // 4. Animation finale (Après avoir forcé le retour au CivilAnimator via Combat)
+        if (_characterVisual != null && _characterVisual.CharacterAnimator != null)
+        {
+            _characterVisual.CharacterAnimator.SetDead(true);
         }
     }
 

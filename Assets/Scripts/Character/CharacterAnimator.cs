@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 
 public class CharacterAnimator : MonoBehaviour
@@ -8,18 +8,15 @@ public class CharacterAnimator : MonoBehaviour
     [SerializeField] private RuntimeAnimatorController _civilAnimatorController;
     [SerializeField] private CharacterCombat _characterCombat;
 
-        public RuntimeAnimatorController CivilAnimatorController => _civilAnimatorController;
+    public RuntimeAnimatorController CivilAnimatorController => _civilAnimatorController;
 
     #region Animation Methods
     private float _lastAttackTime;
 
     public void PlayMeleeAttack()
     {
-        // --- S?CURIT? TEMPORELLE ---
-        // On interdit deux d?clenchements en moins de 0.2s pour ?viter les ghost-triggers
         if (Time.time - _lastAttackTime < 0.2f) return;
         _lastAttackTime = Time.time;
-
         SetTriggerSafely(MeleeAttackTrigger);
     }
 
@@ -31,12 +28,8 @@ public class CharacterAnimator : MonoBehaviour
     private void SetTriggerSafely(int triggerHash)
     {
         if (_animator == null) return;
-        
-        // On nettoie systématiquement les triggers d'actions connus pour éviter l'empilement
         _animator.ResetTrigger(MeleeAttackTrigger);
         _animator.ResetTrigger(ActionTrigger);
-        
-        // On active le nouveau
         _animator.SetTrigger(triggerHash);
     }
 
@@ -46,26 +39,35 @@ public class CharacterAnimator : MonoBehaviour
         _animator.ResetTrigger(MeleeAttackTrigger);
         _animator.ResetTrigger(ActionTrigger);
     }
+
+    public void SetDead(bool dead)
+    {
+        if (_animator != null)
+        {
+            _animator.SetBool(IsDead, dead);
+            if (dead) StopLocomotion();
+        }
+    }
+
+    public void StopLocomotion()
+    {
+        if (_animator == null) return;
+        _animator.SetFloat(VelocityX, 0f);
+        _animator.SetBool(IsWalking, false);
+    }
     #endregion
 
     #region Animation Events Bridge
     public void AE_SpawnCombatStyleAttackInstance()
     {
-        // --- BREAKTHROUGH FIX : On consomme le trigger ICI ---
-        // C'est le moment o? l'attaque "commence" r?ellement son effet. 
-        // En resettant ici, on garantit que l'Animator ne pourra JAMAIS relancer l'animation 
-        // une deuxi?me fois juste apr?s, car le trigger sera d?j? mort.
         ResetActionTriggers();
-
         if (_characterCombat != null)
             _characterCombat.SpawnCombatStyleAttackInstance();
     }
 
     public void AE_DespawnCombatStyleAttackInstance()
     {
-        // S?curit? suppl?mentaire en fin d'animation
         ResetActionTriggers();
-
         if (_characterCombat != null)
             _characterCombat.DespawnCombatStyleAttackInstance();
     }
@@ -82,8 +84,10 @@ public class CharacterAnimator : MonoBehaviour
     public static readonly int ActionTrigger = Animator.StringToHash("Trigger_pickUpItem");
     public static readonly int MeleeAttackTrigger = Animator.StringToHash("Trigger_meleeAttack");
     public static readonly int IsDoingAction = Animator.StringToHash("isDoingAction");
-    private Dictionary<string, float> _clipDurations = new Dictionary<string, float>();
     public static readonly int IsWalking = Animator.StringToHash("isWalking");
+    public static readonly int IsDead = Animator.StringToHash("isDead");
+
+    private Dictionary<string, float> _clipDurations = new Dictionary<string, float>();
 
     public Animator Animator => _animator;
 
@@ -136,6 +140,6 @@ public class CharacterAnimator : MonoBehaviour
                 return pair.Value;
             }
         }
-        return 0.8f; // Fallback par défaut
+        return 0.8f;
     }
 }
