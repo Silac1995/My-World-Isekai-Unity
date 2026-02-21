@@ -38,9 +38,9 @@ public class AttackTargetBehaviour : IAIBehaviour
                 self.CharacterVisual?.UpdateFlip(dir);
 
                 // --- ATTAQUE SURPRISE ---
-                // On déclenche l'attaque immédiatement (l'action gérera le Stop() du mouvement)
+                // On déclenche l'attaque via ExecuteAction pour consommer l'initiative
                 // Le StartFight sera déclenché "naturellement" par CombatStyleAttack.cs lors de l'impact
-                self.CharacterCombat.Attack();
+                self.CharacterCombat.ExecuteAction(() => self.CharacterCombat.Attack());
                 
                 Debug.Log($"<color=red>[AI]</color> {self.CharacterName} lance une attaque surprise sur {_target.CharacterName}!");
                 

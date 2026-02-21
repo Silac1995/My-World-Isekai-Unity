@@ -143,7 +143,7 @@ public abstract class CharacterGameController : MonoBehaviour
         // Sol
         Animator.SetBool(CharacterAnimator.IsGrounded, _characterMovement.IsGrounded());
 
-        // S?curit? Action
+        // Sécurité Action : On ne force pas le true ici pour laisser les triggers (Melee, etc.) piloter l'animator
         if (_character.CharacterActions.CurrentAction == null)
         {
             Animator.SetBool(CharacterAnimator.IsDoingAction, false);
