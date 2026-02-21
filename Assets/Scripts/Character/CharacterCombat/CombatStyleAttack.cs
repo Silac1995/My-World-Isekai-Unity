@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 [RequireComponent(typeof(Collider))]
 public class CombatStyleAttack : MonoBehaviour
@@ -36,6 +36,15 @@ public class CombatStyleAttack : MonoBehaviour
         _finalMaxTargets = _maxTargets + additionalTargets;
         _hitTargets.Clear();
         _potentialTargets.Clear();
+
+        // Application du multiplicateur de stat si disponible
+        if (_character != null && _character.Stats != null && _combatStyleSO != null)
+        {
+            float statValue = _character.Stats.GetSecondaryStatValue(_combatStyleSO.ScalingStat);
+            _damage *= (statValue * _combatStyleSO.StatMultiplier);
+            
+            Debug.Log($"<color=red>[Combat]</color> Dégâts ajustés pour {_character.CharacterName} : {_damage} (Stat: {_combatStyleSO.ScalingStat}={statValue}, Mult: {_combatStyleSO.StatMultiplier})");
+        }
     }
 
     private void Update()

@@ -132,16 +132,24 @@ public class BattleManager : MonoBehaviour
 
     private void UpdateBattleZoneWith(Character character)
     {
-        if (_battleZone == null) return;
+        if (_battleZone == null || _allParticipants.Count == 0) return;
         BoxCollider box = _battleZone as BoxCollider;
         if (box == null) return;
 
-        Bounds bounds = box.bounds;
-        bounds.Encapsulate(character.Collider.bounds);
+        // 1. On calcule les bounds "bruts" englobant tous les participants actuels
+        Bounds rawBounds = new Bounds(_allParticipants[0].Collider.bounds.center, Vector3.zero);
+        foreach (var p in _allParticipants)
+        {
+            if (p != null && p.Collider != null)
+                rawBounds.Encapsulate(p.Collider.bounds);
+        }
+
+        // 2. On applique le padding UNE SEULE FOIS sur la taille totale
+        // On fixe toujours la hauteur à 20f
+        box.size = new Vector3(rawBounds.size.x + _padding * 2f, 20f, rawBounds.size.z + _padding * 2f);
         
-        // On recentre et redimensionne
-        box.size = new Vector3(bounds.size.x + _padding * 2f, 20f, bounds.size.z + _padding * 2f);
-        transform.position = new Vector3(bounds.center.x, transform.position.y, bounds.center.z);
+        // 3. On centre le manager sur le centre géographique des participants
+        transform.position = new Vector3(rawBounds.center.x, transform.position.y, rawBounds.center.z);
 
         DrawBattleZoneOutline();
     }
