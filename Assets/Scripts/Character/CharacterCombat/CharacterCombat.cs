@@ -96,7 +96,7 @@ public class CharacterCombat : MonoBehaviour
         if (_character.Stats == null || _character.Stats.Initiative == null) return;
 
         float speedValue = _character.Stats.Speed != null ? _character.Stats.Speed.Value : 0f;
-        float totalGain = _baseInitiativePerTick + (speedValue * _speedMultiplierInitiative);
+        float totalGain = (_baseInitiativePerTick + (speedValue * _speedMultiplierInitiative)) * Random.Range(0.7f, 1.3f);
         
         _character.Stats.Initiative.IncreaseCurrentAmount(totalGain);
     }
