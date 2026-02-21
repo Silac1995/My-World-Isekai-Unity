@@ -106,22 +106,36 @@ public class NeedSocial : CharacterNeed
 
         var nearbyPartners = awareness.GetVisibleInteractables<CharacterInteractable>()
             .Select(interactable => interactable.Character)
-            .Where(c => c != null && c.IsAlive())
+            .Where(c => c != null && c.IsAlive() && c != _character)
             .ToList();
 
         if (nearbyPartners.Count == 0) return null;
 
-        // --- PRIORITÉ AUX RELATIONS POSITIVES ---
-        var positivePartners = nearbyPartners
+        // --- SÉPARATION DES CATÉGORIES ---
+        var knownPartners = nearbyPartners
             .Where(c => _character.CharacterRelation != null && _character.CharacterRelation.GetRelationshipWith(c)?.RelationValue > 0)
             .OrderBy(c => Vector3.Distance(currentPosition, c.transform.position))
-            .FirstOrDefault();
+            .ToList();
 
-        if (positivePartners != null) return positivePartners;
-
-        // --- SINON DÉSESPOIR : PRENDRE LE PLUS PROCHE (Neutre ou Négatif) ---
-        return nearbyPartners
+        var otherPartners = nearbyPartners
+            .Except(knownPartners)
             .OrderBy(c => Vector3.Distance(currentPosition, c.transform.position))
-            .FirstOrDefault();
+            .ToList();
+
+        // --- LOGIQUE 80% CONNAISSANCES / 20% AUTRES ---
+        bool prioritizeKnown = Random.value < 0.8f;
+
+        if (prioritizeKnown)
+        {
+            if (knownPartners.Count > 0) return knownPartners[0];
+            if (otherPartners.Count > 0) return otherPartners[0];
+        }
+        else
+        {
+            if (otherPartners.Count > 0) return otherPartners[0];
+            if (knownPartners.Count > 0) return knownPartners[0];
+        }
+
+        return null;
     }
 }

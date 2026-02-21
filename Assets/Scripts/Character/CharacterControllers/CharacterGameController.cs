@@ -205,7 +205,13 @@ public abstract class CharacterGameController : MonoBehaviour
 
     protected virtual void UpdateFlip()
     {
-        if (_characterVisual == null) return;
+        if (_characterVisual == null || _characterMovement == null) return;
+
+        // --- SÉCURITÉ INTERACTION : On ne flip pas par vélocité quand on est "en place" ---
+        // Une fois positionné, c'est l'IA (InteractBehaviour) qui gère l'orientation 
+        // pour faire face à l'interlocuteur. On bloque la vélocité ici pour éviter les glitchs.
+        if (_character.CharacterInteraction != null && _character.CharacterInteraction.IsPositioned) return;
+
         Vector3 velocity = _characterMovement.GetVelocity();
         if (velocity.sqrMagnitude > 0.01f) _characterVisual.UpdateFlip(velocity);
     }

@@ -32,3 +32,10 @@ public enum WeaponType
     Barehands,
     None
 }
+
+public enum MeleeDamageType
+{
+    Blunt,
+    Slashing,
+    Piercing
+}

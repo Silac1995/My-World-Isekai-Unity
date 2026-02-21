@@ -41,6 +41,7 @@ public class Character : MonoBehaviour
     private GameObject _currentVisualInstance;
     private NavMeshAgent _cachedNavMeshAgent;
     private bool _isDead;
+    private bool _isUnconscious;
 
     // Ressources statiques partagées
     private static GameObject _worldItemPrefab;
@@ -52,6 +53,7 @@ public class Character : MonoBehaviour
 
     #region Events
     public event Action<Character> OnDeath;
+    public event Action<Character> OnIncapacitated;
     #endregion
 
     #region Properties
@@ -77,6 +79,8 @@ public class Character : MonoBehaviour
     public CharacterAwareness CharacterAwareness => _characterAwareness;
     public CharacterSpeech CharacterSpeech => _characterSpeech;
 
+    public bool IsUnconscious => _isUnconscious;
+    public bool IsIncapacitated => _isDead || _isUnconscious;
     public Transform VisualRoot => _visualRoot;
     public GameObject CurrentVisualInstance => _currentVisualInstance;
     public RigTypeSO RigType => rigType;
@@ -106,6 +110,7 @@ public class Character : MonoBehaviour
         if (_characterSpeech == null) _characterSpeech = GetComponentInChildren<CharacterSpeech>();
         _cachedNavMeshAgent = GetComponent<NavMeshAgent>();
         _isDead = false;
+        _isUnconscious = false;
     }
     #endregion
 
@@ -163,15 +168,72 @@ public class Character : MonoBehaviour
     #endregion
 
     #region Health & Status
-    public bool IsAlive() => !_isDead;
+    public bool IsAlive() => !_isDead && !_isUnconscious;
     public bool IsPlayer() => _controller is PlayerController;
     public bool IsFree() => IsAlive() && !CharacterCombat.IsInBattle && !_characterInteraction.IsInteracting;
+
+    public virtual void SetUnconscious(bool unconscious)
+    {
+        if (_isDead || _isUnconscious == unconscious) return;
+
+        _isUnconscious = unconscious;
+
+        if (unconscious)
+        {
+            // 1. Désactivation physique
+            if (_col != null) _col.enabled = false;
+            if (_rb != null) _rb.isKinematic = true;
+
+            // 2. Arrêt des systèmes actifs
+            if (_characterMovement != null) _characterMovement.Stop();
+            if (_characterActions != null) _characterActions.ClearCurrentAction();
+            if (_characterCombat != null) _characterCombat.ForceExitCombatMode();
+
+            // 3. Désactivation du cerveau
+            if (_controller != null)
+            {
+                _controller.ClearBehaviours();
+                _controller.enabled = false;
+            }
+
+            // 4. Animation (Utilise le paramètre isDead pour le moment)
+            if (_characterVisual != null && _characterVisual.CharacterAnimator != null)
+            {
+                _characterVisual.CharacterAnimator.SetDead(true);
+            }
+
+            Debug.Log($"<color=orange>[Status]</color> {CharacterName} est maintenant inconscient.");
+            OnIncapacitated?.Invoke(this);
+        }
+        else
+        {
+            // --- RÉVEIL ---
+            if (_col != null) _col.enabled = true;
+            if (_rb != null) _rb.isKinematic = IsPlayer() ? false : true; // Rétablir selon le type de controller
+
+            if (_controller != null)
+            {
+                _controller.enabled = true;
+                _controller.Initialize(); // Repart sur Wander ou comportement par défaut
+            }
+
+            if (_characterVisual != null && _characterVisual.CharacterAnimator != null)
+            {
+                _characterVisual.CharacterAnimator.SetDead(false);
+            }
+
+            Debug.Log($"<color=orange>[Status]</color> {CharacterName} a repris connaissance.");
+        }
+    }
+
+    public void WakeUp() => SetUnconscious(false);
 
     public virtual void Die()
     {
         if (_isDead) return;
 
         _isDead = true;
+        _isUnconscious = false; // La mort prime sur l'inconscience
         OnDeath?.Invoke(this);
 
         // 1. Désactivation physique
@@ -190,11 +252,12 @@ public class Character : MonoBehaviour
             _controller.enabled = false;
         }
 
-        // 4. Animation finale (Après avoir forcé le retour au CivilAnimator via Combat)
         if (_characterVisual != null && _characterVisual.CharacterAnimator != null)
         {
             _characterVisual.CharacterAnimator.SetDead(true);
         }
+
+        OnIncapacitated?.Invoke(this);
     }
 
     #endregion

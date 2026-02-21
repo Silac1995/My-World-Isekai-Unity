@@ -16,6 +16,10 @@ public class CharacterCombat : MonoBehaviour
     [SerializeField] private float _baseInitiativePerTick = 1f;
     [SerializeField] private float _speedMultiplierInitiative = 0.1f;
 
+    [Header("HP Recovery Settings")]
+    [SerializeField] private float _unconsciousRecoveryRate = 2.0f; // HP/s quand inconscient
+    [SerializeField] private float _outOfCombatRecoveryRate = 0.2f;  // HP/s quand conscient
+
     // --- NOUVEAUX CHAMPS DÉPLACÉS ---
     [SerializeField] private BattleManager _currentBattleManager;
     [SerializeField] private GameObject _battleManagerPrefab;
@@ -66,8 +70,6 @@ public class CharacterCombat : MonoBehaviour
     private void Update()
     {
         // --- AUTO-DESACTIVATION DU MODE COMBAT ---
-        // Si on est en mode combat mais pas en bataille réelle, 
-        // on range l'arme après un certain temps d'inactivité.
         if (_isCombatMode && !IsInBattle)
         {
             if (Time.time - _lastCombatActionTime > COMBAT_MODE_TIMEOUT)
@@ -75,6 +77,27 @@ public class CharacterCombat : MonoBehaviour
                 _isCombatMode = false;
                 RefreshCurrentAnimator();
                 Debug.Log($"<color=cyan>[Combat]</color> Mode Combat NPC expir? (Inactivit?) : D?SACTIV?");
+            }
+        }
+
+        // --- RÉCUPÉRATION PASSIVE (Uniquement hors bataille) ---
+        if (!IsInBattle && _character.Stats != null && _character.Stats.Health != null)
+        {
+            if (_character.IsUnconscious)
+            {
+                // Récupération rapide quand inconscient
+                _character.Stats.Health.IncreaseCurrentAmount(_unconsciousRecoveryRate * Time.deltaTime);
+
+                // Seuil de réveil : 30% de la vie max
+                if (_character.Stats.Health.CurrentAmount >= _character.Stats.Health.MaxValue * 0.3f)
+                {
+                    _character.WakeUp();
+                }
+            }
+            else if (_character.IsAlive())
+            {
+                // Récupération lente quand conscient
+                _character.Stats.Health.IncreaseCurrentAmount(_outOfCombatRecoveryRate * Time.deltaTime);
             }
         }
     }
@@ -378,12 +401,12 @@ public class CharacterCombat : MonoBehaviour
     #endregion
 
     #region HP Management
-    public void TakeDamage(float amount)
+    public void TakeDamage(float amount, MeleeDamageType type = MeleeDamageType.Blunt)
     {
         if (!_character.IsAlive() || _character.Stats == null) return;
 
         _character.Stats.Health.CurrentAmount -= amount;
-        Debug.Log($"<color=green>[Combat]</color> {_character.CharacterName} took damage {amount} HP.");
+        Debug.Log($"<color=green>[Combat]</color> {_character.CharacterName} took {amount} {type} damage.");
 
         if (_character.CharacterVisual != null && _character.CharacterVisual.CharacterBlink != null)
         {
@@ -392,7 +415,7 @@ public class CharacterCombat : MonoBehaviour
 
         if (_character.Stats.Health.CurrentAmount <= 0)
         {
-            _character.Die();
+            _character.SetUnconscious(true);
         }
     }
 

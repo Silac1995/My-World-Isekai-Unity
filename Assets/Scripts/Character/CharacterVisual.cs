@@ -204,6 +204,15 @@ public class CharacterVisual : MonoBehaviour
 
     }
 
+    /// <summary>
+    /// Oriente le personnage vers un autre personnage.
+    /// </summary>
+    public void FaceCharacter(Character target)
+    {
+        if (target == null) return;
+        FaceTarget(target.transform.position);
+    }
+
 
 
     public void UpdateFlip(Vector3 moveDir)

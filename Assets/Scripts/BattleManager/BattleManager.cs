@@ -141,8 +141,8 @@ public class BattleManager : MonoBehaviour
             }
         }
 
-        character.OnDeath -= HandleCharacterDeath;
-        character.OnDeath += HandleCharacterDeath;
+        character.OnIncapacitated -= HandleCharacterIncapacitated;
+        character.OnIncapacitated += HandleCharacterIncapacitated;
 
         UpdateBattleZoneWith(character);
         Debug.Log($"<color=white>[Battle]</color> {character.CharacterName} a rejoint le combat.");
@@ -187,11 +187,12 @@ public class BattleManager : MonoBehaviour
         DrawBattleZoneOutline();
     }
 
-    private void HandleCharacterDeath(Character deadCharacter)
+    private void HandleCharacterIncapacitated(Character incapacitatedCharacter)
     {
         if (_isBattleEnded) return;
 
         // 1. Vérifier si le combat est terminé (UNE des deux équipes principales est éliminée)
+        // IsTeamEliminated() utilise IsAlive(), qui renvoie désormais false si unconscious.
         if (_battleTeamInitiator.IsTeamEliminated() || _battleTeamTarget.IsTeamEliminated())
         {
             _isBattleEnded = true;
@@ -199,31 +200,28 @@ public class BattleManager : MonoBehaviour
             return;
         }
 
-        // 2. Si le combat continue, on redirige ceux qui tapaient le mort
-        RedirectAttackers(deadCharacter);
+        // 2. Si le combat continue, on redirige ceux qui tapaient l'incapacité
+        RedirectIncapacitated(incapacitatedCharacter);
     }
 
-    private void RedirectAttackers(Character deadTarget)
+    private void RedirectIncapacitated(Character victim)
     {
         foreach (var participant in _allParticipants)
         {
-            if (participant == null || !participant.IsAlive()) continue;
+            if (participant == null || participant.IsIncapacitated) continue;
 
-            // On récupère le comportement de combat s'il existe
             var combatBehaviour = participant.Controller.GetCurrentBehaviour<CombatBehaviour>();
 
             if (combatBehaviour != null)
             {
-                // On vérifie si l'IA n'a plus de cible OU si sa cible actuelle est celle qui vient de mourir
-                if (!combatBehaviour.HasTarget || combatBehaviour.Target == deadTarget)
+                if (!combatBehaviour.HasTarget || combatBehaviour.Target == victim)
                 {
                     BattleTeam enemyTeam = GetEnemyTeamOf(participant);
                     Character nextTarget = enemyTeam?.GetClosestMember(participant.transform.position);
 
-                    // On donne la nouvelle cible au comportement
                     combatBehaviour.SetCurrentTarget(nextTarget);
 
-                    Debug.Log($"<color=yellow>[Battle]</color> {participant.CharacterName} a perdu sa cible ({deadTarget.CharacterName}) et se tourne vers {nextTarget?.CharacterName}");
+                    Debug.Log($"<color=yellow>[Battle]</color> {participant.CharacterName} a perdu sa cible ({victim.CharacterName}) et se tourne vers {nextTarget?.CharacterName}");
                 }
             }
         }
@@ -247,7 +245,7 @@ public class BattleManager : MonoBehaviour
         {
             if (character != null)
             {
-                character.OnDeath -= HandleCharacterDeath;
+                character.OnIncapacitated -= HandleCharacterIncapacitated;
                 character.CharacterCombat.LeaveBattle();
             }
         }

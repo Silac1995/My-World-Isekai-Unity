@@ -55,12 +55,6 @@ public class MoveToInteractionBehaviour : IAIBehaviour
         {
             FaceTarget(self);
 
-            if (_targetCharacter.Controller != null)
-            {
-                Vector3 targetToInitiator = self.transform.position - _targetCharacter.transform.position;
-                _targetCharacter.CharacterVisual?.UpdateFlip(targetToInitiator);
-            }
-
             self.CharacterInteraction.SetPositioned(true);
             movement.Stop();
             
@@ -76,8 +70,7 @@ public class MoveToInteractionBehaviour : IAIBehaviour
 
     private void FaceTarget(Character self)
     {
-        Vector3 direction = _targetCharacter.transform.position - self.transform.position;
-        self.CharacterVisual?.UpdateFlip(direction);
+        self.CharacterVisual?.FaceCharacter(_targetCharacter);
     }
 
     public void Exit(Character self)

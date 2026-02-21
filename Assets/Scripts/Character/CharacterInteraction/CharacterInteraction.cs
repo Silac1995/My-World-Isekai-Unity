@@ -55,6 +55,9 @@ public class CharacterInteraction : MonoBehaviour
         IsPositioned = false; 
         OnInteractionStateChanged?.Invoke(target, true);
 
+        // --- FACE-À-FACE IMMÉDIAT ---
+        _character.CharacterVisual?.FaceCharacter(target);
+
         target.CharacterInteraction.SetInteractionTargetInternal(_character);
 
         // --- GESTION DE LA RELATION ---
@@ -127,6 +130,10 @@ public class CharacterInteraction : MonoBehaviour
     {
         CurrentTarget = target;
         IsPositioned = true; // La cible est passivement prête
+        
+        // --- FACE-À-FACE IMMÉDIAT ---
+        _character.CharacterVisual?.FaceCharacter(target);
+
         OnInteractionStateChanged?.Invoke(target, true);
     }
 

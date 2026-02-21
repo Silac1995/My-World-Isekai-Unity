@@ -88,7 +88,7 @@ public class CombatStyleAttack : MonoBehaviour
             }
 
             _hitTargets.Add(target);
-            target.CharacterCombat.TakeDamage(damage);
+            target.CharacterCombat.TakeDamage(damage, _combatStyleSO != null ? _combatStyleSO.DamageType : MeleeDamageType.Blunt);
 
             if (_character.CharacterCombat != null && !_character.CharacterCombat.IsInBattle)
             {

@@ -18,9 +18,7 @@ public class InteractBehaviour : IAIBehaviour
         }
 
         self.CharacterMovement?.Stop();
-
-        Vector3 direction = target.transform.position - self.transform.position;
-        self.CharacterVisual?.UpdateFlip(direction);
+        self.CharacterVisual?.FaceCharacter(target);
     }
 
     public void Exit(Character self)

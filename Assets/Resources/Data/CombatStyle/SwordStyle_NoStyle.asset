@@ -13,6 +13,11 @@ MonoBehaviour:
   m_Name: SwordStyle_NoStyle
   m_EditorClassIdentifier: Assembly-CSharp::SwordStyleSO
   _styleName: 
+  _prefab: {fileID: 0}
+  _attackRange: 3.5
+  _scalingStat: 0
+  _statMultiplier: 1
+  _damageType: 1
   _levels:
   - MinLevel: 0
     CombatController: {fileID: 0}
