@@ -74,6 +74,12 @@ public class CharacterCombat : MonoBehaviour
     {
         _currentBattleManager = null;
         _isCombatMode = false;
+
+        if (_controller != null && _controller.GetCurrentBehaviour<CombatBehaviour>() != null)
+        {
+            _controller.PopBehaviour();
+        }
+
         RefreshCurrentAnimator();
     }
 

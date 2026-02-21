@@ -61,27 +61,52 @@ public class CombatBehaviour : IAIBehaviour
 
         float distToTarget = Vector3.Distance(self.transform.position, _currentTarget.transform.position);
         
-        bool tooClose = distToTarget < MIN_DISTANCE;
-        bool tooFar = distToTarget > MAX_DISTANCE;
-        bool timerExpired = Time.time - _lastMoveTime > _moveInterval;
-
-        // Stability check: Only update path if we aren't already moving or if it's been a while
-        bool canUpdate = Time.time - _lastMoveTime > 1.5f;
-
-        if (canUpdate && (tooClose || tooFar || timerExpired))
+        // --- NOUVELLE LOGIQUE D'ATTAQUE ---
+        if (self.CharacterCombat != null && self.CharacterCombat.IsReadyToAct)
         {
-            // If too close, we prioritize moving away in a logical direction
-            if (tooClose)
+            // On fonce sur la cible
+            _currentDestination = _currentTarget.transform.position;
+            
+            float attackRange = self.CharacterCombat.CurrentCombatStyleExpertise?.Style?.AttackRange ?? 3.5f;
+            
+            if (distToTarget <= attackRange)
             {
-                _currentDestination = CalculateEscapeDestination(self.transform.position, _currentTarget.transform.position);
+                // On s'arrête et on tape
+                movement.Stop();
+                self.CharacterCombat.Attack();
+                self.CharacterCombat.ConsumeInitiative();
+                
+                // On force une petite pause dans le mouvement pour éviter de glisser pendant l'anim
+                _lastMoveTime = Time.time;
+                _moveInterval = 1f; 
+                return;
             }
-            else
-            {
-                _currentDestination = CalculateSafeDestination(_currentTarget.transform.position, self.transform.position);
-            }
+        }
+        else
+        {
+            // --- LOGIQUE DE DÉPLACEMENT "LAZY" (EXISTANTE) ---
+            bool tooClose = distToTarget < MIN_DISTANCE;
+            bool tooFar = distToTarget > MAX_DISTANCE;
+            bool timerExpired = Time.time - _lastMoveTime > _moveInterval;
 
-            _moveInterval = Random.Range(4f, 8f); // High wait for "lazy" feel
-            _lastMoveTime = Time.time;
+            // Stability check: Only update path if we aren't already moving or if it's been a while
+            bool canUpdate = Time.time - _lastMoveTime > 1.5f;
+
+            if (canUpdate && (tooClose || tooFar || timerExpired))
+            {
+                // If too close, we prioritize moving away in a logical direction
+                if (tooClose)
+                {
+                    _currentDestination = CalculateEscapeDestination(self.transform.position, _currentTarget.transform.position);
+                }
+                else
+                {
+                    _currentDestination = CalculateSafeDestination(_currentTarget.transform.position, self.transform.position);
+                }
+
+                _moveInterval = Random.Range(4f, 8f); // High wait for "lazy" feel
+                _lastMoveTime = Time.time;
+            }
         }
 
         // BATTLE ZONE CONSTRAINT

@@ -15,6 +15,7 @@ public abstract class CombatStyleSO : ScriptableObject
 {
     [SerializeField] private string _styleName;
     [SerializeField] private GameObject _prefab;
+    [SerializeField] private float _attackRange = 3.5f;
 
     [Header("Damage Settings")]
     [SerializeField] private SecondaryStatType _scalingStat = SecondaryStatType.Strength;
@@ -25,6 +26,7 @@ public abstract class CombatStyleSO : ScriptableObject
     public abstract WeaponType WeaponType { get; }
     public string StyleName => _styleName;
     public GameObject Prefab => _prefab;
+    public float AttackRange => _attackRange;
 
     public SecondaryStatType ScalingStat => _scalingStat;
     public float StatMultiplier => _statMultiplier;
