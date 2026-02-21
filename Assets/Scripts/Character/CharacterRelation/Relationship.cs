@@ -31,8 +31,14 @@ public class Relationship
         get => _relationValue;
         set 
         {
+            int oldValue = _relationValue;
             _relationValue = Mathf.Clamp(value, -100, 100);
-            UpdateRelationshipType();
+            
+            if (oldValue != _relationValue)
+            {
+                Debug.Log($"[Relation Debug] {_character.CharacterName} -> {_relatedCharacter.CharacterName} : {oldValue} -> {_relationValue}");
+                UpdateRelationshipType();
+            }
         }
     }
 
@@ -83,6 +89,8 @@ public class Relationship
 
     private void UpdateRelationshipType()
     {
+        RelationshipType lastType = _relationshipType;
+
         // On ne rétrograde pas automatiquement un Lover ou Soulmate via le score simple
         if (_relationshipType == RelationshipType.Lover || _relationshipType == RelationshipType.Soulmate)
             return;
@@ -102,6 +110,11 @@ public class Relationship
         else
         {
             _relationshipType = RelationshipType.Stranger;
+        }
+
+        if (lastType != _relationshipType)
+        {
+            Debug.Log($"<color=orange>[Relation Status]</color> {_character.CharacterName} voit maintenant {_relatedCharacter.CharacterName} comme un **{_relationshipType}**");
         }
     }
 }

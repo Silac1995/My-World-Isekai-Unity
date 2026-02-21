@@ -53,15 +53,11 @@ public class CharacterAwareness : MonoBehaviour
 
     private void OnTriggerEnter(Collider other)
     {
-        // On détecte via le Rigidbody pour plus de fiabilité et de performance
-        if (other.attachedRigidbody != null)
+        // Détection via CharacterInteractable (reversion du Rigidbody)
+        var interactable = other.GetComponent<CharacterInteractable>() ?? other.GetComponentInParent<CharacterInteractable>();
+        if (interactable != null && interactable.Character != null && interactable.Character != _character)
         {
-            Character target = other.attachedRigidbody.GetComponent<Character>();
-            
-            if (target != null && target != _character)
-            {
-                OnCharacterDetected?.Invoke(target);
-            }
+            OnCharacterDetected?.Invoke(interactable.Character);
         }
     }
 }

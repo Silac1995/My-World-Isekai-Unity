@@ -9,13 +9,16 @@ public class NeedSocial : CharacterNeed
 
     private float _socialTimer = 0f;
     private const float _tickInterval = 1f;
-    private float _socialLossPerTick = 300f;
+    private float _socialLossPerTick = 20f; // Valeur de test élevée demandée par l'user
 
     public NeedSocial(Character character, float startValue = 80f) : base(character)
     {
         _currentValue = startValue;
     }
 
+    /// <summary>
+    /// Appelé par CharacterNeeds.Update() pour gérer la perte naturelle du besoin.
+    /// </summary>
     public void UpdateValue()
     {
         _socialTimer += Time.deltaTime;
@@ -50,16 +53,25 @@ public class NeedSocial : CharacterNeed
 
         if (target != null)
         {
-            Debug.Log($"<color=cyan>[Need Social]</color> {npc.name} voit {target.CharacterName} et s'approche.");
+            // --- DÉCISION DE L'ACTION ---
+            int relationScore = 0;
+            if (_character.CharacterRelation != null)
+            {
+                var rel = _character.CharacterRelation.GetRelationshipWith(target);
+                if (rel != null) relationScore = rel.RelationValue;
+            }
+
+            ICharacterInteractionAction actionToPerform = npc.DetermineSocialAction(relationScore);
+
+            Debug.Log($"<color=cyan>[Need Social]</color> {npc.name} choisit de {(actionToPerform is InteractionTalk ? "parler" : "insulter")} {target.CharacterName} (Score: {relationScore}) pour satisfaire son besoin.");
 
             npc.PushBehaviour(new MoveToTargetBehaviour(npc, target.gameObject, 7f, () =>
             {
                 if (target == null) return;
 
-                // On lance l'interaction avec un callback qui s'exécutera UNE FOIS POSITIONNÉ (10f X, Align Z)
                 npc.Character.CharacterInteraction.StartInteractionWith(target, () => 
                 {
-                    npc.Character.CharacterInteraction.PerformInteraction(new InteractionTalk());
+                    npc.Character.CharacterInteraction.PerformInteraction(actionToPerform);
                     npc.Character.CharacterInteraction.EndInteraction();
                     IncreaseValue(50f); 
                 });
@@ -74,13 +86,25 @@ public class NeedSocial : CharacterNeed
         var awareness = _character.GetComponentInChildren<CharacterAwareness>();
         if (awareness == null) return null;
 
-        var nearbyPartners = awareness.GetVisibleInteractables<CharacterInteractable>();
-
-        return nearbyPartners
+        var nearbyPartners = awareness.GetVisibleInteractables<CharacterInteractable>()
             .Select(interactable => interactable.Character)
             .Where(c => c != null && c.IsAlive())
+            .ToList();
+
+        if (nearbyPartners.Count == 0) return null;
+
+        // --- PRIORITÉ AUX AMIS ---
+        // On cherche s'il y a des amis dans le lot
+        var friends = nearbyPartners
+            .Where(c => _character.CharacterRelation != null && _character.CharacterRelation.IsFriend(c))
+            .OrderBy(c => Vector3.Distance(currentPosition, c.transform.position))
+            .FirstOrDefault();
+
+        if (friends != null) return friends;
+
+        // Sinon, on prend le plus proche (Neutre ou Ennemi)
+        return nearbyPartners
             .OrderBy(c => Vector3.Distance(currentPosition, c.transform.position))
             .FirstOrDefault();
     }
 }
-

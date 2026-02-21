@@ -3,6 +3,14 @@ using System.Linq;
 
 public class InteractionTalk : ICharacterInteractionAction
 {
+    private readonly string[] _dialogues = {
+        "Beautiful day, isn't it?",
+        "Have you heard any interesting rumors lately?",
+        "I was just thinking about the local history...",
+        "How are things going for you?",
+        "It's good to see a friendly face."
+    };
+
     public void Execute(Character source, Character target)
     {
         Debug.Log($"<color=lightblue>[Talk]</color> {source.CharacterName} discute avec {target.CharacterName}...");
@@ -19,10 +27,14 @@ public class InteractionTalk : ICharacterInteractionAction
             target.CharacterRelation.UpdateRelation(source, 1);
         }
 
-        // Note : On ne ferme pas l'interaction ici pour permettre d'autres choix.
+        // 3. Shout/Dialogue
+        if (source.CharacterSpeech != null)
+        {
+            string randomTalk = _dialogues[Random.Range(0, _dialogues.Length)];
+            source.CharacterSpeech.Say(randomTalk);
+        }
 
         // --- SATISFACTION DU BESOIN SOCIAL ---
-        // On cherche le besoin social sur les deux participants via leur manager de besoins
         var sourceSocial = source.CharacterNeeds?.AllNeeds.OfType<NeedSocial>().FirstOrDefault();
         if (sourceSocial != null) sourceSocial.IncreaseValue(40f);
 

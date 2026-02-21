@@ -10,7 +10,6 @@ public class CharacterNeeds : MonoBehaviour
     public List<CharacterNeed> AllNeeds => _allNeeds;
     
     private NeedSocial _socialNeed;
-    private Coroutine _socialCoroutine;
 
     private void Start()
     {
@@ -23,6 +22,12 @@ public class CharacterNeeds : MonoBehaviour
 
     private void Update()
     {
+        // On gère la perte des besoins à chaque frame (ou via leur propre timer interne)
+        if (_socialNeed != null)
+        {
+            _socialNeed.UpdateValue();
+        }
+
         if (Time.frameCount % 30 != 0) return;
         EvaluateNeeds();
     }
@@ -48,32 +53,6 @@ public class CharacterNeeds : MonoBehaviour
             {
                 Debug.Log($"<color=orange>[Needs]</color> {npc.name} résout le besoin : {need.GetType().Name} (Urgence: {need.GetUrgency()})");
                 break; // On a trouvé une action à faire, on arrête de chercher pour ce cycle
-            }
-        }
-    }
-
-    private void OnEnable()
-    {
-        _socialCoroutine = StartCoroutine(SocialTickCoroutine());
-    }
-
-    private void OnDisable()
-    {
-        if (_socialCoroutine != null)
-        {
-            StopCoroutine(_socialCoroutine);
-            _socialCoroutine = null;
-        }
-    }
-
-    private IEnumerator SocialTickCoroutine()
-    {
-        while (true)
-        {
-            yield return new WaitForSeconds(5f);
-            if (_socialNeed != null)
-            {
-                _socialNeed.DecreaseValue(2.5f);
             }
         }
     }
