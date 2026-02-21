@@ -290,7 +290,20 @@ public class CharacterCombat : MonoBehaviour
     #region HP Management
     public void TakeDamage(float amount)
     {
-        _character.TakeDamage(amount);
+        if (!_character.IsAlive() || _character.Stats == null) return;
+
+        _character.Stats.Health.CurrentAmount -= amount;
+        Debug.Log($"<color=green>[Combat]</color> {_character.CharacterName} took damage {amount} HP.");
+
+        if (_character.CharacterVisual != null && _character.CharacterVisual.CharacterBlink != null)
+        {
+            _character.CharacterVisual.CharacterBlink.Blink();
+        }
+
+        if (_character.Stats.Health.CurrentAmount <= 0)
+        {
+            _character.Die();
+        }
     }
 
     public void Heal(float amount)

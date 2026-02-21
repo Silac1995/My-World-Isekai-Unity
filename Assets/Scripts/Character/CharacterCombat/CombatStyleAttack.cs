@@ -68,7 +68,7 @@ public class CombatStyleAttack : MonoBehaviour
             // Application des dégâts: Physical Power + (StatMultiplier * ScalingStat)
             float damage = GetDamage();
             _hitTargets.Add(target);
-            target.TakeDamage(damage);
+            target.CharacterCombat.TakeDamage(damage);
 
             // --- AUTO-COMBAT ---
             // Si le lanceur n'est pas déjà en combat, on initie le combat automatiquement avec la première cible frappée

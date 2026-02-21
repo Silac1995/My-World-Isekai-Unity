@@ -21,10 +21,13 @@ public class CharacterVisual : MonoBehaviour
 
     [SerializeField] private CharacterAnimator _characterAnimator;
 
+    [SerializeField] private CharacterBlink characterBlink;
+
 
 
     private Character character;
     private Coroutine _resizeCoroutine;
+    private SpriteRenderer[] allRenderers;
 
     private bool isFacingRight = true;
 
@@ -63,6 +66,10 @@ public class CharacterVisual : MonoBehaviour
     public Character Character => character;
 
     public CharacterAnimator CharacterAnimator => _characterAnimator;
+
+    public CharacterBlink CharacterBlink => characterBlink;
+
+    public SpriteRenderer[] AllRenderers => allRenderers;
 
     // Dans CharacterVisual.cs
 
@@ -162,7 +169,7 @@ public class CharacterVisual : MonoBehaviour
 
 
         InitializeSpriteRenderers();
-
+        if (characterBlink == null) characterBlink = GetComponent<CharacterBlink>();
     }
 
 
@@ -251,7 +258,7 @@ public class CharacterVisual : MonoBehaviour
 
 
 
-        SpriteRenderer[] allRenderers = GetComponentsInChildren<SpriteRenderer>(true);
+        allRenderers = GetComponentsInChildren<SpriteRenderer>(true);
 
 
 

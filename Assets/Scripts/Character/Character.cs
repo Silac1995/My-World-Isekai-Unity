@@ -182,13 +182,6 @@ public class Character : MonoBehaviour
         }
     }
 
-    public void TakeDamage(float damage = 1)
-    {
-        if (!IsAlive() || _stats == null) return;
-
-        _stats.Health.CurrentAmount -= damage;
-        if (_stats.Health.CurrentAmount <= 0) Die();
-    }
     #endregion
 
     #region Context Switching (Player/NPC)
@@ -281,7 +274,7 @@ public class Character : MonoBehaviour
     }
 
     #region Context Menus
-    [ContextMenu("Take 50 Damage")] public void DebugTakeDamage() => TakeDamage(50f);
+    [ContextMenu("Take 50 Damage")] public void DebugTakeDamage() => CharacterCombat.TakeDamage(50f);
     [ContextMenu("Switch To Player")] public void DebugToPlayer() => SwitchToPlayer();
     [ContextMenu("Switch To NPC")] public void DebugToNPC() => SwitchToNPC();
     #endregion
