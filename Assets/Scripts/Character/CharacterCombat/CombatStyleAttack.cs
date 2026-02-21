@@ -67,6 +67,14 @@ public class CombatStyleAttack : MonoBehaviour
 
             // Application des dégâts: Physical Power + (StatMultiplier * ScalingStat)
             float damage = GetDamage();
+
+            // --- PÉNALITÉ D'ATTAQUE SURPRISE ---
+            // Si le lanceur n'est pas encore en combat, on réduit les dégâts à 20%
+            if (_character.CharacterCombat != null && !_character.CharacterCombat.IsInBattle)
+            {
+                damage *= 0.2f;
+            }
+
             _hitTargets.Add(target);
             target.CharacterCombat.TakeDamage(damage);
 

@@ -8,6 +8,7 @@ public abstract class CharacterGameController : MonoBehaviour
     [SerializeField] protected CharacterVisual _characterVisual;
     [SerializeField] protected Character _character;
     [SerializeField] protected CharacterMovement _characterMovement;
+    protected bool _wasDoingAction;
 
     private Stack<IAIBehaviour> _behavioursStack = new Stack<IAIBehaviour>();
     public IAIBehaviour CurrentBehaviour => _behavioursStack.Count > 0 ? _behavioursStack.Peek() : null;
@@ -29,10 +30,18 @@ public abstract class CharacterGameController : MonoBehaviour
     {
         if (_character.CharacterActions.CurrentAction != null)
         {
+            _wasDoingAction = true;
             _characterMovement.Stop();
             UpdateAnimations();
             // On ne flip pas pendant une action pour éviter de glitcher l'animation d'attaque (ou autre)
             return;
+        }
+
+        // --- NOUVEAU : On ne Resume() qu'une seule fois après une action ---
+        if (_wasDoingAction)
+        {
+            _wasDoingAction = false;
+            _characterMovement.Resume();
         }
 
         if (CurrentBehaviour != null)
@@ -43,13 +52,8 @@ public abstract class CharacterGameController : MonoBehaviour
                 return;
             }
 
-            // L'IA g?re son propre Resume/Stop
+            // L'IA gère son propre Resume/Stop
             CurrentBehaviour.Act(_character);
-        }
-        else
-        {
-            // CAS DU JOUEUR : Pas de behaviour, donc on autorise le mouvement manuel
-            _characterMovement.Resume();
         }
 
         UpdateAnimations();

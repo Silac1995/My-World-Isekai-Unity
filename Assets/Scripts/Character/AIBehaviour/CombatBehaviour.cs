@@ -12,6 +12,7 @@ public class CombatBehaviour : IAIBehaviour
     private Vector3 _currentDestination;
     private float _lastMoveTime;
     private float _moveInterval;
+    private float _readyStartTime;
     
     // Safety & Stability
     private const float MIN_DISTANCE = 3f;      // Danger: Too close
@@ -61,31 +62,40 @@ public class CombatBehaviour : IAIBehaviour
 
         float distToTarget = Vector3.Distance(self.transform.position, _currentTarget.transform.position);
         
-        // --- NOUVELLE LOGIQUE D'ATTAQUE ---
         if (self.CharacterCombat != null && self.CharacterCombat.IsReadyToAct)
         {
-            // On fonce sur la cible
-            _currentDestination = _currentTarget.transform.position;
-            
-            float attackRange = self.CharacterCombat.CurrentCombatStyleExpertise?.Style?.AttackRange ?? 3.5f;
-            
-            // --- NOUVEAU : On n'attaque que si la cible ne bouge plus ---
-            bool targetIsStationary = _currentTarget.CharacterMovement != null && _currentTarget.CharacterMovement.GetVelocity().sqrMagnitude < 0.01f;
+            if (_readyStartTime <= 0) _readyStartTime = Time.time;
+            float timeReady = Time.time - _readyStartTime;
 
-            if (distToTarget <= attackRange && targetIsStationary)
+            // --- NOUVEAU : On n'approche que si la cible ne bouge plus OU si on perd patience ---
+            bool targetIsStationary = _currentTarget.CharacterMovement != null && _currentTarget.CharacterMovement.GetVelocity().sqrMagnitude < 0.01f;
+            bool lostPatience = timeReady > 1.0f; // On fonce après 1s d'attente
+
+            if (targetIsStationary || lostPatience)
             {
-                // On s'arrête et on tape
-                movement.Stop();
-                self.CharacterCombat.ExecuteAction(() => self.CharacterCombat.Attack());
+                // On fonce sur la cible
+                _currentDestination = _currentTarget.transform.position;
                 
-                // On force une petite pause dans le mouvement pour éviter de glisser pendant l'anim
-                _lastMoveTime = Time.time;
-                _moveInterval = 1f; 
-                return;
+                float attackRange = self.CharacterCombat.CurrentCombatStyleExpertise?.Style?.AttackRange ?? 3.5f;
+                
+                // On ne frappe que si on est à portée ET (cible immobile OU grosse perte de patience)
+                if (distToTarget <= attackRange && (targetIsStationary || timeReady > 2.0f))
+                {
+                    // On s'arrête et on tape
+                    movement.Stop();
+                    self.CharacterCombat.ExecuteAction(() => self.CharacterCombat.Attack());
+                    
+                    // On force une petite pause dans le mouvement pour éviter de glisser pendant l'anim
+                    _lastMoveTime = Time.time;
+                    _moveInterval = 1f; 
+                    _readyStartTime = 0; // Reset
+                    return;
+                }
             }
         }
         else
         {
+            _readyStartTime = 0; // On n'est plus prêt, on reset le timer
             // --- LOGIQUE DE DÉPLACEMENT "LAZY" (EXISTANTE) ---
             bool tooClose = distToTarget < MIN_DISTANCE;
             bool tooFar = distToTarget > MAX_DISTANCE;
