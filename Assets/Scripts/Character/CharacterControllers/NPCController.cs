@@ -11,15 +11,10 @@ public class NPCController : CharacterGameController
     public float MinWaitTime { get => minWaitTime; set => minWaitTime = value; }
     public float MaxWaitTime { get => maxWaitTime; set => maxWaitTime = value; }
 
-    [Header("AI Scanning")]
-    [SerializeField] private float scanInterval = 4f;
-    private float lastScanTime;
-
     public override void Initialize()
     {
         base.Initialize();
 
-        // On passe par _characterMovement pour configurer l'agent
         if (_characterMovement != null && _character != null)
         {
             var agent = _characterMovement.Agent; 
@@ -32,65 +27,60 @@ public class NPCController : CharacterGameController
         }
         if (Agent != null) Agent.updateRotation = false;
 
+        // --- Abonnement Social ---
+        if (_character.CharacterAwareness != null)
+        {
+            _character.CharacterAwareness.OnCharacterDetected += HandleCharacterDetected;
+        }
+
         ResetStackTo(new WanderBehaviour(this));
-        lastScanTime = Time.time + Random.Range(0f, scanInterval);
+    }
+
+    private void OnDestroy()
+    {
+        if (_character != null && _character.CharacterAwareness != null)
+        {
+            _character.CharacterAwareness.OnCharacterDetected -= HandleCharacterDetected;
+        }
     }
 
     protected virtual void Update()
     {
-        if (_wasDoingAction || _character.CharacterActions.CurrentAction != null)
-        {
-            // On délègue à CharacterGameController pour le lock de mouvement/flip
-            base.Update();
-            return;
-        }
-
-        // On ne scanne que si on est en train de flâner
-        if (GetCurrentBehaviour<WanderBehaviour>() != null)
-        {
-            if (Time.time - lastScanTime > scanInterval)
-            {
-                lastScanTime = Time.time;
-                TryFindRandomTarget();
-            }
-        }
-
         base.Update();
     }
 
-    private void TryFindRandomTarget()
+    private void HandleCharacterDetected(Character target)
     {
-        if (_character.CharacterAwareness == null) return;
+        // On n'interagit pas si on est déjà occupé ou en combat
+        if (_character.CharacterCombat.IsInBattle || _character.CharacterActions.CurrentAction != null) return;
+        if (GetCurrentBehaviour<WanderBehaviour>() == null) return;
 
-        // On récupère les personnages visibles
-        var visibleInteractables = _character.CharacterAwareness.GetVisibleInteractables();
-        var candidates = new System.Collections.Generic.List<Character>();
+        // Vérification de la relation
+        if (_character.CharacterRelation == null) return;
+        var rel = _character.CharacterRelation.GetRelationshipWith(target);
 
-        foreach (var interactable in visibleInteractables)
+        // Si on ne se connaît pas, on s'ignore (pas d'agression/interaction spontanée)
+        if (rel == null || !rel.HasMet) return;
+
+        // Calcul de la probabilité sociale basée sur le score (max 50% pour 100 points)
+        float interactionChance = Mathf.Clamp(rel.RelationValue / 200f, 0f, 0.5f);
+
+        if (Random.value < interactionChance)
         {
-            if (interactable is CharacterInteractable charInteractable)
+            Debug.Log($"<color=cyan>[Social]</color> {_character.CharacterName} reconnaît son ami {target.CharacterName} et va lui parler !");
+            
+            // On s'approche
+            PushBehaviour(new MoveToTargetBehaviour(this, target.gameObject, 7f, () =>
             {
-                Character target = charInteractable.Character;
-                if (target != null && target.IsAlive())
+                if (target == null || !target.IsAlive()) return;
+
+                // Lancement de l'interaction Talk
+                _character.CharacterInteraction.StartInteractionWith(target, () => 
                 {
-                    // On ne cible que ceux qui ne sont pas déjà en combat
-                    if (target.CharacterCombat != null && !target.CharacterCombat.IsInBattle)
-                    {
-                        candidates.Add(target);
-                    }
-                }
-            }
-        }
-
-        if (candidates.Count > 0)
-        {
-            // Chance de 15% de devenir agressif
-            if (Random.value < 0.15f)
-            {
-                Character choice = candidates[Random.Range(0, candidates.Count)];
-                Debug.Log($"<color=orange>[AI]</color> {_character.CharacterName} a repéré {choice.CharacterName} et décide de l'attaquer !");
-                PushBehaviour(new AttackTargetBehaviour(choice));
-            }
+                    _character.CharacterInteraction.PerformInteraction(new InteractionTalk());
+                    _character.CharacterInteraction.EndInteraction();
+                });
+            }));
         }
     }
 }

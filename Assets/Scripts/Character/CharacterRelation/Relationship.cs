@@ -1,15 +1,15 @@
-using UnityEngine;
+Ôªøusing UnityEngine;
 
 [System.Serializable]
 public class Relationship
 {
-    [SerializeField] private Character _character; // Le propriÈtaire (celui qui a ce sentiment)
+    [SerializeField] private Character _character; // Le propri√©taire (celui qui a ce sentiment)
     [SerializeField] private Character _relatedCharacter; // La cible du sentiment
     [SerializeField] private int _relationValue;
     [SerializeField] private RelationshipType _relationshipType = RelationshipType.Stranger;
     [SerializeField] private bool _hasMet = false;
 
-    // Constructeur mis ‡ jour avec le propriÈtaire
+    // Constructeur mis √† jour avec le propri√©taire
     public Relationship(Character owner, Character relatedCharacter, int initialValue = 0, RelationshipType initialType = RelationshipType.Stranger)
     {
         _character = owner;
@@ -17,6 +17,8 @@ public class Relationship
         _relationValue = Mathf.Clamp(initialValue, -100, 100);
         _relationshipType = initialType;
         _hasMet = false;
+
+        UpdateRelationshipType();
     }
 
     public Character Character => _character;
@@ -27,15 +29,19 @@ public class Relationship
     public int RelationValue
     {
         get => _relationValue;
-        set => _relationValue = Mathf.Clamp(value, -100, 100);
+        set 
+        {
+            _relationValue = Mathf.Clamp(value, -100, 100);
+            UpdateRelationshipType();
+        }
     }
 
     /// <summary>
-    /// VÈrifie si les deux personnages se sont rencontrÈs mutuellement.
+    /// V√©rifie si les deux personnages se sont rencontr√©s mutuellement.
     /// </summary>
     public bool BothHaveMet()
     {
-        // 1. Ma propre perception (on est dÈj‡ dans cet objet)
+        // 1. Ma propre perception (on est d√©j√† dans cet objet)
         bool iKnowHim = _hasMet;
 
         // 2. La perception de l'autre
@@ -44,19 +50,19 @@ public class Relationship
         var otherRelationSystem = _relatedCharacter.GetComponentInChildren<CharacterRelation>();
         if (otherRelationSystem == null) return false;
 
-        // On demande au systËme de l'autre sa relation AVEC le propriÈtaire de cette classe
+        // On demande au syst√®me de l'autre sa relation AVEC le propri√©taire de cette classe
         Relationship otherRel = otherRelationSystem.GetRelationshipWith(_character);
 
         return iKnowHim && otherRel != null && otherRel.HasMet;
     }
 
-    // --- MÈthodes de statut ---
+    // --- M√©thodes de statut ---
 
     public void SetAsMet() => _hasMet = true;
     public void SetAsNotMet() => _hasMet = false;
     public void ToggleMetStatus() => _hasMet = !_hasMet;
 
-    // --- …volution de la valeur ---
+    // --- √âvolution de la valeur ---
 
     public void IncreaseRelationValue(int amount)
     {
@@ -73,5 +79,29 @@ public class Relationship
     public void SetRelationshipType(RelationshipType newType)
     {
         _relationshipType = newType;
+    }
+
+    private void UpdateRelationshipType()
+    {
+        // On ne r√©trograde pas automatiquement un Lover ou Soulmate via le score simple
+        if (_relationshipType == RelationshipType.Lover || _relationshipType == RelationshipType.Soulmate)
+            return;
+
+        if (_relationValue <= -10)
+        {
+            _relationshipType = RelationshipType.Enemy;
+        }
+        else if (_relationValue >= 40)
+        {
+            _relationshipType = RelationshipType.Friend;
+        }
+        else if (_relationValue >= 10)
+        {
+            _relationshipType = RelationshipType.Acquaintance;
+        }
+        else
+        {
+            _relationshipType = RelationshipType.Stranger;
+        }
     }
 }
