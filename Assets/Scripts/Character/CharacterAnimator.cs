@@ -13,11 +13,24 @@ public class CharacterAnimator : MonoBehaviour
     #region Animation Methods
     public void PlayMeleeAttack()
     {
-        if (_animator != null)
-        {
-            _animator.ResetTrigger(MeleeAttackTrigger);
-            _animator.SetTrigger(MeleeAttackTrigger);
-        }
+        SetTriggerSafely(MeleeAttackTrigger);
+    }
+
+    public void PlayPickUpItem()
+    {
+        SetTriggerSafely(ActionTrigger);
+    }
+
+    private void SetTriggerSafely(int triggerHash)
+    {
+        if (_animator == null) return;
+        
+        // On nettoie systématiquement les triggers d'actions connus pour éviter l'empilement
+        _animator.ResetTrigger(MeleeAttackTrigger);
+        _animator.ResetTrigger(ActionTrigger);
+        
+        // On active le nouveau
+        _animator.SetTrigger(triggerHash);
     }
 
     public void ResetActionTriggers()

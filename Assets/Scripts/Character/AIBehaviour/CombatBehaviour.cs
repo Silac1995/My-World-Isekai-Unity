@@ -16,9 +16,9 @@ public class CombatBehaviour : IAIBehaviour
     
     // Safety & Stability
     private const float MIN_DISTANCE = 3f;      // Danger: Too close
-    private const float MAX_DISTANCE = 15f;     // Danger: Too far
-    private const float IDEAL_MIN = 6f;         // Buffer zone start
-    private const float IDEAL_MAX = 12f;        // Buffer zone end
+    private const float MAX_DISTANCE = 12f;     // Danger: Too far
+    private const float IDEAL_MIN = 4f;         // Buffer zone start
+    private const float IDEAL_MAX = 8f;        // Buffer zone end
 
     public Character Target => _currentTarget;
     public bool IsFinished => _isFinished;
