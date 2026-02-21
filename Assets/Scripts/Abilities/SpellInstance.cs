@@ -19,7 +19,7 @@ public class SpellInstance
         this.remainingCooldown = 0f;
         this.visualPrefab = spellAsset.VisualPrefab;
 
-        // Initialisation des instances d'effets de statut à partir des effets du spellAsset
+        // Initialisation des instances d'effets de statut Ã  partir des effets du spellAsset
         characterStatusEffectsInstance = new List<CharacterStatusEffectInstance>();
 
         if (spellAsset.CharacterStatusEffects != null)
@@ -51,9 +51,9 @@ public class SpellInstance
         if (!CanCast())
             return;
 
-        characterOwner.Stats.Mana.LoseCurrentAmount(Cost);
+        characterOwner.Stats.Mana.DecreaseCurrentAmount(Cost);
 
-        // Déclencher le cooldown
+        // DÃ©clencher le cooldown
         remainingCooldown = ComputeCooldown();
     }
 
@@ -65,7 +65,7 @@ public class SpellInstance
 
     private float ComputeCooldown()
     {
-        // Plus tard : modifié par les stats du lanceur, etc.
+        // Plus tard : modifiÃ© par les stats du lanceur, etc.
         return 5f;
     }
 }

@@ -123,10 +123,10 @@ public class CharacterActions : MonoBehaviour
             _currentAction.OnActionFinished -= CleanupAction; // Désabonnement important
             _currentAction.OnCancel(); // Permet à l'action de se désabonner (évite memory leaks)
 
-            var animator = _character.CharacterVisual?.CharacterAnimator?.Animator;
-            if (animator != null)
+            var animHandler = _character.CharacterVisual?.CharacterAnimator;
+            if (animHandler != null)
             {
-                animator.ResetTrigger("Trigger_pickUpItem");
+                animHandler.ResetActionTriggers();
             }
 
             OnActionCanceled?.Invoke();

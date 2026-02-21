@@ -26,12 +26,12 @@ public abstract class CharacterPrimaryStats : CharacterBaseStats
         currentAmount = CurrentValue;
     }
 
-    public void LoseCurrentAmount(float value)
+    public void DecreaseCurrentAmount(float value)
     {
         currentAmount = Mathf.Max(0f, currentAmount - value);
     }
 
-    public void GainCurrentAmount(float value)
+    public void IncreaseCurrentAmount(float value)
     {
         currentAmount = Mathf.Min(CurrentValue, currentAmount + value);
     }

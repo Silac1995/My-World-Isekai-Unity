@@ -22,6 +22,8 @@ public class CharacterCombat : MonoBehaviour
 
     private Dictionary<WeaponType, CombatStyleExpertise> _selectedStyles = new Dictionary<WeaponType, CombatStyleExpertise>();
     private GameObject _activeCombatStyleInstance;
+    private float _lastCombatActionTime;
+    private const float COMBAT_MODE_TIMEOUT = 10f;
 
     public CombatStyleExpertise CurrentCombatStyleExpertise => _currentCombatStyleExpertise;
     public bool IsCombatMode => _isCombatMode;
@@ -53,6 +55,30 @@ public class CharacterCombat : MonoBehaviour
         }
     }
 
+    public void UpdateInitiativeTick(float tickAmount)
+    {
+        if (_character.Stats != null && _character.Stats.Initiative != null)
+        {
+            _character.Stats.Initiative.IncreaseCurrentAmount(tickAmount);
+        }
+    }
+
+    private void Update()
+    {
+        // --- AUTO-DESACTIVATION DU MODE COMBAT ---
+        // Si on est en mode combat mais pas en bataille réelle, 
+        // on range l'arme après un certain temps d'inactivité.
+        if (_isCombatMode && !IsInBattle)
+        {
+            if (Time.time - _lastCombatActionTime > COMBAT_MODE_TIMEOUT)
+            {
+                _isCombatMode = false;
+                RefreshCurrentAnimator();
+                Debug.Log($"<color=cyan>[Combat]</color> Mode Combat NPC expir? (Inactivit?) : D?SACTIV?");
+            }
+        }
+    }
+
     /// <summary>
     /// Point d'entrée centralisé pour toute action de combat (Attaque, Item, Capacité).
     /// Exécute l'action et consomme l'initiative SEULEMENT si l'action a pu démarrer.
@@ -72,7 +98,7 @@ public class CharacterCombat : MonoBehaviour
         float speedValue = _character.Stats.Speed != null ? _character.Stats.Speed.Value : 0f;
         float totalGain = _baseInitiativePerTick + (speedValue * _speedMultiplierInitiative);
         
-        _character.Stats.Initiative.GainCurrentAmount(totalGain);
+        _character.Stats.Initiative.IncreaseCurrentAmount(totalGain);
     }
 
     public void JoinBattle(BattleManager manager)
@@ -164,8 +190,10 @@ public class CharacterCombat : MonoBehaviour
     public void ToggleCombatMode()
     {
         _isCombatMode = !_isCombatMode;
+        if (_isCombatMode) _lastCombatActionTime = Time.time;
+        
         RefreshCurrentAnimator();
-        Debug.Log($"<color=cyan>[Combat]</color> Mode Combat : {(_isCombatMode ? "ACTIVÉ" : "DÉSACTIVÉ")}");
+        Debug.Log($"<color=cyan>[Combat]</color> Mode Combat : {(_isCombatMode ? "ACTIV?" : "D?SACTIV?")}");
     }
 
     public void SelectStyle(CombatStyleSO styleToSelect)
@@ -259,6 +287,7 @@ public class CharacterCombat : MonoBehaviour
 
     public bool MeleeAttack()
     {
+        _lastCombatActionTime = Time.time;
         if (!_isCombatMode)
         {
             _isCombatMode = true;
@@ -328,7 +357,7 @@ public class CharacterCombat : MonoBehaviour
     {
         if (_character.Stats != null && _character.Stats.Health != null)
         {
-            _character.Stats.Health.GainCurrentAmount(amount);
+            _character.Stats.Health.IncreaseCurrentAmount(amount);
             Debug.Log($"<color=green>[Combat]</color> {_character.CharacterName} a été soigné de {amount} HP.");
         }
     }

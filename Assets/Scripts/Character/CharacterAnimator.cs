@@ -14,7 +14,17 @@ public class CharacterAnimator : MonoBehaviour
     public void PlayMeleeAttack()
     {
         if (_animator != null)
-            _animator.SetTrigger("Trigger_meleeAttack");
+        {
+            _animator.ResetTrigger(MeleeAttackTrigger);
+            _animator.SetTrigger(MeleeAttackTrigger);
+        }
+    }
+
+    public void ResetActionTriggers()
+    {
+        if (_animator == null) return;
+        _animator.ResetTrigger(MeleeAttackTrigger);
+        _animator.ResetTrigger(ActionTrigger);
     }
     #endregion
 
@@ -41,6 +51,7 @@ public class CharacterAnimator : MonoBehaviour
     public static readonly int IsGrounded = Animator.StringToHash("isGrounded");
     public static readonly int VelocityX = Animator.StringToHash("velocityX");
     public static readonly int ActionTrigger = Animator.StringToHash("Trigger_pickUpItem");
+    public static readonly int MeleeAttackTrigger = Animator.StringToHash("Trigger_meleeAttack");
     public static readonly int IsDoingAction = Animator.StringToHash("isDoingAction");
     private Dictionary<string, float> _clipDurations = new Dictionary<string, float>();
     public static readonly int IsWalking = Animator.StringToHash("isWalking");

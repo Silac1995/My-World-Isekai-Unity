@@ -32,16 +32,21 @@ public abstract class CharacterGameController : MonoBehaviour
         {
             _wasDoingAction = true;
             _characterMovement.Stop();
+
             UpdateAnimations();
             // On ne flip pas pendant une action pour éviter de glitcher l'animation d'attaque (ou autre)
             return;
         }
 
-        // --- NOUVEAU : On ne Resume() qu'une seule fois après une action ---
+        // --- NOUVEAU : Cleanup précis après l'action ---
         if (_wasDoingAction)
         {
             _wasDoingAction = false;
             _characterMovement.Resume();
+            
+            // On nettoie les drapeaux et triggers pour éviter les répétitions
+            Animator.SetBool(CharacterAnimator.IsDoingAction, false);
+            _character.CharacterVisual?.CharacterAnimator?.ResetActionTriggers();
         }
 
         if (CurrentBehaviour != null)
@@ -142,12 +147,6 @@ public abstract class CharacterGameController : MonoBehaviour
 
         // Sol
         Animator.SetBool(CharacterAnimator.IsGrounded, _characterMovement.IsGrounded());
-
-        // Sécurité Action : On ne force pas le true ici pour laisser les triggers (Melee, etc.) piloter l'animator
-        if (_character.CharacterActions.CurrentAction == null)
-        {
-            Animator.SetBool(CharacterAnimator.IsDoingAction, false);
-        }
     }
 
     protected virtual void UpdateFlip()
