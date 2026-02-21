@@ -86,7 +86,7 @@ public class CharacterStats : MonoBehaviour
         health = new CharacterHealth(this, 1f);
         mana = new CharacterMana(this, 1f);
         stamina = new CharacterStamina(this, 1f);
-        initiative = new CharacterInitiative(this, 1f);
+        initiative = new CharacterInitiative(this, 100f);
 
         // Secondary
         strength = new CharacterStrength(this, 1f);

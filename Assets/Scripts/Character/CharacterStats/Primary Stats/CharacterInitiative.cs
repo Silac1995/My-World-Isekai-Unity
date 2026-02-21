@@ -6,4 +6,14 @@ public class CharacterInitiative : CharacterPrimaryStats
     {
         statName = "Initiative";
     }
+
+    public bool IsReady()
+    {
+        return IsFull();
+    }
+
+    public void ResetInitiative()
+    {
+        currentAmount = 0f;
+    }
 }

@@ -12,6 +12,10 @@ public class CharacterCombat : MonoBehaviour
     [SerializeField] private bool _isCombatMode = false;
     [SerializeField] private int _bonusMeleeMaxTargets = 0;
 
+    [Header("Initiative Scaling")]
+    [SerializeField] private float _baseInitiativePerTick = 1f;
+    [SerializeField] private float _speedMultiplierInitiative = 0.1f;
+
     // --- NOUVEAUX CHAMPS DÉPLACÉS ---
     [SerializeField] private BattleManager _currentBattleManager;
     [SerializeField] private GameObject _battleManagerPrefab;
@@ -39,6 +43,25 @@ public class CharacterCombat : MonoBehaviour
     #region Battle Logic
     public bool IsInBattle => _currentBattleManager != null;
     public BattleManager CurrentBattleManager => _currentBattleManager;
+    public bool IsReadyToAct => _character.Stats != null && _character.Stats.Initiative != null && _character.Stats.Initiative.IsReady();
+
+    public void ConsumeInitiative()
+    {
+        if (_character.Stats != null && _character.Stats.Initiative != null)
+        {
+            _character.Stats.Initiative.ResetInitiative();
+        }
+    }
+
+    public void UpdateInitiativeTick()
+    {
+        if (_character.Stats == null || _character.Stats.Initiative == null) return;
+
+        float speedValue = _character.Stats.Speed != null ? _character.Stats.Speed.Value : 0f;
+        float totalGain = _baseInitiativePerTick + (speedValue * _speedMultiplierInitiative);
+        
+        _character.Stats.Initiative.GainCurrentAmount(totalGain);
+    }
 
     public void JoinBattle(BattleManager manager)
     {

@@ -12,6 +12,10 @@ public class BattleManager : MonoBehaviour
     [SerializeField] private LineRenderer _battleZoneLine;
     [SerializeField] private float _padding = 30f;
 
+    [Header("Initiative System")]
+    [SerializeField] private float _ticksPerSecond = 10f;
+    private float _tickTimer = 0f;
+
     private bool _isBattleEnded = false;
 
     // Liste pour le debug (plus besoin de GetAllCharacters à chaque fois)
@@ -42,7 +46,35 @@ public class BattleManager : MonoBehaviour
         // 4. Rendu visuel UNIQUE (pas dans Update)
         DrawBattleZoneOutline();
 
-        Debug.Log($"<color=orange>[Battle]</color> Combat lancé : {initiator.name} vs {target.name}");
+        Debug.Log($"<color=orange>[Battle]</color> Combat lance : {initiator.name} vs {target.name}");
+    }
+
+    private void Update()
+    {
+        if (_isBattleEnded) return;
+
+        // Gestion du temps de combat (Ticks d'initiative)
+        _tickTimer += Time.deltaTime;
+        float tickPeriod = 1f / _ticksPerSecond;
+
+        if (_tickTimer >= tickPeriod)
+        {
+            _tickTimer -= tickPeriod;
+            PerformBattleTick();
+        }
+    }
+
+    private void PerformBattleTick()
+    {
+        foreach (var character in _allParticipants)
+        {
+            if (character == null || !character.IsAlive()) continue;
+
+            if (character.CharacterCombat != null)
+            {
+                character.CharacterCombat.UpdateInitiativeTick();
+            }
+        }
     }
 
     private void CreateBattleZone(Character a, Character b)
@@ -98,6 +130,7 @@ public class BattleManager : MonoBehaviour
         if (character.CharacterCombat != null)
         {
             character.CharacterCombat.JoinBattle(this);
+            character.CharacterCombat.ConsumeInitiative();
 
             if (!character.IsPlayer())
             {
