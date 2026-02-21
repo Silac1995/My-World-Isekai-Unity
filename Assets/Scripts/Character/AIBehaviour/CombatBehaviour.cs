@@ -27,7 +27,7 @@ public class CombatBehaviour : IAIBehaviour
     {
         _battleManager = battleManager;
         _currentTarget = target;
-        _moveInterval = Random.Range(1f, 3f);
+        _moveInterval = Random.Range(5f, 7f);
         _lastMoveTime = Time.time;
         
         if (target != null)
@@ -69,7 +69,10 @@ public class CombatBehaviour : IAIBehaviour
             
             float attackRange = self.CharacterCombat.CurrentCombatStyleExpertise?.Style?.AttackRange ?? 3.5f;
             
-            if (distToTarget <= attackRange)
+            // --- NOUVEAU : On n'attaque que si la cible ne bouge plus ---
+            bool targetIsStationary = _currentTarget.CharacterMovement != null && _currentTarget.CharacterMovement.GetVelocity().sqrMagnitude < 0.01f;
+
+            if (distToTarget <= attackRange && targetIsStationary)
             {
                 // On s'arrête et on tape
                 movement.Stop();
@@ -103,7 +106,7 @@ public class CombatBehaviour : IAIBehaviour
                     _currentDestination = CalculateSafeDestination(_currentTarget.transform.position, self.transform.position);
                 }
 
-                _moveInterval = Random.Range(4f, 8f); // High wait for "lazy" feel
+                _moveInterval = Random.Range(5f, 7f); // High wait for "lazy" feel
                 _lastMoveTime = Time.time;
             }
         }
