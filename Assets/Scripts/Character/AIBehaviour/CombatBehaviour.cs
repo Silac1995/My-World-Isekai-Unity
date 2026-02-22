@@ -77,9 +77,10 @@ public class CombatBehaviour : IAIBehaviour
                 _currentDestination = _currentTarget.transform.position;
                 
                 float attackRange = self.CharacterCombat.CurrentCombatStyleExpertise?.Style?.AttackRange ?? 3.5f;
+                float zDist = Mathf.Abs(self.transform.position.z - _currentTarget.transform.position.z);
                 
-                // On ne frappe que si on est à portée ET (cible immobile OU grosse perte de patience)
-                if (distToTarget <= attackRange && (targetIsStationary || timeReady > 2.0f))
+                // On ne frappe que si on est à portée (3D), aligné en Z (max 1.5f) ET (cible immobile OU grosse perte de patience)
+                if (distToTarget <= attackRange && zDist <= 1.5f && (targetIsStationary || timeReady > 2.0f))
                 {
                     // On s'arrête et on tape
                     movement.Stop();
