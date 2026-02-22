@@ -87,6 +87,50 @@ public class Relationship
         _relationshipType = newType;
     }
 
+    // --- LOGIQUE SOCIALE CENTRALISÉE ---
+
+    /// <summary>
+    /// Calcule la chance (0-1) que ce personnage veuille initier une interaction.
+    /// </summary>
+    public float GetInteractionChance()
+    {
+        // On convertit le score (-100 à 100) en probabilité
+        // Base de 2% pour les inconnus, augmentant avec la relation
+        float chance = Mathf.Clamp(0.02f + (_relationValue / 80f), 0.02f, 0.5f);
+        if (_relationValue <= -10) chance = 0.01f; // Très rare d'initier avec un ennemi sans raison
+        return chance;
+    }
+
+    /// <summary>
+    /// Calcule la chance (0-1) que ce personnage accepte de répondre pendant un échange.
+    /// </summary>
+    public float GetResponseChance()
+    {
+        // Chance de base : 50%
+        // +1% par point de relation (max 100% à 50+ relation)
+        // -1% par point de relation négatif (min 0% à -50- relation)
+        return Mathf.Clamp(0.5f + (_relationValue / 100f), 0.1f, 0.95f);
+    }
+
+    /// <summary>
+    /// Calcule la chance (0-1) que l'interaction soit positive (Talk) plutôt que négative (Insult).
+    /// </summary>
+    public float GetFavorableToneChance()
+    {
+        float baseChance = 0.6f; // Stranger / Acquaintance
+
+        if (_relationshipType == RelationshipType.Enemy) 
+            baseChance = 0.35f;
+        else if (_relationshipType == RelationshipType.Friend || _relationshipType == RelationshipType.Lover || _relationshipType == RelationshipType.Soulmate)
+            baseChance = 0.85f;
+
+        // Formule : Base + Points de relation (chaque point = 1%)
+        float finalChance = baseChance + (_relationValue / 100f);
+
+        // Contrainte User : 10% minimum, 90% maximum
+        return Mathf.Clamp(finalChance, 0.1f, 0.9f);
+    }
+
     private void UpdateRelationshipType()
     {
         RelationshipType lastType = _relationshipType;

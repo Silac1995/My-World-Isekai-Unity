@@ -114,7 +114,6 @@ public class CharacterInteraction : MonoBehaviour
     {
         int totalExchanges = 0;
         const int MAX_EXCHANGES = 6;
-        const float TURN_DELAY = 4.0f;
 
         Character currentSpeaker = initiator;
         Character currentListener = target;
@@ -136,8 +135,9 @@ public class CharacterInteraction : MonoBehaviour
             totalExchanges++;
             if (totalExchanges >= MAX_EXCHANGES) break;
 
-            // 2. Attente avant la réponse
-            yield return new WaitForSeconds(TURN_DELAY);
+            // 2. Attente aléatoire avant la réponse (entre 2.5 et 5 secondes)
+            float randomDelay = UnityEngine.Random.Range(2.5f, 5.0f);
+            yield return new WaitForSeconds(randomDelay);
 
             // 3. Inversion des rôles pour le tour suivant
             Character nextSpeaker = currentListener;

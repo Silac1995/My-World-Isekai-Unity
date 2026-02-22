@@ -28,7 +28,7 @@ public class CharacterSpeech : MonoBehaviour
         _hideCoroutine = null;
     }
 
-    public void Say(string message, float duration = 3f)
+    public void Say(string message, float duration = 3f, float typingSpeed = 0f)
     {
         if (_speechBubblePrefab == null) return;
         if (_hideCoroutine != null) StopCoroutine(_hideCoroutine);
@@ -36,7 +36,7 @@ public class CharacterSpeech : MonoBehaviour
         if (_speechBubblePrefab.TryGetComponent<Speech>(out var speechScript))
         {
             _speechBubblePrefab.SetActive(true);
-            speechScript.Setup(_character, message, _audioSource, _voiceSO, _voicePitch, () => {
+            speechScript.Setup(_character, message, _audioSource, _voiceSO, _voicePitch, typingSpeed, () => {
                 _bodyPartsController?.MouthController?.StopTalking();
                 _hideCoroutine = StartCoroutine(HideSpeechAfterDelay(duration));
             });

@@ -64,10 +64,8 @@ public class NPCController : CharacterGameController
         if (rel == null) return;
 
         // --- 2. LOGIQUE D'AGRESSION (ENNEMIS) ---
-        // On peut attaquer même si la cible est déjà en combat (principe de mêlée)
         if (rel.RelationValue <= -10 && target.IsAlive())
         {
-            // 20% de chance d'attaquer directement
             if (Random.value < 0.2f)
             {
                 Debug.Log($"<color=red>[Aggression]</color> {_character.CharacterName} repère son ennemi {target.CharacterName} et attaque !");
@@ -77,13 +75,10 @@ public class NPCController : CharacterGameController
         }
 
         // --- 3. LOGIQUE SOCIALE ---
-        // On n'initie le social QUE si la cible est "Free" (pas en combat, pas déjà en train de parler, pas KO)
         if (!target.IsFree()) return;
 
-        float interactionChance = Mathf.Clamp(0.02f + (rel.RelationValue / 80f), 0.02f, 0.5f);
-        
-        // Si on est "Enemy" (<= -10) et qu'on n'a pas attaqué au-dessus, on ignore sauf si faim de social
-        if (rel.RelationValue <= -10) interactionChance = 0f; 
+        // UTILISATION DE LA LOGIQUE CENTRALISÉE
+        float interactionChance = rel.GetInteractionChance();
 
         bool isSociallyStarved = false;
         if (_character.CharacterNeeds != null)
@@ -96,7 +91,7 @@ public class NPCController : CharacterGameController
 
         if (Random.value < interactionChance)
         {
-            Debug.Log($"<color=cyan>[Social Detection]</color> {_character.CharacterName} engage {target.CharacterName} (Chance: {interactionChance:P0}, Score: {rel.RelationValue})");
+            Debug.Log($"<color=cyan>[Social Detection]</color> {_character.CharacterName} engage {target.CharacterName} (Chance: {interactionChance:P0}$)");
             
             if (_character.CharacterSpeech != null)
                 _character.CharacterSpeech.Say("Hey! You!");
@@ -104,8 +99,6 @@ public class NPCController : CharacterGameController
             PushBehaviour(new MoveToTargetBehaviour(this, target.gameObject, 7f, () =>
             {
                 if (target == null || !target.IsAlive()) return;
-
-                // On lance l'interaction qui va maintenant gérer la séquence de dialogue
                 _character.CharacterInteraction.StartInteractionWith(target);
             }));
         }
@@ -118,14 +111,9 @@ public class NPCController : CharacterGameController
     {
         if (_character.CharacterRelation == null) return false;
         var rel = _character.CharacterRelation.GetRelationshipWith(source);
-        int score = rel?.RelationValue ?? 0;
+        if (rel == null) return false;
 
-        // Chance de base : 50%
-        // +1% par point de relation (max 100% à 50+ relation)
-        // -1% par point de relation négatif (min 0% à -50- relation)
-        float responseChance = Mathf.Clamp(0.5f + (score / 100f), 0f, 1f);
-        
-        return Random.value < responseChance;
+        return Random.value < rel.GetResponseChance();
     }
 
     /// <summary>
@@ -135,17 +123,9 @@ public class NPCController : CharacterGameController
     {
         if (_character.CharacterRelation == null) return new InteractionTalk();
         var rel = _character.CharacterRelation.GetRelationshipWith(target);
-        int relationValue = rel?.RelationValue ?? 0;
+        if (rel == null) return new InteractionTalk();
 
-        float roll = Random.value;
-        float talkChance = 0.5f;
-
-        if (relationValue >= 40) talkChance = 0.95f;      // Ami : 95% Talk
-        else if (relationValue >= 10) talkChance = 0.8f;  // Sympa : 80% Talk
-        else if (relationValue >= -10) talkChance = 0.5f; // Neutre : 50% Talk
-        else talkChance = 0.15f;                           // Ennemi : 15% Talk
-
-        if (roll < talkChance)
+        if (Random.value < rel.GetFavorableToneChance())
             return new InteractionTalk();
         else
             return new InteractionInsult();
