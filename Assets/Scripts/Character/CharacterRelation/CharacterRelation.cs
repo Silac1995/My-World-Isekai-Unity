@@ -63,11 +63,31 @@ public class CharacterRelation : MonoBehaviour
             rel = AddRelationship(target);
         }
 
-        if (amount >= 0)
-            rel.IncreaseRelationValue(amount);
-        else
-            rel.DecreaseRelationValue(amount);
+        // --- MODIFICATEURS DE PERSONNALITÉ ---
+        float finalAmount = amount;
+        if (_character.CharacterProfile != null && target.CharacterProfile != null)
+        {
+            int compatibility = _character.CharacterProfile.GetCompatibilityWith(target.CharacterProfile);
+            
+            if (amount > 0) // Gain
+            {
+                if (compatibility > 0) finalAmount *= 1.4f;      // Compatible : +40% gain
+                else if (compatibility < 0) finalAmount *= 0.7f; // Incompatible : -30% gain
+            }
+            else if (amount < 0) // Perte
+            {
+                if (compatibility > 0) finalAmount *= 0.6f;      // Compatible : -40% perte (perd moins)
+                else if (compatibility < 0) finalAmount *= 1.4f; // Incompatible : +40% perte (perd plus)
+            }
+        }
 
-        Debug.Log($"<color=white>[Sentiment]</color> L'avis de {_character.CharacterName} sur {target.CharacterName} est maintenant de {rel.RelationValue} ({rel.RelationType})");
+        int roundedAmount = Mathf.RoundToInt(finalAmount);
+
+        if (roundedAmount >= 0)
+            rel.IncreaseRelationValue(roundedAmount);
+        else
+            rel.DecreaseRelationValue(-roundedAmount);
+
+        Debug.Log($"<color=white>[Sentiment]</color> L'avis de {_character.CharacterName} sur {target.CharacterName} est maintenant de {rel.RelationValue} ({rel.RelationType}) [Modif: {amount} -> {roundedAmount}]");
     }
 }

@@ -18,7 +18,7 @@ public class InteractionInsult : ICharacterInteractionAction
         // 1. Diminution de la relation (Unilatéral : la cible apprécie moins la source)
         if (target.CharacterRelation != null)
         {
-            target.CharacterRelation.UpdateRelation(source, -2);
+            target.CharacterRelation.UpdateRelation(source, -3);
         }
 
         // 2. Shout

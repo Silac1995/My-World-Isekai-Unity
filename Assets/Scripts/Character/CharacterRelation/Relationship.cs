@@ -127,6 +127,14 @@ public class Relationship
         // Formule : Base + Points de relation (chaque point = 1%)
         float finalChance = baseChance + (_relationValue / 100f);
 
+        // --- BIAIS DE PERSONNALITÉ ---
+        if (_character.CharacterProfile != null && _relatedCharacter != null && _relatedCharacter.CharacterProfile != null)
+        {
+            int compatibility = _character.CharacterProfile.GetCompatibilityWith(_relatedCharacter.CharacterProfile);
+            if (compatibility > 0) finalChance += 0.2f;      // Compatible : +20% chance de "Talk"
+            else if (compatibility < 0) finalChance -= 0.2f; // Incompatible : -20% chance de "Talk"
+        }
+
         // Contrainte User : 10% minimum, 90% maximum
         return Mathf.Clamp(finalChance, 0.1f, 0.9f);
     }

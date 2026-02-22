@@ -18,7 +18,7 @@ MonoBehaviour:
   _scalingStat: 0
   _statMultiplier: 1
   _damageType: 0
-  _knockbackForce: 25
+  _knockbackForce: 5
   _levels:
   - MinLevel: 0
     CombatController: {fileID: 22100000, guid: 084bdf1b0c1e22849965bafce0cd7624, type: 2}

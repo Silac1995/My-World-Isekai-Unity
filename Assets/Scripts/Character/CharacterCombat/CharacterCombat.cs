@@ -176,7 +176,17 @@ public class CharacterCombat : MonoBehaviour
 
     public void StartFight(Character target)
     {
-        if (target != null && target.CharacterCombat.IsInBattle)
+        if (target == null) return;
+
+        // --- PÉNALITÉ DE RELATION ---
+        // On baisse la relation des deux côtés de 10 points car un combat commence
+        if (_character.CharacterRelation != null)
+            _character.CharacterRelation.UpdateRelation(target, -10);
+        
+        if (target.CharacterRelation != null)
+            target.CharacterRelation.UpdateRelation(_character, -10);
+
+        if (target.CharacterCombat.IsInBattle)
         {
             if (IsInBattle) return;
             if (!_character.IsAlive()) return;

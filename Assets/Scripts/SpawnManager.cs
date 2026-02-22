@@ -7,6 +7,8 @@ public class SpawnManager : MonoBehaviour
     [SerializeField] private GameObject spawnGameObject;
     [SerializeField] private GameObject _defaultItemPrefab;
 
+    private CharacterPersonalitySO[] _availablePersonalities;
+
     private void Awake()
     {
         if (Instance != null && Instance != this)
@@ -18,6 +20,10 @@ public class SpawnManager : MonoBehaviour
 
         Instance = this;
         DontDestroyOnLoad(gameObject);
+
+        // Chargement des personnalités pour le spawn aléatoire
+        _availablePersonalities = Resources.LoadAll<CharacterPersonalitySO>("Data/Personnality");
+        Debug.Log($"<color=cyan>[SpawnManager]</color> {_availablePersonalities.Length} personnalités chargées.");
 
         if (spawnGameObject == null)
         {
@@ -112,7 +118,7 @@ public class SpawnManager : MonoBehaviour
 
     // --- Logique de Spawn de Personnages ---
 
-    public Character SpawnCharacter(Vector3 pos, float health, float mana, float str, float agi, RaceSO race, GameObject visualPrefab, bool isPlayer)
+    public Character SpawnCharacter(Vector3 pos, float health, float mana, float str, float agi, RaceSO race, GameObject visualPrefab, bool isPlayer, CharacterPersonalitySO personality = null)
     {
         Vector3 spawnPos = pos == Vector3.zero && spawnGameObject != null ? spawnGameObject.transform.position : pos;
 
@@ -149,6 +155,19 @@ public class SpawnManager : MonoBehaviour
         character.CharacterVisual.ResizeCharacter(randomSize);
         character.CharacterVisual.RequestAutoResize();
         character.CharacterVisual.ApplyPresetFromRace(race);
+
+        // --- GESTION DE LA PERSONNALITÉ ---
+        if (personality == null && _availablePersonalities != null && _availablePersonalities.Length > 0)
+        {
+            personality = _availablePersonalities[Random.Range(0, _availablePersonalities.Length)];
+        }
+
+        if (character.CharacterProfile != null && personality != null)
+        {
+            character.CharacterProfile.SetPersonality(personality);
+            Debug.Log($"<color=cyan>[Spawn]</color> {character.CharacterName} a spawn avec la personnalité : {personality.PersonalityName}");
+        }
+
         return character;
     }
 

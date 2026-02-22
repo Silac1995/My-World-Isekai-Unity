@@ -47,7 +47,7 @@ public class CharacterInteraction : MonoBehaviour
         }
     }
 
-    public void StartInteractionWith(Character target, Action onPositioned = null)
+    public void StartInteractionWith(Character target, ICharacterInteractionAction forcedFirstAction = null, Action onPositioned = null)
     {
         if (target == null || _currentTarget == target) return;
         
@@ -94,7 +94,7 @@ public class CharacterInteraction : MonoBehaviour
             _character.Controller.PushBehaviour(new MoveToInteractionBehaviour(_character.Controller, target, () => 
             {
                 if (_activeDialogueCoroutine != null) StopCoroutine(_activeDialogueCoroutine);
-                _activeDialogueCoroutine = StartCoroutine(DialogueSequence(_character, target));
+                _activeDialogueCoroutine = StartCoroutine(DialogueSequence(_character, target, forcedFirstAction));
                 onPositioned?.Invoke();
             }));
         }
@@ -103,14 +103,14 @@ public class CharacterInteraction : MonoBehaviour
             // Si pas de controller, on lance direct le dialogue
             IsPositioned = true;
             if (_activeDialogueCoroutine != null) StopCoroutine(_activeDialogueCoroutine);
-            _activeDialogueCoroutine = StartCoroutine(DialogueSequence(_character, target));
+            _activeDialogueCoroutine = StartCoroutine(DialogueSequence(_character, target, forcedFirstAction));
             onPositioned?.Invoke();
         }
 
         Debug.Log($"<color=cyan>[Interaction]</color> {_character.CharacterName} démarre le positionnement pour {target.CharacterName}.");
     }
 
-    private System.Collections.IEnumerator DialogueSequence(Character initiator, Character target)
+    private System.Collections.IEnumerator DialogueSequence(Character initiator, Character target, ICharacterInteractionAction forcedFirstAction = null)
     {
         int totalExchanges = 0;
         const int MAX_EXCHANGES = 6;
@@ -121,7 +121,11 @@ public class CharacterInteraction : MonoBehaviour
         while (totalExchanges < MAX_EXCHANGES)
         {
             // 1. L'orateur actuel effectue une action
-            if (currentSpeaker.Controller is NPCController npc)
+            if (forcedFirstAction != null && totalExchanges == 0)
+            {
+                forcedFirstAction.Execute(currentSpeaker, currentListener);
+            }
+            else if (currentSpeaker.Controller is NPCController npc)
             {
                 var action = npc.GetRandomSocialAction(currentListener);
                 action.Execute(currentSpeaker, currentListener);
