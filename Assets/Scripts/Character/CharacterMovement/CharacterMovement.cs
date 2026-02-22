@@ -38,6 +38,7 @@ public class CharacterMovement : MonoBehaviour
 
     private void Awake()
     {
+        if (_character == null) _character = GetComponent<Character>();
         if (_rb == null) _rb = GetComponent<Rigidbody>();
         if (_agent == null) _agent = GetComponent<NavMeshAgent>();
 
@@ -58,9 +59,15 @@ public class CharacterMovement : MonoBehaviour
             
             if (_knockbackTimer <= 0)
             {
-                // Fin du knockback : On restaure l'état
+                // Fin du knockback : On restaure l'état original
                 if (_rb != null) _rb.isKinematic = _wasKinematic;
-                if (_agent != null) _agent.enabled = true;
+                
+                // On ne réactive l'agent QUE pour ceux qui en ont besoin (NPCs cinématiques)
+                // Le joueur (non-cinématique) reste libre de ses mouvements physiques.
+                if (_agent != null && _wasKinematic)
+                {
+                    _agent.enabled = true;
+                }
             }
             return;
         }
@@ -154,6 +161,9 @@ public class CharacterMovement : MonoBehaviour
 
     public void Stop()
     {
+        // SÉCURITÉ : On ne réduit pas la vitesse à zéro si on est en plein knockback physique !
+        if (_knockbackTimer > 0) return;
+
         _isStopped = true;
         _unstablePathFrames = 0;
         if (_agent != null && _agent.isOnNavMesh)
@@ -189,24 +199,31 @@ public class CharacterMovement : MonoBehaviour
     {
         if (_rb == null) return;
 
-        // On sauvegarde l'état actuel car il peut changer pendant le jeu
-        _wasKinematic = _rb.isKinematic;
+        // --- MÉMOIRE ROBUSTE ---
+        // On ne sauvegarde l'état que si on n'est pas déjà en knockback.
+        // Cela évite d'écraser _wasKinematic par "false" (NPC en vol) lors d'un deuxième coup.
+        if (_knockbackTimer <= 0)
+        {
+            _wasKinematic = _rb.isKinematic;
+        }
 
-        // On arrête l'agent NavMesh s'il est actif
+        // --- INTERRUPTION DES ACTIONS ---
+        if (_character != null && _character.CharacterActions != null)
+        {
+            _character.CharacterActions.ClearCurrentAction();
+        }
+
+        // --- PHYSIQUE & NAVIGATION ---
         if (_agent != null && _agent.enabled)
         {
             _agent.isStopped = true;
             _agent.ResetPath();
-            _agent.enabled = false; // Désactivation complète pour laisser la physique agir
+            _agent.enabled = false; // Désactivation pour laisser la physique agir
         }
 
-        // On sort du mode cinématique pour que la force s'applique (surtout pour NPC)
         _rb.isKinematic = false;
-
-        // On applique une impulsion physique
         _rb.AddForce(force, ForceMode.Impulse);
         
-        // On lock le mouvement pendant 0.4s pour laisser la physique agir
         _knockbackTimer = 0.4f;
         _isStopped = false; 
     }

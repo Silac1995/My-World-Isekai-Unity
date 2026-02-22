@@ -288,6 +288,12 @@ public class CharacterCombat : MonoBehaviour
         _lastCombatActionTime = Time.time;
         ChangeCombatMode(true);
 
+        // SÉCURITÉ SUPPLÉMENTAIRE : Interrompre l'action en cours lors de tout dégât
+        if (_character.CharacterActions != null)
+        {
+            _character.CharacterActions.ClearCurrentAction();
+        }
+
         OnDamageTaken?.Invoke(amount, type);
 
         if (_character.CharacterVisual != null && _character.CharacterVisual.CharacterBlink != null)

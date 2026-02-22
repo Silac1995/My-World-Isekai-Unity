@@ -211,6 +211,9 @@ public class Character : MonoBehaviour
                 _characterVisual.CharacterAnimator.SetDead(true);
             }
 
+            // 5. Désactivation NavMesh
+            ConfigureNavMesh(false);
+
             Debug.Log($"<color=orange>[Status]</color> {CharacterName} est maintenant inconscient.");
             OnIncapacitated?.Invoke(this);
         }
@@ -230,6 +233,9 @@ public class Character : MonoBehaviour
             {
                 _characterVisual.CharacterAnimator.SetDead(false);
             }
+
+            // 5. Restauration NavMesh (Uniquement pour NPCs)
+            ConfigureNavMesh(!IsPlayer());
 
             Debug.Log($"<color=orange>[Status]</color> {CharacterName} a repris connaissance.");
         }
@@ -266,6 +272,9 @@ public class Character : MonoBehaviour
         {
             _characterVisual.CharacterAnimator.SetDead(true);
         }
+
+        // 4. Désactivation NavMesh
+        ConfigureNavMesh(false);
 
         OnIncapacitated?.Invoke(this);
     }
