@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4a3aa45580fb73a4098103279a939d1f, type: 3}
   m_Name: OutOfCombatStatusEffect
   m_EditorClassIdentifier: Assembly-CSharp::CharacterStatusEffect
-  statusEffectName: 
+  statusEffectName: Out of combat
   statusEffects:
   - {fileID: 11400000, guid: 035b3c81c96faa940b49fa6909167d57, type: 2}
   duration: 0

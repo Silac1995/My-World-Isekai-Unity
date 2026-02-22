@@ -57,6 +57,7 @@ public class Character : MonoBehaviour
     #region Events
     public event Action<Character> OnDeath;
     public event Action<Character> OnIncapacitated;
+    public event Action<bool> OnUnconsciousChanged;
     #endregion
 
     #region Properties
@@ -184,6 +185,7 @@ public class Character : MonoBehaviour
         if (_isDead || _isUnconscious == unconscious) return;
 
         _isUnconscious = unconscious;
+        OnUnconsciousChanged?.Invoke(unconscious);
 
         if (unconscious)
         {
@@ -234,6 +236,7 @@ public class Character : MonoBehaviour
     }
 
     public void WakeUp() => SetUnconscious(false);
+    public void Faint() => SetUnconscious(true);
 
     public virtual void Die()
     {

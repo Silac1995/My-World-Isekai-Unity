@@ -13,5 +13,5 @@ MonoBehaviour:
   m_Name: OutOfCombatRegeneration
   m_EditorClassIdentifier: Assembly-CSharp::PeriodicStatEffect
   _targetStat: 0
-  _valuePerSecond: 3
+  _valuePerSecond: 1
   _isPercentage: 0

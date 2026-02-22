@@ -3,7 +3,13 @@ using UnityEngine;
 
 public class CharacterStatusManager : MonoBehaviour
 {
+    [Header("References")]
     [SerializeField] private Character _character;
+
+    [Header("Automatic Effects")]
+    [SerializeField] private CharacterStatusEffect _unconsciousEffect;
+    [SerializeField] private CharacterStatusEffect _outOfCombatEffect;
+
     private List<CharacterStatusEffectInstance> _activeEffects = new List<CharacterStatusEffectInstance>();
     private List<CharacterStatusEffectInstance> _effectsToRemove = new List<CharacterStatusEffectInstance>();
 
@@ -12,6 +18,26 @@ public class CharacterStatusManager : MonoBehaviour
     private void Awake()
     {
         if (_character == null) _character = GetComponent<Character>();
+    }
+
+    private void Start()
+    {
+        if (_character != null)
+        {
+            _character.OnUnconsciousChanged += HandleUnconsciousChanged;
+            if (_character.CharacterCombat != null)
+                _character.CharacterCombat.OnCombatModeChanged += HandleCombatModeChanged;
+        }
+    }
+
+    private void OnDestroy()
+    {
+        if (_character != null)
+        {
+            _character.OnUnconsciousChanged -= HandleUnconsciousChanged;
+            if (_character.CharacterCombat != null)
+                _character.CharacterCombat.OnCombatModeChanged -= HandleCombatModeChanged;
+        }
     }
 
     public void ApplyEffect(CharacterStatusEffect effectAsset, Character caster = null)
@@ -73,5 +99,58 @@ public class CharacterStatusManager : MonoBehaviour
         {
             RemoveEffect(effect);
         }
+
+        if (_character == null || _character.Stats == null) return;
+
+        // Seuil d'arrêt Regen Hors Combat : 50% de la vie max
+        if (_outOfCombatEffect != null && HasEffect(_outOfCombatEffect))
+        {
+            if (_character.Stats.Health.CurrentAmount >= _character.Stats.Health.MaxValue * 0.5f)
+            {
+                RemoveEffect(_outOfCombatEffect);
+            }
+        }
+
+        // Seuil de réveil : 30% de la vie max. 
+        if (_character.IsUnconscious && _character.Stats.Health.CurrentAmount >= _character.Stats.Health.MaxValue * 0.3f)
+        {
+            _character.WakeUp();
+        }
     }
+
+    private void HandleUnconsciousChanged(bool unconscious)
+    {
+        if (unconscious)
+        {
+            if (_unconsciousEffect != null && !HasEffect(_unconsciousEffect))
+                ApplyEffect(_unconsciousEffect);
+        }
+        else
+        {
+            if (_unconsciousEffect != null && HasEffect(_unconsciousEffect))
+                RemoveEffect(_unconsciousEffect);
+        }
+    }
+
+    private void HandleCombatModeChanged(bool isCombat)
+    {
+        if (_character == null || _character.Stats == null) return;
+
+        bool isInBattle = _character.CharacterCombat != null && _character.CharacterCombat.IsInBattle;
+        bool hasEnoughHealth = _character.Stats.Health.CurrentAmount >= _character.Stats.Health.MaxValue * 0.5f;
+
+        bool shouldHaveOutOfCombat = !isCombat && !isInBattle && _character.IsAlive() && !_character.IsUnconscious && !hasEnoughHealth;
+
+        if (shouldHaveOutOfCombat)
+        {
+            if (_outOfCombatEffect != null && !HasEffect(_outOfCombatEffect))
+                ApplyEffect(_outOfCombatEffect);
+        }
+        else
+        {
+            if (_outOfCombatEffect != null && HasEffect(_outOfCombatEffect))
+                RemoveEffect(_outOfCombatEffect);
+        }
+    }
+
 }

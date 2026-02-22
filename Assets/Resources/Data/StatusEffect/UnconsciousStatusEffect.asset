@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4a3aa45580fb73a4098103279a939d1f, type: 3}
   m_Name: UnconsciousStatusEffect
   m_EditorClassIdentifier: Assembly-CSharp::CharacterStatusEffect
-  statusEffectName: 
+  statusEffectName: Unconscious
   statusEffects:
   - {fileID: 11400000, guid: fcc58c551d5bc96458565c4f075bee53, type: 2}
   duration: 0

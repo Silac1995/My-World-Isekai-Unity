@@ -13,5 +13,5 @@ MonoBehaviour:
   m_Name: UnconsciousRegeneration
   m_EditorClassIdentifier: Assembly-CSharp::PeriodicStatEffect
   _targetStat: 0
-  _valuePerSecond: 2
+  _valuePerSecond: 1.5
   _isPercentage: 0

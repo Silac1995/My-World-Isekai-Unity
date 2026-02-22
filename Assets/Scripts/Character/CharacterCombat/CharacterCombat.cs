@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
@@ -12,13 +13,12 @@ public class CharacterCombat : MonoBehaviour
     [SerializeField] private bool _isCombatMode = false;
     [SerializeField] private int _bonusMeleeMaxTargets = 0;
 
+    public event Action<bool> OnCombatModeChanged;
+
     [Header("Initiative Scaling")]
     [SerializeField] private float _baseInitiativePerTick = 1f;
     [SerializeField] private float _speedMultiplierInitiative = 0.1f;
 
-    [Header("HP Recovery Status Effects")]
-    [SerializeField] private CharacterStatusEffect _unconsciousEffect;
-    [SerializeField] private CharacterStatusEffect _outOfCombatEffect;
 
     [Header("Battle Management")]
     [SerializeField] private BattleManager _currentBattleManager;
@@ -77,51 +77,19 @@ public class CharacterCombat : MonoBehaviour
         {
             if (Time.time - _lastCombatActionTime > COMBAT_MODE_TIMEOUT)
             {
-                _isCombatMode = false;
-                RefreshCurrentAnimator();
-                Debug.Log($"<color=cyan>[Combat]</color> Mode Combat expiré : DÉSACTIVÉ");
+                ChangeCombatMode(false);
+                Debug.Log("<color=cyan>[Combat]</color> Mode Combat expire : DESACTIVE");
             }
         }
-
-        HandlePassiveRecoveryEffects();
     }
 
-    private void HandlePassiveRecoveryEffects()
+    private void ChangeCombatMode(bool enabled)
     {
-        if (IsInBattle || _character.Stats == null || _character.StatusManager == null) return;
+        if (_isCombatMode == enabled) return;
 
-        bool shouldHaveUnconscious = _character.IsUnconscious;
-        bool shouldHaveOutOfCombat = !_character.IsUnconscious && _character.IsAlive() && !_isCombatMode;
-
-        // Effet Inconscient
-        if (shouldHaveUnconscious)
-        {
-            if (_unconsciousEffect != null && !_character.StatusManager.HasEffect(_unconsciousEffect))
-                _character.StatusManager.ApplyEffect(_unconsciousEffect);
-        }
-        else
-        {
-            if (_unconsciousEffect != null && _character.StatusManager.HasEffect(_unconsciousEffect))
-                _character.StatusManager.RemoveEffect(_unconsciousEffect);
-        }
-
-        // Effet Hors Combat
-        if (shouldHaveOutOfCombat)
-        {
-            if (_outOfCombatEffect != null && !_character.StatusManager.HasEffect(_outOfCombatEffect))
-                _character.StatusManager.ApplyEffect(_outOfCombatEffect);
-        }
-        else
-        {
-            if (_outOfCombatEffect != null && _character.StatusManager.HasEffect(_outOfCombatEffect))
-                _character.StatusManager.RemoveEffect(_outOfCombatEffect);
-        }
-
-        // Seuil de réveil : 30% de la vie max
-        if (_character.IsUnconscious && _character.Stats.Health.CurrentAmount >= _character.Stats.Health.MaxValue * 0.3f)
-        {
-            _character.WakeUp();
-        }
+        _isCombatMode = enabled;
+        RefreshCurrentAnimator();
+        OnCombatModeChanged?.Invoke(enabled);
     }
     #endregion
 
@@ -140,9 +108,8 @@ public class CharacterCombat : MonoBehaviour
     {
         if (!_character.IsAlive()) return false;
         
-        _isCombatMode = true;
         _lastCombatActionTime = Time.time;
-        RefreshCurrentAnimator();
+        ChangeCombatMode(true);
         
         if (_character.CharacterActions != null)
         {
@@ -155,9 +122,8 @@ public class CharacterCombat : MonoBehaviour
 
     public void ToggleCombatMode()
     {
-        _isCombatMode = !_isCombatMode;
+        ChangeCombatMode(!_isCombatMode);
         if (_isCombatMode) _lastCombatActionTime = Time.time;
-        RefreshCurrentAnimator();
     }
     #endregion
 
@@ -185,7 +151,7 @@ public class CharacterCombat : MonoBehaviour
         if (_character.Stats == null || _character.Stats.Initiative == null) return;
 
         float speedValue = _character.Stats.Speed != null ? _character.Stats.Speed.Value : 0f;
-        float totalGain = (_baseInitiativePerTick + (speedValue * _speedMultiplierInitiative)) * Random.Range(0.7f, 1.3f);
+        float totalGain = (_baseInitiativePerTick + (speedValue * _speedMultiplierInitiative)) * UnityEngine.Random.Range(0.7f, 1.3f);
         
         _character.Stats.Initiative.IncreaseCurrentAmount(totalGain);
     }
@@ -193,8 +159,7 @@ public class CharacterCombat : MonoBehaviour
     public void JoinBattle(BattleManager manager)
     {
         _currentBattleManager = manager;
-        _isCombatMode = true;
-        RefreshCurrentAnimator();
+        ChangeCombatMode(true);
     }
 
     public void LeaveBattle()
@@ -246,9 +211,8 @@ public class CharacterCombat : MonoBehaviour
 
     public void ForceExitCombatMode()
     {
-        _isCombatMode = false;
         _currentBattleManager = null;
-        RefreshCurrentAnimator();
+        ChangeCombatMode(false);
     }
     #endregion
 
@@ -321,14 +285,12 @@ public class CharacterCombat : MonoBehaviour
 
         _character.Stats.Health.DecreaseCurrentAmount(amount);
         _lastCombatActionTime = Time.time;
-        _isCombatMode = true;
+        ChangeCombatMode(true);
 
         if (_character.CharacterVisual != null && _character.CharacterVisual.CharacterBlink != null)
         {
             _character.CharacterVisual.CharacterBlink.Blink();
         }
-
-        RefreshCurrentAnimator();
 
         if (_character.Stats.Health.CurrentAmount <= 0)
         {

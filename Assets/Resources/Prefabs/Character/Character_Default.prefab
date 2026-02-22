@@ -289,6 +289,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CharacterStatusManager
   _character: {fileID: 2536622428659117900}
+  _unconsciousEffect: {fileID: 11400000, guid: 8b53042cad11a914cb6d5847dc93f505, type: 2}
+  _outOfCombatEffect: {fileID: 11400000, guid: 4bb0a5072ebeb5b4a9c039f3d6d8ef4c, type: 2}
 --- !u!1 &2965803382657509719
 GameObject:
   m_ObjectHideFlags: 0
@@ -526,7 +528,7 @@ MonoBehaviour:
   _characterNeeds: {fileID: 908669152878556868}
   _characterAwareness: {fileID: 6695407739293885907}
   _characterSpeech: {fileID: 5778136573146001682}
-  _statusManager: {fileID: 0}
+  _statusManager: {fileID: 426934241252808603}
 --- !u!114 &3158310397905717539
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1082,8 +1084,6 @@ MonoBehaviour:
   _bonusMeleeMaxTargets: 0
   _baseInitiativePerTick: 1
   _speedMultiplierInitiative: 0.1
-  _unconsciousEffect: {fileID: 11400000, guid: 8b53042cad11a914cb6d5847dc93f505, type: 2}
-  _outOfCombatEffect: {fileID: 11400000, guid: 4bb0a5072ebeb5b4a9c039f3d6d8ef4c, type: 2}
   _currentBattleManager: {fileID: 0}
   _battleManagerPrefab: {fileID: 7708501793112527945, guid: 51209fa04a478a445980530b546d4dab, type: 3}
 --- !u!1 &8637028065392131947
