@@ -21,6 +21,7 @@ public abstract class CombatStyleSO : ScriptableObject
     [SerializeField] private SecondaryStatType _scalingStat = SecondaryStatType.Strength;
     [SerializeField] private float _statMultiplier = 1.0f;
     [SerializeField] private MeleeDamageType _damageType = MeleeDamageType.Blunt;
+    [SerializeField] private float _knockbackForce = 5.0f;
 
     [SerializeField] private List<StyleLevelData> _levels = new List<StyleLevelData>();
 
@@ -32,6 +33,7 @@ public abstract class CombatStyleSO : ScriptableObject
     public SecondaryStatType ScalingStat => _scalingStat;
     public float StatMultiplier => _statMultiplier;
     public MeleeDamageType DamageType => _damageType;
+    public float KnockbackForce => _knockbackForce;
 
 
     public RuntimeAnimatorController GetCombatController(int level)

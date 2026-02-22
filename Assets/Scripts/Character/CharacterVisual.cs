@@ -146,6 +146,10 @@ public class CharacterVisual : MonoBehaviour
 
             if (isFacingRight == value) return;
 
+            // Bloquer le flip pendant un knockback pour éviter les rotations bizarres
+            if (character != null && character.CharacterMovement != null && character.CharacterMovement.IsKnockedBack)
+                return;
+
             isFacingRight = value;
 
             ApplyFlip();

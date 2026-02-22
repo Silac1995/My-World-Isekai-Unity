@@ -90,6 +90,32 @@ public class CombatStyleAttack : MonoBehaviour
             _hitTargets.Add(target);
             target.CharacterCombat.TakeDamage(damage, _combatStyleSO != null ? _combatStyleSO.DamageType : MeleeDamageType.Blunt);
 
+            // --- KNOCKBACK ---
+            if (_combatStyleSO != null && _combatStyleSO.KnockbackForce > 0)
+            {
+                // Calcul de la puissance selon la courbe quadratique
+                // Multiplier = Max(0.35, 1.0 - (hitIndex / (maxTargets-1))^2 * 0.65)
+                float knockbackMultiplier = 1f;
+                if (_finalMaxTargets > 1)
+                {
+                    int hitIndex = _hitTargets.Count - 1; // 0 pour le premier, 1 pour le second...
+                    float progress = (float)hitIndex / (_finalMaxTargets - 1);
+                    knockbackMultiplier = Mathf.Max(0.35f, 1.0f - (progress * progress) * 0.65f);
+                }
+
+                float finalForce = _combatStyleSO.KnockbackForce * knockbackMultiplier * UnityEngine.Random.Range(0.7f, 1.3f);
+                
+                // Direction du knockback : de l'attaquant vers la cible
+                Vector3 knockbackDir = (target.transform.position - _character.transform.position).normalized;
+                knockbackDir.y = 0; // On reste sur le plan horizontal
+                if (knockbackDir == Vector3.zero) knockbackDir = _character.transform.forward;
+
+                if (target.CharacterMovement != null)
+                {
+                    target.CharacterMovement.ApplyKnockback(knockbackDir * finalForce);
+                }
+            }
+
             if (_character.CharacterCombat != null && !_character.CharacterCombat.IsInBattle)
             {
                 _character.CharacterCombat.StartFight(target);

@@ -17,6 +17,8 @@ public class CharacterMovement : MonoBehaviour
     private Vector3 _desiredDirection;
     private float _targetSpeed;
     private bool _isStopped = false;
+    private float _knockbackTimer = 0f;
+    private bool _wasKinematic = false;
 
     // Gestion de la stabilité du chemin
     private int _unstablePathFrames = 0;
@@ -32,6 +34,7 @@ public class CharacterMovement : MonoBehaviour
     public NavMeshPathStatus PathStatus => _agent != null ? _agent.pathStatus : NavMeshPathStatus.PathInvalid;
     public Vector3 Destination => _agent != null ? _agent.destination : transform.position;
     public Vector3 Velocity => GetVelocity();
+    public bool IsKnockedBack => _knockbackTimer > 0;
 
     private void Awake()
     {
@@ -43,10 +46,25 @@ public class CharacterMovement : MonoBehaviour
             _agent.updateRotation = false;
             _agent.updateUpAxis = false;
         }
+
+        if (_rb != null) _wasKinematic = _rb.isKinematic;
     }
 
     private void FixedUpdate()
     {
+        if (_knockbackTimer > 0)
+        {
+            _knockbackTimer -= Time.fixedDeltaTime;
+            
+            if (_knockbackTimer <= 0)
+            {
+                // Fin du knockback : On restaure l'état
+                if (_rb != null) _rb.isKinematic = _wasKinematic;
+                if (_agent != null) _agent.enabled = true;
+            }
+            return;
+        }
+
         if (_isStopped) return;
 
         if (_agent != null && _agent.isOnNavMesh && !_agent.isStopped)
@@ -86,6 +104,8 @@ public class CharacterMovement : MonoBehaviour
 
     public void SetDesiredDirection(Vector3 direction, float speed)
     {
+        if (_knockbackTimer > 0) return;
+
         _desiredDirection = direction;
         _targetSpeed = speed;
 
@@ -103,6 +123,7 @@ public class CharacterMovement : MonoBehaviour
 
     public void SetDestination(Vector3 target, float speed)
     {
+        if (_knockbackTimer > 0) return;
         if (_agent == null || !_agent.isOnNavMesh) return;
 
         // --- SECURITE BORD DE NAVMESH ---
@@ -145,6 +166,7 @@ public class CharacterMovement : MonoBehaviour
 
     public void Resume()
     {
+        if (_knockbackTimer > 0) return;
         _isStopped = false;
         if (_agent != null && _agent.isOnNavMesh)
         {
@@ -161,6 +183,32 @@ public class CharacterMovement : MonoBehaviour
             _agent.isStopped = false;
             _agent.ResetPath();
         }
+    }
+
+    public void ApplyKnockback(Vector3 force)
+    {
+        if (_rb == null) return;
+
+        // On sauvegarde l'état actuel car il peut changer pendant le jeu
+        _wasKinematic = _rb.isKinematic;
+
+        // On arrête l'agent NavMesh s'il est actif
+        if (_agent != null && _agent.enabled)
+        {
+            _agent.isStopped = true;
+            _agent.ResetPath();
+            _agent.enabled = false; // Désactivation complète pour laisser la physique agir
+        }
+
+        // On sort du mode cinématique pour que la force s'applique (surtout pour NPC)
+        _rb.isKinematic = false;
+
+        // On applique une impulsion physique
+        _rb.AddForce(force, ForceMode.Impulse);
+        
+        // On lock le mouvement pendant 0.4s pour laisser la physique agir
+        _knockbackTimer = 0.4f;
+        _isStopped = false; 
     }
 
     public bool IsGrounded()
