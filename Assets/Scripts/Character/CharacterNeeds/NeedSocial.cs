@@ -9,7 +9,7 @@ public class NeedSocial : CharacterNeed
 
     private float _socialTimer = 0f;
     private const float _tickInterval = 1f;
-    private float _socialLossPerTick = 20f; // Valeur de test élevée demandée par l'user
+    private float _socialLossPerTick = 3f; // Valeur de test élevée demandée par l'user
 
     public NeedSocial(Character character, float startValue = 80f) : base(character)
     {
@@ -53,45 +53,16 @@ public class NeedSocial : CharacterNeed
 
         if (target != null)
         {
-            // --- DÉCISION DE L'ACTION ---
-            int relationScore = 0;
-            bool hasPositiveRelation = false;
-
-            if (_character.CharacterRelation != null)
-            {
-                var rel = _character.CharacterRelation.GetRelationshipWith(target);
-                if (rel != null)
-                {
-                    relationScore = rel.RelationValue;
-                    hasPositiveRelation = relationScore > 0;
-                }
-            }
-
-            ICharacterInteractionAction actionToPerform;
-            
-            if (hasPositiveRelation)
-            {
-                // Priorité aux gens qu'on aime : logique standard
-                actionToPerform = npc.DetermineSocialAction(relationScore);
-            }
-            else
-            {
-                // Désespoir social : on va voir n'importe qui et on a 60% de chance d'être gentil
-                // pour satisfaire notre besoin coûte que coûte.
-                actionToPerform = (Random.value < 0.6f) ? new InteractionTalk() : (ICharacterInteractionAction)new InteractionInsult();
-            }
-
-            Debug.Log($"<color=cyan>[Need Social]</color> {npc.name} engage {target.CharacterName} par besoin (Positif: {hasPositiveRelation}, Score: {relationScore}, Action: {actionToPerform.GetType().Name}).");
+            Debug.Log($"<color=cyan>[Need Social]</color> {npc.name} engage {target.CharacterName} par besoin social.");
 
             npc.PushBehaviour(new MoveToTargetBehaviour(npc, target.gameObject, 7f, () =>
             {
-                if (target == null) return;
+                if (target == null || !target.IsAlive()) return;
 
+                // On lance l'interaction qui va maintenant gérer la séquence de dialogue automatiquement
                 npc.Character.CharacterInteraction.StartInteractionWith(target, () => 
                 {
-                    npc.Character.CharacterInteraction.PerformInteraction(actionToPerform);
-                    npc.Character.CharacterInteraction.EndInteraction();
-                    IncreaseValue(50f); 
+                    IncreaseValue(50f); // Boost de satisfaction immédiat lors du début de l'échange
                 });
             }));
             return true;

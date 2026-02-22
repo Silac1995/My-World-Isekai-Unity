@@ -96,50 +96,54 @@ public class NPCController : CharacterGameController
 
         if (Random.value < interactionChance)
         {
-            // --- DÉCISION DE L'ACTION ---
-            ICharacterInteractionAction actionToPerform = DetermineSocialAction(rel.RelationValue);
-            string shoutText = (actionToPerform is InteractionTalk) ? "Hey! Wait!" : "YOU! YES YOU!";
-
-            Debug.Log($"<color=cyan>[Social Detection]</color> {_character.CharacterName} engage {target.CharacterName} (Chance: {interactionChance:P0}, Score: {rel.RelationValue}, Action: {actionToPerform.GetType().Name})");
+            Debug.Log($"<color=cyan>[Social Detection]</color> {_character.CharacterName} engage {target.CharacterName} (Chance: {interactionChance:P0}, Score: {rel.RelationValue})");
             
             if (_character.CharacterSpeech != null)
-                _character.CharacterSpeech.Say(shoutText);
+                _character.CharacterSpeech.Say("Hey! You!");
 
             PushBehaviour(new MoveToTargetBehaviour(this, target.gameObject, 7f, () =>
             {
                 if (target == null || !target.IsAlive()) return;
 
-                _character.CharacterInteraction.StartInteractionWith(target, () => 
-                {
-                    _character.CharacterInteraction.PerformInteraction(actionToPerform);
-                    _character.CharacterInteraction.EndInteraction();
-                });
+                // On lance l'interaction qui va maintenant gérer la séquence de dialogue
+                _character.CharacterInteraction.StartInteractionWith(target);
             }));
         }
     }
 
-    public ICharacterInteractionAction DetermineSocialAction(int relationValue)
+    /// <summary>
+    /// Détermine si le NPC accepte de répondre à une interaction.
+    /// </summary>
+    public bool ShouldRespondTo(Character source)
     {
+        if (_character.CharacterRelation == null) return false;
+        var rel = _character.CharacterRelation.GetRelationshipWith(source);
+        int score = rel?.RelationValue ?? 0;
+
+        // Chance de base : 50%
+        // +1% par point de relation (max 100% à 50+ relation)
+        // -1% par point de relation négatif (min 0% à -50- relation)
+        float responseChance = Mathf.Clamp(0.5f + (score / 100f), 0f, 1f);
+        
+        return Random.value < responseChance;
+    }
+
+    /// <summary>
+    /// Choisi une action sociale (Talk ou Insult) basée sur la relation.
+    /// </summary>
+    public ICharacterInteractionAction GetRandomSocialAction(Character target)
+    {
+        if (_character.CharacterRelation == null) return new InteractionTalk();
+        var rel = _character.CharacterRelation.GetRelationshipWith(target);
+        int relationValue = rel?.RelationValue ?? 0;
+
         float roll = Random.value;
         float talkChance = 0.5f;
 
-        if (relationValue >= 40) // Friend+
-        {
-            talkChance = 0.9f;
-        }
-        else if (relationValue >= 0) // Neutral
-        {
-            // De 60% (à 0) à 90% (à 40)
-            talkChance = 0.6f + (relationValue / 40f) * 0.3f;
-        }
-        else if (relationValue > -10) // Negative
-        {
-            talkChance = 0.4f;
-        }
-        else // Enemy
-        {
-            talkChance = 0.25f;
-        }
+        if (relationValue >= 40) talkChance = 0.95f;      // Ami : 95% Talk
+        else if (relationValue >= 10) talkChance = 0.8f;  // Sympa : 80% Talk
+        else if (relationValue >= -10) talkChance = 0.5f; // Neutre : 50% Talk
+        else talkChance = 0.15f;                           // Ennemi : 15% Talk
 
         if (roll < talkChance)
             return new InteractionTalk();

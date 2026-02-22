@@ -10,6 +10,7 @@ public class CharacterInteraction : MonoBehaviour
 
     public Collider InteractionZone => _interactionZone;
     public event Action<Character, bool> OnInteractionStateChanged;
+    private Coroutine _activeDialogueCoroutine;
 
     public Character CurrentTarget
     {
@@ -89,17 +90,79 @@ public class CharacterInteraction : MonoBehaviour
         {
             // Pause de base
             _character.Controller.PushBehaviour(new InteractBehaviour());
-            // Déplacement précis avec callback
-            _character.Controller.PushBehaviour(new MoveToInteractionBehaviour(_character.Controller, target, onPositioned));
+            // Déplacement précis avec callback : On lance le dialogue UNE FOIS en place
+            _character.Controller.PushBehaviour(new MoveToInteractionBehaviour(_character.Controller, target, () => 
+            {
+                if (_activeDialogueCoroutine != null) StopCoroutine(_activeDialogueCoroutine);
+                _activeDialogueCoroutine = StartCoroutine(DialogueSequence(_character, target));
+                onPositioned?.Invoke();
+            }));
         }
         else
         {
-            // Si pas de controller (ex: script externe forçant l'interaction), on considère comme positionné
+            // Si pas de controller, on lance direct le dialogue
             IsPositioned = true;
+            if (_activeDialogueCoroutine != null) StopCoroutine(_activeDialogueCoroutine);
+            _activeDialogueCoroutine = StartCoroutine(DialogueSequence(_character, target));
             onPositioned?.Invoke();
         }
 
         Debug.Log($"<color=cyan>[Interaction]</color> {_character.CharacterName} démarre le positionnement pour {target.CharacterName}.");
+    }
+
+    private System.Collections.IEnumerator DialogueSequence(Character initiator, Character target)
+    {
+        int totalExchanges = 0;
+        const int MAX_EXCHANGES = 6;
+        const float TURN_DELAY = 4.0f;
+
+        Character currentSpeaker = initiator;
+        Character currentListener = target;
+
+        while (totalExchanges < MAX_EXCHANGES)
+        {
+            // 1. L'orateur actuel effectue une action
+            if (currentSpeaker.Controller is NPCController npc)
+            {
+                var action = npc.GetRandomSocialAction(currentListener);
+                action.Execute(currentSpeaker, currentListener);
+            }
+            else if (currentSpeaker.IsPlayer())
+            {
+                // Si c'est le joueur, pour l'instant on fait juste un Talk basique par défaut 
+                new InteractionTalk().Execute(currentSpeaker, currentListener);
+            }
+
+            totalExchanges++;
+            if (totalExchanges >= MAX_EXCHANGES) break;
+
+            // 2. Attente avant la réponse
+            yield return new WaitForSeconds(TURN_DELAY);
+
+            // 3. Inversion des rôles pour le tour suivant
+            Character nextSpeaker = currentListener;
+            Character nextListener = currentSpeaker;
+
+            // 4. Est-ce que le prochain orateur souhaite répondre ?
+            if (nextSpeaker.Controller is NPCController nextNpc)
+            {
+                if (!nextNpc.ShouldRespondTo(nextListener))
+                {
+                    Debug.Log($"<color=orange>[Dialogue]</color> {nextSpeaker.CharacterName} met fin à la conversation (ne souhaite pas répondre).");
+                    break;
+                }
+            }
+            else if (nextSpeaker.IsPlayer())
+            {
+                // Le joueur ne refuse jamais de répondre automatiquement dans ce prototype simple
+            }
+
+            currentSpeaker = nextSpeaker;
+            currentListener = nextListener;
+        }
+
+        Debug.Log($"<color=cyan>[Dialogue]</color> Fin de la séquence après {totalExchanges} échanges.");
+        EndInteraction();
     }
 
     public void EndInteraction()
@@ -109,6 +172,12 @@ public class CharacterInteraction : MonoBehaviour
         Character previousTarget = _currentTarget;
         _currentTarget = null;
         IsPositioned = false;
+
+        if (_activeDialogueCoroutine != null)
+        {
+            StopCoroutine(_activeDialogueCoroutine);
+            _activeDialogueCoroutine = null;
+        }
 
         // On libère la cible si elle était freezée
         if (previousTarget.Controller != null)
