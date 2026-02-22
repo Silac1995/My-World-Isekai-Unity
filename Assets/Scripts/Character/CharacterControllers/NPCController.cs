@@ -83,6 +83,21 @@ public class NPCController : CharacterGameController
             }
         }
 
+        // --- 1b. LOGIQUE D'ENTRAIDE (AMIS EN COMBAT) ---
+        if (target.CharacterCombat.IsInBattle && target.IsAlive())
+        {
+            if (_character.CharacterRelation != null && _character.CharacterRelation.IsFriend(target))
+            {
+                Debug.Log($"<color=green>[Assistance]</color> {_character.CharacterName} voit son ami {target.CharacterName} en combat et fonce l'aider !");
+                
+                if (_character.CharacterSpeech != null)
+                    _character.CharacterSpeech.Say("Hang on, my friend! I'm coming!");
+
+                _character.CharacterCombat.JoinBattleAsAlly(target);
+                return;
+            }
+        }
+
         var rel = _character.CharacterRelation.GetRelationshipWith(target);
 
         // Si on ne se connaît pas officiellement (et pas de clash de personnalité), on s'ignore

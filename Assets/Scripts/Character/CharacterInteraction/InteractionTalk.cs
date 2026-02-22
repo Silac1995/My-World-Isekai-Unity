@@ -18,13 +18,13 @@ public class InteractionTalk : ICharacterInteractionAction
         // 1. Augmenter l'avis de la source sur la cible
         if (source.CharacterRelation != null)
         {
-            source.CharacterRelation.UpdateRelation(target, 1);
+            source.CharacterRelation.UpdateRelation(target, 2);
         }
 
         // 2. Augmenter l'avis de la cible sur la source (Réciprocité)
         if (target.CharacterRelation != null)
         {
-            target.CharacterRelation.UpdateRelation(source, 1);
+            target.CharacterRelation.UpdateRelation(source, 2);
         }
 
         // 3. Shout/Dialogue

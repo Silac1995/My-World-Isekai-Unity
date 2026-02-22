@@ -148,18 +148,28 @@ public class BattleManager : MonoBehaviour
         Debug.Log($"<color=white>[Battle]</color> {character.CharacterName} a rejoint le combat.");
     }
 
-    public void AddParticipant(Character newParticipant, Character target)
+    public void AddParticipant(Character newParticipant, Character target, bool asAlly = false)
     {
         if (newParticipant == null || target == null || _isBattleEnded) return;
 
-        // On trouve l'équipe de la cible et on met le nouveau dans l'équipe adverse
+        // On trouve l'équipe de la cible
         BattleTeam targetTeam = _teams.FirstOrDefault(t => t.IsAlly(target));
         if (targetTeam == null) return;
 
-        BattleTeam enemyTeam = _teams.FirstOrDefault(t => t != targetTeam);
-        if (enemyTeam == null) return;
+        if (asAlly)
+        {
+            // On le met dans la MÊME équipe que la cible
+            targetTeam.AddCharacter(newParticipant);
+        }
+        else
+        {
+            // On le met dans l'équipe adverse (comportement par défaut)
+            BattleTeam enemyTeam = _teams.FirstOrDefault(t => t != targetTeam);
+            if (enemyTeam == null) return;
 
-        enemyTeam.AddCharacter(newParticipant);
+            enemyTeam.AddCharacter(newParticipant);
+        }
+
         RegisterCharacter(newParticipant);
     }
 

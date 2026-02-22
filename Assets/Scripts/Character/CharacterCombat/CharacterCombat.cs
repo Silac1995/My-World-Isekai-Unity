@@ -163,6 +163,24 @@ public class CharacterCombat : MonoBehaviour
         ChangeCombatMode(true);
     }
 
+    public void JoinBattleAsAlly(Character friend)
+    {
+        if (friend == null || !friend.CharacterCombat.IsInBattle) return;
+        if (IsInBattle) return;
+
+        // --- SÉCURITÉ : On ne rejoint que si on est LIBRE ---
+        if (!_character.IsFree())
+        {
+            Debug.Log($"<color=orange>[Combat]</color> {_character.CharacterName} est trop occupé pour rejoindre son ami {friend.CharacterName}.");
+            return;
+        }
+
+        if (!_character.IsAlive()) return;
+
+        _currentBattleManager = friend.CharacterCombat.CurrentBattleManager;
+        _currentBattleManager.AddParticipant(_character, friend, asAlly: true);
+    }
+
     public void LeaveBattle()
     {
         _currentBattleManager = null;

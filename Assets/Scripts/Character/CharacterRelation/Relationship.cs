@@ -132,7 +132,7 @@ public class Relationship
         {
             int compatibility = _character.CharacterProfile.GetCompatibilityWith(_relatedCharacter.CharacterProfile);
             if (compatibility > 0) finalChance += 0.2f;      // Compatible : +20% chance de "Talk"
-            else if (compatibility < 0) finalChance -= 0.35f; // Incompatible : -20% chance de "Talk"
+            else if (compatibility < 0) finalChance -= 0.15f; // Incompatible : -20% chance de "Talk"
         }
 
         // Contrainte User : 10% minimum, 90% maximum
@@ -151,7 +151,7 @@ public class Relationship
         {
             _relationshipType = RelationshipType.Enemy;
         }
-        else if (_relationValue >= 40)
+        else if (_relationValue >= 25)
         {
             _relationshipType = RelationshipType.Friend;
         }

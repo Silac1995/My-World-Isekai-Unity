@@ -71,13 +71,13 @@ public class CharacterRelation : MonoBehaviour
             
             if (amount > 0) // Gain
             {
-                if (compatibility > 0) finalAmount *= 1.4f;      // Compatible : +40% gain
-                else if (compatibility < 0) finalAmount *= 0.7f; // Incompatible : -30% gain
+                if (compatibility > 0) finalAmount *= 1.5f;      // Compatible : +50% gain
+                else if (compatibility < 0) finalAmount *= 0.5f; // Incompatible : -50% gain
             }
             else if (amount < 0) // Perte
             {
-                if (compatibility > 0) finalAmount *= 0.6f;      // Compatible : -40% perte (perd moins)
-                else if (compatibility < 0) finalAmount *= 1.4f; // Incompatible : +40% perte (perd plus)
+                if (compatibility > 0) finalAmount *= 0.5f;      // Compatible : -50% perte (perd moins)
+                else if (compatibility < 0) finalAmount *= 1.5f; // Incompatible : +50% perte (perd plus)
             }
         }
 
