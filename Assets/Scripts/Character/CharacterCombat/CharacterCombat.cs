@@ -14,6 +14,7 @@ public class CharacterCombat : MonoBehaviour
     [SerializeField] private int _bonusMeleeMaxTargets = 0;
 
     public event Action<bool> OnCombatModeChanged;
+    public event Action<float, MeleeDamageType> OnDamageTaken;
 
     [Header("Initiative Scaling")]
     [SerializeField] private float _baseInitiativePerTick = 1f;
@@ -286,6 +287,8 @@ public class CharacterCombat : MonoBehaviour
         _character.Stats.Health.DecreaseCurrentAmount(amount);
         _lastCombatActionTime = Time.time;
         ChangeCombatMode(true);
+
+        OnDamageTaken?.Invoke(amount, type);
 
         if (_character.CharacterVisual != null && _character.CharacterVisual.CharacterBlink != null)
         {

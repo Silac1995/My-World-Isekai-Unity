@@ -310,7 +310,6 @@ public class CharacterVisual : MonoBehaviour
 
 
         InitializeSpriteResolvers();
-
     }
 
 
@@ -488,6 +487,29 @@ public class CharacterVisual : MonoBehaviour
             center.y + (direction.y > 0 ? extents.y : (direction.y < 0 ? -extents.y : 0)),
             center.z + (direction.z > 0 ? extents.z : (direction.z < 0 ? -extents.z : 0))
         );
+    }
+
+    public int GetMaxSortingOrder()
+    {
+        if (allRenderers == null || allRenderers.Length == 0) return 0;
+        return allRenderers.Max(sr => sr.sortingOrder);
+    }
+
+    public Bounds GetVisualBounds()
+    {
+        SpriteRenderer[] srs = GetComponentsInChildren<SpriteRenderer>(false);
+        var filtered = srs.Where(s => !s.name.ToLower().Contains("shadow") && !s.name.ToLower().Contains("wound")).ToList();
+        
+        if (filtered.Count == 0) return new Bounds(transform.position, Vector3.zero);
+
+        Bounds b = filtered[0].bounds;
+        foreach (var sr in filtered) b.Encapsulate(sr.bounds);
+        return b;
+    }
+
+    public Vector3 GetVisualCenter()
+    {
+        return GetVisualBounds().center;
     }
 
     #endregion

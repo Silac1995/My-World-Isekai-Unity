@@ -1,0 +1,22 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b833fc77b47ea674880834e46576bf76, type: 3}
+  m_Name: WoundData
+  m_EditorClassIdentifier: Assembly-CSharp::WoundDataSO
+  WoundSprites:
+  - DamageType: 0
+    Sprites:
+    - {fileID: 102656173, guid: 4a25215df45cbea4fae3dedaef324d6d, type: 3}
+    - {fileID: -1825007944, guid: 7276566d66e133b498649eaa5dad7179, type: 3}
+    - {fileID: -199984656, guid: ab29195b574d9e84d90dd35d40bdbb1d, type: 3}
+    - {fileID: 2102557240, guid: 67bc38f059eef55469b9d09ee7e0cfbe, type: 3}
+    - {fileID: 112055643, guid: 27c2479f80900b2469f5f6e9aa2c6d6d, type: 3}

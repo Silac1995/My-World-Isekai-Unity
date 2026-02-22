@@ -2447,6 +2447,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CharacterAnimator
   _characterVisual: {fileID: 0}
   _animator: {fileID: 3464991032284585821}
+  _civilAnimatorController: {fileID: 0}
+  _characterCombat: {fileID: 0}
 --- !u!95 &3464991032284585821 stripped
 Animator:
   m_CorrespondingSourceObject: {fileID: 1670812888686200070, guid: ec24aed44e58bf64c858f8287ee6dc1b, type: 3}
