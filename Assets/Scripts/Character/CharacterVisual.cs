@@ -1,6 +1,6 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
-
+using System.Linq;
 using UnityEngine;
 
 using UnityEngine.U2D.Animation;
@@ -472,10 +472,13 @@ public class CharacterVisual : MonoBehaviour
     public Vector3 GetVisualExtremity(Vector3 direction)
     {
         SpriteRenderer[] srs = GetComponentsInChildren<SpriteRenderer>(false);
-        if (srs.Length == 0) return transform.position;
+        // On filtre pour exclure les ombres ou autres éléments utilitaires qui fausseraient les bounds réels du corps
+        var filtered = srs.Where(s => !s.name.ToLower().Contains("shadow")).ToList();
+        
+        if (filtered.Count == 0) return transform.position;
 
-        Bounds b = srs[0].bounds;
-        foreach (var sr in srs) b.Encapsulate(sr.bounds);
+        Bounds b = filtered[0].bounds;
+        foreach (var sr in filtered) b.Encapsulate(sr.bounds);
 
         Vector3 center = b.center;
         Vector3 extents = b.extents;

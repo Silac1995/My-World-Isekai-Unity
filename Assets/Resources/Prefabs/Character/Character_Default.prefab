@@ -244,6 +244,51 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9d29c3aea0c6c00498c27c544632b5f9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: '::'
+--- !u!1 &2279493750954164827
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 4804915670603790754}
+  - component: {fileID: 426934241252808603}
+  m_Layer: 0
+  m_Name: StatusEffects
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &4804915670603790754
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2279493750954164827}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 6179432398992828966}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &426934241252808603
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2279493750954164827}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a680bc89727f70c428b8cebeb26b1da8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CharacterStatusManager
+  _character: {fileID: 2536622428659117900}
 --- !u!1 &2965803382657509719
 GameObject:
   m_ObjectHideFlags: 0
@@ -384,6 +429,7 @@ Transform:
   - {fileID: 2146869985690736942}
   - {fileID: 3661421223759161407}
   - {fileID: 1436431929447272827}
+  - {fileID: 4804915670603790754}
   - {fileID: 4494242518797815852}
   - {fileID: 6349130465941525632}
   - {fileID: 3706432557554459124}
@@ -480,6 +526,7 @@ MonoBehaviour:
   _characterNeeds: {fileID: 908669152878556868}
   _characterAwareness: {fileID: 6695407739293885907}
   _characterSpeech: {fileID: 5778136573146001682}
+  _statusManager: {fileID: 0}
 --- !u!114 &3158310397905717539
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -651,7 +698,6 @@ MonoBehaviour:
   walkRadius: 50
   minWaitTime: 2
   maxWaitTime: 7
-  scanInterval: 4
 --- !u!114 &4916404909723457133
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1036,6 +1082,8 @@ MonoBehaviour:
   _bonusMeleeMaxTargets: 0
   _baseInitiativePerTick: 1
   _speedMultiplierInitiative: 0.1
+  _unconsciousEffect: {fileID: 11400000, guid: 8b53042cad11a914cb6d5847dc93f505, type: 2}
+  _outOfCombatEffect: {fileID: 11400000, guid: 4bb0a5072ebeb5b4a9c039f3d6d8ef4c, type: 2}
   _currentBattleManager: {fileID: 0}
   _battleManagerPrefab: {fileID: 7708501793112527945, guid: 51209fa04a478a445980530b546d4dab, type: 3}
 --- !u!1 &8637028065392131947

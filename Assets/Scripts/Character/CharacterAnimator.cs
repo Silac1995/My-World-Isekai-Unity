@@ -55,6 +55,12 @@ public class CharacterAnimator : MonoBehaviour
         _animator.SetFloat(VelocityX, 0f);
         _animator.SetBool(IsWalking, false);
     }
+
+    public void SetCombat(bool combat)
+    {
+        if (_animator != null)
+            _animator.SetBool(IsCombat, combat);
+    }
     #endregion
 
     #region Animation Events Bridge
@@ -86,6 +92,7 @@ public class CharacterAnimator : MonoBehaviour
     public static readonly int IsDoingAction = Animator.StringToHash("isDoingAction");
     public static readonly int IsWalking = Animator.StringToHash("isWalking");
     public static readonly int IsDead = Animator.StringToHash("isDead");
+    public static readonly int IsCombat = Animator.StringToHash("isCombat");
 
     private Dictionary<string, float> _clipDurations = new Dictionary<string, float>();
 

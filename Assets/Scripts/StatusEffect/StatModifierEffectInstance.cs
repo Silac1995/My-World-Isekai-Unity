@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using UnityEngine;
+
 public class StatModifierEffectInstance : StatusEffectInstance
 {
     private StatModifierEffect sourceEffect;
@@ -16,22 +18,43 @@ public class StatModifierEffectInstance : StatusEffectInstance
         this.caster = caster;
         this.target = target;
 
-        // Ici tu peux calculer dynamiquement les valeurs des modifiers selon les stats du caster
         modifiers = new List<StatsModifier>();
         foreach (var mod in sourceEffect.Modifiers)
         {
-            // Exemple basique : tu pourrais multiplier mod.Value par une stat du caster
-            float finalValue = mod.Value; // Par défaut
-            // Exemple: si mod.StatType == Strength, tu peux faire finalValue *= caster.Stats.Strength.CurrentValue; etc.
+            float finalValue = mod.Value; 
             modifiers.Add(new StatsModifier() { StatType = mod.StatType, Value = finalValue });
         }
     }
 
     public override void Apply()
     {
+        if (target == null || target.Stats == null) return;
+
+        foreach (var mod in modifiers)
+        {
+            var stat = target.Stats.GetBaseStat(mod.StatType);
+            if (stat != null)
+            {
+                stat.ApplyModifier(mod.Value);
+            }
+        }
+        
+        target.Stats.RecalculateTertiaryStats();
     }
 
     public override void Remove()
     {
+        if (target == null || target.Stats == null) return;
+
+        foreach (var mod in modifiers)
+        {
+            var stat = target.Stats.GetBaseStat(mod.StatType);
+            if (stat != null)
+            {
+                stat.RemoveModifier(mod.Value);
+            }
+        }
+        
+        target.Stats.RecalculateTertiaryStats();
     }
 }

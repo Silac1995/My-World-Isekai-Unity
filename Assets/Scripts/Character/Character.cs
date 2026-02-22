@@ -35,6 +35,7 @@ public class Character : MonoBehaviour
     [SerializeField] private CharacterNeeds _characterNeeds;
     [SerializeField] private CharacterAwareness _characterAwareness;
     [SerializeField] private CharacterSpeech _characterSpeech;
+    [SerializeField] private CharacterStatusManager _statusManager;
     #endregion
 
     #region Private Fields
@@ -80,6 +81,7 @@ public class Character : MonoBehaviour
     public CharacterNeeds CharacterNeeds => _characterNeeds;
     public CharacterAwareness CharacterAwareness => _characterAwareness;
     public CharacterSpeech CharacterSpeech => _characterSpeech;
+    public CharacterStatusManager StatusManager => _statusManager;
     public TimeManager TimeManager => _timeManager != null ? _timeManager : TimeManager.Instance;
 
     public bool IsUnconscious => _isUnconscious;
@@ -111,6 +113,8 @@ public class Character : MonoBehaviour
         LoadResources();
         if (_characterMovement == null) _characterMovement = GetComponent<CharacterMovement>();
         if (_characterSpeech == null) _characterSpeech = GetComponentInChildren<CharacterSpeech>();
+        if (_statusManager == null) _statusManager = GetComponent<CharacterStatusManager>();
+        
         _cachedNavMeshAgent = GetComponent<NavMeshAgent>();
         _isDead = false;
         _isUnconscious = false;

@@ -159,6 +159,32 @@ public class CharacterStats : MonoBehaviour
         Debug.Log("<color=green>[Stats]</color> Statistiques tertiaires recalcul??es.");
     }
 
+    public CharacterBaseStats GetBaseStat(StatType statType)
+    {
+        return statType switch
+        {
+            StatType.Health => health,
+            StatType.Mana => mana,
+            StatType.Stamina => stamina,
+            StatType.Initiative => initiative,
+            StatType.Strength => strength,
+            StatType.Endurance => endurance,
+            StatType.Agility => agility,
+            StatType.Dexterity => dexterity,
+            StatType.Intelligence => intelligence,
+            StatType.PhysicalPower => physicalPower,
+            StatType.Speed => speed,
+            StatType.Dodge => dodgeChance,
+            StatType.Accuracy => accuracy,
+            StatType.CastingSpeed => castingSpeed,
+            StatType.MagicalPower => magicalPower,
+            StatType.ManaRegen => manaRegenRate,
+            StatType.StaminaRegen => staminaRegenRate,
+            StatType.CriticalChance => criticalHitChance,
+            _ => null
+        };
+    }
+
     public float GetSecondaryStatValue(SecondaryStatType statType)
     {
         switch (statType)
