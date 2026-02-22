@@ -9,8 +9,9 @@ public class PlayerUI : MonoBehaviour
     [Header("UI Components")]
     [SerializeField] private TextMeshProUGUI playerName;
     [SerializeField] private Button _buttonEquipmentUI;
+    [SerializeField] private MWI.UI.TimeUI _timeUI;
 
-    // Le seul lien nÈcessaire pour la barre d'action
+    // Le seul lien n√©cessaire pour la barre d'action
     [SerializeField] private UI_Action_ProgressBar _actionProgressBar;
 
     [Header("UI Windows Prefabs")]
@@ -42,7 +43,13 @@ public class PlayerUI : MonoBehaviour
 
         UpdatePlayerName();
 
-        // On dÈlËgue toute la gestion de la barre au script spÈcialisÈ
+        // Lien avec le syst√®me de temps
+        if (_timeUI != null)
+        {
+            _timeUI.SetTargetCharacter(characterComponent);
+        }
+
+        // On d√©l√®gue toute la gestion de la barre au script sp√©cialis√©
         if (_actionProgressBar != null)
         {
             _actionProgressBar.InitializeCharacterActions(characterComponent.CharacterActions);
@@ -90,7 +97,7 @@ public class PlayerUI : MonoBehaviour
 
     private void CleanupEvents()
     {
-        // Plus besoin de dÈsabonner les actions ici, 
+        // Plus besoin de d√©sabonner les actions ici, 
         // c'est UI_Action_ProgressBar qui s'en occupe !
     }
 

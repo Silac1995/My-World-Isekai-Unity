@@ -1,6 +1,7 @@
 ﻿using System;
 using UnityEngine;
 using UnityEngine.AI;
+using MWI.Time;
 
 [RequireComponent(typeof(CapsuleCollider), typeof(Rigidbody))]
 public class Character : MonoBehaviour
@@ -42,6 +43,7 @@ public class Character : MonoBehaviour
     private NavMeshAgent _cachedNavMeshAgent;
     private bool _isDead;
     private bool _isUnconscious;
+    private TimeManager _timeManager;
 
     // Ressources statiques partagées
     private static GameObject _worldItemPrefab;
@@ -78,6 +80,7 @@ public class Character : MonoBehaviour
     public CharacterNeeds CharacterNeeds => _characterNeeds;
     public CharacterAwareness CharacterAwareness => _characterAwareness;
     public CharacterSpeech CharacterSpeech => _characterSpeech;
+    public TimeManager TimeManager => _timeManager != null ? _timeManager : TimeManager.Instance;
 
     public bool IsUnconscious => _isUnconscious;
     public bool IsIncapacitated => _isDead || _isUnconscious;
@@ -349,6 +352,11 @@ public class Character : MonoBehaviour
     public void EquipGear(EquipmentInstance equipment)
     {
         // TODO: Implémenter
+    }
+
+    public void SetTimeManager(TimeManager manager)
+    {
+        _timeManager = manager;
     }
 
     #region Context Menus
