@@ -49,7 +49,18 @@ public class CharacterInteraction : MonoBehaviour
     public void StartInteractionWith(Character target, Action onPositioned = null)
     {
         if (target == null || _currentTarget == target) return;
-        if (!_character.IsFree() || !target.IsFree()) return;
+        
+        // --- SÉCURITÉ : Personnages occupés ou incapacités ---
+        if (!_character.IsFree())
+        {
+            Debug.LogWarning($"<color=orange>[Interaction]</color> {_character.CharacterName} n'est pas libre pour démarrer une interaction.");
+            return;
+        }
+        if (!target.IsFree())
+        {
+            Debug.LogWarning($"<color=orange>[Interaction]</color> {target.CharacterName} n'est pas libre pour recevoir une interaction.");
+            return;
+        }
 
         CurrentTarget = target;
         IsPositioned = false; 
@@ -128,6 +139,8 @@ public class CharacterInteraction : MonoBehaviour
 
     internal void SetInteractionTargetInternal(Character target)
     {
+        if (!_character.IsFree()) return; // Fail-safe supplémentaire
+
         CurrentTarget = target;
         IsPositioned = true; // La cible est passivement prête
         

@@ -51,7 +51,10 @@ public class NPCController : CharacterGameController
 
     private void HandleCharacterDetected(Character target)
     {
-        if (_character.CharacterCombat.IsInBattle || _character.CharacterActions.CurrentAction != null) return;
+        // 1. DISPONIBILITÉ DU NPC : On n'initie rien si on est déjà occupé (combat, interaction, KO)
+        if (!_character.IsFree()) return;
+        
+        // On ne réagit qu'en mode Wander (balade)
         if (GetCurrentBehaviour<WanderBehaviour>() == null) return;
 
         if (_character.CharacterRelation == null) return;
@@ -60,19 +63,23 @@ public class NPCController : CharacterGameController
         // Si on ne se connaît pas, on s'ignore
         if (rel == null) return;
 
-        // --- 1. TEST D'AGRESSION (ENNEMIS) ---
-        if (rel.RelationValue <= -10)
+        // --- 2. LOGIQUE D'AGRESSION (ENNEMIS) ---
+        // On peut attaquer même si la cible est déjà en combat (principe de mêlée)
+        if (rel.RelationValue <= -10 && target.IsAlive())
         {
             // 20% de chance d'attaquer directement
             if (Random.value < 0.2f)
             {
                 Debug.Log($"<color=red>[Aggression]</color> {_character.CharacterName} repère son ennemi {target.CharacterName} et attaque !");
                 PushBehaviour(new AttackTargetBehaviour(target));
-                return; // On arrête là, l'attaque prime sur le social
+                return;
             }
         }
 
-        // --- 2. LOGIQUE SOCIALE ---
+        // --- 3. LOGIQUE SOCIALE ---
+        // On n'initie le social QUE si la cible est "Free" (pas en combat, pas déjà en train de parler, pas KO)
+        if (!target.IsFree()) return;
+
         float interactionChance = Mathf.Clamp(0.02f + (rel.RelationValue / 80f), 0.02f, 0.5f);
         
         // Si on est "Enemy" (<= -10) et qu'on n'a pas attaqué au-dessus, on ignore sauf si faim de social
