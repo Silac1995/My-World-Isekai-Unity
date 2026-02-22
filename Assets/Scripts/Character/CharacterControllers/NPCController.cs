@@ -58,13 +58,38 @@ public class NPCController : CharacterGameController
         if (GetCurrentBehaviour<WanderBehaviour>() == null) return;
 
         if (_character.CharacterRelation == null) return;
+        
+        // --- 1. LOGIQUE D'INCOMPATIBILITÉ (PERSONNALITÉ) ---
+        // On teste ça même si on ne se connaît pas encore (d'instinct)
+        if (_character.CharacterProfile != null && target.CharacterProfile != null)
+        {
+            if (_character.CharacterProfile.GetCompatibilityWith(target.CharacterProfile) < 0)
+            {
+                // 20% de chance d'aller insulter spontanément
+                if (Random.value < 0.2f)
+                {
+                    Debug.Log($"<color=orange>[Personality Clash]</color> {_character.CharacterName} déteste d'instinct {target.CharacterName} et va l'insulter !");
+                    
+                    if (_character.CharacterSpeech != null)
+                        _character.CharacterSpeech.Say("You! I don't like your face!");
+
+                    PushBehaviour(new MoveToTargetBehaviour(this, target.gameObject, 7f, () =>
+                    {
+                        if (target == null || !target.IsAlive()) return;
+                        _character.CharacterInteraction.StartInteractionWith(target, new InteractionInsult());
+                    }));
+                    return;
+                }
+            }
+        }
+
         var rel = _character.CharacterRelation.GetRelationshipWith(target);
 
-        // Si on ne se connaît pas, on s'ignore
+        // Si on ne se connaît pas officiellement (et pas de clash de personnalité), on s'ignore
         if (rel == null) return;
 
         // --- 2. LOGIQUE D'AGRESSION (ENNEMIS) ---
-        if (rel.RelationValue <= -10 && target.IsAlive())
+        if (target.IsAlive() && rel.RelationValue <= -10)
         {
             if (Random.value < 0.2f)
             {

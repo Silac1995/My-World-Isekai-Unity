@@ -16,6 +16,11 @@ public class InteractionInsult : ICharacterInteractionAction
         Debug.Log($"<color=red>[Insult]</color> {source.CharacterName} insulte {target.CharacterName}!");
 
         // 1. Diminution de la relation (Unilatéral : la cible apprécie moins la source)
+        if (source.CharacterRelation != null)
+        {
+            source.CharacterRelation.UpdateRelation(target, -2);
+        }
+        
         if (target.CharacterRelation != null)
         {
             target.CharacterRelation.UpdateRelation(source, -3);

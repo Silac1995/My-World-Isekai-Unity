@@ -60,7 +60,7 @@ public class NeedSocial : CharacterNeed
                 if (target == null || !target.IsAlive()) return;
 
                 // On lance l'interaction qui va maintenant gérer la séquence de dialogue automatiquement
-                npc.Character.CharacterInteraction.StartInteractionWith(target, () => 
+                npc.Character.CharacterInteraction.StartInteractionWith(target, onPositioned: () => 
                 {
                     IncreaseValue(50f); // Boost de satisfaction immédiat lors du début de l'échange
                 });
