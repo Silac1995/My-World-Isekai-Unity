@@ -21,6 +21,10 @@ public class BattleManager : MonoBehaviour
 
     private bool _isBattleEnded = false;
 
+    // --- NOUVEAU SYSTÈME : ENGAGEMENTS DE COMBAT ---
+    // Représente les différentes "escarmouches" actives (groupes de persos autour d'une cible)
+    private List<CombatEngagement> _activeEngagements = new List<CombatEngagement>();
+
     // Liste pour le debug (plus besoin de GetAllCharacters à chaque fois)
     [SerializeField] private List<Character> _allParticipants = new List<Character>();
 
@@ -315,6 +319,68 @@ public class BattleManager : MonoBehaviour
         }
         return (myTeam == _battleTeamInitiator) ? _battleTeamTarget : _battleTeamInitiator;
     }
+
+    // --- GESTION DES ENGAGEMENTS (COMBAT SLOTS) ---
+    
+    /// <summary>
+    /// Un attaquant demande un slot de combat autour de sa cible.
+    /// Le Manager cherche un engagement existant ou en crée un nouveau.
+    /// </summary>
+    public CombatEngagement RequestEngagement(Character attacker, Character target)
+    {
+        if (target == null || attacker == null) return null;
+
+        // 1. Quitter l'engagement actuel s'il y en a un
+        LeaveCurrentEngagement(attacker);
+
+        // 2. Chercher si un engagement existe déjà pour cette cible
+        CombatEngagement engagement = _activeEngagements.Find(e => 
+            e.GroupA.Members.Contains(target) || e.GroupB.Members.Contains(target)
+        );
+
+        // 3. Sinon, on crée la mêlée
+        if (engagement == null)
+        {
+            BattleTeam targetTeam = GetTeamOf(target);
+            BattleTeam attackerTeam = GetTeamOf(attacker);
+
+            if (targetTeam != null && attackerTeam != null)
+            {
+                engagement = new CombatEngagement(targetTeam, attackerTeam);
+                // On ajoute tout de suite la cible pour initialiser le groupe
+                engagement.JoinEngagement(target); 
+                _activeEngagements.Add(engagement);
+            }
+        }
+
+        // 4. On rejoint l'escarmouche pour avoir un slot
+        if (engagement != null)
+        {
+            engagement.JoinEngagement(attacker);
+        }
+
+        return engagement;
+    }
+
+    /// <summary>
+    /// Retire le personnage de toutes les formations d'attaque actives.
+    /// À appeler quand il change de cible ou meurt.
+    /// </summary>
+    public void LeaveCurrentEngagement(Character attacker)
+    {
+        foreach (var engagement in _activeEngagements)
+        {
+            engagement.LeaveEngagement(attacker);
+        }
+    }
+
+    /// <summary>
+    /// Nettoie les escarmouches terminées (ex: cible morte)
+    /// </summary>
+    private void CleanupEngagements()
+    {
+        _activeEngagements.RemoveAll(e => e.IsFinished());
+    }
     #endregion
 
     private void HandleCharacterIncapacitated(Character incapacitatedCharacter)
@@ -346,6 +412,9 @@ public class BattleManager : MonoBehaviour
 
     private void RedirectIncapacitated(Character victim)
     {
+        // On nettoie l'engagement centré sur le personnage tombé (libère les slots des attaquants)
+        CleanupEngagements();
+        
         foreach (var participant in _allParticipants)
         {
             if (participant == null || participant.IsIncapacitated) continue;
@@ -392,8 +461,11 @@ public class BattleManager : MonoBehaviour
                 character.OnIncapacitated -= HandleCharacterIncapacitated;
                 character.OnDeath -= HandleCharacterIncapacitated;
                 character.CharacterCombat.LeaveBattle();
+                LeaveCurrentEngagement(character); // Nettoie au cas où
             }
         }
+        
+        _activeEngagements.Clear();
 
         Debug.Log("<color=red>[Battle]</color> Le combat est TERMINÉ.");
         Destroy(gameObject);

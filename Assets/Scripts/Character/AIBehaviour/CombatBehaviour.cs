@@ -35,8 +35,8 @@ public class CombatBehaviour : IAIBehaviour
         
         if (target != null && battleManager != null)
         {
-            // Initialisation avec un angle déterministe
-            _currentDestination = CalculateSafeDestination(target.transform.position, Vector3.zero, 0); 
+            // Initialisation simple, la vraie destination sera demandée au manager dans Act()
+            _currentDestination = target.transform.position; 
         }
     }
 
@@ -126,6 +126,7 @@ public class CombatBehaviour : IAIBehaviour
                 if (isXTooClose)
                     _currentDestination = CalculateEscapeDestination(self.transform.position, _currentTarget.transform.position);
                 else
+                    // Quand on est PRÊT à frapper, on FONCE sur la cible, on ne reste pas dans notre slot de formation (qui est trop loin)
                     _currentDestination = _currentTarget.transform.position;
             }
             else
@@ -172,7 +173,7 @@ public class CombatBehaviour : IAIBehaviour
                 }
                 else
                 {
-                    _currentDestination = CalculateSafeDestination(_currentTarget.transform.position, self.transform.position, self.GetInstanceID());
+                    _currentDestination = CalculateSafeDestination(self.transform.position, self);
                 }
 
                 _moveInterval = Random.Range(5f, 7f); // High wait for "lazy" feel
@@ -186,7 +187,13 @@ public class CombatBehaviour : IAIBehaviour
         Vector3 finalPos = _currentDestination;
         if (_battleZone != null && !_battleZone.bounds.Contains(finalPos))
         {
+            // On trouve le point le plus proche autorisé
             finalPos = _battleZone.ClosestPoint(finalPos);
+            
+            // On repousse très légèrement (0.2m) vers le centre de la zone pour être sûr
+            // que le point soit bien accessible sur le NavMesh sans "gratter" la bordure
+            Vector3 pushBackDir = (_battleZone.bounds.center - finalPos).normalized;
+            finalPos += pushBackDir * 0.2f;
         }
         
         // Only update movement if the destination is significantly different to avoid NavMesh jitter
@@ -200,44 +207,35 @@ public class CombatBehaviour : IAIBehaviour
         self.CharacterVisual?.UpdateFlip(dirToTarget);
     }
 
-    private Vector3 CalculateSafeDestination(Vector3 targetPos, Vector3 selfPos, int selfId)
+    private Vector3 CalculateSafeDestination(Vector3 selfPos, Character self)
     {
-        // --- SYSTÈME DE SLOTS DÉTERMINISTE ET ZONE-AWARE ---
-        // On divise le cercle en 8 slots de 45°
-        int preferredSlot = Mathf.Abs(selfId) % 8;
+        if (_battleManager == null || _currentTarget == null) return _currentTarget.transform.position;
+
+        // On demande au BattleManager notre place dans l'escarmouche en cours
+        CombatEngagement engagement = _battleManager.RequestEngagement(self, _currentTarget);
         
-        if (_battleZone == null && _battleManager != null) 
-            _battleZone = _battleManager.GetComponent<BoxCollider>();
-
-        // On cherche le premier slot valide en partant du préféré
-        for (int i = 0; i < 8; i++)
+        if (engagement != null)
         {
-            // On alterne gauche/droite (0, +1, -1, +2, -2...) pour rester au plus proche du slot ID
-            int offset = (i % 2 == 0) ? (i / 2) : -(i / 2 + 1);
-            int currentSlot = (preferredSlot + offset + 8) % 8;
-            
-            float baseAngle = currentSlot * 45f * Mathf.Deg2Rad;
-            float angle = baseAngle + Random.Range(-5f, 5f) * Mathf.Deg2Rad;
-            float radius = Random.Range(PREFERRED_X_GAP, IDEAL_MAX); 
-            
-            Vector3 candidateOffset = new Vector3(Mathf.Cos(angle) * radius, 0, Mathf.Sin(angle) * radius);
-            Vector3 candidatePos = targetPos + candidateOffset;
-
-            // Si le slot est dans la zone, c'est gagné
-            if (_battleZone == null || _battleZone.bounds.Contains(candidatePos))
-            {
-                return candidatePos;
-            }
+            return engagement.GetAssignedPosition(self);
         }
 
-        // Fallback : si aucun slot n'est libre (cible très serrée), on prend le point le plus proche dans la zone
-        return _battleZone != null ? _battleZone.ClosestPoint(targetPos + (selfPos - targetPos).normalized * PREFERRED_X_GAP) : targetPos;
+        // Fallback ultime (ne devrait jamais arriver si le BattleManager fonctionne)
+        return _currentTarget.transform.position;
     }
 
     private Vector3 CalculateEscapeDestination(Vector3 selfPos, Vector3 targetPos)
     {
-        // Déterminisme sur l'axe X : on s'éloigne jusqu'au gap de confort
-        float xDir = (selfPos.x >= targetPos.x) ? 1f : -1f;
+        // Déterminisme : si parfaitement alignés, on force une séparation basée sur l'ID
+        // Sinon, on s'éloigne vers le point le plus dégagé de la cible sur l'axe X
+        float xDir;
+        if (Mathf.Abs(selfPos.x - targetPos.x) < 0.1f && _currentTarget != null) 
+        {
+            xDir = (_selfCharacter.GetInstanceID() > _currentTarget.GetInstanceID()) ? 1f : -1f;
+        }
+        else 
+        {
+            xDir = (selfPos.x > targetPos.x) ? 1f : -1f;
+        }
         
         float radius = PREFERRED_X_GAP;
         Vector3 offset = new Vector3(xDir * radius, 0, Random.Range(-1.5f, 1.5f));
