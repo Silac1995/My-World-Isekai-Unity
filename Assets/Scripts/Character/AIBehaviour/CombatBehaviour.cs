@@ -67,20 +67,40 @@ public class CombatBehaviour : IAIBehaviour
             if (_readyStartTime <= 0) _readyStartTime = Time.time;
             float timeReady = Time.time - _readyStartTime;
 
-            // --- NOUVEAU : On n'approche que si la cible ne bouge plus OU si on perd patience ---
-            bool targetIsStationary = _currentTarget.CharacterMovement != null && _currentTarget.CharacterMovement.GetVelocity().sqrMagnitude < 0.01f;
-            bool lostPatience = timeReady > 1.0f; // On fonce après 1s d'attente
+            float attackRange = self.CharacterCombat.CurrentCombatStyleExpertise?.Style?.AttackRange ?? 3.5f;
+            float zDist = Mathf.Abs(self.transform.position.z - _currentTarget.transform.position.z);
 
-            if (targetIsStationary || lostPatience)
+            // --- NOUVEAU : DÉTECTION D'AGRESSION MUTUELLE ---
+            // Si la cible nous cible aussi avec un CombatBehaviour, on considère l'agression comme mutuelle
+            bool targetIsAggressiveTowardsUs = false;
+            var targetCombatBehaviour = _currentTarget.Controller.GetCurrentBehaviour<CombatBehaviour>();
+            if (targetCombatBehaviour != null && targetCombatBehaviour.Target == self)
             {
-                // On fonce sur la cible
-                _currentDestination = _currentTarget.transform.position;
+                targetIsAggressiveTowardsUs = true;
+            }
+
+            // --- NOUVEAU : On n'approche que si la cible ne bouge plus OU si on perd patience OU si agression mutuelle ---
+            bool targetIsStationary = _currentTarget.CharacterMovement != null && _currentTarget.CharacterMovement.GetVelocity().sqrMagnitude < 0.01f;
+            bool shouldStrikeFast = targetIsAggressiveTowardsUs || timeReady > 1.0f;
+
+            if (targetIsStationary || shouldStrikeFast)
+            {
+                // On vise la cible mais on s'arrête un peu avant (90% de la range) pour éviter de se chevaucher
+                float stopThreshold = attackRange * 0.9f;
                 
-                float attackRange = self.CharacterCombat.CurrentCombatStyleExpertise?.Style?.AttackRange ?? 3.5f;
-                float zDist = Mathf.Abs(self.transform.position.z - _currentTarget.transform.position.z);
+                if (distToTarget > stopThreshold)
+                {
+                    _currentDestination = _currentTarget.transform.position;
+                }
+                else
+                {
+                    movement.Stop(); // On est à portée, on arrête de "pousser"
+                }
                 
-                // On ne frappe que si on est à portée (3D), aligné en Z (max 1.5f) ET (cible immobile OU grosse perte de patience)
-                if (distToTarget <= attackRange && zDist <= 1.5f && (targetIsStationary || timeReady > 2.0f))
+                // On ne frappe que si on est à portée (3D), aligné en Z (max 1.5f) ET (cible immobile OU grosse perte de patience OU agression mutuelle)
+                bool patienceThresholdMet = timeReady > 2.0f || targetIsAggressiveTowardsUs;
+
+                if (distToTarget <= attackRange && zDist <= 1.5f && (targetIsStationary || patienceThresholdMet))
                 {
                     // On s'arrête et on tape
                     movement.Stop();
