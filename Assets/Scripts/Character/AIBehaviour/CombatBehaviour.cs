@@ -22,7 +22,9 @@ public class CombatBehaviour : IAIBehaviour
 
     public Character Target => _currentTarget;
     public bool IsFinished => _isFinished;
-    public bool HasTarget => _currentTarget != null && _currentTarget.IsAlive();
+    public bool HasTarget => _currentTarget != null && _currentTarget.IsAlive() && (_battleManager == null || _battleManager.AreOpponents(_selfCharacter, _currentTarget));
+
+    private Character _selfCharacter; // Cache pour HasTarget
 
     public CombatBehaviour(BattleManager battleManager, Character target)
     {
@@ -47,6 +49,7 @@ public class CombatBehaviour : IAIBehaviour
 
     public void Act(Character self)
     {
+        _selfCharacter = self; // Update cache
         if (_battleManager == null || _isFinished) return;
 
         var movement = self.CharacterMovement;
@@ -70,8 +73,20 @@ public class CombatBehaviour : IAIBehaviour
 
         if (!HasTarget)
         {
-            movement.Stop();
-            return;
+            // Tentative de re-acquisition automatique si la cible est devenue invalide (allié ou morte)
+            BattleTeam enemyTeam = _battleManager.GetOpponentTeamOf(self);
+            Character nextTarget = enemyTeam?.GetClosestMember(self.transform.position);
+
+            if (nextTarget != null)
+            {
+                SetCurrentTarget(nextTarget);
+                Debug.Log($"<color=yellow>[AI]</color> {self.CharacterName} a change de cible pour {nextTarget.CharacterName} (cible precedente invalide).");
+            }
+            else
+            {
+                movement.Stop();
+                return;
+            }
         }
 
         movement.Resume();

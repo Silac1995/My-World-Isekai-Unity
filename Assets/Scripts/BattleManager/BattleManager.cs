@@ -141,15 +141,73 @@ public class BattleManager : MonoBehaviour
 
                     // Décalage d'un demi-diamètre pour sortir de la zone de collision
                     float shiftAmount = _baseBattleZoneSize.x * 0.5f;
-                    transform.position += pushDir * shiftAmount;
-                    
-                    Debug.Log($"<color=cyan>[Battle]</color> Superposition detectee ! Decalage de la zone vers {transform.position}");
+                    Vector3 targetPos = transform.position + pushDir * shiftAmount;
+
+                    // --- NOUVEAU : VALIDATION NAVMESH ---
+                    // On ne décale QUE si la destination est majoritairement sur le NavMesh
+                    if (IsZoneValidOnNavMesh(targetPos))
+                    {
+                        transform.position = targetPos;
+                        Debug.Log($"<color=cyan>[Battle]</color> Superposition detectee ! Decalage vers zone navigable : {transform.position}");
+                    }
+                    else
+                    {
+                        // Si le décalage nous sort du NavMesh, on tente une direction perpendiculaire
+                        Vector3 altDir = Quaternion.Euler(0, 90, 0) * pushDir;
+                        Vector3 altPos = transform.position + altDir * shiftAmount;
+
+                        if (IsZoneValidOnNavMesh(altPos))
+                        {
+                            transform.position = altPos;
+                            Debug.Log($"<color=cyan>[Battle]</color> Superposition detectee ! Sortie NavMesh evitee, decalage lateral : {transform.position}");
+                        }
+                        else
+                        {
+                            Debug.LogWarning($"<color=red>[Battle]</color> Impossible d'eviter la superposition sans sortir du NavMesh. On s'arrete ici.");
+                            return;
+                        }
+                    }
                     break; // On re-check à la prochaine itération de la boucle for
                 }
             }
 
             if (!foundOverlap) break;
         }
+
+        // SECURITE FINALE : Si la zone finale est toujours hors NavMesh (cas du spawn initial), on la ramène
+        if (!IsZoneValidOnNavMesh(transform.position))
+        {
+            if (NavMesh.SamplePosition(transform.position, out NavMeshHit hit, 10f, NavMesh.AllAreas))
+            {
+                transform.position = hit.position;
+            }
+        }
+    }
+
+    private bool IsZoneValidOnNavMesh(Vector3 position)
+    {
+        // On vérifie une grille de 9 points (3x3) dans la zone pour s'assurer que 50% sont sur le NavMesh
+        int pointsOnNavMesh = 0;
+        int totalPoints = 9;
+        
+        float halfX = _baseBattleZoneSize.x * 0.5f;
+        float halfZ = _baseBattleZoneSize.z * 0.5f;
+
+        for (int x = -1; x <= 1; x++)
+        {
+            for (int z = -1; z <= 1; z++)
+            {
+                // On échantillonne un peu en retrait des bords (80%) pour éviter les faux négatifs sur les bordures
+                Vector3 samplePoint = position + new Vector3(x * halfX * 0.8f, 0, z * halfZ * 0.8f);
+                if (NavMesh.SamplePosition(samplePoint, out NavMeshHit hit, 2.0f, NavMesh.AllAreas))
+                {
+                    pointsOnNavMesh++;
+                }
+            }
+        }
+
+        // On exige au moins 5 points sur 9 (55%) pour valider la zone
+        return pointsOnNavMesh >= 5;
     }
 
     private void RegisterParticipants()
@@ -250,8 +308,12 @@ public class BattleManager : MonoBehaviour
     public BattleTeam GetOpponentTeamOf(Character character)
     {
         BattleTeam myTeam = GetTeamOf(character);
-        if (myTeam == null) return null;
-        return _teams.FirstOrDefault(t => t != myTeam);
+        if (myTeam == null) 
+        {
+            Debug.LogWarning($"<color=red>[Battle]</color> {character.CharacterName} n'est dans aucune équipe ! Impossible de trouver son opposant.");
+            return null;
+        }
+        return (myTeam == _battleTeamInitiator) ? _battleTeamTarget : _battleTeamInitiator;
     }
     #endregion
 
@@ -283,29 +345,28 @@ public class BattleManager : MonoBehaviour
             {
                 if (!combatBehaviour.HasTarget || combatBehaviour.Target == victim)
                 {
-                    BattleTeam enemyTeam = GetEnemyTeamOf(participant);
+                    BattleTeam enemyTeam = GetOpponentTeamOf(participant);
                     Character nextTarget = enemyTeam?.GetClosestMember(participant.transform.position);
 
-                    combatBehaviour.SetCurrentTarget(nextTarget);
-
-                    Debug.Log($"<color=yellow>[Battle]</color> {participant.CharacterName} a perdu sa cible ({victim.CharacterName}) et se tourne vers {nextTarget?.CharacterName}");
+                    if (nextTarget != null)
+                    {
+                        combatBehaviour.SetCurrentTarget(nextTarget);
+                        Debug.Log($"<color=yellow>[Battle]</color> {participant.CharacterName} a perdu sa cible ({victim.CharacterName}) et se tourne vers {nextTarget.CharacterName}");
+                    }
                 }
             }
         }
     }
 
-    // Petite méthode utilitaire pour trouver l'équipe adverse
-    private BattleTeam GetEnemyTeamOf(Character c)
-    {
-        BattleTeam myTeam = GetTeamOf(c);
-        if (myTeam == null) return _battleTeamTarget; // Fallback par défaut
-        return (myTeam == _battleTeamInitiator) ? _battleTeamTarget : _battleTeamInitiator;
-    }
 
     public bool AreOpponents(Character a, Character b)
     {
-        BattleTeam teamA = _teams.FirstOrDefault(t => t.IsAlly(a));
-        return teamA != null && teamA.IsOpponent(b, this);
+        if (a == null || b == null || a == b) return false;
+        
+        BattleTeam teamA = GetTeamOf(a);
+        BattleTeam teamB = GetTeamOf(b);
+
+        return teamA != null && teamB != null && teamA != teamB;
     }
 
     public void EndBattle()
