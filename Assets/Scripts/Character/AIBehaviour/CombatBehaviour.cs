@@ -202,17 +202,36 @@ public class CombatBehaviour : IAIBehaviour
 
     private Vector3 CalculateSafeDestination(Vector3 targetPos, Vector3 selfPos, int selfId)
     {
-        // --- SYSTÈME DE SLOTS DÉTERMINISTE ---
+        // --- SYSTÈME DE SLOTS DÉTERMINISTE ET ZONE-AWARE ---
         // On divise le cercle en 8 slots de 45°
-        int slotIndex = Mathf.Abs(selfId) % 8;
-        float baseAngle = slotIndex * 45f * Mathf.Deg2Rad;
+        int preferredSlot = Mathf.Abs(selfId) % 8;
         
-        // On ajoute un tout petit offset aléatoire pour ne pas avoir un cercle parfait non plus
-        float angle = baseAngle + Random.Range(-5f, 5f) * Mathf.Deg2Rad;
+        if (_battleZone == null && _battleManager != null) 
+            _battleZone = _battleManager.GetComponent<BoxCollider>();
 
-        float radius = Random.Range(PREFERRED_X_GAP, IDEAL_MAX); 
-        Vector3 offset = new Vector3(Mathf.Cos(angle) * radius, 0, Mathf.Sin(angle) * radius);
-        return targetPos + offset;
+        // On cherche le premier slot valide en partant du préféré
+        for (int i = 0; i < 8; i++)
+        {
+            // On alterne gauche/droite (0, +1, -1, +2, -2...) pour rester au plus proche du slot ID
+            int offset = (i % 2 == 0) ? (i / 2) : -(i / 2 + 1);
+            int currentSlot = (preferredSlot + offset + 8) % 8;
+            
+            float baseAngle = currentSlot * 45f * Mathf.Deg2Rad;
+            float angle = baseAngle + Random.Range(-5f, 5f) * Mathf.Deg2Rad;
+            float radius = Random.Range(PREFERRED_X_GAP, IDEAL_MAX); 
+            
+            Vector3 candidateOffset = new Vector3(Mathf.Cos(angle) * radius, 0, Mathf.Sin(angle) * radius);
+            Vector3 candidatePos = targetPos + candidateOffset;
+
+            // Si le slot est dans la zone, c'est gagné
+            if (_battleZone == null || _battleZone.bounds.Contains(candidatePos))
+            {
+                return candidatePos;
+            }
+        }
+
+        // Fallback : si aucun slot n'est libre (cible très serrée), on prend le point le plus proche dans la zone
+        return _battleZone != null ? _battleZone.ClosestPoint(targetPos + (selfPos - targetPos).normalized * PREFERRED_X_GAP) : targetPos;
     }
 
     private Vector3 CalculateEscapeDestination(Vector3 selfPos, Vector3 targetPos)
