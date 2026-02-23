@@ -105,7 +105,51 @@ public class BattleManager : MonoBehaviour
         Vector3 center = (a.transform.position + b.transform.position) / 2f;
         transform.position = new Vector3(center.x, a.transform.position.y, center.z);
 
+        // --- NOUVEAU : RÉSOLUTION DES SUPERPOSITIONS ---
+        ResolveZoneOverlap();
+
         _battleZone = box;
+    }
+
+    private void ResolveZoneOverlap()
+    {
+        int maxAttempts = 5;
+        // On utilise la taille de base pour la détection initiale
+        Vector3 halfExtents = _baseBattleZoneSize / 2f;
+
+        for (int i = 0; i < maxAttempts; i++)
+        {
+            // On cherche d'autres zones de combat (le tag "BattleZone" est crucial ici)
+            Collider[] overlaps = Physics.OverlapBox(transform.position, halfExtents, Quaternion.identity);
+            bool foundOverlap = false;
+
+            foreach (var other in overlaps)
+            {
+                // On s'ignore soi-même et on ne cible que les autres BattleZones
+                if (other.gameObject != gameObject && other.CompareTag("BattleZone"))
+                {
+                    foundOverlap = true;
+                    
+                    // Calcul d'une direction de répulsion (de l'autre vers nous)
+                    Vector3 pushDir = (transform.position - other.transform.position);
+                    pushDir.y = 0; // On ne décale que sur le plan horizontal
+                    
+                    if (pushDir.sqrMagnitude < 0.01f) 
+                        pushDir = Vector3.right; // Fallback si positions identiques
+                    else
+                        pushDir.Normalize();
+
+                    // Décalage d'un demi-diamètre pour sortir de la zone de collision
+                    float shiftAmount = _baseBattleZoneSize.x * 0.5f;
+                    transform.position += pushDir * shiftAmount;
+                    
+                    Debug.Log($"<color=cyan>[Battle]</color> Superposition detectee ! Decalage de la zone vers {transform.position}");
+                    break; // On re-check à la prochaine itération de la boucle for
+                }
+            }
+
+            if (!foundOverlap) break;
+        }
     }
 
     private void RegisterParticipants()
