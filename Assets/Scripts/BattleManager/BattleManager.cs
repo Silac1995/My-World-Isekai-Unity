@@ -96,6 +96,7 @@ public class BattleManager : MonoBehaviour
 
         // On utilise un BoxCollider pour les limites
         BoxCollider box = gameObject.AddComponent<BoxCollider>();
+        gameObject.tag = "BattleZone";
         
         box.isTrigger = true;
         // On fixe la hauteur à 20f pour la zone de détection

@@ -12,7 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 89827eb299bf24c48833f34d99f864b9, type: 3}
   m_Name: Grumpy
   m_EditorClassIdentifier: Assembly-CSharp::CharacterPersonalitySO
-  PersonalityName: 
+  PersonalityName: Grumpy
   Description: 
-  CompatiblePersonalities: []
+  CompatiblePersonalities:
+  - {fileID: 11400000}
   IncompatiblePersonalities: []

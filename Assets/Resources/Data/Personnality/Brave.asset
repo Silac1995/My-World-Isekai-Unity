@@ -12,10 +12,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 89827eb299bf24c48833f34d99f864b9, type: 3}
   m_Name: Brave
   m_EditorClassIdentifier: Assembly-CSharp::CharacterPersonalitySO
-  PersonalityName: 
+  PersonalityName: Brave
   Description: 
   CompatiblePersonalities:
   - {fileID: 11400000, guid: 4f061347ef2f4fa45a6d2bbe8a3ebab9, type: 2}
+  - {fileID: 11400000}
   IncompatiblePersonalities:
   - {fileID: 11400000, guid: e82722940181ed748b206a2c2f022814, type: 2}
   - {fileID: 11400000, guid: 398b980ae15674b46b7325a1ae2a6d55, type: 2}

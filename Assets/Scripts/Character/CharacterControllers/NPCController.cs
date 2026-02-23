@@ -59,7 +59,40 @@ public class NPCController : CharacterGameController
 
         if (_character.CharacterRelation == null) return;
         
-        // --- 1. LOGIQUE D'INCOMPATIBILITÉ (PERSONNALITÉ) ---
+        // --- 1. LOGIQUE D'ENTRAIDE (AMIS EN COMBAT) ---
+        // Priorité : Si c'est un ami en combat, on l'aide peu importe le reste
+        if (target.CharacterCombat.IsInBattle && target.IsAlive())
+        {
+            if (_character.CharacterRelation != null && _character.CharacterRelation.IsFriend(target))
+            {
+                Debug.Log($"<color=green>[Assistance]</color> {_character.CharacterName} voit son ami {target.CharacterName} en combat et fonce l'aider !");
+                
+                if (_character.CharacterSpeech != null)
+                    _character.CharacterSpeech.Say("Hang on, my friend! I'm coming!");
+
+                _character.CharacterCombat.JoinBattleAsAlly(target);
+                return;
+            }
+        }
+
+        var rel = _character.CharacterRelation.GetRelationshipWith(target);
+
+        // --- 2. LOGIQUE D'AGRESSION (ENNEMIS) ---
+        // On attaque nos ennemis même s'ils sont en train de papoter !
+        if (rel != null && target.IsAlive() && rel.RelationValue <= -10)
+        {
+            if (Random.value < 0.2f)
+            {
+                Debug.Log($"<color=red>[Aggression]</color> {_character.CharacterName} repère son ennemi {target.CharacterName} et attaque !");
+                PushBehaviour(new AttackTargetBehaviour(target));
+                return;
+            }
+        }
+
+        // --- 3. SÉCURITÉ SOCIALE : Si la cible n'est pas libre (combat, busy), on s'arrête ici pour le social ---
+        if (!target.IsFree()) return;
+        
+        // --- 4. LOGIQUE D'INCOMPATIBILITÉ (PERSONNALITÉ) ---
         // On teste ça même si on ne se connaît pas encore (d'instinct)
         if (_character.CharacterProfile != null && target.CharacterProfile != null)
         {
@@ -83,40 +116,10 @@ public class NPCController : CharacterGameController
             }
         }
 
-        // --- 1b. LOGIQUE D'ENTRAIDE (AMIS EN COMBAT) ---
-        if (target.CharacterCombat.IsInBattle && target.IsAlive())
-        {
-            if (_character.CharacterRelation != null && _character.CharacterRelation.IsFriend(target))
-            {
-                Debug.Log($"<color=green>[Assistance]</color> {_character.CharacterName} voit son ami {target.CharacterName} en combat et fonce l'aider !");
-                
-                if (_character.CharacterSpeech != null)
-                    _character.CharacterSpeech.Say("Hang on, my friend! I'm coming!");
-
-                _character.CharacterCombat.JoinBattleAsAlly(target);
-                return;
-            }
-        }
-
-        var rel = _character.CharacterRelation.GetRelationshipWith(target);
-
         // Si on ne se connaît pas officiellement (et pas de clash de personnalité), on s'ignore
         if (rel == null) return;
 
-        // --- 2. LOGIQUE D'AGRESSION (ENNEMIS) ---
-        if (target.IsAlive() && rel.RelationValue <= -10)
-        {
-            if (Random.value < 0.2f)
-            {
-                Debug.Log($"<color=red>[Aggression]</color> {_character.CharacterName} repère son ennemi {target.CharacterName} et attaque !");
-                PushBehaviour(new AttackTargetBehaviour(target));
-                return;
-            }
-        }
-
-        // --- 3. LOGIQUE SOCIALE ---
-        if (!target.IsFree()) return;
-
+        // --- 5. LOGIQUE SOCIALE ---
         // UTILISATION DE LA LOGIQUE CENTRALISÉE
         float interactionChance = rel.GetInteractionChance();
 
@@ -169,5 +172,43 @@ public class NPCController : CharacterGameController
             return new InteractionTalk();
         else
             return new InteractionInsult();
+    }
+
+    private void OnTriggerEnter(Collider other)
+    {
+        if (other.CompareTag("BattleZone"))
+        {
+            if (other.TryGetComponent<BattleManager>(out var manager))
+            {
+                HandleBattleZoneEntry(manager);
+            }
+        }
+    }
+
+    private void HandleBattleZoneEntry(BattleManager manager)
+    {
+        // 1. Si on est déjà en combat, on est concerné
+        if (_character.CharacterCombat.IsInBattle) return;
+
+        // 2. Chercher un ami dans cette bataille
+        foreach (var team in manager.BattleTeams)
+        {
+            foreach (var participant in team.CharacterList)
+            {
+                if (_character.CharacterRelation != null && _character.CharacterRelation.IsFriend(participant))
+                {
+                    Debug.Log($"<color=green>[Battle Sensor]</color> {_character.CharacterName} voit son ami {participant.CharacterName} dans la bataille et le rejoint !");
+                    _character.CharacterCombat.JoinBattleAsAlly(participant);
+                    return;
+                }
+            }
+        }
+
+        // 3. Sinon, on n'est pas concerné -> On dégage
+        if (!HasBehaviour<MoveOutOfBattleZoneBehaviour>())
+        {
+            Debug.Log($"<color=white>[Battle Sensor]</color> {_character.CharacterName} n'a rien à faire ici, il s'éloigne.");
+            PushBehaviour(new MoveOutOfBattleZoneBehaviour(manager));
+        }
     }
 }

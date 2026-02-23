@@ -6,6 +6,7 @@ TagManager:
   tags:
   - Character Sprite
   - Character
+  - BattleZone
   layers:
   - Default
   - TransparentFX
