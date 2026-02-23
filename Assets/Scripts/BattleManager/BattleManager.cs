@@ -177,7 +177,7 @@ public class BattleManager : MonoBehaviour
         // SECURITE FINALE : Si la zone finale est toujours hors NavMesh (cas du spawn initial), on la ramène
         if (!IsZoneValidOnNavMesh(transform.position))
         {
-            if (NavMesh.SamplePosition(transform.position, out NavMeshHit hit, 10f, NavMesh.AllAreas))
+            if (UnityEngine.AI.NavMesh.SamplePosition(transform.position, out UnityEngine.AI.NavMeshHit hit, 10f, UnityEngine.AI.NavMesh.AllAreas))
             {
                 transform.position = hit.position;
             }
@@ -199,7 +199,7 @@ public class BattleManager : MonoBehaviour
             {
                 // On échantillonne un peu en retrait des bords (80%) pour éviter les faux négatifs sur les bordures
                 Vector3 samplePoint = position + new Vector3(x * halfX * 0.8f, 0, z * halfZ * 0.8f);
-                if (NavMesh.SamplePosition(samplePoint, out NavMeshHit hit, 2.0f, NavMesh.AllAreas))
+                if (UnityEngine.AI.NavMesh.SamplePosition(samplePoint, out UnityEngine.AI.NavMeshHit hit, 2.0f, UnityEngine.AI.NavMesh.AllAreas))
                 {
                     pointsOnNavMesh++;
                 }
@@ -237,7 +237,7 @@ public class BattleManager : MonoBehaviour
 
             if (!character.IsPlayer())
             {
-                BattleTeam opponentTeam = GetEnemyTeamOf(character);
+                BattleTeam opponentTeam = GetOpponentTeamOf(character);
                 Character closestEnemy = opponentTeam?.GetClosestMember(character.transform.position);
                 if (closestEnemy != null)
                     character.Controller.PushBehaviour(new CombatBehaviour(this, closestEnemy));
@@ -321,10 +321,21 @@ public class BattleManager : MonoBehaviour
     {
         if (_isBattleEnded) return;
 
+        // --- NOUVEAU : DIAGNOSTIC DE FIN DE COMBAT ---
+        int initiatorAlive = _battleTeamInitiator.CharacterList.Count(c => c != null && c.IsAlive());
+        int targetAlive = _battleTeamTarget.CharacterList.Count(c => c != null && c.IsAlive());
+        
+        string initiatorNames = string.Join(", ", _battleTeamInitiator.CharacterList.Where(c => c != null && c.IsAlive()).Select(c => c.CharacterName));
+        string targetNames = string.Join(", ", _battleTeamTarget.CharacterList.Where(c => c != null && c.IsAlive()).Select(c => c.CharacterName));
+
+        Debug.Log($"<color=white>[Battle Check]</color> {incapacitatedCharacter.CharacterName} tombe. " +
+                  $"Team Initiateur : {initiatorAlive}/{_battleTeamInitiator.CharacterList.Count} ({initiatorNames}) | " +
+                  $"Team Cible : {targetAlive}/{_battleTeamTarget.CharacterList.Count} ({targetNames})");
+
         // 1. Vérifier si le combat est terminé (UNE des deux équipes principales est éliminée)
-        // IsTeamEliminated() utilise IsAlive(), qui renvoie désormais false si unconscious ou dead.
         if (_battleTeamInitiator.IsTeamEliminated() || _battleTeamTarget.IsTeamEliminated())
         {
+            Debug.Log($"<color=red>[Battle]</color> Elimination detectee. Fin du combat.");
             EndBattle();
             return;
         }

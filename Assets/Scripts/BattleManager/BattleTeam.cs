@@ -1,9 +1,10 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
 
+[System.Serializable]
 public class BattleTeam
 {
-    private List<Character> _charactersList = new List<Character>();
+    [UnityEngine.SerializeField] private List<Character> _charactersList = new List<Character>();
     public List<Character> CharacterList => _charactersList;
 
     public void AddCharacter(Character character)

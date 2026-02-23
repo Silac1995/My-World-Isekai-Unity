@@ -15,10 +15,10 @@ public class CombatBehaviour : IAIBehaviour
     private float _readyStartTime;
     
     // Safety & Stability
-    private const float MIN_DISTANCE = 3f;      // Danger: Too close
-    private const float MAX_DISTANCE = 12f;     // Danger: Too far
-    private const float IDEAL_MIN = 4f;         // Buffer zone start
-    private const float IDEAL_MAX = 8f;        // Buffer zone end
+    private const float PREFERRED_X_GAP = 4.0f;  
+    private const float X_FLIP_SAFETY = 1.5f;    
+    private const float IDEAL_MAX = 8.0f;        
+    private const float MAX_DISTANCE = 12.0f;    
 
     public Character Target => _currentTarget;
     public bool IsFinished => _isFinished;
@@ -118,15 +118,14 @@ public class CombatBehaviour : IAIBehaviour
             if (targetIsStationary || shouldStrikeFast)
             {
                 // On vise la cible mais on s'arrête un peu avant (90% de la range) pour éviter de se chevaucher
-                // ET on respecte un écart X minimum de 2.0 pour que les hitboxes directionnelles portent bien.
+                // ET on respecte un écart X minimum pour que les hitboxes ne se chevauchent pas trop.
                 float stopThreshold = attackRange * 0.9f;
                 bool isWithinRange = distToTarget <= stopThreshold;
-                bool isXTooClose = dx < 2.0f;
+                bool isXTooClose = dx < X_FLIP_SAFETY; // Seul le risque de flip provoque une répulsion immédiate
 
                 if (!isWithinRange || isXTooClose)
                 {
-                    // Si on est trop loin OU trop proche sur l'axe X (chevauchement), on recalcule une position
-                    // On utilise CalculateEscapeDestination pour la répulsion si on est trop proche sur X
+                    // Si on est trop loin OU vraiment trop proche sur X, on recalcule
                     if (isXTooClose)
                     {
                         _currentDestination = CalculateEscapeDestination(self.transform.position, _currentTarget.transform.position);
@@ -141,11 +140,11 @@ public class CombatBehaviour : IAIBehaviour
                     movement.Stop(); // On est à portée et bien positionné sur X
                 }
                 
-                // On ne frappe que si on est à portée (3D), aligné en Z (max 1.5f), avec un écart X minimal (2.0f)
-                // ET (cible immobile OU grosse perte de patience OU agression mutuelle)
+                // On ne frappe que si on est à portée (3D) et aligné en Z.
+                // L'écart X de PREFERRED_X_GAP (4.0) est un objectif de placement, pas un pré-requis strict pour frapper.
                 bool patienceThresholdMet = timeReady > 2.0f || targetIsAggressiveTowardsUs;
 
-                if (distToTarget <= attackRange && dx >= 2.0f && zDist <= 1.5f && (targetIsStationary || patienceThresholdMet))
+                if (distToTarget <= attackRange && zDist <= 1.5f && (targetIsStationary || patienceThresholdMet))
                 {
                     // On s'arrête et on tape
                     movement.Stop();
@@ -163,7 +162,7 @@ public class CombatBehaviour : IAIBehaviour
         {
             _readyStartTime = 0; // On n'est plus prêt, on reset le timer
             // --- LOGIQUE DE DÉPLACEMENT "LAZY" (EXISTANTE) ---
-            bool tooClose = distToTarget < MIN_DISTANCE;
+            bool tooClose = distToTarget < PREFERRED_X_GAP * 0.75f;
             bool tooFar = distToTarget > MAX_DISTANCE;
             bool timerExpired = Time.time - _lastMoveTime > _moveInterval;
 
@@ -209,21 +208,23 @@ public class CombatBehaviour : IAIBehaviour
 
     private Vector3 CalculateSafeDestination(Vector3 targetPos, Vector3 selfPos)
     {
-        // Try to stay in the middle of current angle or pick new one
-        float angle = Random.Range(0f, Mathf.PI * 2f);
-        float radius = Random.Range(IDEAL_MIN, IDEAL_MAX); 
+        // On essaie de garder une distance X de confort (PREFERRED_X_GAP)
+        float angle = Random.Range(30f, 60f) * Mathf.Deg2Rad; // Angle diagonal pour forcer un décalage X
+        if (Random.value > 0.5f) angle = -angle;
+        if (selfPos.x < targetPos.x) angle = Mathf.PI - angle;
+
+        float radius = Random.Range(PREFERRED_X_GAP, IDEAL_MAX); 
         Vector3 offset = new Vector3(Mathf.Cos(angle) * radius, 0, Mathf.Sin(angle) * radius);
         return targetPos + offset;
     }
 
     private Vector3 CalculateEscapeDestination(Vector3 selfPos, Vector3 targetPos)
     {
-        // Déterminisme sur l'axe X : si la cible est à droite, on va à gauche (et inversement)
+        // Déterminisme sur l'axe X : on s'éloigne jusqu'au gap de confort
         float xDir = (selfPos.x >= targetPos.x) ? 1f : -1f;
         
-        // On s'éloigne principalement sur X, avec un petit décalage aléatoire sur Z pour le "feeling"
-        float radius = Random.Range(IDEAL_MIN, IDEAL_MIN + 1f);
-        Vector3 offset = new Vector3(xDir * radius, 0, Random.Range(-1f, 1f));
+        float radius = PREFERRED_X_GAP;
+        Vector3 offset = new Vector3(xDir * radius, 0, Random.Range(-1.5f, 1.5f));
         
         return targetPos + offset;
     }
