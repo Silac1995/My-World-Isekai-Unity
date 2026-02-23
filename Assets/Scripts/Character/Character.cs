@@ -46,6 +46,7 @@ public class Character : MonoBehaviour
     private bool _isDead;
     private bool _isUnconscious;
     private TimeManager _timeManager;
+    private CharacterParty _currentParty;
 
     // Ressources statiques partagées
     private static GameObject _worldItemPrefab;
@@ -78,6 +79,7 @@ public class Character : MonoBehaviour
     public CharacterInteraction CharacterInteraction => _characterInteraction ?? throw new NullReferenceException($"CharacterInteraction non initialisé sur {gameObject.name}");
     public CharacterEquipment CharacterEquipment => _equipment;
     public CharacterRelation CharacterRelation => _characterRelation;
+    public CharacterParty CurrentParty => _currentParty;
     public CharacterInteractable CharacterInteractable => _characterInteractable;
     public CharacterCombat CharacterCombat => _characterCombat;
     public CharacterNeeds CharacterNeeds => _characterNeeds;
@@ -187,7 +189,51 @@ public class Character : MonoBehaviour
     public bool IsPlayer() => _controller is PlayerController;
     public bool IsFree() => IsAlive() && !CharacterCombat.IsInBattle && !_characterInteraction.IsInteracting;
 
+    #region Party Logic
+    public bool IsInParty() => _currentParty != null;
+
+    public bool IsPartyLeader()
+    {
+        return IsInParty() && _currentParty.IsLeader(this);
+    }
+
+    public void CreateParty(string partyName)
+    {
+        if (_currentParty != null)
+        {
+            _currentParty.RemoveMember(this);
+        }
+        _currentParty = new CharacterParty(partyName, this);
+    }
+
+    public void SetParty(CharacterParty party)
+    {
+        _currentParty = party;
+    }
+
+    public void Invite(Character target)
+    {
+        if (target == null || target == this) return;
+        
+        if (_currentParty == null)
+        {
+            CreateParty($"{_characterName}'s Group");
+        }
+
+        if (IsPartyLeader())
+        {
+            // Pour l'instant on l'ajoute directement (intégration avec les interactions à venir)
+            _currentParty.AddMember(target);
+        }
+    }
+    #endregion
+
     public virtual void SetUnconscious(bool unconscious)
+    {
+        HandleUnconsciousStatus(unconscious);
+    }
+
+    private void HandleUnconsciousStatus(bool unconscious)
     {
         if (_isDead || _isUnconscious == unconscious) return;
 
