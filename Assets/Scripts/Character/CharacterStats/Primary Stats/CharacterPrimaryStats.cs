@@ -38,6 +38,16 @@ public abstract class CharacterPrimaryStats : CharacterBaseStats
     }
 
     /// <summary>
+    /// Met à jour le multiplicateur et l'offset, utilisés pour modifier les bases raciales de ce personnage.
+    /// </summary>
+    public void UpdateScaling(float multiplier, float baseOffset)
+    {
+        _multiplier = multiplier;
+        _baseOffset = baseOffset;
+        UpdateFromLinkedStat();
+    }
+
+    /// <summary>
     /// Recalcule la valeur maximale (BaseValue) de cette stat primaire en fonction de la stat secondaire liée et du multiplicateur.
     /// La préservation du pourcentage est désormais gérée globalement par `RecalculateCurrentValue`.
     /// </summary>
@@ -47,6 +57,11 @@ public abstract class CharacterPrimaryStats : CharacterBaseStats
         {
             float newMax = _baseOffset + (_linkedStat.CurrentValue * _multiplier);
             base.SetBaseValue(Mathf.Max(newMax, 0f));
+        }
+        else
+        {
+            // Even without a linked stat, we must update the base value using the offset
+            base.SetBaseValue(Mathf.Max(_baseOffset, 0f));
         }
     }
 

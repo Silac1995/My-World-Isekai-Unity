@@ -159,7 +159,9 @@ public class Character : MonoBehaviour
     public void InitializeRace(RaceSO raceData)
     {
         _race = raceData ?? throw new ArgumentNullException(nameof(raceData));
-        Stats.MoveSpeed.IncreaseBaseValue(_race.bonusSpeed);
+        
+        // Applique dynamiquement toutes les stats (bases, offsets, multiplicateurs) depuis la race
+        _stats.ApplyRaceStats(_race);
 
         if (_controller != null) _controller.Initialize();
     }

@@ -18,12 +18,6 @@ public class CharacterStats : MonoBehaviour
     [SerializeField] private CharacterInitiative initiative;
 
     [Space(10)]
-    [Header("Primary Stat Multipliers")]
-    [SerializeField] private float healthMultiplier = 10f;
-    [SerializeField] private float staminaMultiplier = 10f;
-    [SerializeField] private float manaMultiplier = 10f;
-
-    [Space(10)]
     [Header("Secondary Stats")]
     [SerializeField] private CharacterStrength strength;
     [SerializeField] private CharacterAgility agility;
@@ -43,22 +37,6 @@ public class CharacterStats : MonoBehaviour
     [SerializeField] private StaminaRegenRate staminaRegenRate;
     [SerializeField] private CriticalHitChance criticalHitChance;
     [SerializeField] private MoveSpeed moveSpeed;
-
-    [Space(10)]
-    [Header("Tertiary Stat Multipliers")]
-    [SerializeField] private float accuracyMultiplier = 1f;
-    [SerializeField] private float castingSpeedMultiplier = 1f;
-    [SerializeField] private float dodgeChanceMultiplier = 0.8f;
-    [SerializeField] private float magicalPowerMultiplier = 1f;
-    [SerializeField] private float manaRegenRateMultiplier = 1f;
-    [SerializeField] private float moveSpeedMultiplier = 0.1f;
-    [SerializeField] private float physicalPowerMultiplier = 2f;
-    [SerializeField] private float speedMultiplier = 1f;
-    [SerializeField] private float staminaRegenMultiplier = 1f;
-    [SerializeField] private float criticalHitChanceMultiplier = 0.1f;
-
-    // Constantes pour les stats tertiaires de base
-    private const float BASE_MOVE_SPEED = 5f; // Vitesse de d??placement de base
 
     [Space(10)]
     [Header("Status Effects")]
@@ -108,25 +86,23 @@ public class CharacterStats : MonoBehaviour
         intelligence = new CharacterIntelligence(this, 1f);
         endurance = new CharacterEndurance(this, 1f);
 
-        // Primary
-        health = new CharacterHealth(this, endurance, healthMultiplier, 100f);
-        mana = new CharacterMana(this, intelligence, manaMultiplier, 50f);
-        stamina = new CharacterStamina(this, endurance, staminaMultiplier, 50f);
-        initiative = new CharacterInitiative(this, 100f);
+        // Primary (Defaulted to 1s, overwritten by RaceSO quickly)
+        health = new CharacterHealth(this, endurance, 1f, 0f);
+        mana = new CharacterMana(this, intelligence, 1f, 0f);
+        stamina = new CharacterStamina(this, endurance, 1f, 0f);
+        initiative = new CharacterInitiative(this, 0f); // Default 0 offset
 
-        // Tertiary (toujours dérivées)
-        physicalPower = new PhysicalPower(this, strength, physicalPowerMultiplier);
-        speed = new Speed(this, agility, speedMultiplier);
-        dodgeChance = new DodgeChance(this, agility, dodgeChanceMultiplier);
-        accuracy = new Accuracy(this, dexterity, accuracyMultiplier);
-        castingSpeed = new CastingSpeed(this, dexterity, castingSpeedMultiplier);
-        magicalPower = new MagicalPower(this, intelligence, magicalPowerMultiplier);
-        manaRegenRate = new ManaRegenRate(this, intelligence, manaRegenRateMultiplier);
-        staminaRegenRate = new StaminaRegenRate(this, endurance, staminaRegenMultiplier);
-        criticalHitChance = new CriticalHitChance(this, dexterity, criticalHitChanceMultiplier);
-        
-        // MoveSpeed possède une base fixe de BASE_MOVE_SPEED sur laquelle s'ajoute le bonus d'Agilité
-        moveSpeed = new MoveSpeed(this, agility, moveSpeedMultiplier, BASE_MOVE_SPEED);
+        // Tertiary (Defaulted to 1s, overwritten by RaceSO quickly)
+        physicalPower = new PhysicalPower(this, strength, 1f);
+        speed = new Speed(this, agility, 1f);
+        dodgeChance = new DodgeChance(this, agility, 1f);
+        accuracy = new Accuracy(this, dexterity, 1f);
+        castingSpeed = new CastingSpeed(this, dexterity, 1f);
+        magicalPower = new MagicalPower(this, intelligence, 1f);
+        manaRegenRate = new ManaRegenRate(this, intelligence, 1f);
+        staminaRegenRate = new StaminaRegenRate(this, endurance, 1f);
+        criticalHitChance = new CriticalHitChance(this, dexterity, 1f);
+        moveSpeed = new MoveSpeed(this, agility, 1f, 0f);
     }
 
     public void InitializeStats(float health, float mana, float strength, float agility)
@@ -141,6 +117,38 @@ public class CharacterStats : MonoBehaviour
         Agility.SetBaseValue(agility);
 
         // Recalcul des stats dérivées (primaires dynamiques et tertiaires)
+        RecalculateTertiaryStats();
+    }
+
+    public void ApplyRaceStats(RaceSO race)
+    {
+        if (race == null) return;
+
+        // Secondaries Base
+        Strength.SetBaseValue(race.BaseStrength);
+        Agility.SetBaseValue(race.BaseAgility);
+        Dexterity.SetBaseValue(race.BaseDexterity);
+        Intelligence.SetBaseValue(race.BaseIntelligence);
+        Endurance.SetBaseValue(race.BaseEndurance);
+
+        // Primary Scaling Update
+        Health.UpdateScaling(race.HealthMultiplier, race.BaseHealthOffset);
+        Stamina.UpdateScaling(race.StaminaMultiplier, race.BaseStaminaOffset);
+        Mana.UpdateScaling(race.ManaMultiplier, race.BaseManaOffset);
+        Initiative.UpdateScaling(1f, race.BaseInitiative);
+        
+        // Tertiary Scaling Update
+        PhysicalPower.UpdateScaling(race.PhysicalPowerMultiplier, race.BasePhysicalPowerOffset);
+        Speed.UpdateScaling(race.SpeedMultiplier, race.BaseSpeedOffset);
+        DodgeChance.UpdateScaling(race.DodgeChanceMultiplier, race.BaseDodgeChanceOffset);
+        Accuracy.UpdateScaling(race.AccuracyMultiplier, race.BaseAccuracyOffset);
+        CastingSpeed.UpdateScaling(race.CastingSpeedMultiplier, race.BaseCastingSpeedOffset);
+        MagicalPower.UpdateScaling(race.MagicalPowerMultiplier, race.BaseMagicalPowerOffset);
+        ManaRegenRate.UpdateScaling(race.ManaRegenRateMultiplier, race.BaseManaRegenRateOffset);
+        StaminaRegenRate.UpdateScaling(race.StaminaRegenRateMultiplier, race.BaseStaminaRegenRateOffset);
+        CriticalHitChance.UpdateScaling(race.CriticalHitChanceMultiplier, race.BaseCriticalHitChanceOffset);
+        MoveSpeed.UpdateScaling(race.MoveSpeedMultiplier, race.BaseMoveSpeedOffset);
+
         RecalculateTertiaryStats();
     }
 

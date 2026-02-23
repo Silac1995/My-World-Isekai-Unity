@@ -118,7 +118,7 @@ public class SpawnManager : MonoBehaviour
 
     // --- Logique de Spawn de Personnages ---
 
-    public Character SpawnCharacter(Vector3 pos, float health, float mana, float str, float agi, RaceSO race, GameObject visualPrefab, bool isPlayer, CharacterPersonalitySO personality = null)
+    public Character SpawnCharacter(Vector3 pos, RaceSO race, GameObject visualPrefab, bool isPlayer, CharacterPersonalitySO personality = null)
     {
         Vector3 spawnPos = pos == Vector3.zero && spawnGameObject != null ? spawnGameObject.transform.position : pos;
 
@@ -137,7 +137,7 @@ public class SpawnManager : MonoBehaviour
             return null;
         }
 
-        if (!InitializeCharacter(characterPrefabObj, race, visualPrefab, health, mana, str, agi))
+        if (!InitializeCharacter(characterPrefabObj, race, visualPrefab))
         {
             Destroy(characterPrefabObj);
             return null;
@@ -182,7 +182,7 @@ public class SpawnManager : MonoBehaviour
         return true;
     }
 
-    private bool InitializeCharacter(GameObject obj, RaceSO race, GameObject visualPrefab, float health, float mana, float str, float agi)
+    private bool InitializeCharacter(GameObject obj, RaceSO race, GameObject visualPrefab)
     {
         Character character = obj.GetComponent<Character>();
         if (character == null)
@@ -194,7 +194,7 @@ public class SpawnManager : MonoBehaviour
         Transform visual = obj.transform.Find("Visual");
         character.AssignVisualRoot(visual);
 
-        character.InitializeStats(health, mana, str, agi);
+        // character.InitializeStats() n'est plus appelé ici, car les stats de base sont injectées via InitializeRace
         character.InitializeRace(race);
         character.InitializeAll();
 

@@ -148,10 +148,6 @@ public class DebugScript : MonoBehaviour
         {
             SpawnManager.Instance.SpawnCharacter(
                 pos: pos,
-                health: 50f,
-                mana: 50f,
-                str: 10f,
-                agi: 10f,
                 race: selectedRace,
                 visualPrefab: selectedCharacterDefaultPrefab,
                 isPlayer: isPlayerToggle.isOn && i == 0

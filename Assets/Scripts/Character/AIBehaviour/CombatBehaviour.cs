@@ -145,6 +145,10 @@ public class CombatBehaviour : IAIBehaviour
             if (distToTarget <= attackRange && zDist <= 1.5f && (targetIsStationary || patienceThresholdMet))
             {
                 movement.Stop();
+                
+                // Force facing before strike
+                self.CharacterVisual?.FaceTarget(_currentTarget.transform.position);
+
                 self.CharacterCombat.ExecuteAction(() => self.CharacterCombat.Attack());
                 
                 _lastMoveTime = Time.time;

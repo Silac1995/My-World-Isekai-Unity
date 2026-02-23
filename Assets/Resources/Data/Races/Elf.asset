@@ -9,12 +9,46 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e7c5b95f215d44248bcce89ad7d2f873, type: 3}
+  m_Script: {fileID: 11500000, guid: d8f0b3414e4ae4f4f8fb5c5d5513edfa, type: 3}
   m_Name: Elf
-  m_EditorClassIdentifier: 
+  m_EditorClassIdentifier: Assembly-CSharp::RaceSO
+  RaceName: Elf
   raceName: Elf
-  bonusHealth: 0
-  bonusSpeed: 6
+  Description: 
+  characterVisualPreset: {fileID: 11400000, guid: 76b9198ddbeeaf8489478847bd6d4377, type: 2}
   character_prefabs:
   - {fileID: 5456933137695734175, guid: 7b374d387037c9647bef899d050bac5c, type: 3}
-  characterVisualPreset: {fileID: 11400000, guid: 76b9198ddbeeaf8489478847bd6d4377, type: 2}
+  bonusSpeed: 1
+  BaseStrength: 5
+  BaseAgility: 5
+  BaseDexterity: 5
+  BaseIntelligence: 5
+  BaseEndurance: 5
+  BaseHealthOffset: 10
+  HealthMultiplier: 10
+  BaseStaminaOffset: 50
+  StaminaMultiplier: 10
+  BaseManaOffset: 50
+  ManaMultiplier: 10
+  BaseInitiative: 100
+  BaseArmor: 0
+  BaseMoveSpeedOffset: 5
+  MoveSpeedMultiplier: 0.1
+  BasePhysicalPowerOffset: 0
+  PhysicalPowerMultiplier: 2
+  BaseSpeedOffset: 0
+  SpeedMultiplier: 1
+  BaseDodgeChanceOffset: 0
+  DodgeChanceMultiplier: 0.8
+  BaseAccuracyOffset: 0
+  AccuracyMultiplier: 1
+  BaseCastingSpeedOffset: 0
+  CastingSpeedMultiplier: 1
+  BaseMagicalPowerOffset: 0
+  MagicalPowerMultiplier: 1
+  BaseManaRegenRateOffset: 0
+  ManaRegenRateMultiplier: 1
+  BaseStaminaRegenRateOffset: 0
+  StaminaRegenRateMultiplier: 1
+  BaseCriticalHitChanceOffset: 0
+  CriticalHitChanceMultiplier: 0.1

@@ -30,6 +30,16 @@ public abstract class CharacterTertiaryStats : CharacterBaseStats
     }
 
     /// <summary>
+    /// Met à jour le multiplicateur et l'offset, utilisé pour modifier les bases raciales de ce personnage.
+    /// </summary>
+    public void UpdateScaling(float multiplier, float baseOffset)
+    {
+        _multiplier = multiplier;
+        _baseOffset = baseOffset;
+        UpdateFromLinkedStat();
+    }
+
+    /// <summary>
     /// Recalcule la valeur de cette stat tertiaire en fonction de la stat secondaire li??e et du multiplicateur.
     /// </summary>
     public void UpdateFromLinkedStat()
@@ -38,6 +48,10 @@ public abstract class CharacterTertiaryStats : CharacterBaseStats
         {
             float calculatedBase = _baseOffset + (_linkedStat.CurrentValue * _multiplier);
             SetBaseValue(Mathf.Max(calculatedBase, minValue));
+        }
+        else
+        {
+            SetBaseValue(Mathf.Max(_baseOffset, minValue));
         }
     }
 }
