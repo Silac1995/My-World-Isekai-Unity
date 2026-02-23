@@ -1,8 +1,8 @@
 [System.Serializable]
 public class Speed : CharacterTertiaryStats
 {
-    public Speed(CharacterStats characterStats, float baseValue = 0f)
-        : base(characterStats, baseValue)
+    public Speed(CharacterStats characterStats, CharacterBaseStats linkedStat, float multiplier, float baseOffset = 0f, float minValue = 0f)
+        : base(characterStats, linkedStat, multiplier, baseOffset, minValue)
     {
         statName = "Speed";
     }

@@ -18,6 +18,12 @@ public class CharacterStats : MonoBehaviour
     [SerializeField] private CharacterInitiative initiative;
 
     [Space(10)]
+    [Header("Primary Stat Multipliers")]
+    [SerializeField] private float healthMultiplier = 10f;
+    [SerializeField] private float staminaMultiplier = 10f;
+    [SerializeField] private float manaMultiplier = 10f;
+
+    [Space(10)]
     [Header("Secondary Stats")]
     [SerializeField] private CharacterStrength strength;
     [SerializeField] private CharacterAgility agility;
@@ -37,6 +43,19 @@ public class CharacterStats : MonoBehaviour
     [SerializeField] private StaminaRegenRate staminaRegenRate;
     [SerializeField] private CriticalHitChance criticalHitChance;
     [SerializeField] private MoveSpeed moveSpeed;
+
+    [Space(10)]
+    [Header("Tertiary Stat Multipliers")]
+    [SerializeField] private float accuracyMultiplier = 1f;
+    [SerializeField] private float castingSpeedMultiplier = 1f;
+    [SerializeField] private float dodgeChanceMultiplier = 0.8f;
+    [SerializeField] private float magicalPowerMultiplier = 1f;
+    [SerializeField] private float manaRegenRateMultiplier = 1f;
+    [SerializeField] private float moveSpeedMultiplier = 0.1f;
+    [SerializeField] private float physicalPowerMultiplier = 2f;
+    [SerializeField] private float speedMultiplier = 1f;
+    [SerializeField] private float staminaRegenMultiplier = 1f;
+    [SerializeField] private float criticalHitChanceMultiplier = 0.1f;
 
     // Constantes pour les stats tertiaires de base
     private const float BASE_MOVE_SPEED = 5f; // Vitesse de d??placement de base
@@ -82,12 +101,6 @@ public class CharacterStats : MonoBehaviour
 
     private void CreateStats()
     {
-        // Primary
-        health = new CharacterHealth(this, 1f);
-        mana = new CharacterMana(this, 1f);
-        stamina = new CharacterStamina(this, 1f);
-        initiative = new CharacterInitiative(this, 100f);
-
         // Secondary
         strength = new CharacterStrength(this, 1f);
         agility = new CharacterAgility(this, 1f);
@@ -95,17 +108,25 @@ public class CharacterStats : MonoBehaviour
         intelligence = new CharacterIntelligence(this, 1f);
         endurance = new CharacterEndurance(this, 1f);
 
-        // Tertiary (toujours d???riv???es)
-        physicalPower = new PhysicalPower(this);
-        speed = new Speed(this);
-        dodgeChance = new DodgeChance(this);
-        accuracy = new Accuracy(this);
-        castingSpeed = new CastingSpeed(this);
-        magicalPower = new MagicalPower(this);
-        manaRegenRate = new ManaRegenRate(this);
-        staminaRegenRate = new StaminaRegenRate(this);
-        criticalHitChance = new CriticalHitChance(this);
-        moveSpeed = new MoveSpeed(this, BASE_MOVE_SPEED);
+        // Primary
+        health = new CharacterHealth(this, endurance, healthMultiplier, 100f);
+        mana = new CharacterMana(this, intelligence, manaMultiplier, 50f);
+        stamina = new CharacterStamina(this, endurance, staminaMultiplier, 50f);
+        initiative = new CharacterInitiative(this, 100f);
+
+        // Tertiary (toujours dérivées)
+        physicalPower = new PhysicalPower(this, strength, physicalPowerMultiplier);
+        speed = new Speed(this, agility, speedMultiplier);
+        dodgeChance = new DodgeChance(this, agility, dodgeChanceMultiplier);
+        accuracy = new Accuracy(this, dexterity, accuracyMultiplier);
+        castingSpeed = new CastingSpeed(this, dexterity, castingSpeedMultiplier);
+        magicalPower = new MagicalPower(this, intelligence, magicalPowerMultiplier);
+        manaRegenRate = new ManaRegenRate(this, intelligence, manaRegenRateMultiplier);
+        staminaRegenRate = new StaminaRegenRate(this, endurance, staminaRegenMultiplier);
+        criticalHitChance = new CriticalHitChance(this, dexterity, criticalHitChanceMultiplier);
+        
+        // MoveSpeed possède une base fixe de BASE_MOVE_SPEED sur laquelle s'ajoute le bonus d'Agilité
+        moveSpeed = new MoveSpeed(this, agility, moveSpeedMultiplier, BASE_MOVE_SPEED);
     }
 
     public void InitializeStats(float health, float mana, float strength, float agility)
@@ -119,7 +140,7 @@ public class CharacterStats : MonoBehaviour
         Strength.SetBaseValue(strength);
         Agility.SetBaseValue(agility);
 
-        // Recalcul des stats d???riv???es
+        // Recalcul des stats dérivées (primaires dynamiques et tertiaires)
         RecalculateTertiaryStats();
     }
 
@@ -144,19 +165,24 @@ public class CharacterStats : MonoBehaviour
 
     public void RecalculateTertiaryStats()
     {
-        // Puissance Physique = Force * 2 + Agilit?? * 0.5
-        physicalPower.SetBaseValue(strength.CurrentValue * 2f + agility.CurrentValue * 0.5f);
+        // Primaires dynamiques
+        health.UpdateFromLinkedStat();
+        mana.UpdateFromLinkedStat();
+        stamina.UpdateFromLinkedStat();
 
-        // ??? AVANT (accumule ?? chaque appel)
-        // moveSpeed.SetBaseValue(moveSpeed.BaseValue + (agility.CurrentValue * 0.1f));
+        // Tertiaires
+        physicalPower.UpdateFromLinkedStat();
+        speed.UpdateFromLinkedStat();
+        dodgeChance.UpdateFromLinkedStat();
+        accuracy.UpdateFromLinkedStat();
+        castingSpeed.UpdateFromLinkedStat();
+        magicalPower.UpdateFromLinkedStat();
+        manaRegenRate.UpdateFromLinkedStat();
+        staminaRegenRate.UpdateFromLinkedStat();
+        criticalHitChance.UpdateFromLinkedStat();
+        moveSpeed.UpdateFromLinkedStat();
 
-        // ??? APR??S (recalcule depuis la base)
-        moveSpeed.SetBaseValue(BASE_MOVE_SPEED + (agility.CurrentValue * 0.1f));
-
-        // Esquive = Agilit?? * 0.8
-        dodgeChance.SetBaseValue(agility.CurrentValue * 0.8f);
-
-        Debug.Log("<color=green>[Stats]</color> Statistiques tertiaires recalcul??es.");
+        Debug.Log("<color=green>[Stats]</color> Statistiques dynamiques (Primaires & Tertiaires) recalculées.");
     }
 
     public CharacterBaseStats GetBaseStat(StatType statType)

@@ -5,10 +5,21 @@ public abstract class CharacterTertiaryStats : CharacterBaseStats
 {
     [SerializeField] private float minValue = 1f;
 
-    protected CharacterTertiaryStats(CharacterStats characterStats, float baseValue = 1f)
-        : base(characterStats, baseValue)
+    protected CharacterBaseStats _linkedStat;
+    protected float _multiplier;
+
+    // Optionnel : un offset de base fixe, utile pour la MoveSpeed par exemple (5f + Agi*0.1)
+    protected float _baseOffset;
+
+    protected CharacterTertiaryStats(CharacterStats characterStats, CharacterBaseStats linkedStat, float multiplier, float baseOffset = 0f, float minValue = 0f)
+        : base(characterStats, baseOffset)
     {
-        currentValue = Mathf.Max(baseValue, minValue);
+        _linkedStat = linkedStat;
+        _multiplier = multiplier;
+        _baseOffset = baseOffset;
+        this.minValue = minValue;
+
+        UpdateFromLinkedStat();
     }
 
     public float Value => currentValue;
@@ -16,5 +27,17 @@ public abstract class CharacterTertiaryStats : CharacterBaseStats
     public void Modify(float delta)
     {
         currentValue = Mathf.Max(currentValue + delta, minValue);
+    }
+
+    /// <summary>
+    /// Recalcule la valeur de cette stat tertiaire en fonction de la stat secondaire li??e et du multiplicateur.
+    /// </summary>
+    public void UpdateFromLinkedStat()
+    {
+        if (_linkedStat != null)
+        {
+            float calculatedBase = _baseOffset + (_linkedStat.CurrentValue * _multiplier);
+            SetBaseValue(Mathf.Max(calculatedBase, minValue));
+        }
     }
 }

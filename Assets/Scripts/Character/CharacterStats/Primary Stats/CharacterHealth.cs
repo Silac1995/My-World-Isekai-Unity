@@ -3,8 +3,8 @@
 [System.Serializable]
 public class CharacterHealth : CharacterPrimaryStats
 {
-    public CharacterHealth(CharacterStats characterStats, float baseValue = 1f)
-        : base(characterStats, baseValue)
+    public CharacterHealth(CharacterStats characterStats, CharacterBaseStats linkedStat = null, float multiplier = 1f, float baseOffset = 0f)
+        : base(characterStats, linkedStat, multiplier, baseOffset)
     {
         statName = "Health";
     }

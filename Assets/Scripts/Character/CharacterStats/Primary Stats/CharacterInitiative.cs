@@ -2,7 +2,7 @@
 public class CharacterInitiative : CharacterPrimaryStats
 {
     public CharacterInitiative(CharacterStats characterStats, float baseValue = 1)
-        : base(characterStats, baseValue)
+        : base(characterStats, null, 1f, baseValue)
     {
         statName = "Initiative";
     }

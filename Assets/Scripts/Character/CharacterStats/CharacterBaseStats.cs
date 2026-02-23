@@ -70,7 +70,7 @@ public abstract class CharacterBaseStats
         currentValue = baseValue;
     }
 
-    private void RecalculateCurrentValue()
+    protected virtual void RecalculateCurrentValue()
     {
         float totalModifiers = 0f;
         foreach (var mod in modifiers)
