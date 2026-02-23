@@ -186,6 +186,9 @@ public class CharacterCombat : MonoBehaviour
         _currentBattleManager = null;
         _lastCombatActionTime = Time.time;
 
+        // Force la sortie du mode combat pour notifier le StatusManager
+        ChangeCombatMode(false);
+
         if (_character.Controller != null && _character.Controller.GetCurrentBehaviour<CombatBehaviour>() != null)
         {
             _character.Controller.PopBehaviour();
@@ -304,7 +307,9 @@ public class CharacterCombat : MonoBehaviour
                 }
             }
 
-            animHandler.SetCombat(_isCombatMode);
+            // --- NOUVEAU : SYNC DES PARAMÈTRES APRÈS SWAP ---
+            // Cela évite que le perso ne se "relève" si le controller reset les booléens par défaut
+            animHandler.SyncParameters(_character, _isCombatMode);
         }
     }
 

@@ -10,7 +10,10 @@ public class BattleManager : MonoBehaviour
     [SerializeField] private BattleTeam _battleTeamTarget;
     [SerializeField] private Collider _battleZone;
     [SerializeField] private LineRenderer _battleZoneLine;
-    [SerializeField] private float _padding = 30f;
+    [SerializeField] private Vector3 _baseBattleZoneSize = new Vector3(25f, 35f, 10f);
+    [SerializeField] private float _perParticipantGrowthRate = 0.3f;
+    [SerializeField] private int _maxGrowthTiers = 3;
+    [SerializeField] private int _participantsPerTier = 4;
 
     [Header("Initiative System")]
     [SerializeField] private float _ticksPerSecond = 10f;
@@ -79,31 +82,26 @@ public class BattleManager : MonoBehaviour
 
     private void CreateBattleZone(Character a, Character b)
     {
-        // On s'assure que le manager est neutre en rotation/scale pour que les calculs de Bounds (AABB) matchent
+        // On s'assure que le manager est neutre en rotation/scale
         transform.rotation = Quaternion.identity;
         transform.localScale = Vector3.one;
 
-        // Cleanup : On s'assure qu'il n'y a pas de doublons de colliders qui traînent
+        // Cleanup
         var oldColliders = gameObject.GetComponents<BoxCollider>();
         foreach (var old in oldColliders) Destroy(old);
-
-        Bounds combinedBounds = a.Collider.bounds;
-        combinedBounds.Encapsulate(b.Collider.bounds);
-        
-        // Expand(x) ajoute x au total (donc x/2 de chaque côté). 
-        // Pour une marge de 30f de chaque côté, on Expand de 60f.
-        combinedBounds.Expand(_padding * 2f);
 
         // On utilise un BoxCollider pour les limites
         BoxCollider box = gameObject.AddComponent<BoxCollider>();
         gameObject.tag = "BattleZone";
         
         box.isTrigger = true;
-        // On fixe la hauteur à 20f pour la zone de détection
-        box.size = new Vector3(combinedBounds.size.x, 20f, combinedBounds.size.z);
+
+        // Taille de base définie par l'user
+        box.size = _baseBattleZoneSize;
         
-        // On centre le pivot du manager sur le centre des bounds
-        transform.position = new Vector3(combinedBounds.center.x, a.transform.position.y, combinedBounds.center.z);
+        // Position initiale : milieu entre les deux combattants
+        Vector3 center = (a.transform.position + b.transform.position) / 2f;
+        transform.position = new Vector3(center.x, a.transform.position.y, center.z);
 
         _battleZone = box;
     }
@@ -180,20 +178,19 @@ public class BattleManager : MonoBehaviour
         BoxCollider box = _battleZone as BoxCollider;
         if (box == null) return;
 
-        // 1. On calcule les bounds "bruts" englobant tous les participants actuels
-        Bounds rawBounds = new Bounds(_allParticipants[0].Collider.bounds.center, Vector3.zero);
-        foreach (var p in _allParticipants)
-        {
-            if (p != null && p.Collider != null)
-                rawBounds.Encapsulate(p.Collider.bounds);
-        }
+        // 1. Calcul du nombre de participants valides
+        int count = _allParticipants.Count(p => p != null);
 
-        // 2. On applique le padding UNE SEULE FOIS sur la taille totale
-        // On fixe toujours la hauteur à 20f
-        box.size = new Vector3(rawBounds.size.x + _padding * 2f, 20f, rawBounds.size.z + _padding * 2f);
+        // 2. Calcul de la taille par paliers (Ex: chaque 4 persos)
+        // Multiplier = 1 + (Nombre de paliers * Taux)
+        // On cap le nombre de paliers (max 3 itérations = +90%)
+        int tiers = (count - 1) / _participantsPerTier;
+        tiers = Mathf.Min(tiers, _maxGrowthTiers);
         
-        // 3. On centre le manager sur le centre géographique des participants
-        transform.position = new Vector3(rawBounds.center.x, transform.position.y, rawBounds.center.z);
+        float multiplier = 1f + (tiers * _perParticipantGrowthRate);
+
+        // On n'applique le multiplicateur qu'à X et Z (le sol). Y reste fixe.
+        box.size = new Vector3(_baseBattleZoneSize.x * multiplier, _baseBattleZoneSize.y, _baseBattleZoneSize.z * multiplier);
 
         DrawBattleZoneOutline();
     }

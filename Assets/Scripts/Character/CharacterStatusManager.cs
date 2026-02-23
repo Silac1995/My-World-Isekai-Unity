@@ -122,7 +122,10 @@ public class CharacterStatusManager : MonoBehaviour
     {
         if (unconscious)
         {
-            if (_unconsciousEffect != null && !HasEffect(_unconsciousEffect))
+            // On n'applique la regen que si on n'est pas en combat (IsInBattle)
+            bool isInBattle = _character.CharacterCombat != null && _character.CharacterCombat.IsInBattle;
+            
+            if (!isInBattle && _unconsciousEffect != null && !HasEffect(_unconsciousEffect))
                 ApplyEffect(_unconsciousEffect);
         }
         else
@@ -137,8 +140,16 @@ public class CharacterStatusManager : MonoBehaviour
         if (_character == null || _character.Stats == null) return;
 
         bool isInBattle = _character.CharacterCombat != null && _character.CharacterCombat.IsInBattle;
-        bool hasEnoughHealth = _character.Stats.Health.CurrentAmount >= _character.Stats.Health.MaxValue * 0.5f;
+        
+        // --- GESTION REGEN INCONSCIENT (SORTIE DE COMBAT) ---
+        if (!isInBattle && _character.IsUnconscious)
+        {
+             if (_unconsciousEffect != null && !HasEffect(_unconsciousEffect))
+                ApplyEffect(_unconsciousEffect);
+        }
 
+        // --- GESTION REGEN HORS COMBAT (MANUEL) ---
+        bool hasEnoughHealth = _character.Stats.Health.CurrentAmount >= _character.Stats.Health.MaxValue * 0.5f;
         bool shouldHaveOutOfCombat = !isCombat && !isInBattle && _character.IsAlive() && !_character.IsUnconscious && !hasEnoughHealth;
 
         if (shouldHaveOutOfCombat)

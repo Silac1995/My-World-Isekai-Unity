@@ -45,10 +45,12 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 038cd5a8fa9916e43b398dc327b833bb, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: 
+  m_EditorClassIdentifier: Assembly-CSharp::BattleManager
   _battleZone: {fileID: 6655155365184742527}
   _battleZoneLine: {fileID: 4760077220942187896}
-  _padding: 10
+  _padding: 30
+  _baseBattleZoneSize: {x: 25, y: 35, z: 10}
+  _perParticipantGrowthRate: 0.3
   _ticksPerSecond: 10
   _allParticipants: []
 --- !u!65 &6655155365184742527

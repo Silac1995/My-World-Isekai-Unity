@@ -203,7 +203,7 @@ public class Character : MonoBehaviour
             // 2. Arrêt des systèmes actifs
             if (_characterMovement != null) _characterMovement.Stop();
             if (_characterActions != null) _characterActions.ClearCurrentAction();
-            if (_characterCombat != null) _characterCombat.ForceExitCombatMode();
+            // Note : On ne retire plus le BattleManager ici pour permettre l'interaction/résurrection en combat.
 
             // 3. Désactivation du cerveau
             if (_controller != null)

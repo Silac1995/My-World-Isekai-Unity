@@ -61,6 +61,31 @@ public class CharacterAnimator : MonoBehaviour
         if (_animator != null)
             _animator.SetBool(IsCombat, combat);
     }
+
+    /// <summary>
+    /// Force la synchronisation des paramètres essentiels (mort, combat, etc.)
+    /// Utile après un changement de Controller.
+    /// </summary>
+    public void SyncParameters(Character character, bool isCombat)
+    {
+        if (_animator == null || character == null) return;
+
+        // On ré-applique l'état de vie/mort
+        _animator.SetBool(IsDead, !character.IsAlive());
+        
+        // On ré-applique l'état de combat
+        _animator.SetBool(IsCombat, isCombat);
+
+        // On remet la vélocité à zéro si mort pour éviter de glisser dans la mauvaise anim
+        if (!character.IsAlive())
+        {
+            StopLocomotion();
+        }
+        else
+        {
+            // Optionnel : on pourrait aussi sync la velocityX ici si besoin
+        }
+    }
     #endregion
 
     #region Animation Events Bridge
