@@ -84,6 +84,7 @@ public class CombatBehaviour : IAIBehaviour
             float timeReady = Time.time - _readyStartTime;
 
             float attackRange = self.CharacterCombat.CurrentCombatStyleExpertise?.Style?.AttackRange ?? 3.5f;
+            float dx = Mathf.Abs(self.transform.position.x - _currentTarget.transform.position.x);
             float zDist = Mathf.Abs(self.transform.position.z - _currentTarget.transform.position.z);
 
             // --- NOUVEAU : DÉTECTION D'AGRESSION MUTUELLE ---
@@ -102,21 +103,34 @@ public class CombatBehaviour : IAIBehaviour
             if (targetIsStationary || shouldStrikeFast)
             {
                 // On vise la cible mais on s'arrête un peu avant (90% de la range) pour éviter de se chevaucher
+                // ET on respecte un écart X minimum de 2.0 pour que les hitboxes directionnelles portent bien.
                 float stopThreshold = attackRange * 0.9f;
-                
-                if (distToTarget > stopThreshold)
+                bool isWithinRange = distToTarget <= stopThreshold;
+                bool isXTooClose = dx < 2.0f;
+
+                if (!isWithinRange || isXTooClose)
                 {
-                    _currentDestination = _currentTarget.transform.position;
+                    // Si on est trop loin OU trop proche sur l'axe X (chevauchement), on recalcule une position
+                    // On utilise CalculateEscapeDestination pour la répulsion si on est trop proche sur X
+                    if (isXTooClose)
+                    {
+                        _currentDestination = CalculateEscapeDestination(self.transform.position, _currentTarget.transform.position);
+                    }
+                    else
+                    {
+                        _currentDestination = _currentTarget.transform.position;
+                    }
                 }
                 else
                 {
-                    movement.Stop(); // On est à portée, on arrête de "pousser"
+                    movement.Stop(); // On est à portée et bien positionné sur X
                 }
                 
-                // On ne frappe que si on est à portée (3D), aligné en Z (max 1.5f) ET (cible immobile OU grosse perte de patience OU agression mutuelle)
+                // On ne frappe que si on est à portée (3D), aligné en Z (max 1.5f), avec un écart X minimal (2.0f)
+                // ET (cible immobile OU grosse perte de patience OU agression mutuelle)
                 bool patienceThresholdMet = timeReady > 2.0f || targetIsAggressiveTowardsUs;
 
-                if (distToTarget <= attackRange && zDist <= 1.5f && (targetIsStationary || patienceThresholdMet))
+                if (distToTarget <= attackRange && dx >= 2.0f && zDist <= 1.5f && (targetIsStationary || patienceThresholdMet))
                 {
                     // On s'arrête et on tape
                     movement.Stop();
@@ -189,12 +203,14 @@ public class CombatBehaviour : IAIBehaviour
 
     private Vector3 CalculateEscapeDestination(Vector3 selfPos, Vector3 targetPos)
     {
-        // Move directly away from target to resolve "pushing"
-        Vector3 dirAway = (selfPos - targetPos).normalized;
-        if (dirAway.sqrMagnitude < 0.01f) dirAway = Vector3.forward;
+        // Déterminisme sur l'axe X : si la cible est à droite, on va à gauche (et inversement)
+        float xDir = (selfPos.x >= targetPos.x) ? 1f : -1f;
         
-        float radius = Random.Range(IDEAL_MIN, IDEAL_MIN + 2f); // Just enough to be safe
-        return targetPos + dirAway * radius;
+        // On s'éloigne principalement sur X, avec un petit décalage aléatoire sur Z pour le "feeling"
+        float radius = Random.Range(IDEAL_MIN, IDEAL_MIN + 1f);
+        Vector3 offset = new Vector3(xDir * radius, 0, Random.Range(-1f, 1f));
+        
+        return targetPos + offset;
     }
 
     public void Exit(Character self)
