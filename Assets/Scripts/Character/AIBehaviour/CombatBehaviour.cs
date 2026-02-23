@@ -52,6 +52,22 @@ public class CombatBehaviour : IAIBehaviour
         var movement = self.CharacterMovement;
         if (movement == null) return;
 
+        // --- NOUVEAU : DÉTECTION DE SORTIE DE ZONE ---
+        // Si le personnage lui-même est en dehors, sa priorité ABSOLUE est de rerentrer
+        if (_battleZone == null) _battleZone = _battleManager.GetComponent<BoxCollider>();
+        if (_battleZone != null && !_battleZone.bounds.Contains(self.transform.position))
+        {
+            Vector3 returnPos = _battleZone.ClosestPoint(self.transform.position);
+            // On ajoute une petite marge pour éviter les micro-ajustements
+            if (Vector3.Distance(self.transform.position, returnPos) > 0.5f)
+            {
+                movement.Resume();
+                movement.SetDestination(returnPos);
+                Debug.Log($"<color=orange>[AI]</color> {self.CharacterName} est hors-zone ! Retour forcé vers le combat.");
+                return; // On ne fait rien d'autre tant qu'on n'est pas revenu
+            }
+        }
+
         if (!HasTarget)
         {
             movement.Stop();

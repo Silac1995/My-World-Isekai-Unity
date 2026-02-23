@@ -31,9 +31,11 @@ public class BattleManager : MonoBehaviour
     {
         if (initiator == null || target == null) return;
 
-        // 1. Setup des équipes
+        // 1. Setup des équipes (On s'assure qu'il n'y en a QUE 2)
+        _teams.Clear();
         _battleTeamInitiator = new BattleTeam();
         _battleTeamTarget = new BattleTeam();
+
         _battleTeamInitiator.AddCharacter(initiator);
         _battleTeamTarget.AddCharacter(target);
 
@@ -154,7 +156,7 @@ public class BattleManager : MonoBehaviour
         if (newParticipant == null || target == null || _isBattleEnded) return;
 
         // On trouve l'équipe de la cible
-        BattleTeam targetTeam = _teams.FirstOrDefault(t => t.IsAlly(target));
+        BattleTeam targetTeam = GetTeamOf(target);
         if (targetTeam == null) return;
 
         if (asAlly)
@@ -164,10 +166,8 @@ public class BattleManager : MonoBehaviour
         }
         else
         {
-            // On le met dans l'équipe adverse (comportement par défaut)
-            BattleTeam enemyTeam = _teams.FirstOrDefault(t => t != targetTeam);
-            if (enemyTeam == null) return;
-
+            // On le met dans l'équipe ADVERSE de la cible
+            BattleTeam enemyTeam = (targetTeam == _battleTeamInitiator) ? _battleTeamTarget : _battleTeamInitiator;
             enemyTeam.AddCharacter(newParticipant);
         }
 
@@ -253,7 +253,9 @@ public class BattleManager : MonoBehaviour
     // Petite méthode utilitaire pour trouver l'équipe adverse
     private BattleTeam GetEnemyTeamOf(Character c)
     {
-        return _teams.FirstOrDefault(team => !team.IsAlly(c));
+        BattleTeam myTeam = GetTeamOf(c);
+        if (myTeam == null) return _battleTeamTarget; // Fallback par défaut
+        return (myTeam == _battleTeamInitiator) ? _battleTeamTarget : _battleTeamInitiator;
     }
 
     public bool AreOpponents(Character a, Character b)

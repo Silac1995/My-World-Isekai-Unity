@@ -15,6 +15,7 @@ public class CharacterCombat : MonoBehaviour
 
     public event Action<bool> OnCombatModeChanged;
     public event Action<float, MeleeDamageType> OnDamageTaken;
+    public event Action OnBattleLeft;
 
     [Header("Initiative Scaling")]
     [SerializeField] private float _baseInitiativePerTick = 1f;
@@ -186,8 +187,10 @@ public class CharacterCombat : MonoBehaviour
         _currentBattleManager = null;
         _lastCombatActionTime = Time.time;
 
-        // Force la sortie du mode combat pour notifier le StatusManager
-        ChangeCombatMode(false);
+        // On ne force plus la sortie du mode combat ici. 
+        // Le timeout de 7 secondes dans Update() s'en chargera naturellement.
+
+        OnBattleLeft?.Invoke();
 
         if (_character.Controller != null && _character.Controller.GetCurrentBehaviour<CombatBehaviour>() != null)
         {
@@ -319,6 +322,15 @@ public class CharacterCombat : MonoBehaviour
     public void ForceExitCombatMode()
     {
         _currentBattleManager = null;
+        ChangeCombatMode(false);
+    }
+
+    /// <summary>
+    /// Désactive uniquement la posture de combat (animator) sans quitter le BattleManager.
+    /// Utilisé pour éviter les glitches visuels lors de la mort/inconscience.
+    /// </summary>
+    public void ExitCombatMode()
+    {
         ChangeCombatMode(false);
     }
     #endregion

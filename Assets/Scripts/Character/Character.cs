@@ -237,6 +237,9 @@ public class Character : MonoBehaviour
     {
         if (_isDead || _isUnconscious == unconscious) return;
 
+        if (unconscious && _characterCombat != null)
+            _characterCombat.ExitCombatMode();
+
         _isUnconscious = unconscious;
         OnUnconsciousChanged?.Invoke(unconscious);
 
@@ -300,6 +303,9 @@ public class Character : MonoBehaviour
     public virtual void Die()
     {
         if (_isDead) return;
+
+        if (_characterCombat != null)
+            _characterCombat.ExitCombatMode();
 
         _isDead = true;
         _isUnconscious = false; // La mort prime sur l'inconscience

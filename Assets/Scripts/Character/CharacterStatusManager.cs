@@ -26,7 +26,10 @@ public class CharacterStatusManager : MonoBehaviour
         {
             _character.OnUnconsciousChanged += HandleUnconsciousChanged;
             if (_character.CharacterCombat != null)
+            {
                 _character.CharacterCombat.OnCombatModeChanged += HandleCombatModeChanged;
+                _character.CharacterCombat.OnBattleLeft += HandleBattleLeft;
+            }
         }
     }
 
@@ -36,7 +39,10 @@ public class CharacterStatusManager : MonoBehaviour
         {
             _character.OnUnconsciousChanged -= HandleUnconsciousChanged;
             if (_character.CharacterCombat != null)
+            {
                 _character.CharacterCombat.OnCombatModeChanged -= HandleCombatModeChanged;
+                _character.CharacterCombat.OnBattleLeft -= HandleBattleLeft;
+            }
         }
     }
 
@@ -161,6 +167,20 @@ public class CharacterStatusManager : MonoBehaviour
         {
             if (_outOfCombatEffect != null && HasEffect(_outOfCombatEffect))
                 RemoveEffect(_outOfCombatEffect);
+        }
+    }
+
+    private void HandleBattleLeft()
+    {
+        // Quand on quitte le combat (manager null), si on est inconscient, 
+        // on lance la regen IMMEDIATEMENT sans attendre les 7s de timeout du mode combat.
+        if (_character.IsUnconscious)
+        {
+            if (_unconsciousEffect != null && !HasEffect(_unconsciousEffect))
+            {
+                ApplyEffect(_unconsciousEffect);
+                Debug.Log($"<color=cyan>[StatusManager]</color> Régénération lancée immédiatement après la fin du combat pour {_character.CharacterName}.");
+            }
         }
     }
 
