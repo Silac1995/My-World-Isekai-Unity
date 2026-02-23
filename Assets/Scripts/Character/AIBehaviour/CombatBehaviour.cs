@@ -33,16 +33,18 @@ public class CombatBehaviour : IAIBehaviour
         _moveInterval = Random.Range(5f, 7f);
         _lastMoveTime = Time.time;
         
-        if (target != null)
-            _currentDestination = CalculateSafeDestination(target.transform.position, Vector3.zero);
+        if (target != null && battleManager != null)
+        {
+            // Initialisation avec un angle déterministe
+            _currentDestination = CalculateSafeDestination(target.transform.position, Vector3.zero, 0); 
+        }
     }
 
     public void SetCurrentTarget(Character target)
     {
         _currentTarget = target;
         _lastMoveTime = Time.time;
-        if (target != null)
-            _currentDestination = CalculateSafeDestination(target.transform.position, Vector3.zero);
+        // On laisse Act gérer le premier CalculateSafeDestination avec l'ID correct
     }
 
     public void Terminate() => _isFinished = true;
@@ -111,51 +113,43 @@ public class CombatBehaviour : IAIBehaviour
                 targetIsAggressiveTowardsUs = true;
             }
 
-            // --- NOUVEAU : On n'approche que si la cible ne bouge plus OU si on perd patience OU si agression mutuelle ---
-            bool targetIsStationary = _currentTarget.CharacterMovement != null && _currentTarget.CharacterMovement.GetVelocity().sqrMagnitude < 0.01f;
-            bool shouldStrikeFast = targetIsAggressiveTowardsUs || timeReady > 1.0f;
+            // --- NOUVEAU : On s'approche TOUJOURS si on est prêt (on ne reste pas planté) ---
+            // On vise la cible mais on s'arrête un peu avant (90% de la range) pour éviter de se chevaucher
+            float stopThreshold = attackRange * 0.9f;
+            bool isWithinRange = distToTarget <= stopThreshold;
+            bool isXTooClose = dx < X_FLIP_SAFETY;
+            bool isZAligned = zDist <= 1.5f;
 
-            if (targetIsStationary || shouldStrikeFast)
+            if (!isWithinRange || isXTooClose || !isZAligned)
             {
-                // On vise la cible mais on s'arrête un peu avant (90% de la range) pour éviter de se chevaucher
-                // ET on respecte un écart X minimum pour que les hitboxes ne se chevauchent pas trop.
-                float stopThreshold = attackRange * 0.9f;
-                bool isWithinRange = distToTarget <= stopThreshold;
-                bool isXTooClose = dx < X_FLIP_SAFETY; // Seul le risque de flip provoque une répulsion immédiate
-
-                if (!isWithinRange || isXTooClose)
-                {
-                    // Si on est trop loin OU vraiment trop proche sur X, on recalcule
-                    if (isXTooClose)
-                    {
-                        _currentDestination = CalculateEscapeDestination(self.transform.position, _currentTarget.transform.position);
-                    }
-                    else
-                    {
-                        _currentDestination = _currentTarget.transform.position;
-                    }
-                }
+                // Si on n'est pas à portée OU trop proche sur X OU pas aligné sur Z -> On bouge
+                if (isXTooClose)
+                    _currentDestination = CalculateEscapeDestination(self.transform.position, _currentTarget.transform.position);
                 else
-                {
-                    movement.Stop(); // On est à portée et bien positionné sur X
-                }
-                
-                // On ne frappe que si on est à portée (3D) et aligné en Z.
-                // L'écart X de PREFERRED_X_GAP (4.0) est un objectif de placement, pas un pré-requis strict pour frapper.
-                bool patienceThresholdMet = timeReady > 2.0f || targetIsAggressiveTowardsUs;
+                    _currentDestination = _currentTarget.transform.position;
+            }
+            else
+            {
+                // On n'arrête le perso QUE s'il est à portée, ok sur X et aligné sur Z
+                movement.Stop();
+            }
+            
+            // --- LOGIQUE DE FRAPPE ---
+            // On ne frappe que si on est à portée (3D) et aligné en Z.
+            // On ajoute un failsafe de 3s pour forcer la frappe même si la cible bouge
+            bool targetIsStationary = _currentTarget.CharacterMovement != null && _currentTarget.CharacterMovement.GetVelocity().sqrMagnitude < 0.01f;
+            bool forcedStrike = timeReady > 3.0f;
+            bool patienceThresholdMet = timeReady > 1.5f || targetIsAggressiveTowardsUs || forcedStrike;
 
-                if (distToTarget <= attackRange && zDist <= 1.5f && (targetIsStationary || patienceThresholdMet))
-                {
-                    // On s'arrête et on tape
-                    movement.Stop();
-                    self.CharacterCombat.ExecuteAction(() => self.CharacterCombat.Attack());
-                    
-                    // On force une petite pause dans le mouvement pour éviter de glisser pendant l'anim
-                    _lastMoveTime = Time.time;
-                    _moveInterval = 1f; 
-                    _readyStartTime = 0; // Reset
-                    return;
-                }
+            if (distToTarget <= attackRange && zDist <= 1.5f && (targetIsStationary || patienceThresholdMet))
+            {
+                movement.Stop();
+                self.CharacterCombat.ExecuteAction(() => self.CharacterCombat.Attack());
+                
+                _lastMoveTime = Time.time;
+                _moveInterval = 1f; 
+                _readyStartTime = 0;
+                return;
             }
         }
         else
@@ -178,7 +172,7 @@ public class CombatBehaviour : IAIBehaviour
                 }
                 else
                 {
-                    _currentDestination = CalculateSafeDestination(_currentTarget.transform.position, self.transform.position);
+                    _currentDestination = CalculateSafeDestination(_currentTarget.transform.position, self.transform.position, self.GetInstanceID());
                 }
 
                 _moveInterval = Random.Range(5f, 7f); // High wait for "lazy" feel
@@ -206,12 +200,15 @@ public class CombatBehaviour : IAIBehaviour
         self.CharacterVisual?.UpdateFlip(dirToTarget);
     }
 
-    private Vector3 CalculateSafeDestination(Vector3 targetPos, Vector3 selfPos)
+    private Vector3 CalculateSafeDestination(Vector3 targetPos, Vector3 selfPos, int selfId)
     {
-        // On essaie de garder une distance X de confort (PREFERRED_X_GAP)
-        float angle = Random.Range(30f, 60f) * Mathf.Deg2Rad; // Angle diagonal pour forcer un décalage X
-        if (Random.value > 0.5f) angle = -angle;
-        if (selfPos.x < targetPos.x) angle = Mathf.PI - angle;
+        // --- SYSTÈME DE SLOTS DÉTERMINISTE ---
+        // On divise le cercle en 8 slots de 45°
+        int slotIndex = Mathf.Abs(selfId) % 8;
+        float baseAngle = slotIndex * 45f * Mathf.Deg2Rad;
+        
+        // On ajoute un tout petit offset aléatoire pour ne pas avoir un cercle parfait non plus
+        float angle = baseAngle + Random.Range(-5f, 5f) * Mathf.Deg2Rad;
 
         float radius = Random.Range(PREFERRED_X_GAP, IDEAL_MAX); 
         Vector3 offset = new Vector3(Mathf.Cos(angle) * radius, 0, Mathf.Sin(angle) * radius);
