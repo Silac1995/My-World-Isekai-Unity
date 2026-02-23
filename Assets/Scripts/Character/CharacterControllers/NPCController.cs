@@ -59,16 +59,20 @@ public class NPCController : CharacterGameController
 
         if (_character.CharacterRelation == null) return;
         
-        // --- 1. LOGIQUE D'ENTRAIDE (AMIS EN COMBAT) ---
-        // Priorité : Si c'est un ami en combat, on l'aide peu importe le reste
+        // --- 1. LOGIQUE D'ENTRAIDE (AMIS OU GROUPE EN COMBAT) ---
+        // Priorité : Si c'est un ami ou un membre du groupe en combat, on l'aide peu importe le reste
         if (target.CharacterCombat.IsInBattle && target.IsAlive())
         {
-            if (_character.CharacterRelation != null && _character.CharacterRelation.IsFriend(target))
+            bool isFriend = _character.CharacterRelation != null && _character.CharacterRelation.IsFriend(target);
+            bool sameParty = _character.CurrentParty != null && _character.CurrentParty == target.CurrentParty;
+
+            if (isFriend || sameParty)
             {
-                Debug.Log($"<color=green>[Assistance]</color> {_character.CharacterName} voit son ami {target.CharacterName} en combat et fonce l'aider !");
+                string helpMsg = sameParty ? "Protect the group!" : "Hang on, my friend! I'm coming!";
+                Debug.Log($"<color=green>[Assistance]</color> {_character.CharacterName} voit son {(sameParty ? "coéquipier" : "ami")} {target.CharacterName} en combat et fonce l'aider !");
                 
                 if (_character.CharacterSpeech != null)
-                    _character.CharacterSpeech.Say("Hang on, my friend! I'm coming!");
+                    _character.CharacterSpeech.Say(helpMsg);
 
                 _character.CharacterCombat.JoinBattleAsAlly(target);
                 return;

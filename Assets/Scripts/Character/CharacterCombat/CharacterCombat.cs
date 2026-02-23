@@ -217,6 +217,81 @@ public class CharacterCombat : MonoBehaviour
             return;
         }
 
+        // --- NOUVEAU : VÉRIFICATION DYNAMIQUE DE FUSION (BASÉE PHYSIQUE) ---
+        // On cherche un collider "BattleZone" à proximité (ex: 25m) pour éviter les registres statiques globaux
+        BattleManager nearbyBattle = null;
+        Character connectionFound = null;
+        bool initiatorHasLink = false;
+
+        Collider[] hitColliders = Physics.OverlapSphere(_character.transform.position, 25f);
+        List<BattleManager> detectedBattles = new List<BattleManager>();
+
+        foreach (var hit in hitColliders)
+        {
+            if (hit.CompareTag("BattleZone"))
+            {
+                BattleManager bm = hit.GetComponent<BattleManager>() ?? hit.GetComponentInParent<BattleManager>();
+                if (bm != null && !bm.IsBattleEnded && !detectedBattles.Contains(bm))
+                {
+                    detectedBattles.Add(bm);
+                }
+            }
+        }
+
+        foreach (var battle in detectedBattles)
+        {
+            // On vérifie si l'initiateur a un lien
+            foreach (var p in battle.BattleTeams.SelectMany(t => t.CharacterList))
+            {
+                bool isFriend = _character.CharacterRelation != null && _character.CharacterRelation.IsFriend(p);
+                bool sameParty = _character.CurrentParty != null && _character.CurrentParty == p.CurrentParty;
+
+                if (isFriend || sameParty)
+                {
+                    nearbyBattle = battle;
+                    connectionFound = p;
+                    initiatorHasLink = true;
+                    break;
+                }
+            }
+            if (nearbyBattle != null) break;
+
+            // On vérifie si la cible a un lien
+            foreach (var p in battle.BattleTeams.SelectMany(t => t.CharacterList))
+            {
+                bool isFriend = target.CharacterRelation != null && target.CharacterRelation.IsFriend(p);
+                bool sameParty = target.CurrentParty != null && target.CurrentParty == p.CurrentParty;
+
+                if (isFriend || sameParty)
+                {
+                    nearbyBattle = battle;
+                    connectionFound = p;
+                    initiatorHasLink = false; // Le lien appartient à la cible
+                    break;
+                }
+            }
+            if (nearbyBattle != null) break;
+        }
+
+        if (nearbyBattle != null)
+        {
+            Debug.Log($"<color=orange>[Battle]</color> Fusion : {_character.CharacterName} et {target.CharacterName} rejoignent le combat de {connectionFound.CharacterName}");
+            
+            if (initiatorHasLink)
+            {
+                // L'initiateur rejoint son ami, la cible rejoint en face
+                nearbyBattle.AddParticipant(_character, connectionFound, asAlly: true);
+                nearbyBattle.AddParticipant(target, _character, asAlly: false);
+            }
+            else
+            {
+                // La cible rejoint son ami, l'initiateur rejoint en face
+                nearbyBattle.AddParticipant(target, connectionFound, asAlly: true);
+                nearbyBattle.AddParticipant(_character, target, asAlly: false);
+            }
+            return;
+        }
+
         if (!ValidateFight(target)) return;
 
         GameObject instanceGo = Instantiate(_battleManagerPrefab);

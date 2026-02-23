@@ -142,6 +142,8 @@ public class BattleManager : MonoBehaviour
 
         character.OnIncapacitated -= HandleCharacterIncapacitated;
         character.OnIncapacitated += HandleCharacterIncapacitated;
+        character.OnDeath -= HandleCharacterIncapacitated;
+        character.OnDeath += HandleCharacterIncapacitated;
 
         UpdateBattleZoneWith(character);
         Debug.Log($"<color=white>[Battle]</color> {character.CharacterName} a rejoint le combat.");
@@ -195,15 +197,28 @@ public class BattleManager : MonoBehaviour
         DrawBattleZoneOutline();
     }
 
+    #region Helpers
+    public BattleTeam GetTeamOf(Character character)
+    {
+        return _teams.FirstOrDefault(t => t.CharacterList.Contains(character));
+    }
+
+    public BattleTeam GetOpponentTeamOf(Character character)
+    {
+        BattleTeam myTeam = GetTeamOf(character);
+        if (myTeam == null) return null;
+        return _teams.FirstOrDefault(t => t != myTeam);
+    }
+    #endregion
+
     private void HandleCharacterIncapacitated(Character incapacitatedCharacter)
     {
         if (_isBattleEnded) return;
 
         // 1. Vérifier si le combat est terminé (UNE des deux équipes principales est éliminée)
-        // IsTeamEliminated() utilise IsAlive(), qui renvoie désormais false si unconscious.
+        // IsTeamEliminated() utilise IsAlive(), qui renvoie désormais false si unconscious ou dead.
         if (_battleTeamInitiator.IsTeamEliminated() || _battleTeamTarget.IsTeamEliminated())
         {
-            _isBattleEnded = true;
             EndBattle();
             return;
         }
@@ -249,16 +264,20 @@ public class BattleManager : MonoBehaviour
 
     public void EndBattle()
     {
+        if (_isBattleEnded) return;
+        _isBattleEnded = true;
+
         foreach (var character in _allParticipants)
         {
             if (character != null)
             {
                 character.OnIncapacitated -= HandleCharacterIncapacitated;
+                character.OnDeath -= HandleCharacterIncapacitated;
                 character.CharacterCombat.LeaveBattle();
             }
         }
 
-        Debug.Log("<color=red>[Battle]</color> Fin du combat.");
+        Debug.Log("<color=red>[Battle]</color> Le combat est TERMINÉ.");
         Destroy(gameObject);
     }
 
