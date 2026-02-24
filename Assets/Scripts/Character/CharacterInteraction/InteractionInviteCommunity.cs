@@ -1,13 +1,16 @@
 using UnityEngine;
 
-public class InteractionInviteCommunity : ICharacterInteractionAction
+/// <summary>
+/// Invitation action to recruit a friend into the leader's community.
+/// </summary>
+public class InteractionInviteCommunity : InteractionInvitation
 {
-    public bool CanExecute(Character initiator, Character target)
+    public override bool CanExecute(Character source, Character target)
     {
-        // Initiator must lead a community
-        if (initiator.CharacterCommunity == null || 
-            initiator.CharacterCommunity.CurrentCommunity == null || 
-            initiator.CharacterCommunity.CurrentCommunity.leader != initiator)
+        // Source must lead a community
+        if (source.CharacterCommunity == null || 
+            source.CharacterCommunity.CurrentCommunity == null || 
+            source.CharacterCommunity.CurrentCommunity.leader != source)
         {
             return false;
         }
@@ -19,28 +22,36 @@ public class InteractionInviteCommunity : ICharacterInteractionAction
         }
 
         // Target must be a Friend, Lover or Soulmate
-        if (initiator.CharacterRelation != null)
+        if (source.CharacterRelation != null)
         {
-            return initiator.CharacterRelation.IsFriend(target);
+            return source.CharacterRelation.IsFriend(target);
         }
 
         return false;
     }
 
-    public void Execute(Character initiator, Character target)
+    public override string GetInvitationMessage(Character source, Character target)
     {
-        Debug.Log($"<color=yellow>[Interaction]</color> {initiator.CharacterName} invites {target.CharacterName} to join their community '{initiator.CharacterCommunity.CurrentCommunity.communityName}'!");
-        
-        // Initiator says the line
-        if (initiator.CharacterSpeech != null)
-        {
-            initiator.CharacterSpeech.Say("Wanna join my community?");
-        }
+        return $"Hey {target.CharacterName}, wanna join my community?";
+    }
 
-        // Target joins the community
-        if (target.CharacterCommunity != null)
+    public override string GetAcceptMessage() => "Sure, I'd love to join!";
+    public override string GetRefuseMessage() => "Hmm, not right now...";
+
+    public override void OnAccepted(Character source, Character target)
+    {
+        if (target.CharacterCommunity != null && source.CharacterCommunity != null)
         {
-            target.CharacterCommunity.JoinCommunity(initiator.CharacterCommunity.CurrentCommunity);
+            target.CharacterCommunity.JoinCommunity(source.CharacterCommunity.CurrentCommunity);
+        }
+    }
+
+    public override void OnRefused(Character source, Character target)
+    {
+        // Small relation loss on refusal
+        if (source.CharacterRelation != null)
+        {
+            source.CharacterRelation.UpdateRelation(target, -2);
         }
     }
 }

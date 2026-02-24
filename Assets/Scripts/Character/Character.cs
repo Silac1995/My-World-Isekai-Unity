@@ -39,6 +39,7 @@ public class Character : MonoBehaviour
     [SerializeField] private CharacterProfile _characterProfile;
     [SerializeField] private CharacterTraits _characterTraits;
     [SerializeField] private CharacterCommunity _characterCommunity;
+    [SerializeField] private CharacterInvitation _characterInvitation;
     #endregion
 
     #region Private Fields
@@ -91,6 +92,7 @@ public class Character : MonoBehaviour
     public CharacterStatusManager StatusManager => _statusManager;
     public CharacterProfile CharacterProfile => _characterProfile;
     public CharacterTraits CharacterTraits => _characterTraits;
+    public CharacterInvitation CharacterInvitation => _characterInvitation;
 
     public NavMeshAgent NavMesh => _cachedNavMeshAgent;
     public TimeManager TimeManager => _timeManager != null ? _timeManager : TimeManager.Instance;
