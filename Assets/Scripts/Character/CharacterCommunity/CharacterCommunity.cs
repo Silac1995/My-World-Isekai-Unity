@@ -5,7 +5,7 @@ public class CharacterCommunity : MonoBehaviour
 {
     [SerializeField] private Character _character;
 
-    [SerializeField] private Community _currentCommunity;
+    private Community _currentCommunity;
 
     public Character Character => _character;
     public Community CurrentCommunity => _currentCommunity;
@@ -22,11 +22,18 @@ public class CharacterCommunity : MonoBehaviour
     public void CheckAndCreateCommunity()
     {
         if (_character == null || _character.CharacterTraits == null || !_character.CharacterTraits.CanCreateCommunity()) 
+        {
+            // Debug.Log($"[Community Debug] {_character?.CharacterName} failed CanCreateCommunity trait check.");
             return;
+        }
 
-        // Prevent forming multiple communities by the same leader
-        if (_currentCommunity != null && _currentCommunity.leader == _character)
+        // To prevent community spam (200+ communities bug),
+        // ONLY characters who are NOT in a community yet can found one.
+        if (_currentCommunity != null)
+        {
+            Debug.Log($"[Community Debug] {_character.CharacterName} failed check because they already belong to a community: {_currentCommunity.communityName}");
             return;
+        }
 
         // Count close friends
         int closeFriendsCount = 0;
@@ -36,15 +43,11 @@ public class CharacterCommunity : MonoBehaviour
         {
             foreach (var rel in _character.CharacterRelation.Relationships)
             {
-                if (rel.RelationType == RelationshipType.Friend || 
-                    rel.RelationType == RelationshipType.Lover || 
-                    rel.RelationType == RelationshipType.Soulmate)
+                if (rel.RelatedCharacter != null && rel.RelatedCharacter.IsAlive() &&
+                    _character.CharacterRelation.IsFriend(rel.RelatedCharacter))
                 {
-                    if (rel.RelatedCharacter != null && rel.RelatedCharacter.IsAlive())
-                    {
-                        closeFriendsCount++;
-                        potentialMembers.Add(rel.RelatedCharacter);
-                    }
+                    closeFriendsCount++;
+                    potentialMembers.Add(rel.RelatedCharacter);
                 }
             }
         }
@@ -53,44 +56,31 @@ public class CharacterCommunity : MonoBehaviour
         {
             CreateCommunity(potentialMembers);
         }
+        else
+        {
+            Debug.Log($"[Community Debug] {_character.CharacterName} failed check because they only have {closeFriendsCount} close friends.");
+        }
     }
 
-    private void CreateCommunity(List<Character> initialMembers)
+    public void CreateCommunity(List<Character> potentialMembers)
     {
         string newCommName = $"{_character.CharacterName}'s Band";
         Community newComm = new Community(newCommName, _character);
         
-        // Add the friends to the new community
-        foreach(var friend in initialMembers)
-        {
-            newComm.AddMember(friend);
-            // Link the friend's local component to the new community
-            if (friend.CharacterCommunity != null)
-            {
-                friend.CharacterCommunity.SetCurrentCommunity(newComm);
-            }
-        }
+        // We NO LONGER add initialMembers directly. 
+        // The leader creates the community for themselves first,
+        // and will invite friends later through Interactions.
 
-        // Set the founder's own community reference
+        // Set the founder's own community reference (this adds them as a member in the Community constructor/logic)
         SetCurrentCommunity(newComm);
 
-        // Handle hierarchy
-        if (_currentCommunity != null && _currentCommunity != newComm) // If they were already in another community
+        // Root community registration
+        if (CommunityManager.Instance != null)
         {
-            // Become a sub-community
-            _currentCommunity.AddSubCommunity(newComm);
-            _currentCommunity.RemoveMember(_character); 
-            Debug.Log($"<color=cyan>[Character Community]</color> {_character.CharacterName} formed a Sub-Community '{newCommName}' under {_currentCommunity.communityName} with {initialMembers.Count} followers!");
+            CommunityManager.Instance.RegisterCommunity(newComm);
         }
-        else
-        {
-            // Root community
-            if (CommunityManager.Instance != null)
-            {
-                CommunityManager.Instance.RegisterCommunity(newComm);
-            }
-            Debug.Log($"<color=cyan>[Character Community]</color> {_character.CharacterName} founded a new independent Community '{newCommName}' with {initialMembers.Count} followers!");
-        }
+        
+        Debug.Log($"<color=cyan>[Character Community]</color> {_character.CharacterName} founded a new independent Community '{newCommName}' and is looking for {potentialMembers.Count} members to invite!");
     }
 
     public void SetCurrentCommunity(Community newCommunity)
@@ -137,4 +127,5 @@ public class CharacterCommunity : MonoBehaviour
             target.CharacterCommunity.LeaveCurrentCommunity();
         }
     }
+    [ContextMenu("Create Community")] public void CreateCommunity() => CreateCommunity(new List<Character>());
 }

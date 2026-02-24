@@ -13,6 +13,6 @@ MonoBehaviour:
   m_Name: Leader
   m_EditorClassIdentifier: Assembly-CSharp::CharacterBehavioralTraitsSO
   aggressivity: 0
-  sociability: 0.5
-  loyalty: 0.5
+  sociability: 1
+  loyalty: 1
   canCreateCommunity: 1

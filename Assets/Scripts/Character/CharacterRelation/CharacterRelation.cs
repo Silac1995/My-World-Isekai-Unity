@@ -86,11 +86,6 @@ public class CharacterRelation : MonoBehaviour
         if (roundedAmount >= 0)
         {
             rel.IncreaseRelationValue(roundedAmount);
-            // Check if this new bond triggers a community formation locally
-            if (_character.CharacterCommunity != null)
-            {
-                _character.CharacterCommunity.CheckAndCreateCommunity();
-            }
         }
         else
         {

@@ -42,5 +42,16 @@ public class InteractionTalk : ICharacterInteractionAction
         if (targetSocial != null) targetSocial.IncreaseValue(40f);
 
         Debug.Log($"<color=lightblue>[Talk]</color> Besoin social satisfait pour {source.CharacterName} et {target.CharacterName}.");
+
+        // --- CHECK COMMUNITY CREATION ---
+        // At the end of the interaction, check if either character can form a community
+        if (source.CharacterCommunity != null)
+        {
+            source.CharacterCommunity.CheckAndCreateCommunity();
+        }
+        if (target.CharacterCommunity != null)
+        {
+            target.CharacterCommunity.CheckAndCreateCommunity();
+        }
     }
 }

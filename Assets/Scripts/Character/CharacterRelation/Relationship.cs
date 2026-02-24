@@ -147,11 +147,11 @@ public class Relationship
         if (_relationshipType == RelationshipType.Lover || _relationshipType == RelationshipType.Soulmate)
             return;
 
-        if (_relationValue <= -10)
+        if (_relationValue <= -45)
         {
             _relationshipType = RelationshipType.Enemy;
         }
-        else if (_relationValue >= 25)
+        else if (_relationValue >= 20)
         {
             _relationshipType = RelationshipType.Friend;
         }

@@ -85,7 +85,24 @@ public class NPCController : CharacterGameController
 
         var rel = _character.CharacterRelation.GetRelationshipWith(target);
 
-        // --- 2. LOGIQUE D'AGRESSION (ENNEMIS) ---
+        // --- 2a. AGRESSION SPONTANÉE (trait-based, contre n'importe qui) ---
+        // Un personnage très agressif peut attaquer même un inconnu
+        if (target.IsAlive() && _character.CharacterTraits != null)
+        {
+            float aggressivity = _character.CharacterTraits.GetAggressivity();
+            // Squared curve: 0.1 → 0.3%, 0.5 → 7.5%, 1.0 → 30% max chance per detection
+            float aggroChance = aggressivity * aggressivity * 0.3f;
+            if (aggroChance > 0f && Random.value < aggroChance)
+            {
+                Debug.Log($"<color=red>[Aggression]</color> {_character.CharacterName} attaque {target.CharacterName} de façon spontanée (Aggressivity: {aggressivity:P0})!");
+                if (_character.CharacterSpeech != null)
+                    _character.CharacterSpeech.Say("You're in my way!");
+                PushBehaviour(new AttackTargetBehaviour(target));
+                return;
+            }
+        }
+
+        // --- 2b. LOGIQUE D'AGRESSION (ENNEMIS CONNUS) ---
         // On attaque nos ennemis même s'ils sont en train de papoter !
         if (rel != null && target.IsAlive() && rel.RelationValue <= -10)
         {
@@ -130,22 +147,32 @@ public class NPCController : CharacterGameController
             }
         }
 
-        // Si on ne se connaît pas officiellement (et pas de clash de personnalité), on s'ignore
-        if (rel == null) return;
-
         // --- 5. LOGIQUE SOCIALE ---
-        // UTILISATION DE LA LOGIQUE CENTRALISÉE
-        float interactionChance = rel.GetInteractionChance();
+        float sociability = _character.CharacterTraits != null ? _character.CharacterTraits.GetSociability() : 0.5f;
 
-        // Application des traits comportementaux
-        if (_character.CharacterTraits != null)
+        // Si on ne se connaît pas, on peut quand même aller parler à l'inconnu selon la sociabilité
+        if (rel == null)
         {
-            float sociability = _character.CharacterTraits.GetSociability();
-            // Map 0.0 - 1.0 to -0.5 to +0.5 impact
-            float sociabilityImpact = (sociability - 0.5f); 
-            interactionChance += sociabilityImpact;
+            // Only approach a stranger if sociable enough (e.g. sociability 0.5 = 15% base chance)
+            float strangerChance = sociability * 0.3f;
+            if (Random.value < strangerChance)
+            {
+                Debug.Log($"<color=cyan>[Social - Stranger]</color> {_character.CharacterName} s'approche de l'inconnu {target.CharacterName} (Sociabilité: {sociability:P0})");
+                PushBehaviour(new MoveToInteractionBehaviour(this, target));
+            }
+            return;
         }
 
+        // Si on se connait: 70% de chance de préférer un ami proche à un inconnu
+        bool isFriendKnown = _character.CharacterRelation.IsFriend(target);
+        bool preferFriend = isFriendKnown && (Random.value < 0.7f);
+
+        float interactionChance = rel.GetInteractionChance();
+        
+        // Application de la sociabilité
+        interactionChance += (sociability - 0.5f);
+        
+        // Boost si besoin social non satisfait
         bool isSociallyStarved = false;
         if (_character.CharacterNeeds != null)
         {
@@ -154,6 +181,13 @@ public class NPCController : CharacterGameController
         }
         
         if (isSociallyStarved) interactionChance = Mathf.Max(interactionChance, 0.25f);
+
+        // 70% bias toward friends: when detecting a non-friend acquaintance or stranger,
+        // skip 70% of the time (preferring to approach friends who may be nearby instead)
+        if (!isFriendKnown && Random.value < 0.7f)
+        {
+            return;
+        }
         
         // Clamp the final chance
         interactionChance = Mathf.Clamp01(interactionChance);
@@ -186,15 +220,36 @@ public class NPCController : CharacterGameController
     }
 
     /// <summary>
-    /// Choisi une action sociale (Talk ou Insult) basée sur la relation.
+    /// Choisi une action sociale (Talk, Invite, ou Insult) basée sur la relation.
     /// </summary>
     public ICharacterInteractionAction GetRandomSocialAction(Character target)
     {
+        // First check if an invite is possible and roll for it (e.g. 50% chance if eligible)
+        var inviteAction = new InteractionInviteCommunity();
+        if (inviteAction.CanExecute(_character, target))
+        {
+            if (Random.value > 0.5f)
+            {
+                return inviteAction;
+            }
+        }
+
         if (_character.CharacterRelation == null) return new InteractionTalk();
         var rel = _character.CharacterRelation.GetRelationshipWith(target);
         if (rel == null) return new InteractionTalk();
 
-        if (Random.value < rel.GetFavorableToneChance())
+        // Base chance from relationship quality
+        float talkChance = rel.GetFavorableToneChance();
+
+        // Sociability boosts the chance of being friendly (0.0 sociability = -0.3 penalty, 1.0 = +0.3 bonus)
+        if (_character.CharacterTraits != null)
+        {
+            float sociabilityBonus = (_character.CharacterTraits.GetSociability() - 0.5f) * 0.6f;
+            talkChance += sociabilityBonus;
+        }
+        talkChance = Mathf.Clamp01(talkChance);
+
+        if (Random.value < talkChance)
             return new InteractionTalk();
         else
             return new InteractionInsult();
