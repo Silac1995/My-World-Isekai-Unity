@@ -22,6 +22,7 @@ namespace MWI.Time
 
         private float _currentTime; // 0 to 1
         private DayPhase _currentPhase;
+        private int _lastHour;
 
         public float CurrentTime01 => _currentTime;
         public int CurrentHour => Mathf.FloorToInt(_currentTime * 24f);
@@ -30,6 +31,7 @@ namespace MWI.Time
 
         public event Action<DayPhase> OnPhaseChanged;
         public event Action OnNewDay;
+        public event Action<int> OnHourChanged;
 
         private void Awake()
         {
@@ -39,6 +41,7 @@ namespace MWI.Time
             }
 
             _currentTime = (float)_startHour / 24f;
+            _lastHour = _startHour;
             UpdatePhase(true);
         }
 
@@ -56,6 +59,14 @@ namespace MWI.Time
             {
                 _currentTime -= 1f;
                 OnNewDay?.Invoke();
+            }
+
+            // Détection du changement d'heure
+            int currentHour = CurrentHour;
+            if (currentHour != _lastHour)
+            {
+                _lastHour = currentHour;
+                OnHourChanged?.Invoke(currentHour);
             }
 
             UpdatePhase(false);

@@ -6,6 +6,11 @@ public class CharacterLocations : MonoBehaviour
     public Zone homeZone;
     public Zone workZone;
 
+    [Header("Assigned Buildings")]
+    public ResidentialBuilding homeBuilding;
+    public CommercialBuilding workBuilding;
+    public Job currentJob;
+
     /// <summary>
     /// Retrieves the specific Zone instance assigned to this character based on the requested ZoneType.
     /// </summary>

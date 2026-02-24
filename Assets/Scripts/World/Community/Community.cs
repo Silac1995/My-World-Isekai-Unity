@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -14,8 +15,8 @@ public class Community
     public List<Character> members = new List<Character>();
     
     [Header("Hierarchy")]
-    public Community parentCommunity;
-    public List<Community> subCommunities = new List<Community>();
+    [NonSerialized] public Community parentCommunity;
+    [NonSerialized] public List<Community> subCommunities = new List<Community>();
 
     [Header("Territory")]
     public List<Zone> communityZones = new List<Zone>();

@@ -8,10 +8,10 @@ public class Zone : MonoBehaviour
     public ZoneType zoneType;
     public string zoneName;
 
-    private BoxCollider _boxCollider;
-    private List<GameObject> _charactersInside = new List<GameObject>();
+    protected BoxCollider _boxCollider;
+    protected List<GameObject> _charactersInside = new List<GameObject>();
 
-    private void Awake()
+    protected virtual void Awake()
     {
         _boxCollider = GetComponent<BoxCollider>();
         _boxCollider.isTrigger = true;
