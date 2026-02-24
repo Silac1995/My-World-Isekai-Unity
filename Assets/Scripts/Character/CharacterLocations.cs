@@ -1,5 +1,4 @@
 using UnityEngine;
-using MWI.World.Zones;
 
 public class CharacterLocations : MonoBehaviour
 {

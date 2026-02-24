@@ -1,13 +1,10 @@
-namespace MWI.World.Community
+public enum CommunityLevel
 {
-    public enum CommunityLevel
-    {
-        SmallGroup,
-        Camp,
-        Village,
-        Town,
-        City,
-        Kingdom,
-        Empire
-    }
+    SmallGroup,
+    Camp,
+    Village,
+    Town,
+    City,
+    Kingdom,
+    Empire
 }

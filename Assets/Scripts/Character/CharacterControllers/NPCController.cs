@@ -66,7 +66,11 @@ public class NPCController : CharacterGameController
             bool isFriend = _character.CharacterRelation != null && _character.CharacterRelation.IsFriend(target);
             bool sameParty = _character.CurrentParty != null && _character.CurrentParty == target.CurrentParty;
 
-            if (isFriend || sameParty)
+            // Loyalty trait makes characters more likely to help acquaintances (not just friends)
+            bool isAcquaintance = _character.CharacterRelation != null && _character.CharacterRelation.GetRelationshipWith(target)?.RelationValue >= 0;
+            bool isLoyalHelp = _character.CharacterTraits != null && (_character.CharacterTraits.GetLoyalty() > 0.5f) && isAcquaintance;
+
+            if (isFriend || sameParty || isLoyalHelp)
             {
                 string helpMsg = sameParty ? "Protect the group!" : "Hang on, my friend! I'm coming!";
                 Debug.Log($"<color=green>[Assistance]</color> {_character.CharacterName} voit son {(sameParty ? "coéquipier" : "ami")} {target.CharacterName} en combat et fonce l'aider !");
@@ -85,9 +89,15 @@ public class NPCController : CharacterGameController
         // On attaque nos ennemis même s'ils sont en train de papoter !
         if (rel != null && target.IsAlive() && rel.RelationValue <= -10)
         {
-            if (Random.value < 0.2f)
+            float aggroChance = 0.2f;
+            if (_character.CharacterTraits != null)
             {
-                Debug.Log($"<color=red>[Aggression]</color> {_character.CharacterName} repère son ennemi {target.CharacterName} et attaque !");
+                aggroChance += _character.CharacterTraits.GetAggressivity() * 0.5f;
+            }
+
+            if (Random.value < aggroChance)
+            {
+                Debug.Log($"<color=red>[Aggression]</color> {_character.CharacterName} repère son ennemi {target.CharacterName} et attaque ! (Chance: {aggroChance:P0})");
                 PushBehaviour(new AttackTargetBehaviour(target));
                 return;
             }
@@ -127,6 +137,15 @@ public class NPCController : CharacterGameController
         // UTILISATION DE LA LOGIQUE CENTRALISÉE
         float interactionChance = rel.GetInteractionChance();
 
+        // Application des traits comportementaux
+        if (_character.CharacterTraits != null)
+        {
+            float sociability = _character.CharacterTraits.GetSociability();
+            // Map 0.0 - 1.0 to -0.5 to +0.5 impact
+            float sociabilityImpact = (sociability - 0.5f); 
+            interactionChance += sociabilityImpact;
+        }
+
         bool isSociallyStarved = false;
         if (_character.CharacterNeeds != null)
         {
@@ -135,6 +154,9 @@ public class NPCController : CharacterGameController
         }
         
         if (isSociallyStarved) interactionChance = Mathf.Max(interactionChance, 0.25f);
+        
+        // Clamp the final chance
+        interactionChance = Mathf.Clamp01(interactionChance);
 
         if (Random.value < interactionChance)
         {
