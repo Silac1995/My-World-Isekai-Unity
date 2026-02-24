@@ -153,7 +153,15 @@ public class CharacterCombat : MonoBehaviour
         if (_character.Stats == null || _character.Stats.Initiative == null) return;
 
         float speedValue = _character.Stats.Speed != null ? _character.Stats.Speed.Value : 0f;
-        float totalGain = (_baseInitiativePerTick + (speedValue * _speedMultiplierInitiative)) * UnityEngine.Random.Range(0.7f, 1.3f);
+        
+        // 1. Calcul de base
+        float rawGain = _baseInitiativePerTick + (speedValue * _speedMultiplierInitiative);
+        
+        // 2. On plafonne à 2.0 (On prend la valeur la plus petite entre le calcul et 2.0)
+        float cappedGain = Mathf.Min(rawGain, 2.0f);
+        
+        // 3. On applique le Random Range sur la valeur plafonnée
+        float totalGain = cappedGain * UnityEngine.Random.Range(0.7f, 1.3f);
         
         _character.Stats.Initiative.IncreaseCurrentAmount(totalGain);
     }

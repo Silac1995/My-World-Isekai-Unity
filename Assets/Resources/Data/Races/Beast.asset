@@ -12,44 +12,44 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d8f0b3414e4ae4f4f8fb5c5d5513edfa, type: 3}
   m_Name: Beast
   m_EditorClassIdentifier: Assembly-CSharp::RaceSO
-  RaceName: 
-  raceName: 
+  RaceName: Beast
+  raceName: Beast
   Description: 
   characterVisualPreset: {fileID: 11400000, guid: 36ff85c4179d2e14c871d2af710bdac5, type: 2}
   character_prefabs:
   - {fileID: 5456933137695734175, guid: 7b374d387037c9647bef899d050bac5c, type: 3}
   - {fileID: 5722855078630121073, guid: 0ac29b0de8149704287ff029d3a05e46, type: 3}
-  bonusSpeed: 0
-  BaseStrength: 10
-  BaseAgility: 10
-  BaseDexterity: 10
-  BaseIntelligence: 10
-  BaseEndurance: 10
-  BaseHealthOffset: 100
-  HealthMultiplier: 10
+  bonusSpeed: 2
+  BaseStrength: 5
+  BaseAgility: 5
+  BaseDexterity: 5
+  BaseIntelligence: 5
+  BaseEndurance: 5
+  BaseHealthOffset: 30
+  HealthMultiplier: 0.3
   BaseStaminaOffset: 50
   StaminaMultiplier: 10
   BaseManaOffset: 50
   ManaMultiplier: 10
   BaseInitiative: 100
   BaseArmor: 0
-  BaseMoveSpeedOffset: 5
+  BaseMoveSpeedOffset: 7
   MoveSpeedMultiplier: 0.1
-  BasePhysicalPowerOffset: 0
+  BasePhysicalPowerOffset: 5
   PhysicalPowerMultiplier: 2
-  BaseSpeedOffset: 0
+  BaseSpeedOffset: 50
   SpeedMultiplier: 1
-  BaseDodgeChanceOffset: 0
+  BaseDodgeChanceOffset: 1
   DodgeChanceMultiplier: 0.8
-  BaseAccuracyOffset: 0
+  BaseAccuracyOffset: 1
   AccuracyMultiplier: 1
-  BaseCastingSpeedOffset: 0
+  BaseCastingSpeedOffset: 1
   CastingSpeedMultiplier: 1
-  BaseMagicalPowerOffset: 0
+  BaseMagicalPowerOffset: 1
   MagicalPowerMultiplier: 1
   BaseManaRegenRateOffset: 0
   ManaRegenRateMultiplier: 1
-  BaseStaminaRegenRateOffset: 0
+  BaseStaminaRegenRateOffset: 1
   StaminaRegenRateMultiplier: 1
-  BaseCriticalHitChanceOffset: 0
+  BaseCriticalHitChanceOffset: 1
   CriticalHitChanceMultiplier: 0.1

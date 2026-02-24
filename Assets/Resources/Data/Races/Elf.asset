@@ -32,23 +32,23 @@ MonoBehaviour:
   ManaMultiplier: 10
   BaseInitiative: 100
   BaseArmor: 0
-  BaseMoveSpeedOffset: 5
+  BaseMoveSpeedOffset: 7
   MoveSpeedMultiplier: 0.1
-  BasePhysicalPowerOffset: 0
+  BasePhysicalPowerOffset: 2
   PhysicalPowerMultiplier: 2
-  BaseSpeedOffset: 0
+  BaseSpeedOffset: 1
   SpeedMultiplier: 1
-  BaseDodgeChanceOffset: 0
+  BaseDodgeChanceOffset: 1
   DodgeChanceMultiplier: 0.8
-  BaseAccuracyOffset: 0
+  BaseAccuracyOffset: 1
   AccuracyMultiplier: 1
-  BaseCastingSpeedOffset: 0
+  BaseCastingSpeedOffset: 1
   CastingSpeedMultiplier: 1
-  BaseMagicalPowerOffset: 0
+  BaseMagicalPowerOffset: 1
   MagicalPowerMultiplier: 1
   BaseManaRegenRateOffset: 0
   ManaRegenRateMultiplier: 1
-  BaseStaminaRegenRateOffset: 0
+  BaseStaminaRegenRateOffset: 1
   StaminaRegenRateMultiplier: 1
-  BaseCriticalHitChanceOffset: 0
+  BaseCriticalHitChanceOffset: 1
   CriticalHitChanceMultiplier: 0.1
