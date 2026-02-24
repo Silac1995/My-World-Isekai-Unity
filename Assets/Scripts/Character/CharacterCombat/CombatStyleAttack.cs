@@ -26,9 +26,11 @@ public class CombatStyleAttack : MonoBehaviour
         if (_character == null || _character.Stats == null || _combatStyleSO == null)
             return _damage;
 
-        float physicalDamage = _character.Stats.PhysicalPower.Value;
+        float physicalDamage = _character.Stats.PhysicalPower.Value * _combatStyleSO.PhysicalPowerPercentage;
+        float baseStyleDamage = _combatStyleSO.BaseDamage;
         float scalingStatValue = _character.Stats.GetSecondaryStatValue(_combatStyleSO.ScalingStat);
-        return physicalDamage + (_combatStyleSO.StatMultiplier * scalingStatValue);
+        
+        return physicalDamage + baseStyleDamage + (_combatStyleSO.StatMultiplier * scalingStatValue);
     }
 
     public void Initialize(Character character, int additionalTargets)
@@ -41,9 +43,14 @@ public class CombatStyleAttack : MonoBehaviour
         if (_character != null && _character.Stats != null && _combatStyleSO != null)
         {
             float statValue = _character.Stats.GetSecondaryStatValue(_combatStyleSO.ScalingStat);
-            _damage *= (statValue * _combatStyleSO.StatMultiplier);
+            float baseStyleDamage = _combatStyleSO.BaseDamage;
+            float physicalPowerContrib = _character.Stats.PhysicalPower.Value * _combatStyleSO.PhysicalPowerPercentage;
             
-            Debug.Log($"<color=red>[Combat]</color> Dégâts ajustés pour {_character.CharacterName} : {_damage} (Stat: {_combatStyleSO.ScalingStat}={statValue}, Mult: {_combatStyleSO.StatMultiplier})");
+            // _damage starts at 1f by default in Unity Inspector but GetDamage computes it natively during strike
+            // This multiplier is just for initial log/scaling visualization if needed, but the true damage is done in GetDamage().
+            _damage = physicalPowerContrib + baseStyleDamage + (statValue * _combatStyleSO.StatMultiplier);
+            
+            Debug.Log($"<color=red>[Combat]</color> Dégâts de base calculés pour {_character.CharacterName} : {_damage} (BaseStyle: {baseStyleDamage}, Physical Power ({_combatStyleSO.PhysicalPowerPercentage * 100}%): {physicalPowerContrib}, Stat: {_combatStyleSO.ScalingStat}={statValue} x {_combatStyleSO.StatMultiplier})");
         }
     }
 
