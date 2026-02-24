@@ -63,4 +63,26 @@ public class CommunityManager : MonoBehaviour
         Debug.Log($"<color=cyan>[Community Manager]</color> Established {type} '{zoneName}' for {community.communityName} at {position}.");
         return newZone;
     }
+
+    /// <summary>
+    /// Registers a newly founded community into the global active list.
+    /// </summary>
+    public void RegisterCommunity(Community community)
+    {
+        if (community != null && !activeCommunities.Contains(community))
+        {
+            activeCommunities.Add(community);
+        }
+    }
+
+    /// <summary>
+    /// Removes a dissolved community from the global active list.
+    /// </summary>
+    public void UnregisterCommunity(Community community)
+    {
+        if (community != null && activeCommunities.Contains(community))
+        {
+            activeCommunities.Remove(community);
+        }
+    }
 }

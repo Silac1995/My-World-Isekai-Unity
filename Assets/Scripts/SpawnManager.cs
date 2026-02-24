@@ -8,6 +8,7 @@ public class SpawnManager : MonoBehaviour
     [SerializeField] private GameObject _defaultItemPrefab;
 
     private CharacterPersonalitySO[] _availablePersonalities;
+    private CharacterBehavioralTraitsSO[] _availableTraits;
 
     private void Awake()
     {
@@ -24,6 +25,10 @@ public class SpawnManager : MonoBehaviour
         // Chargement des personnalités pour le spawn aléatoire
         _availablePersonalities = Resources.LoadAll<CharacterPersonalitySO>("Data/Personnality");
         Debug.Log($"<color=cyan>[SpawnManager]</color> {_availablePersonalities.Length} personnalités chargées.");
+
+        // Chargement des traits comportementaux
+        _availableTraits = Resources.LoadAll<CharacterBehavioralTraitsSO>("Data/Behavioural Traits");
+        Debug.Log($"<color=cyan>[SpawnManager]</color> {_availableTraits.Length} profils comportementaux chargés.");
 
         if (spawnGameObject == null)
         {
@@ -166,6 +171,14 @@ public class SpawnManager : MonoBehaviour
         {
             character.CharacterProfile.SetPersonality(personality);
             Debug.Log($"<color=cyan>[Spawn]</color> {character.CharacterName} a spawn avec la personnalité : {personality.PersonalityName}");
+        }
+
+        // --- GESTION DES TRAITS COMPORTEMENTAUX ---
+        if (_availableTraits != null && _availableTraits.Length > 0 && character.CharacterTraits != null)
+        {
+            CharacterBehavioralTraitsSO randomTrait = _availableTraits[Random.Range(0, _availableTraits.Length)];
+            character.CharacterTraits.behavioralTraitsProfile = randomTrait;
+            Debug.Log($"<color=cyan>[Spawn]</color> {character.CharacterName} a reçu le profil comportemental : {randomTrait.name}");
         }
 
         return character;

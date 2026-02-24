@@ -38,6 +38,7 @@ public class Character : MonoBehaviour
     [SerializeField] private CharacterStatusManager _statusManager;
     [SerializeField] private CharacterProfile _characterProfile;
     [SerializeField] private CharacterTraits _characterTraits;
+    [SerializeField] private CharacterCommunity _characterCommunity;
     #endregion
 
     #region Private Fields
@@ -81,6 +82,7 @@ public class Character : MonoBehaviour
     public CharacterEquipment CharacterEquipment => _equipment;
     public CharacterRelation CharacterRelation => _characterRelation;
     public CharacterParty CurrentParty => _currentParty;
+    public CharacterCommunity CharacterCommunity => _characterCommunity;
     public CharacterInteractable CharacterInteractable => _characterInteractable;
     public CharacterCombat CharacterCombat => _characterCombat;
     public CharacterNeeds CharacterNeeds => _characterNeeds;
@@ -128,6 +130,7 @@ public class Character : MonoBehaviour
         if (_characterProfile != null) _characterProfile.Initialize(this);
         
         if (_characterTraits == null) _characterTraits = GetComponentInChildren<CharacterTraits>();
+        if (_characterCommunity == null) _characterCommunity = GetComponentInChildren<CharacterCommunity>();
         
         _cachedNavMeshAgent = GetComponent<NavMeshAgent>();
         _isDead = false;

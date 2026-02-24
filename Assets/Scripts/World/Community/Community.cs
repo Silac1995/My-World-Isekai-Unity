@@ -33,6 +33,10 @@ public class Community
         if (!members.Contains(newMember))
         {
             members.Add(newMember);
+            if (newMember != null && newMember.CharacterCommunity != null) 
+            {
+                newMember.CharacterCommunity.SetCurrentCommunity(this);
+            }
         }
     }
 
@@ -41,6 +45,15 @@ public class Community
         if (members.Contains(member))
         {
             members.Remove(member);
+            if (member != null && member.CharacterCommunity != null) 
+            {
+                // Unset only if it currently points to this community to avoid bugs when swapping
+                if (member.CharacterCommunity.CurrentCommunity == this)
+                {
+                    member.CharacterCommunity.SetCurrentCommunity(null);
+                }
+            }
+
             // Handle case where leader leaves
             if (leader == member)
             {
