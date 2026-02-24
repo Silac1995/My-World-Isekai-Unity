@@ -8,6 +8,8 @@ namespace MWI.World.Zones
         Job,
         Tavern,
         Market,
-        PatrolRoute
+        PatrolRoute,
+        Camp,
+        GatheringArea
     }
 }
