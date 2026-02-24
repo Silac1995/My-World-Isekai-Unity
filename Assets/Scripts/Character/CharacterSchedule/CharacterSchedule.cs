@@ -26,6 +26,7 @@ public class CharacterSchedule : MonoBehaviour
     private void Awake()
     {
         if (_character == null) _character = GetComponent<Character>();
+        if (_timeManager == null) _timeManager = MWI.Time.TimeManager.Instance;
     }
 
     private void OnEnable()

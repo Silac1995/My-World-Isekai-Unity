@@ -200,6 +200,53 @@ AudioSource:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
+--- !u!1 &585987408311895101
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 673712489822227902}
+  - component: {fileID: 8656923019881374110}
+  m_Layer: 0
+  m_Name: Schedule
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &673712489822227902
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 585987408311895101}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 6179432398992828966}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &8656923019881374110
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 585987408311895101}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0d2885347e2ad98479aed56b744b96ee, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CharacterSchedule
+  _character: {fileID: 2536622428659117900}
+  _timeManager: {fileID: 0}
+  _entries: []
 --- !u!1 &855250111993393986
 GameObject:
   m_ObjectHideFlags: 0
@@ -315,7 +362,7 @@ Transform:
   m_GameObject: {fileID: 1948936245242239289}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -1.20455, y: 0.05719, z: 0}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -560,10 +607,11 @@ Transform:
   m_ConstrainProportionsScale: 1
   m_Children:
   - {fileID: 7433225657293554030}
+  - {fileID: 673712489822227902}
+  - {fileID: 6503437136188520673}
   - {fileID: 378579971513508917}
   - {fileID: 2098499672776739634}
   - {fileID: 215557950362507917}
-  - {fileID: 6503437136188520673}
   - {fileID: 8052248722467460333}
   - {fileID: 2146869985690736942}
   - {fileID: 3661421223759161407}
@@ -677,6 +725,7 @@ MonoBehaviour:
   _characterCommunity: {fileID: 2813222458386978924}
   _characterInvitation: {fileID: 2573760608137570996}
   _characterJob: {fileID: 360546061650157614}
+  _characterSchedule: {fileID: 0}
 --- !u!114 &2677209831397210094
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -799,7 +848,7 @@ Transform:
   m_GameObject: {fileID: 4418266412928403763}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -1.20455, y: 0.05719, z: 0}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
