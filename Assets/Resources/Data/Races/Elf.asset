@@ -25,7 +25,7 @@ MonoBehaviour:
   BaseIntelligence: 5
   BaseEndurance: 5
   BaseHealthOffset: 10
-  HealthMultiplier: 10
+  HealthMultiplier: 0.1
   BaseStaminaOffset: 50
   StaminaMultiplier: 10
   BaseManaOffset: 50

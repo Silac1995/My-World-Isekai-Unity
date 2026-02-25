@@ -3,24 +3,32 @@
 public class CameraFollow : MonoBehaviour
 {
     [Header("Camera Position")]
-    [SerializeField] private float fixedYPosition = 20F;
-    [SerializeField] private float minZPosition = 70f;
-    [SerializeField] private float offsetZ = -14f;
+    [SerializeField] private float offsetY = 10.5F;
+    [SerializeField] private float minZPosition = 60f;
+    [SerializeField] private float offsetZ = -17f;
 
     [Header("Camera Rotation")]
     // Le Range crée un curseur entre 0 et 90 degrés dans l'inspecteur
     [Range(0f, 90f)]
-    [SerializeField] private float rotationX = 18f;
+    [SerializeField] private float rotationX = 6f;
 
     [SerializeField] private Transform target;
     [SerializeField] private Character character;
     [SerializeField] private PlayerUI playerUI;
 
     private GameObject targetGameObject;
+    private Camera _camera;
 
     private void Start()
     {
-        
+        _camera = GetComponent<Camera>();
+        if (_camera != null)
+        {
+            // Tri des sprites basé uniquement sur Z (profondeur dans le monde)
+            // Corrige le sorting incorrect quand les personnages sont à des hauteurs Y différentes
+            _camera.transparencySortMode = TransparencySortMode.CustomAxis;
+            _camera.transparencySortAxis = new Vector3(0, 0, 1);
+        }
     }
 
     private void LateUpdate()
@@ -31,10 +39,10 @@ public class CameraFollow : MonoBehaviour
         float desiredZ = target.position.z + offsetZ;
         float clampedZ = Mathf.Max(desiredZ, minZPosition);
 
-        // Application de la position
+        // Application de la position (suit le personnage sur tous les axes)
         transform.position = new Vector3(
             target.position.x,
-            fixedYPosition,
+            target.position.y + offsetY,
             clampedZ
         );
 
