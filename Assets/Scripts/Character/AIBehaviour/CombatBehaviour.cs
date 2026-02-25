@@ -20,11 +20,20 @@ public class CombatBehaviour : IAIBehaviour
     private const float IDEAL_MAX = 8.0f;        
     private const float MAX_DISTANCE = 12.0f;    
 
+    // --- SOFT ZONE CONSTRAINT ---
+    // Au lieu d'un mur invisible, on applique un biais doux vers le centre de la zone
+    // quand le NPC est en dehors. Il peut sortir pour sa formation/attaque, mais sera
+    // doucement ramene si rien ne le retient dehors.
+    private const float SOFT_ZONE_MARGIN = 5f; // Distance max hors zone avant biais fort
+    private float _timeOutsideZone = 0f;
+    private bool _isChargingTarget = false; // True quand le NPC fonce sur sa cible pour attaquer
+    private const float OUTSIDE_ZONE_PATIENCE = 4f; // Secondes avant de forcer un retour
+
     public Character Target => _currentTarget;
     public bool IsFinished => _isFinished;
     public bool HasTarget => _currentTarget != null && _currentTarget.IsAlive() && (_battleManager == null || _battleManager.AreOpponents(_selfCharacter, _currentTarget));
 
-    private Character _selfCharacter; // Cache pour HasTarget
+    private Character _selfCharacter;
 
     public CombatBehaviour(BattleManager battleManager, Character target)
     {
@@ -35,7 +44,6 @@ public class CombatBehaviour : IAIBehaviour
         
         if (target != null && battleManager != null)
         {
-            // Initialisation simple, la vraie destination sera demandée au manager dans Act()
             _currentDestination = target.transform.position; 
         }
     }
@@ -44,38 +52,51 @@ public class CombatBehaviour : IAIBehaviour
     {
         _currentTarget = target;
         _lastMoveTime = Time.time;
-        // On laisse Act gérer le premier CalculateSafeDestination avec l'ID correct
     }
 
     public void Terminate() => _isFinished = true;
 
     public void Act(Character self)
     {
-        _selfCharacter = self; // Update cache
+        _selfCharacter = self;
+        _isChargingTarget = false;
         if (_battleManager == null || _isFinished) return;
 
         var movement = self.CharacterMovement;
         if (movement == null) return;
 
-        // --- NOUVEAU : DÉTECTION DE SORTIE DE ZONE ---
-        // Si le personnage lui-même est en dehors, sa priorité ABSOLUE est de rerentrer
+        // --- SOFT ZONE : Tracking du temps hors zone ---
         if (_battleZone == null) _battleZone = _battleManager.GetComponent<BoxCollider>();
-        if (_battleZone != null && !_battleZone.bounds.Contains(self.transform.position))
+        bool isOutsideZone = _battleZone != null && !_battleZone.bounds.Contains(self.transform.position);
+        
+        if (isOutsideZone)
         {
-            Vector3 returnPos = _battleZone.ClosestPoint(self.transform.position);
-            // On ajoute une petite marge pour éviter les micro-ajustements
-            if (Vector3.Distance(self.transform.position, returnPos) > 0.5f)
+            _timeOutsideZone += Time.deltaTime;
+            
+            // Si le NPC est hors zone depuis trop longtemps ET qu'il n'est pas en train d'attaquer,
+            // on le ramene doucement vers le centre de la zone
+            if (_timeOutsideZone > OUTSIDE_ZONE_PATIENCE)
             {
-                movement.Resume();
-                movement.SetDestination(returnPos);
-                Debug.Log($"<color=orange>[AI]</color> {self.CharacterName} est hors-zone ! Retour forcé vers le combat.");
-                return; // On ne fait rien d'autre tant qu'on n'est pas revenu
+                float distOutside = Vector3.Distance(self.transform.position, _battleZone.ClosestPoint(self.transform.position));
+                
+                // Si vraiment trop loin (au-dela de la marge), retour prioritaire
+                if (distOutside > SOFT_ZONE_MARGIN)
+                {
+                    Vector3 returnPos = _battleZone.bounds.center;
+                    movement.Resume();
+                    movement.SetDestination(returnPos);
+                    Debug.Log($"<color=orange>[AI]</color> {self.CharacterName} est trop loin de la zone de combat, retour en douceur.");
+                    return;
+                }
             }
+        }
+        else
+        {
+            _timeOutsideZone = 0f;
         }
 
         if (!HasTarget)
         {
-            // Tentative de re-acquisition automatique si la cible est devenue invalide (allié ou morte)
             BattleTeam enemyTeam = _battleManager.GetOpponentTeamOf(self);
             Character nextTarget = enemyTeam?.GetClosestMember(self.transform.position);
 
@@ -104,8 +125,6 @@ public class CombatBehaviour : IAIBehaviour
             float dx = Mathf.Abs(self.transform.position.x - _currentTarget.transform.position.x);
             float zDist = Mathf.Abs(self.transform.position.z - _currentTarget.transform.position.z);
 
-            // --- NOUVEAU : DÉTECTION D'AGRESSION MUTUELLE ---
-            // Si la cible nous cible aussi avec un CombatBehaviour, on considère l'agression comme mutuelle
             bool targetIsAggressiveTowardsUs = false;
             var targetCombatBehaviour = _currentTarget.Controller.GetCurrentBehaviour<CombatBehaviour>();
             if (targetCombatBehaviour != null && targetCombatBehaviour.Target == self)
@@ -113,8 +132,6 @@ public class CombatBehaviour : IAIBehaviour
                 targetIsAggressiveTowardsUs = true;
             }
 
-            // --- NOUVEAU : On s'approche TOUJOURS si on est prêt (on ne reste pas planté) ---
-            // On vise la cible mais on s'arrête un peu avant (90% de la range) pour éviter de se chevaucher
             float stopThreshold = attackRange * 0.9f;
             bool isWithinRange = distToTarget <= stopThreshold;
             bool isXTooClose = dx < X_FLIP_SAFETY;
@@ -122,22 +139,16 @@ public class CombatBehaviour : IAIBehaviour
 
             if (!isWithinRange || isXTooClose || !isZAligned)
             {
-                // Si on n'est pas à portée OU trop proche sur X OU pas aligné sur Z -> On bouge
                 if (isXTooClose)
                     _currentDestination = CalculateEscapeDestination(self.transform.position, _currentTarget.transform.position);
-                else
-                    // Quand on est PRÊT à frapper, on FONCE sur la cible, on ne reste pas dans notre slot de formation (qui est trop loin)
+                _isChargingTarget = true;
                     _currentDestination = _currentTarget.transform.position;
             }
             else
             {
-                // On n'arrête le perso QUE s'il est à portée, ok sur X et aligné sur Z
                 movement.Stop();
             }
             
-            // --- LOGIQUE DE FRAPPE ---
-            // On ne frappe que si on est à portée (3D) et aligné en Z.
-            // On ajoute un failsafe de 3s pour forcer la frappe même si la cible bouge
             bool targetIsStationary = _currentTarget.CharacterMovement != null && _currentTarget.CharacterMovement.GetVelocity().sqrMagnitude < 0.01f;
             bool forcedStrike = timeReady > 3.0f;
             bool patienceThresholdMet = timeReady > 1.5f || targetIsAggressiveTowardsUs || forcedStrike;
@@ -146,7 +157,6 @@ public class CombatBehaviour : IAIBehaviour
             {
                 movement.Stop();
                 
-                // Force facing before strike
                 self.CharacterVisual?.FaceTarget(_currentTarget.transform.position);
 
                 self.CharacterCombat.ExecuteAction(() => self.CharacterCombat.Attack());
@@ -159,18 +169,15 @@ public class CombatBehaviour : IAIBehaviour
         }
         else
         {
-            _readyStartTime = 0; // On n'est plus prêt, on reset le timer
-            // --- LOGIQUE DE DÉPLACEMENT "LAZY" (EXISTANTE) ---
+            _readyStartTime = 0;
             bool tooClose = distToTarget < PREFERRED_X_GAP * 0.75f;
             bool tooFar = distToTarget > MAX_DISTANCE;
             bool timerExpired = Time.time - _lastMoveTime > _moveInterval;
 
-            // Stability check: Only update path if we aren't already moving or if it's been a while
             bool canUpdate = Time.time - _lastMoveTime > 1.5f;
 
             if (canUpdate && (tooClose || tooFar || timerExpired))
             {
-                // If too close, we prioritize moving away in a logical direction
                 if (tooClose)
                 {
                     _currentDestination = CalculateEscapeDestination(self.transform.position, _currentTarget.transform.position);
@@ -180,33 +187,34 @@ public class CombatBehaviour : IAIBehaviour
                     _currentDestination = CalculateSafeDestination(self.transform.position, self);
                 }
 
-                _moveInterval = Random.Range(5f, 7f); // High wait for "lazy" feel
+                _moveInterval = Random.Range(5f, 7f);
                 _lastMoveTime = Time.time;
             }
         }
 
-        // BATTLE ZONE CONSTRAINT
-        if (_battleZone == null) _battleZone = _battleManager.GetComponent<BoxCollider>();
-
+        // --- SOFT ZONE BIAS (au lieu du hard clamp) ---
+        // Si la destination est hors zone, on la tire doucement vers le centre
+        // au lieu de la clamper brutalement sur le bord
         Vector3 finalPos = _currentDestination;
-        if (_battleZone != null && !_battleZone.bounds.Contains(finalPos))
+        if (_battleZone != null && !_battleZone.bounds.Contains(finalPos) && !_isChargingTarget)
         {
-            // On trouve le point le plus proche autorisé
-            finalPos = _battleZone.ClosestPoint(finalPos);
+            Vector3 closestInZone = _battleZone.ClosestPoint(finalPos);
+            float distOutsideZone = Vector3.Distance(finalPos, closestInZone);
             
-            // On repousse très légèrement (0.2m) vers le centre de la zone pour être sûr
-            // que le point soit bien accessible sur le NavMesh sans "gratter" la bordure
-            Vector3 pushBackDir = (_battleZone.bounds.center - finalPos).normalized;
-            finalPos += pushBackDir * 0.2f;
+            // Plus on est loin de la zone, plus le biais est fort (0% a 0m, 100% a SOFT_ZONE_MARGIN)
+            float biasFactor = Mathf.Clamp01(distOutsideZone / SOFT_ZONE_MARGIN);
+            
+            // On interpole entre la destination originale et le point le plus proche dans la zone
+            // biasFactor faible = on garde presque la destination originale (formation OK)
+            // biasFactor fort = on ramene fortement vers la zone
+            finalPos = Vector3.Lerp(finalPos, closestInZone, biasFactor);
         }
         
-        // Only update movement if the destination is significantly different to avoid NavMesh jitter
         if (Vector3.Distance(movement.Destination, finalPos) > 0.5f)
         {
             movement.SetDestination(finalPos);
         }
 
-        // Face target
         Vector3 dirToTarget = _currentTarget.transform.position - self.transform.position;
         self.CharacterVisual?.UpdateFlip(dirToTarget);
     }
@@ -215,7 +223,6 @@ public class CombatBehaviour : IAIBehaviour
     {
         if (_battleManager == null || _currentTarget == null) return _currentTarget.transform.position;
 
-        // On demande au BattleManager notre place dans l'escarmouche en cours
         CombatEngagement engagement = _battleManager.RequestEngagement(self, _currentTarget);
         
         if (engagement != null)
@@ -223,14 +230,11 @@ public class CombatBehaviour : IAIBehaviour
             return engagement.GetAssignedPosition(self);
         }
 
-        // Fallback ultime (ne devrait jamais arriver si le BattleManager fonctionne)
         return _currentTarget.transform.position;
     }
 
     private Vector3 CalculateEscapeDestination(Vector3 selfPos, Vector3 targetPos)
     {
-        // Déterminisme : si parfaitement alignés, on force une séparation basée sur l'ID
-        // Sinon, on s'éloigne vers le point le plus dégagé de la cible sur l'axe X
         float xDir;
         if (Mathf.Abs(selfPos.x - targetPos.x) < 0.1f && _currentTarget != null) 
         {

@@ -18,6 +18,13 @@ public class CameraFollow : MonoBehaviour
     [Range(0f, 90f)]
     [SerializeField] private float rotationX = 13f;
 
+    [Header("Occlusion")]
+    [Tooltip("Layers qui bloquent la vue (mettre Environment)")]
+    [SerializeField] private LayerMask _occlusionLayer;
+    [SerializeField] private float _occlusionRadius = 0.3f;
+    [SerializeField] private float _minCameraDistance = 2f;
+    [SerializeField] private float _occlusionSmoothing = 10f;
+
     [SerializeField] private Transform target;
     [SerializeField] private Character character;
     [SerializeField] private PlayerUI playerUI;
@@ -27,6 +34,7 @@ public class CameraFollow : MonoBehaviour
     private float _targetZoom = 0.5f;
     private float _currentZoom = 0.5f;
     private Vector3 _smoothVelocity;
+    private float _currentOcclusionT = 1f; // 1 = position normale, 0 = au plus pres du perso
 
     private void Start()
     {
@@ -42,7 +50,7 @@ public class CameraFollow : MonoBehaviour
     {
         if (target == null) return;
 
-        // Zoom via scroll (scroll up = zoom in = 0, scroll down = zoom out = 1)
+        // Zoom via scroll
         float scroll = Input.GetAxis("Mouse ScrollWheel");
         if (Mathf.Abs(scroll) > 0.01f)
         {
@@ -59,19 +67,54 @@ public class CameraFollow : MonoBehaviour
         float desiredZ = target.position.z + offsetZ;
         float clampedZ = Mathf.Max(desiredZ, minZPosition);
 
-        // Position cible avec smoothing
-        Vector3 targetPos = new Vector3(
+        // Position cible ideale (sans occlusion)
+        Vector3 idealPos = new Vector3(
             target.position.x,
             target.position.y + offsetY,
             clampedZ
         );
 
-        transform.position = Vector3.SmoothDamp(transform.position, targetPos, ref _smoothVelocity, followSmoothing);
+        // --- OCCLUSION AVOIDANCE ---
+        // On utilise le centre visuel du personnage pour l''occlusion (pas les pieds)
+        Vector3 occlusionOrigin = target.position;
+        if (character != null && character.CharacterVisual != null)
+        {
+            occlusionOrigin = character.CharacterVisual.GetVisualCenter();
+        }
+        Vector3 finalPos = HandleOcclusion(occlusionOrigin, idealPos);
 
+        transform.position = Vector3.SmoothDamp(transform.position, finalPos, ref _smoothVelocity, followSmoothing);
         transform.rotation = Quaternion.Euler(rotationX, 0f, 0f);
     }
 
-    // ... Reste de tes méthodes SetGameObject et SetTarget identiques ...
+    /// <summary>
+    /// SphereCast du personnage vers la position ideale de la camera.
+    /// Si un obstacle est detecte, on rapproche la camera.
+    /// </summary>
+    private Vector3 HandleOcclusion(Vector3 targetPos, Vector3 idealCamPos)
+    {
+        Vector3 direction = idealCamPos - targetPos;
+        float maxDistance = direction.magnitude;
+
+        if (maxDistance < 0.1f) return idealCamPos;
+
+        float targetT = 1f; // Par defaut, position ideale
+
+        if (Physics.SphereCast(targetPos, _occlusionRadius, direction.normalized, out RaycastHit hit, maxDistance, _occlusionLayer))
+        {
+            // Un obstacle bloque la vue : on place la camera juste devant
+            float safeDistance = Mathf.Max(hit.distance - 0.2f, _minCameraDistance);
+            targetT = safeDistance / maxDistance;
+            targetT = Mathf.Clamp01(targetT);
+        }
+
+        // Smooth transition : rapide pour rentrer (eviter le clip), plus lent pour sortir
+        float smoothSpeed = (targetT < _currentOcclusionT) ? _occlusionSmoothing * 2f : _occlusionSmoothing;
+        _currentOcclusionT = Mathf.Lerp(_currentOcclusionT, targetT, Time.deltaTime * smoothSpeed);
+
+        return Vector3.Lerp(targetPos, idealCamPos, _currentOcclusionT);
+    }
+
     public void SetGameObject(GameObject newGameObject)
     {
         this.targetGameObject = newGameObject;
