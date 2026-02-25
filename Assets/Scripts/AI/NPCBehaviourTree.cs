@@ -38,6 +38,11 @@ public class NPCBehaviourTree : MonoBehaviour
     private BTCond_WantsToSocialize _socialNode;
     private BTAction_Wander _wanderNode;
 
+    [Header("Performance")]
+    [SerializeField] private int _tickInterval = 5; // Tick tous les N frames
+
+    private int _frameOffset; // Décalage unique par NPC pour répartir la charge
+
     public Blackboard Blackboard => _blackboard;
     public Character Character => _character;
 
@@ -45,6 +50,9 @@ public class NPCBehaviourTree : MonoBehaviour
     {
         if (_character == null)
             _character = GetComponent<Character>();
+
+        // Chaque NPC a un offset différent pour ne pas tous ticker la même frame
+        _frameOffset = GetInstanceID() % _tickInterval;
     }
 
     private void Start()
@@ -95,6 +103,9 @@ public class NPCBehaviourTree : MonoBehaviour
     private void Update()
     {
         if (!_isInitialized || _root == null) return;
+
+        // Stagger : chaque NPC tick seulement 1 frame sur N
+        if ((Time.frameCount + _frameOffset) % _tickInterval != 0) return;
 
         // Le NPC n'est pas un joueur et doit être vivant
         if (_character.Controller is PlayerController) return;
