@@ -10,6 +10,7 @@ public class CombatFormation
     private class SlotPosition
     {
         public Vector3 LocalOffset;
+        public Vector3 Jitter; // Bruit fixe par slot, calculé une seule fois
         public Character Occupant;
     }
 
@@ -51,7 +52,9 @@ public class CombatFormation
         {
             float angleRad = (i * angleStep + angleOffsetDeg) * Mathf.Deg2Rad;
             Vector3 offset = new Vector3(Mathf.Cos(angleRad) * radius, 0, Mathf.Sin(angleRad) * radius);
-            _allAvailableSlots.Add(new SlotPosition { LocalOffset = offset, Occupant = null });
+            // Jitter fixe par slot, calculé une seule fois
+            Vector3 jitter = new Vector3(Random.Range(-0.5f, 0.5f), 0, Random.Range(-0.5f, 0.5f));
+            _allAvailableSlots.Add(new SlotPosition { LocalOffset = offset, Jitter = jitter, Occupant = null });
         }
     }
 
@@ -109,13 +112,14 @@ public class CombatFormation
     {
         if (_assignedSlots.TryGetValue(character, out SlotPosition slot))
         {
-            // On ajoute un petit bruit pour éviter que ce soit purement mathématique à 100%
-            Vector3 jitter = new Vector3(Random.Range(-0.5f, 0.5f), 0, Random.Range(-0.5f, 0.5f));
-            return focalPoint + slot.LocalOffset + jitter;
+            return focalPoint + slot.LocalOffset + slot.Jitter;
         }
 
-        // Fallback si pas de slot (trop de monde)
-        return focalPoint;
+        // Fallback si pas de slot : position stable autour de ROW_2 basée sur l'ID
+        // Évite que les NPCs marchent directement sur la cible
+        float angle = (Mathf.Abs(character.GetInstanceID()) % 360) * Mathf.Deg2Rad;
+        Vector3 overflowOffset = new Vector3(Mathf.Cos(angle) * ROW_2_RADIUS, 0, Mathf.Sin(angle) * ROW_2_RADIUS);
+        return focalPoint + overflowOffset;
     }
 
     public bool HasCharacter(Character character)
