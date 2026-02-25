@@ -29,6 +29,11 @@ public class CharacterNeeds : MonoBehaviour
         }
 
         if (Time.frameCount % 30 != 0) return;
+
+        // Si un BT est présent, il gère la résolution des besoins via BTCond_HasUrgentNeed
+        var npc = _character.Controller as NPCController;
+        if (npc != null && npc.HasBehaviourTree) return;
+
         EvaluateNeeds();
     }
 

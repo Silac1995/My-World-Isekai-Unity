@@ -105,6 +105,11 @@ public class CharacterSchedule : MonoBehaviour
         var npc = _character.Controller as NPCController;
         if (npc == null || !npc.enabled) return;
 
+        // Si un BT est présent, il lit CurrentActivity directement
+        // Pas besoin de manipuler la stack, le BT gère tout
+        if (npc.HasBehaviourTree) return;
+
+        // Mode legacy : on push le behaviour manuellement
         IAIBehaviour newBehaviour = activity switch
         {
             ScheduleActivity.Work => new WorkBehaviour(npc),

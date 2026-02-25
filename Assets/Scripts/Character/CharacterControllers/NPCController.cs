@@ -1,5 +1,6 @@
 ﻿using UnityEngine;
 using System.Linq;
+using MWI.AI;
 
 public class NPCController : CharacterGameController
 {
@@ -11,6 +12,11 @@ public class NPCController : CharacterGameController
     public float WalkRadius { get => walkRadius; set => walkRadius = value; }
     public float MinWaitTime { get => minWaitTime; set => minWaitTime = value; }
     public float MaxWaitTime { get => maxWaitTime; set => maxWaitTime = value; }
+
+    // Référence au BT (null si pas de BT)
+    private NPCBehaviourTree _behaviourTree;
+    public NPCBehaviourTree BehaviourTree => _behaviourTree;
+    public bool HasBehaviourTree => _behaviourTree != null;
 
     public override void Initialize()
     {
@@ -28,17 +34,30 @@ public class NPCController : CharacterGameController
         }
         if (Agent != null) Agent.updateRotation = false;
 
-        if (_character.CharacterAwareness != null)
-        {
-            _character.CharacterAwareness.OnCharacterDetected += HandleCharacterDetected;
-        }
+        // Chercher le BT sur le même GameObject
+        _behaviourTree = GetComponentInParent<NPCBehaviourTree>();
+        if (_behaviourTree == null)
+            _behaviourTree = GetComponent<NPCBehaviourTree>();
 
-        ResetStackTo(new WanderBehaviour(this));
+        if (HasBehaviourTree)
+        {
+            // Le BT gère tout : pas de HandleCharacterDetected ni de WanderBehaviour initial
+            Debug.Log($"<color=lime>[BT]</color> {_character.CharacterName} utilise le Behaviour Tree.");
+        }
+        else
+        {
+            // Mode legacy : on garde l'ancien système
+            if (_character.CharacterAwareness != null)
+            {
+                _character.CharacterAwareness.OnCharacterDetected += HandleCharacterDetected;
+            }
+            ResetStackTo(new WanderBehaviour(this));
+        }
     }
 
     private void OnDestroy()
     {
-        if (_character != null && _character.CharacterAwareness != null)
+        if (!HasBehaviourTree && _character != null && _character.CharacterAwareness != null)
         {
             _character.CharacterAwareness.OnCharacterDetected -= HandleCharacterDetected;
         }
