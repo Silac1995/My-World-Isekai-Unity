@@ -31,6 +31,14 @@ public class CharacterVisual : MonoBehaviour
 
     private bool isFacingRight = true;
 
+    // --- Look Target : cible persistante pour orienter le regard ---
+    private Transform _lookTarget;
+    public Transform LookTarget => _lookTarget;
+    public bool HasLookTarget => _lookTarget != null;
+
+    // --- Anti-flicker : cooldown entre les flips ---
+    private float _lastFlipTime = -999f;
+    private const float FLIP_COOLDOWN = 0.15f;
 
 
     // --- Dictionnaires ---
@@ -146,11 +154,15 @@ public class CharacterVisual : MonoBehaviour
 
             if (isFacingRight == value) return;
 
-            // Bloquer le flip pendant un knockback pour éviter les rotations bizarres
+            // Bloquer le flip pendant un knockback
             if (character != null && character.CharacterMovement != null && character.CharacterMovement.IsKnockedBack)
                 return;
 
+            // Anti-flicker : cooldown entre les flips
+            if (Time.time - _lastFlipTime < FLIP_COOLDOWN) return;
+
             isFacingRight = value;
+            _lastFlipTime = Time.time;
 
             ApplyFlip();
 
@@ -176,6 +188,15 @@ public class CharacterVisual : MonoBehaviour
         if (characterBlink == null) characterBlink = GetComponent<CharacterBlink>();
     }
 
+    private void LateUpdate()
+    {
+        // Si un look target est défini, on oriente le sprite vers lui chaque frame
+        if (_lookTarget != null)
+        {
+            FaceTarget(_lookTarget.position);
+        }
+    }
+
 
 
     #region Flip & Orientation Logic
@@ -189,23 +210,14 @@ public class CharacterVisual : MonoBehaviour
     /// </summary>
 
     public void FaceTarget(Vector3 targetPosition)
-
     {
-
-        // On compare les positions sur l'axe X
-
+        // Zone morte plus large pour éviter le flip-flop quand la cible est quasi alignée en X
         float direction = targetPosition.x - transform.position.x;
 
-
-
-        if (Mathf.Abs(direction) > 0.01f)
-
+        if (Mathf.Abs(direction) > 0.3f)
         {
-
             IsFacingRight = (direction > 0);
-
         }
-
     }
 
     /// <summary>
@@ -217,20 +229,42 @@ public class CharacterVisual : MonoBehaviour
         FaceTarget(target.transform.position);
     }
 
+    /// <summary>
+    /// Définit une cible persistante pour orienter le regard.
+    /// Le sprite s'orientera automatiquement vers cette cible chaque frame.
+    /// </summary>
+    public void SetLookTarget(Transform target)
+    {
+        _lookTarget = target;
+    }
+
+    /// <summary>
+    /// Définit un Character comme cible de regard persistante.
+    /// </summary>
+    public void SetLookTarget(Character target)
+    {
+        _lookTarget = target != null ? target.transform : null;
+    }
+
+    /// <summary>
+    /// Retire la cible de regard. Le flip redevient contrôlé par le mouvement.
+    /// </summary>
+    public void ClearLookTarget()
+    {
+        _lookTarget = null;
+    }
+
 
 
     public void UpdateFlip(Vector3 moveDir)
-
     {
+        // Si un look target est actif, le mouvement ne contrôle pas l'orientation
+        if (_lookTarget != null) return;
 
         if (Mathf.Abs(moveDir.x) > 0.01f)
-
         {
-
             IsFacingRight = (moveDir.x > 0);
-
         }
-
     }
 
 

@@ -3,6 +3,7 @@
 public class InteractBehaviour : IAIBehaviour
 {
     private bool _isFinished = false;
+    private bool _hasStopped = false;
     public bool IsFinished => _isFinished;
 
     public void Terminate() => _isFinished = true;
@@ -17,8 +18,15 @@ public class InteractBehaviour : IAIBehaviour
             return;
         }
 
+        // Premier tick : on coupe net tout mouvement résiduel
+        if (!_hasStopped)
+        {
+            self.CharacterMovement?.ResetPath();
+            self.CharacterMovement?.Stop();
+            _hasStopped = true;
+        }
+
         self.CharacterMovement?.Stop();
-        self.CharacterVisual?.FaceCharacter(target);
     }
 
     public void Exit(Character self)

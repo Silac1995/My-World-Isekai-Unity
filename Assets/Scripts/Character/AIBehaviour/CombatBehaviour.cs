@@ -52,6 +52,18 @@ public class CombatBehaviour : IAIBehaviour
     {
         _currentTarget = target;
         _lastMoveTime = Time.time;
+
+        // Rejoindre/créer un engagement dès le changement de cible
+        if (_battleManager != null && _selfCharacter != null && target != null)
+        {
+            _battleManager.RequestEngagement(_selfCharacter, target);
+        }
+
+        // Orienter le regard vers la cible de combat
+        if (_selfCharacter != null && _selfCharacter.CharacterVisual != null && target != null)
+        {
+            _selfCharacter.CharacterVisual.SetLookTarget(target);
+        }
     }
 
     public void Terminate() => _isFinished = true;
@@ -60,6 +72,13 @@ public class CombatBehaviour : IAIBehaviour
     {
         _selfCharacter = self;
         _isChargingTarget = false;
+
+        // S'assurer que le look target est bien set (peut être manqué au constructeur car _selfCharacter était null)
+        if (_currentTarget != null && self.CharacterVisual != null && !self.CharacterVisual.HasLookTarget)
+        {
+            self.CharacterVisual.SetLookTarget(_currentTarget);
+        }
+
         if (_battleManager == null || _isFinished) return;
 
         var movement = self.CharacterMovement;
@@ -254,6 +273,7 @@ public class CombatBehaviour : IAIBehaviour
     public void Exit(Character self)
     {
         self.CharacterMovement?.ResetPath();
+        self.CharacterVisual?.ClearLookTarget();
         Debug.Log($"<color=orange>[AI]</color> {self.CharacterName} sort du mode Combat.");
     }
 }

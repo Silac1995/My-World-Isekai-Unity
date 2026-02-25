@@ -68,7 +68,7 @@ public class CharacterInteraction : MonoBehaviour
         OnInteractionStateChanged?.Invoke(target, true);
 
         // --- FACE-À-FACE IMMÉDIAT ---
-        _character.CharacterVisual?.FaceCharacter(target);
+        _character.CharacterVisual?.SetLookTarget(target);
 
         target.CharacterInteraction.SetInteractionTargetInternal(_character);
 
@@ -79,20 +79,22 @@ public class CharacterInteraction : MonoBehaviour
         Relationship targetRel = target.CharacterRelation.GetRelationshipWith(_character);
         if (targetRel != null) targetRel.SetAsMet();
 
-        // --- FREEZE DE LA CIBLE (si NPC) ---
-        if (target.Controller != null && target.Controller is NPCController)
+        // --- FREEZE DE LA CIBLE (pas le joueur) ---
+        if (target.Controller != null && !target.IsPlayer())
         {
-            target.Controller.PushBehaviour(new InteractBehaviour());
+            target.Controller.Freeze();
         }
 
         // --- POSITIONNEMENT DE L'INITIATEUR ---
         if (_character.Controller != null)
         {
-            // Pause de base
-            _character.Controller.PushBehaviour(new InteractBehaviour());
-            // Déplacement précis avec callback : On lance le dialogue UNE FOIS en place
+            // Arrêter l'animation de marche immédiatement
+            _character.CharacterVisual?.CharacterAnimator?.StopLocomotion();
+
+            // Déplacement précis avec callback : On freeze + lance le dialogue UNE FOIS en place
             _character.Controller.PushBehaviour(new MoveToInteractionBehaviour(_character.Controller, target, () => 
             {
+                _character.Controller.Freeze();
                 if (_activeDialogueCoroutine != null) StopCoroutine(_activeDialogueCoroutine);
                 _activeDialogueCoroutine = StartCoroutine(DialogueSequence(_character, target, forcedFirstAction));
                 onPositioned?.Invoke();
@@ -177,28 +179,29 @@ public class CharacterInteraction : MonoBehaviour
         _currentTarget = null;
         IsPositioned = false;
 
+        // Libérer le regard
+        _character.CharacterVisual?.ClearLookTarget();
+
         if (_activeDialogueCoroutine != null)
         {
             StopCoroutine(_activeDialogueCoroutine);
             _activeDialogueCoroutine = null;
         }
 
-        // On libère la cible si elle était freezée
+        // On unfreeze la cible
         if (previousTarget.Controller != null)
         {
-            if (previousTarget.Controller.CurrentBehaviour is InteractBehaviour)
-                previousTarget.Controller.PopBehaviour();
+            previousTarget.Controller.Unfreeze();
         }
 
-        // On libère l'initiateur
+        // On unfreeze l'initiateur
         if (_character.Controller != null)
         {
-            // On nettoie la pile des comportements d'interaction
+            // Nettoyer le MoveToInteraction s'il est encore dans la pile
             if (_character.Controller.CurrentBehaviour is MoveToInteractionBehaviour)
                 _character.Controller.PopBehaviour();
-            
-            if (_character.Controller.CurrentBehaviour is InteractBehaviour)
-                _character.Controller.PopBehaviour();
+
+            _character.Controller.Unfreeze();
         }
 
         _character.CharacterInteractable?.Release();
@@ -218,7 +221,7 @@ public class CharacterInteraction : MonoBehaviour
         IsPositioned = true; // La cible est passivement prête
         
         // --- FACE-À-FACE IMMÉDIAT ---
-        _character.CharacterVisual?.FaceCharacter(target);
+        _character.CharacterVisual?.SetLookTarget(target);
 
         OnInteractionStateChanged?.Invoke(target, true);
     }

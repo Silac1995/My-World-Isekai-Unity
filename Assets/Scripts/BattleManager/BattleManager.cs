@@ -22,11 +22,13 @@ public class BattleManager : MonoBehaviour
     private bool _isBattleEnded = false;
 
     // --- NOUVEAU SYSTÈME : ENGAGEMENTS DE COMBAT ---
-    // Représente les différentes "escarmouches" actives (groupes de persos autour d'une cible)
     private List<CombatEngagement> _activeEngagements = new List<CombatEngagement>();
 
-    // Liste pour le debug (plus besoin de GetAllCharacters à chaque fois)
+    // Liste pour le debug
     [SerializeField] private List<Character> _allParticipants = new List<Character>();
+
+    [Header("Debug — Engagements actifs")]
+    [SerializeField] private List<string> _debugEngagements = new List<string>();
 
     public List<BattleTeam> BattleTeams => _teams;
     public bool IsBattleEnded => _isBattleEnded;
@@ -52,7 +54,10 @@ public class BattleManager : MonoBehaviour
         // 3. Inscription des participants
         RegisterParticipants();
 
-        // 4. Rendu visuel UNIQUE (pas dans Update)
+        // 4. Créer l'engagement initial entre l'initiateur et la cible
+        RequestEngagement(initiator, target);
+
+        // 5. Rendu visuel UNIQUE (pas dans Update)
         DrawBattleZoneOutline();
 
         Debug.Log($"<color=orange>[Battle]</color> Combat lance : {initiator.name} vs {target.name}");
@@ -70,6 +75,25 @@ public class BattleManager : MonoBehaviour
         {
             _tickTimer -= tickPeriod;
             PerformBattleTick();
+        }
+
+        // Debug : mise à jour de la liste d'engagements pour l'Inspector
+        UpdateDebugEngagements();
+    }
+
+    private void UpdateDebugEngagements()
+    {
+        _debugEngagements.Clear();
+        for (int i = 0; i < _activeEngagements.Count; i++)
+        {
+            var e = _activeEngagements[i];
+            string groupA = string.Join(", ", e.GroupA.Members
+                .Where(m => m != null)
+                .Select(m => m.CharacterName));
+            string groupB = string.Join(", ", e.GroupB.Members
+                .Where(m => m != null)
+                .Select(m => m.CharacterName));
+            _debugEngagements.Add($"[{i}] A: [{groupA}]  vs  B: [{groupB}]");
         }
     }
 
@@ -244,7 +268,10 @@ public class BattleManager : MonoBehaviour
                 BattleTeam opponentTeam = GetOpponentTeamOf(character);
                 Character closestEnemy = opponentTeam?.GetClosestMember(character.transform.position);
                 if (closestEnemy != null)
+                {
                     character.Controller.PushBehaviour(new CombatBehaviour(this, closestEnemy));
+                    RequestEngagement(character, closestEnemy);
+                }
             }
         }
 
@@ -338,7 +365,48 @@ public class BattleManager : MonoBehaviour
             e.GroupA.Members.Contains(target) || e.GroupB.Members.Contains(target)
         );
 
-        // 3. Sinon, on crée la mêlée
+        // 3. Si pas trouvé par cible, chercher un engagement PROCHE
+        //    pour éviter que deux formations se chevauchent
+        if (engagement == null)
+        {
+            float mergeDistance = 10f; // Distance max pour fusionner deux engagements
+            float bestDist = float.MaxValue;
+
+            foreach (var existing in _activeEngagements)
+            {
+                // Calculer le centre de l'engagement existant
+                Vector3 engagementCenter = Vector3.zero;
+                bool hasCenter = false;
+                
+                if (existing.GroupA.TryGetCenter(out Vector3 centerA) && existing.GroupB.TryGetCenter(out Vector3 centerB))
+                {
+                    engagementCenter = (centerA + centerB) / 2f;
+                    hasCenter = true;
+                }
+                else if (existing.GroupA.TryGetCenter(out Vector3 cA))
+                {
+                    engagementCenter = cA;
+                    hasCenter = true;
+                }
+                else if (existing.GroupB.TryGetCenter(out Vector3 cB))
+                {
+                    engagementCenter = cB;
+                    hasCenter = true;
+                }
+
+                if (hasCenter)
+                {
+                    float dist = Vector3.Distance(target.transform.position, engagementCenter);
+                    if (dist < mergeDistance && dist < bestDist)
+                    {
+                        bestDist = dist;
+                        engagement = existing;
+                    }
+                }
+            }
+        }
+
+        // 4. Sinon, on crée la mêlée
         if (engagement == null)
         {
             BattleTeam targetTeam = GetTeamOf(target);
@@ -353,10 +421,12 @@ public class BattleManager : MonoBehaviour
             }
         }
 
-        // 4. On rejoint l'escarmouche pour avoir un slot
+        // 5. On rejoint l'escarmouche pour avoir un slot
         if (engagement != null)
         {
             engagement.JoinEngagement(attacker);
+            // S'assurer que la cible est aussi dans l'engagement
+            engagement.JoinEngagement(target);
         }
 
         return engagement;

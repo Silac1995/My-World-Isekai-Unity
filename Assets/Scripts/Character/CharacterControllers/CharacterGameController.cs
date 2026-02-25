@@ -15,6 +15,35 @@ public abstract class CharacterGameController : MonoBehaviour
     private Stack<IAIBehaviour> _behavioursStack = new Stack<IAIBehaviour>();
     public IAIBehaviour CurrentBehaviour => _behavioursStack.Count > 0 ? _behavioursStack.Peek() : null;
 
+    // --- Freeze : stoppe tout (mouvement, IA, animations) ---
+    private bool _isFrozen = false;
+    public bool IsFrozen => _isFrozen;
+
+    /// <summary>
+    /// Stoppe entièrement le NPC : mouvement, path, animations de locomotion.
+    /// Le behaviour stack est conservé mais ne tick plus.
+    /// </summary>
+    public virtual void Freeze()
+    {
+        _isFrozen = true;
+        _characterMovement?.ResetPath();
+        _characterMovement?.Stop();
+        _character.CharacterVisual?.CharacterAnimator?.StopLocomotion();
+    }
+
+    /// <summary>
+    /// Reprend le fonctionnement normal du NPC.
+    /// </summary>
+    public virtual void Unfreeze()
+    {
+        _isFrozen = false;
+        _characterMovement?.Resume();
+
+        // Forcer le BT à ticker immédiatement pour éviter un délai visible
+        var bt = _character.GetComponent<NPCBehaviourTree>();
+        if (bt != null) bt.ForceNextTick();
+    }
+
     // --- PROPRIÉTÉS DE COMPATIBILITÉ (Pour corriger tes erreurs) ---
     public Character Character => _character;
     public NavMeshAgent Agent => _characterMovement != null ? _characterMovement.Agent : null;
@@ -53,6 +82,9 @@ public abstract class CharacterGameController : MonoBehaviour
 
     protected virtual void Update()
     {
+        // Freeze : on ne fait rien du tout
+        if (_isFrozen) return;
+
         if (_character.CharacterActions.CurrentAction != null)
         {
             _wasDoingAction = true;
@@ -98,6 +130,9 @@ public abstract class CharacterGameController : MonoBehaviour
             // L'IA gère son propre Resume/Stop
             CurrentBehaviour.Act(_character);
         }
+
+        // Si un behaviour vient d'appeler Freeze() dans son Act(), on sort immédiatement
+        if (_isFrozen) return;
 
         UpdateAnimations();
         UpdateFlip();
@@ -198,9 +233,24 @@ public abstract class CharacterGameController : MonoBehaviour
 
         // Envoi ? l'Animator
         Animator.SetFloat(CharacterAnimator.VelocityX, speed);
+        Animator.SetBool(CharacterAnimator.IsWalking, speed > 0f);
 
         // Sol
         Animator.SetBool(CharacterAnimator.IsGrounded, _characterMovement.IsGrounded());
+
+        // --- Walk Backward : le NPC se déplace à l'opposé de son look target ---
+        bool isWalkingBackward = false;
+        if (speed > 0.1f && _characterVisual != null && _characterVisual.HasLookTarget)
+        {
+            float moveX = velocity.x;
+            float facingDir = _characterVisual.IsFacingRight ? 1f : -1f;
+
+            if (Mathf.Abs(moveX) > 0.1f && Mathf.Sign(moveX) != Mathf.Sign(facingDir))
+            {
+                isWalkingBackward = true;
+            }
+        }
+        _character.CharacterVisual?.CharacterAnimator?.SetWalkingBackward(isWalkingBackward);
     }
 
     protected virtual void UpdateFlip()

@@ -1947,10 +1947,6 @@ PrefabInstance:
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 2536622428659117900, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
-      propertyPath: stats
-      value: 
-      objectReference: {fileID: 6558434741305961598}
-    - target: {fileID: 2536622428659117900, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       propertyPath: equipment
       value: 
       objectReference: {fileID: 315613733655778041}
@@ -2481,17 +2477,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3244fac3036c53948b0080368868d48b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
---- !u!114 &6558434741305961598 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 3158310397905717539, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
-  m_PrefabInstance: {fileID: 8129189969094288733}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 5456933137695734175}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 87ee1e204c713b948a917f73da9734fa, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::CharacterStats
 --- !u!4 &7199851819169467111 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 1385890570874089402, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}

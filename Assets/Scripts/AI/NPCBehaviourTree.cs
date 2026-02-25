@@ -100,16 +100,28 @@ public class NPCBehaviourTree : MonoBehaviour
         );
     }
 
+    private bool _forceNextTick = false;
+
+    /// <summary>
+    /// Force le BT à ticker à la prochaine frame, en ignorant le stagger.
+    /// Utile après un Unfreeze pour éviter un délai visible.
+    /// </summary>
+    public void ForceNextTick() => _forceNextTick = true;
+
     private void Update()
     {
         if (!_isInitialized || _root == null) return;
 
-        // Stagger : chaque NPC tick seulement 1 frame sur N
-        if ((Time.frameCount + _frameOffset) % _tickInterval != 0) return;
+        // Stagger : chaque NPC tick seulement 1 frame sur N (sauf si forcé)
+        if (!_forceNextTick && (Time.frameCount + _frameOffset) % _tickInterval != 0) return;
+        _forceNextTick = false;
 
         // Le NPC n'est pas un joueur et doit être vivant
         if (_character.Controller is PlayerController) return;
         if (!_character.IsAlive()) return;
+
+        // Pause le BT si le controller est gelé (interactions, cinématiques, etc.)
+        if (_character.Controller != null && _character.Controller.IsFrozen) return;
 
         // Pause le BT pendant une interaction (évite les micro-mouvements)
         if (_character.CharacterInteraction != null && _character.CharacterInteraction.IsInteracting) return;

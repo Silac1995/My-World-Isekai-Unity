@@ -1610,6 +1610,7 @@ MonoBehaviour:
   _character: {fileID: 2536622428659117900}
   _debugLog: 0
   _currentNodeName: None
+  _tickInterval: 5
 --- !u!1001 &2837313653771678447
 PrefabInstance:
   m_ObjectHideFlags: 0
