@@ -77,7 +77,7 @@ public class CharacterMovement : MonoBehaviour
         if (_agent != null && _agent.isOnNavMesh && !_agent.isStopped)
         {
             // SECURITE BORD DE NAVMESH : Moins agressive
-            if (_agent.hasPath && (_agent.pathStatus == NavMeshPathStatus.PathPartial || _agent.pathStatus == NavMeshPathStatus.PathInvalid))
+            if (_agent.hasPath && _agent.pathStatus == NavMeshPathStatus.PathInvalid)
             {
                 _unstablePathFrames++;
                 if (_unstablePathFrames > MAX_UNSTABLE_FRAMES)

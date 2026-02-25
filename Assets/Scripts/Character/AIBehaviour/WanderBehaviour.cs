@@ -15,8 +15,8 @@ public class WanderBehaviour : IAIBehaviour
     // --- DETECTION DE BORDURE (EDGE AVOIDANCE) ---
     private float _edgePressureTimer = 0f;
     private const float MAX_EDGE_PRESSURE_TIME = 3f; // Temps max à raser un mur
-    private const float EDGE_DETECTION_DIST = 3.0f;  // Distance pour détecter un bord
-    private const float FORCE_NEW_DEST_DIST = 1.2f;  // Distance pour forcer un changement si bloqué
+    private const float EDGE_DETECTION_DIST = 1.5f;  // Distance pour détecter un bord
+    private const float FORCE_NEW_DEST_DIST = 0.5f;  // Distance pour forcer un changement si bloqué
 
     public bool IsFinished => _isFinished;
 
@@ -95,7 +95,7 @@ public class WanderBehaviour : IAIBehaviour
             if (edgeHit.distance < EDGE_DETECTION_DIST)
             {
                 // On crée un vecteur qui part du mur vers l'intérieur (la normale)
-                finalDirectionBias = edgeHit.normal * _walkRadius * 0.5f; 
+                finalDirectionBias = edgeHit.normal * 3f; 
             }
         }
 

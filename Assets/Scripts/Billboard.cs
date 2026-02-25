@@ -1,4 +1,4 @@
-using UnityEngine;
+ï»¿using UnityEngine;
 
 public class Billboard : MonoBehaviour
 {
@@ -9,12 +9,17 @@ public class Billboard : MonoBehaviour
         mainCam = Camera.main;
     }
 
-
     private void LateUpdate()
     {
         if (mainCam == null) return;
 
-        // Alignement complet face à la caméra
-        transform.forward = mainCam.transform.forward;
+        // Rotation uniquement sur l'axe Y (garde le sprite vertical)
+        // Evite que le sprite penetre dans les murs 3D derriere le personnage
+        Vector3 camForward = mainCam.transform.forward;
+        camForward.y = 0;
+        if (camForward.sqrMagnitude > 0.001f)
+        {
+            transform.forward = camForward;
+        }
     }
 }

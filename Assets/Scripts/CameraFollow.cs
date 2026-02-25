@@ -3,14 +3,20 @@
 public class CameraFollow : MonoBehaviour
 {
     [Header("Camera Position")]
-    [SerializeField] private float offsetY = 10.5F;
     [SerializeField] private float minZPosition = 60f;
-    [SerializeField] private float offsetZ = -17f;
+
+    [Header("Zoom Settings")]
+    [SerializeField] private float minOffsetY = 13f;
+    [SerializeField] private float maxOffsetY = 18f;
+    [SerializeField] private float minOffsetZ = -12.5f;
+    [SerializeField] private float maxOffsetZ = -23.5f;
+    [SerializeField] private float zoomSpeed = 2f;
+    [SerializeField] private float zoomSmoothing = 8f;
+    [SerializeField] private float followSmoothing = 0.15f;
 
     [Header("Camera Rotation")]
-    // Le Range crée un curseur entre 0 et 90 degrés dans l'inspecteur
     [Range(0f, 90f)]
-    [SerializeField] private float rotationX = 6f;
+    [SerializeField] private float rotationX = 13f;
 
     [SerializeField] private Transform target;
     [SerializeField] private Character character;
@@ -18,14 +24,15 @@ public class CameraFollow : MonoBehaviour
 
     private GameObject targetGameObject;
     private Camera _camera;
+    private float _targetZoom = 0.5f;
+    private float _currentZoom = 0.5f;
+    private Vector3 _smoothVelocity;
 
     private void Start()
     {
         _camera = GetComponent<Camera>();
         if (_camera != null)
         {
-            // Tri des sprites basé uniquement sur Z (profondeur dans le monde)
-            // Corrige le sorting incorrect quand les personnages sont à des hauteurs Y différentes
             _camera.transparencySortMode = TransparencySortMode.CustomAxis;
             _camera.transparencySortAxis = new Vector3(0, 0, 1);
         }
@@ -35,18 +42,32 @@ public class CameraFollow : MonoBehaviour
     {
         if (target == null) return;
 
+        // Zoom via scroll (scroll up = zoom in = 0, scroll down = zoom out = 1)
+        float scroll = Input.GetAxis("Mouse ScrollWheel");
+        if (Mathf.Abs(scroll) > 0.01f)
+        {
+            _targetZoom = Mathf.Clamp01(_targetZoom - scroll * zoomSpeed);
+        }
+
+        _currentZoom = Mathf.Lerp(_currentZoom, _targetZoom, Time.deltaTime * zoomSmoothing);
+
+        // Interpolation des offsets selon le zoom
+        float offsetY = Mathf.Lerp(minOffsetY, maxOffsetY, _currentZoom);
+        float offsetZ = Mathf.Lerp(minOffsetZ, maxOffsetZ, _currentZoom);
+
         // Calcul de la position Z avec offset et limite minimum
         float desiredZ = target.position.z + offsetZ;
         float clampedZ = Mathf.Max(desiredZ, minZPosition);
 
-        // Application de la position (suit le personnage sur tous les axes)
-        transform.position = new Vector3(
+        // Position cible avec smoothing
+        Vector3 targetPos = new Vector3(
             target.position.x,
             target.position.y + offsetY,
             clampedZ
         );
 
-        // Utilisation de la variable rotationX pour permettre le changement via l'inspecteur
+        transform.position = Vector3.SmoothDamp(transform.position, targetPos, ref _smoothVelocity, followSmoothing);
+
         transform.rotation = Quaternion.Euler(rotationX, 0f, 0f);
     }
 
