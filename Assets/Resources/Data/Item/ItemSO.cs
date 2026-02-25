@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.U2D.Animation;
 
 [CreateAssetMenu(fileName = "ItemSO", menuName = "Scriptable Objects/ItemSO")]
@@ -20,9 +20,11 @@ public abstract class ItemSO : ScriptableObject
     public Sprite Icon => icon;
     public string CategoryName => category_name;
     public GameObject ItemPrefab => item_prefab;
+    public GameObject WorldItemPrefab => worldItem_prefab;
     public SpriteLibraryAsset SpriteLibraryAsset => _spriteLibrary;
     public abstract System.Type InstanceType { get; }
 
-    // On change 'virtual' en 'abstract' et on retire le corps de la m�thode
+    // On change 'virtual' en 'abstract' et on retire le corps de la méthode
     public abstract ItemInstance CreateInstance();
 }
+

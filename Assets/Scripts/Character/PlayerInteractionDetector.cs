@@ -30,55 +30,23 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
                     Character targetChar = charInteractable.Character;
                     if (targetChar == null) return;
 
-                    // VÉRIFICATION CRITIQUE : 
-                    // On ne peut pas interagir si le joueur n'est pas libre OU si la cible n'est pas libre
                     if (!Character.IsFree() || !targetChar.IsFree())
                     {
                         Debug.LogWarning($"<color=yellow>[Interaction]</color> Interaction impossible : " +
                             $"{(!Character.IsFree() ? "Le joueur est occupé" : "La cible est en combat/interaction")}");
-                        return; // On stoppe tout ici, l'interaction ne se lance même pas
+                        return;
                     }
 
-                    // --- Reste de ta logique actuelle ---
                     if (Character.CharacterInteraction.IsInteracting &&
                         Character.CharacterInteraction.CurrentTarget == targetChar)
                     {
                         Character.CharacterInteraction.EndInteraction();
                         return;
                     }
-
-                    _currentInteractableObjectTarget.Interact(Character);
                 }
 
-                // --- CAS 2 : ITEM ---
-                else if (_currentInteractableObjectTarget is ItemInteractable itemInteractable)
-                {
-                    ItemInstance instance = itemInteractable.ItemInstance;
-                    if (instance == null) return;
-
-                    GameObject rootToDestroy = itemInteractable.RootGameObject;
-
-                    // A. ÉQUIPEMENT PORTABLE (Vêtements, sacs...)
-                    if (instance is WearableInstance wearable)
-                    {
-                        CharacterEquipAction equipAction = new CharacterEquipAction(Character, wearable);
-                        Character.CharacterActions.ExecuteAction(equipAction);
-
-                        // On détruit l'objet au sol car il est maintenant sur le personnage
-                        if (rootToDestroy != null) Destroy(rootToDestroy);
-                        Debug.Log($"[Equip] {wearable.CustomizedName} porté.");
-                    }
-                    // B. ARME OU OBJET DIVERS (On ramasse dans l'inventaire)
-                    else
-                    {
-                        // On traite ici les WeaponInstance et les ItemInstance simples (nourriture, ressources...)
-                        CharacterPickUpItem pickUpAction = new CharacterPickUpItem(Character, instance, rootToDestroy);
-                        Character.CharacterActions.ExecuteAction(pickUpAction);
-
-                        // Note : C'est CharacterPickUpItem.OnApplyEffect qui gérera le Destroy(rootToDestroy) 
-                        // SEULEMENT si l'ajout à l'inventaire réussit.
-                    }
-                }
+                // 2. TOUS LES TYPES : on délègue à l'Interact() de chaque sous-classe
+                _currentInteractableObjectTarget.Interact(Character);
             }
             catch (System.Exception ex)
             {

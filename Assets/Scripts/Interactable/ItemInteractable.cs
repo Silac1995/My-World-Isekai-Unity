@@ -1,20 +1,18 @@
-using NUnit.Framework.Internal.Execution;
-using UnityEngine;
+ï»¿using UnityEngine;
 
 public class ItemInteractable : InteractableObject
 {
     [SerializeField] private WorldItem _worldItem;
 
-    // On sécurise l'accès au WorldItem
     private bool _wasCollected = false;
 
     public bool TryCollect()
     {
-        if (_wasCollected) return false; // Trop tard !
-
+        if (_wasCollected) return false;
         _wasCollected = true;
-        return true; // Gagné !
+        return true;
     }
+
     public WorldItem WorldItem
     {
         get
@@ -28,7 +26,6 @@ public class ItemInteractable : InteractableObject
     {
         get
         {
-            // Si on ne trouve pas le WorldItem, on renvoie null proprement au lieu de spammer l'erreur fatale tout de suite
             if (WorldItem == null) return null;
             return WorldItem.ItemInstance;
         }
@@ -36,12 +33,30 @@ public class ItemInteractable : InteractableObject
 
     public override void Interact(Character interactor)
     {
+        if (interactor == null) return;
+
         var instance = ItemInstance;
         if (instance == null)
         {
-            Debug.LogWarning($"[Interaction] Pas d'instance sur {name}. L'objet est peut-être déjà ramassé.");
+            Debug.LogWarning("[Interaction] Pas d'instance. Objet deja ramasse.");
             return;
         }
-        Debug.Log($"[INTERACT] Objet : {instance.ItemSO.ItemName} | Type : {instance.GetType().Name}");
+
+        GameObject rootToDestroy = RootGameObject;
+
+        // A. EQUIPEMENT PORTABLE (Vetements, sacs...)
+        if (instance is WearableInstance wearable)
+        {
+            CharacterEquipAction equipAction = new CharacterEquipAction(interactor, wearable);
+            interactor.CharacterActions.ExecuteAction(equipAction);
+            if (rootToDestroy != null) Object.Destroy(rootToDestroy);
+            Debug.Log("[Equip] " + wearable.CustomizedName + " porte.");
+        }
+        // B. ARME OU OBJET DIVERS (On ramasse dans inventaire)
+        else
+        {
+            CharacterPickUpItem pickUpAction = new CharacterPickUpItem(interactor, instance, rootToDestroy);
+            interactor.CharacterActions.ExecuteAction(pickUpAction);
+        }
     }
 }

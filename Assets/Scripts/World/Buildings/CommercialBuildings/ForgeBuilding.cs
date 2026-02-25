@@ -45,4 +45,30 @@ public class ForgeBuilding : CommercialBuilding
     {
         return GetJobsOfType<JobBlacksmithApprentice>();
     }
+
+    /// <summary>
+    /// Trouve une enclume disponible dans la forge.
+    /// </summary>
+    public CraftingStation FindAvailableAnvil()
+    {
+        foreach (var station in GetFurnitureOfType<CraftingStation>())
+        {
+            if (station.SupportsType(CraftingStationType.Anvil) && !station.IsOccupied)
+                return station;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Trouve une fournaise disponible dans la forge.
+    /// </summary>
+    public CraftingStation FindAvailableFurnace()
+    {
+        foreach (var station in GetFurnitureOfType<CraftingStation>())
+        {
+            if (station.SupportsType(CraftingStationType.Furnace) && !station.IsOccupied)
+                return station;
+        }
+        return null;
+    }
 }
