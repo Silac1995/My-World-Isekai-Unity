@@ -122,4 +122,65 @@ public class CharacterJob : MonoBehaviour
     {
         return _currentJob is T;
     }
+
+    /// <summary>
+    /// Le personnage est-il propriétaire de son lieu de travail ?
+    /// </summary>
+    public bool IsOwner => _workplace != null && _workplace.Owner == _character;
+
+    /// <summary>
+    /// Le personnage demande un job dans un building commercial.
+    /// Passe par le building qui vérifie que le boss existe.
+    /// </summary>
+    public bool AskForJob(CommercialBuilding building, Job job)
+    {
+        if (building == null || job == null) return false;
+
+        // Demande au building (qui check le boss)
+        if (building.AskForJob(_character, job))
+        {
+            // Le building a accepté → on enregistre le job côté personnage
+            if (HasJob) QuitJob();
+
+            _currentJob = job;
+            _workplace = building;
+            InjectWorkSchedule();
+
+            Debug.Log($"<color=yellow>[CharacterJob]</color> {_character.CharacterName} a été embauché comme {job.JobTitle} à {building.BuildingName}.");
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Le personnage devient propriétaire d'un building commercial.
+    /// Il peut optionnellement prendre un job dans ce building.
+    /// </summary>
+    public bool BecomeOwner(CommercialBuilding building, Job optionalJob = null)
+    {
+        if (building == null) return false;
+
+        // Quitter le job actuel si on en a un
+        if (HasJob) QuitJob();
+
+        // Devenir propriétaire (SetOwner assigne aussi le job si fourni)
+        building.SetOwner(_character, optionalJob);
+
+        // Si un job a été assigné, enregistrer les infos côté personnage
+        if (optionalJob != null && optionalJob.IsAssigned && optionalJob.Worker == _character)
+        {
+            _currentJob = optionalJob;
+            _workplace = building;
+            InjectWorkSchedule();
+        }
+        else
+        {
+            // Juste owner, pas de job
+            _workplace = building;
+        }
+
+        Debug.Log($"<color=green>[CharacterJob]</color> {_character.CharacterName} est devenu propriétaire de {building.BuildingName}.");
+        return true;
+    }
 }

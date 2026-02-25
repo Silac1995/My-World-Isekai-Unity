@@ -97,9 +97,71 @@ public abstract class CommercialBuilding : Building
         }
     }
 
-    public void SetOwner(Character newOwner)
+    public void SetOwner(Character newOwner, Job ownerJob = null)
     {
         _owner = newOwner;
         Debug.Log($"<color=green>[Building]</color> {newOwner?.CharacterName} est propriétaire de {buildingName}.");
+
+        // Le boss peut aussi prendre un job dans son building
+        if (ownerJob != null && newOwner != null)
+        {
+            var charJob = newOwner.CharacterJob;
+            if (charJob != null)
+            {
+                charJob.TakeJob(ownerJob, this);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Le building a-t-il un owner/boss ?
+    /// </summary>
+    public bool HasOwner => _owner != null && _owner.IsAlive();
+
+    /// <summary>
+    /// Un personnage demande un job au boss de ce building.
+    /// Retourne true si l'embauche est acceptée.
+    /// </summary>
+    public bool AskForJob(Character applicant, Job job)
+    {
+        if (applicant == null || job == null) return false;
+
+        // Il faut un boss pour embaucher
+        if (!HasOwner)
+        {
+            Debug.Log($"<color=red>[Building]</color> {buildingName} n'a pas de boss. Personne ne peut embaucher.");
+            return false;
+        }
+
+        // Le job doit exister dans ce building
+        if (!_jobs.Contains(job))
+        {
+            Debug.Log($"<color=red>[Building]</color> Le poste {job.JobTitle} n'existe pas dans {buildingName}.");
+            return false;
+        }
+
+        // Le job doit être libre
+        if (job.IsAssigned)
+        {
+            Debug.Log($"<color=orange>[Building]</color> Le poste {job.JobTitle} à {buildingName} est déjà pris.");
+            return false;
+        }
+
+        // Embauche réussie
+        return AssignWorker(applicant, job);
+    }
+
+    /// <summary>
+    /// Retourne tous les jobs non-assignés dans ce building.
+    /// </summary>
+    public List<Job> GetAvailableJobs()
+    {
+        List<Job> available = new List<Job>();
+        foreach (var job in _jobs)
+        {
+            if (!job.IsAssigned)
+                available.Add(job);
+        }
+        return available;
     }
 }
