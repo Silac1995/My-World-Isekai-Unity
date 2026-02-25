@@ -111,6 +111,9 @@ public class NPCBehaviourTree : MonoBehaviour
         if (_character.Controller is PlayerController) return;
         if (!_character.IsAlive()) return;
 
+        // Pause le BT pendant une interaction (évite les micro-mouvements)
+        if (_character.CharacterInteraction != null && _character.CharacterInteraction.IsInteracting) return;
+
         // Tick l'arbre
         BTNodeStatus status = _root.Execute(_blackboard);
 
