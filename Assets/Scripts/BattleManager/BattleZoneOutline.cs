@@ -1,4 +1,5 @@
-using UnityEngine;
+ï»¿using UnityEngine;
+using System.Collections.Generic;
 
 [RequireComponent(typeof(MeshCollider))]
 [RequireComponent(typeof(LineRenderer))]
@@ -10,6 +11,9 @@ public class BattleZoneOutline : MonoBehaviour
     [Tooltip("Layers considered as ground")]
     public LayerMask groundLayer;
 
+    [Tooltip("Distance between interpolated points along each edge (smaller = smoother on slopes)")]
+    public float segmentLength = 0.5f;
+
     private MeshCollider meshCollider;
     private LineRenderer lineRenderer;
 
@@ -18,7 +22,6 @@ public class BattleZoneOutline : MonoBehaviour
         meshCollider = GetComponent<MeshCollider>();
         lineRenderer = GetComponent<LineRenderer>();
 
-        // Setup LineRenderer appearance
         lineRenderer.loop = true;
         lineRenderer.widthMultiplier = 0.1f;
         lineRenderer.material = new Material(Shader.Find("Sprites/Default"));
@@ -42,45 +45,64 @@ public class BattleZoneOutline : MonoBehaviour
 
         Vector3[] vertices = meshCollider.sharedMesh.vertices;
 
-        // Convert mesh vertices (local space) to world space
         Vector3[] worldVertices = new Vector3[vertices.Length];
         for (int i = 0; i < vertices.Length; i++)
         {
             worldVertices[i] = transform.TransformPoint(vertices[i]);
         }
 
-        // Get perimeter vertices in order — simplest approach: find convex hull on XZ plane
         Vector3[] hullVertices = ConvexHullXZ(worldVertices);
 
-        // Raycast down from each vertex to ground to find exact ground height + offset
-        for (int i = 0; i < hullVertices.Length; i++)
+        // Subdivide each edge so the line follows slopes and stairs
+        List<Vector3> subdividedPoints = SubdivideEdges(hullVertices, segmentLength);
+
+        // Raycast each point down to ground
+        for (int i = 0; i < subdividedPoints.Count; i++)
         {
-            Vector3 rayOrigin = hullVertices[i] + Vector3.up * 10f;
+            Vector3 rayOrigin = subdividedPoints[i] + Vector3.up * 10f;
             if (Physics.Raycast(rayOrigin, Vector3.down, out RaycastHit hit, 20f, groundLayer))
             {
-                hullVertices[i] = hit.point + Vector3.up * lineHeightOffset;
+                subdividedPoints[i] = hit.point + Vector3.up * lineHeightOffset;
             }
             else
             {
-                // fallback: keep original vertex but raise it slightly
-                hullVertices[i] += Vector3.up * lineHeightOffset;
+                subdividedPoints[i] += Vector3.up * lineHeightOffset;
             }
         }
 
-        // Apply positions to LineRenderer and close the loop automatically (loop=true)
-        lineRenderer.positionCount = hullVertices.Length;
-        lineRenderer.SetPositions(hullVertices);
+        lineRenderer.positionCount = subdividedPoints.Count;
+        lineRenderer.SetPositions(subdividedPoints.ToArray());
     }
 
-    // Convex Hull algorithm on XZ plane for 3D points — Gift Wrapping (Jarvis March)
+    private List<Vector3> SubdivideEdges(Vector3[] hull, float maxSegmentLength)
+    {
+        List<Vector3> result = new List<Vector3>();
+
+        for (int i = 0; i < hull.Length; i++)
+        {
+            Vector3 start = hull[i];
+            Vector3 end = hull[(i + 1) % hull.Length];
+
+            float edgeLength = Vector3.Distance(start, end);
+            int divisions = Mathf.Max(1, Mathf.CeilToInt(edgeLength / maxSegmentLength));
+
+            for (int d = 0; d < divisions; d++)
+            {
+                float t = (float)d / divisions;
+                result.Add(Vector3.Lerp(start, end, t));
+            }
+        }
+
+        return result;
+    }
+
     private Vector3[] ConvexHullXZ(Vector3[] points)
     {
         if (points.Length < 3)
             return points;
 
-        System.Collections.Generic.List<Vector3> hull = new System.Collections.Generic.List<Vector3>();
+        List<Vector3> hull = new List<Vector3>();
 
-        // Find leftmost point (min X)
         int leftMost = 0;
         for (int i = 1; i < points.Length; i++)
             if (points[i].x < points[leftMost].x)
@@ -98,19 +120,17 @@ public class BattleZoneOutline : MonoBehaviour
             {
                 if (i == current) continue;
 
-                // Calculate cross product to determine relative orientation on XZ plane
                 Vector3 a = points[current];
                 Vector3 b = points[next];
                 Vector3 c = points[i];
 
                 float cross = ((b.x - a.x) * (c.z - a.z)) - ((b.z - a.z) * (c.x - a.x));
-                if (cross < 0) // point c is more counterclockwise than b
+                if (cross < 0)
                 {
                     next = i;
                 }
                 else if (cross == 0)
                 {
-                    // If colinear, choose the farthest point
                     float distToC = (c - a).sqrMagnitude;
                     float distToB = (b - a).sqrMagnitude;
                     if (distToC > distToB)
