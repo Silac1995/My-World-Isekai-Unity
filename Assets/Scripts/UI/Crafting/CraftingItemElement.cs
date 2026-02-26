@@ -14,6 +14,10 @@ namespace MWI.UI.Crafting
         [SerializeField] private TextMeshProUGUI _itemNameText;
         [SerializeField] private Button _craftButton;
 
+        [Header("Crafting Settings (Temp)")]
+        [SerializeField] private Color _primaryColor = new Color(0,0,0,0);
+        [SerializeField] private Color _secondaryColor = new Color(0,0,0,0);
+
         private ItemSO _itemSO;
         private CraftingStation _station;
         private Character _user;
@@ -63,8 +67,11 @@ namespace MWI.UI.Crafting
         {
             if (_station == null || _itemSO == null) return;
 
-            // Déclenche le craft sur la station
-            _station.Craft(_itemSO);
+            // Déclenche le craft via le système d'actions centralisé
+            if (_user != null && _user.CharacterActions != null)
+            {
+                _user.CharacterActions.ExecuteAction(new CharacterCraftAction(_user, _station, _itemSO, _primaryColor, _secondaryColor));
+            }
 
             // TODO : Ajouter un son, un flash visuel, ou désactiver le bouton le temps de l'animation
         }
