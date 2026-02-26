@@ -7,6 +7,8 @@ using UnityEngine;
 /// </summary>
 public class CombatEngagement
 {
+    public const int MAX_PARTICIPANTS_PER_SIDE = 6;
+
     // Les deux camps qui composent cette escarmouche
     public EngagementGroup GroupA { get; private set; }
     public EngagementGroup GroupB { get; private set; }
@@ -15,8 +17,14 @@ public class CombatEngagement
     private BattleTeam _teamA;
     private BattleTeam _teamB;
 
-    public CombatEngagement(BattleTeam teamA, BattleTeam teamB)
+    public BattleTeam TeamA => _teamA;
+    public BattleTeam TeamB => _teamB;
+
+    public BattleManager Manager { get; private set; }
+
+    public CombatEngagement(BattleManager manager, BattleTeam teamA, BattleTeam teamB)
     {
+        Manager = manager;
         _teamA = teamA;
         _teamB = teamB;
 
@@ -57,6 +65,40 @@ public class CombatEngagement
     public bool IsFinished()
     {
         return GroupA.IsWipedOut() || GroupB.IsWipedOut();
+    }
+
+    /// <summary>
+    /// Vérifie si l'engagement est plein pour une équipe spécifique.
+    /// Si le camp adverse n'a qu'un seul personnage, l'engagement n'est jamais considéré comme plein
+    /// car on ne peut pas le diviser.
+    /// </summary>
+    public bool IsFullFor(BattleTeam team)
+    {
+        if (team == _teamA)
+        {
+            if (GroupB.Members.Count <= 1) return false;
+            return GroupA.Members.Count >= MAX_PARTICIPANTS_PER_SIDE;
+        }
+        else if (team == _teamB)
+        {
+            if (GroupA.Members.Count <= 1) return false;
+            return GroupB.Members.Count >= MAX_PARTICIPANTS_PER_SIDE;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Vérifie si l'engagement doit être séparé en deux (une des deux équipes dépasse la limite,
+    /// et l'autre équipe a plus d'un combattant).
+    /// </summary>
+    public bool NeedsSplit()
+    {
+        bool aIsFull = GroupA.Members.Count > MAX_PARTICIPANTS_PER_SIDE;
+        bool bIsFull = GroupB.Members.Count > MAX_PARTICIPANTS_PER_SIDE;
+        bool aCanSplit = GroupA.Members.Count > 1;
+        bool bCanSplit = GroupB.Members.Count > 1;
+
+        return (aIsFull && bCanSplit) || (bIsFull && aCanSplit);
     }
 
     /// <summary>

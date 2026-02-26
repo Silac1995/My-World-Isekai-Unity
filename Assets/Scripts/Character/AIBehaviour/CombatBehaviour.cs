@@ -116,8 +116,7 @@ public class CombatBehaviour : IAIBehaviour
 
         if (!HasTarget)
         {
-            BattleTeam enemyTeam = _battleManager.GetOpponentTeamOf(self);
-            Character nextTarget = enemyTeam?.GetClosestMember(self.transform.position);
+            Character nextTarget = _battleManager.GetBestTargetFor(self);
 
             if (nextTarget != null)
             {

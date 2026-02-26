@@ -9,11 +9,11 @@ public class BattleManager : MonoBehaviour
     [SerializeField] private BattleTeam _battleTeamInitiator;
     [SerializeField] private BattleTeam _battleTeamTarget;
     [SerializeField] private Collider _battleZone;
+    [SerializeField] private Unity.AI.Navigation.NavMeshModifierVolume _battleZoneModifier;
     [SerializeField] private LineRenderer _battleZoneLine;
     [SerializeField] private Vector3 _baseBattleZoneSize = new Vector3(25f, 35f, 10f);
     [SerializeField] private float _perParticipantGrowthRate = 0.3f;
-    [SerializeField] private int _maxGrowthTiers = 3;
-    [SerializeField] private int _participantsPerTier = 4;
+    [SerializeField] private int _participantsPerTier = 6;
 
     [Header("Initiative System")]
     [SerializeField] private float _ticksPerSecond = 10f;
@@ -137,6 +137,14 @@ public class BattleManager : MonoBehaviour
         ResolveZoneOverlap();
 
         _battleZone = box;
+
+        // --- NOUVEAU : AJOUT DU MODIFICATEUR DE NAVMESH ---
+        // Permet d'augmenter le coût de la zone pour que les PNJs l'évitent
+        if (_battleZoneModifier != null)
+        {
+            _battleZoneModifier.size = box.size;
+            _battleZoneModifier.center = box.center;
+        }
     }
 
     private void ResolveZoneOverlap()
@@ -265,12 +273,11 @@ public class BattleManager : MonoBehaviour
 
             if (!character.IsPlayer())
             {
-                BattleTeam opponentTeam = GetOpponentTeamOf(character);
-                Character closestEnemy = opponentTeam?.GetClosestMember(character.transform.position);
-                if (closestEnemy != null)
+                Character bestEnemy = GetBestTargetFor(character);
+                if (bestEnemy != null)
                 {
-                    character.Controller.PushBehaviour(new CombatBehaviour(this, closestEnemy));
-                    RequestEngagement(character, closestEnemy);
+                    character.Controller.PushBehaviour(new CombatBehaviour(this, bestEnemy));
+                    RequestEngagement(character, bestEnemy);
                 }
             }
         }
@@ -316,16 +323,22 @@ public class BattleManager : MonoBehaviour
         // 1. Calcul du nombre de participants valides
         int count = _allParticipants.Count(p => p != null);
 
-        // 2. Calcul de la taille par paliers (Ex: chaque 4 persos)
+        // 2. Calcul de la taille par paliers (Ex: chaque 6 persos)
         // Multiplier = 1 + (Nombre de paliers * Taux)
-        // On cap le nombre de paliers (max 3 itérations = +90%)
         int tiers = (count - 1) / _participantsPerTier;
-        tiers = Mathf.Min(tiers, _maxGrowthTiers);
+        // La zone peut grandir à l'infini
         
         float multiplier = 1f + (tiers * _perParticipantGrowthRate);
 
         // On n'applique le multiplicateur qu'à X et Z (le sol). Y reste fixe.
         box.size = new Vector3(_baseBattleZoneSize.x * multiplier, _baseBattleZoneSize.y, _baseBattleZoneSize.z * multiplier);
+
+        // --- NOUVEAU : METTRE À JOUR LE MODIFICATEUR DE NAVMESH ---
+        if (_battleZoneModifier != null)
+        {
+            _battleZoneModifier.size = box.size;
+            _battleZoneModifier.center = box.center;
+        }
 
         DrawBattleZoneOutline();
     }
@@ -347,6 +360,66 @@ public class BattleManager : MonoBehaviour
         return (myTeam == _battleTeamInitiator) ? _battleTeamTarget : _battleTeamInitiator;
     }
 
+    /// <summary>
+    /// Trouve le meilleur ennemi à cibler.
+    /// Priorise les ennemis dont l'engagement n'est pas plein pour l'équipe de l'attaquant.
+    /// Si tout est plein, choisit un ennemi valide.
+    /// </summary>
+    public Character GetBestTargetFor(Character attacker)
+    {
+        if (attacker == null) return null;
+
+        BattleTeam myTeam = GetTeamOf(attacker);
+        BattleTeam opponentTeam = GetOpponentTeamOf(attacker);
+        if (opponentTeam == null) return null;
+
+        List<Character> aliveEnemies = opponentTeam.CharacterList.Where(e => e != null && e.IsAlive()).ToList();
+        if (aliveEnemies.Count == 0) return null;
+
+        // 1. Séparer en cibles "libres" (pas d'engagement ou engagement non plein) et cibles "pleines"
+        List<Character> availableTargets = new List<Character>();
+        List<Character> fullTargets = new List<Character>();
+
+        foreach (var enemy in aliveEnemies)
+        {
+            CombatEngagement enemyEngagement = _activeEngagements.Find(e => e.GroupA.Members.Contains(enemy) || e.GroupB.Members.Contains(enemy));
+            
+            if (enemyEngagement == null || !enemyEngagement.IsFullFor(myTeam))
+            {
+                availableTargets.Add(enemy);
+            }
+            else
+            {
+                fullTargets.Add(enemy);
+            }
+        }
+
+        // 2. Si on a des cibles "libres", on prend la plus proche
+        if (availableTargets.Count > 0)
+        {
+            return GetClosestFromList(attacker.transform.position, availableTargets);
+        }
+
+        // 3. Fallback : Tout est plein, on prend au hasard pour rejoindre une mêlée et la diviser ensuite
+        return fullTargets[Random.Range(0, fullTargets.Count)];
+    }
+
+    private Character GetClosestFromList(Vector3 position, List<Character> characters)
+    {
+        Character closest = null;
+        float minDistance = float.MaxValue;
+        foreach (var character in characters)
+        {
+            float dist = Vector3.Distance(position, character.transform.position);
+            if (dist < minDistance)
+            {
+                minDistance = dist;
+                closest = character;
+            }
+        }
+        return closest;
+    }
+
     // --- GESTION DES ENGAGEMENTS (COMBAT SLOTS) ---
     
     /// <summary>
@@ -365,6 +438,9 @@ public class BattleManager : MonoBehaviour
             e.GroupA.Members.Contains(target) || e.GroupB.Members.Contains(target)
         );
 
+        BattleTeam attackerTeam = GetTeamOf(attacker);
+        BattleTeam targetTeam = GetTeamOf(target);
+
         // 3. Si pas trouvé par cible, chercher un engagement PROCHE
         //    pour éviter que deux formations se chevauchent
         if (engagement == null)
@@ -374,6 +450,10 @@ public class BattleManager : MonoBehaviour
 
             foreach (var existing in _activeEngagements)
             {
+                // Ne fusionner QUE si l'engagement existant contient les bonnes équipes et N'EST PAS PLEIN
+                if (existing.TeamA != targetTeam && existing.TeamB != targetTeam) continue;
+                if (existing.IsFullFor(attackerTeam)) continue;
+
                 // Calculer le centre de l'engagement existant
                 Vector3 engagementCenter = Vector3.zero;
                 bool hasCenter = false;
@@ -409,12 +489,9 @@ public class BattleManager : MonoBehaviour
         // 4. Sinon, on crée la mêlée
         if (engagement == null)
         {
-            BattleTeam targetTeam = GetTeamOf(target);
-            BattleTeam attackerTeam = GetTeamOf(attacker);
-
             if (targetTeam != null && attackerTeam != null)
             {
-                engagement = new CombatEngagement(targetTeam, attackerTeam);
+                engagement = new CombatEngagement(this, targetTeam, attackerTeam);
                 // On ajoute tout de suite la cible pour initialiser le groupe
                 engagement.JoinEngagement(target); 
                 _activeEngagements.Add(engagement);
@@ -427,9 +504,89 @@ public class BattleManager : MonoBehaviour
             engagement.JoinEngagement(attacker);
             // S'assurer que la cible est aussi dans l'engagement
             engagement.JoinEngagement(target);
+
+            // 6. Vérifier si l'engagement doit être séparé en deux
+            if (engagement.NeedsSplit())
+            {
+                SplitEngagement(engagement);
+            }
         }
 
         return engagement;
+    }
+
+    /// <summary>
+    /// Divise un engagement en deux si l'un de ses côtés dépasse la limite.
+    /// Les combattants qui sont déplacés dans le nouvel engagement changeront de cible.
+    /// </summary>
+    private void SplitEngagement(CombatEngagement originalEngagement)
+    {
+        if (originalEngagement == null) return;
+
+        // 1. Créer le nouvel engagement
+        CombatEngagement newEngagement = new CombatEngagement(this, originalEngagement.TeamA, originalEngagement.TeamB);
+        _activeEngagements.Add(newEngagement);
+
+        // 2. Extraire la moitié des participants de chaque côté
+        List<Character> groupAKeep = new List<Character>();
+        List<Character> groupAMove = new List<Character>();
+        for (int i = 0; i < originalEngagement.GroupA.Members.Count; i++)
+        {
+            if (i < originalEngagement.GroupA.Members.Count / 2)
+                groupAKeep.Add(originalEngagement.GroupA.Members[i]);
+            else
+                groupAMove.Add(originalEngagement.GroupA.Members[i]);
+        }
+
+        List<Character> groupBKeep = new List<Character>();
+        List<Character> groupBMove = new List<Character>();
+        for (int i = 0; i < originalEngagement.GroupB.Members.Count; i++)
+        {
+            if (i < originalEngagement.GroupB.Members.Count / 2)
+                groupBKeep.Add(originalEngagement.GroupB.Members[i]);
+            else
+                groupBMove.Add(originalEngagement.GroupB.Members[i]);
+        }
+
+        // 3. Déplacer vers le nouveau, on ne doit pas garder ceux qui sont déplacés
+        foreach (var c in groupAMove)
+        {
+            originalEngagement.LeaveEngagement(c);
+            newEngagement.JoinEngagement(c);
+        }
+        foreach (var c in groupBMove)
+        {
+            originalEngagement.LeaveEngagement(c);
+            newEngagement.JoinEngagement(c);
+        }
+
+        Debug.Log($"<color=cyan>[Battle]</color> Escarmouche trop grande : elle est divisée en deux.");
+
+        // 4. Forcer un changement de cible pour que les membres redirigent la formation correctement
+        ForceRetarget(newEngagement);
+    }
+
+    private void ForceRetarget(CombatEngagement engagement)
+    {
+        List<Character> allMembers = new List<Character>();
+        allMembers.AddRange(engagement.GroupA.Members);
+        allMembers.AddRange(engagement.GroupB.Members);
+
+        foreach (var character in allMembers)
+        {
+            if (character == null || !character.IsAlive()) continue;
+
+            // Retirer l'ancien comportement
+            var combatBehaviour = character.Controller.GetCurrentBehaviour<CombatBehaviour>();
+            if (combatBehaviour != null)
+            {
+                Character bestEnemy = GetBestTargetFor(character);
+                if (bestEnemy != null && bestEnemy != combatBehaviour.Target)
+                {
+                    combatBehaviour.SetCurrentTarget(bestEnemy);
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -495,8 +652,7 @@ public class BattleManager : MonoBehaviour
             {
                 if (!combatBehaviour.HasTarget || combatBehaviour.Target == victim)
                 {
-                    BattleTeam enemyTeam = GetOpponentTeamOf(participant);
-                    Character nextTarget = enemyTeam?.GetClosestMember(participant.transform.position);
+                    Character nextTarget = GetBestTargetFor(participant);
 
                     if (nextTarget != null)
                     {
