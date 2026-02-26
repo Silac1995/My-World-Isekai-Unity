@@ -262,8 +262,8 @@ public class Character : MonoBehaviour
 
         if (unconscious)
         {
-            // 1. Désactivation physique
-            if (_col != null) _col.enabled = false;
+            // 1. Désactivation physique (partielle pour permettre le knockback)
+            // On laisse le collider actif temporairement pour la physique de chute/recul
             if (_rb != null) _rb.isKinematic = true;
 
             // 2. Arrêt des systèmes actifs
@@ -328,8 +328,8 @@ public class Character : MonoBehaviour
         _isUnconscious = false; // La mort prime sur l'inconscience
         OnDeath?.Invoke(this);
 
-        // 1. Désactivation physique
-        if (_col != null) _col.enabled = false;
+        // 1. Désactivation physique (partielle pour permettre le knockback)
+        // Le collider sera désactivé via DisableColliderAfterKnockback dans CharacterMovement
         if (_rb != null) _rb.isKinematic = true;
 
         // 2. Arrêt des systèmes actifs

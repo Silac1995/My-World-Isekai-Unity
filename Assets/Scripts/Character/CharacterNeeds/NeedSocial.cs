@@ -77,7 +77,7 @@ public class NeedSocial : CharacterNeed
 
         var nearbyPartners = awareness.GetVisibleInteractables<CharacterInteractable>()
             .Select(interactable => interactable.Character)
-            .Where(c => c != null && c.IsAlive() && c != _character)
+            .Where(c => c != null && c.IsAlive() && c.IsFree() && c != _character)
             .ToList();
 
         if (nearbyPartners.Count == 0) return null;

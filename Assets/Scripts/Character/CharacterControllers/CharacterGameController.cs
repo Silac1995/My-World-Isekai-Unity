@@ -82,8 +82,14 @@ public abstract class CharacterGameController : MonoBehaviour
 
     protected virtual void Update()
     {
-        // Freeze : on ne fait rien du tout
-        if (_isFrozen) return;
+        // Freeze : on ne fait rien du tout, MAIS on continue de mettre à jour 
+        // les animations si jamais le personnage est poussé physiquement.
+        if (_isFrozen) 
+        {
+            UpdateAnimations();
+            UpdateFlip();
+            return;
+        }
 
         if (_character.CharacterActions.CurrentAction != null)
         {
@@ -131,8 +137,13 @@ public abstract class CharacterGameController : MonoBehaviour
             CurrentBehaviour.Act(_character);
         }
 
-        // Si un behaviour vient d'appeler Freeze() dans son Act(), on sort immédiatement
-        if (_isFrozen) return;
+        // Si un behaviour vient d'appeler Freeze() dans son Act(), on assure la transition d'anim
+        if (_isFrozen) 
+        {
+            UpdateAnimations();
+            UpdateFlip();
+            return;
+        }
 
         UpdateAnimations();
         UpdateFlip();
@@ -160,7 +171,10 @@ public abstract class CharacterGameController : MonoBehaviour
 
         if (_behavioursStack.Count == 0 && _character.TryGetComponent<NPCController>(out var npc))
         {
-            ResetStackTo(new WanderBehaviour(npc));
+            if (!npc.HasBehaviourTree)
+            {
+                ResetStackTo(new WanderBehaviour(npc));
+            }
         }
     }
 

@@ -59,7 +59,16 @@ public class CharacterMovement : MonoBehaviour
             
             if (_knockbackTimer <= 0)
             {
-                // Fin du knockback : On restaure l'état original
+                // Si le personnage est mort ou évanoui pendant le knockback, on ne restaure pas le mouvement NavMesh
+                // MAIS on finit de désactiver sa physique propre (qu'on avait laissée active pour le vol plané)
+                if (_character != null && !_character.IsAlive())
+                {
+                    if (_rb != null) _rb.isKinematic = true;
+                    if (_character.Collider != null) _character.Collider.enabled = false;
+                    return;
+                }
+
+                // Fin du knockback normal : On restaure l'état original
                 if (_rb != null) _rb.isKinematic = _wasKinematic;
                 
                 // On ne réactive l'agent QUE pour ceux qui en ont besoin (NPCs cinématiques)
@@ -170,6 +179,8 @@ public class CharacterMovement : MonoBehaviour
         {
             _agent.isStopped = true;
             _agent.ResetPath();
+            _agent.velocity = Vector3.zero;
+            _agent.obstacleAvoidanceType = ObstacleAvoidanceType.NoObstacleAvoidance; // Empêche d'être poussé pendant les dialogues
         }
         if (_rb != null) _rb.linearVelocity = Vector3.zero;
     }
@@ -181,6 +192,7 @@ public class CharacterMovement : MonoBehaviour
         if (_agent != null && _agent.isOnNavMesh)
         {
             _agent.isStopped = false;
+            _agent.obstacleAvoidanceType = ObstacleAvoidanceType.HighQualityObstacleAvoidance; // Rétablit l'évitement
         }
     }
 
@@ -244,18 +256,37 @@ public class CharacterMovement : MonoBehaviour
         }
     }
 
+    private Vector3 _lastPosition;
+    private Vector3 _empiricalVelocity;
+
+    private void Start()
+    {
+        _lastPosition = transform.position;
+    }
+
+    private void LateUpdate()
+    {
+        if (Time.deltaTime > 0f)
+        {
+            _empiricalVelocity = (transform.position - _lastPosition) / Time.deltaTime;
+        }
+        _lastPosition = transform.position;
+    }
+
     public Vector3 GetVelocity()
     {
         if (_agent != null && _agent.isOnNavMesh && !_agent.isStopped)
         {
-            return _agent.velocity;
+            if (_agent.velocity.sqrMagnitude > 0.01f)
+                return _agent.velocity;
         }
 
-        if (_rb != null)
+        if (_rb != null && !_rb.isKinematic)
         {
-            return _rb.linearVelocity;
+            if (_rb.linearVelocity.sqrMagnitude > 0.01f)
+                return _rb.linearVelocity;
         }
 
-        return Vector3.zero;
+        return _empiricalVelocity;
     }
 }
