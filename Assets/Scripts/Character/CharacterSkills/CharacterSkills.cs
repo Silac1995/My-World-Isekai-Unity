@@ -21,7 +21,26 @@ public class CharacterSkills : MonoBehaviour
             _character = GetComponent<Character>();
         }
 
-        // Initialisation de la map
+        SyncSkillsFromInspector();
+    }
+
+    /// <summary>
+    /// Permet de supporter l'ajout manuel de skills hors-code depuis l'inspecteur d'Unity (même en Play Mode).
+    /// </summary>
+    private void OnValidate()
+    {
+        if (Application.isPlaying)
+        {
+            SyncSkillsFromInspector();
+        }
+    }
+
+    private Dictionary<CharacterBaseStats, float> _appliedSkillBonuses = new Dictionary<CharacterBaseStats, float>();
+
+    private void SyncSkillsFromInspector()
+    {
+        if (_skillMap == null) _skillMap = new Dictionary<SkillSO, SkillInstance>();
+
         foreach (var skill in _skills)
         {
             if (skill != null && skill.Skill != null)
@@ -33,15 +52,17 @@ public class CharacterSkills : MonoBehaviour
                 }
             }
         }
+
+        if (Application.isPlaying && _character != null && _character.Stats != null)
+        {
+            RecalculateAllSkillBonuses();
+        }
     }
 
     private void Start()
     {
-        // Appliquer tous les bonus passifs initiaux (si le personnage spawn avec des niveaux de métier)
-        foreach (var skill in _skills)
-        {
-            ApplyPassiveBonuses(skill);
-        }
+        // On s'assure que les bonus sont calculés au démarrage
+        RecalculateAllSkillBonuses();
     }
 
     private void OnDestroy()
@@ -65,7 +86,7 @@ public class CharacterSkills : MonoBehaviour
         
         instance.OnLevelUp += HandleSkillLevelUp;
         
-        ApplyPassiveBonuses(instance);
+        RecalculateAllSkillBonuses();
     }
 
     public bool HasSkill(SkillSO skill)
@@ -119,40 +140,54 @@ public class CharacterSkills : MonoBehaviour
     private void HandleSkillLevelUp(SkillInstance skillInstance, int newLevel)
     {
         Debug.Log($"<color=cyan>[CharacterSkills]</color> {_character.CharacterName} est passé niveau {newLevel} en {skillInstance.Skill.SkillName}.");
-        ApplyPassiveBonuses(skillInstance);
-        
-        // Comme on a ajouté/modifié des statistiques de base, on demande un recalcul des stats tertiaires/dynamiques
-        _character.Stats.RecalculateTertiaryStats(); 
+        RecalculateAllSkillBonuses();
     }
 
     /// <summary>
-    /// Parcourt la liste des Bonus définis dans le SkillSO et les applique aux BaseStats du personnage 
-    /// s'il a atteint le niveau requis.
-    /// (Note : Pour éviter le double-stack à chaque appel, un système plus complexe d'Identifiants de modificateurs 
-    /// serait mieux, mais pour l'instant on ajoute directement à la BaseValue de la stat).
+    /// Calcule de zéro tous les bonus conférés par les Skills actuels et leurs niveaux.
+    /// Utilise ApplyModifier/RemoveModifier pour ne pas écraser les stats de base liées à la race ou aux niveaux.
     /// </summary>
-    private void ApplyPassiveBonuses(SkillInstance instance)
+    private void RecalculateAllSkillBonuses()
     {
-        if (instance == null || instance.Skill == null || instance.Skill.LevelBonuses == null) return;
-        if (_character.Stats == null) return;
+        if (_character == null || _character.Stats == null) return;
 
-        foreach (var bonus in instance.Skill.LevelBonuses)
+        // 1. Retirer tous les anciens modificateurs appliqués par les skills
+        foreach (var stat in _appliedSkillBonuses.Keys)
         {
-            // On vérifie de façon simpliste : si c'est exactement le niveau, on donne le bonus une fois
-            // (Si on appelait ça dans le Start() avec un level 10 d'un coup, on parcourrait jusqu'au niveau 10).
-            // Pour être parfaitement juste même lors de chargement de sauvegarde, il faudrait tracker quels bonus ont déjà été appliqués.
-            // Par souci de simplicité pour le moment (LevelUp en temps réel), on applique juste quand le niveau est atteint.
-            
-            if (bonus.RequiredLevel == instance.Level)
+            stat.RemoveAllModifiersFromSource(this);
+        }
+        _appliedSkillBonuses.Clear();
+
+        // 2. Calculer la somme des nouveaux bonus à appliquer
+        Dictionary<CharacterBaseStats, float> newBonuses = new Dictionary<CharacterBaseStats, float>();
+
+        foreach (var skillInstance in _skills)
+        {
+            if (skillInstance == null || skillInstance.Skill == null || skillInstance.Skill.LevelBonuses == null) continue;
+
+            foreach (var bonus in skillInstance.Skill.LevelBonuses)
             {
-                var statToBoost = _character.Stats.GetBaseStat(bonus.StatToBoost);
-                if (statToBoost != null)
+                if (skillInstance.Level >= bonus.RequiredLevel) // On applique tous les bonus débloqués
                 {
-                    // Ajout permanent du bonus à la base stat
-                    statToBoost.SetBaseValue(statToBoost.BaseValue + bonus.BonusValue);
-                    Debug.Log($"<color=green>[CharacterSkills]</color> Bonus appliqué : +{bonus.BonusValue} en {bonus.StatToBoost}.");
+                    var statToBoost = _character.Stats.GetBaseStat(bonus.StatToBoost);
+                    if (statToBoost != null)
+                    {
+                        if (!newBonuses.ContainsKey(statToBoost)) newBonuses[statToBoost] = 0f;
+                        newBonuses[statToBoost] += bonus.BonusValue;
+                    }
                 }
             }
         }
+
+        // 3. Appliquer les nouveaux modificateurs et les enregistrer
+        foreach (var kvp in newBonuses)
+        {
+            kvp.Key.ApplyModifier(new StatModifier(kvp.Value, this));
+            _appliedSkillBonuses[kvp.Key] = kvp.Value;
+            Debug.Log($"<color=green>[CharacterSkills]</color> Modificateur total appliqué : +{kvp.Value} sur {kvp.Key.StatName}.");
+        }
+
+        // 4. Demander un recalcul global des stats tertiaires/dynamiques (HP Max, etc.)
+        _character.Stats.RecalculateTertiaryStats(); 
     }
 }

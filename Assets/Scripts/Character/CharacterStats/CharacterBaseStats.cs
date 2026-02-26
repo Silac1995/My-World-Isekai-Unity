@@ -9,7 +9,7 @@ public abstract class CharacterBaseStats
     [SerializeField] protected float baseValue; //Raw base value
     [SerializeField] protected float currentValue; //Value with modifiers etc
 
-    private List<float> modifiers = new List<float>();
+    private List<StatModifier> modifiers = new List<StatModifier>();
 
     public CharacterBaseStats(CharacterStats characterStats, float baseValue = 1f)
     {
@@ -28,22 +28,43 @@ public abstract class CharacterBaseStats
         RecalculateCurrentValue();
     }
 
-    public void ApplyModifier(float modValue)
+    public void ApplyModifier(StatModifier modifier)
     {
-        modifiers.Add(modValue);
+        if (modifier == null) return;
+        modifiers.Add(modifier);
         RecalculateCurrentValue();
     }
 
-    public void RemoveModifier(float modValue)
+    public bool RemoveModifier(StatModifier modifier)
     {
-        if (modifiers.Remove(modValue))
+        if (modifier == null) return false;
+
+        if (modifiers.Remove(modifier))
         {
             RecalculateCurrentValue();
+            return true;
         }
         else
         {
-            Debug.LogWarning($"Modifier {modValue} introuvable dans la liste des modificateurs pour {statName}");
+            Debug.LogWarning($"Modifier introuvable dans la liste des modificateurs pour {statName}");
+            return false;
         }
+    }
+
+    /// <summary>
+    /// Retire tous les modificateurs provenant d'une source spécifique.
+    /// </summary>
+    public bool RemoveAllModifiersFromSource(object source)
+    {
+        if (modifiers == null) return false;
+
+        int removedCount = modifiers.RemoveAll(mod => mod.Source == source);
+        if (removedCount > 0)
+        {
+            RecalculateCurrentValue();
+            return true;
+        }
+        return false;
     }
 
     public void IncreaseBaseValue(float value)
@@ -66,16 +87,18 @@ public abstract class CharacterBaseStats
 
     public void Reset()
     {
-        modifiers.Clear();
+        if (modifiers != null) modifiers.Clear();
         currentValue = baseValue;
     }
 
     protected virtual void RecalculateCurrentValue()
     {
+        if (modifiers == null) modifiers = new List<StatModifier>();
+
         float totalModifiers = 0f;
         foreach (var mod in modifiers)
         {
-            totalModifiers += mod;
+            totalModifiers += mod.Value;
         }
         currentValue = baseValue + totalModifiers;
     }

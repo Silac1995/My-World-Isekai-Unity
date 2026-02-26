@@ -35,7 +35,7 @@ public class StatModifierEffectInstance : StatusEffectInstance
             var stat = target.Stats.GetBaseStat(mod.StatType);
             if (stat != null)
             {
-                stat.ApplyModifier(mod.Value);
+                stat.ApplyModifier(new StatModifier(mod.Value, this));
             }
         }
         
@@ -51,7 +51,7 @@ public class StatModifierEffectInstance : StatusEffectInstance
             var stat = target.Stats.GetBaseStat(mod.StatType);
             if (stat != null)
             {
-                stat.RemoveModifier(mod.Value);
+                stat.RemoveAllModifiersFromSource(this);
             }
         }
         
