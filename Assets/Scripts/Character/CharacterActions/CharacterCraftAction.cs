@@ -18,7 +18,30 @@ public class CharacterCraftAction : CharacterAction
 
     public override bool CanExecute()
     {
-        return _station != null && _itemToCraft != null && _station.CanCraft(_itemToCraft);
+        if (_station == null || _itemToCraft == null || !_station.CanCraft(_itemToCraft)) 
+            return false;
+
+        // --- SKILL CHECK ---
+        if (_itemToCraft.RequiredCraftingSkill != null)
+        {
+            if (character.CharacterSkills == null) return false;
+
+            if (!character.CharacterSkills.HasRequiredSkillLevel(_itemToCraft.RequiredCraftingSkill, _itemToCraft.RequiredCraftingLevel))
+            {
+                Debug.LogWarning($"<color=orange>[Crafting]</color> {character.CharacterName} n'a pas le niveau requis en {_itemToCraft.RequiredCraftingSkill.SkillName} pour crafter {_itemToCraft.ItemName}.");
+                return false;
+            }
+        }
+
+        // --- INGREDIENT CHECK ---
+        // TODO: Implémenter la vérification d'inventaire quand le système d'inventaire sera disponible
+        // Exemple:
+        // foreach (var ingredient in _itemToCraft.CraftingRecipe)
+        // {
+        //     if (!character.Inventory.HasItem(ingredient.Item, ingredient.Amount)) return false;
+        // }
+
+        return true;
     }
 
     public override void OnStart()

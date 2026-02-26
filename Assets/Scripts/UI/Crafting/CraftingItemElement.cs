@@ -47,16 +47,35 @@ namespace MWI.UI.Crafting
             _station = station;
             _user = user;
 
-            // Mise à jour visuelle
-            if (_itemIcon != null && item.Icon != null)
+            if (_itemSO != null)
             {
-                _itemIcon.sprite = item.Icon;
-                _itemIcon.enabled = true;
-            }
+                if (_itemNameText != null) _itemNameText.text = _itemSO.ItemName;
+                if (_itemIcon != null) _itemIcon.sprite = _itemSO.Icon;
 
-            if (_itemNameText != null)
-            {
-                _itemNameText.text = item.ItemName;
+                // 1. Vérifie si la station de craft est compatible 
+                bool canCraft = _station.CanCraft(_itemSO);
+
+                // 2. Vérifie si le personnage possède les compétences nécessaires
+                if (canCraft && _itemSO.RequiredCraftingSkill != null)
+                {
+                    if (_user.CharacterSkills == null || !_user.CharacterSkills.HasRequiredSkillLevel(_itemSO.RequiredCraftingSkill, _itemSO.RequiredCraftingLevel))
+                    {
+                        canCraft = false;
+                        _itemNameText.text += $" <color=red>(Req: {_itemSO.RequiredCraftingSkill.SkillName} Lvl {_itemSO.RequiredCraftingLevel})</color>";
+                    }
+                }
+
+                // 3. (Futur) Vérifie les ingrédients de la recette dans l'inventaire
+                // if (canCraft)
+                // {
+                //     foreach (var ingredient in _itemSO.CraftingRecipe) ...
+                // }
+
+                // Active ou désactive le bouton en fonction des autorisations (Station, Stats, Ingrédients)
+                if (_craftButton != null)
+                {
+                    _craftButton.interactable = canCraft;
+                }
             }
         }
 

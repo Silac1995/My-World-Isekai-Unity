@@ -24,7 +24,22 @@ public abstract class ItemSO : ScriptableObject
     public SpriteLibraryAsset SpriteLibraryAsset => _spriteLibrary;
     public abstract System.Type InstanceType { get; }
 
+    [Header("Crafting Requirements")]
+    [SerializeField] private SkillSO _requiredCraftingSkill;
+    [SerializeField] private int _requiredCraftingLevel = 1;
+    [SerializeField] private System.Collections.Generic.List<CraftingIngredient> _craftingRecipe = new System.Collections.Generic.List<CraftingIngredient>();
+
+    public SkillSO RequiredCraftingSkill => _requiredCraftingSkill;
+    public int RequiredCraftingLevel => _requiredCraftingLevel;
+    public System.Collections.Generic.List<CraftingIngredient> CraftingRecipe => _craftingRecipe;
+
     // On change 'virtual' en 'abstract' et on retire le corps de la méthode
     public abstract ItemInstance CreateInstance();
 }
 
+[System.Serializable]
+public struct CraftingIngredient
+{
+    public ItemSO Item;
+    public int Amount;
+}

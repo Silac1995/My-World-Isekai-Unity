@@ -50,7 +50,7 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
             }
             catch (System.Exception ex)
             {
-                Debug.LogError($"<color=red>[Interaction Error]</color> Sur {_currentInteractableObjectTarget.name}: {ex.Message}");
+                Debug.LogError($"<color=red>[Interaction Error]</color> Sur {_currentInteractableObjectTarget.name}: {ex.ToString()}");
             }
         }
     }

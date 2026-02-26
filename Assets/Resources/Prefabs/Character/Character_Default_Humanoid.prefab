@@ -1962,6 +1962,18 @@ PrefabInstance:
       propertyPath: m_RenderMode
       value: 2
       objectReference: {fileID: 0}
+    - target: {fileID: 2759972866297852151, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
+      propertyPath: _skills.Array.size
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2759972866297852151, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
+      propertyPath: _skills.Array.data[0]._skillSO
+      value: 
+      objectReference: {fileID: 11400000, guid: f24479b02a4edb54699cb1cb0c72cf7d, type: 2}
+    - target: {fileID: 2759972866297852151, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
+      propertyPath: _skills.Array.data[0]._currentLevel
+      value: 11
+      objectReference: {fileID: 0}
     - target: {fileID: 3273106316842190247, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       propertyPath: _character
       value: 
