@@ -19,7 +19,7 @@ MonoBehaviour:
   description: A pair of jeans
   icon: {fileID: 0}
   item_prefab: {fileID: 7761151719010417595, guid: cdf7199010af4524e9765cc5d72ef9b4, type: 3}
-  worldItem_prefab: {fileID: 0}
+  worldItem_prefab: {fileID: 718778511601405242, guid: d05bd27244da29941a5703671cff1688, type: 3}
   armor:
     baseValue: 0
     currentValue: 0

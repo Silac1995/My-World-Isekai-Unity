@@ -154,6 +154,13 @@ public class SpawnManager : MonoBehaviour
         {
             CameraFollow cameraFollow = Camera.main?.GetComponent<CameraFollow>();
             if (cameraFollow != null) cameraFollow.SetGameObject(characterPrefabObj);
+
+            // Lien avec l'UI du joueur
+            GameObject playerUIObj = GameObject.Find("UI_Player");
+            if (playerUIObj != null && playerUIObj.TryGetComponent(out PlayerUI playerUI))
+            {
+                playerUI.Initialize(characterPrefabObj);
+            }
         }
 
         float randomSize = Random.Range(0f, 200f);

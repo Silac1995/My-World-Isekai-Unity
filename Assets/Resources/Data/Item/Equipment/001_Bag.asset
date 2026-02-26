@@ -19,7 +19,7 @@ MonoBehaviour:
   description: a bag
   icon: {fileID: 0}
   item_prefab: {fileID: 7464234567237213114, guid: 3efdafad63ca3c543891703e39a6ca2b, type: 3}
-  worldItem_prefab: {fileID: 0}
+  worldItem_prefab: {fileID: 718778511601405242, guid: d05bd27244da29941a5703671cff1688, type: 3}
   armor:
     baseValue: 0
     currentValue: 0

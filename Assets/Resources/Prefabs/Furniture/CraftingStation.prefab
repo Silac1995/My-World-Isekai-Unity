@@ -518,8 +518,9 @@ MonoBehaviour:
   interactionPrompt: Press E to interact
   _interactionZone: {fileID: 7216829249605665523}
   _rootgameObject: {fileID: 1329527029119559092}
-  _furniture: {fileID: 0}
-  _craftingStation: {fileID: 0}
+  _furniture: {fileID: 4748126588462873856}
+  _craftingStation: {fileID: 4748126588462873856}
+  _craftingWindowPrefab: {fileID: 3509334697153544943, guid: 4afa5dd3aa3a9924683f6bd8dbb07d4a, type: 3}
 --- !u!114 &4748126588462873856
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -537,6 +538,8 @@ MonoBehaviour:
   _stationType: 0
   _craftableItems:
   - {fileID: 11400000, guid: 6c5a51e107481e44e877e826e0853958, type: 2}
+  - {fileID: 11400000, guid: 079154c3c6187704eb45940ba6600ecf, type: 2}
+  - {fileID: 11400000, guid: 3b3b00f4c86086d418ad8e1c80a9bd82, type: 2}
   _outputPoint: {fileID: 3468693179383152529}
 --- !u!65 &7216829249605665523
 BoxCollider:

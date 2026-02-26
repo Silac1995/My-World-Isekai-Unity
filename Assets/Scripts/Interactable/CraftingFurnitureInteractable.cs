@@ -7,6 +7,12 @@ using UnityEngine;
 public class CraftingFurnitureInteractable : FurnitureInteractable
 {
     [SerializeField] private CraftingStation _craftingStation;
+    
+    [Header("UI Reference")]
+    [Tooltip("Le prefab de la fenêtre UI de craft. Il sera instancié au premier clic.")]
+    [SerializeField] private GameObject _craftingWindowPrefab;
+
+    private MWI.UI.Crafting.CraftingWindow _instantiatedWindow;
 
     public CraftingStation CraftingStation => _craftingStation;
 
@@ -30,11 +36,35 @@ public class CraftingFurnitureInteractable : FurnitureInteractable
 
         Debug.Log($"<color=yellow>[Crafting]</color> {user.CharacterName} s'installe à {Furniture.FurnitureName} pour crafter.");
 
-        // TEST : craft le premier item de la liste
-        if (_craftingStation != null && _craftingStation.CraftableItems.Count > 0)
+        // 1. Instancier la fenêtre si elle n'existe pas encore
+        if (_instantiatedWindow == null && _craftingWindowPrefab != null)
         {
-            _craftingStation.Craft(_craftingStation.CraftableItems[0]);
-            Release();
+            // Trouver le parent UI où l'instancier
+            GameObject canvasParent = GameObject.Find("UI_Player");
+            
+            GameObject windowGo;
+            if (canvasParent != null)
+            {
+                windowGo = Object.Instantiate(_craftingWindowPrefab, canvasParent.transform);
+            }
+            else
+            {
+                Debug.LogWarning($"<color=orange>[Crafting]</color> Canvas parent introuvable. Instanciation à la racine.");
+                windowGo = Object.Instantiate(_craftingWindowPrefab);
+            }
+
+            _instantiatedWindow = windowGo.GetComponent<MWI.UI.Crafting.CraftingWindow>();
+        }
+
+        // 2. Ouvrir la fenêtre de craft
+        if (_instantiatedWindow != null)
+        {
+            _instantiatedWindow.OpenForStation(this, user);
+        }
+        else
+        {
+            Debug.LogError($"<color=red>[Crafting]</color> Prefab de CraftingWindow invalide ou non assigné sur {name} !");
+            Release(); // Libère le joueur s'il y a une erreur
         }
     }
 
