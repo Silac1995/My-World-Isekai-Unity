@@ -206,6 +206,8 @@ public abstract class CharacterGameController : MonoBehaviour
 
     private void SafeResume()
     {
+        if (_isFrozen) return; // Ne JAMAIS reprendre le mouvement si le cerveau est gelé !
+
         // Une s?curit? de fer : on ne Resume() QUE si on n'est pas en train de faire qqc 
         // ET qu'on a fini le petit temps de settling.
         if (_character.CharacterActions.CurrentAction != null || _wasDoingAction) 

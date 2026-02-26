@@ -14,6 +14,7 @@ public class CharacterSpeech : MonoBehaviour
     [Range(0.85f, 1.25f)][SerializeField] private float _voicePitch = 1.0f;
 
     private Coroutine _hideCoroutine;
+    public bool IsSpeaking => _hideCoroutine != null;
 
     private void Start()
     {

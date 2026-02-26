@@ -40,6 +40,15 @@ public class CharacterInteraction : MonoBehaviour
         if (targetCollider == null) return;
 
         bool isStillTouching = _interactionZone.bounds.Intersects(targetCollider.bounds);
+        
+        // Si les personnages sont déjà positionnés (en plein dialogue), on est plus tolérant sur la distance
+        // pour éviter que le NavMesh avoidance ou un micro-recul annule tout.
+        if (IsPositioned)
+        {
+            float dist = Vector3.Distance(transform.position, _currentTarget.transform.position);
+            if (dist < 3.5f) isStillTouching = true;
+        }
+
         if (!isStillTouching)
         {
             Debug.Log($"<color=yellow>[Interaction]</color> Cible hors de zone, fin de l'interaction.");
@@ -142,7 +151,13 @@ public class CharacterInteraction : MonoBehaviour
             if (totalExchanges >= MAX_EXCHANGES) break;
 
             // 2. Attente aléatoire avant la réponse (entre 2.5 et 5 secondes)
-            float randomDelay = UnityEngine.Random.Range(2.5f, 5.0f);
+            // Mais on s'assure d'abord d'attendre a minima la fin de la bulle de texte
+            while (currentSpeaker.CharacterSpeech != null && currentSpeaker.CharacterSpeech.IsSpeaking)
+            {
+                yield return null;
+            }
+
+            float randomDelay = UnityEngine.Random.Range(1.0f, 2.5f); // Délai réduit car on attend déjà la fin de la bulle
             yield return new WaitForSeconds(randomDelay);
 
             // 3. Inversion des rôles pour le tour suivant
@@ -165,6 +180,14 @@ public class CharacterInteraction : MonoBehaviour
 
             currentSpeaker = nextSpeaker;
             currentListener = nextListener;
+        }
+
+        // --- ATTENTE FINALE DE SÉCURITÉ ---
+        // On s'assure que toutes les bulles de texte sont bien fermées avant de libérer les personnages
+        while ((initiator.CharacterSpeech != null && initiator.CharacterSpeech.IsSpeaking) ||
+               (target.CharacterSpeech != null && target.CharacterSpeech.IsSpeaking))
+        {
+            yield return null;
         }
 
         Debug.Log($"<color=cyan>[Dialogue]</color> Fin de la séquence après {totalExchanges} échanges.");
