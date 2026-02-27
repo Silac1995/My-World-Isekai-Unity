@@ -16,10 +16,13 @@ public class SkillInstance
     // TODO: A remplacer par une vraie courbe d'XP si besoin
     public int XPToNextLevel => _currentLevel * 100;
 
+    public const int MAX_LEVEL = 100;
+
     public SkillSO Skill => _skillSO;
     public int Level => _currentLevel;
     public int XP => _currentXP;
     public int TotalXP => _totalXP;
+    public SkillTier CurrentTier => SkillTierExtensions.GetTierForLevel(_currentLevel);
 
     public SkillInstance(SkillSO skill, int initialLevel = 1)
     {
@@ -31,7 +34,7 @@ public class SkillInstance
 
     public void AddXP(int amount)
     {
-        if (amount <= 0 || _skillSO == null) return;
+        if (amount <= 0 || _skillSO == null || _currentLevel >= MAX_LEVEL) return;
 
         _currentXP += amount;
         _totalXP += amount;
@@ -39,11 +42,16 @@ public class SkillInstance
 
         // Boucle au cas où l'XP fait monter plusieurs niveaux d'un coup
         bool leveledUp = false;
-        while (_currentXP >= XPToNextLevel)
+        while (_currentXP >= XPToNextLevel && _currentLevel < MAX_LEVEL)
         {
             _currentXP -= XPToNextLevel;
             _currentLevel++;
             leveledUp = true;
+        }
+
+        if (_currentLevel >= MAX_LEVEL)
+        {
+            _currentXP = 0; // On ne stocke plus d'XP après le niveau max
         }
 
         if (leveledUp)

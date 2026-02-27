@@ -7,11 +7,14 @@ public class CombatStyleExpertise
     [SerializeField] private int _level = 1;
     [SerializeField] private float _experience = 0f;
 
+    public const int MAX_LEVEL = 100;
+
     public CombatStyleSO Style => _style;
     public int Level => _level;
     public float Experience => _experience;
+    public SkillTier CurrentTier => SkillTierExtensions.GetTierForLevel(_level);
 
-    // Propriété pour un accès rapide (recommandé)
+    // PropriÃ©tÃ© pour un accÃ¨s rapide (recommandÃ©)
     public WeaponType WeaponType => _style != null ? _style.WeaponType : WeaponType.None;
 
     public CombatStyleExpertise(CombatStyleSO style)
@@ -21,10 +24,10 @@ public class CombatStyleExpertise
         _experience = 0f;
     }
 
-    // La méthode demandée
+    // La mÃ©thode demandÃ©e
     public WeaponType GetWeaponType()
     {
-        if (_style == null) return WeaponType.None; // Ou une valeur par défaut de ton Enum
+        if (_style == null) return WeaponType.None; // Ou une valeur par dÃ©faut de ton Enum
         return _style.WeaponType;
     }
 
@@ -33,16 +36,32 @@ public class CombatStyleExpertise
         return _style != null ? _style.GetCombatController(_level) : null;
     }
 
+    private float GetXPRequiredForLevel()
+    {
+        return _level * 100f;
+    }
+
     public void AddExperience(float amount)
     {
+        if (_level >= MAX_LEVEL) return;
+
         _experience += amount;
 
-        // Logique de montée de niveau simple (ex: 100 XP par niveau)
-        float xpRequired = _level * 100f;
-        if (_experience >= xpRequired)
+        bool leveledUp = false;
+        while (_experience >= GetXPRequiredForLevel() && _level < MAX_LEVEL)
         {
-            _experience -= xpRequired;
+            _experience -= GetXPRequiredForLevel();
             _level++;
+            leveledUp = true;
+        }
+
+        if (_level >= MAX_LEVEL)
+        {
+            _experience = 0f;
+        }
+
+        if (leveledUp)
+        {
             Debug.Log($"<color=yellow>[Combat]</color> Style {_style.StyleName} level UP ! (Niv. {_level})");
         }
     }

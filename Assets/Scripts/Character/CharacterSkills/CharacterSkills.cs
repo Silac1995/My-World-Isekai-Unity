@@ -9,6 +9,8 @@ public class CharacterSkills : MonoBehaviour
     [SerializeField]
     private List<SkillInstance> _skills = new List<SkillInstance>();
 
+    public IReadOnlyList<SkillInstance> Skills => _skills;
+
     /// <summary>
     /// Pour recherche rapide des skills par leur SO.
     /// </summary>

@@ -1,23 +1,62 @@
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
+[System.Serializable]
+public class JobAssignment
+{
+    public Job AssignedJob;
+    public CommercialBuilding Workplace;
+    public List<ScheduleEntry> WorkScheduleEntries = new List<ScheduleEntry>();
+}
+
 /// <summary>
-/// Composant attaché au personnage pour gérer son job actuel.
-/// Permet d'assigner, quitter, et exécuter un job dans un CommercialBuilding.
+/// Composant attaché au personnage pour gérer ses différents jobs actuels.
+/// Permet d'assigner, quitter, et exécuter plusieurs jobs dans des CommercialBuilding.
 /// </summary>
 public class CharacterJob : MonoBehaviour
 {
     [SerializeField] private Character _character;
 
-    private Job _currentJob;
-    private CommercialBuilding _workplace;
-    private List<ScheduleEntry> _workScheduleEntries;
+    [SerializeField] private List<JobAssignment> _activeJobs = new List<JobAssignment>();
+    private CommercialBuilding _ownedBuilding; // Lieu dont il est prioritaire
 
     public Character Character => _character;
-    public Job CurrentJob => _currentJob;
-    public CommercialBuilding Workplace => _workplace;
-    public bool HasJob => _currentJob != null;
-    public bool IsWorking => HasJob && _currentJob.IsAssigned;
+    public IReadOnlyList<JobAssignment> ActiveJobs => _activeJobs;
+    public bool HasJob => _activeJobs.Count > 0;
+    
+    // Rétrocompatibilité : Retourne le job actif à l'heure actuelle, ou le premier par défaut
+    public Job CurrentJob
+    {
+        get
+        {
+            if (_activeJobs.Count == 0) return null;
+            int h = MWI.Time.TimeManager.Instance != null ? MWI.Time.TimeManager.Instance.CurrentHour : 12;
+            foreach (var j in _activeJobs)
+            {
+                if (j.WorkScheduleEntries.Any(e => h >= e.startHour && h < e.endHour))
+                    return j.AssignedJob;
+            }
+            return _activeJobs[0].AssignedJob;
+        }
+    }
+
+    public CommercialBuilding Workplace
+    {
+        get
+        {
+            if (_activeJobs.Count == 0) return null;
+            int h = MWI.Time.TimeManager.Instance != null ? MWI.Time.TimeManager.Instance.CurrentHour : 12;
+            foreach (var j in _activeJobs)
+            {
+                if (j.WorkScheduleEntries.Any(e => h >= e.startHour && h < e.endHour))
+                    return j.Workplace;
+            }
+            return _activeJobs[0].Workplace;
+        }
+    }
+
+    public bool IsWorking => HasJob && _activeJobs.Any(j => j.AssignedJob.IsAssigned);
 
     private void Awake()
     {
@@ -25,26 +64,33 @@ public class CharacterJob : MonoBehaviour
     }
 
     /// <summary>
-    /// Assigne un job au personnage dans un building commercial.
+    /// Assigne un job au personnage dans un building commercial s'il n'y a pas de chevauchement d'horaires.
     /// </summary>
     public bool TakeJob(Job job, CommercialBuilding building)
     {
         if (job == null || building == null) return false;
 
-        // Quitter le job actuel si on en a un
-        if (HasJob)
+        var newEntries = job.GetWorkSchedule();
+        if (DoesScheduleOverlap(newEntries))
         {
-            QuitJob();
+            Debug.LogWarning($"<color=orange>[CharacterJob]</color> {_character.CharacterName} ne peut pas prendre le poste de {job.JobTitle} car les horaires se chevauchent.");
+            return false;
         }
 
-        // Assigner le nouveau job
+        // Assigner le nouveau job coté building
         if (building.AssignWorker(_character, job))
         {
-            _currentJob = job;
-            _workplace = building;
+            var assignment = new JobAssignment
+            {
+                AssignedJob = job,
+                Workplace = building,
+                WorkScheduleEntries = newEntries
+            };
 
-            // Injecter les horaires de travail dans le schedule
-            InjectWorkSchedule();
+            _activeJobs.Add(assignment);
+
+            // Injecter les horaires de travail dans le schedule du joueur
+            InjectWorkSchedule(newEntries);
 
             Debug.Log($"<color=yellow>[CharacterJob]</color> {_character.CharacterName} a pris le poste de {job.JobTitle} à {building.BuildingName}.");
             return true;
@@ -53,57 +99,84 @@ public class CharacterJob : MonoBehaviour
         return false;
     }
 
+    private bool DoesScheduleOverlap(List<ScheduleEntry> newEntries)
+    {
+        foreach (var newEntry in newEntries)
+        {
+            foreach (var activeJob in _activeJobs)
+            {
+                foreach (var existingEntry in activeJob.WorkScheduleEntries)
+                {
+                    // L'heure de début de l'un est avant la fin de l'autre
+                    if (newEntry.startHour < existingEntry.endHour && existingEntry.startHour < newEntry.endHour)
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
     /// <summary>
-    /// Le personnage quitte son job actuel.
+    /// Le personnage quitte un job spécifique.
+    /// </summary>
+    public void QuitJob(Job job)
+    {
+        var assignment = _activeJobs.FirstOrDefault(j => j.AssignedJob == job);
+        if (assignment == null) return;
+
+        Debug.Log($"<color=yellow>[CharacterJob]</color> {_character.CharacterName} quitte son poste de {job.JobTitle} à {assignment.Workplace?.BuildingName}.");
+
+        RemoveWorkSchedule(assignment.WorkScheduleEntries);
+
+        if (assignment.Workplace != null)
+        {
+            assignment.Workplace.RemoveWorker(job);
+        }
+
+        _activeJobs.Remove(assignment);
+    }
+
+    /// <summary>
+    /// Rétrocompatibilité : quitte tous les jobs d'un coup.
     /// </summary>
     public void QuitJob()
     {
-        if (!HasJob) return;
-
-        Debug.Log($"<color=yellow>[CharacterJob]</color> {_character.CharacterName} quitte son poste de {_currentJob.JobTitle} à {_workplace?.BuildingName}.");
-
-        // Retirer les horaires de travail du schedule
-        RemoveWorkSchedule();
-
-        if (_workplace != null)
+        var jobsToQuit = _activeJobs.Select(j => j.AssignedJob).ToList();
+        foreach (var j in jobsToQuit)
         {
-            _workplace.RemoveWorker(_currentJob);
+            QuitJob(j);
         }
-
-        _currentJob = null;
-        _workplace = null;
     }
 
-    private void InjectWorkSchedule()
+    private void InjectWorkSchedule(List<ScheduleEntry> entries)
     {
-        if (_currentJob == null) return;
-
         var schedule = _character.CharacterSchedule;
-        if (schedule == null) return;
-
-        _workScheduleEntries = _currentJob.GetWorkSchedule();
-        schedule.InjectJobSchedule(_workScheduleEntries);
+        if (schedule != null && entries != null)
+        {
+            schedule.InjectJobSchedule(entries);
+        }
     }
 
-    private void RemoveWorkSchedule()
+    private void RemoveWorkSchedule(List<ScheduleEntry> entries)
     {
         var schedule = _character.CharacterSchedule;
-        if (schedule == null || _workScheduleEntries == null) return;
-
-        schedule.RemoveJobSchedule(_workScheduleEntries);
-        _workScheduleEntries = null;
+        if (schedule != null && entries != null)
+        {
+            schedule.RemoveJobSchedule(entries);
+        }
     }
 
     /// <summary>
-    /// Exécute le travail du job actuel (appelé quand le personnage est au travail).
+    /// Exécute le travail actuel correspondant à l'heure du jour.
     /// </summary>
     public void Work()
     {
-        if (!HasJob) return;
-
-        if (_currentJob.CanExecute())
+        var job = CurrentJob;
+        if (job != null && job.CanExecute())
         {
-            _currentJob.Execute();
+            job.Execute();
         }
     }
 
@@ -112,7 +185,7 @@ public class CharacterJob : MonoBehaviour
     /// </summary>
     public bool WorksAt(CommercialBuilding building)
     {
-        return _workplace != null && _workplace == building;
+        return _activeJobs.Any(j => j.Workplace == building);
     }
 
     /// <summary>
@@ -120,17 +193,16 @@ public class CharacterJob : MonoBehaviour
     /// </summary>
     public bool HasJobOfType<T>() where T : Job
     {
-        return _currentJob is T;
+        return _activeJobs.Any(j => j.AssignedJob is T);
     }
 
     /// <summary>
     /// Le personnage est-il propriétaire de son lieu de travail ?
     /// </summary>
-    public bool IsOwner => _workplace != null && _workplace.Owner == _character;
+    public bool IsOwner => _ownedBuilding != null && _ownedBuilding.Owner == _character;
 
     /// <summary>
-    /// Le personnage demande un job dans un building commercial.
-    /// Passe par le building qui vérifie que le boss existe.
+    /// Demande un job en passant par le building.
     /// </summary>
     public bool AskForJob(CommercialBuilding building, Job job)
     {
@@ -139,45 +211,30 @@ public class CharacterJob : MonoBehaviour
         // Demande au building (qui check le boss)
         if (building.AskForJob(_character, job))
         {
-            // Le building a accepté → on enregistre le job côté personnage
-            if (HasJob) QuitJob();
-
-            _currentJob = job;
-            _workplace = building;
-            InjectWorkSchedule();
-
-            Debug.Log($"<color=yellow>[CharacterJob]</color> {_character.CharacterName} a été embauché comme {job.JobTitle} à {building.BuildingName}.");
-            return true;
+            // Le building a accepté, du coup on est techniquement embauché
+            // Mais AskForJob de CommercialBuilding appelle souvent `AssignWorker` 
+            // qui lui-même rappelle `TakeJob`. Si ça se boucle mal, ça peut foirer.
+            // On s'assure juste d'appeler notre TakeJob interne :
+            return TakeJob(job, building);
         }
 
         return false;
     }
 
     /// <summary>
-    /// Le personnage devient propriétaire d'un building commercial.
-    /// Il peut optionnellement prendre un job dans ce building.
+    /// Devient propriétaire. Optionnellement, prend le 1er job dans la foulée.
     /// </summary>
     public bool BecomeOwner(CommercialBuilding building, Job optionalJob = null)
     {
         if (building == null) return false;
 
-        // Quitter le job actuel si on en a un
-        if (HasJob) QuitJob();
-
-        // Devenir propriétaire (SetOwner assigne aussi le job si fourni)
+        // Devenir propriétaire (SetOwner assigne le Owner du building)
         building.SetOwner(_character, optionalJob);
+        _ownedBuilding = building;
 
-        // Si un job a été assigné, enregistrer les infos côté personnage
-        if (optionalJob != null && optionalJob.IsAssigned && optionalJob.Worker == _character)
+        if (optionalJob != null)
         {
-            _currentJob = optionalJob;
-            _workplace = building;
-            InjectWorkSchedule();
-        }
-        else
-        {
-            // Juste owner, pas de job
-            _workplace = building;
+            TakeJob(optionalJob, building);
         }
 
         Debug.Log($"<color=green>[CharacterJob]</color> {_character.CharacterName} est devenu propriétaire de {building.BuildingName}.");

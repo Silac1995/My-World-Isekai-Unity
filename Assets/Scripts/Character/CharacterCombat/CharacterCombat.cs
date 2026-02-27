@@ -10,6 +10,8 @@ public class CharacterCombat : MonoBehaviour
     [Header("Expertise & Memory")]
     [SerializeField] private List<CombatStyleExpertise> _knownStyles = new List<CombatStyleExpertise>();
     [SerializeField] private CombatStyleExpertise _currentCombatStyleExpertise;
+    
+    public IReadOnlyList<CombatStyleExpertise> KnownStyles => _knownStyles;
     [SerializeField] private bool _isCombatMode = false;
     [SerializeField] private int _bonusMeleeMaxTargets = 0;
 
@@ -441,4 +443,14 @@ public class CharacterCombat : MonoBehaviour
 
     // Keep compatibility with old single arg call if needed
     public void TakeDamage(float amount) => TakeDamage(amount, MeleeDamageType.Blunt);
+
+    public void UnlockCombatStyle(CombatStyleSO style)
+    {
+        if (style == null) return;
+        if (!_knownStyles.Exists(s => s.Style == style))
+        {
+            _knownStyles.Add(new CombatStyleExpertise(style));
+            Debug.Log($"<color=yellow>[Combat]</color> Nouveau style débloqué : {style.StyleName}");
+        }
+    }
 }
