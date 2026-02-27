@@ -210,7 +210,11 @@ public class Character : MonoBehaviour
     #region Health & Status
     public bool IsAlive() => !_isDead && !_isUnconscious;
     public bool IsPlayer() => _controller is PlayerController;
-    public bool IsFree() => IsAlive() && !CharacterCombat.IsInBattle && !_characterInteraction.IsInteracting;
+    public bool IsFree() 
+    {
+        bool isTeaching = _characterMentorship != null && _characterMentorship.IsCurrentlyTeaching;
+        return IsAlive() && !CharacterCombat.IsInBattle && !_characterInteraction.IsInteracting && !isTeaching;
+    }
 
     #region Party Logic
     public bool IsInParty() => _currentParty != null;

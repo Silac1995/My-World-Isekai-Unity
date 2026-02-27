@@ -63,4 +63,10 @@ public abstract class InteractionInvitation : ICharacterInteractionAction
     /// Called when the target refuses. Override to add penalties (e.g. relation loss).
     /// </summary>
     public virtual void OnRefused(Character source, Character target) { }
+
+    /// <summary>
+    /// Optional custom evaluation logic for specific interactions. 
+    /// Return null to fallback to CharacterInvitation's default sociability check.
+    /// </summary>
+    public virtual bool? EvaluateCustomInvitation(Character source, Character target) => null;
 }

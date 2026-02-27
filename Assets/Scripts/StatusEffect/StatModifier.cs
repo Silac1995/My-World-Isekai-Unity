@@ -1,4 +1,4 @@
-using UnityEngine;
+ï»¿using UnityEngine;
 
 [System.Serializable]
 public class StatsModifier
@@ -6,7 +6,7 @@ public class StatsModifier
     [SerializeField]
     private StatType statType;
     [SerializeField]
-    private float value; // Peut être négatif ou positif.
+    private float value; // Peut Ãªtre nÃ©gatif ou positif.
 
     public StatType StatType
     {
@@ -30,6 +30,7 @@ public class StatsModifier
             StatType.Agility => statClass == typeof(CharacterAgility),
             StatType.Dexterity => statClass == typeof(CharacterDexterity),
             StatType.Intelligence => statClass == typeof(CharacterIntelligence),
+            StatType.Charisma => statClass == typeof(CharacterCharisma),
 
             StatType.PhysicalPower => statClass == typeof(PhysicalPower),
             StatType.Speed => statClass == typeof(Speed),

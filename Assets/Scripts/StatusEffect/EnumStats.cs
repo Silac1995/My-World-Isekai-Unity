@@ -12,6 +12,7 @@ public enum StatType
     Agility,
     Dexterity,
     Intelligence,
+    Charisma,
 
     // Tertiary
     PhysicalPower,

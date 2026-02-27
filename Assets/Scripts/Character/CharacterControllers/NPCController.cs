@@ -253,6 +253,17 @@ public class NPCController : CharacterGameController
             }
         }
 
+        // --- NEW: Check if mentorship is possible ---
+        var mentorAction = new InteractionMentorship(null);
+        if (mentorAction.CanExecute(_character, target))
+        {
+            // 40% chance to naturally ask for a lesson if we meet someone who can teach us
+            if (Random.value < 0.4f)
+            {
+                return mentorAction;
+            }
+        }
+
         if (_character.CharacterRelation == null) return new InteractionTalk();
         var rel = _character.CharacterRelation.GetRelationshipWith(target);
         if (rel == null) return new InteractionTalk();

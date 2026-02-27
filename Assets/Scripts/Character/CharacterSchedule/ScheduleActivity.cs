@@ -7,5 +7,6 @@ public enum ScheduleActivity
     Work,       // Aller au travail et exécuter son job
     Sleep,      // Rentrer chez soi et dormir
     Leisure,    // Aller dans un lieu de divertissement
-    GoHome      // Rentrer chez soi sans dormir
+    GoHome,     // Rentrer chez soi sans dormir
+    Teach       // Donner un cours / Être Mentor
 }

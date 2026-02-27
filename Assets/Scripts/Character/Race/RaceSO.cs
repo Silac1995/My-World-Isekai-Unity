@@ -21,6 +21,7 @@ public class RaceSO : ScriptableObject
     public float BaseDexterity = 10f;
     public float BaseIntelligence = 10f;
     public float BaseEndurance = 10f;
+    public float BaseCharisma = 10f;
 
     [Header("Primary Stats (Offsets & Multipliers)")]
     public float BaseHealthOffset = 100f;

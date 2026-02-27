@@ -15,6 +15,9 @@ public class MentorshipClass
     public ScriptableObject TeachingSubject => _teachingSubject;
     public IReadOnlyList<Character> EnrolledStudents => _enrolledStudents;
 
+    public event System.Action<MentorshipClass> OnClassStarted;
+    public event System.Action<MentorshipClass> OnClassEnded;
+
     public MentorshipClass(Character mentor, ScriptableObject subject)
     {
         _mentor = mentor;
@@ -46,6 +49,22 @@ public class MentorshipClass
         {
             _enrolledStudents.Remove(student);
         }
+    }
+
+    /// <summary>
+    /// Notifie tous les abonnés (élèves) que le cours a commencé.
+    /// </summary>
+    public void NotifyClassStarted()
+    {
+        OnClassStarted?.Invoke(this);
+    }
+
+    /// <summary>
+    /// Notifie tous les abonnés (élèves) que le cours est terminé.
+    /// </summary>
+    public void NotifyClassEnded()
+    {
+        OnClassEnded?.Invoke(this);
     }
 
     /// <summary>

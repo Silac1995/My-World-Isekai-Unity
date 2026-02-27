@@ -13,8 +13,8 @@ NavMeshProjectSettings:
     cost: 2
   - name: BattleZone
     cost: 10
-  - name: 
-    cost: 1
+  - name: ClassZone
+    cost: 2
   - name: 
     cost: 1
   - name: 

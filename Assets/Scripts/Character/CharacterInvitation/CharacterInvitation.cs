@@ -97,6 +97,14 @@ public class CharacterInvitation : MonoBehaviour
     /// </summary>
     private bool EvaluateInvitation(InteractionInvitation invitation, Character source)
     {
+        // --- CUSTOM INTERACTION EVALUATION ---
+        bool? customEval = invitation.EvaluateCustomInvitation(source, _character);
+        if (customEval.HasValue)
+        {
+            Debug.Log($"<color=cyan>[Invitation]</color> {_character.CharacterName} evaluates custom invitation from {source.CharacterName} → {(customEval.Value ? "ACCEPTED" : "REFUSED")}");
+            return customEval.Value;
+        }
+
         float acceptChance = 0.3f; // Base 30% chance for strangers
 
         // --- RELATION-BASED ---

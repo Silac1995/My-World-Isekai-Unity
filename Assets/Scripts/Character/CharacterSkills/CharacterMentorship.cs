@@ -1,6 +1,7 @@
 using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
+using MWI.Time;
 
 public class CharacterMentorship : MonoBehaviour
 {
@@ -26,23 +27,115 @@ public class CharacterMentorship : MonoBehaviour
     public MentorshipClass CurrentActiveClass => _currentActiveClass;
     public MentorClassZone SpawnedClassZone => _spawnedClassZone;
 
-    private void Update()
+    private ScheduleEntry _dynamicClassEntry;
+
+    private void OnEnable()
     {
-        // --- TEMPORARY AUTO-TEACH TEST ---
-        // Si le personnage n'enseigne pas déjà, qu'il est libre, et que son activité actuelle est Wander (temps libre)
-        if (!_isCurrentlyTeaching && _character != null && _character.IsFree())
+        if (TimeManager.Instance != null)
+        {
+            TimeManager.Instance.OnHourChanged += OnHourChanged;
+        }
+        
+        if (_character != null && _character.CharacterCombat != null)
+        {
+            _character.CharacterCombat.OnCombatModeChanged += HandleCombatModeChanged;
+        }
+    }
+
+    private void OnDisable()
+    {
+        if (TimeManager.Instance != null)
+        {
+            TimeManager.Instance.OnHourChanged -= OnHourChanged;
+        }
+
+        if (_character != null && _character.CharacterCombat != null)
+        {
+            _character.CharacterCombat.OnCombatModeChanged -= HandleCombatModeChanged;
+        }
+    }
+
+    private void HandleCombatModeChanged(bool isInCombat)
+    {
+        // Si le mentor entre en combat (se fait attaquer ou attaque), on annule la leçon
+        if (isInCombat && _isCurrentlyTeaching)
+        {
+            Debug.Log($"<color=orange>[Mentorship]</color> Le cours de {_character.CharacterName} est interrompu par un combat !");
+            
+            // On s'assure de dire une phrase RP pour l'interruption
+            if (_character.CharacterSpeech != null)
+            {
+                _character.CharacterSpeech.Say("We are under attack! Class dismissed!");
+            }
+
+            StopGivingLesson();
+        }
+    }
+
+    private void OnHourChanged(int hour)
+    {
+        // 1. Nettoyer l'ancienne classe dynamique si elle est finie
+        if (_dynamicClassEntry != null && !_dynamicClassEntry.IsActiveAtHour(hour))
         {
             var schedule = _character.CharacterSchedule;
-            // Si on est en Wander, c'est du temps libre. On peut commencer un cours.
-            if (schedule != null && schedule.CurrentActivity == ScheduleActivity.Wander)
+            if (schedule != null) schedule.RemoveEntry(_dynamicClassEntry);
+            _dynamicClassEntry = null;
+            
+            // Si on donnait cours, on arrête
+            if (_isCurrentlyTeaching) StopGivingLesson();
+        }
+
+        // 2. Si on ne donne pas encours de cours, on regarde si on a des élèves
+        if (!_isCurrentlyTeaching && _character.IsFree())
+        {
+            var schedule = _character.CharacterSchedule;
+            if (schedule != null)
             {
-                // Un Mentor ne commence un cours que s'il a au moins une classe formelle avec des élèves inscrits
-                var classToTeach = GetFirstClassWithStudents();
-                if (classToTeach != null)
+                // Uniquement si on a défini de se balader (Wander) pendant cette heure
+                if (schedule.GetCurrentActivity(hour) == ScheduleActivity.Wander || schedule.GetCurrentActivity(hour) == ScheduleActivity.Teach)
                 {
-                    Debug.Log($"<color=magenta>[TEST]</color> {_character.CharacterName} a du temps libre, il décide de donner son cours de {classToTeach.TeachingSubject.name} à ses élèves inscrits !");
-                    StartGivingLesson(classToTeach.TeachingSubject);
+                    var classToTeach = GetFirstClassWithStudents();
+                    if (classToTeach != null)
+                    {
+                        // On planifie un cours pour cette heure-ci avec une haute priorité
+                        _dynamicClassEntry = new ScheduleEntry(hour, hour + 1, ScheduleActivity.Teach, 50);
+                        schedule.AddEntry(_dynamicClassEntry);
+                        schedule.ReevaluateCurrentActivity(); // Force l'application immédiate
+                        
+                        // L'appel précédent va declencher GiveLessonBehaviour, 
+                        // mais on s'assure d'initialiser les données de la classe.
+                        StartGivingLesson(classToTeach.TeachingSubject);
+                    }
                 }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Appelé lors de l'ajout d'un nouvel élève. Tente de lancer le cours immédiatement si le mentor est libre.
+    /// </summary>
+    public void TryScheduleImmediateClass(MentorshipClass classToTeach)
+    {
+        if (_isCurrentlyTeaching) return; // Déjà en train de donner cours
+        if (!_character.IsFree()) return;
+
+        if (TimeManager.Instance == null) return;
+        int currentHour = TimeManager.Instance.CurrentHour;
+
+        var schedule = _character.CharacterSchedule;
+        if (schedule != null)
+        {
+            if (schedule.GetCurrentActivity(currentHour) == ScheduleActivity.Wander || schedule.GetCurrentActivity(currentHour) == ScheduleActivity.Teach)
+            {
+                // Nettoyer si existant
+                if (_dynamicClassEntry != null) schedule.RemoveEntry(_dynamicClassEntry);
+
+                // Planifier le cours immédiat pour l'heure en cours
+                _dynamicClassEntry = new ScheduleEntry(currentHour, currentHour + 1, ScheduleActivity.Teach, 50);
+                schedule.AddEntry(_dynamicClassEntry);
+                schedule.ReevaluateCurrentActivity();
+
+                StartGivingLesson(classToTeach.TeachingSubject);
             }
         }
     }
@@ -50,8 +143,9 @@ public class CharacterMentorship : MonoBehaviour
     /// <summary>
     /// Inscrit un élève à l'une des classes gérées par ce mentor. 
     /// Crée la classe si elle n'existe pas encore.
+    /// Retourne la classe pour que l'élève puisse s'y abonner.
     /// </summary>
-    public void EnrollStudentToClass(Character student, ScriptableObject subject)
+    public MentorshipClass EnrollStudentToClass(Character student, ScriptableObject subject)
     {
         var mentorshipClass = _hostedClasses.FirstOrDefault(c => c.TeachingSubject == subject);
         if (mentorshipClass == null)
@@ -64,6 +158,8 @@ public class CharacterMentorship : MonoBehaviour
         {
             Debug.Log($"<color=cyan>[Mentorship]</color> {student.CharacterName} s'est officiellement inscrit au cours de {subject.name} de {_character.CharacterName}.");
         }
+
+        return mentorshipClass;
     }
 
     /// <summary>
@@ -84,20 +180,62 @@ public class CharacterMentorship : MonoBehaviour
     }
 
     /// <summary>
-    /// Assigne un mentor à ce personnage pour un sujet précis.
+    /// Assigne un mentor à ce personnage pour un sujet précis, et s'abonne aux événements de classe.
     /// </summary>
-    public void SetMentor(Character mentor, ScriptableObject subject)
+    public void SetMentor(Character mentor, ScriptableObject subject, MentorshipClass targetClass)
     {
+        ClearMentor(); // S'assurer de nettoyer les anciens events
+
         _currentMentor = mentor;
         _learningSubject = subject;
         _learningProgress = 0f;
+
+        if (targetClass != null)
+        {
+            targetClass.OnClassStarted -= HandleMentorClassStarted;
+            targetClass.OnClassStarted += HandleMentorClassStarted;
+        }
     }
 
     public void ClearMentor()
     {
+        if (_currentMentor != null)
+        {
+            var mentorMentorship = _currentMentor.CharacterMentorship;
+            if (mentorMentorship != null)
+            {
+                var mentorshipClass = mentorMentorship.HostedClasses.FirstOrDefault(c => c.TeachingSubject == _learningSubject);
+                if (mentorshipClass != null)
+                {
+                    mentorshipClass.OnClassStarted -= HandleMentorClassStarted;
+                }
+            }
+        }
+
         _currentMentor = null;
         _learningSubject = null;
         _learningProgress = 0f;
+    }
+
+    private void HandleMentorClassStarted(MentorshipClass activeClass)
+    {
+        // On vérifie qu'on est au bon endroit et libre de nous y rendre
+        if (!_character.IsFree()) return;
+
+        var schedule = _character.CharacterSchedule;
+        if (schedule != null && schedule.CurrentActivity == ScheduleActivity.Wander)
+        {
+            var npcController = _character.Controller as NPCController;
+            if (npcController != null && !npcController.HasBehaviourTree)
+            {
+                var currentBehaviour = npcController.GetCurrentBehaviour<AttendClassBehaviour>();
+                if (currentBehaviour == null)
+                {
+                    Debug.Log($"<color=magenta>[TEST-EVENT]</color> {_character.CharacterName} a reçu la notification que le cours a commencé. Il s'y rend !");
+                    npcController.SetBehaviour(new AttendClassBehaviour(npcController));
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -124,7 +262,7 @@ public class CharacterMentorship : MonoBehaviour
             _spawnedClassZone = zoneObj.GetComponent<MentorClassZone>();
             if (_spawnedClassZone != null)
             {
-                _spawnedClassZone.InitializeClass(targetClass);
+                _spawnedClassZone.InitializeClass(targetClass, _dynamicClassEntry);
                 _spawnedClassZone.StartClass();
             }
         }
@@ -147,6 +285,17 @@ public class CharacterMentorship : MonoBehaviour
         if (!_isCurrentlyTeaching) return;
         _isCurrentlyTeaching = false;
         _currentActiveClass = null;
+
+        if (_dynamicClassEntry != null)
+        {
+            var schedule = _character.CharacterSchedule;
+            if (schedule != null)
+            {
+                schedule.RemoveEntry(_dynamicClassEntry);
+                schedule.ReevaluateCurrentActivity();
+            }
+            _dynamicClassEntry = null;
+        }
 
         if (_spawnedClassZone != null)
         {
@@ -184,6 +333,7 @@ public class CharacterMentorship : MonoBehaviour
                 if ((int)studentTier >= (int)mentorTier - 1)
                 {
                     // L'élève a atteint la limite d'enseignement pour ce maître
+                    Graduate(skillSO);
                     return;
                 }
                 skills.GainXP(skillSO, Mathf.CeilToInt(finalXP));
@@ -211,6 +361,7 @@ public class CharacterMentorship : MonoBehaviour
                 if ((int)studentTier >= (int)mentorTier - 1)
                 {
                     // L'élève a atteint la limite d'enseignement pour ce maître
+                    Graduate(combatSO);
                     return;
                 }
                 expertise.AddExperience(finalXP);
@@ -226,6 +377,38 @@ public class CharacterMentorship : MonoBehaviour
                     Debug.Log($"<color=cyan>[Mentorship]</color> {_character.CharacterName} a enfin appris le style {combatSO.StyleName} !");
                 }
             }
+        }
+    }
+
+    /// <summary>
+    /// Appelé quand l'élève a complété son apprentissage (A atteint le maximum possible sous ce mentor).
+    /// </summary>
+    private void Graduate(ScriptableObject subject)
+    {
+        Debug.Log($"<color=green>[Mentorship - Graduation]</color> {_character.CharacterName} n'a plus rien à apprendre de son maître pour {subject.name}. L'enseignement est terminé !");
+
+        if (_currentMentor != null)
+        {
+            var mentorMentorship = _currentMentor.CharacterMentorship;
+            if (mentorMentorship != null)
+            {
+                // Demander au maître de le retirer de sa classe
+                mentorMentorship.RemoveStudentFromClass(_character, subject);
+            }
+        }
+        
+        // Dire une petite phrase et se nettoyer
+        if (_character.CharacterSpeech != null)
+            _character.CharacterSpeech.Say("I've learned all I can! Thank you, master!");
+
+        ClearMentor();
+        
+        // Stopper le behaviour si on est en train de suivre le cours
+        var npcController = _character.Controller as NPCController;
+        if (npcController != null)
+        {
+            var currentGive = npcController.GetCurrentBehaviour<AttendClassBehaviour>();
+            if (currentGive != null) currentGive.Terminate();
         }
     }
 
@@ -264,5 +447,47 @@ public class CharacterMentorship : MonoBehaviour
         }
 
         return subjects;
+    }
+
+    /// <summary>
+    /// Calcule le pourcentage de chance (0 à 100) que ce mentor accepte de prendre le personnage en tant qu'élève.
+    /// Basé principalement sur la relation, le charisme, et potentiellement le nombre d'élèves actuels.
+    /// </summary>
+    public float CalculateAcceptanceChance(Character student)
+    {
+        float baseChance = 0f;
+
+        // 1. Facteur de Relation (Élément principal)
+        if (_character.CharacterRelation != null)
+        {
+            var rel = _character.CharacterRelation.GetRelationshipWith(student);
+            
+            // Si on ne se connaît pas, ou si on se déteste, aucune chance.
+            if (rel == null || rel.RelationValue < 0) return 0f;
+
+            // Relation de 0 à 100 donne 0% à 70% de chance d'acceptation de base
+            baseChance += (rel.RelationValue / 100f) * 70f;
+        }
+
+        // 2. Bonus de Charisme de l'élève (Jusqu'à +20%)
+        if (student.Stats != null && student.Stats.Charisma != null)
+        {
+            // Charisme de 0 à 100 donne 0 à +20%
+            float charismaBonus = (student.Stats.Charisma.Value / 100f) * 20f;
+            baseChance += charismaBonus;
+        }
+
+        // 3. Malus d'engorgement : Moins de chance si le maître a déjà beaucoup d'élèves
+        int totalStudents = _hostedClasses.Sum(c => c.EnrolledStudents.Count);
+        if (totalStudents > 0)
+        {
+            // Par exemple, -10% par élève déjà inscrit.
+            baseChance -= (totalStudents * 10f);
+        }
+
+        // 4. Bonus de base (10% de grâce minimum si relation >= 0)
+        baseChance += 10f;
+
+        return Mathf.Clamp(baseChance, 0f, 100f);
     }
 }

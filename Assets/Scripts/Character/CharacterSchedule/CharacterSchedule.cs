@@ -60,11 +60,11 @@ public class CharacterSchedule : MonoBehaviour
     /// <summary>
     /// Évalue le schedule à l'heure donnée et applique le behaviour correspondant.
     /// </summary>
-    private void EvaluateSchedule(int hour)
+    public void EvaluateSchedule(int hour, bool forceApply = false)
     {
         ScheduleActivity newActivity = GetCurrentActivity(hour);
 
-        if (newActivity == _currentActivity) return;
+        if (!forceApply && newActivity == _currentActivity) return;
 
         ScheduleActivity previousActivity = _currentActivity;
         _currentActivity = newActivity;
@@ -72,6 +72,17 @@ public class CharacterSchedule : MonoBehaviour
         Debug.Log($"<color=cyan>[Schedule]</color> {_character.CharacterName} : {previousActivity} → {_currentActivity} (Heure: {hour}h)");
 
         ApplyActivity(_currentActivity);
+    }
+
+    /// <summary>
+    /// Force la réévaluation immédiate de l'activité pour l'heure courante (utile après un ajout dynamique via script).
+    /// </summary>
+    public void ReevaluateCurrentActivity()
+    {
+        if (TimeManager != null)
+        {
+            EvaluateSchedule(TimeManager.CurrentHour, true);
+        }
     }
 
     /// <summary>
@@ -114,6 +125,7 @@ public class CharacterSchedule : MonoBehaviour
         {
             ScheduleActivity.Work => new WorkBehaviour(npc),
             ScheduleActivity.Wander => new WanderBehaviour(npc),
+            ScheduleActivity.Teach => new GiveLessonBehaviour(),
             // TODO: Implémenter SleepBehaviour, LeisureBehaviour, GoHomeBehaviour
             ScheduleActivity.Sleep => new WanderBehaviour(npc),
             ScheduleActivity.Leisure => new WanderBehaviour(npc),

@@ -24,6 +24,7 @@ public class CharacterStats : MonoBehaviour
     [SerializeField] private CharacterDexterity dexterity;
     [SerializeField] private CharacterIntelligence intelligence;
     [SerializeField] private CharacterEndurance endurance;
+    [SerializeField] private CharacterCharisma charisma;
 
     [Space(10)]
     [Header("Tertiary Stats")]
@@ -57,6 +58,7 @@ public class CharacterStats : MonoBehaviour
     public CharacterDexterity Dexterity => dexterity;
     public CharacterIntelligence Intelligence => intelligence;
     public CharacterEndurance Endurance => endurance;
+    public CharacterCharisma Charisma => charisma;
 
     public PhysicalPower PhysicalPower => physicalPower;
     public Speed Speed => speed;
@@ -85,6 +87,7 @@ public class CharacterStats : MonoBehaviour
         dexterity = new CharacterDexterity(this, 1f);
         intelligence = new CharacterIntelligence(this, 1f);
         endurance = new CharacterEndurance(this, 1f);
+        charisma = new CharacterCharisma(this, 1f);
 
         // Primary (Defaulted to 1s, overwritten by RaceSO quickly)
         health = new CharacterHealth(this, endurance, 1f, 0f);
@@ -130,6 +133,7 @@ public class CharacterStats : MonoBehaviour
         Dexterity.SetBaseValue(race.BaseDexterity);
         Intelligence.SetBaseValue(race.BaseIntelligence);
         Endurance.SetBaseValue(race.BaseEndurance);
+        Charisma.SetBaseValue(race.BaseCharisma);
 
         // Primary Scaling Update
         Health.UpdateScaling(race.HealthMultiplier, race.BaseHealthOffset);
@@ -206,6 +210,7 @@ public class CharacterStats : MonoBehaviour
             StatType.Agility => agility,
             StatType.Dexterity => dexterity,
             StatType.Intelligence => intelligence,
+            StatType.Charisma => charisma,
             StatType.PhysicalPower => physicalPower,
             StatType.Speed => speed,
             StatType.Dodge => dodgeChance,
@@ -228,6 +233,7 @@ public class CharacterStats : MonoBehaviour
             case SecondaryStatType.Dexterity: return dexterity.Value;
             case SecondaryStatType.Intelligence: return intelligence.Value;
             case SecondaryStatType.Endurance: return endurance.Value;
+            case SecondaryStatType.Charisma: return charisma.Value;
             default: return 1f;
         }
     }

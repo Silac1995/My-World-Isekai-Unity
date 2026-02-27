@@ -56,18 +56,18 @@ public class InteractionTalk : ICharacterInteractionAction
 
         // --- TEMPORARY MENTORSHIP TEST ---
         // Vérifie si la cible peut enseigner quelque chose à la source
-        InteractionMentorship demoMentorship = new InteractionMentorship(null);
-        if (demoMentorship.CanExecute(source, target))
-        {
-            Debug.Log($"<color=magenta>[TEST]</color> {source.CharacterName} demande un mentorat forcé à {target.CharacterName}.");
-            demoMentorship.Execute(source, target);
-        }
+        // InteractionMentorship demoMentorship = new InteractionMentorship(null);
+        // if (demoMentorship.CanExecute(source, target))
+        // {
+        //     Debug.Log($"<color=magenta>[TEST]</color> {source.CharacterName} demande un mentorat forcé à {target.CharacterName}.");
+        //     demoMentorship.Execute(source, target);
+        // }
         // Test inverse (Source enseigne à target)
-        InteractionMentorship demoMentorshipReverse = new InteractionMentorship(null);
-        if (demoMentorshipReverse.CanExecute(target, source))
-        {
-            Debug.Log($"<color=magenta>[TEST]</color> {target.CharacterName} demande un mentorat forcé à {source.CharacterName}.");
-            demoMentorshipReverse.Execute(target, source);
-        }
+        // InteractionMentorship demoMentorshipReverse = new InteractionMentorship(null);
+        // if (demoMentorshipReverse.CanExecute(target, source))
+        // {
+        //     Debug.Log($"<color=magenta>[TEST]</color> {target.CharacterName} demande un mentorat forcé à {source.CharacterName}.");
+        //     demoMentorshipReverse.Execute(target, source);
+        // }
     }
 }

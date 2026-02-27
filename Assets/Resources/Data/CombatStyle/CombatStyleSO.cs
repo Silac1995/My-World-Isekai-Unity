@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public enum SecondaryStatType { Strength, Agility, Dexterity, Intelligence, Endurance }
+public enum SecondaryStatType { Strength, Agility, Dexterity, Intelligence, Endurance, Charisma }
 
 [System.Serializable]
 public struct StyleLevelData
