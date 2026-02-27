@@ -13,7 +13,7 @@ public class InteractionMentorship : InteractionInvitation
     public override bool CanExecute(Character source, Character target)
     {
         // Source est l'élève, target est le maître potentiel
-        CharacterMentorship targetMentorship = target.GetComponent<CharacterMentorship>();
+        CharacterMentorship targetMentorship = target.CharacterMentorship;
         if (targetMentorship == null) return false;
 
         var teachable = targetMentorship.GetTeachableSubjects();
@@ -22,20 +22,22 @@ public class InteractionMentorship : InteractionInvitation
         if (SubjectToTeach != null && !teachable.Contains(SubjectToTeach))
             return false;
 
-        // Exigeons au moins d'être connaissance (Acquaintance) ou mieux
-        if (source.CharacterRelation != null)
-        {
-            var rel = source.CharacterRelation.GetRelationshipWith(target);
-            if (rel == null) return false;
-            return rel.RelationValue >= 10;
-        }
+        // Pour ce TEST, on retire l'exigence de relation (par défaut RelationValue = 0 au spawn)
+        // if (source.CharacterRelation != null)
+        // {
+        //     var rel = source.CharacterRelation.GetRelationshipWith(target);
+        //     if (rel == null) return false;
+        //     return rel.RelationValue >= 10;
+        // }
 
         return true;
     }
 
     private void AutoSelectSubject(Character source, Character target)
     {
-        var teachable = target.GetComponent<CharacterMentorship>().GetTeachableSubjects();
+        var mentorship = target.CharacterMentorship;
+        if (mentorship == null) return;
+        var teachable = mentorship.GetTeachableSubjects();
         if (teachable.Count > 0)
         {
             // Prendre le premier enseignement dispo (Idéalement, on filtrerait pour ceux que source n'a pas)
@@ -61,10 +63,13 @@ public class InteractionMentorship : InteractionInvitation
     {
         if (SubjectToTeach == null) AutoSelectSubject(source, target);
 
-        CharacterMentorship sourceMentorship = source.GetComponent<CharacterMentorship>();
-        if (sourceMentorship != null && SubjectToTeach != null)
+        CharacterMentorship sourceMentorship = source.CharacterMentorship;
+        CharacterMentorship targetMentorship = target.CharacterMentorship;
+
+        if (sourceMentorship != null && targetMentorship != null && SubjectToTeach != null)
         {
             sourceMentorship.SetMentor(target, SubjectToTeach);
+            targetMentorship.EnrollStudentToClass(source, SubjectToTeach);
             Debug.Log($"<color=cyan>[Mentorship]</color> {source.CharacterName} is now learning '{SubjectToTeach.name}' under {target.CharacterName}.");
         }
     }

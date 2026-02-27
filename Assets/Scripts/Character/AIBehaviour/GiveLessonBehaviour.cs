@@ -17,7 +17,7 @@ public class GiveLessonBehaviour : IAIBehaviour
 
         if (_myClassZone == null)
         {
-            var mentorship = character.GetComponent<CharacterMentorship>();
+            var mentorship = character.CharacterMentorship;
             if (mentorship != null)
             {
                 _myClassZone = mentorship.SpawnedClassZone;
@@ -39,21 +39,21 @@ public class GiveLessonBehaviour : IAIBehaviour
     {
         if (_myClassZone == null || _myClassZone.ActiveStudents.Count == 0) return;
 
-        var mentorship = mentor.GetComponent<CharacterMentorship>();
+        var mentorship = mentor.CharacterMentorship;
         if (mentorship == null) return;
 
         SkillTier mentorTier = SkillTier.Novice;
 
         if (_myClassZone.TeachingSkill is SkillSO skillSO)
         {
-            var skills = mentor.GetComponent<CharacterSkills>();
+            var skills = mentor.CharacterSkills;
             if (skills != null && skills.HasSkill(skillSO))
                 mentorTier = SkillTierExtensions.GetTierForLevel(skills.GetSkillLevel(skillSO));
             else return; 
         }
         else if (_myClassZone.TeachingSkill is CombatStyleSO combatSO)
         {
-            var combat = mentor.GetComponent<CharacterCombat>();
+            var combat = mentor.CharacterCombat;
             if (combat != null)
             {
                 var expertise = combat.KnownStyles.FirstOrDefault(s => s.Style == combatSO);
@@ -69,7 +69,7 @@ public class GiveLessonBehaviour : IAIBehaviour
         {
             if (student == null) continue;
             
-            var studentMentorship = student.GetComponent<CharacterMentorship>();
+            var studentMentorship = student.CharacterMentorship;
             if (studentMentorship != null && studentMentorship.CurrentMentor == mentor)
             {
                 studentMentorship.ReceiveLessonTick(_myClassZone.TeachingSkill, mentorTier, _baseXPPerTick);

@@ -13,6 +13,8 @@ public class CharacterMentorship : MonoBehaviour
     
     [Header("Mentor Data")]
     [SerializeField] private bool _isCurrentlyTeaching = false;
+    [SerializeField] private List<MentorshipClass> _hostedClasses = new List<MentorshipClass>();
+    [SerializeField] private MentorshipClass _currentActiveClass;
     [SerializeField] private GameObject _mentorClassZonePrefab;
     private MentorClassZone _spawnedClassZone;
 
@@ -20,11 +22,65 @@ public class CharacterMentorship : MonoBehaviour
     public ScriptableObject LearningSubject => _learningSubject;
     public float LearningProgress => _learningProgress;
     public bool IsCurrentlyTeaching { get => _isCurrentlyTeaching; set => _isCurrentlyTeaching = value; }
+    public IReadOnlyList<MentorshipClass> HostedClasses => _hostedClasses;
+    public MentorshipClass CurrentActiveClass => _currentActiveClass;
     public MentorClassZone SpawnedClassZone => _spawnedClassZone;
 
-    private void Awake()
+    private void Update()
     {
-        _character = GetComponent<Character>();
+        // --- TEMPORARY AUTO-TEACH TEST ---
+        // Si le personnage n'enseigne pas déjà, qu'il est libre, et que son activité actuelle est Wander (temps libre)
+        if (!_isCurrentlyTeaching && _character != null && _character.IsFree())
+        {
+            var schedule = _character.CharacterSchedule;
+            // Si on est en Wander, c'est du temps libre. On peut commencer un cours.
+            if (schedule != null && schedule.CurrentActivity == ScheduleActivity.Wander)
+            {
+                // Un Mentor ne commence un cours que s'il a au moins une classe formelle avec des élèves inscrits
+                var classToTeach = GetFirstClassWithStudents();
+                if (classToTeach != null)
+                {
+                    Debug.Log($"<color=magenta>[TEST]</color> {_character.CharacterName} a du temps libre, il décide de donner son cours de {classToTeach.TeachingSubject.name} à ses élèves inscrits !");
+                    StartGivingLesson(classToTeach.TeachingSubject);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Inscrit un élève à l'une des classes gérées par ce mentor. 
+    /// Crée la classe si elle n'existe pas encore.
+    /// </summary>
+    public void EnrollStudentToClass(Character student, ScriptableObject subject)
+    {
+        var mentorshipClass = _hostedClasses.FirstOrDefault(c => c.TeachingSubject == subject);
+        if (mentorshipClass == null)
+        {
+            mentorshipClass = new MentorshipClass(_character, subject);
+            _hostedClasses.Add(mentorshipClass);
+        }
+
+        if (mentorshipClass.EnrollStudent(student))
+        {
+            Debug.Log($"<color=cyan>[Mentorship]</color> {student.CharacterName} s'est officiellement inscrit au cours de {subject.name} de {_character.CharacterName}.");
+        }
+    }
+
+    /// <summary>
+    /// Retire un élève de l'enseignement formel.
+    /// </summary>
+    public void RemoveStudentFromClass(Character student, ScriptableObject subject)
+    {
+        var mentorshipClass = _hostedClasses.FirstOrDefault(c => c.TeachingSubject == subject);
+        if (mentorshipClass != null)
+        {
+            mentorshipClass.RemoveStudent(student);
+        }
+    }
+
+    private MentorshipClass GetFirstClassWithStudents()
+    {
+        return _hostedClasses.FirstOrDefault(c => c.HasStudents());
     }
 
     /// <summary>
@@ -50,7 +106,16 @@ public class CharacterMentorship : MonoBehaviour
     public void StartGivingLesson(ScriptableObject subjectToTeach)
     {
         if (_isCurrentlyTeaching) return;
+        
+        var targetClass = _hostedClasses.FirstOrDefault(c => c.TeachingSubject == subjectToTeach);
+        if (targetClass == null || !targetClass.HasStudents())
+        {
+            Debug.LogWarning($"<color=orange>[Mentorship]</color> {_character.CharacterName} a essayé de donner un cours de {subjectToTeach.name}, mais il n'a aucun élève d'inscrit.");
+            return;
+        }
+
         _isCurrentlyTeaching = true;
+        _currentActiveClass = targetClass;
 
         // Spawn la zone aux pieds du mentor
         if (_mentorClassZonePrefab != null && _spawnedClassZone == null)
@@ -59,13 +124,13 @@ public class CharacterMentorship : MonoBehaviour
             _spawnedClassZone = zoneObj.GetComponent<MentorClassZone>();
             if (_spawnedClassZone != null)
             {
-                _spawnedClassZone.InitializeClass(_character, subjectToTeach);
+                _spawnedClassZone.InitializeClass(targetClass);
                 _spawnedClassZone.StartClass();
             }
         }
 
         // Force le NPC à se diriger vers sa MentorClassZone
-        var npcController = GetComponent<NPCController>();
+        var npcController = _character.Controller as NPCController;
         if (npcController != null && !npcController.HasBehaviourTree)
         {
             npcController.SetBehaviour(new GiveLessonBehaviour());
@@ -81,6 +146,7 @@ public class CharacterMentorship : MonoBehaviour
     {
         if (!_isCurrentlyTeaching) return;
         _isCurrentlyTeaching = false;
+        _currentActiveClass = null;
 
         if (_spawnedClassZone != null)
         {
@@ -89,7 +155,7 @@ public class CharacterMentorship : MonoBehaviour
             _spawnedClassZone = null;
         }
 
-        var npcController = GetComponent<NPCController>();
+        var npcController = _character.Controller as NPCController;
         if (npcController != null && !npcController.HasBehaviourTree)
         {
             var currentGive = npcController.GetCurrentBehaviour<GiveLessonBehaviour>();
@@ -110,8 +176,8 @@ public class CharacterMentorship : MonoBehaviour
 
         if (subject is SkillSO skillSO)
         {
-            CharacterSkills skills = GetComponent<CharacterSkills>();
-            if (skills.HasSkill(skillSO))
+            CharacterSkills skills = _character.CharacterSkills;
+            if (skills != null && skills.HasSkill(skillSO))
             {
                 // Vérifier la limite de Tier
                 SkillTier studentTier = SkillTierExtensions.GetTierForLevel(skills.GetSkillLevel(skillSO));
@@ -136,7 +202,8 @@ public class CharacterMentorship : MonoBehaviour
         }
         else if (subject is CombatStyleSO combatSO)
         {
-            CharacterCombat combat = GetComponent<CharacterCombat>();
+            CharacterCombat combat = _character.CharacterCombat;
+            if (combat == null) return;
             var expertise = combat.KnownStyles.FirstOrDefault(s => s.Style == combatSO);
             if (expertise != null)
             {
@@ -170,20 +237,21 @@ public class CharacterMentorship : MonoBehaviour
         List<ScriptableObject> subjects = new List<ScriptableObject>();
 
         // 1. Chercher les Skills
-        CharacterSkills skills = GetComponent<CharacterSkills>();
+        CharacterSkills skills = _character.CharacterSkills;
         if (skills != null)
         {
             foreach (var instance in skills.Skills)
             {
                 if (instance != null && instance.Level >= 35) // 35 = Advanced
                 {
+                    Debug.Log($"<color=magenta>[TEST]</color> Trouvé Skill {instance.Skill.SkillName} lvl {instance.Level}");
                     subjects.Add(instance.Skill);
                 }
             }
         }
 
         // 2. Chercher les Styles de Combat
-        CharacterCombat combat = GetComponent<CharacterCombat>();
+        CharacterCombat combat = _character.CharacterCombat;
         if (combat != null)
         {
             foreach (var expertise in combat.KnownStyles)

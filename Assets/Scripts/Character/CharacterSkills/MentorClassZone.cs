@@ -77,13 +77,16 @@ public class MentorClassZone : MonoBehaviour
         Debug.Log($"<color=yellow>[Class]</color> La classe de {TeachingSkill?.name} animée par {Mentor?.CharacterName} est terminée.");
     }
 
+    public MentorshipClass LinkedClass { get; private set; }
+
     /// <summary>
     /// Initialise la zone d'enseignement simplifiée pour les préfabs déjà paramétrés.
     /// </summary>
-    public void InitializeClass(Character mentor, ScriptableObject skill)
+    public void InitializeClass(MentorshipClass mentorshipClass)
     {
-        Mentor = mentor;
-        TeachingSkill = skill;
+        LinkedClass = mentorshipClass;
+        Mentor = mentorshipClass.Mentor;
+        TeachingSkill = mentorshipClass.TeachingSubject;
         ActiveStudents.Clear();
     }
 
