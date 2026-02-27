@@ -61,30 +61,34 @@ public class AttendClassBehaviour : IAIBehaviour
         var movement = self.CharacterMovement;
         if (movement == null) return;
 
-        // Si on est déjà dans le collider, on arrête de bouger et on écoute
-        if (classZone.ActiveStudents.Contains(self))
+        // Récupérer la place attitrée de cet étudiant
+        Vector3 targetPos = classZone.GetStudentSlotPosition(self);
+        
+        // On calcule la distance (sur le plan XZ) par rapport à sa chaise
+        Vector3 selfPosFlat = new Vector3(self.transform.position.x, 0, self.transform.position.z);
+        Vector3 targetPosFlat = new Vector3(targetPos.x, 0, targetPos.z);
+        float distance = Vector3.Distance(selfPosFlat, targetPosFlat);
+
+        // Si on est arrivé à notre place
+        if (distance < 0.5f)
         {
             _hasArrived = true;
             _isMoving = false;
             movement.Stop();
             
-            // Regarder le prof de temps en temps
+            // Toujours se tourner vers le professeur quand on est assis
             Vector3 directionToMentor = classZone.Mentor.transform.position - self.transform.position;
             directionToMentor.y = 0;
-            if (directionToMentor.sqrMagnitude > 0.1f && Random.value > 0.5f)
+            if (directionToMentor.sqrMagnitude > 0.1f)
             {
                 movement.transform.rotation = Quaternion.RotateTowards(movement.transform.rotation, Quaternion.LookRotation(directionToMentor), Time.deltaTime * 360f);
             }
             return;
         }
 
-        // Si on n'est pas encore arrivé, on se dirige vers la zone
-        if (!_isMoving || _hasArrived)
+        // Si on n'est pas encore arrivé, on se dirige vers la place
+        if (!_isMoving || _hasArrived || Vector3.Distance(movement.Destination, targetPos) > 1.0f)
         {
-            // On prend la position centrale de la classe avec un léger offset aléatoire pour ne pas tous s'empiler
-            Vector2 randomOffset = Random.insideUnitCircle * 2f;
-            Vector3 targetPos = classZone.transform.position + new Vector3(randomOffset.x, 0, randomOffset.y);
-            
             movement.SetDestination(targetPos);
             _isMoving = true;
             _hasArrived = false;

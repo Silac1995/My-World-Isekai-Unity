@@ -121,4 +121,37 @@ public class MentorClassZone : MonoBehaviour
             ActiveStudents.Remove(chara);
         }
     }
+
+    /// <summary>
+    /// Calcule la position d'un étudiant dans une formation en grille face au mentor.
+    /// </summary>
+    public Vector3 GetStudentSlotPosition(Character student)
+    {
+        if (LinkedClass == null || Mentor == null) return transform.position;
+
+        int index = LinkedClass.EnrolledStudents.ToList().IndexOf(student);
+        if (index == -1) return transform.position; // Fallback
+
+        // Direction du mentor (pour que la classe se place devant lui)
+        Vector3 mentorForward = Mentor.transform.forward;
+        Vector3 mentorRight = Mentor.transform.right;
+
+        // Configurations de la grille
+        int columns = 3; // 3 étudiants par rangée
+        float rowSpacing = 2.5f; // Espace entre les rangées
+        float colSpacing = 2.0f; // Espace entre les colonnes
+
+        int row = index / columns;
+        int col = index % columns;
+
+        // Centrer les colonnes. Si columns=3, ça donne colOffset: -1 * 2, 0 * 2, 1 * 2
+        float colOffset = (col - ((columns - 1) / 2f)) * colSpacing;
+
+        // Les étudiants se placent devant le mentor, à partir de 3 unités
+        float distFromMentor = 3f + (row * rowSpacing);
+
+        // Position finale
+        Vector3 slotPos = Mentor.transform.position + (mentorForward * distFromMentor) + (mentorRight * colOffset);
+        return slotPos;
+    }
 }

@@ -255,11 +255,27 @@ public class CharacterMentorship : MonoBehaviour
         _isCurrentlyTeaching = true;
         _currentActiveClass = targetClass;
 
-        // Spawn la zone aux pieds du mentor
+        // Spawn la zone à un emplacement valide (N/S/E/W) du mentor
         if (_mentorClassZonePrefab != null && _spawnedClassZone == null)
         {
-            var zoneObj = Instantiate(_mentorClassZonePrefab, transform.position, Quaternion.identity);
+            // On estime grossièrement la taille de la zone nécessaire pour trouver un emplacement
+            int totalPeople = targetClass.EnrolledStudents.Count + 1;
+            int gridSide = Mathf.CeilToInt(Mathf.Sqrt(totalPeople));
+            float estimatedSize = (gridSide * 5f) + 2f;
+
+            Vector3 spawnPos = FindValidClassPosition(estimatedSize);
+            
+            var zoneObj = Instantiate(_mentorClassZonePrefab, spawnPos, Quaternion.identity);
             _spawnedClassZone = zoneObj.GetComponent<MentorClassZone>();
+            
+            // Faire tourner la zone pour qu'elle "regarde" le mentor (utile si des props visuels sont dans la zone)
+            Vector3 directionToMentor = transform.position - spawnPos;
+            directionToMentor.y = 0;
+            if (directionToMentor.sqrMagnitude > 0.1f)
+            {
+                zoneObj.transform.rotation = Quaternion.LookRotation(directionToMentor);
+            }
+
             if (_spawnedClassZone != null)
             {
                 _spawnedClassZone.InitializeClass(targetClass, _dynamicClassEntry);
@@ -275,6 +291,61 @@ public class CharacterMentorship : MonoBehaviour
         }
 
         Debug.Log($"<color=green>[Mentorship]</color> {_character.CharacterName} commence à donner son cours de {subjectToTeach?.name}.");
+    }
+
+    /// <summary>
+    /// Cherche un emplacement valide (N/S/E/W) proche du mentor pour instancier la zone d'enseignement.
+    /// Renvoie la position du mentor si aucune place n'est trouvée.
+    /// </summary>
+    private Vector3 FindValidClassPosition(float zoneSize)
+    {
+        // La distance à laquelle on veut placer le centre de la zone (moitié de la zone + espace pour le mentor)
+        float targetDistance = (zoneSize / 2f) + 2f; 
+        
+        Vector3[] directions = new Vector3[]
+        {
+            transform.forward,  // Devant
+            transform.right,    // Droite
+            -transform.right,   // Gauche
+            -transform.forward  // Derrière
+        };
+
+        foreach (var dir in directions)
+        {
+            // Position théorique du centre de la zone
+            Vector3 testPos = transform.position + (dir * targetDistance);
+            
+            // 1. On vérifie d'abord qu'on peut tracer une ligne droite sur le NavMesh jusqu'à cet endroit
+            // (Si le raycast touche quelque chose, c'est qu'il y a un mur ou le bord de la map)
+            bool hitWall = UnityEngine.AI.NavMesh.Raycast(transform.position, testPos, out UnityEngine.AI.NavMeshHit edgeHit, UnityEngine.AI.NavMesh.AllAreas);
+            
+            if (!hitWall)
+            {
+                // Pas de mur ! On valide en s'assurant que le point est bien sur le NavMesh
+                if (UnityEngine.AI.NavMesh.SamplePosition(testPos, out UnityEngine.AI.NavMeshHit validHit, 2.0f, UnityEngine.AI.NavMesh.AllAreas))
+                {
+                    return validHit.position;
+                }
+            }
+            else
+            {
+                // Si ça a touché un mur (bord de map), on regarde si la distance parcourue avant le mur
+                // est suffisante pour y caler notre classe quand même.
+                if (edgeHit.distance > (zoneSize / 2f) + 1f)
+                {
+                    // L'espace est tronqué, mais suffisant. On recule un peu par rapport au mur
+                    Vector3 adjustedPos = transform.position + (dir * (edgeHit.distance - (zoneSize / 2f)));
+                    if (UnityEngine.AI.NavMesh.SamplePosition(adjustedPos, out UnityEngine.AI.NavMeshHit validHit, 2.0f, UnityEngine.AI.NavMesh.AllAreas))
+                    {
+                        return validHit.position;
+                    }
+                }
+            }
+        }
+
+        // Si vraiment coincé de tous les côtés, on spawn à nos pieds
+        Debug.LogWarning($"<color=orange>[Mentorship]</color> Espace trop restreint pour le cours ! Spawn du ClassZone à la position exacte du Mentor.");
+        return transform.position;
     }
 
     /// <summary>

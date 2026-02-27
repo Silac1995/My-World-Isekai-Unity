@@ -16,7 +16,11 @@ public class WanderBehaviour : IAIBehaviour
     private float _edgePressureTimer = 0f;
     private const float MAX_EDGE_PRESSURE_TIME = 3f; // Temps max à raser un mur
     private const float EDGE_DETECTION_DIST = 1.5f;  // Distance pour détecter un bord
-    private const float FORCE_NEW_DEST_DIST = 0.5f;  // Distance pour forcer un changement si bloqué
+    private const float FORCE_NEW_DEST_DIST = 0.5f;  // Distance pour force un changement si bloqué
+
+    // --- REPRISE DECTIVITES (Cours, Jobs, etc.) ---
+    private float _periodicCheckTimer = 0f;
+    private const float PERIODIC_CHECK_RATE = 10f;
 
     public bool IsFinished => _isFinished;
 
@@ -32,6 +36,14 @@ public class WanderBehaviour : IAIBehaviour
     {
         var movement = selfCharacter.CharacterMovement;
         if (movement == null || _isFinished) return;
+
+        // 0. VERIFICATION DES ACTIVITÉS INTERROMPUES (Reprise si interrompu par combat/dialogue)
+        _periodicCheckTimer += Time.deltaTime;
+        if (_periodicCheckTimer >= PERIODIC_CHECK_RATE)
+        {
+            _periodicCheckTimer = 0f;
+            if (TryResumeActivity(selfCharacter)) return;
+        }
 
         if (_isWaiting) return;
 
@@ -110,6 +122,31 @@ public class WanderBehaviour : IAIBehaviour
         {
             movement.SetDestination(hit.position);
         }
+    }
+
+    /// <summary>
+    /// Vérifie si le personnage doit arrêter d'errer pour reprendre une activité plus prioritaire
+    /// qu'il a pu oublier suite à une interruption (combat, dialogue).
+    /// Retourne true si le Behaviour a été remplacé.
+    /// </summary>
+    private bool TryResumeActivity(Character self)
+    {
+        // 1. Mentorship / Cours en direct
+        var mentorship = self.CharacterMentorship;
+        if (mentorship != null && mentorship.CurrentMentor != null)
+        {
+            var mentorMentorship = mentorship.CurrentMentor.CharacterMentorship;
+            if (mentorMentorship != null && mentorMentorship.IsCurrentlyTeaching && mentorMentorship.SpawnedClassZone != null)
+            {
+                Debug.Log($"<color=cyan>[Mentorship]</color> {self.CharacterName} se souvient qu'il a un cours en cours et y retourne !");
+                _npcController.SetBehaviour(new AttendClassBehaviour(_npcController));
+                return true;
+            }
+        }
+
+        // --- D'autres vérifications futures (Jobs, Schedules oubliés) pourront être ajoutées ici ---
+
+        return false;
     }
 
     public void Exit(Character selfCharacter)
