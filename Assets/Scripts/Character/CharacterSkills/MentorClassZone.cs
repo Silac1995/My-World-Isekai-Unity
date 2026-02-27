@@ -70,7 +70,10 @@ public class MentorClassZone : MonoBehaviour
         Vector3 dynamicSize = new Vector3(newSize, 5f, newSize);
 
         if (_zoneCollider != null) 
+        {
             _zoneCollider.size = dynamicSize;
+            _zoneCollider.isTrigger = true; // SÉCURITÉ: empêcher le collider de bloquer physiquement les élèves
+        }
 
         if (_navMeshModifier != null) 
         {
@@ -124,6 +127,7 @@ public class MentorClassZone : MonoBehaviour
 
     /// <summary>
     /// Calcule la position d'un étudiant dans une formation en grille face au mentor.
+    /// Les positions sont relatives à la zone elle-même pour garantir que les élèves sont bien dedans.
     /// </summary>
     public Vector3 GetStudentSlotPosition(Character student)
     {
@@ -132,9 +136,9 @@ public class MentorClassZone : MonoBehaviour
         int index = LinkedClass.EnrolledStudents.ToList().IndexOf(student);
         if (index == -1) return transform.position; // Fallback
 
-        // Direction du mentor (pour que la classe se place devant lui)
-        Vector3 mentorForward = Mentor.transform.forward;
-        Vector3 mentorRight = Mentor.transform.right;
+        // La zone regarde le Mentor (grâce au LookRotation à l'instanciation)
+        Vector3 zoneForward = transform.forward;
+        Vector3 zoneRight = transform.right;
 
         // Configurations de la grille
         int columns = 3; // 3 étudiants par rangée
@@ -144,14 +148,27 @@ public class MentorClassZone : MonoBehaviour
         int row = index / columns;
         int col = index % columns;
 
-        // Centrer les colonnes. Si columns=3, ça donne colOffset: -1 * 2, 0 * 2, 1 * 2
+        // Centrer les colonnes. Si columns=3, ça donne colOffset: -2, 0, 2
         float colOffset = (col - ((columns - 1) / 2f)) * colSpacing;
 
-        // Les étudiants se placent devant le mentor, à partir de 3 unités
-        float distFromMentor = 3f + (row * rowSpacing);
+        // Où est l'avant de la zone ?
+        float zOffsetFromCenter = 0f;
+        if (_zoneCollider != null)
+        {
+            // Le bord avant (vers le mentor) est à size.z / 2f.
+            // On se recule de 1.5u pour la 1ère ligne, puis on recule selon la rangée.
+            zOffsetFromCenter = (_zoneCollider.size.z / 2f) - 1.5f - (row * rowSpacing);
+        }
+        else
+        {
+            // Fallback si pas de collider
+            zOffsetFromCenter = 3f - (row * rowSpacing);
+        }
 
-        // Position finale
-        Vector3 slotPos = Mentor.transform.position + (mentorForward * distFromMentor) + (mentorRight * colOffset);
+        // Position finale (On remet un Y correct basé sur la position actuelle de la zone)
+        Vector3 slotPos = transform.position + (zoneForward * zOffsetFromCenter) + (zoneRight * colOffset);
+        slotPos.y = Mentor.transform.position.y; // S'assurer de rester au même niveau que le sol du mentor
+
         return slotPos;
     }
 }

@@ -12,8 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9854ab9cd25473f498cfec74f6c9c677, type: 3}
   m_Name: Basics
   m_EditorClassIdentifier: Assembly-CSharp::SkillSO
-  SkillID: 
-  SkillName: 
+  SkillID: S00
+  SkillName: Basics
   Description: 
   Icon: {fileID: 0}
   BaseProficiencyPerLevel: 1

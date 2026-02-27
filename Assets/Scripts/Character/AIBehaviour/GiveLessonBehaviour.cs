@@ -27,6 +27,15 @@ public class GiveLessonBehaviour : IAIBehaviour
             if (_myClassZone == null) return; 
         }
 
+        // Faire face à la classe en plaçant le mentor de façon adéquate
+        Vector3 directionToZone = _myClassZone.transform.position - character.transform.position;
+        directionToZone.y = 0;
+        if (directionToZone.sqrMagnitude > 0.1f && character.CharacterMovement != null)
+        {
+            Transform movementTransform = character.CharacterMovement.transform;
+            movementTransform.rotation = Quaternion.RotateTowards(movementTransform.rotation, Quaternion.LookRotation(directionToZone), Time.deltaTime * 360f);
+        }
+
         _tickTimer += Time.deltaTime;
         if (_tickTimer >= _tickRate)
         {
