@@ -89,7 +89,7 @@ namespace MWI.UI.Crafting
             // Déclenche le craft via le système d'actions centralisé
             if (_user != null && _user.CharacterActions != null)
             {
-                _user.CharacterActions.ExecuteAction(new CharacterCraftAction(_user, _station, _itemSO, _primaryColor, _secondaryColor));
+                _user.CharacterActions.ExecuteAction(new CharacterCraftAction(_user, _itemSO, _primaryColor, _secondaryColor));
             }
 
             // TODO : Ajouter un son, un flash visuel, ou désactiver le bouton le temps de l'animation

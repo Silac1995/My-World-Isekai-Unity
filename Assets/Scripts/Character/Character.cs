@@ -116,7 +116,7 @@ public class Character : MonoBehaviour
     public NavMeshAgent NavMesh => _cachedNavMeshAgent;
     public TimeManager TimeManager => _timeManager != null ? _timeManager : TimeManager.Instance;
 
-    public Furniture CurrentFurniture { get; private set; }
+    public Furniture OccupyingFurniture { get; private set; }
 
     public bool IsUnconscious => _isUnconscious;
     public bool IsIncapacitated => _isDead || _isUnconscious;
@@ -271,7 +271,7 @@ public class Character : MonoBehaviour
             return false;
         }
 
-        if (CurrentFurniture != null && CurrentFurniture.GetComponent<CraftingStation>() != null)
+        if (OccupyingFurniture != null && OccupyingFurniture.GetComponent<CraftingStation>() != null)
         {
             reason = CharacterBusyReason.Crafting;
             return false;
@@ -537,8 +537,8 @@ public class Character : MonoBehaviour
     [ContextMenu("Switch To NPC")] public void DebugToNPC() => SwitchToNPC();
     #endregion
 
-    public void SetCurrentFurniture(Furniture furniture)
+    public void SetOccupyingFurniture(Furniture furniture)
     {
-        CurrentFurniture = furniture;
+        OccupyingFurniture = furniture;
     }
 }

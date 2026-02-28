@@ -70,10 +70,20 @@ public class CraftItemBehaviour : IAIBehaviour
                 self.transform.localScale = new Vector3(Mathf.Abs(self.transform.localScale.x) * directionX, self.transform.localScale.y, self.transform.localScale.z);
             }
 
-            // On lance l'action de craft (unifiée avec le joueur)
-            if (self.CharacterActions != null)
+            // On installe le NPC sur la station avant de lancer l'action
+            if (!_station.IsOccupied || _station.Occupant == self)
             {
-                self.CharacterActions.ExecuteAction(new CharacterCraftAction(self, _station, _itemToCraft));
+                _station.Use(self);
+                
+                // On lance l'action de craft (qui trouvera la station via OccupyingFurniture)
+                if (self.CharacterActions != null)
+                {
+                    self.CharacterActions.ExecuteAction(new CharacterCraftAction(self, _itemToCraft));
+                }
+            }
+            else
+            {
+                Debug.LogWarning($"<color=orange>[AI]</color> {_station.name} est occupee quand {self.CharacterName} est arrive.");
             }
 
             _isFinished = true; 

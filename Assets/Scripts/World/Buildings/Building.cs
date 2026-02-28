@@ -11,37 +11,63 @@ public abstract class Building : Zone
     [Header("Building Info")]
     [SerializeField] protected string buildingName;
 
-    // Meubles détectés automatiquement dans les enfants du building
-    private List<Furniture> _furniture = new List<Furniture>();
+    // Pièces du bâtiment
+    [SerializeField] private List<Room> _rooms = new List<Room>();
 
     public string BuildingName => buildingName;
     public abstract BuildingType BuildingType { get; }
-    public IReadOnlyList<Furniture> Furniture => _furniture;
+    public IReadOnlyList<Room> Rooms => _rooms;
 
     protected override void Awake()
     {
         base.Awake();
-        _furniture = new List<Furniture>(GetComponentsInChildren<Furniture>());
+        
+        _rooms = new List<Room>(GetComponentsInChildren<Room>());
+        
+        if (_rooms.Count == 0)
+        {
+            Debug.LogError($"<color=red>[Building]</color> {buildingName} n'a aucune Room enfant. Un bâtiment doit avoir au moins une Room !");
+        }
+    }
+
+    public Room GetRoomAt(Vector3 position)
+    {
+        foreach (var room in _rooms)
+        {
+            if (room.IsPointInsideRoom(position))
+                return room;
+        }
+        return null;
+    }
+
+    public List<T> GetRoomsOfType<T>() where T : Room
+    {
+        return _rooms.OfType<T>().ToList();
     }
 
     /// <summary>
-    /// Trouve le premier meuble disponible d'un type donné.
+    /// Trouve le premier meuble disponible d'un type donné dans toutes les pièces du bâtiment.
     /// </summary>
     public T FindAvailableFurniture<T>() where T : Furniture
     {
-        foreach (var f in _furniture)
+        foreach (var room in _rooms)
         {
-            if (f is T typed && !typed.IsOccupied)
-                return typed;
+            T result = room.FindAvailableFurniture<T>();
+            if (result != null) return result;
         }
         return null;
     }
 
     /// <summary>
-    /// Récupère tous les meubles d'un type donné.
+    /// Récupère tous les meubles d'un type donné dans toutes les pièces du bâtiment.
     /// </summary>
     public List<T> GetFurnitureOfType<T>() where T : Furniture
     {
-        return _furniture.OfType<T>().ToList();
+        List<T> result = new List<T>();
+        foreach (var room in _rooms)
+        {
+            result.AddRange(room.Furnitures.OfType<T>());
+        }
+        return result;
     }
 }

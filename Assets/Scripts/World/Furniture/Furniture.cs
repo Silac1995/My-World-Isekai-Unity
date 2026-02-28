@@ -10,11 +10,13 @@ public class Furniture : MonoBehaviour
     [Header("Furniture Info")]
     [SerializeField] private string _furnitureName;
     [SerializeField] private Transform _interactionPoint;
+    [SerializeField] private Vector2Int _sizeInCells = new Vector2Int(1, 1);
 
     private Character _occupant;
 
     public string FurnitureName => _furnitureName;
     public Transform InteractionPoint => _interactionPoint;
+    public Vector2Int SizeInCells => _sizeInCells;
     public Character Occupant => _occupant;
     public bool IsOccupied => _occupant != null;
 
@@ -31,7 +33,7 @@ public class Furniture : MonoBehaviour
         }
 
         _occupant = character;
-        _occupant.SetCurrentFurniture(this);
+        _occupant.SetOccupyingFurniture(this);
         Debug.Log($"<color=cyan>[Furniture]</color> {character.CharacterName} utilise {_furnitureName}.");
         return true;
     }
@@ -44,7 +46,7 @@ public class Furniture : MonoBehaviour
         if (_occupant != null)
         {
             Debug.Log($"<color=cyan>[Furniture]</color> {_occupant.CharacterName} quitte {_furnitureName}.");
-            _occupant.SetCurrentFurniture(null);
+            _occupant.SetOccupyingFurniture(null);
         }
         _occupant = null;
     }

@@ -7,13 +7,17 @@ public class CharacterCraftAction : CharacterAction
     private Color _primaryColor;
     private Color _secondaryColor;
 
-    public CharacterCraftAction(Character character, CraftingStation station, ItemSO itemToCraft, Color primaryColor = default, Color secondaryColor = default, float duration = 1.0f) 
+    public CharacterCraftAction(Character character, ItemSO itemToCraft, Color primaryColor = default, Color secondaryColor = default, float duration = 1.0f) 
         : base(character, duration)
     {
-        _station = station;
         _itemToCraft = itemToCraft;
         _primaryColor = primaryColor;
         _secondaryColor = secondaryColor;
+
+        if (character != null && character.OccupyingFurniture is CraftingStation station)
+        {
+            _station = station;
+        }
     }
 
     public override bool CanExecute()
