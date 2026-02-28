@@ -104,6 +104,26 @@ public class GiveLessonBehaviour : IAIBehaviour
                 }
             }
         }
+        
+        // --- RANDOM SPEECH ---
+        // 10% chance per tick (so roughly every 20 seconds on average)
+        if (mentor.CharacterSpeech != null && Random.value < 0.1f)
+        {
+            string[] phrases = new string[]
+            {
+                "So today I'm going to teach you...",
+                "Pay attention to the form.",
+                "It's all in the wrist.",
+                "Watch closely how I do this.",
+                "Practice makes perfect.",
+                "Don't rush it, take your time.",
+                "Focus on the technique, not just power.",
+                "A true master never stops learning.",
+                "Are you all following me?",
+                "Let's go over that one more time."
+            };
+            mentor.CharacterSpeech.Say(phrases[Random.Range(0, phrases.Length)]);
+        }
     }
 
     public void Exit(Character character)

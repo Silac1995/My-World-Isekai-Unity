@@ -564,6 +564,7 @@ public class BattleManager : MonoBehaviour
 
         // 4. Forcer un changement de cible pour que les membres redirigent la formation correctement
         ForceRetarget(newEngagement);
+        ForceRetarget(originalEngagement);
     }
 
     private void ForceRetarget(CombatEngagement engagement)
@@ -580,7 +581,9 @@ public class BattleManager : MonoBehaviour
             var combatBehaviour = character.Controller.GetCurrentBehaviour<CombatBehaviour>();
             if (combatBehaviour != null)
             {
-                Character bestEnemy = GetBestTargetFor(character);
+                Character bestEnemy = engagement.GetClosestOpponent(character);
+                if (bestEnemy == null) bestEnemy = GetBestTargetFor(character);
+
                 if (bestEnemy != null && bestEnemy != combatBehaviour.Target)
                 {
                     combatBehaviour.SetCurrentTarget(bestEnemy);
