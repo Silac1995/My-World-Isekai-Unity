@@ -190,6 +190,10 @@ public class CharacterInteraction : MonoBehaviour
             yield return null;
         }
 
+        // --- DÉLAI DE FIN D'INTERACTION ---
+        // Petit délai supplémentaire (ex: 2 secondes) pour que les personnages ne s'enfuient pas immédiatement
+        yield return new WaitForSeconds(2.0f);
+
         Debug.Log($"<color=cyan>[Dialogue]</color> Fin de la séquence après {totalExchanges} échanges.");
         EndInteraction();
     }

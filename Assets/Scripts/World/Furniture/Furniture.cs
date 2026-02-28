@@ -31,6 +31,7 @@ public class Furniture : MonoBehaviour
         }
 
         _occupant = character;
+        _occupant.SetCurrentFurniture(this);
         Debug.Log($"<color=cyan>[Furniture]</color> {character.CharacterName} utilise {_furnitureName}.");
         return true;
     }
@@ -43,6 +44,7 @@ public class Furniture : MonoBehaviour
         if (_occupant != null)
         {
             Debug.Log($"<color=cyan>[Furniture]</color> {_occupant.CharacterName} quitte {_furnitureName}.");
+            _occupant.SetCurrentFurniture(null);
         }
         _occupant = null;
     }

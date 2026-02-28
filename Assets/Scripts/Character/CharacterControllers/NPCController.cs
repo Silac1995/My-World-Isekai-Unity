@@ -156,7 +156,7 @@ public class NPCController : CharacterGameController
                     if (_character.CharacterSpeech != null)
                         _character.CharacterSpeech.Say("You! I don't like your face!");
 
-                    PushBehaviour(new MoveToTargetBehaviour(this, target.gameObject, 7f, () =>
+                    PushBehaviour(new MoveToInteractionBehaviour(this, target, () =>
                     {
                         if (target == null || !target.IsAlive()) return;
                         _character.CharacterInteraction.StartInteractionWith(target, new InteractionInsult());
@@ -177,7 +177,11 @@ public class NPCController : CharacterGameController
             if (Random.value < strangerChance)
             {
                 Debug.Log($"<color=cyan>[Social - Stranger]</color> {_character.CharacterName} s'approche de l'inconnu {target.CharacterName} (Sociabilité: {sociability:P0})");
-                PushBehaviour(new MoveToInteractionBehaviour(this, target));
+                PushBehaviour(new MoveToInteractionBehaviour(this, target, () =>
+                {
+                    if (target == null || !target.IsAlive()) return;
+                    _character.CharacterInteraction.StartInteractionWith(target);
+                }));
             }
             return;
         }
@@ -218,7 +222,7 @@ public class NPCController : CharacterGameController
             if (_character.CharacterSpeech != null)
                 _character.CharacterSpeech.Say("Hey! You!");
 
-            PushBehaviour(new MoveToTargetBehaviour(this, target.gameObject, 7f, () =>
+            PushBehaviour(new MoveToInteractionBehaviour(this, target, () =>
             {
                 if (target == null || !target.IsAlive()) return;
                 _character.CharacterInteraction.StartInteractionWith(target);

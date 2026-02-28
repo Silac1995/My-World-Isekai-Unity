@@ -8,6 +8,8 @@ public class GiveLessonBehaviour : IAIBehaviour
     private float _tickTimer = 0f;
     private float _tickRate = 2f; // XP given every 2 seconds
     private float _baseXPPerTick = 10f;
+    
+    private int _relationshipTickCounter = 0;
 
     private MentorClassZone _myClassZone;
 
@@ -72,7 +74,14 @@ public class GiveLessonBehaviour : IAIBehaviour
             else return;
         }
 
-        // Distribuer l'XP
+        _relationshipTickCounter++;
+        bool shouldIncreaseRelation = _relationshipTickCounter >= 4;
+        if (shouldIncreaseRelation)
+        {
+            _relationshipTickCounter = 0;
+        }
+
+        // Distribuer l'XP et les relations
         var students = _myClassZone.ActiveStudents.ToList();
         foreach (var student in students)
         {
@@ -82,6 +91,17 @@ public class GiveLessonBehaviour : IAIBehaviour
             if (studentMentorship != null && studentMentorship.CurrentMentor == mentor)
             {
                 studentMentorship.ReceiveLessonTick(_myClassZone.TeachingSkill, mentorTier, _baseXPPerTick);
+                
+                if (shouldIncreaseRelation)
+                {
+                    // Mentor vers Eleve
+                    Relationship mentorToStudent = mentor.CharacterRelation?.AddRelationship(student);
+                    if (mentorToStudent != null) mentorToStudent.IncreaseRelationValue(1);
+
+                    // Eleve vers Mentor
+                    Relationship studentToMentor = student.CharacterRelation?.AddRelationship(mentor);
+                    if (studentToMentor != null) studentToMentor.IncreaseRelationValue(1);
+                }
             }
         }
     }

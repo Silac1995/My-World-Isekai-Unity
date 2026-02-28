@@ -1,4 +1,4 @@
-using System.Linq;
+ï»¿using System.Linq;
 using TMPro;
 using UnityEngine;
 
@@ -10,6 +10,7 @@ public class UI_CharacterDebugScript : MonoBehaviour
     [SerializeField] private TextMeshProUGUI characterInteractionDebugText;
     [SerializeField] private TextMeshProUGUI characterNeedsText;
     [SerializeField] private TextMeshProUGUI agentState;
+    [SerializeField] private TextMeshProUGUI busyReasonText;
 
     private void Update()
     {
@@ -20,6 +21,7 @@ public class UI_CharacterDebugScript : MonoBehaviour
         UpdateInteractionDebug();
         UpdateNeedsDebug(); // Ajout de l'affichage des besoins
         UpdateAgentDebug();
+        UpdateBusyReasonDebug();
     }
 
     private void UpdateActionDebug()
@@ -29,7 +31,7 @@ public class UI_CharacterDebugScript : MonoBehaviour
         var currentAction = character.CharacterActions.CurrentAction;
         if (currentAction != null)
         {
-            characterActionDebugText.text = $"Action: {currentAction.GetType().Name}";
+            characterActionDebugText.text = "Action: " + currentAction.GetType().Name;
             characterActionDebugText.color = Color.yellow;
         }
         else
@@ -51,7 +53,7 @@ public class UI_CharacterDebugScript : MonoBehaviour
             if (stackNames.Count > 0)
             {
                 // Le premier est toujours le Current (sommet de la pile)
-                string current = $"<color=#00FFFF>Current: {stackNames[0]}</color>";
+                string current = "<color=#00FFFF>Current: " + stackNames[0] + "</color>";
 
                 // Les suivants sont en attente
                 string next = "";
@@ -60,7 +62,7 @@ public class UI_CharacterDebugScript : MonoBehaviour
                     next = "\n<color=#F5B027>Queue: " + string.Join(" -> ", stackNames.Skip(1)) + "</color>";
                 }
 
-                characterBehaviourDebugText.text = $"{current}{next}";
+                characterBehaviourDebugText.text = current + next;
             }
             else
             {
@@ -74,13 +76,13 @@ public class UI_CharacterDebugScript : MonoBehaviour
     {
         if (characterInteractionDebugText == null) return;
 
-        // On utilise la propriété CurrentTarget que l'on a créée dans CharacterInteraction
+        // On utilise la propriete CurrentTarget que l'on a cree dans CharacterInteraction
         var interaction = character.CharacterInteraction;
 
         if (interaction != null && interaction.IsInteracting)
         {
             // Affiche le nom du personnage cible
-            characterInteractionDebugText.text = $"Interaction with: {interaction.CurrentTarget.CharacterName}";
+            characterInteractionDebugText.text = "Interaction with: " + interaction.CurrentTarget.CharacterName;
             characterInteractionDebugText.color = Color.green; // Vert pour indiquer un lien actif
         }
         else
@@ -89,11 +91,12 @@ public class UI_CharacterDebugScript : MonoBehaviour
             characterInteractionDebugText.color = Color.gray;
         }
     }
+
     private void UpdateNeedsDebug()
     {
         if (characterNeedsText == null) return;
 
-        // Utilisation de la référence directe depuis la classe Character
+        // Utilisation de la reference directe depuis la classe Character
         var needsSystem = character.CharacterNeeds;
 
         if (needsSystem != null)
@@ -117,7 +120,7 @@ public class UI_CharacterDebugScript : MonoBehaviour
                 string colorCode = !isActive ? "#888888" : (urgency >= 100 ? "#FF4444" : "#F5B027");
 
                 string status = isActive ? "ON" : "OFF";
-                debugContent += $"\n<color={colorCode}>• {need.GetType().Name}: {urgency:F0}% [{status}]</color>";
+                debugContent += "\n<color=" + colorCode + ">  " + need.GetType().Name + ": " + urgency.ToString("F0") + "% [" + status + "]</color>";
             }
 
             characterNeedsText.text = debugContent;
@@ -129,12 +132,12 @@ public class UI_CharacterDebugScript : MonoBehaviour
         }
     }
 
-    // La méthode à ajouter
+    // La methode a ajouter
     private void UpdateAgentDebug()
     {
         if (agentState == null) return;
 
-        // Si c'est le joueur, on affiche un état spécial
+        // Si c'est le joueur, on affiche un etat special
         if (character.IsPlayer())
         {
             agentState.text = "Agent: <color=grey>PLAYER (Manual)</color>";
@@ -147,11 +150,28 @@ public class UI_CharacterDebugScript : MonoBehaviour
             var agent = controller.Agent;
             string stoppedStatus = agent.isStopped ? "<color=red>STOPPED</color>" : "<color=green>RUNNING</color>";
             string pathStatus = agent.hasPath ? "Has Path" : "No Path";
-            agentState.text = $"Agent: {stoppedStatus} | {pathStatus}";
+            agentState.text = "Agent: " + stoppedStatus + " | " + pathStatus;
         }
         else
         {
             agentState.text = "Agent: <color=orange>OFF NAVMESH</color>";
+        }
+    }
+
+    private void UpdateBusyReasonDebug()
+    {
+        if (busyReasonText == null) return;
+
+        var reason = character.BusyReason;
+        if (reason == CharacterBusyReason.None)
+        {
+            busyReasonText.text = "Busy Reason: " + reason;
+            busyReasonText.color = Color.gray;
+        }
+        else
+        {
+            busyReasonText.text = "Busy Reason: " + reason;
+            busyReasonText.color = Color.yellow;
         }
     }
 }

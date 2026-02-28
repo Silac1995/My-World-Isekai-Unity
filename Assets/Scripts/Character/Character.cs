@@ -3,6 +3,17 @@ using UnityEngine;
 using UnityEngine.AI;
 using MWI.Time;
 
+public enum CharacterBusyReason
+{
+    None,
+    Dead,
+    Unconscious,
+    InCombat,
+    Interacting,
+    Teaching,
+    Crafting
+}
+
 [RequireComponent(typeof(CapsuleCollider), typeof(Rigidbody))]
 public class Character : MonoBehaviour
 {
@@ -104,6 +115,8 @@ public class Character : MonoBehaviour
 
     public NavMeshAgent NavMesh => _cachedNavMeshAgent;
     public TimeManager TimeManager => _timeManager != null ? _timeManager : TimeManager.Instance;
+
+    public Furniture CurrentFurniture { get; private set; }
 
     public bool IsUnconscious => _isUnconscious;
     public bool IsIncapacitated => _isDead || _isUnconscious;
@@ -210,10 +223,67 @@ public class Character : MonoBehaviour
     #region Health & Status
     public bool IsAlive() => !_isDead && !_isUnconscious;
     public bool IsPlayer() => _controller is PlayerController;
+
+    public CharacterBusyReason BusyReason
+    {
+        get
+        {
+            IsFree(out CharacterBusyReason reason);
+            return reason;
+        }
+    }
+
+    public bool IsFree(out CharacterBusyReason reason)
+    {
+        if (_isDead)
+        {
+            reason = CharacterBusyReason.Dead;
+            return false;
+        }
+
+        if (_isUnconscious)
+        {
+            reason = CharacterBusyReason.Unconscious;
+            return false;
+        }
+
+        if (CharacterCombat != null && CharacterCombat.IsInBattle)
+        {
+            reason = CharacterBusyReason.InCombat;
+            return false;
+        }
+
+        if (_characterInteraction != null && _characterInteraction.IsInteracting)
+        {
+            reason = CharacterBusyReason.Interacting;
+            return false;
+        }
+
+        if (_characterMentorship != null && _characterMentorship.IsCurrentlyTeaching)
+        {
+            reason = CharacterBusyReason.Teaching;
+            return false;
+        }
+
+        if (_characterActions != null && _characterActions.CurrentAction is CharacterCraftAction)
+        {
+            reason = CharacterBusyReason.Crafting;
+            return false;
+        }
+
+        if (CurrentFurniture != null && CurrentFurniture.GetComponent<CraftingStation>() != null)
+        {
+            reason = CharacterBusyReason.Crafting;
+            return false;
+        }
+
+        reason = CharacterBusyReason.None;
+        return true;
+    }
+
     public bool IsFree() 
     {
-        bool isTeaching = _characterMentorship != null && _characterMentorship.IsCurrentlyTeaching;
-        return IsAlive() && !CharacterCombat.IsInBattle && !_characterInteraction.IsInteracting && !isTeaching;
+        return IsFree(out _);
     }
 
     #region Party Logic
@@ -466,4 +536,9 @@ public class Character : MonoBehaviour
     [ContextMenu("Switch To Player")] public void DebugToPlayer() => SwitchToPlayer();
     [ContextMenu("Switch To NPC")] public void DebugToNPC() => SwitchToNPC();
     #endregion
+
+    public void SetCurrentFurniture(Furniture furniture)
+    {
+        CurrentFurniture = furniture;
+    }
 }
