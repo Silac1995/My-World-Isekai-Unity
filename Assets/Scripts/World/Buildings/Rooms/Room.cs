@@ -47,17 +47,36 @@ public class Room : Zone
     {
         if (_grid == null) return false;
 
-        // Verify if it's within the room's bounds and not occupied on the grid
-        if (IsPointInsideRoom(targetPosition) && _grid.CanPlaceFurniture(targetPosition, furniturePrefab.SizeInCells))
+        // Verify if the grid allows placement
+        if (_grid.CanPlaceFurniture(targetPosition, furniturePrefab.SizeInCells))
         {
             Furniture newFurniture = Instantiate(furniturePrefab, targetPosition, Quaternion.identity, transform);
             
+            // Correction du pivot Y : targetPosition correspond au sol (la grille).
+            // Si le pivot du meuble est au centre de son volume, il sera à moitié enterré.
+            Renderer[] renderers = newFurniture.GetComponentsInChildren<Renderer>();
+            if (renderers.Length > 0)
+            {
+                // On calcule la bounding box de tout le meuble
+                Bounds bounds = renderers[0].bounds;
+                for (int i = 1; i < renderers.Length; i++)
+                {
+                    bounds.Encapsulate(renderers[i].bounds);
+                }
+
+                // bounds.min.y correspond au point le plus bas (visuellement) du meuble dans le monde
+                // On veut que ce point bas s'aligne exactement avec targetPosition.y
+                float offsetY = newFurniture.transform.position.y - bounds.min.y;
+                newFurniture.transform.position += new Vector3(0, offsetY, 0);
+            }
+
             _furnitures.Add(newFurniture);
             _grid.RegisterFurniture(newFurniture, targetPosition, newFurniture.SizeInCells);
+            Debug.Log($"<color=green>[Room]</color> Instanciation REUSSIE de {furniturePrefab.name} à {newFurniture.transform.position} dans {_roomName} !");
             return true;
         }
 
-        Debug.LogWarning($"<color=orange>[Room]</color> Emplacement invalide ou déjà occupé pour le meuble {furniturePrefab.FurnitureName} dans {_roomName}.");
+        Debug.LogWarning($"<color=orange>[Room]</color> Emplacement invalide ou déjà occupé pour le meuble {furniturePrefab.FurnitureName} à {targetPosition} dans {_roomName}.");
         return false;
     }
 

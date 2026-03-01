@@ -12,12 +12,15 @@ public class DebugScript : MonoBehaviour
     [SerializeField] private Toggle isPlayerToggle;
     [SerializeField] private Button spawnButton;
     [SerializeField] private Button spawnItem;
+    [SerializeField] private Button testInstallFurnitureBtn; // NOUVEAU
     [SerializeField] private TMP_Dropdown itemsSOList;
     [SerializeField] private Button switchButton;
     [SerializeField] private GameObject debugPanel;
 
     [Header("Prefabs & Managers")]
     [SerializeField] private Transform spawnPoint;
+    [Tooltip("Meuble qui sera spawn via le bouton 'Test Install Furniture'")]
+    [SerializeField] private Furniture _testFurniturePrefab;
 
     private List<RaceSO> availableRaces = new List<RaceSO>();
     private List<ItemSO> availableItems = new List<ItemSO>();
@@ -47,6 +50,11 @@ public class DebugScript : MonoBehaviour
 
         spawnItem.onClick.AddListener(OnSpawnItemClicked);
         spawnButton.onClick.AddListener(SpawnCharacters);
+        
+        if (testInstallFurnitureBtn != null)
+        {
+            testInstallFurnitureBtn.onClick.AddListener(TestInstallFurniture);
+        }
         
         if (switchButton != null)
         {
@@ -152,6 +160,92 @@ public class DebugScript : MonoBehaviour
                 visualPrefab: selectedCharacterDefaultPrefab,
                 isPlayer: isPlayerToggle.isOn && i == 0
             );
+        }
+    }
+
+    private void TestInstallFurniture()
+    {
+        // On récupère le joueur pour le test
+        Character player = FindObjectOfType<PlayerController>()?.GetComponent<Character>();
+        if (player == null)
+        {
+            Debug.LogWarning("Aucun joueur trouvé pour le test d'installation !");
+            return;
+        }
+
+        // On cherche le bâtiment qui lui appartient (pour l'exemple, le premier ResidentialBuilding qu'il possède)
+        ResidentialBuilding playerHouse = null;
+        
+        if (BuildingManager.Instance == null)
+        {
+            Debug.LogError("BuildingManager n'est pas présent dans la scène ! Ajoutez-le pour tester l'installation.");
+            return;
+        }
+
+        var allBuildings = BuildingManager.Instance.allBuildings;
+        
+        foreach (var b in allBuildings)
+        {
+            if (b is ResidentialBuilding res && res.Owner == player)
+            {
+                playerHouse = res;
+                break;
+            }
+        }
+
+        if (playerHouse == null)
+        {
+            Debug.LogWarning($"{player.CharacterName} ne possède aucune maison ! Mettez-le Owner d'un HouseBuilding d'abord.");
+            return;
+        }
+
+        // On vérifie si tu as bien assigné le prefab dans l'inspecteur
+        if (_testFurniturePrefab == null)
+        {
+            Debug.LogError("Aucun _testFurniturePrefab n'a été assigné dans l'inspecteur du DebugScript !");
+            return;
+        }
+
+        // On récupère toutes les salles du bâtiment principal et on en prend une aléatoire
+        var allRooms = new List<Room>(playerHouse.Rooms);
+        if (allRooms.Count == 0)
+        {
+            Debug.LogWarning($"La maison {playerHouse.BuildingName} ne possède aucune Room/SubRoom.");
+            return;
+        }
+
+        // On mélange la liste des rooms pour un essai aléatoire (Fisher-Yates shuffle)
+        for (int i = 0; i < allRooms.Count; i++)
+        {
+            int randomIndex = Random.Range(i, allRooms.Count);
+            Room temp = allRooms[i];
+            allRooms[i] = allRooms[randomIndex];
+            allRooms[randomIndex] = temp;
+        }
+
+        bool installed = false;
+
+        // On essaie d'installer le meuble dans les pièces (dans leur ordre aléatoire)
+        foreach (var randomRoom in allRooms)
+        {
+            if (randomRoom.Grid != null)
+            {
+                Vector3? freePos = randomRoom.Grid.GetRandomFreePosition(_testFurniturePrefab.SizeInCells);
+                if (freePos.HasValue)
+                {
+                    if (randomRoom.AddFurniture(_testFurniturePrefab, freePos.Value))
+                    {
+                        Debug.Log($"<color=green>[Building - Debug]</color> {_testFurniturePrefab.name} installé aléatoirement avec succès dans {randomRoom.RoomName}.");
+                        installed = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (!installed)
+        {
+            Debug.LogWarning($"<color=orange>[Building - Debug]</color> Impossible d'installer le meuble, aucune room aléatoire n'avait de place.");
         }
     }
 }

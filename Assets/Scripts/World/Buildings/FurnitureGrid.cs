@@ -57,8 +57,10 @@ public class FurnitureGrid : MonoBehaviour
         {
             for (int z = 0; z < _gridDepth; z++)
             {
-                // Position centrale de la cellule
-                Vector3 cellPos = _gridOrigin + new Vector3(x * _cellSize + _cellSize / 2f, _buildingBounds.center.y, z * _cellSize + _cellSize / 2f);
+                // Position centrale de la cellule (en X/Z). Sur Y, on se place à la base du BoxCollider (le sol).
+                float bottomY = transform.TransformPoint(_buildingBounds.center - new Vector3(0, _buildingBounds.size.y / 2f, 0)).y;
+                Vector3 cellPos = _gridOrigin + new Vector3(x * _cellSize + _cellSize / 2f, 0, z * _cellSize + _cellSize / 2f);
+                cellPos.y = bottomY;
                 
                 _grid[x, z] = new GridCell
                 {
@@ -181,6 +183,35 @@ public class FurnitureGrid : MonoBehaviour
         }
 
         return found;
+    }
+
+    /// <summary>
+    /// Cherche aléatoirement une position valide sur la grille pour un meuble donné.
+    /// Retourne la position Vector3 monde, ou null s'il n'y a plus de place.
+    /// </summary>
+    public Vector3? GetRandomFreePosition(Vector2Int sizeInCells)
+    {
+        List<Vector3> validPositions = new List<Vector3>();
+
+        // Parcourt toute la grille pour compiler les emplacements valides
+        for (int x = 0; x <= _gridWidth - sizeInCells.x; x++)
+        {
+            for (int z = 0; z <= _gridDepth - sizeInCells.y; z++)
+            {
+                Vector3 candidatePos = _grid[x, z].WorldPosition;
+                if (CanPlaceFurniture(candidatePos, sizeInCells))
+                {
+                    validPositions.Add(candidatePos);
+                }
+            }
+        }
+
+        if (validPositions.Count > 0)
+        {
+            return validPositions[Random.Range(0, validPositions.Count)];
+        }
+
+        return null;
     }
 
     private void OnDrawGizmosSelected()

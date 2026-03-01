@@ -17,6 +17,7 @@ GameObject:
   - component: {fileID: 2431383171460620552}
   - component: {fileID: 150143065738999904}
   - component: {fileID: 7974542712889491093}
+  - component: {fileID: 2620759637936554435}
   m_Layer: 0
   m_Name: Room_Main
   m_TagString: Untagged
@@ -528,10 +529,31 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Room
   zoneType: 1
   zoneName: Crafing Zone
+  _boundsTarget: {fileID: 0}
   _roomName: Crafing Room
   _owners: []
   _furnitures:
   - {fileID: 3966345238403808512}
+--- !u!114 &2620759637936554435
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3533999881373028604}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1e3fdca004f2d45fe8abbed571a8abd5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.AI.Navigation::Unity.AI.Navigation.NavMeshModifier
+  m_SerializedVersion: 0
+  m_OverrideArea: 0
+  m_Area: 0
+  m_OverrideGenerateLinks: 0
+  m_GenerateLinks: 0
+  m_IgnoreFromBuild: 0
+  m_ApplyToChildren: 1
+  m_AffectedAgents: ffffffff
 --- !u!1001 &799164589460882133
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -594,6 +616,12 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 3315547130765415992, guid: 3912e32b2a079d942b67533a34636010, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1635203243438209901}
+    - targetCorrespondingSourceObject: {fileID: 3315547130765415992, guid: 3912e32b2a079d942b67533a34636010, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 6724133526155209896}
+    - targetCorrespondingSourceObject: {fileID: 3315547130765415992, guid: 3912e32b2a079d942b67533a34636010, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 9062824166755621424}
   m_SourcePrefab: {fileID: 100100000, guid: 3912e32b2a079d942b67533a34636010, type: 3}
 --- !u!4 &480338460532572783 stripped
 Transform:
@@ -619,11 +647,49 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ForgeBuilding
   zoneType: 0
   zoneName: Forge Zone
+  _boundsTarget: {fileID: 3990240040879924722}
+  _roomName: 
+  _owners: []
+  _furnitures: []
+  _subRooms: []
   buildingName: Forge
-  _mainRoom: {fileID: 0}
-  _rooms: []
+  _isPublicLocation: 0
+  _buildingType: 0
   _owner: {fileID: 0}
   _apprenticeCount: 1
+--- !u!114 &6724133526155209896
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2671764298148451565}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4b43482cfd5435e4da940cd87d30dcad, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FurnitureGrid
+  _cellSize: 1
+--- !u!114 &9062824166755621424
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2671764298148451565}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1e3fdca004f2d45fe8abbed571a8abd5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.AI.Navigation::Unity.AI.Navigation.NavMeshModifier
+  m_SerializedVersion: 0
+  m_OverrideArea: 0
+  m_Area: 0
+  m_OverrideGenerateLinks: 0
+  m_GenerateLinks: 0
+  m_IgnoreFromBuild: 0
+  m_ApplyToChildren: 1
+  m_AffectedAgents: ffffffff
 --- !u!1001 &8570334712528388096
 PrefabInstance:
   m_ObjectHideFlags: 0

@@ -188,6 +188,20 @@ public class SpawnManager : MonoBehaviour
             Debug.Log($"<color=cyan>[Spawn]</color> {character.CharacterName} a reçu le profil comportemental : {randomTrait.name}");
         }
 
+        // --- DEBUG : ASSIGNATION AUTOMATIQUE DE RÉSIDENCE ---
+        if (BuildingManager.Instance != null && BuildingManager.Instance.allBuildings != null)
+        {
+            foreach (var b in BuildingManager.Instance.allBuildings)
+            {
+                if (b is ResidentialBuilding resBuilding && resBuilding.Owners.Count == 0)
+                {
+                    resBuilding.SetOwner(character);
+                    Debug.Log($"<color=green>[Spawn - Debug]</color> {character.CharacterName} a automatiquement reçu la propriété de {resBuilding.BuildingName}.");
+                    break;
+                }
+            }
+        }
+
         return character;
     }
 
