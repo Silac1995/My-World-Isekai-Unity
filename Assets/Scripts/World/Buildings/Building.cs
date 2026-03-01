@@ -79,16 +79,16 @@ public class Building : ComplexRoom
 
         foreach (var room in allRooms)
         {
-            // On vérifie si la pièce a une grille valide
-            if (room.Grid != null)
+            // On vérifie si la pièce a un FurnitureManager valide
+            if (room.FurnitureManager != null && room.FurnitureManager.Grid != null)
             {
                 // Demande à la grille de trouver une position libre pour cette taille
-                Vector3? freePos = room.Grid.GetRandomFreePosition(furniturePrefab.SizeInCells);
+                Vector3? freePos = room.FurnitureManager.Grid.GetRandomFreePosition(furniturePrefab.SizeInCells);
                 
                 if (freePos.HasValue)
                 {
                     // Convertir la position grille (monde) en appel d'ajout
-                    if (room.AddFurniture(furniturePrefab, freePos.Value))
+                    if (room.FurnitureManager.AddFurniture(furniturePrefab, freePos.Value))
                     {
                         Debug.Log($"<color=green>[Building]</color> {furniturePrefab.name} installé avec succès dans {room.RoomName} de {BuildingName}.");
                         return true; // Succès, on arrête la recherche

@@ -228,12 +228,12 @@ public class DebugScript : MonoBehaviour
         // On essaie d'installer le meuble dans les pièces (dans leur ordre aléatoire)
         foreach (var randomRoom in allRooms)
         {
-            if (randomRoom.Grid != null)
+            if (randomRoom.FurnitureManager != null && randomRoom.FurnitureManager.Grid != null)
             {
-                Vector3? freePos = randomRoom.Grid.GetRandomFreePosition(_testFurniturePrefab.SizeInCells);
+                Vector3? freePos = randomRoom.FurnitureManager.Grid.GetRandomFreePosition(_testFurniturePrefab.SizeInCells);
                 if (freePos.HasValue)
                 {
-                    if (randomRoom.AddFurniture(_testFurniturePrefab, freePos.Value))
+                    if (randomRoom.FurnitureManager.AddFurniture(_testFurniturePrefab, freePos.Value))
                     {
                         Debug.Log($"<color=green>[Building - Debug]</color> {_testFurniturePrefab.name} installé aléatoirement avec succès dans {randomRoom.RoomName}.");
                         installed = true;

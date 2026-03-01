@@ -535,6 +535,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CraftingStation
   _furnitureName: Anvil
   _interactionPoint: {fileID: 6070397181164859014}
+  _sizeInCells: {x: 15, y: 5}
   _stationType: 0
   _craftableItems:
   - {fileID: 11400000, guid: 6c5a51e107481e44e877e826e0853958, type: 2}

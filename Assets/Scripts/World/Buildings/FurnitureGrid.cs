@@ -78,8 +78,6 @@ public class FurnitureGrid : MonoBehaviour
             return false;
 
         // On vérifie de -size/2 à +size/2 (approx) selon l'ancrage du meuble
-        // Pour simplifier, supposons que targetPosition est le coin inférieur gauche (ou centre selon le pivot)
-        // Partons du principe que startX/startZ est le coin bas-gauche
         for (int x = startX; x < startX + sizeInCells.x; x++)
         {
             for (int z = startZ; z < startZ + sizeInCells.y; z++)
@@ -89,6 +87,23 @@ public class FurnitureGrid : MonoBehaviour
 
                 if (_grid[x, z].IsOccupied)
                     return false; // Déjà occupé
+
+                // Pour s'assurer qu'aucun bord du meuble ne traverse le mur,
+                // on vérifie les 4 coins de cette cellule spécifique par rapport au BoxCollider
+                Vector3 center = _grid[x, z].WorldPosition;
+                center.y += 0.5f; // Remonter un peu pour éviter les float issues au sol
+
+                float halfCell = _cellSize / 2.01f; // Léger in-set pour la tolérance des murs
+                Vector3 p1 = center + new Vector3(halfCell, 0, halfCell);
+                Vector3 p2 = center + new Vector3(-halfCell, 0, halfCell);
+                Vector3 p3 = center + new Vector3(halfCell, 0, -halfCell);
+                Vector3 p4 = center + new Vector3(-halfCell, 0, -halfCell);
+
+                Bounds roomBounds = _buildingBounds.bounds;
+                if (!roomBounds.Contains(p1) || !roomBounds.Contains(p2) || !roomBounds.Contains(p3) || !roomBounds.Contains(p4))
+                {
+                    return false; // La cellule déborde physiquement du BoxCollider !
+                }
             }
         }
 

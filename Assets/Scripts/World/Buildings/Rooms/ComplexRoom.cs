@@ -97,7 +97,7 @@ public class ComplexRoom : Room
     public T FindAvailableFurniture<T>() where T : Furniture
     {
         // Check own furniture first
-        T result = base.FindAvailableFurniture<T>();
+        T result = FurnitureManager != null ? FurnitureManager.FindAvailableFurniture<T>() : null;
         if (result != null) return result;
 
         // Then check subrooms
@@ -107,9 +107,9 @@ public class ComplexRoom : Room
             {
                 result = complex.FindAvailableFurniture<T>();
             }
-            else
+            else if (subRoom.FurnitureManager != null)
             {
-                result = subRoom.FindAvailableFurniture<T>();
+                result = subRoom.FurnitureManager.FindAvailableFurniture<T>();
             }
 
             if (result != null) return result;
@@ -123,9 +123,12 @@ public class ComplexRoom : Room
         // Get from own base room first
         List<T> result = new List<T>();
         
-        foreach (var f in _furnitures)
+        if (FurnitureManager != null)
         {
-            if (f is T typed) result.Add(typed);
+            foreach (var f in FurnitureManager.Furnitures)
+            {
+                if (f is T typed) result.Add(typed);
+            }
         }
 
         // Add from subrooms
@@ -135,9 +138,9 @@ public class ComplexRoom : Room
             {
                 result.AddRange(complex.GetFurnitureOfType<T>());
             }
-            else
+            else if (subRoom.FurnitureManager != null)
             {
-                foreach (var f in subRoom.Furnitures)
+                foreach (var f in subRoom.FurnitureManager.Furnitures)
                 {
                     if (f is T typed) result.Add(typed);
                 }

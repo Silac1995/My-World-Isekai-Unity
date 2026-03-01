@@ -50,8 +50,8 @@ public class CharacterPlaceFurnitureAction : CharacterAction
             }
         }
 
-        // Vérifie si la position trouvée/donnée est (toujours) valide (limite la vérification à la Room elle-même et à la grille)
-        return _targetRoom.IsPointInsideRoom(_targetPosition) && grid.CanPlaceFurniture(_targetPosition, _furniturePrefab.SizeInCells);
+        // Vérifie si la position trouvée/donnée est (toujours) valide
+        return _targetRoom.FurnitureManager != null && _targetRoom.FurnitureManager.IsPlacementValid(_furniturePrefab, _targetPosition);
     }
 
     public override void OnStart()
@@ -70,9 +70,9 @@ public class CharacterPlaceFurnitureAction : CharacterAction
 
     public override void OnApplyEffect()
     {
-        if (_targetRoom != null && _furniturePrefab != null)
+        if (_targetRoom != null && _targetRoom.FurnitureManager != null && _furniturePrefab != null)
         {
-            bool success = _targetRoom.AddFurniture(_furniturePrefab, _targetPosition);
+            bool success = _targetRoom.FurnitureManager.AddFurniture(_furniturePrefab, _targetPosition);
             if (success)
             {
                 Debug.Log($"<color=cyan>[Action]</color> {_furniturePrefab.FurnitureName} placé avec succès !");
