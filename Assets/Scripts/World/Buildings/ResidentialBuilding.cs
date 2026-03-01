@@ -9,28 +9,83 @@ public class ResidentialBuilding : Building
 {
     public override BuildingType BuildingType => BuildingType.Residential;
 
-    [Header("Residential")]
-    [SerializeField] private Character _owner;
+    [Header("Residential (For Simple House)")]
     [SerializeField] private List<Character> _residents = new List<Character>();
-    [SerializeField] private int _maxResidents = 4;
 
-    public Character Owner => _owner;
-    public IReadOnlyList<Character> Residents => _residents;
-    public bool IsFull => _residents.Count >= _maxResidents;
+    public List<ApartmentRoom> Apartments => GetRoomsOfType<ApartmentRoom>();
+
+    public Character Owner => _owners.Count > 0 ? _owners[0] : null;
+
+    public IReadOnlyList<Character> Residents
+    {
+        get
+        {
+            var apts = Apartments;
+            if (apts.Count > 0)
+            {
+                List<Character> allResidents = new List<Character>();
+                foreach (var apt in apts)
+                {
+                    allResidents.AddRange(apt.Residents);
+                }
+                return allResidents;
+            }
+            return _residents;
+        }
+    }
+
+    public int GetApartmentCount()
+    {
+        return Apartments.Count;
+    }
 
     public void SetOwner(Character newOwner)
     {
-        _owner = newOwner;
-        if (newOwner != null && !_residents.Contains(newOwner))
+        _owners.Clear();
+        if (newOwner != null)
         {
-            _residents.Add(newOwner);
+            AddOwner(newOwner);
+            if (!_residents.Contains(newOwner))
+            {
+                _residents.Add(newOwner);
+            }
         }
         Debug.Log($"<color=green>[Building]</color> {newOwner?.CharacterName} est maintenant propriétaire de {buildingName}.");
     }
 
-    public bool AddResident(Character resident)
+    public bool AddResident(Character resident, ApartmentRoom targetRoom = null)
     {
-        if (resident == null || IsFull || _residents.Contains(resident)) return false;
+        if (resident == null || IsResident(resident)) return false;
+
+        var apts = Apartments;
+        if (apts.Count > 0)
+        {
+            ApartmentRoom targetApt = targetRoom;
+
+            if (targetApt == null || !apts.Contains(targetApt))
+            {
+                // Si aucune chambre n'est fournie (ou si elle n'appartient pas au batiment), 
+                // trouver l'appartement avec le moins de résidents pour équilibrer.
+                targetApt = apts[0];
+                foreach (var apt in apts)
+                {
+                    if (apt.Residents.Count < targetApt.Residents.Count)
+                    {
+                        targetApt = apt;
+                    }
+                }
+            }
+
+            // Si l'appartement n'a pas de propriétaire, le premier résident devient le propriétaire par défaut
+            if (targetApt.Owners.Count == 0) targetApt.AddOwner(resident);
+            
+            if (targetApt.AddResident(resident))
+            {
+                Debug.Log($"<color=green>[Building]</color> {resident.CharacterName} habite maintenant dans un appartement de {buildingName}.");
+                return true;
+            }
+            return false;
+        }
 
         _residents.Add(resident);
         Debug.Log($"<color=green>[Building]</color> {resident.CharacterName} habite maintenant à {buildingName}.");
@@ -39,14 +94,31 @@ public class ResidentialBuilding : Building
 
     public bool RemoveResident(Character resident)
     {
-        if (resident == null || !_residents.Contains(resident)) return false;
+        if (resident == null || !IsResident(resident)) return false;
+
+        var apts = Apartments;
+        if (apts.Count > 0)
+        {
+            foreach (var apt in apts)
+            {
+                if (apt.IsResident(resident))
+                {
+                    apt.RemoveResident(resident);
+                    // Remove ownership if they were owner
+                    apt.RemoveOwner(resident);
+                    Debug.Log($"<color=green>[Building]</color> {resident.CharacterName} a quitté son appartement dans {buildingName}.");
+                    return true;
+                }
+            }
+            return false;
+        }
 
         _residents.Remove(resident);
 
         // Si le résident retiré était le propriétaire, transférer ou vider
-        if (_owner == resident)
+        if (Owner == resident)
         {
-            _owner = _residents.Count > 0 ? _residents[0] : null;
+            SetOwner(_residents.Count > 0 ? _residents[0] : null);
         }
 
         Debug.Log($"<color=green>[Building]</color> {resident.CharacterName} a quitté {buildingName}.");
@@ -55,6 +127,18 @@ public class ResidentialBuilding : Building
 
     public bool IsResident(Character character)
     {
-        return character != null && _residents.Contains(character);
+        if (character == null) return false;
+        
+        var apts = Apartments;
+        if (apts.Count > 0)
+        {
+            foreach (var apt in apts)
+            {
+                if (apt.IsResident(character)) return true;
+            }
+            return false;
+        }
+
+        return _residents.Contains(character);
     }
 }

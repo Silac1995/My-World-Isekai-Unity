@@ -54,7 +54,7 @@ public class BuildingManager : MonoBehaviour
     {
         foreach (var building in allBuildings)
         {
-            if (building is ResidentialBuilding residential && !residential.IsFull)
+            if (building is ResidentialBuilding residential)
             {
                 return residential;
             }

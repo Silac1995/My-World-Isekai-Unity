@@ -7,11 +7,13 @@ public class Room : Zone
 {
     [Header("Room Info")]
     [SerializeField] protected string _roomName;
+    [SerializeField] protected List<Character> _owners = new List<Character>();
 
     [SerializeField] protected List<Furniture> _furnitures = new List<Furniture>();
     protected FurnitureGrid _grid;
 
     public string RoomName => _roomName;
+    public IReadOnlyList<Character> Owners => _owners;
     public IReadOnlyList<Furniture> Furnitures => _furnitures;
     public FurnitureGrid Grid => _grid;
 
@@ -95,5 +97,21 @@ public class Room : Zone
     {
         if (_boxCollider == null) return false;
         return _boxCollider.bounds.Contains(point);
+    }
+
+    public void AddOwner(Character owner)
+    {
+        if (owner != null && !_owners.Contains(owner))
+        {
+            _owners.Add(owner);
+        }
+    }
+
+    public void RemoveOwner(Character owner)
+    {
+        if (owner != null && _owners.Contains(owner))
+        {
+            _owners.Remove(owner);
+        }
     }
 }

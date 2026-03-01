@@ -14,8 +14,8 @@ GameObject:
   - component: {fileID: 2642364023356075324}
   - component: {fileID: 2938863138989939715}
   - component: {fileID: 4228615583743460828}
-  - component: {fileID: 150143065738999904}
   - component: {fileID: 2431383171460620552}
+  - component: {fileID: 150143065738999904}
   - component: {fileID: 7974542712889491093}
   m_Layer: 0
   m_Name: Room_Main
@@ -480,19 +480,6 @@ MeshCollider:
   m_Convex: 0
   m_CookingOptions: 30
   m_Mesh: {fileID: 0}
---- !u!114 &150143065738999904
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3533999881373028604}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 4b43482cfd5435e4da940cd87d30dcad, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::FurnitureGrid
-  _cellSize: 1
 --- !u!65 &2431383171460620552
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -514,6 +501,19 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 34, y: 16, z: 15.093044}
   m_Center: {x: 0, y: 0, z: 0}
+--- !u!114 &150143065738999904
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3533999881373028604}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4b43482cfd5435e4da940cd87d30dcad, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FurnitureGrid
+  _cellSize: 1
 --- !u!114 &7974542712889491093
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -529,6 +529,7 @@ MonoBehaviour:
   zoneType: 1
   zoneName: Crafing Zone
   _roomName: Crafing Room
+  _owners: []
   _furnitures:
   - {fileID: 3966345238403808512}
 --- !u!1001 &799164589460882133
@@ -589,13 +590,40 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 990144019250249914, guid: 3912e32b2a079d942b67533a34636010, type: 3}
       insertIndex: -1
       addedObject: {fileID: 3990240040879924722}
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 3315547130765415992, guid: 3912e32b2a079d942b67533a34636010, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1635203243438209901}
   m_SourcePrefab: {fileID: 100100000, guid: 3912e32b2a079d942b67533a34636010, type: 3}
 --- !u!4 &480338460532572783 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 990144019250249914, guid: 3912e32b2a079d942b67533a34636010, type: 3}
   m_PrefabInstance: {fileID: 799164589460882133}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &2671764298148451565 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 3315547130765415992, guid: 3912e32b2a079d942b67533a34636010, type: 3}
+  m_PrefabInstance: {fileID: 799164589460882133}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &1635203243438209901
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2671764298148451565}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c15496fdbea9ac345b0058298cbc112a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ForgeBuilding
+  zoneType: 0
+  zoneName: Forge Zone
+  buildingName: Forge
+  _mainRoom: {fileID: 0}
+  _rooms: []
+  _owner: {fileID: 0}
+  _apprenticeCount: 1
 --- !u!1001 &8570334712528388096
 PrefabInstance:
   m_ObjectHideFlags: 0
