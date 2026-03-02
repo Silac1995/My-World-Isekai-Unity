@@ -1,8 +1,12 @@
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 public class CharacterLocations : MonoBehaviour
 {
+    [Header("References")]
+    [SerializeField] private Character _character;
+
     [Header("Assigned Zones")]
     public Zone homeZone;
     public Zone workZone;
@@ -30,7 +34,7 @@ public class CharacterLocations : MonoBehaviour
             case ZoneType.Job:
                 return workZone;
             default:
-                Debug.LogWarning($"[CharacterLocations] ZoneType {type} is not yet handled or assigned for {gameObject.name}");
+                Debug.LogWarning($"[CharacterLocations] ZoneType {type} is not yet handled or assigned for {_character.name}");
                 return null;
         }
     }
@@ -52,8 +56,8 @@ public class CharacterLocations : MonoBehaviour
         }
         
         // Also tell the building backend that this character is an owner
-        building.AddOwner(GetComponent<Character>());
-        Debug.Log($"<color=green>[CharacterLocations]</color> {gameObject.name} has received ownership of {building.RoomName}.");
+        building.AddOwner(_character);
+        Debug.Log($"<color=green>[CharacterLocations]</color> {_character.name} has received ownership of {building.RoomName}.");
     }
 
     // ==========================================
@@ -72,8 +76,8 @@ public class CharacterLocations : MonoBehaviour
             ResidentRooms.Add(room);
         }
         
-        room.AddResident(GetComponent<Character>());
-        Debug.Log($"<color=cyan>[CharacterLocations]</color> {gameObject.name} is now a resident in {room.RoomName}.");
+        room.AddResident(_character);
+        Debug.Log($"<color=cyan>[CharacterLocations]</color> {_character.name} is now a resident in {room.RoomName}.");
     }
 
     /// <summary>
@@ -82,13 +86,11 @@ public class CharacterLocations : MonoBehaviour
     /// </summary>
     public bool AddResidentToRoom(Character potentialResident, Room targetRoom)
     {
-        Character thisCharacter = GetComponent<Character>();
-
         // Check if THIS character has the right to assign residents
         // (Must be in the targetRoom.Owners list, or if the room is inside a Building this character owns)
         Building parentBuilding = targetRoom.GetComponentInParent<Building>();
         
-        bool isOwnerOfRoom = targetRoom.Owners.Contains(thisCharacter);
+        bool isOwnerOfRoom = targetRoom.Owners.Contains(_character);
         bool isOwnerOfBuilding = (parentBuilding != null && OwnedBuildings.Contains(parentBuilding));
 
         if (isOwnerOfRoom || isOwnerOfBuilding)
@@ -100,7 +102,7 @@ public class CharacterLocations : MonoBehaviour
             }
         }
         
-        Debug.LogWarning($"<color=orange>[CharacterLocations]</color> {gameObject.name} cannot add a resident to {targetRoom.RoomName} because they are not an Owner!");
+        Debug.LogWarning($"<color=orange>[CharacterLocations]</color> {_character.name} cannot add a resident to {targetRoom.RoomName} because they are not an Owner!");
         return false;
     }
 
@@ -110,9 +112,7 @@ public class CharacterLocations : MonoBehaviour
     /// </summary>
     public bool AddOwnerToBuilding(Character potentialOwner, Building targetBuilding)
     {
-        Character thisCharacter = GetComponent<Character>();
-
-        bool isAlreadyOwner = OwnedBuildings.Contains(targetBuilding) || targetBuilding.Owners.Contains(thisCharacter);
+        bool isAlreadyOwner = OwnedBuildings.Contains(targetBuilding) || targetBuilding.Owners.Contains(_character);
         bool isUnownedBuilding = targetBuilding.Owners.Count == 0;
 
         if (isAlreadyOwner || isUnownedBuilding)

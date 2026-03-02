@@ -9,14 +9,11 @@ public class ResidentialBuilding : Building
 {
     public override BuildingType BuildingType => BuildingType.Residential;
 
-    [Header("Residential (For Simple House)")]
-    [SerializeField] private List<Character> _residents = new List<Character>();
-
     public List<ApartmentRoom> Apartments => GetRoomsOfType<ApartmentRoom>();
 
-    public Character Owner => _owners.Count > 0 ? _owners[0] : null;
+    public Character Owner => _roomOwners.Count > 0 ? _roomOwners[0] : null;
 
-    public IReadOnlyList<Character> Residents
+    public new IReadOnlyList<Character> Residents
     {
         get
         {
@@ -30,7 +27,7 @@ public class ResidentialBuilding : Building
                 }
                 return allResidents;
             }
-            return _residents;
+            return _roomResidents;
         }
     }
 
@@ -41,19 +38,25 @@ public class ResidentialBuilding : Building
 
     public void SetOwner(Character newOwner)
     {
-        _owners.Clear();
+        // _roomOwners inherited from Room via Building/ComplexRoom
+        _roomOwners.Clear();
         if (newOwner != null)
         {
             AddOwner(newOwner);
-            if (!_residents.Contains(newOwner))
+            if (!_roomResidents.Contains(newOwner))
             {
-                _residents.Add(newOwner);
+                _roomResidents.Add(newOwner);
             }
         }
         Debug.Log($"<color=green>[Building]</color> {newOwner?.CharacterName} est maintenant propriétaire de {buildingName}.");
     }
 
-    public bool AddResident(Character resident, ApartmentRoom targetRoom = null)
+    public override bool AddResident(Character resident)
+    {
+        return AddResident(resident, null);
+    }
+
+    public bool AddResident(Character resident, ApartmentRoom targetRoom)
     {
         if (resident == null || IsResident(resident)) return false;
 
@@ -87,12 +90,12 @@ public class ResidentialBuilding : Building
             return false;
         }
 
-        _residents.Add(resident);
+        _roomResidents.Add(resident);
         Debug.Log($"<color=green>[Building]</color> {resident.CharacterName} habite maintenant à {buildingName}.");
         return true;
     }
 
-    public bool RemoveResident(Character resident)
+    public override bool RemoveResident(Character resident)
     {
         if (resident == null || !IsResident(resident)) return false;
 
@@ -113,19 +116,19 @@ public class ResidentialBuilding : Building
             return false;
         }
 
-        _residents.Remove(resident);
+        _roomResidents.Remove(resident);
 
         // Si le résident retiré était le propriétaire, transférer ou vider
         if (Owner == resident)
         {
-            SetOwner(_residents.Count > 0 ? _residents[0] : null);
+            SetOwner(_roomResidents.Count > 0 ? _roomResidents[0] : null);
         }
 
         Debug.Log($"<color=green>[Building]</color> {resident.CharacterName} a quitté {buildingName}.");
         return true;
     }
 
-    public bool IsResident(Character character)
+    public override bool IsResident(Character character)
     {
         if (character == null) return false;
         
@@ -139,6 +142,6 @@ public class ResidentialBuilding : Building
             return false;
         }
 
-        return _residents.Contains(character);
+        return _roomResidents.Contains(character);
     }
 }

@@ -8,6 +8,27 @@ public class ComplexRoom : Room
 
     public IReadOnlyList<Room> SubRooms => _subRooms;
 
+    public override bool IsResident(Character character)
+    {
+        if (base.IsResident(character)) return true;
+
+        foreach (var subRoom in _subRooms)
+        {
+            if (subRoom.IsResident(character)) return true;
+        }
+
+        return false;
+    }
+
+    public void AddResidentToAllSubRooms(Character resident)
+    {
+        AddResident(resident);
+        foreach (var subRoom in _subRooms)
+        {
+            subRoom.AddResident(resident);
+        }
+    }
+
     public void AddSubRoom(Room room)
     {
         if (room != null && !_subRooms.Contains(room))

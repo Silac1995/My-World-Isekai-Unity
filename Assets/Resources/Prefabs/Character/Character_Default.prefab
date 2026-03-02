@@ -732,6 +732,7 @@ MonoBehaviour:
   _characterSchedule: {fileID: 8656923019881374110}
   _characterSkills: {fileID: 2759972866297852151}
   _characterMentorship: {fileID: 7383321509428321023}
+  _characterLocations: {fileID: 4198040619971064388}
 --- !u!114 &2677209831397210094
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -910,6 +911,10 @@ MonoBehaviour:
     baseValue: 0
     currentValue: 0
     maxValue: 0
+  charisma:
+    baseValue: 0
+    currentValue: 0
+    maxValue: 0
   physicalPower:
     baseValue: 0
     currentValue: 0
@@ -994,10 +999,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: de90f5951359f294a9776f9c90b81ed1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CharacterLocations
+  _character: {fileID: 2536622428659117900}
   homeZone: {fileID: 0}
   workZone: {fileID: 0}
   homeBuilding: {fileID: 0}
   workBuilding: {fileID: 0}
+  OwnedBuildings: []
+  ResidentRooms: []
 --- !u!1 &4775004607268511839
 GameObject:
   m_ObjectHideFlags: 0
@@ -1237,6 +1245,11 @@ MonoBehaviour:
   _learningSubject: {fileID: 0}
   _learningProgress: 0
   _isCurrentlyTeaching: 0
+  _hostedClasses: []
+  _currentActiveClass:
+    _mentor: {fileID: 0}
+    _teachingSubject: {fileID: 0}
+    _enrolledStudents: []
   _mentorClassZonePrefab: {fileID: 1486305583445089330, guid: 17ba6025ed6c68649864a3f5c1d8427c, type: 3}
 --- !u!1 &6033310835848199150
 GameObject:

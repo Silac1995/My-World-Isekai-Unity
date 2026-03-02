@@ -8,14 +8,19 @@ public class Room : Zone
 {
     [Header("Room Info")]
     [SerializeField] protected string _roomName;
-    [SerializeField] protected List<Character> _owners = new List<Character>();
-    [SerializeField] protected List<Character> _residents = new List<Character>();
+    [SerializeField] protected List<Character> _roomOwners = new List<Character>();
+    [SerializeField] protected List<Character> _roomResidents = new List<Character>();
 
     protected FurnitureManager _furnitureManager;
 
     public string RoomName => _roomName;
-    public IReadOnlyList<Character> Owners => _owners;
-    public IReadOnlyList<Character> Residents => _residents;
+    public IReadOnlyList<Character> Owners => _roomOwners;
+    public IReadOnlyList<Character> Residents => _roomResidents;
+    
+    public virtual bool IsResident(Character character)
+    {
+        return character != null && _roomResidents.Contains(character);
+    }
     public FurnitureManager FurnitureManager => _furnitureManager;
     // Helper to get the grid from the manager for quick access
     public FurnitureGrid Grid => _furnitureManager != null ? _furnitureManager.Grid : null;
@@ -52,33 +57,37 @@ public class Room : Zone
 
     public void AddOwner(Character owner)
     {
-        if (owner != null && !_owners.Contains(owner))
+        if (owner != null && !_roomOwners.Contains(owner))
         {
-            _owners.Add(owner);
+            _roomOwners.Add(owner);
         }
     }
 
     public void RemoveOwner(Character owner)
     {
-        if (owner != null && _owners.Contains(owner))
+        if (owner != null && _roomOwners.Contains(owner))
         {
-            _owners.Remove(owner);
+            _roomOwners.Remove(owner);
         }
     }
 
-    public void AddResident(Character resident)
+    public virtual bool AddResident(Character resident)
     {
-        if (resident != null && !_residents.Contains(resident))
+        if (resident != null && !_roomResidents.Contains(resident))
         {
-            _residents.Add(resident);
+            _roomResidents.Add(resident);
+            return true;
         }
+        return false;
     }
 
-    public void RemoveResident(Character resident)
+    public virtual bool RemoveResident(Character resident)
     {
-        if (resident != null && _residents.Contains(resident))
+        if (resident != null && _roomResidents.Contains(resident))
         {
-            _residents.Remove(resident);
+            _roomResidents.Remove(resident);
+            return true;
         }
+        return false;
     }
 }

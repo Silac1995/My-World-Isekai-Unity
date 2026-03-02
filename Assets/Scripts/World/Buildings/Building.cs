@@ -26,28 +26,22 @@ public class Building : ComplexRoom
 
     protected override void Awake()
     {
-        base.Awake(); // Will initialize Room and Zone logic (e.g., FurnitureGrid for the building envelope)
+        base.Awake(); // Will initialize Room and Zone logic
         
-        // Auto-populate SubRooms if the user forgot to assign them in the inspector,
-        // specifically searching for direct children rooms.
+        // Auto-populate SubRooms if the user forgot to assign them in the inspector
         if (_subRooms.Count == 0)
         {
-            // On cherche TOUS les Room enfants, MAIS on exclut ce script lui-même (puisqu'un Building EST un Room)
             Room[] childRooms = GetComponentsInChildren<Room>();
             foreach (Room r in childRooms)
             {
-                if (r != this)
-                {
-                    AddSubRoom(r);
-                }
+                if (r != this) AddSubRoom(r);
             }
         }
-        
-        // Si _subRooms.Count == 0, ce n'est pas grave, on considère que le Building est une pièce unique (Room).
     }
 
     protected virtual void Start()
     {
+        // Register in Start to ensure BuildingManager.Instance is initialized
         if (BuildingManager.Instance != null)
         {
             BuildingManager.Instance.RegisterBuilding(this);

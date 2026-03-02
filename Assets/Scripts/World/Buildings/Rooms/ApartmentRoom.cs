@@ -4,31 +4,23 @@ using UnityEngine;
 /// <summary>
 /// A room representing a single apartment within an apartment building.
 /// </summary>
-public class ApartmentRoom : Room
+public class ApartmentRoom : ComplexRoom
 {
-    [Header("Apartment Info")]
-    [SerializeField] private List<Character> _residents = new List<Character>();
+    // _roomResidents and Residents inherited from Room
 
-    public IReadOnlyList<Character> Residents => _residents;
-
-    public bool AddResident(Character resident)
+    public override bool AddResident(Character resident)
     {
-        if (resident == null || _residents.Contains(resident)) return false;
+        if (resident == null || _roomResidents.Contains(resident)) return false;
 
-        _residents.Add(resident);
+        _roomResidents.Add(resident);
         return true;
     }
 
-    public bool RemoveResident(Character resident)
+    public override bool RemoveResident(Character resident)
     {
-        if (resident == null || !_residents.Contains(resident)) return false;
+        if (resident == null || !_roomResidents.Contains(resident)) return false;
 
-        _residents.Remove(resident);
+        _roomResidents.Remove(resident);
         return true;
-    }
-
-    public bool IsResident(Character character)
-    {
-        return character != null && _residents.Contains(character);
     }
 }

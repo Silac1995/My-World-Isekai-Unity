@@ -55,6 +55,7 @@ public class Character : MonoBehaviour
     [SerializeField] private CharacterSchedule _characterSchedule;
     [SerializeField] private CharacterSkills _characterSkills;
     [SerializeField] private CharacterMentorship _characterMentorship;
+    [SerializeField] private CharacterLocations _characterLocations;
     #endregion
 
     #region Private Fields
@@ -112,6 +113,7 @@ public class Character : MonoBehaviour
     public CharacterSchedule CharacterSchedule => _characterSchedule;
     public CharacterSkills CharacterSkills => _characterSkills;
     public CharacterMentorship CharacterMentorship => _characterMentorship;
+    public CharacterLocations CharacterLocations => _characterLocations;
 
     public NavMeshAgent NavMesh => _cachedNavMeshAgent;
     public TimeManager TimeManager => _timeManager != null ? _timeManager : TimeManager.Instance;
@@ -158,6 +160,7 @@ public class Character : MonoBehaviour
         if (_characterSchedule == null) _characterSchedule = GetComponentInChildren<CharacterSchedule>();
         if (_characterSkills == null) _characterSkills = GetComponent<CharacterSkills>();
         if (_characterMentorship == null) _characterMentorship = GetComponent<CharacterMentorship>();
+        if (_characterLocations == null) _characterLocations = GetComponent<CharacterLocations>();
         
         _cachedNavMeshAgent = GetComponent<NavMeshAgent>();
         _isDead = false;

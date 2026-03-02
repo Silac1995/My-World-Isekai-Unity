@@ -191,21 +191,52 @@ public class SpawnManager : MonoBehaviour
         // --- DEBUG : ASSIGNATION AUTOMATIQUE DE RÉSIDENCE ---
         if (BuildingManager.Instance != null && BuildingManager.Instance.allBuildings != null)
         {
-            foreach (var b in BuildingManager.Instance.allBuildings)
+            int totalBuildings = BuildingManager.Instance.allBuildings.Count;
+            if (totalBuildings == 0)
             {
-                if (b is ResidentialBuilding resBuilding && resBuilding.Owners.Count == 0)
+                Debug.LogWarning($"<color=orange>[SpawnManager]</color> Aucun bâtiment n'est enregistré dans le BuildingManager ! {character.CharacterName} reste sans maison.");
+            }
+            else
+            {
+                bool buildingFound = false;
+                foreach (var b in BuildingManager.Instance.allBuildings)
                 {
-                    if (character.CharacterLocations != null)
+                    if (b is ResidentialBuilding resBuilding)
                     {
-                        character.CharacterLocations.ReceiveOwnership(resBuilding);
+                        if (resBuilding.Owners.Count == 0)
+                        {
+                            if (character.CharacterLocations != null)
+                            {
+                                character.CharacterLocations.ReceiveOwnership(resBuilding);
+                                Debug.Log($"<color=green>[SpawnManager]</color> {character.CharacterName} est maintenant propriétaire de {resBuilding.BuildingName}.");
+                                buildingFound = true;
+                                break;
+                            }
+                            else
+                            {
+                                Debug.LogWarning($"<color=orange>[SpawnManager]</color> {character.CharacterName} n'a pas de composant CharacterLocations !");
+                            }
+                        }
+                        else
+                        {
+                            Debug.Log($"[SpawnManager] Bâtiment {resBuilding.BuildingName} ignoré car il a déjà {resBuilding.Owners.Count} propriétaire(s).");
+                        }
                     }
                     else
                     {
-                        Debug.LogWarning($"<color=orange>[Spawn - Debug]</color> {character.CharacterName} n'a pas de composant CharacterLocations !");
+                        Debug.Log($"[SpawnManager] Bâtiment {b.BuildingName} ignoré car c'est un {b.BuildingType} (non résidentiel).");
                     }
-                    break;
+                }
+
+                if (!buildingFound)
+                {
+                    Debug.LogWarning($"<color=orange>[SpawnManager]</color> Aucun bâtiment résidentiel libre trouvé parmi les {totalBuildings} bâtiments enregistrés.");
                 }
             }
+        }
+        else
+        {
+            Debug.LogError("[SpawnManager] BuildingManager.Instance est null ou la liste des bâtiments est manquante.");
         }
 
         return character;
