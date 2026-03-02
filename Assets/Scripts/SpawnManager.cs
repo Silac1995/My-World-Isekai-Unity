@@ -195,8 +195,14 @@ public class SpawnManager : MonoBehaviour
             {
                 if (b is ResidentialBuilding resBuilding && resBuilding.Owners.Count == 0)
                 {
-                    resBuilding.SetOwner(character);
-                    Debug.Log($"<color=green>[Spawn - Debug]</color> {character.CharacterName} a automatiquement reçu la propriété de {resBuilding.BuildingName}.");
+                    if (character.CharacterLocations != null)
+                    {
+                        character.CharacterLocations.ReceiveOwnership(resBuilding);
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"<color=orange>[Spawn - Debug]</color> {character.CharacterName} n'a pas de composant CharacterLocations !");
+                    }
                     break;
                 }
             }

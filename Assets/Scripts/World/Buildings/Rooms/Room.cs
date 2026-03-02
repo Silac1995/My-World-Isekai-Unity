@@ -9,11 +9,13 @@ public class Room : Zone
     [Header("Room Info")]
     [SerializeField] protected string _roomName;
     [SerializeField] protected List<Character> _owners = new List<Character>();
+    [SerializeField] protected List<Character> _residents = new List<Character>();
 
     protected FurnitureManager _furnitureManager;
 
     public string RoomName => _roomName;
     public IReadOnlyList<Character> Owners => _owners;
+    public IReadOnlyList<Character> Residents => _residents;
     public FurnitureManager FurnitureManager => _furnitureManager;
     // Helper to get the grid from the manager for quick access
     public FurnitureGrid Grid => _furnitureManager != null ? _furnitureManager.Grid : null;
@@ -61,6 +63,22 @@ public class Room : Zone
         if (owner != null && _owners.Contains(owner))
         {
             _owners.Remove(owner);
+        }
+    }
+
+    public void AddResident(Character resident)
+    {
+        if (resident != null && !_residents.Contains(resident))
+        {
+            _residents.Add(resident);
+        }
+    }
+
+    public void RemoveResident(Character resident)
+    {
+        if (resident != null && _residents.Contains(resident))
+        {
+            _residents.Remove(resident);
         }
     }
 }
