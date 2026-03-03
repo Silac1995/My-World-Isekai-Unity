@@ -254,19 +254,9 @@ public abstract class CharacterGameController : MonoBehaviour
         // Sol
         Animator.SetBool(CharacterAnimator.IsGrounded, _characterMovement.IsGrounded());
 
-        // --- Walk Backward : le NPC se déplace à l'opposé de son look target ---
-        bool isWalkingBackward = false;
-        if (speed > 0.1f && _characterVisual != null && _characterVisual.HasLookTarget)
-        {
-            float moveX = velocity.x;
-            float facingDir = _characterVisual.IsFacingRight ? 1f : -1f;
-
-            if (Mathf.Abs(moveX) > 0.1f && Mathf.Sign(moveX) != Mathf.Sign(facingDir))
-            {
-                isWalkingBackward = true;
-            }
-        }
-        _character.CharacterVisual?.CharacterAnimator?.SetWalkingBackward(isWalkingBackward);
+        // --- Walk Forward/Backward ---
+        // On délègue le calcul des paramètres de direction à CharacterVisual
+        _characterVisual?.UpdateWalkingParameters(velocity);
     }
 
     protected virtual void UpdateFlip()

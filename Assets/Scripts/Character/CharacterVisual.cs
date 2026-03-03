@@ -267,7 +267,53 @@ public class CharacterVisual : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Détermine si le personnage marche vers l'avant ou l'arrière par rapport à son orientation.
+    /// Utilisé principalement quand un LookTarget est actif.
+    /// </summary>
+    public void UpdateWalkingParameters(Vector3 velocity)
+    {
+        if (_characterAnimator == null) return;
 
+        float speed = new Vector3(velocity.x, 0, velocity.z).magnitude;
+        bool isWalkingForward = false;
+        bool isWalkingBackward = false;
+
+        if (speed > 0.1f)
+        {
+            if (_lookTarget != null)
+            {
+                float moveX = velocity.x;
+                float facingDir = isFacingRight ? 1f : -1f;
+
+                if (Mathf.Abs(moveX) > 0.1f)
+                {
+                    // Si le mouvement X est dans le même sens que l'orientation -> Forward
+                    // Sinon -> Backward
+                    if (Mathf.Sign(moveX) == Mathf.Sign(facingDir))
+                        isWalkingForward = true;
+                    else
+                        isWalkingBackward = true;
+                }
+                else
+                {
+                    // Mouvement purement vertical (Z) alors qu'on regarde une cible sur le côté
+                    // On considère ça comme une marche avant par défaut
+                    isWalkingForward = true;
+                }
+            }
+            else
+            {
+                // Pas de cible : marche normale vers l'avant
+                isWalkingForward = true;
+            }
+        }
+
+        _characterAnimator.SetWalkingForward(isWalkingForward);
+        _characterAnimator.SetWalkingBackward(isWalkingBackward);
+    }
+
+    public bool HasALookTarget() => _lookTarget != null;
 
     private void ApplyFlip()
 

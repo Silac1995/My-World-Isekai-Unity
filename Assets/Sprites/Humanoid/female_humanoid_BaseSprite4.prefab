@@ -220,6 +220,14 @@ PrefabInstance:
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
       objectReference: {fileID: -876546973899608171, guid: 2d92f20263de6f142ab007d4720101c7, type: 3}
+    - target: {fileID: -7085144782045429845, guid: 9c6fbf50fb4c3e4469a6564d0ab60a76, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 2.1492224
+      objectReference: {fileID: 0}
+    - target: {fileID: -7085144782045429845, guid: 9c6fbf50fb4c3e4469a6564d0ab60a76, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0.013161838
+      objectReference: {fileID: 0}
     - target: {fileID: -6523992257907869085, guid: 9c6fbf50fb4c3e4469a6564d0ab60a76, type: 3}
       propertyPath: m_Name
       value: Skin_Mouth
@@ -227,6 +235,10 @@ PrefabInstance:
     - target: {fileID: -5837869187061898383, guid: 9c6fbf50fb4c3e4469a6564d0ab60a76, type: 3}
       propertyPath: m_BoneTransforms.Array.size
       value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: -5569231794578572364, guid: 9c6fbf50fb4c3e4469a6564d0ab60a76, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: -0.1567774
       objectReference: {fileID: 0}
     - target: {fileID: -5126600936871768863, guid: 9c6fbf50fb4c3e4469a6564d0ab60a76, type: 3}
       propertyPath: m_Sprite
@@ -1824,6 +1836,7 @@ SortingGroup:
   m_SortingLayer: 1
   m_SortingOrder: 10
   m_SortAtRoot: 0
+  m_Sort3DAs2D: 0
 --- !u!1 &102031348321328830 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 1094418732684582965, guid: 9c6fbf50fb4c3e4469a6564d0ab60a76, type: 3}
@@ -1871,6 +1884,7 @@ SortingGroup:
   m_SortingLayer: 1
   m_SortingOrder: 34
   m_SortAtRoot: 0
+  m_Sort3DAs2D: 0
 --- !u!1 &209883367026919789 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: -8308029439511349274, guid: 9c6fbf50fb4c3e4469a6564d0ab60a76, type: 3}
@@ -1918,6 +1932,7 @@ SortingGroup:
   m_SortingLayer: 1
   m_SortingOrder: 34
   m_SortAtRoot: 0
+  m_Sort3DAs2D: 0
 --- !u!1 &527555085993187522 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: -8572579353772939703, guid: 9c6fbf50fb4c3e4469a6564d0ab60a76, type: 3}
@@ -1965,6 +1980,7 @@ SortingGroup:
   m_SortingLayer: 1
   m_SortingOrder: 36
   m_SortAtRoot: 0
+  m_Sort3DAs2D: 0
 --- !u!1 &701887742015545142 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: -8653719598885068355, guid: 9c6fbf50fb4c3e4469a6564d0ab60a76, type: 3}
@@ -2039,6 +2055,7 @@ SortingGroup:
   m_SortingLayer: 1
   m_SortingOrder: 33
   m_SortAtRoot: 0
+  m_Sort3DAs2D: 0
 --- !u!4 &826470473769586841 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 369966374786018834, guid: 9c6fbf50fb4c3e4469a6564d0ab60a76, type: 3}
@@ -2091,6 +2108,7 @@ SortingGroup:
   m_SortingLayer: 1
   m_SortingOrder: 42
   m_SortAtRoot: 0
+  m_Sort3DAs2D: 0
 --- !u!1 &1112328295699484737 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 87147568632409802, guid: 9c6fbf50fb4c3e4469a6564d0ab60a76, type: 3}
@@ -2108,6 +2126,7 @@ SortingGroup:
   m_SortingLayer: 1
   m_SortingOrder: 25
   m_SortAtRoot: 0
+  m_Sort3DAs2D: 0
 --- !u!1 &1140386566105700613 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: -9112713358631721074, guid: 9c6fbf50fb4c3e4469a6564d0ab60a76, type: 3}
@@ -2125,6 +2144,7 @@ SortingGroup:
   m_SortingLayer: 1
   m_SortingOrder: 30
   m_SortAtRoot: 0
+  m_Sort3DAs2D: 0
 --- !u!1 &1761955087115385758 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 1597067166944019733, guid: 9c6fbf50fb4c3e4469a6564d0ab60a76, type: 3}
@@ -2142,6 +2162,7 @@ SortingGroup:
   m_SortingLayer: 1
   m_SortingOrder: 44
   m_SortAtRoot: 0
+  m_Sort3DAs2D: 0
 --- !u!1 &1886082273977121099 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 1474613475430238144, guid: 9c6fbf50fb4c3e4469a6564d0ab60a76, type: 3}
@@ -2189,6 +2210,7 @@ SortingGroup:
   m_SortingLayer: 1
   m_SortingOrder: 35
   m_SortAtRoot: 0
+  m_Sort3DAs2D: 0
 --- !u!1 &1994921353614108692 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: -7641141167499405665, guid: 9c6fbf50fb4c3e4469a6564d0ab60a76, type: 3}
@@ -2206,6 +2228,7 @@ SortingGroup:
   m_SortingLayer: 1
   m_SortingOrder: 15
   m_SortAtRoot: 0
+  m_Sort3DAs2D: 0
 --- !u!4 &2212199219427939287 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -8004836586041561764, guid: 9c6fbf50fb4c3e4469a6564d0ab60a76, type: 3}
@@ -2228,6 +2251,7 @@ SortingGroup:
   m_SortingLayer: 1
   m_SortingOrder: 45
   m_SortAtRoot: 0
+  m_Sort3DAs2D: 0
 --- !u!1 &2612414513715616103 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 3034157148374247404, guid: 9c6fbf50fb4c3e4469a6564d0ab60a76, type: 3}
@@ -2245,6 +2269,7 @@ SortingGroup:
   m_SortingLayer: 1
   m_SortingOrder: 31
   m_SortAtRoot: 0
+  m_Sort3DAs2D: 0
 --- !u!1 &2637482796636440633 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 3080581237571532466, guid: 9c6fbf50fb4c3e4469a6564d0ab60a76, type: 3}
@@ -2262,6 +2287,7 @@ SortingGroup:
   m_SortingLayer: 1
   m_SortingOrder: 27
   m_SortAtRoot: 0
+  m_Sort3DAs2D: 0
 --- !u!1 &2839467837138435945 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 2971676487526072802, guid: 9c6fbf50fb4c3e4469a6564d0ab60a76, type: 3}
@@ -2279,6 +2305,7 @@ SortingGroup:
   m_SortingLayer: 1
   m_SortingOrder: 13
   m_SortAtRoot: 0
+  m_Sort3DAs2D: 0
 --- !u!4 &3043916946960345938 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 2622360128171267545, guid: 9c6fbf50fb4c3e4469a6564d0ab60a76, type: 3}
@@ -2351,6 +2378,7 @@ SortingGroup:
   m_SortingLayer: 1
   m_SortingOrder: 36
   m_SortAtRoot: 0
+  m_Sort3DAs2D: 0
 --- !u!1 &3257299641562401748 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 2553000258439394655, guid: 9c6fbf50fb4c3e4469a6564d0ab60a76, type: 3}
@@ -2368,6 +2396,7 @@ SortingGroup:
   m_SortingLayer: 1
   m_SortingOrder: 28
   m_SortAtRoot: 0
+  m_Sort3DAs2D: 0
 --- !u!1 &3415515478805616117 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 2394804263669312382, guid: 9c6fbf50fb4c3e4469a6564d0ab60a76, type: 3}
@@ -2415,6 +2444,7 @@ SortingGroup:
   m_SortingLayer: 1
   m_SortingOrder: 31
   m_SortAtRoot: 0
+  m_Sort3DAs2D: 0
 --- !u!1 &3455963166899985089 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 2426411888997786698, guid: 9c6fbf50fb4c3e4469a6564d0ab60a76, type: 3}
@@ -2462,6 +2492,7 @@ SortingGroup:
   m_SortingLayer: 1
   m_SortingOrder: 43
   m_SortAtRoot: 0
+  m_Sort3DAs2D: 0
 --- !u!1 &3508485628331289280 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 4533701946886378571, guid: 9c6fbf50fb4c3e4469a6564d0ab60a76, type: 3}
@@ -2509,6 +2540,7 @@ SortingGroup:
   m_SortingLayer: 1
   m_SortingOrder: 36
   m_SortAtRoot: 0
+  m_Sort3DAs2D: 0
 --- !u!1 &3790044392141257185 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: -4989243217932368022, guid: 9c6fbf50fb4c3e4469a6564d0ab60a76, type: 3}
@@ -2556,6 +2588,7 @@ SortingGroup:
   m_SortingLayer: 1
   m_SortingOrder: 35
   m_SortAtRoot: 0
+  m_Sort3DAs2D: 0
 --- !u!1 &4368770819834807052 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 3673434368779468167, guid: 9c6fbf50fb4c3e4469a6564d0ab60a76, type: 3}
@@ -2603,6 +2636,7 @@ SortingGroup:
   m_SortingLayer: 1
   m_SortingOrder: 35
   m_SortAtRoot: 0
+  m_Sort3DAs2D: 0
 --- !u!1 &4530290604579509343 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 3496068452586056404, guid: 9c6fbf50fb4c3e4469a6564d0ab60a76, type: 3}
@@ -2620,6 +2654,7 @@ SortingGroup:
   m_SortingLayer: 1
   m_SortingOrder: 26
   m_SortAtRoot: 0
+  m_Sort3DAs2D: 0
 --- !u!4 &4709943145054320527 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -3528780694926358268, guid: 9c6fbf50fb4c3e4469a6564d0ab60a76, type: 3}
@@ -2642,6 +2677,7 @@ SortingGroup:
   m_SortingLayer: 1
   m_SortingOrder: 14
   m_SortAtRoot: 0
+  m_Sort3DAs2D: 0
 --- !u!4 &4984822560401965968 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -3785291686204408549, guid: 9c6fbf50fb4c3e4469a6564d0ab60a76, type: 3}
@@ -2699,6 +2735,7 @@ SortingGroup:
   m_SortingLayer: 1
   m_SortingOrder: 32
   m_SortAtRoot: 0
+  m_Sort3DAs2D: 0
 --- !u!4 &6011710937762264165 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -2506332570402075922, guid: 9c6fbf50fb4c3e4469a6564d0ab60a76, type: 3}
@@ -2721,6 +2758,7 @@ SortingGroup:
   m_SortingLayer: 1
   m_SortingOrder: 9
   m_SortAtRoot: 0
+  m_Sort3DAs2D: 0
 --- !u!1 &6439657214377550509 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: -2953210238421541850, guid: 9c6fbf50fb4c3e4469a6564d0ab60a76, type: 3}
@@ -2768,6 +2806,7 @@ SortingGroup:
   m_SortingLayer: 1
   m_SortingOrder: 28
   m_SortAtRoot: 0
+  m_Sort3DAs2D: 0
 --- !u!1 &6572631459191414050 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: -3067802865092369495, guid: 9c6fbf50fb4c3e4469a6564d0ab60a76, type: 3}
@@ -2785,6 +2824,7 @@ SortingGroup:
   m_SortingLayer: 1
   m_SortingOrder: 24
   m_SortAtRoot: 0
+  m_Sort3DAs2D: 0
 --- !u!1 &7075738637645679992 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: -1411801259098786829, guid: 9c6fbf50fb4c3e4469a6564d0ab60a76, type: 3}
@@ -2832,6 +2872,7 @@ SortingGroup:
   m_SortingLayer: 1
   m_SortingOrder: 13
   m_SortAtRoot: 0
+  m_Sort3DAs2D: 0
 --- !u!1 &7459997656837657680 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: -1595003616138548517, guid: 9c6fbf50fb4c3e4469a6564d0ab60a76, type: 3}
@@ -2879,6 +2920,7 @@ SortingGroup:
   m_SortingLayer: 1
   m_SortingOrder: 33
   m_SortAtRoot: 0
+  m_Sort3DAs2D: 0
 --- !u!1 &7530325656810120111 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: -1811779963561812700, guid: 9c6fbf50fb4c3e4469a6564d0ab60a76, type: 3}
@@ -2926,6 +2968,7 @@ SortingGroup:
   m_SortingLayer: 1
   m_SortingOrder: 12
   m_SortAtRoot: 0
+  m_Sort3DAs2D: 0
 --- !u!1 &7566803440192157432 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: -1776393723051227021, guid: 9c6fbf50fb4c3e4469a6564d0ab60a76, type: 3}
@@ -2943,6 +2986,7 @@ SortingGroup:
   m_SortingLayer: 1
   m_SortingOrder: 29
   m_SortAtRoot: 0
+  m_Sort3DAs2D: 0
 --- !u!1 &8034912007597413151 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: -2171886109816361580, guid: 9c6fbf50fb4c3e4469a6564d0ab60a76, type: 3}
@@ -2990,6 +3034,7 @@ SortingGroup:
   m_SortingLayer: 1
   m_SortingOrder: 33
   m_SortAtRoot: 0
+  m_Sort3DAs2D: 0
 --- !u!1 &8358232483674313939 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: -169943980843275688, guid: 9c6fbf50fb4c3e4469a6564d0ab60a76, type: 3}
@@ -3037,6 +3082,7 @@ SortingGroup:
   m_SortingLayer: 1
   m_SortingOrder: 34
   m_SortAtRoot: 0
+  m_Sort3DAs2D: 0
 --- !u!1 &8418849101792882098 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 8831442691556119353, guid: 9c6fbf50fb4c3e4469a6564d0ab60a76, type: 3}
@@ -3054,6 +3100,7 @@ SortingGroup:
   m_SortingLayer: 1
   m_SortingOrder: 8
   m_SortAtRoot: 0
+  m_Sort3DAs2D: 0
 --- !u!1 &8515452362750878362 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 8680303727196888081, guid: 9c6fbf50fb4c3e4469a6564d0ab60a76, type: 3}
@@ -3071,6 +3118,7 @@ SortingGroup:
   m_SortingLayer: 1
   m_SortingOrder: 11
   m_SortAtRoot: 0
+  m_Sort3DAs2D: 0
 --- !u!4 &8529567790897924515 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -574973904728967384, guid: 9c6fbf50fb4c3e4469a6564d0ab60a76, type: 3}
@@ -3123,6 +3171,7 @@ SortingGroup:
   m_SortingLayer: 1
   m_SortingOrder: 33
   m_SortAtRoot: 0
+  m_Sort3DAs2D: 0
 --- !u!1 &8805159491909950857 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: -835310981404646654, guid: 9c6fbf50fb4c3e4469a6564d0ab60a76, type: 3}
@@ -3170,6 +3219,7 @@ SortingGroup:
   m_SortingLayer: 1
   m_SortingOrder: 36
   m_SortAtRoot: 0
+  m_Sort3DAs2D: 0
 --- !u!1 &9072466704968808282 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: -883351391132825135, guid: 9c6fbf50fb4c3e4469a6564d0ab60a76, type: 3}
@@ -3217,6 +3267,7 @@ SortingGroup:
   m_SortingLayer: 1
   m_SortingOrder: 34
   m_SortAtRoot: 0
+  m_Sort3DAs2D: 0
 --- !u!1 &9114145432886588577 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 8079921768558692906, guid: 9c6fbf50fb4c3e4469a6564d0ab60a76, type: 3}
@@ -3234,6 +3285,7 @@ SortingGroup:
   m_SortingLayer: 1
   m_SortingOrder: 26
   m_SortAtRoot: 0
+  m_Sort3DAs2D: 0
 --- !u!4 &9163900710957809210 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 8175972680122613937, guid: 9c6fbf50fb4c3e4469a6564d0ab60a76, type: 3}

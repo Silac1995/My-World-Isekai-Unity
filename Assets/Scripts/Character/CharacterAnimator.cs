@@ -55,12 +55,19 @@ public class CharacterAnimator : MonoBehaviour
         _animator.SetFloat(VelocityX, 0f);
         _animator.SetBool(IsWalking, false);
         _animator.SetBool(IsWalkingBackward, false);
+        _animator.SetBool(IsWalkingForward, false);
     }
 
     public void SetWalkingBackward(bool backward)
     {
         if (_animator != null)
             _animator.SetBool(IsWalkingBackward, backward);
+    }
+
+    public void SetWalkingForward(bool forward)
+    {
+        if (_animator != null)
+            _animator.SetBool(IsWalkingForward, forward);
     }
 
     public void SetCombat(bool combat)
@@ -124,6 +131,7 @@ public class CharacterAnimator : MonoBehaviour
     public static readonly int IsDoingAction = Animator.StringToHash("isDoingAction");
     public static readonly int IsWalking = Animator.StringToHash("isWalking");
     public static readonly int IsWalkingBackward = Animator.StringToHash("isWalkingBackward");
+    public static readonly int IsWalkingForward = Animator.StringToHash("isWalkingForward");
     public static readonly int IsDead = Animator.StringToHash("isDead");
     public static readonly int IsCombat = Animator.StringToHash("isCombat");
 
