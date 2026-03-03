@@ -4,7 +4,7 @@ using UnityEngine.AI;
 using Unity.AI.Navigation;
 
 [RequireComponent(typeof(BoxCollider))]
-[RequireComponent(typeof(NavMeshModifier))]
+[RequireComponent(typeof(NavMeshModifierVolume))]
 public class Zone : MonoBehaviour
 {
     public ZoneType zoneType;
@@ -14,7 +14,7 @@ public class Zone : MonoBehaviour
     [SerializeField] private Transform _boundsTarget;
 
     protected BoxCollider _boxCollider;
-    protected List<GameObject> _charactersInside = new List<GameObject>();
+    protected HashSet<GameObject> _charactersInside = new HashSet<GameObject>();
 
     protected virtual void Awake()
     {
@@ -26,11 +26,7 @@ public class Zone : MonoBehaviour
     {
         if (other.CompareTag("Character"))
         {
-            GameObject charObj = other.gameObject;
-            if (!_charactersInside.Contains(charObj))
-            {
-                _charactersInside.Add(charObj);
-            }
+            _charactersInside.Add(other.gameObject);
         }
     }
 

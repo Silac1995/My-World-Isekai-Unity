@@ -9,6 +9,7 @@ public class Furniture : MonoBehaviour
 {
     [Header("Furniture Info")]
     [SerializeField] private string _furnitureName;
+    [SerializeField] private FurnitureTag _furnitureTag = FurnitureTag.None;
     [SerializeField] private Transform _interactionPoint;
     [SerializeField] private Vector2Int _sizeInCells = new Vector2Int(0, 0);
 
@@ -16,6 +17,7 @@ public class Furniture : MonoBehaviour
     private bool _sizeCalculated = false;
 
     public string FurnitureName => _furnitureName;
+    public FurnitureTag FurnitureTag => _furnitureTag;
     public Transform InteractionPoint => _interactionPoint;
     public Vector2Int SizeInCells => _sizeInCells;
     public Character Occupant => _occupant;

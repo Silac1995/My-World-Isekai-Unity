@@ -11,7 +11,7 @@ public class ResidentialBuilding : Building
     public override BuildingType BuildingType => BuildingType.Residential;
     public IEnumerable<ApartmentRoom> Apartments => GetRoomsOfType<ApartmentRoom>();
 
-    public Character Owner => _roomOwners.Count > 0 ? _roomOwners[0] : null;
+    public Character Owner => _roomOwners.Count > 0 ? _roomOwners.First() : null;
 
     public new IEnumerable<Character> Residents
     {
@@ -105,7 +105,7 @@ public class ResidentialBuilding : Building
         {
             if (Owner == resident)
             {
-                SetOwner(_roomResidents.Count > 0 ? _roomResidents[0] : null);
+                SetOwner(_roomResidents.Count > 0 ? _roomResidents.First() : null);
             }
             Debug.Log($"<color=green>[Building]</color> {resident.CharacterName} a quitté {buildingName}.");
             return true;

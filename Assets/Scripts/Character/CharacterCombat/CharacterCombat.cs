@@ -16,7 +16,7 @@ public class CharacterCombat : MonoBehaviour
     [SerializeField] private int _bonusMeleeMaxTargets = 0;
 
     public event Action<bool> OnCombatModeChanged;
-    public event Action<float, MeleeDamageType> OnDamageTaken;
+    public event Action<float, DamageType> OnDamageTaken;
     public event Action OnBattleLeft;
 
     [Header("Initiative Scaling")]
@@ -108,21 +108,41 @@ public class CharacterCombat : MonoBehaviour
         return false;
     }
 
-    public bool Attack()
+    public bool Attack(Character target = null)
     {
         if (!_character.IsAlive()) return false;
         
         _lastCombatActionTime = Time.time;
         ChangeCombatMode(true);
-        
-        if (_character.CharacterActions != null)
+
+        if (_character.CharacterActions == null) return false;
+
+        // Si le style actuel est Ranged et que la cible est au-delà de la portée melee, tir à distance
+        if (target != null 
+            && _currentCombatStyleExpertise?.Style is RangedCombatStyleSO rangedStyle)
         {
-            return _character.CharacterActions.ExecuteAction(new CharacterMeleeAttackAction(_character));
+            float distToTarget = Vector3.Distance(_character.transform.position, target.transform.position);
+            if (distToTarget > rangedStyle.MeleeRange)
+            {
+                return RangedAttack(target, rangedStyle);
+            }
         }
-        return false;
+
+        // Sinon, attaque melee (même pour une arme ranged au corps-à-corps)
+        return MeleeAttack();
     }
 
-    public bool MeleeAttack() => Attack();
+    public bool MeleeAttack()
+    {
+        if (_character.CharacterActions == null) return false;
+        return _character.CharacterActions.ExecuteAction(new CharacterMeleeAttackAction(_character));
+    }
+
+    public bool RangedAttack(Character target, RangedCombatStyleSO rangedStyle)
+    {
+        if (_character.CharacterActions == null || target == null || rangedStyle == null) return false;
+        return _character.CharacterActions.ExecuteAction(new CharacterRangedAttackAction(_character, target, rangedStyle));
+    }
 
     public void ToggleCombatMode()
     {
@@ -350,7 +370,10 @@ public class CharacterCombat : MonoBehaviour
     {
         if (_currentCombatStyleExpertise == null || _currentCombatStyleExpertise.Style == null) return;
         
-        GameObject prefab = _currentCombatStyleExpertise.Style.Prefab;
+        // Seuls les styles melee ont un hitbox prefab
+        if (_currentCombatStyleExpertise.Style is not MeleeCombatStyleSO meleeStyle) return;
+
+        GameObject prefab = meleeStyle.HitboxPrefab;
         if (prefab == null) return;
 
         // Positionnement à l'extrémité visuelle selon la direction et centré en Y
@@ -410,7 +433,7 @@ public class CharacterCombat : MonoBehaviour
         }
     }
 
-    public void TakeDamage(float amount, MeleeDamageType type = MeleeDamageType.Blunt)
+    public void TakeDamage(float amount, DamageType type = DamageType.Blunt)
     {
         if (_character.Stats == null || _character.Stats.Health == null) return;
 
@@ -442,7 +465,7 @@ public class CharacterCombat : MonoBehaviour
     }
 
     // Keep compatibility with old single arg call if needed
-    public void TakeDamage(float amount) => TakeDamage(amount, MeleeDamageType.Blunt);
+    public void TakeDamage(float amount) => TakeDamage(amount, DamageType.Blunt);
 
     public void UnlockCombatStyle(CombatStyleSO style)
     {

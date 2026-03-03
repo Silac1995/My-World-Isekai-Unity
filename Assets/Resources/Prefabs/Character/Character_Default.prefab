@@ -1620,11 +1620,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CharacterEquipment
   character: {fileID: 2536622428659117900}
-  _weapon:
-    _itemSO: {fileID: 0}
-    _customizedName: 
-    _primaryColor: {r: 0, g: 0, b: 0, a: 0}
-    _secondaryColor: {r: 0, g: 0, b: 0, a: 0}
   _weaponSocket: {fileID: 0}
   underwearLayer: {fileID: 0}
   clothingLayer: {fileID: 0}
@@ -2258,6 +2253,22 @@ PrefabInstance:
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 6703706041384634746, guid: 9b174f65dcbf8c44a804e02dc7699ddd, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6983920391989430038, guid: 9b174f65dcbf8c44a804e02dc7699ddd, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6983920391989430038, guid: 9b174f65dcbf8c44a804e02dc7699ddd, type: 3}
+      propertyPath: m_AnchorMin.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6983920391989430038, guid: 9b174f65dcbf8c44a804e02dc7699ddd, type: 3}
+      propertyPath: m_AnchoredPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6983920391989430038, guid: 9b174f65dcbf8c44a804e02dc7699ddd, type: 3}
       propertyPath: m_AnchoredPosition.y
       value: 0
       objectReference: {fileID: 0}

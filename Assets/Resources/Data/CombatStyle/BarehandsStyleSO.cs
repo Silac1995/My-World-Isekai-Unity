@@ -1,7 +1,7 @@
 using UnityEngine;
 
 [CreateAssetMenu(fileName = "BarehandsStyleSO", menuName = "Scriptable Objects/Combat Style/Barehands Style")]
-public class BarehandsStyleSO : CombatStyleSO
+public class BarehandsStyleSO : MeleeCombatStyleSO
 {
     public override WeaponType WeaponType => WeaponType.Barehands;
 

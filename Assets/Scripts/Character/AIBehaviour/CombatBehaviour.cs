@@ -139,7 +139,7 @@ public class CombatBehaviour : IAIBehaviour
             if (_readyStartTime <= 0) _readyStartTime = Time.time;
             float timeReady = Time.time - _readyStartTime;
 
-            float attackRange = self.CharacterCombat.CurrentCombatStyleExpertise?.Style?.AttackRange ?? 3.5f;
+            float attackRange = self.CharacterCombat.CurrentCombatStyleExpertise?.Style?.MeleeRange ?? 3.5f;
             float dx = Mathf.Abs(self.transform.position.x - _currentTarget.transform.position.x);
             float zDist = Mathf.Abs(self.transform.position.z - _currentTarget.transform.position.z);
 

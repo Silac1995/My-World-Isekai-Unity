@@ -33,7 +33,13 @@ public enum WeaponType
     None
 }
 
-public enum MeleeDamageType
+public enum WeaponCategory
+{
+    Melee,
+    Ranged
+}
+
+public enum DamageType
 {
     Blunt,
     Slashing,

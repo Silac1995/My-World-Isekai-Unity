@@ -8,13 +8,13 @@ public class WoundDataSO : ScriptableObject
     [Serializable]
     public struct WoundSpriteEntry
     {
-        public MeleeDamageType DamageType;
+        public DamageType DamageType;
         public List<Sprite> Sprites;
     }
 
     public List<WoundSpriteEntry> WoundSprites;
 
-    public Sprite GetRandomSprite(MeleeDamageType type)
+    public Sprite GetRandomSprite(DamageType type)
     {
         var entry = WoundSprites.Find(x => x.DamageType == type);
         if (entry.Sprites != null && entry.Sprites.Count > 0)

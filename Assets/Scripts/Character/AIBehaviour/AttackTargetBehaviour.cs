@@ -25,7 +25,7 @@ public class AttackTargetBehaviour : IAIBehaviour
         if (movement == null) return;
 
         float dist = Vector3.Distance(self.transform.position, _target.transform.position);
-        float attackRange = self.CharacterCombat?.CurrentCombatStyleExpertise?.Style?.AttackRange ?? 3.5f;
+        float attackRange = self.CharacterCombat?.CurrentCombatStyleExpertise?.Style?.MeleeRange ?? 3.5f;
         float zDist = Mathf.Abs(self.transform.position.z - _target.transform.position.z);
 
         if (dist <= attackRange && zDist <= 1.5f)

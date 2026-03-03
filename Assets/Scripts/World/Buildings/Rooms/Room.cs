@@ -8,14 +8,14 @@ public class Room : Zone
 {
     [Header("Room Info")]
     [SerializeField] protected string _roomName;
-    [SerializeField] protected List<Character> _roomOwners = new List<Character>();
-    [SerializeField] protected List<Character> _roomResidents = new List<Character>();
+    [SerializeField] protected HashSet<Character> _roomOwners = new HashSet<Character>();
+    [SerializeField] protected HashSet<Character> _roomResidents = new HashSet<Character>();
 
     protected FurnitureManager _furnitureManager;
 
     public string RoomName => _roomName;
-    public IReadOnlyList<Character> Owners => _roomOwners;
-    public IReadOnlyList<Character> Residents => _roomResidents;
+    public IReadOnlyCollection<Character> Owners => _roomOwners;
+    public IReadOnlyCollection<Character> Residents => _roomResidents;
     
     public virtual bool IsResident(Character character)
     {
@@ -44,8 +44,6 @@ public class Room : Zone
         _furnitureManager.LoadExistingFurniture();
     }
 
-
-
     /// <summary>
     /// Helper to verify if a point is inside the Room's BoxCollider bounds.
     /// </summary>
@@ -57,37 +55,52 @@ public class Room : Zone
 
     public void AddOwner(Character owner)
     {
-        if (owner != null && !_roomOwners.Contains(owner))
-        {
-            _roomOwners.Add(owner);
-        }
+        if (owner != null) _roomOwners.Add(owner);
     }
 
     public void RemoveOwner(Character owner)
     {
-        if (owner != null && _roomOwners.Contains(owner))
-        {
-            _roomOwners.Remove(owner);
-        }
+        if (owner != null) _roomOwners.Remove(owner);
     }
 
     public virtual bool AddResident(Character resident)
     {
-        if (resident != null && !_roomResidents.Contains(resident))
-        {
-            _roomResidents.Add(resident);
-            return true;
-        }
-        return false;
+        if (resident == null) return false;
+        return _roomResidents.Add(resident);
     }
 
     public virtual bool RemoveResident(Character resident)
     {
-        if (resident != null && _roomResidents.Contains(resident))
+        if (resident == null) return false;
+        return _roomResidents.Remove(resident);
+    }
+
+    #region Furniture Tag Queries
+
+    /// <summary>
+    /// Vérifie si cette room contient au moins un meuble avec le tag donné.
+    /// </summary>
+    public virtual bool HasFurnitureWithTag(FurnitureTag tag)
+    {
+        if (_furnitureManager == null) return false;
+        foreach (var f in _furnitureManager.Furnitures)
         {
-            _roomResidents.Remove(resident);
-            return true;
+            if (f != null && f.FurnitureTag == tag) return true;
         }
         return false;
     }
+
+    /// <summary>
+    /// Retourne tous les meubles de cette room qui ont le tag donné.
+    /// </summary>
+    public virtual IEnumerable<Furniture> GetFurnitureByTag(FurnitureTag tag)
+    {
+        if (_furnitureManager == null) yield break;
+        foreach (var f in _furnitureManager.Furnitures)
+        {
+            if (f != null && f.FurnitureTag == tag) yield return f;
+        }
+    }
+
+    #endregion
 }

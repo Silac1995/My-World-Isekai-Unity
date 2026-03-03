@@ -40,7 +40,7 @@ public class CharacterWounds : MonoBehaviour
         }
     }
 
-    private void HandleDamageTaken(float amount, MeleeDamageType type)
+    private void HandleDamageTaken(float amount, DamageType type)
     {
         if (_woundData == null) return;
         Sprite woundSprite = _woundData.GetRandomSprite(type);

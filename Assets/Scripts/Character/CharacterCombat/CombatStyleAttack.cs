@@ -95,7 +95,7 @@ public class CombatStyleAttack : MonoBehaviour
             }
 
             _hitTargets.Add(target);
-            target.CharacterCombat.TakeDamage(damage, _combatStyleSO != null ? _combatStyleSO.DamageType : MeleeDamageType.Blunt);
+            target.CharacterCombat.TakeDamage(damage, _combatStyleSO != null ? _combatStyleSO.DamageType : DamageType.Blunt);
 
             // --- KNOCKBACK ---
             if (_combatStyleSO != null && _combatStyleSO.KnockbackForce > 0)

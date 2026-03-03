@@ -169,4 +169,39 @@ public class ComplexRoom : Room
             }
         }
     }
+
+    #region Furniture Tag Queries (Recursive)
+
+    public override bool HasFurnitureWithTag(FurnitureTag tag)
+    {
+        // Check own room first
+        if (base.HasFurnitureWithTag(tag)) return true;
+
+        // Then check sub-rooms
+        foreach (var subRoom in _subRooms)
+        {
+            if (subRoom.HasFurnitureWithTag(tag)) return true;
+        }
+        return false;
+    }
+
+    public override IEnumerable<Furniture> GetFurnitureByTag(FurnitureTag tag)
+    {
+        // Own room
+        foreach (var f in base.GetFurnitureByTag(tag))
+        {
+            yield return f;
+        }
+
+        // Sub-rooms
+        foreach (var subRoom in _subRooms)
+        {
+            foreach (var f in subRoom.GetFurnitureByTag(tag))
+            {
+                yield return f;
+            }
+        }
+    }
+
+    #endregion
 }

@@ -1,26 +1,11 @@
-using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
 /// A room representing a single apartment within an apartment building.
+/// Inherits all resident management from Room (HashSet-based).
 /// </summary>
 public class ApartmentRoom : ComplexRoom
 {
-    // _roomResidents and Residents inherited from Room
-
-    public override bool AddResident(Character resident)
-    {
-        if (resident == null || _roomResidents.Contains(resident)) return false;
-
-        _roomResidents.Add(resident);
-        return true;
-    }
-
-    public override bool RemoveResident(Character resident)
-    {
-        if (resident == null || !_roomResidents.Contains(resident)) return false;
-
-        _roomResidents.Remove(resident);
-        return true;
-    }
+    // Resident management is fully handled by Room base class.
+    // No overrides needed since HashSet.Add/Remove already return bool.
 }
