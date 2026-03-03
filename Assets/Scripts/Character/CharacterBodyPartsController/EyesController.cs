@@ -1,4 +1,4 @@
-using System.Collections;
+ï»¿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.U2D.Animation;
@@ -57,13 +57,13 @@ public class EyesController : MonoBehaviour
         // On cible le conteneur des sprites (ex: Humanoid_Base)
         Transform spritesContainer = (transform.childCount > 0) ? transform.GetChild(0) : transform;
 
-        // Dictionnaires pour coupler les pièces par côté
+        // Dictionnaires pour coupler les piï¿½ces par cï¿½tï¿½
         var bases = new Dictionary<string, GameObject>();
         var pupils = new Dictionary<string, GameObject>();
         var scleras = new Dictionary<string, GameObject>();
         var eyebrows = new Dictionary<string, GameObject>();
 
-        // On récupère uniquement les objets ayant un SpriteRenderer (on ignore les os/bones)
+        // On rï¿½cupï¿½re uniquement les objets ayant un SpriteRenderer (on ignore les os/bones)
         SpriteRenderer[] allRenderers = spritesContainer.GetComponentsInChildren<SpriteRenderer>(true);
 
         if (debugMode) Debug.Log($"<color=cyan>[EyesController]</color> Scanning {allRenderers.Length} sprites in {spritesContainer.name}...");
@@ -74,20 +74,20 @@ public class EyesController : MonoBehaviour
             string lowerName = part.name.ToLower();
             string side = "";
 
-            // Détection du côté (flexible : gère _L, _l, Eye_L, etc.)
+            // Dï¿½tection du cï¿½tï¿½ (flexible : gï¿½re _L, _l, Eye_L, etc.)
             if (lowerName.Contains("_l")) side = "L";
             else if (lowerName.Contains("_r")) side = "R";
 
             if (string.IsNullOrEmpty(side)) continue;
 
-            // Tri des pièces par mots-clés
+            // Tri des piï¿½ces par mots-clï¿½s
             if (lowerName.Contains("eyebase") || lowerName.Contains("eye_base")) bases[side] = part;
             else if (lowerName.Contains("pupil")) pupils[side] = part;
             else if (lowerName.Contains("sclera")) scleras[side] = part;
             else if (lowerName.Contains("eyebrow")) eyebrows[side] = part;
         }
 
-        // Assemblage final avec Debugs de vérification
+        // Assemblage final avec Debugs de vï¿½rification
         string[] sides = { "L", "R" };
         foreach (string s in sides)
         {
@@ -97,9 +97,9 @@ public class EyesController : MonoBehaviour
                 string eyeLabel = $"Eye_{s}";
                 string eyebrowLabel = $"Eyebrow_{s}";
 
-                // Dans ta méthode RetrieveEyeGameObjects, au moment du "new" :
+                // Dans ta mï¿½thode RetrieveEyeGameObjects, au moment du "new" :
                 CharacterEye newEye = new CharacterEye(
-                    bodyPartsController, // On passe la référence ici
+                    bodyPartsController, // On passe la rï¿½fï¿½rence ici
                     eyebrows.ContainsKey(s) ? eyebrows[s] : null,
                     bases[s],
                     scleras.ContainsKey(s) ? scleras[s] : null,
@@ -155,6 +155,18 @@ public class EyesController : MonoBehaviour
         {
             blinkRoutine = StartCoroutine(BlinkRoutine());
         }
+
+        if (bodyPartsController != null && bodyPartsController.Character != null)
+        {
+            bodyPartsController.Character.OnIncapacitated += HandleIncapacitated;
+            bodyPartsController.Character.OnWakeUp += HandleWakeUp;
+
+            // SÃƒÂ©curitÃƒÂ© initiale : si le personnage spawn dÃƒÂ©jÃƒÂ  mort/inconscient
+            if (!bodyPartsController.Character.IsAlive())
+            {
+                HandleIncapacitated(bodyPartsController.Character);
+            }
+        }
     }
 
     private void OnDisable()
@@ -163,6 +175,35 @@ public class EyesController : MonoBehaviour
         {
             StopCoroutine(blinkRoutine);
             blinkRoutine = null;
+        }
+
+        if (bodyPartsController != null && bodyPartsController.Character != null)
+        {
+            bodyPartsController.Character.OnIncapacitated -= HandleIncapacitated;
+            bodyPartsController.Character.OnWakeUp -= HandleWakeUp;
+        }
+    }
+
+    private void HandleIncapacitated(Character character)
+    {
+        if (debugMode) Debug.Log($"<color=cyan>[Eyes]</color> {character.CharacterName} incapacitÃƒÂ© : fermeture des yeux.");
+        
+        if (blinkRoutine != null)
+        {
+            StopCoroutine(blinkRoutine);
+            blinkRoutine = null;
+        }
+        SetEyesClosed(true);
+    }
+
+    private void HandleWakeUp(Character character)
+    {
+        if (debugMode) Debug.Log($"<color=cyan>[Eyes]</color> {character.CharacterName} rÃƒÂ©veillÃƒÂ© : rÃƒÂ©ouverture des yeux.");
+
+        SetEyesClosed(false);
+        if (enableAutoBlink && blinkRoutine == null)
+        {
+            blinkRoutine = StartCoroutine(BlinkRoutine());
         }
     }
 
@@ -177,10 +218,10 @@ public class EyesController : MonoBehaviour
             // Fermer les yeux
             SetEyesClosed(true);
 
-            // Maintenir fermé pendant blinkDuration
+            // Maintenir fermï¿½ pendant blinkDuration
             yield return new WaitForSeconds(blinkDuration);
 
-            // Réouvrir
+            // Rï¿½ouvrir
             SetEyesClosed(false);
         }
     }
@@ -197,10 +238,10 @@ public class EyesController : MonoBehaviour
     }
 
     /// <summary>
-    /// Change la couleur d'un œil spécifique dans la liste des eyes.
+    /// Change la couleur d'un ï¿½il spï¿½cifique dans la liste des eyes.
     /// </summary>
-    /// <param name="eyeIndex">Index de l'œil dans la liste (0-based).</param>
-    /// <param name="color">Couleur à appliquer à la pupille de l'œil.</param>
+    /// <param name="eyeIndex">Index de l'ï¿½il dans la liste (0-based).</param>
+    /// <param name="color">Couleur ï¿½ appliquer ï¿½ la pupille de l'ï¿½il.</param>
     public void SetEyePupilColor(int eyeIndex, Color color)
     {
         if (eyeIndex < 0 || eyeIndex >= eyes.Count)
@@ -223,7 +264,7 @@ public class EyesController : MonoBehaviour
     /// <summary>
     /// Change la couleur de toutes les pupilles de tous les yeux.
     /// </summary>
-    /// <param name="color">La couleur à appliquer aux pupilles.</param>
+    /// <param name="color">La couleur ï¿½ appliquer aux pupilles.</param>
     public void SetAllPupilsColor(Color color)
     {
         for (int i = 0; i < eyes.Count; i++)
@@ -239,7 +280,7 @@ public class EyesController : MonoBehaviour
             }
         }
     }
-    // Définit l'expression des sourcils pour tous les yeux
+    // Dï¿½finit l'expression des sourcils pour tous les yeux
     public void SetEyebrowsExpression(string expressionSuffix)
     {
         foreach (var eye in eyes)
@@ -248,7 +289,7 @@ public class EyesController : MonoBehaviour
         }
     }
 
-    // Méthodes d'appel simplifiées
+    // Mï¿½thodes d'appel simplifiï¿½es
     [ContextMenu("Set Eyebrows to Normal")]
     public void SetEyebrowsToNormal() => SetEyebrowsExpression("_normal");
 

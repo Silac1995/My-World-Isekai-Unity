@@ -45,6 +45,9 @@ public class CharacterSchedule : MonoBehaviour
             
             if (_character.CharacterInteraction != null)
                 _character.CharacterInteraction.OnInteractionStateChanged += HandleInteractionStateChanged;
+
+            if (_character.CharacterActions != null)
+                _character.CharacterActions.OnActionCanceled += HandleBusyStateEnded;
         }
     }
 
@@ -63,6 +66,9 @@ public class CharacterSchedule : MonoBehaviour
 
             if (_character.CharacterInteraction != null)
                 _character.CharacterInteraction.OnInteractionStateChanged -= HandleInteractionStateChanged;
+
+            if (_character.CharacterActions != null)
+                _character.CharacterActions.OnActionCanceled -= HandleBusyStateEnded;
         }
     }
 

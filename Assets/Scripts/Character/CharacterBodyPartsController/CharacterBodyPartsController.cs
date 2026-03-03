@@ -9,6 +9,7 @@ public class CharacterBodyPartsController : MonoBehaviour
     [SerializeField] private EarsController _earsController;
     [SerializeField] private MouthController _mouthController;
 
+    public Character Character => character;
     public EyesController EyesController => eyesController;
     public HairController HairController => _hairController;
     public EarsController EarsController => _earsController;

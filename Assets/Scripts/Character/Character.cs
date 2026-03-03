@@ -11,7 +11,8 @@ public enum CharacterBusyReason
     InCombat,
     Interacting,
     Teaching,
-    Crafting
+    Crafting,
+    DoingAction
 }
 
 [RequireComponent(typeof(CapsuleCollider), typeof(Rigidbody))]
@@ -78,6 +79,7 @@ public class Character : MonoBehaviour
     #region Events
     public event Action<Character> OnDeath;
     public event Action<Character> OnIncapacitated;
+    public event Action<Character> OnWakeUp;
     public event Action<bool> OnUnconsciousChanged;
     #endregion
 
@@ -268,9 +270,9 @@ public class Character : MonoBehaviour
             return false;
         }
 
-        if (_characterActions != null && _characterActions.CurrentAction is CharacterCraftAction)
+        if (_characterActions != null && _characterActions.CurrentAction != null)
         {
-            reason = CharacterBusyReason.Crafting;
+            reason = _characterActions.CurrentAction is CharacterCraftAction ? CharacterBusyReason.Crafting : CharacterBusyReason.DoingAction;
             return false;
         }
 
@@ -394,6 +396,7 @@ public class Character : MonoBehaviour
             ConfigureNavMesh(!IsPlayer());
 
             Debug.Log($"<color=orange>[Status]</color> {CharacterName} a repris connaissance.");
+            OnWakeUp?.Invoke(this);
         }
     }
 
