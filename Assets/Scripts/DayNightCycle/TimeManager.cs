@@ -8,8 +8,8 @@ namespace MWI.Time
         public static TimeManager Instance { get; private set; }
 
         [Header("Time Settings")]
-        [SerializeField, Tooltip("Seconds in real time for a full 24h in-game")]
-        private float _fullDayDurationInSeconds = 1200f; // 20 minutes by default
+        [SerializeField, Tooltip("Seconds in real time for one in-game hour")]
+        private float _secondsPerHour = 50f; // 50s * 24h = 1200s (20 min)
         
         [SerializeField, Range(0, 23)]
         private int _startHour = 6;
@@ -52,7 +52,8 @@ namespace MWI.Time
 
         private void ProgressTime()
         {
-            float timeToAdvance = UnityEngine.Time.deltaTime / _fullDayDurationInSeconds;
+            float fullDayDuration = _secondsPerHour * 24f;
+            float timeToAdvance = UnityEngine.Time.deltaTime / fullDayDuration;
             _currentTime += timeToAdvance;
 
             if (_currentTime >= 1f)

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 /// <summary>
@@ -71,15 +72,9 @@ public abstract class CommercialBuilding : Building
     /// <summary>
     /// Récupère tous les jobs d'un type donné.
     /// </summary>
-    public List<T> GetJobsOfType<T>() where T : Job
+    public IEnumerable<T> GetJobsOfType<T>() where T : Job
     {
-        List<T> result = new List<T>();
-        foreach (var job in _jobs)
-        {
-            if (job is T typedJob)
-                result.Add(typedJob);
-        }
-        return result;
+        return _jobs.OfType<T>();
     }
 
     /// <summary>
@@ -154,14 +149,8 @@ public abstract class CommercialBuilding : Building
     /// <summary>
     /// Retourne tous les jobs non-assignés dans ce building.
     /// </summary>
-    public List<Job> GetAvailableJobs()
+    public IEnumerable<Job> GetAvailableJobs()
     {
-        List<Job> available = new List<Job>();
-        foreach (var job in _jobs)
-        {
-            if (!job.IsAssigned)
-                available.Add(job);
-        }
-        return available;
+        return _jobs.Where(j => !j.IsAssigned);
     }
 }

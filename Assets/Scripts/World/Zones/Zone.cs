@@ -26,9 +26,10 @@ public class Zone : MonoBehaviour
     {
         if (other.CompareTag("Character"))
         {
-            if (!_charactersInside.Contains(other.gameObject))
+            GameObject charObj = other.gameObject;
+            if (!_charactersInside.Contains(charObj))
             {
-                _charactersInside.Add(other.gameObject);
+                _charactersInside.Add(charObj);
             }
         }
     }
@@ -43,25 +44,24 @@ public class Zone : MonoBehaviour
 
     public Vector3 GetRandomPointInZone()
     {
-        Vector3 center = _boxCollider.bounds.center;
-        Vector3 size = _boxCollider.bounds.size;
+        if (_boxCollider == null) return transform.position;
 
-        // Generate a random position within the box collider bounds
-        float randomX = Random.Range(center.x - size.x / 2, center.x + size.x / 2);
-        float randomY = center.y; // Keep the same Y level initially
-        float randomZ = Random.Range(center.z - size.z / 2, center.z + size.z / 2);
-
-        Vector3 randomPoint = new Vector3(randomX, randomY, randomZ);
-
-        // Ensure the point is on the NavMesh
-        NavMeshHit hit;
-        if (NavMesh.SamplePosition(randomPoint, out hit, 2.0f, NavMesh.AllAreas))
+        Bounds bounds = _boxCollider.bounds;
+        
+        // Try multiple times to find a valid NavMesh point
+        for (int i = 0; i < 5; i++)
         {
-            return hit.position;
+            float randomX = Random.Range(bounds.min.x, bounds.max.x);
+            float randomZ = Random.Range(bounds.min.z, bounds.max.z);
+            Vector3 randomPoint = new Vector3(randomX, bounds.center.y, randomZ);
+
+            if (NavMesh.SamplePosition(randomPoint, out NavMeshHit hit, 2.0f, NavMesh.AllAreas))
+            {
+                return hit.position;
+            }
         }
 
-        // Fallback to center if sampling fails
-        return center;
+        return bounds.center;
     }
 
     [ContextMenu("Fit Collider To Children")]

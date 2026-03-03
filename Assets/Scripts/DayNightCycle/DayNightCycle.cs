@@ -14,10 +14,12 @@ public class DayNightCycle : MonoBehaviour
     public TimeManager EffectiveTimeManager => _timeManager != null ? _timeManager : TimeManager.Instance;
 
     // rotation points
-    private Quaternion _rotMidi = Quaternion.Euler(160, 0, 0);
-    private Quaternion _rotHorizonGauche = Quaternion.Euler(180, -20, 270);
-    private Quaternion _rotCouche = Quaternion.Euler(200, 0, 175);
-    private Quaternion _rotHorizonDroite = Quaternion.Euler(180, 20, 95);
+    private Quaternion _rotNight = Quaternion.Euler(-9, 1.5f, 0);      // Nuit (00:00)
+    private Quaternion _rotMorning = Quaternion.Euler(-8, -10, 0);    // Matin (06:00) - Reste sombre
+    private Quaternion _rotFullDay = Quaternion.Euler(22, -9.5f, 0);  // Pleine Journée (12:00)
+    private Quaternion _rotAfternoon = Quaternion.Euler(185, 8, 0);    // Afternoon (18:00)
+    private Quaternion _rotEvening = Quaternion.Euler(-4.59f, -15, 0); // Soirée (21:00)
+
 
     private void Awake()
     {
@@ -39,23 +41,51 @@ public class DayNightCycle : MonoBehaviour
 
     private Quaternion GetRotationAtTime(float t)
     {
-        // PHASE INVERSE : Droite -> Gauche
+        // t = 0 -> Minuit (00h)
+        // t = 0.25 -> Matin (06h)
+        // t = 0.5 -> Midi (12h)
+        // t = 0.75 -> Afternoon (18h)
+        // t = 0.875 -> Evening (21h)
+        // t = 1.0 -> Minuit (00h)
 
-        // 1. Midi vers Horizon DROITE (0.0 to 0.25)
-        if (t < 0.25f) return Quaternion.Slerp(_rotMidi, _rotHorizonDroite, t / 0.25f);
-
-        // 2. Horizon DROITE vers Couche (0.25 to 0.5)
-        if (t < 0.5f) return Quaternion.Slerp(_rotHorizonDroite, _rotCouche, (t - 0.25f) / 0.25f);
-
-        // 3. Couche vers Horizon GAUCHE (0.5 to 0.75)
-        if (t < 0.75f) return Quaternion.Slerp(_rotCouche, _rotHorizonGauche, (t - 0.5f) / 0.25f);
-
-        // 4. Horizon GAUCHE vers Midi (0.75 to 1.0)
-        return Quaternion.Slerp(_rotHorizonGauche, _rotMidi, (t - 0.75f) / 0.25f);
+        if (t < 0.25f)
+        {
+            // 00h -> 06h : Night to Morning (Reste sombre)
+            return Quaternion.Slerp(_rotNight, _rotMorning, t / 0.25f);
+        }
+        else if (t < 0.5f)
+        {
+            // 06h -> 12h : Morning to Full Day (Lever rapide)
+            return Quaternion.Slerp(_rotMorning, _rotFullDay, (t - 0.25f) / 0.25f);
+        }
+        else if (t < 0.75f)
+        {
+            // 12h -> 18h : Full Day to Afternoon
+            return Quaternion.Slerp(_rotFullDay, _rotAfternoon, (t - 0.5f) / 0.25f);
+        }
+        else if (t < 0.875f)
+        {
+            // 18h -> 21h : Afternoon to Evening
+            return Quaternion.Slerp(_rotAfternoon, _rotEvening, (t - 0.75f) / 0.125f);
+        }
+        else
+        {
+            // 21h -> 00h : Evening to Night
+            return Quaternion.Slerp(_rotEvening, _rotNight, (t - 0.875f) / 0.125f);
+        }
     }
 
     private void UpdateVisuals(float t)
     {
+        // Force intensity to 0 if light is below horizon (Rotation X < 0)
+        float currentX = transform.eulerAngles.x;
+        // Euler angles are 0-360. -10 is 350.
+        if (currentX > 180 && currentX < 359) // Under the horizon (negative values)
+        {
+            _directionalLight.intensity = 0;
+            return;
+        }
+
         if (_lightColor != null)
         {
             _directionalLight.color = _lightColor.Evaluate(t);

@@ -22,7 +22,7 @@ public class Building : ComplexRoom
     public ComplexRoom MainRoom => this;
 
     // Use inherited GetAllRooms() to replace the old _rooms list logic
-    public IReadOnlyList<Room> Rooms => GetAllRooms();
+    public IEnumerable<Room> Rooms => GetAllRooms();
 
     protected override void Awake()
     {

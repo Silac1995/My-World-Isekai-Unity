@@ -40,7 +40,7 @@ public class BarBuilding : CommercialBuilding
     /// <summary>
     /// Récupère tous les serveurs de ce bar.
     /// </summary>
-    public List<JobServer> GetServers()
+    public IEnumerable<JobServer> GetServers()
     {
         return GetJobsOfType<JobServer>();
     }

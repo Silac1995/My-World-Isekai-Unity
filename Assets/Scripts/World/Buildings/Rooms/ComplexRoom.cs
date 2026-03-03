@@ -48,23 +48,24 @@ public class ComplexRoom : Room
     /// <summary>
     /// Gets all rooms recursively, including this ComplexRoom itself and all nested SubRooms.
     /// </summary>
-    public List<Room> GetAllRooms()
+    public IEnumerable<Room> GetAllRooms()
     {
-        List<Room> allRooms = new List<Room>();
-        allRooms.Add(this);
+        yield return this;
 
         foreach (var subRoom in _subRooms)
         {
             if (subRoom is ComplexRoom complex)
             {
-                allRooms.AddRange(complex.GetAllRooms());
+                foreach (var r in complex.GetAllRooms())
+                {
+                    yield return r;
+                }
             }
             else
             {
-                allRooms.Add(subRoom);
+                yield return subRoom;
             }
         }
-        return allRooms;
     }
 
     /// <summary>
@@ -94,25 +95,24 @@ public class ComplexRoom : Room
         return null;
     }
 
-    public List<T> GetRoomsOfType<T>() where T : Room
+    public IEnumerable<T> GetRoomsOfType<T>() where T : Room
     {
-        List<T> result = new List<T>();
-        
-        if (this is T thisT) result.Add(thisT);
+        if (this is T thisT) yield return thisT;
 
         foreach (var subRoom in _subRooms)
         {
             if (subRoom is ComplexRoom complex)
             {
-                result.AddRange(complex.GetRoomsOfType<T>());
+                foreach (var r in complex.GetRoomsOfType<T>())
+                {
+                    yield return r;
+                }
             }
             else if (subRoom is T typed)
             {
-                result.Add(typed);
+                yield return typed;
             }
         }
-
-        return result;
     }
 
     public T FindAvailableFurniture<T>() where T : Furniture
@@ -139,16 +139,14 @@ public class ComplexRoom : Room
         return null;
     }
     
-    public List<T> GetFurnitureOfType<T>() where T : Furniture
+    public IEnumerable<T> GetFurnitureOfType<T>() where T : Furniture
     {
         // Get from own base room first
-        List<T> result = new List<T>();
-        
         if (FurnitureManager != null)
         {
             foreach (var f in FurnitureManager.Furnitures)
             {
-                if (f is T typed) result.Add(typed);
+                if (f is T typed) yield return typed;
             }
         }
 
@@ -157,17 +155,18 @@ public class ComplexRoom : Room
         {
             if (subRoom is ComplexRoom complex)
             {
-                result.AddRange(complex.GetFurnitureOfType<T>());
+                foreach (var f in complex.GetFurnitureOfType<T>())
+                {
+                    yield return f;
+                }
             }
             else if (subRoom.FurnitureManager != null)
             {
                 foreach (var f in subRoom.FurnitureManager.Furnitures)
                 {
-                    if (f is T typed) result.Add(typed);
+                    if (f is T typed) yield return typed;
                 }
             }
         }
-
-        return result;
     }
 }

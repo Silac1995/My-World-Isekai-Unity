@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 /// <summary>
@@ -8,37 +9,38 @@ using UnityEngine;
 public class ResidentialBuilding : Building
 {
     public override BuildingType BuildingType => BuildingType.Residential;
-
-    public List<ApartmentRoom> Apartments => GetRoomsOfType<ApartmentRoom>();
+    public IEnumerable<ApartmentRoom> Apartments => GetRoomsOfType<ApartmentRoom>();
 
     public Character Owner => _roomOwners.Count > 0 ? _roomOwners[0] : null;
 
-    public new IReadOnlyList<Character> Residents
+    public new IEnumerable<Character> Residents
     {
         get
         {
-            var apts = Apartments;
-            if (apts.Count > 0)
+            if (Apartments.Any())
             {
-                List<Character> allResidents = new List<Character>();
-                foreach (var apt in apts)
+                foreach (var apt in Apartments)
                 {
-                    allResidents.AddRange(apt.Residents);
+                    foreach (var res in apt.Residents)
+                    {
+                        yield return res;
+                    }
                 }
-                return allResidents;
             }
-            return _roomResidents;
+            else
+            {
+                foreach (var res in _roomResidents)
+                {
+                    yield return res;
+                }
+            }
         }
     }
 
-    public int GetApartmentCount()
-    {
-        return Apartments.Count;
-    }
+    public int GetApartmentCount() => Apartments.Count();
 
     public void SetOwner(Character newOwner)
     {
-        // _roomOwners inherited from Room via Building/ComplexRoom
         _roomOwners.Clear();
         if (newOwner != null)
         {
@@ -51,35 +53,24 @@ public class ResidentialBuilding : Building
         Debug.Log($"<color=green>[Building]</color> {newOwner?.CharacterName} est maintenant propriétaire de {buildingName}.");
     }
 
-    public override bool AddResident(Character resident)
-    {
-        return AddResident(resident, null);
-    }
+    public override bool AddResident(Character resident) => AddResident(resident, null);
 
     public bool AddResident(Character resident, ApartmentRoom targetRoom)
     {
         if (resident == null || IsResident(resident)) return false;
 
-        var apts = Apartments;
+        var apts = Apartments.ToList();
         if (apts.Count > 0)
         {
             ApartmentRoom targetApt = targetRoom;
 
             if (targetApt == null || !apts.Contains(targetApt))
             {
-                // Si aucune chambre n'est fournie (ou si elle n'appartient pas au batiment), 
-                // trouver l'appartement avec le moins de résidents pour équilibrer.
-                targetApt = apts[0];
-                foreach (var apt in apts)
-                {
-                    if (apt.Residents.Count < targetApt.Residents.Count)
-                    {
-                        targetApt = apt;
-                    }
-                }
+                // Find apartment with the fewest residents
+                targetApt = apts.OrderBy(a => a.Residents.Count).First();
             }
 
-            // Si l'appartement n'a pas de propriétaire, le premier résident devient le propriétaire par défaut
+            // First resident becomes owner if unowned
             if (targetApt.Owners.Count == 0) targetApt.AddOwner(resident);
             
             if (targetApt.AddResident(resident))
@@ -99,47 +90,37 @@ public class ResidentialBuilding : Building
     {
         if (resident == null || !IsResident(resident)) return false;
 
-        var apts = Apartments;
-        if (apts.Count > 0)
+        foreach (var apt in Apartments)
         {
-            foreach (var apt in apts)
+            if (apt.IsResident(resident))
             {
-                if (apt.IsResident(resident))
-                {
-                    apt.RemoveResident(resident);
-                    // Remove ownership if they were owner
-                    apt.RemoveOwner(resident);
-                    Debug.Log($"<color=green>[Building]</color> {resident.CharacterName} a quitté son appartement dans {buildingName}.");
-                    return true;
-                }
+                apt.RemoveResident(resident);
+                apt.RemoveOwner(resident);
+                Debug.Log($"<color=green>[Building]</color> {resident.CharacterName} a quitté son appartement dans {buildingName}.");
+                return true;
             }
-            return false;
         }
 
-        _roomResidents.Remove(resident);
-
-        // Si le résident retiré était le propriétaire, transférer ou vider
-        if (Owner == resident)
+        if (_roomResidents.Remove(resident))
         {
-            SetOwner(_roomResidents.Count > 0 ? _roomResidents[0] : null);
+            if (Owner == resident)
+            {
+                SetOwner(_roomResidents.Count > 0 ? _roomResidents[0] : null);
+            }
+            Debug.Log($"<color=green>[Building]</color> {resident.CharacterName} a quitté {buildingName}.");
+            return true;
         }
 
-        Debug.Log($"<color=green>[Building]</color> {resident.CharacterName} a quitté {buildingName}.");
-        return true;
+        return false;
     }
 
     public override bool IsResident(Character character)
     {
         if (character == null) return false;
         
-        var apts = Apartments;
-        if (apts.Count > 0)
+        if (Apartments.Any())
         {
-            foreach (var apt in apts)
-            {
-                if (apt.IsResident(character)) return true;
-            }
-            return false;
+            return Apartments.Any(apt => apt.IsResident(character));
         }
 
         return _roomResidents.Contains(character);

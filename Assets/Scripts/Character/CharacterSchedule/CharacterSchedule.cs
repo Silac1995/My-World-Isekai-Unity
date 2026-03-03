@@ -37,6 +37,15 @@ public class CharacterSchedule : MonoBehaviour
             tm.OnHourChanged += OnHourChanged;
             Debug.Log($"<color=cyan>[Schedule]</color> {_character?.CharacterName} abonné à OnHourChanged.");
         }
+
+        if (_character != null)
+        {
+            if (_character.CharacterCombat != null)
+                _character.CharacterCombat.OnBattleLeft += HandleBusyStateEnded;
+            
+            if (_character.CharacterInteraction != null)
+                _character.CharacterInteraction.OnInteractionStateChanged += HandleInteractionStateChanged;
+        }
     }
 
     private void OnDisable()
@@ -46,6 +55,29 @@ public class CharacterSchedule : MonoBehaviour
         {
             tm.OnHourChanged -= OnHourChanged;
         }
+
+        if (_character != null)
+        {
+            if (_character.CharacterCombat != null)
+                _character.CharacterCombat.OnBattleLeft -= HandleBusyStateEnded;
+
+            if (_character.CharacterInteraction != null)
+                _character.CharacterInteraction.OnInteractionStateChanged -= HandleInteractionStateChanged;
+        }
+    }
+
+    private void HandleBusyStateEnded()
+    {
+        // Re-évaluer le schedule dès qu'on sort d'un combat ou état occupé
+        ReevaluateCurrentActivity();
+    }
+
+    private void HandleInteractionStateChanged(Character target, bool isInteracting)
+    {
+        if (!isInteracting)
+        {
+            HandleBusyStateEnded();
+        }
     }
 
     /// <summary>
@@ -54,7 +86,53 @@ public class CharacterSchedule : MonoBehaviour
     private void OnHourChanged(int newHour)
     {
         Debug.Log($"<color=cyan>[Schedule]</color> {_character?.CharacterName} — OnHourChanged trigger: {newHour}h");
-        EvaluateSchedule(newHour);
+        
+        // Initialisation quotidienne à minuit
+        if (newHour == 0)
+        {
+            InitializeSchedule();
+        }
+        else
+        {
+            EvaluateSchedule(newHour);
+        }
+    }
+
+    /// <summary>
+    /// Initialisation globale du schedule (appelée chaque jour à 00:00).
+    /// </summary>
+    public void InitializeSchedule()
+    {
+        Debug.Log($"<color=cyan>[Schedule]</color> Initialisation quotidienne pour {_character?.CharacterName}");
+        
+        InitializeFromJobs();
+        // On peut ajouter ici d'autres initialisations (routines de loisirs aléatoires, etc.)
+        
+        ReevaluateCurrentActivity();
+    }
+
+    /// <summary>
+    /// Synchronise les créneaux de travail avec les jobs actuels du personnage.
+    /// </summary>
+    public void InitializeFromJobs()
+    {
+        // Nettoyer les anciens créneaux de "Work" pour repartir sur une base propre
+        _entries.RemoveAll(e => e.activity == ScheduleActivity.Work);
+
+        // Réinjecter les horaires de tous les jobs actifs
+        if (_character != null && _character.CharacterJob != null)
+        {
+            foreach (var assignment in _character.CharacterJob.ActiveJobs)
+            {
+                if (assignment.WorkScheduleEntries != null)
+                {
+                    foreach (var entry in assignment.WorkScheduleEntries)
+                    {
+                        AddEntry(entry);
+                    }
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -70,6 +148,13 @@ public class CharacterSchedule : MonoBehaviour
         _currentActivity = newActivity;
 
         Debug.Log($"<color=cyan>[Schedule]</color> {_character.CharacterName} : {previousActivity} → {_currentActivity} (Heure: {hour}h)");
+
+        // --- SÉCURITÉ : Garde pour ne pas interrompre les actions critiques ---
+        if (!_character.IsFree(out CharacterBusyReason reason))
+        {
+            Debug.Log($"<color=orange>[Schedule]</color> {_character.CharacterName} est occupé ({reason}). L'activité sera appliquée plus tard.");
+            return;
+        }
 
         ApplyActivity(_currentActivity);
     }

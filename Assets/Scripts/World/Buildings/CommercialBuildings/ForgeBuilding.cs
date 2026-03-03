@@ -41,7 +41,7 @@ public class ForgeBuilding : CommercialBuilding
     /// <summary>
     /// Récupère tous les apprentis de cette forge.
     /// </summary>
-    public List<JobBlacksmithApprentice> GetApprentices()
+    public IEnumerable<JobBlacksmithApprentice> GetApprentices()
     {
         return GetJobsOfType<JobBlacksmithApprentice>();
     }

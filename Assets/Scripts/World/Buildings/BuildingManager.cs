@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 /// <summary>
@@ -48,18 +49,26 @@ public class BuildingManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Trouve un logement résidentiel avec de la place disponible.
+    /// Trouve un logement résidentiel avec de la place disponible (celui qui a le moins de résidents).
     /// </summary>
     public ResidentialBuilding FindAvailableHousing()
     {
+        ResidentialBuilding bestBuilding = null;
+        int minResidents = int.MaxValue;
+
         foreach (var building in allBuildings)
         {
             if (building is ResidentialBuilding residential)
             {
-                return residential;
+                int count = residential.Residents.Count();
+                if (count < minResidents)
+                {
+                    minResidents = count;
+                    bestBuilding = residential;
+                }
             }
         }
-        return null;
+        return bestBuilding;
     }
 
     /// <summary>
