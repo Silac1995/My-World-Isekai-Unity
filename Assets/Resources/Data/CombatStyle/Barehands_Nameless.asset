@@ -10,9 +10,9 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 666a164fe1cc4eb48988bd0d46a8becf, type: 3}
-  m_Name: Barehands_NoStyle
+  m_Name: Barehands_Nameless
   m_EditorClassIdentifier: Assembly-CSharp::BarehandsStyleSO
-  _styleName: No Style
+  _styleName: Nameless fist
   _meleeRange: 3.5
   _scalingStat: 0
   _statMultiplier: 1

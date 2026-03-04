@@ -8,12 +8,14 @@ public class CharacterBodyPartsController : MonoBehaviour
     [SerializeField] private HairController _hairController;
     [SerializeField] private EarsController _earsController;
     [SerializeField] private MouthController _mouthController;
+    [SerializeField] private HandsController _handsController;
 
     public Character Character => character;
     public EyesController EyesController => eyesController;
     public HairController HairController => _hairController;
     public EarsController EarsController => _earsController;
     public MouthController MouthController => _mouthController;
+    public HandsController HandsController => _handsController;
 
     void Start()
     {
@@ -27,6 +29,7 @@ public class CharacterBodyPartsController : MonoBehaviour
         if (HairController != null) HairController.Initialize();
         if (EarsController != null) EarsController.Initialize();
         if (MouthController != null) MouthController.Initialize();
+        if (HandsController != null) HandsController.Initialize();
 
         Debug.Log("<color=white>[BodyParts]</color> All body parts initialized.");
     }
@@ -57,6 +60,10 @@ public class CharacterBodyPartsController : MonoBehaviour
         if(_mouthController == null)
         {
                 Debug.LogError($"CharacterBodyPartsController on {gameObject.name}: MouthController is missing!");
+        }
+        if(_handsController == null)
+        {
+                Debug.LogError($"CharacterBodyPartsController on {gameObject.name}: HandsController is missing!");
         }
         else
         {

@@ -10,17 +10,20 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5f09bf60e92c9a04daeeafb08555e0f5, type: 3}
-  m_Name: SwordStyle_NoStyle
+  m_Name: SwordStyle_Nameless
   m_EditorClassIdentifier: Assembly-CSharp::SwordStyleSO
-  _styleName: 
-  _prefab: {fileID: 0}
-  _attackRange: 3.5
+  _styleName: Nameless sword
+  _meleeRange: 3.5
   _scalingStat: 0
   _statMultiplier: 1
   _damageType: 1
+  _baseDamage: 5
+  _physicalPowerPercentage: 0.3
+  _knockbackForce: 5
   _levels:
   - MinLevel: 0
     CombatController: {fileID: 0}
   - MinLevel: 0
     CombatController: {fileID: 0}
+  _hitboxPrefab: {fileID: 0}
   _info: 'Weapon Type: Sword'

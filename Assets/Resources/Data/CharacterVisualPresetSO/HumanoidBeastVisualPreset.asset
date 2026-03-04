@@ -15,5 +15,6 @@ MonoBehaviour:
   _characterDefaultPrefab: {fileID: 0}
   _characterSpritePrefab: {fileID: 0}
   _earCategory: 02_elf
+  _handCategory: 01_human
   _hasTail: 0
   _defaultSkinColor: {r: 0.5801887, g: 0.60162663, b: 0.7735849, a: 1}

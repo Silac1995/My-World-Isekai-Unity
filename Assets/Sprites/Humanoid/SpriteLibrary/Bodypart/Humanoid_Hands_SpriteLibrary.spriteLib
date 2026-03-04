@@ -17,48 +17,48 @@ MonoBehaviour:
     m_Hash: 811842104
     m_CategoryList: []
     m_OverrideEntries:
-    - m_Name: Thumb_R_normal
-      m_Hash: 912648161
-      m_Sprite: {fileID: 0}
-      m_FromMain: 0
-      m_SpriteOverride: {fileID: 0}
     - m_Name: Fingers_R_normal
       m_Hash: 623731932
-      m_Sprite: {fileID: 0}
+      m_Sprite: {fileID: -1305344551, guid: c0786863c16d0574390a2edd0ec0e4c8, type: 3}
       m_FromMain: 0
-      m_SpriteOverride: {fileID: 0}
-    - m_Name: Thumb_L_normal
-      m_Hash: 525649144
-      m_Sprite: {fileID: 0}
+      m_SpriteOverride: {fileID: -1305344551, guid: c0786863c16d0574390a2edd0ec0e4c8, type: 3}
+    - m_Name: Thumb_R_normal
+      m_Hash: 912648161
+      m_Sprite: {fileID: 1943304445, guid: b12af892383f5e04fbabda3b20d47b87, type: 3}
       m_FromMain: 0
-      m_SpriteOverride: {fileID: 0}
+      m_SpriteOverride: {fileID: 1943304445, guid: b12af892383f5e04fbabda3b20d47b87, type: 3}
     - m_Name: Fingers_L_normal
       m_Hash: 203179973
-      m_Sprite: {fileID: 0}
+      m_Sprite: {fileID: 1476852977, guid: ef5e9808c03c50f42a86cea679ebd49d, type: 3}
       m_FromMain: 0
-      m_SpriteOverride: {fileID: 0}
-    - m_Name: Thumb_R_fist
-      m_Hash: 630517840
-      m_Sprite: {fileID: 0}
+      m_SpriteOverride: {fileID: 1476852977, guid: ef5e9808c03c50f42a86cea679ebd49d, type: 3}
+    - m_Name: Thumb_L_normal
+      m_Hash: 525649144
+      m_Sprite: {fileID: -113273716, guid: 3b345143f823ca34881facaf2a95a1c6, type: 3}
       m_FromMain: 0
-      m_SpriteOverride: {fileID: 0}
+      m_SpriteOverride: {fileID: -113273716, guid: 3b345143f823ca34881facaf2a95a1c6, type: 3}
     - m_Name: Fingers_R_fist
       m_Hash: 919024727
-      m_Sprite: {fileID: 0}
+      m_Sprite: {fileID: 1035141281, guid: 555062e141471c5468f0649e80a7e26e, type: 3}
       m_FromMain: 0
-      m_SpriteOverride: {fileID: 0}
-    - m_Name: Thumb_L_fist
-      m_Hash: 474518459
-      m_Sprite: {fileID: 0}
+      m_SpriteOverride: {fileID: 1035141281, guid: 555062e141471c5468f0649e80a7e26e, type: 3}
+    - m_Name: Thumb_R_fist
+      m_Hash: 630517840
+      m_Sprite: {fileID: 2029834784, guid: b5a8d242663bc6449ae40af9fbeb59ed, type: 3}
       m_FromMain: 0
-      m_SpriteOverride: {fileID: 0}
+      m_SpriteOverride: {fileID: 2029834784, guid: b5a8d242663bc6449ae40af9fbeb59ed, type: 3}
     - m_Name: Fingers_L_fist
       m_Hash: 253450172
-      m_Sprite: {fileID: 0}
+      m_Sprite: {fileID: 1509213942, guid: faf31d017c12d514089502bc6b443814, type: 3}
       m_FromMain: 0
-      m_SpriteOverride: {fileID: 0}
+      m_SpriteOverride: {fileID: 1509213942, guid: faf31d017c12d514089502bc6b443814, type: 3}
+    - m_Name: Thumb_L_fist
+      m_Hash: 474518459
+      m_Sprite: {fileID: 1223884550, guid: 2167b256c5b04e5459b84ce4f6441245, type: 3}
+      m_FromMain: 0
+      m_SpriteOverride: {fileID: 1223884550, guid: 2167b256c5b04e5459b84ce4f6441245, type: 3}
     m_FromMain: 0
     m_EntryOverrideCount: 8
   m_PrimaryLibraryGUID: 
-  m_ModificationHash: 639035537807658687
+  m_ModificationHash: 639082495888994193
   m_Version: 1

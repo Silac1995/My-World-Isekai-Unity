@@ -8,10 +8,42 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 1415101698751226736, guid: b74182ade6e88b64abfbad5d0003a907, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 2035843929847483525, guid: b74182ade6e88b64abfbad5d0003a907, type: 3}
+      propertyPath: m_BoneTransforms.Array.size
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 2750089682294006633, guid: b74182ade6e88b64abfbad5d0003a907, type: 3}
       propertyPath: m_Name
-      value: Humanoid_Base
+      value: Humanoid_Human_Female_Base
       objectReference: {fileID: 0}
+    - target: {fileID: 3818406326930100301, guid: b74182ade6e88b64abfbad5d0003a907, type: 3}
+      propertyPath: m_SpriteLibraryAsset
+      value: 
+      objectReference: {fileID: 7108339969198208228, guid: a8d14df8ad04d6c4ea89caaee84d18f0, type: 3}
+    - target: {fileID: 5776065776245616038, guid: b74182ade6e88b64abfbad5d0003a907, type: 3}
+      propertyPath: m_labelHash
+      value: 1.503953e-16
+      objectReference: {fileID: 0}
+    - target: {fileID: 5890237674294078985, guid: b74182ade6e88b64abfbad5d0003a907, type: 3}
+      propertyPath: m_labelHash
+      value: 0.000003425863
+      objectReference: {fileID: 0}
+    - target: {fileID: 5890237674294078985, guid: b74182ade6e88b64abfbad5d0003a907, type: 3}
+      propertyPath: m_SpriteHash
+      value: 80974225
+      objectReference: {fileID: 0}
+    - target: {fileID: 6196189380252802151, guid: b74182ade6e88b64abfbad5d0003a907, type: 3}
+      propertyPath: m_SpriteLibraryAsset
+      value: 
+      objectReference: {fileID: 7108339969198208228, guid: a8d14df8ad04d6c4ea89caaee84d18f0, type: 3}
+    - target: {fileID: 6995737800194908971, guid: b74182ade6e88b64abfbad5d0003a907, type: 3}
+      propertyPath: m_SpriteLibraryAsset
+      value: 
+      objectReference: {fileID: 7108339969198208228, guid: a8d14df8ad04d6c4ea89caaee84d18f0, type: 3}
     - target: {fileID: 7154720235545125042, guid: b74182ade6e88b64abfbad5d0003a907, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0
@@ -51,6 +83,26 @@ PrefabInstance:
     - target: {fileID: 7154720235545125042, guid: b74182ade6e88b64abfbad5d0003a907, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7508299021839237857, guid: b74182ade6e88b64abfbad5d0003a907, type: 3}
+      propertyPath: m_labelHash
+      value: 0.000003425863
+      objectReference: {fileID: 0}
+    - target: {fileID: 8739476056955883513, guid: b74182ade6e88b64abfbad5d0003a907, type: 3}
+      propertyPath: m_Size.x
+      value: 2.33
+      objectReference: {fileID: 0}
+    - target: {fileID: 8739476056955883513, guid: b74182ade6e88b64abfbad5d0003a907, type: 3}
+      propertyPath: m_Size.y
+      value: 1.94
+      objectReference: {fileID: 0}
+    - target: {fileID: 8739476056955883513, guid: b74182ade6e88b64abfbad5d0003a907, type: 3}
+      propertyPath: m_Sprite
+      value: 
+      objectReference: {fileID: 1943304445, guid: b12af892383f5e04fbabda3b20d47b87, type: 3}
+    - target: {fileID: 8739476056955883513, guid: b74182ade6e88b64abfbad5d0003a907, type: 3}
+      propertyPath: m_WasSpriteAssigned
+      value: 1
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

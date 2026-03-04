@@ -1855,6 +1855,10 @@ PrefabInstance:
       value: 
       objectReference: {fileID: 1641562415796598567}
     - target: {fileID: 1007890653781899237, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
+      propertyPath: _handsController
+      value: 
+      objectReference: {fileID: 9038793969391701578}
+    - target: {fileID: 1007890653781899237, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       propertyPath: _mouthController
       value: 
       objectReference: {fileID: 2885815791812827100}
@@ -2364,6 +2368,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 5246753746272467509, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       insertIndex: -1
       addedObject: {fileID: 2885815791812827100}
+    - targetCorrespondingSourceObject: {fileID: 5246753746272467509, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 9038793969391701578}
   m_SourcePrefab: {fileID: 100100000, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
 --- !u!114 &315613733655778041 stripped
 MonoBehaviour:
@@ -2483,7 +2490,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::EarsController
   _bodyPartsController: {fileID: 9019601751347794616}
   _ears: []
-  _spriteLibraryAssetsEars: {fileID: 0}
+  _spriteLibraryAssetsEars: {fileID: 7108339969198208228, guid: 181e823f07e35e74ca2bf31b3486aeff, type: 3}
   _spriteLibraryCategory: 01
   _debugMode: 1
 --- !u!114 &2885815791812827100
@@ -2504,6 +2511,23 @@ MonoBehaviour:
     _mouthObject: {fileID: 685365087006501904}
     _mouthCategory: 01
   _talkingSpeed: 0.12
+--- !u!114 &9038793969391701578
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4035394106473422696}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2d370464204703b4397b0da9a120d267, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::HandsController
+  _bodyPartsController: {fileID: 9019601751347794616}
+  _hands: []
+  _spriteLibraryAssetsHands: {fileID: 7108339969198208228, guid: a8d14df8ad04d6c4ea89caaee84d18f0, type: 3}
+  _spriteLibraryCategory: 01
+  _debugMode: 1
 --- !u!65 &4207761057859573151 stripped
 BoxCollider:
   m_CorrespondingSourceObject: {fileID: 5383023488254193858, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}

@@ -139,6 +139,13 @@ public class CharacterVisual : MonoBehaviour
             // On force aussi la couleur sur les oreilles spécifiquement
             bodyPartsController.EarsController.SetEarsColor(preset.DefaultSkinColor);
         }
+
+        // 5. Application des mains
+        if (bodyPartsController.HandsController != null)
+        {
+            bodyPartsController.HandsController.SetHandsCategory(preset.HandCategory);
+            bodyPartsController.HandsController.SetHandsColor(preset.DefaultSkinColor);
+        }
     }
 
 

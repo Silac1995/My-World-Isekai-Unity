@@ -5,11 +5,13 @@ public class HumanoidVisualPresetSO : CharacterVisualPresetSO
 {
     [Header("Sprite Library Categories")]
     [SerializeField] private string _earCategory = "01";
+    [SerializeField] private string _handCategory = "01";
 
     [Header("Morphology Settings")]
     [SerializeField] private bool _hasTail;
     [SerializeField] private Color _defaultSkinColor = Color.white;
 
     public string EarCategory => _earCategory;
+    public string HandCategory => _handCategory;
     public Color DefaultSkinColor => _defaultSkinColor;
 }
