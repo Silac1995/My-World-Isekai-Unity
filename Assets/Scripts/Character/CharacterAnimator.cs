@@ -7,6 +7,7 @@ public class CharacterAnimator : MonoBehaviour
     [SerializeField] private Animator _animator;
     [SerializeField] private RuntimeAnimatorController _civilAnimatorController;
     [SerializeField] private CharacterCombat _characterCombat;
+    [SerializeField] private CharacterBodyPartsController _bodyPartsController;
 
     public RuntimeAnimatorController CivilAnimatorController => _civilAnimatorController;
 
@@ -115,6 +116,43 @@ public class CharacterAnimator : MonoBehaviour
         ResetActionTriggers();
         if (_characterCombat != null)
             _characterCombat.DespawnCombatStyleAttackInstance();
+    }
+
+    // --- Hands Animation Events ---
+    public void AE_SetAllHandsFist()
+    {
+        if (_bodyPartsController != null && _bodyPartsController.HandsController != null)
+            _bodyPartsController.HandsController.SetAllHandsFist();
+    }
+
+    public void AE_SetAllHandsNormal()
+    {
+        if (_bodyPartsController != null && _bodyPartsController.HandsController != null)
+            _bodyPartsController.HandsController.SetAllHandsNormal();
+    }
+
+    public void AE_SetRightHandFist()
+    {
+        if (_bodyPartsController != null && _bodyPartsController.HandsController != null)
+            _bodyPartsController.HandsController.SetRightHandFist();
+    }
+
+    public void AE_SetRightHandNormal()
+    {
+        if (_bodyPartsController != null && _bodyPartsController.HandsController != null)
+            _bodyPartsController.HandsController.SetRightHandNormal();
+    }
+
+    public void AE_SetLeftHandFist()
+    {
+        if (_bodyPartsController != null && _bodyPartsController.HandsController != null)
+            _bodyPartsController.HandsController.SetLeftHandFist();
+    }
+
+    public void AE_SetLeftHandNormal()
+    {
+        if (_bodyPartsController != null && _bodyPartsController.HandsController != null)
+            _bodyPartsController.HandsController.SetLeftHandNormal();
     }
     #endregion
 
