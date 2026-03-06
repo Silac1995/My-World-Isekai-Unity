@@ -239,6 +239,27 @@ public class SpawnManager : MonoBehaviour
             Debug.LogError("[SpawnManager] BuildingManager.Instance est null ou la liste des bâtiments est manquante.");
         }
 
+        // --- DEBUG : ASSIGNATION AUTOMATIQUE COMME GATHERER (TEST) ---
+        if (!isPlayer && character.CharacterJob != null && BuildingManager.Instance != null)
+        {
+            foreach (var b in BuildingManager.Instance.allBuildings)
+            {
+                if (b is GatheringBuilding gatheringBuilding)
+                {
+                    // Trouver un job disponible dans le GatheringBuilding
+                    var availableJob = gatheringBuilding.FindAvailableJob<JobGatherer>();
+                    if (availableJob != null)
+                    {
+                        if (character.CharacterJob.TakeJob(availableJob, gatheringBuilding))
+                        {
+                            Debug.Log($"<color=green>[SpawnManager]</color> {character.CharacterName} assigné comme {availableJob.JobTitle} à {gatheringBuilding.BuildingName}.");
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+
         return character;
     }
 

@@ -21,16 +21,14 @@ public class GoapAction_ExploreForResources : GoapAction
         { "hasGatherZone", true }
     };
 
-    public override float Cost => 3f; // Coûteux car c'est de l'exploration
+    public override float Cost => 3f;
 
     private GatheringBuilding _building;
     private bool _isComplete = false;
     private bool _isMoving = false;
     private float _searchRadius = 30f;
-    private float _scanTimer = 0f;
-    private float _scanInterval = 2f; // Scanner toutes les 2 secondes
     private int _explorationAttempts = 0;
-    private int _maxExplorationAttempts = 5;
+    private int _maxExplorationAttempts = 10;
 
     public override bool IsComplete => _isComplete;
 
@@ -48,7 +46,6 @@ public class GoapAction_ExploreForResources : GoapAction
     {
         if (_isComplete) return;
 
-        // Si le building a trouvé une zone pendant qu'on cherchait (un autre employé l'a trouvée)
         if (_building.HasGatherableZone)
         {
             _isComplete = true;
@@ -62,16 +59,11 @@ public class GoapAction_ExploreForResources : GoapAction
             return;
         }
 
-        // Scanner les GatherableObject autour du worker
-        _scanTimer += UnityEngine.Time.deltaTime;
-        if (_scanTimer >= _scanInterval)
+        // Scanner les GatherableObject via CharacterAwareness (chaque tick)
+        if (ScanForGatherableObjects(worker))
         {
-            _scanTimer = 0f;
-            if (ScanForGatherableObjects(worker))
-            {
-                _isComplete = true;
-                return;
-            }
+            _isComplete = true;
+            return;
         }
 
         // Si on n'est pas en mouvement, se déplacer vers un point aléatoire pour explorer
@@ -86,7 +78,6 @@ public class GoapAction_ExploreForResources : GoapAction
                 return;
             }
 
-            // Se déplacer vers un point aléatoire dans un rayon
             Vector3 randomDirection = Random.insideUnitSphere * _searchRadius;
             randomDirection.y = 0;
             Vector3 targetPoint = worker.transform.position + randomDirection;
@@ -100,40 +91,91 @@ public class GoapAction_ExploreForResources : GoapAction
     }
 
     /// <summary>
-    /// Scanne les GatherableObject autour du worker.
-    /// Si un objet compatible est trouvé, cherche la Zone parente et met à jour le building.
+    /// Scanne les GatherableObject via CharacterAwareness.
+    /// Cherche d'abord une Zone parente dans la hiérarchie,
+    /// sinon cherche une Zone dont le collider contient le GatherableObject.
     /// </summary>
     private bool ScanForGatherableObjects(Character worker)
     {
         var wantedItems = _building.GetWantedItems();
         if (wantedItems.Count == 0) return false;
 
-        // Chercher les GatherableObject dans un rayon
-        Collider[] colliders = Physics.OverlapSphere(worker.transform.position, _searchRadius);
-        foreach (var col in colliders)
-        {
-            var gatherable = col.GetComponentInParent<GatherableObject>();
-            if (gatherable == null || !gatherable.CanGather()) continue;
+        var awareness = worker.CharacterAwareness;
+        if (awareness == null) return false;
 
-            // Vérifie si le gatherable produit un item voulu
+        var visibleGatherables = awareness.GetVisibleInteractables<GatherableObject>();
+
+        foreach (var gatherable in visibleGatherables)
+        {
+            if (!gatherable.CanGather()) continue;
+
             if (gatherable.HasAnyOutput(wantedItems))
             {
-                // Chercher une Zone parente (GatheringArea)
-                var zone = col.GetComponentInParent<Zone>();
+                // 1. Chercher une Zone parente dans la hiérarchie
+                Zone zone = gatherable.GetComponentInParent<Zone>();
+
+                // 2. Sinon, chercher une Zone dont le collider contient la position du GatherableObject
+                if (zone == null)
+                {
+                    zone = FindZoneContaining(gatherable.transform.position);
+                }
+
+                // 3. Sinon, chercher la Zone la plus proche
+                if (zone == null)
+                {
+                    zone = FindNearestZone(gatherable.transform.position);
+                }
+
                 if (zone != null)
                 {
-                    Debug.Log($"<color=green>[GOAP Explore]</color> {worker.CharacterName} a trouvé une zone de récolte : {zone.zoneName} !");
+                    Debug.Log($"<color=green>[GOAP Explore]</color> {worker.CharacterName} a trouvé une zone de récolte : {zone.zoneName} (via {gatherable.gameObject.name}) !");
                     _building.SetGatherableZone(zone);
                     return true;
                 }
                 else
                 {
-                    Debug.Log($"<color=orange>[GOAP Explore]</color> {worker.CharacterName} a trouvé un {gatherable.gameObject.name} mais sans Zone parente.");
+                    Debug.LogWarning($"<color=orange>[GOAP Explore]</color> {worker.CharacterName} a trouvé {gatherable.gameObject.name} mais aucune Zone n'existe dans la scène. Crée une Zone (GatheringArea) autour de tes ressources !");
                 }
             }
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Cherche une Zone dont le collider (trigger) contient la position donnée.
+    /// </summary>
+    private Zone FindZoneContaining(Vector3 position)
+    {
+        Collider[] colliders = Physics.OverlapSphere(position, 1f, Physics.AllLayers, QueryTriggerInteraction.Collide);
+        foreach (var col in colliders)
+        {
+            var zone = col.GetComponent<Zone>();
+            if (zone != null) return zone;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Cherche la Zone la plus proche de la position donnée (fallback).
+    /// </summary>
+    private Zone FindNearestZone(Vector3 position)
+    {
+        Zone[] allZones = Object.FindObjectsByType<Zone>(FindObjectsSortMode.None);
+        Zone nearest = null;
+        float nearestDist = float.MaxValue;
+
+        foreach (var zone in allZones)
+        {
+            float dist = Vector3.Distance(position, zone.transform.position);
+            if (dist < nearestDist)
+            {
+                nearest = zone;
+                nearestDist = dist;
+            }
+        }
+
+        return nearest;
     }
 
     public override void Exit(Character worker)
