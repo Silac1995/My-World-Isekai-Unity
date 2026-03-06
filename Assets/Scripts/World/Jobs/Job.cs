@@ -24,7 +24,7 @@ public abstract class Job
     /// <summary>
     /// Assigne un worker à ce poste dans un building donné.
     /// </summary>
-    public void Assign(Character worker, CommercialBuilding workplace)
+    public virtual void Assign(Character worker, CommercialBuilding workplace)
     {
         if (worker == null || workplace == null) return;
 
@@ -36,7 +36,7 @@ public abstract class Job
     /// <summary>
     /// Retire le worker de ce poste.
     /// </summary>
-    public void Unassign()
+    public virtual void Unassign()
     {
         if (_worker != null)
         {

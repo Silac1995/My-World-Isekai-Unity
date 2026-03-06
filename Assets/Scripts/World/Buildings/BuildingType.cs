@@ -5,5 +5,6 @@ public enum BuildingType
     Shop,
     Inn,
     Workshop,
-    Warehouse
+    Warehouse,
+    GatheringSite
 }

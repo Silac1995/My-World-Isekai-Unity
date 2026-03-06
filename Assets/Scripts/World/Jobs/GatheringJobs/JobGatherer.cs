@@ -1,0 +1,192 @@
+using System.Collections.Generic;
+using UnityEngine;
+
+/// <summary>
+/// Job de type Gatherer : récolte des ressources selon ce que le GatheringBuilding dicte.
+/// Utilise le système GOAP pour planifier ses actions :
+/// 1. Explorer pour trouver une zone de GatherableObject (si pas encore trouvée)
+/// 2. Se rendre à la zone et récolter
+/// 3. Déposer les ressources à la zone de dépôt
+/// Puis recommencer le cycle.
+/// </summary>
+public class JobGatherer : Job
+{
+    private string _jobTitle;
+
+    public override string JobTitle => _jobTitle;
+    public override JobCategory Category => JobCategory.Gatherer;
+
+    // GOAP
+    private GoapGoal _gatherGoal;
+    private List<GoapAction> _availableActions;
+    private Queue<GoapAction> _currentPlan;
+    private GoapAction _currentAction;
+
+    public JobGatherer(string jobTitle = "Gatherer")
+    {
+        _jobTitle = jobTitle;
+    }
+
+    /// <summary>
+    /// Exécuté chaque tick quand le worker est au travail.
+    /// Utilise le GOAP planner pour décider quoi faire.
+    /// </summary>
+    public override void Execute()
+    {
+        if (_workplace == null || !(_workplace is GatheringBuilding gathering)) return;
+
+        // Initialiser le GOAP si ce n'est pas fait
+        if (_gatherGoal == null)
+        {
+            InitializeGOAP(gathering);
+        }
+
+        // Si on a une action en cours, l'exécuter
+        if (_currentAction != null)
+        {
+            // Vérifier que l'action est encore valide
+            if (!_currentAction.IsValid(_worker))
+            {
+                Debug.Log($"<color=orange>[JobGatherer]</color> {_worker.CharacterName} : action {_currentAction.ActionName} invalide, replanification...");
+                _currentAction.Exit(_worker);
+                _currentAction = null;
+                _currentPlan = null;
+                return;
+            }
+
+            _currentAction.Execute(_worker);
+
+            if (_currentAction.IsComplete)
+            {
+                Debug.Log($"<color=cyan>[JobGatherer]</color> {_worker.CharacterName} : action {_currentAction.ActionName} terminée.");
+                _currentAction.Exit(_worker);
+                _currentAction = null;
+
+                // Passer à la prochaine action du plan
+                if (_currentPlan != null && _currentPlan.Count > 0)
+                {
+                    _currentAction = _currentPlan.Dequeue();
+                    Debug.Log($"<color=cyan>[JobGatherer]</color> {_worker.CharacterName} : prochaine action → {_currentAction.ActionName}");
+                }
+                else
+                {
+                    // Plan terminé, on replanifie au prochain tick
+                    _currentPlan = null;
+                }
+            }
+            return;
+        }
+
+        // Pas d'action en cours → Planifier
+        PlanNextActions(gathering);
+    }
+
+    /// <summary>
+    /// Initialise le système GOAP avec le goal et les actions disponibles.
+    /// </summary>
+    private void InitializeGOAP(GatheringBuilding building)
+    {
+        _gatherGoal = new GoapGoal(
+            "DepositGatheredResources",
+            new Dictionary<string, bool>
+            {
+                { "hasDepositedResources", true }
+            },
+            priority: 1
+        );
+
+        // Les actions sont recréées à chaque planification pour avoir des références fraîches
+    }
+
+    /// <summary>
+    /// Construit le world state actuel et lance le planner.
+    /// </summary>
+    private void PlanNextActions(GatheringBuilding building)
+    {
+        // Vérifier si le building a encore besoin de ressources
+        if (!building.NeedsResources())
+        {
+            Debug.Log($"<color=green>[JobGatherer]</color> {_worker.CharacterName} : le building n'a plus besoin de ressources.");
+            return;
+        }
+
+        // Construire le world state
+        var worldState = new Dictionary<string, bool>
+        {
+            { "hasGatherZone", building.HasGatherableZone },
+            { "hasResources", false },
+            { "hasDepositedResources", false }
+        };
+
+        // Créer les actions fraîches (chaque instance est stateful)
+        _availableActions = new List<GoapAction>
+        {
+            new GoapAction_ExploreForResources(building),
+            new GoapAction_GatherResources(building),
+            new GoapAction_DepositResources(building)
+        };
+
+        // Planifier
+        _currentPlan = GoapPlanner.Plan(worldState, _availableActions, _gatherGoal);
+
+        if (_currentPlan != null && _currentPlan.Count > 0)
+        {
+            _currentAction = _currentPlan.Dequeue();
+            Debug.Log($"<color=green>[JobGatherer]</color> {_worker.CharacterName} : nouveau plan ! Première action → {_currentAction.ActionName}");
+        }
+        else
+        {
+            Debug.Log($"<color=orange>[JobGatherer]</color> {_worker.CharacterName} : impossible de planifier.");
+        }
+    }
+
+    public override bool CanExecute()
+    {
+        return base.CanExecute() && _workplace is GatheringBuilding;
+    }
+
+    /// <summary>
+    /// Les gatherers commencent tôt le matin.
+    /// </summary>
+    public override List<ScheduleEntry> GetWorkSchedule()
+    {
+        return new List<ScheduleEntry>
+        {
+            new ScheduleEntry(6, 16, ScheduleActivity.Work, 10)
+        };
+    }
+
+    /// <summary>
+    /// Override Assign pour ajouter l'employé au building.
+    /// </summary>
+    public override void Assign(Character worker, CommercialBuilding workplace)
+    {
+        base.Assign(worker, workplace);
+
+        if (workplace is GatheringBuilding gathering)
+        {
+            gathering.AddEmployee(worker);
+        }
+    }
+
+    /// <summary>
+    /// Override Unassign pour retirer l'employé du building.
+    /// </summary>
+    public override void Unassign()
+    {
+        if (_workplace is GatheringBuilding gathering && _worker != null)
+        {
+            gathering.RemoveEmployee(_worker);
+        }
+
+        // Cleanup GOAP
+        if (_currentAction != null)
+        {
+            _currentAction.Exit(_worker);
+            _currentAction = null;
+        }
+        _currentPlan = null;
+
+        base.Unassign();
+    }
+}
