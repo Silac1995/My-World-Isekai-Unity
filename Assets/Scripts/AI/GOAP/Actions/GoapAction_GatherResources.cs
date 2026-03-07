@@ -261,18 +261,16 @@ public class GoapAction_GatherResources : GoapAction
 
     /// <summary>
     /// Cherche s'il existe des WorldItems demandés qui traînent au sol DANS la GatheringZone.
-    /// Utilise le même OverlapBox que le bâtiment lui-même pour garantir la détection.
+    /// Utilise le même OverlapBox que le bâtiment lui-même pour garantir la détection,
+    /// ou un grand rayon autour du worker en cas d'absence de zone.
     /// </summary>
     private WorldItem FindLooseWantedWorldItemInZone(Character worker)
     {
         var wantedItems = _building.GetWantedItems();
-        if (wantedItems.Count == 0 || _building.GatherableZone == null) return null;
-
-        WorldItem nearest = null;
-        float nearestDist = float.MaxValue;
+        if (wantedItems.Count == 0) return null;
 
         Collider[] colliders = new Collider[0];
-        BoxCollider boxCol = _building.GatherableZone.GetComponent<BoxCollider>();
+        BoxCollider boxCol = _building.GatherableZone?.GetComponent<BoxCollider>();
 
         if (boxCol != null)
         {
@@ -285,27 +283,7 @@ public class GoapAction_GatherResources : GoapAction
             colliders = Physics.OverlapSphere(worker.transform.position, 30f);
         }
 
-        foreach (var col in colliders)
-        {
-            var worldItem = col.GetComponent<WorldItem>() ?? col.GetComponentInParent<WorldItem>();
-            if (worldItem == null || worldItem.ItemInstance == null || worldItem.IsBeingCarried) continue;
-
-            // Ignorer si le WorldItem n'est pas "dans" la zone du point de vue local s'il était juste à côté
-            // (La boîte OverlapBox garantit globalement l'inclusion)
-            if (Zone.IsPositionInZoneType(worldItem.transform.position, ZoneType.Deposit)) continue;
-
-            if (wantedItems.Contains(worldItem.ItemInstance.ItemSO))
-            {
-                float dist = Vector3.Distance(worker.transform.position, worldItem.transform.position);
-                if (dist < nearestDist)
-                {
-                    nearest = worldItem;
-                    nearestDist = dist;
-                }
-            }
-        }
-
-        return nearest;
+        return GetNearestValidWorldItem(worker, colliders, wantedItems);
     }
 
     /// <summary>
@@ -318,21 +296,32 @@ public class GoapAction_GatherResources : GoapAction
         var wantedItems = _building.GetWantedItems();
         if (wantedItems.Count == 0) return null;
 
+        float searchRadius = 5f; 
+        Collider[] colliders = Physics.OverlapSphere(worker.transform.position, searchRadius);
+
+        return GetNearestValidWorldItem(worker, colliders, wantedItems);
+    }
+
+    /// <summary>
+    /// Méthode utilitaire appelée par les autres fonctions de recherche,
+    /// itère sur une liste de colliders et filtre les WorldItems valides et ramassables,
+    /// puis retourne le plus proche.
+    /// </summary>
+    private WorldItem GetNearestValidWorldItem(Character worker, Collider[] colliders, List<ItemSO> wantedItems)
+    {
         WorldItem nearest = null;
         float nearestDist = float.MaxValue;
 
-        // On cherche autour du joueur
-        Vector3 searchCenter = worker.transform.position;
-        float searchRadius = 5f; 
-
-        Collider[] colliders = Physics.OverlapSphere(searchCenter, searchRadius);
         foreach (var col in colliders)
         {
             var worldItem = col.GetComponent<WorldItem>() ?? col.GetComponentInParent<WorldItem>();
             if (worldItem == null || worldItem.ItemInstance == null || worldItem.IsBeingCarried) continue;
 
-            // Ignorer si l'item est dans la zone de Deposit
+            // Ignorer si l'item se trouve dans une Deposit Zone locale
             if (Zone.IsPositionInZoneType(worldItem.transform.position, ZoneType.Deposit)) continue;
+
+            // Ignorer l'objet au sol si on n'a pas la place précise de le stocker
+            if (!CanCarryItem(worker, worldItem.ItemInstance)) continue;
 
             if (wantedItems.Contains(worldItem.ItemInstance.ItemSO))
             {
@@ -417,6 +406,33 @@ public class GoapAction_GatherResources : GoapAction
         }
 
         return nearest;
+    }
+
+    /// <summary>
+    /// Vérifie si l'employé possède la capacité (dans son sac ou ses mains) de ramasser cet item précis.
+    /// Cela évite qu'il cible en boucle un objet par terre qu'il ne peut de toute façon pas stocker.
+    /// </summary>
+    private bool CanCarryItem(Character worker, ItemInstance itemInstance)
+    {
+        if (itemInstance == null) return false;
+
+        var equipment = worker.CharacterEquipment;
+        if (equipment != null && equipment.HaveInventory())
+        {
+            var inventory = equipment.GetInventory();
+            if (inventory.HasFreeSpaceForItem(itemInstance))
+            {
+                return true;
+            }
+        }
+
+        var handsController = worker.CharacterVisual?.BodyPartsController?.HandsController;
+        if (handsController != null && handsController.AreHandsFree())
+        {
+            return true;
+        }
+
+        return false;
     }
 
     public override void Exit(Character worker)
