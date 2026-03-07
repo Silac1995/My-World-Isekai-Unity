@@ -8,5 +8,6 @@ public enum ZoneType
     Market,
     PatrolRoute,
     Camp,
-    GatheringArea
+    GatheringArea,
+    Deposit
 }

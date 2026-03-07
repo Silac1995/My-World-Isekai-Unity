@@ -14,7 +14,7 @@ GameObject:
   - component: {fileID: 5733457314814422371}
   m_Layer: 0
   m_Name: Zone
-  m_TagString: Untagged
+  m_TagString: Deposit
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -84,7 +84,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 556ce41a973a5704fbfc8c807ad8ecd2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Zone
-  zoneType: 0
+  zoneType: 7
   zoneName: 
   _boundsTarget: {fileID: 0}
 --- !u!1 &8314060955435681043

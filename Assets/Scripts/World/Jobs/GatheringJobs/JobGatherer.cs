@@ -62,17 +62,9 @@ public class JobGatherer : Job
                 _currentAction.Exit(_worker);
                 _currentAction = null;
 
-                // Passer à la prochaine action du plan
-                if (_currentPlan != null && _currentPlan.Count > 0)
-                {
-                    _currentAction = _currentPlan.Dequeue();
-                    Debug.Log($"<color=cyan>[JobGatherer]</color> {_worker.CharacterName} : prochaine action → {_currentAction.ActionName}");
-                }
-                else
-                {
-                    // Plan terminé, on replanifie au prochain tick
-                    _currentPlan = null;
-                }
+                // Forcer la replanification à chaque fois pour évaluer la capacité restante.
+                // Au lieu de dépiler un plan devenu obsolète (ex: Deposit alors qu'on a encore de la place).
+                _currentPlan = null;
             }
             return;
         }

@@ -225,6 +225,7 @@ public class GoapAction_GatherResources : GoapAction
 
     /// <summary>
     /// Trouve le WorldItem le plus proche contenant un item voulu par le building.
+    /// On cherche prioritairement autour de l'objet qu'on vient de récolter pour éviter de piocher dans la deposit zone.
     /// </summary>
     private WorldItem FindNearestWantedWorldItem(Character worker)
     {
@@ -234,11 +235,29 @@ public class GoapAction_GatherResources : GoapAction
         WorldItem nearest = null;
         float nearestDist = float.MaxValue;
 
-        Collider[] colliders = Physics.OverlapSphere(worker.transform.position, 5f);
+        // On cherche autour du joueur
+        Vector3 searchCenter = worker.transform.position;
+        float searchRadius = 5f; 
+
+        Collider[] colliders = Physics.OverlapSphere(searchCenter, searchRadius);
         foreach (var col in colliders)
         {
             var worldItem = col.GetComponent<WorldItem>() ?? col.GetComponentInParent<WorldItem>();
             if (worldItem == null || worldItem.ItemInstance == null || worldItem.IsBeingCarried) continue;
+
+            // Ignorer si l'item est dans la zone de Deposit
+            bool inDepositZone = false;
+            Collider[] itemColliders = Physics.OverlapSphere(worldItem.transform.position, 0.1f, Physics.AllLayers, QueryTriggerInteraction.Collide);
+            foreach (var itemCol in itemColliders)
+            {
+                var zone = itemCol.GetComponent<Zone>() ?? itemCol.GetComponentInParent<Zone>();
+                if (zone != null && zone.zoneType == ZoneType.Deposit)
+                {
+                    inDepositZone = true;
+                    break;
+                }
+            }
+            if (inDepositZone) continue;
 
             foreach (var wanted in wantedItems)
             {

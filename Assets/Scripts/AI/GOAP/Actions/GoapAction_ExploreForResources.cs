@@ -201,6 +201,20 @@ public class GoapAction_ExploreForResources : GoapAction
             var worldItem = itemInteractable.GetComponent<WorldItem>();
             if (worldItem == null || worldItem.ItemInstance == null || worldItem.IsBeingCarried) continue;
 
+            // Ignorer si l'item est dans la zone de Deposit
+            bool inDepositZone = false;
+            Collider[] itemColliders = Physics.OverlapSphere(worldItem.transform.position, 0.1f, Physics.AllLayers, QueryTriggerInteraction.Collide);
+            foreach (var itemCol in itemColliders)
+            {
+                var zone = itemCol.GetComponent<Zone>() ?? itemCol.GetComponentInParent<Zone>();
+                if (zone != null && zone.zoneType == ZoneType.Deposit)
+                {
+                    inDepositZone = true;
+                    break;
+                }
+            }
+            if (inDepositZone) continue;
+
             // Vérifier si c'est un wanted item
             bool isWanted = false;
             foreach (var wanted in wantedItems)
