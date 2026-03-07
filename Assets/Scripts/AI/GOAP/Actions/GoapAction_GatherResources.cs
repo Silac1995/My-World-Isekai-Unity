@@ -321,7 +321,7 @@ public class GoapAction_GatherResources : GoapAction
             if (Zone.IsPositionInZoneType(worldItem.transform.position, ZoneType.Deposit)) continue;
 
             // Ignorer l'objet au sol si on n'a pas la place précise de le stocker
-            if (!CanCarryItem(worker, worldItem.ItemInstance)) continue;
+            if (worker.CharacterEquipment != null && !worker.CharacterEquipment.CanCarryItemAnyMore(worldItem.ItemInstance)) continue;
 
             if (wantedItems.Contains(worldItem.ItemInstance.ItemSO))
             {
@@ -406,33 +406,6 @@ public class GoapAction_GatherResources : GoapAction
         }
 
         return nearest;
-    }
-
-    /// <summary>
-    /// Vérifie si l'employé possède la capacité (dans son sac ou ses mains) de ramasser cet item précis.
-    /// Cela évite qu'il cible en boucle un objet par terre qu'il ne peut de toute façon pas stocker.
-    /// </summary>
-    private bool CanCarryItem(Character worker, ItemInstance itemInstance)
-    {
-        if (itemInstance == null) return false;
-
-        var equipment = worker.CharacterEquipment;
-        if (equipment != null && equipment.HaveInventory())
-        {
-            var inventory = equipment.GetInventory();
-            if (inventory.HasFreeSpaceForItem(itemInstance))
-            {
-                return true;
-            }
-        }
-
-        var handsController = worker.CharacterVisual?.BodyPartsController?.HandsController;
-        if (handsController != null && handsController.AreHandsFree())
-        {
-            return true;
-        }
-
-        return false;
     }
 
     public override void Exit(Character worker)

@@ -11,6 +11,7 @@ public class UI_CharacterDebugScript : MonoBehaviour
     [SerializeField] private TextMeshProUGUI characterNeedsText;
     [SerializeField] private TextMeshProUGUI agentState;
     [SerializeField] private TextMeshProUGUI busyReasonText;
+    [SerializeField] private TextMeshProUGUI workPhaseGOAPText; // Add this specific field on the prefab later
 
     private void Update()
     {
@@ -22,6 +23,7 @@ public class UI_CharacterDebugScript : MonoBehaviour
         UpdateNeedsDebug(); // Ajout de l'affichage des besoins
         UpdateAgentDebug();
         UpdateBusyReasonDebug();
+        UpdateWorkPhaseGOAPDebug();
     }
 
     private void UpdateActionDebug()
@@ -173,5 +175,36 @@ public class UI_CharacterDebugScript : MonoBehaviour
             busyReasonText.text = "Busy Reason: " + reason;
             busyReasonText.color = Color.yellow;
         }
+    }
+
+    private void UpdateWorkPhaseGOAPDebug()
+    {
+        if (workPhaseGOAPText == null) return;
+        
+        string goapGoalText = "GOAP Goal: None";
+        string goapActionText = "GOAP Action: None";
+        string phaseText = "Work Phase: N/A";
+
+        if (character != null && character.CharacterJob != null && character.CharacterJob.CurrentJob != null)
+        {
+            string goalName = character.CharacterJob.CurrentJob.CurrentGoalName;
+            goapGoalText = string.IsNullOrEmpty(goalName) ? "GOAP Goal: N/A" : $"GOAP Goal: {goalName}";
+
+            string actionName = character.CharacterJob.CurrentJob.CurrentActionName;
+            goapActionText = string.IsNullOrEmpty(actionName) ? "GOAP Action: N/A" : $"GOAP Action: {actionName}";
+        }
+
+        var controller = character.GetComponent<CharacterGameController>();
+        if (controller != null)
+        {
+            var workBehaviour = controller.GetCurrentBehaviour<WorkBehaviour>();
+            if (workBehaviour != null)
+            {
+                phaseText = $"Work Phase: {workBehaviour.CurrentPhase}";
+            }
+        }
+
+        workPhaseGOAPText.text = $"{phaseText}\n{goapGoalText}\n{goapActionText}";
+        workPhaseGOAPText.color = new Color(0.7f, 0.7f, 1f); // Light blue
     }
 }

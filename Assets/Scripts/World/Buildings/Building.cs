@@ -97,4 +97,28 @@ public class Building : ComplexRoom
         Debug.LogWarning($"<color=orange>[Building]</color> Impossible d'installer {furniturePrefab.name} dans {BuildingName} : pas de place trouvée.");
         return false;
     }
+
+    /// <summary>
+    /// Trouve un point valide à l'intérieur du Collider BuildingZone (s'il y en a un),
+    /// sinon utilise le point aléatoire de la zone générale.
+    /// Idéal pour que les employés se rendent dans l'espace formel du bâtiment
+    /// pour pointer ou s'y promener.
+    /// </summary>
+    public Vector3 GetRandomPointInBuildingZone(float yCoord)
+    {
+        if (_buildingZone != null)
+        {
+            float randomX = Random.Range(_buildingZone.bounds.min.x, _buildingZone.bounds.max.x);
+            float randomZ = Random.Range(_buildingZone.bounds.min.z, _buildingZone.bounds.max.z);
+            Vector3 targetPoint = new Vector3(randomX, yCoord, randomZ);
+
+            if (UnityEngine.AI.NavMesh.SamplePosition(targetPoint, out UnityEngine.AI.NavMeshHit hit, 10f, UnityEngine.AI.NavMesh.AllAreas))
+            {
+                return hit.position;
+            }
+            return targetPoint;
+        }
+
+        return base.GetRandomPointInZone();
+    }
 }

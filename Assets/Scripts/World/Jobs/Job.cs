@@ -20,6 +20,16 @@ public abstract class Job
     public Character Worker => _worker;
     public CommercialBuilding Workplace => _workplace;
     public bool IsAssigned => _worker != null;
+    
+    /// <summary>
+    /// Utilisé pour le debug. Retourne le nom de l'action ou de l'état en cours (ex: "GOAP: GatherResources").
+    /// </summary>
+    public virtual string CurrentActionName => string.Empty;
+
+    /// <summary>
+    /// Utilisé pour le debug. Retourne le nom de l'objectif GOAP en cours (ex: "Gather10Wood").
+    /// </summary>
+    public virtual string CurrentGoalName => string.Empty;
 
     /// <summary>
     /// Assigne un worker à ce poste dans un building donné.
@@ -59,6 +69,16 @@ public abstract class Job
     public virtual bool CanExecute()
     {
         return IsAssigned && _worker.IsAlive();
+    }
+
+    /// <summary>
+    /// Spécifie s'il y a actuellement du travail à faire concrètement pour ce job.
+    /// Par exemple, un JobGatherer retourne faux si toutes les ressources sont réunies
+    /// et que le reste a été déposé. Utilisé pour donner des pauses aux NPCs.
+    /// </summary>
+    public virtual bool HasWorkToDo()
+    {
+        return true;
     }
 
     /// <summary>

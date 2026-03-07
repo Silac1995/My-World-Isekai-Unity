@@ -73,8 +73,12 @@ public class NPCController : CharacterGameController
         // 1. DISPONIBILITÉ DU NPC : On n'initie rien si on est déjà occupé (combat, interaction, KO)
         if (!_character.IsFree()) return;
         
-        // On ne réagit qu'en mode Wander (balade)
-        if (GetCurrentBehaviour<WanderBehaviour>() == null) return;
+        // On ne réagit qu'en mode Wander (balade) ou en Pause au travail
+        bool isWandering = GetCurrentBehaviour<WanderBehaviour>() != null;
+        var workBehaviour = GetCurrentBehaviour<WorkBehaviour>();
+        bool isOnBreak = workBehaviour != null && workBehaviour.IsOnBreak;
+
+        if (!isWandering && !isOnBreak) return;
 
         if (_character.CharacterRelation == null) return;
         

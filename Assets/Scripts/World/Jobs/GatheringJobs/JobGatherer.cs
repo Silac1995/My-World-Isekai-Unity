@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 /// <summary>
@@ -21,6 +22,9 @@ public class JobGatherer : Job
     private List<GoapAction> _availableActions;
     private Queue<GoapAction> _currentPlan;
     private GoapAction _currentAction;
+
+    public override string CurrentActionName => _currentAction != null ? _currentAction.ActionName : "Planning / Idle";
+    public override string CurrentGoalName => _gatherGoal != null ? _gatherGoal.GoalName : "No Goal";
 
     public JobGatherer(string jobTitle = "Gatherer")
     {
@@ -165,6 +169,8 @@ public class JobGatherer : Job
             targetGoal = new GoapGoal("GatherAndDeposit", new Dictionary<string, bool> { { "hasDepositedResources", true } }, priority: 1);
         }
 
+        _gatherGoal = targetGoal; // On sauvegarde l'objectif courant pour l'UI de Debug
+        
         // Planifier
         _currentPlan = GoapPlanner.Plan(worldState, _availableActions, targetGoal);
 
@@ -182,6 +188,39 @@ public class JobGatherer : Job
     public override bool CanExecute()
     {
         return base.CanExecute() && _workplace is GatheringBuilding;
+    }
+
+    /// <summary>
+    /// Spécifie si le gatherer a encore de la récolte ou du dépôt à faire.
+    /// Renvoie Faux s'il n'a plus rien sur lui et que le batiment n'a plus besoin de rien.
+    /// </summary>
+    public override bool HasWorkToDo()
+    {
+        if (_workplace is not GatheringBuilding building) return false;
+
+        bool hasAtLeastOneResource = _worker.CharacterEquipment != null && 
+                                     _worker.CharacterEquipment.HaveInventory() && 
+                                     _worker.CharacterEquipment.GetInventory().ItemSlots.Any(slot => !slot.IsEmpty());
+                                     
+        if (_worker.CharacterVisual?.BodyPartsController?.HandsController != null)
+        {
+            if (_worker.CharacterVisual.BodyPartsController.HandsController.IsCarrying)
+            {
+                hasAtLeastOneResource = true;
+            }
+        }
+
+        bool allResourcesGathered = building.AreAllRequestedResourcesGathered();
+
+        // Le travail est fini si : 
+        // 1. On n'a plus rien sur nous pour déposer
+        // 2. Le batiment a toutes les ressources voulues OU il n'y a plus de zone avec ressources
+        if (allResourcesGathered && !hasAtLeastOneResource)
+        {
+            return false;
+        }
+
+        return true;
     }
 
     /// <summary>

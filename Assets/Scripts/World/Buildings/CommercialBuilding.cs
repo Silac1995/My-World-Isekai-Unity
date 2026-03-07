@@ -13,9 +13,11 @@ public abstract class CommercialBuilding : Building
     [SerializeField] protected Character _owner;
 
     protected List<Job> _jobs = new List<Job>();
+    protected List<Character> _activeWorkersOnShift = new List<Character>();
 
     public Character Owner => _owner;
     public IReadOnlyList<Job> Jobs => _jobs;
+    public IReadOnlyList<Character> ActiveWorkersOnShift => _activeWorkersOnShift;
 
     /// <summary>
     /// Le building est opérationnel si tous les jobs sont occupés par un worker.
@@ -152,5 +154,31 @@ public abstract class CommercialBuilding : Building
     public IEnumerable<Job> GetAvailableJobs()
     {
         return _jobs.Where(j => !j.IsAssigned);
+    }
+
+    /// <summary>
+    /// Appelé par un employé lorsqu'il arrive physiquement sur son lieu de travail
+    /// et commence (Punch In).
+    /// </summary>
+    public virtual void WorkerStartingShift(Character worker)
+    {
+        if (worker != null && !_activeWorkersOnShift.Contains(worker))
+        {
+            _activeWorkersOnShift.Add(worker);
+            Debug.Log($"<color=green>[Building]</color> {worker.CharacterName} a pointé (Punch In) à {buildingName}.");
+        }
+    }
+
+    /// <summary>
+    /// Appelé par un employé lorsqu'il quitte son comportement de travail
+    /// (fin de journée, événement spécial) (Punch Out).
+    /// </summary>
+    public virtual void WorkerEndingShift(Character worker)
+    {
+        if (worker != null && _activeWorkersOnShift.Contains(worker))
+        {
+            _activeWorkersOnShift.Remove(worker);
+            Debug.Log($"<color=orange>[Building]</color> {worker.CharacterName} a dépointé (Punch Out) de {buildingName}.");
+        }
     }
 }
