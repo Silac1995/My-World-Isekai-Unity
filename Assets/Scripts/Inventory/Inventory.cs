@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+ï»¿using System.Collections.Generic;
 using UnityEngine;
 
 [System.Serializable]
@@ -59,8 +59,27 @@ public class Inventory
         return false;
     }
 
+    public bool HasFreeSpaceForWearable()
+    {
+        foreach (var slot in _itemSlots)
+        {
+            if (slot is MiscSlot && slot.IsEmpty()) return true;
+        }
+        return false;
+    }
+
+    public bool HasFreeSpaceForItemSO(ItemSO itemSO)
+    {
+        if (itemSO == null) return false;
+
+        if (itemSO is WeaponSO) return HasFreeSpaceForWeapon();
+        if (itemSO is WearableSO) return HasFreeSpaceForWearable();
+        
+        return HasFreeSpaceForMisc();
+    }
+
     /// <summary>
-    /// Ajoute l'objet en passant le Character pour les mises à jour visuelles.
+    /// Ajoute l'objet en passant le Character pour les mises Ã  jour visuelles.
     /// </summary>
     public bool AddItem(ItemInstance item, Character character)
     {
@@ -83,7 +102,7 @@ public class Inventory
             if (slot is MiscSlot && slot.IsEmpty() && slot.CanAcceptItem(item))
             {
                 slot.ItemInstance = item;
-                Debug.Log($"[Inventory] Misc ajouté : {item.CustomizedName}");
+                Debug.Log($"[Inventory] Misc ajoutÃ© : {item.CustomizedName}");
                 return true;
             }
         }
@@ -98,10 +117,10 @@ public class Inventory
             {
                 slot.ItemInstance = item;
 
-                // On utilise le paramètre character pour mettre à jour le visuel
+                // On utilise le paramÃ¨tre character pour mettre Ã  jour le visuel
                 UpdateWeaponVisuals(character);
 
-                Debug.Log($"[Inventory] Arme ajoutée : {item.CustomizedName}");
+                Debug.Log($"[Inventory] Arme ajoutÃ©e : {item.CustomizedName}");
                 return true;
             }
         }
@@ -112,7 +131,7 @@ public class Inventory
     {
         if (character != null && character.CharacterEquipment != null)
         {
-            // Appelle la logique que nous avons créée pour le sac
+            // Appelle la logique que nous avons crÃ©e pour le sac
             character.CharacterEquipment.UpdateWeaponVisualOnBag();
         }
     }
@@ -134,7 +153,7 @@ public class Inventory
                 if (isWeapon)
                     UpdateWeaponVisuals(character);
 
-                Debug.Log($"[Inventory] {item.CustomizedName} retiré.");
+                Debug.Log($"[Inventory] {item.CustomizedName} retirÃ©.");
                 return true;
             }
         }

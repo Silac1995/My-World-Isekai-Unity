@@ -439,6 +439,16 @@ public class CharacterEquipment : MonoBehaviour
     }
 
     /// <summary>
+    /// Vérifie dynamiquement s'il y a de la place pour un type d'objet donné (Arme, Wearable, Misc).
+    /// </summary>
+    public bool HasFreeSpaceForItemSO(ItemSO itemSO)
+    {
+        if (!HaveInventory()) return false;
+        
+        return GetInventory().HasFreeSpaceForItemSO(itemSO);
+    }
+
+    /// <summary>
     /// Détermine si le personnage peut encore porter cet item (soit dans son sac, soit dans ses mains).
     /// </summary>
     public bool CanCarryItemAnyMore(ItemInstance itemInstance)

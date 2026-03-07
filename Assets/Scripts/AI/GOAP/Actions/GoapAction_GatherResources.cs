@@ -44,15 +44,31 @@ public class GoapAction_GatherResources : GoapAction
         if (_building == null || !_building.HasGatherableZone) return false;
 
         // Si le worker ne peut plus rien porter (ni sac ni main), l'action est invalide
-        // Remarque : Pour vérifier l'ItemInstance, on devrait idéalement savoir d'avance, mais
-        // ici on va vérifier s'il a au moins de la place de manière générale, sinon on bloque.
-        // Comme CanCarryItemAnyMore requiert un ItemInstance, on vérifie s'il y a juste de la place.
         var equipment = worker.CharacterEquipment;
         if (equipment != null)
         {
             var hands = worker.CharacterVisual?.BodyPartsController?.HandsController;
             bool handsFree = hands != null && hands.AreHandsFree();
-            bool bagHasSpace = equipment.HasFreeSpaceForMisc();
+            
+            bool bagHasSpace = false;
+            // Vérifier s'il y a de la place pour au moins UN des items voulus par le building
+            var wantedItems = _building.GetWantedItems();
+            if (wantedItems != null && wantedItems.Count > 0)
+            {
+                foreach (var wantedItem in wantedItems)
+                {
+                    if (equipment.HasFreeSpaceForItemSO(wantedItem))
+                    {
+                        bagHasSpace = true;
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                // Fallback générique si on ne sait pas quoi chercher
+                bagHasSpace = equipment.HasFreeSpaceForMisc();
+            }
 
             if (!handsFree && !bagHasSpace)
             {
