@@ -89,18 +89,15 @@ public class GatherableObject : InteractableObject
             Deplete();
         }
 
-        // Spawn le WorldItem dans le monde (même pattern que CraftingStation.Craft)
-        SpawnWorldItem(harvestedItem, gatherer);
-
         Debug.Log($"<color=green>[Gather]</color> {gatherer.CharacterName} a récolté {harvestedItem.ItemName}.");
         return harvestedItem;
     }
 
     /// <summary>
     /// Instancie le WorldItem prefab de l'ItemSO et l'initialise dans le monde.
-    /// L'item apparaît devant le gatherer.
+    /// Utilisé quand on veut drop un item au sol (ex: deposit).
     /// </summary>
-    private void SpawnWorldItem(ItemSO itemSO, Character gatherer)
+    public static void SpawnWorldItem(ItemSO itemSO, Vector3 position)
     {
         GameObject prefab = itemSO.WorldItemPrefab;
         if (prefab == null)
@@ -109,13 +106,9 @@ public class GatherableObject : InteractableObject
             return;
         }
 
-        // Spawn devant le gatherer
-        Vector3 spawnPos = gatherer.transform.position + gatherer.transform.forward * 0.5f + Vector3.up * 0.3f;
-
-        GameObject worldItemGo = Object.Instantiate(prefab, spawnPos, Quaternion.identity);
+        GameObject worldItemGo = Object.Instantiate(prefab, position, Quaternion.identity);
         worldItemGo.name = $"WorldItem_{itemSO.ItemName}";
 
-        // Créer l'instance de données et lier au WorldItem
         ItemInstance instance = itemSO.CreateInstance();
 
         if (worldItemGo.TryGetComponent(out WorldItem worldItem))

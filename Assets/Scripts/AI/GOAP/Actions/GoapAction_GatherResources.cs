@@ -2,9 +2,8 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// Action GOAP : Se rendre à la zone de récolte et récolter les GatherableObject.
-/// Le gatherer se déplace vers la gatherableZone du building, trouve un GatherableObject,
-/// et le récolte. L'item récolté est ajouté à l'inventaire du worker.
+/// Action GOAP : Se rendre à la zone de récolte, récolter un GatherableObject,
+/// puis ramasser le WorldItem spawné (dans le sac ou dans les mains).
 /// </summary>
 public class GoapAction_GatherResources : GoapAction
 {
@@ -28,6 +27,8 @@ public class GoapAction_GatherResources : GoapAction
     private bool _isMovingToZone = false;
     private bool _arrivedAtZone = false;
     private bool _isGathering = false;
+    private bool _gatherFinished = false;
+    private bool _pickupStarted = false;
     private GatherableObject _currentTarget = null;
     private CharacterGatherAction _gatherAction = null;
 
@@ -47,7 +48,6 @@ public class GoapAction_GatherResources : GoapAction
     {
         if (_isComplete) return;
 
-        // Vérifier que la zone est encore valide
         if (!_building.HasGatherableZone)
         {
             Debug.Log($"<color=orange>[GOAP Gather]</color> {worker.CharacterName} : la zone de récolte a disparu !");
@@ -69,20 +69,18 @@ public class GoapAction_GatherResources : GoapAction
             return;
         }
 
-        // Phase 2 : Trouver un GatherableObject et récolter
+        // Phase 2 : Trouver un GatherableObject
         if (_currentTarget == null)
         {
             _currentTarget = FindNearestGatherable(worker);
             if (_currentTarget == null)
             {
-                // Plus rien à récolter dans cette zone → la vider
                 Debug.Log($"<color=orange>[GOAP Gather]</color> {worker.CharacterName} : plus de ressources dans la zone.");
                 _building.ClearGatherableZone();
                 _isComplete = true;
                 return;
             }
 
-            // Se déplacer vers le GatherableObject
             Vector3 targetPos = _currentTarget.transform.position;
             movement.SetDestination(targetPos);
             return;
@@ -91,23 +89,17 @@ public class GoapAction_GatherResources : GoapAction
         // Phase 3 : Lancer la CharacterGatherAction quand on est arrivé
         if (!_isGathering)
         {
-            // Vérifier si on est arrivé au GatherableObject
             if (!movement.PathPending && (!movement.HasPath || movement.RemainingDistance <= movement.StoppingDistance + 1f))
             {
                 _isGathering = true;
                 _gatherAction = new CharacterGatherAction(worker, _currentTarget);
 
-                // S'abonner à la fin de l'action
                 _gatherAction.OnActionFinished += () =>
                 {
-                    if (_gatherAction.HarvestedItem != null)
-                    {
-                        Debug.Log($"<color=green>[GOAP Gather]</color> {worker.CharacterName} a récolté {_gatherAction.HarvestedItem.ItemName} !");
-                    }
-                    _isComplete = true;
+                    _gatherFinished = true;
+                    Debug.Log($"<color=cyan>[GOAP Gather]</color> {worker.CharacterName} a fini de récolter, recherche du WorldItem...");
                 };
 
-                // Exécuter via le système de CharacterActions
                 if (!worker.CharacterActions.ExecuteAction(_gatherAction))
                 {
                     Debug.Log($"<color=orange>[GOAP Gather]</color> {worker.CharacterName} ne peut pas lancer la récolte.");
@@ -117,8 +109,118 @@ public class GoapAction_GatherResources : GoapAction
             return;
         }
 
-        // Phase 4 : Attendre que la CharacterGatherAction se termine
-        // (Le système CharacterActions gère le timer et appelle OnApplyEffect automatiquement)
+        // Phase 4 : Après la récolte, ramasser le WorldItem spawné
+        if (_gatherFinished && !_pickupStarted)
+        {
+            _pickupStarted = true;
+            PickupNearbyWorldItem(worker);
+            return;
+        }
+
+        // Phase 5 : Attendre que le pickup (CharacterPickUpItem) se termine
+        // _isComplete sera mis à true par le callback
+    }
+
+    /// <summary>
+    /// Cherche un WorldItem au sol proche du worker et le ramasse (sac ou mains).
+    /// </summary>
+    private void PickupNearbyWorldItem(Character worker)
+    {
+        WorldItem nearestWorldItem = FindNearestWantedWorldItem(worker);
+
+        if (nearestWorldItem == null)
+        {
+            Debug.Log($"<color=orange>[GOAP Gather]</color> {worker.CharacterName} : aucun WorldItem trouvé à ramasser.");
+            _isComplete = true;
+            return;
+        }
+
+        ItemInstance itemInstance = nearestWorldItem.ItemInstance;
+        if (itemInstance == null)
+        {
+            _isComplete = true;
+            return;
+        }
+
+        // Option 1 : Le personnage a un sac avec de la place → CharacterPickUpItem
+        var equipment = worker.CharacterEquipment;
+        if (equipment != null && equipment.HaveInventory())
+        {
+            var inventory = equipment.GetInventory();
+            if (inventory.HasFreeSpaceForItem(itemInstance))
+            {
+                var pickupAction = new CharacterPickUpItem(worker, itemInstance, nearestWorldItem.gameObject);
+                pickupAction.OnActionFinished += () =>
+                {
+                    Debug.Log($"<color=green>[GOAP Gather]</color> {worker.CharacterName} a mis {itemInstance.ItemSO.ItemName} dans son sac.");
+                    _isComplete = true;
+                };
+
+                if (!worker.CharacterActions.ExecuteAction(pickupAction))
+                {
+                    CarryItemFallback(worker, itemInstance, nearestWorldItem);
+                }
+                return;
+            }
+        }
+
+        // Option 2 : Pas de sac ou plein → carry dans les mains
+        CarryItemFallback(worker, itemInstance, nearestWorldItem);
+    }
+
+    /// <summary>
+    /// Fallback : porte l'item dans les mains et détruit le WorldItem au sol.
+    /// </summary>
+    private void CarryItemFallback(Character worker, ItemInstance itemInstance, WorldItem worldItem)
+    {
+        var handsController = worker.CharacterVisual?.BodyPartsController?.HandsController;
+        if (handsController != null && handsController.AreHandsFree())
+        {
+            handsController.CarryItem(itemInstance);
+            Object.Destroy(worldItem.gameObject);
+            Debug.Log($"<color=green>[GOAP Gather]</color> {worker.CharacterName} porte {itemInstance.ItemSO.ItemName} dans ses mains.");
+        }
+        else
+        {
+            Debug.Log($"<color=orange>[GOAP Gather]</color> {worker.CharacterName} ne peut ni stocker ni porter l'item.");
+        }
+
+        _isComplete = true;
+    }
+
+    /// <summary>
+    /// Trouve le WorldItem le plus proche contenant un item voulu par le building.
+    /// </summary>
+    private WorldItem FindNearestWantedWorldItem(Character worker)
+    {
+        var wantedItems = _building.GetWantedItems();
+        if (wantedItems.Count == 0) return null;
+
+        WorldItem nearest = null;
+        float nearestDist = float.MaxValue;
+
+        Collider[] colliders = Physics.OverlapSphere(worker.transform.position, 5f);
+        foreach (var col in colliders)
+        {
+            var worldItem = col.GetComponent<WorldItem>() ?? col.GetComponentInParent<WorldItem>();
+            if (worldItem == null || worldItem.ItemInstance == null) continue;
+
+            foreach (var wanted in wantedItems)
+            {
+                if (worldItem.ItemInstance.ItemSO == wanted)
+                {
+                    float dist = Vector3.Distance(worker.transform.position, worldItem.transform.position);
+                    if (dist < nearestDist)
+                    {
+                        nearest = worldItem;
+                        nearestDist = dist;
+                    }
+                    break;
+                }
+            }
+        }
+
+        return nearest;
     }
 
     private void MoveToGatherZone(Character worker, CharacterMovement movement)
@@ -131,7 +233,6 @@ public class GoapAction_GatherResources : GoapAction
             return;
         }
 
-        // Vérifier si on est arrivé
         if (!movement.PathPending && (!movement.HasPath || movement.RemainingDistance <= movement.StoppingDistance + 0.5f))
         {
             _arrivedAtZone = true;
@@ -140,9 +241,6 @@ public class GoapAction_GatherResources : GoapAction
         }
     }
 
-    /// <summary>
-    /// Trouve le GatherableObject le plus proche qui produit un item voulu et qui n'est pas épuisé.
-    /// </summary>
     private GatherableObject FindNearestGatherable(Character worker)
     {
         var wantedItems = _building.GetWantedItems();
@@ -151,7 +249,6 @@ public class GoapAction_GatherResources : GoapAction
         GatherableObject nearest = null;
         float nearestDist = float.MaxValue;
 
-        // Chercher dans un rayon autour du worker
         Collider[] colliders = Physics.OverlapSphere(worker.transform.position, 20f);
         foreach (var col in colliders)
         {
@@ -177,6 +274,8 @@ public class GoapAction_GatherResources : GoapAction
         _isMovingToZone = false;
         _arrivedAtZone = false;
         _isGathering = false;
+        _gatherFinished = false;
+        _pickupStarted = false;
         _currentTarget = null;
         worker.CharacterMovement?.ResetPath();
     }

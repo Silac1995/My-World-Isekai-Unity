@@ -1,5 +1,6 @@
 using UnityEngine;
 
+[RequireComponent(typeof(UnityEngine.Rendering.SortingGroup))]
 public class WorldItem : MonoBehaviour
 {
     [Header("References")]
@@ -8,6 +9,12 @@ public class WorldItem : MonoBehaviour
     [Header("Data")]
     [SerializeField] private ItemInstance _itemInstance;
     public ItemInstance ItemInstance => _itemInstance;
+    public UnityEngine.Rendering.SortingGroup SortingGroup { get; private set; }
+
+    private void Awake()
+    {
+        SortingGroup = GetComponent<UnityEngine.Rendering.SortingGroup>();
+    }
 
     public void Initialize(ItemInstance instance)
     {

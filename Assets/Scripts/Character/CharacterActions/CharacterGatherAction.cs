@@ -50,12 +50,14 @@ public class CharacterGatherAction : CharacterAction
             return;
         }
 
-        // Récolter l'item
+        // Récolter l'item (retourne le ItemSO)
         _harvestedItem = _target.Gather(character);
 
         if (_harvestedItem != null)
         {
-            Debug.Log($"<color=green>[Gather Action]</color> {character.CharacterName} a récolté {_harvestedItem.ItemName} !");
+            // Spawn le WorldItem au sol devant le personnage
+            Vector3 spawnPos = character.transform.position + character.transform.forward * 0.5f + Vector3.up * 0.3f;
+            GatherableObject.SpawnWorldItem(_harvestedItem, spawnPos);
         }
     }
 

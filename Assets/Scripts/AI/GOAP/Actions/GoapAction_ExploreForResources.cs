@@ -66,6 +66,9 @@ public class GoapAction_ExploreForResources : GoapAction
             return;
         }
 
+        // Opportuniste : ramasser les WorldItem voulus vus au sol
+        TryPickupNearbyWantedItems(worker);
+
         // Si on n'est pas en mouvement, se déplacer vers un point aléatoire pour explorer
         if (!_isMoving || (!movement.PathPending && (!movement.HasPath || movement.RemainingDistance <= movement.StoppingDistance + 0.5f)))
         {
@@ -176,6 +179,65 @@ public class GoapAction_ExploreForResources : GoapAction
         }
 
         return nearest;
+    }
+
+    /// <summary>
+    /// Pendant l'exploration, si le worker voit des WorldItem voulus par terre, il les ramasse.
+    /// </summary>
+    private void TryPickupNearbyWantedItems(Character worker)
+    {
+        var awareness = worker.CharacterAwareness;
+        if (awareness == null) return;
+
+        var wantedItems = _building.GetWantedItems();
+        if (wantedItems.Count == 0) return;
+
+        // Chercher les ItemInteractable visibles (WorldItem hérite d'InteractableObject via ItemInteractable)
+        var visibleItems = awareness.GetVisibleInteractables<ItemInteractable>();
+
+        foreach (var itemInteractable in visibleItems)
+        {
+            var worldItem = itemInteractable.GetComponent<WorldItem>();
+            if (worldItem == null || worldItem.ItemInstance == null) continue;
+
+            // Vérifier si c'est un wanted item
+            bool isWanted = false;
+            foreach (var wanted in wantedItems)
+            {
+                if (worldItem.ItemInstance.ItemSO == wanted)
+                {
+                    isWanted = true;
+                    break;
+                }
+            }
+            if (!isWanted) continue;
+
+            // Essayer de ramasser — sac d'abord, puis mains
+            var equipment = worker.CharacterEquipment;
+            if (equipment != null && equipment.HaveInventory())
+            {
+                var inventory = equipment.GetInventory();
+                if (inventory.HasFreeSpaceForItem(worldItem.ItemInstance))
+                {
+                    var pickupAction = new CharacterPickUpItem(worker, worldItem.ItemInstance, worldItem.gameObject);
+                    worker.CharacterActions.ExecuteAction(pickupAction);
+                    Debug.Log($"<color=green>[GOAP Explore]</color> {worker.CharacterName} ramasse {worldItem.ItemInstance.ItemSO.ItemName} trouvé par terre !");
+                    return;
+                }
+            }
+
+            // Mains
+            var handsController = worker.CharacterVisual?.BodyPartsController?.HandsController;
+            if (handsController != null && handsController.AreHandsFree())
+            {
+                handsController.CarryItem(worldItem.ItemInstance);
+                Object.Destroy(worldItem.gameObject);
+                Debug.Log($"<color=green>[GOAP Explore]</color> {worker.CharacterName} porte {worldItem.ItemInstance.ItemSO.ItemName} trouvé par terre !");
+                return;
+            }
+
+            break; // Un seul pickup à la fois
+        }
     }
 
     public override void Exit(Character worker)

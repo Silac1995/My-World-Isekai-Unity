@@ -111,10 +111,37 @@ public class JobGatherer : Job
         }
 
         // Construire le world state
+        bool hasResources = false;
+
+        // Check 1 : Le worker porte un item dans les mains
+        var handsController = _worker.CharacterVisual?.BodyPartsController?.HandsController;
+        if (handsController != null && handsController.IsCarrying)
+            hasResources = true;
+
+        // Check 2 : Le worker a des wanted items dans son sac
+        if (!hasResources && _worker.CharacterEquipment != null && _worker.CharacterEquipment.HaveInventory())
+        {
+            var inventory = _worker.CharacterEquipment.GetInventory();
+            var wantedItems = building.GetWantedItems();
+            foreach (var slot in inventory.ItemSlots)
+            {
+                if (slot.IsEmpty()) continue;
+                foreach (var wanted in wantedItems)
+                {
+                    if (slot.ItemInstance.ItemSO == wanted)
+                    {
+                        hasResources = true;
+                        break;
+                    }
+                }
+                if (hasResources) break;
+            }
+        }
+
         var worldState = new Dictionary<string, bool>
         {
             { "hasGatherZone", building.HasGatherableZone },
-            { "hasResources", false },
+            { "hasResources", hasResources },
             { "hasDepositedResources", false }
         };
 

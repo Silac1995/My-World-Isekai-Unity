@@ -1,4 +1,4 @@
-using System;
+ï»¿using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.U2D.Animation;
@@ -6,7 +6,7 @@ using UnityEngine.U2D.Animation;
 public class CharacterEquipment : MonoBehaviour
 {
     [SerializeField] private Character character;
-    // Cet événement sera déclenché chaque fois qu'un équipement change
+    // Cet Ã©vÃ©nement sera dÃ©clenchÃ© chaque fois qu'un Ã©quipement change
     public event Action OnEquipmentChanged;
 
     public Character Character
@@ -20,8 +20,9 @@ public class CharacterEquipment : MonoBehaviour
     [SerializeField] private GameObject _weaponSocket; // Le point d'attache visuel de l'arme
 
     public WeaponInstance CurrentWeapon => _weapon;
+    public bool HasWeaponInHands => _weapon != null;
 
-    // Tes couches assignées manuellement via [SerializeReference]
+    // Tes couches assignÃ©es manuellement via [SerializeReference]
     [SerializeReference] private UnderwearLayer underwearLayer;
     [SerializeReference] private ClothingLayer clothingLayer;
     [SerializeReference] private ArmorLayer armorLayer;
@@ -42,15 +43,15 @@ public class CharacterEquipment : MonoBehaviour
     private void Start()
     {
         UpdateBagVisual(_bag != null);
-        UpdateWeaponVisual(); // Cette méthode gère déjà le cas null proprement maintenant
+        UpdateWeaponVisual(); // Cette mÃ©thode gÃ¨re dÃ©jÃ  le cas null proprement maintenant
     }
 
     /// <summary>
-    /// Met à jour l'état visuel du socket d'arme et informe le système de combat.
+    /// Met Ã  jour l'Ã©tat visuel du socket d'arme et informe le systÃ¨me de combat.
     /// </summary>
     private void UpdateWeaponVisual()
     {
-        // On considère qu'on a une arme UNIQUEMENT si l'instance ET son SO existent
+        // On considÃ¨re qu'on a une arme UNIQUEMENT si l'instance ET son SO existent
         bool hasValidWeapon = _weapon != null && _weapon.ItemSO != null;
 
         // 1. GESTION DU SOCKET VISUEL
@@ -79,7 +80,7 @@ public class CharacterEquipment : MonoBehaviour
 
     private void SyncWeaponVisualToSocket()
     {
-        // Double sécurité : on vérifie le SO avant d'accéder à CategoryName
+        // Double sÃ©curitÃ© : on vÃ©rifie le SO avant d'accÃ©der Ã  CategoryName
         if (_weapon == null || _weapon.ItemSO == null) return;
 
         SpriteResolver[] resolvers = _weaponSocket.GetComponentsInChildren<SpriteResolver>();
@@ -89,8 +90,8 @@ public class CharacterEquipment : MonoBehaviour
         }
     }
     /// <summary>
-    /// Force la désactivation visuelle de tous les sockets du sac.
-    /// Utile si tu veux vider le visuel sans toucher à la donnée.
+    /// Force la dÃ©sactivation visuelle de tous les sockets du sac.
+    /// Utile si tu veux vider le visuel sans toucher Ã  la donnÃ©e.
     /// </summary>
     public void DisableBagVisuals()
     {
@@ -102,10 +103,10 @@ public class CharacterEquipment : MonoBehaviour
         // 1. GESTION DES ARMES
         if (itemInstance is WeaponInstance weapon)
         {
-            // On vérifie si c'est déjà l'arme équipée
+            // On vÃ©rifie si c'est dÃ©jÃ  l'arme Ã©quipÃ©e
             if (_weapon == weapon) return;
 
-            // Utilisation de la méthode dédiée
+            // Utilisation de la mÃ©thode dÃ©diÃ©e
             EquipWeapon(weapon);
 
             OnEquipmentChanged?.Invoke();
@@ -115,11 +116,11 @@ public class CharacterEquipment : MonoBehaviour
         // 2. GESTION DES WEARABLES (Sacs inclus)
         if (itemInstance is WearableInstance wearable)
         {
-            // On récupère le SO typé (WearableSO ou BagSO qui en hérite)
+            // On rÃ©cupÃ¨re le SO typÃ© (WearableSO ou BagSO qui en hÃ©rite)
             if (wearable.ItemSO is WearableSO data)
             {
                 // --- CAS PARTICULIER : LE SAC ---
-                // On vérifie soit le type d'enum, soit la classe de l'instance
+                // On vÃ©rifie soit le type d'enum, soit la classe de l'instance
                 if (data.WearableType == WearableType.Bag || wearable is BagInstance)
                 {
                     if (wearable is BagInstance bag)
@@ -129,12 +130,12 @@ public class CharacterEquipment : MonoBehaviour
                     }
                     else
                     {
-                        Debug.LogError($"[Equip] L'item {data.ItemName} est marqué comme Bag mais l'instance n'est pas un BagInstance!");
+                        Debug.LogError($"[Equip] L'item {data.ItemName} est marquÃ© comme Bag mais l'instance n'est pas un BagInstance!");
                     }
                     return;
                 }
 
-                // --- CAS GÉNÉRAL : COUCHES D'ÉQUIPEMENT ---
+                // --- CAS GÃ‰NÃ‰RAL : COUCHES D'Ã‰QUIPEMENT ---
                 EquipmentLayer targetLayer = GetTargetLayer(data.EquipmentLayer);
 
                 if (targetLayer != null)
@@ -149,18 +150,18 @@ public class CharacterEquipment : MonoBehaviour
         }
     }
 
-    // Petite méthode pour préparer la suite (Gestion des mains gauche/droite par ex)
+    // Petite mÃ©thode pour prÃ©parer la suite (Gestion des mains gauche/droite par ex)
     private void EquipWeapon(WeaponInstance weapon)
     {
-        // 1. Mise à jour de la donnée
+        // 1. Mise Ã  jour de la donnÃ©e
         _weapon = weapon;
-        Debug.Log($"<color=red>[Equip-Weapon]</color> {weapon.ItemSO.ItemName} équipée !");
+        Debug.Log($"<color=red>[Equip-Weapon]</color> {weapon.ItemSO.ItemName} Ã©quipÃ©e !");
 
-        // 2. Mise à jour de TOUTE la chaîne (Visuel + Animator)
+        // 2. Mise Ã  jour de TOUTE la chaÃ®ne (Visuel + Animator)
         UpdateWeaponVisual();
     }
     /// <summary>
-    /// Déséquipe l'arme actuelle et repasse en mode civil.
+    /// DÃ©sÃ©quipe l'arme actuelle et repasse en mode civil.
     /// </summary>
     public void UnequipWeapon()
     {
@@ -169,13 +170,13 @@ public class CharacterEquipment : MonoBehaviour
         character.DropItem(_weapon);
         _weapon = null;
 
-        UpdateWeaponVisual(); // Désactive le socket + remet l'animator civil
+        UpdateWeaponVisual(); // DÃ©sactive le socket + remet l'animator civil
         OnEquipmentChanged?.Invoke();
     }
 
     private void EquipBag(BagInstance newBag)
     {
-        // Si un sac est déjà équipé, on pourrait le déséquiper ici
+        // Si un sac est dÃ©jÃ  Ã©quipÃ©, on pourrait le dÃ©sÃ©quiper ici
         if (_bag != null)
         {
             // Logique pour remettre l'ancien sac dans l'inventaire ou au sol
@@ -183,27 +184,27 @@ public class CharacterEquipment : MonoBehaviour
 
         _bag = newBag;
         UpdateBagVisual(true);
-        Debug.Log($"<color=green>[Equip-Bag]</color> {newBag.ItemSO.ItemName} équipé sur le slot global.");
+        Debug.Log($"<color=green>[Equip-Bag]</color> {newBag.ItemSO.ItemName} Ã©quipÃ© sur le slot global.");
     }
 
     /// <summary>
-    /// Retire le sac actuel, met à jour le visuel et fait apparaître l'item au sol.
+    /// Retire le sac actuel, met Ã  jour le visuel et fait apparaÃ®tre l'item au sol.
     /// </summary>
     public void UnequipBag()
     {
         if (_bag == null)
         {
-            Debug.LogWarning("[Unequip] Aucun sac n'est équipé.");
+            Debug.LogWarning("[Unequip] Aucun sac n'est Ã©quipÃ©.");
             return;
         }
 
         Debug.Log($"<color=orange>[Unequip-Bag]</color> Retrait de : <b>{_bag.ItemSO.ItemName}</b>");
 
         // 1. On demande au personnage de faire tomber l'item physiquement dans le monde
-        // Cette méthode doit gérer le spawn du prefab WorldItem avec l'instance _bag
+        // Cette mÃ©thode doit gÃ©rer le spawn du prefab WorldItem avec l'instance _bag
         character.DropItem(_bag);
 
-        // 2. On nettoie la référence et on cache les visuels
+        // 2. On nettoie la rÃ©fÃ©rence et on cache les visuels
         _bag = null;
         UpdateBagVisual(false);
     }
@@ -212,7 +213,7 @@ public class CharacterEquipment : MonoBehaviour
     {
         if (_bagSockets == null || _bagSockets.Count == 0) return;
 
-        // --- ÉTAPE DE NETTOYAGE ---
+        // --- Ã‰TAPE DE NETTOYAGE ---
         // Avant d'afficher le nouveau sac, on s'assure que l'ancien nettoie ses armes
         if (!show || _bag == null)
         {
@@ -226,12 +227,12 @@ public class CharacterEquipment : MonoBehaviour
         {
             if (socket == null) continue;
 
-            // Si on cache le sac, on désactive le socket
+            // Si on cache le sac, on dÃ©sactive le socket
             socket.SetActive(shouldActuallyShow);
 
             if (shouldActuallyShow)
             {
-                // On récupère le nouveau script de sac
+                // On rÃ©cupÃ¨re le nouveau script de sac
                 _bagScript = socket.GetComponent<Bag>();
 
                 if (_bagScript != null)
@@ -251,14 +252,14 @@ public class CharacterEquipment : MonoBehaviour
             }
         }
 
-        // Une fois le nouveau sac prêt, on affiche les armes qu'il contient
+        // Une fois le nouveau sac prÃªt, on affiche les armes qu'il contient
         if (shouldActuallyShow)
         {
             UpdateWeaponVisualOnBag();
         }
     }
 
-    // Extraction de la logique de couleur pour plus de clarté
+    // Extraction de la logique de couleur pour plus de clartÃ©
     private void ApplyBagColors(GameObject socket)
     {
         SpriteRenderer[] renderers = socket.GetComponentsInChildren<SpriteRenderer>();
@@ -272,7 +273,7 @@ public class CharacterEquipment : MonoBehaviour
         }
     }
     /// <summary>
-    /// Détruit tous les visuels d'armes actuellement fixés sur le sac.
+    /// DÃ©truit tous les visuels d'armes actuellement fixÃ©s sur le sac.
     /// </summary>
     public void ClearAllWeaponVisualsOnBag()
     {
@@ -289,14 +290,14 @@ public class CharacterEquipment : MonoBehaviour
         }
     }
     /// <summary>
-    /// Rafraîchit l'affichage des armes sur le sac en utilisant les anchors détectés.
+    /// RafraÃ®chit l'affichage des armes sur le sac en utilisant les anchors dÃ©tectÃ©s.
     /// </summary>
     public void UpdateWeaponVisualOnBag()
     {
-        // 1. Sécurités de base
+        // 1. SÃ©curitÃ©s de base
         if (_bagScript == null || !HaveInventory()) return;
 
-        // 2. On récupère la liste des slots d'armes de l'inventaire
+        // 2. On rÃ©cupÃ¨re la liste des slots d'armes de l'inventaire
         // On filtre pour n'avoir que les armes
         List<ItemInstance> weaponsInInventory = new List<ItemInstance>();
         foreach (var slot in GetInventory().ItemSlots)
@@ -307,7 +308,7 @@ public class CharacterEquipment : MonoBehaviour
             }
         }
 
-        // 3. On récupère les points d'ancrage visuels sur le prefab du sac
+        // 3. On rÃ©cupÃ¨re les points d'ancrage visuels sur le prefab du sac
         List<Transform> anchors = _bagScript.GetAllWeaponAnchors();
 
         // 4. Nettoyage et Instanciation
@@ -315,7 +316,7 @@ public class CharacterEquipment : MonoBehaviour
         {
             Transform anchor = anchors[i];
 
-            // On détruit l'ancien visuel s'il existe
+            // On dÃ©truit l'ancien visuel s'il existe
             foreach (Transform child in anchor)
             {
                 Destroy(child.gameObject);
@@ -334,14 +335,14 @@ public class CharacterEquipment : MonoBehaviour
         GameObject visualPrefab = weapon.ItemPrefab;
         if (visualPrefab == null) return;
 
-        // 1. Instanciation SANS parent d'abord (très important pour le calcul de matrice propre)
+        // 1. Instanciation SANS parent d'abord (trÃ¨s important pour le calcul de matrice propre)
         GameObject instantiatedWeapon = Instantiate(visualPrefab);
         instantiatedWeapon.name = "Visual_" + weapon.ItemSO.ItemName;
 
         // 2. Initialisation des visuels (Sprites/Library)
         weapon.InitializePrefab(instantiatedWeapon);
 
-        // 3. On laisse le Bag gérer le parentage ET le skinning d'un seul bloc
+        // 3. On laisse le Bag gÃ©rer le parentage ET le skinning d'un seul bloc
         if (_bagScript != null)
         {
             _bagScript.InitializeWeaponBones(instantiatedWeapon, anchor);
@@ -350,11 +351,11 @@ public class CharacterEquipment : MonoBehaviour
 
 
     /// <summary>
-    /// Retire un équipement spécifique en fonction de sa couche (Layer) et de son emplacement (Slot).
-    /// Gère la destruction de l'instance, la libération du slot et la mise à jour visuelle.
+    /// Retire un Ã©quipement spÃ©cifique en fonction de sa couche (Layer) et de son emplacement (Slot).
+    /// GÃ¨re la destruction de l'instance, la libÃ©ration du slot et la mise Ã  jour visuelle.
     /// </summary>
-    /// <param name="layerType">La couche concernée (Underwear, Clothing, Armor).</param>
-    /// <param name="slotType">La partie du corps à libérer (Helmet, Armor, Boots, etc.).</param>
+    /// <param name="layerType">La couche concernÃ©e (Underwear, Clothing, Armor).</param>
+    /// <param name="slotType">La partie du corps Ã  libÃ©rer (Helmet, Armor, Boots, etc.).</param>
     /// 
 
     public void Unequip(WearableLayerEnum layerType, WearableType slotType)
@@ -370,7 +371,7 @@ public class CharacterEquipment : MonoBehaviour
 
         if (targetLayer != null)
         {
-            // 1. On récupère l'instance AVANT de vider le slot
+            // 1. On rÃ©cupÃ¨re l'instance AVANT de vider le slot
             EquipmentInstance instanceToDrop = targetLayer.GetInstance(slotType);
 
             if (instanceToDrop == null) return;
@@ -379,14 +380,14 @@ public class CharacterEquipment : MonoBehaviour
             targetLayer.Unequip(slotType);
             OnEquipmentChanged?.Invoke();
 
-            // 3. On fait tomber l'instance qu'on a sauvegardée
+            // 3. On fait tomber l'instance qu'on a sauvegardÃ©e
             character.DropItem(instanceToDrop);
 
-            Debug.Log($"<color=orange>[Unequip]</color> {instanceToDrop.ItemSO.ItemName} retiré et jeté.");
+            Debug.Log($"<color=orange>[Unequip]</color> {instanceToDrop.ItemSO.ItemName} retirÃ© et jetÃ©.");
         }
     }
 
-    // Logique basée sur l'Enum EquipmentLayerEnum
+    // Logique basÃ©e sur l'Enum EquipmentLayerEnum
     private EquipmentLayer GetTargetLayer(WearableLayerEnum layerType)
     {
         switch (layerType)
@@ -398,23 +399,23 @@ public class CharacterEquipment : MonoBehaviour
             case WearableLayerEnum.Armor:
                 return armorLayer;
             case WearableLayerEnum.Bag:
-                return null; // Le sac n'a pas de composant EquipmentLayer dédié
+                return null; // Le sac n'a pas de composant EquipmentLayer dÃ©diÃ©
             default:
                 return null;
         }
     }
 
     /// <summary>
-    /// Vérifie si le personnage possède actuellement un conteneur équipé (Sac).
+    /// VÃ©rifie si le personnage possÃ¨de actuellement un conteneur Ã©quipÃ© (Sac).
     /// </summary>
     public bool HaveInventory()
     {
-        // On vérifie si le sac existe ET s'il possède bien un inventaire initialisé
+        // On vÃ©rifie si le sac existe ET s'il possÃ¨de bien un inventaire initialisÃ©
         return _bag != null && _bag.Inventory != null;
     }
 
     /// <summary>
-    /// Retourne l'inventaire du sac équipé. Renvoie null si aucun sac n'est présent.
+    /// Retourne l'inventaire du sac Ã©quipÃ©. Renvoie null si aucun sac n'est prÃ©sent.
     /// </summary>
     public Inventory GetInventory()
     {
@@ -427,8 +428,8 @@ public class CharacterEquipment : MonoBehaviour
     }
 
     /// <summary>
-    /// Vérifie si le torse/poitrine du personnage est exposé.
-    /// Retourne True si aucun vêtement de type "Shirt" n'est équipé dans les 3 couches.
+    /// VÃ©rifie si le torse/poitrine du personnage est exposÃ©.
+    /// Retourne True si aucun vÃªtement de type "Shirt" n'est Ã©quipÃ© dans les 3 couches.
     /// </summary>
     public bool IsChestExposed()
     {
@@ -436,18 +437,18 @@ public class CharacterEquipment : MonoBehaviour
         bool hasClothingShirt = clothingLayer != null && clothingLayer.GetInstance(WearableType.Armor) != null;
         bool hasArmorShirt = armorLayer != null && armorLayer.GetInstance(WearableType.Armor) != null;
 
-        // Exposé si aucune couche n'a de Shirt
+        // ExposÃ© si aucune couche n'a de Shirt
         return !hasUnderwearShirt && !hasClothingShirt && !hasArmorShirt;
     }
 
     /// <summary>
-    /// Vérifie si les parties intimes inférieures sont exposées.
-    /// Retourne True si aucun vêtement de type "Pants" n'est équipé dans les 3 couches.
-    /// Note : C'est techniquement identique à ta logique actuelle de IsNaked().
+    /// VÃ©rifie si les parties intimes infÃ©rieures sont exposÃ©es.
+    /// Retourne True si aucun vÃªtement de type "Pants" n'est Ã©quipÃ© dans les 3 couches.
+    /// Note : C'est techniquement identique Ã  ta logique actuelle de IsNaked().
     /// </summary>
     public bool IsGroinExposed()
     {
-        // On réutilise la logique des Pants
+        // On rÃ©utilise la logique des Pants
         bool hasUnderwearPants = underwearLayer != null && underwearLayer.GetInstance(WearableType.Pants) != null;
         bool hasClothingPants = clothingLayer != null && clothingLayer.GetInstance(WearableType.Pants) != null;
         bool hasArmorPants = armorLayer != null && armorLayer.GetInstance(WearableType.Pants) != null;
@@ -456,7 +457,7 @@ public class CharacterEquipment : MonoBehaviour
     }
 
     /// <summary>
-    /// Vérifie la nudité totale (Haut et Bas).
+    /// VÃ©rifie la nuditÃ© totale (Haut et Bas).
     /// </summary>
     public bool IsFullyNaked()
     {
@@ -464,12 +465,12 @@ public class CharacterEquipment : MonoBehaviour
     }
 
     /// <summary>
-    /// Vérifie si le personnage est "nu" au niveau des jambes.
-    /// Retourne True si aucun pantalon n'est équipé dans les 3 couches (Underwear, Clothing, Armor).
+    /// VÃ©rifie si le personnage est "nu" au niveau des jambes.
+    /// Retourne True si aucun pantalon n'est Ã©quipÃ© dans les 3 couches (Underwear, Clothing, Armor).
     /// </summary>
     public bool IsNaked()
     {
-        // On vérifie le slot Pants dans chaque couche.
+        // On vÃ©rifie le slot Pants dans chaque couche.
         // Si l'une des couches retourne une instance non nulle, le perso n'est pas nu.
         bool hasUnderwearPants = underwearLayer != null && underwearLayer.GetInstance(WearableType.Pants) != null;
         bool hasClothingPants = clothingLayer != null && clothingLayer.GetInstance(WearableType.Pants) != null;

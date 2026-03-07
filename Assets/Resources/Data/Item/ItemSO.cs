@@ -13,6 +13,7 @@ public abstract class ItemSO : ScriptableObject
     [SerializeField] private Sprite icon;
     [SerializeField] protected GameObject item_prefab;
     [SerializeField] protected GameObject worldItem_prefab;
+    [SerializeField] private ItemWeight _weight = ItemWeight.Medium;
 
     public string ItemId => itemId;
     public string ItemName => itemName;
@@ -22,6 +23,7 @@ public abstract class ItemSO : ScriptableObject
     public GameObject ItemPrefab => item_prefab;
     public GameObject WorldItemPrefab => worldItem_prefab;
     public SpriteLibraryAsset SpriteLibraryAsset => _spriteLibrary;
+    public ItemWeight Weight => _weight;
     public abstract System.Type InstanceType { get; }
 
     [Header("Crafting Requirements")]

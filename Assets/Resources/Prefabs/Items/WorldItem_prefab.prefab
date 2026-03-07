@@ -13,6 +13,7 @@ GameObject:
   - component: {fileID: 8154045440721903422}
   - component: {fileID: 2261858023461683581}
   - component: {fileID: 6899146370233858579}
+  - component: {fileID: 8427571290252601647}
   m_Layer: 0
   m_Name: WorldItem_prefab
   m_TagString: Untagged
@@ -51,7 +52,7 @@ MonoBehaviour:
   interactionPrompt: Press E to interact
   _interactionZone: {fileID: 2261858023461683581}
   _rootgameObject: {fileID: 718778511601405242}
-  _worldItem: {fileID: 0}
+  _worldItem: {fileID: 8154045440721903422}
 --- !u!114 &8154045440721903422
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -113,6 +114,19 @@ Rigidbody:
   m_Interpolate: 0
   m_Constraints: 0
   m_CollisionDetection: 0
+--- !u!210 &8427571290252601647
+SortingGroup:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 718778511601405242}
+  m_Enabled: 1
+  m_SortingLayerID: -974200329
+  m_SortingLayer: 1
+  m_SortingOrder: 0
+  m_SortAtRoot: 0
+  m_Sort3DAs2D: 0
 --- !u!1 &4772183078833418991
 GameObject:
   m_ObjectHideFlags: 0
@@ -122,7 +136,6 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 7115953151577608828}
-  - component: {fileID: 3866825986235690607}
   m_Layer: 0
   m_Name: Visual
   m_TagString: Untagged
@@ -145,15 +158,3 @@ Transform:
   m_Children: []
   m_Father: {fileID: 5056001056728578569}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!210 &3866825986235690607
-SortingGroup:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4772183078833418991}
-  m_Enabled: 1
-  m_SortingLayerID: 0
-  m_SortingLayer: 0
-  m_SortingOrder: 0
-  m_SortAtRoot: 0
