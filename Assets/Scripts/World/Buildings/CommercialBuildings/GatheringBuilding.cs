@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using MWI.Time;
 
 /// <summary>
 /// Entrée de configuration pour une ressource voulue par un GatheringBuilding.
@@ -32,8 +33,10 @@ public class GatheringBuilding : CommercialBuilding
 
     [Header("Zones")]
     [SerializeField] private Zone _depositZone;
+    [SerializeField, Tooltip("Optionnel: Zone à scanner automatiquement chaque jour pour trouver des ressources. Au lieu de laisser les workers explorer.")]
+    private Zone _gatheringAreaZone;
 
-    // Runtime : zone de récolte découverte par les employés
+    // Runtime : zone de récolte découverte par les employés (ou assignée via le scan)
     private Zone _gatherableZone;
 
     // Runtime : liste des employés (Characters assignés)
@@ -50,6 +53,29 @@ public class GatheringBuilding : CommercialBuilding
 
     // === Initialisation ===
 
+    protected virtual void OnEnable()
+    {
+        if (TimeManager.Instance != null)
+        {
+            TimeManager.Instance.OnNewDay += ScanGatheringArea;
+        }
+    }
+
+    protected virtual void OnDisable()
+    {
+        if (TimeManager.Instance != null)
+        {
+            TimeManager.Instance.OnNewDay -= ScanGatheringArea;
+        }
+    }
+
+    protected override void Start()
+    {
+        base.Start();
+        // Premier scan au démarrage
+        ScanGatheringArea();
+    }
+
     protected override void InitializeJobs()
     {
         for (int i = 0; i < _gathererCount; i++)
@@ -61,6 +87,60 @@ public class GatheringBuilding : CommercialBuilding
     }
 
     // === Gestion de la zone de récolte ===
+
+    /// <summary>
+    /// Scanne la zone de récolte assignée (_gatheringAreaZone) pour voir s'il reste des ressources voulues.
+    /// Appelé automatiquement au début de chaque jour (OnNewDay).
+    /// </summary>
+    public void ScanGatheringArea()
+    {
+        if (_gatheringAreaZone == null) return;
+
+        BoxCollider boxCol = _gatheringAreaZone.GetComponent<BoxCollider>();
+        if (boxCol == null) return;
+
+        // Préparer les infos pour l'OverlapBox
+        Vector3 center = boxCol.transform.TransformPoint(boxCol.center);
+        Vector3 halfExtents = Vector3.Scale(boxCol.size, boxCol.transform.lossyScale) * 0.5f;
+
+        // Récupérer les items désirés
+        var wantedItems = GetWantedItems();
+        if (wantedItems.Count == 0)
+        {
+            // Le building ne veut plus rien (tout est plein)
+            if (_gatherableZone != null) ClearGatherableZone();
+            return;
+        }
+
+        bool foundValidResource = false;
+
+        Collider[] colliders = Physics.OverlapBox(center, halfExtents, boxCol.transform.rotation, Physics.AllLayers, QueryTriggerInteraction.Ignore);
+        foreach (var col in colliders)
+        {
+            GatherableObject gatherable = col.GetComponent<GatherableObject>() ?? col.GetComponentInParent<GatherableObject>();
+            if (gatherable != null && gatherable.CanGather())
+            {
+                // Vérifier si ce gatherable donne un item voulu
+                if (gatherable.HasAnyOutput(wantedItems))
+                {
+                    foundValidResource = true;
+                    break;
+                }
+            }
+
+            if (foundValidResource) break;
+        }
+
+        if (foundValidResource)
+        {
+            SetGatherableZone(_gatheringAreaZone);
+        }
+        else
+        {
+            ClearGatherableZone();
+            Debug.Log($"<color=orange>[GatheringBuilding]</color> {buildingName} : Scan de _gatheringAreaZone n'a rien trouvé. Retour à l'exploration.");
+        }
+    }
 
     /// <summary>
     /// Appelé par un employé explorateur quand il a trouvé une zone contenant
