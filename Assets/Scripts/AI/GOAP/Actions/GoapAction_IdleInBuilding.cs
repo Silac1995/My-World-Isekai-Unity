@@ -60,8 +60,21 @@ public class GoapAction_IdleInBuilding : GoapAction
             
             if (_waitTime <= 0f)
             {
-                // Trouver une destination aléatoire DANS la zone du bâtiment (ou autour du centre)
-                if (_building.DepositZone != null)
+                // Trouver une destination aléatoire DANS la zone du bâtiment (ou DepositZone en fallback)
+                if (_building.BuildingZone != null)
+                {
+                    Bounds bounds = _building.BuildingZone.bounds;
+                    float randomX = Random.Range(bounds.min.x, bounds.max.x);
+                    float randomZ = Random.Range(bounds.min.z, bounds.max.z);
+                    _wanderTarget = new Vector3(randomX, bounds.center.y, randomZ);
+
+                    // S'assurer qu'on est sur le NavMesh
+                    if (UnityEngine.AI.NavMesh.SamplePosition(_wanderTarget, out UnityEngine.AI.NavMeshHit hit, 2.0f, UnityEngine.AI.NavMesh.AllAreas))
+                    {
+                        _wanderTarget = hit.position;
+                    }
+                }
+                else if (_building.DepositZone != null)
                 {
                     _wanderTarget = _building.DepositZone.GetRandomPointInZone();
                 }
