@@ -80,6 +80,13 @@ public class NPCController : CharacterGameController
 
         if (!isWandering && !isOnBreak) return;
 
+        // Restriction : En pause au travail, on ne parle qu'à ses collègues
+        if (isOnBreak && !isWandering)
+        {
+            if (workBehaviour.Workplace == null || target.CharacterJob == null) return;
+            if (!target.CharacterJob.WorksAt(workBehaviour.Workplace)) return; // La cible n'est pas un collègue
+        }
+
         if (_character.CharacterRelation == null) return;
         
         // --- 1. LOGIQUE D'ENTRAIDE (AMIS OU GROUPE EN COMBAT) ---

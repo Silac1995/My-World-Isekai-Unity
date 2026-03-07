@@ -67,10 +67,18 @@ public class GoapAction_DepositResources : GoapAction
         }
 
         // Phase 2 : Vérifier si on est arrivé
-        if (!movement.PathPending && (!movement.HasPath || movement.RemainingDistance <= movement.StoppingDistance + 0.5f))
+        if (!movement.PathPending)
         {
-            DepositItems(worker);
-            _isComplete = true;
+            if (!movement.HasPath)
+            {
+                // Le chemin a été effacé (ex: par le combat), on doit relancer le déplacement
+                _isMoving = false;
+            }
+            else if (movement.RemainingDistance <= movement.StoppingDistance + 0.5f)
+            {
+                DepositItems(worker);
+                _isComplete = true;
+            }
         }
     }
 

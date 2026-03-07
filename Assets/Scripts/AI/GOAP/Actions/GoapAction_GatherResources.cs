@@ -137,12 +137,21 @@ public class GoapAction_GatherResources : GoapAction
         // Phase 2.5 : L'employé va ramasser l'objet libre qu'il a ciblé
         if (_targetWorldItem != null)
         {
-            if (!movement.PathPending && (!movement.HasPath || movement.RemainingDistance <= movement.StoppingDistance + 0.5f))
+            if (!movement.PathPending)
             {
-                if (!_pickupStarted)
+                if (!movement.HasPath) 
                 {
-                    _pickupStarted = true;
-                    PickupSpecificWorldItem(worker, _targetWorldItem);
+                    // Chemin effacé : on annule la cible et on recommence la recherche
+                    _targetWorldItem = null;
+                    return;
+                }
+                else if (movement.RemainingDistance <= movement.StoppingDistance + 0.5f)
+                {
+                    if (!_pickupStarted)
+                    {
+                        _pickupStarted = true;
+                        PickupSpecificWorldItem(worker, _targetWorldItem);
+                    }
                 }
             }
             return; // On attend que le pickup finisse (mettra IsComplete à true)
@@ -151,22 +160,42 @@ public class GoapAction_GatherResources : GoapAction
         // Phase 3 : Lancer la CharacterGatherAction quand on est arrivé à l'objet à récolter
         if (!_isGathering && _currentTarget != null)
         {
-            if (!movement.PathPending && (!movement.HasPath || movement.RemainingDistance <= movement.StoppingDistance + 1f))
+            if (!movement.PathPending)
             {
-                _isGathering = true;
-                _gatherAction = new CharacterGatherAction(worker, _currentTarget);
-
-                _gatherAction.OnActionFinished += () =>
+                if (!movement.HasPath)
                 {
-                    _gatherFinished = true;
-                    Debug.Log($"<color=cyan>[GOAP Gather]</color> {worker.CharacterName} a fini de récolter, recherche du WorldItem...");
-                };
-
-                if (!worker.CharacterActions.ExecuteAction(_gatherAction))
-                {
-                    Debug.Log($"<color=orange>[GOAP Gather]</color> {worker.CharacterName} ne peut pas lancer la récolte.");
-                    _isComplete = true;
+                    // Chemin effacé : on annule la cible et on recommence
+                    _currentTarget = null;
+                    return;
                 }
+                else if (movement.RemainingDistance <= movement.StoppingDistance + 1f)
+                {
+                    _isGathering = true;
+                    _gatherAction = new CharacterGatherAction(worker, _currentTarget);
+
+                    _gatherAction.OnActionFinished += () =>
+                    {
+                        _gatherFinished = true;
+                        Debug.Log($"<color=cyan>[GOAP Gather]</color> {worker.CharacterName} a fini de récolter, recherche du WorldItem...");
+                    };
+
+                    if (!worker.CharacterActions.ExecuteAction(_gatherAction))
+                    {
+                        Debug.Log($"<color=orange>[GOAP Gather]</color> {worker.CharacterName} ne peut pas lancer la récolte.");
+                        _isComplete = true; // This ends the action!
+                    }
+                }
+            }
+            return;
+        }
+
+        // Reprise sur interruption : L'action a été annulée (ex: par le combat)
+        if (_isGathering && !_gatherFinished)
+        {
+            if (worker.CharacterActions.CurrentAction != _gatherAction)
+            {
+                Debug.Log($"<color=red>[GOAP Gather]</color> {worker.CharacterName} : La récolte a été interrompue. Action annulée et on réinitialise l'objectif.");
+                _isComplete = true; 
             }
             return;
         }
@@ -181,6 +210,18 @@ public class GoapAction_GatherResources : GoapAction
 
         // Phase 5 : Attendre que le pickup (CharacterPickUpItem) se termine
         // _isComplete sera mis à true par le callback
+        if (_pickupStarted)
+        {
+            if (worker.CharacterActions.CurrentAction == null || !(worker.CharacterActions.CurrentAction is CharacterPickUpItem))
+            {
+                // Si l'action a été effacée sans le callback (interrompue par dégâts), terminer dans le doute
+                if (!_isComplete) 
+                {
+                    Debug.Log($"<color=red>[GOAP Gather]</color> {worker.CharacterName} : Le ramassage a été interrompu ! Fausse complétion.");
+                    _isComplete = true;
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -355,11 +396,18 @@ public class GoapAction_GatherResources : GoapAction
             return;
         }
 
-        if (!movement.PathPending && (!movement.HasPath || movement.RemainingDistance <= movement.StoppingDistance + 0.5f))
+        if (!movement.PathPending)
         {
-            _arrivedAtZone = true;
-            _isMovingToZone = false;
-            Debug.Log($"<color=cyan>[GOAP Gather]</color> {worker.CharacterName} est arrivé à la zone de récolte.");
+            if (!movement.HasPath)
+            {
+                _isMovingToZone = false; // Path was cleared, restart journey
+            }
+            else if (movement.RemainingDistance <= movement.StoppingDistance + 0.5f)
+            {
+                _arrivedAtZone = true;
+                _isMovingToZone = false;
+                Debug.Log($"<color=cyan>[GOAP Gather]</color> {worker.CharacterName} est arrivé à la zone de récolte.");
+            }
         }
     }
 
