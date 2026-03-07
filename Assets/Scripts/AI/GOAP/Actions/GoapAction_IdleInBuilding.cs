@@ -66,10 +66,12 @@ public class GoapAction_IdleInBuilding : GoapAction
                     Bounds bounds = _building.BuildingZone.bounds;
                     float randomX = Random.Range(bounds.min.x, bounds.max.x);
                     float randomZ = Random.Range(bounds.min.z, bounds.max.z);
-                    _wanderTarget = new Vector3(randomX, bounds.center.y, randomZ);
+                    
+                    // Utiliser le Y du worker pour éviter d'être bloqué dans le toit du bâtiment
+                    _wanderTarget = new Vector3(randomX, worker.transform.position.y, randomZ);
 
-                    // S'assurer qu'on est sur le NavMesh
-                    if (UnityEngine.AI.NavMesh.SamplePosition(_wanderTarget, out UnityEngine.AI.NavMeshHit hit, 2.0f, UnityEngine.AI.NavMesh.AllAreas))
+                    // S'assurer qu'on est sur le NavMesh avec un grand rayon de recherche (au cas où on tape un mur)
+                    if (UnityEngine.AI.NavMesh.SamplePosition(_wanderTarget, out UnityEngine.AI.NavMeshHit hit, 10.0f, UnityEngine.AI.NavMesh.AllAreas))
                     {
                         _wanderTarget = hit.position;
                     }
