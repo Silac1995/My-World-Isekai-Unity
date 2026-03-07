@@ -35,12 +35,6 @@ public class JobGatherer : Job
     {
         if (_workplace == null || !(_workplace is GatheringBuilding gathering)) return;
 
-        // Initialiser le GOAP si ce n'est pas fait
-        if (_gatherGoal == null)
-        {
-            InitializeGOAP(gathering);
-        }
-
         // Si on a une action en cours, l'exécuter
         if (_currentAction != null)
         {
@@ -74,34 +68,10 @@ public class JobGatherer : Job
     }
 
     /// <summary>
-    /// Initialise le système GOAP avec le goal et les actions disponibles.
-    /// </summary>
-    private void InitializeGOAP(GatheringBuilding building)
-    {
-        _gatherGoal = new GoapGoal(
-            "DepositGatheredResources",
-            new Dictionary<string, bool>
-            {
-                { "hasDepositedResources", true }
-            },
-            priority: 1
-        );
-
-        // Les actions sont recréées à chaque planification pour avoir des références fraîches
-    }
-
-    /// <summary>
-    /// Construit le world state actuel et lance le planner.
+    /// Construit le world state actuel et lance le planner avec un nouvel objectif calculé dynamiquement.
     /// </summary>
     private void PlanNextActions(GatheringBuilding building)
     {
-        // Vérifier si le building a encore besoin de ressources
-        if (!building.NeedsResources())
-        {
-            Debug.Log($"<color=green>[JobGatherer]</color> {_worker.CharacterName} : le building n'a plus besoin de ressources.");
-            return;
-        }
-
         // Construire le world state
         bool hasAtLeastOneResource = false;
         var handsController = _worker.CharacterVisual?.BodyPartsController?.HandsController;
@@ -163,11 +133,16 @@ public class JobGatherer : Job
             }
         }
 
+        bool allResourcesGathered = building.AreAllRequestedResourcesGathered();
+        bool needsToWork = !allResourcesGathered;
+
         var worldState = new Dictionary<string, bool>
         {
             { "hasGatherZone", building.HasGatherableZone },
             { "hasResources", hasResourcesForGoap },
-            { "hasDepositedResources", false }
+            { "hasDepositedResources", false },
+            { "needsToWork", needsToWork },
+            { "isIdling", false }
         };
 
         // Créer les actions fraîches (chaque instance est stateful)
@@ -175,11 +150,23 @@ public class JobGatherer : Job
         {
             new GoapAction_ExploreForResources(building),
             new GoapAction_GatherResources(building),
-            new GoapAction_DepositResources(building)
+            new GoapAction_DepositResources(building),
+            new GoapAction_IdleInBuilding(building)
         };
 
+        // Définir l'objectif prioritaire
+        GoapGoal targetGoal;
+        if (allResourcesGathered && !hasAtLeastOneResource)
+        {
+            targetGoal = new GoapGoal("Idle", new Dictionary<string, bool> { { "isIdling", true } }, priority: 1);
+        }
+        else
+        {
+            targetGoal = new GoapGoal("GatherAndDeposit", new Dictionary<string, bool> { { "hasDepositedResources", true } }, priority: 1);
+        }
+
         // Planifier
-        _currentPlan = GoapPlanner.Plan(worldState, _availableActions, _gatherGoal);
+        _currentPlan = GoapPlanner.Plan(worldState, _availableActions, targetGoal);
 
         if (_currentPlan != null && _currentPlan.Count > 0)
         {

@@ -15,9 +15,12 @@ public class Building : ComplexRoom
 
     [SerializeField] protected BuildingType _buildingType = BuildingType.Residential; // Default value
 
+    [SerializeField] protected Collider _buildingZone;
+
     public string BuildingName => buildingName;
     public virtual BuildingType BuildingType => _buildingType;
     public bool IsPublicLocation => _isPublicLocation;
+    public Collider BuildingZone => _buildingZone;
 
     public ComplexRoom MainRoom => this;
 

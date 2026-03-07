@@ -211,6 +211,15 @@ public class GatheringBuilding : CommercialBuilding
     }
 
     /// <summary>
+    /// Vérifie si TOUTES les ressources demandées ont atteint leur limite maximale.
+    /// Utilisé pour ordonner aux employés de se reposer.
+    /// </summary>
+    public bool AreAllRequestedResourcesGathered()
+    {
+        return !NeedsResources();
+    }
+
+    /// <summary>
     /// Enregistre un item récolté. Incrémente le compteur de la ressource correspondante.
     /// Retourne true si l'item était bien voulu.
     /// </summary>

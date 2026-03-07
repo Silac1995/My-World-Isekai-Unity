@@ -266,6 +266,14 @@ public class GoapAction_GatherResources : GoapAction
     {
         if (!_isMovingToZone)
         {
+            // NEW CHECK : Si on est DÉJÀ dans la zone, on skip la marche d'entrée
+            BoxCollider box = _building.GatherableZone.GetComponent<BoxCollider>();
+            if (box != null && box.bounds.Contains(worker.transform.position))
+            {
+                _arrivedAtZone = true;
+                return;
+            }
+
             Vector3 destination = _building.GatherableZone.GetRandomPointInZone();
             movement.SetDestination(destination);
             _isMovingToZone = true;
@@ -288,7 +296,24 @@ public class GoapAction_GatherResources : GoapAction
         GatherableObject nearest = null;
         float nearestDist = float.MaxValue;
 
-        Collider[] colliders = Physics.OverlapSphere(worker.transform.position, 20f);
+        Collider[] colliders = new Collider[0];
+
+        if (_building.GatherableZone != null)
+        {
+            BoxCollider boxCol = _building.GatherableZone.GetComponent<BoxCollider>();
+            if (boxCol != null)
+            {
+                Vector3 center = boxCol.transform.TransformPoint(boxCol.center);
+                Vector3 halfExtents = Vector3.Scale(boxCol.size, boxCol.transform.lossyScale) * 0.5f;
+                colliders = Physics.OverlapBox(center, halfExtents, boxCol.transform.rotation, Physics.AllLayers, QueryTriggerInteraction.Ignore);
+            }
+        }
+        else
+        {
+            // Fallback (ne devrait normalement pas arriver si HasGatherableZone est respecté)
+            colliders = Physics.OverlapSphere(worker.transform.position, 30f);
+        }
+
         foreach (var col in colliders)
         {
             var gatherable = col.GetComponentInParent<GatherableObject>();
