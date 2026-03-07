@@ -81,15 +81,16 @@ public class GoapAction_DepositResources : GoapAction
     private void DepositItems(Character worker)
     {
         bool deposited = false;
-        var wantedItems = _building.GetWantedItems();
         Vector3 dropPos = worker.transform.position + Vector3.up * 0.2f;
 
-        // 1. Déposer les items voulus depuis le sac (inventaire)
+        // 1. Déposer les items acceptés depuis le sac (inventaire)
         var equipment = worker.CharacterEquipment;
         if (equipment != null && equipment.HaveInventory())
         {
             var inventory = equipment.GetInventory();
-            // Parcourir les slots et déposer les items voulus
+            var acceptedItems = _building.GetAcceptedItems();
+
+            // Parcourir les slots et déposer les items acceptés
             for (int i = inventory.ItemSlots.Count - 1; i >= 0; i--)
             {
                 var slot = inventory.ItemSlots[i];
@@ -98,10 +99,10 @@ public class GoapAction_DepositResources : GoapAction
                 ItemInstance item = slot.ItemInstance;
                 if (item == null) continue;
 
-                // Vérifier si c'est un wanted item
-                foreach (var wanted in wantedItems)
+                // Vérifier si c'est un item accepté
+                foreach (var accepted in acceptedItems)
                 {
-                    if (item.ItemSO == wanted)
+                    if (item.ItemSO == accepted)
                     {
                         // Retirer du sac
                         inventory.RemoveItem(item, worker);

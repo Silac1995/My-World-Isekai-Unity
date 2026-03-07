@@ -110,23 +110,37 @@ public class JobGatherer : Job
         if (handsController != null && handsController.IsCarrying)
             hasAtLeastOneResource = true;
 
-        // Check 2 : Le worker a des wanted items dans son sac
+        // Check 2 : Le worker a des items acceptés par le building dans son sac
+        var acceptedItems = building.GetAcceptedItems();
         var wantedItems = building.GetWantedItems();
-        if (!hasAtLeastOneResource && _worker.CharacterEquipment != null && _worker.CharacterEquipment.HaveInventory())
+        if (_worker.CharacterEquipment != null && _worker.CharacterEquipment.HaveInventory())
         {
             var inventory = _worker.CharacterEquipment.GetInventory();
             foreach (var slot in inventory.ItemSlots)
             {
                 if (slot.IsEmpty()) continue;
-                foreach (var wanted in wantedItems)
+                foreach (var item in acceptedItems)
                 {
-                    if (slot.ItemInstance.ItemSO == wanted)
+                    if (slot.ItemInstance.ItemSO == item)
                     {
                         hasAtLeastOneResource = true;
                         break;
                     }
                 }
                 if (hasAtLeastOneResource) break;
+            }
+        }
+
+        // Check 2.1 : Et dans les mains aussi (seulement si c'est un item accepté)
+        if (!hasAtLeastOneResource && handsController != null && handsController.IsCarrying)
+        {
+            foreach (var item in acceptedItems)
+            {
+                if (handsController.CarriedItem.ItemSO == item)
+                {
+                    hasAtLeastOneResource = true;
+                    break;
+                }
             }
         }
 

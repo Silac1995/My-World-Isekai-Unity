@@ -90,6 +90,23 @@ public class GatheringBuilding : CommercialBuilding
     // === Gestion des ressources voulues ===
 
     /// <summary>
+    /// Retourne la liste de tous les items acceptés par le building, même si la limite est atteinte.
+    /// Utile pour forcer le dépôt des ressources en surplus avant de changer d'activité.
+    /// </summary>
+    public List<ItemSO> GetAcceptedItems()
+    {
+        var accepted = new List<ItemSO>();
+        foreach (var entry in _wantedResources)
+        {
+            if (entry.targetItem != null)
+            {
+                accepted.Add(entry.targetItem);
+            }
+        }
+        return accepted;
+    }
+
+    /// <summary>
     /// Retourne la liste des ItemSO encore sous la limite (pas encore assez récoltés).
     /// </summary>
     public List<ItemSO> GetWantedItems()
