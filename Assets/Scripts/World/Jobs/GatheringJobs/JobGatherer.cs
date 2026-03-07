@@ -104,43 +104,23 @@ public class JobGatherer : Job
 
         // Construire le world state
         bool hasAtLeastOneResource = false;
-
-        // Check 1 : Le worker porte un item dans les mains (on suppose que c'est une ressource valide)
         var handsController = _worker.CharacterVisual?.BodyPartsController?.HandsController;
-        if (handsController != null && handsController.IsCarrying)
-            hasAtLeastOneResource = true;
-
-        // Check 2 : Le worker a des items acceptés par le building dans son sac
+        
         var acceptedItems = building.GetAcceptedItems();
         var wantedItems = building.GetWantedItems();
+
+        // Check 1 : Le worker a des items acceptés par le building dans son sac ?
         if (_worker.CharacterEquipment != null && _worker.CharacterEquipment.HaveInventory())
         {
-            var inventory = _worker.CharacterEquipment.GetInventory();
-            foreach (var slot in inventory.ItemSlots)
-            {
-                if (slot.IsEmpty()) continue;
-                foreach (var item in acceptedItems)
-                {
-                    if (slot.ItemInstance.ItemSO == item)
-                    {
-                        hasAtLeastOneResource = true;
-                        break;
-                    }
-                }
-                if (hasAtLeastOneResource) break;
-            }
+            hasAtLeastOneResource = _worker.CharacterEquipment.GetInventory().HasAnyItemSO(acceptedItems);
         }
 
-        // Check 2.1 : Et dans les mains aussi (seulement si c'est un item accepté)
+        // Check 2 : Et dans les mains ?
         if (!hasAtLeastOneResource && handsController != null && handsController.IsCarrying)
         {
-            foreach (var item in acceptedItems)
+            if (acceptedItems.Contains(handsController.CarriedItem.ItemSO))
             {
-                if (handsController.CarriedItem.ItemSO == item)
-                {
-                    hasAtLeastOneResource = true;
-                    break;
-                }
+                hasAtLeastOneResource = true;
             }
         }
 
@@ -153,17 +133,10 @@ public class JobGatherer : Job
             {
                 hasFreeSpace = true;
             }
-            else
+            else if (equip.HaveInventory())
             {
                 // Vérifier si au moins UN wanted item peut encore rentrer dans le sac
-                foreach (var wanted in wantedItems)
-                {
-                    if (equip.HasFreeSpaceForItemSO(wanted))
-                    {
-                        hasFreeSpace = true;
-                        break;
-                    }
-                }
+                hasFreeSpace = equip.GetInventory().HasFreeSpaceForAnyItemSO(wantedItems);
             }
         }
 

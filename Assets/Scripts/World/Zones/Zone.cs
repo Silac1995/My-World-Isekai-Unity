@@ -60,6 +60,23 @@ public class Zone : MonoBehaviour
         return bounds.center;
     }
 
+    /// <summary>
+    /// Vérifie si une position donnée se trouve à l'intérieur du collider d'une zone d'un type spécifique.
+    /// </summary>
+    public static bool IsPositionInZoneType(Vector3 position, ZoneType targetZoneType, float checkRadius = 0.1f)
+    {
+        Collider[] colliders = Physics.OverlapSphere(position, checkRadius, Physics.AllLayers, QueryTriggerInteraction.Collide);
+        foreach (var col in colliders)
+        {
+            var zone = col.GetComponent<Zone>() ?? col.GetComponentInParent<Zone>();
+            if (zone != null && zone.zoneType == targetZoneType)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
     [ContextMenu("Fit Collider To Children")]
     public void FitColliderToChildren()
     {

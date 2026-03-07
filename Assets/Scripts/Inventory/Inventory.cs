@@ -79,6 +79,37 @@ public class Inventory
     }
 
     /// <summary>
+    /// Vérifie si l'inventaire a de la place pour au moins un des items de la liste donnée.
+    /// </summary>
+    public bool HasFreeSpaceForAnyItemSO(List<ItemSO> itemSOs)
+    {
+        if (itemSOs == null || itemSOs.Count == 0 || _itemSlots == null) return false;
+
+        foreach (var item in itemSOs)
+        {
+            if (HasFreeSpaceForItemSO(item)) return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Vérifie si l'inventaire contient au moins un des items de la liste donnée.
+    /// </summary>
+    public bool HasAnyItemSO(List<ItemSO> itemSOs)
+    {
+        if (itemSOs == null || itemSOs.Count == 0 || _itemSlots == null) return false;
+
+        foreach (var slot in _itemSlots)
+        {
+            if (!slot.IsEmpty() && itemSOs.Contains(slot.ItemInstance.ItemSO))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>
     /// Ajoute l'objet en passant le Character pour les mises à jour visuelles.
     /// </summary>
     public bool AddItem(ItemInstance item, Character character)

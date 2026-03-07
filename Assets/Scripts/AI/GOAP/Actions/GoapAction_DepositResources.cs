@@ -82,13 +82,13 @@ public class GoapAction_DepositResources : GoapAction
     {
         bool deposited = false;
         Vector3 dropPos = worker.transform.position + Vector3.up * 0.2f;
+        var acceptedItems = _building.GetAcceptedItems();
 
         // 1. Déposer les items acceptés depuis le sac (inventaire)
         var equipment = worker.CharacterEquipment;
         if (equipment != null && equipment.HaveInventory())
         {
             var inventory = equipment.GetInventory();
-            var acceptedItems = _building.GetAcceptedItems();
 
             // Parcourir les slots et déposer les items acceptés
             for (int i = inventory.ItemSlots.Count - 1; i >= 0; i--)
@@ -100,40 +100,39 @@ public class GoapAction_DepositResources : GoapAction
                 if (item == null) continue;
 
                 // Vérifier si c'est un item accepté
-                foreach (var accepted in acceptedItems)
+                if (acceptedItems.Contains(item.ItemSO))
                 {
-                    if (item.ItemSO == accepted)
-                    {
-                        // Retirer du sac
-                        inventory.RemoveItem(item, worker);
+                    // Retirer du sac
+                    inventory.RemoveItem(item, worker);
 
-                        // Spawn le WorldItem au sol
-                        Vector3 offset = new Vector3(Random.Range(-0.3f, 0.3f), 0, Random.Range(-0.3f, 0.3f));
-                        GatherableObject.SpawnWorldItem(item.ItemSO, dropPos + offset);
+                    // Spawn le WorldItem au sol
+                    Vector3 offset = new Vector3(Random.Range(-0.3f, 0.3f), 0, Random.Range(-0.3f, 0.3f));
+                    GatherableObject.SpawnWorldItem(item.ItemSO, dropPos + offset);
 
-                        // Enregistrer au building
-                        _building.RegisterGatheredItem(item.ItemSO);
-                        Debug.Log($"<color=green>[GOAP Deposit]</color> {worker.CharacterName} a déposé {item.ItemSO.ItemName} (sac) à la zone de dépôt.");
-                        deposited = true;
-                        break;
-                    }
+                    // Enregistrer au building
+                    _building.RegisterGatheredItem(item.ItemSO);
+                    Debug.Log($"<color=green>[GOAP Deposit]</color> {worker.CharacterName} a déposé {item.ItemSO.ItemName} (sac) à la zone de dépôt.");
+                    deposited = true;
                 }
             }
         }
 
-        // 2. Déposer l'item porté dans les mains
+        // 2. Déposer l'item porté dans les mains (si accepté)
         var handsController = worker.CharacterVisual?.BodyPartsController?.HandsController;
         if (handsController != null && handsController.IsCarrying)
         {
-            ItemInstance carriedItem = handsController.DropCarriedItem();
-            if (carriedItem != null)
+            if (handsController.CarriedItem != null && acceptedItems.Contains(handsController.CarriedItem.ItemSO))
             {
-                Vector3 offset = new Vector3(Random.Range(-0.3f, 0.3f), 0, Random.Range(-0.3f, 0.3f));
-                GatherableObject.SpawnWorldItem(carriedItem.ItemSO, dropPos + offset);
+                ItemInstance carriedItem = handsController.DropCarriedItem();
+                if (carriedItem != null)
+                {
+                    Vector3 offset = new Vector3(Random.Range(-0.3f, 0.3f), 0, Random.Range(-0.3f, 0.3f));
+                    GatherableObject.SpawnWorldItem(carriedItem.ItemSO, dropPos + offset);
 
-                _building.RegisterGatheredItem(carriedItem.ItemSO);
-                Debug.Log($"<color=green>[GOAP Deposit]</color> {worker.CharacterName} a déposé {carriedItem.ItemSO.ItemName} (mains) à la zone de dépôt.");
-                deposited = true;
+                    _building.RegisterGatheredItem(carriedItem.ItemSO);
+                    Debug.Log($"<color=green>[GOAP Deposit]</color> {worker.CharacterName} a déposé {carriedItem.ItemSO.ItemName} (mains) à la zone de dépôt.");
+                    deposited = true;
+                }
             }
         }
 
