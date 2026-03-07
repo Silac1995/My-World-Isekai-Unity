@@ -428,6 +428,40 @@ public class CharacterEquipment : MonoBehaviour
     }
 
     /// <summary>
+    /// Vérifie si l'inventaire posséde au moins un slot vide POUR des objets basiques (bois, pierre).
+    /// Si le personnage n'a pas d'inventaire, retourne faux.
+    /// </summary>
+    public bool HasFreeSpaceForMisc()
+    {
+        if (!HaveInventory()) return false;
+        
+        return GetInventory().HasFreeSpaceForMisc();
+    }
+
+    /// <summary>
+    /// Détermine si le personnage peut encore porter cet item (soit dans son sac, soit dans ses mains).
+    /// </summary>
+    public bool CanCarryItemAnyMore(ItemInstance itemInstance)
+    {
+        if (itemInstance == null) return false;
+
+        // 1. Vérifier s'il y a de la place dans le sac
+        if (HaveInventory() && GetInventory().HasFreeSpaceForItem(itemInstance))
+        {
+            return true;
+        }
+
+        // 2. Vérifier si les mains sont libres
+        var handsController = character.CharacterVisual?.BodyPartsController?.HandsController;
+        if (handsController != null && handsController.AreHandsFree())
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// Vérifie si le torse/poitrine du personnage est exposé.
     /// Retourne True si aucun vêtement de type "Shirt" n'est équipé dans les 3 couches.
     /// </summary>

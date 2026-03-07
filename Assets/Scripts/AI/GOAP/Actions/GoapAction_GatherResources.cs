@@ -41,7 +41,26 @@ public class GoapAction_GatherResources : GoapAction
 
     public override bool IsValid(Character worker)
     {
-        return _building != null && _building.HasGatherableZone;
+        if (_building == null || !_building.HasGatherableZone) return false;
+
+        // Si le worker ne peut plus rien porter (ni sac ni main), l'action est invalide
+        // Remarque : Pour vérifier l'ItemInstance, on devrait idéalement savoir d'avance, mais
+        // ici on va vérifier s'il a au moins de la place de manière générale, sinon on bloque.
+        // Comme CanCarryItemAnyMore requiert un ItemInstance, on vérifie s'il y a juste de la place.
+        var equipment = worker.CharacterEquipment;
+        if (equipment != null)
+        {
+            var hands = worker.CharacterVisual?.BodyPartsController?.HandsController;
+            bool handsFree = hands != null && hands.AreHandsFree();
+            bool bagHasSpace = equipment.HasFreeSpaceForMisc();
+
+            if (!handsFree && !bagHasSpace)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     public override void Execute(Character worker)
@@ -203,7 +222,7 @@ public class GoapAction_GatherResources : GoapAction
         foreach (var col in colliders)
         {
             var worldItem = col.GetComponent<WorldItem>() ?? col.GetComponentInParent<WorldItem>();
-            if (worldItem == null || worldItem.ItemInstance == null) continue;
+            if (worldItem == null || worldItem.ItemInstance == null || worldItem.IsBeingCarried) continue;
 
             foreach (var wanted in wantedItems)
             {

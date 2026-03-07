@@ -41,6 +41,24 @@ public class Inventory
         return false;
     }
 
+    public bool HasFreeSpaceForMisc()
+    {
+        foreach (var slot in _itemSlots)
+        {
+            if (slot is MiscSlot && slot.IsEmpty()) return true;
+        }
+        return false;
+    }
+
+    public bool HasFreeSpaceForWeapon()
+    {
+        foreach (var slot in _itemSlots)
+        {
+            if (slot is WeaponSlot && slot.IsEmpty()) return true;
+        }
+        return false;
+    }
+
     /// <summary>
     /// Ajoute l'objet en passant le Character pour les mises à jour visuelles.
     /// </summary>

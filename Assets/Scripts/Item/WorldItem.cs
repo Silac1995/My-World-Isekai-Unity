@@ -10,6 +10,7 @@ public class WorldItem : MonoBehaviour
     [SerializeField] private ItemInstance _itemInstance;
     public ItemInstance ItemInstance => _itemInstance;
     public UnityEngine.Rendering.SortingGroup SortingGroup { get; private set; }
+    public bool IsBeingCarried { get; set; } = false;
 
     private void Awake()
     {

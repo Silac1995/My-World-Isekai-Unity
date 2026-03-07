@@ -13,7 +13,8 @@ public class GoapAction_ExploreForResources : GoapAction
 
     public override Dictionary<string, bool> Preconditions => new Dictionary<string, bool>
     {
-        { "hasGatherZone", false }
+        { "hasGatherZone", false },
+        { "hasResources", false }
     };
 
     public override Dictionary<string, bool> Effects => new Dictionary<string, bool>
@@ -198,7 +199,7 @@ public class GoapAction_ExploreForResources : GoapAction
         foreach (var itemInteractable in visibleItems)
         {
             var worldItem = itemInteractable.GetComponent<WorldItem>();
-            if (worldItem == null || worldItem.ItemInstance == null) continue;
+            if (worldItem == null || worldItem.ItemInstance == null || worldItem.IsBeingCarried) continue;
 
             // Vérifier si c'est un wanted item
             bool isWanted = false;
@@ -212,8 +213,15 @@ public class GoapAction_ExploreForResources : GoapAction
             }
             if (!isWanted) continue;
 
-            // Essayer de ramasser — sac d'abord, puis mains
+            // Essayer de ramasser — vérifier si on peut porter
             var equipment = worker.CharacterEquipment;
+            if (equipment != null && !equipment.CanCarryItemAnyMore(worldItem.ItemInstance))
+            {
+                // Le personnage est plein (sac plein + mains occupées), on skip
+                continue;
+            }
+
+            // Sac d'abord
             if (equipment != null && equipment.HaveInventory())
             {
                 var inventory = equipment.GetInventory();
