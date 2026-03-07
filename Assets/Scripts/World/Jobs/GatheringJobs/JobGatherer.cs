@@ -111,18 +111,18 @@ public class JobGatherer : Job
         }
 
         // Construire le world state
-        bool hasResources = false;
+        bool hasAtLeastOneResource = false;
 
-        // Check 1 : Le worker porte un item dans les mains
+        // Check 1 : Le worker porte un item dans les mains (on suppose que c'est une ressource valide)
         var handsController = _worker.CharacterVisual?.BodyPartsController?.HandsController;
         if (handsController != null && handsController.IsCarrying)
-            hasResources = true;
+            hasAtLeastOneResource = true;
 
         // Check 2 : Le worker a des wanted items dans son sac
-        if (!hasResources && _worker.CharacterEquipment != null && _worker.CharacterEquipment.HaveInventory())
+        var wantedItems = building.GetWantedItems();
+        if (!hasAtLeastOneResource && _worker.CharacterEquipment != null && _worker.CharacterEquipment.HaveInventory())
         {
             var inventory = _worker.CharacterEquipment.GetInventory();
-            var wantedItems = building.GetWantedItems();
             foreach (var slot in inventory.ItemSlots)
             {
                 if (slot.IsEmpty()) continue;
@@ -130,18 +130,64 @@ public class JobGatherer : Job
                 {
                     if (slot.ItemInstance.ItemSO == wanted)
                     {
-                        hasResources = true;
+                        hasAtLeastOneResource = true;
                         break;
                     }
                 }
-                if (hasResources) break;
+                if (hasAtLeastOneResource) break;
+            }
+        }
+
+        // Check 3 : Le worker a-t-il encore de la place ?
+        bool hasFreeSpace = false;
+        var equip = _worker.CharacterEquipment;
+        if (equip != null)
+        {
+            if (handsController != null && handsController.AreHandsFree())
+            {
+                hasFreeSpace = true;
+            }
+            else
+            {
+                // Vérifier si au moins UN wanted item peut encore rentrer dans le sac
+                foreach (var wanted in wantedItems)
+                {
+                    if (equip.HasFreeSpaceForItemSO(wanted))
+                    {
+                        hasFreeSpace = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Logique GOAP intelligente :
+        // Si on a des ressources mais qu'on a ENCORE de la place et qu'une zone existe, 
+        // on ment au planner (hasResources=false) pour le forcer à continuer de Gather.
+        bool hasResourcesForGoap = false;
+        if (hasAtLeastOneResource)
+        {
+            if (!hasFreeSpace)
+            {
+                hasResourcesForGoap = true; // Plein à craquer -> aller déposer
+            }
+            else
+            {
+                if (building.HasGatherableZone)
+                {
+                    hasResourcesForGoap = false; // Continuer de gather
+                }
+                else
+                {
+                    hasResourcesForGoap = true; // Plus rien à gather -> aller déposer ce qu'on a
+                }
             }
         }
 
         var worldState = new Dictionary<string, bool>
         {
             { "hasGatherZone", building.HasGatherableZone },
-            { "hasResources", hasResources },
+            { "hasResources", hasResourcesForGoap },
             { "hasDepositedResources", false }
         };
 
