@@ -33,8 +33,15 @@ L'ancrage physique dans la scène.
 - **Le Recrutement (`AskForJob`)** : Pour qu'un personnage obtienne un poste ici, il faut que le Building ait un Boss (`HasOwner`), que le poste existe localement et qu'il soit libre.
 - **Le Pointage (Punch In / Punch Out)** : Lorsqu'un NPC arrive physiquement dans le bâtiment pour bosser, il s'annonce (`WorkerStartingShift`). Le building sait instatanément qui est dans les murs.
 
+### 4. L'Artisanat (CraftingBuilding & JobCrafter)
+L'artisanat suit une sur-couche de ce système.
+- **CraftingBuilding** : Un `CommercialBuilding` spécialisé. Il scanne ses `ComplexRoom` pour trouver des `CraftingStation` et compile une liste de ce qui peut y être fabriqué via `GetCraftableItems()`. 
+- **JobCrafter** : Le job d'artisan (ex: Forgeron).
+   - **Exigences** : Il demande au NPC d'avoir une compétence spécifique (`SkillSO`) et d'un niveau minimum (`SkillTier` défini dans `CharacterSkills`). Sans ça, le building refuse l'embauche.
+   - **Logique pilotée par la demande** : L'artisan ne produit pas dans le vide. Son Behaviour Tree vérifie que le `JobLogisticsManager` du bâtiment possède une **`CraftingOrder`** active (qui suit la même logique temporelle et de pénalité de réputation que `BuyOrder`). S'il y a une commande, il trouve la bonne station, joue son animation, et produit l'objet.
+
 ## Comment Créer un Nouveau Job ?
 A l'avenir, si l'Agent doit créer un "Forgeron" :
-1. Taper le code `JobBlacksmith` héritant de `Job` (Data pure). Définir ses horaires et son `Execute()`.
-2. Créer ou modifier le `ForgeBuilding` héritant de `CommercialBuilding` pour que sa fonction `InitializeJobs()` ajoute un `JobBlacksmith` à son instance de terrain.
-3. Terminé ! Le joueur pourra aller demander le poste, et s'il est accepté, `CharacterJob` fera le lien et le forcer a pointer dans le batiment à l'heure H.
+1. Taper le code `JobCrafter` abstrait, puis `JobBlacksmith` héritant de `JobCrafter`. Définir ses horaires, ses prérequis de `SkillSO`/`SkillTier`, et son node BT `BTAction_PerformCraft`.
+2. Créer ou modifier le `ForgeBuilding` héritant de `CraftingBuilding` (et non plus juste `CommercialBuilding`) pour que sa fonction `InitializeJobs()` ajoute un `JobBlacksmith` + un `JobLogisticsManager` (pour les commandes).
+3. Terminé ! Le joueur pourra aller demander le poste (s'il a le bon niveau de skill), et passer des commandes de fabrication au Logistics Manager.
