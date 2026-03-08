@@ -4,10 +4,13 @@ using UnityEngine;
 /// Job d'Apprenti Forgeron : assiste le forgeron principal.
 /// Prépare les matériaux, entretient le feu, apprend le métier.
 /// </summary>
-public class JobBlacksmithApprentice : Job
+public class JobBlacksmithApprentice : JobCrafter
 {
     public override string JobTitle => "Apprenti Forgeron";
-    public override JobCategory Category => JobCategory.Artisan;
+
+    public JobBlacksmithApprentice(SkillSO smithingSkill, SkillTier tier = SkillTier.Novice) : base(smithingSkill, tier)
+    {
+    }
 
     public override void Execute()
     {

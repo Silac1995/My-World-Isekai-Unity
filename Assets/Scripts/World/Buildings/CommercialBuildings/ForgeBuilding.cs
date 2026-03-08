@@ -4,26 +4,33 @@ using UnityEngine;
 /// <summary>
 /// Bâtiment de type Forge.
 /// Nécessite un Forgeron (craft les objets) et optionnellement des Apprentis.
-/// Le boss est typiquement le forgeron principal.
+/// Le boss est typiquement le forgeron principal, ou un LogisticsManager.
 /// </summary>
-public class ForgeBuilding : CommercialBuilding
+public class ForgeBuilding : CraftingBuilding
 {
     public override BuildingType BuildingType => BuildingType.Workshop;
 
     [Header("Forge Config")]
     [SerializeField] private int _apprenticeCount = 1;
+    
+    [Header("Crafting Requirements")]
+    [SerializeField] private SkillSO _smithingSkill;
+    [SerializeField] private SkillTier _minimumBlacksmithTier = SkillTier.Intermediate;
+    [SerializeField] private SkillTier _minimumApprenticeTier = SkillTier.Novice;
 
     public int ApprenticeCount => _apprenticeCount;
 
     protected override void InitializeJobs()
     {
-        _jobs.Add(new JobBlacksmith());
+        _jobs.Add(new JobLogisticsManager("Forge Master")); // Le boss/manager pour prendre les commandes
+        _jobs.Add(new JobBlacksmith(_smithingSkill, _minimumBlacksmithTier));
+        
         for (int i = 0; i < _apprenticeCount; i++)
         {
-            _jobs.Add(new JobBlacksmithApprentice());
+            _jobs.Add(new JobBlacksmithApprentice(_smithingSkill, _minimumApprenticeTier));
         }
 
-        Debug.Log($"<color=orange>[Forge]</color> {buildingName} initialisée avec 1 Forgeron et {_apprenticeCount} Apprenti(s).");
+        Debug.Log($"<color=orange>[Forge]</color> {buildingName} initialisée avec 1 Manager, 1 Forgeron et {_apprenticeCount} Apprenti(s).");
     }
 
     /// <summary>

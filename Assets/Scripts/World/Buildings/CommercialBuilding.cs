@@ -149,6 +149,16 @@ public abstract class CommercialBuilding : Building
             return false;
         }
 
+        // Si le job est un métier d'artisanat, on vérifie les prérequis de compétences
+        if (job is JobCrafter crafterJob)
+        {
+            if (!crafterJob.CheckRequirements(applicant))
+            {
+                Debug.Log($"<color=orange>[Building]</color> {applicant.CharacterName} n'a pas les compétences requises pour le poste de {job.JobTitle}.");
+                return false;
+            }
+        }
+
         // Embauche réussie
         return AssignWorker(applicant, job);
     }

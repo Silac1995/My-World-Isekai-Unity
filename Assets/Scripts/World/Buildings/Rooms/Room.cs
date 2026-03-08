@@ -102,5 +102,17 @@ public class Room : Zone
         }
     }
 
+    /// <summary>
+    /// Retourne tous les meubles de cette room qui sont du type T spécifié.
+    /// </summary>
+    public virtual IEnumerable<T> GetFurnitureOfType<T>() where T : Furniture
+    {
+        if (_furnitureManager == null) yield break;
+        foreach (var f in _furnitureManager.Furnitures)
+        {
+            if (f is T typed) yield return typed;
+        }
+    }
+
     #endregion
 }

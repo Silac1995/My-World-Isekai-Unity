@@ -16,6 +16,10 @@ public class JobLogisticsManager : Job
     private List<BuyOrder> _activeOrders = new List<BuyOrder>();
     public IReadOnlyList<BuyOrder> ActiveOrders => _activeOrders;
 
+    // Liste des commandes de fabrication (Crafting) locales au bâtiment
+    private List<CraftingOrder> _activeCraftingOrders = new List<CraftingOrder>();
+    public IReadOnlyList<CraftingOrder> ActiveCraftingOrders => _activeCraftingOrders;
+
     public JobLogisticsManager(string title = "Logistics Manager")
     {
         _customTitle = title;
@@ -48,6 +52,18 @@ public class JobLogisticsManager : Job
     }
 
     /// <summary>
+    /// Dépôt d'une commande de fabrication (locale).
+    /// </summary>
+    public bool PlaceCraftingOrder(CraftingOrder order)
+    {
+        if (order == null || order.Quantity <= 0) return false;
+
+        _activeCraftingOrders.Add(order);
+        Debug.Log($"<color=cyan>[JobLogisticsManager]</color> Commande Craft reçue : {order.Quantity}x {order.ItemToCraft.ItemName}. Jours restants : {order.RemainingDays}");
+        return true;
+    }
+
+    /// <summary>
     /// Utilisé par les JobTransporter pour récupérer une commande à effectuer.
     /// Retourne la commande dont la deadline est la plus proche, ou la première de la liste.
     /// </summary>
@@ -58,6 +74,25 @@ public class JobLogisticsManager : Job
         // Trie optionnel : prendre la commande avec le plus petit Délai restants (RemainingDays)
         BuyOrder nextOrder = _activeOrders[0];
         foreach(var order in _activeOrders)
+        {
+            if(order.RemainingDays < nextOrder.RemainingDays)
+            {
+                nextOrder = order;
+            }
+        }
+        return nextOrder;
+    }
+
+    /// <summary>
+    /// Utilisé par les JobCrafter pour récupérer une commande de fabrication à effectuer.
+    /// Retourne la commande dont la deadline est la plus proche, ou la première de la liste.
+    /// </summary>
+    public CraftingOrder GetNextAvailableCraftingOrder()
+    {
+        if (_activeCraftingOrders.Count == 0) return null;
+
+        CraftingOrder nextOrder = _activeCraftingOrders[0];
+        foreach(var order in _activeCraftingOrders)
         {
             if(order.RemainingDays < nextOrder.RemainingDays)
             {
@@ -84,11 +119,35 @@ public class JobLogisticsManager : Job
     }
 
     /// <summary>
+    /// Met à jour la progression d'une commande de fabrication.
+    /// Si complétée, elle est retirée de la liste.
+    /// </summary>
+    public void UpdateCraftingOrderProgress(CraftingOrder order, int craftedAmount)
+    {
+        if (!_activeCraftingOrders.Contains(order)) return;
+
+        bool completed = order.RecordCraft(craftedAmount);
+        if (completed)
+        {
+            _activeCraftingOrders.Remove(order);
+            Debug.Log($"<color=green>[JobLogisticsManager]</color> Commande Craft {order.Quantity}x {order.ItemToCraft.ItemName} COMPLÉTÉE.");
+        }
+    }
+
+    /// <summary>
     /// Vérifie si l'une des commandes est expirée et applique les conséquences sociales.
     /// </summary>
     private void CheckExpiredOrders()
     {
-        if (_activeOrders.Count == 0 || TimeManager.Instance == null) return;
+        if (TimeManager.Instance == null) return;
+
+        CheckExpiredBuyOrders();
+        CheckExpiredCraftingOrders();
+    }
+
+    private void CheckExpiredBuyOrders()
+    {
+        if (_activeOrders.Count == 0) return;
 
         List<BuyOrder> expiredOrders = new List<BuyOrder>();
 
@@ -114,7 +173,6 @@ public class JobLogisticsManager : Job
                 if (expired.ClientBoss != null && expired.ClientBoss.IsAlive())
                 {
                     // Le patron qui n'a pas reçu sa commande déteste le boss du transporteur
-                    // -25 d'opinion brute (sera modulé par la personnalité via CharacterProfile)
                     expired.ClientBoss.CharacterRelation?.UpdateRelation(transporterBoss, -25);
                 }
 
@@ -122,6 +180,40 @@ public class JobLogisticsManager : Job
                 {
                     // Le patron qui a payé le transport mais que ça n'a pas été livré
                     expired.IntermediaryBoss.CharacterRelation?.UpdateRelation(transporterBoss, -10);
+                }
+            }
+        }
+    }
+
+    private void CheckExpiredCraftingOrders()
+    {
+        if (_activeCraftingOrders.Count == 0) return;
+
+        List<CraftingOrder> expiredOrders = new List<CraftingOrder>();
+
+        foreach (var order in _activeCraftingOrders)
+        {
+            order.DecreaseRemainingDays();
+            if (order.RemainingDays <= 0)
+            {
+                expiredOrders.Add(order);
+            }
+        }
+
+        foreach (var expired in expiredOrders)
+        {
+            _activeCraftingOrders.Remove(expired);
+            Debug.Log($"<color=red>[JobLogisticsManager]</color> Commande Craft {expired.Quantity}x {expired.ItemToCraft.ItemName} EXPIRÉE.");
+
+            // Appliquer les conséquences sociales si le bâtiment et boss sont configurés
+            if (_workplace != null && _workplace.Owner != null)
+            {
+                Character workplaceBoss = _workplace.Owner;
+
+                if (expired.ClientBoss != null && expired.ClientBoss.IsAlive())
+                {
+                    // Le patron qui n'a pas reçu sa commande déteste le boss de l'artisan
+                    expired.ClientBoss.CharacterRelation?.UpdateRelation(workplaceBoss, -25);
                 }
             }
         }

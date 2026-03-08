@@ -139,7 +139,7 @@ public class ComplexRoom : Room
         return null;
     }
     
-    public IEnumerable<T> GetFurnitureOfType<T>() where T : Furniture
+    public override IEnumerable<T> GetFurnitureOfType<T>()
     {
         // Get from own base room first
         if (FurnitureManager != null)
