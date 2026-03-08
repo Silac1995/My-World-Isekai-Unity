@@ -143,6 +143,75 @@ public class JobLogisticsManager : Job
 
         CheckExpiredBuyOrders();
         CheckExpiredCraftingOrders();
+        
+        // --- NEW: Restock Shop if this is a ShopBuilding ---
+        if (_workplace is ShopBuilding shop)
+        {
+            CheckShopInventory(shop);
+        }
+    }
+
+    /// <summary>
+    /// Scanne l'inventaire du shop et passe des commandes si des items manquent.
+    /// </summary>
+    private void CheckShopInventory(ShopBuilding shop)
+    {
+        var itemsToSell = shop.ItemsToSell;
+        var inventory = shop.Inventory;
+
+        foreach (var itemSO in itemsToSell)
+        {
+            // Si l'item n'est pas présent dans l'inventaire
+            if (!shop.HasItemInStock(itemSO))
+            {
+                // Vérifier si une commande est déjà en cours pour cet item
+                bool alreadyOrdered = _activeOrders.Any(o => o.ItemToTransport.ItemData == itemSO);
+                if (alreadyOrdered) continue;
+
+                // Chercher un fournisseur (Forge, Alchimiste, etc.)
+                var supplier = FindSupplierFor(itemSO);
+                if (supplier != null)
+                {
+                    Debug.Log($"<color=cyan>[Logistics]</color> Stock bas pour {itemSO.ItemName}. Commande de réapprovisionnement passée auprès de {supplier.BuildingName}.");
+                    
+                    // Création de la commande de transport
+                    // On demande 5 exemplaires par défaut pour le réappro
+                    var order = new BuyOrder(
+                        itemSO, 
+                        5, 
+                        shop.Owner,        // Client = Le patron du magasin
+                        supplier.Owner,    // Vendeur = Le patron du fournisseur
+                        _workplace.Owner,  // Intermédiaire = Le patron du manager logistique (souvent le même que shop.Owner)
+                        3                  // Délai de 3 jours
+                    );
+
+                    // On enregistre la commande chez le fournisseur (pour que ses transporteurs la voient)
+                    var supplierLogistics = supplier.Jobs.OfType<JobLogisticsManager>().FirstOrDefault();
+                    if (supplierLogistics != null)
+                    {
+                        supplierLogistics.PlaceBuyOrder(order);
+                    }
+                }
+            }
+        }
+    }
+
+    private CommercialBuilding FindSupplierFor(ItemSO item)
+    {
+        if (BuildingManager.Instance == null) return null;
+
+        // On cherche un bâtiment de type "CraftingBuilding" ou "Shop" (grossiste) qui produit cet item
+        foreach (var b in BuildingManager.Instance.allBuildings)
+        {
+            if (b == _workplace || !(b is CommercialBuilding commBuilding)) continue;
+
+            if (commBuilding is CraftingBuilding craftingBuilding)
+            {
+                if (craftingBuilding.GetCraftableItems().Contains(item)) return commBuilding;
+            }
+            // On pourrait aussi checker d'autres types de bâtiments (ex: un autre shop qui est un grossiste)
+        }
+        return null;
     }
 
     private void CheckExpiredBuyOrders()
