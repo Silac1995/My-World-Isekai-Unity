@@ -251,26 +251,6 @@ public class SpawnManager : MonoBehaviour
                 character.CharacterJob.BecomeOwner(unownedCommercial);
                 Debug.Log($"<color=green>[SpawnManager]</color> {character.CharacterName} a pris possession du bâtiment commercial libre : {unownedCommercial.BuildingName}.");
             }
-            else
-            {
-                // 2. Sinon, cherche simplement un emploi disponible n'importe où
-                foreach (var b in BuildingManager.Instance.allBuildings)
-                {
-                    if (b is CommercialBuilding commercial)
-                    {
-                        var availableJobs = commercial.GetAvailableJobs();
-                        if (availableJobs != null && availableJobs.Any())
-                        {
-                            var firstJobAvailable = availableJobs.First();
-                            if (character.CharacterJob.TakeJob(firstJobAvailable, commercial))
-                            {
-                                Debug.Log($"<color=green>[SpawnManager]</color> {character.CharacterName} a été embauché en tant que {firstJobAvailable.JobTitle} à {commercial.BuildingName}.");
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
         }
 
         return character;

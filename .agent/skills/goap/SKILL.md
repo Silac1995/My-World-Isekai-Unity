@@ -1,46 +1,46 @@
 ---
-description: Règles d'utilisation du GOAP pour dicter la vie de tous les jours et les buts ultimes d'un NPC (ex: fonder une famille).
+description: Rules for using GOAP to dictate the daily life and ultimate goals of an NPC (e.g., starting a family).
 ---
 
 # GOAP (Life Goals) System Skill
 
-Ce skill définit comment utiliser et étendre le système GOAP (Goal-Oriented Action Planning). 
-**Important :** Le GOAP de ce projet n'est pas qu'un gestionnaire de file d'attente pour des métiers (ex: Gatherer). Il est conçu pour être le chef d'orchestre de la **vie de tous les jours** du NPC, basé sur des **buts ultimes**.
+This skill defines how to use and extend the GOAP (Goal-Oriented Action Planning) system. 
+**Important:** The GOAP in this project is not just a job queue manager (e.g., Gatherer). It is designed to be the orchestrator of the NPC's **daily life**, based on **ultimate goals**.
 
-## Concept Global : Le GOAP comme "Life Manager"
-Le GOAP donne une direction globale et organique au NPC. Plutôt que de dire "Va couper du bois", on donne un Goal de vie au NPC. 
+## Global Concept: GOAP as a "Life Manager"
+GOAP gives the NPC a global and organic direction. Rather than saying "Go chop wood," we give the NPC a life Goal. 
 
-Exemples de buts ultimes :
-- **Fonder une famille** : Le Planner GOAP va privilégier des actions de vie courante menant à ce but (Discuter avec des NPCs, cibler le sexe opposé, flirter, se marier, faire des enfants).
-- **Être le meilleur artiste martial** : Le Planner enchaînera des actions d'entraînement (trouver un dojo, affronter des adversaires, s'améliorer sur un CombatSO).
-- **Ambition financière** : Amasser des richesses (ce qui le poussera à trouver un métier comme Gatherer et déposer des ressources).
+Examples of ultimate goals:
+- **Starting a family**: The GOAP Planner will prioritize daily life actions leading to this goal (Talking with NPCs, targeting the opposite sex, flirting, marrying, having children).
+- **Being the best martial artist**: The Planner will chain training actions (finding a dojo, fighting opponents, improving on a CombatSO).
+- **Financial ambition**: Amassing wealth (which will push them to find a job like Gatherer and deposit resources).
 
-Le GOAP gère le plan à long/moyen terme, tandis que le Behaviour Tree (BT) s'occupe de la survie à court terme (réagir à une agression, fuir, manger en urgence).
+The GOAP manages the long/medium-term plan, while the Behaviour Tree (BT) handles short-term survival (reacting to aggression, fleeing, eating urgently).
 
 ## When to use this skill
-- Pour concevoir un nouveau **Life Goal** ou de nouvelles chaînes d'actions quotidiennes (ex: cycle de séduction, cycle d'entraînement martial).
-- Lors de la création d'une `GoapAction` qui fait avancer l'histoire personnelle du NPC (ex: `Action_Socialize`, `Action_TrainMartialArts`).
-- Pour structurer les préconditions et effets liant la vie sociale, les métiers et les besoins du NPC.
+- To design a new **Life Goal** or new daily action chains (e.g., a seduction cycle, a martial training cycle).
+- When creating a `GoapAction` that advances the NPC's personal story (e.g., `Action_Socialize`, `Action_TrainMartialArts`).
+- To structure the preconditions and effects linking the NPC's social life, jobs, and needs.
 
 ## How to use it
 
-### 1. Créer un But Ultime (`GoapGoal`)
-Un Goal GOAP définit l'état absolu que le NPC veut atteindre dans un pan de sa vie.
-- `GoalName` : Nom du but à accomplir (ex: "FonderUneFamille").
-- `DesiredState` : Dictionnaire d'états booléens décrivant le succès du but.
+### 1. Create an Ultimate Goal (`GoapGoal`)
+A GOAP Goal defines the absolute state the NPC wants to reach in a part of their life.
+- `GoalName`: Name of the goal to accomplish (e.g., "StartAFamily").
+- `DesiredState`: Dictionary of boolean states describing the success of the goal.
     - Ex: `new Dictionary<string, bool> { { "hasChildren", true } }`
-- `Priority` : Niveau d'importance du but (permet au NPC de choisir entre s'entraîner ou développer son cercle social).
+- `Priority`: Priority level of the goal (allows the NPC to choose between training or developing their social circle).
 
-### 2. Définir une Action de Vie (`GoapAction`)
-L'action est la brique de base du quotidien.
-- `ActionName` : String identifiant l'action.
-- `Preconditions` : L'état nécessaire pour lancer l'action.
-    - Ex: pour faire un enfant, la précondition est peut-être `{"isMarried", true}`.
-- `Effects` : L'état résultant de l'action.
-    - Ex: faire un enfant donne la condition `{"hasChildren", true}`.
-- `Cost` : La "pénibilité" ou la difficulté du processus (le Planner choisit la route la moins coûteuse). On peut varier ce coût selon les "traits" du NPC !
-- `IsValid`, `Execute`, `IsComplete`, `Exit` : Fonctions contrôlant l'action frame par frame.
+### 2. Define a Life Action (`GoapAction`)
+The action is the basic building block of everyday life.
+- `ActionName`: String identifying the action.
+- `Preconditions`: The necessary state to launch the action.
+    - Ex: to have a child, the precondition might be `{"isMarried", true}`.
+- `Effects`: The resulting state of the action.
+    - Ex: having a child gives the condition `{"hasChildren", true}`.
+- `Cost`: The "tediousness" or difficulty of the process (the Planner chooses the least costly route). This cost can vary according to the NPC's "traits"!
+- `IsValid`, `Execute`, `IsComplete`, `Exit`: Functions controlling the action frame by frame.
 
-### 3. Logique du Planner (`GoapPlanner`)
-- Il effectue une recherche en marche arrière (backward search) à partir du Life Goal et trouve la suite logique et quotidienne pour l'accomplir.
-- **Astuce d'équilibrage** : Mettez en place des chaînes de préconditions logiques qui imposent au NPC de vivre sa vie (pour se marier il faut un haut niveau d'affinité, pour avoir de l'affinité il faut l'action "Socialize", etc).
+### 3. Planner Logic (`GoapPlanner`)
+- It performs a backward search from the Life Goal and finds the logical and daily sequence to accomplish it.
+- **Balancing tip**: Set up chains of logical preconditions that force the NPC to live their life (to get married requires a high level of affinity, to have affinity requires the "Socialize" action, etc.).

@@ -1,46 +1,46 @@
 ---
-description: Structure, priorités et API de contrôle du système de Behaviour Tree des NPCs.
+description: Structure, priorities, and control API for the NPC Behaviour Tree system.
 ---
 
 # Behaviour Tree System Skill
 
-Ce skill détaille l'arborescence et le fonctionnement du système de Behaviour Tree (BT) utilisé par les NPCs. 
+This skill details the architecture and inner workings of the Behaviour Tree (BT) system used by NPCs. 
 
 ## When to use this skill
-- Pour ajouter un nouveau comportement global (ex: dormir, manger, routines sociales).
-- Pour interagir avec un NPC de l'extérieur via le script `NPCBehaviourTree` (ex: donner un ordre).
-- Pour debugger pourquoi un NPC "ne fait rien" ou agit de façon inattendue.
+- To add a new global behavior (e.g., sleeping, eating, social routines).
+- To interact with an NPC from the outside via the `NPCBehaviourTree` script (e.g., giving an order).
+- To debug why an NPC "does nothing" or acts unexpectedly.
 
 ## How to use it
 
-### 1. Architecture et Priorités des Noeuds
-Le Behaviour Tree utilise un `BTSelector` racine (`_root`) qui évalue ses enfants de haut en bas. **L'ordre définit la priorité**.
-L'arbre actuel s'évalue dans cet ordre :
-1. **Ordres** (`BTCond_HasOrder`) : Le joueur ou le jeu a donné un ordre explicite (Priorité Max).
-2. **Combat** (`BTCond_IsInCombat`) : Le NPC est déjà engagé dans un combat.
-3. **Entraide** (`BTCond_FriendInDanger`) : Le NPC voit un allié agressé.
-4. **Agression** (`BTCond_DetectedEnemy`) : Le NPC détecte une menace et l'attaque.
-5. **Besoins** (`BTCond_HasUrgentNeed`) : Faim, repos d'urgence, vêtements...
-6. **Schedule** (`BTCond_HasScheduledActivity`) : Routines quotidiennes (Travail, sommeil régulier).
-7. **Social** (`BTCond_WantsToSocialize`) : Discussions et interactions spontanées.
-8. **Wander** (`BTAction_Wander`) : Le Fallback, le NPC erre.
+### 1. Architecture and Node Priorities
+The Behaviour Tree uses a root `BTSelector` (`_root`) that evaluates its children from top to bottom. **Order defines priority**.
+The current tree evaluates in this order:
+1. **Orders** (`BTCond_HasOrder`): The player or the game has given an explicit order (Max Priority).
+2. **Combat** (`BTCond_IsInCombat`): The NPC is already engaged in combat.
+3. **Assistance** (`BTCond_FriendInDanger`): The NPC sees an ally under attack.
+4. **Aggression** (`BTCond_DetectedEnemy`): The NPC detects a threat and attacks it.
+5. **Needs** (`BTCond_HasUrgentNeed`): Hunger, urgent rest, clothing...
+6. **Schedule** (`BTCond_HasScheduledActivity`): Daily routines (Work, regular sleep).
+7. **Social** (`BTCond_WantsToSocialize`): Spontaneous discussions and interactions.
+8. **Wander** (`BTAction_Wander`): The Fallback, the NPC wanders.
 
-*Si vous ajoutez un nouveau comportement, réfléchissez au noeud dans lequel l'insérer ou à la position du nouveau noeud conditionnel dans le `BuildTree()` de `NPCBehaviourTree`.*
+*If you add a new behavior, think about which node to insert it into or the position of the new conditional node in the `BuildTree()` method of `NPCBehaviourTree`.*
 
-### 2. Le Tick (Performances)
-- **Staggering** : Le BT ne s'exécute pas à chaque frame. Il s'exécute tous les `_tickInterval` frames (défaut: 5), avec un décalage (`_frameOffset`) unique par PNJ pour étaler la charge CPU.
-- **Exceptions de tick** :
-    - Le joueur ne tick pas le BT.
-    - Un personnage mort ne tick pas.
-    - `Controller.IsFrozen` pause le BT (utile pour les cinématiques/dialogues forts).
-    - `CharacterInteraction.IsInteracting` pause le BT pour éviter des mouvements ou des annulations impromptues de l'interaction (ex: s'asseoir).
-    - L'ancien système (`Controller.CurrentBehaviour != null`) met le BT en pause. *Le but à terme est sûrement de remplacer tous les comportements par le BT ou le GOAP, mais c'est la règle actuelle*.
+### 2. The Tick (Performance)
+- **Staggering**: The BT does not execute every frame. It executes every `_tickInterval` frames (default: 5), with a unique offset (`_frameOffset`) per NPC to spread the CPU load.
+- **Tick Exceptions**:
+    - The player does not tick the BT.
+    - A dead character does not tick.
+    - `Controller.IsFrozen` pauses the BT (useful for strong cutscenes/dialogues).
+    - `CharacterInteraction.IsInteracting` pauses the BT to avoid unpredictable movements or interaction cancellations (e.g., sitting down).
+    - The old system (`Controller.CurrentBehaviour != null`) pauses the BT. *The long-term goal is likely to replace all behaviors with the BT or GOAP, but this is the current rule*.
 
-### 3. API Publique (Interaction Externe)
-Pour bypasser l'IA autonome et forcer une action (ex: un sort mind-control, le mode Build du joueur, etc.) :
-- `GiveOrder(NPCOrder order)` : Place un ordre dans le `Blackboard`. Il sera prioritaire au prochain tick. Annule tout ordre précédent en cours.
-- `CancelOrder()` : Annule l'ordre en cours.
-- `ForceNextTick()` : À appeler si le NPC vient d'être décongelé (`IsFrozen = false`) et qu'il faut qu'il réagisse très vite sans attendre son cycle de 5 frames.
+### 3. Public API (External Interaction)
+To bypass autonomous AI and force an action (e.g., a mind-control spell, player's Build mode, etc.):
+- `GiveOrder(NPCOrder order)`: Places an order in the `Blackboard`. It will take priority on the next tick. Cancels any previous ongoing order.
+- `CancelOrder()`: Cancels the ongoing order.
+- `ForceNextTick()`: Call this if the NPC has just been unfrozen (`IsFrozen = false`) and needs to react very quickly without waiting for its 5-frame cycle.
 
-## Mettre à jour des Noeuds 
-Les actions terminales du BT doivent, dans la mesure du possible, implémenter l'interface `IAIBehaviour` pour pouvoir être proprement gérées (avec `.Act()`, `.Exit()`, `.Terminate()`, `.IsFinished`).
+## Updating Nodes
+The BT's terminal actions should, whenever possible, implement the `IAIBehaviour` interface so they can be properly managed (using `.Act()`, `.Exit()`, `.Terminate()`, `.IsFinished`).

@@ -18,6 +18,7 @@ public class CharacterNeeds : MonoBehaviour
         _allNeeds.Add(_socialNeed);
 
         _allNeeds.Add(new NeedToWearClothing(_character));
+        _allNeeds.Add(new NeedJob(_character));
     }
 
     private void Update()

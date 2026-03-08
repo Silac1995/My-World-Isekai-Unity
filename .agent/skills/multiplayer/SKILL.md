@@ -1,40 +1,40 @@
 ---
-description: Architecture de code "Future-Proof" pour le multijoueur (Pas de singletons locaux, séparation Inputs/Logique).
+description: "Future-Proof" code architecture for multiplayer (No local singletons, Inputs/Logic separation).
 ---
 
 # Multiplayer Architecture Skill
 
-Ce skill dicte la philosophie architecturale "Network-Ready" (prête pour le réseau) qui **doit être appliquée systématiquement** dans le projet, même s'il n'y a pas encore de framework (comme Mirror ou Netcode) d'installé.
-La règle d'or (définie dans `global.md`) est de toujours coder en présumant que le jeu "va être" multijoueur.
+This skill dictates the "Network-Ready" architectural philosophy that **must be systematically applied** in the project, even if no framework (like Mirror or Netcode) is installed yet.
+The golden rule (defined in `global.md`) is to always code under the assumption that the game "will be" multiplayer.
 
 ## When to use this skill
-- À appliquer **systématiquement** lors de la création d'un nouveau système (ex: système de Quête, Inventaire, Combat).
-- Lors de l'ajout d'une mécanique impliquant plusieurs personnages.
-- Lors de l'écriture de `MonoBehaviours` liés au Temps ou aux Inputs.
+- To be applied **systematically** when creating a new system (e.g., Quest, Inventory, Combat systems).
+- When adding mechanics involving multiple characters.
+- When writing `MonoBehaviours` related to Time or Inputs.
 
-## Règles d'Architecture "Future-Proof"
+## "Future-Proof" Architecture Rules
 
-### 1. Bannissement des Singletons pour l'État de Jeu
-- **La Règle :** Ne **JAMAIS** utiliser `FindObjectOfType<Player>()` ou un `Player.Instance`.
-- **Pourquoi ?** En multijoueur, il y a *plusieurs* joueurs dans une même scène.
-- **La Solution :** Utilisez l'Injection de Dépendances, des références explicites par GetComponent, ou des gestionnaires d'instances locaux isolés. (ex: Un `BattleManager` gère une liste de `CharacterCombat` qu'il connaît, plutôt que de deviner qui attaque qui).
+### 1. Banning Singletons for Game State
+- **The Rule:** NEVER use `FindObjectOfType<Player>()` or a `Player.Instance`.
+- **Why?** In multiplayer, there are *multiple* players in the same scene.
+- **The Solution:** Use Dependency Injection, explicit references via GetComponent, or isolated local instance managers. (e.g., A `BattleManager` manages a list of `CharacterCombat` that it knows about, rather than guessing who is attacking whom).
 
-### 2. Découplage strict des Inputs et de la Logique
-- **La Règle :** Le code qui lit le clavier/la manette (`InputManager.cs`) **ne doit pas** contenir la logique de gameplay (`personnage.Deplacer()`).
-- **Pourquoi ?** En réseau, un monstre ne reçoit pas d'inputs claviers locaux. Il reçoit un ordre (RPC) du serveur.
-- **La Solution :** Les Inputs ne font qu'emettre des évènements (ex: `OnAttackPressed`). La logique (`Attack()`) écoute cet évènement, mais pourrait tout aussi bien être appelée par un paquet réseau (ou une décision du `BehaviourTree`).
+### 2. Strict Decoupling of Inputs and Logic
+- **The Rule:** The code that reads the keyboard/controller (`InputManager.cs`) **must not** contain gameplay logic (`character.Move()`).
+- **Why?** Over a network, a monster does not receive local keyboard inputs. It receives an order (RPC) from the server.
+- **The Solution:** Inputs only emit events (e.g., `OnAttackPressed`). The logic (`Attack()`) listens to this event, but could just as easily be called by a network packet (or a `BehaviourTree` decision).
 
-### 3. État (State) vs Visuel
-- Ce découplage est déjà amorcé dans le projet : `CharacterStats` possède la donnée et `CharacterVisual` l'affiche.
-- **La Règle :** Ne synchronisez jamais un Visuel sur le réseau. Seul l'État (`CharacterStats.Health`, `CharacterCombat.Initiative`) doit un jour être synchronisé par le serveur.
+### 3. State vs Visual
+- This decoupling has already started in the project: `CharacterStats` owns the data and `CharacterVisual` displays it.
+- **The Rule:** Never sync a Visual over the network. Only the State (`CharacterStats.Health`, `CharacterCombat.Initiative`) should eventually be synced by the server.
 
-### 4. La Dictature du Temps
-- **La Règle :** Ne manipulez **jamais** `Time.timeScale` pour mettre le jeu en pause ou le ralentir dans une logique locale de personnage.
-- **Pourquoi ?** Ralentir le temps localement désynchronisera le client de tous les autres joueurs et du serveur physique de façon catastrophique.
-- **La Solution :** Confiez la gestion du temps aux Managers Serveurs. Exemple typique : le `BattleManager` utilise son propre "Tick" (`PerformBattleTick()`) indépendant du `Time.time` de Unity, ce qui le rendra facilement synchronisable plus tard.
+### 4. The Dictatorship of Time
+- **The Rule:** Never manipulate `Time.timeScale` to pause or slow down the game in a local character logic.
+- **Why?** Slowing down time locally will catastrophically desync the client from all other players and the physical server.
+- **The Solution:** Entrust time management to Server Managers. Typical example: the `BattleManager` uses its own independent "Tick" (`PerformBattleTick()`) separate from Unity's `Time.time`, making it easily synchronizable later.
 
-## Checklist du Code "Network-Ready"
-Passez votre nouveau code au crible :
-- [ ] Mon code survit-il s'il y a 2 "Objets Joueurs" dans la scène ?
-- [ ] Si j'appelle ma méthode de tir ou de déplacement par le code pur depuis n'importe où, marche-t-elle sans dépendre d'un booléen obscur du clavier ?
-- [ ] Mes délais (cooldowns) se basent-ils bien sur l'architecture locale plutôt que de modifier le moteur Unity ?
+## "Network-Ready" Code Checklist
+Critically review your new code:
+- [ ] Does my code survive if there are 2 "Player Objects" in the scene?
+- [ ] If I call my shooting or moving method purely through code from anywhere, does it work without depending on an obscure keyboard boolean?
+- [ ] Do my cooldowns rely on the local architecture rather than modifying the Unity engine?

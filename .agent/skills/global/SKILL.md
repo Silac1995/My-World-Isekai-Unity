@@ -1,31 +1,31 @@
 ---
-description: Règles globales du projet, style de code C#, optimisation et bonnes pratiques spécifiques à l'environnement Unity en 2D/3D.
+description: Global project rules, C# coding style, optimization, and best practices specific to the 2D/3D Unity environment.
 ---
 
 # Global Project Skills
 
-Ce skill contient les règles fondamentales et les bonnes pratiques à appliquer systématiquement pour tout développement dans ce projet Unity.
+This skill contains the fundamental rules and best practices to systematically apply for any development in this Unity project.
 
 ## When to use this skill
-- **Toujours** : Lors de l'écriture, la modification ou la revue de n'importe quel script C# dans ce projet.
-- Avant de proposer une nouvelle architecture ou fonctionnalité (pour s'assurer qu'elle respecte l'optimisation et la vision multijoueur).
-- Lors de la gestion des coroutines, des événements et de la mémoire.
+- **Always**: When writing, modifying, or reviewing any C# script in this project.
+- Before proposing a new architecture or feature (to ensure it respects the optimization and multiplayer vision).
+- When managing coroutines, events, and memory.
 
 ## How to use it
-Appliquez strictement les règles suivantes lors de la rédaction de code :
+Strictly apply the following rules when writing code:
 
-### 1. Style et Architecture C#
-- **Attributs privés** : Toujours préfixer les attributs privés par un underscore `_` (ex: `_skeletonAnimation`).
-- **Encapsulation** : Privilégier les attributs privés avec des accesseurs (propriétés `get`) ou `[SerializeField] private` pour l'inspecteur Unity. L'utilisation d'attributs publics doit être évitée sauf nécessité absolue.
+### 1. C# Style and Architecture
+- **Private attributes**: Always prefix private attributes with an underscore `_` (e.g., `_skeletonAnimation`).
+- **Encapsulation**: Favor private attributes with accessors (`get` properties) or `[SerializeField] private` for the Unity inspector. The use of public attributes should be avoided unless absolutely necessary.
 
-### 2. Contexte du Jeu
-- **Hybride 3D/2D** : Le jeu est développé sous Unity dans un environnement 3D, mais utilise des sprites de personnages en 2D (notamment Spine). Prenez en compte les interactions 3D/2D.
-- **Multijoueur** : Le jeu est conçu avec l'objectif d'être multijoueur. Pensez à l'architecture réseau et évitez les singletons ou dépendances qui bloqueraient cette évolution.
+### 2. Game Context
+- **3D/2D Hybrid**: The game is developed in Unity within a 3D environment, but uses 2D character sprites (notably Spine). Take 3D/2D interactions into account.
+- **Multiplayer**: The game is designed with the objective of being multiplayer. Think about network architecture and avoid singletons or dependencies that would hinder this evolution.
 
-### 3. Optimisation et Memory Safety
-- **Performances** : L'optimisation est une priorité absolue. Évitez toute allocation inutile dans la boucle `Update` et prévenez les fuites de mémoire.
-- **Gestion des Coroutines** :
-    - Ne laissez *jamais* une Coroutine s'exécuter sans contrôle.
-    - Conservez une référence à vos coroutines. Chaque `StartCoroutine` doit idéalement être accompagné d'un `StopCoroutine` (ou `StopAllCoroutines`) dans le `OnDisable` ou `OnDestroy`.
-- **Gestion des Événements** :
-    - Toujours se désabonner des événements (actions C#, événements Unity, animations Spine) dans la méthode `OnDisable` ou `OnDestroy` pour éviter les fuites de mémoire (Memory Leaks).
+### 3. Optimization and Memory Safety
+- **Performance**: Optimization is an absolute priority. Avoid any unnecessary allocation in the `Update` loop and prevent memory leaks.
+- **Coroutine Management**:
+    - *Never* let a Coroutine run unchecked.
+    - Keep a reference to your coroutines. Every `StartCoroutine` should ideally be accompanied by a `StopCoroutine` (or `StopAllCoroutines`) in `OnDisable` or `OnDestroy`.
+- **Event Management**:
+    - Always unsubscribe from events (C# actions, Unity events, Spine animations) in the `OnDisable` or `OnDestroy` method to avoid memory leaks.

@@ -1,40 +1,40 @@
 ---
-description: Rendu visuel 2.5D (Billboarding), Presets de Race, et architecture logique des parties du corps (Yeux, Mains) en vue de Spine2D.
+description: 2.5D visual rendering (Billboarding), Race Presets, and logical architecture of body parts (Eyes, Hands) in preparation for Spine2D.
 ---
 
 # Character Visuals System Skill
 
-Ce skill détaille comment les visuels des personnages (sprites 2D dans un monde 3D) sont gérés, ainsi que le système de "Body Parts" (Mains, Yeux, Cheveux, etc.).
+This skill details how character visuals (2D sprites in a 3D world) are handled, as well as the "Body Parts" system (Hands, Eyes, Hair, etc.).
 
-> [!WARNING] (Migration Spine2D)
-> Le moteur de rendu local **SpriteResolver** et **SpriteLibrary** d'Unity (actuellement utilisé par `CharacterEye`, `CharacterHand`...) est **temporaire**. Il sera entièrement remplacé par des rigs **Spine2D**.
-> **RÈGLE D'OR** : Bien que le *rendu* sous-jacent va changer, **l'API logique des Body Parts doit être préservée**. Le code de gameplay (`CharacterActions`, `GoapActions`, `Animator`) **doit** continuer à appeler les méthodes comme `CharacterEye.SetClosed(true)` ou `CharacterHand.SetPose("fist")`. C'est cette surcouche logique qui garantit la modularité du projet, peu importe la technologie d'animation en dessous.
+> [!WARNING] (Spine2D Migration)
+> Unity's local rendering engine **SpriteResolver** and **SpriteLibrary** (currently used by `CharacterEye`, `CharacterHand`...) is **temporary**. It will be entirely replaced by **Spine2D** rigs.
+> **GOLDEN RULE**: Although the underlying *rendering* will change, **the logical API of Body Parts must be preserved**. Gameplay code (`CharacterActions`, `GoapActions`, `Animator`) **must** continue to call methods like `CharacterEye.SetClosed(true)` or `CharacterHand.SetPose("fist")`. It is this logical overlay that guarantees the project's modularity, regardless of the underlying animation technology.
 
 ## When to use this skill
-- Pour configurer de nouvelles races (`RaceSO`) ou gérer les presets visuels (`CharacterVisualPresetSO`).
-- Pour diriger le regard ou orienter un sprite (`Billboarding`, `LookTarget`).
-- Lors de l'implémentation d'une fonctionnalité nécessitant le changement d'expression d'un personnage (cligner des yeux, serrer les poings pendant le combat).
-- Pour interagir avec `CharacterBodyPartsController`.
+- To configure new races (`RaceSO`) or manage visual presets (`CharacterVisualPresetSO`).
+- To direct gaze or orient a sprite (`Billboarding`, `LookTarget`).
+- When implementing a feature requiring a change in a character's expression (blinking, clenching fists during combat).
+- To interact with `CharacterBodyPartsController`.
 
 ## Architecture & How to use it
 
 ### 1. Billboarding & Rendering (`CharacterVisual.cs`)
-- **Billboarding** : Les sprites 2D des personnages font toujours face à la caméra. Cela est géré via la rotation du `transform` par rapport à la rotation de la caméra principale.
-- **Orientation (Flip)** : `IsFacingRight` contrôle l'inversion du visuel. Il contient une sécurité anti-flickering (`FLIP_COOLDOWN = 0.15f`) et bloque le flip si le personnage est en plein Knockback.
+- **Billboarding**: The 2D character sprites always face the camera. This is managed by rotating the `transform` relative to the main camera's rotation.
+- **Orientation (Flip)**: `IsFacingRight` controls the visual flip. It contains an anti-flickering safety (`FLIP_COOLDOWN = 0.15f`) and blocks flipping if the character is in the middle of Knockback.
 
-### 2. Presets et Initialisation
-La méthode `ApplyPresetFromRace(RaceSO)` dans `CharacterVisual` sert de hub d'initialisation.
-- Elle délègue l'initialisation des organes au `CharacterBodyPartsController.InitializeAllBodyParts()`.
-- Elle applique le `DefaultSkinColor` (ou la catégorie) à travers les divers sous-contrôleurs (Ears, Hands, etc.).
+### 2. Presets and Initialization
+The `ApplyPresetFromRace(RaceSO)` method in `CharacterVisual` acts as an initialization hub.
+- It delegates organ initialization to `CharacterBodyPartsController.InitializeAllBodyParts()`.
+- It applies the `DefaultSkinColor` (or category) across the various sub-controllers (Ears, Hands, etc.).
 
-### 3. Logique des Body Parts (L'API Intouchable)
-L'architecture utilise un hub, `CharacterBodyPartsController`, qui contient les sous-contrôleurs (`EyesController`, `HandsController`, etc.), eux-mêmes gérant les objets finaux (`CharacterEye`, `CharacterHand`).
+### 3. Body Parts Logic (The Untouchable API)
+The architecture uses a hub, `CharacterBodyPartsController`, which contains sub-controllers (`EyesController`, `HandsController`, etc.), themselves managing the final objects (`CharacterEye`, `CharacterHand`).
 
-**L'API qui doit survivre à Spine2D** :
-- **Clignement / Fermeture (Eyes)** : `CharacterEye.SetClosed(bool)` est la source de vérité pour déterminer si un oeil est fermé (pour dormir, cligner, exprimer la douleur).
-- **Poses de Mains (Hands)** : `CharacterHand.SetPose(string)` (ex: "fist", "normal") dicte l'état de la main. Il est conçu pour synchroniser toutes les couches (le pouce *et* les doigts sous l'arme).
-- **Catégories** : Des méthodes comme `SetCategory(string)` permettent de changer un composant entier (ex: passer d'une oreille Humaine à Elfe).
+**The API that must survive Spine2D**:
+- **Blinking / Closing (Eyes)**: `CharacterEye.SetClosed(bool)` is the source of truth to determine if an eye is closed (for sleeping, blinking, expressing pain).
+- **Hand Poses (Hands)**: `CharacterHand.SetPose(string)` (e.g., "fist", "normal") dictates the state of the hand. It is designed to synchronize all layers (the thumb *and* fingers underneath the weapon).
+- **Categories**: Methods like `SetCategory(string)` allow changing an entire component (e.g., going from a Human ear to an Elf ear).
 
 ## Tips & Troubleshooting
-- **Un sprite ne s'affiche pas / Bug visuel** : Vérifiez que la logique appelle bien l'API de base (`SetPose()`, `SetClosed()`). Le fait que la technologie sous-jacente soit temporaire (SpriteResolver) ne dispense pas d'utiliser l'architecture modulaire !
-- Si vous créez une nouvelle action GOAP/BT (ex: "S'endormir"), n'oubliez pas d'y inclure l'appel visuel de vos actions : `Character.CharacterVisual.BodyPartsController.EyesController.SetClosed(true)`.
+- **A sprite does not appear / Visual bug**: Verify that the logic actually calls the basic API (`SetPose()`, `SetClosed()`). The fact that the underlying technology is temporary (SpriteResolver) does not excuse bypassing the modular architecture!
+- If you create a new GOAP/BT action (e.g., "Fall asleep"), don't forget to include the visual call for your actions: `Character.CharacterVisual.BodyPartsController.EyesController.SetClosed(true)`.

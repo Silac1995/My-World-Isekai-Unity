@@ -101,7 +101,20 @@ public abstract class CommercialBuilding : Building
 
         if (ownerJob == null)
         {
-            ownerJob = FindAvailableJob<JobLogisticsManager>();
+            // Y a-t-il DÉJÀ quelqu'un qui est assigné (occupé) à un JobLogisticsManager dans ce building ?
+            bool hasActiveLogisticsManager = _jobs.OfType<JobLogisticsManager>().Any(j => j.IsAssigned);
+
+            if (!hasActiveLogisticsManager)
+            {
+                // S'il n'y a personne pour faire la logistique, le boss DOIT prendre ce poste
+                ownerJob = _jobs.OfType<JobLogisticsManager>().FirstOrDefault();
+            }
+
+            // Si vraiment il y a déjà un logisticien (ou si le bâtiment n'en a pas du tout), on prend un autre poste libre
+            if (ownerJob == null)
+            {
+                ownerJob = GetAvailableJobs().FirstOrDefault();
+            }
         }
 
         // Le boss peut aussi prendre un job dans son building
@@ -159,8 +172,9 @@ public abstract class CommercialBuilding : Building
             }
         }
 
-        // Embauche réussie
-        return AssignWorker(applicant, job);
+        // Embauche approuvée. On retourne true pour que le CharacterJob.TakeJob()
+        // puisse s'occuper de synchroniser l'assignation des deux côtés (Employé et Bâtiment).
+        return true;
     }
 
     /// <summary>

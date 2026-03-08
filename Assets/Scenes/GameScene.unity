@@ -1002,6 +1002,10 @@ PrefabInstance:
       propertyPath: m_Mesh
       value: 
       objectReference: {fileID: 20557633}
+    - target: {fileID: 1919224454290065110, guid: bcf1eea9ceffe55459083485e22660a5, type: 3}
+      propertyPath: m_VersionIndex
+      value: 11636
+      objectReference: {fileID: 0}
     - target: {fileID: 1945857671188992395, guid: bcf1eea9ceffe55459083485e22660a5, type: 3}
       propertyPath: m_Name
       value: Forge
@@ -1058,10 +1062,18 @@ PrefabInstance:
       propertyPath: m_Mesh
       value: 
       objectReference: {fileID: 2022418361}
+    - target: {fileID: 8087778697939860842, guid: bcf1eea9ceffe55459083485e22660a5, type: 3}
+      propertyPath: _minimumBlacksmithTier
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 8407666620020605695, guid: bcf1eea9ceffe55459083485e22660a5, type: 3}
       propertyPath: m_Mesh
       value: 
       objectReference: {fileID: 2022418361}
+    - target: {fileID: 8407666620020605695, guid: bcf1eea9ceffe55459083485e22660a5, type: 3}
+      propertyPath: m_VersionIndex
+      value: 4276
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -8117,6 +8129,10 @@ PrefabInstance:
       propertyPath: m_Mesh
       value: 
       objectReference: {fileID: 1796318328}
+    - target: {fileID: 7013122586924547130, guid: a4477ff05a156094798e960b1dca3af6, type: 3}
+      propertyPath: m_VersionIndex
+      value: 10256
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -8545,7 +8561,7 @@ PrefabInstance:
       objectReference: {fileID: 252235232}
     - target: {fileID: 6831021411016071213, guid: 1fd58c35117c7fc4699772b5fb2696c0, type: 3}
       propertyPath: m_VersionIndex
-      value: 8165
+      value: 8168
       objectReference: {fileID: 0}
     - target: {fileID: 7153458554410679557, guid: 1fd58c35117c7fc4699772b5fb2696c0, type: 3}
       propertyPath: m_Name
@@ -12351,11 +12367,11 @@ SceneRoots:
   - {fileID: 703645850}
   - {fileID: 250260481}
   - {fileID: 1494089259}
+  - {fileID: 1373517871}
+  - {fileID: 231530951}
   - {fileID: 992643873}
   - {fileID: 1298509751}
   - {fileID: 1960406991}
   - {fileID: 1623637746}
   - {fileID: 2017641151}
   - {fileID: 1566346024}
-  - {fileID: 1373517871}
-  - {fileID: 231530951}

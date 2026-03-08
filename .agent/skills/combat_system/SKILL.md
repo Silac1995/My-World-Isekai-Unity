@@ -1,48 +1,48 @@
 ---
-description: Architecture, déroulement et intégration du système de combat (BattleManager, CharacterCombat, Initiative, Stats).
+description: Architecture, flow, and integration of the combat system (BattleManager, CharacterCombat, Initiative, Stats).
 ---
 
 # Combat System Skill
 
-Ce skill détaille l'architecture du système de combat dans le projet et les règles à suivre lors de son extension ou de son débogage. Le système de combat est basé sur des notions de **Tick d'Initiative**, des **Groupes d'Engagements**, et la séparation stricte des rôles entre le Manager global et les composants locaux.
+This skill details the architecture of the combat system in the project and the rules to follow when extending or debugging it. The combat system relies on concepts like **Initiative Ticks**, **Engagement Groups**, and strict role separation between the global Manager and local components.
 
 ## When to use this skill
-- Pour ajouter une nouvelle fonctionnalité liée aux combats (ex: attaque de zone, fuite, nouveaux buffs/debuffs liés au combat).
-- Pour interagir avec le délai d'attaque des personnages (`Initiative`).
-- En cas de bugs où le combat ne se termine pas, ou un personnage est figé sans attaquer.
-- Lors de l'ajout ou de la modification de statistiques liées au combat (dans `CharacterStats`).
+- To add a new combat-related feature (e.g., AoE attack, fleeing, new combat buffs/debuffs).
+- To interact with characters' attack delay (`Initiative`).
+- In case of bugs where combat doesn't end, or a character is frozen without attacking.
+- When adding or modifying combat-related statistics (in `CharacterStats`).
 
 ## Architecture & How to use it
 
-### 1. Le BattleManager (Gestion Global)
-Le `BattleManager` est l'entité suprême d'un combat, souvent instantiée au déclenchement d'un affrontement.
-- **BattleTeams** : Il maintient toujours deux équipes (Initiateur vs Cible). On ne supporte *pas* de mêlée générale à 3 équipes dans une seule instance.
-- **CombatEngagement** : NOUVEAU SYSTÈME. Le BattleManager gère des "sous-groupes" de bagarre (ex: le Guerrier tape le Mage, pendant que l'Archer tape le Voleur au sein du même combat). Géré par la liste interne `_activeEngagements`.
-- **BattleZone** : Une zone physique (`BoxCollider` isTrigger) et de pathfinding (`NavMeshModifierVolume`) est générée dynamiquement au centre de l'affrontement initial pour marquer le terrain.
-- **Tick System** : C'est le `BattleManager` qui donne le rythme (`PerformBattleTick()`), et *non pas l'Update de chaque personnage*.
+### 1. The BattleManager (Global Management)
+The `BattleManager` is the supreme entity of a battle, usually instantiated when a clash begins.
+- **BattleTeams**: It always maintains two teams (Initiator vs Target). We do *not* support 3-team free-for-alls in a single instance.
+- **CombatEngagement**: NEW SYSTEM. The BattleManager manages brawl "subgroups" (e.g., the Warrior hits the Mage, while the Archer hits the Rogue within the same battle). Handled by the internal `_activeEngagements` list.
+- **BattleZone**: A physical zone (`BoxCollider` isTrigger) and pathfinding volume (`NavMeshModifierVolume`) is dynamically generated at the center of the initial clash to mark the terrain.
+- **Tick System**: It is the `BattleManager` that sets the pace (`PerformBattleTick()`), and *not the Update method of each character*.
 
-### 2. CharacterCombat (Logique Locale)
-C'est le composant que chaque PNJ/Joueur possède pour pouvoir se battre.
-- **Mode Combat** : Un personnage bascule en "CombatMode" (et tire son arme) s'il compte attaquer. Il y a un `COMBAT_MODE_TIMEOUT` (7 secondes par défaut).
-- **Consommation & Tick d'Initiative** :
-  - La méthode `.IsReadyToAct` vérifie si l'Initiative (dans les Stats) est pleine.
-  - La méthode `.ConsumeInitiative()` remet l'initiative à 0 après une attaque réussie.
-  - La méthode `.UpdateInitiativeTick(amount)` est **appelée par le BattleManager** pour faire grimper la barre.
-- **Attack()** : Choix dynamique. Si la cible est portée d'une arme à distance (selon le `RangedCombatStyleSO.MeleeRange`), il fera un `RangedAttack()`. Sinon, il choisit `MeleeAttack()`. Ces actions sont envoyées au système global `CharacterActions`.
+### 2. CharacterCombat (Local Logic)
+This is the component every NPC/Player has in order to fight.
+- **Combat Mode**: A character switches to "CombatMode" (and draws their weapon) if they intend to attack. There is a `COMBAT_MODE_TIMEOUT` (default 7 seconds).
+- **Consumption & Initiative Tick**:
+  - The `.IsReadyToAct` method checks if the Initiative (in Stats) is full.
+  - The `.ConsumeInitiative()` method resets initiative to 0 after a successful attack.
+  - The `.UpdateInitiativeTick(amount)` method is **called by the BattleManager** to fill the bar.
+- **Attack()**: Dynamic choice. If the target is within ranged weapon reach (according to `RangedCombatStyleSO.MeleeRange`), it performs a `RangedAttack()`. Otherwise, it chooses `MeleeAttack()`. These actions are sent to the global `CharacterActions` system.
 
 ### 3. Combat Styles (`CombatStyleSO`)
-Le pont entre l'État (`CharacterStats`) et la Logique Spatiale (`CharacterCombat`).
-- **Data Statistique** : Il définit sur quelle statistique l'attaque devient plus forte (`ScalingStat`, `StatMultiplier`). Ex: La dague scale sur la Dextérité plutôt que la Force.
-- **Portée et Animations** : Il contient la portée de l'arme (`MeleeRange`) et surtout **le contrôleur d'animation dynamique** assigné selon le niveau de maîtrise (`StyleLevelData.CombatController`).
-- Ces variables sont interrogées à la volée par le `CharacterCombat` au moment d'attaquer.
+The bridge between State (`CharacterStats`) and Spatial Logic (`CharacterCombat`).
+- **Statistical Data**: Defines which stat makes the attack stronger (`ScalingStat`, `StatMultiplier`). Ex: The dagger scales with Dexterity rather than Strength.
+- **Range and Animations**: Contains the weapon range (`MeleeRange`) and especially **the dynamic animation controller** assigned according to the mastery level (`StyleLevelData.CombatController`).
+- These variables are polled on the fly by `CharacterCombat` at the moment of attacking.
 
-### 4. CharacterStats (Répartition des Stats)
-Le combat utilise massivement `CharacterStats`. Il est primordial de respecter son architecture :
-- **Primary Stats** : Dynamique (Health, Stamina, Mana, **Initiative**). 
-  - *Note : L'initiative a une base de "0" par défaut.*
-- **Secondary Stats** : Les caractéristiques de base (Strength, Agility, Dexterity, Intelligence, Endurance, Charisma).
-- **Tertiary Stats** : Dérivées des secondaires (PhysicalPower, MoveSpeed, DodgeChance, CriticalHitChance, etc.). Ces stats sont celles vérifiées lors des calculs de dégâts purs.
+### 4. CharacterStats (Stat Distribution)
+Combat massively relies on `CharacterStats`. It is critical to respect its architecture:
+- **Primary Stats**: Dynamic (Health, Stamina, Mana, **Initiative**). 
+  - *Note: Initiative has a default base of "0".*
+- **Secondary Stats**: Base characteristics (Strength, Agility, Dexterity, Intelligence, Endurance, Charisma).
+- **Tertiary Stats**: Derived from secondary ones (PhysicalPower, MoveSpeed, DodgeChance, CriticalHitChance, etc.). These stats are checked during pure damage calculations.
 
 ## Tips & Troubleshooting
-- **Un personnage ne tape jamais** : Vérifiez que le `BattleManager` appelle bien le `.UpdateInitiativeTick()` sur ce personnage. Si la zone de combat l'a "oublié" dans `_allParticipants`, l'Initiative restera à 0 indéfiniment.
-- **Le combat ne s'arrête pas** : Le drapeau `_isBattleEnded` dépend souvent de la survie des équipes entières. Assurez-vous des callbacks lors de la mort d'un participant.
+- **A character never attacks**: Verify that the `BattleManager` is properly calling `.UpdateInitiativeTick()` on this character. If the combat zone "forgot" them in `_allParticipants`, Initiative will stay at 0 forever.
+- **Combat never ends**: The `_isBattleEnded` flag often depends on the survival of entire teams. Ensure callbacks are firing upon a participant's death.
