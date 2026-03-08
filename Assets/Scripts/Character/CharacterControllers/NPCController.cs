@@ -80,12 +80,22 @@ public class NPCController : CharacterGameController
 
         if (!isWandering && !isOnBreak) return;
 
-        // Restriction : En pause au travail, on ne parle qu'à ses collègues
-        if (isOnBreak && !isWandering)
+        bool isTargetOnBreak = false;
+        if (target.Controller is NPCController targetNPC)
         {
-            if (workBehaviour.Workplace == null || target.CharacterJob == null) return;
-            if (!target.CharacterJob.WorksAt(workBehaviour.Workplace)) return; // La cible n'est pas un collègue
+            var targetWorkBehaviour = targetNPC.GetCurrentBehaviour<WorkBehaviour>();
+            isTargetOnBreak = targetWorkBehaviour != null && targetWorkBehaviour.IsOnBreak;
         }
+
+        bool areCoworkers = _character.CharacterJob != null && target.CharacterJob != null &&
+                            _character.CharacterJob.HasJob && target.CharacterJob.HasJob &&
+                            _character.CharacterJob.Workplace == target.CharacterJob.Workplace;
+
+        // Restriction : En pause au travail, on ne parle qu'à ses collègues
+        if (isOnBreak && (!areCoworkers || !isTargetOnBreak)) return;
+
+        // Restriction : Si la cible est en pause au travail, on ne peut pas lui parler sauf si on est son collègue (et aussi en pause)
+        if (isTargetOnBreak && (!areCoworkers || !isOnBreak)) return;
 
         if (_character.CharacterRelation == null) return;
         
@@ -167,11 +177,8 @@ public class NPCController : CharacterGameController
                     if (_character.CharacterSpeech != null)
                         _character.CharacterSpeech.Say("You! I don't like your face!");
 
-                    PushBehaviour(new MoveToInteractionBehaviour(this, target, () =>
-                    {
-                        if (target == null || !target.IsAlive()) return;
+                    if (target != null && target.IsAlive())
                         _character.CharacterInteraction.StartInteractionWith(target, new InteractionInsult());
-                    }));
                     return;
                 }
             }
@@ -179,6 +186,22 @@ public class NPCController : CharacterGameController
 
         // --- 5. LOGIQUE SOCIALE ---
         float sociability = _character.CharacterTraits != null ? _character.CharacterTraits.GetSociability() : 0.5f;
+
+        // --- EXCEPTION COLLÈGUES EN PAUSE ---
+        if (isOnBreak && isTargetOnBreak && areCoworkers)
+        {
+            float breakChatChance = 0.5f + (sociability * 0.5f); // 50% à 100% chance de prendre un café
+            if (Random.value < breakChatChance)
+            {
+                Debug.Log($"<color=cyan>[Social - Break]</color> {_character.CharacterName} va discuter avec son collègue {target.CharacterName} pendant leur pause.");
+                if (_character.CharacterSpeech != null)
+                    _character.CharacterSpeech.Say("Taking a break too, right? Need to stretch my hands.");
+
+                if (target != null && target.IsAlive())
+                    _character.CharacterInteraction.StartInteractionWith(target);
+            }
+            return;
+        }
 
         // Si on ne se connaît pas, on peut quand même aller parler à l'inconnu selon la sociabilité
         if (rel == null)
@@ -188,11 +211,8 @@ public class NPCController : CharacterGameController
             if (Random.value < strangerChance)
             {
                 Debug.Log($"<color=cyan>[Social - Stranger]</color> {_character.CharacterName} s'approche de l'inconnu {target.CharacterName} (Sociabilité: {sociability:P0})");
-                PushBehaviour(new MoveToInteractionBehaviour(this, target, () =>
-                {
-                    if (target == null || !target.IsAlive()) return;
+                if (target != null && target.IsAlive())
                     _character.CharacterInteraction.StartInteractionWith(target);
-                }));
             }
             return;
         }
@@ -233,11 +253,8 @@ public class NPCController : CharacterGameController
             if (_character.CharacterSpeech != null)
                 _character.CharacterSpeech.Say("Hey! You!");
 
-            PushBehaviour(new MoveToInteractionBehaviour(this, target, () =>
-            {
-                if (target == null || !target.IsAlive()) return;
+            if (target != null && target.IsAlive())
                 _character.CharacterInteraction.StartInteractionWith(target);
-            }));
         }
     }
 
