@@ -1,4 +1,5 @@
 ﻿using UnityEngine;
+using System.Linq;
 
 public class SpawnManager : MonoBehaviour
 {
@@ -239,22 +240,34 @@ public class SpawnManager : MonoBehaviour
             Debug.LogError("[SpawnManager] BuildingManager.Instance est null ou la liste des bâtiments est manquante.");
         }
 
-        // --- DEBUG : ASSIGNATION AUTOMATIQUE COMME GATHERER (TEST) ---
-        if (!isPlayer && character.CharacterJob != null && BuildingManager.Instance != null)
+        // --- LOGIQUE D'EMPLOI AUTOMATIQUE ---
+        if (!isPlayer && character.CharacterJob != null && BuildingManager.Instance != null && BuildingManager.Instance.allBuildings.Count > 0)
         {
-            foreach (var b in BuildingManager.Instance.allBuildings)
+            // 1. Tente d'abord de devenir propriétaire d'un bâtiment commercial libre
+            CommercialBuilding unownedCommercial = BuildingManager.Instance.FindUnownedCommercialBuilding();
+            if (unownedCommercial != null)
             {
-                if (b is GatheringBuilding gatheringBuilding)
+                // Le SetOwner s'occupera de lui donner le JobLogisticsManager prioritairement
+                character.CharacterJob.BecomeOwner(unownedCommercial);
+                Debug.Log($"<color=green>[SpawnManager]</color> {character.CharacterName} a pris possession du bâtiment commercial libre : {unownedCommercial.BuildingName}.");
+            }
+            else
+            {
+                // 2. Sinon, cherche simplement un emploi disponible n'importe où
+                foreach (var b in BuildingManager.Instance.allBuildings)
                 {
-                    // Trouver un job disponible dans le GatheringBuilding
-                    var availableJob = gatheringBuilding.FindAvailableJob<JobGatherer>();
-                    if (availableJob != null)
+                    if (b is CommercialBuilding commercial)
                     {
-                        if (character.CharacterJob.TakeJob(availableJob, gatheringBuilding))
+                        var availableJobs = commercial.GetAvailableJobs();
+                        if (availableJobs != null && availableJobs.Any())
                         {
-                            Debug.Log($"<color=green>[SpawnManager]</color> {character.CharacterName} assigné comme {availableJob.JobTitle} à {gatheringBuilding.BuildingName}.");
+                            var firstJobAvailable = availableJobs.First();
+                            if (character.CharacterJob.TakeJob(firstJobAvailable, commercial))
+                            {
+                                Debug.Log($"<color=green>[SpawnManager]</color> {character.CharacterName} a été embauché en tant que {firstJobAvailable.JobTitle} à {commercial.BuildingName}.");
+                                break;
+                            }
                         }
-                        break;
                     }
                 }
             }

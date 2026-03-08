@@ -17,10 +17,14 @@ public class Building : ComplexRoom
 
     [SerializeField] protected Collider _buildingZone;
 
+    [Header("Logistics Phase")]
+    [SerializeField] protected Zone _deliveryZone;
+
     public string BuildingName => buildingName;
     public virtual BuildingType BuildingType => _buildingType;
     public bool IsPublicLocation => _isPublicLocation;
     public Collider BuildingZone => _buildingZone;
+    public Zone DeliveryZone => _deliveryZone;
 
     public ComplexRoom MainRoom => this;
 

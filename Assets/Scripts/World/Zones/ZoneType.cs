@@ -9,5 +9,6 @@ public enum ZoneType
     PatrolRoute,
     Camp,
     GatheringArea,
-    Deposit
+    Deposit,
+    DeliveryArea
 }

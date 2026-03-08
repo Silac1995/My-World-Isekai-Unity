@@ -72,6 +72,21 @@ public class BuildingManager : MonoBehaviour
     }
 
     /// <summary>
+    /// Trouve un bâtiment commercial sans propriétaire.
+    /// </summary>
+    public CommercialBuilding FindUnownedCommercialBuilding()
+    {
+        foreach (var building in allBuildings)
+        {
+            if (building is CommercialBuilding commercial && !commercial.HasOwner)
+            {
+                return commercial;
+            }
+        }
+        return null;
+    }
+
+    /// <summary>
     /// Trouve un job disponible d'un type spécifique dans tous les buildings commerciaux.
     /// Retourne le building et le job trouvé, ou null si aucun n'est disponible.
     /// </summary>

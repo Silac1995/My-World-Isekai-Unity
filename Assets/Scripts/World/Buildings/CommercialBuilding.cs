@@ -99,6 +99,11 @@ public abstract class CommercialBuilding : Building
         _owner = newOwner;
         Debug.Log($"<color=green>[Building]</color> {newOwner?.CharacterName} est propriétaire de {buildingName}.");
 
+        if (ownerJob == null)
+        {
+            ownerJob = FindAvailableJob<JobLogisticsManager>();
+        }
+
         // Le boss peut aussi prendre un job dans son building
         if (ownerJob != null && newOwner != null)
         {

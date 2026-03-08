@@ -83,7 +83,9 @@ public class GatheringBuilding : CommercialBuilding
             _jobs.Add(new JobGatherer(_gathererJobTitle));
         }
 
-        Debug.Log($"<color=green>[GatheringBuilding]</color> {buildingName} initialisé avec {_gathererCount} {_gathererJobTitle}(s).");
+        _jobs.Add(new JobLogisticsManager("Logistics Manager"));
+
+        Debug.Log($"<color=green>[GatheringBuilding]</color> {buildingName} initialisé avec {_gathererCount} {_gathererJobTitle}(s) et 1 Manager.");
     }
 
     // === Gestion de la zone de récolte ===
