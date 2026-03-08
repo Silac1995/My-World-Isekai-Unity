@@ -28,7 +28,7 @@ public class InteractionBuyItem : ICharacterInteractionAction
         // Vendre le premier item de l'inventaire
         if (_shop.Inventory.Count > 0)
         {
-            var itemToSell = _shop.Inventory[0].ItemData;
+            var itemToSell = _shop.Inventory[0].ItemSO;
             var soldItem = _shop.SellItem(itemToSell);
 
             if (soldItem != null)

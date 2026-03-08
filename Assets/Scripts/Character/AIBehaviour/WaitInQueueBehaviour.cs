@@ -37,7 +37,7 @@ public class WaitInQueueBehaviour : IAIBehaviour
         // Si on n'est pas encore dans la file, on s'y ajoute (simulation du Start)
         // Note: On pourrait aussi le faire dans le constructeur, mais Act est appelé à chaque frame.
         // Utilisons un booléen pour s'assurer qu'on ne s'inscrit qu'une fois.
-        if (!character.CharacterInteraction.IsBusy) 
+        if (!character.CharacterInteraction.IsInteracting) 
         {
              // On s'enregistre dans la file d'attente si ce n'est pas déjà fait
              _shop.JoinQueue(character);

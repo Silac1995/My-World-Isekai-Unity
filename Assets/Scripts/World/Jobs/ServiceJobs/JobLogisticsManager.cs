@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using MWI.Time;
 
@@ -165,7 +166,7 @@ public class JobLogisticsManager : Job
             if (!shop.HasItemInStock(itemSO))
             {
                 // Vérifier si une commande est déjà en cours pour cet item
-                bool alreadyOrdered = _activeOrders.Any(o => o.ItemToTransport.ItemData == itemSO);
+                bool alreadyOrdered = _activeOrders.Any(o => o.ItemToTransport == itemSO);
                 if (alreadyOrdered) continue;
 
                 // Chercher un fournisseur (Forge, Alchimiste, etc.)
@@ -179,10 +180,11 @@ public class JobLogisticsManager : Job
                     var order = new BuyOrder(
                         itemSO, 
                         5, 
-                        shop.Owner,        // Client = Le patron du magasin
-                        supplier.Owner,    // Vendeur = Le patron du fournisseur
-                        _workplace.Owner,  // Intermédiaire = Le patron du manager logistique (souvent le même que shop.Owner)
-                        3                  // Délai de 3 jours
+                        supplier,          // source
+                        shop,              // dest
+                        3,                 // remainingDays
+                        shop.Owner,        // clientBoss
+                        _workplace.Owner   // intermediaryBoss
                     );
 
                     // On enregistre la commande chez le fournisseur (pour que ses transporteurs la voient)

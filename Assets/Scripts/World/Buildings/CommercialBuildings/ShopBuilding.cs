@@ -47,6 +47,18 @@ public class ShopBuilding : CommercialBuilding
     }
 
     /// <summary>
+    /// Récupère le vendeur de ce shop.
+    /// </summary>
+    public JobVendor GetVendor()
+    {
+        foreach (var job in _jobs)
+        {
+            if (job is JobVendor vendor) return vendor;
+        }
+        return null;
+    }
+
+    /// <summary>
     /// Ajoute physiquement un objet à l'inventaire du magasin (ex: par un Transporter).
     /// </summary>
     public void AddToInventory(ItemInstance item)
@@ -62,7 +74,7 @@ public class ShopBuilding : CommercialBuilding
     /// </summary>
     public ItemInstance SellItem(ItemSO requestedItem)
     {
-        var itemInstance = _inventory.Find(i => i.ItemData == requestedItem);
+        var itemInstance = _inventory.Find(i => i.ItemSO == requestedItem);
         if (itemInstance != null)
         {
             _inventory.Remove(itemInstance);
@@ -76,7 +88,7 @@ public class ShopBuilding : CommercialBuilding
     /// </summary>
     public bool HasItemInStock(ItemSO item)
     {
-        return _inventory.Exists(i => i.ItemData == item);
+        return _inventory.Exists(i => i.ItemSO == item);
     }
 
     // ==========================================
