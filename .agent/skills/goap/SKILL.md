@@ -1,8 +1,9 @@
 ---
+name: goap
 description: Rules for using GOAP to dictate the daily life and ultimate goals of an NPC (e.g., starting a family).
 ---
 
-# GOAP (Life Goals) System Skill
+# GOAP System
 
 This skill defines how to use and extend the GOAP (Goal-Oriented Action Planning) system. 
 **Important:** The GOAP in this project is not just a job queue manager (e.g., Gatherer). It is designed to be the orchestrator of the NPC's **daily life**, based on **ultimate goals**.

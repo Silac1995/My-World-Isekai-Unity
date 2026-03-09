@@ -1,8 +1,9 @@
 ---
+name: combat-system
 description: Architecture, flow, and integration of the combat system (BattleManager, CharacterCombat, Initiative, Stats).
 ---
 
-# Combat System Skill
+# Combat System
 
 This skill details the architecture of the combat system in the project and the rules to follow when extending or debugging it. The combat system relies on concepts like **Initiative Ticks**, **Engagement Groups**, and strict role separation between the global Manager and local components.
 

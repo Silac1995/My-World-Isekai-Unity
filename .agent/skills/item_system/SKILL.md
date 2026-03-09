@@ -1,8 +1,9 @@
 ---
+name: item-system
 description: The life cycle of an object (static ItemSO, dynamic ItemInstance in memory, CharacterEquipment for usage, and WorldItem for dropping on the ground).
 ---
 
-# Item System Skill
+# Item System
 
 This skill details the complete architecture of items in the game. The system is based on a drastic separation between the abstract and universal definition of the item, and its concrete, colored, and instantiated existence in the scene.
 

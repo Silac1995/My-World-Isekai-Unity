@@ -1,8 +1,9 @@
 ---
+name: character-visuals
 description: 2.5D visual rendering (Billboarding), Race Presets, and logical architecture of body parts (Eyes, Hands) in preparation for Spine2D.
 ---
 
-# Character Visuals System Skill
+# Character Visuals System
 
 This skill details how character visuals (2D sprites in a 3D world) are handled, as well as the "Body Parts" system (Hands, Eyes, Hair, etc.).
 

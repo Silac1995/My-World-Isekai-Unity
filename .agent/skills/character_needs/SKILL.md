@@ -1,8 +1,9 @@
 ---
+name: character-needs
 description: The autonomous decision-making layer that pushes NPCs to act based on internal drives (Social interaction, Finding a Job, Dressing up).
 ---
 
-# Character Needs System Skill
+# Character Needs System
 
 This skill explains how the `CharacterNeeds` system operates, serving as the biological or psychological engine of an NPC. 
 Needs are evaluated constantly but only translated into action if the NPC is currently idle (e.g., in a `WanderBehaviour`).

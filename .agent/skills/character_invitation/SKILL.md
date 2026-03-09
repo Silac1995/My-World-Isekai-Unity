@@ -1,8 +1,9 @@
 ---
+name: character-invitation
 description: The Template Method pattern for managing propositions and delayed responses (Invitations) between characters.
 ---
 
-# Character Invitation System Skill
+# Character Invitation System
 
 This skill details the `CharacterInvitation` system and the abstract `InteractionInvitation` class. This duo handles all interactions where one character makes a "proposition" to another, requiring a reflection delay before the response (e.g., Asking to marry, Joining a party, Asking for a job).
 

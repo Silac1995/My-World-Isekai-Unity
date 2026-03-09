@@ -1,8 +1,9 @@
 ---
+name: behaviour-tree
 description: Structure, priorities, and control API for the NPC Behaviour Tree system.
 ---
 
-# Behaviour Tree System Skill
+# Behaviour Tree System
 
 This skill details the architecture and inner workings of the Behaviour Tree (BT) system used by NPCs. 
 

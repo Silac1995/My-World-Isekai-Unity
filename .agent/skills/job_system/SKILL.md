@@ -1,8 +1,9 @@
 ---
+name: job-system
 description: The work ecosystem connecting the employee (CharacterJob), the pure data (Job), and the workplace (CommercialBuilding).
 ---
 
-# Job System Skill
+# Job System
 
 Economy and work govern the game world. This skill details the physical-data-entity triad architecture that allows a character (NPC or Player) to hold a position in a building.
 

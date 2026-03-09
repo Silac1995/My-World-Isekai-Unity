@@ -1,8 +1,9 @@
 ---
+name: character-core
 description: The central hub of the entity. Dictates rules on the character's availability (IsFree), life cycle (Death/Unconscious), and brain (Player/NPC Switch).
 ---
 
-# Character Core Skill
+# Character Core
 
 The `Character.cs` script is the most important class of the entity. It is the Central Architecture (Facade Pattern) through which **everything** passes.
 

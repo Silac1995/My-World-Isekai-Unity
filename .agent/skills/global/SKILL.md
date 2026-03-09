@@ -1,8 +1,9 @@
 ---
+name: global
 description: Global project rules, C# coding style, optimization, and best practices specific to the 2D/3D Unity environment.
 ---
 
-# Global Project Skills
+# Global Project Rules
 
 This skill contains the fundamental rules and best practices to systematically apply for any development in this Unity project.
 

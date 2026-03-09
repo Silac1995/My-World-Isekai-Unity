@@ -1,8 +1,9 @@
 ---
+name: shop-system
 description: Architecture of the commercial Shop System, from Logistics restocks to Customer queuing and sales.
 ---
 
-# Shop System Skill
+# Shop System
 
 This document details how the Shop Economy functions, which acts as the final destination for items crafted or gathered in the world. 
 The system relies on a continuous loop of: **Restocking (Logistics)** -> **Waiting for Customers (Vendor)** -> **Queuing & Buying (Customers)**.

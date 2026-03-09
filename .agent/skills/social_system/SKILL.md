@@ -1,8 +1,9 @@
 ---
+name: social-system
 description: System of interactions between NPCs/Players (Speaking turns, ICharacterInteractionAction) and relationships (Compatibility modifiers, Friendships/Enmities).
 ---
 
-# Social System Skill
+# Social System
 
 This skill details how characters dynamically interact with each other (discussions, exchanges) and how these events forge their long-term memories (relationships and personality compatibility).
 It encompasses `CharacterInteraction` (the act of expressing oneself) and `CharacterRelation` (the memory).

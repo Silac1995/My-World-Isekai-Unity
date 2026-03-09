@@ -1,8 +1,9 @@
 ---
+name: multiplayer
 description: "Future-Proof" code architecture for multiplayer (No local singletons, Inputs/Logic separation).
 ---
 
-# Multiplayer Architecture Skill
+# Multiplayer Architecture
 
 This skill dictates the "Network-Ready" architectural philosophy that **must be systematically applied** in the project, even if no framework (like Mirror or Netcode) is installed yet.
 The golden rule (defined in `global.md`) is to always code under the assumption that the game "will be" multiplayer.
