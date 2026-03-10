@@ -13,6 +13,7 @@ public class PlayerUI : MonoBehaviour
 
     // Le seul lien nécessaire pour la barre d'action
     [SerializeField] private UI_Action_ProgressBar _actionProgressBar;
+    [SerializeField] private UI_SegmentedBar _healthBar;
 
     [Header("UI Windows Prefabs")]
     [SerializeField] private GameObject _equipmentUIPrefab;
@@ -53,6 +54,11 @@ public class PlayerUI : MonoBehaviour
         if (_actionProgressBar != null)
         {
             _actionProgressBar.InitializeCharacterActions(characterComponent.CharacterActions);
+        }
+
+        if (_healthBar != null && characterComponent.Stats != null)
+        {
+            _healthBar.Initialize(characterComponent.Stats.Health);
         }
 
         if (_buttonEquipmentUI != null)

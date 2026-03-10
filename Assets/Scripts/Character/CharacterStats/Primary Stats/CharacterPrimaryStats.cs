@@ -9,12 +9,22 @@ public abstract class CharacterPrimaryStats : CharacterBaseStats
     protected float _multiplier;
     protected float _baseOffset;
 
+    public event System.Action<float, float> OnAmountChanged; // oldAmount, newAmount
+
     public float MaxValue => CurrentValue;
 
     public float CurrentAmount
     {
         get => currentAmount;
-        set => currentAmount = value;
+        set
+        {
+            if (Mathf.Abs(currentAmount - value) > 0.001f)
+            {
+                float prev = currentAmount;
+                currentAmount = value;
+                OnAmountChanged?.Invoke(prev, currentAmount);
+            }
+        }
     }
 
     protected CharacterPrimaryStats(CharacterStats characterStats, CharacterBaseStats linkedStat = null, float multiplier = 1f, float baseOffset = 0f)
@@ -76,18 +86,18 @@ public abstract class CharacterPrimaryStats : CharacterBaseStats
 
         float newMax = CurrentValue;
 
-        // On conserve exactement le même pourcentage par rapport au nouveau max (ex: rester à 43% d'HP)
-        currentAmount = newMax * percentage;
+        // Use the property to trigger the event (OnAmountChanged)
+        CurrentAmount = newMax * percentage;
     }
 
     public void DecreaseCurrentAmount(float value)
     {
-        currentAmount = Mathf.Max(0f, currentAmount - value);
+        CurrentAmount = Mathf.Max(0f, CurrentAmount - value);
     }
 
     public void IncreaseCurrentAmount(float value)
     {
-        currentAmount = Mathf.Min(CurrentValue, currentAmount + value);
+        CurrentAmount = Mathf.Min(MaxValue, CurrentAmount + value);
     }
 
     public bool IsFull()

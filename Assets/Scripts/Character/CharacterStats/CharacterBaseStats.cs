@@ -10,6 +10,7 @@ public abstract class CharacterBaseStats
     [SerializeField] protected float currentValue; //Value with modifiers etc
 
     private List<StatModifier> modifiers = new List<StatModifier>();
+    public event System.Action<float, float> OnValueChanged; // oldValue, newValue
 
     public CharacterBaseStats(CharacterStats characterStats, float baseValue = 1f)
     {
@@ -87,8 +88,14 @@ public abstract class CharacterBaseStats
 
     public void Reset()
     {
+        float previousValue = currentValue;
         if (modifiers != null) modifiers.Clear();
         currentValue = baseValue;
+
+        if (Mathf.Abs(previousValue - currentValue) > 0.001f)
+        {
+            OnValueChanged?.Invoke(previousValue, currentValue);
+        }
     }
 
     protected virtual void RecalculateCurrentValue()
@@ -100,6 +107,13 @@ public abstract class CharacterBaseStats
         {
             totalModifiers += mod.Value;
         }
+
+        float previousValue = currentValue;
         currentValue = baseValue + totalModifiers;
+
+        if (Mathf.Abs(previousValue - currentValue) > 0.001f)
+        {
+            OnValueChanged?.Invoke(previousValue, currentValue);
+        }
     }
 }
