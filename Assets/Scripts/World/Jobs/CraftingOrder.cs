@@ -3,6 +3,7 @@ using UnityEngine;
 /// <summary>
 /// Représente une commande de fabrication locale au bâtiment.
 /// Utilisé par le JobLogisticsManager pour transmettre les besoins de production aux artisans (JobCrafter).
+/// CustomerBuilding indique le bâtiment destinataire final (ex: le ShopBuilding qui a commandé).
 /// </summary>
 [System.Serializable]
 public class CraftingOrder
@@ -11,18 +12,20 @@ public class CraftingOrder
     public int Quantity { get; private set; }
     public int RemainingDays { get; private set; }
     public Character ClientBoss { get; private set; }
+    public CommercialBuilding CustomerBuilding { get; private set; }
 
     // Quantité déjà fabriquée
     public int CraftedQuantity { get; private set; }
 
     public bool IsCompleted => CraftedQuantity >= Quantity;
 
-    public CraftingOrder(ItemSO item, int quantity, int remainingDays, Character clientBoss = null)
+    public CraftingOrder(ItemSO item, int quantity, int remainingDays, Character clientBoss = null, CommercialBuilding customerBuilding = null)
     {
         ItemToCraft = item;
         Quantity = quantity;
         RemainingDays = remainingDays;
         ClientBoss = clientBoss;
+        CustomerBuilding = customerBuilding;
         CraftedQuantity = 0;
     }
 

@@ -138,7 +138,8 @@ public class JobLogisticsManager : Job
 
     /// <summary>
     /// Met à jour la progression d'une commande de fabrication.
-    /// Si complétée, elle est retirée de la liste.
+    /// Si complétée, elle est retirée de la liste et un BuyOrder (transport) est placé
+    /// auprès d'un TransporterBuilding pour livrer les items au client.
     /// </summary>
     public void UpdateCraftingOrderProgress(CraftingOrder order, int craftedAmount)
     {
@@ -148,8 +149,81 @@ public class JobLogisticsManager : Job
         if (completed)
         {
             _activeCraftingOrders.Remove(order);
-            Debug.Log($"<color=green>[JobLogisticsManager]</color> Commande Craft {order.Quantity}x {order.ItemToCraft.ItemName} COMPLÉTÉE.");
+            Debug.Log($"<color=green>[JobLogisticsManager]</color> Commande Craft {order.Quantity}x {order.ItemToCraft.ItemName} COMPLÉTÉE. Recherche d'un transporteur...");
+
+            // Placer un BuyOrder pour transporter les items vers le client
+            PlaceTransportOrder(order);
         }
+    }
+
+    /// <summary>
+    /// Après avoir complété une CraftingOrder, cherche un TransporterBuilding
+    /// et place un BuyOrder pour livrer les items au CustomerBuilding.
+    /// </summary>
+    private void PlaceTransportOrder(CraftingOrder completedOrder)
+    {
+        if (completedOrder.CustomerBuilding == null)
+        {
+            Debug.LogWarning($"<color=orange>[Logistics]</color> CraftingOrder pour {completedOrder.ItemToCraft.ItemName} n'a pas de CustomerBuilding. Impossible de livrer.");
+            return;
+        }
+
+        // Chercher un TransporterBuilding
+        var transporter = FindTransporterBuilding();
+        if (transporter == null)
+        {
+            Debug.LogWarning($"<color=orange>[Logistics]</color> Aucun TransporterBuilding trouvé pour livrer {completedOrder.ItemToCraft.ItemName}.");
+            return;
+        }
+
+        // Récupérer le LogisticsManager du Transporter et son worker
+        var transporterLogistics = transporter.Jobs.OfType<JobLogisticsManager>().FirstOrDefault();
+        if (transporterLogistics == null || transporterLogistics.Worker == null)
+        {
+            Debug.LogWarning($"<color=orange>[Logistics]</color> {transporter.BuildingName} n'a pas de LogisticsManager assigné.");
+            return;
+        }
+
+        // Créer le BuyOrder (transport)
+        var buyOrder = new BuyOrder(
+            completedOrder.ItemToCraft,
+            completedOrder.Quantity,
+            _workplace,                          // source = CraftingBuilding
+            completedOrder.CustomerBuilding,      // dest = ShopBuilding
+            3,                                    // remainingDays
+            completedOrder.ClientBoss,            // clientBoss
+            _workplace.Owner                      // intermediaryBoss = patron du CraftingBuilding
+        );
+
+        Debug.Log($"<color=cyan>[Logistics]</color> 🚚 Commande de transport : {completedOrder.Quantity}x {completedOrder.ItemToCraft.ItemName} de {_workplace.BuildingName} → {completedOrder.CustomerBuilding.BuildingName} via {transporter.BuildingName}.");
+
+        // Passer la commande via interaction
+        if (_worker != null && _worker.CharacterInteraction != null)
+        {
+            _worker.CharacterInteraction.StartInteractionWith(
+                transporterLogistics.Worker,
+                new InteractionPlaceOrder(buyOrder)
+            );
+        }
+        else
+        {
+            // Fallback
+            transporterLogistics.PlaceBuyOrder(buyOrder);
+        }
+    }
+
+    /// <summary>
+    /// Cherche un TransporterBuilding dans la ville.
+    /// </summary>
+    private CommercialBuilding FindTransporterBuilding()
+    {
+        if (BuildingManager.Instance == null) return null;
+
+        foreach (var b in BuildingManager.Instance.allBuildings)
+        {
+            if (b is TransporterBuilding) return b as CommercialBuilding;
+        }
+        return null;
     }
 
     /// <summary>
@@ -251,12 +325,13 @@ public class JobLogisticsManager : Job
             // Calculer la quantité à commander (différence entre max et stock actuel)
             int quantityToOrder = maxStock - currentStock;
 
-            // Créer la CraftingOrder
+            // Créer la CraftingOrder (avec CustomerBuilding = le shop pour la livraison retour)
             var craftingOrder = new CraftingOrder(
                 itemSO,
                 quantityToOrder,
                 3,                 // remainingDays
-                shop.Owner         // clientBoss = le patron du magasin
+                shop.Owner,        // clientBoss = le patron du magasin
+                shop               // customerBuilding = le shop destinataire
             );
 
             // Passer la commande via une interaction avec le LogisticsManager du fournisseur
