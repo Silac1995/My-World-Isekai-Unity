@@ -1,5 +1,16 @@
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
+
+/// <summary>
+/// Entrée de catalogue du shop : un item et sa quantité cible en stock.
+/// </summary>
+[System.Serializable]
+public struct ShopItemEntry
+{
+    public ItemSO Item;
+    public int MaxStock;
+}
 
 /// <summary>
 /// Bâtiment de type Shop.
@@ -11,7 +22,7 @@ public class ShopBuilding : CommercialBuilding
     public override BuildingType BuildingType => BuildingType.Shop;
 
     [Header("Shop Settings")]
-    [SerializeField] private List<ItemSO> _itemsToSell = new List<ItemSO>();
+    [SerializeField] private List<ShopItemEntry> _itemsToSell = new List<ShopItemEntry>();
     
     [Header("Work Positions")]
     [SerializeField] private Transform _vendorPoint;
@@ -24,7 +35,12 @@ public class ShopBuilding : CommercialBuilding
     // File d'attente des clients
     private Queue<Character> _customerQueue = new Queue<Character>();
 
-    public IReadOnlyList<ItemSO> ItemsToSell => _itemsToSell;
+    /// <summary>Liste des entrées de catalogue (ItemSO + MaxStock).</summary>
+    public IReadOnlyList<ShopItemEntry> ShopEntries => _itemsToSell;
+
+    /// <summary>Liste des ItemSO à vendre (raccourci pour la compatibilité).</summary>
+    public IReadOnlyList<ItemSO> ItemsToSell => _itemsToSell.Select(e => e.Item).ToList();
+
     public IReadOnlyList<ItemInstance> Inventory => _inventory;
     public int CustomersInQueue => _customerQueue.Count;
 
@@ -37,6 +53,29 @@ public class ShopBuilding : CommercialBuilding
         _jobs.Add(new JobLogisticsManager("Shop Manager"));
 
         Debug.Log($"<color=magenta>[Shop]</color> {buildingName} initialisé avec 1 Vendeur et 1 LogisticsManager.");
+    }
+
+    /// <summary>
+    /// Quand un employé arrive au travail (Punch In), on vérifie s'il est
+    /// le LogisticsManager pour déclencher la vérification de l'inventaire.
+    /// </summary>
+    public override void WorkerStartingShift(Character worker)
+    {
+        base.WorkerStartingShift(worker);
+
+        if (worker.CharacterJob != null)
+        {
+            var logisticsJob = worker.CharacterJob.ActiveJobs
+                .Select(j => j.AssignedJob)
+                .OfType<JobLogisticsManager>()
+                .FirstOrDefault(j => j.Workplace == this);
+
+            if (logisticsJob != null)
+            {
+                Debug.Log($"<color=cyan>[Shop]</color> LogisticsManager {worker.CharacterName} a pointé — vérification de l'inventaire...");
+                logisticsJob.OnWorkerPunchIn();
+            }
+        }
     }
 
     /// <summary>
@@ -111,6 +150,22 @@ public class ShopBuilding : CommercialBuilding
     public bool HasItemInStock(ItemSO item)
     {
         return _inventory.Exists(i => i.ItemSO == item);
+    }
+
+    /// <summary>
+    /// Retourne le nombre d'exemplaires de cet item dans l'inventaire.
+    /// </summary>
+    public int GetStockCount(ItemSO item)
+    {
+        return _inventory.Count(i => i.ItemSO == item);
+    }
+
+    /// <summary>
+    /// Vérifie si le stock actuel est inférieur au maximum souhaité pour cet item.
+    /// </summary>
+    public bool NeedsRestock(ItemSO item, int maxStock)
+    {
+        return GetStockCount(item) < maxStock;
     }
 
     // ==========================================

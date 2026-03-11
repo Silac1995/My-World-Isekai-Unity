@@ -17,6 +17,7 @@ public class WorkBehaviour : IAIBehaviour
     private NPCController _npcController;
     private bool _isFinished = false;
     private bool _isMoving = false;
+    private bool _wasInInteraction = false;
 
     private WorkPhase _currentPhase = WorkPhase.MovingToWorkplace;
     private CommercialBuilding _workplace;
@@ -29,6 +30,22 @@ public class WorkBehaviour : IAIBehaviour
     public WorkBehaviour(NPCController npcController)
     {
         _npcController = npcController;
+
+        // S'abonner aux changements d'interaction pour savoir quand reprendre le poste
+        var character = npcController.Character;
+        if (character?.CharacterInteraction != null)
+        {
+            character.CharacterInteraction.OnInteractionStateChanged += OnInteractionChanged;
+        }
+    }
+
+    private void OnInteractionChanged(Character target, bool started)
+    {
+        if (!started)
+        {
+            // L'interaction vient de se terminer — on devra reprendre le poste
+            _wasInInteraction = true;
+        }
     }
 
     public void Act(Character selfCharacter)
@@ -53,6 +70,24 @@ public class WorkBehaviour : IAIBehaviour
         if (_currentPhase == WorkPhase.MovingToWorkplace)
         {
             MoveToWorkplace(selfCharacter, _workplace);
+            return;
+        }
+
+        // Sécurité : si le personnage est en interaction, on ne fait rien
+        // (il sera freeze/unfreeze par CharacterInteraction)
+        if (selfCharacter.CharacterInteraction != null && selfCharacter.CharacterInteraction.IsInteracting)
+        {
+            return;
+        }
+
+        // Après une interaction, le personnage a pu être déplacé.
+        // On vérifie s'il est encore dans la zone de travail et on le renvoie si nécessaire.
+        if (_wasInInteraction)
+        {
+            _wasInInteraction = false;
+            _currentPhase = WorkPhase.MovingToWorkplace;
+            _isMoving = false;
+            Debug.Log($"<color=cyan>[Work]</color> {selfCharacter.CharacterName} reprend son poste après une interaction.");
             return;
         }
 
@@ -106,7 +141,14 @@ public class WorkBehaviour : IAIBehaviour
     {
         _currentPhase = WorkPhase.MovingToWorkplace;
         _isMoving = false;
+        _wasInInteraction = false;
         selfCharacter.CharacterMovement?.ResetPath();
+
+        // Désabonner l'événement d'interaction
+        if (selfCharacter.CharacterInteraction != null)
+        {
+            selfCharacter.CharacterInteraction.OnInteractionStateChanged -= OnInteractionChanged;
+        }
         
         // On ne fait plus WorkerEndingShift ici car le PunchOut physique est géré par PunchOutBehaviour
     }

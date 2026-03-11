@@ -5,7 +5,7 @@ description: The supply chain cycle between CommercialBuildings and JobLogistics
 
 # Logistics Cycle
 
-This skill documents the complete supply chain that keeps shops stocked and buildings supplied. It covers how a `JobLogisticsManager` detects missing inventory, places production orders at `CraftingBuilding`s, and how the crafted goods flow back.
+This skill documents the complete supply chain that keeps shops stocked and buildings supplied. It covers how a `JobLogisticsManager` detects missing inventory, places production orders at `CraftingBuilding`s via character interactions, and how the crafted goods flow back.
 
 ## When to use this skill
 - To understand how a `ShopBuilding` restocks its inventory automatically.
@@ -21,48 +21,69 @@ The `JobLogisticsManager` subscribes to `TimeManager.OnNewDay`. On each new day,
 1. **Expiring old orders** (both `BuyOrder` and `CraftingOrder`) and applying reputation penalties.
 2. **Restocking** — if the workplace is a `ShopBuilding`, it calls `CheckShopInventory(shop)`.
 
-### 2. The Restock Flow (ShopBuilding → CraftingBuilding)
+### 2. Shop Catalogue: ShopItemEntry
+
+Each `ShopBuilding` defines its catalogue via a `List<ShopItemEntry>`:
+```csharp
+[System.Serializable]
+public struct ShopItemEntry
+{
+    public ItemSO Item;
+    public int MaxStock; // target stock qty (defaults to 5 if 0)
+}
+```
+- `ShopEntries` exposes the full list.
+- `GetStockCount(ItemSO)` returns how many of that item are currently in inventory.
+- `NeedsRestock(ItemSO, maxStock)` returns `true` if current stock < max target.
+
+### 3. The Restock Flow (ShopBuilding → CraftingBuilding)
 
 ```
 OnNewDay
   └─ CheckShopInventory(shop)
-       └─ For each ItemSO in shop.ItemsToSell:
-            ├─ Is it in stock? → Skip
+       └─ For each ShopItemEntry:
+            ├─ NeedsRestock(item, maxStock)? → No? Skip (✓ log)
             ├─ FindSupplierFor(itemSO) → finds a CraftingBuilding
-            ├─ Is there already a CraftingOrder for this item at supplier? → Skip
-            └─ Place CraftingOrder on supplier's JobLogisticsManager
-                 └─ Crafter's BT (BTAction_PerformCraft) picks it up and crafts the item
+            ├─ Supplier has a LogisticsManager with a worker? → No? Skip (⚠ log)
+            ├─ Already a CraftingOrder for this item at supplier? → Skip (⏳ log)
+            └─ Place CraftingOrder via InteractionPlaceOrder
+                 └─ _worker.CharacterInteraction.StartInteractionWith(
+                        supplierLogistics.Worker,
+                        new InteractionPlaceOrder(craftingOrder)
+                    )
 ```
 
-**Key methods in `JobLogisticsManager`:**
-- `CheckShopInventory(ShopBuilding)` — scans `ItemsToSell` vs `Inventory`, places `CraftingOrder`s.
-- `FindSupplierFor(ItemSO)` — searches all `CraftingBuilding`s via `BuildingManager` for one that can produce the item (`GetCraftableItems().Contains(item)`).
-- `PlaceCraftingOrder(CraftingOrder)` — registers the order in `_activeCraftingOrders`.
+> [!IMPORTANT]
+> **Orders MUST go through `InteractionPlaceOrder`**. The shop's LogisticsManager character physically interacts with the supplier's LogisticsManager character. This is a conscious design choice — orders are social transactions, not data-only operations.
 
-### 3. Order Types
+### 4. InteractionPlaceOrder
+
+`InteractionPlaceOrder` implements `ICharacterInteractionAction` and supports both order types:
+- `new InteractionPlaceOrder(BuyOrder order)` — for transport orders.
+- `new InteractionPlaceOrder(CraftingOrder order)` — for crafting requests.
+
+In `Execute(source, target)`:
+1. Finds the `JobLogisticsManager` on the **target** character.
+2. Calls `PlaceBuyOrder()` or `PlaceCraftingOrder()` accordingly.
+3. Applies a +2 relation boost on both sides for the commercial agreement.
+4. Logs the result.
+
+### 5. Order Types
 
 | Type | Purpose | Placed By | Consumed By |
 |------|---------|-----------|-------------|
-| `CraftingOrder` | Request item production | Shop's LogisticsManager | CraftingBuilding's `JobCrafter` (via BT) |
-| `BuyOrder` | Transport items between buildings | Any LogisticsManager | `JobTransporter` (via BT) |
+| `CraftingOrder` | Request item production | Shop's LogisticsManager (via interaction) | CraftingBuilding's `JobCrafter` (via BT) |
+| `BuyOrder` | Transport items between buildings | Any LogisticsManager (via interaction) | `JobTransporter` (via BT) |
 
-### 4. Order Lifecycle
+### 6. Order Lifecycle
 
 Both order types follow this lifecycle:
 1. **Created** → added to `_activeOrders` or `_activeCraftingOrders`.
 2. **Progress** → `RecordDelivery(amount)` / `RecordCraft(amount)` updates quantity.
 3. **Completed** → `IsCompleted` returns true, order is removed from the list.
-4. **Expired** → `RemainingDays` hits 0, reputation penalties applied to `ClientBoss` and `IntermediaryBoss`.
+4. **Expired** → `RemainingDays` hits 0, reputation penalties applied.
 
-### 5. Duplicate Prevention
-
-Before placing a new `CraftingOrder`, the shop's manager checks the **supplier's** `ActiveCraftingOrders`:
-```csharp
-bool alreadyOrdered = supplierLogistics.ActiveCraftingOrders.Any(o => o.ItemToCraft == itemSO);
-```
-This prevents flooding a crafter with duplicate orders for the same item.
-
-### 6. Inter-Building Discovery
+### 7. Inter-Building Discovery
 
 `FindSupplierFor(ItemSO)` iterates over `BuildingManager.Instance.allBuildings`:
 - Skips the current workplace.
@@ -72,10 +93,10 @@ This prevents flooding a crafter with duplicate orders for the same item.
 ## Debugging Checklist
 
 If items are not being restocked:
-1. Does the `ShopBuilding` have `ItemsToSell` configured in the inspector?
+1. Does the `ShopBuilding` have `ShopItemEntry`s configured in the inspector? (Item + MaxStock)
 2. Is a `JobLogisticsManager` assigned and has a worker?
 3. Is `TimeManager.OnNewDay` firing correctly?
-4. Does a `CraftingBuilding` exist in the scene that can craft the item?
-5. Does that `CraftingBuilding` have its own `JobLogisticsManager` with a worker?
-6. Does the crafter at that building have a `JobCrafter` and the required skill?
-7. Is `BTAction_PerformCraft` picking up the `CraftingOrder`?
+4. Does a `CraftingBuilding` exist that can craft the item? (`GetCraftableItems()`)
+5. Does that `CraftingBuilding` have its own `JobLogisticsManager` with a **worker assigned**?
+6. Check the console for `[Logistics]` logs — they detail every step of the check.
+7. Does the crafter have a `JobCrafter` and the required skill level?

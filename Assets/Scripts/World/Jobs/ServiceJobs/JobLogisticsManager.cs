@@ -24,12 +24,29 @@ public class JobLogisticsManager : Job
     public JobLogisticsManager(string title = "Logistics Manager")
     {
         _customTitle = title;
+    }
 
-        // On s'abonne au changement de jour pour vérifier l'expiration des commandes
+    /// <summary>
+    /// On s'abonne à OnNewDay au moment de l'assignation (quand _workplace et TimeManager sont dispo).
+    /// </summary>
+    public override void Assign(Character worker, CommercialBuilding workplace)
+    {
+        base.Assign(worker, workplace);
+
         if (TimeManager.Instance != null)
         {
             TimeManager.Instance.OnNewDay += CheckExpiredOrders;
+            Debug.Log($"<color=cyan>[Logistics]</color> {worker.CharacterName} abonné à OnNewDay pour {workplace.BuildingName}.");
         }
+    }
+
+    public override void Unassign()
+    {
+        if (TimeManager.Instance != null)
+        {
+            TimeManager.Instance.OnNewDay -= CheckExpiredOrders;
+        }
+        base.Unassign();
     }
 
     ~JobLogisticsManager()
@@ -137,6 +154,7 @@ public class JobLogisticsManager : Job
 
     /// <summary>
     /// Vérifie si l'une des commandes est expirée et applique les conséquences sociales.
+    /// Appelé chaque nouveau jour via OnNewDay.
     /// </summary>
     private void CheckExpiredOrders()
     {
@@ -144,8 +162,16 @@ public class JobLogisticsManager : Job
 
         CheckExpiredBuyOrders();
         CheckExpiredCraftingOrders();
-        
-        // --- NEW: Restock Shop if this is a ShopBuilding ---
+    }
+
+    /// <summary>
+    /// Appelé lorsque le worker arrive au travail (Punch In).
+    /// Si le workplace est un ShopBuilding, on vérifie l'inventaire.
+    /// </summary>
+    public void OnWorkerPunchIn()
+    {
+        if (!IsOwnerOrOnSchedule()) return;
+
         if (_workplace is ShopBuilding shop)
         {
             CheckShopInventory(shop);
@@ -153,41 +179,100 @@ public class JobLogisticsManager : Job
     }
 
     /// <summary>
+    /// Vérifie si le worker est le propriétaire OU est dans ses heures de travail.
+    /// Le propriétaire peut agir à tout moment.
+    /// </summary>
+    private bool IsOwnerOrOnSchedule()
+    {
+        if (_worker == null || _workplace == null) return false;
+
+        // Le propriétaire peut toujours agir
+        if (_workplace.Owner == _worker) return true;
+
+        // Sinon, vérifier si on est dans les heures de travail
+        if (_worker.CharacterSchedule != null)
+        {
+            return _worker.CharacterSchedule.CurrentActivity == ScheduleActivity.Work;
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// Scanne l'inventaire du shop et passe des CraftingOrders si des items manquent.
     /// Appelé à chaque nouveau jour via OnNewDay.
+    /// Les commandes sont passées via InteractionPlaceOrder (interaction avec le LogisticsManager du fournisseur).
     /// </summary>
     private void CheckShopInventory(ShopBuilding shop)
     {
-        var itemsToSell = shop.ItemsToSell;
+        var entries = shop.ShopEntries;
 
-        foreach (var itemSO in itemsToSell)
+        Debug.Log($"<color=cyan>[Logistics]</color> {_worker?.CharacterName ?? "?"} vérifie l'inventaire de {shop.BuildingName} ({entries.Count} types d'items).");
+
+        foreach (var entry in entries)
         {
-            // Si l'item n'est pas présent dans l'inventaire
-            if (!shop.HasItemInStock(itemSO))
+            var itemSO = entry.Item;
+            int maxStock = entry.MaxStock > 0 ? entry.MaxStock : 5;
+            int currentStock = shop.GetStockCount(itemSO);
+
+            // Vérifier si le stock est suffisant
+            if (!shop.NeedsRestock(itemSO, maxStock))
             {
-                // Chercher un fournisseur (Forge, Alchimiste, etc.)
-                var supplier = FindSupplierFor(itemSO);
-                if (supplier == null) continue;
+                Debug.Log($"<color=cyan>[Logistics]</color>   ✓ {itemSO.ItemName}: {currentStock}/{maxStock} — stock suffisant.");
+                continue;
+            }
 
-                // Récupérer le LogisticsManager du fournisseur
-                var supplierLogistics = supplier.Jobs.OfType<JobLogisticsManager>().FirstOrDefault();
-                if (supplierLogistics == null) continue;
+            Debug.Log($"<color=yellow>[Logistics]</color>   ✗ {itemSO.ItemName}: {currentStock}/{maxStock} — stock bas, recherche d'un fournisseur...");
 
-                // Vérifier si une CraftingOrder est déjà en cours chez le fournisseur pour cet item
-                bool alreadyOrdered = supplierLogistics.ActiveCraftingOrders.Any(o => o.ItemToCraft == itemSO);
-                if (alreadyOrdered) continue;
+            // Chercher un fournisseur (CraftingBuilding)
+            var supplier = FindSupplierFor(itemSO);
+            if (supplier == null)
+            {
+                Debug.LogWarning($"<color=orange>[Logistics]</color>   Aucun fournisseur trouvé pour {itemSO.ItemName}.");
+                continue;
+            }
 
-                Debug.Log($"<color=cyan>[Logistics]</color> Stock bas pour {itemSO.ItemName}. Commande de fabrication passée auprès de {supplier.BuildingName}.");
-                
-                // Création de la commande de fabrication
-                // On demande 5 exemplaires par défaut pour le réappro, délai de 3 jours
-                var craftingOrder = new CraftingOrder(
-                    itemSO, 
-                    5, 
-                    3,                 // remainingDays
-                    shop.Owner         // clientBoss = le patron du magasin
+            // Récupérer le LogisticsManager du fournisseur et son worker
+            var supplierLogistics = supplier.Jobs.OfType<JobLogisticsManager>().FirstOrDefault();
+            if (supplierLogistics == null || supplierLogistics.Worker == null)
+            {
+                Debug.LogWarning($"<color=orange>[Logistics]</color>   {supplier.BuildingName} n'a pas de LogisticsManager assigné.");
+                continue;
+            }
+
+            // Vérifier si une CraftingOrder est déjà en cours chez le fournisseur pour cet item
+            bool alreadyOrdered = supplierLogistics.ActiveCraftingOrders.Any(o => o.ItemToCraft == itemSO);
+            if (alreadyOrdered)
+            {
+                Debug.Log($"<color=cyan>[Logistics]</color>   ⏳ {itemSO.ItemName}: CraftingOrder déjà en cours chez {supplier.BuildingName}.");
+                continue;
+            }
+
+            // Calculer la quantité à commander (différence entre max et stock actuel)
+            int quantityToOrder = maxStock - currentStock;
+
+            // Créer la CraftingOrder
+            var craftingOrder = new CraftingOrder(
+                itemSO,
+                quantityToOrder,
+                3,                 // remainingDays
+                shop.Owner         // clientBoss = le patron du magasin
+            );
+
+            // Passer la commande via une interaction avec le LogisticsManager du fournisseur
+            Debug.Log($"<color=cyan>[Logistics]</color>   📦 {_worker?.CharacterName} passe une CraftingOrder de {quantityToOrder}x {itemSO.ItemName} auprès de {supplierLogistics.Worker.CharacterName} ({supplier.BuildingName}).");
+
+            if (_worker != null && _worker.CharacterInteraction != null)
+            {
+                _worker.CharacterInteraction.StartInteractionWith(
+                    supplierLogistics.Worker,
+                    new InteractionPlaceOrder(craftingOrder)
                 );
-
+            }
+            else
+            {
+                // Fallback si le worker n'est pas disponible (premier jour, etc.)
+                Debug.LogWarning($"<color=orange>[Logistics]</color>   Worker indisponible, commande directe.");
                 supplierLogistics.PlaceCraftingOrder(craftingOrder);
             }
         }
