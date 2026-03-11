@@ -6,15 +6,22 @@ namespace MWI.Dialogue
     [System.Serializable]
     public class DialogueLine
     {
-        [Tooltip("If true, the line is spoken by the player. If false, it's the NPC.")]
-        [SerializeField] private bool _isPlayerLine;
+        [Tooltip("The index of the participant (1-indexed based on the list passed to StartDialogue).")]
+        [SerializeField] private int _characterIndex = 1;
+        [System.NonSerialized] private Character _character;
         [TextArea(3, 10)]
-        [SerializeField] private string _text;
+        [SerializeField] private string _lineText;
         [SerializeField] private float _typingSpeedOverride = 0f;
 
-        public bool IsPlayerLine => _isPlayerLine;
-        public string Text => _text;
+        public int CharacterIndex => _characterIndex;
+        public Character Character => _character;
+        public string LineText => _lineText;
         public float TypingSpeedOverride => _typingSpeedOverride;
+
+        public void Initialize(Character character)
+        {
+            _character = character;
+        }
     }
 
     [System.Serializable]

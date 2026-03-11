@@ -1,6 +1,7 @@
 using System;
 using UnityEngine;
 using UnityEngine.AI;
+using System.Collections.Generic;
 using MWI.Time;
 
 public enum CharacterBusyReason
@@ -548,11 +549,18 @@ public class Character : MonoBehaviour
     public void DebugStartDialogue()
     {
         var manager = GetComponent<DialogueManager>() ?? gameObject.AddComponent<DialogueManager>();
-        // Find an NPC to talk to (first one in range or just any other character for testing)
-        Character npc = FindFirstObjectByType<Character>(); // Very crude for testing
-        if (npc == this) npc = null;
         
-        manager.StartDialogue(_testDialogue, npc);
+        // Find other characters to act as participants
+        List<Character> participants = new List<Character> { this };
+        Character[] allCharacters = FindObjectsByType<Character>(FindObjectsSortMode.None);
+        
+        foreach (var c in allCharacters)
+        {
+            if (c != this) participants.Add(c);
+            if (participants.Count >= 3) break; // Test with up to 3
+        }
+        
+        manager.StartDialogue(_testDialogue, participants);
     }
     #endregion
 

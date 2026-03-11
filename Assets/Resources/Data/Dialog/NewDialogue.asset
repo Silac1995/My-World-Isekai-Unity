@@ -13,7 +13,12 @@ MonoBehaviour:
   m_Name: NewDialogue
   m_EditorClassIdentifier: Assembly-CSharp::MWI.Dialogue.DialogueSO
   _lines:
-  - _isPlayerLine: 0
-    _text: 
-    _typingSpeedOverride: 0
+  - _characterIndex: 1
+    _lineText: Tetst hello
+    _typingSpeedOverride: 0.04
+  - _characterIndex: 1
+    _lineText: 'Wassuup
+
+'
+    _typingSpeedOverride: 0.04
   _choices: []

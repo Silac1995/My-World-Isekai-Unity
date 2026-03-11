@@ -103,6 +103,7 @@ MonoBehaviour:
   _audioSource: {fileID: 6443598352899297707}
   _voiceSO: {fileID: 0}
   _voicePitch: 1
+  _scriptedSpeech: {fileID: 0}
 --- !u!82 &6443598352899297707
 AudioSource:
   m_ObjectHideFlags: 0
@@ -634,6 +635,7 @@ Transform:
   - {fileID: 7548370862418862157}
   - {fileID: 4629397348468206407}
   - {fileID: 6993029267619590529}
+  - {fileID: 95981129722925135}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!54 &3937668831498777898
@@ -733,6 +735,7 @@ MonoBehaviour:
   _characterSkills: {fileID: 2759972866297852151}
   _characterMentorship: {fileID: 7383321509428321023}
   _characterLocations: {fileID: 4198040619971064388}
+  _testDialogue: {fileID: 0}
 --- !u!114 &2677209831397210094
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1159,6 +1162,7 @@ MonoBehaviour:
   _hairController: {fileID: 0}
   _earsController: {fileID: 0}
   _mouthController: {fileID: 0}
+  _handsController: {fileID: 0}
 --- !u!114 &6566596457304981575
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1472,6 +1476,51 @@ MonoBehaviour:
   _character: {fileID: 2536622428659117900}
   _rb: {fileID: 3937668831498777898}
   _agent: {fileID: 4447047040555525631}
+--- !u!1 &7038462132579949301
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 95981129722925135}
+  - component: {fileID: 2908413847768549937}
+  m_Layer: 0
+  m_Name: DialogueManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &95981129722925135
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7038462132579949301}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: -1.20455, y: 0.05719, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 6179432398992828966}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &2908413847768549937
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7038462132579949301}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 614c4c669e9c7b948b800d54b4746da0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::DialogueManager
+  _choicesWindow: {fileID: 0}
 --- !u!1 &7134676473740008436
 GameObject:
   m_ObjectHideFlags: 0
