@@ -144,9 +144,13 @@ namespace MWI.AI
             // Crafting terminé
             if (_currentStation != null && _currentOrder != null)
             {
-                ItemInstance craftedItem = _currentStation.Craft(_currentOrder.ItemToCraft, self);
+                ItemInstance craftedItem = _currentStation.Craft(_currentOrder.ItemToCraft, self, true, _job.Workplace as CommercialBuilding);
                 if (craftedItem != null)
                 {
+                    if (_job.Workplace is CommercialBuilding building)
+                    {
+                        building.AddToInventory(craftedItem);
+                    }
                     _manager.UpdateCraftingOrderProgress(_currentOrder, 1);
                     
                     if (_job.RequiredSkill != null && self.CharacterSkills != null)

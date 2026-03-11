@@ -1,4 +1,5 @@
 using UnityEngine;
+using MWI.AI;
 
 /// <summary>
 /// Job d'Apprenti Forgeron : assiste le forgeron principal.
@@ -19,8 +20,17 @@ public class JobBlacksmithApprentice : JobCrafter
         var npcController = _worker.GetComponent<NPCController>();
         if (npcController != null && _worker.IsFree())
         {
+            if (_workplace is CommercialBuilding cb)
+            {
+                // Priorité 1 : Ranger les objets qui traînent
+                if (!npcController.HasBehaviour<StoreItemsBehaviour>() && !npcController.HasBehaviour<WanderBehaviour>())
+                {
+                    npcController.PushBehaviour(new StoreItemsBehaviour(npcController, cb));
+                }
+            }
+
             // L'apprenti flâne dans le bâtiment s'il n'a rien à faire
-            if (_workplace != null && !npcController.HasBehaviour<WanderBehaviour>())
+            if (_workplace != null && !npcController.HasBehaviour<WanderBehaviour>() && !npcController.HasBehaviour<StoreItemsBehaviour>())
             {
                 npcController.PushBehaviour(new WanderBehaviour(npcController, _workplace));
             }

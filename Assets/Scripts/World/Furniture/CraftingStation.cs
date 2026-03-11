@@ -36,7 +36,7 @@ public class CraftingStation : Furniture
     /// Craft un item et le fait spawn dans le monde.
     /// L'item apparaît au _outputPoint (ou au-dessus de la station si non défini).
     /// </summary>
-    public ItemInstance Craft(ItemSO item, Character crafter, Color primaryColor = default, Color secondaryColor = default)
+    public ItemInstance Craft(ItemSO item, Character crafter, bool isForWork = false, CommercialBuilding workPlace = null, Color primaryColor = default, Color secondaryColor = default)
     {
         if (item == null)
         {
@@ -67,6 +67,12 @@ public class CraftingStation : Furniture
 
         // Position de sortie
         Vector3 spawnPos = _outputPoint != null ? _outputPoint.position : transform.position + Vector3.up * 0.5f;
+
+        // Si c'est pour le travail, on spawn l'objet dans la zone de stockage du bâtiment
+        if (isForWork && workPlace != null && workPlace.StorageZone != null)
+        {
+            spawnPos = workPlace.StorageZone.GetRandomPointInZone();
+        }
 
         // 1. Instancier le prefab WorldItem
         GameObject worldItemGo = Object.Instantiate(prefab, spawnPos, Quaternion.identity);

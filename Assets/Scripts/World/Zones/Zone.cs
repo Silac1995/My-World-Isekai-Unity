@@ -10,10 +10,13 @@ public class Zone : MonoBehaviour
     public ZoneType zoneType;
     public string zoneName;
 
+    [Header("Bounds")]
     [Tooltip("Optionnel : Objet enfant qui contient tous les murs/visuels pour calculer la taille de la zone.")]
     [SerializeField] private Transform _boundsTarget;
 
     protected BoxCollider _boxCollider;
+    public Collider Collider => _boxCollider;
+    public Bounds Bounds => _boxCollider != null ? _boxCollider.bounds : new Bounds(transform.position, Vector3.zero);
     protected HashSet<GameObject> _charactersInside = new HashSet<GameObject>();
 
     protected virtual void Awake()
@@ -58,6 +61,11 @@ public class Zone : MonoBehaviour
         }
 
         return bounds.center;
+    }
+
+    public bool IsPointInZone(Vector3 point)
+    {
+        return _boxCollider != null && _boxCollider.bounds.Contains(point);
     }
 
     /// <summary>
