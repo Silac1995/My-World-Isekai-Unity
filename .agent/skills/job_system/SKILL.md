@@ -26,13 +26,16 @@ This is the component (MonoBehaviour) attached to the character.
 Pure abstract C# class. This is the essence of the position (e.g., "Bartender").
 - **Stateless/Data**: Contains the `JobTitle`, `Category`, and specifies the hours of the day dedicated to this role (`GetWorkSchedule()`).
 - **Container**: Stores the references of `Worker` (who does the job) and `Workplace` (where it happens). A job can only have one worker. `IsAssigned` checks its availability.
-- **The Action (`Execute()`)**: Method called every Tick during office hours. This is where the agent will develop the business logic (Serving beers, Forging a sword, etc.).
+- **The Action (`Execute()`)**: Method called every Tick during office hours. 
+    - **Proactive AI Injection**: To prevent characters from stacking at the workplace entry, `Execute()` should push active behaviors (e.g. `PerformCraftBehaviour`, `WanderBehaviour`) to the character's controller if they are not already busy.
+    - **State Management**: It manages the specific business logic (Forging, Assistance) by checking building needs.
 
 ### 3. The Location (`CommercialBuilding`)
 The physical anchor in the scene.
 - **Administration**: The building instantiates all its own Jobs in the abstract array (via `InitializeJobs()`).
 - **Recruitment (`AskForJob`)**: For a character to get a position here, the Building must have a Boss (`HasOwner`), the position must exist locally, and it must be vacant.
-- **Punching In/Out**: When an NPC physically arrives in the building to work, they announce themselves (`WorkerStartingShift`). The building instantly knows who has entered its walls.
+- **Punching In/Out (`WorkerStartingShift`)**: When an NPC physically arrives in the building to work, they announce themselves. The base class automatically triggers the `JobLogisticsManager.OnWorkerPunchIn()` to check inventory/orders.
+- **Physical Dispersion**: `GetWorkPosition(Character)` provides a point within the `BuildingZone` with a unique offset (based on InstanceID) to ensure workers don't stack on top of each other.
 
 ### 4. Crafting (CraftingBuilding & JobCrafter)
 Crafting follows a specialized overlay of this system.
@@ -42,11 +45,13 @@ Crafting follows a specialized overlay of this system.
    - **Demand-Driven Logic**: The artisan does not produce in a vacuum. Their Behaviour Tree checks that the building's `JobLogisticsManager` has an active **`CraftingOrder`** (which follows the same time and reputation penalty logic as a `BuyOrder`). If there is an order, they find the right station, play their animation, and produce the item.
 
 ### 5. Logistics Cycle (JobLogisticsManager)
-Every `CommercialBuilding` that needs supply management has a `JobLogisticsManager`. The restock cycle works as follows:
-- **Event-Driven**: The manager acts on `OnNewDay` events, not every tick. During work hours, the character goes to the building and is present, but doesn't actively do anything continuously.
-- **ShopBuilding Restock**: On each new day, `CheckShopInventory()` scans `ItemsToSell` vs `Inventory`. For each missing item, it finds a `CraftingBuilding` supplier and places a `CraftingOrder` on that supplier's `JobLogisticsManager`.
-- **Order Types**: `BuyOrder` (transport between buildings) and `CraftingOrder` (production request at a CraftingBuilding).
-- **Duplicate Prevention**: Before placing an order, it checks the supplier's `ActiveCraftingOrders` to avoid duplicate requests.
+Every `CommercialBuilding` that needs supply management has a `JobLogisticsManager`.
+- **Event-Driven & Physical**: Triggered by `OnWorkerPunchIn` (when the manager arrives at work) and `OnNewDay`.
+- **Pending Order Queue**: Orders (`BuyOrder`, `CraftingOrder`) are not executed instantly. They are added to a `PendingOrder` queue. The manager's `Execute()` method pops these and pushes a `PlaceOrderBehaviour`, forcing the character to physically travel to the supplier.
+- **Shop Restock**: `CheckShopInventory()` scans `ItemsToSell` vs `Inventory` and enqueues orders for missing stock.
+- **Crafting Ingredients**: `CheckCraftingIngredients()` scans active `CraftingOrder`s, calculates missing materials based on `CraftingRecipe`, and enqueues `BuyOrder`s to fetch them.
+- **Order Types**: `BuyOrder` (transport/purchase) and `CraftingOrder` (production request).
+- **Duplicate Prevention**: Before placing/enqueuing an order, it checks if an order for that item is already active or pending.
 - **Expiration**: Orders have a `RemainingDays` counter. Expired orders trigger reputation penalties (`CharacterRelation.UpdateRelation`).
 
 ### 6. Work Positions

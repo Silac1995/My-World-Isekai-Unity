@@ -24,8 +24,14 @@ public class JobBlacksmith : JobCrafter
 
     public override void Execute()
     {
-        // L'action réelle est gérée par le BT (PerformCraftBehaviour)
-        // Ce Execute de base peut être complété ou laissé vide si le BT fait tout.
+        if (_worker == null) return;
+
+        var npcController = _worker.GetComponent<NPCController>();
+        if (npcController != null && !npcController.HasBehaviour<MWI.AI.PerformCraftBehaviour>())
+        {
+            // Le BT ou le behaviour gérera la recherche de commande et de station
+            npcController.PushBehaviour(new MWI.AI.PerformCraftBehaviour(npcController, this));
+        }
     }
 
     public override bool CanExecute()

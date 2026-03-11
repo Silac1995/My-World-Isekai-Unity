@@ -199,6 +199,20 @@ public abstract class CommercialBuilding : Building
         {
             _activeWorkersOnShift.Add(worker);
             Debug.Log($"<color=green>[Building]</color> {worker.CharacterName} a pointé (Punch In) à {buildingName}.");
+
+            // Déclencher la logique logistique si c'est le manager
+            if (worker.CharacterJob != null)
+            {
+                var logisticsJob = worker.CharacterJob.ActiveJobs
+                    .Select(j => j.AssignedJob)
+                    .OfType<JobLogisticsManager>()
+                    .FirstOrDefault(j => j.Workplace == this);
+
+                if (logisticsJob != null)
+                {
+                    logisticsJob.OnWorkerPunchIn();
+                }
+            }
         }
     }
 
@@ -209,7 +223,24 @@ public abstract class CommercialBuilding : Building
     /// </summary>
     public virtual Vector3 GetWorkPosition(Character worker)
     {
-        return GetRandomPointInBuildingZone(worker.transform.position.y);
+        // On récupère une position de base (zone de building ou centre du building)
+        Vector3 basePos = GetRandomPointInBuildingZone(worker.transform.position.y);
+        
+        // On ajoute un léger offset basé sur l'ID du worker pour éviter que tout le monde
+        // ne converge exactement sur le même point si la zone est trop petite.
+        float offsetRange = 1.5f;
+        float offsetX = (Mathf.Abs(worker.gameObject.GetInstanceID() % 100) / 50f - 1f) * offsetRange;
+        float offsetZ = (Mathf.Abs((worker.gameObject.GetInstanceID() / 100) % 100) / 50f - 1f) * offsetRange;
+        
+        Vector3 offsetPos = basePos + new Vector3(offsetX, 0, offsetZ);
+
+        // On vérifie que le point avec offset est toujours valide sur le NavMesh
+        if (UnityEngine.AI.NavMesh.SamplePosition(offsetPos, out UnityEngine.AI.NavMeshHit hit, 2f, UnityEngine.AI.NavMesh.AllAreas))
+        {
+            return hit.position;
+        }
+
+        return basePos;
     }
 
     /// <summary>

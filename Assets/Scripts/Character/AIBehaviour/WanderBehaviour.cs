@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using UnityEngine.AI;
 using System.Collections;
 
@@ -24,12 +24,15 @@ public class WanderBehaviour : IAIBehaviour
 
     public bool IsFinished => _isFinished;
 
-    public WanderBehaviour(NPCController npcController)
+    private Zone _wanderZone;
+
+    public WanderBehaviour(NPCController npcController, Zone wanderZone = null)
     {
         _npcController = npcController;
         _walkRadius = npcController.WalkRadius;
         _minWait = npcController.MinWaitTime;
         _maxWait = npcController.MaxWaitTime;
+        _wanderZone = wanderZone;
     }
 
     public void Act(Character selfCharacter)
@@ -98,30 +101,40 @@ public class WanderBehaviour : IAIBehaviour
         var movement = self.CharacterMovement;
         if (movement == null) return;
 
-        // --- LOGIQUE DE "REBOND" NATUREL ---
-        Vector3 finalDirectionBias = Vector3.zero;
+        Vector3 targetPos;
 
-        // On regarde si on est près d'un bord
-        if (NavMesh.FindClosestEdge(self.transform.position, out NavMeshHit edgeHit, NavMesh.AllAreas))
+        if (_wanderZone != null)
         {
-            if (edgeHit.distance < EDGE_DETECTION_DIST)
+            targetPos = _wanderZone.GetRandomPointInZone();
+        }
+        else
+        {
+            // --- LOGIQUE DE "REBOND" NATUREL (Existing logic) ---
+            Vector3 finalDirectionBias = Vector3.zero;
+
+            if (NavMesh.FindClosestEdge(self.transform.position, out NavMeshHit edgeHit, NavMesh.AllAreas))
             {
-                // On crée un vecteur qui part du mur vers l'intérieur (la normale)
-                finalDirectionBias = edgeHit.normal * 3f; 
+                if (edgeHit.distance < EDGE_DETECTION_DIST)
+                {
+                    finalDirectionBias = edgeHit.normal * 3f; 
+                }
+            }
+
+            Vector2 randomCircle = Random.insideUnitCircle * _walkRadius;
+            Vector3 randomPos = new Vector3(randomCircle.x, 0, randomCircle.y) + self.transform.position;
+            Vector3 biasedPos = randomPos + finalDirectionBias;
+
+            if (NavMesh.SamplePosition(biasedPos, out NavMeshHit hit, _walkRadius, NavMesh.AllAreas))
+            {
+                targetPos = hit.position;
+            }
+            else
+            {
+                targetPos = self.transform.position;
             }
         }
 
-        // JITTER + BIAIS
-        Vector2 randomCircle = Random.insideUnitCircle * _walkRadius;
-        Vector3 randomPos = new Vector3(randomCircle.x, 0, randomCircle.y) + self.transform.position;
-        
-        // On additionne le biais pour "pousser" la recherche vers l'espace libre
-        Vector3 biasedPos = randomPos + finalDirectionBias;
-
-        if (NavMesh.SamplePosition(biasedPos, out NavMeshHit hit, _walkRadius, NavMesh.AllAreas))
-        {
-            movement.SetDestination(hit.position);
-        }
+        movement.SetDestination(targetPos);
     }
 
     /// <summary>

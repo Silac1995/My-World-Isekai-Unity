@@ -51,28 +51,7 @@ public class ShopBuilding : CommercialBuilding
         Debug.Log($"<color=magenta>[Shop]</color> {buildingName} initialisé avec 1 Vendeur et 1 LogisticsManager.");
     }
 
-    /// <summary>
-    /// Quand un employé arrive au travail (Punch In), on vérifie s'il est
-    /// le LogisticsManager pour déclencher la vérification de l'inventaire.
-    /// </summary>
-    public override void WorkerStartingShift(Character worker)
-    {
-        base.WorkerStartingShift(worker);
 
-        if (worker.CharacterJob != null)
-        {
-            var logisticsJob = worker.CharacterJob.ActiveJobs
-                .Select(j => j.AssignedJob)
-                .OfType<JobLogisticsManager>()
-                .FirstOrDefault(j => j.Workplace == this);
-
-            if (logisticsJob != null)
-            {
-                Debug.Log($"<color=cyan>[Shop]</color> LogisticsManager {worker.CharacterName} a pointé — vérification de l'inventaire...");
-                logisticsJob.OnWorkerPunchIn();
-            }
-        }
-    }
 
     /// <summary>
     /// Seul le Vendeur va à son poste fixe (_vendorPoint).

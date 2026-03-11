@@ -30,8 +30,8 @@ Work Cycle (JobLogisticsManager.Execute)
   ▼
 CraftingBuilding (produces items)
   │
-  │  3. Crafting Manager receives CraftingOrder → PlaceCraftingOrder()
-  │     Check ingredients in StorageZone (Inventory).
+  │  3. Crafting Manager receives CraftingOrder → CheckCraftingIngredients()
+  │     Scans active orders and checks inventory (StorageZone).
   │     IF ingredients missing → Queues BuyOrder (physical visit to supplier).
   │
   │  4. JobCrafter picks up CraftingOrder (BTAction_PerformCraft)
@@ -49,12 +49,13 @@ ShopBuilding (receives items)
      7. Items delivered to Shop's Inventory (StorageZone)
 ```
 
-### 2. Trigger: When Does Restocking Happen?
-
-The shop's `JobLogisticsManager` checks inventory on **Punch-In** (arrival at work), NOT on a daily timer:
-- `WorkBehaviour` → `WorkerStartingShift(worker)` → `ShopBuilding` override detects logistics worker → calls `OnWorkerPunchIn()`.
+The `JobLogisticsManager` checks inventory on **Punch-In** (arrival at work in ANY building):
+- `WorkBehaviour` → `WorkerStartingShift(worker)` → `CommercialBuilding` (base class) detects logistics worker → calls `OnWorkerPunchIn()`.
+- `OnWorkerPunchIn()` triggers:
+  - `CheckShopInventory()` if workplace is a `ShopBuilding`.
+  - `CheckCraftingIngredients()` if workplace is a `CraftingBuilding`.
 - `OnWorkerPunchIn()` is gated by `IsOwnerOrOnSchedule()`:
-  - **Owner** of the building can act anytime.
+  - **Owner** can act anytime.
   - **Employees** only act during their scheduled `ScheduleActivity.Work` hours.
 
 ### 3. Step 1: Shop Places CraftingOrder

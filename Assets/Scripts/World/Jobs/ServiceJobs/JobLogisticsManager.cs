@@ -304,6 +304,10 @@ public class JobLogisticsManager : Job
         {
             CheckShopInventory(shop);
         }
+        else if (_workplace is CraftingBuilding crafting)
+        {
+            CheckCraftingIngredients(crafting);
+        }
     }
 
     /// <summary>
@@ -392,6 +396,46 @@ public class JobLogisticsManager : Job
             // on l'ajoute à la file d'attente pour que le worker s'y rende physiquement.
             _pendingOrders.Enqueue(new PendingOrder(craftingOrder, supplier));
             Debug.Log($"<color=cyan>[Logistics]</color>   📦 Enregistrement d'une commande de {quantityToOrder}x {itemSO.ItemName} auprès de {supplier.BuildingName}.");
+        }
+    }
+
+    /// <summary>
+    /// Pour chaque commande de fabrication active, vérifie si on a les ingrédients.
+    /// Si non, place des BuyOrders pour les obtenir.
+    /// </summary>
+    public void CheckCraftingIngredients(CraftingBuilding building)
+    {
+        foreach (var order in _activeCraftingOrders)
+        {
+            var recipe = order.ItemToCraft.CraftingRecipe;
+            if (recipe == null) continue;
+
+            foreach (var ingredient in recipe)
+            {
+                int needed = ingredient.Amount * order.Quantity;
+                int possessed = building.GetItemCount(ingredient.Item);
+
+                if (possessed < needed)
+                {
+                    int toBuy = needed - possessed;
+                    
+                    // Vérifier si un BuyOrder est déjà en cours pour cet ingrédient
+                    bool alreadyOrdered = _activeOrders.Any(o => o.ItemToTransport == ingredient.Item);
+                    if (alreadyOrdered)
+                    {
+                        Debug.Log($"<color=cyan>[Logistics]</color>   ⏳ {ingredient.Item.ItemName}: Ingrédient déjà commandé pour {building.BuildingName}.");
+                        continue;
+                    }
+
+                    var supplier = FindSupplierFor(ingredient.Item);
+                    if (supplier != null)
+                    {
+                        var buyOrder = new BuyOrder(ingredient.Item, toBuy, supplier, building, 3, building.Owner);
+                        _pendingOrders.Enqueue(new PendingOrder(buyOrder, supplier));
+                        Debug.Log($"<color=cyan>[Logistics]</color>   📦 Manque {toBuy}x {ingredient.Item.ItemName} pour crafter {order.ItemToCraft.ItemName}. Commande en attente chez {supplier.BuildingName}.");
+                    }
+                }
+            }
         }
     }
 
