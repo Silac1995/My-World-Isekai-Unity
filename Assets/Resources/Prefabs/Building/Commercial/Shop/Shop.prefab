@@ -1191,9 +1191,29 @@ PrefabInstance:
       propertyPath: m_Center.z
       value: -17.28853
       objectReference: {fileID: 0}
+    - target: {fileID: 6121972414477404733, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_Size.x
+      value: 20
+      objectReference: {fileID: 0}
+    - target: {fileID: 6121972414477404733, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_Size.y
+      value: 20
+      objectReference: {fileID: 0}
+    - target: {fileID: 6121972414477404733, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_Size.z
+      value: 20
+      objectReference: {fileID: 0}
     - target: {fileID: 6528054620988570630, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: m_Name
       value: Shop
+      objectReference: {fileID: 0}
+    - target: {fileID: 7289148798581441162, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: -14.47
+      objectReference: {fileID: 0}
+    - target: {fileID: 7289148798581441162, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: -33.12
       objectReference: {fileID: 0}
     - target: {fileID: 7371631401807285046, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: zoneName
@@ -1286,6 +1306,17 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 8729890495040055940, guid: 0266b0096947362429f7d224956a5096, type: 3}
   m_PrefabInstance: {fileID: 2834340834780121599}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &6942077358948493099 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 5116845001314938580, guid: 0266b0096947362429f7d224956a5096, type: 3}
+  m_PrefabInstance: {fileID: 2834340834780121599}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 556ce41a973a5704fbfc8c807ad8ecd2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Zone
 --- !u!65 &8333455769947060722 stripped
 BoxCollider:
   m_CorrespondingSourceObject: {fileID: 6121509161196564493, guid: 0266b0096947362429f7d224956a5096, type: 3}
@@ -1362,7 +1393,8 @@ MonoBehaviour:
   _buildingZone: {fileID: 8333455769947060722}
   _deliveryZone: {fileID: 4690730239702237897}
   _owner: {fileID: 0}
+  _storageZone: {fileID: 6942077358948493099}
   _itemsToSell:
-  - {fileID: 11400000, guid: 6c5a51e107481e44e877e826e0853958, type: 2}
+  - Item: {fileID: 0}
+    MaxStock: 0
   _vendorPoint: {fileID: 7459607895208990959}
-  _managerPoint: {fileID: 0}

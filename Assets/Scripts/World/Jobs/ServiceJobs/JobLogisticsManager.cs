@@ -21,6 +21,34 @@ public class JobLogisticsManager : Job
     private List<CraftingOrder> _activeCraftingOrders = new List<CraftingOrder>();
     public IReadOnlyList<CraftingOrder> ActiveCraftingOrders => _activeCraftingOrders;
 
+    // File d'attente des commandes à placer physiquement
+    private Queue<PendingOrder> _pendingOrders = new Queue<PendingOrder>();
+    public bool HasPendingOrders => _pendingOrders.Count > 0;
+
+    public struct PendingOrder
+    {
+        public BuyOrder BuyOrder;
+        public CraftingOrder CraftingOrder;
+        public CommercialBuilding Supplier;
+        public bool IsCrafting;
+
+        public PendingOrder(BuyOrder order, CommercialBuilding supplier)
+        {
+            BuyOrder = order;
+            CraftingOrder = null;
+            Supplier = supplier;
+            IsCrafting = false;
+        }
+
+        public PendingOrder(CraftingOrder order, CommercialBuilding supplier)
+        {
+            BuyOrder = null;
+            CraftingOrder = order;
+            Supplier = supplier;
+            IsCrafting = true;
+        }
+    }
+
     public JobLogisticsManager(string title = "Logistics Manager")
     {
         _customTitle = title;
@@ -75,6 +103,42 @@ public class JobLogisticsManager : Job
     public bool PlaceCraftingOrder(CraftingOrder order)
     {
         if (order == null || order.Quantity <= 0) return false;
+
+        // V?rification des ingrédients dans l'inventaire du bâtiment (ou StorageZone)
+        if (_workplace != null)
+        {
+            var recipe = order.ItemToCraft.CraftingRecipe;
+            foreach (var ingredient in recipe)
+            {
+                int needed = ingredient.Amount * order.Quantity;
+                int available = _workplace.GetItemCount(ingredient.Item);
+
+                if (available < needed)
+                {
+                    int toOrder = needed - available;
+                    Debug.Log($"<color=yellow>[Logistics]</color> Ingrédient manquant pour {order.ItemToCraft.ItemName} : {ingredient.Item.ItemName} ({available}/{needed}). Placement d'une commande...");
+                    
+                    // On cherche un fournisseur pour l'ingrédient
+                    var supplier = FindSupplierFor(ingredient.Item);
+                    if (supplier != null)
+                    {
+                        var ingredientOrder = new BuyOrder(
+                            ingredient.Item,
+                            toOrder,
+                            supplier,
+                            _workplace,
+                            3,
+                            _workplace.Owner
+                        );
+                        _pendingOrders.Enqueue(new PendingOrder(ingredientOrder, supplier));
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"<color=red>[Logistics]</color> Aucun fournisseur trouvé pour l'ingrédient {ingredient.Item.ItemName} !");
+                    }
+                }
+            }
+        }
 
         _activeCraftingOrders.Add(order);
         Debug.Log($"<color=cyan>[JobLogisticsManager]</color> Commande Craft reçue : {order.Quantity}x {order.ItemToCraft.ItemName}. Jours restants : {order.RemainingDays}");
@@ -197,19 +261,9 @@ public class JobLogisticsManager : Job
 
         Debug.Log($"<color=cyan>[Logistics]</color> 🚚 Commande de transport : {completedOrder.Quantity}x {completedOrder.ItemToCraft.ItemName} de {_workplace.BuildingName} → {completedOrder.CustomerBuilding.BuildingName} via {transporter.BuildingName}.");
 
-        // Passer la commande via interaction
-        if (_worker != null && _worker.CharacterInteraction != null)
-        {
-            _worker.CharacterInteraction.StartInteractionWith(
-                transporterLogistics.Worker,
-                new InteractionPlaceOrder(buyOrder)
-            );
-        }
-        else
-        {
-            // Fallback
-            transporterLogistics.PlaceBuyOrder(buyOrder);
-        }
+        // On l'ajoute à la file d'attente pour que le worker s'y rende physiquement.
+        _pendingOrders.Enqueue(new PendingOrder(buyOrder, transporter));
+        Debug.Log($"<color=cyan>[Logistics]</color>   📦 Enregistrement d'une commande de transport vers {transporter.BuildingName}.");
     }
 
     /// <summary>
@@ -334,22 +388,10 @@ public class JobLogisticsManager : Job
                 shop               // customerBuilding = le shop destinataire
             );
 
-            // Passer la commande via une interaction avec le LogisticsManager du fournisseur
-            Debug.Log($"<color=cyan>[Logistics]</color>   📦 {_worker?.CharacterName} passe une CraftingOrder de {quantityToOrder}x {itemSO.ItemName} auprès de {supplierLogistics.Worker.CharacterName} ({supplier.BuildingName}).");
-
-            if (_worker != null && _worker.CharacterInteraction != null)
-            {
-                _worker.CharacterInteraction.StartInteractionWith(
-                    supplierLogistics.Worker,
-                    new InteractionPlaceOrder(craftingOrder)
-                );
-            }
-            else
-            {
-                // Fallback si le worker n'est pas disponible (premier jour, etc.)
-                Debug.LogWarning($"<color=orange>[Logistics]</color>   Worker indisponible, commande directe.");
-                supplierLogistics.PlaceCraftingOrder(craftingOrder);
-            }
+            // Au lieu de placer la commande immédiatement via interaction (qui échouerait si le worker est occupé),
+            // on l'ajoute à la file d'attente pour que le worker s'y rende physiquement.
+            _pendingOrders.Enqueue(new PendingOrder(craftingOrder, supplier));
+            Debug.Log($"<color=cyan>[Logistics]</color>   📦 Enregistrement d'une commande de {quantityToOrder}x {itemSO.ItemName} auprès de {supplier.BuildingName}.");
         }
     }
 
@@ -447,8 +489,20 @@ public class JobLogisticsManager : Job
 
     public override void Execute()
     {
-        // Le Manager est piloté par événements (OnNewDay → CheckShopInventory),
-        // pas par un tick actif. Il reste au bureau et attend.
+        // Si on a des commandes en attente de placement physique
+        if (_pendingOrders.Count > 0 && _worker != null)
+        {
+            var npcController = _worker.GetComponent<NPCController>();
+            if (npcController != null)
+            {
+                // On vérifie si on n'est pas déjà en train de placer une commande
+                if (!npcController.HasBehaviour<PlaceOrderBehaviour>())
+                {
+                    var pending = _pendingOrders.Dequeue();
+                    npcController.PushBehaviour(new PlaceOrderBehaviour(npcController, pending));
+                }
+            }
+        }
     }
 
     public override string CurrentActionName => "Managing Orders";

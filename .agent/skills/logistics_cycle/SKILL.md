@@ -21,23 +21,32 @@ This skill documents the complete supply chain that keeps shops stocked and buil
 ShopBuilding (needs items)
   │
   │  1. LogisticsManager punches in → CheckShopInventory()
-  │     Places CraftingOrder via InteractionPlaceOrder
+  │     Queues PendingOrder (physical visit)
+  ▼
+Work Cycle (JobLogisticsManager.Execute)
+  │  2. Dequeues PendingOrder → Pushes PlaceOrderBehaviour
+  │     Manager physically walks to Supplier building
+  │     Manager starts InteractionPlaceOrder with Supplier Manager
   ▼
 CraftingBuilding (produces items)
   │
-  │  2. JobCrafter picks up CraftingOrder (BTAction_PerformCraft)
-  │     Crafts the items → items go into building depot
+  │  3. Crafting Manager receives CraftingOrder → PlaceCraftingOrder()
+  │     Check ingredients in StorageZone (Inventory).
+  │     IF ingredients missing → Queues BuyOrder (physical visit to supplier).
   │
-  │  3. LogisticsManager sees completed order + items in depot
-  │     Places BuyOrder (transport) via InteractionPlaceOrder
+  │  4. JobCrafter picks up CraftingOrder (BTAction_PerformCraft)
+  │     Crafts the items → items go into building Inventory (StorageZone)
+  │
+  │  5. LogisticsManager sees completed order + items in Inventory
+  │     Queues BuyOrder (transport) for delivery
   ▼
 TransporterBuilding (moves items)
   │
-  │  4. LogisticsManager accepts BuyOrder
+  │  6. LogisticsManager accepts BuyOrder
   │     JobTransporter picks it up → physically carries items
   ▼
 ShopBuilding (receives items)
-     5. Items delivered to Shop's Inventory
+     7. Items delivered to Shop's Inventory (StorageZone)
 ```
 
 ### 2. Trigger: When Does Restocking Happen?

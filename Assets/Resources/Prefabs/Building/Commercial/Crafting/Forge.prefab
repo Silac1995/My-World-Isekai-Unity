@@ -744,9 +744,29 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 6121972414477404733, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_Size.x
+      value: 20
+      objectReference: {fileID: 0}
+    - target: {fileID: 6121972414477404733, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_Size.y
+      value: 20
+      objectReference: {fileID: 0}
+    - target: {fileID: 6121972414477404733, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_Size.z
+      value: 20
+      objectReference: {fileID: 0}
     - target: {fileID: 6528054620988570630, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: m_Name
       value: Forge
+      objectReference: {fileID: 0}
+    - target: {fileID: 7289148798581441162, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: -13.7
+      objectReference: {fileID: 0}
+    - target: {fileID: 7289148798581441162, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: -10
       objectReference: {fileID: 0}
     - target: {fileID: 8729890495040055940, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: m_LocalPosition.x
@@ -811,6 +831,17 @@ PrefabInstance:
       insertIndex: -1
       addedObject: {fileID: 4769992228224564470}
   m_SourcePrefab: {fileID: 100100000, guid: 0266b0096947362429f7d224956a5096, type: 3}
+--- !u!114 &476241650930320217 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 5116845001314938580, guid: 0266b0096947362429f7d224956a5096, type: 3}
+  m_PrefabInstance: {fileID: 4726910616087735693}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 556ce41a973a5704fbfc8c807ad8ecd2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Zone
 --- !u!1 &1945857671188992395 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 6528054620988570630, guid: 0266b0096947362429f7d224956a5096, type: 3}
@@ -839,6 +870,7 @@ MonoBehaviour:
   _buildingZone: {fileID: 0}
   _deliveryZone: {fileID: 2869944826478470843}
   _owner: {fileID: 0}
+  _storageZone: {fileID: 476241650930320217}
   _apprenticeCount: 1
   _smithingSkill: {fileID: 0}
   _minimumBlacksmithTier: 1

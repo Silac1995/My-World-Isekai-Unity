@@ -29,9 +29,6 @@ public class ShopBuilding : CommercialBuilding
     
     public Transform VendorPoint => _vendorPoint;
     
-    // Inventaire réel du magasin
-    private List<ItemInstance> _inventory = new List<ItemInstance>();
-
     // File d'attente des clients
     private Queue<Character> _customerQueue = new Queue<Character>();
 
@@ -41,7 +38,6 @@ public class ShopBuilding : CommercialBuilding
     /// <summary>Liste des ItemSO à vendre (raccourci pour la compatibilité).</summary>
     public IReadOnlyList<ItemSO> ItemsToSell => _itemsToSell.Select(e => e.Item).ToList();
 
-    public IReadOnlyList<ItemInstance> Inventory => _inventory;
     public int CustomersInQueue => _customerQueue.Count;
 
     protected override void InitializeJobs()

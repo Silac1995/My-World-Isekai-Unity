@@ -11,13 +11,17 @@ public abstract class CommercialBuilding : Building
 {
     [Header("Commercial")]
     [SerializeField] protected Character _owner;
+    [SerializeField] protected Zone _storageZone;
 
     protected List<Job> _jobs = new List<Job>();
     protected List<Character> _activeWorkersOnShift = new List<Character>();
+    protected List<ItemInstance> _inventory = new List<ItemInstance>();
 
     public Character Owner => _owner;
     public IReadOnlyList<Job> Jobs => _jobs;
     public IReadOnlyList<Character> ActiveWorkersOnShift => _activeWorkersOnShift;
+    public Zone StorageZone => _storageZone;
+    public IReadOnlyList<ItemInstance> Inventory => _inventory;
 
     /// <summary>
     /// Le building est opérationnel si tous les jobs sont occupés par un worker.
@@ -219,5 +223,27 @@ public abstract class CommercialBuilding : Building
             _activeWorkersOnShift.Remove(worker);
             Debug.Log($"<color=orange>[Building]</color> {worker.CharacterName} a dépointé (Punch Out) de {buildingName}.");
         }
+    }
+
+    public virtual void AddToInventory(ItemInstance item)
+    {
+        if (item == null) return;
+        _inventory.Add(item);
+        Debug.Log($"<color=green>[Building]</color> {item.ItemSO.ItemName} ajouté à l'inventaire de {buildingName}.");
+    }
+
+    public virtual int GetItemCount(ItemSO itemSO)
+    {
+        return _inventory.Count(i => i.ItemSO == itemSO);
+    }
+
+    public virtual bool HasRequiredIngredients(IEnumerable<CraftingIngredient> ingredients, int multiplier = 1)
+    {
+        foreach (var ingredient in ingredients)
+        {
+            if (GetItemCount(ingredient.Item) < ingredient.Amount * multiplier)
+                return false;
+        }
+        return true;
     }
 }

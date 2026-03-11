@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using UnityEngine;
 using UnityEngine.AI;
 using MWI.Time;
@@ -541,6 +541,19 @@ public class Character : MonoBehaviour
     [ContextMenu("Take 50 Damage")] public void DebugTakeDamage() => CharacterCombat.TakeDamage(50f);
     [ContextMenu("Switch To Player")] public void DebugToPlayer() => SwitchToPlayer();
     [ContextMenu("Switch To NPC")] public void DebugToNPC() => SwitchToNPC();
+    
+    [Header("Dialogue Test")]
+    [SerializeField] private MWI.Dialogue.DialogueSO _testDialogue;
+    [ContextMenu("Start Test Dialogue")]
+    public void DebugStartDialogue()
+    {
+        var manager = GetComponent<DialogueManager>() ?? gameObject.AddComponent<DialogueManager>();
+        // Find an NPC to talk to (first one in range or just any other character for testing)
+        Character npc = FindFirstObjectByType<Character>(); // Very crude for testing
+        if (npc == this) npc = null;
+        
+        manager.StartDialogue(_testDialogue, npc);
+    }
     #endregion
 
     public void SetOccupyingFurniture(Furniture furniture)
