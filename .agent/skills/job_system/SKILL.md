@@ -41,6 +41,19 @@ Crafting follows a specialized overlay of this system.
    - **Requirements**: It requires the NPC to have a specific skill (`SkillSO`) and a minimum tier (`SkillTier` defined in `CharacterSkills`). Without this, the building refuses employment.
    - **Demand-Driven Logic**: The artisan does not produce in a vacuum. Their Behaviour Tree checks that the building's `JobLogisticsManager` has an active **`CraftingOrder`** (which follows the same time and reputation penalty logic as a `BuyOrder`). If there is an order, they find the right station, play their animation, and produce the item.
 
+### 5. Logistics Cycle (JobLogisticsManager)
+Every `CommercialBuilding` that needs supply management has a `JobLogisticsManager`. The restock cycle works as follows:
+- **Event-Driven**: The manager acts on `OnNewDay` events, not every tick. During work hours, the character goes to the building and is present, but doesn't actively do anything continuously.
+- **ShopBuilding Restock**: On each new day, `CheckShopInventory()` scans `ItemsToSell` vs `Inventory`. For each missing item, it finds a `CraftingBuilding` supplier and places a `CraftingOrder` on that supplier's `JobLogisticsManager`.
+- **Order Types**: `BuyOrder` (transport between buildings) and `CraftingOrder` (production request at a CraftingBuilding).
+- **Duplicate Prevention**: Before placing an order, it checks the supplier's `ActiveCraftingOrders` to avoid duplicate requests.
+- **Expiration**: Orders have a `RemainingDays` counter. Expired orders trigger reputation penalties (`CharacterRelation.UpdateRelation`).
+
+### 6. Work Positions
+- **`CommercialBuilding.GetWorkPosition(Character)`**: Virtual method returning where a worker should stand. Defaults to `GetRandomPointInBuildingZone()`.
+- **ShopBuilding Override**: Vendors go to a specific `VendorPoint` Transform (counter), all others wander in the building zone.
+- **BTVendorBehaviour**: If a `VendorPoint` exists, the vendor paths to it before serving. If not, they wander in the building zone.
+
 ## How to Create a New Job?
 In the future, if the AI Agent needs to create a "Blacksmith":
 1. Write the abstract `JobCrafter` code, then `JobBlacksmith` inheriting from `JobCrafter`. Define its schedule, its `SkillSO`/`SkillTier` prerequisites, and its BT node `BTAction_PerformCraft`.

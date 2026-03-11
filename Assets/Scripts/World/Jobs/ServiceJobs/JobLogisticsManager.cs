@@ -153,47 +153,42 @@ public class JobLogisticsManager : Job
     }
 
     /// <summary>
-    /// Scanne l'inventaire du shop et passe des commandes si des items manquent.
+    /// Scanne l'inventaire du shop et passe des CraftingOrders si des items manquent.
+    /// Appelé à chaque nouveau jour via OnNewDay.
     /// </summary>
     private void CheckShopInventory(ShopBuilding shop)
     {
         var itemsToSell = shop.ItemsToSell;
-        var inventory = shop.Inventory;
 
         foreach (var itemSO in itemsToSell)
         {
             // Si l'item n'est pas présent dans l'inventaire
             if (!shop.HasItemInStock(itemSO))
             {
-                // Vérifier si une commande est déjà en cours pour cet item
-                bool alreadyOrdered = _activeOrders.Any(o => o.ItemToTransport == itemSO);
-                if (alreadyOrdered) continue;
-
                 // Chercher un fournisseur (Forge, Alchimiste, etc.)
                 var supplier = FindSupplierFor(itemSO);
-                if (supplier != null)
-                {
-                    Debug.Log($"<color=cyan>[Logistics]</color> Stock bas pour {itemSO.ItemName}. Commande de réapprovisionnement passée auprès de {supplier.BuildingName}.");
-                    
-                    // Création de la commande de transport
-                    // On demande 5 exemplaires par défaut pour le réappro
-                    var order = new BuyOrder(
-                        itemSO, 
-                        5, 
-                        supplier,          // source
-                        shop,              // dest
-                        3,                 // remainingDays
-                        shop.Owner,        // clientBoss
-                        _workplace.Owner   // intermediaryBoss
-                    );
+                if (supplier == null) continue;
 
-                    // On enregistre la commande chez le fournisseur (pour que ses transporteurs la voient)
-                    var supplierLogistics = supplier.Jobs.OfType<JobLogisticsManager>().FirstOrDefault();
-                    if (supplierLogistics != null)
-                    {
-                        supplierLogistics.PlaceBuyOrder(order);
-                    }
-                }
+                // Récupérer le LogisticsManager du fournisseur
+                var supplierLogistics = supplier.Jobs.OfType<JobLogisticsManager>().FirstOrDefault();
+                if (supplierLogistics == null) continue;
+
+                // Vérifier si une CraftingOrder est déjà en cours chez le fournisseur pour cet item
+                bool alreadyOrdered = supplierLogistics.ActiveCraftingOrders.Any(o => o.ItemToCraft == itemSO);
+                if (alreadyOrdered) continue;
+
+                Debug.Log($"<color=cyan>[Logistics]</color> Stock bas pour {itemSO.ItemName}. Commande de fabrication passée auprès de {supplier.BuildingName}.");
+                
+                // Création de la commande de fabrication
+                // On demande 5 exemplaires par défaut pour le réappro, délai de 3 jours
+                var craftingOrder = new CraftingOrder(
+                    itemSO, 
+                    5, 
+                    3,                 // remainingDays
+                    shop.Owner         // clientBoss = le patron du magasin
+                );
+
+                supplierLogistics.PlaceCraftingOrder(craftingOrder);
             }
         }
     }
@@ -292,8 +287,8 @@ public class JobLogisticsManager : Job
 
     public override void Execute()
     {
-        // Le Manager peut rester à un bureau (Behaviour Tree ou GOAP).
-        // Logique vide pour l'instant car c'est un métier principalement piloté par UI et Interactions.
+        // Le Manager est piloté par événements (OnNewDay → CheckShopInventory),
+        // pas par un tick actif. Il reste au bureau et attend.
     }
 
     public override string CurrentActionName => "Managing Orders";

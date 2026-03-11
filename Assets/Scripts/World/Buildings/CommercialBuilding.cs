@@ -199,6 +199,16 @@ public abstract class CommercialBuilding : Building
     }
 
     /// <summary>
+    /// Retourne la position de travail d'un employé dans ce bâtiment.
+    /// Par défaut, retourne un point aléatoire dans la zone du bâtiment.
+    /// Les sous-classes (ex: ShopBuilding) peuvent override pour fournir un poste précis.
+    /// </summary>
+    public virtual Vector3 GetWorkPosition(Character worker)
+    {
+        return GetRandomPointInBuildingZone(worker.transform.position.y);
+    }
+
+    /// <summary>
     /// Appelé par un employé lorsqu'il quitte son comportement de travail
     /// (fin de journée, événement spécial) (Punch Out).
     /// </summary>

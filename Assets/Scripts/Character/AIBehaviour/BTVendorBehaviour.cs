@@ -2,7 +2,7 @@ using UnityEngine;
 
 /// <summary>
 /// Comportement du Vendeur.
-/// Se tient derrière son comptoir et appelle les clients dans la file d'attente du magasin.
+/// Se déplace vers son comptoir (VendorPoint) puis appelle les clients dans la file d'attente du magasin.
 /// </summary>
 public class BTVendorBehaviour : IAIBehaviour
 {
@@ -10,6 +10,8 @@ public class BTVendorBehaviour : IAIBehaviour
     private ShopBuilding _shop;
     private Character _currentClient;
     private bool _isFinished = false;
+    private bool _isAtCounter = false;
+    private bool _isMovingToCounter = false;
 
     public bool IsFinished => _isFinished;
 
@@ -24,7 +26,16 @@ public class BTVendorBehaviour : IAIBehaviour
     {
         if (_shop == null || _isFinished) return;
 
-        // 1. Si on a déjà un client en cours de transaction, on attend
+        // Phase 1 : Se déplacer vers le comptoir (VendorPoint)
+        if (!_isAtCounter)
+        {
+            MoveToCounter(character);
+            return;
+        }
+
+        // Phase 2 : Servir les clients
+
+        // Si on a déjà un client en cours de transaction, on attend
         if (_currentClient != null)
         {
             // Vérifier si le client est parti ou a terminé l'interaction
@@ -35,7 +46,7 @@ public class BTVendorBehaviour : IAIBehaviour
             return;
         }
 
-        // 2. Si on est libre, on vérifie la file d'attente du magasin
+        // Si on est libre, on vérifie la file d'attente du magasin
         if (_shop.CustomersInQueue > 0)
         {
             _currentClient = _shop.GetNextCustomer();
@@ -47,6 +58,53 @@ public class BTVendorBehaviour : IAIBehaviour
                 // On déclenche l'interaction de vente
                 character.CharacterInteraction.StartInteractionWith(_currentClient, new InteractionBuyItem(_shop));
             }
+        }
+    }
+
+    private void MoveToCounter(Character character)
+    {
+        var movement = character.CharacterMovement;
+
+        if (_shop.VendorPoint == null)
+        {
+            // Pas de point fixe assigné → le vendeur se déplace dans la zone du bâtiment
+            if (movement != null && !_isMovingToCounter)
+            {
+                Vector3 wanderTarget = _shop.GetRandomPointInBuildingZone(character.transform.position.y);
+                movement.SetDestination(wanderTarget);
+                _isMovingToCounter = true;
+            }
+
+            // Vérifier si arrivé
+            if (movement != null && _isMovingToCounter 
+                && !movement.PathPending 
+                && (!movement.HasPath || movement.RemainingDistance <= movement.StoppingDistance + 0.5f))
+            {
+                _isAtCounter = true;
+                _isMovingToCounter = false;
+            }
+            return;
+        }
+
+        if (movement == null)
+        {
+            _isAtCounter = true;
+            return;
+        }
+
+        if (!_isMovingToCounter)
+        {
+            movement.SetDestination(_shop.VendorPoint.position);
+            _isMovingToCounter = true;
+            return;
+        }
+
+        // Vérifier si on est arrivé
+        if (!movement.PathPending && (!movement.HasPath || movement.RemainingDistance <= movement.StoppingDistance + 0.5f))
+        {
+            _isAtCounter = true;
+            _isMovingToCounter = false;
+            Debug.Log($"<color=cyan>[VendorAI]</color> {character.CharacterName} est arrivé au comptoir.");
         }
     }
 

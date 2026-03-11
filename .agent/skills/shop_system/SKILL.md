@@ -18,9 +18,11 @@ The `ShopBuilding` inherits from `CommercialBuilding` but introduces several cru
 
 ### 2. Restocking (`JobLogisticsManager`)
 Every Shop employs at least one `JobLogisticsManager`. Their sole duty is maintaining the inventory:
-- They periodically check `Inventory` against `Items To Sell`.
-- If stock is low, the manager generates a `BuyOrder` (e.g., "I need 10 Iron Swords").
-- This `BuyOrder` is sent out to production buildings (e.g., the Forge), where a `JobTransporter` will eventually deliver the requested items directly into the Shop's real-time `Inventory`.
+- On each **new day** (`OnNewDay`), they check `Inventory` against `Items To Sell`.
+- If stock is low, the manager finds a `CraftingBuilding` that can produce the item (via `FindSupplierFor`) and places a `CraftingOrder` on that building's `JobLogisticsManager`.
+- The crafter at the CraftingBuilding picks up the `CraftingOrder` via their BT (`BTAction_PerformCraft`) and produces the items.
+- A `JobTransporter` will eventually deliver the crafted items into the Shop's `Inventory`.
+- The LogisticsManager is **event-driven** (`HasWorkToDo() => false`), so the character goes on break at the shop between events.
 
 ### 3. Selling (`JobVendor`)
 Vendors are the face of the shop. Their GOAP/BT behavior traps them behind the counter.

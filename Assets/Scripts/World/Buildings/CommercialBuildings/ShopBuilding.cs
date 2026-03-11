@@ -13,6 +13,11 @@ public class ShopBuilding : CommercialBuilding
     [Header("Shop Settings")]
     [SerializeField] private List<ItemSO> _itemsToSell = new List<ItemSO>();
     
+    [Header("Work Positions")]
+    [SerializeField] private Transform _vendorPoint;
+    
+    public Transform VendorPoint => _vendorPoint;
+    
     // Inventaire réel du magasin
     private List<ItemInstance> _inventory = new List<ItemInstance>();
 
@@ -32,6 +37,23 @@ public class ShopBuilding : CommercialBuilding
         _jobs.Add(new JobLogisticsManager("Shop Manager"));
 
         Debug.Log($"<color=magenta>[Shop]</color> {buildingName} initialisé avec 1 Vendeur et 1 LogisticsManager.");
+    }
+
+    /// <summary>
+    /// Seul le Vendeur va à son poste fixe (_vendorPoint).
+    /// Les autres employés (Manager, etc.) utilisent le comportement par défaut (zone du bâtiment).
+    /// </summary>
+    public override Vector3 GetWorkPosition(Character worker)
+    {
+        if (worker.CharacterJob != null)
+        {
+            var currentJob = worker.CharacterJob.CurrentJob;
+
+            if (currentJob is JobVendor && _vendorPoint != null)
+                return _vendorPoint.position;
+        }
+
+        return base.GetWorkPosition(worker);
     }
 
     /// <summary>

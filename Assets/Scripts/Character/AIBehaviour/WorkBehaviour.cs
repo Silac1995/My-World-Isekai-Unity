@@ -85,7 +85,7 @@ public class WorkBehaviour : IAIBehaviour
         // Si on n'a pas encore lancé le déplacement
         if (!_isMoving)
         {
-            Vector3 destination = workplace.GetRandomPointInBuildingZone(self.transform.position.y);
+            Vector3 destination = workplace.GetWorkPosition(self);
             movement.SetDestination(destination);
             _isMoving = true;
             return;

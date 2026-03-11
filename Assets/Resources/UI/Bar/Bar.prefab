@@ -46,12 +46,11 @@ MonoBehaviour:
   m_GameObject: {fileID: 663722911165973681}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: b0c9b0c7fcbf1914d8ff81ad7242c350, type: 3}
+  m_Script: {fileID: 11500000, guid: c7a97159c451ed3409506e8e3da74838, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::UI_SegmentedBar
-  _valuePerSegment: 10
   _barImage: {fileID: 3058648650523621429}
-  _gapWidth: 0.05
+  _healFlashDuration: 0.5
 --- !u!1 &2398064282267826464
 GameObject:
   m_ObjectHideFlags: 0

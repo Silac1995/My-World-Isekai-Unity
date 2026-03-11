@@ -13,7 +13,7 @@ public class PlayerUI : MonoBehaviour
 
     // Le seul lien nécessaire pour la barre d'action
     [SerializeField] private UI_Action_ProgressBar _actionProgressBar;
-    [SerializeField] private UI_SegmentedBar _healthBar;
+    [SerializeField] private UI_HealthBar _healthBar;
 
     [Header("UI Windows Prefabs")]
     [SerializeField] private GameObject _equipmentUIPrefab;
