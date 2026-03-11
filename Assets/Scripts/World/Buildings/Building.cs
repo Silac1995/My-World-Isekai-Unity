@@ -20,7 +20,7 @@ public class Building : ComplexRoom
     [Header("Logistics Phase")]
     [SerializeField] protected Zone _deliveryZone;
 
-    public string BuildingName => string.IsNullOrEmpty(buildingName) ? gameObject.name : buildingName;
+    public string BuildingName => buildingName;
     public virtual BuildingType BuildingType => _buildingType;
     public bool IsPublicLocation => _isPublicLocation;
     public Collider BuildingZone => _buildingZone;

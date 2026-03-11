@@ -2,7 +2,6 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using MWI.Time;
-using MWI.AI;
 
 /// <summary>
 /// Gère la réception et la distribution des commandes (BuyOrders) pour un bâtiment.
@@ -535,21 +534,16 @@ public class JobLogisticsManager : Job
     public override void Execute()
     {
         // Si on a des commandes en attente de placement physique
-        if (_worker != null)
+        if (_pendingOrders.Count > 0 && _worker != null)
         {
             var npcController = _worker.GetComponent<NPCController>();
             if (npcController != null)
             {
-                // Priorité 1 : Placer les commandes
-                if (_pendingOrders.Count > 0 && !npcController.HasBehaviour<PlaceOrderBehaviour>())
+                // On vérifie si on n'est pas déjà en train de placer une commande
+                if (!npcController.HasBehaviour<PlaceOrderBehaviour>())
                 {
                     var pending = _pendingOrders.Dequeue();
                     npcController.PushBehaviour(new PlaceOrderBehaviour(npcController, pending));
-                }
-                // Priorité 2 : Ranger les objets qui traînent
-                else if (_pendingOrders.Count == 0 && _worker.IsFree() && !npcController.HasBehaviour<StoreItemsBehaviour>())
-                {
-                    npcController.PushBehaviour(new StoreItemsBehaviour(npcController, _workplace));
                 }
             }
         }

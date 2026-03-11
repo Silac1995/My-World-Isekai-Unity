@@ -7,15 +7,10 @@ public class CharacterCraftAction : CharacterAction
     private Color _primaryColor;
     private Color _secondaryColor;
 
-    private bool _isForWork;
-    private CommercialBuilding _workPlace;
-
-    public CharacterCraftAction(Character character, ItemSO itemToCraft, bool isForWork = false, CommercialBuilding workPlace = null, Color primaryColor = default, Color secondaryColor = default, float duration = 1.0f) 
+    public CharacterCraftAction(Character character, ItemSO itemToCraft, Color primaryColor = default, Color secondaryColor = default, float duration = 1.0f) 
         : base(character, duration)
     {
         _itemToCraft = itemToCraft;
-        _isForWork = isForWork;
-        _workPlace = workPlace;
         _primaryColor = primaryColor;
         _secondaryColor = secondaryColor;
 
@@ -70,7 +65,7 @@ public class CharacterCraftAction : CharacterAction
     {
         if (_station != null && _itemToCraft != null)
         {
-            _station.Craft(_itemToCraft, character, _isForWork, _workPlace, _primaryColor, _secondaryColor);
+            _station.Craft(_itemToCraft, character, _primaryColor, _secondaryColor);
 
             // Si c'est un NPC, il libère la station une fois fini. (Le joueur la libère en fermant la fenêtre UI).
             if (character.Controller is NPCController)
