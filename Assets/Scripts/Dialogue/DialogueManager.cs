@@ -17,6 +17,8 @@ public class DialogueManager : MonoBehaviour
     private int _currentLineIndex = -1;
     private bool _isTyping = false;
     private bool _isWaitingForInput = false;
+    private bool _hasPlayer = false;
+    private Coroutine _autoAdvanceRoutine;
 
     [ContextMenu("Trigger Serialized Dialogue")]
     public void TriggerTestDialogue()
@@ -57,11 +59,13 @@ public class DialogueManager : MonoBehaviour
 
         _currentDialogue = dialogue;
         _participantsIndices.Clear();
+        _hasPlayer = false;
         
         // Map participants (1-indexed)
         for (int i = 0; i < participants.Count; i++)
         {
             _participantsIndices[i + 1] = participants[i];
+            if (participants[i].IsPlayer()) _hasPlayer = true;
         }
 
         // Initialize lines (transient reference)
@@ -75,7 +79,7 @@ public class DialogueManager : MonoBehaviour
 
         _currentLineIndex = 0;
         
-        Debug.Log($"<color=green>[Dialogue]</color> Starting dialogue with {participants.Count} participants.");
+        Debug.Log($"<color=green>[Dialogue]</color> Starting dialogue with {participants.Count} participants (Has player: {_hasPlayer}).");
         
         ShowCurrentLine();
     }
@@ -89,6 +93,12 @@ public class DialogueManager : MonoBehaviour
         {
             HandleInput();
         }
+    }
+
+    private void OnDisable()
+    {
+        if (_autoAdvanceRoutine != null) StopCoroutine(_autoAdvanceRoutine);
+        _autoAdvanceRoutine = null;
     }
 
     private void HandleInput()
@@ -132,7 +142,21 @@ public class DialogueManager : MonoBehaviour
         speaker.CharacterSpeech?.SayScripted(processedText, line.TypingSpeedOverride, () => {
             _isTyping = false;
             _isWaitingForInput = true;
+
+            // Handle NPC-only auto-advance
+            if (!_hasPlayer)
+            {
+                if (_autoAdvanceRoutine != null) StopCoroutine(_autoAdvanceRoutine);
+                _autoAdvanceRoutine = StartCoroutine(AutoAdvanceRoutine(1.5f));
+            }
         });
+    }
+
+    private IEnumerator AutoAdvanceRoutine(float delay)
+    {
+        yield return new WaitForSeconds(delay);
+        AdvanceDialogue();
+        _autoAdvanceRoutine = null;
     }
 
     private string ProcessDialogueTags(string originalText)
@@ -154,6 +178,12 @@ public class DialogueManager : MonoBehaviour
 
     public void AdvanceDialogue()
     {
+        if (_autoAdvanceRoutine != null)
+        {
+            StopCoroutine(_autoAdvanceRoutine);
+            _autoAdvanceRoutine = null;
+        }
+
         _currentLineIndex++;
         
         if (_currentLineIndex < _currentDialogue.Lines.Count)

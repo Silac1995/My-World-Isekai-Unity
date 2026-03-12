@@ -23,9 +23,9 @@ Dialogue is stored in `DialogueSO` ScriptableObjects.
 
 ### 2. Dialogue Management
 Each player character has a `DialogueManager` component.
-- Call `StartDialogue(DialogueSO dialogue, List<Character> participants)` to initiate.
-- The manager maps the `participants` list to indices (1-indexed based on list order: first character is Index 1).
-- The manager handles `Input.GetKeyDown(KeyCode.Space)` and `Input.GetMouseButtonDown(0)` to advance lines.
+- **Multiplayer Synchronization**: 
+    - If no players are participating in the dialogue, the script will **automatically advance** lines with a **1.5-second delay** after the speech text has finished typing.
+    - If at least one player character is participating, the dialogue waits for player input (`Space` or `Left Click`) to advance.
 
 ### 3. Speech Bubbles
 The system uses the `ScriptedSpeech` component.
