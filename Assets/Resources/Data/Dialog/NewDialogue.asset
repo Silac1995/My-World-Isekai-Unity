@@ -14,11 +14,21 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MWI.Dialogue.DialogueSO
   _lines:
   - _characterIndex: 1
-    _lineText: Tetst hello
+    _lineText: Hello, i'm human and i'm naked
+    _typingSpeedOverride: 0.04
+  - _characterIndex: 2
+    _lineText: Hello naked human. How are u doing?
     _typingSpeedOverride: 0.04
   - _characterIndex: 1
-    _lineText: 'Wassuup
-
-'
+    _lineText: my nutsacks are freezing but im fine, thanks for worrying.
     _typingSpeedOverride: 0.04
+  - _characterIndex: 3
+    _lineText: hello guys.
+    _typingSpeedOverride: 0.04
+  - _characterIndex: 3
+    _lineText: they've taken the hobbits to isenguard
+    _typingSpeedOverride: 0.04
+  - _characterIndex: 1
+    _lineText: ooh noooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo
+    _typingSpeedOverride: 0.025
   _choices: []

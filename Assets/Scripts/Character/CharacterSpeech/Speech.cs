@@ -53,5 +53,6 @@ public class Speech : MonoBehaviour
     {
         if (_typeRoutine != null) StopCoroutine(_typeRoutine);
         _typeRoutine = null;
+        if (_textElement != null) _textElement.text = "";
     }
 }

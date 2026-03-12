@@ -205,7 +205,7 @@ public class DialogueManager : MonoBehaviour
     {
         foreach (var participant in _participantsIndices.Values)
         {
-            participant.CharacterSpeech?.CloseSpeech();
+            participant.CharacterSpeech?.ResetSpeech();
         }
         
         _currentDialogue = null;

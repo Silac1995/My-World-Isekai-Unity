@@ -58,11 +58,10 @@ public class CharacterSpeech : MonoBehaviour
         if (_scriptedSpeech != null)
         {
             _speechBubblePrefab.SetActive(true);
-            _scriptedSpeech.OnTypingFinished += () => {
+            _scriptedSpeech.SetupScripted(_character, message, _audioSource, _voiceSO, _voicePitch, typingSpeed, () => {
                 _bodyPartsController?.MouthController?.StopTalking();
                 onTypingFinished?.Invoke();
-            };
-            _scriptedSpeech.SetupScripted(_character, message, _audioSource, _voiceSO, _voicePitch, typingSpeed);
+            });
         }
         else if (_speechBubblePrefab.TryGetComponent<Speech>(out var speechScript))
         {
@@ -78,8 +77,19 @@ public class CharacterSpeech : MonoBehaviour
     {
         if (_hideCoroutine != null) StopCoroutine(_hideCoroutine);
         _hideCoroutine = null;
-        if (_speechBubblePrefab != null) _speechBubblePrefab.SetActive(false);
+        
+        if (_scriptedSpeech != null) _scriptedSpeech.Clear();
+        else if (_speechBubblePrefab != null) _speechBubblePrefab.SetActive(false);
+        
         _bodyPartsController?.MouthController?.StopTalking();
+    }
+
+    /// <summary>
+    /// Formally resets the speech system state, ensuring no scripted logic remains.
+    /// </summary>
+    public void ResetSpeech()
+    {
+        CloseSpeech();
     }
 
     private IEnumerator HideSpeechAfterDelay(float delay)
