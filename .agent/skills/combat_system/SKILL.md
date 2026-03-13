@@ -13,7 +13,7 @@ This skill details the architecture of the combat system in the project and the 
 - In case of bugs where combat doesn't end, or a character is frozen without attacking.
 - When adding or modifying combat-related statistics (in `CharacterStats`).
 
-## Architecture & How to use it
+## How to use it
 
 ### 1. The BattleManager (Global Management)
 The `BattleManager` is the supreme entity of a battle, usually instantiated when a clash begins.
@@ -29,21 +29,50 @@ This is the component every NPC/Player has in order to fight.
   - The `.IsReadyToAct` method checks if the Initiative (in Stats) is full.
   - The `.ConsumeInitiative()` method resets initiative to 0 after a successful attack.
   - The `.UpdateInitiativeTick(amount)` method is **called by the BattleManager** to fill the bar.
-- **Attack()**: Dynamic choice. If the target is within ranged weapon reach (according to `RangedCombatStyleSO.MeleeRange`), it performs a `RangedAttack()`. Otherwise, it chooses `MeleeAttack()`. These actions are sent to the global `CharacterActions` system.
+- **Attack(target)**: Dynamic choice. 
+  - If the character has a `RangedCombatStyleSO` equipped AND the target is beyond `MeleeRange`, it performs a `RangedAttack()`.
+  - Otherwise, it performs a `MeleeAttack()`.
+  - Note: Ranged weapons fallback to Melee at close range (e.g., hitting someone with a bow).
 
-### 3. Combat Styles (`CombatStyleSO`)
-The bridge between State (`CharacterStats`) and Spatial Logic (`CharacterCombat`).
-- **Statistical Data**: Defines which stat makes the attack stronger (`ScalingStat`, `StatMultiplier`). Ex: The dagger scales with Dexterity rather than Strength.
-- **Range and Animations**: Contains the weapon range (`MeleeRange`) and especially **the dynamic animation controller** assigned according to the mastery level (`StyleLevelData.CombatController`).
-- These variables are polled on the fly by `CharacterCombat` at the moment of attacking.
+### 3. Weapons & Styles (3-Layer Architecture)
 
-### 4. CharacterStats (Stat Distribution)
+The system is split into three distinct layers to separate static data, runtime state, and fight mechanics.
+
+#### A. Static Data (`WeaponSO` & `CombatStyleSO`)
+- **`WeaponSO`**: Defines the item properties.
+  - `WeaponCategory` (Melee vs Ranged).
+  - `DamageType` (Slashing, Piercing, Blunt). *This is the primary source of damage type.*
+  - Max stats (`MaxDurability`, `MaxSharpness`, `MagazineSize`).
+- **`CombatStyleSO`**: Defines how the character fights.
+  - **Hierarchy**: `MeleeCombatStyleSO` (hitbox-based) vs `RangedCombatStyleSO` (projectile-based).
+  - **Ranged Subtypes**: `ChargingRangedCombatStyleSO` (Bow) vs `MagazineRangedCombatStyleSO` (Gun/Crossbow).
+  - Defines `MeleeRange`, `ScalingStat`, and `KnockbackForce`.
+
+#### B. Runtime State (`WeaponInstance`)
+Every equipped weapon has a specialized instance class to track its wear and tear.
+- **`MeleeWeaponInstance`**: Tracks `Sharpness`. High sharpness grants bonuses (impl. pending), low sharpness might require sharpening at a forge.
+- **`RangedWeaponInstance`**:
+  - `ChargingWeaponInstance`: Tracks `ChargeProgress`. Must be 100% to fire.
+  - `MagazineWeaponInstance`: Tracks `CurrentAmmo`. Requires a `Reload()` action when empty.
+
+#### C. Combat Actions (`CharacterAction`)
+The actual implementation of the attack.
+- **`CharacterMeleeAttackAction`**: Triggers animator, spawns a `CombatStyleAttack` (hitbox) via Animation Event.
+- **`CharacterRangedAttackAction`**: Spawns a `Projectile` towards the target.
+
+### 4. Damage Resolution Rules
+1. **Damage Type**: Always check `WeaponSO.DamageType` first. If no weapon is equipped, use `CombatStyleSO.DamageType` (fallback for barehands, usually Blunt).
+2. **Formula**: `PhysicalPower (from Stats) * Style.PhysicalPowerPercentage + Style.BaseDamage + (ScalingStatValue * Style.StatMultiplier)`.
+3. **Projectiles**: Use the `Projectile.cs` script. They are physical objects (`Rigidbody`) that apply damage and knockback on `OnTriggerEnter`.
+
+### 5. CharacterStats (Stat Distribution)
 Combat massively relies on `CharacterStats`. It is critical to respect its architecture:
 - **Primary Stats**: Dynamic (Health, Stamina, Mana, **Initiative**). 
-  - *Note: Initiative has a default base of "0".*
 - **Secondary Stats**: Base characteristics (Strength, Agility, Dexterity, Intelligence, Endurance, Charisma).
-- **Tertiary Stats**: Derived from secondary ones (PhysicalPower, MoveSpeed, DodgeChance, CriticalHitChance, etc.). These stats are checked during pure damage calculations.
+- **Tertiary Stats**: Derived from secondary ones (PhysicalPower, MoveSpeed, DodgeChance, CriticalHitChance, etc.).
 
 ## Tips & Troubleshooting
-- **A character never attacks**: Verify that the `BattleManager` is properly calling `.UpdateInitiativeTick()` on this character. If the combat zone "forgot" them in `_allParticipants`, Initiative will stay at 0 forever.
-- **Combat never ends**: The `_isBattleEnded` flag often depends on the survival of entire teams. Ensure callbacks are firing upon a participant's death.
+- **A character never attacks**: 
+  - Verify that the `BattleManager` is properly calling `.UpdateInitiativeTick()`.
+  - Check `WeaponInstance.CanFire()`. A magazine-based weapon won't fire if empty.
+- **Ranged attack accuracy**: Projectiles travel in a straight line towards the target's position at the moment of firing. They do not "home in" on the target.
