@@ -16,21 +16,22 @@ The player UI system displays vital information, active actions, and manages inv
 ## Architecture
 The UI follows a **Push/Event-driven** model.
 
-- **PlayerUI.cs**: Central entry point, initialized by the player's `Character`.
+- **PlayerUI.cs**: Central entry point. Standardized scene instance name: **"UI_PlayerHUD"**.
 - **Stats Events**: UI components subscribe to events from stat classes (`CharacterHealth`, etc.).
-- **Shader-based Bars**: Uses `UI_HealthBar` with a custom `UI/HealthBar` shader for visual feedback.
-- **Notification Channels**: `ScriptableObject`-based event channels allow any game system to raise a notification without depending on the UI layer.
+- **Shader-based Bars**: Uses `UI_HealthBar` for performance.
+- **Notification Channels**: `ScriptableObject`-based. The `PlayerUI` "pushes" these channels to the `CharacterEquipment` during initialization.
 
 ## Initialization Flow
-1. `PlayerController` or `UIManager` calls `PlayerUI.Initialize(playerCharacter)`.
-2. `PlayerUI` retrieves stat components via `playerCharacter.Stats`.
-3. Sub-components (Health bar, Action bar, Notification badges) subscribe to the appropriate events.
+1. `Character.SwitchToPlayer()` searches for the GameObject **"UI_PlayerHUD"**.
+2. `PlayerUI.Initialize(playerCharacter)` is called.
+3. `PlayerUI` retrieves stats and **pushes** its local `NotificationChannel` assets to the character's `CharacterEquipment`.
+4. Character is now ready to trigger HUD events through these channels.
 
 ## Best Practices
-- **Unsubscription**: Always unsubscribe from events in `OnDestroy()` or via a `CleanupEvents()` helper on re-initialization.
-- **Performance**: Never use `GetComponent` in UI update loops. Use the shader-based approach for resource bars.
-- **Property usage**: Always use the `CurrentAmount` **property setter** in stat classes; modifying the private field directly bypasses the `OnAmountChanged` event.
-- **Notification raising**: Game systems (inventory, quest, shop) must never reference UI components directly. Always raise notifications through a `NotificationChannel` SO.
+- **Standardized Naming**: Always refer to the main player HUD as **"UI_PlayerHUD"** for automatic discovery.
+- **Unsubscription**: Always pair event subscriptions in `OnEnable` with unsubscriptions in `OnDisable`/`CleanupEvents`.
+- **Performance**: Never use `Update()` for UI visibility polling. Use `UI_NotificationClearer` on window objects instead.
+- **Notification clearing**: `SwitchToNPC` calls `ClearNotifications` on equipment to prevent NPC events from triggering the user's HUD.
 
 ---
 
@@ -65,18 +66,18 @@ Game systems never reference UI components. The UI badge listens to its assigned
 A lightweight SO that acts as a decoupled event relay. It contains `OnNotificationRaised` and `OnNotificationCleared` events.
 
 #### UI_NotificationBadge (MonoBehaviour)
-Attach to the icon button of any window. Assign the matching `NotificationChannel` in the Inspector.
+Attach to any window icon button (e.g., Inventory Button).
 
 **Responsibilities**:
-- Subscribe to `OnNotificationRaised` → show the badge.
-- Subscribe to `OnNotificationCleared` → hide the badge.
-- Unsubscribe in `OnDisable`/`OnDestroy`.
+- Listen to `NotificationChannel` and toggle its badge visibility.
+- **Auto-Hide**: If a `Parent Window` is assigned, the badge stays hidden while that window is active.
 
-#### Raising a Notification (from any game system)
-Inject the `NotificationChannel` SO and call `Raise()`. The system doesn't need to know who is listening.
+#### UI_NotificationClearer (MonoBehaviour)
+Attach to the actual **Window GameObject** (e.g., the Inventory frame). Set the matching channel in the inspector.
 
-#### Clearing a Notification
-Call `Clear()` on the channel when the window is opened or the content is viewed.
+**Responsibilities**:
+- **Event-Driven Clearing**: Automatically calls `channel.Clear()` on `OnEnable`. 
+- This ensures the badge is cleared the moment the window is opened without using `Update()` polling.
 
 ---
 

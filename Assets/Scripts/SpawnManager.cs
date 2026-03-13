@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using System.Linq;
 
 public class SpawnManager : MonoBehaviour
@@ -157,7 +157,7 @@ public class SpawnManager : MonoBehaviour
             if (cameraFollow != null) cameraFollow.SetGameObject(characterPrefabObj);
 
             // Lien avec l'UI du joueur
-            GameObject playerUIObj = GameObject.Find("UI_Player");
+            GameObject playerUIObj = GameObject.Find("UI_PlayerHUD");
             if (playerUIObj != null && playerUIObj.TryGetComponent(out PlayerUI playerUI))
             {
                 playerUI.Initialize(characterPrefabObj);

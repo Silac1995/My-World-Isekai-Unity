@@ -44,7 +44,11 @@ This is the ultimate safety method. `Character` scrutinizes all of its child com
 ## 4. Context Switching (The Brain)
 A character in your game can switch from an autonomous civilian AI (NPC) to a Player-controlled Avatar with a snap of a finger.
 
-- `SwitchToPlayer()`: Turns off the `NPCController`, turns on the `PlayerController`. Disables the NavMeshAgent because the player uses physics (non-Kinematic Rigidbody) to move.
-- `SwitchToNPC()`: Turns off the `PlayerController` and turns on the `NPCController`. Reactivates the NavMeshAgent and switches the Rigidbody back to Kinematic.
+- `SwitchToPlayer()`: 
+  - Swaps controllers and interaction detectors.
+  - **UI Setup**: Finds the GameObject **"UI_PlayerHUD"** and calls `PlayerUI.Initialize(this)`. This pushes notification channels to the equipment system.
+- `SwitchToNPC()`: 
+  - Reverts controllers and reactivates NavMesh.
+  - **Notification Cleanup**: Calls `CharacterEquipment.ClearNotifications()` to prevent NPC actions from triggering UI events.
 
 > In case of an input or navigation bug, always first verify that the correct Controller is turned on via this Switch system.

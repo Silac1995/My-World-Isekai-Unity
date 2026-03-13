@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.U2D.Animation;
@@ -26,11 +26,23 @@ public class CharacterEquipment : MonoBehaviour
     [SerializeReference] private UnderwearLayer underwearLayer;
     [SerializeReference] private ClothingLayer clothingLayer;
     [SerializeReference] private ArmorLayer armorLayer;
-    // --- NOUVELLES VARIABLES POUR LE SAC ---
     [Header("Global Accessories")]
     [SerializeField] private Bag _bagScript;
     [SerializeField] private BagInstance _bag;
     [SerializeField] private List<GameObject> _bagSockets;
+
+    [Header("Notifications")]
+    [SerializeField] private MWI.UI.Notifications.NotificationChannel _inventoryNotificationChannel;
+
+    public void InitializeNotifications(MWI.UI.Notifications.NotificationChannel inventoryChannel)
+    {
+        _inventoryNotificationChannel = inventoryChannel;
+    }
+
+    public void ClearNotifications()
+    {
+        _inventoryNotificationChannel = null;
+    }
 
     // Getters publics
     public UnderwearLayer UnderwearLayer => underwearLayer;
@@ -524,5 +536,23 @@ public class CharacterEquipment : MonoBehaviour
         return !hasUnderwearPants && !hasClothingPants && !hasArmorPants;
     }
 
+    /// <summary>
+    /// Centralized method to pick up an item. 
+    /// Adds to inventory and triggers the notification system.
+    /// </summary>
+    public bool PickUpItem(ItemInstance item)
+    {
+        if (item == null) return false;
 
+        var inventory = GetInventory();
+        if (inventory != null && inventory.AddItem(item, character))
+        {
+            if (_inventoryNotificationChannel != null)
+                _inventoryNotificationChannel.Raise();
+                
+            return true;
+        }
+
+        return false;
+    }
 }

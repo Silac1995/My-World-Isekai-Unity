@@ -11,14 +11,16 @@ public class PlayerUI : MonoBehaviour
     [SerializeField] private Button _buttonEquipmentUI;
     [SerializeField] private MWI.UI.TimeUI _timeUI;
 
+    [Header("Notification Channels")]
+    [SerializeField] private MWI.UI.Notifications.NotificationChannel _inventoryChannel;
+
     // Le seul lien nécessaire pour la barre d'action
     [SerializeField] private UI_Action_ProgressBar _actionProgressBar;
     [SerializeField] private UI_HealthBar _healthBar;
 
-    [Header("UI Windows Prefabs")]
-    [SerializeField] private GameObject _equipmentUIPrefab;
+    [Header("UI Windows")]
+    [SerializeField] private CharacterEquipmentUI _equipmentUI;
 
-    private GameObject _equipmentUIInstance;
     private Character characterComponent;
 
     public void Initialize(GameObject newCharacter)
@@ -61,6 +63,18 @@ public class PlayerUI : MonoBehaviour
             _healthBar.Initialize(characterComponent.Stats.Health);
         }
 
+        // Push notification channels to the equipment system
+        if (characterComponent.CharacterEquipment != null)
+        {
+            characterComponent.CharacterEquipment.InitializeNotifications(_inventoryChannel);
+        }
+
+        // Initialize the equipment UI if it's already active or for when it's opened
+        if (_equipmentUI != null)
+        {
+            _equipmentUI.Initialize(characterComponent);
+        }
+
         if (_buttonEquipmentUI != null)
         {
             _buttonEquipmentUI.onClick.RemoveAllListeners();
@@ -70,21 +84,15 @@ public class PlayerUI : MonoBehaviour
 
     public void ToggleEquipmentUI()
     {
-        if (_equipmentUIInstance == null && _equipmentUIPrefab != null)
-        {
-            _equipmentUIInstance = Instantiate(_equipmentUIPrefab, this.transform);
-            var equipmentUIScript = _equipmentUIInstance.GetComponent<CharacterEquipmentUI>();
-            if (equipmentUIScript != null)
-            {
-                equipmentUIScript.Initialize(characterComponent);
-            }
-            _equipmentUIInstance.SetActive(true);
-            return;
-        }
+        if (_equipmentUI == null) return;
 
-        if (_equipmentUIInstance != null)
+        bool isCurrentlyActive = _equipmentUI.gameObject.activeSelf;
+        _equipmentUI.gameObject.SetActive(!isCurrentlyActive);
+
+        // If we are opening it, re-initialize to be safe with the current character data
+        if (!isCurrentlyActive && characterComponent != null)
         {
-            _equipmentUIInstance.SetActive(!_equipmentUIInstance.activeSelf);
+            _equipmentUI.Initialize(characterComponent);
         }
     }
 
@@ -96,6 +104,11 @@ public class PlayerUI : MonoBehaviour
 
     private void ClearUI()
     {
+        if (characterComponent != null && characterComponent.CharacterEquipment != null)
+        {
+            characterComponent.CharacterEquipment.ClearNotifications();
+        }
+
         this.character = null;
         this.characterComponent = null;
         if (playerName != null) playerName.text = "";
@@ -103,6 +116,11 @@ public class PlayerUI : MonoBehaviour
 
     private void CleanupEvents()
     {
+        if (characterComponent != null && characterComponent.CharacterEquipment != null)
+        {
+            characterComponent.CharacterEquipment.ClearNotifications();
+        }
+
         // Plus besoin de désabonner les actions ici, 
         // c'est UI_Action_ProgressBar qui s'en occupe !
     }

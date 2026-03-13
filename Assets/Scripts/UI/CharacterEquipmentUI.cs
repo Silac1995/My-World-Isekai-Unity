@@ -1,24 +1,22 @@
-using TMPro;
+ï»¿using TMPro;
 using UnityEngine;
-using UnityEngine.TextCore.Text;
 using UnityEngine.UI;
 
 public class CharacterEquipmentUI : MonoBehaviour
 {
-    [SerializeField] private Button _buttonClose;
-    [SerializeField] private UI_Inventory _ui_inventory;
-
-    [Header("References")]
     [SerializeField] private Character _character;
-    private EquipmentLayer _currentLayer;
+    
+    [Header("Window Components")]
+    [SerializeField] private Button _buttonClose;
+    [SerializeField] private TextMeshProUGUI _selectedEquipmentLayer;
+    [SerializeField] private UI_Inventory _ui_inventory;
 
     [Header("Layer Selection")]
     [SerializeField] private Button _buttonArmorLayer;
     [SerializeField] private Button _buttonClothingLayer;
     [SerializeField] private Button _buttonUnderwearLayer;
-    [SerializeField] private TextMeshProUGUI _selectedEquipmentLayer;
 
-    [Header("Unequip Buttons")]
+    [Header("Slot Actions")]
     [SerializeField] private Button _unequipHeadButton;
     [SerializeField] private Button _unequipArmorButton;
     [SerializeField] private Button _unequipGlovesButton;
@@ -26,43 +24,36 @@ public class CharacterEquipmentUI : MonoBehaviour
     [SerializeField] private Button _unequipBootsButton;
     [SerializeField] private Button _unequipBagButton;
 
-    private void Start()
+    private EquipmentLayer _currentLayer;
+
+    private void OnEnable()
     {
-        // Ajout du listener pour le bouton fermer
-        _buttonClose?.onClick.AddListener(CloseUI);
-
-        _buttonArmorLayer?.onClick.AddListener(() => SwitchLayer(WearableLayerEnum.Armor));
-        _buttonClothingLayer?.onClick.AddListener(() => SwitchLayer(WearableLayerEnum.Clothing));
-        _buttonUnderwearLayer?.onClick.AddListener(() => SwitchLayer(WearableLayerEnum.Underwear));
-
-        _unequipHeadButton?.onClick.AddListener(() => RequestUnequip(WearableType.Helmet));
-        _unequipArmorButton?.onClick.AddListener(() => RequestUnequip(WearableType.Armor));
-        _unequipGlovesButton?.onClick.AddListener(() => RequestUnequip(WearableType.Gloves));
-        _unequipPantsButton?.onClick.AddListener(() => RequestUnequip(WearableType.Pants));
-        _unequipBootsButton?.onClick.AddListener(() => RequestUnequip(WearableType.Boots));
-        _unequipBagButton?.onClick.AddListener(() => RequestUnequip(WearableType.Bag));
-
-        if (_character != null) SetupUI(_character);
+        RemoveAllButtonListeners();
+        SetupButtonEvents();
+        
+        if (_character != null) UpdateUI();
     }
+
     /// <summary>
-    /// Initialise la fenêtre avec le personnage cible.
+    /// Initialise la fenÃªtre avec le personnage cible.
     /// </summary>
     public void Initialize(Character target)
     {
         if (target == null) return;
 
-        // ... (ton code de désabonnement existant) ...
+        // Cleanup previous character subscription if any
+        if (_character != null && _character.CharacterEquipment != null)
+        {
+            _character.CharacterEquipment.OnEquipmentChanged -= UpdateUI;
+        }
 
         _character = target;
 
-        // --- MISE À JOUR ICI ---
-        // On initialise l'inventaire en même temps que le reste
         if (_ui_inventory != null)
         {
             _ui_inventory.Initialize(_character.CharacterEquipment.GetInventory());
         }
 
-        // On s'abonne à l'événement
         if (_character.CharacterEquipment != null)
         {
             _character.CharacterEquipment.OnEquipmentChanged += UpdateUI;
@@ -72,15 +63,15 @@ public class CharacterEquipmentUI : MonoBehaviour
         SetupButtonEvents();
         SwitchLayer(WearableLayerEnum.Armor);
     }
+
     private void SetupButtonEvents()
     {
         _buttonClose?.onClick.AddListener(CloseUI);
-        // Couches
+        
         _buttonArmorLayer?.onClick.AddListener(() => SwitchLayer(WearableLayerEnum.Armor));
         _buttonClothingLayer?.onClick.AddListener(() => SwitchLayer(WearableLayerEnum.Clothing));
         _buttonUnderwearLayer?.onClick.AddListener(() => SwitchLayer(WearableLayerEnum.Underwear));
 
-        // Déséquipement
         _unequipHeadButton?.onClick.AddListener(() => RequestUnequip(WearableType.Helmet));
         _unequipArmorButton?.onClick.AddListener(() => RequestUnequip(WearableType.Armor));
         _unequipGlovesButton?.onClick.AddListener(() => RequestUnequip(WearableType.Gloves));
@@ -91,15 +82,14 @@ public class CharacterEquipmentUI : MonoBehaviour
 
     private void RemoveAllButtonListeners()
     {
-        _buttonClose?.onClick.RemoveAllListeners(); // On nettoie aussi le bouton close
-        _buttonArmorLayer?.onClick.RemoveAllListeners();
+        _buttonClose?.onClick.RemoveAllListeners();
         _buttonArmorLayer?.onClick.RemoveAllListeners();
         _buttonClothingLayer?.onClick.RemoveAllListeners();
         _buttonUnderwearLayer?.onClick.RemoveAllListeners();
         _unequipHeadButton?.onClick.RemoveAllListeners();
         _unequipArmorButton?.onClick.RemoveAllListeners();
         _unequipGlovesButton?.onClick.RemoveAllListeners();
-        _unequipPantsButton?.onClick.AddListener(() => RequestUnequip(WearableType.Pants));
+        _unequipPantsButton?.onClick.RemoveAllListeners();
         _unequipBootsButton?.onClick.RemoveAllListeners();
         _unequipBagButton?.onClick.RemoveAllListeners();
     }
@@ -111,9 +101,6 @@ public class CharacterEquipmentUI : MonoBehaviour
         SwitchLayer(WearableLayerEnum.Armor);
     }
 
-    /// <summary>
-    /// Change la couche d'équipement affichée (Armor, Clothing, Underwear)
-    /// </summary>
     private void SwitchLayer(WearableLayerEnum layerType)
     {
         if (_character == null || _character.CharacterEquipment == null) return;
@@ -129,27 +116,6 @@ public class CharacterEquipmentUI : MonoBehaviour
             _selectedEquipmentLayer.text = layerType.ToString() + " Layer";
 
         UpdateUI();
-    }
-
-    /// <summary>
-    /// Change la couleur du titre selon la catégorie sélectionnée
-    /// </summary>
-    private void UpdateLayerTextColor(WearableLayerEnum layerType)
-    {
-        if (_selectedEquipmentLayer == null) return;
-
-        switch (layerType)
-        {
-            case WearableLayerEnum.Armor:
-                _selectedEquipmentLayer.color = new Color(0.8f, 0.2f, 0.2f); // Rouge/Acier
-                break;
-            case WearableLayerEnum.Clothing:
-                _selectedEquipmentLayer.color = new Color(0.2f, 0.8f, 0.2f); // Vert/Tissu
-                break;
-            case WearableLayerEnum.Underwear:
-                _selectedEquipmentLayer.color = new Color(0.2f, 0.6f, 1f);   // Bleu/Sous-vêtements
-                break;
-        }
     }
 
     private void RequestUnequip(WearableType slotType)
@@ -168,14 +134,12 @@ public class CharacterEquipmentUI : MonoBehaviour
     {
         if (_character == null || _character.CharacterEquipment == null || _currentLayer == null) return;
 
-        // 1. Mise à jour des boutons de déséquipement (Head, Armor, etc.)
         UpdateSlotButtonState(_unequipHeadButton, WearableType.Helmet);
         UpdateSlotButtonState(_unequipArmorButton, WearableType.Armor);
         UpdateSlotButtonState(_unequipGlovesButton, WearableType.Gloves);
         UpdateSlotButtonState(_unequipPantsButton, WearableType.Pants);
         UpdateSlotButtonState(_unequipBootsButton, WearableType.Boots);
 
-        // 2. Mise à jour du bouton Sac
         if (_unequipBagButton != null)
         {
             var bag = _character.CharacterEquipment.GetBagInstance();
@@ -183,29 +147,17 @@ public class CharacterEquipmentUI : MonoBehaviour
             _unequipBagButton.interactable = (bag != null);
         }
 
-        // 3. REFRESH DE L'INVENTAIRE
-        // Dès que l'équipement change, on rafraîchit la grille d'objets
         if (_ui_inventory != null)
         {
-            // On récupère l'inventaire actuel (car si on a changé de sac, l'instance a changé)
             _ui_inventory.Initialize(_character.CharacterEquipment.GetInventory());
-            Debug.Log("<color=yellow>[UI_Sync]</color> Équipement modifié -> Refresh de la grille d'inventaire.");
         }
     }
 
-    /// <summary>
-    /// Gère à la fois l'état interactif et le texte du bouton
-    /// </summary>
     private void UpdateSlotButtonState(Button btn, WearableType type)
     {
         if (btn == null) return;
-
         EquipmentInstance item = _currentLayer.GetInstance(type);
-
-        // 1. On change le texte ("None" ou nom de l'item)
         UpdateSlotText(btn, item);
-
-        // 2. On active/désactive le bouton
         btn.interactable = (item != null);
     }
 
@@ -214,10 +166,7 @@ public class CharacterEquipmentUI : MonoBehaviour
         TextMeshProUGUI btnText = btn.GetComponentInChildren<TextMeshProUGUI>();
         if (btnText != null)
         {
-            // Si l'item existe, on affiche son nom, sinon "None"
             btnText.text = (item != null) ? item.ItemSO.ItemName : "None";
-
-            // Optionnel : On change la couleur si c'est vide pour que ce soit plus lisible
             btnText.color = (item != null) ? Color.white : new Color(1, 1, 1, 0.5f);
         }
     }
@@ -228,14 +177,11 @@ public class CharacterEquipmentUI : MonoBehaviour
         if (_currentLayer is UnderwearLayer) return WearableLayerEnum.Underwear;
         return WearableLayerEnum.Clothing;
     }
-    /// <summary>
-    /// Ferme la fenêtre d'interface
-    /// </summary>
+
     public void CloseUI()
     {
         this.gameObject.SetActive(false);
     }
-
 
     private void OnDestroy()
     {

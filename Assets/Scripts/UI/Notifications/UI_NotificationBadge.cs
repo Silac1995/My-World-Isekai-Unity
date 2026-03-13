@@ -36,8 +36,19 @@ namespace MWI.UI.Notifications
             _channel.OnNotificationCleared -= HideBadge;
         }
 
+        [Header("Auto-Hide")]
+        [Tooltip("Optional: The window this badge belongs to. If this window is active, the badge will stay hidden.")]
+        [SerializeField] private GameObject _parentWindow;
+
         private void ShowBadge()
         {
+            // If the window is already open, we don't show the badge
+            if (_parentWindow != null && _parentWindow.activeInHierarchy)
+            {
+                _channel.Clear();
+                return;
+            }
+
             if (_badgeObject != null)
                 _badgeObject.SetActive(true);
         }

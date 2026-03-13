@@ -449,12 +449,24 @@ public class Character : MonoBehaviour
     {
         SwitchController<PlayerController>(GetComponent<NPCController>());
         SwitchInteractionDetector<PlayerInteractionDetector, NPCInteractionDetector>();
+
+        // Link with the centralized HUD
+        GameObject playerUIObj = GameObject.Find("UI_PlayerHUD");
+        if (playerUIObj != null && playerUIObj.TryGetComponent(out PlayerUI playerUI))
+        {
+            playerUI.Initialize(this.gameObject);
+        }
     }
 
     public void SwitchToNPC()
     {
         SwitchController<NPCController>(GetComponent<PlayerController>());
         SwitchInteractionDetector<NPCInteractionDetector, PlayerInteractionDetector>();
+        
+        if (CharacterEquipment != null)
+        {
+            CharacterEquipment.ClearNotifications();
+        }
     }
 
     private void SwitchController<TTarget>(CharacterGameController toDisable) where TTarget : CharacterGameController
