@@ -42,11 +42,14 @@ The action is the basic building block of everyday life.
 - `Cost`: The "tediousness" or difficulty of the process (the Planner chooses the least costly route). This cost can vary according to the NPC's "traits"!
 - `IsValid`, `Execute`, `IsComplete`, `Exit`: Functions controlling the action frame by frame.
 
-### 3. Planner Logic (`GoapPlanner`)
-- It performs a backward search from the Life Goal and finds the logical and daily sequence to accomplish it.
-- **Balancing tip**: Set up chains of logical preconditions that force the NPC to live their life (to get married requires a high level of affinity, to have affinity requires the "Socialize" action, etc.).
+### 4. Injecting Needs into GOAP (SOLID Architecture)
+The `CharacterGoapController` does not directly manage or hardcode specific needs (e.g., jobs, socializing). Instead, the system uses **Dependency Inversion**:
+- The `CharacterNeeds` system acts as a **Data Provider**.
+- Each `CharacterNeed` subclass (like `NeedJob` or `NeedSocial`) implements `GetGoapGoal()` and `GetGoapActions()`.
+- During `Replan()`, the `CharacterGoapController` iterates through all active needs and dynamically loads their goals and actions directly into the planner.
+- **Rule:** Never execute logic inside `CharacterNeed`. Needs are exclusively read-only state sensors that provide GOAP goals via the `GetGoapGoal()` method.
 
-### 4. GOAP & Interaction Synchronization (Critical Rule)
+### 5. GOAP & Interaction Synchronization (Critical Rule)
 When a `GoapAction` triggers a `CharacterInteraction` (e.g., asking for a job, talking to a boss), the GOAP Action **must not complete** (`_isComplete = true`) immediately after starting the interaction. 
 - It must explicitly remain running (`return;`) as long as `worker.CharacterInteraction.IsInteracting` is true.
 - Failing to do so causes the GOAP planner to finish the plan prematurely, handing control back to the Behaviour Tree. The BT will then evaluate the fallback node (`BTAction_Wander`) and override the interaction's movement, causing the NPC to walk away mid-conversation or get stuck.

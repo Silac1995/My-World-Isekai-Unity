@@ -38,21 +38,22 @@ public class CharacterGoapController : MonoBehaviour
     {
         _worldState.Clear();
         
-        // 1. Besoins de base
         if (_character.CharacterNeeds != null)
         {
-            var needs = _character.CharacterNeeds.AllNeeds;
-            foreach (var need in needs)
+            foreach (var need in _character.CharacterNeeds.AllNeeds)
             {
-                // On simplifie : un besoin est "satisfied" s'il n'est pas urgent
-                string key = $"need_{need.GetType().Name.Replace("Need", "")}";
-                _worldState[key] = !need.IsActive();
+                var goal = need.GetGoapGoal();
+                if (goal != null && goal.DesiredState != null)
+                {
+                    foreach (var kvp in goal.DesiredState)
+                    {
+                        // If need is active, the desired state is NOT met (we invert the desired boolean).
+                        // If need is inactive, the desired state IS met (we match the desired boolean).
+                        _worldState[kvp.Key] = need.IsActive() ? !kvp.Value : kvp.Value;
+                    }
+                }
             }
         }
-
-        // 2. État Professionnel
-        bool hasJob = _character.CharacterJob != null && _character.CharacterJob.HasJob;
-        _worldState["hasJob"] = hasJob;
 
         // 3. Connaissance locale (Sensors)
         // Note: Dans une version avancée, on checkerait ici si le personnage connaît un boss/building
@@ -87,12 +88,18 @@ public class CharacterGoapController : MonoBehaviour
     {
         UpdateWorldState();
         
-        // Définir les objectifs possibles (Priorités)
         List<GoapGoal> potentialGoals = new List<GoapGoal>();
-        
-        if (!_worldState["hasJob"])
+
+        // Dynamic Goal Injection from CharacterNeeds
+        if (_character.CharacterNeeds != null)
         {
-            potentialGoals.Add(new GoapGoal("FindJob", new Dictionary<string, bool> { { "hasJob", true } }, 10));
+            foreach (var need in _character.CharacterNeeds.AllNeeds)
+            {
+                if (need.IsActive())
+                {
+                    potentialGoals.Add(need.GetGoapGoal());
+                }
+            }
         }
 
         // Trier par priorité et tenter de planifier
@@ -120,14 +127,15 @@ public class CharacterGoapController : MonoBehaviour
     {
         List<GoapAction> actions = new List<GoapAction>();
 
-        // Prototype : Actions liées au travail
-        if (BuildingManager.Instance == null) return actions;
-
-        var (building, job) = BuildingManager.Instance.FindAvailableJob<Job>();
-        if (building != null && building.HasOwner && job != null)
+        if (_character.CharacterNeeds != null)
         {
-            actions.Add(new GoapAction_GoToBoss(building.Owner));
-            actions.Add(new GoapAction_AskForJob(building, job));
+            foreach (var need in _character.CharacterNeeds.AllNeeds)
+            {
+                if (need.IsActive())
+                {
+                    actions.AddRange(need.GetGoapActions());
+                }
+            }
         }
 
         return actions;

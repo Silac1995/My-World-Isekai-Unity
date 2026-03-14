@@ -7,8 +7,8 @@ public class CharacterCraftAction : CharacterAction
     private Color _primaryColor;
     private Color _secondaryColor;
 
-    public CharacterCraftAction(Character character, ItemSO itemToCraft, Color primaryColor = default, Color secondaryColor = default, float duration = 1.0f) 
-        : base(character, duration)
+    public CharacterCraftAction(Character character, ItemSO itemToCraft, Color primaryColor = default, Color secondaryColor = default) 
+        : base(character, itemToCraft != null ? itemToCraft.CraftingDuration : 1.0f)
     {
         _itemToCraft = itemToCraft;
         _primaryColor = primaryColor;

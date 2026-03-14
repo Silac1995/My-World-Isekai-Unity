@@ -135,7 +135,7 @@ namespace MWI.AI
                     // TODO: Gérer la couleur dynamiquement selon l'ItemSO si nécessaire (ex: via une palette ou recette)
                     Color targetColor = Color.white; 
                     
-                    self.CharacterActions.ExecuteAction(new CharacterCraftAction(self, _currentOrder.ItemToCraft, targetColor, default, _currentOrder.ItemToCraft.CraftingDuration));
+                    self.CharacterActions.ExecuteAction(new CharacterCraftAction(self, _currentOrder.ItemToCraft, targetColor, default));
                     _currentPhase = CraftPhase.ExecutingAction;
                 }
             }

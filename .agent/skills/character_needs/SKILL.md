@@ -3,48 +3,50 @@ name: character-needs
 description: The autonomous decision-making layer that pushes NPCs to act based on internal drives (Social interaction, Finding a Job, Dressing up).
 ---
 
-# Character Needs
+# Character Needs (GOAP Providers)
 
-The `CharacterNeeds` system is the primary driver of autonomous NPC behavior. It manages a list of "Needs" that decrease over time and trigger specialized AI behaviors when they become urgent.
+The `CharacterNeeds` system holds a list of "Needs" that decrease over time and trigger specialized GOAP goals when they become urgent.
 
 ## When to use this skill
 - When creating a new interior drive for NPCs (e.g., Hunger, Sleep).
-- When debugging why an NPC is not responding to a specific internal state.
-- When refactoring the needs evaluation or resolution logic.
+- When debugging why an NPC isn't prioritizing a specific internal state.
+- When creating new `GoapAction`s to satisfy a need.
 
-## How to use it
+## The SOLID Provider Architecture
+
+Previously, the Needs system was imperative: a need would evaluate itself and directly push a `MoveToTargetBehaviour` into the `NPCController`, entirely bypassing the intelligence of the Planner.
+
+Now, `CharacterNeeds` acts exclusively as a **Dependency Injector** for the `CharacterGoapController`.
 
 ### 1. Creating a New Need
-Inherit from `CharacterNeed` and implement the three abstract methods:
-- `IsActive()`: Returns true if the need is currently relevant (usually based on a threshold).
-- `GetUrgency()`: Returns a priority value (0-100).
-- `Resolve(NPCController npc)`: Logic to find a target and push an `IAIBehaviour`. **Must return true if a resolution was started.**
+Inherit from `CharacterNeed` and implement the abstract provider methods. **Rule:** A Need should NEVER execute logic or touch the Behaviour Tree.
+- `IsActive()`: Returns a boolean to indicate if the need should be fulfilled.
+- `GetUrgency()`: Returns a priority value.
+- `GetGoapGoal()`: Returns the concrete `GoapGoal` (e.g., `isFull = true`) the planner must achieve.
+- `GetGoapActions()`: Returns the list of logical actions capable of fulfilling the goal (e.g., `new GoapAction_EatFood()`).
 
-### 2. Registering the Need
-Add the new need to the `_allNeeds` list in `CharacterNeeds.Start()`.
+### 2. Event-Driven Decay (`update-usage`)
+To adhere to the `update-usage` constraints, do not check `need.Tick(Time.deltaTime)` every frame in `Update()`.
+Instead, `CharacterNeeds` manages slow-ticking Coroutines:
+```csharp
+private IEnumerator SocialDecayCoroutine()
+{
+    while (true)
+    {
+        yield return new WaitForSeconds(1f);
+        _socialNeed?.DecreaseValue(3f);
+    }
+}
+```
 
-### 3. Sequential Resolution Strategy
-The system uses a **Sequential Resolution** approach (implemented in both `CharacterNeeds.EvaluateNeeds` and `BTCond_HasUrgentNeed.cs`):
-1. Get all active needs.
-2. Sort them by urgency (Descending).
-3. Attempt to `Resolve()` each one in order.
-4. Stop at the first successful resolution.
+### 3. Execution via GOAP
+Because Needs are simply Data Providers, the resolution happens naturally in Priority 5 of the `NPCBehaviourTree` (`BTAction_ExecuteGoapPlan`):
+1. `CharacterGoapController` iterates through `_character.CharacterNeeds.AllNeeds`.
+2. It extracts their Goals if `IsActive() == true` and their Urgency.
+3. The Planner chains the `GoapActions` provided by the needs to reach the Desire state.
 
-> [!IMPORTANT]
-> This strategy ensures that if a high-priority need (like Social) is blocked because no partners are available, lower-priority needs (like Job) still get a chance to be resolved.
-
-### 4. Integration with Behaviour Tree
-The `BTCond_HasUrgentNeed` node handles needs for NPCs with a BT. It includes a **State Guard**:
-- It only resolves needs if the NPC is in `WanderBehaviour` or is idle.
-- This prevents "behavior push loops" where a need re-resolves every frame while the NPC is already moving toward a target.
-
-## Existing Needs
-- `NeedSocial`: Drives NPCs to find a partner and start an interaction.
-- `NeedJob`: Drives unemployed NPCs to find a boss/building and ask for a job.
-- `NeedToWearClothing`: Drives NPCs to put on clothes if they are naked.
-
-### 5. Proactive Resolution (GOAP)
-For long-term goals (like finding a job), the system can leverage a proactive planning layer:
-1. **Sensors**: `CharacterGoapController.UpdateWorldState()` observes the current state of `CharacterNeeds`.
-2. **Planner**: `GoapPlanner` generates a multi-step plan to satisfy a life goal (e.g., `FindJob`).
-3. **Execution**: The `BTAction_ExecuteGoapPlan` node in the Behaviour Tree (Priority 5) manages the sequential execution of these GOAP actions.
+### 4. Existing Needs & Actions
+- `NeedSocial` -> `GoapGoal("Socialize")` -> `GoapAction_Socialize`.
+- `NeedJob` -> `GoapGoal("FindJob")` -> `GoapAction_AskForJob`.
+- `NeedToWearClothing` -> `GoapGoal("WearClothing")` -> `GoapAction_WearClothing`.
+- `NeedShopping` -> `GoapGoal("GoShopping")` -> `GoapAction_GoShopping`.

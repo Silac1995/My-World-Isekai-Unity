@@ -1,7 +1,5 @@
-﻿using System;
-using UnityEngine;
-using System.Linq;
 using System.Collections.Generic;
+using UnityEngine;
 
 public class NeedToWearClothing : CharacterNeed
 {
@@ -22,48 +20,16 @@ public class NeedToWearClothing : CharacterNeed
         return 60f;
     }
 
-    public override bool Resolve(NPCController npc)
+    public override GoapGoal GetGoapGoal()
     {
-        if (npc.HasBehaviour<MoveToTargetBehaviour>()) return false;
-
-        List<WearableType> missingTypes = new List<WearableType>();
-        if (_character.CharacterEquipment.IsGroinExposed()) missingTypes.Add(WearableType.Pants);
-        if (_character.CharacterEquipment.IsChestExposed()) missingTypes.Add(WearableType.Armor);
-
-        ItemInteractable targetInteractable = FindClosestWearable(npc.transform.position, missingTypes);
-
-        if (targetInteractable != null && targetInteractable.ItemInstance is EquipmentInstance equip)
-        {
-            GameObject rootObject = targetInteractable.RootGameObject;
-
-            Action atArrival = () => {
-                if (targetInteractable == null) return;
-                if (targetInteractable.TryCollect())
-                {
-                    CharacterEquipAction equipAction = new CharacterEquipAction(npc.Character, equip);
-                    npc.Character.CharacterActions.ExecuteAction(equipAction);
-                    if (rootObject != null) UnityEngine.Object.Destroy(rootObject);
-                }
-            };
-
-            npc.PushBehaviour(new MoveToTargetBehaviour(npc, rootObject, 1.2f, atArrival));
-            return true;
-        }
-        return false;
+        return new GoapGoal("WearClothing", new Dictionary<string, bool> { { "isNaked", false } }, (int)GetUrgency());
     }
 
-    private ItemInteractable FindClosestWearable(Vector3 currentPosition, List<WearableType> typesToFind)
+    public override List<GoapAction> GetGoapActions()
     {
-        var awareness = _character.CharacterAwareness;
-        if (awareness == null) return null;
-
-        return awareness.GetVisibleInteractables<ItemInteractable>()
-            .Where(item => {
-                if (item.ItemInstance is WearableInstance w)
-                    return typesToFind.Contains(((WearableSO)w.ItemSO).WearableType);
-                return false;
-            })
-            .OrderBy(item => Vector3.Distance(currentPosition, item.transform.position))
-            .FirstOrDefault();
+        return new List<GoapAction>
+        {
+            new GoapAction_WearClothing()
+        };
     }
 }

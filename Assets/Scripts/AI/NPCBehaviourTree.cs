@@ -33,7 +33,6 @@ public class NPCBehaviourTree : MonoBehaviour
     private BTCond_IsInCombat _combatNode;
     private BTCond_FriendInDanger _friendNode;
     private BTCond_DetectedEnemy _enemyNode;
-    private BTCond_HasUrgentNeed _needsNode;
     private BTCond_HasScheduledActivity _scheduleNode;
     private BTCond_WantsToSocialize _socialNode;
     private BTAction_ExecuteGoapPlan _goapNode;
@@ -84,7 +83,6 @@ public class NPCBehaviourTree : MonoBehaviour
         _combatNode = new BTCond_IsInCombat();
         _friendNode = new BTCond_FriendInDanger();
         _enemyNode = new BTCond_DetectedEnemy();
-        _needsNode = new BTCond_HasUrgentNeed();
         _scheduleNode = new BTCond_HasScheduledActivity();
         _socialNode = new BTCond_WantsToSocialize();
         _goapNode = new BTAction_ExecuteGoapPlan();
@@ -96,8 +94,7 @@ public class NPCBehaviourTree : MonoBehaviour
             _friendNode,        // 3. Entraide
             _enemyNode,         // 4. Agression
             _goapNode,          // 5. GOAP (Life Goals / Proactive)
-            _needsNode,         // 6. Besoins (Urgent/Réactif)
-            _scheduleNode,      // 7. Schedule
+            _scheduleNode,      // 6. Schedule
             _socialNode,        // 8. Social
             _wanderNode         // 9. Wander (fallback)
         );
@@ -196,7 +193,6 @@ public class NPCBehaviourTree : MonoBehaviour
         else if (_combatNode.IsRunning) _currentNodeName = "Combat";
         else if (_friendNode.IsRunning) _currentNodeName = "FriendInDanger";
         else if (_enemyNode.IsRunning) _currentNodeName = "DetectedEnemy";
-        else if (_needsNode.IsRunning) _currentNodeName = "Needs";
         else if (_scheduleNode.IsRunning) _currentNodeName = "Schedule";
         else if (_socialNode.IsRunning) _currentNodeName = "Social";
         else if (_goapNode.IsRunning) _currentNodeName = "GOAP";

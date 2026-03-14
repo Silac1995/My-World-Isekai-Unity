@@ -19,46 +19,19 @@ public class CharacterNeeds : MonoBehaviour
 
         _allNeeds.Add(new NeedToWearClothing(_character));
         _allNeeds.Add(new NeedJob(_character));
+
+        StartCoroutine(SocialDecayCoroutine());
     }
 
-    private void Update()
+    private IEnumerator SocialDecayCoroutine()
     {
-        // On gère la perte des besoins à chaque frame (ou via leur propre timer interne)
-        if (_socialNeed != null)
+        while (true)
         {
-            _socialNeed.UpdateValue();
-        }
-
-        // Optimization: Check only every 30 frames
-        if (Time.frameCount % 30 != 0) return;
-
-        // Si un BT est présent, il gère la résolution des besoins via BTCond_HasUrgentNeed
-        var npc = _character.Controller as NPCController;
-        if (npc != null && npc.HasBehaviourTree) return;
-
-        EvaluateNeeds();
-    }
-
-    private void EvaluateNeeds()
-    {
-        var npc = _character.Controller as NPCController;
-        if (npc == null || !npc.enabled) return;
-
-        // Seul le WanderBehaviour peut être interrompu par un besoin
-        if (!(npc.CurrentBehaviour is WanderBehaviour)) return;
-
-        // Get active needs sorted by urgency
-        var activeNeeds = _allNeeds
-            .Where(n => n.IsActive())
-            .OrderByDescending(n => n.GetUrgency())
-            .ToList();
-
-        foreach (var need in activeNeeds)
-        {
-            if (need.Resolve(npc))
+            // Decays social need outside of per-frame polling
+            yield return new WaitForSeconds(1f);
+            if (_socialNeed != null)
             {
-                Debug.Log($"<color=orange>[Needs]</color> {npc.name} résout le besoin : {need.GetType().Name} (Urgence: {need.GetUrgency()})");
-                return;
+                _socialNeed.DecreaseValue(3f);
             }
         }
     }

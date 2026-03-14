@@ -1,14 +1,12 @@
-using System.Linq;
+using System.Collections.Generic;
 using UnityEngine;
+using System.Linq;
 
 public class NeedJob : CharacterNeed
 {
     // L'urgence peut varier en fonction de la condition du PNJ (Richesse, Faim, etc.) 
     // ou être fixe à 60 (Moyennement urgent, moins que la survie, plus que le blabla).
     private const float BASE_URGENCY = 60f;
-
-    private float _lastAttemptTime = -999f;
-    private const float RETRY_COOLDOWN = 10f; // Seconds before retrying to find a job
 
     public NeedJob(Character character) : base(character)
     {
@@ -28,72 +26,26 @@ public class NeedJob : CharacterNeed
         return BASE_URGENCY;
     }
 
-    public override bool Resolve(NPCController npc)
+    public override GoapGoal GetGoapGoal()
     {
-        // --- RETRY COOLDOWN : Prevent tight AI loops when failing to find/talk to a boss ---
-        if (UnityEngine.Time.time - _lastAttemptTime < RETRY_COOLDOWN)
-        {
-            return false;
-        }
-        _lastAttemptTime = UnityEngine.Time.time;
+        return new GoapGoal("FindJob", new Dictionary<string, bool> { { "hasJob", true } }, (int)GetUrgency());
+    }
 
-        if (BuildingManager.Instance == null || BuildingManager.Instance.allBuildings.Count == 0)
-        {
-            return false;
-        }
+    public override List<GoapAction> GetGoapActions()
+    {
+        List<GoapAction> actions = new List<GoapAction>();
 
-        // 1. Chercher d'abord un business vide pour devenir propriétaire
-        CommercialBuilding unownedCommercial = BuildingManager.Instance.FindUnownedCommercialBuilding();
-        if (unownedCommercial != null && _character.CharacterJob.BecomeOwner(unownedCommercial))
+        if (BuildingManager.Instance != null)
         {
-            // Le personnage a pris possession du commerce
-            return true;
-        }
-
-        // 2. Chercher n'importe quel job disponible dans un CommercialBuilding (qui a un patron valide et physiquement là)
-        foreach (var building in BuildingManager.Instance.allBuildings)
-        {
-            if (building is CommercialBuilding commercial && commercial.HasOwner)
+            // Note: In a future iteration we could abstract this out into "BecomeOwnerAction" etc.
+            var (building, job) = BuildingManager.Instance.FindAvailableJob<Job>();
+            if (building != null && building.HasOwner && job != null)
             {
-                Character boss = commercial.Owner;
-                
-                // Le boss doit être instancié, en vie et libre pour qu'on aille lui parler
-                if (boss != null && boss.IsAlive() && boss.IsFree())
-                {
-                    var availableJobs = commercial.GetAvailableJobs().Where(j => j.CanTakeJob(_character));
-                    if (availableJobs != null && availableJobs.Any())
-                    {
-                        var desiredJob = availableJobs.First();
-
-                        Debug.Log($"<color=cyan>[NeedJob]</color> {_character.CharacterName} va demander le poste de {desiredJob.JobTitle} à {boss.CharacterName}.");
-
-                        npc.PushBehaviour(new MoveToTargetBehaviour(npc, boss.gameObject, 2.5f, () =>
-                        {
-                            if (boss == null || !boss.IsAlive() || !boss.IsFree()) 
-                            {
-                                npc.Character.CharacterMovement?.Resume();
-                                return;
-                            }
-
-                            // Le poste a pu être pris pendant qu'on marchait vers le boss
-                            if (desiredJob == null || desiredJob.IsAssigned)
-                            {
-                                Debug.Log($"<color=orange>[NeedJob]</color> {_character.CharacterName} est arrivé, mais le poste de {desiredJob?.JobTitle} n'est plus disponible.");
-                                npc.Character.CharacterMovement?.Resume();
-                                return;
-                            }
-
-                            // Une fois arrivé devant le boss, on déclenche l'interaction de demande d'emploi
-                            npc.Character.CharacterInteraction.StartInteractionWith(boss, new InteractionAskForJob(commercial, desiredJob));
-                        }));
-
-                        return true;
-                    }
-                }
+                actions.Add(new GoapAction_GoToBoss(building.Owner));
+                actions.Add(new GoapAction_AskForJob(building, job));
             }
         }
 
-        // Aucun job trouvé
-        return false;
+        return actions;
     }
 }

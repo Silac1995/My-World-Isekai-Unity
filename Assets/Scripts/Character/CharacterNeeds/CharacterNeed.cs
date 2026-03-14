@@ -1,4 +1,7 @@
-﻿public abstract class CharacterNeed
+using System.Collections.Generic;
+using UnityEngine;
+
+public abstract class CharacterNeed
 {
     protected Character _character;
 
@@ -13,7 +16,15 @@
     // Quelle est l'urgence ? (0 = rien, 100 = vital)
     public abstract float GetUrgency();
 
-    // Quelle action ou behaviour ce besoin doit-il déclencher ?
-    // Retourne true si une action a été effectivement lancée.
-    public abstract bool Resolve(NPCController npc);
+    /// <summary>
+    /// Fournit le but GOAP correspondant à ce besoin.
+    /// Sera lu et injecté dynamiquement par le CharacterGoapController.
+    /// </summary>
+    public abstract GoapGoal GetGoapGoal();
+
+    /// <summary>
+    /// Fournit les actions GOAP capables de résoudre ce besoin.
+    /// Seront lues et injectées dynamiquement par le CharacterGoapController.
+    /// </summary>
+    public abstract List<GoapAction> GetGoapActions();
 }
