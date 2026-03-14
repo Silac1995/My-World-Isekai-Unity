@@ -1,41 +1,67 @@
 ---
 name: multiplayer
-description: "Future-Proof" code architecture for multiplayer (No local singletons, Inputs/Logic separation).
+description: Comprehensive architecture and implementation standards for Unity Netcode for GameObjects (NGO) 2.10+.
 ---
 
-# Multiplayer Architecture
+# Multiplayer (Netcode for GameObjects 2.10)
 
-This skill dictates the "Network-Ready" architectural philosophy that **must be systematically applied** in the project, even if no framework (like Mirror or Netcode) is installed yet.
-The golden rule (defined in `global.md`) is to always code under the assumption that the game "will be" multiplayer.
+This skill dictates the mandatory standards for multiplayer development in the project, specifically leveraging **Netcode for GameObjects (NGO) 2.10**. It enforces a server-authoritative, modular, and reactive architecture.
 
 ## When to use this skill
-- To be applied **systematically** when creating a new system (e.g., Quest, Inventory, Combat systems).
-- When adding mechanics involving multiple characters.
-- When writing `MonoBehaviours` related to Time or Inputs.
+- **Systematically** when creating any networked component or system.
+- When implementing synchronized state, remote actions, or scene loading.
+- When handling player connections and session management.
 
-## "Future-Proof" Architecture Rules
+## Core Architecture & Rules
 
-### 1. Banning Singletons for Game State
-- **The Rule:** NEVER use `FindObjectOfType<Player>()` or a `Player.Instance`.
-- **Why?** In multiplayer, there are *multiple* players in the same scene.
-- **The Solution:** Use Dependency Injection, explicit references via GetComponent, or isolated local instance managers. (e.g., A `BattleManager` manages a list of `CharacterCombat` that it knows about, rather than guessing who is attacking whom).
+### 1. The Foundation: NetworkBehaviour & Lifecycle
+- **Mandatory:** Inherit from `NetworkBehaviour`.
+- **Lifecycle Hooks:**
+    - `OnNetworkPreSpawn()`: Initialize `NetworkVariable` values on the server BEFORE spawning.
+    - `OnNetworkSpawn()`: Setup logic after the object is ready on the network.
+    - `OnNetworkDespawn()`: Cleanup, unsubscribe from events to prevent memory leaks.
+    - `OnNetworkSessionSynchronized()`: Client-side only; triggers after full session sync.
 
-### 2. Strict Decoupling of Inputs and Logic
-- **The Rule:** The code that reads the keyboard/controller (`InputManager.cs`) **must not** contain gameplay logic (`character.Move()`).
-- **Why?** Over a network, a monster does not receive local keyboard inputs. It receives an order (RPC) from the server.
-- **The Solution:** Inputs only emit events (e.g., `OnAttackPressed`). The logic (`Attack()`) listens to this event, but could just as easily be called by a network packet (or a `BehaviourTree` decision).
+### 2. State Sync: NetworkVariable
+- **The Rule:** Use `NetworkVariable<T>` for persistent state required by late-joiners.
+- **Authority:** Server-authoritative writes by default.
+- **Reactivity:** Subscribe to `OnValueChanged` for UI/Visual updates. Use `FixedString32Bytes` for strings in variables.
 
-### 3. State vs Visual
-- This decoupling has already started in the project: `CharacterStats` owns the data and `CharacterVisual` displays it.
-- **The Rule:** Never sync a Visual over the network. Only the State (`CharacterStats.Health`, `CharacterCombat.Initiative`) should eventually be synced by the server.
+### 3. Messaging: The Unified [Rpc] System
+- **Modern Pattern:** Use the unified `[Rpc]` attribute instead of legacy `[ServerRpc]/[ClientRpc]`.
+- **Naming Rule:** Methods MUST end with the `Rpc` suffix.
+- **Targeting:** Control execution via `SendTo` (e.g., `SendTo.Server`, `SendTo.Everyone`, `SendTo.Owner`).
+```csharp
+[Rpc(SendTo.Server)]
+public void RequestActionRpc(int actionId) { /* Logic */ }
+```
 
-### 4. The Dictatorship of Time
-- **The Rule:** Never manipulate `Time.timeScale` to pause or slow down the game in a local character logic.
-- **Why?** Slowing down time locally will catastrophically desync the client from all other players and the physical server.
-- **The Solution:** Entrust time management to Server Managers. Typical example: the `BattleManager` uses its own independent "Tick" (`PerformBattleTick()`) separate from Unity's `Time.time`, making it easily synchronizable later.
+### 4. Serialization
+- **Custom Types:** Implement `INetworkSerializable`.
+- **BufferSerializer:** Use the unified `NetworkSerialize` method for both reading and writing.
+- **Constraints:** Avoid `string` (use `FixedString`), avoid `List` (use `NativeArray` or buffers if possible).
 
-## "Network-Ready" Code Checklist
-Critically review your new code:
-- [ ] Does my code survive if there are 2 "Player Objects" in the scene?
-- [ ] If I call my shooting or moving method purely through code from anywhere, does it work without depending on an obscure keyboard boolean?
-- [ ] Do my cooldowns rely on the local architecture rather than modifying the Unity engine?
+### 5. Object Spawning & Prefabs
+- **NetworkObject:** Must be at the root of the prefab. Nested `NetworkObject`s are prohibited.
+- **Registration:** Prefabs MUST be registered in the `NetworkManager`'s NetworkPrefabs list.
+- **Spawning:** Only the server can call `Spawn()`. Use `networkObject.Despawn(true)` for cleanup.
+
+### 6. Scene Management
+- **NetworkSceneManager:** Use `LoadScene` via the `NetworkManager.Singleton.SceneManager`.
+- **Synchronization:** Clients automatically sync to the server's active scenes. Track progress via `OnSceneEvent`.
+
+### 7. Connection & Session Management
+- **Connection Approval:** Mandatory for security. Set `ConnectionApproval = true` and handle `ConnectionApprovalCallback`.
+- **OnConnectionEvent:** The unified source for handling client joins/leaves and peer notifications.
+
+## Network-Ready Checklist
+- [ ] Is my script a `NetworkBehaviour`?
+- [ ] Are my RPCs using the unified `[Rpc]` attribute and `Rpc` suffix?
+- [ ] Am I initializing `NetworkVariable`s in `OnNetworkPreSpawn`?
+- [ ] Am I validating all client requests on the server?
+- [ ] Does my custom data implement `INetworkSerializable`?
+- [ ] Have I registered my NetworkPrefabs?
+- [ ] Am I using `NetworkSceneManager` for all scene transitions?
+
+## Examples & Patterns
+Refer to [netcode_patterns.md](file:///c:/Users/Kevin/Unity/Unity%20Projects/Git/MWI%20-%20Version%20Control/My-World-Isekai-Unity/.agent/skills/multiplayer/examples/netcode_patterns.md) for concrete NGO 2.10 implementations.
