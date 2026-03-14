@@ -13,6 +13,7 @@ public class GiveLessonBehaviour : IAIBehaviour
 
     private MentorClassZone _myClassZone;
 
+    public void Enter(Character selfCharacter) { }
     public void Act(Character character)
     {
         if (IsFinished) return;

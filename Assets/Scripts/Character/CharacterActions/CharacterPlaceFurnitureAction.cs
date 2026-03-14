@@ -56,12 +56,6 @@ public class CharacterPlaceFurnitureAction : CharacterAction
 
     public override void OnStart()
     {
-        var animator = character.CharacterVisual?.CharacterAnimator?.Animator;
-        if (animator != null)
-        {
-            animator.SetTrigger("IsDoingAction"); 
-        }
-
         // On peut faire se tourner le personnage vers la cible
         character.CharacterVisual?.FaceTarget(_targetPosition);
 

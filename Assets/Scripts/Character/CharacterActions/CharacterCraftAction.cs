@@ -50,14 +50,6 @@ public class CharacterCraftAction : CharacterAction
 
     public override void OnStart()
     {
-        var animator = character.CharacterVisual?.CharacterAnimator?.Animator;
-        if (animator != null)
-        {
-            // Note: Replace "Trigger_Craft" with the actual animation trigger name if one exists in the project.
-            // Using a generic action trigger as fallback.
-            animator.SetTrigger("IsDoingAction"); 
-        }
-
         Debug.Log($"<color=cyan>[Action]</color> {character.CharacterName} commence à crafter {_itemToCraft.ItemName}.");
     }
 

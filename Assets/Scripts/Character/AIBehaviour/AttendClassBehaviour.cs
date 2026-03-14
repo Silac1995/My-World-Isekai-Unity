@@ -18,6 +18,7 @@ public class AttendClassBehaviour : IAIBehaviour
         _npcController = npcController;
     }
 
+    public void Enter(Character selfCharacter) { }
     public void Act(Character selfCharacter)
     {
         if (_isFinished) return;

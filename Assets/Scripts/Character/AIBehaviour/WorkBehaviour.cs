@@ -48,6 +48,7 @@ public class WorkBehaviour : IAIBehaviour
         }
     }
 
+    public void Enter(Character selfCharacter) { }
     public void Act(Character selfCharacter)
     {
         if (_isFinished) return;

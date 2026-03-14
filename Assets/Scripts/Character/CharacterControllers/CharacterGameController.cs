@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using UnityEngine.AI;
@@ -51,17 +51,16 @@ public abstract class CharacterGameController : MonoBehaviour
     public Animator Animator => (_characterVisual != null && _characterVisual.CharacterAnimator != null)
                                  ? _characterVisual.CharacterAnimator.Animator
                                  : null;
-
     public virtual void Initialize()
     {
         if (_character != null && !_character.IsAlive()) enabled = false;
         
-        // --- NOUVEAU : Tracking immédiat du début d'action ---
-        // On n'attend pas l'Update pour savoir qu'on fait quelque chose
-        if (_character != null)
+        if (_character != null && _character.CharacterActions != null)
         {
             _character.CharacterActions.OnActionStarted -= HandleActionStarted;
             _character.CharacterActions.OnActionStarted += HandleActionStarted;
+            _character.CharacterActions.OnActionFinished -= HandleActionFinished;
+            _character.CharacterActions.OnActionFinished += HandleActionFinished;
         }
     }
 
@@ -69,7 +68,19 @@ public abstract class CharacterGameController : MonoBehaviour
     {
         _wasDoingAction = true;
         _actionCooldownTimer = ACTION_RESUME_DELAY;
-        _characterMovement.Stop();
+        _characterMovement?.Stop();
+
+        if (action.ShouldPlayGenericActionAnimation)
+        {
+            Animator?.SetBool(CharacterAnimator.IsDoingAction, true);
+        }
+    }
+
+    private void HandleActionFinished()
+    {
+        // Don't reset _wasDoingAction here, let the cooldown timer handle it in Update
+        Animator?.SetBool(CharacterAnimator.IsDoingAction, false);
+        _character.CharacterVisual?.CharacterAnimator?.ResetActionTriggers();
     }
 
     protected virtual void OnDestroy()
@@ -77,50 +88,40 @@ public abstract class CharacterGameController : MonoBehaviour
         if (_character != null && _character.CharacterActions != null)
         {
             _character.CharacterActions.OnActionStarted -= HandleActionStarted;
+            _character.CharacterActions.OnActionFinished -= HandleActionFinished;
         }
     }
 
     protected virtual void Update()
     {
-        // Freeze : on ne fait rien du tout, MAIS on continue de mettre à jour 
-        // les animations si jamais le personnage est poussé physiquement.
         if (_isFrozen) 
         {
-            UpdateAnimations();
-            UpdateFlip();
+            UpdateVisuals();
             return;
         }
 
+        // Action logic is now event-driven for starting/finishing, 
+        // but we still need to handle the cooldown timer here.
         if (_character.CharacterActions.CurrentAction != null)
         {
-            _wasDoingAction = true;
-            _actionCooldownTimer = ACTION_RESUME_DELAY;
-            _characterMovement.Stop();
-
-            UpdateAnimations();
-            // On ne flip pas pendant une action pour éviter de glitcher l'animation d'attaque (ou autre)
+            _characterMovement?.Stop();
+            UpdateVisuals(true); // Force speed 0 and skip flip
             return;
         }
 
-        // --- NOUVEAU : Cleanup et décompte après l'action ---
         if (_wasDoingAction)
         {
-            // On nettoie les drapeaux et triggers dès la fin de l'action pour éviter les pile-ups
-            Animator.SetBool(CharacterAnimator.IsDoingAction, false);
-            _character.CharacterVisual?.CharacterAnimator?.ResetActionTriggers();
-
             _actionCooldownTimer -= Time.deltaTime;
 
             if (_actionCooldownTimer <= 0)
             {
                 _wasDoingAction = false;
-                _characterMovement.Resume();
+                _characterMovement?.Resume();
             }
             else
             {
-                // Pendant le délai "de grâce", on reste immobile
-                _characterMovement.Stop();
-                UpdateAnimations();
+                _characterMovement?.Stop();
+                UpdateVisuals(true); 
                 return;
             }
         }
@@ -133,20 +134,20 @@ public abstract class CharacterGameController : MonoBehaviour
                 return;
             }
 
-            // L'IA gère son propre Resume/Stop
             CurrentBehaviour.Act(_character);
         }
 
-        // Si un behaviour vient d'appeler Freeze() dans son Act(), on assure la transition d'anim
-        if (_isFrozen) 
-        {
-            UpdateAnimations();
-            UpdateFlip();
-            return;
-        }
+        UpdateVisuals();
+    }
 
-        UpdateAnimations();
-        UpdateFlip();
+    private void UpdateVisuals(bool forceIdle = false)
+    {
+        UpdateAnimations(forceIdle);
+        // Only flip if not doing an action and not forced idle
+        if (!forceIdle && _character.CharacterActions.CurrentAction == null)
+        {
+            UpdateFlip();
+        }
     }
 
     // --- M?THODES REQUISES PAR TES BEHAVIOURS ET INTERACTIONS ---
@@ -157,6 +158,7 @@ public abstract class CharacterGameController : MonoBehaviour
     {
         SafeResume();
         _behavioursStack.Push(newBehaviour);
+        newBehaviour.Enter(_character);
     }
 
     public void PopBehaviour()
@@ -202,6 +204,7 @@ public abstract class CharacterGameController : MonoBehaviour
         ClearBehaviours();
         SafeResume();
         _behavioursStack.Push(baseBehaviour);
+        baseBehaviour.Enter(_character);
     }
 
     private void SafeResume()
@@ -227,22 +230,14 @@ public abstract class CharacterGameController : MonoBehaviour
 
     // --- LOGIQUE VISUELLE ---
 
-    protected virtual void UpdateAnimations()
+    protected virtual void UpdateAnimations(bool forceIdle = false)
     {
         if (Animator == null || _characterMovement == null) return;
 
-        // R?cup?ration de la vitesse physique r?elle
         Vector3 velocity = _characterMovement.GetVelocity();
         float speed = new Vector3(velocity.x, 0, velocity.z).magnitude;
 
-        // --- S?CURIT? ANIMATION : On force le calme pendant les actions ---
-        // On ne laisse jamais la vitesse physique (qui peut mettre une frame ? s'arr?ter) 
-        // interrompre une animation d'attaque ou le d?lai de repos.
-        if (_wasDoingAction || _character.CharacterActions.CurrentAction != null)
-        {
-            speed = 0f;
-        }
-        else if (speed < 0.1f) 
+        if (forceIdle || speed < 0.1f) 
         {
             speed = 0f;
         }

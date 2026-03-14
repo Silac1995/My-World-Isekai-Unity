@@ -13,6 +13,7 @@ public class AttackTargetBehaviour : IAIBehaviour
         _target = target;
     }
 
+    public void Enter(Character selfCharacter) { }
     public void Act(Character self)
     {
         if (_isFinished || _target == null || !_target.IsAlive())

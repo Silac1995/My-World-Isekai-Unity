@@ -2,6 +2,8 @@ using UnityEngine;
 
 public abstract class CharacterCombatAction : CharacterAction
 {
+    public override bool ShouldPlayGenericActionAnimation => false;
+
     protected CharacterCombatAction(Character character, float duration = 0f) 
         : base(character, duration)
     {

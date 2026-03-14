@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using UnityEngine.AI;
 
 public class CombatBehaviour : IAIBehaviour
@@ -68,6 +68,7 @@ public class CombatBehaviour : IAIBehaviour
 
     public void Terminate() => _isFinished = true;
 
+    public void Enter(Character selfCharacter) { }
     public void Act(Character self)
     {
         _selfCharacter = self;

@@ -32,13 +32,6 @@ public class CharacterGatherAction : CharacterAction
 
     public override void OnStart()
     {
-        // Jouer l'animation de récolte
-        var animator = character.CharacterVisual?.CharacterAnimator?.Animator;
-        if (animator != null)
-        {
-            animator.SetTrigger("IsDoingAction");
-        }
-
         Debug.Log($"<color=cyan>[Gather Action]</color> {character.CharacterName} commence à récolter {_target.gameObject.name}...");
     }
 

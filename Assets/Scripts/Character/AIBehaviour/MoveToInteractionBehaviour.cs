@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using System;
 
 public class MoveToInteractionBehaviour : IAIBehaviour
@@ -23,6 +23,7 @@ public class MoveToInteractionBehaviour : IAIBehaviour
         _onArrived = onArrived;
     }
 
+    public void Enter(Character selfCharacter) { }
     public void Act(Character self)
     {
         if (_targetCharacter == null || !self.CharacterInteraction.IsInteracting)

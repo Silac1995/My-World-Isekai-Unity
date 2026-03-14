@@ -3,46 +3,42 @@ name: character-needs
 description: The autonomous decision-making layer that pushes NPCs to act based on internal drives (Social interaction, Finding a Job, Dressing up).
 ---
 
-# Character Needs System
+# Character Needs
 
-This skill explains how the `CharacterNeeds` system operates, serving as the biological or psychological engine of an NPC. 
-Needs are evaluated constantly but only translated into action if the NPC is currently idle (e.g., in a `WanderBehaviour`).
+The `CharacterNeeds` system is the primary driver of autonomous NPC behavior. It manages a list of "Needs" that decrease over time and trigger specialized AI behaviors when they become urgent.
 
 ## When to use this skill
-- To create a new fundamental drive for NPCs (e.g., `NeedSleep`, `NeedFood`, `NeedEntertainment`).
-- To understand how NPCs decide what to do when they have nothing scheduled.
-- If an NPC is stuck doing nothing, or alternatively, constantly obsessing over one specific action (like endlessly finding jobs).
+- When creating a new interior drive for NPCs (e.g., Hunger, Sleep).
+- When debugging why an NPC is not responding to a specific internal state.
+- When refactoring the needs evaluation or resolution logic.
 
-## Architecture
+## How to use it
 
-The system relies on a Master component (`CharacterNeeds.cs`) attached to the `Character` GameObject and a list of Pure C# classes (`CharacterNeed`).
+### 1. Creating a New Need
+Inherit from `CharacterNeed` and implement the three abstract methods:
+- `IsActive()`: Returns true if the need is currently relevant (usually based on a threshold).
+- `GetUrgency()`: Returns a priority value (0-100).
+- `Resolve(NPCController npc)`: Logic to find a target and push an `IAIBehaviour`. **Must return true if a resolution was started.**
 
-### 1. The Manager: `CharacterNeeds`
-- Contains a list of all possible "Needs" for this character (`_allNeeds`).
-- Every 30 frames (to save performance), it calls `EvaluateNeeds()`.
-- **Optimization**: Use manual `for` loops and avoid LINQ (`Where`, `OrderBy`, `ToList`) inside `EvaluateNeeds` to minimize allocations in the game loop.
-- **Condition for action**: The manager **will not** trigger any need if the character's Behaviour Tree is actively doing something else. It only steps in if the current behaviour is `WanderBehaviour` (which means "I am idle").
-- It iterates through all needs to find the most urgent `IsActive()` one. If successful, it stops evaluating for this tick.
+### 2. Registering the Need
+Add the new need to the `_allNeeds` list in `CharacterNeeds.Start()`.
 
-### 2. The Abstract Need: `CharacterNeed`
-An abstract base class that every biological or social desire must implement.
-- **`IsActive()`**: Returns true if the need currently requires attention. Example: `NeedJob` is active if `!CharacterJob.HasJob`.
-- **`GetUrgency()`**: Returns a float (0 to 100+).
-    - Survival needs (Sleep, Health) should be close to 100.
-    - Life organization (Job, Clothing) around 60.
-    - Casual desires (Socializing, Wander) around 20-30.
-- **`Resolve(NPCController npc)`**: The execution method. This is where you inject a new active Behaviour into the `NPCController`, or where you instantly resolve the issue (e.g., claiming a vacant building). Must return `true` if an action was genuinely undertaken, or `false` if the system should try to resolve the next need in the list instead.
+### 3. Sequential Resolution Strategy
+The system uses a **Sequential Resolution** approach (implemented in both `CharacterNeeds.EvaluateNeeds` and `BTCond_HasUrgentNeed.cs`):
+1. Get all active needs.
+2. Sort them by urgency (Descending).
+3. Attempt to `Resolve()` each one in order.
+4. Stop at the first successful resolution.
 
-## Example: The Employment Need (`NeedJob.cs`)
-- **IsActive**: Checks if the character lacks a job. It also ignores Player avatars.
-- **Urgency**: Fixed at `60f`.
-- **Resolve**:
-  1. It loops through `BuildingManager` to see if there is a vacant `CommercialBuilding` to own.
-  2. Alternatively, it looks for any `CommercialBuilding` that has `GetAvailableJobs()`.
-  3. It calls `AskForJob` to get hired.
+> [!IMPORTANT]
+> This strategy ensures that if a high-priority need (like Social) is blocked because no partners are available, lower-priority needs (like Job) still get a chance to be resolved.
 
-## How to add a new Need
-1. Create a pure C# class (e.g., `NeedSleep.cs`).
-2. Inherit from `CharacterNeed`.
-3. Implement the three abstract methods.
-4. Go to `CharacterNeeds.cs` and add `_allNeeds.Add(new NeedSleep(_character));` inside the `Start()` method.
+### 4. Integration with Behaviour Tree
+The `BTCond_HasUrgentNeed` node handles needs for NPCs with a BT. It includes a **State Guard**:
+- It only resolves needs if the NPC is in `WanderBehaviour` or is idle.
+- This prevents "behavior push loops" where a need re-resolves every frame while the NPC is already moving toward a target.
+
+## Existing Needs
+- `NeedSocial`: Drives NPCs to find a partner and start an interaction.
+- `NeedJob`: Drives unemployed NPCs to find a boss/building and ask for a job.
+- `NeedToWearClothing`: Drives NPCs to put on clothes if they are naked.

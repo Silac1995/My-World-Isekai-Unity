@@ -22,6 +22,7 @@ public class BTVendorBehaviour : IAIBehaviour
         Debug.Log($"<color=cyan>[VendorAI]</color> {_npc.Character.CharacterName} commence son service au { _shop.BuildingName }.");
     }
 
+    public void Enter(Character selfCharacter) { }
     public void Act(Character character)
     {
         if (_shop == null || _isFinished) return;

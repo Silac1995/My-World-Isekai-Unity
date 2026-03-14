@@ -16,6 +16,7 @@ public class MoveOutOfBattleZoneBehaviour : IAIBehaviour
         _battleManager = battleManager;
     }
 
+    public void Enter(Character selfCharacter) { }
     public void Act(Character self)
     {
         if (_battleManager == null || _isFinished)

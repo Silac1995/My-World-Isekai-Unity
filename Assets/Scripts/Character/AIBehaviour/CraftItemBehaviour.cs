@@ -20,6 +20,7 @@ public class CraftItemBehaviour : IAIBehaviour
         _itemToCraft = itemToCraft;
     }
 
+    public void Enter(Character selfCharacter) { }
     public void Act(Character self)
     {
         if (_station == null || _itemToCraft == null)

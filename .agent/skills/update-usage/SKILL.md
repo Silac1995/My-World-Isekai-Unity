@@ -81,3 +81,37 @@ private void HandleAmountChanged(float oldVal, float newVal) => PushToShader();
 ```
 > [!TIP]
 > Always unsubscribe from events in `OnDestroy` to prevent memory leaks and unexpected behavior when objects are pooled or destroyed.
+### 10. Case Study: Controller Action Handling (Polling vs. Events)
+The `CharacterGameController` was refactored from a polling-based system to an event-driven one to manage action-based movement stops and resumes.
+
+**Before (Polling Pattern):**
+```csharp
+private void Update() {
+    if (_character.CharacterActions.CurrentAction != null) {
+        _movement.Stop();
+        UpdateAnimations();
+        return;
+    }
+    // ... logic to resume
+}
+```
+
+**After (Event-Driven Pattern):**
+```csharp
+private void Initialize() {
+    _actions.OnActionStarted += HandleActionStarted;
+    _actions.OnActionFinished += HandleActionEnded;
+}
+
+private void HandleActionStarted(CharacterAction a) {
+    _wasDoingAction = true;
+    _movement.Stop();
+}
+
+private void HandleActionEnded() {
+    // Cooldown handled in Update only when necessary
+    StartResumeCooldown();
+}
+```
+> [!TIP]
+> Use events for discrete state changes (Start/End) and reserve `Update()` only for continuous logic like countdown timers or smoothing.

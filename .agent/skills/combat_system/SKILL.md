@@ -61,6 +61,9 @@ The actual implementation of the attack.
 - **`CharacterMeleeAttackAction`**: Triggers animator, spawns a `CombatStyleAttack` (hitbox) via Animation Event.
 - **`CharacterRangedAttackAction`**: Spawns a `Projectile` towards the target.
 
+> [!NOTE]
+> All combat actions must override **`ShouldPlayGenericActionAnimation`** to return **`false`**. This prevents the generic "busy" animation from overriding the specific `MeleeAttack` or `RangedAttack` triggers managed by the `CharacterAnimator`.
+
 ### 4. Damage Resolution Rules
 1. **Damage Type**: Always check `WeaponSO.DamageType` first. If no weapon is equipped, use `CombatStyleSO.DamageType` (fallback for barehands, usually Blunt).
 2. **Formula**: `PhysicalPower (from Stats) * Style.PhysicalPowerPercentage + Style.BaseDamage + (ScalingStatValue * Style.StatMultiplier)`.

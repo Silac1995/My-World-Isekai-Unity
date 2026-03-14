@@ -19,19 +19,29 @@ namespace MWI.AI
             NPCController npc = self.Controller as NPCController;
             if (npc == null) return BTNodeStatus.Failure;
 
-            // Trouver le besoin le plus urgent
-            var urgentNeed = needs.AllNeeds
+            // Trouver les besoins actifs triés par urgence
+            var activeNeeds = needs.AllNeeds
                 .Where(n => n.IsActive())
                 .OrderByDescending(n => n.GetUrgency())
-                .FirstOrDefault();
+                .ToList();
 
-            if (urgentNeed == null) return BTNodeStatus.Failure;
+            if (activeNeeds.Count == 0) return BTNodeStatus.Failure;
 
             // Tenter de résoudre le besoin
-            if (urgentNeed.Resolve(npc))
+            // SÉCURITÉ : On ne résout un besoin que si le NPC est "libre" (Wander ou Idle).
+            // Si une pile de comportements spécialisés est déjà là, on attend qu'elle finisse.
+            if (!(npc.CurrentBehaviour is WanderBehaviour) && npc.CurrentBehaviour != null)
             {
-                bb.Set(Blackboard.KEY_URGENT_NEED, urgentNeed);
-                return BTNodeStatus.Success;
+                return BTNodeStatus.Failure;
+            }
+
+            foreach (var need in activeNeeds)
+            {
+                if (need.Resolve(npc))
+                {
+                    bb.Set(Blackboard.KEY_URGENT_NEED, need);
+                    return BTNodeStatus.Success;
+                }
             }
 
             return BTNodeStatus.Failure;

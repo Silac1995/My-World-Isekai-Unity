@@ -39,7 +39,8 @@ namespace MWI.AI
             }
         }
 
-        public void Act(Character selfCharacter)
+        public void Enter(Character selfCharacter) { }
+    public void Act(Character selfCharacter)
         {
             if (_isFinished || _isWaiting) return;
 

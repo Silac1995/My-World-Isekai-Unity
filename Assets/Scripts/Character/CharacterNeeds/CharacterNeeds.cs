@@ -47,29 +47,18 @@ public class CharacterNeeds : MonoBehaviour
         // Seul le WanderBehaviour peut être interrompu par un besoin
         if (!(npc.CurrentBehaviour is WanderBehaviour)) return;
 
-        // Optimization: Reduce LINQ allocations and overhead
-        CharacterNeed urgentNeed = null;
-        float maxUrgency = -1f;
+        // Get active needs sorted by urgency
+        var activeNeeds = _allNeeds
+            .Where(n => n.IsActive())
+            .OrderByDescending(n => n.GetUrgency())
+            .ToList();
 
-        for (int i = 0; i < _allNeeds.Count; i++)
+        foreach (var need in activeNeeds)
         {
-            var need = _allNeeds[i];
-            if (need.IsActive())
+            if (need.Resolve(npc))
             {
-                float urgency = need.GetUrgency();
-                if (urgency > maxUrgency)
-                {
-                    maxUrgency = urgency;
-                    urgentNeed = need;
-                }
-            }
-        }
-
-        if (urgentNeed != null)
-        {
-            if (urgentNeed.Resolve(npc))
-            {
-                Debug.Log($"<color=orange>[Needs]</color> {npc.name} résout le besoin : {urgentNeed.GetType().Name} (Urgence: {maxUrgency})");
+                Debug.Log($"<color=orange>[Needs]</color> {npc.name} résout le besoin : {need.GetType().Name} (Urgence: {need.GetUrgency()})");
+                return;
             }
         }
     }

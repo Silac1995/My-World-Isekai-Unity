@@ -1,4 +1,4 @@
-using System;
+ï»¿using System;
 
 public abstract class CharacterAction
 {
@@ -7,21 +7,27 @@ public abstract class CharacterAction
 
     public float Duration { get; set; }
 
+    /// <summary>
+    /// Si true, le CharacterGameController dclenchera le boolen 'isDoingAction' dans l'Animator.
+    /// Les actions de combat l'outrepassent pour viter les conflits d'animation.
+    /// </summary>
+    public virtual bool ShouldPlayGenericActionAnimation => true;
+
     protected CharacterAction(Character character, float duration = 0f)
     {
         this.character = character;
         this.Duration = duration;
     }
 
-    // Nouvelle méthode de validation
+    // Nouvelle mthode de validation
     public virtual bool CanExecute() => true;
 
     public abstract void OnStart();
     public abstract void OnApplyEffect();
 
     /// <summary>
-    /// Appelé quand l'action est annulée (ex: ClearCurrentAction).
-    /// Permet de désabonner des événements pour éviter les memory leaks.
+    /// Appel quand l'action est annule (ex: ClearCurrentAction).
+    /// Permet de dsabonner des vnements pour viter les memory leaks.
     /// </summary>
     public virtual void OnCancel() { }
 

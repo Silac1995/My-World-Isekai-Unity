@@ -7,7 +7,7 @@ public class CharacterActions : MonoBehaviour
     [SerializeField] private Character _character;
 
     public Action<CharacterAction> OnActionStarted;
-    public Action OnActionCanceled;
+    public Action OnActionFinished;
     private float _actionStartTime; // Pour calculer la progression
 
     private CharacterAction _currentAction;
@@ -99,7 +99,7 @@ public class CharacterActions : MonoBehaviour
         _currentAction = null;
         _actionRoutine = null;
 
-        OnActionCanceled?.Invoke();
+        OnActionFinished?.Invoke();
     }
 
     // Remplace ou ajoute cette méthode dans CharacterActions.cs
@@ -122,7 +122,7 @@ public class CharacterActions : MonoBehaviour
                 animHandler.ResetActionTriggers();
             }
 
-            OnActionCanceled?.Invoke();
+            OnActionFinished?.Invoke();
         }
 
         _currentAction = null;

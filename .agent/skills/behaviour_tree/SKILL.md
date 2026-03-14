@@ -43,5 +43,10 @@ To bypass autonomous AI and force an action (e.g., a mind-control spell, player'
 - `CancelOrder()`: Cancels the ongoing order.
 - `ForceNextTick()`: Call this if the NPC has just been unfrozen (`IsFrozen = false`) and needs to react very quickly without waiting for its 5-frame cycle.
 
-## Updating Nodes
-The BT's terminal actions should, whenever possible, implement the `IAIBehaviour` interface so they can be properly managed (using `.Act()`, `.Exit()`, `.Terminate()`, `.IsFinished`).
+## 4. AI Behaviour Life Cycle (`IAIBehaviour`)
+Any terminal action or character state must implement the `IAIBehaviour` interface to ensure a clean transition life cycle managed by the `CharacterGameController`.
+
+- `Enter(Character self)`: Initialization. Called once when the behaviour is pushed or set. Use for setting initial destinations or clearing animation triggers.
+- `Act(Character self)`: The update loop. Called every frame while the behaviour is on top of the stack.
+- `Exit(Character self)`: Cleanup. Called when the behaviour is popped or replaced. **Must stop ongoing coroutines and reset paths**.
+- `Terminate()`: Logic flag (`_isFinished = true`) to signal the controller to pop the behaviour and resume the previous one.

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using UnityEngine;
 
 public class MoveToTargetBehaviour : IAIBehaviour
@@ -28,6 +28,7 @@ public class MoveToTargetBehaviour : IAIBehaviour
         _onArrived = onArrived;
     }
 
+    public void Enter(Character selfCharacter) { }
     public void Act(Character character)
     {
         if (_targetGameObject == null && _targetPosition == Vector3.zero)

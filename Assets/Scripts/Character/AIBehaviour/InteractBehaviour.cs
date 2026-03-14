@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 
 public class InteractBehaviour : IAIBehaviour
 {
@@ -8,9 +8,10 @@ public class InteractBehaviour : IAIBehaviour
 
     public void Terminate() => _isFinished = true;
 
-    public void Act(Character self)
+    public void Enter(Character selfCharacter) { }
+    public void Act(Character selfCharacter)
     {
-        Character target = self.CharacterInteraction.CurrentTarget;
+        Character target = selfCharacter.CharacterInteraction.CurrentTarget;
 
         if (target == null)
         {
@@ -21,16 +22,16 @@ public class InteractBehaviour : IAIBehaviour
         // Premier tick : on coupe net tout mouvement résiduel
         if (!_hasStopped)
         {
-            self.CharacterMovement?.ResetPath();
-            self.CharacterMovement?.Stop();
+            selfCharacter.CharacterMovement?.ResetPath();
+            selfCharacter.CharacterMovement?.Stop();
             _hasStopped = true;
         }
 
-        self.CharacterMovement?.Stop();
+        selfCharacter.CharacterMovement?.Stop();
     }
 
-    public void Exit(Character self)
+    public void Exit(Character selfCharacter)
     {
-        Debug.Log($"{self.CharacterName} sort de l'état d'interaction.");
+        Debug.Log($"{selfCharacter.CharacterName} sort de l'état d'interaction.");
     }
 }

@@ -1,10 +1,10 @@
-using UnityEngine;
+ï»¿using UnityEngine;
 
 public class CharacterEquipAction : CharacterAction
 {
     private EquipmentInstance _equipment;
 
-    // On ajoute un délai de 0.8s pour l'action d'équipement
+    // On ajoute un dlai de 0.8s pour l'action d'quipement
     public CharacterEquipAction(Character character, EquipmentInstance equipment)
         : base(character, 0.8f)
     {
@@ -15,25 +15,11 @@ public class CharacterEquipAction : CharacterAction
     {
         if (_equipment == null) { Finish(); return; }
 
-        var animator = character.CharacterVisual?.CharacterAnimator?.Animator;
-        if (animator != null)
-        {
-            // On lance la boucle
-            animator.SetBool(CharacterAnimator.IsDoingAction, true);
-        }
-
-        Debug.Log($"{character.CharacterName} prépare l'équipement...");
+        Debug.Log($"{character.CharacterName} prpare l'quipement...");
     }
 
     public override void OnApplyEffect()
     {
         character.CharacterEquipment.Equip(_equipment);
-
-        // On coupe la boucle ici car l'effet est appliqué et l'action se termine
-        var animator = character.CharacterVisual?.CharacterAnimator?.Animator;
-        if (animator != null)
-        {
-            animator.SetBool(CharacterAnimator.IsDoingAction, false);
-        }
     }
 }

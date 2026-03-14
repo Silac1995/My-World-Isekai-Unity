@@ -1,4 +1,4 @@
-using UnityEngine;
+ï»¿using UnityEngine;
 
 public class FollowTargetBehaviour : IAIBehaviour
 {
@@ -14,6 +14,8 @@ public class FollowTargetBehaviour : IAIBehaviour
         _followDistance = followDistance;
     }
 
+    public void Enter(Character selfCharacter) { }
+
     public void Terminate() => _isFinished = true;
 
     public void Act(Character self)
@@ -27,13 +29,13 @@ public class FollowTargetBehaviour : IAIBehaviour
 
         if (distance > _followDistance)
         {
-            // RÉVEIL FORCÉ : On s'assure que rien ne bloque
+            // R?VEIL FORC? : On s'assure que rien ne bloque
             controller.CharacterMovement.ForceResume();
             controller.CharacterMovement.SetDestination(_targetCharacter.transform.position);
         }
         else
         {
-            // On est proche, là on a le droit de stopper
+            // On est proche, l? on a le droit de stopper
             controller.CharacterMovement.Stop();
 
             Vector3 direction = _targetCharacter.transform.position - self.transform.position;

@@ -159,11 +159,20 @@ public class Character : MonoBehaviour
         
         if (_characterTraits == null) _characterTraits = GetComponentInChildren<CharacterTraits>();
         if (_characterCommunity == null) _characterCommunity = GetComponentInChildren<CharacterCommunity>();
+        if (_characterInvitation == null) _characterInvitation = GetComponentInChildren<CharacterInvitation>();
         if (_characterJob == null) _characterJob = GetComponentInChildren<CharacterJob>();
         if (_characterSchedule == null) _characterSchedule = GetComponentInChildren<CharacterSchedule>();
         if (_characterSkills == null) _characterSkills = GetComponent<CharacterSkills>();
         if (_characterMentorship == null) _characterMentorship = GetComponent<CharacterMentorship>();
         if (_characterLocations == null) _characterLocations = GetComponent<CharacterLocations>();
+        if (_characterInteraction == null) _characterInteraction = GetComponent<CharacterInteraction>();
+        if (_characterNeeds == null) _characterNeeds = GetComponent<CharacterNeeds>();
+        if (_characterCombat == null) _characterCombat = GetComponent<CharacterCombat>();
+        if (_characterRelation == null) _characterRelation = GetComponent<CharacterRelation>();
+        if (_characterActions == null) _characterActions = GetComponent<CharacterActions>();
+        if (_characterMovement == null) _characterMovement = GetComponent<CharacterMovement>();
+        if (_characterVisual == null) _characterVisual = GetComponentInChildren<CharacterVisual>();
+        if (_characterAwareness == null) _characterAwareness = GetComponentInChildren<CharacterAwareness>();
         
         _cachedNavMeshAgent = GetComponent<NavMeshAgent>();
         _isDead = false;

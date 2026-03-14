@@ -35,6 +35,11 @@ public class WanderBehaviour : IAIBehaviour
         _wanderZone = wanderZone;
     }
 
+    public void Enter(Character selfCharacter)
+    {
+        // Initialization logic if needed (currently handled in constructor, but can be moved here)
+    }
+
     public void Act(Character selfCharacter)
     {
         var movement = selfCharacter.CharacterMovement;

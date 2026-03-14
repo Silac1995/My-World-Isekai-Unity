@@ -49,6 +49,14 @@ A character in your game can switch from an autonomous civilian AI (NPC) to a Pl
   - **UI Setup**: Finds the GameObject **"UI_PlayerHUD"** and calls `PlayerUI.Initialize(this)`. This pushes notification channels to the equipment system.
 - `SwitchToNPC()`: 
   - Reverts controllers and reactivates NavMesh.
-  - **Notification Cleanup**: Calls `CharacterEquipment.ClearNotifications()` to prevent NPC actions from triggering UI events.
+  ## 5. Character Actions and Movement Control
+The `CharacterActions` component manages distinct, timed actions (Gathering, Crafting, Attacking). These actions are integrated into the `CharacterGameController` via an event-driven system to manage character availability and movement.
+
+- **`OnActionStarted`**: Triggered when a `CharacterAction` begins. The controller automatically stops movement and sets the `isDoingAction` animator bool (if the action allows it).
+- **`OnActionFinished`**: Triggered when an action ends or is cancelled. This initiates a short **Action Cooldown** (default: 0.5s) before the character can resume navigation.
+- **`ShouldPlayGenericActionAnimation`**: Each `CharacterAction` can opt-out of the generic "busy" animation to prevent flickering or overriding specific animations (like Combat).
+
+> [!IMPORTANT]
+> To stop a character during an action, always prefer using the `CharacterActions` system rather than manually calling `Stop()` in `Update()`. This ensures consistent behavior across Player and NPC controllers.
 
 > In case of an input or navigation bug, always first verify that the correct Controller is turned on via this Switch system.

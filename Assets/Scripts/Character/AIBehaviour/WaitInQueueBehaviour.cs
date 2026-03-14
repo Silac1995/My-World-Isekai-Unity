@@ -30,6 +30,7 @@ public class WaitInQueueBehaviour : IAIBehaviour
         }
     }
 
+    public void Enter(Character selfCharacter) { }
     public void Act(Character character)
     {
         if (_shop == null || _isFinished) return;

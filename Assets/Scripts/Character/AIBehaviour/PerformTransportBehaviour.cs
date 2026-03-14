@@ -30,6 +30,7 @@ public class PerformTransportBehaviour : IAIBehaviour
         _currentOrder = transporterJob.CurrentOrder;
     }
 
+    public void Enter(Character selfCharacter) { }
     public void Act(Character selfCharacter)
     {
         if (_isFinished || _isWaiting || _currentOrder == null) return;

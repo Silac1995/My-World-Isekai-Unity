@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 
 public class IdleBehaviour : IAIBehaviour
 {
@@ -8,6 +8,7 @@ public class IdleBehaviour : IAIBehaviour
 
     public void Terminate() => _isFinished = true;
 
+    public void Enter(Character selfCharacter) { }
     public void Act(Character self)
     {
         if (!_isStopped)
