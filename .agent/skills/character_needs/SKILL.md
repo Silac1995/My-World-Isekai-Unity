@@ -42,3 +42,9 @@ The `BTCond_HasUrgentNeed` node handles needs for NPCs with a BT. It includes a 
 - `NeedSocial`: Drives NPCs to find a partner and start an interaction.
 - `NeedJob`: Drives unemployed NPCs to find a boss/building and ask for a job.
 - `NeedToWearClothing`: Drives NPCs to put on clothes if they are naked.
+
+### 5. Proactive Resolution (GOAP)
+For long-term goals (like finding a job), the system can leverage a proactive planning layer:
+1. **Sensors**: `CharacterGoapController.UpdateWorldState()` observes the current state of `CharacterNeeds`.
+2. **Planner**: `GoapPlanner` generates a multi-step plan to satisfy a life goal (e.g., `FindJob`).
+3. **Execution**: The `BTAction_ExecuteGoapPlan` node in the Behaviour Tree (Priority 5) manages the sequential execution of these GOAP actions.

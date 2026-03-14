@@ -21,10 +21,11 @@ The current tree evaluates in this order:
 2. **Combat** (`BTCond_IsInCombat`): The NPC is already engaged in combat.
 3. **Assistance** (`BTCond_FriendInDanger`): The NPC sees an ally under attack.
 4. **Aggression** (`BTCond_DetectedEnemy`): The NPC detects a threat and attacks it.
-5. **Needs** (`BTCond_HasUrgentNeed`): Hunger, urgent rest, clothing...
-6. **Schedule** (`BTCond_HasScheduledActivity`): Daily routines (Work, regular sleep).
-7. **Social** (`BTCond_WantsToSocialize`): Spontaneous discussions and interactions.
-8. **Wander** (`BTAction_Wander`): The Fallback, the NPC wanders.
+5. **GOAP** (`BTAction_ExecuteGoapPlan`): Proactive life planning (Job search, personal goals).
+6. **Needs** (`BTCond_HasUrgentNeed`): Hunger, urgent rest, clothing... (Urgent fallback).
+7. **Schedule** (`BTCond_HasScheduledActivity`): Daily routines (Work, regular sleep).
+8. **Social** (`BTCond_WantsToSocialize`): Spontaneous discussions and interactions.
+9. **Wander** (`BTAction_Wander`): The Fallback, the NPC wanders.
 
 *If you add a new behavior, think about which node to insert it into or the position of the new conditional node in the `BuildTree()` method of `NPCBehaviourTree`.*
 
@@ -35,7 +36,8 @@ The current tree evaluates in this order:
     - A dead character does not tick.
     - `Controller.IsFrozen` pauses the BT (useful for strong cutscenes/dialogues).
     - `CharacterInteraction.IsInteracting` pauses the BT to avoid unpredictable movements or interaction cancellations (e.g., sitting down).
-    - The old system (`Controller.CurrentBehaviour != null`) pauses the BT. *The long-term goal is likely to replace all behaviors with the BT or GOAP, but this is the current rule*.
+    - **GOAP Bridge**: `BTAction_ExecuteGoapPlan` delegates specific life-planning logic to `CharacterGoapController`. If a GOAP action pushes a behaviour to the old stack (like a `MoveToTargetBehaviour`), the BT automatically pauses as long as that behaviour is active.
+    - The old system (`Controller.CurrentBehaviour != null`) pauses the BT.
 
 ### 3. Public API (External Interaction)
 To bypass autonomous AI and force an action (e.g., a mind-control spell, player's Build mode, etc.):

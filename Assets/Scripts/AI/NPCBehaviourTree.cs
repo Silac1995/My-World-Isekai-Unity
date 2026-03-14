@@ -36,6 +36,7 @@ public class NPCBehaviourTree : MonoBehaviour
     private BTCond_HasUrgentNeed _needsNode;
     private BTCond_HasScheduledActivity _scheduleNode;
     private BTCond_WantsToSocialize _socialNode;
+    private BTAction_ExecuteGoapPlan _goapNode;
     private BTAction_Wander _wanderNode;
 
     [Header("Performance")]
@@ -86,6 +87,7 @@ public class NPCBehaviourTree : MonoBehaviour
         _needsNode = new BTCond_HasUrgentNeed();
         _scheduleNode = new BTCond_HasScheduledActivity();
         _socialNode = new BTCond_WantsToSocialize();
+        _goapNode = new BTAction_ExecuteGoapPlan();
         _wanderNode = new BTAction_Wander();
 
         return new BTSelector(
@@ -93,10 +95,11 @@ public class NPCBehaviourTree : MonoBehaviour
             _combatNode,        // 2. Combat actif
             _friendNode,        // 3. Entraide
             _enemyNode,         // 4. Agression
-            _needsNode,         // 5. Besoins
-            _scheduleNode,      // 6. Schedule
-            _socialNode,        // 7. Social
-            _wanderNode         // 8. Wander (fallback)
+            _goapNode,          // 5. GOAP (Life Goals / Proactive)
+            _needsNode,         // 6. Besoins (Urgent/Réactif)
+            _scheduleNode,      // 7. Schedule
+            _socialNode,        // 8. Social
+            _wanderNode         // 9. Wander (fallback)
         );
     }
 
@@ -194,6 +197,7 @@ public class NPCBehaviourTree : MonoBehaviour
         else if (_needsNode.IsRunning) _currentNodeName = "Needs";
         else if (_scheduleNode.IsRunning) _currentNodeName = "Schedule";
         else if (_socialNode.IsRunning) _currentNodeName = "Social";
+        else if (_goapNode.IsRunning) _currentNodeName = "GOAP";
         else if (_wanderNode.IsRunning) _currentNodeName = "Wander";
         else _currentNodeName = "None";
     }

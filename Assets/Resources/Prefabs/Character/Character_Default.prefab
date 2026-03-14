@@ -1,5 +1,51 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
+--- !u!1 &13943566291826573
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 3576894322142989136}
+  - component: {fileID: 8601409522411222074}
+  m_Layer: 0
+  m_Name: GOAPController
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &3576894322142989136
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 13943566291826573}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: -1.20455, y: 0.05719, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 6179432398992828966}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &8601409522411222074
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 13943566291826573}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fd400535d1f5458449eaeaf8968783f0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CharacterGoapController
+  _character: {fileID: 2536622428659117900}
+  _planReevaluationInterval: 2
 --- !u!1 &226592772466241420
 GameObject:
   m_ObjectHideFlags: 0
@@ -609,6 +655,7 @@ Transform:
   m_ConstrainProportionsScale: 1
   m_Children:
   - {fileID: 110975066696998304}
+  - {fileID: 3576894322142989136}
   - {fileID: 7433225657293554030}
   - {fileID: 9190579779038921305}
   - {fileID: 673712489822227902}
@@ -735,6 +782,7 @@ MonoBehaviour:
   _characterSkills: {fileID: 2759972866297852151}
   _characterMentorship: {fileID: 7383321509428321023}
   _characterLocations: {fileID: 4198040619971064388}
+  _characterGoap: {fileID: 8601409522411222074}
   _testDialogue: {fileID: 0}
 --- !u!114 &2677209831397210094
 MonoBehaviour:
@@ -1520,6 +1568,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 614c4c669e9c7b948b800d54b4746da0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::DialogueManager
+  _currentDialogue: {fileID: 0}
+  _testParticipants: []
   _choicesWindow: {fileID: 0}
 --- !u!1 &7134676473740008436
 GameObject:
@@ -1675,6 +1725,7 @@ MonoBehaviour:
   armorLayer: {fileID: 0}
   _bagScript: {fileID: 0}
   _bagSockets: []
+  _inventoryNotificationChannel: {fileID: 0}
 --- !u!1 &8922584864793057334
 GameObject:
   m_ObjectHideFlags: 0

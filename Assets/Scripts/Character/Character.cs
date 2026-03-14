@@ -58,6 +58,7 @@ public class Character : MonoBehaviour
     [SerializeField] private CharacterSkills _characterSkills;
     [SerializeField] private CharacterMentorship _characterMentorship;
     [SerializeField] private CharacterLocations _characterLocations;
+    [SerializeField] private CharacterGoapController _characterGoap;
     #endregion
 
     #region Private Fields
@@ -117,6 +118,7 @@ public class Character : MonoBehaviour
     public CharacterSkills CharacterSkills => _characterSkills;
     public CharacterMentorship CharacterMentorship => _characterMentorship;
     public CharacterLocations CharacterLocations => _characterLocations;
+    public CharacterGoapController CharacterGoap => _characterGoap;
 
     public NavMeshAgent NavMesh => _cachedNavMeshAgent;
     public TimeManager TimeManager => _timeManager != null ? _timeManager : TimeManager.Instance;
@@ -165,6 +167,7 @@ public class Character : MonoBehaviour
         if (_characterSkills == null) _characterSkills = GetComponent<CharacterSkills>();
         if (_characterMentorship == null) _characterMentorship = GetComponent<CharacterMentorship>();
         if (_characterLocations == null) _characterLocations = GetComponent<CharacterLocations>();
+        if (_characterGoap == null) _characterGoap = GetComponent<CharacterGoapController>();
         if (_characterInteraction == null) _characterInteraction = GetComponent<CharacterInteraction>();
         if (_characterNeeds == null) _characterNeeds = GetComponent<CharacterNeeds>();
         if (_characterCombat == null) _characterCombat = GetComponent<CharacterCombat>();
