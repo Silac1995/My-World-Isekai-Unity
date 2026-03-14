@@ -60,6 +60,7 @@ This section maps all specialized skills available in this project. Refer to the
 | Skill | Purpose |
 |---|---|
 | `character-visuals` | 2.5D rendering (Billboarding), Race Presets, and logical Body Part API |
+| `spine-unity` | Technical standards and implementation patterns for Spine-Unity integration |
 | `dialogue-system` | Scripted conversations, speech bubbles, and player input advancement |
 | `social-system` | Dynamic interactions and compatibility-based long-term relationships |
 
