@@ -4,6 +4,8 @@ using UnityEngine;
 public class CharacterCommunity : MonoBehaviour
 {
     [SerializeField] private Character _character;
+    [Header("Debug")]
+    [SerializeField] private string _debugCommunityName = "New Community";
 
     private Community _currentCommunity;
 
@@ -16,71 +18,70 @@ public class CharacterCommunity : MonoBehaviour
     }
 
     /// <summary>
-    /// Checks if this character has the required traits and close friends to found a new community.
-    /// Requirements: 'CanCreateCommunity' trait and at least 4 close relationships (Friend+).
+    /// Checks if this character meets requirements to found a new "Small Group" community.
+    /// If the character is already in a community, the new one becomes a sub-community.
+    /// Requirements: 'CanCreateCommunity' trait, at least 4 friends, and NOT already LEADING a community.
     /// </summary>
     public void CheckAndCreateCommunity()
     {
-        if (_character == null || _character.CharacterTraits == null || !_character.CharacterTraits.CanCreateCommunity()) 
-        {
-            // Debug.Log($"[Community Debug] {_character?.CharacterName} failed CanCreateCommunity trait check.");
-            return;
-        }
+        if (_character == null) return;
 
-        // To prevent community spam (200+ communities bug),
-        // ONLY characters who are NOT in a community yet can found one.
-        if (_currentCommunity != null)
-        {
-            Debug.Log($"[Community Debug] {_character.CharacterName} failed check because they already belong to a community: {_currentCommunity.communityName}");
-            return;
-        }
+        // 1. Requirement: Trait
+        if (_character.CharacterTraits == null || !_character.CharacterTraits.CanCreateCommunity()) return;
 
-        // Count close friends
-        int closeFriendsCount = 0;
-        List<Character> potentialMembers = new List<Character>();
+        // 2. Requirement: Not already leading a community (cannot lead two)
+        if (_currentCommunity != null && _currentCommunity.leader == _character) return;
 
-        if (_character.CharacterRelation != null)
-        {
-            foreach (var rel in _character.CharacterRelation.Relationships)
-            {
-                if (rel.RelatedCharacter != null && rel.RelatedCharacter.IsAlive() &&
-                    _character.CharacterRelation.IsFriend(rel.RelatedCharacter))
-                {
-                    closeFriendsCount++;
-                    potentialMembers.Add(rel.RelatedCharacter);
-                }
-            }
-        }
+        // 3. Requirement: 4 Friends
+        int friendCount = _character.CharacterRelation != null ? _character.CharacterRelation.GetFriendCount() : 0;
+        if (friendCount < 4) return;
 
-        if (closeFriendsCount >= 4)
+        // Founding
+        CreateCommunity();
+    }
+
+    /// <summary>
+    /// Creates a new community. If currently in one, the new one is a sub-community.
+    /// </summary>
+    public void CreateCommunity()
+    {
+        string newCommName = $"{_character.CharacterName}'s Small Group of Friends";
+        Community parent = _currentCommunity; // Capture current community to make it a parent
+        
+        Community newComm = null;
+        if (CommunityManager.Instance != null)
         {
-            CreateCommunity(potentialMembers);
+            newComm = CommunityManager.Instance.CreateNewCommunity(_character, newCommName);
         }
         else
         {
-            Debug.Log($"[Community Debug] {_character.CharacterName} failed check because they only have {closeFriendsCount} close friends.");
+            newComm = new Community(newCommName, _character);
+        }
+
+        if (newComm != null)
+        {
+            // Link hierarchy if founder was in a community
+            if (parent != null)
+            {
+                parent.AddSubCommunity(newComm);
+            }
+
+            SetCurrentCommunity(newComm);
+            newComm.ChangeLevel(CommunityLevel.SmallGroup);
+            
+            Debug.Log($"<color=cyan>[Character Community]</color> {_character.CharacterName} founded a new {(parent != null ? "sub-" : "independent ")}Community '{newCommName}'.");
         }
     }
 
-    public void CreateCommunity(List<Character> potentialMembers)
+    /// <summary>
+    /// Declares independence from the parent community if this character is the leader.
+    /// </summary>
+    public void BreakFreeFromParent()
     {
-        string newCommName = $"{_character.CharacterName}'s Band";
-        Community newComm = new Community(newCommName, _character);
-        
-        // We NO LONGER add initialMembers directly. 
-        // The leader creates the community for themselves first,
-        // and will invite friends later through Interactions.
-
-        // Set the founder's own community reference (this adds them as a member in the Community constructor/logic)
-        SetCurrentCommunity(newComm);
-
-        // Root community registration
-        if (CommunityManager.Instance != null)
+        if (_currentCommunity != null && _currentCommunity.leader == _character)
         {
-            CommunityManager.Instance.RegisterCommunity(newComm);
+            _currentCommunity.DeclareIndependence();
         }
-        
-        Debug.Log($"<color=cyan>[Character Community]</color> {_character.CharacterName} founded a new independent Community '{newCommName}' and is looking for {potentialMembers.Count} members to invite!");
     }
 
     public void SetCurrentCommunity(Community newCommunity)
@@ -127,5 +128,33 @@ public class CharacterCommunity : MonoBehaviour
             target.CharacterCommunity.LeaveCurrentCommunity();
         }
     }
-    [ContextMenu("Create Community")] public void CreateCommunity() => CreateCommunity(new List<Character>());
+    [ContextMenu("Debug Create Community")] 
+    public void DebugCreateCommunity()
+    {
+        string originalName = _character.CharacterName;
+        // Temporarily override name or just use the debug string
+        string customName = string.IsNullOrEmpty(_debugCommunityName) ? $"{originalName}'s Band" : _debugCommunityName;
+        
+        CreateCommunity(customName);
+    }
+
+    private void CreateCommunity(string name)
+    {
+        Community newComm = null;
+        if (CommunityManager.Instance != null)
+        {
+            newComm = CommunityManager.Instance.CreateNewCommunity(_character, name);
+        }
+        else
+        {
+            newComm = new Community(name, _character);
+        }
+
+        if (newComm != null)
+        {
+            SetCurrentCommunity(newComm);
+            newComm.ChangeLevel(CommunityLevel.SmallGroup);
+            Debug.Log($"<color=cyan>[Character Community]</color> {_character.CharacterName} founded '{name}'.");
+        }
+    }
 }

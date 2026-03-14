@@ -72,6 +72,7 @@ This section maps all specialized skills available in this project. Refer to the
 | `shop-system` | Commercial logic: customer queuing, vendors, and sales |
 | `job-system` | Ecosystem connecting employees, jobs, and commercial building workplaces |
 | `logistics-cycle` | Supply chain management, restocking, and transport orders |
+| `community-system` | Social and territorial structure: hierarchy, membership, and zones |
 
 ### UI
 | Skill | Purpose |

@@ -168,21 +168,39 @@ public class GoapAction_GatherResources : GoapAction
                     _currentTarget = null;
                     return;
                 }
-                else if (movement.RemainingDistance <= movement.StoppingDistance + 1f)
+                else
                 {
-                    _isGathering = true;
-                    _gatherAction = new CharacterGatherAction(worker, _currentTarget);
-
-                    _gatherAction.OnActionFinished += () =>
+                    // Vérification robuste : on attend d'être physiquement dans ou très proche de l'InteractionZone
+                    bool isAtTarget = false;
+                    if (_currentTarget.InteractionZone != null)
                     {
-                        _gatherFinished = true;
-                        Debug.Log($"<color=cyan>[GOAP Gather]</color> {worker.CharacterName} a fini de récolter, recherche du WorldItem...");
-                    };
-
-                    if (!worker.CharacterActions.ExecuteAction(_gatherAction))
+                        isAtTarget = _currentTarget.InteractionZone.bounds.Contains(worker.transform.position) || 
+                                     Vector3.Distance(worker.transform.position, _currentTarget.InteractionZone.bounds.ClosestPoint(worker.transform.position)) <= 0.5f;
+                    }
+                    else
                     {
-                        Debug.Log($"<color=orange>[GOAP Gather]</color> {worker.CharacterName} ne peut pas lancer la récolte.");
-                        _isComplete = true; // This ends the action!
+                        isAtTarget = movement.RemainingDistance <= movement.StoppingDistance + 1f;
+                    }
+
+                    if (isAtTarget)
+                    {
+                        // S'assurer de faire face à la cible
+                        worker.transform.LookAt(new Vector3(_currentTarget.transform.position.x, worker.transform.position.y, _currentTarget.transform.position.z));
+                        
+                        _isGathering = true;
+                        _gatherAction = new CharacterGatherAction(worker, _currentTarget);
+
+                        _gatherAction.OnActionFinished += () =>
+                        {
+                            _gatherFinished = true;
+                            Debug.Log($"<color=cyan>[GOAP Gather]</color> {worker.CharacterName} a fini de récolter, recherche du WorldItem...");
+                        };
+
+                        if (!worker.CharacterActions.ExecuteAction(_gatherAction))
+                        {
+                            Debug.Log($"<color=orange>[GOAP Gather]</color> {worker.CharacterName} ne peut pas lancer la récolte.");
+                            _isComplete = true; // This ends the action!
+                        }
                     }
                 }
             }

@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using UnityEngine;
 
 public class CharacterRelation : MonoBehaviour
@@ -32,6 +32,22 @@ public class CharacterRelation : MonoBehaviour
         if (rel == null) return false;
         
         return rel.RelationType == RelationshipType.Enemy;
+    }
+
+    /// <summary>
+    /// Returns the total number of friends (including lovers and soulmates).
+    /// </summary>
+    public int GetFriendCount()
+    {
+        int count = 0;
+        foreach (var rel in _relationships)
+        {
+            if (IsFriend(rel.RelatedCharacter))
+            {
+                count++;
+            }
+        }
+        return count;
     }
 
     // Ajoute une nouvelle relation (Bilatéral : ils se connaissent)

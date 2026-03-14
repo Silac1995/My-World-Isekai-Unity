@@ -27,6 +27,31 @@ public class CharacterGatherAction : CharacterAction
             return false;
         }
 
+        // Vérification de la portée via l'InteractionZone (Collider) de l'objet
+        if (_target.InteractionZone != null)
+        {
+            if (!_target.InteractionZone.bounds.Contains(character.transform.position))
+            {
+                // Fallback : On vérifie si on est au moins très proche du centre du collider (pour les petits colliders ou offsets)
+                float dist = Vector3.Distance(character.transform.position, _target.InteractionZone.bounds.ClosestPoint(character.transform.position));
+                if (dist > 0.5f)
+                {
+                    Debug.LogWarning($"<color=orange>[Gather Action]</color> {character.CharacterName} est trop loin de la zone d'interaction de {_target.gameObject.name}.");
+                    return false;
+                }
+            }
+        }
+        else
+        {
+            // Fallback si pas de zone : distance fixe
+            float dist = Vector3.Distance(character.transform.position, _target.transform.position);
+            if (dist > 3f)
+            {
+                Debug.LogWarning($"<color=orange>[Gather Action]</color> {character.CharacterName} est trop loin pour récolter {_target.gameObject.name} (pas de zone d'interaction).");
+                return false;
+            }
+        }
+
         return true;
     }
 

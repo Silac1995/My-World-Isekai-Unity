@@ -63,12 +63,33 @@ public class Community
         }
     }
 
+    /// <summary>
+    /// Adds a sub-community. Note that a parent only tracks its DIRECT children.
+    /// </summary>
     public void AddSubCommunity(Community subComm)
     {
+        if (subComm == null || subComm == this) return;
+
         if (!subCommunities.Contains(subComm))
         {
+            // If it already has a parent, leave it first
+            subComm.DeclareIndependence();
+
             subCommunities.Add(subComm);
             subComm.parentCommunity = this;
+        }
+    }
+
+    /// <summary>
+    /// Breaks the link with the parent community, making this community independent.
+    /// </summary>
+    public void DeclareIndependence()
+    {
+        if (parentCommunity != null)
+        {
+            Debug.Log($"<color=orange>[Community]</color> {communityName} has declared independence from {parentCommunity.communityName}!");
+            parentCommunity.subCommunities.Remove(this);
+            parentCommunity = null;
         }
     }
 

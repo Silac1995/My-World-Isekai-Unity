@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using System.Linq;
 
 public class InteractionTalk : ICharacterInteractionAction
@@ -43,31 +43,19 @@ public class InteractionTalk : ICharacterInteractionAction
 
         Debug.Log($"<color=lightblue>[Talk]</color> Besoin social satisfait pour {source.CharacterName} et {target.CharacterName}.");
 
-        // --- CHECK COMMUNITY CREATION ---
-        // At the end of the interaction, check if either character can form a community
+        // --- DEBUG: COMMUNITY CREATION ---
         if (source.CharacterCommunity != null)
         {
             source.CharacterCommunity.CheckAndCreateCommunity();
         }
-        if (target.CharacterCommunity != null)
-        {
-            target.CharacterCommunity.CheckAndCreateCommunity();
-        }
 
-        // --- TEMPORARY MENTORSHIP TEST ---
-        // Vérifie si la cible peut enseigner quelque chose à la source
-        // InteractionMentorship demoMentorship = new InteractionMentorship(null);
-        // if (demoMentorship.CanExecute(source, target))
-        // {
-        //     Debug.Log($"<color=magenta>[TEST]</color> {source.CharacterName} demande un mentorat forcé à {target.CharacterName}.");
-        //     demoMentorship.Execute(source, target);
-        // }
-        // Test inverse (Source enseigne à target)
-        // InteractionMentorship demoMentorshipReverse = new InteractionMentorship(null);
-        // if (demoMentorshipReverse.CanExecute(target, source))
-        // {
-        //     Debug.Log($"<color=magenta>[TEST]</color> {target.CharacterName} demande un mentorat forcé à {source.CharacterName}.");
-        //     demoMentorshipReverse.Execute(target, source);
-        // }
+        // --- DEBUG: COMMUNITY INVITATION ---
+        // If source is a leader, automatically try to invite the target (if they are a friend)
+        var inviteAction = new InteractionInviteCommunity();
+        if (inviteAction.CanExecute(source, target))
+        {
+            Debug.Log($"<color=cyan>[DEBUG]</color> {source.CharacterName} (Founder) invites {target.CharacterName} to their community.");
+            inviteAction.Execute(source, target);
+        }
     }
 }
