@@ -41,7 +41,15 @@ public void RequestActionRpc(int actionId) { /* Logic */ }
 - **BufferSerializer:** Use the unified `NetworkSerialize` method for both reading and writing.
 - **Constraints:** Avoid `string` (use `FixedString`), avoid `List` (use `NativeArray` or buffers if possible).
 
-### 5. Object Spawning & Prefabs
+### 5. Ownership and Authority
+- **The Rule:** Validate everything on the server. Clients "request" actions; the server "executes" them if valid.
+- **Player Objects:** The client has ownership of their local player character. Use `IsOwner` to gate input in `PlayerController`.
+- **NPC Authority:** NPCs are **Server-Authoritative**. Their AI controllers (`NPCController`, Behaviour Trees) MUST only run on the server (`IsServer`).
+- **Possession Switch:** When switching between NPC and Player control:
+    - Enable `PlayerController` ONLY if `IsOwner` AND the character is currently player-controlled.
+    - Enable `NPCController` (and AI) ONLY if `IsServer` AND the character is NOT player-controlled.
+
+### 6. Object Spawning & Prefabs
 - **NetworkObject:** Must be at the root of the prefab. Nested `NetworkObject`s are prohibited.
 - **Registration:** Prefabs MUST be registered in the `NetworkManager`'s NetworkPrefabs list.
 - **Spawning:** Only the server can call `Spawn()`. Use `networkObject.Despawn(true)` for cleanup.

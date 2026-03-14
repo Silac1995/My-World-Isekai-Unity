@@ -100,4 +100,35 @@ public class ConnectionManager : MonoBehaviour {
         }
     }
 }
+## 5. Player/NPC Controller Switching
+Handling characters that can be either an NPC or a Player in multiplayer.
+
+```csharp
+public class CharacterControllerManager : NetworkBehaviour {
+    [SerializeField] private PlayerController playerController;
+    [SerializeField] private NPCController npcController;
+    
+    // Sync which mode the brain is in
+    public NetworkVariable<bool> IsPlayerControlled = new NetworkVariable<bool>(false);
+
+    public override void OnNetworkSpawn() {
+        IsPlayerControlled.OnValueChanged += OnBrainChanged;
+        RefreshControllers();
+    }
+
+    private void OnBrainChanged(bool prev, bool current) => RefreshControllers();
+
+    private void RefreshControllers() {
+        // 1. Player Controller: Only active for the OWNER if it's player-controlled
+        playerController.enabled = IsOwner && IsPlayerControlled.Value;
+
+        // 2. NPC Controller: Only active on the SERVER if it's NOT player-controlled
+        npcController.enabled = IsServer && !IsPlayerControlled.Value;
+        
+        // Ensure AI components (BT) are also gated by IsServer
+        if (TryGetComponent<NPCBehaviourTree>(out var bt)) {
+            bt.enabled = IsServer && !IsPlayerControlled.Value;
+        }
+    }
+}
 ```
