@@ -12,6 +12,7 @@ namespace MWI.AI
         private CraftingOrder _currentOrder;
         private CraftingStation _currentStation;
         private JobLogisticsManager _manager;
+        private System.Action _onFinished;
 
         private bool _isFinished = false;
         private bool _isWaiting = false;
@@ -21,17 +22,18 @@ namespace MWI.AI
         {
             SearchingOrder,
             MovingToStation,
-            Crafting
+            ExecutingAction
         }
 
         private CraftPhase _currentPhase = CraftPhase.SearchingOrder;
 
         public bool IsFinished => _isFinished;
 
-        public PerformCraftBehaviour(NPCController npc, JobCrafter job)
+        public PerformCraftBehaviour(NPCController npc, JobCrafter job, System.Action onFinished = null)
         {
             _npc = npc;
             _job = job;
+            _onFinished = onFinished;
 
             if (_job.Workplace is CraftingBuilding cb)
             {
@@ -57,8 +59,8 @@ namespace MWI.AI
                     HandleMovementToStation(selfCharacter, movement);
                     break;
 
-                case CraftPhase.Crafting:
-                    _craftCoroutine = _npc.StartCoroutine(WaitAndCraft(selfCharacter, 5f)); // 5 secondes de craft
+                case CraftPhase.ExecutingAction:
+                    HandleCraftingExecution(selfCharacter);
                     break;
             }
         }
@@ -128,47 +130,57 @@ namespace MWI.AI
                 {
                     // Arrivé à la station
                     movement.ResetPath();
-                    _currentPhase = CraftPhase.Crafting;
+                    _currentStation.Use(self);
+
+                    // TODO: Gérer la couleur dynamiquement selon l'ItemSO si nécessaire (ex: via une palette ou recette)
+                    Color targetColor = Color.white; 
+                    
+                    self.CharacterActions.ExecuteAction(new CharacterCraftAction(self, _currentOrder.ItemToCraft, targetColor, default, 5f));
+                    _currentPhase = CraftPhase.ExecutingAction;
                 }
             }
         }
 
-        private IEnumerator WaitAndCraft(Character self, float time)
+        private void HandleCraftingExecution(Character self)
         {
-            _isWaiting = true;
-            Debug.Log($"<color=cyan>[PerformCraft]</color> {self.CharacterName} commence la fabrication de {_currentOrder.ItemToCraft.ItemName}...");
+            // Vérifier si l'action est toujours en cours
+            var currentAction = self.CharacterActions.CurrentAction;
             
-            // TODO: Jouer animation d'artisanat selon la station (Enclume, Etabli...)
-            
-            yield return new WaitForSeconds(time);
-
-            // Crafting terminé
-            if (_currentStation != null && _currentOrder != null)
+            // Soit il fait spécifiquement un CharacterCraftAction, soit il n'a pas encore eu le temps de s'initialiser
+            if (currentAction != null && currentAction is CharacterCraftAction)
             {
-                ItemInstance craftedItem = _currentStation.Craft(_currentOrder.ItemToCraft, self);
-                if (craftedItem != null)
-                {
-                    _manager.UpdateCraftingOrderProgress(_currentOrder, 1);
-                    
-                    if (_job.RequiredSkill != null && self.CharacterSkills != null)
-                    {
-                        self.CharacterSkills.GainXP(_job.RequiredSkill, 10);
-                    }
-                }
+                return; // On attend la fin
             }
 
+            // L'action est terminée ou annulée. On vérifie si elle a réussi.
+            // Actuellement, Action_Craft Item applique l'effet directement. 
+            // On peut détecter le succès global soit en vérifiant l'XP ou la commande.
+            // (La station aura crafté l'objet physiquement).
+            
+            if (_manager != null && _currentOrder != null)
+            {
+                // Note : CharacterCraftAction appelle _station.Craft() qui crée l'objet.
+                // On notifie le manager logistique que la commande avance.
+                _manager.UpdateCraftingOrderProgress(_currentOrder, 1);
+            }
+
+            if (_job.RequiredSkill != null && self.CharacterSkills != null)
+            {
+                self.CharacterSkills.GainXP(_job.RequiredSkill, 10);
+            }
+
+            FinishBehaviour();
+        }
+
+        private void FinishBehaviour()
+        {
+            if (_isFinished) return;
             _isFinished = true;
-            _isWaiting = false;
-            _craftCoroutine = null;
+            _onFinished?.Invoke();
         }
 
         public void Exit(Character selfCharacter)
         {
-            if (_npc != null && _craftCoroutine != null)
-            {
-                _npc.StopCoroutine(_craftCoroutine);
-                _craftCoroutine = null;
-            }
 
             if (_currentStation != null && _currentStation.Occupant == selfCharacter)
             {
@@ -179,6 +191,9 @@ namespace MWI.AI
             selfCharacter.CharacterMovement?.ResetPath();
         }
 
-        public void Terminate() => _isFinished = true;
+        public void Terminate()
+        {
+            FinishBehaviour();
+        }
     }
 }

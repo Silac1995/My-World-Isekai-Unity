@@ -22,16 +22,30 @@ public class JobBlacksmith : JobCrafter
     /// </summary>
     public CraftingStation CurrentStation => _currentStation;
 
+    private float _cooldownTimer = 0f;
+    private const float CRAFT_COOLDOWN = 2f;
+
     public override void Execute()
     {
         if (_worker == null) return;
+
+        if (_cooldownTimer > 0f)
+        {
+            _cooldownTimer -= Time.deltaTime;
+            return;
+        }
 
         var npcController = _worker.GetComponent<NPCController>();
         if (npcController != null && !npcController.HasBehaviour<MWI.AI.PerformCraftBehaviour>())
         {
             // Le BT ou le behaviour gérera la recherche de commande et de station
-            npcController.PushBehaviour(new MWI.AI.PerformCraftBehaviour(npcController, this));
+            npcController.PushBehaviour(new MWI.AI.PerformCraftBehaviour(npcController, this, OnCraftFinished));
         }
+    }
+
+    private void OnCraftFinished()
+    {
+        _cooldownTimer = CRAFT_COOLDOWN;
     }
 
     public override bool CanExecute()

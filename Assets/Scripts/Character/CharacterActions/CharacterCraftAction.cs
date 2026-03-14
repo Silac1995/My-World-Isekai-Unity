@@ -59,11 +59,8 @@ public class CharacterCraftAction : CharacterAction
         {
             _station.Craft(_itemToCraft, character, _primaryColor, _secondaryColor);
 
-            // Si c'est un NPC, il libère la station une fois fini. (Le joueur la libère en fermant la fenêtre UI).
-            if (character.Controller is NPCController)
-            {
-                _station.Release();
-            }
+            // Si c'est le joueur, il la libère en fermant la fenêtre UI.
+            // Pour les NPCs, c'est géré par PerformCraftBehaviour.Exit() ou l'action appelante.
         }
         else
         {
