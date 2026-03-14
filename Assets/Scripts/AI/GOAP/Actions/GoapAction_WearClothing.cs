@@ -17,64 +17,84 @@ public class GoapAction_WearClothing : GoapAction
     public override float Cost => 1f;
 
     private bool _isComplete = false;
-    private bool _hasStartedMoving = false;
+    private bool _isMoving = false;
+    private ItemInteractable _targetInteractable;
     
     public override bool IsComplete => _isComplete;
 
     public override bool IsValid(Character worker)
     {
+        if (_isComplete) return false;
+        if (_targetInteractable != null && _targetInteractable.RootGameObject != null) return true;
+
         List<WearableType> missingTypes = GetMissingTypes(worker);
-        return FindClosestWearable(worker, missingTypes) != null;
+        _targetInteractable = FindClosestWearable(worker, missingTypes);
+        return _targetInteractable != null;
     }
 
     public override void Execute(Character worker)
     {
         if (_isComplete) return;
 
-        NPCController npc = worker.Controller as NPCController;
-        if (npc == null)
+        if (_targetInteractable == null || _targetInteractable.RootGameObject == null || _targetInteractable.ItemInstance is not EquipmentInstance equip)
         {
             _isComplete = true;
             return;
         }
 
-        if (_hasStartedMoving)
+        var movement = worker.CharacterMovement;
+        if (movement == null)
         {
-            // The action is complete when we stop moving
-            if (!(npc.CurrentBehaviour is MoveToTargetBehaviour))
+            _isComplete = true;
+            return;
+        }
+
+        GameObject rootObject = _targetInteractable.RootGameObject;
+        Vector3 targetPos = rootObject.transform.position;
+
+        // On ignore l'axe Y pour la distance
+        Vector3 currentPos = worker.transform.position;
+        currentPos.y = 0;
+        targetPos.y = 0;
+        
+        float distance = Vector3.Distance(currentPos, targetPos);
+
+        // 1. Déplacement vers l'objet
+        if (distance > 1.2f)
+        {
+            if (!_isMoving || movement.PathStatus == UnityEngine.AI.NavMeshPathStatus.PathInvalid || (!movement.HasPath && !movement.PathPending))
             {
-                _isComplete = true;
+                movement.SetDestination(rootObject.transform.position);
+                _isMoving = true;
             }
             return;
         }
 
-        List<WearableType> missingTypes = GetMissingTypes(worker);
-        ItemInteractable targetInteractable = FindClosestWearable(worker, missingTypes);
-
-        if (targetInteractable != null && targetInteractable.ItemInstance is EquipmentInstance equip)
+        // 2. Arrivé à l'objet
+        if (_isMoving)
         {
-            _hasStartedMoving = true;
-            GameObject rootObject = targetInteractable.RootGameObject;
-
-            Action atArrival = () => {
-                if (targetInteractable == null) return;
-                
-                // If we successfully acquire it from the world
-                if (targetInteractable.TryCollect())
-                {
-                    CharacterEquipAction equipAction = new CharacterEquipAction(worker, equip);
-                    worker.CharacterActions.ExecuteAction(equipAction);
-                    
-                    if (rootObject != null) UnityEngine.Object.Destroy(rootObject);
-                }
-            };
-
-            npc.PushBehaviour(new MoveToTargetBehaviour(npc, rootObject, 1.2f, atArrival));
+            movement.Stop();
+            _isMoving = false;
         }
-        else
+
+        // 3. Collecter et équiper
+        if (_targetInteractable.TryCollect())
         {
-            _isComplete = true;
+            CharacterEquipAction equipAction = new CharacterEquipAction(worker, equip);
+            worker.CharacterActions.ExecuteAction(equipAction);
+            
+            if (rootObject != null) UnityEngine.Object.Destroy(rootObject);
         }
+
+        _isComplete = true;
+    }
+
+    public override void Exit(Character worker)
+    {
+        _isComplete = false;
+        _isMoving = false;
+        _targetInteractable = null;
+        worker.CharacterMovement?.Resume();
     }
 
     private List<WearableType> GetMissingTypes(Character worker)

@@ -16,13 +16,18 @@ public class GoapAction_Socialize : GoapAction
     public override float Cost => 2f;
 
     private bool _isComplete = false;
-    private bool _hasStartedMoving = false;
+    private bool _isMoving = false;
+    private Character _target;
     
     public override bool IsComplete => _isComplete;
 
     public override bool IsValid(Character worker)
     {
-        return FindBestSocialPartner(worker) != null;
+        if (_isComplete) return false;
+        if (_target != null && _target.IsAlive() && _target.IsFree()) return true;
+
+        _target = FindBestSocialPartner(worker);
+        return _target != null;
     }
 
     public override void Execute(Character worker)
@@ -31,46 +36,62 @@ public class GoapAction_Socialize : GoapAction
 
         if (worker.CharacterInteraction.IsInteracting)
         {
-            return;
+            return; // on attend la fin de l'interaction
         }
 
-        NPCController npc = worker.Controller as NPCController;
-        if (npc == null)
+        if (_target == null || !_target.IsAlive() || !_target.IsFree())
         {
             _isComplete = true;
             return;
         }
 
-        if (_hasStartedMoving)
+        var movement = worker.CharacterMovement;
+        if (movement == null) 
         {
-            if (!(npc.CurrentBehaviour is MoveToTargetBehaviour))
+            _isComplete = true;
+            return;
+        }
+
+        Vector3 targetPos = _target.transform.position;
+        Vector3 currentPos = worker.transform.position;
+        currentPos.y = 0;
+        targetPos.y = 0;
+        
+        float distance = Vector3.Distance(currentPos, targetPos);
+
+        // 1. Déplacement vers la cible (Socialize trigger distance is roughly 7f as per old behaviour)
+        if (distance > 7f)
+        {
+            if (!_isMoving || movement.PathStatus == UnityEngine.AI.NavMeshPathStatus.PathInvalid || (!movement.HasPath && !movement.PathPending))
             {
-                _isComplete = true; 
+                movement.SetDestination(_target.transform.position);
+                _isMoving = true;
             }
             return;
         }
 
-        Character target = FindBestSocialPartner(worker);
-        if (target != null)
+        // 2. Arrivé près de la cible
+        if (_isMoving)
         {
-            _hasStartedMoving = true;
-            npc.PushBehaviour(new MoveToTargetBehaviour(npc, target.gameObject, 7f, () =>
-            {
-                if (target == null || !target.IsAlive())
-                {
-                    return;
-                }
+            movement.Stop();
+            _isMoving = false;
+        }
 
-                worker.CharacterInteraction.StartInteractionWith(target, onPositioned: () => 
-                {
-                    // Optionally logic here on positioned 
-                });
-            }));
-        }
-        else
+        // 3. Déclencher l'interaction
+        worker.CharacterInteraction.StartInteractionWith(_target, onPositioned: () => 
         {
-            _isComplete = true;
-        }
+            // Optionally logic here on positioned 
+        });
+
+        _isComplete = true;
+    }
+
+    public override void Exit(Character worker)
+    {
+        _isComplete = false;
+        _isMoving = false;
+        _target = null;
+        worker.CharacterMovement?.Resume();
     }
 
     private Character FindBestSocialPartner(Character worker)
@@ -81,7 +102,7 @@ public class GoapAction_Socialize : GoapAction
         var nearbyPartners = awareness.GetVisibleInteractables<CharacterInteractable>()
             .Select(interactable => interactable.Character)
             .Where(c => c != null && c.IsAlive() && c.IsFree() && c != worker
-                     && !(c.Controller is NPCController npc && npc.CurrentBehaviour != null && npc.CurrentBehaviour.GetType().Name == "WorkBehaviour"))
+                     && c.CharacterSchedule?.CurrentActivity != ScheduleActivity.Work)
             .ToList();
 
         if (!nearbyPartners.Any()) return null;

@@ -76,21 +76,91 @@ public class CharacterInteraction : MonoBehaviour
         Debug.Log($"<color=cyan>[Interaction]</color> {_character.CharacterName} démarre le positionnement pour {target.CharacterName}.");
 
         // --- POSITIONNEMENT DE L'INITIATEUR ---
-        if (_character.Controller is NPCController npc)
+        if (_character.Controller is NPCController)
         {
             // Arrêter l'animation de marche immédiatement
             _character.CharacterVisual?.CharacterAnimator?.StopLocomotion();
 
-            // Déplacement précis avec callback : On freeze + lance le dialogue UNE FOIS en place
-            npc.PushBehaviour(new MoveToInteractionBehaviour(npc, target, () => 
-            {
-                ExecuteInteraction(target, forcedFirstAction, onPositioned);
-            }));
+            // Déplacement précis avec Coroutine : On se déplace vers la cible, puis ExecuteInteraction
+            if (_activeDialogueCoroutine != null) StopCoroutine(_activeDialogueCoroutine);
+            _activeDialogueCoroutine = StartCoroutine(MoveToInteractionRoutine(target, forcedFirstAction, onPositioned));
         }
         else
         {
-            // Si pas de controller, on lance direct le dialogue
+            // Si pas de controller (ou joueur manuel), on lance direct le dialogue
             ExecuteInteraction(target, forcedFirstAction, onPositioned);
+        }
+    }
+
+    private System.Collections.IEnumerator MoveToInteractionRoutine(Character target, ICharacterInteractionAction forcedFirstAction, Action onPositioned)
+    {
+        float timeoutTimer = 0f;
+        const float TIMEOUT_DURATION = 5f;
+        var movement = _character.CharacterMovement;
+        var detector = _character.GetComponent<CharacterInteractionDetector>();
+        var targetInteractable = target.CharacterInteractable;
+        
+        while (true)
+        {
+            if (target == null || !target.IsFree())
+            {
+                Debug.LogWarning($"<color=orange>[Interaction]</color> Cible perdue pendant le mouvement.");
+                EndInteraction();
+                yield break;
+            }
+
+            timeoutTimer += Time.deltaTime;
+            if (timeoutTimer > TIMEOUT_DURATION)
+            {
+                Debug.LogWarning($"<color=orange>[Interaction]</color> Timeout de positionnement pour {_character.CharacterName} vers {target.CharacterName}. ABORT.");
+                EndInteraction();
+                yield break;
+            }
+
+            bool isCloseEnough = false;
+
+            Vector3 targetPos = target.transform.position;
+            // Offset de 2 unités sur l'axe X pour le face-à-face (ici 4)
+            float xOffset = _character.transform.position.x > targetPos.x ? 4f : -4f;
+            Vector3 desiredPos = new Vector3(targetPos.x + xOffset, _character.transform.position.y, targetPos.z);
+
+            float distDelta = Vector3.Distance(new Vector3(_character.transform.position.x, 0, _character.transform.position.z), 
+                                               new Vector3(desiredPos.x, 0, desiredPos.z));
+
+            if (detector != null && targetInteractable != null)
+            {
+                bool isOverlapping = detector.IsOverlapping(targetInteractable);
+                
+                // Le joueur exige un alignement parfait : même Z, distance X de 4. Pas plus, pas moins.
+                float zDiff = Mathf.Abs(_character.transform.position.z - targetPos.z);
+                float xDiff = Mathf.Abs(_character.transform.position.x - targetPos.x);
+                bool isAlignedVisually = zDiff <= 0.05f && Mathf.Abs(xDiff - 4f) <= 0.05f;
+
+                isCloseEnough = (isOverlapping && isAlignedVisually) || distDelta <= 0.05f;
+            }
+            else
+            {
+                isCloseEnough = distDelta <= 0.05f;
+            }
+
+            if (isCloseEnough)
+            {
+                _character.CharacterVisual?.FaceCharacter(target);
+                SetPositioned(true);
+                if (movement != null) movement.Stop();
+                
+                ExecuteInteraction(target, forcedFirstAction, onPositioned);
+                yield break;
+            }
+
+            SetPositioned(false);
+            if (movement != null)
+            {
+                movement.Resume();
+                movement.SetDestination(desiredPos);
+            }
+
+            yield return null;
         }
     }
 
@@ -261,10 +331,6 @@ public class CharacterInteraction : MonoBehaviour
         // Initiator cleanup
         if (_character.Controller is NPCController initNpc)
         {
-            // Nettoyer le MoveToInteraction s'il est encore dans la pile
-            if (initNpc.CurrentBehaviour is MoveToInteractionBehaviour)
-                initNpc.PopBehaviour();
-
             if (_character.GetComponent<NPCBehaviourTree>() != null)
             {
                 initNpc.ClearBehaviours();
@@ -318,21 +384,7 @@ public class CharacterInteraction : MonoBehaviour
         if (_character.Controller == null || target == null) return;
         var npc = _character.Controller as NPCController;
         if (npc == null) return;
-
-        // Check if we have a MoveToInteractionBehaviour (initiator)
-        if (npc.CurrentBehaviour is MoveToInteractionBehaviour)
-        {
-            npc.PopBehaviour();
-        }
-
-        // Check if we have a MoveToTargetBehaviour (legacy/social) targeting this specific character
-        if (npc.CurrentBehaviour is MoveToTargetBehaviour moveBehaviour)
-        {
-            if (moveBehaviour.Target == target.gameObject)
-            {
-                Debug.Log($"<color=cyan>[Interaction]</color> Cleaning up redundant MoveToTargetBehaviour for {_character.CharacterName} towards {target.CharacterName}.");
-                moveBehaviour.Terminate();
-            }
-        }
+        
+        // Native movement manages itself through the Coroutine and CharacterMovement natively.
     }
 }

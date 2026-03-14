@@ -13,14 +13,62 @@ namespace MWI.AI
         private float _lastCheckTime = -999f;
         private float _socialCooldown = 60f; // Cooldown après une interaction réussie
         private float _lastSocialTime = -999f;
+        
+        private Character _activeTarget;
+        private bool _isMoving = false;
+
+        protected override void OnExit(Blackboard bb)
+        {
+            if (_isMoving && bb.Self != null && bb.Self.CharacterMovement != null)
+            {
+                bb.Self.CharacterMovement.Stop();
+            }
+            _isMoving = false;
+            _activeTarget = null;
+        }
 
         protected override BTNodeStatus OnExecute(Blackboard bb)
         {
             Character self = bb.Self;
-            if (self == null || !self.IsFree()) return BTNodeStatus.Failure;
+            if (self == null || !self.IsFree()) return ResetAndFail(self);
 
             // --- WORK FOCUS : NPCs at work don't initiate social interactions ---
-            if (self.Controller is NPCController selfNpc && selfNpc.CurrentBehaviour != null && selfNpc.CurrentBehaviour.GetType().Name == "WorkBehaviour") return BTNodeStatus.Failure;
+            if (self.CharacterSchedule?.CurrentActivity == ScheduleActivity.Work) return ResetAndFail(self);
+
+            // Si on est DÉJÀ en train de suivre quelqu'un:
+            if (_activeTarget != null)
+            {
+                if (!_activeTarget.IsAlive() || !_activeTarget.IsFree()) return ResetAndFail(self);
+
+                var movement = self.CharacterMovement;
+                if (movement == null) return ResetAndFail(self);
+
+                Vector3 targetPos = _activeTarget.transform.position;
+                Vector3 currentPos = self.transform.position;
+                currentPos.y = 0; targetPos.y = 0;
+                
+                float distance = Vector3.Distance(currentPos, targetPos);
+
+                if (distance > 7f)
+                {
+                    if (!_isMoving || movement.PathStatus == UnityEngine.AI.NavMeshPathStatus.PathInvalid || (!movement.HasPath && !movement.PathPending))
+                    {
+                        movement.SetDestination(_activeTarget.transform.position);
+                        _isMoving = true;
+                    }
+                    return BTNodeStatus.Running; // On continue d'avancer
+                }
+
+                if (_isMoving)
+                {
+                    movement.Stop();
+                    _isMoving = false;
+                }
+
+                self.CharacterInteraction.StartInteractionWith(_activeTarget);
+                _activeTarget = null;
+                return BTNodeStatus.Success; // Terminé
+            }
 
             // Cooldown après la dernière socialisation
             if (UnityEngine.Time.time - _lastSocialTime < _socialCooldown) return BTNodeStatus.Failure;
@@ -46,7 +94,7 @@ namespace MWI.AI
                 .Select(i => i.Character)
                 .Where(c => c != null && c != self && c.IsAlive() && c.IsFree()
                     && !c.CharacterInteraction.IsInteracting
-                    && !(c.Controller is NPCController targetNpc && targetNpc.CurrentBehaviour != null && targetNpc.CurrentBehaviour.GetType().Name == "WorkBehaviour"))
+                    && c.CharacterSchedule?.CurrentActivity != ScheduleActivity.Work)
                 .ToList();
 
             if (!potentialTargets.Any()) return BTNodeStatus.Failure;
@@ -65,20 +113,22 @@ namespace MWI.AI
 
             bb.Set(Blackboard.KEY_SOCIAL_TARGET, target);
 
-            // Initier l'interaction
-            NPCController npc = self.Controller as NPCController;
-            if (npc == null) return BTNodeStatus.Failure;
-
             _lastSocialTime = UnityEngine.Time.time; // Cooldown démarre maintenant
-
-            npc.PushBehaviour(new MoveToTargetBehaviour(npc, target.gameObject, 7f, () =>
-            {
-                if (target == null || !target.IsAlive()) return;
-                self.CharacterInteraction.StartInteractionWith(target);
-            }));
+            _activeTarget = target;
 
             Debug.Log($"<color=cyan>[BT Social]</color> {self.CharacterName} engage la conversation avec {target.CharacterName}.");
-            return BTNodeStatus.Success;
+            return BTNodeStatus.Running; // Démarre le mouvement au prochain tick (ou à l'instant même selon le Selector)
+        }
+
+        private BTNodeStatus ResetAndFail(Character self)
+        {
+            if (_isMoving && self != null && self.CharacterMovement != null)
+            {
+                self.CharacterMovement.Stop();
+            }
+            _activeTarget = null;
+            _isMoving = false;
+            return BTNodeStatus.Failure;
         }
     }
 }

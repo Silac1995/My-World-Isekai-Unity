@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 
 public class CharacterStartInteraction : CharacterAction
 {
@@ -26,18 +26,8 @@ public class CharacterStartInteraction : CharacterAction
         character.CharacterInteraction.StartInteractionWith(_target);
 
         // --- CORRECTION ICI ---
-        // On ne bloque l'IA que pour les PNJs. 
-        // Le joueur doit rester libre de ses mouvements (le CheckInteractionDistance s'occupera de couper si il s'eloigne)
-
-        if (!_target.IsPlayer() && _target.Controller is NPCController targetNpc)
-        {
-            targetNpc.PushBehaviour(new InteractBehaviour());
-        }
-
-        if (!character.IsPlayer() && character.Controller is NPCController initNpc)
-        {
-            initNpc.PushBehaviour(new InteractBehaviour());
-        }
+        // Le NPC est bloqué nativement via Controller.Freeze() appelé par CharacterInteraction.
+        // On n'utilise plus InteractBehaviour.
 
         if (character.IsPlayer()) ShowInteractionUI();
 
