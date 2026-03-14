@@ -14,6 +14,7 @@ public class Furniture : MonoBehaviour
     [SerializeField] private Vector2Int _sizeInCells = new Vector2Int(0, 0);
 
     private Character _occupant;
+    private Character _reservedBy;
     private bool _sizeCalculated = false;
 
     public string FurnitureName => _furnitureName;
@@ -21,10 +22,23 @@ public class Furniture : MonoBehaviour
     public Transform InteractionPoint => _interactionPoint;
     public Vector2Int SizeInCells => _sizeInCells;
     public Character Occupant => _occupant;
+    public Character ReservedBy => _reservedBy;
     public bool IsOccupied => _occupant != null;
 
     /// <summary>
-    /// Un personnage utilise ce meuble.
+    /// Réserve le meuble pour un personnage en approche.
+    /// </summary>
+    public virtual bool Reserve(Character character)
+    {
+        if (character == null) return false;
+        if (IsOccupied || _reservedBy != null) return false;
+        
+        _reservedBy = character;
+        return true;
+    }
+
+    /// <summary>
+    /// Un personnage utilise physiquement ce meuble.
     /// </summary>
     public bool Use(Character character)
     {
@@ -36,13 +50,14 @@ public class Furniture : MonoBehaviour
         }
 
         _occupant = character;
+        _reservedBy = null; // La réservation est convertie en occupation
         _occupant.SetOccupyingFurniture(this);
         Debug.Log($"<color=cyan>[Furniture]</color> {character.CharacterName} utilise {_furnitureName}.");
         return true;
     }
 
     /// <summary>
-    /// Libère le meuble.
+    /// Libère l'utilisation ou la réservation du meuble.
     /// </summary>
     public void Release()
     {
@@ -52,6 +67,15 @@ public class Furniture : MonoBehaviour
             _occupant.SetOccupyingFurniture(null);
         }
         _occupant = null;
+        _reservedBy = null;
+    }
+
+    /// <summary>
+    /// Vérifie si le meuble est totalement libre (ni occupé, ni réservé).
+    /// </summary>
+    public virtual bool IsFree()
+    {
+        return _occupant == null && _reservedBy == null;
     }
 
     /// <summary>

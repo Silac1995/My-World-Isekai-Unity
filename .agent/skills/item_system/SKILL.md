@@ -14,7 +14,7 @@ The system is built around 4 main pillars:
 ### 1. Universal Data (`ItemSO`)
 A *ScriptableObject* containing the immutable data of the object.
 - Contains the base name, description, icon, and visual `ItemPrefab`.
-- **Crafting**: Contains the necessary ingredients via the `CraftingRecipe` variable.
+- **Crafting**: Contains the necessary ingredients via the `CraftingRecipe` variable, and the required time to craft via `CraftingDuration`.
 - Contains the "parent" SpriteResolver (`SpriteLibraryAsset`) of the object.
 - > **NEVER** store changing state (like color or durability of a sword) in an `ItemSO`. This is a serious architectural error that will affect all swords in the realm.
 

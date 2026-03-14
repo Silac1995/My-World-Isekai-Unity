@@ -289,12 +289,6 @@ public class Character : MonoBehaviour
             return false;
         }
 
-        if (OccupyingFurniture != null && OccupyingFurniture.GetComponent<CraftingStation>() != null)
-        {
-            reason = CharacterBusyReason.Crafting;
-            return false;
-        }
-
         reason = CharacterBusyReason.None;
         return true;
     }

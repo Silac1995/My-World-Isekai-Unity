@@ -89,7 +89,7 @@ namespace MWI.AI
                 {
                     foreach (var station in room.GetFurnitureOfType<CraftingStation>())
                     {
-                        if (station.CanCraft(_currentOrder.ItemToCraft) && (!station.IsOccupied || station.Occupant == self))
+                        if (station.CanCraft(_currentOrder.ItemToCraft) && (station.IsFree() || station.Occupant == self))
                         {
                             _currentStation = station;
                             break;
@@ -106,7 +106,7 @@ namespace MWI.AI
                 return;
             }
 
-            _currentStation.Use(self);
+            _currentStation.Reserve(self);
             _currentPhase = CraftPhase.MovingToStation;
         }
 
@@ -135,7 +135,7 @@ namespace MWI.AI
                     // TODO: Gérer la couleur dynamiquement selon l'ItemSO si nécessaire (ex: via une palette ou recette)
                     Color targetColor = Color.white; 
                     
-                    self.CharacterActions.ExecuteAction(new CharacterCraftAction(self, _currentOrder.ItemToCraft, targetColor, default, 5f));
+                    self.CharacterActions.ExecuteAction(new CharacterCraftAction(self, _currentOrder.ItemToCraft, targetColor, default, _currentOrder.ItemToCraft.CraftingDuration));
                     _currentPhase = CraftPhase.ExecutingAction;
                 }
             }
@@ -181,10 +181,13 @@ namespace MWI.AI
 
         public void Exit(Character selfCharacter)
         {
-
-            if (_currentStation != null && _currentStation.Occupant == selfCharacter)
+            // Libère la station si on l'occupait ou si on l'avait réservée
+            if (_currentStation != null)
             {
-                _currentStation.Release();
+                if (_currentStation.Occupant == selfCharacter || _currentStation.ReservedBy == selfCharacter)
+                {
+                    _currentStation.Release();
+                }
             }
 
             _isWaiting = false;

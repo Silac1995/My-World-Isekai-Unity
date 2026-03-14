@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using UnityEngine.U2D.Animation;
 
 [CreateAssetMenu(fileName = "ItemSO", menuName = "Scriptable Objects/ItemSO")]
@@ -29,10 +29,12 @@ public abstract class ItemSO : ScriptableObject
     [Header("Crafting Requirements")]
     [SerializeField] private SkillSO _requiredCraftingSkill;
     [SerializeField] private int _requiredCraftingLevel = 1;
+    [SerializeField] private float _craftingDuration = 3f;
     [SerializeField] private System.Collections.Generic.List<CraftingIngredient> _craftingRecipe = new System.Collections.Generic.List<CraftingIngredient>();
 
     public SkillSO RequiredCraftingSkill => _requiredCraftingSkill;
     public int RequiredCraftingLevel => _requiredCraftingLevel;
+    public float CraftingDuration => _craftingDuration;
     public System.Collections.Generic.List<CraftingIngredient> CraftingRecipe => _craftingRecipe;
 
     // On change 'virtual' en 'abstract' et on retire le corps de la méthode
