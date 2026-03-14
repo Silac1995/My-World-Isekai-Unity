@@ -55,3 +55,29 @@ Avoid sending network messages or triggering RPCs inside `Update()`.
 - **Dirty Flag Pattern**: Only sync state when it changes.
 - **NetworkVariable Callbacks**: React to value changes synced by the server.
 - **Tick-based Sync**: Use a fixed-rate tick for periodic updates (e.g., entity positions).
+### 9. Case Study: Refactoring UI_HealthBar (Polling vs. Event-Driven)
+Converting a polling-based UI element to an event-driven one significantly reduces CPU usage, especially with many UI elements. The `UI_HealthBar` system follows this principle by reacting to stat changes rather than checking them every frame.
+
+**Before (Polling Pattern):**
+```csharp
+private void Update() {
+    UpdateBar(); // Called every frame!
+}
+```
+
+**After (Event-Driven Pattern in UI_HealthBar.cs):**
+```csharp
+public void Initialize(CharacterPrimaryStats stat) {
+    _targetStat = stat;
+    _targetStat.OnAmountChanged += HandleAmountChanged;
+}
+
+private void OnDestroy() {
+    if (_targetStat != null)
+        _targetStat.OnAmountChanged -= HandleAmountChanged;
+}
+
+private void HandleAmountChanged(float oldVal, float newVal) => PushToShader();
+```
+> [!TIP]
+> Always unsubscribe from events in `OnDestroy` to prevent memory leaks and unexpected behavior when objects are pooled or destroyed.

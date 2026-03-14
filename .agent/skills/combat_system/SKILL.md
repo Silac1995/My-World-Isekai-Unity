@@ -21,6 +21,7 @@ The `BattleManager` is the supreme entity of a battle, usually instantiated when
 - **CombatEngagement**: NEW SYSTEM. The BattleManager manages brawl "subgroups" (e.g., the Warrior hits the Mage, while the Archer hits the Rogue within the same battle). Handled by the internal `_activeEngagements` list.
 - **BattleZone**: A physical zone (`BoxCollider` isTrigger) and pathfinding volume (`NavMeshModifierVolume`) is dynamically generated at the center of the initial clash to mark the terrain.
 - **Tick System**: It is the `BattleManager` that sets the pace (`PerformBattleTick()`), and *not the Update method of each character*.
+- **Performance**: Always guard expensive debug logic (e.g., `UpdateDebugEngagements`) with `#if UNITY_EDITOR` to ensure optimal performance in production builds.
 
 ### 2. CharacterCombat (Local Logic)
 This is the component every NPC/Player has in order to fight.

@@ -20,9 +20,9 @@ The system relies on a Master component (`CharacterNeeds.cs`) attached to the `C
 ### 1. The Manager: `CharacterNeeds`
 - Contains a list of all possible "Needs" for this character (`_allNeeds`).
 - Every 30 frames (to save performance), it calls `EvaluateNeeds()`.
+- **Optimization**: Use manual `for` loops and avoid LINQ (`Where`, `OrderBy`, `ToList`) inside `EvaluateNeeds` to minimize allocations in the game loop.
 - **Condition for action**: The manager **will not** trigger any need if the character's Behaviour Tree is actively doing something else. It only steps in if the current behaviour is `WanderBehaviour` (which means "I am idle").
-- It sorts all `IsActive()` needs by their Urgency (`GetUrgency()`) in descending order.
-- It attempts to resolve the most urgent need by calling its `Resolve()` method. If successful, it stops evaluating for this tick.
+- It iterates through all needs to find the most urgent `IsActive()` one. If successful, it stops evaluating for this tick.
 
 ### 2. The Abstract Need: `CharacterNeed`
 An abstract base class that every biological or social desire must implement.

@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
@@ -77,10 +77,13 @@ public class BattleManager : MonoBehaviour
             PerformBattleTick();
         }
 
+#if UNITY_EDITOR
         // Debug : mise à jour de la liste d'engagements pour l'Inspector
         UpdateDebugEngagements();
+#endif
     }
 
+#if UNITY_EDITOR
     private void UpdateDebugEngagements()
     {
         _debugEngagements.Clear();
@@ -96,6 +99,7 @@ public class BattleManager : MonoBehaviour
             _debugEngagements.Add($"[{i}] A: [{groupA}]  vs  B: [{groupB}]");
         }
     }
+#endif
 
     private void PerformBattleTick()
     {

@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using System.Linq;
@@ -29,6 +29,7 @@ public class CharacterNeeds : MonoBehaviour
             _socialNeed.UpdateValue();
         }
 
+        // Optimization: Check only every 30 frames
         if (Time.frameCount % 30 != 0) return;
 
         // Si un BT est présent, il gère la résolution des besoins via BTCond_HasUrgentNeed
@@ -46,19 +47,29 @@ public class CharacterNeeds : MonoBehaviour
         // Seul le WanderBehaviour peut être interrompu par un besoin
         if (!(npc.CurrentBehaviour is WanderBehaviour)) return;
 
-        // 1. Filtrer les besoins actifs et les trier par urgence décroissante
-        var sortedActiveNeeds = _allNeeds
-            .Where(n => n.IsActive())
-            .OrderByDescending(n => n.GetUrgency())
-            .ToList();
+        // Optimization: Reduce LINQ allocations and overhead
+        CharacterNeed urgentNeed = null;
+        float maxUrgency = -1f;
 
-        // 2. Tenter de résoudre chaque besoin, dans l'ordre, jusqu'à ce qu'un réussisse
-        foreach (var need in sortedActiveNeeds)
+        for (int i = 0; i < _allNeeds.Count; i++)
         {
-            if (need.Resolve(npc))
+            var need = _allNeeds[i];
+            if (need.IsActive())
             {
-                Debug.Log($"<color=orange>[Needs]</color> {npc.name} résout le besoin : {need.GetType().Name} (Urgence: {need.GetUrgency()})");
-                break; // On a trouvé une action à faire, on arrête de chercher pour ce cycle
+                float urgency = need.GetUrgency();
+                if (urgency > maxUrgency)
+                {
+                    maxUrgency = urgency;
+                    urgentNeed = need;
+                }
+            }
+        }
+
+        if (urgentNeed != null)
+        {
+            if (urgentNeed.Resolve(npc))
+            {
+                Debug.Log($"<color=orange>[Needs]</color> {npc.name} résout le besoin : {urgentNeed.GetType().Name} (Urgence: {maxUrgency})");
             }
         }
     }
