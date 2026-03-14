@@ -57,3 +57,14 @@ Any terminal action or character state must implement the `IAIBehaviour` interfa
 - `Act(Character self)`: The update loop. Called every frame while the behaviour is on top of the stack.
 - `Exit(Character self)`: Cleanup. Called when the behaviour is popped or replaced. **Must stop ongoing coroutines and reset paths**.
 - `Terminate()`: Logic flag (`_isFinished = true`) to signal the controller to pop the behaviour and resume the previous one.
+
+### 5. Movement vs. Interaction (Macro vs Micro)
+The architecture strictly separates pathfinding from visual positioning to prevent conflicts with the 2.5D visual rules:
+- **Macro Navigation (`MoveToTargetBehaviour`)**: The general-purpose pathfinder. Used by the AI to cross the map or reach an area. It stops when the agent is "close enough" based on a distance threshold. It does not calculate visual Z-plane alignment.
+- **Micro Positioning (`MoveToInteractionBehaviour`)**: A specialized, highly-constrained state completely owned by `CharacterInteraction`. Triggered *only* after an interaction has begun. It overrides the NavMesh to guarantee a mathematically perfect 2.5D visual alignment (exact `Z` plane match, exact `4f` distance on `X`, and overlapping `InteractionZone` colliders) before popping the dialogue bubbles.
+
+### 6. Social Filtering (Worker Focus)
+Social nodes (`BTCond_WantsToSocialize`, `NeedSocial`) autonomously scan for free targets (`Character.IsFree()`). 
+To ensure NPCs can do their jobs uninterrupted:
+- Social scans must actively filter out characters currently executing a `WorkBehaviour`.
+- This ensures workers remain `Free` so players or logistics managers can interact with them for business, but they will not be distracted by casual greetings from random passersby.

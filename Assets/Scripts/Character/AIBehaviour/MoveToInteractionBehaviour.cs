@@ -26,7 +26,7 @@ public class MoveToInteractionBehaviour : IAIBehaviour
     public void Enter(Character selfCharacter) { }
     public void Act(Character self)
     {
-        if (_targetCharacter == null || !self.CharacterInteraction.IsInteracting)
+        if (_targetCharacter == null || !_targetCharacter.IsFree())
         {
             _isFinished = true;
             return;
@@ -37,7 +37,6 @@ public class MoveToInteractionBehaviour : IAIBehaviour
         if (_timeoutTimer > TIMEOUT_DURATION)
         {
             Debug.LogWarning($"<color=orange>[Interaction]</color> Timeout de positionnement pour {self.CharacterName} vers {_targetCharacter.CharacterName}. ABORT.");
-            self.CharacterInteraction.EndInteraction();
             _isFinished = true;
             return;
         }

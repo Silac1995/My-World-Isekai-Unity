@@ -12,6 +12,8 @@ public class UI_CharacterDebugScript : MonoBehaviour
     [SerializeField] private TextMeshProUGUI agentState;
     [SerializeField] private TextMeshProUGUI busyReasonText;
     [SerializeField] private TextMeshProUGUI workPhaseGOAPText; // Add this specific field on the prefab later
+    [SerializeField] private TextMeshProUGUI btStateText;
+    [SerializeField] private TextMeshProUGUI lifeGoapStateText;
 
     private void Update()
     {
@@ -24,6 +26,7 @@ public class UI_CharacterDebugScript : MonoBehaviour
         UpdateAgentDebug();
         UpdateBusyReasonDebug();
         UpdateWorkPhaseGOAPDebug();
+        UpdateBTAndLifeGOAPDebug();
     }
 
     private void UpdateActionDebug()
@@ -206,5 +209,32 @@ public class UI_CharacterDebugScript : MonoBehaviour
 
         workPhaseGOAPText.text = $"{phaseText}\n{goapGoalText}\n{goapActionText}";
         workPhaseGOAPText.color = new Color(0.7f, 0.7f, 1f); // Light blue
+    }
+
+    private void UpdateBTAndLifeGOAPDebug()
+    {
+        if (character.Controller is NPCController npc)
+        {
+            if (btStateText != null)
+            {
+                if (npc.HasBehaviourTree)
+                    btStateText.text = "BT: " + npc.BehaviourTree.DebugCurrentNode;
+                else
+                    btStateText.text = "BT: N/A";
+            }
+
+            if (lifeGoapStateText != null)
+            {
+                if (npc.GoapController != null && npc.GoapController.CurrentAction != null)
+                    lifeGoapStateText.text = "Life GOAP: " + npc.GoapController.CurrentAction.ActionName;
+                else
+                    lifeGoapStateText.text = "Life GOAP: None";
+            }
+        }
+        else
+        {
+            if (btStateText != null) btStateText.text = "BT: N/A";
+            if (lifeGoapStateText != null) lifeGoapStateText.text = "Life GOAP: N/A";
+        }
     }
 }

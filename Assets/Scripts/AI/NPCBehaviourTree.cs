@@ -188,6 +188,8 @@ public class NPCBehaviourTree : MonoBehaviour
     //  Debug
     // ========================================
 
+    public string DebugCurrentNode => _currentNodeName;
+
     private void UpdateDebugNodeName()
     {
         if (_orderNode.IsRunning) _currentNodeName = "Order";

@@ -69,12 +69,17 @@ public class NeedJob : CharacterNeed
 
                         npc.PushBehaviour(new MoveToTargetBehaviour(npc, boss.gameObject, 2.5f, () =>
                         {
-                            if (boss == null || !boss.IsAlive() || !boss.IsFree()) return;
+                            if (boss == null || !boss.IsAlive() || !boss.IsFree()) 
+                            {
+                                npc.Character.CharacterMovement?.Resume();
+                                return;
+                            }
 
                             // Le poste a pu être pris pendant qu'on marchait vers le boss
                             if (desiredJob == null || desiredJob.IsAssigned)
                             {
                                 Debug.Log($"<color=orange>[NeedJob]</color> {_character.CharacterName} est arrivé, mais le poste de {desiredJob?.JobTitle} n'est plus disponible.");
+                                npc.Character.CharacterMovement?.Resume();
                                 return;
                             }
 

@@ -49,10 +49,13 @@ public class GoapAction_GoToBoss : GoapAction
             return;
         }
 
-        // Utilise le système de mouvement standard
-        if (!_isMoving)
+        Vector3 targetPos = _boss.transform.position;
+        var movement = worker.CharacterMovement;
+
+        // Mise à jour dynamique de la destination si la cible bouge
+        if (!_isMoving || Vector3.Distance(movement.Destination, targetPos) > 0.1f)
         {
-            worker.CharacterMovement?.SetDestination(_boss.transform.position);
+            movement?.SetDestination(targetPos);
             _isMoving = true;
         }
     }
@@ -60,5 +63,6 @@ public class GoapAction_GoToBoss : GoapAction
     public override void Exit(Character worker)
     {
         _isMoving = false;
+        worker.CharacterMovement?.ResetPath(); // Arrêt forcé si l'action est annulée par CharacterGoapController
     }
 }

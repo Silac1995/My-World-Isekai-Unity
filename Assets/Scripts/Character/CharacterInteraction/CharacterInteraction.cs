@@ -73,27 +73,7 @@ public class CharacterInteraction : MonoBehaviour
             return;
         }
 
-        CurrentTarget = target;
-        IsPositioned = false; 
-        OnInteractionStateChanged?.Invoke(target, true);
-
-        // --- FACE-À-FACE IMMÉDIAT ---
-        _character.CharacterVisual?.SetLookTarget(target);
-
-        target.CharacterInteraction.SetInteractionTargetInternal(_character);
-
-        // --- GESTION DE LA RELATION ---
-        Relationship rel = _character.CharacterRelation.AddRelationship(target);
-        if (rel != null) rel.SetAsMet();
-
-        Relationship targetRel = target.CharacterRelation.GetRelationshipWith(_character);
-        if (targetRel != null) targetRel.SetAsMet();
-
-        // --- FREEZE DE LA CIBLE (pas le joueur) ---
-        if (target.Controller != null && !target.IsPlayer())
-        {
-            target.Controller.Freeze();
-        }
+        Debug.Log($"<color=cyan>[Interaction]</color> {_character.CharacterName} démarre le positionnement pour {target.CharacterName}.");
 
         // --- POSITIONNEMENT DE L'INITIATEUR ---
         if (_character.Controller != null)
@@ -104,22 +84,50 @@ public class CharacterInteraction : MonoBehaviour
             // Déplacement précis avec callback : On freeze + lance le dialogue UNE FOIS en place
             _character.Controller.PushBehaviour(new MoveToInteractionBehaviour(_character.Controller, target, () => 
             {
-                _character.Controller.Freeze();
-                if (_activeDialogueCoroutine != null) StopCoroutine(_activeDialogueCoroutine);
-                _activeDialogueCoroutine = StartCoroutine(DialogueSequence(_character, target, forcedFirstAction));
-                onPositioned?.Invoke();
+                ExecuteInteraction(target, forcedFirstAction, onPositioned);
             }));
         }
         else
         {
             // Si pas de controller, on lance direct le dialogue
-            IsPositioned = true;
-            if (_activeDialogueCoroutine != null) StopCoroutine(_activeDialogueCoroutine);
-            _activeDialogueCoroutine = StartCoroutine(DialogueSequence(_character, target, forcedFirstAction));
-            onPositioned?.Invoke();
+            ExecuteInteraction(target, forcedFirstAction, onPositioned);
+        }
+    }
+
+    private void ExecuteInteraction(Character target, ICharacterInteractionAction forcedFirstAction, Action onPositioned)
+    {
+        if (target == null) return;
+        
+        // Double sécurité : L'un des deux a pu devenir occupé pendant le trajet !
+        if (!_character.IsFree() || !target.IsFree())
+        {
+            Debug.LogWarning($"<color=orange>[Interaction]</color> {target.CharacterName} ou {_character.CharacterName} n'est plus libre après le trajet.");
+            return;
         }
 
-        Debug.Log($"<color=cyan>[Interaction]</color> {_character.CharacterName} démarre le positionnement pour {target.CharacterName}.");
+        CurrentTarget = target;
+        IsPositioned = true; 
+        OnInteractionStateChanged?.Invoke(target, true);
+
+        // --- FACE-À-FACE IMMÉDIAT ---
+        _character.CharacterVisual?.SetLookTarget(target);
+        target.CharacterInteraction.SetInteractionTargetInternal(_character);
+
+        // --- GESTION DE LA RELATION ---
+        Relationship rel = _character.CharacterRelation.AddRelationship(target);
+        if (rel != null) rel.SetAsMet();
+
+        Relationship targetRel = target.CharacterRelation.GetRelationshipWith(_character);
+        if (targetRel != null) targetRel.SetAsMet();
+
+        // --- FREEZE DE LA CIBLE ET DE L'INITIATEUR ---
+        if (target.Controller != null && !target.IsPlayer()) target.Controller.Freeze();
+        if (_character.Controller != null) _character.Controller.Freeze();
+
+        if (_activeDialogueCoroutine != null) StopCoroutine(_activeDialogueCoroutine);
+        _activeDialogueCoroutine = StartCoroutine(DialogueSequence(_character, target, forcedFirstAction));
+        
+        onPositioned?.Invoke();
     }
 
     private System.Collections.IEnumerator DialogueSequence(Character initiator, Character target, ICharacterInteractionAction forcedFirstAction = null)

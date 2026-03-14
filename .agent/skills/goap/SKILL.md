@@ -45,3 +45,8 @@ The action is the basic building block of everyday life.
 ### 3. Planner Logic (`GoapPlanner`)
 - It performs a backward search from the Life Goal and finds the logical and daily sequence to accomplish it.
 - **Balancing tip**: Set up chains of logical preconditions that force the NPC to live their life (to get married requires a high level of affinity, to have affinity requires the "Socialize" action, etc.).
+
+### 4. GOAP & Interaction Synchronization (Critical Rule)
+When a `GoapAction` triggers a `CharacterInteraction` (e.g., asking for a job, talking to a boss), the GOAP Action **must not complete** (`_isComplete = true`) immediately after starting the interaction. 
+- It must explicitly remain running (`return;`) as long as `worker.CharacterInteraction.IsInteracting` is true.
+- Failing to do so causes the GOAP planner to finish the plan prematurely, handing control back to the Behaviour Tree. The BT will then evaluate the fallback node (`BTAction_Wander`) and override the interaction's movement, causing the NPC to walk away mid-conversation or get stuck.
