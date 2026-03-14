@@ -153,6 +153,8 @@ public abstract class CommercialBuilding : Building
                 charJob.TakeJob(ownerJob, this);
             }
         }
+    }
+
     /// <summary>
     /// Le building a-t-il un owner/boss (individuel) ?
     /// </summary>
@@ -187,14 +189,11 @@ public abstract class CommercialBuilding : Building
             return false;
         }
 
-        // Si le job est un métier d'artisanat, on vérifie les prérequis de compétences
-        if (job is JobCrafter crafterJob)
+        // Vérifie les prérequis spécifiques du métier (ex: compétences pour un artisan)
+        if (!job.CanTakeJob(applicant))
         {
-            if (!crafterJob.CheckRequirements(applicant))
-            {
-                Debug.Log($"<color=orange>[Building]</color> {applicant.CharacterName} n'a pas les compétences requises pour le poste de {job.JobTitle}.");
-                return false;
-            }
+            Debug.Log($"<color=orange>[Building]</color> {applicant.CharacterName} n'a pas les prérequis pour le poste de {job.JobTitle}.");
+            return false;
         }
 
         // Embauche approuvée. On retourne true pour que le CharacterJob.TakeJob()

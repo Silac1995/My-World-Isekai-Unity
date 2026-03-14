@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using System.Linq;
 using MWI.AI;
 
@@ -13,9 +13,12 @@ public class NPCController : CharacterGameController
     public float MinWaitTime { get => minWaitTime; set => minWaitTime = value; }
     public float MaxWaitTime { get => maxWaitTime; set => maxWaitTime = value; }
 
-    // Référence au BT (null si pas de BT)
-    private NPCBehaviourTree _behaviourTree;
+    [Header("AI Controllers")]
+    [SerializeField] private NPCBehaviourTree _behaviourTree;
+    [SerializeField] private CharacterGoapController _goapController;
+
     public NPCBehaviourTree BehaviourTree => _behaviourTree;
+    public CharacterGoapController GoapController => _goapController;
     public bool HasBehaviourTree => _behaviourTree != null;
 
     public override void Initialize()
@@ -34,10 +37,21 @@ public class NPCController : CharacterGameController
         }
         if (Agent != null) Agent.updateRotation = false;
 
-        // Chercher le BT sur le même GameObject
-        _behaviourTree = GetComponentInParent<NPCBehaviourTree>();
+        // Chercher le BT sur le même GameObject si pas assigné dans l'inspecteur
         if (_behaviourTree == null)
-            _behaviourTree = GetComponent<NPCBehaviourTree>();
+        {
+            _behaviourTree = GetComponentInParent<NPCBehaviourTree>();
+            if (_behaviourTree == null)
+                _behaviourTree = GetComponent<NPCBehaviourTree>();
+        }
+
+        // Chercher le GoapController sur le même GameObject si pas assigné dans l'inspecteur
+        if (_goapController == null)
+        {
+            _goapController = GetComponentInParent<CharacterGoapController>();
+            if (_goapController == null)
+                _goapController = GetComponent<CharacterGoapController>();
+        }
 
         if (HasBehaviourTree)
         {
@@ -76,7 +90,7 @@ public class NPCController : CharacterGameController
         // On ne réagit qu'en mode Wander (balade) ou en Pause au travail
         bool isWandering = GetCurrentBehaviour<WanderBehaviour>() != null;
         var workBehaviour = GetCurrentBehaviour<WorkBehaviour>();
-        bool isOnBreak = workBehaviour != null && workBehaviour.IsOnBreak;
+        bool isOnBreak = workBehaviour != null && _character.CharacterJob?.CurrentJob?.CurrentGoalName == "Idle";
 
         if (!isWandering && !isOnBreak) return;
 
@@ -84,7 +98,7 @@ public class NPCController : CharacterGameController
         if (target.Controller is NPCController targetNPC)
         {
             var targetWorkBehaviour = targetNPC.GetCurrentBehaviour<WorkBehaviour>();
-            isTargetOnBreak = targetWorkBehaviour != null && targetWorkBehaviour.IsOnBreak;
+            isTargetOnBreak = targetWorkBehaviour != null && target.CharacterJob?.CurrentJob?.CurrentGoalName == "Idle";
         }
 
         bool areCoworkers = _character.CharacterJob != null && target.CharacterJob != null &&
@@ -162,6 +176,9 @@ public class NPCController : CharacterGameController
 
         // --- 3. SÉCURITÉ SOCIALE : Si la cible n'est pas libre (combat, busy), on s'arrête ici pour le social ---
         if (!target.IsFree()) return;
+        
+        // --- WORK FOCUS : On ne dérange pas un travailleur (sauf s'il est techniquement en pause) ---
+        if (!isTargetOnBreak && target.Controller != null && target.Controller.CurrentBehaviour is WorkBehaviour) return;
         
         // --- 4. LOGIQUE D'INCOMPATIBILITÉ (PERSONNALITÉ) ---
         // On teste ça même si on ne se connaît pas encore (d'instinct)
@@ -277,7 +294,9 @@ public class NPCController : CharacterGameController
     {
         // First check if an invite is possible and roll for it (e.g. 50% chance if eligible)
         var inviteAction = new InteractionInviteCommunity();
-        if (inviteAction.CanExecute(_character, target))
+        bool targetThinking = target.CharacterInvitation != null && target.CharacterInvitation.HasPendingInvitation;
+
+        if (!targetThinking && inviteAction.CanExecute(_character, target))
         {
             if (Random.value > 0.5f)
             {

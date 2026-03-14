@@ -7,6 +7,9 @@ public class NeedJob : CharacterNeed
     // ou être fixe à 60 (Moyennement urgent, moins que la survie, plus que le blabla).
     private const float BASE_URGENCY = 60f;
 
+    private float _lastAttemptTime = -999f;
+    private const float RETRY_COOLDOWN = 10f; // Seconds before retrying to find a job
+
     public NeedJob(Character character) : base(character)
     {
     }
@@ -27,6 +30,13 @@ public class NeedJob : CharacterNeed
 
     public override bool Resolve(NPCController npc)
     {
+        // --- RETRY COOLDOWN : Prevent tight AI loops when failing to find/talk to a boss ---
+        if (UnityEngine.Time.time - _lastAttemptTime < RETRY_COOLDOWN)
+        {
+            return false;
+        }
+        _lastAttemptTime = UnityEngine.Time.time;
+
         if (BuildingManager.Instance == null || BuildingManager.Instance.allBuildings.Count == 0)
         {
             return false;
@@ -50,17 +60,23 @@ public class NeedJob : CharacterNeed
                 // Le boss doit être instancié, en vie et libre pour qu'on aille lui parler
                 if (boss != null && boss.IsAlive() && boss.IsFree())
                 {
-                    var availableJobs = commercial.GetAvailableJobs();
+                    var availableJobs = commercial.GetAvailableJobs().Where(j => j.CanTakeJob(_character));
                     if (availableJobs != null && availableJobs.Any())
                     {
                         var desiredJob = availableJobs.First();
 
                         Debug.Log($"<color=cyan>[NeedJob]</color> {_character.CharacterName} va demander le poste de {desiredJob.JobTitle} à {boss.CharacterName}.");
 
-                        // On lance le comportement pour aller physiquement lui parler
                         npc.PushBehaviour(new MoveToTargetBehaviour(npc, boss.gameObject, 2.5f, () =>
                         {
                             if (boss == null || !boss.IsAlive() || !boss.IsFree()) return;
+
+                            // Le poste a pu être pris pendant qu'on marchait vers le boss
+                            if (desiredJob == null || desiredJob.IsAssigned)
+                            {
+                                Debug.Log($"<color=orange>[NeedJob]</color> {_character.CharacterName} est arrivé, mais le poste de {desiredJob?.JobTitle} n'est plus disponible.");
+                                return;
+                            }
 
                             // Une fois arrivé devant le boss, on déclenche l'interaction de demande d'emploi
                             npc.Character.CharacterInteraction.StartInteractionWith(boss, new InteractionAskForJob(commercial, desiredJob));

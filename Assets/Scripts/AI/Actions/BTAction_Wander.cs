@@ -1,17 +1,125 @@
+using UnityEngine;
+using UnityEngine.AI;
+
 namespace MWI.AI
 {
     /// <summary>
-    /// Wrappe WanderBehaviour dans le BT.
-    /// Retourne toujours Running (le wander est un fallback infini).
+    /// Implémentation native de l'exploration (Wander) pour le Behaviour Tree.
+    /// Ne dépend plus de l'ancien IAIBehaviour (WanderBehaviour) pour éviter 
+    /// les conflits de Coroutines sous-jacentes.
     /// </summary>
-    public class BTAction_Wander : BTActionNode
+    public class BTAction_Wander : BTNode
     {
-        protected override IAIBehaviour CreateBehaviour(Blackboard bb)
+        private float _waitEndTime = 0f;
+        private bool _isWaiting = false;
+
+        private float _edgePressureEndTime = 0f;
+        private const float MAX_EDGE_PRESSURE_TIME = 3f;
+        private const float EDGE_DETECTION_DIST = 1.5f;
+        private const float FORCE_NEW_DEST_DIST = 0.5f;
+
+        protected override void OnEnter(Blackboard bb)
+        {
+            _isWaiting = false;
+            _edgePressureEndTime = 0f;
+            PickNewDestination(bb);
+        }
+
+        protected override BTNodeStatus OnExecute(Blackboard bb)
         {
             Character self = bb.Self;
-            NPCController npc = self?.Controller as NPCController;
-            if (npc == null) return null;
-            return new WanderBehaviour(npc);
+            if (self == null) return BTNodeStatus.Failure;
+
+            var movement = self.CharacterMovement;
+            if (movement == null) return BTNodeStatus.Failure;
+
+            if (_isWaiting)
+            {
+                if (UnityEngine.Time.time >= _waitEndTime)
+                {
+                    _isWaiting = false;
+                    PickNewDestination(bb);
+                }
+                return BTNodeStatus.Running;
+            }
+
+            // Vérifier si on est arrivé à destination
+            if (!movement.PathPending && (!movement.HasPath || movement.RemainingDistance <= movement.StoppingDistance + 0.5f))
+            {
+                StartWaiting(bb.Self);
+                return BTNodeStatus.Running;
+            }
+
+            // Détection anti-glissement sur les bords
+            if (NavMesh.FindClosestEdge(self.transform.position, out NavMeshHit hit, NavMesh.AllAreas))
+            {
+                if (hit.distance < FORCE_NEW_DEST_DIST)
+                {
+                    if (_edgePressureEndTime <= 0) _edgePressureEndTime = UnityEngine.Time.time + MAX_EDGE_PRESSURE_TIME;
+                    
+                    if (UnityEngine.Time.time > _edgePressureEndTime)
+                    {
+                        StartWaiting(bb.Self);
+                    }
+                }
+                else
+                {
+                    _edgePressureEndTime = 0f;
+                }
+            }
+
+            return BTNodeStatus.Running;
+        }
+
+        private void StartWaiting(Character self)
+        {
+            NPCController npc = self.Controller as NPCController;
+            float minWait = npc != null ? npc.MinWaitTime : 2f;
+            float maxWait = npc != null ? npc.MaxWaitTime : 7f;
+
+            _waitEndTime = UnityEngine.Time.time + Random.Range(minWait, maxWait);
+            _isWaiting = true;
+            _edgePressureEndTime = 0f;
+        }
+
+        private void PickNewDestination(Blackboard bb)
+        {
+            Character self = bb.Self;
+            NPCController npc = self.Controller as NPCController;
+            float walkRadius = npc != null ? npc.WalkRadius : 50f;
+
+            var movement = self.CharacterMovement;
+            if (movement == null) return;
+
+            Vector3 finalDirectionBias = Vector3.zero;
+
+            if (NavMesh.FindClosestEdge(self.transform.position, out NavMeshHit edgeHit, NavMesh.AllAreas))
+            {
+                if (edgeHit.distance < EDGE_DETECTION_DIST)
+                {
+                    finalDirectionBias = edgeHit.normal * 3f; 
+                }
+            }
+
+            Vector2 randomCircle = Random.insideUnitCircle * walkRadius;
+            Vector3 randomPos = new Vector3(randomCircle.x, 0, randomCircle.y) + self.transform.position;
+            Vector3 biasedPos = randomPos + finalDirectionBias;
+
+            if (NavMesh.SamplePosition(biasedPos, out NavMeshHit hit, walkRadius, NavMesh.AllAreas))
+            {
+                movement.SetDestination(hit.position);
+            }
+            else
+            {
+                movement.SetDestination(self.transform.position);
+            }
+        }
+
+        protected override void OnExit(Blackboard bb)
+        {
+            _isWaiting = false;
+            _edgePressureEndTime = 0f;
+            bb.Self?.CharacterMovement?.ResetPath();
         }
     }
 }

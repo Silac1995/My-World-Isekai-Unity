@@ -25,6 +25,15 @@ public class JobLogisticsManager : Job
     private Queue<PendingOrder> _pendingOrders = new Queue<PendingOrder>();
     public bool HasPendingOrders => _pendingOrders.Count > 0;
 
+    // GOAP
+    private GoapGoal _logisticsGoal;
+    private List<GoapAction> _availableActions;
+    private Queue<GoapAction> _currentPlan;
+    private GoapAction _currentAction;
+
+    public override string CurrentActionName => _currentAction != null ? _currentAction.ActionName : "Planning / Idle";
+    public override string CurrentGoalName => _logisticsGoal != null ? _logisticsGoal.GoalName : "No Goal";
+
     public struct PendingOrder
     {
         public BuyOrder BuyOrder;
@@ -74,6 +83,15 @@ public class JobLogisticsManager : Job
         {
             TimeManager.Instance.OnNewDay -= CheckExpiredOrders;
         }
+
+        // Cleanup GOAP
+        if (_currentAction != null)
+        {
+            _currentAction.Exit(_worker);
+            _currentAction = null;
+        }
+        _currentPlan = null;
+
         base.Unassign();
     }
 
@@ -531,23 +549,89 @@ public class JobLogisticsManager : Job
         }
     }
 
-    public override void Execute()
+    public PendingOrder PeekPendingOrder()
     {
-        // Si on a des commandes en attente de placement physique
-        if (_pendingOrders.Count > 0 && _worker != null)
+        return _pendingOrders.Peek();
+    }
+
+    public void DequeuePendingOrder()
+    {
+        if (_pendingOrders.Count > 0)
         {
-            var npcController = _worker.GetComponent<NPCController>();
-            if (npcController != null)
-            {
-                // On vérifie si on n'est pas déjà en train de placer une commande
-                if (!npcController.HasBehaviour<PlaceOrderBehaviour>())
-                {
-                    var pending = _pendingOrders.Dequeue();
-                    npcController.PushBehaviour(new PlaceOrderBehaviour(npcController, pending));
-                }
-            }
+            _pendingOrders.Dequeue();
         }
     }
 
-    public override string CurrentActionName => "Managing Orders";
+    public override void Execute()
+    {
+        if (_workplace == null) return;
+
+        // Si on a une action en cours, l'exécuter
+        if (_currentAction != null)
+        {
+            // Vérifier que l'action est encore valide
+            if (!_currentAction.IsValid(_worker))
+            {
+                Debug.Log($"<color=orange>[JobLogistics]</color> {_worker.CharacterName} : action {_currentAction.ActionName} invalide, replanification...");
+                _currentAction.Exit(_worker);
+                _currentAction = null;
+                _currentPlan = null;
+                return;
+            }
+
+            _currentAction.Execute(_worker);
+
+            if (_currentAction.IsComplete)
+            {
+                Debug.Log($"<color=cyan>[JobLogistics]</color> {_worker.CharacterName} : action {_currentAction.ActionName} terminée.");
+                _currentAction.Exit(_worker);
+                _currentAction = null;
+                _currentPlan = null; // Forcer la replanification
+            }
+            return;
+        }
+
+        // Pas d'action en cours → Planifier
+        PlanNextActions();
+    }
+
+    private void PlanNextActions()
+    {
+        var worldState = new Dictionary<string, bool>
+        {
+            { "hasPendingOrders", HasPendingOrders },
+            { "isIdling", false }
+        };
+
+        _availableActions = new List<GoapAction>
+        {
+            new GoapAction_PlaceOrder(this),
+            new GoapAction_IdleInCommercialBuilding(_workplace as CommercialBuilding)
+        };
+
+        GoapGoal targetGoal;
+        if (HasPendingOrders)
+        {
+            targetGoal = new GoapGoal("ProcessOrders", new Dictionary<string, bool> { { "hasPendingOrders", false } }, priority: 1);
+        }
+        else
+        {
+            targetGoal = new GoapGoal("Idle", new Dictionary<string, bool> { { "isIdling", true } }, priority: 1);
+        }
+
+        _logisticsGoal = targetGoal;
+        
+        _currentPlan = GoapPlanner.Plan(worldState, _availableActions, targetGoal);
+
+        if (_currentPlan != null && _currentPlan.Count > 0)
+        {
+            _currentAction = _currentPlan.Dequeue();
+            Debug.Log($"<color=green>[JobLogistics]</color> {_worker.CharacterName} : nouveau plan ! Première action → {_currentAction.ActionName}");
+        }
+        else
+        {
+            Debug.Log($"<color=orange>[JobLogistics]</color> {_worker.CharacterName} : impossible de planifier.");
+        }
+    }
+
 }

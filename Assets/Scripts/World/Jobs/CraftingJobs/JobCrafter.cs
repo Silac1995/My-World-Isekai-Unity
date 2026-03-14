@@ -25,7 +25,7 @@ public abstract class JobCrafter : Job
     /// <summary>
     /// Utilisé lors de l'embauche pour vérifier si le PNJ possède la compétence et le niveau requis.
     /// </summary>
-    public virtual bool CheckRequirements(Character applicant)
+    public override bool CanTakeJob(Character applicant)
     {
         if (applicant == null || applicant.CharacterSkills == null) return false;
         

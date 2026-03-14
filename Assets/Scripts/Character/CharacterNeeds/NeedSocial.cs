@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using System.Linq;
 
 public class NeedSocial : CharacterNeed
@@ -77,7 +77,8 @@ public class NeedSocial : CharacterNeed
 
         var nearbyPartners = awareness.GetVisibleInteractables<CharacterInteractable>()
             .Select(interactable => interactable.Character)
-            .Where(c => c != null && c.IsAlive() && c.IsFree() && c != _character)
+            .Where(c => c != null && c.IsAlive() && c.IsFree() && c != _character
+                     && !(c.Controller != null && c.Controller.CurrentBehaviour is WorkBehaviour))
             .ToList();
 
         if (nearbyPartners.Count == 0) return null;

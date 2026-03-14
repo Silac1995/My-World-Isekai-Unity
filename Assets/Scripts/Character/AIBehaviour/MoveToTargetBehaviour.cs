@@ -10,6 +10,8 @@ public class MoveToTargetBehaviour : IAIBehaviour
     private Action _onArrived;
     private bool _isFinished = false;
     public bool IsFinished => _isFinished;
+    public GameObject Target => _targetGameObject;
+    public Vector3 TargetPosition => _targetPosition;
 
     public MoveToTargetBehaviour(NPCController controller, GameObject target, float stopDist, Action onArrived)
     {
@@ -43,8 +45,10 @@ public class MoveToTargetBehaviour : IAIBehaviour
 
         if (_targetGameObject != null)
         {
-            var targetInteractable = _targetGameObject.GetComponentInChildren<InteractableObject>();
+            float dist = Vector3.Distance(character.transform.position, _targetGameObject.transform.position);
 
+            // Priority 1: Specific interaction trigger overlap
+            var targetInteractable = _targetGameObject.GetComponentInChildren<InteractableObject>();
             if (detector != null && targetInteractable != null)
             {
                 if (detector.IsOverlapping(targetInteractable))
@@ -52,6 +56,13 @@ public class MoveToTargetBehaviour : IAIBehaviour
                     StopAndArrive(character);
                     return;
                 }
+            }
+            
+            // Priority 2: Simple distance fallback (essential for tracking moving NPCs/Bosses)
+            if (dist <= _stoppingDistance)
+            {
+                StopAndArrive(character);
+                return;
             }
 
             UpdateAgentDestination(movement, _targetGameObject.transform.position);

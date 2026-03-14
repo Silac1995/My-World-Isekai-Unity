@@ -34,7 +34,7 @@ Pure abstract C# class. This is the essence of the position (e.g., "Bartender").
 The physical anchor in the scene.
 - **Administration**: The building instantiates all its own Jobs in the abstract array (via `InitializeJobs()`).
 - **Recruitment (`AskForJob`)**: For a character to get a position here, the Building must have a Boss (`HasOwner`), the position must exist locally, and it must be vacant.
-- **Punching In/Out (`WorkerStartingShift`)**: When an NPC physically arrives in the building to work, they announce themselves. The base class automatically triggers the `JobLogisticsManager.OnWorkerPunchIn()` to check inventory/orders.
+- **Punching In/Out**: Handled by strict `CharacterAction`s (`Action_PunchIn` / `Action_PunchOut`). A character cannot telepathically start working; their `WorkBehaviour` first pushes a `PunchInBehaviour` to physically navigate them inside `BuildingZone.bounds`, which then spawns the `Action_PunchIn` to call `WorkerStartingShift`.
 - **Physical Dispersion**: `GetWorkPosition(Character)` provides a point within the `BuildingZone` with a unique offset (based on InstanceID) to ensure workers don't stack on top of each other.
 
 ### 4. Crafting (CraftingBuilding & JobCrafter)

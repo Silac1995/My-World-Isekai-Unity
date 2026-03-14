@@ -15,6 +15,10 @@ namespace MWI.AI
         protected override void OnEnter(Blackboard bb)
         {
             _behaviour = CreateBehaviour(bb);
+            if (_behaviour != null && bb.Self != null)
+            {
+                _behaviour.Enter(bb.Self);
+            }
         }
 
         protected override BTNodeStatus OnExecute(Blackboard bb)

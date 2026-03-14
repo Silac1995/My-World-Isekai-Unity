@@ -17,6 +17,10 @@ public class InteractionAskForJob : InteractionInvitation
 
     public override bool CanExecute(Character source, Character target)
     {
+        // Must not already have a job
+        if (source.CharacterJob != null && source.CharacterJob.HasJob)
+            return false;
+
         // On ne peut exécuter l'interaction que si le bâtiment a bien un boss et que le job est encore dispo
         return _building != null && _job != null && _building.HasOwner && !_job.IsAssigned;
     }

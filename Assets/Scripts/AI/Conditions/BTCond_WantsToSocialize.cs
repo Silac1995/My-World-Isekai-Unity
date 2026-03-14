@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using System.Linq;
 
 namespace MWI.AI
@@ -18,6 +18,9 @@ namespace MWI.AI
         {
             Character self = bb.Self;
             if (self == null || !self.IsFree()) return BTNodeStatus.Failure;
+
+            // --- WORK FOCUS : NPCs at work don't initiate social interactions ---
+            if (self.Controller?.CurrentBehaviour is WorkBehaviour) return BTNodeStatus.Failure;
 
             // Cooldown après la dernière socialisation
             if (UnityEngine.Time.time - _lastSocialTime < _socialCooldown) return BTNodeStatus.Failure;
@@ -42,7 +45,8 @@ namespace MWI.AI
             var potentialTargets = visibleCharacters
                 .Select(i => i.Character)
                 .Where(c => c != null && c != self && c.IsAlive() && c.IsFree()
-                    && !c.CharacterInteraction.IsInteracting)
+                    && !c.CharacterInteraction.IsInteracting
+                    && !(c.Controller != null && c.Controller.CurrentBehaviour is WorkBehaviour))
                 .ToList();
 
             if (potentialTargets.Count == 0) return BTNodeStatus.Failure;

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using UnityEngine;
 
 public class CharacterInteraction : MonoBehaviour
@@ -27,7 +27,8 @@ public class CharacterInteraction : MonoBehaviour
 
     private void Update()
     {
-        if (IsInteracting)
+        // On ne vérifie la distance que s'ils ont déjà fini de se rapprocher
+        if (IsInteracting && IsPositioned)
         {
             CheckInteractionDistance();
         }
@@ -140,6 +141,23 @@ public class CharacterInteraction : MonoBehaviour
             {
                 var action = npc.GetRandomSocialAction(currentListener);
                 action.Execute(currentSpeaker, currentListener);
+
+                // --- NEW: Wait if an invitation is pending (thinking/responding phase) ---
+                if (currentListener.CharacterInvitation != null)
+                {
+                    // Give it a frame to register that it's pending if started by action.Execute
+                    yield return null; 
+                    while (currentListener.CharacterInvitation.HasPendingInvitation)
+                    {
+                        yield return new WaitForSeconds(0.2f);
+                    }
+                    
+                    // If it was an invitation, we wait an extra bit for the response bubble to be readable
+                    if (action is InteractionInvitation)
+                    {
+                        yield return new WaitForSeconds(2.0f);
+                    }
+                }
             }
             else if (currentSpeaker.IsPlayer())
             {
@@ -215,19 +233,34 @@ public class CharacterInteraction : MonoBehaviour
             _activeDialogueCoroutine = null;
         }
 
-        // On unfreeze la cible
+        // --- NEW: Clean up redundant movement plans towards the interlocutor ---
+        ClearRedundantMovement(previousTarget);
+
+        // --- NEW: Clear behaviours BEFORE unfreezing ---
+        // This ensures the last command given to the movement system isn't 'Stop' 
+        // after we've already tried to Resume via Unfreeze.
+        
+        // Target cleanup
         if (previousTarget.Controller != null)
         {
+            if (previousTarget.GetComponent<NPCBehaviourTree>() != null)
+            {
+                previousTarget.Controller.ClearBehaviours();
+            }
             previousTarget.Controller.Unfreeze();
         }
 
-        // On unfreeze l'initiateur
+        // Initiator cleanup
         if (_character.Controller != null)
         {
             // Nettoyer le MoveToInteraction s'il est encore dans la pile
             if (_character.Controller.CurrentBehaviour is MoveToInteractionBehaviour)
                 _character.Controller.PopBehaviour();
 
+            if (_character.GetComponent<NPCBehaviourTree>() != null)
+            {
+                _character.Controller.ClearBehaviours();
+            }
             _character.Controller.Unfreeze();
         }
 
@@ -250,6 +283,9 @@ public class CharacterInteraction : MonoBehaviour
         // --- FACE-À-FACE IMMÉDIAT ---
         _character.CharacterVisual?.SetLookTarget(target);
 
+        // --- NEW: If we were already planning to move towards this target to talk, cancel it ---
+        ClearRedundantMovement(target);
+
         OnInteractionStateChanged?.Invoke(target, true);
     }
 
@@ -267,5 +303,26 @@ public class CharacterInteraction : MonoBehaviour
 
         Debug.Log($"<color=green>[Interaction]</color> {_character.CharacterName} exécute {action.GetType().Name} sur {_currentTarget.CharacterName}");
         action.Execute(_character, _currentTarget);
+    }
+
+    private void ClearRedundantMovement(Character target)
+    {
+        if (_character.Controller == null || target == null) return;
+
+        // Check if we have a MoveToInteractionBehaviour (initiator)
+        if (_character.Controller.CurrentBehaviour is MoveToInteractionBehaviour)
+        {
+            _character.Controller.PopBehaviour();
+        }
+
+        // Check if we have a MoveToTargetBehaviour (legacy/social) targeting this specific character
+        if (_character.Controller.CurrentBehaviour is MoveToTargetBehaviour moveBehaviour)
+        {
+            if (moveBehaviour.Target == target.gameObject)
+            {
+                Debug.Log($"<color=cyan>[Interaction]</color> Cleaning up redundant MoveToTargetBehaviour for {_character.CharacterName} towards {target.CharacterName}.");
+                moveBehaviour.Terminate();
+            }
+        }
     }
 }

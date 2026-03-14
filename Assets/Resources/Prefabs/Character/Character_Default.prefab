@@ -383,6 +383,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CharacterCommunity
   _character: {fileID: 2536622428659117900}
+  _debugCommunityName: New Community
 --- !u!1 &1948936245242239289
 GameObject:
   m_ObjectHideFlags: 0
@@ -865,6 +866,8 @@ MonoBehaviour:
   walkRadius: 50
   minWaitTime: 2
   maxWaitTime: 7
+  _behaviourTree: {fileID: 1645947454900012649}
+  _goapController: {fileID: 8601409522411222074}
 --- !u!114 &4916404909723457133
 MonoBehaviour:
   m_ObjectHideFlags: 0

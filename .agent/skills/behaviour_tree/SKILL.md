@@ -24,12 +24,17 @@ The current tree evaluates in this order:
 5. **GOAP** (`BTAction_ExecuteGoapPlan`): Proactive life planning (Job search, personal goals).
 6. **Needs** (`BTCond_HasUrgentNeed`): Hunger, urgent rest, clothing... (Urgent fallback).
 7. **Schedule** (`BTCond_HasScheduledActivity`): Daily routines (Work, regular sleep).
-8. **Social** (`BTCond_WantsToSocialize`): Spontaneous discussions and interactions.
-9. **Wander** (`BTAction_Wander`): The Fallback, the NPC wanders.
+8. **Social** (`BTCond_WantsToSocialize`): Spontaneous discussions. (Native Node).
+9. **Wander** (`BTAction_Wander`): The Fallback. (Native Node).
 
-*If you add a new behavior, think about which node to insert it into or the position of the new conditional node in the `BuildTree()` method of `NPCBehaviourTree`.*
+*If you add a new behavior, think about which node to insert it into. Prefer native `BTNode` implementations for high-frequency or foundational logic, and use `BTActionNode` wrappers only for complex legacy behaviours that require full stack management.*
 
-### 2. The Tick (Performance)
+### 2. Native Nodes vs Legacy Wrappers
+The system is migrating towards native `BTNode` implementations for better performance and predictability:
+- **Native Nodes** (e.g., `BTAction_Wander`): Implement logic directly in `OnExecute`. Do not use Coroutines. Use `UnityEngine.Time.time` for time-tracking to remain independent of BT frame staggering.
+- **Legacy Wrappers** (`BTActionNode`): Wrap an `IAIBehaviour`. These push the behaviour to the character's stack on `Enter` and pop it on `Exit`. The BT pauses itself while a legacy behaviour (or any behaviour) is active on the stack.
+
+### 3. The Tick (Performance)
 - **Staggering**: The BT does not execute every frame. It executes every `_tickInterval` frames (default: 5), with a unique offset (`_frameOffset`) per NPC to spread the CPU load.
 - **Tick Exceptions**:
     - The player does not tick the BT.

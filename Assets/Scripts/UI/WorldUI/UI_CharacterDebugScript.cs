@@ -1,4 +1,4 @@
-﻿using System.Linq;
+using System.Linq;
 using TMPro;
 using UnityEngine;
 
@@ -200,7 +200,7 @@ public class UI_CharacterDebugScript : MonoBehaviour
             var workBehaviour = controller.GetCurrentBehaviour<WorkBehaviour>();
             if (workBehaviour != null)
             {
-                phaseText = $"Work Phase: {workBehaviour.CurrentPhase}";
+                phaseText = "Work Phase: Working / GOAP";
             }
         }
 

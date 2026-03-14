@@ -94,14 +94,7 @@ public abstract class CharacterGameController : MonoBehaviour
 
     protected virtual void Update()
     {
-        if (_isFrozen) 
-        {
-            UpdateVisuals();
-            return;
-        }
-
-        // Action logic is now event-driven for starting/finishing, 
-        // but we still need to handle the cooldown timer here.
+        // 1. Check if we are performing a specific CharacterAction (animation/logic sequence)
         if (_character.CharacterActions.CurrentAction != null)
         {
             _characterMovement?.Stop();
@@ -109,6 +102,8 @@ public abstract class CharacterGameController : MonoBehaviour
             return;
         }
 
+        // 2. Handle the "settling" cooldown after an action finishes 
+        // to prevent immediate jerky movement before the state is stable.
         if (_wasDoingAction)
         {
             _actionCooldownTimer -= Time.deltaTime;
@@ -126,6 +121,7 @@ public abstract class CharacterGameController : MonoBehaviour
             }
         }
 
+        // 3. Process the AI behavior stack
         if (CurrentBehaviour != null)
         {
             if (CurrentBehaviour.IsFinished)
@@ -134,7 +130,17 @@ public abstract class CharacterGameController : MonoBehaviour
                 return;
             }
 
-            CurrentBehaviour.Act(_character);
+            if (!_isFrozen)
+            {
+                CurrentBehaviour.Act(_character);
+            }
+        }
+
+        // 4. If frozen (dialogue), early return but still update visuals (idle)
+        if (_isFrozen) 
+        {
+            UpdateVisuals();
+            return;
         }
 
         UpdateVisuals();

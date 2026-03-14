@@ -72,6 +72,15 @@ public abstract class Job
     }
 
     /// <summary>
+    /// Vérifie si le personnage (candidat) possède les prérequis pour prendre ce job.
+    /// Override dans les sous-classes (ex: artisans) pour vérifier les compétences.
+    /// </summary>
+    public virtual bool CanTakeJob(Character applicant)
+    {
+        return true;
+    }
+
+    /// <summary>
     /// Spécifie s'il y a actuellement du travail à faire concrètement pour ce job.
     /// Par exemple, un JobGatherer retourne faux si toutes les ressources sont réunies
     /// et que le reste a été déposé. Utilisé pour donner des pauses aux NPCs.

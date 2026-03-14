@@ -35,15 +35,16 @@ namespace MWI.AI
             {
                 if (!_goapController.Replan())
                 {
-                    return BTNodeStatus.Success; 
+                    return BTNodeStatus.Failure; 
                 }
             }
 
             // Exécuter l'action en cours
             _goapController.ExecutePlan();
 
-            // Tant qu'on a un plan, on reste en "Running"
-            return _goapController.CurrentAction != null ? BTNodeStatus.Running : BTNodeStatus.Success;
+            // Tant qu'on a un plan, on reste en "Running". S'il se termine ce tick, on renvoie Failure pour laisser
+            // le relai aux priorités inférieures au prochain frame (puisque _goapController.CurrentAction deviendra null)
+            return _goapController.CurrentAction != null ? BTNodeStatus.Running : BTNodeStatus.Failure;
         }
 
         protected override void OnExit(Blackboard bb)

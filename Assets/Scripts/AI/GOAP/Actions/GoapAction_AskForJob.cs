@@ -42,14 +42,25 @@ public class GoapAction_AskForJob : GoapAction
     {
         if (_isComplete) return;
 
-        Character boss = _building.Owner;
-        
-        // Lancer l'invitation / interaction
-        var interaction = new InteractionAskForJob(_building, _job);
-        worker.CharacterInteraction.StartInteractionWith(boss, interaction);
+        // If we haven't started yet, trigger the interaction
+        if (!worker.CharacterInteraction.IsInteracting)
+        {
+            Character boss = _building.Owner;
+            if (boss == null)
+            {
+                _isComplete = true; // Fail gracefully
+                return;
+            }
 
-        // On termine l'action GOAP immédiatement car l'interaction externe prend le relais.
-        // Si l'interaction est refusée, le "hasJob" du world state restera false au prochain plan.
-        _isComplete = true;
+            var interaction = new InteractionAskForJob(_building, _job);
+            worker.CharacterInteraction.StartInteractionWith(boss, interaction);
+        }
+        else
+        {
+            // The action is only complete once the interaction itself finishes.
+            // This prevents the GOAP block from terminating early and the BT
+            // falling back to 'Wander' while we are talking.
+            _isComplete = !worker.CharacterInteraction.IsInteracting;
+        }
     }
 }

@@ -45,14 +45,39 @@ public class MoveToInteractionBehaviour : IAIBehaviour
         var movement = self.CharacterMovement;
         if (movement == null) return;
 
+        var detector = self.GetComponent<CharacterInteractionDetector>();
+        var targetInteractable = _targetCharacter.CharacterInteractable;
+        
+        bool isCloseEnough = false;
+
         Vector3 targetPos = _targetCharacter.transform.position;
-        float xOffset = self.transform.position.x > targetPos.x ? 5f : -5f;
+        // Offset de 2 unités sur l'axe X pour le face-à-face
+        float xOffset = self.transform.position.x > targetPos.x ? 4f : -4f;
         Vector3 desiredPos = new Vector3(targetPos.x + xOffset, self.transform.position.y, targetPos.z);
 
         float distDelta = Vector3.Distance(new Vector3(self.transform.position.x, 0, self.transform.position.z), 
                                            new Vector3(desiredPos.x, 0, desiredPos.z));
 
-        if (distDelta < 0.25f)
+        if (detector != null && targetInteractable != null)
+        {
+            bool isOverlapping = detector.IsOverlapping(targetInteractable);
+            
+            // Le joueur exige un alignement parfait : même Z, distance X de 4. Pas plus, pas moins.
+            // On utilise une micro-tolérance (0.05f) indispensable pour le système de coordonnées et le NavMesh.
+            float zDiff = Mathf.Abs(self.transform.position.z - targetPos.z);
+            float xDiff = Mathf.Abs(self.transform.position.x - targetPos.x);
+            bool isAlignedVisually = zDiff <= 0.05f && Mathf.Abs(xDiff - 4f) <= 0.05f;
+
+            // On s'arrête si on est dans la zone ET parfaitement aligné, OU si on a atteint la destination parfaite.
+            isCloseEnough = (isOverlapping && isAlignedVisually) || distDelta <= 0.05f;
+        }
+        else
+        {
+            // Priorité 2: Fallback basé sur la distance parfaite si pas de collider
+            isCloseEnough = distDelta <= 0.05f;
+        }
+
+        if (isCloseEnough)
         {
             FaceTarget(self);
 
