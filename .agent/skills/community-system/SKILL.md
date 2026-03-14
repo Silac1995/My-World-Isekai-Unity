@@ -41,7 +41,12 @@ Communities can be nested infinitely to form complex social structures (Kingdoms
 community.DeclareIndependence();
 ```
 
-### 3. Manual and Global Management
+### 3. Community Assets & Building Ownership
+While a `CommercialBuilding` is strictly owned by an **individual** character (`Character _owner`), the community automatically tracks the assets of its members.
+- **Tracking**: When a character becomes the owner of a building via `CommercialBuilding.SetOwner()`, that building is automatically added to their current community's `ownedBuildings` list.
+- **Privileges**: Owner privileges (like bypassing schedules in `JobLogisticsManager`) remain strictly with the individual owner, not the entire community.
+
+### 4. Manual and Global Management
 The `CommunityManager` serves as a global registry and visualization tool. Use it for administrative tasks or scripted setups.
 
 ```csharp

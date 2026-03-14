@@ -18,8 +18,9 @@ public class Community
     [NonSerialized] public Community parentCommunity;
     [NonSerialized] public List<Community> subCommunities = new List<Community>();
 
-    [Header("Territory")]
+    [Header("Territory & Assets")]
     public List<Zone> communityZones = new List<Zone>();
+    public List<Building> ownedBuildings = new List<Building>();
 
     public Community(string name, Character founder)
     {

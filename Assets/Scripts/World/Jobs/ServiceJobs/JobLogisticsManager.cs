@@ -318,7 +318,7 @@ public class JobLogisticsManager : Job
     {
         if (_worker == null || _workplace == null) return false;
 
-        // Le propriétaire peut toujours agir
+        // Le propriétaire individuel peut toujours agir
         if (_workplace.Owner == _worker) return true;
 
         // Sinon, vérifier si on est dans les heures de travail
