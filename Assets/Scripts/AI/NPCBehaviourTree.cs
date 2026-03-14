@@ -133,9 +133,11 @@ public class NPCBehaviourTree : MonoBehaviour
         BTNodeStatus status = _root.Execute(_blackboard);
 
         // Debug display
+        UpdateDebugNodeName();
+
         if (_debugLog)
         {
-            UpdateDebugNodeName();
+            Debug.Log($"[BT] {_currentNodeName}");
         }
     }
 
@@ -189,14 +191,14 @@ public class NPCBehaviourTree : MonoBehaviour
 
     private void UpdateDebugNodeName()
     {
-        if (_orderNode.IsRunning) _currentNodeName = "Order";
-        else if (_combatNode.IsRunning) _currentNodeName = "Combat";
-        else if (_friendNode.IsRunning) _currentNodeName = "FriendInDanger";
-        else if (_enemyNode.IsRunning) _currentNodeName = "DetectedEnemy";
-        else if (_scheduleNode.IsRunning) _currentNodeName = "Schedule";
-        else if (_socialNode.IsRunning) _currentNodeName = "Social";
-        else if (_goapNode.IsRunning) _currentNodeName = "GOAP";
-        else if (_wanderNode.IsRunning) _currentNodeName = "Wander";
+        if (_orderNode != null && _orderNode.IsRunning) _currentNodeName = "Order";
+        else if (_combatNode != null && _combatNode.IsRunning) _currentNodeName = "Combat";
+        else if (_friendNode != null && _friendNode.IsRunning) _currentNodeName = "FriendInDanger";
+        else if (_enemyNode != null && _enemyNode.IsRunning) _currentNodeName = "DetectedEnemy";
+        else if (_scheduleNode != null && _scheduleNode.IsRunning) _currentNodeName = "Schedule";
+        else if (_socialNode != null && _socialNode.IsRunning) _currentNodeName = "Social";
+        else if (_goapNode != null && _goapNode.IsRunning) _currentNodeName = "GOAP";
+        else if (_wanderNode != null && _wanderNode.IsRunning) _currentNodeName = "Wander";
         else _currentNodeName = "None";
     }
 }

@@ -186,29 +186,36 @@ public class UI_CharacterDebugScript : MonoBehaviour
         
         string goapGoalText = "GOAP Goal: None";
         string goapActionText = "GOAP Action: None";
-        string phaseText = "Work Phase: N/A";
+        string phaseText = "Phase: N/A";
 
-        if (character != null && character.CharacterJob != null && character.CharacterJob.CurrentJob != null)
+        bool isLifeGoapActive = false;
+        if (character.Controller is NPCController npc && npc.GoapController != null && npc.GoapController.CurrentAction != null)
+        {
+            isLifeGoapActive = true;
+            string goalName = npc.GoapController.CurrentGoalName;
+            goapGoalText = string.IsNullOrEmpty(goalName) || goalName == "None" ? "Life Goal: N/A" : $"Life Goal: {goalName}";
+
+            string actionName = npc.GoapController.CurrentAction.ActionName;
+            goapActionText = $"Life Action: {actionName}";
+            phaseText = "Phase: Life Routine";
+        }
+        else if (character != null && character.CharacterJob != null && character.CharacterJob.CurrentJob != null)
         {
             string goalName = character.CharacterJob.CurrentJob.CurrentGoalName;
-            goapGoalText = string.IsNullOrEmpty(goalName) ? "GOAP Goal: N/A" : $"GOAP Goal: {goalName}";
+            goapGoalText = string.IsNullOrEmpty(goalName) ? "Job Goal: N/A" : $"Job Goal: {goalName}";
 
             string actionName = character.CharacterJob.CurrentJob.CurrentActionName;
-            goapActionText = string.IsNullOrEmpty(actionName) ? "GOAP Action: N/A" : $"GOAP Action: {actionName}";
-        }
-
-        var controller = character.GetComponent<CharacterGameController>();
-        if (controller != null)
-        {
-            var workBehaviour = controller.GetCurrentBehaviour<WorkBehaviour>();
-            if (workBehaviour != null)
+            goapActionText = string.IsNullOrEmpty(actionName) ? "Job Action: N/A" : $"Job Action: {actionName}";
+            
+            var controller = character.GetComponent<CharacterGameController>();
+            if (controller != null && controller.GetCurrentBehaviour<WorkBehaviour>() != null)
             {
-                phaseText = "Work Phase: Working / GOAP";
+                phaseText = "Phase: Working";
             }
         }
 
         workPhaseGOAPText.text = $"{phaseText}\n{goapGoalText}\n{goapActionText}";
-        workPhaseGOAPText.color = new Color(0.7f, 0.7f, 1f); // Light blue
+        workPhaseGOAPText.color = isLifeGoapActive ? new Color(0.7f, 1f, 0.7f) : new Color(0.7f, 0.7f, 1f); 
     }
 
     private void UpdateBTAndLifeGOAPDebug()
