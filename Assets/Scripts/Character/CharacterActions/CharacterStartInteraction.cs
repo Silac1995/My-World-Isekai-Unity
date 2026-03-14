@@ -1,10 +1,10 @@
-using UnityEngine;
+ï»¿using UnityEngine;
 
 public class CharacterStartInteraction : CharacterAction
 {
     private Character _target;
 
-    // On passe par base(character, 0f) car l'interaction est instantanée
+    // On passe par base(character, 0f) car l'interaction est instantanee
     public CharacterStartInteraction(Character character, Character target) : base(character, 0f)
     {
         _target = target ?? throw new System.ArgumentNullException(nameof(target));
@@ -22,21 +22,21 @@ public class CharacterStartInteraction : CharacterAction
         character.CharacterVisual?.FaceTarget(_target.transform.position);
         _target.CharacterVisual?.FaceTarget(character.transform.position);
 
-        // 2. Logique : Créer le lien
+        // 2. Logique : Creer le lien
         character.CharacterInteraction.StartInteractionWith(_target);
 
         // --- CORRECTION ICI ---
         // On ne bloque l'IA que pour les PNJs. 
-        // Le joueur doit rester libre de ses mouvements (le CheckInteractionDistance s'occupera de couper si il s'éloigne)
+        // Le joueur doit rester libre de ses mouvements (le CheckInteractionDistance s'occupera de couper si il s'eloigne)
 
-        if (!_target.IsPlayer())
+        if (!_target.IsPlayer() && _target.Controller is NPCController targetNpc)
         {
-            _target.Controller?.PushBehaviour(new InteractBehaviour());
+            targetNpc.PushBehaviour(new InteractBehaviour());
         }
 
-        if (!character.IsPlayer())
+        if (!character.IsPlayer() && character.Controller is NPCController initNpc)
         {
-            character.Controller?.PushBehaviour(new InteractBehaviour());
+            initNpc.PushBehaviour(new InteractBehaviour());
         }
 
         if (character.IsPlayer()) ShowInteractionUI();
@@ -44,10 +44,10 @@ public class CharacterStartInteraction : CharacterAction
         Finish();
     }
 
-    // OBLIGATOIRE : Même si c'est vide, on doit l'implémenter
+    // OBLIGATOIRE : Meme si c'est vide, on doit l'implementer
     public override void OnApplyEffect()
     {
-        // Rien à faire ici pour une interaction de dialogue
+        // Rien a faire ici pour une interaction de dialogue
     }
 
     private void ShowInteractionUI()

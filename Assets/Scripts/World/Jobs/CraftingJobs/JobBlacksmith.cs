@@ -1,33 +1,54 @@
+using System.Linq;
 using UnityEngine;
 
 /// <summary>
 /// Job de Forgeron : craft des armes et armures dans une ForgeBuilding.
-/// Le forgeron est le poste principal du building (souvent le boss).
-/// Nécessite une enclume (CraftingStation de type Anvil) pour travailler.
+/// Gère lui-même son état d'exécution de crafting (Recherche d'ordre -> Déplacement -> Crafting).
 /// </summary>
 public class JobBlacksmith : JobCrafter
 {
     public override string JobTitle => "Forgeron";
 
-    // Un Forgeron a typiquement besoin de "Smithing", mais on le passera dans InitializeJobs ou via AssetDatabase.
-    // Pour l'instant, on laisse le constructeur accepter le skill et le tier, avec des valeurs par défaut au besoin.
-    public JobBlacksmith(SkillSO smithingSkill, SkillTier tier = SkillTier.Intermediate) : base(smithingSkill, tier)
-    {
-    }
-
     private CraftingStation _currentStation;
+    private CraftingOrder _currentOrder;
+    private JobLogisticsManager _manager;
 
-    /// <summary>
-    /// La station de craft actuellement utilisée par le forgeron.
-    /// </summary>
     public CraftingStation CurrentStation => _currentStation;
 
     private float _cooldownTimer = 0f;
     private const float CRAFT_COOLDOWN = 2f;
 
+    private enum CraftPhase
+    {
+        SearchingOrder,
+        MovingToStation,
+        ExecutingAction
+    }
+
+    private CraftPhase _currentPhase = CraftPhase.SearchingOrder;
+
+    public override string CurrentActionName
+    {
+        get
+        {
+            if (_cooldownTimer > 0f) return "Resting";
+            switch (_currentPhase)
+            {
+                case CraftPhase.SearchingOrder: return "Searching for orders";
+                case CraftPhase.MovingToStation: return "Moving to Anvil";
+                case CraftPhase.ExecutingAction: return $"Forging {_currentOrder?.ItemToCraft?.ItemName}";
+                default: return "Idle";
+            }
+        }
+    }
+
+    public JobBlacksmith(SkillSO smithingSkill, SkillTier tier = SkillTier.Intermediate) : base(smithingSkill, tier)
+    {
+    }
+
     public override void Execute()
     {
-        if (_worker == null) return;
+        if (_worker == null || !(_workplace is CraftingBuilding cb)) return;
 
         if (_cooldownTimer > 0f)
         {
@@ -35,17 +56,138 @@ public class JobBlacksmith : JobCrafter
             return;
         }
 
-        var npcController = _worker.GetComponent<NPCController>();
-        if (npcController != null && !npcController.HasBehaviour<MWI.AI.PerformCraftBehaviour>())
+        var movement = _worker.CharacterMovement;
+        if (movement == null) return;
+
+        switch (_currentPhase)
         {
-            // Le BT ou le behaviour gérera la recherche de commande et de station
-            npcController.PushBehaviour(new MWI.AI.PerformCraftBehaviour(npcController, this, OnCraftFinished));
+            case CraftPhase.SearchingOrder:
+                HandleSearchOrder(cb);
+                break;
+
+            case CraftPhase.MovingToStation:
+                HandleMovementToStation(movement);
+                break;
+
+            case CraftPhase.ExecutingAction:
+                HandleCraftingExecution();
+                break;
         }
     }
 
-    private void OnCraftFinished()
+    private void HandleSearchOrder(CraftingBuilding cb)
     {
+        if (_manager == null)
+        {
+            _manager = cb.GetJobsOfType<JobLogisticsManager>().FirstOrDefault();
+        }
+
+        if (_manager == null)
+        {
+            Debug.Log($"<color=orange>[JobBlacksmith]</color> {_worker.CharacterName} : Pas de Manager Logistique dans le bâtiment.");
+            return;
+        }
+
+        _currentOrder = _manager.GetNextAvailableCraftingOrder();
+        if (_currentOrder == null)
+        {
+            return; // En attente de commandes
+        }
+
+        // Trouver une station libre et compatible
+        foreach (var room in cb.Rooms)
+        {
+            foreach (var station in room.GetFurnitureOfType<CraftingStation>())
+            {
+                if (station.CanCraft(_currentOrder.ItemToCraft) && (station.IsFree() || station.Occupant == _worker))
+                {
+                    _currentStation = station;
+                    break;
+                }
+            }
+            if (_currentStation != null) break;
+        }
+
+        if (_currentStation == null)
+        {
+            Debug.Log($"<color=orange>[JobBlacksmith]</color> {_worker.CharacterName} : Pas de station libre capable de crafter {_currentOrder.ItemToCraft.ItemName}.");
+            return; // Attendre qu'une station se libère
+        }
+
+        _currentStation.Reserve(_worker);
+        _currentPhase = CraftPhase.MovingToStation;
+    }
+
+    private void HandleMovementToStation(CharacterMovement movement)
+    {
+        if (_currentStation == null)
+        {
+            ResetCraftingState();
+            return;
+        }
+
+        Vector3 targetPos = _currentStation.InteractionPoint != null ? _currentStation.InteractionPoint.position : _currentStation.transform.position;
+        
+        if (!movement.HasPath || movement.RemainingDistance <= movement.StoppingDistance + 0.5f)
+        {
+            if (Vector3.Distance(_worker.transform.position, targetPos) > movement.StoppingDistance + 0.5f)
+            {
+                movement.SetDestination(targetPos);
+            }
+            else
+            {
+                // Arrivé à la station
+                movement.ResetPath();
+                _currentStation.Use(_worker);
+
+                Color targetColor = Color.white; 
+                _worker.CharacterActions.ExecuteAction(new CharacterCraftAction(_worker, _currentOrder.ItemToCraft, targetColor, default));
+                _currentPhase = CraftPhase.ExecutingAction;
+            }
+        }
+    }
+
+    private void HandleCraftingExecution()
+    {
+        var currentAction = _worker.CharacterActions.CurrentAction;
+        
+        if (currentAction != null && currentAction is CharacterCraftAction)
+        {
+            return; // On attend la fin
+        }
+
+        // L'action est terminée
+        if (_manager != null && _currentOrder != null)
+        {
+            _manager.UpdateCraftingOrderProgress(_currentOrder, 1);
+        }
+
+        if (RequiredSkill != null && _worker.CharacterSkills != null)
+        {
+            _worker.CharacterSkills.GainXP(RequiredSkill, 10);
+        }
+
         _cooldownTimer = CRAFT_COOLDOWN;
+        ResetCraftingState();
+    }
+
+    private void ResetCraftingState()
+    {
+        ReleaseStation();
+        _currentOrder = null;
+        _currentPhase = CraftPhase.SearchingOrder;
+    }
+
+    public void ReleaseStation()
+    {
+        if (_currentStation != null)
+        {
+            if (_currentStation.Occupant == _worker || _currentStation.ReservedBy == _worker)
+            {
+                _currentStation.Release();
+            }
+            _currentStation = null;
+        }
     }
 
     public override bool CanExecute()
@@ -53,15 +195,11 @@ public class JobBlacksmith : JobCrafter
         return base.CanExecute() && _workplace is CraftingBuilding;
     }
 
-    /// <summary>
-    /// Libère la station de craft quand le forgeron arrête de travailler.
-    /// </summary>
-    public void ReleaseStation()
+    public override void Unassign()
     {
-        if (_currentStation != null)
-        {
-            _currentStation.Release();
-            _currentStation = null;
-        }
+        ResetCraftingState();
+        _manager = null;
+        _worker?.CharacterMovement?.ResetPath();
+        base.Unassign();
     }
 }

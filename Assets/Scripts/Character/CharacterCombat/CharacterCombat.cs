@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -221,11 +221,6 @@ public class CharacterCombat : MonoBehaviour
         // Le timeout de 7 secondes dans Update() s'en chargera naturellement.
 
         OnBattleLeft?.Invoke();
-
-        if (_character.Controller != null && _character.Controller.GetCurrentBehaviour<CombatBehaviour>() != null)
-        {
-            _character.Controller.PopBehaviour();
-        }
     }
 
     public void StartFight(Character target)

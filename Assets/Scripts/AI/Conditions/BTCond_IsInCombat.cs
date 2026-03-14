@@ -22,9 +22,8 @@ namespace MWI.AI
             {
                 bb.Set(Blackboard.KEY_BATTLE_MANAGER, bm);
 
-                // Trouver la cible la plus proche dans l'équipe ennemie
-                BattleTeam enemyTeam = bm.GetOpponentTeamOf(self);
-                Character target = enemyTeam?.GetClosestMember(self.transform.position);
+                // Trouver la cible la plus prioritaire / optimale
+                Character target = bm.GetBestTargetFor(self);
                 if (target != null)
                     bb.Set(Blackboard.KEY_COMBAT_TARGET, target);
             }

@@ -73,12 +73,20 @@ public class NPCBehaviourTree : MonoBehaviour
             Debug.Log($"<color=lime>[BT]</color> {_character.CharacterName} : Behaviour Tree initialisé.");
     }
 
+    private BTSequence _legacySequence;
+    private BTCond_NeedsToPunchOut _punchOutNode;
+
     /// <summary>
     /// Construit l'arbre de décision complet.
     /// L'ordre des enfants dans le Selector = l'ordre de priorité.
     /// </summary>
     private BTNode BuildTree()
     {
+        _legacySequence = new BTSequence(
+            new BTCond_HasLegacyBehaviour(),
+            new BTAction_ExecuteLegacyStack()
+        );
+
         _orderNode = new BTCond_HasOrder();
         _combatNode = new BTCond_IsInCombat();
         _friendNode = new BTCond_FriendInDanger();
@@ -87,9 +95,12 @@ public class NPCBehaviourTree : MonoBehaviour
         _socialNode = new BTCond_WantsToSocialize();
         _goapNode = new BTAction_ExecuteGoapPlan();
         _wanderNode = new BTAction_Wander();
+        _punchOutNode = new BTCond_NeedsToPunchOut();
 
         return new BTSelector(
+            _legacySequence,    // 0. Imperative actions bypass the intelligent tree
             _orderNode,         // 1. Ordres (priorité max)
+            _punchOutNode,      // 1.5 Fin de shift forcé
             _combatNode,        // 2. Combat actif
             _friendNode,        // 3. Entraide
             _enemyNode,         // 4. Agression
@@ -122,9 +133,6 @@ public class NPCBehaviourTree : MonoBehaviour
 
         // Pause le BT si le controller est gelé (interactions, cinématiques, etc.)
         if (_character.Controller != null && _character.Controller.IsFrozen) return;
-
-        // Pause le BT si l'ancien système de pile (behavioursStack) a pris le relais (pour un MoveToTarget etc.)
-        if (_character.Controller != null && _character.Controller.CurrentBehaviour != null) return;
 
         // Pause le BT pendant une interaction (évite les micro-mouvements)
         if (_character.CharacterInteraction != null && _character.CharacterInteraction.IsInteracting) return;
@@ -191,7 +199,9 @@ public class NPCBehaviourTree : MonoBehaviour
 
     private void UpdateDebugNodeName()
     {
-        if (_orderNode != null && _orderNode.IsRunning) _currentNodeName = "Order";
+        if (_legacySequence != null && _legacySequence.IsRunning) _currentNodeName = "ImperativeStack";
+        else if (_orderNode != null && _orderNode.IsRunning) _currentNodeName = "Order";
+        else if (_punchOutNode != null && _punchOutNode.IsRunning) _currentNodeName = "PunchOut";
         else if (_combatNode != null && _combatNode.IsRunning) _currentNodeName = "Combat";
         else if (_friendNode != null && _friendNode.IsRunning) _currentNodeName = "FriendInDanger";
         else if (_enemyNode != null && _enemyNode.IsRunning) _currentNodeName = "DetectedEnemy";

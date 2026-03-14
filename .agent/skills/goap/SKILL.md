@@ -16,12 +16,12 @@ Examples of ultimate goals:
 - **Being the best martial artist**: The Planner will chain training actions (finding a dojo, fighting opponents, improving on a CombatSO).
 - **Financial ambition**: Amassing wealth (which will push them to find a job like Gatherer and deposit resources).
 
-The GOAP manages the long/medium-term plan, while the Behaviour Tree (BT) handles short-term survival (reacting to aggression, fleeing, eating urgently).
+The GOAP manages the long/medium-term plan (Needs, Jobs, Socializing), while the Behaviour Tree (BT) handles short-term survival (reacting to aggression, fleeing, executing schedules).
 
 ## When to use this skill
 - To design a new **Life Goal** or new daily action chains (e.g., a seduction cycle, a martial training cycle).
-- When creating a `GoapAction` that advances the NPC's personal story (e.g., `Action_Socialize`, `Action_TrainMartialArts`).
-- To structure the preconditions and effects linking the NPC's social life, jobs, and needs.
+- When creating a `GoapAction` that advances the NPC's personal story or logic (e.g., `GoapAction_Socialize`, `GoapAction_PlaceOrder`).
+- To structure the preconditions and effects linking the NPC's social life, jobs, and foundational Needs.
 
 ## How to use it
 

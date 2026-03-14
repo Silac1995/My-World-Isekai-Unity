@@ -211,29 +211,16 @@ public class CharacterSchedule : MonoBehaviour
         if (npc.HasBehaviourTree) return;
 
         // --- SÉCURITÉ POUR NE PAS RE-RÉINITIALISER EN BOUCLE ---
-        // Si l'activité demandée correspond au behaviour déjà présent au sommet ou à la racine,
-        // on ne réinitialise pas la pile ! (Évite de reset le WorkBehaviour au milieu d'une action)
-        if (activity == ScheduleActivity.Work && npc.HasBehaviour<WorkBehaviour>()) return;
         if (activity == ScheduleActivity.Wander && npc.HasBehaviour<WanderBehaviour>()) return;
         if (activity == ScheduleActivity.Teach && npc.HasBehaviour<GiveLessonBehaviour>()) return;
         if (activity == ScheduleActivity.Sleep && npc.HasBehaviour<WanderBehaviour>()) return; 
         if (activity == ScheduleActivity.Leisure && npc.HasBehaviour<WanderBehaviour>()) return; 
         if (activity == ScheduleActivity.GoHome && npc.HasBehaviour<WanderBehaviour>()) return;
 
-        bool needsPunchOut = false;
-        CommercialBuilding lastWorkplace = null;
-
-        var currentWorkBehaviour = npc.GetCurrentBehaviour<WorkBehaviour>();
-        if (currentWorkBehaviour != null && currentWorkBehaviour.Workplace != null && currentWorkBehaviour.Workplace.ActiveWorkersOnShift.Contains(_character))
-        {
-            needsPunchOut = true;
-            lastWorkplace = currentWorkBehaviour.Workplace;
-        }
-
         // Mode legacy : on push le behaviour manuellement
         IAIBehaviour newBehaviour = activity switch
         {
-            ScheduleActivity.Work => new WorkBehaviour(npc),
+            ScheduleActivity.Work => new WanderBehaviour(npc), // Fallback, Job/Work est pure BT maintenant
             ScheduleActivity.Wander => new WanderBehaviour(npc),
             ScheduleActivity.Teach => new GiveLessonBehaviour(),
             ScheduleActivity.Sleep => new WanderBehaviour(npc),
@@ -243,13 +230,6 @@ public class CharacterSchedule : MonoBehaviour
         };
 
         npc.ResetStackTo(newBehaviour);
-
-        if (needsPunchOut && lastWorkplace != null)
-        {
-            // On injecte le Punch Out pardessus le Reset (donc il s'exécutera avant le Wander ou GoHome)
-            Debug.Log($"<color=orange>[Schedule]</color> {_character.CharacterName} termine son shift. En route pour le bâtiment pour dépointer !");
-            npc.PushBehaviour(new PunchOutBehaviour(lastWorkplace));
-        }
     }
 
     // ──────────────────────────────────────────────

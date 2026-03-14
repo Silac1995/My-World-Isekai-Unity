@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Linq;
+using System.Collections.Generic;
 using MWI.AI;
 
 public class NPCController : CharacterGameController
@@ -20,6 +21,10 @@ public class NPCController : CharacterGameController
     public NPCBehaviourTree BehaviourTree => _behaviourTree;
     public CharacterGoapController GoapController => _goapController;
     public bool HasBehaviourTree => _behaviourTree != null;
+
+    // --- LEGACY AI STACK (To be removed in Phase 4) ---
+    private Stack<IAIBehaviour> _behavioursStack = new Stack<IAIBehaviour>();
+    public IAIBehaviour CurrentBehaviour => _behavioursStack.Count > 0 ? _behavioursStack.Peek() : null;
 
     public override void Initialize()
     {
@@ -82,23 +87,85 @@ public class NPCController : CharacterGameController
         base.Update();
     }
 
+    // --- LEGACY STACK METHODS (To be removed in Phase 4) ---
+
+    public void SetBehaviour(IAIBehaviour behaviour) => ResetStackTo(behaviour);
+
+    public void PushBehaviour(IAIBehaviour newBehaviour)
+    {
+        SafeResume();
+        _behavioursStack.Push(newBehaviour);
+        newBehaviour.Enter(_character);
+    }
+
+    public void PopBehaviour()
+    {
+        if (_behavioursStack.Count > 0)
+        {
+            IAIBehaviour old = _behavioursStack.Pop();
+            old.Exit(_character);
+        }
+
+        SafeResume();
+
+        if (_behavioursStack.Count == 0 && _character.TryGetComponent<NPCController>(out var npc))
+        {
+            if (!npc.HasBehaviourTree)
+            {
+                ResetStackTo(new WanderBehaviour(npc));
+            }
+        }
+    }
+
+    public void ClearBehaviours()
+    {
+        while (_behavioursStack.Count > 0)
+        {
+            IAIBehaviour old = _behavioursStack.Pop();
+            old.Exit(_character);
+        }
+
+        if (_characterMovement != null)
+        {
+            _characterMovement.Stop();
+            if (Agent != null && Agent.isOnNavMesh)
+            {
+                Agent.ResetPath();
+            }
+        }
+    }
+
+    public void ResetStackTo(IAIBehaviour baseBehaviour)
+    {
+        ClearBehaviours();
+        SafeResume();
+        _behavioursStack.Push(baseBehaviour);
+        baseBehaviour.Enter(_character);
+    }
+
+    public bool HasBehaviour<T>() where T : IAIBehaviour => _behavioursStack.Any(b => b is T);
+
+    public T GetCurrentBehaviour<T>() where T : class, IAIBehaviour => CurrentBehaviour as T;
+
+    public List<string> GetBehaviourStackNames() => _behavioursStack.Select(b => b.GetType().Name).ToList();
+
     private void HandleCharacterDetected(Character target)
     {
         // 1. DISPONIBILITÉ DU NPC : On n'initie rien si on est déjà occupé (combat, interaction, KO)
         if (!_character.IsFree()) return;
         
         // On ne réagit qu'en mode Wander (balade) ou en Pause au travail
-        bool isWandering = GetCurrentBehaviour<WanderBehaviour>() != null;
-        var workBehaviour = GetCurrentBehaviour<WorkBehaviour>();
-        bool isOnBreak = workBehaviour != null && _character.CharacterJob?.CurrentJob?.CurrentGoalName == "Idle";
+        bool isWandering = GetCurrentBehaviour<WanderBehaviour>() != null || (HasBehaviourTree && _character.CharacterSchedule?.CurrentActivity == ScheduleActivity.Wander);
+        bool isWorking = _character.CharacterSchedule?.CurrentActivity == ScheduleActivity.Work;
+        bool isOnBreak = isWorking && _character.CharacterJob?.CurrentJob?.CurrentGoalName == "Idle";
 
         if (!isWandering && !isOnBreak) return;
 
         bool isTargetOnBreak = false;
         if (target.Controller is NPCController targetNPC)
         {
-            var targetWorkBehaviour = targetNPC.GetCurrentBehaviour<WorkBehaviour>();
-            isTargetOnBreak = targetWorkBehaviour != null && target.CharacterJob?.CurrentJob?.CurrentGoalName == "Idle";
+            bool isTargetWorking = target.CharacterSchedule?.CurrentActivity == ScheduleActivity.Work;
+            isTargetOnBreak = isTargetWorking && target.CharacterJob?.CurrentJob?.CurrentGoalName == "Idle";
         }
 
         bool areCoworkers = _character.CharacterJob != null && target.CharacterJob != null &&
@@ -178,7 +245,7 @@ public class NPCController : CharacterGameController
         if (!target.IsFree()) return;
         
         // --- WORK FOCUS : On ne dérange pas un travailleur (sauf s'il est techniquement en pause) ---
-        if (!isTargetOnBreak && target.Controller != null && target.Controller.CurrentBehaviour is WorkBehaviour) return;
+        if (!isTargetOnBreak && target.Controller is NPCController targetNpc && targetNpc.CurrentBehaviour != null && targetNpc.CurrentBehaviour.GetType().Name == "WorkBehaviour") return;
         
         // --- 4. LOGIQUE D'INCOMPATIBILITÉ (PERSONNALITÉ) ---
         // On teste ça même si on ne se connaît pas encore (d'instinct)

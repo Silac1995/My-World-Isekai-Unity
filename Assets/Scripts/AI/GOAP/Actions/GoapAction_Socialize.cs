@@ -81,10 +81,10 @@ public class GoapAction_Socialize : GoapAction
         var nearbyPartners = awareness.GetVisibleInteractables<CharacterInteractable>()
             .Select(interactable => interactable.Character)
             .Where(c => c != null && c.IsAlive() && c.IsFree() && c != worker
-                     && !(c.Controller != null && c.Controller.CurrentBehaviour is WorkBehaviour))
+                     && !(c.Controller is NPCController npc && npc.CurrentBehaviour != null && npc.CurrentBehaviour.GetType().Name == "WorkBehaviour"))
             .ToList();
 
-        if (nearbyPartners.Count == 0) return null;
+        if (!nearbyPartners.Any()) return null;
 
         var knownPartners = nearbyPartners
             .Where(c => worker.CharacterRelation != null && worker.CharacterRelation.GetRelationshipWith(c)?.RelationValue > 0)
@@ -100,13 +100,13 @@ public class GoapAction_Socialize : GoapAction
 
         if (prioritizeKnown)
         {
-            if (knownPartners.Count > 0) return knownPartners[0];
-            if (otherPartners.Count > 0) return otherPartners[0];
+            if (knownPartners.Any()) return knownPartners[0];
+            if (otherPartners.Any()) return otherPartners[0];
         }
         else
         {
-            if (otherPartners.Count > 0) return otherPartners[0];
-            if (knownPartners.Count > 0) return knownPartners[0];
+            if (otherPartners.Any()) return otherPartners[0];
+            if (knownPartners.Any()) return knownPartners[0];
         }
 
         return null;

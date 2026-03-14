@@ -50,19 +50,19 @@ public class UI_CharacterDebugScript : MonoBehaviour
     {
         if (characterBehaviourDebugText == null) return;
 
-        var controller = character.GetComponent<CharacterGameController>();
+        var controller = character.Controller as NPCController;
         if (controller != null)
         {
             var stackNames = controller.GetBehaviourStackNames();
 
-            if (stackNames.Count > 0)
+            if (stackNames.Any())
             {
                 // Le premier est toujours le Current (sommet de la pile)
-                string current = "<color=#00FFFF>Current: " + stackNames[0] + "</color>";
+                string current = "<color=#00FFFF>Current: " + stackNames.First() + "</color>";
 
                 // Les suivants sont en attente
                 string next = "";
-                if (stackNames.Count > 1)
+                if (stackNames.Skip(1).Any())
                 {
                     next = "\n<color=#F5B027>Queue: " + string.Join(" -> ", stackNames.Skip(1)) + "</color>";
                 }
@@ -207,8 +207,8 @@ public class UI_CharacterDebugScript : MonoBehaviour
             string actionName = character.CharacterJob.CurrentJob.CurrentActionName;
             goapActionText = string.IsNullOrEmpty(actionName) ? "Job Action: N/A" : $"Job Action: {actionName}";
             
-            var controller = character.GetComponent<CharacterGameController>();
-            if (controller != null && controller.GetCurrentBehaviour<WorkBehaviour>() != null)
+            var controller = character.Controller as NPCController;
+            if (controller != null && controller.CurrentBehaviour != null && controller.CurrentBehaviour.GetType().Name == "WorkBehaviour")
             {
                 phaseText = "Phase: Working";
             }

@@ -366,7 +366,7 @@ public class Character : MonoBehaviour
             // 3. Désactivation du cerveau
             if (_controller != null)
             {
-                _controller.ClearBehaviours();
+                if (_controller is NPCController npc) npc.ClearBehaviours();
                 _controller.enabled = false;
             }
 
@@ -433,7 +433,7 @@ public class Character : MonoBehaviour
         // 3. Désactivation du cerveau
         if (_controller != null)
         {
-            _controller.ClearBehaviours();
+            if (_controller is NPCController npc) npc.ClearBehaviours();
             _controller.enabled = false;
         }
 

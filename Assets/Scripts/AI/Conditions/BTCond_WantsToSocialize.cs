@@ -20,7 +20,7 @@ namespace MWI.AI
             if (self == null || !self.IsFree()) return BTNodeStatus.Failure;
 
             // --- WORK FOCUS : NPCs at work don't initiate social interactions ---
-            if (self.Controller?.CurrentBehaviour is WorkBehaviour) return BTNodeStatus.Failure;
+            if (self.Controller is NPCController selfNpc && selfNpc.CurrentBehaviour != null && selfNpc.CurrentBehaviour.GetType().Name == "WorkBehaviour") return BTNodeStatus.Failure;
 
             // Cooldown après la dernière socialisation
             if (UnityEngine.Time.time - _lastSocialTime < _socialCooldown) return BTNodeStatus.Failure;
@@ -46,10 +46,10 @@ namespace MWI.AI
                 .Select(i => i.Character)
                 .Where(c => c != null && c != self && c.IsAlive() && c.IsFree()
                     && !c.CharacterInteraction.IsInteracting
-                    && !(c.Controller != null && c.Controller.CurrentBehaviour is WorkBehaviour))
+                    && !(c.Controller is NPCController targetNpc && targetNpc.CurrentBehaviour != null && targetNpc.CurrentBehaviour.GetType().Name == "WorkBehaviour"))
                 .ToList();
 
-            if (potentialTargets.Count == 0) return BTNodeStatus.Failure;
+            if (!potentialTargets.Any()) return BTNodeStatus.Failure;
 
             // Choisir la meilleure cible (priorité aux connaissances)
             Character target = potentialTargets

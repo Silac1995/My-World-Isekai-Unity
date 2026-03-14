@@ -76,13 +76,13 @@ public class CharacterInteraction : MonoBehaviour
         Debug.Log($"<color=cyan>[Interaction]</color> {_character.CharacterName} démarre le positionnement pour {target.CharacterName}.");
 
         // --- POSITIONNEMENT DE L'INITIATEUR ---
-        if (_character.Controller != null)
+        if (_character.Controller is NPCController npc)
         {
             // Arrêter l'animation de marche immédiatement
             _character.CharacterVisual?.CharacterAnimator?.StopLocomotion();
 
             // Déplacement précis avec callback : On freeze + lance le dialogue UNE FOIS en place
-            _character.Controller.PushBehaviour(new MoveToInteractionBehaviour(_character.Controller, target, () => 
+            npc.PushBehaviour(new MoveToInteractionBehaviour(npc, target, () => 
             {
                 ExecuteInteraction(target, forcedFirstAction, onPositioned);
             }));
@@ -249,28 +249,28 @@ public class CharacterInteraction : MonoBehaviour
         // after we've already tried to Resume via Unfreeze.
         
         // Target cleanup
-        if (previousTarget.Controller != null)
+        if (previousTarget.Controller is NPCController targetNpc)
         {
             if (previousTarget.GetComponent<NPCBehaviourTree>() != null)
             {
-                previousTarget.Controller.ClearBehaviours();
+                targetNpc.ClearBehaviours();
             }
-            previousTarget.Controller.Unfreeze();
         }
+        if (previousTarget.Controller != null) previousTarget.Controller.Unfreeze();
 
         // Initiator cleanup
-        if (_character.Controller != null)
+        if (_character.Controller is NPCController initNpc)
         {
             // Nettoyer le MoveToInteraction s'il est encore dans la pile
-            if (_character.Controller.CurrentBehaviour is MoveToInteractionBehaviour)
-                _character.Controller.PopBehaviour();
+            if (initNpc.CurrentBehaviour is MoveToInteractionBehaviour)
+                initNpc.PopBehaviour();
 
             if (_character.GetComponent<NPCBehaviourTree>() != null)
             {
-                _character.Controller.ClearBehaviours();
+                initNpc.ClearBehaviours();
             }
-            _character.Controller.Unfreeze();
         }
+        if (_character.Controller != null) _character.Controller.Unfreeze();
 
         _character.CharacterInteractable?.Release();
         OnInteractionStateChanged?.Invoke(previousTarget, false);
@@ -316,15 +316,17 @@ public class CharacterInteraction : MonoBehaviour
     private void ClearRedundantMovement(Character target)
     {
         if (_character.Controller == null || target == null) return;
+        var npc = _character.Controller as NPCController;
+        if (npc == null) return;
 
         // Check if we have a MoveToInteractionBehaviour (initiator)
-        if (_character.Controller.CurrentBehaviour is MoveToInteractionBehaviour)
+        if (npc.CurrentBehaviour is MoveToInteractionBehaviour)
         {
-            _character.Controller.PopBehaviour();
+            npc.PopBehaviour();
         }
 
         // Check if we have a MoveToTargetBehaviour (legacy/social) targeting this specific character
-        if (_character.Controller.CurrentBehaviour is MoveToTargetBehaviour moveBehaviour)
+        if (npc.CurrentBehaviour is MoveToTargetBehaviour moveBehaviour)
         {
             if (moveBehaviour.Target == target.gameObject)
             {

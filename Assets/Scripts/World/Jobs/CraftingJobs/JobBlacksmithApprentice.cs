@@ -14,16 +14,13 @@ public class JobBlacksmithApprentice : JobCrafter
 
     public override void Execute()
     {
-        if (_worker == null) return;
+        if (_worker == null || _workplace == null) return;
 
-        var npcController = _worker.GetComponent<NPCController>();
-        if (npcController != null && _worker.IsFree())
+        var movement = _worker.CharacterMovement;
+        if (movement != null && !movement.HasPath)
         {
-            // L'apprenti flâne dans le bâtiment s'il n'a rien à faire
-            if (_workplace != null && !npcController.HasBehaviour<WanderBehaviour>())
-            {
-                npcController.PushBehaviour(new WanderBehaviour(npcController, _workplace));
-            }
+            Vector3 wanderTarget = _workplace.GetRandomPointInBuildingZone(_worker.transform.position.y);
+            movement.SetDestination(wanderTarget);
         }
     }
 

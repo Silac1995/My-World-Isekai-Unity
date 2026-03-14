@@ -12,9 +12,6 @@ public abstract class CharacterGameController : MonoBehaviour
     protected float _actionCooldownTimer;
     private const float ACTION_RESUME_DELAY = 0.10f;
 
-    private Stack<IAIBehaviour> _behavioursStack = new Stack<IAIBehaviour>();
-    public IAIBehaviour CurrentBehaviour => _behavioursStack.Count > 0 ? _behavioursStack.Peek() : null;
-
     // --- Freeze : stoppe tout (mouvement, IA, animations) ---
     private bool _isFrozen = false;
     public bool IsFrozen => _isFrozen;
@@ -121,21 +118,6 @@ public abstract class CharacterGameController : MonoBehaviour
             }
         }
 
-        // 3. Process the AI behavior stack
-        if (CurrentBehaviour != null)
-        {
-            if (CurrentBehaviour.IsFinished)
-            {
-                PopBehaviour();
-                return;
-            }
-
-            if (!_isFrozen)
-            {
-                CurrentBehaviour.Act(_character);
-            }
-        }
-
         // 4. If frozen (dialogue), early return but still update visuals (idle)
         if (_isFrozen) 
         {
@@ -156,83 +138,22 @@ public abstract class CharacterGameController : MonoBehaviour
         }
     }
 
-    // --- M?THODES REQUISES PAR TES BEHAVIOURS ET INTERACTIONS ---
+    // --- MÉTHODES UTILES ---
 
-    public void SetBehaviour(IAIBehaviour behaviour) => ResetStackTo(behaviour);
-
-    public void PushBehaviour(IAIBehaviour newBehaviour)
-    {
-        SafeResume();
-        _behavioursStack.Push(newBehaviour);
-        newBehaviour.Enter(_character);
-    }
-
-    public void PopBehaviour()
-    {
-        if (_behavioursStack.Count > 0)
-        {
-            IAIBehaviour old = _behavioursStack.Pop();
-            old.Exit(_character);
-        }
-
-        SafeResume();
-
-        if (_behavioursStack.Count == 0 && _character.TryGetComponent<NPCController>(out var npc))
-        {
-            if (!npc.HasBehaviourTree)
-            {
-                ResetStackTo(new WanderBehaviour(npc));
-            }
-        }
-    }
-
-    public void ClearBehaviours()
-    {
-        // ... (existing code)
-        while (_behavioursStack.Count > 0)
-        {
-            IAIBehaviour old = _behavioursStack.Pop();
-            old.Exit(_character);
-        }
-
-        if (_characterMovement != null)
-        {
-            _characterMovement.Stop();
-            if (Agent != null && Agent.isOnNavMesh)
-            {
-                Agent.ResetPath();
-            }
-        }
-    }
-
-    public void ResetStackTo(IAIBehaviour baseBehaviour)
-    {
-        ClearBehaviours();
-        SafeResume();
-        _behavioursStack.Push(baseBehaviour);
-        baseBehaviour.Enter(_character);
-    }
-
-    private void SafeResume()
+    protected void SafeResume()
     {
         if (_isFrozen) return; // Ne JAMAIS reprendre le mouvement si le cerveau est gelé !
 
-        // Une s?curit? de fer : on ne Resume() QUE si on n'est pas en train de faire qqc 
+        // Une sécurité de fer : on ne Resume() QUE si on n'est pas en train de faire qqc 
         // ET qu'on a fini le petit temps de settling.
         if (_character.CharacterActions.CurrentAction != null || _wasDoingAction) 
         {
-            _characterMovement.Stop(); // On double-lock en s?curit?
+            _characterMovement.Stop(); // On double-lock en sécurité
             return;
         }
         
         _characterMovement.Resume();
     }
-
-    public bool HasBehaviour<T>() where T : IAIBehaviour => _behavioursStack.Any(b => b is T);
-
-    public T GetCurrentBehaviour<T>() where T : class, IAIBehaviour => CurrentBehaviour as T;
-
-    public List<string> GetBehaviourStackNames() => _behavioursStack.Select(b => b.GetType().Name).ToList();
 
     // --- LOGIQUE VISUELLE ---
 

@@ -280,7 +280,6 @@ public class BattleManager : MonoBehaviour
                 Character bestEnemy = GetBestTargetFor(character);
                 if (bestEnemy != null)
                 {
-                    character.Controller.PushBehaviour(new CombatBehaviour(this, bestEnemy));
                     RequestEngagement(character, bestEnemy);
                 }
             }
@@ -573,27 +572,7 @@ public class BattleManager : MonoBehaviour
 
     private void ForceRetarget(CombatEngagement engagement)
     {
-        List<Character> allMembers = new List<Character>();
-        allMembers.AddRange(engagement.GroupA.Members);
-        allMembers.AddRange(engagement.GroupB.Members);
-
-        foreach (var character in allMembers)
-        {
-            if (character == null || !character.IsAlive()) continue;
-
-            // Retirer l'ancien comportement
-            var combatBehaviour = character.Controller.GetCurrentBehaviour<CombatBehaviour>();
-            if (combatBehaviour != null)
-            {
-                Character bestEnemy = engagement.GetClosestOpponent(character);
-                if (bestEnemy == null) bestEnemy = GetBestTargetFor(character);
-
-                if (bestEnemy != null && bestEnemy != combatBehaviour.Target)
-                {
-                    combatBehaviour.SetCurrentTarget(bestEnemy);
-                }
-            }
-        }
+        // No longer needed; the BT natively updates targets continuously via BTCond_IsInCombat
     }
 
     /// <summary>
@@ -649,26 +628,7 @@ public class BattleManager : MonoBehaviour
         // On nettoie l'engagement centré sur le personnage tombé (libère les slots des attaquants)
         CleanupEngagements();
         
-        foreach (var participant in _allParticipants)
-        {
-            if (participant == null || participant.IsIncapacitated) continue;
-
-            var combatBehaviour = participant.Controller.GetCurrentBehaviour<CombatBehaviour>();
-
-            if (combatBehaviour != null)
-            {
-                if (!combatBehaviour.HasTarget || combatBehaviour.Target == victim)
-                {
-                    Character nextTarget = GetBestTargetFor(participant);
-
-                    if (nextTarget != null)
-                    {
-                        combatBehaviour.SetCurrentTarget(nextTarget);
-                        Debug.Log($"<color=yellow>[Battle]</color> {participant.CharacterName} a perdu sa cible ({victim.CharacterName}) et se tourne vers {nextTarget.CharacterName}");
-                    }
-                }
-            }
-        }
+        // Le BT (BTCond_IsInCombat) se chargera naturellement de recibler au prochain tick.
     }
 
 

@@ -18,21 +18,21 @@ This skill details the architecture and inner workings of the Behaviour Tree (BT
 The Behaviour Tree uses a root `BTSelector` (`_root`) that evaluates its children from top to bottom. **Order defines priority**.
 The current tree evaluates in this order:
 1. **Orders** (`BTCond_HasOrder`): The player or the game has given an explicit order (Max Priority).
-2. **Combat** (`BTCond_IsInCombat`): The NPC is already engaged in combat.
-3. **Assistance** (`BTCond_FriendInDanger`): The NPC sees an ally under attack.
-4. **Aggression** (`BTCond_DetectedEnemy`): The NPC detects a threat and attacks it.
-5. **GOAP** (`BTAction_ExecuteGoapPlan`): Proactive life planning (Job search, personal goals).
-6. **Needs** (`BTCond_HasUrgentNeed`): Hunger, urgent rest, clothing... (Urgent fallback).
-7. **Schedule** (`BTCond_HasScheduledActivity`): Daily routines (Work, regular sleep).
+2. **Shift Ends** (`BTCond_NeedsToPunchOut`): The NPC's work schedule ended while at work, forcing an immediate, safe Punch-Out action.
+3. **Combat** (`BTCond_IsInCombat`): The NPC is already engaged in combat.
+4. **Assistance** (`BTCond_FriendInDanger`): The NPC sees an ally under attack.
+5. **Aggression** (`BTCond_DetectedEnemy`): The NPC detects a threat and attacks it.
+6. **GOAP** (`BTAction_ExecuteGoapPlan`): Proactive life and needs planning (Shopping, socializing, fulfilling jobs).
+7. **Schedule** (`BTCond_HasScheduledActivity`): Daily routines (Native `BTAction_Work`, regular sleep, etc.).
 8. **Social** (`BTCond_WantsToSocialize`): Spontaneous discussions. (Native Node).
 9. **Wander** (`BTAction_Wander`): The Fallback. (Native Node).
 
 *If you add a new behavior, think about which node to insert it into. Prefer native `BTNode` implementations for high-frequency or foundational logic, and use `BTActionNode` wrappers only for complex legacy behaviours that require full stack management.*
 
-### 2. Native Nodes vs Legacy Wrappers
-The system is migrating towards native `BTNode` implementations for better performance and predictability:
-- **Native Nodes** (e.g., `BTAction_Wander`): Implement logic directly in `OnExecute`. Do not use Coroutines. Use `UnityEngine.Time.time` for time-tracking to remain independent of BT frame staggering.
-- **Legacy Wrappers** (`BTActionNode`): Wrap an `IAIBehaviour`. These push the behaviour to the character's stack on `Enter` and pop it on `Exit`. The BT pauses itself while a legacy behaviour (or any behaviour) is active on the stack.
+### 2. Native Nodes vs Legacy Wrappers (Deprecation)
+The system is actively **migrating away** from `IAIBehaviour` and the `_behavioursStack` towards fully native `BTNode` and `GoapAction` implementations.
+- **Native Nodes** (e.g., `BTAction_Work`, `BTAction_Combat`): Implement logic directly in `OnExecute` as State Machines. Do not use Coroutines. Use `UnityEngine.Time.time` for time-tracking to remain independent of BT frame staggering. This is the **standard**.
+- **Legacy Wrappers** (`BTCond_HasLegacyBehaviour`, `BTAction_ExecuteLegacyStack`): These bridge nodes pause the Behaviour Tree while any lingering `IAIBehaviour` is executing on the NPC's stack. *Do not create new legacy behaviours!*
 
 ### 3. The Tick (Performance)
 - **Staggering**: The BT does not execute every frame. It executes every `_tickInterval` frames (default: 5), with a unique offset (`_frameOffset`) per NPC to spread the CPU load.
@@ -66,5 +66,5 @@ The architecture strictly separates pathfinding from visual positioning to preve
 ### 6. Social Filtering (Worker Focus)
 Social nodes (`BTCond_WantsToSocialize`, `NeedSocial`) autonomously scan for free targets (`Character.IsFree()`). 
 To ensure NPCs can do their jobs uninterrupted:
-- Social scans must actively filter out characters currently executing a `WorkBehaviour`.
-- This ensures workers remain `Free` so players or logistics managers can interact with them for business, but they will not be distracted by casual greetings from random passersby.
+- Social scans must actively filter out characters currently scheduled to work (`CharacterSchedule.CurrentActivity == ScheduleActivity.Work`).
+- This ensures workers remain focused so players or logistics managers can interact with them for business, but they will not be distracted by casual greetings from random passersby unless they are officially "on a break" (`CurrentGoal = "Idle"`).
