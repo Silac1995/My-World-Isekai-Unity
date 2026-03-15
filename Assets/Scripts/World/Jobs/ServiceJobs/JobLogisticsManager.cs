@@ -124,6 +124,17 @@ public class JobLogisticsManager : Job
         }
     }
 
+    public override void OnWorkerPunchOut()
+    {
+        base.OnWorkerPunchOut();
+        if (_currentAction != null)
+        {
+            _currentAction.Exit(_worker);
+            _currentAction = null;
+        }
+        _currentPlan = null;
+    }
+
     /// <summary>
     /// Utilisé (notamment via UI ou Interactions) pour déposer une commande auprès de ce manager.
     /// </summary>
@@ -627,8 +638,14 @@ public class JobLogisticsManager : Job
         if (_completedCraftOrdersToDispatch.Count > 0)
         {
             var order = _completedCraftOrdersToDispatch[0];
-            _completedCraftOrdersToDispatch.RemoveAt(0);
-            GenerateTransportOrder(order);
+            
+            // On s'assure que les objets ont bien été ramassés physiquement au sol par le Manager Logistique
+            // avant d'appeler la compagnie de transport.
+            if (_workplace.GetItemCount(order.ItemToCraft) >= order.Quantity)
+            {
+                _completedCraftOrdersToDispatch.RemoveAt(0);
+                GenerateTransportOrder(order);
+            }
         }
 
         // Si on a une action en cours, l'exécuter

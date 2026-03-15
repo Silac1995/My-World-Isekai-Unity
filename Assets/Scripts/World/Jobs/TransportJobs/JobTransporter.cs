@@ -1,4 +1,4 @@
-﻿using System.Linq;
+using System.Linq;
 using System.Collections.Generic;
 using UnityEngine;
 using MWI.AI;
@@ -144,6 +144,17 @@ public class JobTransporter : Job
         {
             Debug.Log($"<color=orange>[JobTransporter]</color> {_worker.CharacterName} : impossible de planifier pour l'objectif {targetGoal.GoalName}.");
         }
+    }
+
+    public override void OnWorkerPunchOut()
+    {
+        base.OnWorkerPunchOut();
+        if (_currentAction != null)
+        {
+            _currentAction.Exit(_worker);
+            _currentAction = null;
+        }
+        _currentPlan = null;
     }
 
     public override void Unassign()

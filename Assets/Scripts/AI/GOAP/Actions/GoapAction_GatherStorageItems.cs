@@ -48,9 +48,12 @@ public class GoapAction_GatherStorageItems : GoapAction
     {
         if (_isComplete || _building == null || _building.BuildingZone == null) return false;
 
-        // Valide s'il y a un objet au sol (WorldItem) dans la zone du bâtiment
+        var hands = worker.CharacterVisual?.BodyPartsController?.HandsController;
+        bool isCarrying = hands != null && !hands.AreHandsFree();
+
+        // Valide s'il y a un objet au sol (WorldItem) dans la zone du bâtiment, OU si on porte déjà qqchose
         _targetItem = FindLooseWorldItem(worker);
-        return _targetItem != null;
+        return _targetItem != null || isCarrying;
     }
 
     public override void Execute(Character worker)
@@ -63,6 +66,17 @@ public class GoapAction_GatherStorageItems : GoapAction
         switch (_currentState)
         {
             case GatherState.FindingItem:
+                var hands = worker.CharacterVisual?.BodyPartsController?.HandsController;
+                bool isCarrying = hands != null && !hands.AreHandsFree();
+                
+                if (isCarrying)
+                {
+                    DetermineStoragePosition();
+                    _currentState = GatherState.MovingToStorage;
+                    _actionStarted = false;
+                    return;
+                }
+
                 if (_targetItem == null) _targetItem = FindLooseWorldItem(worker);
                 
                 if (_targetItem != null)
@@ -82,17 +96,28 @@ public class GoapAction_GatherStorageItems : GoapAction
                     return;
                 }
 
-                Collider col = _targetItem.GetComponentInChildren<Collider>();
-                if (col != null && !col.isTrigger)
+                Collider targetCol = _targetItem.InteractionZone;
+                if (targetCol == null)
                 {
-                    _targetPos = col.bounds.ClosestPoint(worker.transform.position);
+                    targetCol = _targetItem.GetComponentInChildren<Collider>();
+                }
+
+                var interactable = _targetItem.GetComponentInChildren<InteractableObject>();
+                if (interactable != null && interactable.InteractionZone != null)
+                {
+                    targetCol = interactable.InteractionZone;
+                    _targetPos = targetCol.bounds.ClosestPoint(worker.transform.position);
+                }
+                else if (targetCol != null && !targetCol.isTrigger)
+                {
+                    _targetPos = targetCol.bounds.ClosestPoint(worker.transform.position);
                 }
                 else
                 {
                     _targetPos = _targetItem.transform.position;
                 }
 
-                HandleMovementTo(worker, _targetPos, out bool arrivedAtItem);
+                HandleMovementTo(worker, _targetPos, out bool arrivedAtItem, targetCol);
                 if (arrivedAtItem)
                 {
                     _currentState = GatherState.PickingUp;
@@ -216,10 +241,22 @@ public class GoapAction_GatherStorageItems : GoapAction
         }
     }
 
-    private void HandleMovementTo(Character worker, Vector3 targetPos, out bool arrived)
+    private void HandleMovementTo(Character worker, Vector3 targetPos, out bool arrived, Collider targetCollider = null)
     {
         arrived = false;
         var movement = worker.CharacterMovement;
+
+        // Si on a un collider cible, on vérifie direct l'intersection des bounds
+        if (targetCollider != null)
+        {
+            var workerCol = worker.GetComponent<Collider>();
+            if (workerCol != null && targetCollider.bounds.Intersects(workerCol.bounds))
+            {
+                movement.ResetPath();
+                arrived = true;
+                return;
+            }
+        }
 
         float distance = Vector3.Distance(new Vector3(worker.transform.position.x, 0, worker.transform.position.z), new Vector3(targetPos.x, 0, targetPos.z));
 

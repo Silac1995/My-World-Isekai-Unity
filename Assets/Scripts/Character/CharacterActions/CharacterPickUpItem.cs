@@ -68,16 +68,28 @@ public class CharacterPickUpItem : CharacterAction
             if (interactable != null && interactable.InteractionZone != null)
             {
                 var zoneBounds = interactable.InteractionZone.bounds;
-                Vector3 closestPoint = zoneBounds.ClosestPoint(character.transform.position);
-                closestPoint.y = 0;
-                
-                Vector3 charPos = character.transform.position;
-                charPos.y = 0;
+                var charCollider = character.GetComponent<Collider>();
 
-                if (Vector3.Distance(charPos, closestPoint) > 1f)
+                if (charCollider != null)
                 {
-                    Debug.Log($"[Action] {character.CharacterName} est trop loin de {_item.CustomizedName} pour le ramasser.");
-                    return false;
+                    if (!zoneBounds.Intersects(charCollider.bounds) && !zoneBounds.Contains(character.transform.position))
+                    {
+                        Debug.Log($"[Action] {character.CharacterName} est hors de la zone d'interaction de {_item.CustomizedName}.");
+                        return false;
+                    }
+                }
+                else
+                {
+                    Vector3 closestPoint = zoneBounds.ClosestPoint(character.transform.position);
+                    closestPoint.y = 0;
+                    Vector3 charPos = character.transform.position;
+                    charPos.y = 0;
+
+                    if (Vector3.Distance(charPos, closestPoint) > 1f)
+                    {
+                        Debug.Log($"[Action] {character.CharacterName} est trop loin de {_item.CustomizedName} pour le ramasser.");
+                        return false;
+                    }
                 }
             }
         }

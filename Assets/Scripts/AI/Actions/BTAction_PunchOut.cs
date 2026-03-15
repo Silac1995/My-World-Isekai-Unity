@@ -102,6 +102,12 @@ namespace MWI.AI
                     workplace.WorkerEndingShift(self);
                 }
             }
+
+            // Réinitialiser le GOAP pour qu'il passe à autre chose (ex: rentrer chez soi, manger)
+            if (self != null && self.CharacterGoap != null)
+            {
+                self.CharacterGoap.CancelPlan();
+            }
         }
     }
 }

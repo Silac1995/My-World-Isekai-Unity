@@ -57,6 +57,14 @@ public abstract class Job
     }
 
     /// <summary>
+    /// Appelé lors de la fin du service (Punch Out) par le CommercialBuilding.
+    /// Utile pour arrêter les coroutines ou nettoyer le GOAP interne du job.
+    /// </summary>
+    public virtual void OnWorkerPunchOut()
+    {
+    }
+
+    /// <summary>
     /// Appelé chaque cycle quand le worker est au travail.
     /// Chaque job concret code sa logique spécifique ici.
     /// </summary>

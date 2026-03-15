@@ -57,15 +57,11 @@ public class GoapAction_WearClothing : GoapAction
 
         // 1. Déplacement vers l'objet
         bool isCloseEnough = false;
-        
+
         if (_targetInteractable.InteractionZone != null)
         {
-            // Tolérance plus large : la distance par rapport au ClosestPoint de la zone
-            Vector3 closestPoint = _targetInteractable.InteractionZone.bounds.ClosestPoint(worker.transform.position);
-            closestPoint.y = 0;
-            Vector3 workerPos = worker.transform.position;
-            workerPos.y = 0;
-            if (Vector3.Distance(workerPos, closestPoint) <= 1.0f) // Plus tolerant (1.0f au lieu de 0.8f pour marge de sécu)
+            var charCollider = worker.GetComponent<Collider>();
+            if (charCollider != null && _targetInteractable.InteractionZone.bounds.Intersects(charCollider.bounds))
             {
                 isCloseEnough = true;
             }
@@ -91,10 +87,8 @@ public class GoapAction_WearClothing : GoapAction
                 Vector3 dest = targetPos;
                 if (_targetInteractable.InteractionZone != null)
                 {
-                    // Cherche le point le plus proche sur les bounds, mais garde une légère marge pour ne pas rentrer dedans
+                    // Cherche le point le plus proche sur les bounds
                     dest = _targetInteractable.InteractionZone.bounds.ClosestPoint(worker.transform.position);
-                    Vector3 directionFromCenter = (dest - _targetInteractable.InteractionZone.transform.position).normalized;
-                    dest += directionFromCenter * 0.3f; // Offset pour s'arreter devant
                 }
                 movement.SetDestination(dest);
                 _lastTargetPos = targetPos;

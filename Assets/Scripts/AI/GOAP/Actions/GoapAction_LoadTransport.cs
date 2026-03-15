@@ -110,8 +110,9 @@ namespace MWI.AI
                 }
                 else
                 {
-                    // Fallback force
+                    // Fallback force (NPC has no bag, put it in hands)
                     worker.CharacterVisual?.BodyPartsController?.HandsController?.CarryItem(_takenItem);
+                    _job.SetCarriedItem(_takenItem); // Critical: Update transporter state
                     _isComplete = true; 
                 }
             }

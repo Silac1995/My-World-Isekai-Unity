@@ -273,6 +273,15 @@ public abstract class CommercialBuilding : Building
         {
             _activeWorkersOnShift.Remove(worker);
             Debug.Log($"<color=orange>[Building]</color> {worker.CharacterName} a dépointé (Punch Out) de {buildingName}.");
+
+            if (worker.CharacterJob != null)
+            {
+                var activeJobAssignment = worker.CharacterJob.ActiveJobs.FirstOrDefault(j => j.Workplace == this);
+                if (activeJobAssignment != null && activeJobAssignment.AssignedJob != null)
+                {
+                    activeJobAssignment.AssignedJob.OnWorkerPunchOut();
+                }
+            }
         }
     }
 

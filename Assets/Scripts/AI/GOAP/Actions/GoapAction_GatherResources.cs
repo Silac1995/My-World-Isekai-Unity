@@ -28,6 +28,7 @@ public class GoapAction_GatherResources : GoapAction
     private bool _arrivedAtZone = false;
     private bool _isGathering = false;
     private bool _gatherFinished = false;
+    private bool _arrivedAtSpawnedItem = false;
     private bool _pickupStarted = false;
     private GatherableObject _currentTarget = null;
     private WorldItem _targetWorldItem = null;
@@ -114,12 +115,21 @@ public class GoapAction_GatherResources : GoapAction
             if (_targetWorldItem != null)
             {
                 Debug.Log($"<color=cyan>[GOAP Gather]</color> {worker.CharacterName} a vu {_targetWorldItem.ItemInstance.ItemSO.ItemName} par terre, il va le ramasser.");
+
                 Vector3 targetPos = _targetWorldItem.transform.position;
-                Collider col = _targetWorldItem.GetComponentInChildren<Collider>();
-                if (col != null && !col.isTrigger)
+                if (_targetWorldItem.InteractionZone != null)
                 {
-                    targetPos = col.bounds.ClosestPoint(worker.transform.position);
+                    targetPos = _targetWorldItem.InteractionZone.bounds.ClosestPoint(worker.transform.position);
                 }
+                else
+                {
+                    Collider col = _targetWorldItem.GetComponentInChildren<Collider>();
+                    if (col != null && !col.isTrigger)
+                    {
+                        targetPos = col.bounds.ClosestPoint(worker.transform.position);
+                    }
+                }
+                
                 movement.SetDestination(targetPos);
                 return;
             }
@@ -154,10 +164,23 @@ public class GoapAction_GatherResources : GoapAction
                     _targetWorldItem = null;
                     return;
                 }
-                else if (movement.RemainingDistance <= movement.StoppingDistance + 0.5f)
+                else
                 {
-                    if (!_pickupStarted)
+                    bool isAtWorldItem = false;
+                    var workerCol = worker.GetComponent<Collider>();
+
+                    if (_targetWorldItem.InteractionZone != null && workerCol != null)
                     {
+                        isAtWorldItem = _targetWorldItem.InteractionZone.bounds.Intersects(workerCol.bounds);
+                    }
+                    else
+                    {
+                        isAtWorldItem = movement.RemainingDistance <= movement.StoppingDistance + 0.5f;
+                    }
+
+                    if (isAtWorldItem && !_pickupStarted)
+                    {
+                        movement.Stop();
                         _pickupStarted = true;
                         PickupSpecificWorldItem(worker, _targetWorldItem);
                     }
@@ -179,12 +202,13 @@ public class GoapAction_GatherResources : GoapAction
                 }
                 else
                 {
-                    // Vérification robuste : on attend d'être physiquement dans ou très proche de l'InteractionZone
+                    // Vérification robuste : on attend d'être physiquement dans l'InteractionZone
                     bool isAtTarget = false;
-                    if (_currentTarget.InteractionZone != null)
+                    var workerCol = worker.GetComponent<Collider>();
+
+                    if (_currentTarget.InteractionZone != null && workerCol != null)
                     {
-                        isAtTarget = _currentTarget.InteractionZone.bounds.Contains(worker.transform.position) || 
-                                     Vector3.Distance(worker.transform.position, _currentTarget.InteractionZone.bounds.ClosestPoint(worker.transform.position)) <= 0.5f;
+                        isAtTarget = _currentTarget.InteractionZone.bounds.Intersects(workerCol.bounds);
                     }
                     else
                     {
@@ -227,15 +251,69 @@ public class GoapAction_GatherResources : GoapAction
             return;
         }
 
-        // Phase 4 : Après la récolte, ramasser le WorldItem spawné
-        if (_gatherFinished && !_pickupStarted)
+        // Phase 4 : Après la récolte, chercher le WorldItem spawné et s'y diriger
+        if (_gatherFinished && !_arrivedAtSpawnedItem)
         {
-            _pickupStarted = true;
-            PickupNearbyWorldItem(worker);
+            if (_targetWorldItem == null)
+            {
+                _targetWorldItem = FindNearestWantedWorldItem(worker);
+                if (_targetWorldItem == null)
+                {
+                    Debug.Log($"<color=orange>[GOAP Gather]</color> {worker.CharacterName} : aucun WorldItem trouvé à ramasser après la récolte.");
+                    _isComplete = true;
+                    return;
+                }
+                
+                // Calcul de la destination vers l'item droppé
+                Vector3 targetPos = _targetWorldItem.transform.position;
+                if (_targetWorldItem.InteractionZone != null)
+                {
+                    targetPos = _targetWorldItem.InteractionZone.bounds.ClosestPoint(worker.transform.position);
+                }
+                else
+                {
+                    Collider col = _targetWorldItem.GetComponentInChildren<Collider>();
+                    if (col != null && !col.isTrigger)
+                    {
+                        targetPos = col.bounds.ClosestPoint(worker.transform.position);
+                    }
+                }
+                movement.SetDestination(targetPos);
+            }
+
+            // Phase 4.5 : Attendre d'arriver au WorldItem fraîchement spawné
+            if (!movement.PathPending)
+            {
+                bool isAtWorldItem = false;
+                var workerCol = worker.GetComponent<Collider>();
+
+                if (_targetWorldItem.InteractionZone != null && workerCol != null)
+                {
+                    isAtWorldItem = _targetWorldItem.InteractionZone.bounds.Intersects(workerCol.bounds);
+                }
+                else
+                {
+                    isAtWorldItem = movement.RemainingDistance <= movement.StoppingDistance + 0.5f;
+                }
+
+                if (isAtWorldItem)
+                {
+                    movement.Stop();
+                    _arrivedAtSpawnedItem = true;
+                }
+            }
             return;
         }
 
-        // Phase 5 : Attendre que le pickup (CharacterPickUpItem) se termine
+        // Phase 5 : On est devant le WorldItem spawné, on déclenche le pickup
+        if (_arrivedAtSpawnedItem && !_pickupStarted)
+        {
+            _pickupStarted = true;
+            PickupSpecificWorldItem(worker, _targetWorldItem);
+            return;
+        }
+
+        // Phase 6 : Attendre que le pickup (CharacterPickUpItem) se termine
         // _isComplete sera mis à true par le callback
         if (_pickupStarted)
         {
@@ -253,6 +331,7 @@ public class GoapAction_GatherResources : GoapAction
 
     /// <summary>
     /// Cherche un WorldItem au sol proche du worker après avoir récolté un objet.
+    /// (Méthode conservée pour la compatibilité interne)
     /// </summary>
     private void PickupNearbyWorldItem(Character worker)
     {
