@@ -17,19 +17,28 @@ public class GoapAction_WearClothing : GoapAction
     public override float Cost => 1f;
 
     private bool _isComplete = false;
-    private bool _isMoving = false;
     private bool _actionStarted = false;
     private ItemInteractable _targetInteractable;
-    private Vector3 _lastTargetPos = Vector3.positiveInfinity;
-    private float _lastRouteRequestTime = 0f;
     private float _cooldownEndTime = 0f;
+    private Vector3 _targetPos;
     
+    private WearState _currentState = WearState.FindingItem;
+
+    private enum WearState
+    {
+        FindingItem,
+        MovingToItem,
+        Equipping
+    }
+
     public override bool IsComplete => _isComplete;
 
     public override bool IsValid(Character worker)
     {
         if (_isComplete) return false;
         if (UnityEngine.Time.time < _cooldownEndTime) return false;
+
+        // On vérifie d'abord si on a un objet cible actuellement valide
         if (_targetInteractable != null && _targetInteractable.RootGameObject != null) return true;
 
         List<WearableType> missingTypes = GetMissingTypes(worker);
@@ -41,15 +50,6 @@ public class GoapAction_WearClothing : GoapAction
     {
         if (_isComplete) return;
 
-        if (_targetInteractable == null || _targetInteractable.RootGameObject == null || _targetInteractable.ItemInstance is not EquipmentInstance equip)
-        {
-            // Lost the race! The item was destroyed by someone else.
-            Debug.Log($"<color=teal>[WearClothing]</color> {worker.CharacterName} a perdu la course. Vêtement pris par un autre. Cooldown...");
-            _cooldownEndTime = UnityEngine.Time.time + 1.5f;
-            _isComplete = true;
-            return;
-        }
-
         var movement = worker.CharacterMovement;
         if (movement == null)
         {
@@ -57,100 +57,145 @@ public class GoapAction_WearClothing : GoapAction
             return;
         }
 
-        GameObject rootObject = _targetInteractable.RootGameObject;
-        Vector3 targetPos = rootObject.transform.position;
-
-        // 1. Déplacement vers l'objet
-        bool isCloseEnough = false;
-
-        if (_targetInteractable.InteractionZone != null)
+        switch (_currentState)
         {
-            var charCollider = worker.GetComponent<Collider>();
-            if (charCollider != null && _targetInteractable.InteractionZone.bounds.Intersects(charCollider.bounds))
-            {
-                isCloseEnough = true;
-            }
-        }
-
-        // Si l'intersection physique échoue (ex: Agent bloqué juste devant par un autre NPC/mur)
-        // On valide si l'agent considère être arrivé à destination
-        if (!isCloseEnough && movement != null)
-        {
-            if (_isMoving && !movement.PathPending && movement.HasPath && movement.RemainingDistance <= movement.StoppingDistance + 0.5f)
-            {
-                isCloseEnough = true;
-            }
-            else
-            {
-                // Fallback ultime distance absolue
-                Vector3 currentPos = worker.transform.position;
-                currentPos.y = 0;
-                targetPos.y = 0;
-                if (Vector3.Distance(currentPos, targetPos) <= 1.5f)
+            case WearState.FindingItem:
+                if (_targetInteractable == null || _targetInteractable.RootGameObject == null)
                 {
-                    isCloseEnough = true;
+                    List<WearableType> missingTypes = GetMissingTypes(worker);
+                    _targetInteractable = FindClosestWearable(worker, missingTypes);
                 }
-            }
-        }
 
-        if (!isCloseEnough)
-        {
-            bool hasPathFailed = (UnityEngine.Time.time - _lastRouteRequestTime > 0.2f) && (movement.PathStatus == UnityEngine.AI.NavMeshPathStatus.PathInvalid || (!movement.HasPath && !movement.PathPending));
-
-            if (!_isMoving || Vector3.Distance(_lastTargetPos, targetPos) > 1f || hasPathFailed)
-            {
-                // Afin de garantir l'intersection (Intersect) du collider, on vise le centre de l'item (targetPos)
-                // plutôt que le point le plus proche sur les bounds (ClosestPoint) qui risque de nous faire stopper juste avant.
-                movement.SetDestination(targetPos);
-                _lastTargetPos = targetPos;
-                _lastRouteRequestTime = UnityEngine.Time.time;
-                _isMoving = true;
-            }
-            return;
-        }
-
-        // 2. Arrivé à l'objet
-        if (_isMoving)
-        {
-            movement.Stop();
-            _isMoving = false;
-            _lastTargetPos = Vector3.positiveInfinity;
-        }
-
-        // 3. Collecter et équiper (Attendre que l'action se termine)
-        if (!_actionStarted)
-        {
-            if (_targetInteractable.TryCollect())
-            {
-                CharacterEquipAction equipAction = new CharacterEquipAction(worker, equip);
-                bool success = worker.CharacterActions.ExecuteAction(equipAction);
-                if (success)
+                if (_targetInteractable != null)
                 {
-                    _actionStarted = true;
-                    // On détruit l'objet physique au sol dès qu'on commence l'équipement pour éviter les doublons
-                    if (rootObject != null) UnityEngine.Object.Destroy(rootObject);
+                    _currentState = WearState.MovingToItem;
                 }
                 else
                 {
-                    // Action occupée, on échoue gracieusement
+                    _isComplete = true; 
+                }
+                break;
+
+            case WearState.MovingToItem:
+                if (_targetInteractable == null || _targetInteractable.RootGameObject == null)
+                {
+                    // L'item a été détruit par quelqu'un d'autre
+                    Debug.Log($"<color=teal>[WearClothing]</color> {worker.CharacterName} a perdu la course. Vêtement pris par un autre. Cooldown...");
+                    _cooldownEndTime = UnityEngine.Time.time + 1.5f;
                     _isComplete = true;
                     return;
                 }
-            }
-            else 
+
+                GameObject rootObject = _targetInteractable.RootGameObject;
+                Collider targetCol = _targetInteractable.InteractionZone;
+                
+                if (targetCol != null)
+                {
+                    _targetPos = targetCol.bounds.ClosestPoint(worker.transform.position);
+                }
+                else
+                {
+                    _targetPos = rootObject.transform.position;
+                }
+
+                HandleMovementTo(worker, _targetPos, out bool arrived, targetCol);
+
+                // Anti-stuck : S'il y a trop de monde sur l'objet et qu'on ne peut pas l'atteindre
+                float distToTarget = Vector3.Distance(new Vector3(worker.transform.position.x, 0, worker.transform.position.z), new Vector3(_targetPos.x, 0, _targetPos.z));
+                if (!arrived && distToTarget <= 2f && movement.GetVelocity().sqrMagnitude < 0.1f)
+                {
+                    // On force l'arrivée si on est bloqué par la foule juste devant
+                    arrived = true;
+                    movement.ResetPath();
+                }
+
+                if (arrived)
+                {
+                    _currentState = WearState.Equipping;
+                    _actionStarted = false;
+                }
+                break;
+
+            case WearState.Equipping:
+                if (_targetInteractable == null || _targetInteractable.RootGameObject == null || _targetInteractable.ItemInstance is not EquipmentInstance equip)
+                {
+                    Debug.Log($"<color=teal>[WearClothing]</color> {worker.CharacterName} a perdu la course. Vêtement pris par un autre. Cooldown...");
+                    _cooldownEndTime = UnityEngine.Time.time + 1.5f;
+                    _isComplete = true;
+                    return;
+                }
+
+                if (!_actionStarted)
+                {
+                    if (_targetInteractable.TryCollect())
+                    {
+                        CharacterEquipAction equipAction = new CharacterEquipAction(worker, equip);
+                        bool success = worker.CharacterActions.ExecuteAction(equipAction);
+                        
+                        if (success)
+                        {
+                            _actionStarted = true;
+                            // On détruit l'objet physique au sol dès qu'on commence l'équipement pour éviter les doublons
+                            var rootToDestroy = _targetInteractable.RootGameObject;
+                            if (rootToDestroy != null) UnityEngine.Object.Destroy(rootToDestroy);
+                        }
+                        else
+                        {
+                            _isComplete = true;
+                            return;
+                        }
+                    }
+                    else 
+                    {
+                        Debug.Log($"<color=teal>[WearClothing]</color> {worker.CharacterName} est arrivé mais l'objet n'est plus collectable. Cooldown...");
+                        _cooldownEndTime = UnityEngine.Time.time + 1.5f;
+                        _isComplete = true; 
+                        return;
+                    }
+                }
+                else
+                {
+                    // Attente de la fin de l'action CharacterEquipAction (0.8s)
+                    if (!(worker.CharacterActions.CurrentAction is CharacterEquipAction))
+                    {
+                        _isComplete = true;
+                    }
+                }
+                break;
+        }
+    }
+
+    private void HandleMovementTo(Character worker, Vector3 targetPos, out bool arrived, Collider targetCollider = null)
+    {
+        arrived = false;
+        var movement = worker.CharacterMovement;
+
+        // Si on a un collider cible, on vérifie direct l'intersection des bounds
+        if (targetCollider != null)
+        {
+            var workerCol = worker.GetComponent<Collider>();
+            if (workerCol != null && targetCollider.bounds.Intersects(workerCol.bounds))
             {
-                Debug.Log($"<color=teal>[WearClothing]</color> {worker.CharacterName} est arrivé mais l'objet n'est plus collectable. Cooldown...");
-                _cooldownEndTime = UnityEngine.Time.time + 1.5f;
-                _isComplete = true; // Déjà pris par qqun d'autre
+                movement.ResetPath();
+                arrived = true;
                 return;
             }
         }
-        else
+
+        float distance = Vector3.Distance(new Vector3(worker.transform.position.x, 0, worker.transform.position.z), new Vector3(targetPos.x, 0, targetPos.z));
+
+        if (movement.PathPending) return;
+
+        if (!movement.HasPath || movement.RemainingDistance <= movement.StoppingDistance + 0.5f)
         {
-            // Attente de la fin de l'action CharacterEquipAction (0.8s)
-            if (!(worker.CharacterActions.CurrentAction is CharacterEquipAction))
+            if (distance > movement.StoppingDistance + 0.5f)
             {
-                _isComplete = true;
+                movement.SetDestination(targetPos);
+            }
+            else
+            {
+                movement.ResetPath();
+                arrived = true;
             }
         }
     }
@@ -158,8 +203,8 @@ public class GoapAction_WearClothing : GoapAction
     public override void Exit(Character worker)
     {
         _isComplete = false;
-        _isMoving = false;
         _actionStarted = false;
+        _currentState = WearState.FindingItem;
         _targetInteractable = null;
         worker.CharacterMovement?.Stop();
     }
