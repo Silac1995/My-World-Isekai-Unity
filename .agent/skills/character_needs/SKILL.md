@@ -25,17 +25,21 @@ Inherit from `CharacterNeed` and implement the abstract provider methods. **Rule
 - `GetGoapGoal()`: Returns the concrete `GoapGoal` (e.g., `isFull = true`) the planner must achieve.
 - `GetGoapActions()`: Returns the list of logical actions capable of fulfilling the goal (e.g., `new GoapAction_EatFood()`).
 
-### 2. Event-Driven Decay (`update-usage`)
-To adhere to the `update-usage` constraints, do not check `need.Tick(Time.deltaTime)` every frame in `Update()`.
-Instead, `CharacterNeeds` manages slow-ticking Coroutines:
+### 2. Event-Driven Decay (`time-manager` and `update-usage`)
+To adhere to the `update-usage` constraints and avoid the scaling overhead of Coroutines on hundreds of NPCs, `CharacterNeeds` relies on the `TimeManager` for daily decay loops instead of `Update()` or `WaitForSeconds()`.
+
 ```csharp
-private IEnumerator SocialDecayCoroutine()
+private void Start()
 {
-    while (true)
+    if (MWI.Time.TimeManager.Instance != null)
     {
-        yield return new WaitForSeconds(1f);
-        _socialNeed?.DecreaseValue(3f);
+        MWI.Time.TimeManager.Instance.OnNewDay += HandleNewDay;
     }
+}
+
+private void HandleNewDay()
+{
+    _socialNeed?.DecreaseValue(15f); // Decays entirely via event
 }
 ```
 

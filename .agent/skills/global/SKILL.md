@@ -44,6 +44,7 @@ This section maps all specialized skills available in this project. Refer to the
 |---|---|
 | `global` | Fundamental project rules, coding style, optimization, memory safety (this file) |
 | `update-usage` | Rules for Update(), FixedUpdate(), LateUpdate() — when to use, when to avoid |
+| `time-manager` | Event-driven architecture for Day/Night cycle, hours, and phase transitions |
 | `multiplayer` | Future-proof architecture rules, decoupling, and safe game state management |
 | `save-load-system` | Game state persistence, DTOs, versioning, atomic file operations |
 | `character-core` | Central entity hub — availability (IsFree), lifecycle, player/NPC context |
