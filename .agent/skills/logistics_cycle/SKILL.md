@@ -126,20 +126,6 @@ public struct ShopItemEntry
 |------|---------|-----------|-------------|
 | `BuyOrder` | Ingredient/Stock procurement | CraftingBuilding or Shop LogisticsManager | Wholesale/Supplier LogisticsManager |
 | `CraftingOrder` | Request item production | Shop's LogisticsManager | CraftingBuilding's `JobCrafter` |
-| `TransportOrder` | Move goods A→B | CraftingBuilding's LogisticsManager | TransporterBuilding's `JobTransporter` |
-
-### 9. Schedule Guard
-
-`IsOwnerOrOnSchedule()` gates all logistics actions:
-- **Owner** → always allowed.
-- **Employee** → only during `ScheduleActivity.Work`.
-
-## Debugging Checklist
-
-| Step | What to check |
-|------|--------------|
-| Shop has items? | `ShopItemEntry`s configured? `MaxStock` > 0? |
-| Manager assigned? | `JobLogisticsManager` on ShopBuilding has a worker? |
 | Punch-in fires? | `[Shop] LogisticsManager X a pointé` in logs? |
 | Schedule ok? | `IsOwnerOrOnSchedule()` returns true? Check schedule. |
 | Supplier exists? | `CraftingBuilding` in scene with matching craftable item? |

@@ -71,3 +71,10 @@ In the future, if the AI Agent needs to create a "Blacksmith":
 1. Write the abstract `JobCrafter` code, then `JobBlacksmith` inheriting from `JobCrafter`. Define its schedule, its `SkillSO`/`SkillTier` prerequisites, and its BT node `BTAction_PerformCraft`.
 2. Create or modify the `ForgeBuilding` inheriting from `CraftingBuilding` (and not just `CommercialBuilding`) so its `InitializeJobs()` function adds a `JobBlacksmith` + a `JobLogisticsManager` (for orders).
 3. Done! The player can go ask for the job (if they have the right skill level), and place crafting orders with the Logistics Manager.
+
+## Strict Architectural Rules
+- **Interaction Distance**: To interact with an object or get in range, **always** use the `InteractionZone` (its colliders or explicit properties).
+- **Physical Destruction**: When picking up an item from the scene/world, you must **always destroy it IN THE `Assets/Scripts/Character/CharacterActions/CharacterPickUpItem.cs`**. NOWHERE ELSE.
+- **Spawning Rules**: To SPAWN an item in the world through `Assets/Scripts/Item/WorldItem.cs`:
+    - If it's an existing item, use the methods in `Assets/Scripts/Item/ItemInstance.cs` to keep the ItemInstance parameters intact.
+    - If it's a brand new item, it MUST be instantiated through `Assets/Resources/Data/Item/ItemSO.cs` with the methods that take color and other parameters.
