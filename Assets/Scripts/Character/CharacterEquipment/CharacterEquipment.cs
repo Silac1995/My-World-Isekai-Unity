@@ -537,6 +537,28 @@ public class CharacterEquipment : MonoBehaviour
     }
 
     /// <summary>
+    /// Checks if the character possesses at least one item of the specified ItemSO (in inventory or hands).
+    /// </summary>
+    public bool HasItemSO(ItemSO itemSO)
+    {
+        if (itemSO == null) return false;
+
+        var inventory = GetInventory();
+        if (inventory != null && inventory.HasAnyItemSO(new List<ItemSO> { itemSO }))
+        {
+            return true;
+        }
+
+        var handsController = character.CharacterVisual?.BodyPartsController?.HandsController;
+        if (handsController != null && handsController.CarriedItem != null && handsController.CarriedItem.ItemSO == itemSO)
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// Centralized method to pick up an item. 
     /// Adds to inventory and triggers the notification system.
     /// </summary>

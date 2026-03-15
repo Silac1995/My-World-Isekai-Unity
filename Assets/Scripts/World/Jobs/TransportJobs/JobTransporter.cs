@@ -16,8 +16,11 @@ public class JobTransporter : Job
     // La commande courante que l'employé est en train de livrer
     public TransportOrder CurrentOrder { get; private set; }
     
-    // L'item actuellement tenu (utilisé par GOAP)
-    public ItemInstance CarriedItem { get; private set; }
+    // Les items actuellement tenus (logique, utilisé par GOAP et l'inventaire)
+    public List<ItemInstance> CarriedItems { get; private set; } = new List<ItemInstance>();
+    
+    // La référence physique de l'item ciblé au sol
+    public WorldItem TargetWorldItem { get; set; }
 
     // --- GOAP ---
     private GoapGoal _transporterGoal;
@@ -35,7 +38,8 @@ public class JobTransporter : Job
         if (order != null)
         {
             Debug.Log($"<color=green>[JobTransporter]</color> {_worker?.CharacterName} commence la demande: Livrer {order.ItemToTransport.ItemName} à {order.Destination.BuildingName}.");
-            CarriedItem = null;
+            CarriedItems.Clear();
+            TargetWorldItem = null;
             
             // Forcer la replanification GOAP
             if (_currentAction != null)
@@ -47,9 +51,12 @@ public class JobTransporter : Job
         }
     }
 
-    public void SetCarriedItem(ItemInstance item)
+    public void AddCarriedItem(ItemInstance item)
     {
-        CarriedItem = item;
+        if (item != null && !CarriedItems.Contains(item))
+        {
+            CarriedItems.Add(item);
+        }
     }
 
     public override void Execute()
@@ -105,24 +112,99 @@ public class JobTransporter : Job
 
     private void PlanNextActions()
     {
+        bool itemLocated = TargetWorldItem != null;
+        bool atItem = false;
+        
+        bool itemCarried = false;
+        if (CurrentOrder != null && CarriedItems.Count > 0)
+        {
+            int remainingNeeded = CurrentOrder.Quantity - CurrentOrder.DeliveredQuantity;
+            bool hasEnough = CarriedItems.Count >= remainingNeeded;
+            
+            bool canCarryMore = false;
+            if (_worker.CharacterEquipment != null)
+            {
+                if (_worker.CharacterEquipment.HasFreeSpaceForItemSO(CurrentOrder.ItemToTransport))
+                {
+                    canCarryMore = true;
+                }
+                else
+                {
+                    var hands = _worker.CharacterVisual?.BodyPartsController?.HandsController;
+                    if (hands != null && hands.AreHandsFree()) canCarryMore = true;
+                }
+            }
+            
+            // Si on a assez d'objets pour finir l'ordre, OU si on ne peut physiquement plus en porter un seul
+            if (hasEnough || !canCarryMore)
+            {
+                itemCarried = true;
+                // Important: clear TargetWorldItem so we don't hold a phantom reference while delivering
+                TargetWorldItem = null;
+                itemLocated = false;
+            }
+        }
+
+        bool atDestination = false;
+        bool itemDelivered = false;
+
+        if (CurrentOrder != null)
+        {
+            var workerPos = _worker.transform.position;
+            var charCollider = _worker.GetComponent<Collider>();
+            
+            // Check if at item
+            if (itemLocated && TargetWorldItem.ItemInteractable != null && TargetWorldItem.ItemInteractable.InteractionZone != null)
+            {
+                if (charCollider != null && TargetWorldItem.ItemInteractable.InteractionZone.bounds.Intersects(charCollider.bounds))
+                {
+                    atItem = true;
+                }
+                else if (TargetWorldItem.ItemInteractable.InteractionZone.bounds.Contains(workerPos))
+                {
+                    atItem = true;
+                }
+            }
+
+            // Check if at destination
+            if (CurrentOrder.Destination != null)
+            {
+                Zone deliveryZone = CurrentOrder.Destination.DeliveryZone ?? CurrentOrder.Destination.MainRoom.GetComponent<Zone>();
+                if (deliveryZone != null && deliveryZone.GetComponent<Collider>().bounds.Contains(workerPos))
+                {
+                    atDestination = true;
+                }
+                else if (deliveryZone == null && Vector3.Distance(workerPos, CurrentOrder.Destination.transform.position) < 3f)
+                {
+                    atDestination = true;
+                }
+            }
+        }
+
         var worldState = new Dictionary<string, bool>
         {
-            { "hasDelivered", false },
-            { "isLoaded", CarriedItem != null },
+            { "itemLocated", itemLocated },
+            { "atItem", atItem },
+            { "itemCarried", itemCarried },
+            { "atDestination", atDestination },
+            { "itemDelivered", itemDelivered },
             { "isIdling", false }
         };
 
         var availableActions = new List<GoapAction>
         {
-            new GoapAction_LoadTransport(this),
-            new GoapAction_UnloadTransport(this),
+            new GoapAction_LocateItem(this),
+            new GoapAction_MoveToItem(this),
+            new GoapAction_PickupItem(this),
+            new GoapAction_MoveToDestination(this),
+            new GoapAction_DeliverItem(this),
             new GoapAction_IdleInCommercialBuilding(_workplace as CommercialBuilding)
         };
 
         GoapGoal targetGoal;
         if (CurrentOrder != null)
         {
-            targetGoal = new GoapGoal("DeliverItems", new Dictionary<string, bool> { { "hasDelivered", true } }, priority: 1);
+            targetGoal = new GoapGoal("DeliverItems", new Dictionary<string, bool> { { "itemDelivered", true } }, priority: 1);
         }
         else
         {
@@ -131,9 +213,7 @@ public class JobTransporter : Job
 
         _transporterGoal = targetGoal;
         
-        var validActions = availableActions.Where(a => a.IsValid(_worker)).ToList();
-        
-        _currentPlan = GoapPlanner.Plan(worldState, validActions, targetGoal);
+        _currentPlan = GoapPlanner.Plan(worldState, availableActions, targetGoal);
 
         if (_currentPlan != null && _currentPlan.Count > 0)
         {
@@ -165,7 +245,8 @@ public class JobTransporter : Job
             _currentAction = null;
         }
         _currentPlan = null;
-        CarriedItem = null;
+        CarriedItems.Clear();
+        TargetWorldItem = null;
         CurrentOrder = null;
 
         base.Unassign();
@@ -194,7 +275,7 @@ public class JobTransporter : Job
 
     public void NotifyDeliveryProgress(int amount)
     {
-        if (CarriedItem == null)
+        if (CarriedItems.Count == 0)
         {
             Debug.LogWarning($"<color=red>[JobTransporter]</color> {_worker?.CharacterName} a tenté d'enregistrer une livraison sans objet! Opération ignorée.");
             return;
@@ -208,12 +289,11 @@ public class JobTransporter : Job
                 manager.UpdateTransportOrderProgress(CurrentOrder, amount);
             }
 
-            CarriedItem = null; // Always clear the carried item once credit is given
-
             if (CurrentOrder.IsCompleted)
             {
                 CurrentOrder = null;
                 _currentPlan = null;
+                CarriedItems.Clear(); 
             }
         }
     }
@@ -222,7 +302,8 @@ public class JobTransporter : Job
     {
         Debug.Log($"<color=orange>[JobTransporter]</color> {_worker?.CharacterName} annule sa livraison en cours.");
         CurrentOrder = null;
-        CarriedItem = null;
+        CarriedItems.Clear();
+        TargetWorldItem = null;
         
         if (_currentAction != null)
         {
