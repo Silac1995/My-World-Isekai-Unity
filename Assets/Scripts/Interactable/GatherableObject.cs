@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -91,63 +91,6 @@ public class GatherableObject : InteractableObject
 
         Debug.Log($"<color=green>[Gather]</color> {gatherer.CharacterName} a récolté {harvestedItem.ItemName}.");
         return harvestedItem;
-    }
-
-    /// <summary>
-    /// Instancie le WorldItem prefab de l'ItemSO et l'initialise dans le monde.
-    /// Utilisé quand on veut drop un item au sol (ex: deposit).
-    /// </summary>
-    public static void SpawnWorldItem(ItemSO itemSO, Vector3 position)
-    {
-        GameObject prefab = itemSO.WorldItemPrefab;
-        if (prefab == null)
-        {
-            Debug.LogWarning($"<color=orange>[Gather]</color> Pas de WorldItemPrefab sur {itemSO.ItemName}, item non spawné.");
-            return;
-        }
-
-        GameObject worldItemGo = Object.Instantiate(prefab, position, Quaternion.identity);
-        worldItemGo.name = $"WorldItem_{itemSO.ItemName}";
-
-        ItemInstance instance = itemSO.CreateInstance();
-
-        if (worldItemGo.TryGetComponent(out WorldItem worldItem))
-        {
-            worldItem.Initialize(instance);
-        }
-        else
-        {
-            Debug.LogError($"<color=red>[Gather]</color> Le prefab de {itemSO.ItemName} n'a pas de composant WorldItem !");
-            Object.Destroy(worldItemGo);
-        }
-    }
-
-    /// <summary>
-    /// Instancie le WorldItem prefab en utilisant une instance existante (pour préserver sa durabilité, couleurs, etc).
-    /// </summary>
-    public static void SpawnWorldItem(ItemInstance instance, Vector3 position)
-    {
-        if (instance == null || instance.ItemSO == null) return;
-
-        GameObject prefab = instance.ItemSO.WorldItemPrefab;
-        if (prefab == null)
-        {
-            Debug.LogWarning($"<color=orange>[Gather]</color> Pas de WorldItemPrefab sur {instance.ItemSO.ItemName}, item non spawné.");
-            return;
-        }
-
-        GameObject worldItemGo = Object.Instantiate(prefab, position, Quaternion.identity);
-        worldItemGo.name = $"WorldItem_{instance.ItemSO.ItemName}";
-
-        if (worldItemGo.TryGetComponent(out WorldItem worldItem))
-        {
-            worldItem.Initialize(instance);
-        }
-        else
-        {
-            Debug.LogError($"<color=red>[Gather]</color> Le prefab de {instance.ItemSO.ItemName} n'a pas de composant WorldItem !");
-            Object.Destroy(worldItemGo);
-        }
     }
 
     /// <summary>

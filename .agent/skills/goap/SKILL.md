@@ -21,6 +21,7 @@ The GOAP manages the long/medium-term plan (Needs, Jobs, Socializing), while the
 ## When to use this skill
 - To design a new **Life Goal** or new daily action chains (e.g., a seduction cycle, a martial training cycle).
 - When creating a `GoapAction` that advances the NPC's personal story or logic (e.g., `GoapAction_Socialize`, `GoapAction_PlaceOrder`).
+- When defining purely functional job logistics loops that require decoupling state from strict FSM execution (e.g., `GoapAction_LoadTransport`, `GoapAction_UnloadTransport` used natively inside `JobTransporter.Execute()`).
 - To structure the preconditions and effects linking the NPC's social life, jobs, and foundational Needs.
 
 ## How to use it

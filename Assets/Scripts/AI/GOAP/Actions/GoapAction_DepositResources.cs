@@ -115,7 +115,7 @@ public class GoapAction_DepositResources : GoapAction
 
                     // Spawn le WorldItem au sol
                     Vector3 offset = new Vector3(Random.Range(-0.3f, 0.3f), 0, Random.Range(-0.3f, 0.3f));
-                    GatherableObject.SpawnWorldItem(item.ItemSO, dropPos + offset);
+                    WorldItem.SpawnWorldItem(item, dropPos + offset);
 
                     // Enregistrer au building
                     _building.RegisterGatheredItem(item.ItemSO);
@@ -135,7 +135,7 @@ public class GoapAction_DepositResources : GoapAction
                 if (carriedItem != null)
                 {
                     Vector3 offset = new Vector3(Random.Range(-0.3f, 0.3f), 0, Random.Range(-0.3f, 0.3f));
-                    GatherableObject.SpawnWorldItem(carriedItem.ItemSO, dropPos + offset);
+                    WorldItem.SpawnWorldItem(carriedItem, dropPos + offset);
 
                     _building.RegisterGatheredItem(carriedItem.ItemSO);
                     Debug.Log($"<color=green>[GOAP Deposit]</color> {worker.CharacterName} a déposé {carriedItem.ItemSO.ItemName} (mains) à la zone de dépôt.");

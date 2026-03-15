@@ -1,10 +1,11 @@
-using System.Linq;
+﻿using System.Linq;
 using System.Collections.Generic;
 using UnityEngine;
+using MWI.AI;
 
 /// <summary>
 /// Métier du livreur. Demande du travail à son JobLogisticsManager interne, puis part en livraison.
-/// Exécute désormais le transport nativement via sa propre machine à états (MovingToSource, PickingUp, etc.).
+/// Exécute désormais le transport nativement via GOAP.
 /// </summary>
 public class JobTransporter : Job
 {
@@ -14,21 +15,14 @@ public class JobTransporter : Job
 
     // La commande courante que l'employé est en train de livrer
     public TransportOrder CurrentOrder { get; private set; }
+    
+    // L'item actuellement tenu (utilisé par GOAP)
+    public ItemInstance CarriedItem { get; private set; }
 
-    private enum TransportPhase
-    {
-        Idle,
-        MovingToSource,
-        PickingUp,
-        MovingToDestination,
-        DroppingOff
-    }
-
-    private TransportPhase _currentPhase = TransportPhase.Idle;
-    private float _nextActionTime = 0f;
-    private Vector3 _currentTargetPos = Vector3.positiveInfinity;
-    private bool _actionStarted = false;
-    private ItemInstance _carriedItem = null;
+    // --- GOAP ---
+    private GoapGoal _transporterGoal;
+    private Queue<GoapAction> _currentPlan;
+    private GoapAction _currentAction;
 
     public JobTransporter(string title = "Transporter")
     {
@@ -41,171 +35,130 @@ public class JobTransporter : Job
         if (order != null)
         {
             Debug.Log($"<color=green>[JobTransporter]</color> {_worker?.CharacterName} commence la demande: Livrer {order.ItemToTransport.ItemName} à {order.Destination.BuildingName}.");
-            _currentPhase = TransportPhase.MovingToSource;
-            _currentTargetPos = Vector3.positiveInfinity;
-            _actionStarted = false;
-            _carriedItem = null;
+            CarriedItem = null;
+            
+            // Forcer la replanification GOAP
+            if (_currentAction != null)
+            {
+                _currentAction.Exit(_worker);
+                _currentAction = null;
+            }
+            _currentPlan = null;
         }
+    }
+
+    public void SetCarriedItem(ItemInstance item)
+    {
+        CarriedItem = item;
     }
 
     public override void Execute()
     {
         if (_worker == null) return;
 
-        // Diminution des timers
-        if (Time.time < _nextActionTime)
-        {
-            return;
-        }
-
+        // Diminution des timers / File d'attente
         if (CurrentOrder == null)
         {
             if (HasWorkToDo())
             {
-                // HasWorkToDo a assigné _currentOrder via AssignOrder
+                // HasWorkToDo a assigné CurrentOrder via AssignOrder
                 return;
             }
-            // En attente
+        }
+
+        // --- Exécution GOAP ---
+        if (_currentAction != null)
+        {
+            if (!_currentAction.IsValid(_worker))
+            {
+                Debug.Log($"<color=orange>[JobTransporter]</color> {_worker.CharacterName} : action {_currentAction.ActionName} invalide, replanification...");
+                _currentAction.Exit(_worker);
+                _currentAction = null;
+                _currentPlan = null;
+                return;
+            }
+
+            _currentAction.Execute(_worker);
+
+            if (_currentAction.IsComplete)
+            {
+                Debug.Log($"<color=cyan>[JobTransporter]</color> {_worker.CharacterName} : action {_currentAction.ActionName} terminée.");
+                _currentAction.Exit(_worker);
+                _currentAction = null;
+                // Si on a d'autres actions dans le plan, on prend la suivante,
+                // sinon on met le plan à null pour forcer un nouveau cycle.
+                if (_currentPlan != null && _currentPlan.Count > 0)
+                {
+                    _currentAction = _currentPlan.Dequeue();
+                    Debug.Log($"<color=green>[JobTransporter]</color> {_worker.CharacterName} : passe à l'action suivante → {_currentAction.ActionName}");
+                }
+                else
+                {
+                    _currentPlan = null;
+                }
+            }
             return;
         }
 
-        var movement = _worker.CharacterMovement;
-        if (movement == null) return;
-
-        switch (_currentPhase)
-        {
-            case TransportPhase.MovingToSource:
-                if (_currentTargetPos == Vector3.positiveInfinity)
-                {
-                    Zone zone = CurrentOrder.Source.StorageZone ?? CurrentOrder.Source.MainRoom.GetComponent<Zone>();
-                    _currentTargetPos = zone != null ? zone.GetRandomPointInZone() : CurrentOrder.Source.transform.position;
-                    movement.SetDestination(_currentTargetPos);
-                }
-
-                HandleMovementTo(_currentTargetPos, out bool arrivedAtSource);
-                if (arrivedAtSource)
-                {
-                    _currentPhase = TransportPhase.PickingUp;
-                    _currentTargetPos = Vector3.positiveInfinity;
-                    _actionStarted = false;
-                    Debug.Log($"<color=cyan>[Transport]</color> {_worker.CharacterName} arrive au dépôt et charge {CurrentOrder.ItemToTransport.ItemName}.");
-                }
-                break;
-
-            case TransportPhase.PickingUp:
-                if (!_actionStarted)
-                {
-                    _carriedItem = CurrentOrder.Source.TakeFromInventory(CurrentOrder.ItemToTransport);
-                    if (_carriedItem == null) 
-                    {
-                        Debug.LogWarning($"<color=orange>[Transport]</color> Plus de {CurrentOrder.ItemToTransport.ItemName} disponible chez {CurrentOrder.Source.BuildingName}. Annulation.");
-                        CancelCurrentOrder();
-                        return;
-                    }
-
-                    var pickupAction = new CharacterPickUpItem(_worker, _carriedItem, null);
-                    if (_worker.CharacterActions.ExecuteAction(pickupAction))
-                    {
-                        _actionStarted = true;
-                        pickupAction.OnActionFinished += () => 
-                        {
-                            _currentPhase = TransportPhase.MovingToDestination;
-                            _actionStarted = false;
-                        };
-                    }
-                    else
-                    {
-                        _worker.CharacterVisual?.BodyPartsController?.HandsController?.CarryItem(_carriedItem);
-                        _currentPhase = TransportPhase.MovingToDestination;
-                        _actionStarted = false;
-                    }
-                }
-                break;
-
-            case TransportPhase.MovingToDestination:
-                if (_currentTargetPos == Vector3.positiveInfinity)
-                {
-                    Zone zone = CurrentOrder.Destination.DeliveryZone ?? CurrentOrder.Destination.MainRoom.GetComponent<Zone>();
-                    _currentTargetPos = zone != null ? zone.GetRandomPointInZone() : CurrentOrder.Destination.transform.position;
-                    movement.SetDestination(_currentTargetPos);
-                }
-
-                HandleMovementTo(_currentTargetPos, out bool arrivedAtDest);
-                if (arrivedAtDest)
-                {
-                    _currentPhase = TransportPhase.DroppingOff;
-                    _currentTargetPos = Vector3.positiveInfinity;
-                    _actionStarted = false;
-                    Debug.Log($"<color=cyan>[Transport]</color> {_worker.CharacterName} arrive à la boutique et décharge {CurrentOrder.ItemToTransport.ItemName}.");
-                }
-                break;
-
-            case TransportPhase.DroppingOff:
-                if (!_actionStarted && _carriedItem != null)
-                {
-                    var dropAction = new CharacterDropItem(_worker, _carriedItem);
-                    if (_worker.CharacterActions.ExecuteAction(dropAction))
-                    {
-                        _actionStarted = true;
-                        dropAction.OnActionFinished += FinishDropoff;
-                    }
-                    else
-                    {
-                        var inventory = _worker.CharacterEquipment?.GetInventory();
-                        if (inventory != null && inventory.HasAnyItemSO(new List<ItemSO> { _carriedItem.ItemSO }))
-                            inventory.RemoveItem(_carriedItem, _worker);
-                        else
-                            _worker.CharacterVisual?.BodyPartsController?.HandsController?.DropCarriedItem();
-                        
-                        FinishDropoff();
-                    }
-                }
-                break;
-        }
+        PlanNextActions();
     }
 
-    private void FinishDropoff()
+    private void PlanNextActions()
     {
-        CurrentOrder.Destination.AddToInventory(_carriedItem);
-        Debug.Log($"<color=green>[Transport]</color> {_worker.CharacterName} a livré 1 lot de {CurrentOrder.ItemToTransport.ItemName} à {CurrentOrder.Destination.BuildingName} !");
-        NotifyDeliveryProgress(1);
-        _carriedItem = null;
-        _actionStarted = false;
-
-        if (CurrentOrder != null) 
+        var worldState = new Dictionary<string, bool>
         {
-            _currentPhase = TransportPhase.MovingToSource;
+            { "hasDelivered", false },
+            { "isLoaded", CarriedItem != null },
+            { "isIdling", false }
+        };
+
+        var availableActions = new List<GoapAction>
+        {
+            new GoapAction_LoadTransport(this),
+            new GoapAction_UnloadTransport(this),
+            new GoapAction_IdleInCommercialBuilding(_workplace as CommercialBuilding)
+        };
+
+        GoapGoal targetGoal;
+        if (CurrentOrder != null)
+        {
+            targetGoal = new GoapGoal("DeliverItems", new Dictionary<string, bool> { { "hasDelivered", true } }, priority: 1);
         }
         else
         {
-            _currentPhase = TransportPhase.Idle;
+            targetGoal = new GoapGoal("Idle", new Dictionary<string, bool> { { "isIdling", true } }, priority: 1);
         }
-    }
 
-    private void HandleMovementTo(Vector3 targetPos, out bool arrived)
-    {
-        arrived = false;
-        var movement = _worker.CharacterMovement;
+        _transporterGoal = targetGoal;
+        
+        var validActions = availableActions.Where(a => a.IsValid(_worker)).ToList();
+        
+        _currentPlan = GoapPlanner.Plan(worldState, validActions, targetGoal);
 
-        float distance = Vector3.Distance(workerPosXZ(movement.transform.position), workerPosXZ(targetPos));
-
-        if (movement.PathPending) return;
-
-        if (!movement.HasPath || movement.RemainingDistance <= movement.StoppingDistance + 0.5f)
+        if (_currentPlan != null && _currentPlan.Count > 0)
         {
-            if (distance > movement.StoppingDistance + 2f)
-            {
-                movement.SetDestination(targetPos);
-            }
-            else
-            {
-                movement.ResetPath();
-                arrived = true;
-            }
+            _currentAction = _currentPlan.Dequeue();
+            Debug.Log($"<color=green>[JobTransporter]</color> {_worker.CharacterName} : nouveau plan GOAP ! Première action → {_currentAction.ActionName}");
+        }
+        else
+        {
+            Debug.Log($"<color=orange>[JobTransporter]</color> {_worker.CharacterName} : impossible de planifier pour l'objectif {targetGoal.GoalName}.");
         }
     }
 
-    private Vector3 workerPosXZ(Vector3 pos) { return new Vector3(pos.x, 0, pos.z); }
+    public override void Unassign()
+    {
+        if (_currentAction != null)
+        {
+            _currentAction.Exit(_worker);
+            _currentAction = null;
+        }
+        _currentPlan = null;
+        CarriedItem = null;
+        CurrentOrder = null;
+
+        base.Unassign();
+    }
 
     public override bool HasWorkToDo()
     {
@@ -241,7 +194,8 @@ public class JobTransporter : Job
             if (CurrentOrder.IsCompleted)
             {
                 CurrentOrder = null;
-                _currentPhase = TransportPhase.Idle;
+                CarriedItem = null;
+                _currentPlan = null;
             }
         }
     }
@@ -250,8 +204,16 @@ public class JobTransporter : Job
     {
         Debug.Log($"<color=orange>[JobTransporter]</color> {_worker?.CharacterName} annule sa livraison en cours.");
         CurrentOrder = null;
-        _currentPhase = TransportPhase.Idle;
+        CarriedItem = null;
+        
+        if (_currentAction != null)
+        {
+            _currentAction.Exit(_worker);
+            _currentAction = null;
+        }
+        _currentPlan = null;
     }
 
-    public override string CurrentActionName => CurrentOrder != null ? $"Livraison : {CurrentOrder.ItemToTransport.ItemName}" : "En attente de commandes";
+    public override string CurrentActionName => _currentAction != null ? _currentAction.ActionName : "En attente de commandes";
+    public override string CurrentGoalName => _transporterGoal != null ? _transporterGoal.GoalName : "No Goal";
 }

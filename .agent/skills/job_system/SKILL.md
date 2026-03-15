@@ -54,7 +54,14 @@ Every `CommercialBuilding` that needs supply management has a `JobLogisticsManag
 - **Duplicate Prevention**: Before placing/enqueuing an order, it checks if an order for that item is already active or pending.
 - **Expiration**: Orders have a `RemainingDays` counter. Expired orders trigger reputation penalties (`CharacterRelation.UpdateRelation`).
 
-### 6. Work Positions
+### 6. Transporter (JobTransporter)
+- **Logistics Delivery Mechanism**: Built to physically move items between a `CraftingBuilding` and a `ShopBuilding` following a `TransportOrder`.
+- **Native GOAP Integration**: Unlike older FSM jobs, `JobTransporter` natively runs a GOAP planner inside its `Execute()` method.
+  - Generates a `DeliverItems` goal if it has an active `TransportOrder`.
+  - Pushes `GoapAction_LoadTransport` (travels to the source building and triggers `CharacterPickUpItem`) followed by `GoapAction_UnloadTransport` (travels to the destination building and triggers `CharacterDropItem`).
+  - Idles in its assigned building using `GoapAction_IdleInCommercialBuilding` when waiting for new orders.
+
+### 7. Work Positions
 - **`CommercialBuilding.GetWorkPosition(Character)`**: Virtual method returning where a worker should stand. Defaults to `GetRandomPointInBuildingZone()`.
 - **ShopBuilding Override**: Vendors go to a specific `VendorPoint` Transform (counter), all others wander in the building zone.
 - **BTVendorBehaviour**: If a `VendorPoint` exists, the vendor paths to it before serving. If not, they wander in the building zone.

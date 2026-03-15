@@ -67,6 +67,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WorldItem
   _visualRoot: {fileID: 7115953151577608828}
+  _interactionZone: {fileID: 0}
 --- !u!65 &2261858023461683581
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -147,7 +148,7 @@ BoxCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Size: {x: 5, y: 2, z: 5}
+  m_Size: {x: 7, y: 7, z: 7}
   m_Center: {x: 0, y: 0, z: 0}
 --- !u!1 &4772183078833418991
 GameObject:

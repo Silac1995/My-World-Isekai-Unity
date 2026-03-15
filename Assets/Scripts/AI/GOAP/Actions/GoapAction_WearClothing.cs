@@ -60,8 +60,12 @@ public class GoapAction_WearClothing : GoapAction
         
         if (_targetInteractable.InteractionZone != null)
         {
-            // On vérifie si on est dans la zone d'interaction
-            if (_targetInteractable.InteractionZone.bounds.Contains(worker.transform.position))
+            // Tolérance plus large : la distance par rapport au ClosestPoint de la zone
+            Vector3 closestPoint = _targetInteractable.InteractionZone.bounds.ClosestPoint(worker.transform.position);
+            closestPoint.y = 0;
+            Vector3 workerPos = worker.transform.position;
+            workerPos.y = 0;
+            if (Vector3.Distance(workerPos, closestPoint) <= 1.0f) // Plus tolerant (1.0f au lieu de 0.8f pour marge de sécu)
             {
                 isCloseEnough = true;
             }
@@ -84,7 +88,14 @@ public class GoapAction_WearClothing : GoapAction
 
             if (!_isMoving || Vector3.Distance(_lastTargetPos, targetPos) > 1f || hasPathFailed)
             {
-                Vector3 dest = _targetInteractable.InteractionZone != null ? _targetInteractable.InteractionZone.bounds.ClosestPoint(worker.transform.position) : targetPos;
+                Vector3 dest = targetPos;
+                if (_targetInteractable.InteractionZone != null)
+                {
+                    // Cherche le point le plus proche sur les bounds, mais garde une légère marge pour ne pas rentrer dedans
+                    dest = _targetInteractable.InteractionZone.bounds.ClosestPoint(worker.transform.position);
+                    Vector3 directionFromCenter = (dest - _targetInteractable.InteractionZone.transform.position).normalized;
+                    dest += directionFromCenter * 0.3f; // Offset pour s'arreter devant
+                }
                 movement.SetDestination(dest);
                 _lastTargetPos = targetPos;
                 _lastRouteRequestTime = UnityEngine.Time.time;

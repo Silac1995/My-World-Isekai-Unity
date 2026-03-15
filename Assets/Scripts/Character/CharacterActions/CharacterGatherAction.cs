@@ -75,7 +75,7 @@ public class CharacterGatherAction : CharacterAction
         {
             // Spawn le WorldItem au sol devant le personnage
             Vector3 spawnPos = character.transform.position + character.transform.forward * 0.5f + Vector3.up * 0.3f;
-            GatherableObject.SpawnWorldItem(_harvestedItem, spawnPos);
+            WorldItem.SpawnWorldItem(_harvestedItem, spawnPos);
         }
     }
 

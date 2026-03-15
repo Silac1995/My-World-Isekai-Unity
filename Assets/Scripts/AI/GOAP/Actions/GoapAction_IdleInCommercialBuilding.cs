@@ -60,7 +60,7 @@ public class GoapAction_IdleInCommercialBuilding : GoapAction
             {
                 if (_building.BuildingZone != null)
                 {
-                    Bounds bounds = _building.BuildingZone.bounds;
+                    Bounds bounds = _building.BuildingZone.GetComponent<Collider>().bounds;
                     float randomX = Random.Range(bounds.min.x, bounds.max.x);
                     float randomZ = Random.Range(bounds.min.z, bounds.max.z);
                     

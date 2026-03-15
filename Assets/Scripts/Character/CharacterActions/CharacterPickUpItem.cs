@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 
 public class CharacterPickUpItem : CharacterAction
 {
@@ -59,6 +59,27 @@ public class CharacterPickUpItem : CharacterAction
         {
             Debug.LogWarning($"[Action] {character.CharacterName} cannot carry {_item.CustomizedName} (Inventory full or No Bag).");
             return false;
+        }
+
+        // Si l'objet possède une zone d'interaction formelle, s'assurer qu'on y est.
+        if (_worldObject != null)
+        {
+            var interactable = _worldObject.GetComponent<InteractableObject>() ?? _worldObject.GetComponentInParent<InteractableObject>();
+            if (interactable != null && interactable.InteractionZone != null)
+            {
+                var zoneBounds = interactable.InteractionZone.bounds;
+                Vector3 closestPoint = zoneBounds.ClosestPoint(character.transform.position);
+                closestPoint.y = 0;
+                
+                Vector3 charPos = character.transform.position;
+                charPos.y = 0;
+
+                if (Vector3.Distance(charPos, closestPoint) > 1f)
+                {
+                    Debug.Log($"[Action] {character.CharacterName} est trop loin de {_item.CustomizedName} pour le ramasser.");
+                    return false;
+                }
+            }
         }
 
         return true;

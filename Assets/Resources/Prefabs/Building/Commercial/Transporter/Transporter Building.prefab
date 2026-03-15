@@ -1309,12 +1309,19 @@ MonoBehaviour:
   _boundsTarget: {fileID: 0}
   _roomName: 
   _subRooms: []
-  buildingName: 
+  buildingName: Transporter Company
   _isPublicLocation: 0
   _buildingType: 7
   _buildingZone: {fileID: 7668004441454646188}
   _deliveryZone: {fileID: 6400893783335544983}
   _owner: {fileID: 0}
+  _ownerCommunity:
+    communityName: 
+    level: 0
+    leader: {fileID: 0}
+    members: []
+    communityZones: []
+    ownedBuildings: []
   _storageZone: {fileID: 8762718603653025141}
   _transporterCount: 3
 --- !u!65 &7668004441454646188 stripped
