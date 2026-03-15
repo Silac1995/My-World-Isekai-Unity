@@ -22,12 +22,14 @@ public class GoapAction_WearClothing : GoapAction
     private ItemInteractable _targetInteractable;
     private Vector3 _lastTargetPos = Vector3.positiveInfinity;
     private float _lastRouteRequestTime = 0f;
+    private float _cooldownEndTime = 0f;
     
     public override bool IsComplete => _isComplete;
 
     public override bool IsValid(Character worker)
     {
         if (_isComplete) return false;
+        if (UnityEngine.Time.time < _cooldownEndTime) return false;
         if (_targetInteractable != null && _targetInteractable.RootGameObject != null) return true;
 
         List<WearableType> missingTypes = GetMissingTypes(worker);
@@ -41,6 +43,9 @@ public class GoapAction_WearClothing : GoapAction
 
         if (_targetInteractable == null || _targetInteractable.RootGameObject == null || _targetInteractable.ItemInstance is not EquipmentInstance equip)
         {
+            // Lost the race! The item was destroyed by someone else.
+            Debug.Log($"<color=teal>[WearClothing]</color> {worker.CharacterName} a perdu la course. Vêtement pris par un autre. Cooldown...");
+            _cooldownEndTime = UnityEngine.Time.time + 1.5f;
             _isComplete = true;
             return;
         }
@@ -71,7 +76,7 @@ public class GoapAction_WearClothing : GoapAction
         // On valide si l'agent considère être arrivé à destination
         if (!isCloseEnough && movement != null)
         {
-            if (!movement.PathPending && movement.HasPath && movement.RemainingDistance <= movement.StoppingDistance + 0.5f)
+            if (_isMoving && !movement.PathPending && movement.HasPath && movement.RemainingDistance <= movement.StoppingDistance + 0.5f)
             {
                 isCloseEnough = true;
             }
@@ -134,6 +139,8 @@ public class GoapAction_WearClothing : GoapAction
             }
             else 
             {
+                Debug.Log($"<color=teal>[WearClothing]</color> {worker.CharacterName} est arrivé mais l'objet n'est plus collectable. Cooldown...");
+                _cooldownEndTime = UnityEngine.Time.time + 1.5f;
                 _isComplete = true; // Déjà pris par qqun d'autre
                 return;
             }
@@ -172,6 +179,7 @@ public class GoapAction_WearClothing : GoapAction
 
         return awareness.GetVisibleInteractables<ItemInteractable>()
             .Where(item => {
+                if (item == null || item.RootGameObject == null) return false;
                 if (item.WorldItem != null && item.WorldItem.IsBeingCarried) return false;
 
                 if (item.ItemInstance is WearableInstance w)

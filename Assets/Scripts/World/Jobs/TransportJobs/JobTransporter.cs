@@ -137,33 +137,61 @@ public class JobTransporter : Job
         bool itemLocated = TargetWorldItem != null;
         bool atItem = false;
         
+        bool atSourceStorage = false;
+        
         bool itemCarried = false;
-        if (CurrentOrder != null && CarriedItems.Count > 0)
+        if (CurrentOrder != null)
         {
-            int remainingNeeded = CurrentOrder.Quantity - CurrentOrder.DeliveredQuantity;
-            bool hasEnough = CarriedItems.Count >= remainingNeeded;
+            var workerPos = _worker.transform.position;
+            var charCollider = _worker.Collider;
             
-            bool canCarryMore = false;
-            if (_worker.CharacterEquipment != null)
+            // Check if at source storage
+            CommercialBuilding source = CurrentOrder.Source;
+            if (source != null)
             {
-                if (_worker.CharacterEquipment.HasFreeSpaceForItemSO(CurrentOrder.ItemToTransport))
+                Zone targetZone = source.StorageZone ?? source.MainRoom.GetComponent<Zone>();
+                if (targetZone != null)
                 {
-                    canCarryMore = true;
-                }
-                else
-                {
-                    var hands = _worker.CharacterVisual?.BodyPartsController?.HandsController;
-                    if (hands != null && hands.AreHandsFree()) canCarryMore = true;
+                    var zoneCol = targetZone.GetComponent<Collider>();
+                    if (zoneCol != null && charCollider != null && zoneCol.bounds.Intersects(charCollider.bounds))
+                    {
+                        atSourceStorage = true;
+                    }
+                    else if (zoneCol != null && zoneCol.bounds.Contains(workerPos))
+                    {
+                        atSourceStorage = true;
+                    }
                 }
             }
-            
-            // Si on a assez d'objets pour finir l'ordre, OU si on ne peut physiquement plus en porter un seul
-            if (hasEnough || !canCarryMore)
+
+            if (CarriedItems.Count > 0)
             {
-                itemCarried = true;
-                // Important: clear TargetWorldItem so we don't hold a phantom reference while delivering
-                TargetWorldItem = null;
-                itemLocated = false;
+                int remainingNeeded = CurrentOrder.Quantity - CurrentOrder.DeliveredQuantity;
+                bool hasEnough = CarriedItems.Count >= remainingNeeded;
+                
+                bool canCarryMore = false;
+                if (_worker.CharacterEquipment != null)
+                {
+                    if (_worker.CharacterEquipment.HasFreeSpaceForItemSO(CurrentOrder.ItemToTransport))
+                    {
+                        canCarryMore = true;
+                    }
+                    else
+                    {
+                        var hands = _worker.CharacterVisual?.BodyPartsController?.HandsController;
+                        if (hands != null && hands.AreHandsFree()) canCarryMore = true;
+                    }
+                }
+                
+                // Si on a assez d'objets pour finir l'ordre, OU si on ne peut physiquement plus en porter un seul
+                // Ou qu'on est forcé (ForceDeliverPartialBatch) de livrer car aucune autre dispo
+                if (hasEnough || !canCarryMore || ForceDeliverPartialBatch)
+                {
+                    itemCarried = true;
+                    // Important: clear TargetWorldItem so we don't hold a phantom reference while delivering
+                    TargetWorldItem = null;
+                    itemLocated = false;
+                }
             }
         }
 
@@ -205,6 +233,7 @@ public class JobTransporter : Job
 
         var worldState = new Dictionary<string, bool>
         {
+            { "atSourceStorage", atSourceStorage },
             { "itemLocated", itemLocated },
             { "atItem", atItem },
             { "itemCarried", itemCarried },
@@ -215,6 +244,7 @@ public class JobTransporter : Job
 
         var availableActions = new List<GoapAction>
         {
+            new GoapAction_GoToSourceStorage(this),
             new GoapAction_LocateItem(this),
             new GoapAction_MoveToItem(this),
             new GoapAction_PickupItem(this),

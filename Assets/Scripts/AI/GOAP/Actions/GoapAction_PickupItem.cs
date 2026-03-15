@@ -38,9 +38,19 @@ namespace MWI.AI
 
         public override void Execute(Character worker)
         {
-            if (_job.CurrentOrder == null || _job.TargetWorldItem == null)
+            if (_job.CurrentOrder == null)
             {
                 _isComplete = true; // Lost track
+                return;
+            }
+
+            if (_job.TargetWorldItem == null || _job.TargetWorldItem.IsBeingCarried)
+            {
+                // Lost the race! Someone else destroyed/picked up the physical item
+                Debug.Log($"<color=orange>[PickupItem]</color> {_job.Worker.CharacterName} lost the race to pick up the item. Cooldown applied.");
+                _job.TargetWorldItem = null;
+                _job.WaitCooldown = 1.0f;
+                _isComplete = true;
                 return;
             }
 
@@ -53,8 +63,9 @@ namespace MWI.AI
                 ItemInstance logicalItemFromShop = source.TakeFromInventory(exactTarget.ItemInstance.ItemSO);
                 if (logicalItemFromShop == null)
                 {
-                    Debug.LogWarning($"<color=orange>[PickupItem]</color> Fantôme détecté ! L'item {exactTarget.ItemInstance.ItemSO.ItemName} n'était plus dans l'inventaire de {source.BuildingName}.");
-                    _job.CancelCurrentOrder();
+                    Debug.LogWarning($"<color=orange>[PickupItem]</color> Fantôme détecté ! {_job.Worker.CharacterName} lost the race in logic. Applying cooldown.");
+                    _job.TargetWorldItem = null;
+                    _job.WaitCooldown = 1.0f;
                     _isComplete = true;
                     return;
                 }

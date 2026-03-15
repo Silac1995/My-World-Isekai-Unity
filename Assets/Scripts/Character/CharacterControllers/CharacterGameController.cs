@@ -69,15 +69,30 @@ public abstract class CharacterGameController : MonoBehaviour
 
         if (action.ShouldPlayGenericActionAnimation)
         {
-            Animator?.SetBool(CharacterAnimator.IsDoingAction, true);
+            if (_characterVisual != null && _characterVisual.CharacterAnimator != null)
+            {
+                _characterVisual.CharacterAnimator.SetAnimBoolSafely(CharacterAnimator.IsDoingAction, true);
+            }
+            else
+            {
+                Animator?.SetBool(CharacterAnimator.IsDoingAction, true);
+            }
         }
     }
 
     private void HandleActionFinished()
     {
         // Don't reset _wasDoingAction here, let the cooldown timer handle it in Update
-        Animator?.SetBool(CharacterAnimator.IsDoingAction, false);
-        _character.CharacterVisual?.CharacterAnimator?.ResetActionTriggers();
+        if (_characterVisual != null && _characterVisual.CharacterAnimator != null)
+        {
+            _characterVisual.CharacterAnimator.SetAnimBoolSafely(CharacterAnimator.IsDoingAction, false);
+            _characterVisual.CharacterAnimator.ResetActionTriggers();
+        }
+        else
+        {
+            Animator?.SetBool(CharacterAnimator.IsDoingAction, false);
+            _character.CharacterVisual?.CharacterAnimator?.ResetActionTriggers();
+        }
     }
 
     protected virtual void OnDestroy()
@@ -170,11 +185,22 @@ public abstract class CharacterGameController : MonoBehaviour
         }
 
         // Envoi ? l'Animator
-        Animator.SetFloat(CharacterAnimator.VelocityX, speed);
-        Animator.SetBool(CharacterAnimator.IsWalking, speed > 0f);
+        if (_characterVisual != null && _characterVisual.CharacterAnimator != null)
+        {
+            _characterVisual.CharacterAnimator.SetAnimFloatSafely(CharacterAnimator.VelocityX, speed);
+            _characterVisual.CharacterAnimator.SetAnimBoolSafely(CharacterAnimator.IsWalking, speed > 0f);
+            
+            // Sol
+            _characterVisual.CharacterAnimator.SetAnimBoolSafely(CharacterAnimator.IsGrounded, _characterMovement.IsGrounded());
+        }
+        else
+        {
+            Animator.SetFloat(CharacterAnimator.VelocityX, speed);
+            Animator.SetBool(CharacterAnimator.IsWalking, speed > 0f);
 
-        // Sol
-        Animator.SetBool(CharacterAnimator.IsGrounded, _characterMovement.IsGrounded());
+            // Sol
+            Animator.SetBool(CharacterAnimator.IsGrounded, _characterMovement.IsGrounded());
+        }
 
         // --- Walk Forward/Backward ---
         // On délègue le calcul des paramètres de direction à CharacterVisual

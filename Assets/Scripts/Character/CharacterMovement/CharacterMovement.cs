@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using UnityEngine.AI;
 
 [RequireComponent(typeof(Rigidbody))]
@@ -182,7 +182,7 @@ public class CharacterMovement : MonoBehaviour
             _agent.velocity = Vector3.zero;
             _agent.obstacleAvoidanceType = ObstacleAvoidanceType.NoObstacleAvoidance; // Empêche d'être poussé pendant les dialogues
         }
-        if (_rb != null) _rb.linearVelocity = Vector3.zero;
+        if (_rb != null && !_rb.isKinematic) _rb.linearVelocity = Vector3.zero;
     }
 
     public void Resume()

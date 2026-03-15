@@ -3,7 +3,12 @@ using UnityEngine;
 
 public class NeedToWearClothing : CharacterNeed
 {
-    public NeedToWearClothing(Character character) : base(character) { }
+    private GoapAction_WearClothing _wearClothingAction;
+
+    public NeedToWearClothing(Character character) : base(character) 
+    {
+        _wearClothingAction = new GoapAction_WearClothing();
+    }
 
     public override bool IsActive()
     {
@@ -29,7 +34,7 @@ public class NeedToWearClothing : CharacterNeed
     {
         return new List<GoapAction>
         {
-            new GoapAction_WearClothing()
+            _wearClothingAction
         };
     }
 }

@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using UnityEngine;
 
 public class CharacterAnimator : MonoBehaviour
@@ -29,52 +29,46 @@ public class CharacterAnimator : MonoBehaviour
     private void SetTriggerSafely(int triggerHash)
     {
         if (_animator == null) return;
-        _animator.ResetTrigger(MeleeAttackTrigger);
-        _animator.ResetTrigger(ActionTrigger);
-        _animator.SetTrigger(triggerHash);
+        if (HasParameter(MeleeAttackTrigger)) _animator.ResetTrigger(MeleeAttackTrigger);
+        if (HasParameter(ActionTrigger)) _animator.ResetTrigger(ActionTrigger);
+        SetAnimTriggerSafely(triggerHash);
     }
 
     public void ResetActionTriggers()
     {
         if (_animator == null) return;
-        _animator.ResetTrigger(MeleeAttackTrigger);
-        _animator.ResetTrigger(ActionTrigger);
+        if (HasParameter(MeleeAttackTrigger)) _animator.ResetTrigger(MeleeAttackTrigger);
+        if (HasParameter(ActionTrigger)) _animator.ResetTrigger(ActionTrigger);
     }
 
     public void SetDead(bool dead)
     {
-        if (_animator != null)
-        {
-            _animator.SetBool(IsDead, dead);
-            if (dead) StopLocomotion();
-        }
+        SetAnimBoolSafely(IsDead, dead);
+        if (dead) StopLocomotion();
     }
 
     public void StopLocomotion()
     {
         if (_animator == null) return;
-        _animator.SetFloat(VelocityX, 0f);
-        _animator.SetBool(IsWalking, false);
-        _animator.SetBool(IsWalkingBackward, false);
-        _animator.SetBool(IsWalkingForward, false);
+        SetAnimFloatSafely(VelocityX, 0f);
+        SetAnimBoolSafely(IsWalking, false);
+        SetAnimBoolSafely(IsWalkingBackward, false);
+        SetAnimBoolSafely(IsWalkingForward, false);
     }
 
     public void SetWalkingBackward(bool backward)
     {
-        if (_animator != null)
-            _animator.SetBool(IsWalkingBackward, backward);
+        SetAnimBoolSafely(IsWalkingBackward, backward);
     }
 
     public void SetWalkingForward(bool forward)
     {
-        if (_animator != null)
-            _animator.SetBool(IsWalkingForward, forward);
+        SetAnimBoolSafely(IsWalkingForward, forward);
     }
 
     public void SetCombat(bool combat)
     {
-        if (_animator != null)
-            _animator.SetBool(IsCombat, combat);
+        SetAnimBoolSafely(IsCombat, combat);
     }
 
     /// <summary>
@@ -86,10 +80,10 @@ public class CharacterAnimator : MonoBehaviour
         if (_animator == null || character == null) return;
 
         // On ré-applique l'état de vie/mort
-        _animator.SetBool(IsDead, !character.IsAlive());
+        SetAnimBoolSafely(IsDead, !character.IsAlive());
         
         // On ré-applique l'état de combat
-        _animator.SetBool(IsCombat, isCombat);
+        SetAnimBoolSafely(IsCombat, isCombat);
 
         // On remet la vélocité à zéro si mort pour éviter de glisser dans la mauvaise anim
         if (!character.IsAlive())
@@ -177,10 +171,43 @@ public class CharacterAnimator : MonoBehaviour
 
     public Animator Animator => _animator;
 
+    private HashSet<int> _validParameters = new HashSet<int>();
+
     private void Awake()
     {
         if (_animator == null) _animator = GetComponent<Animator>();
         CacheClipDurations();
+        CacheParameters();
+    }
+
+    public void CacheParameters()
+    {
+        if (_animator == null) return;
+        _validParameters.Clear();
+        foreach (var param in _animator.parameters)
+        {
+            _validParameters.Add(param.nameHash);
+        }
+    }
+
+    public bool HasParameter(int hash) => _validParameters.Contains(hash);
+
+    public void SetAnimFloatSafely(int hash, float value)
+    {
+        if (_animator != null && HasParameter(hash))
+            _animator.SetFloat(hash, value);
+    }
+
+    public void SetAnimBoolSafely(int hash, bool value)
+    {
+        if (_animator != null && HasParameter(hash))
+            _animator.SetBool(hash, value);
+    }
+
+    public void SetAnimTriggerSafely(int hash)
+    {
+        if (_animator != null && HasParameter(hash))
+            _animator.SetTrigger(hash);
     }
 
     public void CacheClipDurations()
@@ -199,8 +226,7 @@ public class CharacterAnimator : MonoBehaviour
 
     public void SetVelocity(float speed)
     {
-        if (_animator != null)
-            _animator.SetFloat(VelocityX, speed);
+        SetAnimFloatSafely(VelocityX, speed);
     }
 
     public float GetCurrentClipDuration()
