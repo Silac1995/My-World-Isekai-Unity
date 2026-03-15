@@ -998,13 +998,41 @@ PrefabInstance:
       propertyPath: m_Mesh
       value: 
       objectReference: {fileID: 20557633}
+    - target: {fileID: 1391463334343815251, guid: bcf1eea9ceffe55459083485e22660a5, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1543226207171321216, guid: bcf1eea9ceffe55459083485e22660a5, type: 3}
+      propertyPath: m_Size.x
+      value: 34
+      objectReference: {fileID: 0}
+    - target: {fileID: 1543226207171321216, guid: bcf1eea9ceffe55459083485e22660a5, type: 3}
+      propertyPath: m_Size.y
+      value: 16
+      objectReference: {fileID: 0}
+    - target: {fileID: 1543226207171321216, guid: bcf1eea9ceffe55459083485e22660a5, type: 3}
+      propertyPath: m_Size.z
+      value: 15.093048
+      objectReference: {fileID: 0}
+    - target: {fileID: 1543226207171321216, guid: bcf1eea9ceffe55459083485e22660a5, type: 3}
+      propertyPath: m_Enabled
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1543226207171321216, guid: bcf1eea9ceffe55459083485e22660a5, type: 3}
+      propertyPath: m_Center.y
+      value: 7.999999
+      objectReference: {fileID: 0}
     - target: {fileID: 1919224454290065110, guid: bcf1eea9ceffe55459083485e22660a5, type: 3}
       propertyPath: m_Mesh
       value: 
       objectReference: {fileID: 20557633}
     - target: {fileID: 1919224454290065110, guid: bcf1eea9ceffe55459083485e22660a5, type: 3}
+      propertyPath: m_Enabled
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1919224454290065110, guid: bcf1eea9ceffe55459083485e22660a5, type: 3}
       propertyPath: m_VersionIndex
-      value: 11744
+      value: 11747
       objectReference: {fileID: 0}
     - target: {fileID: 1945857671188992395, guid: bcf1eea9ceffe55459083485e22660a5, type: 3}
       propertyPath: m_Name
@@ -1063,6 +1091,10 @@ PrefabInstance:
       value: 
       objectReference: {fileID: 2022418361}
     - target: {fileID: 8087778697939860842, guid: bcf1eea9ceffe55459083485e22660a5, type: 3}
+      propertyPath: _buildingZone
+      value: 
+      objectReference: {fileID: 1025469522}
+    - target: {fileID: 8087778697939860842, guid: bcf1eea9ceffe55459083485e22660a5, type: 3}
       propertyPath: _minimumBlacksmithTier
       value: 0
       objectReference: {fileID: 0}
@@ -1072,7 +1104,7 @@ PrefabInstance:
       objectReference: {fileID: 2022418361}
     - target: {fileID: 8407666620020605695, guid: bcf1eea9ceffe55459083485e22660a5, type: 3}
       propertyPath: m_VersionIndex
-      value: 4384
+      value: 4387
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -3292,8 +3324,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MWI.Time.TimeManager
   _secondsPerHour: 50
-  _startHour: 6
-  _morningStart: 7
+  _startHour: 8
+  _morningStart: 6
   _afternoonStart: 12
   _eveningStart: 18
   _nightStart: 21
@@ -6368,6 +6400,11 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: c16503217f5e61a4abd1b9f5fb75b547, type: 3}
+--- !u!65 &1025469522 stripped
+BoxCollider:
+  m_CorrespondingSourceObject: {fileID: 1543226207171321216, guid: bcf1eea9ceffe55459083485e22660a5, type: 3}
+  m_PrefabInstance: {fileID: 231530951}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &1047485977
 GameObject:
   m_ObjectHideFlags: 0
@@ -7038,7 +7075,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: -281.66675, y: -12.895508}
+  m_AnchoredPosition: {x: -281.66678, y: -12.895508}
   m_SizeDelta: {x: -563.3334, y: -47.7778}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1156610394

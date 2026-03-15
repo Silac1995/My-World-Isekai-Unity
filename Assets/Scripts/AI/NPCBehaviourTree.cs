@@ -116,8 +116,8 @@ public class NPCBehaviourTree : MonoBehaviour
             _combatNode,        // 2. Combat actif
             _entraideSequence,  // 3. Entraide
             _agressionSequence, // 4. Agression
-            _goapNode,          // 5. GOAP (Life Goals / Proactive)
-            _scheduleNode,      // 6. Schedule
+            _scheduleNode,      // 5. Schedule (Work/Sleep > Personal Goals)
+            _goapNode,          // 6. GOAP (Life Goals / Proactive)
             _socialNode,        // 8. Social
             _wanderNode         // 9. Wander (fallback)
         );

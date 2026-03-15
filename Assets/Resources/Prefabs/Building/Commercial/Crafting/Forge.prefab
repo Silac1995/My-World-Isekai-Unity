@@ -744,6 +744,22 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 6121509161196564493, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_Size.x
+      value: 34
+      objectReference: {fileID: 0}
+    - target: {fileID: 6121509161196564493, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_Size.y
+      value: 16
+      objectReference: {fileID: 0}
+    - target: {fileID: 6121509161196564493, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_Size.z
+      value: 15.093044
+      objectReference: {fileID: 0}
+    - target: {fileID: 6121509161196564493, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_Center.y
+      value: 8
+      objectReference: {fileID: 0}
     - target: {fileID: 6121972414477404733, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: m_Size.x
       value: 20
@@ -842,6 +858,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 556ce41a973a5704fbfc8c807ad8ecd2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Zone
+--- !u!65 &1543226207171321216 stripped
+BoxCollider:
+  m_CorrespondingSourceObject: {fileID: 6121509161196564493, guid: 0266b0096947362429f7d224956a5096, type: 3}
+  m_PrefabInstance: {fileID: 4726910616087735693}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &1945857671188992395 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 6528054620988570630, guid: 0266b0096947362429f7d224956a5096, type: 3}
@@ -867,9 +888,16 @@ MonoBehaviour:
   buildingName: Forge
   _isPublicLocation: 0
   _buildingType: 0
-  _buildingZone: {fileID: 0}
+  _buildingZone: {fileID: 1543226207171321216}
   _deliveryZone: {fileID: 2869944826478470843}
   _owner: {fileID: 0}
+  _ownerCommunity:
+    communityName: 
+    level: 0
+    leader: {fileID: 0}
+    members: []
+    communityZones: []
+    ownedBuildings: []
   _storageZone: {fileID: 476241650930320217}
   _apprenticeCount: 1
   _smithingSkill: {fileID: 0}

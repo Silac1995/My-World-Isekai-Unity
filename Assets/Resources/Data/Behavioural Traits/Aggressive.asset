@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: cb89952efff64374a9d395339a8bbdf9, type: 3}
   m_Name: Aggressive
   m_EditorClassIdentifier: Assembly-CSharp::CharacterBehavioralTraitsSO
-  aggressivity: 0
+  aggressivity: 0.1
   sociability: 0.5
   loyalty: 0.5
   canCreateCommunity: 0
