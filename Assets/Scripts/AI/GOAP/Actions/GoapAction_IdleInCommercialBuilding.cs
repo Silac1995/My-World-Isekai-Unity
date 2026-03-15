@@ -23,7 +23,7 @@ public class GoapAction_IdleInCommercialBuilding : GoapAction
 
     public override Dictionary<string, bool> Preconditions => new Dictionary<string, bool>
     {
-        { "isIdling", true }
+        // Aucune précondition: on peut toujours se mettre à flâner
     };
 
     public override Dictionary<string, bool> Effects => new Dictionary<string, bool>

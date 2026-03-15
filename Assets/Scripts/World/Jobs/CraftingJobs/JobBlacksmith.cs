@@ -16,7 +16,7 @@ public class JobBlacksmith : JobCrafter
     public CraftingStation CurrentStation => _currentStation;
 
     private float _cooldownTimer = 0f;
-    private const float CRAFT_COOLDOWN = 2f;
+    private const float CRAFT_COOLDOWN = 1f;
 
     private enum CraftPhase
     {
