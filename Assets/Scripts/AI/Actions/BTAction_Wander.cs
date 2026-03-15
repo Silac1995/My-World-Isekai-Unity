@@ -18,6 +18,8 @@ namespace MWI.AI
         private const float EDGE_DETECTION_DIST = 1.5f;
         private const float FORCE_NEW_DEST_DIST = 0.5f;
 
+        private int _framesSincePathRequest = 0;
+
         protected override void OnEnter(Blackboard bb)
         {
             _isWaiting = false;
@@ -43,11 +45,17 @@ namespace MWI.AI
                 return BTNodeStatus.Running;
             }
 
-            // Vérifier si on est arrivé à destination
-            if (!movement.PathPending && (!movement.HasPath || movement.RemainingDistance <= movement.StoppingDistance + 0.5f))
+            _framesSincePathRequest++;
+
+            // Wait until NavMesh thread answers
+            if (_framesSincePathRequest > 5)
             {
-                StartWaiting(bb.Self);
-                return BTNodeStatus.Running;
+                // Vérifier si on est arrivé à destination
+                if (!movement.PathPending && (!movement.HasPath || movement.RemainingDistance <= movement.StoppingDistance + 0.5f))
+                {
+                    StartWaiting(bb.Self);
+                    return BTNodeStatus.Running;
+                }
             }
 
             // Détection anti-glissement sur les bords
@@ -80,10 +88,12 @@ namespace MWI.AI
             _waitEndTime = UnityEngine.Time.time + Random.Range(minWait, maxWait);
             _isWaiting = true;
             _edgePressureEndTime = 0f;
+            _framesSincePathRequest = 0;
         }
 
         private void PickNewDestination(Blackboard bb)
         {
+            _framesSincePathRequest = 0;
             Character self = bb.Self;
             NPCController npc = self.Controller as NPCController;
             float walkRadius = npc != null ? npc.WalkRadius : 50f;

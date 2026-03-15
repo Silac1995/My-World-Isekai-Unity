@@ -19,6 +19,8 @@ public class GoapAction_WearClothing : GoapAction
     private bool _isComplete = false;
     private bool _isMoving = false;
     private ItemInteractable _targetInteractable;
+    private Vector3 _lastTargetPos = Vector3.positiveInfinity;
+    private float _lastRouteRequestTime = 0f;
     
     public override bool IsComplete => _isComplete;
 
@@ -62,9 +64,13 @@ public class GoapAction_WearClothing : GoapAction
         // 1. Déplacement vers l'objet
         if (distance > 1.2f)
         {
-            if (!_isMoving || movement.PathStatus == UnityEngine.AI.NavMeshPathStatus.PathInvalid || (!movement.HasPath && !movement.PathPending))
+            bool hasPathFailed = (UnityEngine.Time.time - _lastRouteRequestTime > 0.2f) && (movement.PathStatus == UnityEngine.AI.NavMeshPathStatus.PathInvalid || (!movement.HasPath && !movement.PathPending));
+
+            if (!_isMoving || Vector3.Distance(_lastTargetPos, targetPos) > 1f || hasPathFailed)
             {
                 movement.SetDestination(rootObject.transform.position);
+                _lastTargetPos = targetPos;
+                _lastRouteRequestTime = UnityEngine.Time.time;
                 _isMoving = true;
             }
             return;
@@ -75,6 +81,7 @@ public class GoapAction_WearClothing : GoapAction
         {
             movement.Stop();
             _isMoving = false;
+            _lastTargetPos = Vector3.positiveInfinity;
         }
 
         // 3. Collecter et équiper
@@ -94,7 +101,7 @@ public class GoapAction_WearClothing : GoapAction
         _isComplete = false;
         _isMoving = false;
         _targetInteractable = null;
-        worker.CharacterMovement?.Resume();
+        worker.CharacterMovement?.Stop();
     }
 
     private List<WearableType> GetMissingTypes(Character worker)

@@ -11,6 +11,9 @@ public class CharacterInteraction : MonoBehaviour
     public Collider InteractionZone => _interactionZone;
     public event Action<Character, bool> OnInteractionStateChanged;
     private Coroutine _activeDialogueCoroutine;
+    
+    // Suivi de la cible actuelle d'approche pour le désabonnement
+    private Character _pendingTarget;
 
     public Character CurrentTarget
     {
@@ -58,20 +61,20 @@ public class CharacterInteraction : MonoBehaviour
         }
     }
 
-    public void StartInteractionWith(Character target, ICharacterInteractionAction forcedFirstAction = null, Action onPositioned = null)
+    public bool StartInteractionWith(Character target, ICharacterInteractionAction forcedFirstAction = null, Action onPositioned = null)
     {
-        if (target == null || _currentTarget == target) return;
+        if (target == null || _currentTarget == target) return false;
         
         // --- SÉCURITÉ : Personnages occupés ou incapacités ---
         if (!_character.IsFree())
         {
             Debug.LogWarning($"<color=orange>[Interaction]</color> {_character.CharacterName} n'est pas libre pour démarrer une interaction.");
-            return;
+            return false;
         }
         if (!target.IsFree())
         {
             Debug.LogWarning($"<color=orange>[Interaction]</color> {target.CharacterName} n'est pas libre pour recevoir une interaction.");
-            return;
+            return false;
         }
 
         Debug.Log($"<color=cyan>[Interaction]</color> {_character.CharacterName} démarre le positionnement pour {target.CharacterName}.");
@@ -82,6 +85,14 @@ public class CharacterInteraction : MonoBehaviour
             // Arrêter l'animation de marche immédiatement
             _character.CharacterVisual?.CharacterAnimator?.StopLocomotion();
 
+            // --- NOUVEAU: S'abonner à l'état de la cible pour annuler si elle devient occupée ---
+            if (_pendingTarget != null)
+            {
+                _pendingTarget.CharacterInteraction.OnInteractionStateChanged -= HandleTargetStateChanged;
+            }
+            _pendingTarget = target;
+            _pendingTarget.CharacterInteraction.OnInteractionStateChanged += HandleTargetStateChanged;
+
             // Déplacement précis avec Coroutine : On se déplace vers la cible, puis ExecuteInteraction
             if (_activeDialogueCoroutine != null) StopCoroutine(_activeDialogueCoroutine);
             _activeDialogueCoroutine = StartCoroutine(MoveToInteractionRoutine(target, forcedFirstAction, onPositioned));
@@ -91,6 +102,7 @@ public class CharacterInteraction : MonoBehaviour
             // Si pas de controller (ou joueur manuel), on lance direct le dialogue
             ExecuteInteraction(target, forcedFirstAction, onPositioned);
         }
+        return true;
     }
 
     private System.Collections.IEnumerator MoveToInteractionRoutine(Character target, ICharacterInteractionAction forcedFirstAction, Action onPositioned)
@@ -101,11 +113,16 @@ public class CharacterInteraction : MonoBehaviour
         var detector = _character.GetComponent<CharacterInteractionDetector>();
         var targetInteractable = target.CharacterInteractable;
         
+        // Security checks against NaN/stutter loops for Navmesh
+        float lastRouteRequestTime = 0f;
+        Vector3 lastDesiredPos = Vector3.positiveInfinity;
+
         while (true)
         {
             if (target == null || !target.IsFree())
             {
-                Debug.LogWarning($"<color=orange>[Interaction]</color> Cible perdue pendant le mouvement.");
+                Debug.LogWarning($"<color=orange>[Interaction]</color> Cible perdue ou occupée pendant le mouvement.");
+                if (movement != null) movement.Stop();
                 EndInteraction();
                 yield break;
             }
@@ -114,6 +131,7 @@ public class CharacterInteraction : MonoBehaviour
             if (timeoutTimer > TIMEOUT_DURATION)
             {
                 Debug.LogWarning($"<color=orange>[Interaction]</color> Timeout de positionnement pour {_character.CharacterName} vers {target.CharacterName}. ABORT.");
+                if (movement != null) movement.Stop();
                 EndInteraction();
                 yield break;
             }
@@ -158,16 +176,56 @@ public class CharacterInteraction : MonoBehaviour
             if (movement != null)
             {
                 movement.Resume();
-                movement.SetDestination(desiredPos);
+                
+                // --- SÉCURITÉ DE THREAD NAVMESH ---
+                // Le NavMesh prend au moins 1 frame pour calculer le chemin (PathPending = true) puis basculer HasPath.
+                // Si on spamme SetDestination chaque frame, le calcul est réinitialisé et le PNJ stagne.
+                // HasPathFailed = on a attendu 0.2s et on n'a ni chemin, ni chemin en cours, ou chemin invalide.
+                bool hasPathFailed = (Time.time - lastRouteRequestTime > 0.2f) && (movement.Agent.pathStatus == UnityEngine.AI.NavMeshPathStatus.PathInvalid || (!movement.Agent.hasPath && !movement.Agent.pathPending));
+
+                if (Vector3.Distance(lastDesiredPos, desiredPos) > 1f || hasPathFailed)
+                {
+                    movement.SetDestination(desiredPos);
+                    lastDesiredPos = desiredPos;
+                    lastRouteRequestTime = Time.time;
+                }
             }
 
             yield return null;
         }
     }
 
+    private void HandleTargetStateChanged(Character character, bool isInteracting)
+    {
+        // Si la cible avec laquelle on voulait interagir commence une interaction avec QUELQU'UN D'AUTRE...
+        if (isInteracting && _pendingTarget != null)
+        {
+            if (_pendingTarget.CharacterInteraction.CurrentTarget != _character)
+            {
+                Debug.Log($"<color=orange>[Interaction]</color> {_character.CharacterName} annule son approche, car {_pendingTarget.CharacterName} a commencé une interaction avec quelqu'un d'autre.");
+                
+                // On nettoie la coroutine d'approche AVANT d'appeler EndInteraction pour s'assurer qu'elle s'arrête bien
+                if (_activeDialogueCoroutine != null)
+                {
+                    StopCoroutine(_activeDialogueCoroutine);
+                    _activeDialogueCoroutine = null;
+                }
+                
+                EndInteraction();
+            }
+        }
+    }
+
     private void ExecuteInteraction(Character target, ICharacterInteractionAction forcedFirstAction, Action onPositioned)
     {
         if (target == null) return;
+        
+        // On est arrivé, on se désabonne de l'événement d'approche
+        if (_pendingTarget != null)
+        {
+            _pendingTarget.CharacterInteraction.OnInteractionStateChanged -= HandleTargetStateChanged;
+            _pendingTarget = null;
+        }
         
         // Double sécurité : L'un des deux a pu devenir occupé pendant le trajet !
         if (!_character.IsFree() || !target.IsFree())
@@ -297,6 +355,25 @@ public class CharacterInteraction : MonoBehaviour
 
     public void EndInteraction()
     {
+        // Nettoyage garanti de l'état d'approche / coroutine, même si on n'a pas encore de CurrentTarget
+        if (_pendingTarget != null)
+        {
+            _pendingTarget.CharacterInteraction.OnInteractionStateChanged -= HandleTargetStateChanged;
+            _pendingTarget = null;
+        }
+
+        if (_activeDialogueCoroutine != null)
+        {
+            StopCoroutine(_activeDialogueCoroutine);
+            _activeDialogueCoroutine = null;
+        }
+
+        // --- NEW: S'assurer que le mouvement est bien stoppé en cas d'annulation avant positionnement ---
+        if (!IsPositioned && _character.CharacterMovement != null)
+        {
+            _character.CharacterMovement.Stop();
+        }
+
         if (_currentTarget == null) return;
 
         Character previousTarget = _currentTarget;
@@ -305,12 +382,6 @@ public class CharacterInteraction : MonoBehaviour
 
         // Libérer le regard
         _character.CharacterVisual?.ClearLookTarget();
-
-        if (_activeDialogueCoroutine != null)
-        {
-            StopCoroutine(_activeDialogueCoroutine);
-            _activeDialogueCoroutine = null;
-        }
 
         // --- NEW: Clean up redundant movement plans towards the interlocutor ---
         ClearRedundantMovement(previousTarget);

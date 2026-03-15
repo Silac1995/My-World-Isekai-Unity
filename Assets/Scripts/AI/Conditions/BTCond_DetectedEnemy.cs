@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 
 namespace MWI.AI
 {
@@ -30,7 +30,7 @@ namespace MWI.AI
                 Character target = interactable.Character;
                 if (target == null || !target.IsAlive() || target == self) continue;
 
-                // --- Agression spontanÃ©e (trait-based) ---
+                // --- Agression spontanée (trait-based) ---
                 if (self.CharacterTraits != null)
                 {
                     float aggressivity = self.CharacterTraits.GetAggressivity();
@@ -38,13 +38,12 @@ namespace MWI.AI
 
                     if (aggroChance > 0f && Random.value < aggroChance)
                     {
-                        Debug.Log($"<color=red>[BT Aggro]</color> {self.CharacterName} attaque {target.CharacterName} spontanÃ©ment !");
+                        Debug.Log($"<color=red>[BT Aggro]</color> {self.CharacterName} attaque {target.CharacterName} spontanément !");
                         if (self.CharacterSpeech != null)
                             self.CharacterSpeech.Say("You're in my way!");
 
                         bb.Set(Blackboard.KEY_DETECTED_CHARACTER, target);
-                        NPCController npc = self.Controller as NPCController;
-                        npc?.PushBehaviour(new AttackTargetBehaviour(target));
+                        bb.Set(Blackboard.KEY_COMBAT_TARGET, target);
                         return BTNodeStatus.Success;
                     }
                 }
@@ -59,10 +58,9 @@ namespace MWI.AI
 
                     if (Random.value < aggroChance)
                     {
-                        Debug.Log($"<color=red>[BT Aggro]</color> {self.CharacterName} repÃ¨re son ennemi {target.CharacterName} et attaque !");
+                        Debug.Log($"<color=red>[BT Aggro]</color> {self.CharacterName} repère son ennemi {target.CharacterName} et attaque !");
                         bb.Set(Blackboard.KEY_DETECTED_CHARACTER, target);
-                        NPCController npc2 = self.Controller as NPCController;
-                        npc2?.PushBehaviour(new AttackTargetBehaviour(target));
+                        bb.Set(Blackboard.KEY_COMBAT_TARGET, target);
                         return BTNodeStatus.Success;
                     }
                 }

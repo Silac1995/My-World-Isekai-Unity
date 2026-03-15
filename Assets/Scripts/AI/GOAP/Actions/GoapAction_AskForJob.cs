@@ -53,15 +53,23 @@ public class GoapAction_AskForJob : GoapAction
             }
 
             Character boss = _building.Owner;
-            if (boss == null)
+            if (boss == null || !_job.IsAvailable())
             {
                 _isComplete = true; // Fail gracefully
                 return;
             }
 
+            // On attend patiemment que le boss soit libre au lieu de replanifier à l'infini
+            if (!boss.IsFree())
+            {
+                return;
+            }
+
             var interaction = new InteractionAskForJob(_building, _job);
-            worker.CharacterInteraction.StartInteractionWith(boss, interaction);
-            _hasStartedInteraction = true;
+            if (worker.CharacterInteraction.StartInteractionWith(boss, interaction))
+            {
+                _hasStartedInteraction = true;
+            }
         }
     }
 }

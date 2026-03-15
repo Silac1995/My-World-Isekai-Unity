@@ -21,6 +21,8 @@ public class GoapAction_GoShopping : GoapAction
     private bool _hasJoinedQueue = false;
     private bool _wasInteracting = false;
     private ShopBuilding _shop;
+    private Vector3 _lastTargetPos = Vector3.positiveInfinity;
+    private float _lastRouteRequestTime = 0f;
     
     public override bool IsComplete => _isComplete;
 
@@ -65,9 +67,13 @@ public class GoapAction_GoShopping : GoapAction
 
             if (distance > 3f)
             {
-                if (!_isMoving || movement.PathStatus == UnityEngine.AI.NavMeshPathStatus.PathInvalid || (!movement.HasPath && !movement.PathPending))
+                bool hasPathFailed = (UnityEngine.Time.time - _lastRouteRequestTime > 0.2f) && (movement.PathStatus == UnityEngine.AI.NavMeshPathStatus.PathInvalid || (!movement.HasPath && !movement.PathPending));
+
+                if (!_isMoving || Vector3.Distance(_lastTargetPos, targetPos) > 1f || hasPathFailed)
                 {
                     movement.SetDestination(_shop.transform.position);
+                    _lastTargetPos = targetPos;
+                    _lastRouteRequestTime = UnityEngine.Time.time;
                     _isMoving = true;
                 }
                 return;
@@ -77,6 +83,7 @@ public class GoapAction_GoShopping : GoapAction
             {
                 movement.Stop();
                 _isMoving = false;
+                _lastTargetPos = Vector3.positiveInfinity;
             }
 
             if (!worker.CharacterInteraction.IsInteracting)
@@ -118,7 +125,7 @@ public class GoapAction_GoShopping : GoapAction
         }
         _hasJoinedQueue = false;
         _shop = null;
-        worker.CharacterMovement?.Resume();
+        worker.CharacterMovement?.Stop();
     }
 
     private ShopBuilding FindShop()

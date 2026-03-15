@@ -17,6 +17,7 @@ namespace MWI.AI
         public const string KEY_URGENT_NEED = "UrgentNeed";
         public const string KEY_SCHEDULE_ACTIVITY = "ScheduleActivity";
         public const string KEY_BATTLE_MANAGER = "BattleManager";
+        public const string KEY_FLEE_BATTLE_MANAGER = "FleeBattleManager";
         public const string KEY_COMBAT_TARGET = "CombatTarget";
         public const string KEY_SOCIAL_TARGET = "SocialTarget";
 

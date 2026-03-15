@@ -24,6 +24,9 @@ public class GoapAction_GoToBoss : GoapAction
     private Character _boss;
     private bool _isComplete = false;
     private bool _isMoving = false;
+    
+    private Vector3 _lastTargetPos = Vector3.positiveInfinity;
+    private float _lastRouteRequestTime = 0f;
 
     public override bool IsComplete => _isComplete;
 
@@ -45,24 +48,29 @@ public class GoapAction_GoToBoss : GoapAction
         if (dist <= 2.5f)
         {
             _isComplete = true;
-            worker.CharacterMovement?.ResetPath();
+            worker.CharacterMovement?.Stop();
             return;
         }
 
         Vector3 targetPos = _boss.transform.position;
         var movement = worker.CharacterMovement;
+        
+        bool hasPathFailed = (UnityEngine.Time.time - _lastRouteRequestTime > 0.2f) && (movement.PathStatus == UnityEngine.AI.NavMeshPathStatus.PathInvalid || (!movement.HasPath && !movement.PathPending));
 
         // Mise à jour dynamique de la destination si la cible bouge
-        if (!_isMoving || Vector3.Distance(movement.Destination, targetPos) > 0.1f)
+        if (!_isMoving || Vector3.Distance(_lastTargetPos, targetPos) > 1f || hasPathFailed)
         {
             movement?.SetDestination(targetPos);
+            _lastTargetPos = targetPos;
+            _lastRouteRequestTime = UnityEngine.Time.time;
             _isMoving = true;
         }
     }
 
     public override void Exit(Character worker)
     {
+        _isComplete = false;
         _isMoving = false;
-        worker.CharacterMovement?.ResetPath(); // Arrêt forcé si l'action est annulée par CharacterGoapController
+        worker.CharacterMovement?.Stop();
     }
 }

@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 
 namespace MWI.AI
 {
@@ -48,14 +48,24 @@ namespace MWI.AI
                     _friendInDanger = target;
 
                     string helpMsg = sameParty ? "Protect the group!" : "Hang on, my friend! I'm coming!";
-                    Debug.Log($"<color=green>[BT Assist]</color> {self.CharacterName} voit {target.CharacterName} en combat et va l'aider !");
+                    
+                    // Trouver l'adversaire de l'ami (s'il en a un)
+                    _friendInDanger = target;
+                    Character enemyToAttack = target.CharacterCombat.CurrentBattleManager?.GetBestTargetFor(target);
+                    
+                    if (enemyToAttack != null)
+                    {
+                        Debug.Log($"<color=green>[BT Assist]</color> {self.CharacterName} voit {target.CharacterName} en combat contre {enemyToAttack.CharacterName} et va l'aider !");
+                        
+                        if (self.CharacterSpeech != null)
+                            self.CharacterSpeech.Say(helpMsg);
 
-                    if (self.CharacterSpeech != null)
-                        self.CharacterSpeech.Say(helpMsg);
-
-                    self.CharacterCombat.JoinBattleAsAlly(target);
-
-                    return BTNodeStatus.Success;
+                        self.CharacterCombat.JoinBattleAsAlly(target);
+                        
+                        // Définir la cible pour le BTAction_AttackTarget
+                        bb.Set(Blackboard.KEY_COMBAT_TARGET, enemyToAttack);
+                        return BTNodeStatus.Success;
+                    }
                 }
             }
 

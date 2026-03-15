@@ -218,7 +218,11 @@ public class NPCController : CharacterGameController
                 Debug.Log($"<color=red>[Aggression]</color> {_character.CharacterName} attaque {target.CharacterName} de façon spontanée (Aggressivity: {aggressivity:P0})!");
                 if (_character.CharacterSpeech != null)
                     _character.CharacterSpeech.Say("You're in my way!");
-                PushBehaviour(new AttackTargetBehaviour(target));
+                
+                if (BehaviourTree != null)
+                {
+                    BehaviourTree.Blackboard.Set(Blackboard.KEY_COMBAT_TARGET, target);
+                }
                 return;
             }
         }
@@ -236,7 +240,10 @@ public class NPCController : CharacterGameController
             if (Random.value < aggroChance)
             {
                 Debug.Log($"<color=red>[Aggression]</color> {_character.CharacterName} repère son ennemi {target.CharacterName} et attaque ! (Chance: {aggroChance:P0})");
-                PushBehaviour(new AttackTargetBehaviour(target));
+                if (BehaviourTree != null)
+                {
+                    BehaviourTree.Blackboard.Set(Blackboard.KEY_COMBAT_TARGET, target);
+                }
                 return;
             }
         }
@@ -434,10 +441,14 @@ public class NPCController : CharacterGameController
         }
 
         // 3. Sinon, on n'est pas concerné -> On dégage
-        if (!HasBehaviour<MoveOutOfBattleZoneBehaviour>())
+        if (BehaviourTree != null && BehaviourTree.Blackboard != null)
         {
-            Debug.Log($"<color=white>[Battle Sensor]</color> {_character.CharacterName} n'a rien à faire ici, il s'éloigne.");
-            PushBehaviour(new MoveOutOfBattleZoneBehaviour(manager));
+            // Eviter de spammer si on fuit déjà CETTE bataille
+            if (BehaviourTree.Blackboard.Get<BattleManager>(Blackboard.KEY_FLEE_BATTLE_MANAGER) != manager)
+            {
+                Debug.Log($"<color=white>[Battle Sensor]</color> {_character.CharacterName} n'a rien à faire ici, il s'éloigne.");
+                BehaviourTree.Blackboard.Set(Blackboard.KEY_FLEE_BATTLE_MANAGER, manager);
+            }
         }
     }
 }

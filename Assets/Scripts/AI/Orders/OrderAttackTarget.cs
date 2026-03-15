@@ -10,6 +10,7 @@ namespace MWI.AI
     {
         private Character _target;
         private bool _combatInitiated = false;
+        private BTAction_AttackTarget _attackNode;
 
         public override NPCOrderType OrderType => NPCOrderType.AttackTarget;
         public Character Target => _target;
@@ -17,13 +18,20 @@ namespace MWI.AI
         public OrderAttackTarget(Character target)
         {
             _target = target;
+            _attackNode = new BTAction_AttackTarget();
         }
 
         public override BTNodeStatus Execute(Character self)
         {
+            NPCController npc = self.Controller as NPCController;
+            if (npc == null || npc.BehaviourTree == null) return BTNodeStatus.Failure;
+
+            Blackboard bb = npc.BehaviourTree.Blackboard;
+
             if (_target == null || !_target.IsAlive())
             {
                 IsComplete = true;
+                bb.Remove(Blackboard.KEY_COMBAT_TARGET);
                 return BTNodeStatus.Success;
             }
 
@@ -31,30 +39,31 @@ namespace MWI.AI
             if (!_combatInitiated)
             {
                 _combatInitiated = true;
-
-                // On utilise le pattern existant : PushBehaviour → AttackTargetBehaviour
-                NPCController npc = self.Controller as NPCController;
-                if (npc != null)
-                {
-                    npc.PushBehaviour(new AttackTargetBehaviour(_target));
-                }
+                bb.Set(Blackboard.KEY_COMBAT_TARGET, _target);
                 Debug.Log($"<color=red>[Order]</color> {self.CharacterName} attaque {_target.CharacterName} sur ordre !");
             }
 
-            // L'ordre reste Running tant que le combat est actif
-            if (self.CharacterCombat.IsInBattle)
+            // Exécution native de l'approche et du combat
+            BTNodeStatus status = _attackNode.Execute(bb);
+
+            if (status != BTNodeStatus.Running && !self.CharacterCombat.IsInBattle)
             {
-                return BTNodeStatus.Running;
+                IsComplete = true;
+                return BTNodeStatus.Success;
             }
 
-            // Le combat est terminé
-            IsComplete = true;
-            return BTNodeStatus.Success;
+            // L'ordre reste Running tant que le combat est actif ou l'approche est en cours
+            return BTNodeStatus.Running;
         }
 
         public override void Cancel(Character self)
         {
             base.Cancel(self);
+            NPCController npc = self.Controller as NPCController;
+            if (npc != null && npc.BehaviourTree != null)
+            {
+                npc.BehaviourTree.Blackboard.Remove(Blackboard.KEY_COMBAT_TARGET);
+            }
             Debug.Log($"<color=yellow>[Order]</color> Ordre d'attaque annulé pour {self.CharacterName}.");
         }
 

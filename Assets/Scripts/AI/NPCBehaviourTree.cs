@@ -38,6 +38,11 @@ public class NPCBehaviourTree : MonoBehaviour
     private BTAction_ExecuteGoapPlan _goapNode;
     private BTAction_Wander _wanderNode;
 
+    private BTSequence _legacySequence;
+    private BTSequence _agressionSequence;
+    private BTSequence _entraideSequence;
+    private BTCond_NeedsToPunchOut _punchOutNode;
+
     [Header("Performance")]
     [SerializeField] private int _tickInterval = 5; // Tick tous les N frames
 
@@ -73,9 +78,6 @@ public class NPCBehaviourTree : MonoBehaviour
             Debug.Log($"<color=lime>[BT]</color> {_character.CharacterName} : Behaviour Tree initialisé.");
     }
 
-    private BTSequence _legacySequence;
-    private BTCond_NeedsToPunchOut _punchOutNode;
-
     /// <summary>
     /// Construit l'arbre de décision complet.
     /// L'ordre des enfants dans le Selector = l'ordre de priorité.
@@ -97,13 +99,23 @@ public class NPCBehaviourTree : MonoBehaviour
         _wanderNode = new BTAction_Wander();
         _punchOutNode = new BTCond_NeedsToPunchOut();
 
+        _entraideSequence = new BTSequence(
+            _friendNode,
+            new BTAction_AttackTarget()
+        );
+
+        _agressionSequence = new BTSequence(
+            _enemyNode,
+            new BTAction_AttackTarget()
+        );
+
         return new BTSelector(
             _legacySequence,    // 0. Imperative actions bypass the intelligent tree
             _orderNode,         // 1. Ordres (priorité max)
             _punchOutNode,      // 1.5 Fin de shift forcé
             _combatNode,        // 2. Combat actif
-            _friendNode,        // 3. Entraide
-            _enemyNode,         // 4. Agression
+            _entraideSequence,  // 3. Entraide
+            _agressionSequence, // 4. Agression
             _goapNode,          // 5. GOAP (Life Goals / Proactive)
             _scheduleNode,      // 6. Schedule
             _socialNode,        // 8. Social
@@ -203,8 +215,8 @@ public class NPCBehaviourTree : MonoBehaviour
         else if (_orderNode != null && _orderNode.IsRunning) _currentNodeName = "Order";
         else if (_punchOutNode != null && _punchOutNode.IsRunning) _currentNodeName = "PunchOut";
         else if (_combatNode != null && _combatNode.IsRunning) _currentNodeName = "Combat";
-        else if (_friendNode != null && _friendNode.IsRunning) _currentNodeName = "FriendInDanger";
-        else if (_enemyNode != null && _enemyNode.IsRunning) _currentNodeName = "DetectedEnemy";
+        else if (_entraideSequence != null && _entraideSequence.IsRunning) _currentNodeName = "AssistFriend";
+        else if (_agressionSequence != null && _agressionSequence.IsRunning) _currentNodeName = "Aggression";
         else if (_scheduleNode != null && _scheduleNode.IsRunning) _currentNodeName = "Schedule";
         else if (_socialNode != null && _socialNode.IsRunning) _currentNodeName = "Social";
         else if (_goapNode != null && _goapNode.IsRunning) _currentNodeName = "GOAP";
