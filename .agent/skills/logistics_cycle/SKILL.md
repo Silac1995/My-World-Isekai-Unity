@@ -148,3 +148,5 @@ public struct ShopItemEntry
 | Crafter picks up? | `BTAction_PerformCraft` fires on CraftingBuilding? |
 | Transport ordered? | `BuyOrder` placed with `TransporterBuilding`? |
 | Transporter delivers? | `JobTransporter` picks up and delivers items? |
+| Ghost Deliveries? | Ensure `JobTransporter.NotifyDeliveryProgress` rigorously checks `CarriedItem != null` before granting progress. |
+| Manager freezes? | If the `JobLogisticsManager` freezes endlessly over loose items, verify their `GoapAction_GatherStorageItems` dynamically ignores the `FindingItem` phase if their hands are currently full. |

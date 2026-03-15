@@ -199,7 +199,7 @@ public class UI_CharacterDebugScript : MonoBehaviour
             goapActionText = $"Life Action: {actionName}";
             phaseText = "Phase: Life Routine";
         }
-        else if (character != null && character.CharacterJob != null && character.CharacterJob.CurrentJob != null)
+        else if (character != null && character.CharacterJob != null && character.CharacterJob.IsWorking && character.CharacterJob.CurrentJob != null)
         {
             string goalName = character.CharacterJob.CurrentJob.CurrentGoalName;
             goapGoalText = string.IsNullOrEmpty(goalName) ? "Job Goal: N/A" : $"Job Goal: {goalName}";

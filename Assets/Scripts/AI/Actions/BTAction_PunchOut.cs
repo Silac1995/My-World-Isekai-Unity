@@ -108,6 +108,12 @@ namespace MWI.AI
             {
                 self.CharacterGoap.CancelPlan();
             }
+
+            // Clean up any lingering physical action block 
+            if (self != null && self.CharacterActions != null)
+            {
+                self.CharacterActions.ClearCurrentAction();
+            }
         }
     }
 }

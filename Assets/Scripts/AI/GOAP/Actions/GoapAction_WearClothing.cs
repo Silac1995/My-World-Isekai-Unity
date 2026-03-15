@@ -66,15 +66,25 @@ public class GoapAction_WearClothing : GoapAction
                 isCloseEnough = true;
             }
         }
-        else
+
+        // Si l'intersection physique échoue (ex: Agent bloqué juste devant par un autre NPC/mur)
+        // On valide si l'agent considère être arrivé à destination
+        if (!isCloseEnough && movement != null)
         {
-            // Fallback
-            Vector3 currentPos = worker.transform.position;
-            currentPos.y = 0;
-            targetPos.y = 0;
-            if (Vector3.Distance(currentPos, targetPos) <= 1.5f)
+            if (!movement.PathPending && movement.HasPath && movement.RemainingDistance <= movement.StoppingDistance + 0.5f)
             {
                 isCloseEnough = true;
+            }
+            else
+            {
+                // Fallback ultime distance absolue
+                Vector3 currentPos = worker.transform.position;
+                currentPos.y = 0;
+                targetPos.y = 0;
+                if (Vector3.Distance(currentPos, targetPos) <= 1.5f)
+                {
+                    isCloseEnough = true;
+                }
             }
         }
 
@@ -162,6 +172,8 @@ public class GoapAction_WearClothing : GoapAction
 
         return awareness.GetVisibleInteractables<ItemInteractable>()
             .Where(item => {
+                if (item.WorldItem != null && item.WorldItem.IsBeingCarried) return false;
+
                 if (item.ItemInstance is WearableInstance w)
                     return typesToFind.Contains(((WearableSO)w.ItemSO).WearableType);
                 return false;

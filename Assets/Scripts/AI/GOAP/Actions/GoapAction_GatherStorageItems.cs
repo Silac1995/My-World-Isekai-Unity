@@ -96,7 +96,7 @@ public class GoapAction_GatherStorageItems : GoapAction
                     return;
                 }
 
-                Collider targetCol = _targetItem.InteractionZone;
+                Collider targetCol = _targetItem.GetComponentInChildren<ItemInteractable>()?.InteractionZone;
                 if (targetCol == null)
                 {
                     targetCol = _targetItem.GetComponentInChildren<Collider>();
@@ -286,7 +286,7 @@ public class GoapAction_GatherStorageItems : GoapAction
         Vector3 center = boxCol.transform.TransformPoint(boxCol.center);
         Vector3 halfExtents = Vector3.Scale(boxCol.size, boxCol.transform.lossyScale) * 0.5f;
 
-        Collider[] colliders = Physics.OverlapBox(center, halfExtents, boxCol.transform.rotation, Physics.AllLayers, QueryTriggerInteraction.Ignore);
+        Collider[] colliders = Physics.OverlapBox(center, halfExtents, boxCol.transform.rotation, Physics.AllLayers, QueryTriggerInteraction.Collide);
 
         WorldItem nearest = null;
         float nearestDist = float.MaxValue;

@@ -141,7 +141,7 @@ public class Building : ComplexRoom
             Vector3 center = boxCol.transform.TransformPoint(boxCol.center);
             Vector3 halfExtents = Vector3.Scale(boxCol.size, boxCol.transform.lossyScale) * 0.5f;
 
-            Collider[] colliders = Physics.OverlapBox(center, halfExtents, boxCol.transform.rotation, Physics.AllLayers, QueryTriggerInteraction.Ignore);
+            Collider[] colliders = Physics.OverlapBox(center, halfExtents, boxCol.transform.rotation, Physics.AllLayers, QueryTriggerInteraction.Collide);
             foreach (var col in colliders)
             {
                 var worldItem = col.GetComponent<WorldItem>() ?? col.GetComponentInParent<WorldItem>();

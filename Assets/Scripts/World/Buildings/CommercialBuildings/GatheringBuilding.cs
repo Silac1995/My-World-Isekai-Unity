@@ -116,7 +116,7 @@ public class GatheringBuilding : CommercialBuilding
 
         bool foundValidResource = false;
 
-        Collider[] colliders = Physics.OverlapBox(center, halfExtents, boxCol.transform.rotation, Physics.AllLayers, QueryTriggerInteraction.Ignore);
+        Collider[] colliders = Physics.OverlapBox(center, halfExtents, boxCol.transform.rotation, Physics.AllLayers, QueryTriggerInteraction.Collide);
         foreach (var col in colliders)
         {
             GatherableObject gatherable = col.GetComponent<GatherableObject>() ?? col.GetComponentInParent<GatherableObject>();

@@ -117,9 +117,10 @@ public class GoapAction_GatherResources : GoapAction
                 Debug.Log($"<color=cyan>[GOAP Gather]</color> {worker.CharacterName} a vu {_targetWorldItem.ItemInstance.ItemSO.ItemName} par terre, il va le ramasser.");
 
                 Vector3 targetPos = _targetWorldItem.transform.position;
-                if (_targetWorldItem.InteractionZone != null)
+                var itemInteractable = _targetWorldItem.GetComponentInChildren<ItemInteractable>();
+                if (itemInteractable != null && itemInteractable.InteractionZone != null)
                 {
-                    targetPos = _targetWorldItem.InteractionZone.bounds.ClosestPoint(worker.transform.position);
+                    targetPos = itemInteractable.InteractionZone.bounds.ClosestPoint(worker.transform.position);
                 }
                 else
                 {
@@ -169,9 +170,10 @@ public class GoapAction_GatherResources : GoapAction
                     bool isAtWorldItem = false;
                     var workerCol = worker.GetComponent<Collider>();
 
-                    if (_targetWorldItem.InteractionZone != null && workerCol != null)
+                    var itemInteractable = _targetWorldItem.GetComponentInChildren<ItemInteractable>();
+                    if (itemInteractable != null && itemInteractable.InteractionZone != null && workerCol != null)
                     {
-                        isAtWorldItem = _targetWorldItem.InteractionZone.bounds.Intersects(workerCol.bounds);
+                        isAtWorldItem = itemInteractable.InteractionZone.bounds.Intersects(workerCol.bounds);
                     }
                     else
                     {
@@ -264,11 +266,11 @@ public class GoapAction_GatherResources : GoapAction
                     return;
                 }
                 
-                // Calcul de la destination vers l'item droppé
                 Vector3 targetPos = _targetWorldItem.transform.position;
-                if (_targetWorldItem.InteractionZone != null)
+                var itemInteractable = _targetWorldItem.GetComponentInChildren<ItemInteractable>();
+                if (itemInteractable != null && itemInteractable.InteractionZone != null)
                 {
-                    targetPos = _targetWorldItem.InteractionZone.bounds.ClosestPoint(worker.transform.position);
+                    targetPos = itemInteractable.InteractionZone.bounds.ClosestPoint(worker.transform.position);
                 }
                 else
                 {
@@ -287,9 +289,10 @@ public class GoapAction_GatherResources : GoapAction
                 bool isAtWorldItem = false;
                 var workerCol = worker.GetComponent<Collider>();
 
-                if (_targetWorldItem.InteractionZone != null && workerCol != null)
+                var itemInteractable = _targetWorldItem.GetComponentInChildren<ItemInteractable>();
+                if (itemInteractable != null && itemInteractable.InteractionZone != null && workerCol != null)
                 {
-                    isAtWorldItem = _targetWorldItem.InteractionZone.bounds.Intersects(workerCol.bounds);
+                    isAtWorldItem = itemInteractable.InteractionZone.bounds.Intersects(workerCol.bounds);
                 }
                 else
                 {
@@ -423,7 +426,7 @@ public class GoapAction_GatherResources : GoapAction
         {
             Vector3 center = boxCol.transform.TransformPoint(boxCol.center);
             Vector3 halfExtents = Vector3.Scale(boxCol.size, boxCol.transform.lossyScale) * 0.5f;
-            colliders = Physics.OverlapBox(center, halfExtents, boxCol.transform.rotation, Physics.AllLayers, QueryTriggerInteraction.Ignore);
+            colliders = Physics.OverlapBox(center, halfExtents, boxCol.transform.rotation, Physics.AllLayers, QueryTriggerInteraction.Collide);
         }
         else
         {
@@ -534,7 +537,7 @@ public class GoapAction_GatherResources : GoapAction
             {
                 Vector3 center = boxCol.transform.TransformPoint(boxCol.center);
                 Vector3 halfExtents = Vector3.Scale(boxCol.size, boxCol.transform.lossyScale) * 0.5f;
-                colliders = Physics.OverlapBox(center, halfExtents, boxCol.transform.rotation, Physics.AllLayers, QueryTriggerInteraction.Ignore);
+                colliders = Physics.OverlapBox(center, halfExtents, boxCol.transform.rotation, Physics.AllLayers, QueryTriggerInteraction.Collide);
             }
         }
         else

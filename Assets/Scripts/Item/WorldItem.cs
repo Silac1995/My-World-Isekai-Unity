@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 
 [RequireComponent(typeof(UnityEngine.Rendering.SortingGroup))]
 public class WorldItem : MonoBehaviour
@@ -8,10 +8,8 @@ public class WorldItem : MonoBehaviour
 
     [Header("Data")]
     [SerializeField] private ItemInstance _itemInstance;
-    [SerializeField] private Collider _interactionZone; // Optional custom interaction zone
     
     public ItemInstance ItemInstance => _itemInstance;
-    public Collider InteractionZone => _interactionZone;
     public UnityEngine.Rendering.SortingGroup SortingGroup { get; private set; }
     public bool IsBeingCarried { get; set; } = false;
 
