@@ -20,6 +20,7 @@ public class CharacterInteraction : MonoBehaviour
 
     public GameObject InteractionActionPrefab => _interactionActionPrefab;
     public bool IsInteracting => _currentTarget != null;
+    public bool IsInteractionProcessActive => _activeDialogueCoroutine != null || IsInteracting;
     
     // --- POSITIONNEMENT ---
     public bool IsPositioned { get; private set; }

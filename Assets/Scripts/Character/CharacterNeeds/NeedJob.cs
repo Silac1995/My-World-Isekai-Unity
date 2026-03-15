@@ -37,12 +37,16 @@ public class NeedJob : CharacterNeed
 
         if (BuildingManager.Instance != null)
         {
-            // Note: In a future iteration we could abstract this out into "BecomeOwnerAction" etc.
-            var (building, job) = BuildingManager.Instance.FindAvailableJob<Job>();
-            if (building != null && building.HasOwner && job != null)
+            var (building, job) = BuildingManager.Instance.FindAvailableJob<Job>(true);
+            if (building != null && job != null)
             {
+                Debug.Log($"<color=yellow>[NeedJob]</color> Found job '{job.JobTitle}' at '{building.BuildingName}' with boss '{building.Owner?.CharacterName}'. Generating Actions.");
                 actions.Add(new GoapAction_GoToBoss(building.Owner));
                 actions.Add(new GoapAction_AskForJob(building, job));
+            }
+            else
+            {
+                Debug.LogWarning($"<color=orange>[NeedJob]</color> FindAvailableJob(true) returned null for both building and job! No boss-owned vacant jobs found in BuildingManager.");
             }
         }
 

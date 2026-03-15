@@ -90,12 +90,14 @@ public class BuildingManager : MonoBehaviour
     /// Trouve un job disponible d'un type spécifique dans tous les buildings commerciaux.
     /// Retourne le building et le job trouvé, ou null si aucun n'est disponible.
     /// </summary>
-    public (CommercialBuilding building, T job) FindAvailableJob<T>() where T : Job
+    public (CommercialBuilding building, T job) FindAvailableJob<T>(bool requireBoss = false) where T : Job
     {
         foreach (var building in allBuildings)
         {
             if (building is CommercialBuilding commercial)
             {
+                if (requireBoss && !commercial.HasOwner) continue;
+
                 T availableJob = commercial.FindAvailableJob<T>();
                 if (availableJob != null)
                 {

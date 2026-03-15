@@ -65,16 +65,21 @@ public class CharacterGoapController : MonoBehaviour
     {
         if (BuildingManager.Instance == null) return false;
         
-        // Utiliser la méthode existante du BuildingManager pour trouver n'importe quel job vacant
-        var (building, job) = BuildingManager.Instance.FindAvailableJob<Job>();
-        return building != null && building.HasOwner;
+        var (building, job) = BuildingManager.Instance.FindAvailableJob<Job>(true);
+        if (building != null)
+        {
+            return true;
+        }
+        
+        Debug.LogWarning($"<color=orange>[GOAP Sensor]</color> {_character.CharacterName} doesn't know any vacant jobs with a boss.");
+        return false;
     }
 
     private bool CheckAtBossLocation()
     {
         if (_character.CharacterJob == null || _character.CharacterJob.HasJob) return false;
         
-        var (building, job) = BuildingManager.Instance.FindAvailableJob<Job>();
+        var (building, job) = BuildingManager.Instance.FindAvailableJob<Job>(true);
         if (building == null || !building.HasOwner) return false;
 
         float dist = Vector3.Distance(_character.transform.position, building.Owner.transform.position);
@@ -133,7 +138,13 @@ public class CharacterGoapController : MonoBehaviour
             {
                 if (need.IsActive())
                 {
-                    actions.AddRange(need.GetGoapActions());
+                    foreach (var action in need.GetGoapActions())
+                    {
+                        if (action.IsValid(_character))
+                        {
+                            actions.Add(action);
+                        }
+                    }
                 }
             }
         }

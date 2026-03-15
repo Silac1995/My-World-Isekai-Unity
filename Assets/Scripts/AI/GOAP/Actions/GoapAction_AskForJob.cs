@@ -24,6 +24,7 @@ public class GoapAction_AskForJob : GoapAction
     private CommercialBuilding _building;
     private Job _job;
     private bool _isComplete = false;
+    private bool _hasStartedInteraction = false;
 
     public override bool IsComplete => _isComplete;
 
@@ -42,9 +43,15 @@ public class GoapAction_AskForJob : GoapAction
     {
         if (_isComplete) return;
 
-        // If we haven't started yet, trigger the interaction
-        if (!worker.CharacterInteraction.IsInteracting)
+        if (!worker.CharacterInteraction.IsInteractionProcessActive)
         {
+            if (_hasStartedInteraction)
+            {
+                // The interaction finished (or timed out).
+                _isComplete = true;
+                return;
+            }
+
             Character boss = _building.Owner;
             if (boss == null)
             {
@@ -54,13 +61,7 @@ public class GoapAction_AskForJob : GoapAction
 
             var interaction = new InteractionAskForJob(_building, _job);
             worker.CharacterInteraction.StartInteractionWith(boss, interaction);
-        }
-        else
-        {
-            // The action is only complete once the interaction itself finishes.
-            // This prevents the GOAP block from terminating early and the BT
-            // falling back to 'Wander' while we are talking.
-            _isComplete = !worker.CharacterInteraction.IsInteracting;
+            _hasStartedInteraction = true;
         }
     }
 }

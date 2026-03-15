@@ -20,19 +20,26 @@ public class CharacterNeeds : MonoBehaviour
         _allNeeds.Add(new NeedToWearClothing(_character));
         _allNeeds.Add(new NeedJob(_character));
 
-        StartCoroutine(SocialDecayCoroutine());
+        if (MWI.Time.TimeManager.Instance != null)
+        {
+            MWI.Time.TimeManager.Instance.OnNewDay += HandleNewDay;
+        }
     }
 
-    private IEnumerator SocialDecayCoroutine()
+    private void HandleNewDay()
     {
-        while (true)
+        if (_socialNeed != null)
         {
-            // Decays social need outside of per-frame polling
-            yield return new WaitForSeconds(1f);
-            if (_socialNeed != null)
-            {
-                _socialNeed.DecreaseValue(3f);
-            }
+            // Decays social need by 15 every in-game day
+            _socialNeed.DecreaseValue(15f);
+        }
+    }
+
+    private void OnDestroy()
+    {
+        if (MWI.Time.TimeManager.Instance != null)
+        {
+            MWI.Time.TimeManager.Instance.OnNewDay -= HandleNewDay;
         }
     }
 }
