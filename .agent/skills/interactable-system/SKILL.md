@@ -12,6 +12,7 @@ The Interactable System defines how entities in the world can be interacted with
 1. **Interaction Zone Constraint**: For a `Character` to interact with any `InteractableObject`, the Character's Rigidbody (`_rb`) **MUST** be inside the object's `_interactionZone` (a `Collider`). This physical proximity check is mandatory for all interactions.
 2. **Base Class**: `InteractableObject` provides the core `_interactionZone` (Collider), `interactionPrompt` (string), and the abstract `Interact(Character interactor)` method.
 3. **Execution via CharacterActions**: The actual result of an interaction usually instantiates a `CharacterAction` (like `CharacterPickUpItem`, `CharacterEquipAction`, `CharacterStartInteraction`, `CharacterGatherAction`) which is then sent to the interactor's `CharacterActions.ExecuteAction(...)`.
+4. **Action Exclusivity (No Manual Overrides)**: You must **never** manually bypass an `InteractableObject`'s lifecycle. Do not forcefully inject items into hands or manually call `Object.Destroy()` if an AI determines it can't execute the Action. Delegate completely to the `CharacterAction` (which handles inventory availability routing) to prevent item logic desyncs and ghost duplication.
 
 ## Implementing Interactables
 
@@ -19,8 +20,9 @@ Here are the primary interactable types in the project:
 
 ### 1. ItemInteractable (`ItemInteractable.cs`)
 Used for items placed in the world (e.g., dropped items, equippable gear).
+- **Structure**: It is structurally bound as a child collider to a `WorldItem`. The `WorldItem` maintains a direct serialized reference (`ItemInteractable` property) to avoid `GetComponentInChildren` performance bottlenecks.
 - **Behavior**: Depending on the type of `ItemInstance` (`WearableInstance` vs normal item), it creates a `CharacterEquipAction` or a `CharacterPickUpItem` action.
-- **Consumption**: The root GameObject is usually destroyed (`Object.Destroy(rootToDestroy)`) once the item is equipped or added to the inventory.
+- **Consumption**: The root GameObject is explicitly destroyed by the `CharacterPickUpItem` or `CharacterEquipAction` ONCE the visual animation concludes. > **NEVER** destroy an `ItemInteractable` or its parent `WorldItem` manually inside fallback logs or AI GOAP code.
 
 ### 2. CharacterInteractable (`CharacterInteractable.cs`)
 Used for interactions between two Characters (conversations, specific actions).

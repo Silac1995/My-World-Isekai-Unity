@@ -96,7 +96,7 @@ public class GoapAction_GatherStorageItems : GoapAction
                     return;
                 }
 
-                Collider targetCol = _targetItem.GetComponentInChildren<ItemInteractable>()?.InteractionZone;
+                Collider targetCol = _targetItem.ItemInteractable?.InteractionZone;
                 if (targetCol == null)
                 {
                     targetCol = _targetItem.GetComponentInChildren<Collider>();
@@ -149,13 +149,8 @@ public class GoapAction_GatherStorageItems : GoapAction
                     }
                     else
                     {
-                        // Fallback : détruire l'item au sol et porter manuellement
-                        Object.Destroy(_targetItem.gameObject);
-                        worker.CharacterVisual?.BodyPartsController?.HandsController?.CarryItem(itemInstance);
-                        
-                        DetermineStoragePosition();
-                        _currentState = GatherState.MovingToStorage;
-                        _actionStarted = false;
+                        Debug.LogWarning($"<color=orange>[GOAP Storage]</color> {worker.CharacterName} n'a pas pu ramasser l'item.");
+                        _currentState = GatherState.FindingItem;
                     }
                 }
                 break;

@@ -217,26 +217,11 @@ public class GoapAction_ExploreForResources : GoapAction
                 continue;
             }
 
-            // Sac d'abord
-            if (equipment != null && equipment.HaveInventory())
+            // Exécuter l'action de pickup standard (gérera le sac ou les mains automatiquement)
+            var pickupAction = new CharacterPickUpItem(worker, worldItem.ItemInstance, worldItem.gameObject);
+            if (worker.CharacterActions.ExecuteAction(pickupAction))
             {
-                var inventory = equipment.GetInventory();
-                if (inventory.HasFreeSpaceForItem(worldItem.ItemInstance))
-                {
-                    var pickupAction = new CharacterPickUpItem(worker, worldItem.ItemInstance, worldItem.gameObject);
-                    worker.CharacterActions.ExecuteAction(pickupAction);
-                    Debug.Log($"<color=green>[GOAP Explore]</color> {worker.CharacterName} ramasse {worldItem.ItemInstance.ItemSO.ItemName} trouvé par terre !");
-                    return;
-                }
-            }
-
-            // Mains
-            var handsController = worker.CharacterVisual?.BodyPartsController?.HandsController;
-            if (handsController != null && handsController.AreHandsFree())
-            {
-                handsController.CarryItem(worldItem.ItemInstance);
-                Object.Destroy(worldItem.gameObject);
-                Debug.Log($"<color=green>[GOAP Explore]</color> {worker.CharacterName} porte {worldItem.ItemInstance.ItemSO.ItemName} trouvé par terre !");
+                Debug.Log($"<color=green>[GOAP Explore]</color> {worker.CharacterName} ramasse {worldItem.ItemInstance.ItemSO.ItemName} trouvé par terre !");
                 return;
             }
 

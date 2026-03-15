@@ -117,7 +117,7 @@ public class GoapAction_GatherResources : GoapAction
                 Debug.Log($"<color=cyan>[GOAP Gather]</color> {worker.CharacterName} a vu {_targetWorldItem.ItemInstance.ItemSO.ItemName} par terre, il va le ramasser.");
 
                 Vector3 targetPos = _targetWorldItem.transform.position;
-                var itemInteractable = _targetWorldItem.GetComponentInChildren<ItemInteractable>();
+                var itemInteractable = _targetWorldItem.ItemInteractable;
                 if (itemInteractable != null && itemInteractable.InteractionZone != null)
                 {
                     targetPos = itemInteractable.InteractionZone.bounds.ClosestPoint(worker.transform.position);
@@ -169,8 +169,8 @@ public class GoapAction_GatherResources : GoapAction
                 {
                     bool isAtWorldItem = false;
                     var workerCol = worker.GetComponent<Collider>();
+                    var itemInteractable = _targetWorldItem.ItemInteractable;
 
-                    var itemInteractable = _targetWorldItem.GetComponentInChildren<ItemInteractable>();
                     if (itemInteractable != null && itemInteractable.InteractionZone != null && workerCol != null)
                     {
                         isAtWorldItem = itemInteractable.InteractionZone.bounds.Intersects(workerCol.bounds);
@@ -178,6 +178,12 @@ public class GoapAction_GatherResources : GoapAction
                     else
                     {
                         isAtWorldItem = movement.RemainingDistance <= movement.StoppingDistance + 0.5f;
+                    }
+
+                    // Fallback NavMesh si l'intersection physique est bloquée
+                    if (!isAtWorldItem && movement.RemainingDistance <= movement.StoppingDistance + 0.5f)
+                    {
+                        isAtWorldItem = true;
                     }
 
                     if (isAtWorldItem && !_pickupStarted)
@@ -215,6 +221,12 @@ public class GoapAction_GatherResources : GoapAction
                     else
                     {
                         isAtTarget = movement.RemainingDistance <= movement.StoppingDistance + 1f;
+                    }
+
+                    // Fallback NavMesh si l'intersection physique est bloquée
+                    if (!isAtTarget && movement.RemainingDistance <= movement.StoppingDistance + 0.5f)
+                    {
+                        isAtTarget = true;
                     }
 
                     if (isAtTarget)
@@ -267,7 +279,7 @@ public class GoapAction_GatherResources : GoapAction
                 }
                 
                 Vector3 targetPos = _targetWorldItem.transform.position;
-                var itemInteractable = _targetWorldItem.GetComponentInChildren<ItemInteractable>();
+                var itemInteractable = _targetWorldItem.ItemInteractable;
                 if (itemInteractable != null && itemInteractable.InteractionZone != null)
                 {
                     targetPos = itemInteractable.InteractionZone.bounds.ClosestPoint(worker.transform.position);
@@ -289,7 +301,7 @@ public class GoapAction_GatherResources : GoapAction
                 bool isAtWorldItem = false;
                 var workerCol = worker.GetComponent<Collider>();
 
-                var itemInteractable = _targetWorldItem.GetComponentInChildren<ItemInteractable>();
+                var itemInteractable = _targetWorldItem.ItemInteractable;
                 if (itemInteractable != null && itemInteractable.InteractionZone != null && workerCol != null)
                 {
                     isAtWorldItem = itemInteractable.InteractionZone.bounds.Intersects(workerCol.bounds);
@@ -390,23 +402,24 @@ public class GoapAction_GatherResources : GoapAction
     }
 
     /// <summary>
-    /// Fallback : porte l'item dans les mains et détruit le WorldItem au sol.
+    /// Fallback : Tente de ramasser l'item via l'action standard (qui gèrera les mains si le sac est plein).
     /// </summary>
     private void CarryItemFallback(Character worker, ItemInstance itemInstance, WorldItem worldItem)
     {
-        var handsController = worker.CharacterVisual?.BodyPartsController?.HandsController;
-        if (handsController != null && handsController.AreHandsFree())
+        var pickupAction = new CharacterPickUpItem(worker, itemInstance, worldItem.gameObject);
+        if (worker.CharacterActions.ExecuteAction(pickupAction))
         {
-            handsController.CarryItem(itemInstance);
-            Object.Destroy(worldItem.gameObject);
-            Debug.Log($"<color=green>[GOAP Gather]</color> {worker.CharacterName} porte {itemInstance.ItemSO.ItemName} dans ses mains.");
+            Debug.Log($"<color=green>[GOAP Gather]</color> {worker.CharacterName} ramasse {itemInstance.ItemSO.ItemName}.");
+            pickupAction.OnActionFinished += () =>
+            {
+                _isComplete = true;
+            };
         }
         else
         {
             Debug.Log($"<color=orange>[GOAP Gather]</color> {worker.CharacterName} ne peut ni stocker ni porter l'item.");
+            _isComplete = true;
         }
-
-        _isComplete = true;
     }
 
     /// <summary>

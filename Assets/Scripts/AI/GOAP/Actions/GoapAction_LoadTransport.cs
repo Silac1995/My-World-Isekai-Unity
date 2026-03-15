@@ -11,6 +11,7 @@ namespace MWI.AI
         private Vector3 _lastTargetPos = Vector3.positiveInfinity;
         private float _lastRouteRequestTime;
         private ItemInstance _takenItem;
+        private WorldItem _targetWorldItem;
         protected bool _isComplete = false;
 
         public override string ActionName => "Load Transport";
@@ -51,25 +52,67 @@ namespace MWI.AI
 
             CommercialBuilding source = _job.CurrentOrder.Source;
             Zone zone = source.StorageZone ?? source.MainRoom.GetComponent<Zone>();
+            ItemSO wantedSO = _job.CurrentOrder.ItemToTransport;
             
-            // Movement phase
-            if (!_isActionStarted)
+            // Phase 1: Trouver l'objet PHYSIQUE dans la zone de stockage
+            if (_targetWorldItem == null && !_isActionStarted)
+            {
+                Collider searchZone = zone != null ? zone.GetComponent<Collider>() : source.GetComponent<Collider>();
+                
+                if (searchZone != null)
+                {
+                    Collider[] colliders = Physics.OverlapBox(searchZone.bounds.center, searchZone.bounds.extents, Quaternion.identity);
+                    foreach (var col in colliders)
+                    {
+                        var wi = col.GetComponentInParent<WorldItem>();
+                        if (wi != null && wi.ItemInstance != null && wi.ItemInstance.ItemSO == wantedSO)
+                        {
+                            // On s'assure que cet objet est bien DANS l'inventaire logique de la source
+                            if (source.GetItemCount(wantedSO) > 0)
+                            {
+                                _targetWorldItem = wi;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                // Fallback de secours (si pas trouvé dans bounds strict)
+                if (_targetWorldItem == null)
+                {
+                    WorldItem[] allItems = Object.FindObjectsByType<WorldItem>(FindObjectsSortMode.None);
+                    foreach (var wi in allItems)
+                    {
+                        if (wi.ItemInstance != null && wi.ItemInstance.ItemSO == wantedSO && Vector3.Distance(wi.transform.position, source.transform.position) < 25f)
+                        {
+                            _targetWorldItem = wi;
+                            break;
+                        }
+                    }
+                }
+
+                if (_targetWorldItem == null)
+                {
+                    Debug.LogWarning($"<color=orange>[LoadTransport]</color> Plus de {wantedSO.ItemName} physiquement disponible chez {source.BuildingName}. Annulation.");
+                    _job.CancelCurrentOrder();
+                    _isComplete = true;
+                    return;
+                }
+            }
+
+            // Phase 2: Mouvement physique vers l'objet
+            if (!_isActionStarted && _targetWorldItem != null)
             {
                 bool isCloseEnough = false;
-
-                if (zone != null)
+                var workerCol = worker.GetComponent<Collider>();
+                
+                if (_targetWorldItem.ItemInteractable != null && _targetWorldItem.ItemInteractable.InteractionZone != null && workerCol != null)
                 {
-                    if (zone.GetComponent<Collider>().bounds.Contains(worker.transform.position))
-                    {
-                        isCloseEnough = true;
-                    }
+                    isCloseEnough = _targetWorldItem.ItemInteractable.InteractionZone.bounds.Intersects(workerCol.bounds);
                 }
                 else
                 {
-                    if (Vector3.Distance(worker.transform.position, source.transform.position) < 3f)
-                    {
-                        isCloseEnough = true;
-                    }
+                    isCloseEnough = movement.RemainingDistance <= movement.StoppingDistance + 0.5f;
                 }
 
                 if (!isCloseEnough)
@@ -78,7 +121,12 @@ namespace MWI.AI
 
                     if (!_isMoving || hasPathFailed)
                     {
-                        Vector3 dest = zone != null ? zone.GetRandomPointInZone() : source.transform.position;
+                        Vector3 dest = _targetWorldItem.transform.position;
+                        if (_targetWorldItem.ItemInteractable != null && _targetWorldItem.ItemInteractable.InteractionZone != null)
+                        {
+                            dest = _targetWorldItem.ItemInteractable.InteractionZone.bounds.ClosestPoint(worker.transform.position);
+                        }
+                        
                         movement.SetDestination(dest);
                         _lastTargetPos = dest;
                         _lastRouteRequestTime = UnityEngine.Time.time;
@@ -93,17 +141,20 @@ namespace MWI.AI
                     _isMoving = false;
                 }
 
-                // Pickup Phase
-                _takenItem = source.TakeFromInventory(_job.CurrentOrder.ItemToTransport);
-                if (_takenItem == null)
+                // Phase 3: Pickup logic
+                _takenItem = _targetWorldItem.ItemInstance;
+                
+                // On retire L'INSTANCE EXACTE de l'inventaire logique de la source
+                bool success = source.RemoveExactItemFromInventory(_takenItem);
+                if (!success)
                 {
-                    Debug.LogWarning($"<color=orange>[LoadTransport]</color> Plus de {_job.CurrentOrder.ItemToTransport.ItemName} disponible chez {source.BuildingName}. Annulation.");
+                    Debug.LogWarning($"<color=orange>[LoadTransport]</color> Fantôme détecté ! Le WorldItem {wantedSO.ItemName} n'était plus dans l'inventaire de {source.BuildingName}.");
                     _job.CancelCurrentOrder();
                     _isComplete = true;
                     return;
                 }
 
-                var pickupAction = new CharacterPickUpItem(worker, _takenItem, null);
+                var pickupAction = new CharacterPickUpItem(worker, _takenItem, _targetWorldItem.gameObject);
                 if (worker.CharacterActions.ExecuteAction(pickupAction))
                 {
                     _isActionStarted = true;
@@ -112,16 +163,17 @@ namespace MWI.AI
                 {
                     // Fallback force (NPC has no bag, put it in hands)
                     worker.CharacterVisual?.BodyPartsController?.HandsController?.CarryItem(_takenItem);
-                    _job.SetCarriedItem(_takenItem); // Critical: Update transporter state
+                    _job.SetCarriedItem(_takenItem);
+                    Object.Destroy(_targetWorldItem.gameObject);
                     _isComplete = true; 
                 }
             }
-            else
+            else if (_isActionStarted)
             {
-                // Wait for pickup animation
+                // Wait for pickup animation to resolve
                 if (!(worker.CharacterActions.CurrentAction is CharacterPickUpItem))
                 {
-                    _job.SetCarriedItem(_takenItem); // Update transporter state
+                    _job.SetCarriedItem(_takenItem);
                     _isComplete = true;
                 }
             }
@@ -134,6 +186,7 @@ namespace MWI.AI
             _isActionStarted = false;
             _lastTargetPos = Vector3.positiveInfinity;
             _takenItem = null;
+            _targetWorldItem = null;
             worker.CharacterMovement?.Stop();
         }
     }

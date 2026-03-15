@@ -67,6 +67,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WorldItem
   _visualRoot: {fileID: 7115953151577608828}
+  _itemInteractable: {fileID: 2241389753081601182}
 --- !u!65 &2261858023461683581
 BoxCollider:
   m_ObjectHideFlags: 0

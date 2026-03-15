@@ -303,6 +303,16 @@ public abstract class CommercialBuilding : Building
         return null;
     }
 
+    public virtual bool RemoveExactItemFromInventory(ItemInstance exactItem)
+    {
+        if (exactItem != null && _inventory.Contains(exactItem))
+        {
+            _inventory.Remove(exactItem);
+            return true;
+        }
+        return false;
+    }
+
     public virtual int GetItemCount(ItemSO itemSO)
     {
         return _inventory.Count(i => i.ItemSO == itemSO);

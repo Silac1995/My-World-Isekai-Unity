@@ -195,6 +195,20 @@ public class JobBlacksmith : JobCrafter
         return base.CanExecute() && _workplace is CraftingBuilding;
     }
 
+    public override void OnWorkerPunchOut()
+    {
+        base.OnWorkerPunchOut();
+        ResetCraftingState();
+        _worker?.CharacterMovement?.ResetPath();
+        
+        // Nettoyer toute CharacterCraftAction qui serait encore en cours
+        var currentAction = _worker?.CharacterActions?.CurrentAction;
+        if (currentAction is CharacterCraftAction && _worker != null)
+        {
+            _worker.CharacterActions.ClearCurrentAction();
+        }
+    }
+
     public override void Unassign()
     {
         ResetCraftingState();

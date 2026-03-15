@@ -8,8 +8,10 @@ public class WorldItem : MonoBehaviour
 
     [Header("Data")]
     [SerializeField] private ItemInstance _itemInstance;
+    [SerializeField] private ItemInteractable _itemInteractable;
     
     public ItemInstance ItemInstance => _itemInstance;
+    public ItemInteractable ItemInteractable => _itemInteractable;
     public UnityEngine.Rendering.SortingGroup SortingGroup { get; private set; }
     public bool IsBeingCarried { get; set; } = false;
 

@@ -27,6 +27,8 @@ This is the incarnation of an item in the inventory. This "Pure" C# class (not M
 ### 3. Physical Presence on the Ground (`WorldItem`)
 When an `ItemInstance` is dropped from the inventory, it materializes a local `WorldItem` GameObject with a `SortingGroup`.
 - The script assigns the SO's child `ItemPrefab` to the `_visualRoot` Node.
+- **Performance Rule**: To avoid expensive `GetComponentInChildren<>` lookups during AI Navigation and Interaction checks, `WorldItem` natively exposes `public ItemInteractable ItemInteractable { get; }` which is serialized in the inspector.
+- **Destruction Rule**: > **NEVER** manually call `Object.Destroy()` on a `WorldItem` or its GameObject from external AI/GOAP scripts. This bypasses the inventory system and causes ghost item duplication. To remove an item from the floor, you **MUST** execute a `CharacterPickUpItem` action and let it resolve the destruction natively.
 - The script bridges the memory data of the `ItemInstance` and the physical colors via `WearableHandlerBase` (for complex clothing) or a direct call to `InitializeWorldPrefab` (for a simple object like an apple).
 
 ### 4. Character Usage (`CharacterEquipment`)
