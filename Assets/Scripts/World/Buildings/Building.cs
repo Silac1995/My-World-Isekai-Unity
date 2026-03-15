@@ -125,4 +125,34 @@ public class Building : ComplexRoom
 
         return base.GetRandomPointInZone();
     }
+
+    /// <summary>
+    /// Retourne tous les WorldItem posés physiquement dans la zone spécifiée.
+    /// Utile pour inspecter les StorageZone, DepositZone, DeliveryZone.
+    /// </summary>
+    public List<WorldItem> GetPhysicalItemsInZone(Zone zone)
+    {
+        List<WorldItem> items = new List<WorldItem>();
+        if (zone == null) return items;
+
+        BoxCollider boxCol = zone.GetComponent<BoxCollider>();
+        if (boxCol != null)
+        {
+            Vector3 center = boxCol.transform.TransformPoint(boxCol.center);
+            Vector3 halfExtents = Vector3.Scale(boxCol.size, boxCol.transform.lossyScale) * 0.5f;
+
+            Collider[] colliders = Physics.OverlapBox(center, halfExtents, boxCol.transform.rotation, Physics.AllLayers, QueryTriggerInteraction.Ignore);
+            foreach (var col in colliders)
+            {
+                var worldItem = col.GetComponent<WorldItem>() ?? col.GetComponentInParent<WorldItem>();
+                
+                // On s'assure que l'item n'est pas deja porte par quelqu'un d'autre
+                if (worldItem != null && !worldItem.IsBeingCarried && !items.Contains(worldItem))
+                {
+                    items.Add(worldItem);
+                }
+            }
+        }
+        return items;
+    }
 }

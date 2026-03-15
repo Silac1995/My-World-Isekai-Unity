@@ -1,11 +1,10 @@
-using UnityEngine;
+ï»¿using UnityEngine;
 using UnityEngine.TextCore.Text;
 
 public class CharacterDropItem : CharacterAction
 {
     private ItemInstance _itemInstance;
 
-    // On donne une petite durée de 0.5s pour l'animation de lâcher
     public CharacterDropItem(Character character, ItemInstance item) : base(character, 0.5f)
     {
         _itemInstance = item ?? throw new System.ArgumentNullException(nameof(item));
@@ -13,21 +12,41 @@ public class CharacterDropItem : CharacterAction
 
     public override void OnStart()
     {
-        // Lancer une animation de jet/drop si elle existe
         var animator = character.CharacterVisual?.CharacterAnimator?.Animator;
         if (animator != null) animator.SetTrigger("Trigger_Drop");
 
-        Debug.Log($"{character.CharacterName} prépare l'abandon de {_itemInstance.CustomizedName}.");
+        Debug.Log($"{character.CharacterName} prepare le drop.");
     }
 
     public override void OnApplyEffect()
     {
-        // C'est ici qu'on retire l'item de l'inventaire et qu'on le fait apparaître au sol
-        if (character.CharacterEquipment.GetInventory().RemoveItem(_itemInstance, character))
+        bool removed = false;
+        
+        var equip = character.CharacterEquipment;
+        if (equip != null && equip.HaveInventory())
         {
-            // Code pour faire apparaître l'objet physique dans le monde à la position du perso
-            // ItemManager.Instance?.SpawnWorldItem(_itemInstance, character.transform.position);
-            Debug.Log($"{_itemInstance.CustomizedName} a été jeté au sol.");
+            if (equip.GetInventory().RemoveItem(_itemInstance, character))
+            {
+                removed = true;
+            }
+        }
+
+        if (!removed)
+        {
+            var hands = character.CharacterVisual?.BodyPartsController?.HandsController;
+            if (hands != null && hands.CarriedItem == _itemInstance)
+            {
+                hands.DropCarriedItem();
+                removed = true;
+            }
+        }
+
+        if (removed)
+        {
+            Vector3 dropPos = character.transform.position + Vector3.up * 0.2f;
+            Vector3 offset = new Vector3(Random.Range(-0.3f, 0.3f), 0, Random.Range(-0.3f, 0.3f));
+            GatherableObject.SpawnWorldItem(_itemInstance, dropPos + offset);
+            Debug.Log($"Item {_itemInstance.ItemSO.ItemName} lache physiquement.");
         }
     }
 }

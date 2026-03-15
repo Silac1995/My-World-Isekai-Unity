@@ -123,6 +123,34 @@ public class GatherableObject : InteractableObject
     }
 
     /// <summary>
+    /// Instancie le WorldItem prefab en utilisant une instance existante (pour préserver sa durabilité, couleurs, etc).
+    /// </summary>
+    public static void SpawnWorldItem(ItemInstance instance, Vector3 position)
+    {
+        if (instance == null || instance.ItemSO == null) return;
+
+        GameObject prefab = instance.ItemSO.WorldItemPrefab;
+        if (prefab == null)
+        {
+            Debug.LogWarning($"<color=orange>[Gather]</color> Pas de WorldItemPrefab sur {instance.ItemSO.ItemName}, item non spawné.");
+            return;
+        }
+
+        GameObject worldItemGo = Object.Instantiate(prefab, position, Quaternion.identity);
+        worldItemGo.name = $"WorldItem_{instance.ItemSO.ItemName}";
+
+        if (worldItemGo.TryGetComponent(out WorldItem worldItem))
+        {
+            worldItem.Initialize(instance);
+        }
+        else
+        {
+            Debug.LogError($"<color=red>[Gather]</color> Le prefab de {instance.ItemSO.ItemName} n'a pas de composant WorldItem !");
+            Object.Destroy(worldItemGo);
+        }
+    }
+
+    /// <summary>
     /// Retourne un item aléatoire parmi les outputs.
     /// </summary>
     private ItemSO GetRandomOutput()

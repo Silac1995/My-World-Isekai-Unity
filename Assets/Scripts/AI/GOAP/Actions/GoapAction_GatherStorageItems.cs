@@ -25,6 +25,7 @@ public class GoapAction_GatherStorageItems : GoapAction
     private bool _isComplete = false;
     private bool _actionStarted = false;
     private GatherState _currentState = GatherState.FindingItem;
+    private Vector3 _targetPos;
 
     private enum GatherState
     {
@@ -81,14 +82,17 @@ public class GoapAction_GatherStorageItems : GoapAction
                     return;
                 }
 
-                Vector3 targetPos = _targetItem.transform.position;
                 Collider col = _targetItem.GetComponentInChildren<Collider>();
                 if (col != null && !col.isTrigger)
                 {
-                    targetPos = col.bounds.ClosestPoint(worker.transform.position);
+                    _targetPos = col.bounds.ClosestPoint(worker.transform.position);
+                }
+                else
+                {
+                    _targetPos = _targetItem.transform.position;
                 }
 
-                HandleMovementTo(worker, targetPos, out bool arrivedAtItem);
+                HandleMovementTo(worker, _targetPos, out bool arrivedAtItem);
                 if (arrivedAtItem)
                 {
                     _currentState = GatherState.PickingUp;
@@ -113,6 +117,7 @@ public class GoapAction_GatherStorageItems : GoapAction
                         _actionStarted = true;
                         pickupAction.OnActionFinished += () => 
                         {
+                            DetermineStoragePosition();
                             _currentState = GatherState.MovingToStorage;
                             _actionStarted = false;
                         };
@@ -123,6 +128,7 @@ public class GoapAction_GatherStorageItems : GoapAction
                         Object.Destroy(_targetItem.gameObject);
                         worker.CharacterVisual?.BodyPartsController?.HandsController?.CarryItem(itemInstance);
                         
+                        DetermineStoragePosition();
                         _currentState = GatherState.MovingToStorage;
                         _actionStarted = false;
                     }
@@ -130,10 +136,7 @@ public class GoapAction_GatherStorageItems : GoapAction
                 break;
 
             case GatherState.MovingToStorage:
-                Zone storageZone = _building.StorageZone ?? _building.MainRoom.GetComponent<Zone>();
-                Vector3 storagePos = storageZone != null ? storageZone.GetRandomPointInZone() : _building.transform.position;
-                
-                HandleMovementTo(worker, storagePos, out bool arrivedAtStorage);
+                HandleMovementTo(worker, _targetPos, out bool arrivedAtStorage);
                 if (arrivedAtStorage)
                 {
                     _currentState = GatherState.DroppingOff;
@@ -168,6 +171,12 @@ public class GoapAction_GatherStorageItems : GoapAction
                 }
                 break;
         }
+    }
+
+    private void DetermineStoragePosition()
+    {
+        Zone storageZone = _building.StorageZone ?? _building.MainRoom.GetComponent<Zone>();
+        _targetPos = storageZone != null ? storageZone.GetRandomPointInZone() : _building.transform.position;
     }
 
     private void FinishDropoff(Character worker, ItemInstance item)
@@ -245,10 +254,16 @@ public class GoapAction_GatherStorageItems : GoapAction
         WorldItem nearest = null;
         float nearestDist = float.MaxValue;
 
+        Zone storageZone = _building.StorageZone;
+        BoxCollider storageCol = storageZone != null ? storageZone.GetComponent<BoxCollider>() : null;
+
         foreach (var col in colliders)
         {
             var worldItem = col.GetComponent<WorldItem>() ?? col.GetComponentInParent<WorldItem>();
             if (worldItem == null || worldItem.ItemInstance == null || worldItem.IsBeingCarried) continue;
+
+            // Ignore les items qui sont déjà dans la zone de stockage (pour éviter un Gather infini)
+            if (storageCol != null && storageCol.bounds.Contains(worldItem.transform.position)) continue;
 
             // Optional: check if it belongs to crafting output. 
             // Currently, any loose item in building zone gets stashed.
