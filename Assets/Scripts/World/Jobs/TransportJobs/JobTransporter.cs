@@ -189,6 +189,8 @@ public class JobTransporter : Job
 
         float distance = Vector3.Distance(workerPosXZ(movement.transform.position), workerPosXZ(targetPos));
 
+        if (movement.PathPending) return;
+
         if (!movement.HasPath || movement.RemainingDistance <= movement.StoppingDistance + 0.5f)
         {
             if (distance > movement.StoppingDistance + 2f)

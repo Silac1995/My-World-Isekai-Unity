@@ -214,6 +214,8 @@ public class GoapAction_GatherStorageItems : GoapAction
 
         float distance = Vector3.Distance(new Vector3(worker.transform.position.x, 0, worker.transform.position.z), new Vector3(targetPos.x, 0, targetPos.z));
 
+        if (movement.PathPending) return;
+
         if (!movement.HasPath || movement.RemainingDistance <= movement.StoppingDistance + 0.5f)
         {
             if (distance > movement.StoppingDistance + 0.5f)

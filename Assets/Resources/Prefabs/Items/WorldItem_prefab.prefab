@@ -14,6 +14,7 @@ GameObject:
   - component: {fileID: 2261858023461683581}
   - component: {fileID: 6899146370233858579}
   - component: {fileID: 8427571290252601647}
+  - component: {fileID: 805665600973762066}
   m_Layer: 0
   m_Name: WorldItem_prefab
   m_TagString: Untagged
@@ -50,7 +51,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ItemInteractable
   interactionPrompt: Press E to interact
-  _interactionZone: {fileID: 2261858023461683581}
+  _interactionZone: {fileID: 805665600973762066}
   _rootgameObject: {fileID: 718778511601405242}
   _worldItem: {fileID: 8154045440721903422}
 --- !u!114 &8154045440721903422
@@ -85,7 +86,7 @@ BoxCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Size: {x: 5, y: 2, z: 5}
+  m_Size: {x: 1, y: 1, z: 1}
   m_Center: {x: 0, y: 0, z: 0}
 --- !u!54 &6899146370233858579
 Rigidbody:
@@ -127,6 +128,27 @@ SortingGroup:
   m_SortingOrder: 0
   m_SortAtRoot: 0
   m_Sort3DAs2D: 0
+--- !u!65 &805665600973762066
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 718778511601405242}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 1
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 5, y: 2, z: 5}
+  m_Center: {x: 0, y: 0, z: 0}
 --- !u!1 &4772183078833418991
 GameObject:
   m_ObjectHideFlags: 0
