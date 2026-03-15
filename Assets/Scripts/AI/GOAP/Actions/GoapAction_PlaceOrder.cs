@@ -50,18 +50,18 @@ public class GoapAction_PlaceOrder : GoapAction
         }
 
         var pendingOrder = _manager.PeekPendingOrder();
-        var supplierBuilding = pendingOrder.Supplier;
+        var targetBuilding = pendingOrder.TargetBuilding;
 
-        if (supplierBuilding == null)
+        if (targetBuilding == null)
         {
             _manager.DequeuePendingOrder();
             return; 
         }
 
-        var targetLogistics = supplierBuilding.Jobs.OfType<JobLogisticsManager>().FirstOrDefault();
+        var targetLogistics = targetBuilding.Jobs.OfType<JobLogisticsManager>().FirstOrDefault();
         if (targetLogistics == null || targetLogistics.Worker == null)
         {
-            Debug.LogWarning($"<color=orange>[Logistics]</color> {supplierBuilding.BuildingName} n'a pas de manager pour recevoir la commande.");
+            Debug.LogWarning($"<color=orange>[Logistics]</color> {targetBuilding.BuildingName} n'a pas de manager pour recevoir la commande.");
             _manager.DequeuePendingOrder(); 
             return; 
         }
@@ -118,7 +118,7 @@ public class GoapAction_PlaceOrder : GoapAction
         // Consume order from queue
         _manager.DequeuePendingOrder();
 
-        if (pendingOrder.IsCrafting)
+        if (pendingOrder.Type == JobLogisticsManager.OrderType.Crafting)
         {
             if (targetLogistics.PlaceCraftingOrder(pendingOrder.CraftingOrder))
             {
@@ -127,12 +127,21 @@ public class GoapAction_PlaceOrder : GoapAction
                 UpdateRelationships(worker, targetWorker);
             }
         }
-        else
+        else if (pendingOrder.Type == JobLogisticsManager.OrderType.Buy)
         {
             if (targetLogistics.PlaceBuyOrder(pendingOrder.BuyOrder))
             {
                 Debug.Log($"<color=green>[Logistics]</color> {worker.CharacterName} passe une commande (Achat) à {targetWorker.CharacterName}.");
                 worker.CharacterSpeech?.Say($"J'ai besoin de {pendingOrder.BuyOrder.Quantity}x {pendingOrder.BuyOrder.ItemToTransport.ItemName}.");
+                UpdateRelationships(worker, targetWorker);
+            }
+        }
+        else if (pendingOrder.Type == JobLogisticsManager.OrderType.Transport)
+        {
+            if (targetLogistics.PlaceTransportOrder(pendingOrder.TransportOrder))
+            {
+                Debug.Log($"<color=green>[Logistics]</color> {worker.CharacterName} demande une livraison à {targetWorker.CharacterName}.");
+                worker.CharacterSpeech?.Say($"Pouvez-vous livrer {pendingOrder.TransportOrder.Quantity}x {pendingOrder.TransportOrder.ItemToTransport.ItemName} ?");
                 UpdateRelationships(worker, targetWorker);
             }
         }

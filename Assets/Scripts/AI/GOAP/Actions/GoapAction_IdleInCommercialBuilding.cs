@@ -84,6 +84,7 @@ public class GoapAction_IdleInCommercialBuilding : GoapAction
             if (!movement.PathPending && (!movement.HasPath || (movement.RemainingDistance <= movement.StoppingDistance + 0.5f && distToTarget <= movement.StoppingDistance + 1f)))
             {
                 _isWalking = false;
+                _isComplete = true; // Permet au JobLogisticsManager.Execute de replanifier et traiter ses PendingOrders
             }
         }
 

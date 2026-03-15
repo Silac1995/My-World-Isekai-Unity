@@ -12,7 +12,7 @@ public class JobTransporter : Job
     public override JobCategory Category => JobCategory.Transporter;
 
     // La commande courante que l'employé est en train de livrer
-    public BuyOrder CurrentOrder { get; private set; }
+    public TransportOrder CurrentOrder { get; private set; }
 
     private enum TransportPhase
     {
@@ -33,7 +33,7 @@ public class JobTransporter : Job
         _customTitle = title;
     }
 
-    public void AssignOrder(BuyOrder order)
+    public void AssignOrder(TransportOrder order)
     {
         CurrentOrder = order;
         if (order != null)
@@ -149,7 +149,7 @@ public class JobTransporter : Job
             var manager = _workplace.GetJobsOfType<JobLogisticsManager>().FirstOrDefault();
             if (manager != null)
             {
-                BuyOrder next = manager.GetNextAvailableOrder();
+                TransportOrder next = manager.GetNextAvailableTransportOrder();
                 if (next != null)
                 {
                     AssignOrder(next);
@@ -167,7 +167,7 @@ public class JobTransporter : Job
             var manager = _workplace.GetJobsOfType<JobLogisticsManager>().FirstOrDefault();
             if (manager != null)
             {
-                manager.UpdateOrderProgress(CurrentOrder, amount);
+                manager.UpdateTransportOrderProgress(CurrentOrder, amount);
             }
 
             if (CurrentOrder.IsCompleted)
