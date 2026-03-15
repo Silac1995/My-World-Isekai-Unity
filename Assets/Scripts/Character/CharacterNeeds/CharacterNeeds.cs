@@ -31,7 +31,7 @@ public class CharacterNeeds : MonoBehaviour
         if (_socialNeed != null)
         {
             // Decays social need by 15 every in-game day
-            _socialNeed.DecreaseValue(15f);
+            _socialNeed.DecreaseValue(45f);
         }
     }
 

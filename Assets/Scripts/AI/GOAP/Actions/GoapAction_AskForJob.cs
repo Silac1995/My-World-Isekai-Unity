@@ -25,6 +25,8 @@ public class GoapAction_AskForJob : GoapAction
     private Job _job;
     private bool _isComplete = false;
     private bool _hasStartedInteraction = false;
+    private float _waitStartTime = 0f;
+    private bool _isWaitingForBoss = false;
 
     public override bool IsComplete => _isComplete;
 
@@ -53,7 +55,7 @@ public class GoapAction_AskForJob : GoapAction
             }
 
             Character boss = _building.Owner;
-            if (boss == null || !_job.IsAvailable())
+            if (boss == null || _job.IsAssigned)
             {
                 _isComplete = true; // Fail gracefully
                 return;
@@ -62,8 +64,20 @@ public class GoapAction_AskForJob : GoapAction
             // On attend patiemment que le boss soit libre au lieu de replanifier à l'infini
             if (!boss.IsFree())
             {
+                if (!_isWaitingForBoss)
+                {
+                    _isWaitingForBoss = true;
+                    _waitStartTime = UnityEngine.Time.time;
+                }
+                else if (UnityEngine.Time.time - _waitStartTime > 10f)
+                {
+                    Debug.LogWarning($"<color=orange>[Interaction]</color> {worker.CharacterName} a attendu trop longtemps pour parler à {boss.CharacterName}. Abandon du Job.");
+                    _isComplete = true; // Give up
+                }
                 return;
             }
+
+            _isWaitingForBoss = false;
 
             var interaction = new InteractionAskForJob(_building, _job);
             if (worker.CharacterInteraction.StartInteractionWith(boss, interaction))
@@ -71,5 +85,12 @@ public class GoapAction_AskForJob : GoapAction
                 _hasStartedInteraction = true;
             }
         }
+    }
+
+    public override void Exit(Character worker)
+    {
+        _isWaitingForBoss = false;
+        _isComplete = false;
+        _hasStartedInteraction = false;
     }
 }
