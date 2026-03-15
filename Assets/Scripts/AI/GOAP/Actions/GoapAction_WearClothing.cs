@@ -68,11 +68,11 @@ public class GoapAction_WearClothing : GoapAction
         }
         else
         {
-            // Fallback (on garde l'ancien système au cas où)
+            // Fallback
             Vector3 currentPos = worker.transform.position;
             currentPos.y = 0;
             targetPos.y = 0;
-            if (Vector3.Distance(currentPos, targetPos) <= 1.2f)
+            if (Vector3.Distance(currentPos, targetPos) <= 1.5f)
             {
                 isCloseEnough = true;
             }
@@ -84,13 +84,9 @@ public class GoapAction_WearClothing : GoapAction
 
             if (!_isMoving || Vector3.Distance(_lastTargetPos, targetPos) > 1f || hasPathFailed)
             {
-                Vector3 dest = targetPos;
-                if (_targetInteractable.InteractionZone != null)
-                {
-                    // Cherche le point le plus proche sur les bounds
-                    dest = _targetInteractable.InteractionZone.bounds.ClosestPoint(worker.transform.position);
-                }
-                movement.SetDestination(dest);
+                // Afin de garantir l'intersection (Intersect) du collider, on vise le centre de l'item (targetPos)
+                // plutôt que le point le plus proche sur les bounds (ClosestPoint) qui risque de nous faire stopper juste avant.
+                movement.SetDestination(targetPos);
                 _lastTargetPos = targetPos;
                 _lastRouteRequestTime = UnityEngine.Time.time;
                 _isMoving = true;

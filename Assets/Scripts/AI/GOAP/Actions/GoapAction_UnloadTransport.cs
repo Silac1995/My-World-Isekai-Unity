@@ -92,6 +92,33 @@ namespace MWI.AI
                     _isMoving = false;
                 }
 
+                // Security Check: Verify the worker STILL possesses the item before performing a physical drop.
+                bool hasItem = false;
+                var inventory = worker.CharacterEquipment?.GetInventory();
+                
+                if (inventory != null && inventory.HasAnyItemSO(new List<ItemSO> { _job.CarriedItem.ItemSO }))
+                {
+                    hasItem = true;
+                }
+                else
+                {
+                    var hands = worker.CharacterVisual?.BodyPartsController?.HandsController;
+                    if (hands != null && hands.CarriedItem == _job.CarriedItem)
+                    {
+                        hasItem = true;
+                    }
+                }
+
+                if (!hasItem)
+                {
+                    // Transporter arrived empty-handed. Abort mission without logging a success.
+                    Debug.Log($"<color=red>[JobTransporter]</color> {worker.CharacterName} est arrivé pour livrer mais n'a physiquement plus l'item {_job.CarriedItem.ItemSO.ItemName}. Livraison annulée.");
+                    _isComplete = true;
+                    // Force a replan by clearing the job's tracking WITHOUT giving order progress
+                    _job.SetCarriedItem(null);
+                    return;
+                }
+
                 // Drop Phase
                 var dropAction = new CharacterDropItem(worker, _job.CarriedItem);
                 if (worker.CharacterActions.ExecuteAction(dropAction))
@@ -102,7 +129,6 @@ namespace MWI.AI
                 else
                 {
                     // Fallback clear
-                    var inventory = worker.CharacterEquipment?.GetInventory();
                     if (inventory != null && inventory.HasAnyItemSO(new List<ItemSO> { _job.CarriedItem.ItemSO }))
                         inventory.RemoveItem(_job.CarriedItem, worker);
                     else

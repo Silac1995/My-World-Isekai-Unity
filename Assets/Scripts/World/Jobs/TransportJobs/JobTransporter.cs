@@ -194,6 +194,12 @@ public class JobTransporter : Job
 
     public void NotifyDeliveryProgress(int amount)
     {
+        if (CarriedItem == null)
+        {
+            Debug.LogWarning($"<color=red>[JobTransporter]</color> {_worker?.CharacterName} a tenté d'enregistrer une livraison sans objet! Opération ignorée.");
+            return;
+        }
+
         if (CurrentOrder != null)
         {
             var manager = _workplace.GetJobsOfType<JobLogisticsManager>().FirstOrDefault();
@@ -202,10 +208,11 @@ public class JobTransporter : Job
                 manager.UpdateTransportOrderProgress(CurrentOrder, amount);
             }
 
+            CarriedItem = null; // Always clear the carried item once credit is given
+
             if (CurrentOrder.IsCompleted)
             {
                 CurrentOrder = null;
-                CarriedItem = null;
                 _currentPlan = null;
             }
         }
