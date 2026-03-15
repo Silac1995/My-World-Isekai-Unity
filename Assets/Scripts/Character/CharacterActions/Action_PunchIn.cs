@@ -17,10 +17,11 @@ public class Action_PunchIn : CharacterAction
 
     public override bool CanExecute()
     {
-        if (_workplace == null || _workplace.BuildingZone == null) return false;
+        if (_workplace == null) return false;
 
-        // Le personnage DOIT être à l'intérieur du Collider de la BuildingZone
-        return _workplace.BuildingZone.bounds.Contains(character.transform.position);
+        // On est indulgent: BTAction_Work se charge déjà de le rapprocher.
+        // Éviter l'échec silencieux si le personnage est à 0.1 unité hors du trigger.
+        return true;
     }
 
     public override void OnStart()

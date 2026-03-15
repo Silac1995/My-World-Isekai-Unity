@@ -8,9 +8,18 @@ public class NeedSocial : CharacterNeed
     private float _maxValue = 100f;
     private float _lowThreshold = 30f;
 
+    private float _searchCooldown = 15f; 
+    private float _lastSearchTime = -999f;
+
     public NeedSocial(Character character, float startValue = 80f) : base(character)
     {
         _currentValue = startValue;
+    }
+
+    // Call this if the action fails to find a partner
+    public void SetCooldown()
+    {
+        _lastSearchTime = UnityEngine.Time.time;
     }
 
     public void IncreaseValue(float amount) => _currentValue = Mathf.Clamp(_currentValue + amount, 0, _maxValue);
@@ -20,6 +29,7 @@ public class NeedSocial : CharacterNeed
 
     public override bool IsActive()
     {
+        if (UnityEngine.Time.time - _lastSearchTime < _searchCooldown) return false;
         return IsLow() && !_character.CharacterInteraction.IsInteracting;
     }
 

@@ -20,6 +20,7 @@ public class GoapAction_Socialize : GoapAction
     private Character _target;
     private Vector3 _lastTargetPos = Vector3.positiveInfinity;
     private float _lastRouteRequestTime = 0f;
+    private bool _hasStartedInteraction = false;
     
     public override bool IsComplete => _isComplete;
 
@@ -36,13 +37,29 @@ public class GoapAction_Socialize : GoapAction
     {
         if (_isComplete) return;
 
-        if (worker.CharacterInteraction.IsInteracting)
+        if (worker.CharacterInteraction.IsInteractionProcessActive)
         {
             return; // on attend la fin de l'interaction
         }
 
+        if (_hasStartedInteraction)
+        {
+            // L'interaction est terminée !
+            var needSocial = worker.CharacterNeeds?.AllNeeds.OfType<NeedSocial>().FirstOrDefault();
+            if (needSocial != null)
+            {
+                needSocial.IncreaseValue(50f); // Satisfait grandement le besoin
+            }
+            _isComplete = true;
+            return;
+        }
+
         if (_target == null || !_target.IsAlive() || !_target.IsFree())
         {
+            // Impossible de trouver une cible ou la cible n'est plus libre
+            var needSocial = worker.CharacterNeeds?.AllNeeds.OfType<NeedSocial>().FirstOrDefault();
+            if (needSocial != null) needSocial.SetCooldown(); // On attend avant de réessayer
+            
             _isComplete = true;
             return;
         }
@@ -85,18 +102,29 @@ public class GoapAction_Socialize : GoapAction
         }
 
         // 3. Déclencher l'interaction
-        worker.CharacterInteraction.StartInteractionWith(_target, onPositioned: () => 
+        bool success = worker.CharacterInteraction.StartInteractionWith(_target, onPositioned: () => 
         {
-            // Optionally logic here on positioned 
+            // Logique éventuelle une fois positionné
         });
 
-        _isComplete = true;
+        if (success)
+        {
+            _hasStartedInteraction = true;
+        }
+        else
+        {
+            // L'interaction a échoué (ex: la cible vient juste de commencer à parler avec un autre)
+            var needSocial = worker.CharacterNeeds?.AllNeeds.OfType<NeedSocial>().FirstOrDefault();
+            if (needSocial != null) needSocial.SetCooldown();
+            _isComplete = true;
+        }
     }
 
     public override void Exit(Character worker)
     {
         _isComplete = false;
         _isMoving = false;
+        _hasStartedInteraction = false;
         _target = null;
         worker.CharacterMovement?.Stop();
     }

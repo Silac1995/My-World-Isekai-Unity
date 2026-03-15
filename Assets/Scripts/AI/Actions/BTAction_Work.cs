@@ -62,7 +62,18 @@ namespace MWI.AI
             // Set Destination
             if (!movement.HasPath || movement.RemainingDistance <= movement.StoppingDistance + 0.5f)
             {
-                if (workplace.BuildingZone != null && !workplace.BuildingZone.bounds.Contains(self.transform.position))
+                bool isCloseEnough = true;
+                if (workplace.BuildingZone != null)
+                {
+                    Bounds b = workplace.BuildingZone.bounds;
+                    b.Expand(3f); // Tolérance de 1.5m de chaque côté
+                    if (!b.Contains(self.transform.position))
+                    {
+                        isCloseEnough = false;
+                    }
+                }
+
+                if (!isCloseEnough)
                 {
                     Vector3 dest = workplace.GetRandomPointInBuildingZone(self.transform.position.y);
                     movement.SetDestination(dest);

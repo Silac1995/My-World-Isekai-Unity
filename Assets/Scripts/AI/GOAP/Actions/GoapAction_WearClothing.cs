@@ -55,15 +55,30 @@ public class GoapAction_WearClothing : GoapAction
         GameObject rootObject = _targetInteractable.RootGameObject;
         Vector3 targetPos = rootObject.transform.position;
 
-        // On ignore l'axe Y pour la distance
-        Vector3 currentPos = worker.transform.position;
-        currentPos.y = 0;
-        targetPos.y = 0;
-        
-        float distance = Vector3.Distance(currentPos, targetPos);
-
         // 1. Déplacement vers l'objet
-        if (distance > 1.2f)
+        bool isCloseEnough = false;
+        
+        if (_targetInteractable.InteractionZone != null)
+        {
+            // On vérifie si on est dans la zone d'interaction
+            if (_targetInteractable.InteractionZone.bounds.Contains(worker.transform.position))
+            {
+                isCloseEnough = true;
+            }
+        }
+        else
+        {
+            // Fallback (on garde l'ancien système au cas où)
+            Vector3 currentPos = worker.transform.position;
+            currentPos.y = 0;
+            targetPos.y = 0;
+            if (Vector3.Distance(currentPos, targetPos) <= 1.2f)
+            {
+                isCloseEnough = true;
+            }
+        }
+
+        if (!isCloseEnough)
         {
             bool hasPathFailed = (UnityEngine.Time.time - _lastRouteRequestTime > 0.2f) && (movement.PathStatus == UnityEngine.AI.NavMeshPathStatus.PathInvalid || (!movement.HasPath && !movement.PathPending));
 

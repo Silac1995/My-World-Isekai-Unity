@@ -18,10 +18,10 @@ public class Action_PunchOut : CharacterAction
 
     public override bool CanExecute()
     {
-        if (_workplace == null || _workplace.BuildingZone == null) return false;
+        if (_workplace == null) return false;
 
-        // Le personnage DOIT être à l'intérieur du Collider de la BuildingZone
-        return _workplace.BuildingZone.bounds.Contains(character.transform.position);
+        // On est indulgent: le behaviour tree se charge de l'amener à destination.
+        return true;
     }
 
     public override void OnStart()
