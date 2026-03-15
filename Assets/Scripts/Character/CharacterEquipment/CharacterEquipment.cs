@@ -553,6 +553,12 @@ public class CharacterEquipment : MonoBehaviour
             return true;
         }
 
+        var handsController = character.CharacterVisual?.BodyPartsController?.HandsController;
+        if (handsController != null && handsController.AreHandsFree())
+        {
+            return handsController.CarryItem(item);
+        }
+
         return false;
     }
 }

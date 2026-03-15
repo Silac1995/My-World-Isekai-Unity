@@ -9,9 +9,17 @@ public class GoapAction_IdleInCommercialBuilding : GoapAction
 {
     private Vector3 _wanderTarget;
     private bool _isComplete = false;
-    private bool _isWalking = false;
     private float _nextActionTime = 0f;
     private CommercialBuilding _building;
+    private IdleState _currentState = IdleState.PickingDestination;
+    private float _waitDuration = 0f;
+
+    private enum IdleState
+    {
+        PickingDestination,
+        Walking,
+        Waiting
+    }
 
     public GoapAction_IdleInCommercialBuilding(CommercialBuilding building)
     {
@@ -46,7 +54,7 @@ public class GoapAction_IdleInCommercialBuilding : GoapAction
         var movement = worker.CharacterMovement;
         if (movement == null) return;
 
-        if (!_isWalking)
+        if (_currentState == IdleState.PickingDestination)
         {
             if (Time.time >= _nextActionTime)
             {
@@ -71,19 +79,24 @@ public class GoapAction_IdleInCommercialBuilding : GoapAction
 
                 movement.Stop();
                 movement.SetDestination(_wanderTarget);
-                _isWalking = true;
-                
-                _nextActionTime = Time.time + Random.Range(2f, 6f);
+                _currentState = IdleState.Walking;
             }
         }
-        else
+        else if (_currentState == IdleState.Walking)
         {
-            // Vérification de distance en plus car RemainingDistance peut être 0 si le chemin est en cours de calcul (PathPending sur de longs trajets)
             float distToTarget = Vector3.Distance(worker.transform.position, _wanderTarget);
             
             if (!movement.PathPending && (!movement.HasPath || (movement.RemainingDistance <= movement.StoppingDistance + 0.5f && distToTarget <= movement.StoppingDistance + 1f)))
             {
-                _isWalking = false;
+                _waitDuration = Time.time + Random.Range(2f, 4f);
+                _currentState = IdleState.Waiting;
+            }
+        }
+        else if (_currentState == IdleState.Waiting)
+        {
+            if (Time.time >= _waitDuration)
+            {
+                _currentState = IdleState.PickingDestination;
                 _isComplete = true; // Permet au JobLogisticsManager.Execute de replanifier et traiter ses PendingOrders
             }
         }
@@ -97,8 +110,9 @@ public class GoapAction_IdleInCommercialBuilding : GoapAction
 
     public override void Exit(Character worker)
     {
-        _isWalking = false;
+        _currentState = IdleState.PickingDestination;
         _isComplete = false;
         _nextActionTime = 0f;
+        _waitDuration = 0f;
     }
 }

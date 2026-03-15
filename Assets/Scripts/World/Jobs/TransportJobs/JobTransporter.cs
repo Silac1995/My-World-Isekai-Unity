@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -25,8 +26,9 @@ public class JobTransporter : Job
 
     private TransportPhase _currentPhase = TransportPhase.Idle;
     private float _nextActionTime = 0f;
-    private const float PICKUP_TIME = 2f;
-    private const float DROPOFF_TIME = 2f;
+    private Vector3 _currentTargetPos = Vector3.positiveInfinity;
+    private bool _actionStarted = false;
+    private ItemInstance _carriedItem = null;
 
     public JobTransporter(string title = "Transporter")
     {
@@ -40,7 +42,9 @@ public class JobTransporter : Job
         {
             Debug.Log($"<color=green>[JobTransporter]</color> {_worker?.CharacterName} commence la demande: Livrer {order.ItemToTransport.ItemName} à {order.Destination.BuildingName}.");
             _currentPhase = TransportPhase.MovingToSource;
-            _nextActionTime = 0f;
+            _currentTargetPos = Vector3.positiveInfinity;
+            _actionStarted = false;
+            _carriedItem = null;
         }
     }
 
@@ -71,59 +75,119 @@ public class JobTransporter : Job
         switch (_currentPhase)
         {
             case TransportPhase.MovingToSource:
-                HandleMovementTo(CurrentOrder.Source, out bool arrivedAtSource);
+                if (_currentTargetPos == Vector3.positiveInfinity)
+                {
+                    Zone zone = CurrentOrder.Source.StorageZone ?? CurrentOrder.Source.MainRoom.GetComponent<Zone>();
+                    _currentTargetPos = zone != null ? zone.GetRandomPointInZone() : CurrentOrder.Source.transform.position;
+                    movement.SetDestination(_currentTargetPos);
+                }
+
+                HandleMovementTo(_currentTargetPos, out bool arrivedAtSource);
                 if (arrivedAtSource)
                 {
                     _currentPhase = TransportPhase.PickingUp;
-                    _nextActionTime = Time.time + PICKUP_TIME;
+                    _currentTargetPos = Vector3.positiveInfinity;
+                    _actionStarted = false;
                     Debug.Log($"<color=cyan>[Transport]</color> {_worker.CharacterName} arrive au dépôt et charge {CurrentOrder.ItemToTransport.ItemName}.");
                 }
                 break;
 
             case TransportPhase.PickingUp:
-                _currentPhase = TransportPhase.MovingToDestination;
-                Debug.Log($"<color=cyan>[Transport]</color> {_worker.CharacterName} part livrer {CurrentOrder.ItemToTransport.ItemName} à {CurrentOrder.Destination.BuildingName}.");
+                if (!_actionStarted)
+                {
+                    _carriedItem = CurrentOrder.Source.TakeFromInventory(CurrentOrder.ItemToTransport);
+                    if (_carriedItem == null) 
+                    {
+                        Debug.LogWarning($"<color=orange>[Transport]</color> Plus de {CurrentOrder.ItemToTransport.ItemName} disponible chez {CurrentOrder.Source.BuildingName}. Annulation.");
+                        CancelCurrentOrder();
+                        return;
+                    }
+
+                    var pickupAction = new CharacterPickUpItem(_worker, _carriedItem, null);
+                    if (_worker.CharacterActions.ExecuteAction(pickupAction))
+                    {
+                        _actionStarted = true;
+                        pickupAction.OnActionFinished += () => 
+                        {
+                            _currentPhase = TransportPhase.MovingToDestination;
+                            _actionStarted = false;
+                        };
+                    }
+                    else
+                    {
+                        _worker.CharacterVisual?.BodyPartsController?.HandsController?.CarryItem(_carriedItem);
+                        _currentPhase = TransportPhase.MovingToDestination;
+                        _actionStarted = false;
+                    }
+                }
                 break;
 
             case TransportPhase.MovingToDestination:
-                HandleMovementTo(CurrentOrder.Destination, out bool arrivedAtDest);
+                if (_currentTargetPos == Vector3.positiveInfinity)
+                {
+                    Zone zone = CurrentOrder.Destination.DeliveryZone ?? CurrentOrder.Destination.MainRoom.GetComponent<Zone>();
+                    _currentTargetPos = zone != null ? zone.GetRandomPointInZone() : CurrentOrder.Destination.transform.position;
+                    movement.SetDestination(_currentTargetPos);
+                }
+
+                HandleMovementTo(_currentTargetPos, out bool arrivedAtDest);
                 if (arrivedAtDest)
                 {
                     _currentPhase = TransportPhase.DroppingOff;
-                    _nextActionTime = Time.time + DROPOFF_TIME;
+                    _currentTargetPos = Vector3.positiveInfinity;
+                    _actionStarted = false;
                     Debug.Log($"<color=cyan>[Transport]</color> {_worker.CharacterName} arrive à la boutique et décharge {CurrentOrder.ItemToTransport.ItemName}.");
                 }
                 break;
 
             case TransportPhase.DroppingOff:
-                Debug.Log($"<color=green>[Transport]</color> {_worker.CharacterName} a livré 1 lot de {CurrentOrder.ItemToTransport.ItemName} à {CurrentOrder.Destination.BuildingName} !");
-                NotifyDeliveryProgress(1); // Livre 1 lot 
-                
-                if (CurrentOrder != null) 
+                if (!_actionStarted && _carriedItem != null)
                 {
-                    // S'il reste des trucs à livrer, on retourne à la source
-                    _currentPhase = TransportPhase.MovingToSource;
-                }
-                else
-                {
-                    _currentPhase = TransportPhase.Idle;
+                    var dropAction = new CharacterDropItem(_worker, _carriedItem);
+                    if (_worker.CharacterActions.ExecuteAction(dropAction))
+                    {
+                        _actionStarted = true;
+                        dropAction.OnActionFinished += FinishDropoff;
+                    }
+                    else
+                    {
+                        var inventory = _worker.CharacterEquipment?.GetInventory();
+                        if (inventory != null && inventory.HasAnyItemSO(new List<ItemSO> { _carriedItem.ItemSO }))
+                            inventory.RemoveItem(_carriedItem, _worker);
+                        else
+                            _worker.CharacterVisual?.BodyPartsController?.HandsController?.DropCarriedItem();
+                        
+                        FinishDropoff();
+                    }
                 }
                 break;
         }
     }
 
-    private void HandleMovementTo(CommercialBuilding building, out bool arrived)
+    private void FinishDropoff()
+    {
+        CurrentOrder.Destination.AddToInventory(_carriedItem);
+        Debug.Log($"<color=green>[Transport]</color> {_worker.CharacterName} a livré 1 lot de {CurrentOrder.ItemToTransport.ItemName} à {CurrentOrder.Destination.BuildingName} !");
+        NotifyDeliveryProgress(1);
+        _carriedItem = null;
+        _actionStarted = false;
+
+        if (CurrentOrder != null) 
+        {
+            _currentPhase = TransportPhase.MovingToSource;
+        }
+        else
+        {
+            _currentPhase = TransportPhase.Idle;
+        }
+    }
+
+    private void HandleMovementTo(Vector3 targetPos, out bool arrived)
     {
         arrived = false;
         var movement = _worker.CharacterMovement;
-        Vector3 targetPos = building.transform.position;
-        
-        if (building.BuildingZone != null)
-        {
-            targetPos = building.GetRandomPointInBuildingZone(_worker.transform.position.y);
-        }
 
-        float distance = Vector3.Distance(_worker.transform.position, targetPos);
+        float distance = Vector3.Distance(workerPosXZ(movement.transform.position), workerPosXZ(targetPos));
 
         if (!movement.HasPath || movement.RemainingDistance <= movement.StoppingDistance + 0.5f)
         {
@@ -138,6 +202,8 @@ public class JobTransporter : Job
             }
         }
     }
+
+    private Vector3 workerPosXZ(Vector3 pos) { return new Vector3(pos.x, 0, pos.z); }
 
     public override bool HasWorkToDo()
     {

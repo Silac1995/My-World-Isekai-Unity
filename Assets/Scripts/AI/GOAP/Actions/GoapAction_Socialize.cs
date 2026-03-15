@@ -72,20 +72,26 @@ public class GoapAction_Socialize : GoapAction
         }
 
         Vector3 targetPos = _target.transform.position;
+        var interactable = _target.GetComponentInChildren<CharacterInteractable>();
+        if (interactable != null && interactable.InteractionZone != null)
+        {
+            targetPos = interactable.InteractionZone.bounds.ClosestPoint(worker.transform.position);
+        }
+
         Vector3 currentPos = worker.transform.position;
         currentPos.y = 0;
         targetPos.y = 0;
         
         float distance = Vector3.Distance(currentPos, targetPos);
 
-        // 1. Déplacement vers la cible (Socialize trigger distance is roughly 7f as per old behaviour)
-        if (distance > 7f)
+        // 1. Déplacement vers la cible (Socialize trigger distance is roughly 1f here because we already take the edge)
+        if (distance > 1.5f)
         {
             bool hasPathFailed = (UnityEngine.Time.time - _lastRouteRequestTime > 0.2f) && (movement.PathStatus == UnityEngine.AI.NavMeshPathStatus.PathInvalid || (!movement.HasPath && !movement.PathPending));
 
             if (!_isMoving || Vector3.Distance(_lastTargetPos, targetPos) > 1f || hasPathFailed)
             {
-                movement.SetDestination(_target.transform.position);
+                movement.SetDestination(targetPos);
                 _lastTargetPos = targetPos;
                 _lastRouteRequestTime = UnityEngine.Time.time;
                 _isMoving = true;

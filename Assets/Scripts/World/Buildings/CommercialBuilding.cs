@@ -283,6 +283,17 @@ public abstract class CommercialBuilding : Building
         Debug.Log($"<color=green>[Building]</color> {item.ItemSO.ItemName} ajouté à l'inventaire de {buildingName}.");
     }
 
+    public virtual ItemInstance TakeFromInventory(ItemSO itemSO)
+    {
+        var item = _inventory.FirstOrDefault(i => i.ItemSO == itemSO);
+        if (item != null)
+        {
+            _inventory.Remove(item);
+            return item;
+        }
+        return null;
+    }
+
     public virtual int GetItemCount(ItemSO itemSO)
     {
         return _inventory.Count(i => i.ItemSO == itemSO);

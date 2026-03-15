@@ -312,7 +312,8 @@ public class JobLogisticsManager : Job
         var transporter = FindTransporterBuilding();
         if (transporter == null)
         {
-            Debug.LogWarning($"<color=orange>[Logistics]</color> Aucun TransporterBuilding trouvé pour livrer {completedOrder.ItemToCraft.ItemName}.");
+            Debug.LogWarning($"<color=orange>[Logistics]</color> Aucun TransporterBuilding trouvé pour livrer {completedOrder.ItemToCraft.ItemName}. Garde en attente.");
+            _completedCraftOrdersToDispatch.Insert(0, completedOrder); // Remettre en file
             return;
         }
 
@@ -320,7 +321,8 @@ public class JobLogisticsManager : Job
         var transporterLogistics = transporter.Jobs.OfType<JobLogisticsManager>().FirstOrDefault();
         if (transporterLogistics == null || transporterLogistics.Worker == null)
         {
-            Debug.LogWarning($"<color=orange>[Logistics]</color> {transporter.BuildingName} n'a pas de LogisticsManager assigné.");
+            Debug.LogWarning($"<color=orange>[Logistics]</color> {transporter.BuildingName} n'a pas de LogisticsManager assigné. Impossible de livrer maintenant.");
+            _completedCraftOrdersToDispatch.Insert(0, completedOrder); // Remettre en file
             return;
         }
 
@@ -669,6 +671,7 @@ public class JobLogisticsManager : Job
         _availableActions = new List<GoapAction>
         {
             new GoapAction_PlaceOrder(this),
+            new GoapAction_GatherStorageItems(this),
             new GoapAction_IdleInCommercialBuilding(_workplace as CommercialBuilding)
         };
 
@@ -684,7 +687,9 @@ public class JobLogisticsManager : Job
 
         _logisticsGoal = targetGoal;
         
-        _currentPlan = GoapPlanner.Plan(worldState, _availableActions, targetGoal);
+        var validActions = _availableActions.Where(a => a.IsValid(_worker)).ToList();
+        
+        _currentPlan = GoapPlanner.Plan(worldState, validActions, targetGoal);
 
         if (_currentPlan != null && _currentPlan.Count > 0)
         {

@@ -84,7 +84,8 @@ public class GoapAction_WearClothing : GoapAction
 
             if (!_isMoving || Vector3.Distance(_lastTargetPos, targetPos) > 1f || hasPathFailed)
             {
-                movement.SetDestination(rootObject.transform.position);
+                Vector3 dest = _targetInteractable.InteractionZone != null ? _targetInteractable.InteractionZone.bounds.ClosestPoint(worker.transform.position) : targetPos;
+                movement.SetDestination(dest);
                 _lastTargetPos = targetPos;
                 _lastRouteRequestTime = UnityEngine.Time.time;
                 _isMoving = true;

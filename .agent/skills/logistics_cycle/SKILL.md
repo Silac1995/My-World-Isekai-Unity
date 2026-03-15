@@ -38,12 +38,12 @@ CraftingBuilding (produces items)
   │     Crafts the items → items go into building Inventory (StorageZone)
   │
   │  5. LogisticsManager sees completed order + items in Inventory
-  │     Queues BuyOrder (transport) for delivery
+  │     Queues TransportOrder (transport) for delivery
   ▼
 TransporterBuilding (moves items)
   │
-  │  6. LogisticsManager accepts BuyOrder
-  │     JobTransporter picks it up → physically carries items
+  │  6. LogisticsManager accepts TransportOrder
+  │     JobTransporter picks it up → physically carries items from StorageZone
   ▼
 ShopBuilding (receives items)
      7. Items delivered to Shop's Inventory (StorageZone)
@@ -78,10 +78,11 @@ For each ShopItemEntry (Item + MaxStock):
 
 When a `CraftingBuilding`'s LogisticsManager receives a `CraftingOrder`:
 1. The `JobCrafter`'s BT (`BTAction_PerformCraft`) picks up the order.
-2. Crafter produces items → calls `UpdateCraftingOrderProgress()`.
-3. When `IsCompleted` → `PlaceTransportOrder()` is auto-called:
+2. Crafter produces `WorldItem`s on the floor → calls `UpdateCraftingOrderProgress()`.
+3. The `JobLogisticsManager` (acting as a janitor via `GoapAction_GatherStorageItems`) physically picks up the loose items and stores them in the building's `StorageZone` inventory.
+4. When order `IsCompleted` → `PlaceTransportOrder()` is auto-called by the Manager's Tick:
    - Finds a `TransporterBuilding` via `FindTransporterBuilding()`.
-   - Creates a `BuyOrder` (source = CraftingBuilding, dest = `order.CustomerBuilding`).
+   - Creates a `TransportOrder` (source = CraftingBuilding, dest = `order.CustomerBuilding`).
    - Places it via `InteractionPlaceOrder` with the TransporterBuilding's worker.
 
 The `CraftingOrder.CustomerBuilding` field tracks the final destination (set when the shop places the order).
@@ -89,14 +90,14 @@ The `CraftingOrder.CustomerBuilding` field tracks the final destination (set whe
 ### 5. Step 4-5: TransporterBuilding Delivers
 
 `TransporterBuilding` has:
-- 1 `JobLogisticsManager` ("Head of Logistics") — accepts `BuyOrder`s.
+- 1 `JobLogisticsManager` ("Head of Logistics") — accepts `TransportOrder`s.
 - N `JobTransporter`s — physically carry items from source → destination.
 
-When a `BuyOrder` is accepted:
+When a `TransportOrder` is accepted:
 1. A `JobTransporter` picks it up.
-2. Transporter goes to the source building, picks up items.
-3. Transporter travels to the destination building, delivers items.
-4. `ShopBuilding.AddToInventory()` is called.
+2. Transporter walks to the source building's `StorageZone`, plays pick up animation, takes items from building Inventory into equipment.
+3. Transporter travels to the destination building's `DeliveryZone`, plays drop off animation, delivers items.
+4. `ShopBuilding.AddToInventory()` is called recursively.
 
 ### 6. InteractionPlaceOrder (Mandatory)
 
@@ -123,8 +124,9 @@ public struct ShopItemEntry
 
 | Type | Purpose | Placed By | Consumed By |
 |------|---------|-----------|-------------|
+| `BuyOrder` | Ingredient/Stock procurement | CraftingBuilding or Shop LogisticsManager | Wholesale/Supplier LogisticsManager |
 | `CraftingOrder` | Request item production | Shop's LogisticsManager | CraftingBuilding's `JobCrafter` |
-| `BuyOrder` | Transport items A→B | Any LogisticsManager | TransporterBuilding's `JobTransporter` |
+| `TransportOrder` | Move goods A→B | CraftingBuilding's LogisticsManager | TransporterBuilding's `JobTransporter` |
 
 ### 9. Schedule Guard
 

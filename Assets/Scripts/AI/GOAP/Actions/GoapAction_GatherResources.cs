@@ -115,6 +115,11 @@ public class GoapAction_GatherResources : GoapAction
             {
                 Debug.Log($"<color=cyan>[GOAP Gather]</color> {worker.CharacterName} a vu {_targetWorldItem.ItemInstance.ItemSO.ItemName} par terre, il va le ramasser.");
                 Vector3 targetPos = _targetWorldItem.transform.position;
+                Collider col = _targetWorldItem.GetComponentInChildren<Collider>();
+                if (col != null && !col.isTrigger)
+                {
+                    targetPos = col.bounds.ClosestPoint(worker.transform.position);
+                }
                 movement.SetDestination(targetPos);
                 return;
             }
@@ -130,6 +135,10 @@ public class GoapAction_GatherResources : GoapAction
             }
 
             Vector3 gatherPos = _currentTarget.transform.position;
+            if (_currentTarget.InteractionZone != null)
+            {
+                gatherPos = _currentTarget.InteractionZone.bounds.ClosestPoint(worker.transform.position);
+            }
             movement.SetDestination(gatherPos);
             return;
         }
