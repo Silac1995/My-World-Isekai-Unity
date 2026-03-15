@@ -235,7 +235,15 @@ public class JobLogisticsManager : Job
     {
         if (_activeTransportOrders.Count == 0) return null;
 
-        return _activeTransportOrders[0];
+        foreach (var order in _activeTransportOrders)
+        {
+            if (order.Quantity > order.DeliveredQuantity + order.InTransitQuantity)
+            {
+                return order;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>

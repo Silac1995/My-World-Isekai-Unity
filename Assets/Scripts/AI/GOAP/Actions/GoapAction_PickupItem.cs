@@ -47,26 +47,30 @@ namespace MWI.AI
             if (!_isActionStarted)
             {
                 CommercialBuilding source = _job.CurrentOrder.Source;
-                _takenItem = _job.TargetWorldItem.ItemInstance;
+                WorldItem exactTarget = _job.TargetWorldItem;
                 
-                // Retirer L'INSTANCE EXACTE de l'inventaire logique de la source
-                bool success = source.RemoveExactItemFromInventory(_takenItem);
-                if (!success)
+                // Retirer n'importe quelle instance du même type de l'inventaire logique de la source
+                ItemInstance logicalItemFromShop = source.TakeFromInventory(exactTarget.ItemInstance.ItemSO);
+                if (logicalItemFromShop == null)
                 {
-                    Debug.LogWarning($"<color=orange>[PickupItem]</color> Fantôme détecté ! L'item {_takenItem.ItemSO.ItemName} n'était plus dans l'inventaire de {source.BuildingName}.");
+                    Debug.LogWarning($"<color=orange>[PickupItem]</color> Fantôme détecté ! L'item {exactTarget.ItemInstance.ItemSO.ItemName} n'était plus dans l'inventaire de {source.BuildingName}.");
                     _job.CancelCurrentOrder();
                     _isComplete = true;
                     return;
                 }
 
-                var pickupAction = new CharacterPickUpItem(worker, _takenItem, _job.TargetWorldItem.gameObject);
+                _takenItem = logicalItemFromShop;
+
+                var pickupAction = new CharacterPickUpItem(worker, _takenItem, exactTarget.gameObject);
                 if (worker.CharacterActions.ExecuteAction(pickupAction))
                 {
                     _isActionStarted = true;
                 }
                 else
                 {
-                    Debug.LogWarning($"<color=orange>[PickupItem]</color> {_job.Worker.CharacterName} a les mains pleines et pas de sac. Annulation.");
+                    Debug.LogWarning($"<color=orange>[PickupItem]</color> {_job.Worker.CharacterName} n'a pas pu executer l'action (hors de portee ou mains pleines). Annulation.");
+                    source.AddToInventory(_takenItem); // Remettre dans l'inventaire logique !
+                    _job.WaitCooldown = 2f;
                     _job.CancelCurrentOrder();
                     _isComplete = true; 
                 }
@@ -86,6 +90,9 @@ namespace MWI.AI
                     else
                     {
                         Debug.LogWarning($"<color=orange>[PickupItem]</color> {_job.Worker.CharacterName} n'a pas pu physiquement ramasser l'item.");
+                        CommercialBuilding source = _job.CurrentOrder.Source;
+                        if (source != null) source.AddToInventory(_takenItem);
+                        _job.WaitCooldown = 2f;
                         _job.CancelCurrentOrder();
                     }
                     

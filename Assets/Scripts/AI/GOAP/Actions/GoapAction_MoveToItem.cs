@@ -52,7 +52,20 @@ namespace MWI.AI
             
             if (_job.TargetWorldItem.ItemInteractable != null && _job.TargetWorldItem.ItemInteractable.InteractionZone != null && workerCol != null)
             {
-                isCloseEnough = _job.TargetWorldItem.ItemInteractable.InteractionZone.bounds.Intersects(workerCol.bounds);
+                var zoneBounds = _job.TargetWorldItem.ItemInteractable.InteractionZone.bounds;
+                isCloseEnough = zoneBounds.Intersects(workerCol.bounds);
+
+                if (!isCloseEnough)
+                {
+                    Vector3 closestPoint = zoneBounds.ClosestPoint(worker.transform.position);
+                    closestPoint.y = 0;
+                    Vector3 charPos = worker.transform.position;
+                    charPos.y = 0;
+                    if (Vector3.Distance(charPos, closestPoint) <= 1f)
+                    {
+                        isCloseEnough = true;
+                    }
+                }
             }
             else
             {

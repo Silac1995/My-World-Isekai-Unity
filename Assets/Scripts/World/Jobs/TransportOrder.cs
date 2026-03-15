@@ -15,6 +15,9 @@ public class TransportOrder
     // Quantité déjà livrée par les transporteurs
     public int DeliveredQuantity { get; private set; }
 
+    // Quantité actuellement dans les sacs/mains des transporteurs
+    public int InTransitQuantity { get; private set; }
+
     public bool IsCompleted => DeliveredQuantity >= Quantity;
 
     public TransportOrder(ItemSO item, int quantity, CommercialBuilding source, CommercialBuilding dest)
@@ -24,6 +27,7 @@ public class TransportOrder
         Source = source;
         Destination = dest;
         DeliveredQuantity = 0;
+        InTransitQuantity = 0;
     }
 
     /// <summary>
@@ -34,5 +38,15 @@ public class TransportOrder
     {
         DeliveredQuantity += amount;
         return IsCompleted;
+    }
+
+    public void AddInTransit(int amount)
+    {
+        InTransitQuantity += amount;
+    }
+
+    public void RemoveInTransit(int amount)
+    {
+        InTransitQuantity = Mathf.Max(0, InTransitQuantity - amount);
     }
 }

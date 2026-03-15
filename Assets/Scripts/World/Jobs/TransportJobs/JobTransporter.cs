@@ -22,6 +22,9 @@ public class JobTransporter : Job
     // La référence physique de l'item ciblé au sol
     public WorldItem TargetWorldItem { get; set; }
 
+    public bool ForceDeliverPartialBatch { get; set; } = false;
+    public float WaitCooldown { get; set; } = 0f;
+
     // --- GOAP ---
     private GoapGoal _transporterGoal;
     private Queue<GoapAction> _currentPlan;
@@ -56,12 +59,31 @@ public class JobTransporter : Job
         if (item != null && !CarriedItems.Contains(item))
         {
             CarriedItems.Add(item);
+            if (CurrentOrder != null) CurrentOrder.AddInTransit(1);
+        }
+    }
+
+    public void RemoveCarriedItem(ItemInstance item)
+    {
+        if (CarriedItems.Contains(item))
+        {
+            CarriedItems.Remove(item);
+            if (CarriedItems.Count == 0)
+            {
+                ForceDeliverPartialBatch = false;
+            }
         }
     }
 
     public override void Execute()
     {
         if (_worker == null) return;
+
+        if (WaitCooldown > 0)
+        {
+            WaitCooldown -= UnityEngine.Time.deltaTime;
+            return;
+        }
 
         // Diminution des timers / File d'attente
         if (CurrentOrder == null)

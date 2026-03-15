@@ -7,7 +7,6 @@ namespace MWI.AI
     {
         private JobTransporter _job;
         private bool _isActionStarted = false;
-        private int _dropIndex = 0;
         protected bool _isComplete = false;
 
         public override string ActionName => "Deliver Item";
@@ -38,13 +37,13 @@ namespace MWI.AI
 
         public override void Execute(Character worker)
         {
-            if (_job.CurrentOrder == null || _job.CarriedItems.Count == 0 || _dropIndex >= _job.CarriedItems.Count)
+            if (_job.CurrentOrder == null || _job.CarriedItems.Count == 0)
             {
                 _isComplete = true; 
                 return;
             }
 
-            var currentItem = _job.CarriedItems[_dropIndex];
+            var currentItem = _job.CarriedItems[0];
 
             // Security Check: Verify the worker STILL possesses the item logically.
             bool hasItem = worker.CharacterEquipment != null && worker.CharacterEquipment.HasItemSO(currentItem.ItemSO);
@@ -53,7 +52,7 @@ namespace MWI.AI
             {
                 // Transporter arrived empty-handed for this specific item.
                 Debug.Log($"<color=red>[DeliverItem]</color> {worker.CharacterName} n'a physiquement plus l'item {currentItem.ItemSO.ItemName}. Passage au suivant.");
-                _dropIndex++;
+                _job.RemoveCarriedItem(currentItem);
                 _isActionStarted = false;
                 return;
             }
@@ -78,7 +77,7 @@ namespace MWI.AI
                 {
                     // Item dropped!
                     _job.NotifyDeliveryProgress(1);
-                    _dropIndex++;
+                    _job.RemoveCarriedItem(currentItem);
                     _isActionStarted = false;
                 }
             }
@@ -88,7 +87,6 @@ namespace MWI.AI
         {
             _isComplete = false;
             _isActionStarted = false;
-            _dropIndex = 0;
         }
     }
 }

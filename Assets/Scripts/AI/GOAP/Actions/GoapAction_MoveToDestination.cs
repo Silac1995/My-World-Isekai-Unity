@@ -54,7 +54,7 @@ namespace MWI.AI
             }
 
             // Force a replan (loop back to LocateItem) if we don't have enough and can carry more
-            if (!hasEnough && canCarryMore)
+            if (!hasEnough && canCarryMore && !_job.ForceDeliverPartialBatch)
             {
                 Debug.Log($"<color=cyan>[MoveToDestination]</color> Wait! {worker.CharacterName} can still carry {(_job.CurrentOrder.ItemToTransport.ItemName)}. Returning to storage for more!");
                 return false; 

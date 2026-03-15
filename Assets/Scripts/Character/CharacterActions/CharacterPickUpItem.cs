@@ -33,6 +33,9 @@ public class CharacterPickUpItem : CharacterAction
         {
             var rb = _worldObject.GetComponent<Rigidbody>();
             if (rb != null) rb.isKinematic = true;
+
+            var worldItem = _worldObject.GetComponent<WorldItem>();
+            if (worldItem != null) worldItem.IsBeingCarried = true;
         }
     }
 
@@ -72,10 +75,19 @@ public class CharacterPickUpItem : CharacterAction
 
                 if (charCollider != null)
                 {
-                    if (!zoneBounds.Intersects(charCollider.bounds) && !zoneBounds.Contains(character.transform.position))
+                    bool intersects = zoneBounds.Intersects(charCollider.bounds) || zoneBounds.Contains(character.transform.position);
+                    if (!intersects)
                     {
-                        Debug.Log($"[Action] {character.CharacterName} est hors de la zone d'interaction de {_item.CustomizedName}.");
-                        return false;
+                        Vector3 closestPoint = zoneBounds.ClosestPoint(character.transform.position);
+                        closestPoint.y = 0;
+                        Vector3 charPos = character.transform.position;
+                        charPos.y = 0;
+
+                        if (Vector3.Distance(charPos, closestPoint) > 1f)
+                        {
+                            Debug.Log($"[Action] {character.CharacterName} est hors de la zone d'interaction de {_item.CustomizedName}.");
+                            return false;
+                        }
                     }
                 }
                 else

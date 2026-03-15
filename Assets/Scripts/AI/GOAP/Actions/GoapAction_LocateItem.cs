@@ -55,10 +55,21 @@ namespace MWI.AI
                 foreach (var col in colliders)
                 {
                     var wi = col.GetComponentInParent<WorldItem>();
-                    if (wi != null && wi.ItemInstance != null && wi.ItemInstance.ItemSO == wantedSO)
+                    if (wi != null && wi.ItemInstance != null && wi.ItemInstance.ItemSO == wantedSO && !wi.IsBeingCarried)
                     {
+                        // On s'assure que ce n'est pas ciblé par un collègue
+                        bool alreadyTargeted = false;
+                        foreach (var otherJob in source.GetJobsOfType<JobTransporter>())
+                        {
+                            if (otherJob != _job && otherJob.TargetWorldItem == wi)
+                            {
+                                alreadyTargeted = true;
+                                break;
+                            }
+                        }
+
                         // On s'assure que cet objet est bien DANS l'inventaire logique de la source
-                        if (source.GetItemCount(wantedSO) > 0)
+                        if (!alreadyTargeted && source.GetItemCount(wantedSO) > 0)
                         {
                             targetWorldItem = wi;
                             break;
@@ -73,10 +84,23 @@ namespace MWI.AI
                 WorldItem[] allItems = Object.FindObjectsByType<WorldItem>(FindObjectsSortMode.None);
                 foreach (var wi in allItems)
                 {
-                    if (wi.ItemInstance != null && wi.ItemInstance.ItemSO == wantedSO && Vector3.Distance(wi.transform.position, source.transform.position) < 25f)
+                    if (wi.ItemInstance != null && wi.ItemInstance.ItemSO == wantedSO && !wi.IsBeingCarried && Vector3.Distance(wi.transform.position, source.transform.position) < 25f)
                     {
-                        targetWorldItem = wi;
-                        break;
+                        bool alreadyTargeted = false;
+                        foreach (var otherJob in source.GetJobsOfType<JobTransporter>())
+                        {
+                            if (otherJob != _job && otherJob.TargetWorldItem == wi)
+                            {
+                                alreadyTargeted = true;
+                                break;
+                            }
+                        }
+
+                        if (!alreadyTargeted)
+                        {
+                            targetWorldItem = wi;
+                            break;
+                        }
                     }
                 }
             }
@@ -87,12 +111,14 @@ namespace MWI.AI
                 {
                     Debug.LogWarning($"<color=orange>[LocateItem]</color> Plus de {wantedSO.ItemName} disponible. {_job.Worker.CharacterName} lance la livraison de son batch partiel ({_job.CarriedItems.Count} items).");
                     // Force GOAP to transition to deliver by short circuiting the locate flag
+                    _job.ForceDeliverPartialBatch = true;
                     _isComplete = true;
                     return;
                 }
                 else
                 {
                     Debug.LogWarning($"<color=orange>[LocateItem]</color> Plus de {wantedSO.ItemName} physiquement disponible chez {source.BuildingName}. Annulation de l'ordre.");
+                    _job.WaitCooldown = 2f;
                     _job.CancelCurrentOrder();
                     _isComplete = true;
                     return;
