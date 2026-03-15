@@ -15,7 +15,7 @@ public class JobBlacksmith : JobCrafter
 
     public CraftingStation CurrentStation => _currentStation;
 
-    private float _cooldownTimer = 0f;
+    private float _nextActionTime = 0f;
     private const float CRAFT_COOLDOWN = 1f;
 
     private enum CraftPhase
@@ -31,7 +31,7 @@ public class JobBlacksmith : JobCrafter
     {
         get
         {
-            if (_cooldownTimer > 0f) return "Resting";
+            if (Time.time < _nextActionTime) return "Resting";
             switch (_currentPhase)
             {
                 case CraftPhase.SearchingOrder: return "Searching for orders";
@@ -50,9 +50,8 @@ public class JobBlacksmith : JobCrafter
     {
         if (_worker == null || !(_workplace is CraftingBuilding cb)) return;
 
-        if (_cooldownTimer > 0f)
+        if (Time.time < _nextActionTime)
         {
-            _cooldownTimer -= Time.deltaTime;
             return;
         }
 
@@ -168,7 +167,7 @@ public class JobBlacksmith : JobCrafter
             _worker.CharacterSkills.GainXP(RequiredSkill, 10);
         }
 
-        _cooldownTimer = CRAFT_COOLDOWN;
+        _nextActionTime = Time.time + CRAFT_COOLDOWN;
         ResetCraftingState();
     }
 

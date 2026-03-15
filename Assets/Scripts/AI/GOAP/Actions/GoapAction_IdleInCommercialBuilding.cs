@@ -10,8 +10,7 @@ public class GoapAction_IdleInCommercialBuilding : GoapAction
     private Vector3 _wanderTarget;
     private bool _isComplete = false;
     private bool _isWalking = false;
-    private float _waitTime = 0f;
-    private float _maxWaitTime = 5f;
+    private float _nextActionTime = 0f;
     private CommercialBuilding _building;
 
     public GoapAction_IdleInCommercialBuilding(CommercialBuilding building)
@@ -49,9 +48,7 @@ public class GoapAction_IdleInCommercialBuilding : GoapAction
 
         if (!_isWalking)
         {
-            _waitTime -= Time.deltaTime;
-            
-            if (_waitTime <= 0f)
+            if (Time.time >= _nextActionTime)
             {
                 if (_building.BuildingZone != null)
                 {
@@ -76,7 +73,7 @@ public class GoapAction_IdleInCommercialBuilding : GoapAction
                 movement.SetDestination(_wanderTarget);
                 _isWalking = true;
                 
-                _waitTime = Random.Range(2f, 6f);
+                _nextActionTime = Time.time + Random.Range(2f, 6f);
             }
         }
         else
@@ -101,6 +98,6 @@ public class GoapAction_IdleInCommercialBuilding : GoapAction
     {
         _isWalking = false;
         _isComplete = false;
-        _waitTime = 0f;
+        _nextActionTime = 0f;
     }
 }
