@@ -111,15 +111,31 @@ namespace MWI.AI
                 }
             }
 
-            Vector2 randomCircle = Random.insideUnitCircle * walkRadius;
-            Vector3 randomPos = new Vector3(randomCircle.x, 0, randomCircle.y) + self.transform.position;
-            Vector3 biasedPos = randomPos + finalDirectionBias;
+            bool pathFound = false;
 
-            if (NavMesh.SamplePosition(biasedPos, out NavMeshHit hit, walkRadius, NavMesh.AllAreas))
+            // Essayer jusqu'à 5 fois de trouver un point atteignable (PathComplete)
+            for (int i = 0; i < 5; i++)
             {
-                movement.SetDestination(hit.position);
+                Vector2 randomCircle = Random.insideUnitCircle * walkRadius;
+                Vector3 randomPos = new Vector3(randomCircle.x, 0, randomCircle.y) + self.transform.position;
+                Vector3 biasedPos = randomPos + finalDirectionBias;
+
+                if (NavMesh.SamplePosition(biasedPos, out NavMeshHit hit, walkRadius, NavMesh.AllAreas))
+                {
+                    NavMeshPath path = new NavMeshPath();
+                    if (NavMesh.CalculatePath(self.transform.position, hit.position, NavMesh.AllAreas, path))
+                    {
+                        if (path.status == NavMeshPathStatus.PathComplete)
+                        {
+                            movement.SetDestination(hit.position);
+                            pathFound = true;
+                            break;
+                        }
+                    }
+                }
             }
-            else
+
+            if (!pathFound)
             {
                 movement.SetDestination(self.transform.position);
             }

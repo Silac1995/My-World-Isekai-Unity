@@ -11,6 +11,7 @@ public class Speech : MonoBehaviour
     [SerializeField] private float _typingSpeed = 0.06f; // Vitesse de d�filement
 
     private Coroutine _typeRoutine;
+    public bool IsTyping => _typeRoutine != null;
 
     public void Setup(Character owner, string message, AudioSource source, VoiceSO voice, float characterPitch, float typingSpeed = 0f, System.Action onComplete = null)
     {

@@ -17,7 +17,23 @@ public class CharacterSpeech : MonoBehaviour
     [SerializeField] private ScriptedSpeech _scriptedSpeech;
     
     private Coroutine _hideCoroutine;
-    public bool IsSpeaking => _hideCoroutine != null;
+    
+    public bool IsSpeaking 
+    {
+        get 
+        {
+            // Vrai si on est dans le délai de disparition (Speech usuel)
+            if (_hideCoroutine != null) return true;
+            
+            // Vrai si le texte est actuellement en train de s'écrire (Speech ou ScriptedSpeech)
+            if (_speechBubblePrefab != null && _speechBubblePrefab.activeSelf)
+            {
+                var speech = _speechBubblePrefab.GetComponent<Speech>();
+                if (speech != null && speech.IsTyping) return true;
+            }
+            return false;
+        }
+    }
 
     private void Start()
     {

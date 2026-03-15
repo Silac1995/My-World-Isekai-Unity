@@ -18,6 +18,7 @@ public class GoapAction_WearClothing : GoapAction
 
     private bool _isComplete = false;
     private bool _isMoving = false;
+    private bool _actionStarted = false;
     private ItemInteractable _targetInteractable;
     private Vector3 _lastTargetPos = Vector3.positiveInfinity;
     private float _lastRouteRequestTime = 0f;
@@ -84,22 +85,47 @@ public class GoapAction_WearClothing : GoapAction
             _lastTargetPos = Vector3.positiveInfinity;
         }
 
-        // 3. Collecter et équiper
-        if (_targetInteractable.TryCollect())
+        // 3. Collecter et équiper (Attendre que l'action se termine)
+        if (!_actionStarted)
         {
-            CharacterEquipAction equipAction = new CharacterEquipAction(worker, equip);
-            worker.CharacterActions.ExecuteAction(equipAction);
-            
-            if (rootObject != null) UnityEngine.Object.Destroy(rootObject);
+            if (_targetInteractable.TryCollect())
+            {
+                CharacterEquipAction equipAction = new CharacterEquipAction(worker, equip);
+                bool success = worker.CharacterActions.ExecuteAction(equipAction);
+                if (success)
+                {
+                    _actionStarted = true;
+                    // On détruit l'objet physique au sol dès qu'on commence l'équipement pour éviter les doublons
+                    if (rootObject != null) UnityEngine.Object.Destroy(rootObject);
+                }
+                else
+                {
+                    // Action occupée, on échoue gracieusement
+                    _isComplete = true;
+                    return;
+                }
+            }
+            else 
+            {
+                _isComplete = true; // Déjà pris par qqun d'autre
+                return;
+            }
         }
-
-        _isComplete = true;
+        else
+        {
+            // Attente de la fin de l'action CharacterEquipAction (0.8s)
+            if (!(worker.CharacterActions.CurrentAction is CharacterEquipAction))
+            {
+                _isComplete = true;
+            }
+        }
     }
 
     public override void Exit(Character worker)
     {
         _isComplete = false;
         _isMoving = false;
+        _actionStarted = false;
         _targetInteractable = null;
         worker.CharacterMovement?.Stop();
     }

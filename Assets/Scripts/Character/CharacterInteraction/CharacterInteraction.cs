@@ -270,36 +270,42 @@ public class CharacterInteraction : MonoBehaviour
         while (totalExchanges < MAX_EXCHANGES)
         {
             // 1. L'orateur actuel effectue une action
+            ICharacterInteractionAction actionExecuted = null;
+
             if (forcedFirstAction != null && totalExchanges == 0)
             {
                 forcedFirstAction.Execute(currentSpeaker, currentListener);
+                actionExecuted = forcedFirstAction;
             }
             else if (currentSpeaker.Controller is NPCController npc)
             {
                 var action = npc.GetRandomSocialAction(currentListener);
                 action.Execute(currentSpeaker, currentListener);
-
-                // --- NEW: Wait if an invitation is pending (thinking/responding phase) ---
-                if (currentListener.CharacterInvitation != null)
-                {
-                    // Give it a frame to register that it's pending if started by action.Execute
-                    yield return null; 
-                    while (currentListener.CharacterInvitation.HasPendingInvitation)
-                    {
-                        yield return new WaitForSeconds(0.2f);
-                    }
-                    
-                    // If it was an invitation, we wait an extra bit for the response bubble to be readable
-                    if (action is InteractionInvitation)
-                    {
-                        yield return new WaitForSeconds(2.0f);
-                    }
-                }
+                actionExecuted = action;
             }
             else if (currentSpeaker.IsPlayer())
             {
                 // Si c'est le joueur, pour l'instant on fait juste un Talk basique par défaut 
-                new InteractionTalk().Execute(currentSpeaker, currentListener);
+                actionExecuted = new InteractionTalk();
+                actionExecuted.Execute(currentSpeaker, currentListener);
+            }
+
+            // --- NEW/FIX: Wait if an invitation is pending (thinking/responding phase) ---
+            // Moved OUTSIDE the block so forcedFirstAction (like AskForJob) also waits!
+            if (currentListener.CharacterInvitation != null && actionExecuted != null)
+            {
+                // Give it a frame to register that it's pending if started by action.Execute
+                yield return null; 
+                while (currentListener.CharacterInvitation.HasPendingInvitation)
+                {
+                    yield return new WaitForSeconds(0.2f);
+                }
+                
+                // If it was an invitation, we wait an extra bit for the response bubble to be readable
+                if (actionExecuted is InteractionInvitation)
+                {
+                    yield return new WaitForSeconds(2.0f);
+                }
             }
 
             totalExchanges++;
