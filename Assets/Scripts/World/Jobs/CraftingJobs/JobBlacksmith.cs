@@ -156,7 +156,8 @@ public class JobBlacksmith : JobCrafter
             return; // On attend la fin
         }
 
-        // L'action est terminée
+        // L'action est terminée (succès ou annulée)
+        // Vérifier si la station a pu crafter correctement
         if (_manager != null && _currentOrder != null)
         {
             _manager.UpdateCraftingOrderProgress(_currentOrder, 1);

@@ -81,12 +81,16 @@ public class GoapAction_IdleInCommercialBuilding : GoapAction
         }
         else
         {
-            if (!movement.PathPending && (!movement.HasPath || movement.RemainingDistance <= movement.StoppingDistance + 0.5f))
+            // Vérification de distance en plus car RemainingDistance peut être 0 si le chemin est en cours de calcul (PathPending sur de longs trajets)
+            float distToTarget = Vector3.Distance(worker.transform.position, _wanderTarget);
+            
+            if (!movement.PathPending && (!movement.HasPath || (movement.RemainingDistance <= movement.StoppingDistance + 0.5f && distToTarget <= movement.StoppingDistance + 1f)))
             {
                 _isWalking = false;
             }
         }
 
+        // On ne clear l'action courante que si c'est nécessaire pour ne pas spammer OnCancel
         if (worker.CharacterActions != null && worker.CharacterActions.CurrentAction != null)
         {
             worker.CharacterActions.ClearCurrentAction();
