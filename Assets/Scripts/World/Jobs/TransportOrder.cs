@@ -23,12 +23,15 @@ public class TransportOrder
     // Indique si la commande a été officiellement acceptée par le fournisseur via interaction
     public bool IsPlaced { get; set; } = false;
 
-    public TransportOrder(ItemSO item, int quantity, CommercialBuilding source, CommercialBuilding dest)
+    public BuyOrder AssociatedBuyOrder { get; private set; }
+
+    public TransportOrder(ItemSO item, int quantity, CommercialBuilding source, CommercialBuilding dest, BuyOrder associatedBuyOrder = null)
     {
         ItemToTransport = item;
         Quantity = quantity;
         Source = source;
         Destination = dest;
+        AssociatedBuyOrder = associatedBuyOrder;
         DeliveredQuantity = 0;
         InTransitQuantity = 0;
     }

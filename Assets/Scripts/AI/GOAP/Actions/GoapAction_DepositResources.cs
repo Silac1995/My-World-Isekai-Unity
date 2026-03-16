@@ -79,9 +79,25 @@ public class GoapAction_DepositResources : GoapAction
 
         if (!isCloseEnough)
         {
-            bool hasPathFailed = NavMeshUtility.HasPathFailed(movement, _lastRouteRequestTime, 0.2f);
+            if (_isMoving)
+            {
+                bool hasPathFailed = NavMeshUtility.HasPathFailed(movement, _lastRouteRequestTime, 0.2f);
+                if (hasPathFailed)
+                {
+                    bool blacklisted = worker.PathingMemory.RecordFailure(depositZone.gameObject.GetInstanceID());
+                    if (blacklisted)
+                    {
+                        movement.Stop();
+                        movement.ResetPath();
+                        _isMoving = false;
+                        _isComplete = true; // Complete prematurely to abort
+                        return;
+                    }
+                    _isMoving = false; // Force recalculation
+                }
+            }
 
-            if (!_isMoving || hasPathFailed)
+            if (!_isMoving)
             {
                 // Navigate to the center of the zone rather than the edge to ensure the item stays in
                 movement.SetDestination(targetCenter);
@@ -130,7 +146,7 @@ public class GoapAction_DepositResources : GoapAction
             {
                 ItemInstance carriedItem = handsController.CarriedItem;
                 
-                var dropAction = new CharacterDropItem(worker, carriedItem);
+                var dropAction = new CharacterDropItem(worker, carriedItem, true);
                 dropAction.OnActionFinished += () => 
                 {
                     _building.RegisterGatheredItem(carriedItem.ItemSO);
@@ -159,7 +175,7 @@ public class GoapAction_DepositResources : GoapAction
 
                 if (acceptedItems.Contains(item.ItemSO))
                 {
-                    var dropAction = new CharacterDropItem(worker, item);
+                    var dropAction = new CharacterDropItem(worker, item, true);
                     dropAction.OnActionFinished += () => 
                     {
                         _building.RegisterGatheredItem(item.ItemSO);

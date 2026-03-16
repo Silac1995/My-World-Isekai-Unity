@@ -58,6 +58,8 @@ namespace MWI.AI
                     WorldItem wi = itemInteractable != null ? itemInteractable.WorldItem : null;
                     if (wi != null && wi.ItemInstance != null && wi.ItemInstance.ItemSO == wantedSO && !wi.IsBeingCarried)
                     {
+                        if (worker.PathingMemory.IsBlacklisted(wi.gameObject.GetInstanceID())) continue;
+
                         // Logical verification: Ensure it's inside the source's inventory
                         if (source.GetItemCount(wantedSO) > 0)
                         {

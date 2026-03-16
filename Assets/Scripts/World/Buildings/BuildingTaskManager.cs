@@ -34,7 +34,7 @@ public class BuildingTaskManager : MonoBehaviour
     /// <summary>
     /// Finds the closest valid task of type T, claims it for the worker, and moves it to in-progress.
     /// </summary>
-    public T ClaimBestTask<T>(Character worker) where T : BuildingTask
+    public T ClaimBestTask<T>(Character worker, System.Predicate<T> predicate = null) where T : BuildingTask
     {
         // Clean up invalid tasks first (e.g. items destroyed outside of tasks)
         _availableTasks.RemoveAll(t => !t.IsValid());
@@ -44,7 +44,7 @@ public class BuildingTaskManager : MonoBehaviour
 
         foreach (var task in _availableTasks.OfType<T>())
         {
-            if (task.IsValid())
+            if (task.IsValid() && (predicate == null || predicate(task)))
             {
                 float dist = Vector3.Distance(worker.transform.position, task.Target.transform.position);
                 if (dist < bestDist)
@@ -115,14 +115,14 @@ public class BuildingTaskManager : MonoBehaviour
     /// <summary>
     /// Checks if there is any available or currently claimed (by this worker) task of the specified type.
     /// </summary>
-    public bool HasAvailableOrClaimedTask<T>(Character worker = null) where T : BuildingTask
+    public bool HasAvailableOrClaimedTask<T>(Character worker = null, System.Predicate<T> predicate = null) where T : BuildingTask
     {
-        bool hasAvailable = _availableTasks.OfType<T>().Any(t => t.IsValid());
+        bool hasAvailable = _availableTasks.OfType<T>().Any(t => t.IsValid() && (predicate == null || predicate(t)));
         if (hasAvailable) return true;
 
         if (worker != null)
         {
-            return _inProgressTasks.OfType<T>().Any(t => t.ClaimedBy == worker && t.IsValid());
+            return _inProgressTasks.OfType<T>().Any(t => t.ClaimedBy == worker && t.IsValid() && (predicate == null || predicate(t)));
         }
 
         return false;

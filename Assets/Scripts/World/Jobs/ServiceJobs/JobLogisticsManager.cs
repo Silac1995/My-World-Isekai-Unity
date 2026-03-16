@@ -258,6 +258,20 @@ public class JobLogisticsManager : Job
         if (!_activeTransportOrders.Contains(order)) return;
 
         bool completed = order.RecordDelivery(deliveredAmount);
+
+        // NOUVEAU: Mettre à jour la commande client instantanément au drop!
+        if (order.AssociatedBuyOrder != null)
+        {
+            var clientLogistics = order.Destination?.Jobs.OfType<JobLogisticsManager>().FirstOrDefault();
+            if (clientLogistics != null)
+            {
+                // Le client se met à jour et nous rend la pareille (AcknowledgeDeliveryProgress) via sa méthode OnItemsDeliveredByTransporter
+                clientLogistics.OnItemsDeliveredByTransporter(order.AssociatedBuyOrder, deliveredAmount);
+                // Le fournisseur (nous) enregistrons notre avancée:
+                AcknowledgeDeliveryProgress(order.AssociatedBuyOrder, deliveredAmount);
+            }
+        }
+
         if (completed)
         {
             _activeTransportOrders.Remove(order);
@@ -453,49 +467,49 @@ public class JobLogisticsManager : Job
 
     /// <summary>
     /// Appelé par GoapAction_GatherStorageItems lorsqu'un item ramassé est rangé dans le bâtiment.
-    /// Valide notre réception et prévient le fournisseur.
+    /// Valide simplement le rangement physique sans toucher aux BuyOrders (elles sont complétées à la livraison).
     /// </summary>
     public void OnItemGathered(ItemSO itemSO)
     {
-        // On cherche la plus vieille commande non complétée pour cet item
-        var placedOrder = _placedBuyOrders.FirstOrDefault(o => o.ItemToTransport == itemSO && !o.IsCompleted);
-        if (placedOrder != null)
-        {
-            placedOrder.RecordDelivery(1);
-            
-            // Notifier le fournisseur que la livraison est bien reçue
-            if (placedOrder.Source != null)
-            {
-                var sourceManager = placedOrder.Source.Jobs.OfType<JobLogisticsManager>().FirstOrDefault();
-                if (sourceManager != null)
-                {
-                    sourceManager.AcknowledgeDeliveryProgress(placedOrder);
-                }
-            }
+        // Ne gère plus l'économie ici (la BuyOrder a déjà été complétée par le livreur lors du drop)
+        // Peut être utilisé pour des statistiques ou du logging local.
+        Debug.Log($"<color=gray>[Logistics]</color> L'item {itemSO.ItemName} a été physiquement déplacé de la zone de livraison vers le stockage.");
+    }
 
-            if (placedOrder.IsCompleted)
+    /// <summary>
+    /// Appelé par le Logistics Manager fournisseur (via le Transporter) lorsque le livreur a déposé les items chez nous.
+    /// Met à jour notre commande d'achat locale et notifie le boss.
+    /// </summary>
+    public void OnItemsDeliveredByTransporter(BuyOrder clientOrder, int amount)
+    {
+        var myOrder = _placedBuyOrders.FirstOrDefault(o => o.ItemToTransport == clientOrder.ItemToTransport && o.Source == clientOrder.Source && !o.IsCompleted);
+        if (myOrder != null)
+        {
+            myOrder.RecordDelivery(amount);
+            
+            if (myOrder.IsCompleted)
             {
-                _placedBuyOrders.Remove(placedOrder);
-                Debug.Log($"<color=green>[JobLogisticsManager]</color> ✅ La commande de {placedOrder.Quantity}x {itemSO.ItemName} a été entièrement reçue et intégrée !");
+                _placedBuyOrders.Remove(myOrder);
+                Debug.Log($"<color=green><h2>[ECONOMY]</h2></color> <color=yellow>CONGRATULATIONS !</color> La commande de {myOrder.Quantity}x {myOrder.ItemToTransport.ItemName} a été entièrement livrée à {myOrder.Destination.BuildingName} !");
             }
         }
     }
 
     /// <summary>
-    /// Appelé par le client lorsqu'il a physiquement reçu et rangé un item lié à une de nos commandes actives.
+    /// Appelé par le client lorsqu'il a physiquement reçu un item lié à une de nos commandes actives.
     /// Diminue la demande attendue et nettoie la commande terminées.
     /// </summary>
-    public void AcknowledgeDeliveryProgress(BuyOrder clientOrder)
+    public void AcknowledgeDeliveryProgress(BuyOrder clientOrder, int amount = 1)
     {
         // On cherche dans NOS _activeOrders la commande qui correspond à la sienne (même item, même target)
         var myOrder = _activeOrders.FirstOrDefault(o => o.ItemToTransport == clientOrder.ItemToTransport && o.Destination == clientOrder.Destination);
         if (myOrder != null)
         {
-            myOrder.RecordDelivery(1);
+            myOrder.RecordDelivery(amount);
             if (myOrder.IsCompleted)
             {
                 _activeOrders.Remove(myOrder);
-                Debug.Log($"<color=green>[JobLogisticsManager]</color> 🤝 Le client a acquitté avoir reçu toute la commande de {myOrder.Quantity}x {myOrder.ItemToTransport.ItemName} !");
+                Debug.Log($"<color=green>[JobLogisticsManager]</color> 🤝 Le client a acquitté avoir reçu {myOrder.Quantity}x {myOrder.ItemToTransport.ItemName} !");
             }
         }
     }
@@ -537,7 +551,8 @@ public class JobLogisticsManager : Job
                     buyOrder.ItemToTransport,
                     remainingToDispatch,
                     _workplace,
-                    buyOrder.Destination
+                    buyOrder.Destination,
+                    buyOrder
                 );
 
                 buyOrder.RecordDispatch(remainingToDispatch);

@@ -157,7 +157,10 @@ public class GoapAction_GatherStorageItems : GoapAction
                 break;
 
             case GatherState.MovingToStorage:
-                HandleMovementTo(worker, _targetPos, out bool arrivedAtStorage);
+                Zone storageZone = _building.StorageZone != null ? _building.StorageZone : _building.MainRoom.GetComponent<Zone>();
+                Collider storageCol = storageZone != null ? storageZone.GetComponent<Collider>() : null;
+
+                HandleMovementTo(worker, _targetPos, out bool arrivedAtStorage, storageCol);
                 if (arrivedAtStorage)
                 {
                     _currentState = GatherState.DroppingOff;
@@ -266,6 +269,25 @@ public class GoapAction_GatherStorageItems : GoapAction
 
         if (movement.PathPending) return;
 
+        bool hasPathFailed = NavMeshUtility.HasPathFailed(movement, 0, 0.2f); // Using 0 for request time since it's not strictly tracked here, but usually HasPath=false is caught.
+        
+        // Custom Failure tracking
+        if (!movement.HasPath || hasPathFailed)
+        {
+            if (targetCollider != null)
+            {
+                bool blacklisted = worker.PathingMemory.RecordFailure(targetCollider.gameObject.GetInstanceID());
+                if (blacklisted)
+                {
+                    movement.Stop();
+                    movement.ResetPath();
+                    arrived = false;
+                    _currentState = GatherState.FindingItem; // Abort and try to find another item
+                    return;
+                }
+            }
+        }
+
         // If we don't have a path, we definitely haven't started moving. Start now.
         if (!movement.HasPath)
         {
@@ -344,6 +366,8 @@ public class GoapAction_GatherStorageItems : GoapAction
         {
             var worldItem = col.GetComponent<WorldItem>() ?? col.GetComponentInParent<WorldItem>();
             if (worldItem == null || worldItem.ItemInstance == null || worldItem.IsBeingCarried) continue;
+
+            if (worker.PathingMemory.IsBlacklisted(worldItem.gameObject.GetInstanceID())) continue;
 
             // Ignore les items qui sont déjà dans la zone de stockage (pour éviter un Gather infini)
             if (storageCol != null && storageCol.bounds.Contains(worldItem.transform.position)) continue;

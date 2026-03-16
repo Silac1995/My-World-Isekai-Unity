@@ -103,7 +103,12 @@ public class GoapAction_GatherResources : GoapAction
         // Phase 2 : Trouver un objet à récolter (Arbre, etc.)
         if (_currentTarget == null && _assignedTask == null)
         {
-            _assignedTask = _building.TaskManager?.ClaimBestTask<GatherResourceTask>(worker);
+            _assignedTask = _building.TaskManager?.ClaimBestTask<GatherResourceTask>(worker, task => 
+            {
+                var interactable = task.Target as GatherableObject;
+                if (interactable == null) return true;
+                return !worker.PathingMemory.IsBlacklisted(interactable.gameObject.GetInstanceID());
+            });
             
             if (_assignedTask != null)
             {
@@ -112,7 +117,8 @@ public class GoapAction_GatherResources : GoapAction
 
             if (_currentTarget == null || _assignedTask == null)
             {
-                Debug.Log($"<color=orange>[GOAP Gather]</color> {worker.CharacterName} : plus de tâches de ressources dans la zone.");
+                Debug.Log($"<color=orange>[GOAP Gather]</color> {worker.CharacterName} : plus de tâches de ressources (ou tout est blacklisté) dans la zone. On vide la zone.");
+                _building.ClearGatherableZone();
                 _isComplete = true;
                 return;
             }
@@ -190,6 +196,10 @@ public class GoapAction_GatherResources : GoapAction
                 {
                     // If we reached the end of the path but are still not in valid range, we are blocked physically
                     Debug.Log($"<color=red>[GOAP Gather]</color> {worker.CharacterName} est bloqué ou ne peut pas atteindre {_currentTarget.gameObject.name}. (Dist: {Vector3.Distance(worker.transform.position, _currentTarget.transform.position)})");
+                    if (_currentTarget != null)
+                    {
+                        worker.PathingMemory.RecordFailure(_currentTarget.gameObject.GetInstanceID());
+                    }
                     _building.TaskManager?.UnclaimTask(_assignedTask);
                     _assignedTask = null;
                     _currentTarget = null;

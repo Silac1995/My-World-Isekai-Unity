@@ -87,9 +87,29 @@ public abstract class GoapAction_MoveToTarget : GoapAction
 
         if (!isCloseEnough)
         {
-            bool hasPathFailed = NavMeshUtility.HasPathFailed(movement, _lastRouteRequestTime, 0.2f);
+            if (_isMoving)
+            {
+                bool hasPathFailed = NavMeshUtility.HasPathFailed(movement, _lastRouteRequestTime, 0.2f);
+                if (hasPathFailed)
+                {
+                    int targetId = targetCol != null ? targetCol.gameObject.GetInstanceID() : rawDest.GetHashCode();
+                    bool nowBlacklisted = worker.PathingMemory.RecordFailure(targetId);
 
-            if (!_isMoving || hasPathFailed || hasTargetMoved)
+                    if (nowBlacklisted)
+                    {
+                        // Stop moving entirely so GOAP can drop this plan
+                        movement.Stop();
+                        movement.ResetPath();
+                        _isMoving = false;
+                        return; // Exit out, let GOAP fail it on IsValid or timeout
+                    }
+                    
+                    // Force a recalculation for path diversification
+                    _isMoving = false;
+                }
+            }
+
+            if (!_isMoving || hasTargetMoved)
             {
                 Vector3 finalDest = rawDest;
                 if (targetCol != null)
@@ -102,6 +122,31 @@ public abstract class GoapAction_MoveToTarget : GoapAction
                     {
                         // Snap to the closest edge of the interation zone, reducing gridlock vs NavMeshObstacles (like trees)
                         finalDest = NavMeshUtility.GetOptimalDestination(worker, targetCol);
+                    }
+                }
+
+                // Path Diversification logic
+                int targetId = targetCol != null ? targetCol.gameObject.GetInstanceID() : rawDest.GetHashCode();
+                int failCount = worker.PathingMemory.GetFailCount(targetId);
+                
+                if (failCount > 0)
+                {
+                    // Calculate a slight offset to try a different approach angle
+                    // Rotate a base offset depending on the fail count (e.g. 1st fail = +90 deg, 2nd fail = -90 deg)
+                    Vector3 directionToTarget = (finalDest - worker.transform.position).normalized;
+                    if (directionToTarget.sqrMagnitude < 0.01f) directionToTarget = worker.transform.forward;
+
+                    float sign = (failCount % 2 == 0) ? -1f : 1f;
+                    float angle = 90f * sign;
+                    Vector3 rotatedOffset = Quaternion.Euler(0, angle, 0) * directionToTarget;
+                    
+                    // Push the destination 1.5 units out sideways to try to walk around an obstacle
+                    finalDest += rotatedOffset * 1.5f;
+
+                    // Ensure the new offset point is valid NavMesh
+                    if (UnityEngine.AI.NavMesh.SamplePosition(finalDest, out UnityEngine.AI.NavMeshHit hit, 2.0f, UnityEngine.AI.NavMesh.AllAreas))
+                    {
+                        finalDest = hit.position;
                     }
                 }
 

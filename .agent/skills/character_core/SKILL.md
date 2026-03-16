@@ -17,6 +17,7 @@ Examples:
 - `character.CharacterMovement` -> Manages navigation.
 - `character.CharacterEquipment` -> Manages equippable inventory.
 - `character.Stats` -> Provides vital statistics.
+- `character.PathingMemory` -> Specialized memory container that tracks unreachable targets to prevent infinite evaluation/movement loops (self-cleaning on TimeManager resets via `OnDestroy()`).
 
 ## 2. Justice of the Peace and Availability (`IsFree()`)
 This is the ultimate safety method. `Character` scrutinizes all of its child components to tell the global system (GOAP, Player commands, Interactions) whether the character is allowed to be interrupted or is already busy.

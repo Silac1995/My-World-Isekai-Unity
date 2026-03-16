@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.AI;
 using System.Collections.Generic;
 using MWI.Time;
+using MWI.AI;
 
 public enum CharacterBusyReason
 {
@@ -69,6 +70,7 @@ public class Character : MonoBehaviour
     private bool _isUnconscious;
     private TimeManager _timeManager;
     private CharacterParty _currentParty;
+    private CharacterPathingMemory _pathingMemory;
 
     // Ressources statiques partagées
     private static GameObject _worldItemPrefab;
@@ -122,6 +124,7 @@ public class Character : MonoBehaviour
 
     public NavMeshAgent NavMesh => _cachedNavMeshAgent;
     public TimeManager TimeManager => _timeManager != null ? _timeManager : TimeManager.Instance;
+    public CharacterPathingMemory PathingMemory => _pathingMemory;
 
     public Furniture OccupyingFurniture { get; private set; }
 
@@ -180,6 +183,12 @@ public class Character : MonoBehaviour
         _cachedNavMeshAgent = GetComponent<NavMeshAgent>();
         _isDead = false;
         _isUnconscious = false;
+        _pathingMemory = new CharacterPathingMemory(this);
+    }
+
+    protected virtual void OnDestroy()
+    {
+        _pathingMemory?.CleanUp();
     }
     #endregion
 

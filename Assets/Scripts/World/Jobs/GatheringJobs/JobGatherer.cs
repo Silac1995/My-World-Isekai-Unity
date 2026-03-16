@@ -141,12 +141,27 @@ public class JobGatherer : Job
         }
 
         // Planification intelligente du Pickup vs Gather
-        bool looseItemExists = building.TaskManager != null && building.TaskManager.HasAvailableOrClaimedTask<PickupLooseItemTask>(_worker);
-        bool canGather = building.TaskManager != null && building.TaskManager.HasAvailableOrClaimedTask<GatherResourceTask>(_worker);
+        bool looseItemExists = false;
+        bool canGather = false;
+        
+        if (building.TaskManager != null)
+        {
+            looseItemExists = building.TaskManager.HasAvailableOrClaimedTask<PickupLooseItemTask>(_worker, task => 
+            {
+                var interactable = task.Target as WorldItem;
+                return interactable != null && !_worker.PathingMemory.IsBlacklisted(interactable.gameObject.GetInstanceID());
+            });
+
+            canGather = building.TaskManager.HasAvailableOrClaimedTask<GatherResourceTask>(_worker, task => 
+            {
+                var interactable = task.Target as GatherableObject;
+                return interactable != null && !_worker.PathingMemory.IsBlacklisted(interactable.gameObject.GetInstanceID());
+            });
+        }
 
         var worldState = new Dictionary<string, bool>
         {
-            { "hasGatherZone", canGather },
+            { "hasGatherZone", building.HasGatherableZone },
             { "looseItemExists", looseItemExists },
             { "hasResources", hasResourcesForGoap },
             { "hasDepositedResources", false },

@@ -84,7 +84,12 @@ public class GoapAction_PickupLooseItem : GoapAction
         // 1. Trouver un objet au sol
         if (_targetWorldItem == null && _assignedTask == null)
         {
-            _assignedTask = _building.TaskManager?.ClaimBestTask<PickupLooseItemTask>(worker);
+            _assignedTask = _building.TaskManager?.ClaimBestTask<PickupLooseItemTask>(worker, task => 
+            {
+                var interactable = task.Target as WorldItem;
+                if (interactable == null) return true;
+                return !worker.PathingMemory.IsBlacklisted(interactable.gameObject.GetInstanceID());
+            });
 
             if (_assignedTask != null)
             {
@@ -125,6 +130,12 @@ public class GoapAction_PickupLooseItem : GoapAction
         {
             if (!movement.HasPath && movement.RemainingDistance > movement.StoppingDistance + 0.5f) 
             {
+                Debug.Log($"<color=red>[GOAP Pickup]</color> {worker.CharacterName} : Impossible d'atteindre l'objet. Blacklist.");
+                if (_targetWorldItem != null)
+                {
+                    worker.PathingMemory.RecordFailure(_targetWorldItem.gameObject.GetInstanceID());
+                }
+                
                 // Le chemin a été effacé mais on n'est pas arrivé : on annule et on cherche de nouveau
                 _building.TaskManager?.UnclaimTask(_assignedTask);
                 _assignedTask = null;
