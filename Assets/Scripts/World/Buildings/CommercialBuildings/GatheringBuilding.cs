@@ -97,8 +97,18 @@ public class GatheringBuilding : CommercialBuilding
     public void ScanGatheringArea()
     {
         if (_gatheringAreaZone == null) return;
+        ScanAndRegisterZone(_gatheringAreaZone);
+    }
 
-        BoxCollider boxCol = _gatheringAreaZone.GetComponent<BoxCollider>();
+    /// <summary>
+    /// Scanne une zone de récolte spécifique pour voir s'il reste des ressources voulues
+    /// et enregistre toutes les tâches dans le TaskManager.
+    /// </summary>
+    public void ScanAndRegisterZone(Zone zone)
+    {
+        if (zone == null) return;
+
+        BoxCollider boxCol = zone.GetComponent<BoxCollider>();
         if (boxCol == null) return;
 
         // Préparer les infos pour l'OverlapBox
@@ -133,7 +143,7 @@ public class GatheringBuilding : CommercialBuilding
 
         if (foundValidResource)
         {
-            SetGatherableZone(_gatheringAreaZone);
+            SetGatherableZone(zone);
             
             // Cleanup old subscriptions
             ClearTrackedGatherables();
@@ -163,7 +173,7 @@ public class GatheringBuilding : CommercialBuilding
         {
             ClearGatherableZone();
             TaskManager?.ClearAvailableTasksOfType<GatherResourceTask>();
-            Debug.Log($"<color=orange>[GatheringBuilding]</color> {buildingName} : Scan de _gatheringAreaZone n'a rien trouvé. Retour à l'exploration.");
+            Debug.Log($"<color=orange>[GatheringBuilding]</color> {buildingName} : Scan de {zone.zoneName} n'a rien trouvé. Retour à l'exploration.");
         }
     }
 

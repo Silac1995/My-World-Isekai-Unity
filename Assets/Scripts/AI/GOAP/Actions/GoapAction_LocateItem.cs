@@ -28,6 +28,7 @@ namespace MWI.AI
         public GoapAction_LocateItem(JobTransporter job)
         {
             _job = job;
+            _isComplete = false;
         }
 
         public override bool IsValid(Character worker)
@@ -62,7 +63,11 @@ namespace MWI.AI
                     // --- NOUVEAU: Le livreur ne cible plus N'IMPORTE QUEL ITEM, mais EXCLUSIVEMENT ceux qui lui sont réservés ---
                     if (wi != null && wi.ItemInstance != null && _job.CurrentOrder.ReservedItems.Contains(wi.ItemInstance) && !wi.IsBeingCarried)
                     {
-                        if (worker.PathingMemory.IsBlacklisted(wi.gameObject.GetInstanceID())) continue;
+                        if (worker.PathingMemory.IsBlacklisted(wi.gameObject.GetInstanceID()))
+                        {
+                            Debug.Log($"<color=cyan>[LocateItem]</color> {_job.Worker.CharacterName} ignore l'item blacklisté: {wi.name}.");
+                            continue;
+                        }
 
                         // Logical verification: Ensure it's inside the source's inventory
                         if (source.GetItemCount(wantedSO) > 0)
@@ -75,6 +80,11 @@ namespace MWI.AI
                 if (validItems.Count > 0)
                 {
                     targetWorldItem = validItems[Random.Range(0, validItems.Count)];
+                    Debug.Log($"<color=magenta>[LocateItem]</color> {_job.Worker.CharacterName} a trouvé {validItems.Count} items valides. Choisi: {targetWorldItem.name}");
+                }
+                else
+                {
+                    Debug.Log($"<color=magenta>[LocateItem]</color> {_job.Worker.CharacterName} a trouvé ZERO item valide parmi {visibleInteractables.Count} interactables visibles.");
                 }
             }
             else
@@ -134,6 +144,7 @@ namespace MWI.AI
 
             _job.TargetWorldItem = targetWorldItem;
             _isComplete = true;
+            Debug.Log($"<color=cyan>[LocateItem]</color> {_job.Worker.CharacterName} a assigné TargetWorldItem: {(_job.TargetWorldItem != null ? _job.TargetWorldItem.name : "NULL")}. isComplete=true. FIN D'EXECUTION.");
         }
 
         public override void Exit(Character worker)

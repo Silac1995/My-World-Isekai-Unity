@@ -133,7 +133,7 @@ public class GoapAction_ExploreForResources : GoapAction
                 if (zone != null)
                 {
                     Debug.Log($"<color=green>[GOAP Explore]</color> {worker.CharacterName} a trouvé une zone de récolte : {zone.zoneName} (via {gatherable.gameObject.name}) !");
-                    _building.SetGatherableZone(zone);
+                    _building.ScanAndRegisterZone(zone);
                     return true;
                 }
                 else
