@@ -11,7 +11,6 @@ public class CharacterInteraction : MonoBehaviour
     public Collider InteractionZone => _interactionZone;
     public event Action<Character, bool> OnInteractionStateChanged;
     private Coroutine _activeDialogueCoroutine;
-    private Coroutine _activePositioningCoroutine;
     
     // Suivi de la cible actuelle d'approche pour le désabonnement
     private Character _pendingTarget;
@@ -62,84 +61,6 @@ public class CharacterInteraction : MonoBehaviour
         }
     }
 
-    public void JoinInteractionPositioning(Character initiator, Vector3 destination)
-    {
-        if (initiator == null) return;
-        
-        // SÉCURITÉ : Ne pas accepter d'être positionné par B si on est déjà en cours de positionnement/dialogue avec A
-        if (_currentTarget != null && _currentTarget != initiator)
-        {
-            Debug.LogWarning($"<color=orange>[Interaction]</color> {_character.CharacterName} refuse le positionnement de {initiator.CharacterName} car déjà occupé avec {_currentTarget.CharacterName}.");
-            return;
-        }
-
-        Debug.Log($"<color=cyan>[Interaction]</color> {_character.CharacterName} se positionne pour répondre à {initiator.CharacterName}.");
-        CurrentTarget = initiator;
-        IsPositioned = false;
-        
-        // Arrêter l'activité en cours
-        _character.CharacterVisual?.CharacterAnimator?.StopLocomotion();
-        
-        if (_activePositioningCoroutine != null) StopCoroutine(_activePositioningCoroutine);
-        _activePositioningCoroutine = StartCoroutine(PositioningRoutine(destination));
-    }
-
-    private System.Collections.IEnumerator PositioningRoutine(Vector3 destination)
-    {
-        var movement = _character.CharacterMovement;
-        float timeoutTimer = 0f;
-        const float TIMEOUT_DURATION = 5f;
-        float lastRouteRequestTime = 0f;
-        Vector3 lastDesiredPos = Vector3.positiveInfinity;
-
-        while (true)
-        {
-            // Vérifier si l'initiateur a annulé ou est mort
-            if (_currentTarget == null || !_currentTarget.IsAlive())
-            {
-                if (movement != null) movement.Stop();
-                EndInteraction();
-                yield break;
-            }
-
-            timeoutTimer += Time.deltaTime;
-            if (timeoutTimer > TIMEOUT_DURATION)
-            {
-                Debug.LogWarning($"<color=orange>[Interaction]</color> Timeout de positionnement pour {_character.CharacterName} (Target). ABORT.");
-                if (movement != null) movement.Stop();
-                EndInteraction();
-                yield break;
-            }
-
-            // On retire la composante Y pour la comparaison de distance
-            float distDelta = Vector3.Distance(new Vector3(_character.transform.position.x, 0, _character.transform.position.z), 
-                                               new Vector3(destination.x, 0, destination.z));
-
-            if (distDelta <= 0.15f)
-            {
-                _character.CharacterVisual?.FaceCharacter(_currentTarget);
-                SetPositioned(true);
-                if (movement != null) movement.Stop();
-                yield break; // L'initiateur déclenchera ExecuteInteraction quand les DEUX seront prêts
-            }
-
-            if (movement != null)
-            {
-                movement.Resume();
-                bool hasPathFailed = (Time.time - lastRouteRequestTime > 0.2f) && (movement.Agent.pathStatus == UnityEngine.AI.NavMeshPathStatus.PathInvalid || (!movement.Agent.hasPath && !movement.Agent.pathPending));
-
-                if (Vector3.Distance(lastDesiredPos, destination) > 1f || hasPathFailed)
-                {
-                    movement.SetDestination(destination);
-                    lastDesiredPos = destination;
-                    lastRouteRequestTime = Time.time;
-                }
-            }
-
-            yield return null;
-        }
-    }
-
     public bool StartInteractionWith(Character target, ICharacterInteractionAction forcedFirstAction = null, Action onPositioned = null)
     {
         if (target == null || _currentTarget == target) return false;
@@ -150,10 +71,9 @@ public class CharacterInteraction : MonoBehaviour
             Debug.LogWarning($"<color=orange>[Interaction]</color> {_character.CharacterName} n'est pas libre pour démarrer une interaction.");
             return false;
         }
-        
         if (!target.IsFree())
         {
-            Debug.LogWarning($"<color=orange>[Interaction]</color> {target.CharacterName} n'est pas libre pour recevoir une interaction de {_character.CharacterName}.");
+            Debug.LogWarning($"<color=orange>[Interaction]</color> {target.CharacterName} n'est pas libre pour recevoir une interaction.");
             return false;
         }
 
@@ -193,14 +113,13 @@ public class CharacterInteraction : MonoBehaviour
         var detector = _character.GetComponent<CharacterInteractionDetector>();
         var targetInteractable = target.CharacterInteractable;
         
+        // Security checks against NaN/stutter loops for Navmesh
         float lastRouteRequestTime = 0f;
         Vector3 lastDesiredPos = Vector3.positiveInfinity;
-        bool midpointCalculated = false;
-        Vector3 initiatorTargetPos = Vector3.zero;
 
         while (true)
         {
-            if (target == null || !target.IsAlive() || (!target.IsFree() && target.CharacterInteraction.CurrentTarget != _character))
+            if (target == null || !target.IsFree())
             {
                 Debug.LogWarning($"<color=orange>[Interaction]</color> Cible perdue ou occupée pendant le mouvement.");
                 if (movement != null) movement.Stop();
@@ -217,110 +136,64 @@ public class CharacterInteraction : MonoBehaviour
                 yield break;
             }
 
-            if (!midpointCalculated)
+            bool isCloseEnough = false;
+
+            Vector3 targetPos = target.transform.position;
+            // Offset de 2 unités sur l'axe X pour le face-à-face (ici 4)
+            float xOffset = _character.transform.position.x > targetPos.x ? 4f : -4f;
+            Vector3 desiredPos = new Vector3(targetPos.x + xOffset, _character.transform.position.y, targetPos.z);
+
+            float distDelta = Vector3.Distance(new Vector3(_character.transform.position.x, 0, _character.transform.position.z), 
+                                               new Vector3(desiredPos.x, 0, desiredPos.z));
+
+            if (detector != null && targetInteractable != null)
             {
-                // 1. On avance vers la cible jusqu'à entrer dans la zone d'interaction
-                float distanceToTarget = Vector3.Distance(_character.transform.position, target.transform.position);
-                bool isOverlapping = detector != null && targetInteractable != null && detector.IsOverlapping(targetInteractable);
+                bool isOverlapping = detector.IsOverlapping(targetInteractable);
+                
+                // Le joueur exige un alignement parfait : même Z, distance X de 4. Pas plus, pas moins.
+                float zDiff = Mathf.Abs(_character.transform.position.z - targetPos.z);
+                float xDiff = Mathf.Abs(_character.transform.position.x - targetPos.x);
+                bool isAlignedVisually = zDiff <= 0.05f && Mathf.Abs(xDiff - 4f) <= 0.05f;
 
-                // Start calculating midpoint as soon as we are reasonably close (3.5f instead of 4.5f to wait for physical proximity but trigger before bumping)
-                if (isOverlapping || distanceToTarget <= 3.5f)
-                {
-                    // Calcul du Midpoint
-                    Vector3 centerPos = (_character.transform.position + target.transform.position) / 2f;
-                    
-                    // L'initiateur se place selon son offset X actuel (-2 ou +2 = delta total 4)
-                    float xOffset = _character.transform.position.x > target.transform.position.x ? 2f : -2f;
-                    
-                    Vector3 desiredInitPos = new Vector3(centerPos.x + xOffset, centerPos.y, centerPos.z);
-                    Vector3 desiredTargetPos = new Vector3(centerPos.x - xOffset, centerPos.y, centerPos.z);
-
-                    // NavMesh Safety pour éviter les murs avec un rayon suffisant (4.0f)
-                    if (UnityEngine.AI.NavMesh.SamplePosition(desiredInitPos, out UnityEngine.AI.NavMeshHit hitInit, 4.0f, UnityEngine.AI.NavMesh.AllAreas))
-                    {
-                        initiatorTargetPos = hitInit.position;
-                    }
-                    else initiatorTargetPos = desiredInitPos;
-
-                    if (UnityEngine.AI.NavMesh.SamplePosition(desiredTargetPos, out UnityEngine.AI.NavMeshHit hitTarget, 4.0f, UnityEngine.AI.NavMesh.AllAreas))
-                    {
-                        desiredTargetPos = hitTarget.position;
-                    }
-
-                    // Avertir la cible de se positionner SEULEMENT si elle n'est pas déjà ciblée ailleurs
-                    if (target.CharacterInteraction.CurrentTarget == null || target.CharacterInteraction.CurrentTarget == _character)
-                    {
-                        target.CharacterInteraction.JoinInteractionPositioning(_character, desiredTargetPos);
-                    }
-                    else
-                    {
-                        // La cible s'est faite engager par quelqu'un d'autre juste avant qu'on n'arrive à portée !
-                        Debug.LogWarning($"<color=orange>[Interaction]</color> {_character.CharacterName} abandonne l'approche : {target.CharacterName} a été intercepté.");
-                        if (movement != null) movement.Stop();
-                        EndInteraction();
-                        yield break;
-                    }
-
-                    midpointCalculated = true;
-                }
-                else
-                {
-                    // Continue de marcher vers la cible tant qu'on n'est pas dans la zone
-                    if (movement != null)
-                    {
-                        movement.Resume();
-                        bool hasPathFailed = (Time.time - lastRouteRequestTime > 0.2f) && (movement.Agent.pathStatus == UnityEngine.AI.NavMeshPathStatus.PathInvalid || (!movement.Agent.hasPath && !movement.Agent.pathPending));
-
-                        if (Vector3.Distance(lastDesiredPos, target.transform.position) > 1f || hasPathFailed)
-                        {
-                            movement.SetDestination(target.transform.position);
-                            lastDesiredPos = target.transform.position;
-                            lastRouteRequestTime = Time.time;
-                        }
-                    }
-                    yield return null;
-                    continue;
-                }
+                isCloseEnough = (isOverlapping && isAlignedVisually) || distDelta <= 0.05f;
+            }
+            else
+            {
+                isCloseEnough = distDelta <= 0.05f;
             }
 
-            // Phase 2: Les deux personnages se mettent en place
-            float distDelta = Vector3.Distance(new Vector3(_character.transform.position.x, 0, _character.transform.position.z), 
-                                               new Vector3(initiatorTargetPos.x, 0, initiatorTargetPos.z));
-
-            if (distDelta <= 0.15f)
+            if (isCloseEnough)
             {
                 _character.CharacterVisual?.FaceCharacter(target);
                 SetPositioned(true);
                 if (movement != null) movement.Stop();
                 
-                // On attend que la cible soit aussi en position
-                if (target.CharacterInteraction.IsPositioned)
-                {
-                    ExecuteInteraction(target, forcedFirstAction, onPositioned);
-                    yield break;
-                }
+                ExecuteInteraction(target, forcedFirstAction, onPositioned);
+                yield break;
             }
-            else
-            {
-                SetPositioned(false);
-                if (movement != null)
-                {
-                    movement.Resume();
-                    bool hasPathFailed = (Time.time - lastRouteRequestTime > 0.2f) && (movement.Agent.pathStatus == UnityEngine.AI.NavMeshPathStatus.PathInvalid || (!movement.Agent.hasPath && !movement.Agent.pathPending));
 
-                    if (Vector3.Distance(lastDesiredPos, initiatorTargetPos) > 1f || hasPathFailed)
-                    {
-                        movement.SetDestination(initiatorTargetPos);
-                        lastDesiredPos = initiatorTargetPos;
-                        lastRouteRequestTime = Time.time;
-                    }
+            SetPositioned(false);
+            if (movement != null)
+            {
+                movement.Resume();
+                
+                // --- SÉCURITÉ DE THREAD NAVMESH ---
+                // Le NavMesh prend au moins 1 frame pour calculer le chemin (PathPending = true) puis basculer HasPath.
+                // Si on spamme SetDestination chaque frame, le calcul est réinitialisé et le PNJ stagne.
+                // HasPathFailed = on a attendu 0.2s et on n'a ni chemin, ni chemin en cours, ou chemin invalide.
+                bool hasPathFailed = (Time.time - lastRouteRequestTime > 0.2f) && (movement.Agent.pathStatus == UnityEngine.AI.NavMeshPathStatus.PathInvalid || (!movement.Agent.hasPath && !movement.Agent.pathPending));
+
+                if (Vector3.Distance(lastDesiredPos, desiredPos) > 1f || hasPathFailed)
+                {
+                    movement.SetDestination(desiredPos);
+                    lastDesiredPos = desiredPos;
+                    lastRouteRequestTime = Time.time;
                 }
             }
 
             yield return null;
         }
     }
-
 
     private void HandleTargetStateChanged(Character character, bool isInteracting)
     {
@@ -354,10 +227,10 @@ public class CharacterInteraction : MonoBehaviour
             _pendingTarget = null;
         }
         
-        // Double sécurité : L'un des deux a pu devenir incapacité pendant le trajet !
-        if (!_character.IsAlive() || !target.IsAlive() || _character.IsUnconscious || target.IsUnconscious)
+        // Double sécurité : L'un des deux a pu devenir occupé pendant le trajet !
+        if (!_character.IsFree() || !target.IsFree())
         {
-            Debug.LogWarning($"<color=orange>[Interaction]</color> {target.CharacterName} ou {_character.CharacterName} n'est plus valide après le trajet.");
+            Debug.LogWarning($"<color=orange>[Interaction]</color> {target.CharacterName} ou {_character.CharacterName} n'est plus libre après le trajet.");
             return;
         }
 
@@ -499,12 +372,6 @@ public class CharacterInteraction : MonoBehaviour
         {
             StopCoroutine(_activeDialogueCoroutine);
             _activeDialogueCoroutine = null;
-        }
-
-        if (_activePositioningCoroutine != null)
-        {
-            StopCoroutine(_activePositioningCoroutine);
-            _activePositioningCoroutine = null;
         }
 
         // --- NEW: S'assurer que le mouvement est bien stoppé en cas d'annulation avant positionnement ---

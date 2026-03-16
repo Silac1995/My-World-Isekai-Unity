@@ -1,47 +1,91 @@
 ---
 name: logistics-cycle
-description: The complete supply chain cycle and internal mechanics of JobLogisticsManager, detailing order queuing, stock reservation, shared references, and GOAP logic.
+description: The complete supply chain cycle and internal mechanics of JobLogisticsManager, detailing order queuing, stock reservation, and physical interactions.
 ---
 
-# Logistics Cycle
+# Logistics Cycle (JobLogisticsManager)
 
-This skill documents the complete supply chain that keeps shops stocked and buildings supplied, with a deep dive into how `JobLogisticsManager` operates internally to prevent duplicate orders, manage shared object references, and dispatch transporters via GOAP without looping.
+This skill documents the complete supply chain that keeps shops stocked and buildings supplied, with a deep dive into how `JobLogisticsManager` operates internally to prevent duplicate orders, manage stock reservations, and dispatch transporters.
 
 ## When to use this skill
 - To understand how a `ShopBuilding` restocks its inventory automatically.
-- To debug why orders aren't being placed, why transporters are clustering or freezing, or why deliveries complete prematurely.
+- To debug why a shop has empty shelves, why orders aren't being placed/delivered, or why transporters are duplicating orders.
+- To understand the internal list structures (`_activeOrders`, `_pendingOrders`, `_placedTransportOrders`) of `JobLogisticsManager`.
 - To safely modify `JobLogisticsManager` or `JobTransporter` without breaking the delicate order lifecycle.
 
-## The Event-Driven Order Architecture
+## How to use it
 
-The Logistics cycle relies on a completely asynchronous, event-driven architecture heavily dependent on physical interactions and GOAP priority handling.
+### 1. The Core Responsibilities of JobLogisticsManager
+`JobLogisticsManager` acts as the brain of any commercial building. It handles:
+- **Inventory Monitoring**: Checking if `ShopEntries` fall below `MaxStock`.
+- **Supplier Sourcing**: Finding other buildings that produce missing items via `FindSupplierFor`.
+- **Order Queueing (`_pendingOrders`)**: Storing orders that need to be physically placed via character interactions.
+- **Fulfillment (`ProcessActiveBuyOrders`)**: Dispatching `TransportOrder`s to Transporters or `CraftingOrder`s to internal Crafters when clients request items.
 
-### 1. The Internal Order Lists (JobLogisticsManager)
-Understanding `JobLogisticsManager` requires knowing its internal tracking lists. Never bypass these lists.
-**Rule:** Orders are objects passed by reference. Operations on a single shared order must be strictly centralized.
-- `_activeOrders`: Commercial requests received from other clients.
-- `_placedBuyOrders`: Requests we made to suppliers.
-- `_placedTransportOrders`: Physical delivery requests sent to a `TransporterBuilding`.
-- `_pendingOrders`: The physical "To-Do" list. Enqueued orders are popped by `GoapAction_PlaceOrder` which forces the manager to physically walk to the target and perform `InteractionPlaceOrder`.
+### 2. The Internal Order Lists
+Understanding `JobLogisticsManager` requires knowing its internal tracking lists. Never bypass these lists when modifying the system.
+- `_activeOrders (List<BuyOrder>)`: Commercial requests received from *other* clients. We are the supplier.
+- `_placedBuyOrders (List<BuyOrder>)`: Requests *we* made to suppliers. We are the client.
+- `_placedTransportOrders (List<TransportOrder>)`: Physical delivery requests we sent to a `TransporterBuilding` to deliver our items to our clients.
+- `_activeCraftingOrders (List<CraftingOrder>)`: Internal requests for our `JobCrafter`s to make items to fulfill `_activeOrders`.
+- `_pendingOrders (Queue<PendingOrder>)`: The physical "To-Do" list. Whenever the manager decides to place a Buy/Craft/Transport order, they queue it here. The GOAP action `GoapAction_PlaceOrder` dequeues these and physically walks the manager to the target to perform an `InteractionPlaceOrder`.
 
-### 2. Shared References and Double-Increments
-**Rule:** When a Transporter completes a delivery, they must invoke `AssociatedBuyOrder.RecordDelivery()` exactly **ONCE**.
-Because `BuyOrder` instances are shared by reference between the Client, Supplier, and the Transporter's `TransportOrder`, both the Client (`AcknowledgeDeliveryProgress`) and the Supplier (`OnItemsDeliveredByTransporter`) must act purely as observers checking if `order.IsCompleted` is true to clean up their internal tracking lists. If both sides increment the delivery manually, it results in a double-increment bug.
+### 3. The Supply Chain Flow
+The lifecycle of an item moving between buildings involves several state changes:
+1. **Detection**: `OnWorkerPunchIn()` reads the `ShopBuilding` inventory. If stock is low, it calls `RequestStock()`, which creates a `BuyOrder`, adds it to `_placedBuyOrders`, and enqueues a `PendingOrder`.
+2. **Placement**: The logistics manager physically walks to the supplier and initiates `InteractionPlaceOrder`. The supplier accepts it and adds it to their `_activeOrders`.
+3. **Fulfillment (Supplier Side)**: During `Execute()`, the supplier calls `ProcessActiveBuyOrders()`.
+   - Checks physical stock minus `reservedStockThisTick`.
+   - If enough stock: Reserves it, creates a `TransportOrder`, adds it to `_placedTransportOrders`, and enqueues a `PendingOrder` for the `TransporterBuilding`.
+   - If not enough stock: Creates a `CraftingOrder` for the internal `JobCrafter`.
+4. **Delivery**: The `JobTransporter` physically moves items. When dropped, they trigger `NotifyDeliveryProgress()`.
+5. **Acknowledgment**: The supplier calls `AcknowledgeDeliveryProgress()`, which removes the `TransportOrder` from `_placedTransportOrders` and cleans up the completed `BuyOrder`.
 
-### 3. GOAP Priority Starvation (Gathering vs. Dispatching)
-**Rule:** Logistics managers must be allowed to interrupt low-priority cleanup tasks to execute high-priority orders.
-- A `JobLogisticsManager` cleans the physical floor (e.g., crafter drops) using `GoapAction_GatherStorageItems`.
-- To prevent an infinite gathering loop (where crafters produce faster than the manager cleans, starving the `GoapAction_PlaceOrder` execution), the Gather action MUST include an explicit bailout: `if (_manager.HasPendingOrders) { return false; }` in `IsValid` or `Execute`. This forces GOAP to replan and prioritize dispatching.
+### 4. Stock Reservation (Anti-Double Booking)
+To prevent generating duplicate `TransportOrder`s for the same physical items, `JobLogisticsManager` uses a local `Dictionary<ItemSO, int> reservedStockThisTick` inside `ProcessActiveBuyOrders()`.
+- It tracks how many items are currently assigned to a `TransportOrder` *in the same evaluation frame*.
+- `actuallyAvailableStock = physicalStock - reservedStockThisTick`.
+- This ensures that if we have 10 items physically, we don't dynamically dispatch two separate orders demanding 10 items each.
 
-### 4. Transporter Targeting and Clustering
-**Rule:** When multiple Transporters fetch identical items, their targets must be randomized.
-- If Transporters search for valid `WorldItem`s on the floor deterministically (e.g., picking the first item in the list), they will all target the exact same item position, resulting in a "clown car" clustering bug where they freeze and block each other.
-- Collect all valid visible reserved items into a list and select the target using `Random.Range()`.
+## Examples
 
-### 5. Proper Inventory Checking
-**Rule:** To verify if a character is currently carrying an item during GOAP states, NEVER exclusively check their hands (`AreHandsFree()`). Characters use backpacks/item slots. Always use `Inventory.GetCarriedItem(worker) != null` to ensure the entire capacity is validated to prevent freezing during drop-offs.
+### Example 1: Debugging Phantom Transport Orders
+**Scenario**: A supplier keeps sending out transport orders to the TransporterBuilding, but there are no items left in the storage. Transporters arrive and find nothing.
+**Solution**: Check `JobLogisticsManager.ProcessActiveBuyOrders()`. Ensure that `reservedStockThisTick` is being correctly incremented relative to physical stock:
+```csharp
+int getReserved(ItemSO item) => reservedStockThisTick.ContainsKey(item) ? reservedStockThisTick[item] : 0;
+int actuallyAvailableStock = physicalStock - getReserved(buyOrder.ItemToTransport);
 
-## Existing Components
-- `JobLogisticsManager` -> Scans inventory, creates Pending Orders, and dispatches Transporters.
-- `JobTransporter` -> Accepts `TransportOrder`s, navigates to the physical supplier to pickup items, and delivers them.
-- `InteractionPlaceOrder` -> The physical handshake executing the enqueued Pending Order between two active characters.
+if (actuallyAvailableStock >= remainingToDispatch) {
+    // Reserve it so the next BuyOrder in the loop doesn't claim it!
+    if (reservedStockThisTick.ContainsKey(buyOrder.ItemToTransport))
+        reservedStockThisTick[buyOrder.ItemToTransport] += remainingToDispatch;
+    else
+        reservedStockThisTick.Add(buyOrder.ItemToTransport, remainingToDispatch);
+        
+    // ... Queue TransportOrder ...
+}
+```
+
+### Example 2: Safely Managing In-Transit Quantities
+**Scenario**: Transporters are refusing to pick up an active `TransportOrder` because they think it's already fully handled by other transporters, causing the delivery to permanently halt.
+**Solution**: When `JobTransporter` picks up an item, `AddInTransit(amount)` is called to lock the quota. You **must** ensure that `RemoveInTransit(amount)` is systematically called if the order completes, fails, or the item is dropped.
+```csharp
+public void CancelCurrentOrder()
+{
+    // Clean up the transit quota so other transporters can take over the job
+    if (CurrentOrder != null && CarriedItems.Count > 0)
+    {
+        CurrentOrder.RemoveInTransit(CarriedItems.Count);
+    }
+    CurrentOrder = null;
+    CarriedItems.Clear();
+}
+```
+
+### Example 3: Adding a New Order Segment
+If you introduce a new type of logistics transaction (e.g., `CleaningOrder`), you must adapt the full cycle:
+1. Update `struct PendingOrder` to include a constructor for `CleaningOrder`.
+2. In `JobLogisticsManager.Execute()`, evaluate active `CleaningOrder`s.
+3. Queue it using `_pendingOrders.Enqueue(new PendingOrder(cleaningOrder, targetBuilding))`.
+4. Ensure `InteractionPlaceOrder` acts as the handshake, supporting the passing of `CleaningOrder` to the target character/building.
