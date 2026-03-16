@@ -313,7 +313,7 @@ public class CharacterInteraction : MonoBehaviour
 
             // 2. Attente aléatoire avant la réponse (entre 2.5 et 5 secondes)
             // Mais on s'assure d'abord d'attendre a minima la fin de la bulle de texte
-            while (currentSpeaker.CharacterSpeech != null && currentSpeaker.CharacterSpeech.IsSpeaking)
+            while (currentSpeaker.CharacterSpeech != null && currentSpeaker.CharacterSpeech.IsTyping)
             {
                 yield return null;
             }
@@ -344,9 +344,9 @@ public class CharacterInteraction : MonoBehaviour
         }
 
         // --- ATTENTE FINALE DE SÉCURITÉ ---
-        // On s'assure que toutes les bulles de texte sont bien fermées avant de libérer les personnages
-        while ((initiator.CharacterSpeech != null && initiator.CharacterSpeech.IsSpeaking) ||
-               (target.CharacterSpeech != null && target.CharacterSpeech.IsSpeaking))
+        // On s'assure que toutes les bulles de texte ont fini d'être tapées avant de libérer les personnages
+        while ((initiator.CharacterSpeech != null && initiator.CharacterSpeech.IsTyping) ||
+               (target.CharacterSpeech != null && target.CharacterSpeech.IsTyping))
         {
             yield return null;
         }

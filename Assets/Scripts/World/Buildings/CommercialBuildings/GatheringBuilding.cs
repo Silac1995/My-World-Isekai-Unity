@@ -40,6 +40,9 @@ public class GatheringBuilding : CommercialBuilding
     // Runtime : liste des employés (Characters assignés)
     private List<Character> _employees = new List<Character>();
 
+    // Runtime : list of scanned gatherable objects we are tracking for respawn events
+    private List<GatherableObject> _trackedGatherables = new List<GatherableObject>();
+
     // === Accesseurs publics ===
 
     public IReadOnlyList<GatheringResourceEntry> WantedResources => _wantedResources;
@@ -133,14 +136,27 @@ public class GatheringBuilding : CommercialBuilding
         {
             SetGatherableZone(_gatheringAreaZone);
             
+            // Cleanup old subscriptions
+            ClearTrackedGatherables();
+
             // Register tasks for all valid gatherables found
             TaskManager?.ClearAvailableTasksOfType<GatherResourceTask>();
             foreach (var col in colliders)
             {
                 GatherableObject gatherable = col.GetComponent<GatherableObject>() ?? col.GetComponentInParent<GatherableObject>();
-                if (gatherable != null && gatherable.CanGather() && gatherable.HasAnyOutput(wantedItems))
+                if (gatherable != null && gatherable.HasAnyOutput(wantedItems))
                 {
-                    TaskManager?.RegisterTask(new GatherResourceTask(gatherable));
+                    // Track for respawn regardless of current state
+                    if (!_trackedGatherables.Contains(gatherable))
+                    {
+                        gatherable.OnRespawned += HandleGatherableRespawned;
+                        _trackedGatherables.Add(gatherable);
+                    }
+
+                    if (gatherable.CanGather())
+                    {
+                        TaskManager?.RegisterTask(new GatherResourceTask(gatherable));
+                    }
                 }
             }
         }
@@ -150,6 +166,32 @@ public class GatheringBuilding : CommercialBuilding
             TaskManager?.ClearAvailableTasksOfType<GatherResourceTask>();
             Debug.Log($"<color=orange>[GatheringBuilding]</color> {buildingName} : Scan de _gatheringAreaZone n'a rien trouvé. Retour à l'exploration.");
         }
+    }
+
+    private void HandleGatherableRespawned(GatherableObject gatherable)
+    {
+        if (gatherable != null && TaskManager != null)
+        {
+            // Only register if we still want this item type
+            var wantedItems = GetWantedItems();
+            if (wantedItems.Count > 0 && gatherable.HasAnyOutput(wantedItems))
+            {
+                Debug.Log($"<color=green>[GatheringBuilding]</color> {buildingName} noticed {gatherable.name} respawned! Re-registering task.");
+                TaskManager.RegisterTask(new GatherResourceTask(gatherable));
+            }
+        }
+    }
+
+    private void ClearTrackedGatherables()
+    {
+        foreach (var gatherable in _trackedGatherables)
+        {
+            if (gatherable != null)
+            {
+                gatherable.OnRespawned -= HandleGatherableRespawned;
+            }
+        }
+        _trackedGatherables.Clear();
     }
 
     /// <summary>
@@ -175,6 +217,7 @@ public class GatheringBuilding : CommercialBuilding
             Debug.Log($"<color=orange>[GatheringBuilding]</color> {buildingName} : zone de récolte {_gatherableZone.zoneName} épuisée ou invalide.");
         }
         _gatherableZone = null;
+        ClearTrackedGatherables();
     }
 
     // === Gestion des ressources voulues ===

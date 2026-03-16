@@ -157,6 +157,17 @@ public class JobGatherer : Job
                 var interactable = task.Target as GatherableObject;
                 return interactable != null && !_worker.PathingMemory.IsBlacklisted(interactable.gameObject.GetInstanceID());
             });
+
+            // If we have a zone memory, but absolutely ZERO tasks exist for it (not even claimed ones), the zone is truly dead.
+            if (building.HasGatherableZone)
+            {
+                bool anyGatherTaskExists = building.TaskManager.HasAnyTaskOfType<GatherResourceTask>();
+                if (!anyGatherTaskExists)
+                {
+                    Debug.Log($"<color=orange>[JobGatherer]</color> {_worker.CharacterName}: The active gathering zone has 0 physical trees remaining. Clearing zone memory.");
+                    building.ClearGatherableZone();
+                }
+            }
         }
 
         var worldState = new Dictionary<string, bool>
@@ -181,7 +192,11 @@ public class JobGatherer : Job
 
         // Définir l'objectif prioritaire
         GoapGoal targetGoal;
-        if (allResourcesGathered && !hasAtLeastOneResource)
+        
+        bool trulyFinishedWork = allResourcesGathered && !hasAtLeastOneResource;
+        bool stuckWaitingForTrees = building.HasGatherableZone && !canGather && !looseItemExists && !hasAtLeastOneResource;
+
+        if (trulyFinishedWork || stuckWaitingForTrees)
         {
             targetGoal = new GoapGoal("Idle", new Dictionary<string, bool> { { "isIdling", true } }, priority: 1);
         }

@@ -129,6 +129,19 @@ public class BuildingTaskManager : MonoBehaviour
     }
 
     /// <summary>
+    /// Checks if there is ANY registered task of the specified type, whether available or currently claimed by someone.
+    /// This is useful to distinguish between "No available tasks right now" and "No tasks exist at all".
+    /// </summary>
+    public bool HasAnyTaskOfType<T>(System.Predicate<T> predicate = null) where T : BuildingTask
+    {
+        bool hasAvailable = _availableTasks.OfType<T>().Any(t => t.IsValid() && (predicate == null || predicate(t)));
+        if (hasAvailable) return true;
+
+        bool hasInProgress = _inProgressTasks.OfType<T>().Any(t => t.IsValid() && (predicate == null || predicate(t)));
+        return hasInProgress;
+    }
+
+    /// <summary>
     /// Clears all tasks of a specific type from the available queue.
     /// </summary>
     public void ClearAvailableTasksOfType<T>() where T : BuildingTask

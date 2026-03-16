@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -19,6 +19,8 @@ public class GatherableObject : InteractableObject
     private int _currentGatherCount = 0;
     private bool _isDepleted = false;
     private float _respawnTimer = 0f;
+
+    public event System.Action<GatherableObject> OnRespawned;
 
     // Visuels (optionnel)
     [Header("Visuals")]
@@ -128,6 +130,7 @@ public class GatherableObject : InteractableObject
             _visualRoot.SetActive(true);
 
         Debug.Log($"<color=green>[Gather]</color> {gameObject.name} a respawn !");
+        OnRespawned?.Invoke(this);
     }
 
     private void Update()

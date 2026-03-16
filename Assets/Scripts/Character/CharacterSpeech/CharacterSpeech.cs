@@ -18,6 +18,19 @@ public class CharacterSpeech : MonoBehaviour
     
     private Coroutine _hideCoroutine;
     
+    public bool IsTyping
+    {
+        get
+        {
+            if (_speechBubblePrefab != null && _speechBubblePrefab.activeSelf)
+            {
+                var speech = _speechBubblePrefab.GetComponent<Speech>();
+                if (speech != null && speech.IsTyping) return true;
+            }
+            return false;
+        }
+    }
+
     public bool IsSpeaking 
     {
         get 
@@ -26,12 +39,7 @@ public class CharacterSpeech : MonoBehaviour
             if (_hideCoroutine != null) return true;
             
             // Vrai si le texte est actuellement en train de s'écrire (Speech ou ScriptedSpeech)
-            if (_speechBubblePrefab != null && _speechBubblePrefab.activeSelf)
-            {
-                var speech = _speechBubblePrefab.GetComponent<Speech>();
-                if (speech != null && speech.IsTyping) return true;
-            }
-            return false;
+            return IsTyping;
         }
     }
 

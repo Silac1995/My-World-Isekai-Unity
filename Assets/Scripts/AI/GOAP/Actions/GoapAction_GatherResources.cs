@@ -117,8 +117,7 @@ public class GoapAction_GatherResources : GoapAction
 
             if (_currentTarget == null || _assignedTask == null)
             {
-                Debug.Log($"<color=orange>[GOAP Gather]</color> {worker.CharacterName} : plus de tâches de ressources (ou tout est blacklisté) dans la zone. On vide la zone.");
-                _building.ClearGatherableZone();
+                Debug.Log($"<color=orange>[GOAP Gather]</color> {worker.CharacterName} : No available tasks right now (maybe all are claimed). Returning to Planner.");
                 _isComplete = true;
                 return;
             }
