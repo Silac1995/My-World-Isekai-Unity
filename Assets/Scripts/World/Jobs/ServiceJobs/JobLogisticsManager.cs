@@ -527,7 +527,8 @@ public class JobLogisticsManager : Job
         var linkedTransportOrder = _placedTransportOrders.FirstOrDefault(t => t.AssociatedBuyOrder == clientOrder);
         if (linkedTransportOrder != null)
         {
-            linkedTransportOrder.RecordDelivery(amount);
+            // FIX: The transporter already recorded the physical delivery inside its own UpdateTransportOrderProgress.
+            // Since this object is passed by reference, calling RecordDelivery again here would double-count the item!
             if (linkedTransportOrder.IsCompleted)
             {
                 _placedTransportOrders.Remove(linkedTransportOrder);
