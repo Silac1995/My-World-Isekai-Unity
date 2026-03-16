@@ -19,7 +19,7 @@ public class InteractionPlaceOrder : ICharacterInteractionAction
 
     public void Execute(Character source, Character target)
     {
-        Debug.Log($"<color=lightblue>[Order]</color> {source.CharacterName} demande à passer une commande auprès de {target.CharacterName}...");
+        Debug.Log($"<color=green>[Logistics]</color> {source.CharacterName} débute l'interaction pour passer {_pendingOrders.Count} commande(s) à {target.CharacterName}.");
 
         if (target.CharacterJob == null) return;
 
@@ -55,6 +55,7 @@ public class InteractionPlaceOrder : ICharacterInteractionAction
     {
         if (manager.PlaceBuyOrder(order))
         {
+            order.IsPlaced = true; // Confirme que le fournisseur a bien reçu et traité la commande
             Debug.Log($"<color=green>[Order]</color> BuyOrder de {order.Quantity}x {order.ItemToTransport.ItemName} acceptée par {target.CharacterName}.");
 
             if (source.CharacterRelation != null) source.CharacterRelation.UpdateRelation(target, 2);

@@ -59,7 +59,20 @@ public class GoapAction_DepositResources : GoapAction
             return;
         }
 
-        bool isCloseEnough = NavMeshUtility.IsCharacterAtTargetZone(worker, depositZone.GetComponent<Collider>(), 1f);
+        Vector3 targetCenter = depositZone.GetComponent<Collider>().bounds.center;
+        
+        bool isCloseEnough = false;
+        Vector3 workerPosFlat = new Vector3(worker.transform.position.x, 0, worker.transform.position.z);
+        Vector3 targetPosFlat = new Vector3(targetCenter.x, 0, targetCenter.z);
+        
+        if (Vector3.Distance(workerPosFlat, targetPosFlat) <= 2.5f) 
+        {
+            isCloseEnough = true;
+        }
+        else if (depositZone.GetComponent<Collider>().bounds.Contains(worker.transform.position) && Vector3.Distance(workerPosFlat, targetPosFlat) <= 4.0f)
+        {
+            isCloseEnough = true;
+        }
         
         // Try precise NavMesh state if bounds check failed
         if (!isCloseEnough) isCloseEnough = _isMoving && NavMeshUtility.HasAgentReachedDestination(movement, 0.5f);
@@ -70,10 +83,9 @@ public class GoapAction_DepositResources : GoapAction
 
             if (!_isMoving || hasPathFailed)
             {
-                // Navigate to the edge of the zone rather than raw center to prevent gridlock
-                Vector3 destination = NavMeshUtility.GetOptimalDestination(worker, depositZone.GetComponent<Collider>());
+                // Navigate to the center of the zone rather than the edge to ensure the item stays in
+                movement.SetDestination(targetCenter);
                 
-                movement.SetDestination(destination);
                 _lastRouteRequestTime = UnityEngine.Time.time;
                 _isMoving = true;
             }

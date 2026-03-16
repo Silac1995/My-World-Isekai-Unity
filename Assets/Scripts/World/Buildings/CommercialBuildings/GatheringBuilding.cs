@@ -11,10 +11,8 @@ using MWI.Time;
 public class GatheringResourceEntry
 {
     public ItemSO targetItem;
-    public int maxAmount = -1;      // -1 = illimité
+    public int minAmount = -1;      // -1 = illimité
     [HideInInspector] public int currentAmount = 0;
-
-    public bool IsAtLimit => maxAmount > 0 && currentAmount >= maxAmount;
 }
 
 /// <summary>
@@ -206,7 +204,7 @@ public class GatheringBuilding : CommercialBuilding
         var wanted = new List<ItemSO>();
         foreach (var entry in _wantedResources)
         {
-            if (entry.targetItem != null && !entry.IsAtLimit)
+            if (entry.targetItem != null && !IsResourceAtLimit(entry))
             {
                 wanted.Add(entry.targetItem);
             }
@@ -215,11 +213,33 @@ public class GatheringBuilding : CommercialBuilding
     }
 
     /// <summary>
-    /// Vérifie si le building veut encore des ressources (au moins un item sous la limite).
+    /// Vérifie si le building veut encore des ressources (au moins un item sous la limite combinée: minAmount + pending orders).
     /// </summary>
     public bool NeedsResources()
     {
-        return _wantedResources.Any(r => r.targetItem != null && !r.IsAtLimit);
+        return _wantedResources.Any(r => r.targetItem != null && !IsResourceAtLimit(r));
+    }
+
+    /// <summary>
+    /// Evalue dynamiquement si un item a atteint son quota.
+    /// Quota = minAmount (stock de base du bâtiment) + demandes d'expédition (BuyOrders actives dans le LogisticsManager).
+    /// </summary>
+    private bool IsResourceAtLimit(GatheringResourceEntry entry)
+    {
+        if (entry.minAmount <= 0) return false; // illimité
+
+        int activeOrdersDemand = 0;
+        var managerList = _jobs.OfType<JobLogisticsManager>().ToList();
+        if (managerList.Count > 0)
+        {
+            var logistics = managerList[0];
+            activeOrdersDemand = logistics.ActiveOrders
+                                .Where(o => o.ItemToTransport == entry.targetItem)
+                                .Sum(o => o.Quantity - o.DeliveredQuantity);
+        }
+
+        int totalRequiredAmount = entry.minAmount + activeOrdersDemand;
+        return entry.currentAmount >= totalRequiredAmount;
     }
 
     /// <summary>
@@ -244,7 +264,7 @@ public class GatheringBuilding : CommercialBuilding
             if (entry.targetItem == item)
             {
                 entry.currentAmount++;
-                Debug.Log($"<color=cyan>[GatheringBuilding]</color> {buildingName} : {item.ItemName} récolté ({entry.currentAmount}/{(entry.maxAmount > 0 ? entry.maxAmount.ToString() : "∞")}).");
+                Debug.Log($"<color=cyan>[GatheringBuilding]</color> {buildingName} : {item.ItemName} récolté ({entry.currentAmount} en stock interne).");
                 return true;
             }
         }

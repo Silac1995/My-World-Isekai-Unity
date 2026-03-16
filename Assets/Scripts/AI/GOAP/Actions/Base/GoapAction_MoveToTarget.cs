@@ -26,6 +26,12 @@ public abstract class GoapAction_MoveToTarget : GoapAction
     protected abstract Vector3 GetDestinationPoint(Character worker);
 
     /// <summary>
+    /// If true, the character will walk towards the physical center of the target zone 
+    /// instead of stopping at the closest outer edge. Ideal for dropping items inside a zone.
+    /// </summary>
+    protected virtual bool ShouldGoInsideZone() => false;
+
+    /// <summary>
     /// Evaluates if the agent has reached the destination criteria. Overridable for edge cases.
     /// </summary>
     protected virtual bool CheckArrival(Character worker, Collider targetZone, Vector3 targetPos)
@@ -35,16 +41,25 @@ public abstract class GoapAction_MoveToTarget : GoapAction
             return NavMeshUtility.IsCharacterAtTargetZone(worker, targetZone, 1.0f);
         }
         
-        // If no collider exists, evaluate raw Vector3
-        if (Vector3.Distance(worker.transform.position, targetPos) <= 2.5f)
-        {
-            return true;
-        }
-
         if (targetZone != null)
         {
-            float distToTarget = Vector3.Distance(worker.transform.position, targetZone.bounds.ClosestPoint(worker.transform.position));
-            if (distToTarget <= 1.5f) return true;
+            if (ShouldGoInsideZone())
+            {
+                Vector3 workerPosFlat = new Vector3(worker.transform.position.x, 0, worker.transform.position.z);
+                Vector3 centerFlat = new Vector3(targetZone.bounds.center.x, 0, targetZone.bounds.center.z);
+                
+                if (Vector3.Distance(workerPosFlat, centerFlat) <= 2.5f) return true;
+                
+                // Secondary check: if the zone is huge, just being comfortably inside is enough
+                if (targetZone.bounds.Contains(worker.transform.position) && Vector3.Distance(workerPosFlat, centerFlat) <= 4.0f) return true;
+                
+                return false;
+            }
+            else
+            {
+                float distToTarget = Vector3.Distance(worker.transform.position, targetZone.bounds.ClosestPoint(worker.transform.position));
+                if (distToTarget <= 1.5f) return true;
+            }
         }
 
         // Return false instead of relying on NavMesh completion, which triggers too early if path is blocked
@@ -79,8 +94,15 @@ public abstract class GoapAction_MoveToTarget : GoapAction
                 Vector3 finalDest = rawDest;
                 if (targetCol != null)
                 {
-                    // Snap to the closest edge of the interation zone, reducing gridlock vs NavMeshObstacles (like trees)
-                    finalDest = NavMeshUtility.GetOptimalDestination(worker, targetCol);
+                    if (ShouldGoInsideZone())
+                    {
+                        finalDest = targetCol.bounds.center;
+                    }
+                    else
+                    {
+                        // Snap to the closest edge of the interation zone, reducing gridlock vs NavMeshObstacles (like trees)
+                        finalDest = NavMeshUtility.GetOptimalDestination(worker, targetCol);
+                    }
                 }
 
                 movement.SetDestination(finalDest);

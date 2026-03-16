@@ -17,15 +17,16 @@ public class JobLogisticsManager : Job
     private List<BuyOrder> _activeOrders = new List<BuyOrder>();
     public IReadOnlyList<BuyOrder> ActiveOrders => _activeOrders;
 
+    // Liste des commandes d'achat envoyées aux autres bâtiments fournisseurs par ce bâtiment
+    private List<BuyOrder> _placedBuyOrders = new List<BuyOrder>();
+    public IReadOnlyList<BuyOrder> PlacedBuyOrders => _placedBuyOrders;
+
     // Liste des commandes de transport assignées aux livreurs
     private List<TransportOrder> _activeTransportOrders = new List<TransportOrder>();
 
     // Liste des commandes de fabrication (Crafting) locales au bâtiment
     private List<CraftingOrder> _activeCraftingOrders = new List<CraftingOrder>();
     public IReadOnlyList<CraftingOrder> ActiveCraftingOrders => _activeCraftingOrders;
-
-    // Commandes terminées en attente d'être envoyées aux transporteurs
-    private List<CraftingOrder> _completedCraftOrdersToDispatch = new List<CraftingOrder>();
 
     // File d'attente des commandes à placer physiquement
     private Queue<PendingOrder> _pendingOrders = new Queue<PendingOrder>();
@@ -273,55 +274,11 @@ public class JobLogisticsManager : Job
         if (completed)
         {
             _activeCraftingOrders.Remove(order);
-            _completedCraftOrdersToDispatch.Add(order);
-            Debug.Log($"<color=green>[JobLogisticsManager]</color> Commande Craft {order.Quantity}x {order.ItemToCraft.ItemName} COMPLÉTÉE. Le Manager s'en occupera bientôt.");
+            Debug.Log($"<color=green>[JobLogisticsManager]</color> Commande Craft {order.Quantity}x {order.ItemToCraft.ItemName} COMPLÉTÉE.");
         }
     }
 
-    /// <summary>
-    /// Après avoir complété une CraftingOrder, cherche un TransporterBuilding
-    /// et génère un TransportOrder pour livrer les items au CustomerBuilding.
-    /// </summary>
-    private void GenerateTransportOrder(CraftingOrder completedOrder)
-    {
-        if (completedOrder.CustomerBuilding == null)
-        {
-            Debug.LogWarning($"<color=orange>[Logistics]</color> CraftingOrder pour {completedOrder.ItemToCraft.ItemName} n'a pas de CustomerBuilding. Impossible de livrer.");
-            return;
-        }
 
-        // Chercher un TransporterBuilding
-        var transporter = FindTransporterBuilding();
-        if (transporter == null)
-        {
-            Debug.LogWarning($"<color=orange>[Logistics]</color> Aucun TransporterBuilding trouvé pour livrer {completedOrder.ItemToCraft.ItemName}. Garde en attente.");
-            _completedCraftOrdersToDispatch.Insert(0, completedOrder); // Remettre en file
-            return;
-        }
-
-        // Récupérer le LogisticsManager du Transporter et son worker
-        var transporterLogistics = transporter.Jobs.OfType<JobLogisticsManager>().FirstOrDefault();
-        if (transporterLogistics == null || transporterLogistics.Worker == null)
-        {
-            Debug.LogWarning($"<color=orange>[Logistics]</color> {transporter.BuildingName} n'a pas de LogisticsManager assigné. Impossible de livrer maintenant.");
-            _completedCraftOrdersToDispatch.Insert(0, completedOrder); // Remettre en file
-            return;
-        }
-
-        // Créer le TransportOrder (sans composante financière)
-        var transportOrder = new TransportOrder(
-            completedOrder.ItemToCraft,
-            completedOrder.Quantity,
-            _workplace,                          // source = CraftingBuilding
-            completedOrder.CustomerBuilding       // dest = ShopBuilding
-        );
-
-        Debug.Log($"<color=cyan>[Logistics]</color> 🚚 Commande de transport : {completedOrder.Quantity}x {completedOrder.ItemToCraft.ItemName} de {_workplace.BuildingName} → {completedOrder.CustomerBuilding.BuildingName} via {transporter.BuildingName}.");
-
-        // On l'ajoute à la file d'attente pour que le worker s'y rende physiquement.
-        _pendingOrders.Enqueue(new PendingOrder(transportOrder, transporter));
-        Debug.Log($"<color=cyan>[Logistics]</color>   📦 Enregistrement d'une commande de transport vers {transporter.BuildingName}.");
-    }
 
     /// <summary>
     /// Cherche un TransporterBuilding dans la ville.
@@ -467,6 +424,14 @@ public class JobLogisticsManager : Job
             return;
         }
 
+        // --- NOUVEAU: Vérifier si notre building n'a pas DÉJÀ une commande non placée pour ce même item et ce même fournisseur ---
+        bool alreadyPendingPlacement = _placedBuyOrders.Any(o => o.ItemToTransport == itemSO && o.Source == supplier && !o.IsPlaced);
+        if (alreadyPendingPlacement)
+        {
+            Debug.Log($"<color=cyan>[Logistics]</color>   ⏳ {itemSO.ItemName}: Une commande est déjà en attente d'être passée physiquement à {supplier.BuildingName}.");
+            return;
+        }
+
         var buyOrder = new BuyOrder(
             itemSO,
             quantityToOrder,
@@ -477,8 +442,58 @@ public class JobLogisticsManager : Job
             null
         );
 
+        _placedBuyOrders.Add(buyOrder);
         _pendingOrders.Enqueue(new PendingOrder(buyOrder, supplier));
         Debug.Log($"<color=cyan>[Logistics]</color>   📦 Enregistrement d'une commande d'achat (BuyOrder) de {quantityToOrder}x {itemSO.ItemName} auprès de {supplier.BuildingName}.");
+    }
+
+    /// <summary>
+    /// Appelé par GoapAction_GatherStorageItems lorsqu'un item ramassé est rangé dans le bâtiment.
+    /// Valide notre réception et prévient le fournisseur.
+    /// </summary>
+    public void OnItemGathered(ItemSO itemSO)
+    {
+        // On cherche la plus vieille commande non complétée pour cet item
+        var placedOrder = _placedBuyOrders.FirstOrDefault(o => o.ItemToTransport == itemSO && !o.IsCompleted);
+        if (placedOrder != null)
+        {
+            placedOrder.RecordDelivery(1);
+            
+            // Notifier le fournisseur que la livraison est bien reçue
+            if (placedOrder.Source != null)
+            {
+                var sourceManager = placedOrder.Source.Jobs.OfType<JobLogisticsManager>().FirstOrDefault();
+                if (sourceManager != null)
+                {
+                    sourceManager.AcknowledgeDeliveryProgress(placedOrder);
+                }
+            }
+
+            if (placedOrder.IsCompleted)
+            {
+                _placedBuyOrders.Remove(placedOrder);
+                Debug.Log($"<color=green>[JobLogisticsManager]</color> ✅ La commande de {placedOrder.Quantity}x {itemSO.ItemName} a été entièrement reçue et intégrée !");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Appelé par le client lorsqu'il a physiquement reçu et rangé un item lié à une de nos commandes actives.
+    /// Diminue la demande attendue et nettoie la commande terminées.
+    /// </summary>
+    public void AcknowledgeDeliveryProgress(BuyOrder clientOrder)
+    {
+        // On cherche dans NOS _activeOrders la commande qui correspond à la sienne (même item, même target)
+        var myOrder = _activeOrders.FirstOrDefault(o => o.ItemToTransport == clientOrder.ItemToTransport && o.Destination == clientOrder.Destination);
+        if (myOrder != null)
+        {
+            myOrder.RecordDelivery(1);
+            if (myOrder.IsCompleted)
+            {
+                _activeOrders.Remove(myOrder);
+                Debug.Log($"<color=green>[JobLogisticsManager]</color> 🤝 Le client a acquitté avoir reçu toute la commande de {myOrder.Quantity}x {myOrder.ItemToTransport.ItemName} !");
+            }
+        }
     }
 
     /// <summary>
@@ -493,11 +508,8 @@ public class JobLogisticsManager : Job
         {
             var buyOrder = _activeOrders[i];
             
-            // Si la commande est en cours de livraison (TransportOrder générée), on ne la re-traite pas ici
-            if (buyOrder.DeliveredQuantity > 0 || _activeTransportOrders.Any(t => t.ItemToTransport == buyOrder.ItemToTransport && t.Destination == buyOrder.Destination))
-            {
-                continue;
-            }
+            int remainingToDispatch = buyOrder.Quantity - buyOrder.DeliveredQuantity - buyOrder.DispatchedQuantity;
+            if (remainingToDispatch <= 0) continue;
 
             // On vérifie aussi les pending
             if (_pendingOrders.Any(p => p.Type == OrderType.Transport && p.TransportOrder.ItemToTransport == buyOrder.ItemToTransport && p.TransportOrder.Destination == buyOrder.Destination))
@@ -507,7 +519,7 @@ public class JobLogisticsManager : Job
 
             int availableStock = _workplace.GetItemCount(buyOrder.ItemToTransport);
             
-            if (availableStock >= buyOrder.Quantity)
+            if (availableStock >= remainingToDispatch)
             {
                 // Stock suffisant, on prépare l'expédition
                 var transporter = FindTransporterBuilding();
@@ -519,13 +531,15 @@ public class JobLogisticsManager : Job
 
                 var transportOrder = new TransportOrder(
                     buyOrder.ItemToTransport,
-                    buyOrder.Quantity,
+                    remainingToDispatch,
                     _workplace,
                     buyOrder.Destination
                 );
 
+                buyOrder.RecordDispatch(remainingToDispatch);
+
                 _pendingOrders.Enqueue(new PendingOrder(transportOrder, transporter));
-                Debug.Log($"<color=cyan>[Logistics]</color>   🚚 Expédition de {buyOrder.Quantity}x {buyOrder.ItemToTransport.ItemName} vers {buyOrder.Destination.BuildingName} préparée.");
+                Debug.Log($"<color=cyan>[Logistics]</color>   🚚 Expédition de {remainingToDispatch}x {buyOrder.ItemToTransport.ItemName} vers {buyOrder.Destination.BuildingName} préparée.");
             }
             else
             {
@@ -536,7 +550,7 @@ public class JobLogisticsManager : Job
                     bool craftInProgress = _activeCraftingOrders.Any(c => c.ItemToCraft == buyOrder.ItemToTransport);
                     if (!craftInProgress)
                     {
-                        int quantityToCraft = buyOrder.Quantity - availableStock;
+                        int quantityToCraft = remainingToDispatch - availableStock;
                         var craftOrder = new CraftingOrder(
                             buyOrder.ItemToTransport,
                             quantityToCraft,
@@ -547,14 +561,6 @@ public class JobLogisticsManager : Job
                         PlaceCraftingOrder(craftOrder);
                         Debug.Log($"<color=cyan>[Logistics]</color>   🔨 Génération d'un ordre de craft interne pour honorer la BuyOrder de {buyOrder.Destination.BuildingName}.");
                     }
-                    else
-                    {
-                        // Commenté pour ne pas spammer: Debug.Log($"<color=cyan>[Logistics]</color>   🔨 Un ordre est déjà en cours pour {buyOrder.ItemToTransport.ItemName}.");
-                    }
-                }
-                else
-                {
-                    Debug.Log($"<color=orange>[Logistics]</color> {_workplace.BuildingName} ne peut pas crafter {buyOrder.ItemToTransport.ItemName} ! (RequiresCraftingFor=false)");
                 }
             }
         }
@@ -662,26 +668,37 @@ public class JobLogisticsManager : Job
         _pendingOrders.Enqueue(order);
     }
 
+    /// <summary>
+    /// Ré-injecte dans la file d'attente les commandes qui ont échoué lors de l'interaction physique
+    /// (ex: le fournisseur était occupé).
+    /// </summary>
+    private void RetryUnplacedOrders()
+    {
+        foreach (var order in _placedBuyOrders)
+        {
+            if (!order.IsPlaced && !order.IsCompleted)
+            {
+                // Vérifier si elle est DÉJÀ dans la file d'attente pour ne pas créer de doublons
+                bool alreadyInQueue = _pendingOrders.Any(p => p.Type == OrderType.Buy && p.BuyOrder == order);
+                if (!alreadyInQueue)
+                {
+                    Debug.Log($"<color=yellow>[Logistics]</color> {_worker.CharacterName} : La commande de {order.Quantity}x {order.ItemToTransport.ItemName} pour {order.Source.BuildingName} avait échoué. On retente.");
+                    EnqueuePendingOrder(new PendingOrder(order, order.Source));
+                }
+            }
+        }
+    }
+
     public override void Execute()
     {
         if (_workplace == null) return;
 
+        // V?rifier les commandes qui n'ont pas pu être physiquement passées (ex: Cible occupée)
+        RetryUnplacedOrders();
+
         // Evaluer nos propres engagements envers les autres (BuyOrders reçues)
         ProcessActiveBuyOrders();
 
-        // Traiter les commandes de craft fraîchement terminées
-        if (_completedCraftOrdersToDispatch.Count > 0)
-        {
-            var order = _completedCraftOrdersToDispatch[0];
-            
-            // On s'assure que les objets ont bien été ramassés physiquement au sol par le Manager Logistique
-            // avant d'appeler la compagnie de transport.
-            if (_workplace.GetItemCount(order.ItemToCraft) >= order.Quantity)
-            {
-                _completedCraftOrdersToDispatch.RemoveAt(0);
-                GenerateTransportOrder(order);
-            }
-        }
 
         // Si on a une action en cours, l'exécuter
         if (_currentAction != null)

@@ -330,6 +330,38 @@ public abstract class CommercialBuilding : Building
         return _inventory.Count(i => i.ItemSO == itemSO);
     }
 
+    /// <summary>
+    /// Récupère physiquement tous les WorldItems actuellement déposés dans la StorageZone.
+    /// Pratique pour que les employés (ex: GatherStorageItems) ciblent les bons objets.
+    /// </summary>
+    /// <returns>Une liste de WorldItems se trouvant dans les limites du BoxCollider de la StorageZone.</returns>
+    public virtual List<WorldItem> GetWorldItemsInStorage()
+    {
+        List<WorldItem> foundItems = new List<WorldItem>();
+
+        if (_storageZone == null) return foundItems;
+
+        BoxCollider boxCol = _storageZone.GetComponent<BoxCollider>();
+        if (boxCol == null) return foundItems;
+
+        Vector3 center = boxCol.transform.TransformPoint(boxCol.center);
+        Vector3 halfExtents = Vector3.Scale(boxCol.size, boxCol.transform.lossyScale) * 0.5f;
+
+        Collider[] colliders = Physics.OverlapBox(center, halfExtents, boxCol.transform.rotation, Physics.AllLayers, QueryTriggerInteraction.Collide);
+        
+        foreach (var col in colliders)
+        {
+            // Chercher le composant sur l'objet ou sur son parent
+            WorldItem worldItem = col.GetComponent<WorldItem>() ?? col.GetComponentInParent<WorldItem>();
+            if (worldItem != null && !foundItems.Contains(worldItem))
+            {
+                foundItems.Add(worldItem);
+            }
+        }
+
+        return foundItems;
+    }
+
     public virtual bool HasRequiredIngredients(IEnumerable<CraftingIngredient> ingredients, int multiplier = 1)
     {
         foreach (var ingredient in ingredients)

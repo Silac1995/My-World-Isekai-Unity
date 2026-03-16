@@ -336,6 +336,7 @@ public class JobTransporter : Job
 
         if (CurrentOrder != null)
         {
+            // Update the Transporter's internal LogisticsManager
             var manager = _workplace.GetJobsOfType<JobLogisticsManager>().FirstOrDefault();
             if (manager != null)
             {

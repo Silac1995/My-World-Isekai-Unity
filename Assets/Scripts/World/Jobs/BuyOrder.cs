@@ -18,7 +18,13 @@ public class BuyOrder
     // Quantité déjà livrée par les transporteurs
     public int DeliveredQuantity { get; private set; }
 
+    // Quantité pour laquelle un TransportOrder a déjà été généré
+    public int DispatchedQuantity { get; private set; }
+
     public bool IsCompleted => DeliveredQuantity >= Quantity;
+
+    // Indique si la commande a été officiellement acceptée par le fournisseur via interaction
+    public bool IsPlaced { get; set; } = false;
 
     public BuyOrder(ItemSO item, int quantity, CommercialBuilding source, CommercialBuilding dest, int remainingDays, Character clientBoss, Character intermediaryBoss = null)
     {
@@ -30,6 +36,7 @@ public class BuyOrder
         ClientBoss = clientBoss;
         IntermediaryBoss = intermediaryBoss;
         DeliveredQuantity = 0;
+        DispatchedQuantity = 0;
     }
 
     public void DecreaseRemainingDays()
@@ -45,5 +52,10 @@ public class BuyOrder
     {
         DeliveredQuantity += amount;
         return IsCompleted;
+    }
+
+    public void RecordDispatch(int amount)
+    {
+        DispatchedQuantity += amount;
     }
 }

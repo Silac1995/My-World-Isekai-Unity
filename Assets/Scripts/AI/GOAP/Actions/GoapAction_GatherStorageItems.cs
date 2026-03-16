@@ -204,6 +204,12 @@ public class GoapAction_GatherStorageItems : GoapAction
     {
         _building.AddToInventory(item);
         Debug.Log($"<color=green>[Gathering]</color> {worker.CharacterName} a rangé {item.ItemSO.ItemName} dans le stockage.");
+        
+        if (_manager != null)
+        {
+            _manager.OnItemGathered(item.ItemSO);
+        }
+
         _currentState = GatherState.FindingItem;
         _actionStarted = false;
         
@@ -303,6 +309,9 @@ public class GoapAction_GatherStorageItems : GoapAction
             depositZone = gatheringBuilding.DepositZone;
         }
         BoxCollider depositCol = depositZone != null ? depositZone.GetComponent<BoxCollider>() : null;
+        
+        Zone deliveryZone = _building.DeliveryZone;
+        BoxCollider deliveryCol = deliveryZone != null ? deliveryZone.GetComponent<BoxCollider>() : null;
 
         List<Collider> allCols = new List<Collider>(colliders);
 
@@ -312,6 +321,14 @@ public class GoapAction_GatherStorageItems : GoapAction
             Vector3 dHalfExtents = Vector3.Scale(depositCol.size, depositCol.transform.lossyScale) * 0.5f;
             var dCols = Physics.OverlapBox(dCenter, dHalfExtents, depositCol.transform.rotation, Physics.AllLayers, QueryTriggerInteraction.Collide);
             allCols.AddRange(dCols);
+        }
+        
+        if (deliveryCol != null)
+        {
+            Vector3 delCenter = deliveryCol.transform.TransformPoint(deliveryCol.center);
+            Vector3 delHalfExtents = Vector3.Scale(deliveryCol.size, deliveryCol.transform.lossyScale) * 0.5f;
+            var delCols = Physics.OverlapBox(delCenter, delHalfExtents, deliveryCol.transform.rotation, Physics.AllLayers, QueryTriggerInteraction.Collide);
+            allCols.AddRange(delCols);
         }
 
         foreach (var col in allCols)

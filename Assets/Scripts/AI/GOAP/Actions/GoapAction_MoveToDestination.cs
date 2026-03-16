@@ -59,6 +59,8 @@ namespace MWI.AI
             return true;
         }
 
+        protected override bool ShouldGoInsideZone() => true;
+
         protected override Collider GetTargetCollider(Character worker)
         {
             if (_job == null || _job.CurrentOrder == null || _job.CurrentOrder.Destination == null) return null;

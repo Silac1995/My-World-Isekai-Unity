@@ -149,11 +149,11 @@ public class GoapAction_PlaceOrder : GoapAction
         {
             if (worker.CharacterInteraction.StartInteractionWith(targetWorker, interaction))
             {
-                Debug.Log($"<color=green>[Logistics]</color> {worker.CharacterName} débute l'interaction pour passer {ordersForTarget.Count} commande(s) à {targetWorker.CharacterName}.");
+                Debug.Log($"<color=yellow>[Logistics]</color> {worker.CharacterName} tente d'interpeller {targetWorker.CharacterName} pour des commandes...");
             }
             else
             {
-                Debug.LogWarning($"<color=orange>[Logistics]</color> L'interaction PlaceOrder a échoué à démarrer. Remise en file de {ordersForTarget.Count} commande(s).");
+                Debug.LogWarning($"<color=orange>[Logistics]</color> L'interaction PlaceOrder a échoué à démarrer (Cible occupée ?). Remise en file de {ordersForTarget.Count} commande(s).");
                 foreach(var failOrder in ordersForTarget)
                 {
                     _manager.EnqueuePendingOrder(failOrder);
