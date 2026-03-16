@@ -38,7 +38,7 @@ public class GoapAction_PickupLooseItem : GoapAction
 
     public override bool IsValid(Character worker)
     {
-        if (_building == null || !_building.HasGatherableZone) return false;
+        if (_building == null) return false;
 
         var equipment = worker.CharacterEquipment;
         if (equipment != null)
@@ -261,7 +261,8 @@ public class GoapAction_PickupLooseItem : GoapAction
         }
         else
         {
-            Debug.Log($"<color=orange>[GOAP Pickup]</color> {worker.CharacterName} ne peut ni stocker ni porter l'item.");
+            Debug.Log($"<color=orange>[GOAP Pickup]</color> {worker.CharacterName} ne peut ni stocker ni porter l'item. Blacklist temporaire.");
+            worker.PathingMemory.RecordFailure(worldItem.gameObject.GetInstanceID());
             _isComplete = true;
         }
     }

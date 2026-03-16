@@ -102,7 +102,7 @@ public class JobTransporter : Job
         {
             if (!_currentAction.IsValid(_worker))
             {
-                Debug.Log($"<color=orange>[JobTransporter]</color> {_worker.CharacterName} : action {_currentAction.ActionName} invalide, replanification...");
+                Debug.Log($"<color=orange>[JobTransporter]</color> {_worker.CharacterName} : action {_currentAction.ActionName} invalide, replanification... (TargetWorldItem = {(TargetWorldItem != null ? TargetWorldItem.name : "NULL")})");
                 _currentAction.Exit(_worker);
                 _currentAction = null;
                 _currentPlan = null;
@@ -122,7 +122,7 @@ public class JobTransporter : Job
                 if (_currentPlan != null && _currentPlan.Count > 0)
                 {
                     _currentAction = _currentPlan.Dequeue();
-                    Debug.Log($"<color=green>[JobTransporter]</color> {_worker.CharacterName} : passe à l'action suivante → {_currentAction.ActionName}");
+                    Debug.Log($"<color=green>[JobTransporter]</color> {_worker.CharacterName} : passe à l'action suivante → {_currentAction.ActionName} (TargetWorldItem = {(TargetWorldItem != null ? TargetWorldItem.name : "NULL")})");
                 }
                 else
                 {
@@ -138,6 +138,7 @@ public class JobTransporter : Job
     private void PlanNextActions()
     {
         bool itemLocated = TargetWorldItem != null;
+        if (!itemLocated && _currentPlan != null) Debug.Log($"[JobTransporter] PlanNextActions triggered while TargetWorldItem is NULL.");
         bool atItem = false;
         
         bool atSourceStorage = false;
