@@ -242,7 +242,7 @@ public class GoapAction_GatherStorageItems : GoapAction
         arrived = false;
         var movement = worker.CharacterMovement;
 
-        if (NavMeshUtility.IsCharacterAtTargetZone(worker, targetCollider, 1f))
+        if (NavMeshUtility.IsCharacterAtTargetZone(worker, targetCollider, 1.5f))
         {
             movement.ResetPath();
             arrived = true;
@@ -296,8 +296,25 @@ public class GoapAction_GatherStorageItems : GoapAction
 
         Zone storageZone = _building.StorageZone;
         BoxCollider storageCol = storageZone != null ? storageZone.GetComponent<BoxCollider>() : null;
+        
+        Zone depositZone = null;
+        if (_building is GatheringBuilding gatheringBuilding)
+        {
+            depositZone = gatheringBuilding.DepositZone;
+        }
+        BoxCollider depositCol = depositZone != null ? depositZone.GetComponent<BoxCollider>() : null;
 
-        foreach (var col in colliders)
+        List<Collider> allCols = new List<Collider>(colliders);
+
+        if (depositCol != null)
+        {
+            Vector3 dCenter = depositCol.transform.TransformPoint(depositCol.center);
+            Vector3 dHalfExtents = Vector3.Scale(depositCol.size, depositCol.transform.lossyScale) * 0.5f;
+            var dCols = Physics.OverlapBox(dCenter, dHalfExtents, depositCol.transform.rotation, Physics.AllLayers, QueryTriggerInteraction.Collide);
+            allCols.AddRange(dCols);
+        }
+
+        foreach (var col in allCols)
         {
             var worldItem = col.GetComponent<WorldItem>() ?? col.GetComponentInParent<WorldItem>();
             if (worldItem == null || worldItem.ItemInstance == null || worldItem.IsBeingCarried) continue;

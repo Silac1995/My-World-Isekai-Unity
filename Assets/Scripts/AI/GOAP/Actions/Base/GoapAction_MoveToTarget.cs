@@ -41,8 +41,14 @@ public abstract class GoapAction_MoveToTarget : GoapAction
             return true;
         }
 
-        // Rely purely on NavMesh stopping distance calculation
-        return worker.CharacterMovement != null && NavMeshUtility.HasAgentReachedDestination(worker.CharacterMovement, 0.5f);
+        if (targetZone != null)
+        {
+            float distToTarget = Vector3.Distance(worker.transform.position, targetZone.bounds.ClosestPoint(worker.transform.position));
+            if (distToTarget <= 1.5f) return true;
+        }
+
+        // Return false instead of relying on NavMesh completion, which triggers too early if path is blocked
+        return false;
     }
 
     public override void Execute(Character worker)

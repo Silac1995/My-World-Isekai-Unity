@@ -83,7 +83,7 @@ public class CharacterPickUpItem : CharacterAction
                         Vector3 charPos = character.transform.position;
                         charPos.y = 0;
 
-                        if (Vector3.Distance(charPos, closestPoint) > 1f)
+                        if (Vector3.Distance(charPos, closestPoint) > 1.5f)
                         {
                             Debug.Log($"[Action] {character.CharacterName} est hors de la zone d'interaction de {_item.CustomizedName}.");
                             return false;
@@ -97,7 +97,7 @@ public class CharacterPickUpItem : CharacterAction
                     Vector3 charPos = character.transform.position;
                     charPos.y = 0;
 
-                    if (Vector3.Distance(charPos, closestPoint) > 1f)
+                    if (Vector3.Distance(charPos, closestPoint) > 1.5f)
                     {
                         Debug.Log($"[Action] {character.CharacterName} est trop loin de {_item.CustomizedName} pour le ramasser.");
                         return false;

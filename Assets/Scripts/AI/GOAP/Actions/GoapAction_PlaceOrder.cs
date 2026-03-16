@@ -109,28 +109,55 @@ public class GoapAction_PlaceOrder : GoapAction
         ExecuteOrderTransfer(worker, targetWorker, targetLogistics, pendingOrder);
     }
 
-    private void ExecuteOrderTransfer(Character worker, Character targetWorker, JobLogisticsManager targetLogistics, JobLogisticsManager.PendingOrder pendingOrder)
+    private void ExecuteOrderTransfer(Character worker, Character targetWorker, JobLogisticsManager targetLogistics, JobLogisticsManager.PendingOrder firstOrder)
     {
+        // Extraire TOUTES les commandes en attente pour CE bâtiment spécifique
+        List<JobLogisticsManager.PendingOrder> ordersForTarget = new List<JobLogisticsManager.PendingOrder>();
+        List<JobLogisticsManager.PendingOrder> remainingOrders = new List<JobLogisticsManager.PendingOrder>();
+
+        while (_manager.HasPendingOrders)
+        {
+            var pOrder = _manager.PeekPendingOrder();
+            _manager.DequeuePendingOrder();
+
+            if (pOrder.TargetBuilding == firstOrder.TargetBuilding)
+            {
+                ordersForTarget.Add(pOrder);
+            }
+            else
+            {
+                remainingOrders.Add(pOrder);
+            }
+        }
+
+        // Remettre les commandes qui n'étaient pas pour ce bâtiment
+        foreach(var remaining in remainingOrders)
+        {
+            _manager.EnqueuePendingOrder(remaining);
+        }
+
         // Visuals (Face-à-face)
         worker.CharacterVisual?.FaceCharacter(targetWorker);
         targetWorker.CharacterVisual?.FaceCharacter(worker);
 
         // Au lieu de transférer magiquement les données, on lance une interaction formelle.
         // Cela respecte l'architecture dictée par les skills job_system et logistics_cycle.
-        InteractionPlaceOrder interaction = new InteractionPlaceOrder(worker, targetWorker, targetLogistics.Workplace, pendingOrder);
+        InteractionPlaceOrder interaction = new InteractionPlaceOrder(worker, targetWorker, targetLogistics.Workplace, ordersForTarget);
         
         // On demande au CharacterInteraction d'exécuter cette interaction
         if (worker.CharacterInteraction != null)
         {
             if (worker.CharacterInteraction.StartInteractionWith(targetWorker, interaction))
             {
-                // Consume order from queue only if the interaction started successfully
-                _manager.DequeuePendingOrder();
-                Debug.Log($"<color=green>[Logistics]</color> {worker.CharacterName} débute l'interaction pour passer commande à {targetWorker.CharacterName}.");
+                Debug.Log($"<color=green>[Logistics]</color> {worker.CharacterName} débute l'interaction pour passer {ordersForTarget.Count} commande(s) à {targetWorker.CharacterName}.");
             }
             else
             {
-                Debug.LogWarning($"<color=orange>[Logistics]</color> L'interaction PlaceOrder a échoué à démarrer.");
+                Debug.LogWarning($"<color=orange>[Logistics]</color> L'interaction PlaceOrder a échoué à démarrer. Remise en file de {ordersForTarget.Count} commande(s).");
+                foreach(var failOrder in ordersForTarget)
+                {
+                    _manager.EnqueuePendingOrder(failOrder);
+                }
             }
         }
         else

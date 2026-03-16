@@ -547,6 +547,14 @@ public class JobLogisticsManager : Job
                         PlaceCraftingOrder(craftOrder);
                         Debug.Log($"<color=cyan>[Logistics]</color>   🔨 Génération d'un ordre de craft interne pour honorer la BuyOrder de {buyOrder.Destination.BuildingName}.");
                     }
+                    else
+                    {
+                        // Commenté pour ne pas spammer: Debug.Log($"<color=cyan>[Logistics]</color>   🔨 Un ordre est déjà en cours pour {buyOrder.ItemToTransport.ItemName}.");
+                    }
+                }
+                else
+                {
+                    Debug.Log($"<color=orange>[Logistics]</color> {_workplace.BuildingName} ne peut pas crafter {buyOrder.ItemToTransport.ItemName} ! (RequiresCraftingFor=false)");
                 }
             }
         }
@@ -647,6 +655,11 @@ public class JobLogisticsManager : Job
         {
             _pendingOrders.Dequeue();
         }
+    }
+
+    public void EnqueuePendingOrder(PendingOrder order)
+    {
+        _pendingOrders.Enqueue(order);
     }
 
     public override void Execute()

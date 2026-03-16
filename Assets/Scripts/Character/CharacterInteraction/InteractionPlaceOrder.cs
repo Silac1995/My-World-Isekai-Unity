@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Linq;
+using System.Collections.Generic;
 
 /// <summary>
 /// Action d'interaction permettant à un personnage de passer une commande (BuyOrder ou CraftingOrder)
@@ -7,12 +8,12 @@ using System.Linq;
 /// </summary>
 public class InteractionPlaceOrder : ICharacterInteractionAction
 {
-    private JobLogisticsManager.PendingOrder _pendingOrder;
+    private List<JobLogisticsManager.PendingOrder> _pendingOrders;
     private CommercialBuilding _targetBuilding;
 
-    public InteractionPlaceOrder(Character source, Character target, CommercialBuilding targetBuilding, JobLogisticsManager.PendingOrder pendingOrder)
+    public InteractionPlaceOrder(Character source, Character target, CommercialBuilding targetBuilding, List<JobLogisticsManager.PendingOrder> pendingOrders)
     {
-        _pendingOrder = pendingOrder;
+        _pendingOrders = pendingOrders;
         _targetBuilding = targetBuilding;
     }
 
@@ -33,23 +34,25 @@ public class InteractionPlaceOrder : ICharacterInteractionAction
             return;
         }
 
-        if (_pendingOrder.Type == JobLogisticsManager.OrderType.Buy && _pendingOrder.BuyOrder != null)
+        foreach (var orderData in _pendingOrders)
         {
-            ExecuteBuyOrder(source, target, manager);
-        }
-        else if (_pendingOrder.Type == JobLogisticsManager.OrderType.Crafting && _pendingOrder.CraftingOrder != null)
-        {
-            ExecuteCraftingOrder(source, target, manager);
-        }
-        else if (_pendingOrder.Type == JobLogisticsManager.OrderType.Transport && _pendingOrder.TransportOrder != null)
-        {
-            ExecuteTransportOrder(source, target, manager);
+            if (orderData.Type == JobLogisticsManager.OrderType.Buy && orderData.BuyOrder != null)
+            {
+                ExecuteBuyOrder(source, target, manager, orderData.BuyOrder);
+            }
+            else if (orderData.Type == JobLogisticsManager.OrderType.Crafting && orderData.CraftingOrder != null)
+            {
+                ExecuteCraftingOrder(source, target, manager, orderData.CraftingOrder);
+            }
+            else if (orderData.Type == JobLogisticsManager.OrderType.Transport && orderData.TransportOrder != null)
+            {
+                ExecuteTransportOrder(source, target, manager, orderData.TransportOrder);
+            }
         }
     }
 
-    private void ExecuteBuyOrder(Character source, Character target, JobLogisticsManager manager)
+    private void ExecuteBuyOrder(Character source, Character target, JobLogisticsManager manager, BuyOrder order)
     {
-        var order = _pendingOrder.BuyOrder;
         if (manager.PlaceBuyOrder(order))
         {
             Debug.Log($"<color=green>[Order]</color> BuyOrder de {order.Quantity}x {order.ItemToTransport.ItemName} acceptée par {target.CharacterName}.");
@@ -61,9 +64,8 @@ public class InteractionPlaceOrder : ICharacterInteractionAction
         }
     }
 
-    private void ExecuteCraftingOrder(Character source, Character target, JobLogisticsManager manager)
+    private void ExecuteCraftingOrder(Character source, Character target, JobLogisticsManager manager, CraftingOrder order)
     {
-        var order = _pendingOrder.CraftingOrder;
         if (manager.PlaceCraftingOrder(order))
         {
             Debug.Log($"<color=green>[Order]</color> CraftingOrder de {order.Quantity}x {order.ItemToCraft.ItemName} acceptée par {target.CharacterName}.");
@@ -75,9 +77,8 @@ public class InteractionPlaceOrder : ICharacterInteractionAction
         }
     }
 
-    private void ExecuteTransportOrder(Character source, Character target, JobLogisticsManager manager)
+    private void ExecuteTransportOrder(Character source, Character target, JobLogisticsManager manager, TransportOrder order)
     {
-        var order = _pendingOrder.TransportOrder;
         if (manager.PlaceTransportOrder(order))
         {
             Debug.Log($"<color=green>[Order]</color> TransportOrder de {order.Quantity}x {order.ItemToTransport.ItemName} acceptée par {target.CharacterName}.");

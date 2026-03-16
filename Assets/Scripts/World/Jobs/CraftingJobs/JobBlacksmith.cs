@@ -46,6 +46,10 @@ public class JobBlacksmith : JobCrafter
     {
     }
 
+    private float _lastLogTime_NoOrder = 0f;
+    private float _lastLogTime_NoStation = 0f;
+    private float _lastLogTime_NoIngr = 0f;
+
     public override void Execute()
     {
         if (_worker == null || !(_workplace is CraftingBuilding cb)) return;
@@ -90,7 +94,11 @@ public class JobBlacksmith : JobCrafter
         _currentOrder = _manager.GetNextAvailableCraftingOrder();
         if (_currentOrder == null)
         {
-            // Logging removed here to avoid spamming every frame when idle
+            if (Time.time > _lastLogTime_NoOrder + 5f)
+            {
+                Debug.Log($"<color=orange>[JobBlacksmith]</color> {_worker.CharacterName} ({cb.BuildingName}) : Aucune CraftingOrder disponible (ou manager vide).");
+                _lastLogTime_NoOrder = Time.time;
+            }
             return; // En attente de commandes
         }
 
@@ -110,7 +118,11 @@ public class JobBlacksmith : JobCrafter
 
         if (_currentStation == null)
         {
-            // Logging removed here to avoid spamming every frame when missing a station
+            if (Time.time > _lastLogTime_NoStation + 5f)
+            {
+                Debug.Log($"<color=orange>[JobBlacksmith]</color> {_worker.CharacterName} : Pas de station libre ou capable de faire {_currentOrder.ItemToCraft.ItemName}.");
+                _lastLogTime_NoStation = Time.time;
+            }
             return; // Attendre qu'une station se libère
         }
 
@@ -119,7 +131,11 @@ public class JobBlacksmith : JobCrafter
         {
             if (!cb.HasRequiredIngredients(_currentOrder.ItemToCraft.CraftingRecipe))
             {
-                // Logging removed here to avoid spamming every frame when waiting for ingredients
+                if (Time.time > _lastLogTime_NoIngr + 5f)
+                {
+                    Debug.Log($"<color=orange>[JobBlacksmith]</color> {_worker.CharacterName} : En attente de la livraison de matériaux par les transporteurs pour {_currentOrder.ItemToCraft.ItemName}.");
+                    _lastLogTime_NoIngr = Time.time;
+                }
                 return;
             }
             else
