@@ -19,6 +19,9 @@ public class CraftingOrder
 
     public bool IsCompleted => CraftedQuantity >= Quantity;
 
+    // Indique si la commande a été officiellement acceptée par l'artisan via interaction
+    public bool IsPlaced { get; set; } = false;
+
     public CraftingOrder(ItemSO item, int quantity, int remainingDays, Character clientBoss = null, CommercialBuilding customerBuilding = null)
     {
         ItemToCraft = item;

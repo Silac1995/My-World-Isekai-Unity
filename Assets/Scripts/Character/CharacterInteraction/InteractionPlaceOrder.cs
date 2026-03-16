@@ -69,6 +69,7 @@ public class InteractionPlaceOrder : ICharacterInteractionAction
     {
         if (manager.PlaceCraftingOrder(order))
         {
+            order.IsPlaced = true;
             Debug.Log($"<color=green>[Order]</color> CraftingOrder de {order.Quantity}x {order.ItemToCraft.ItemName} acceptée par {target.CharacterName}.");
 
             if (source.CharacterRelation != null) source.CharacterRelation.UpdateRelation(target, 2);
@@ -82,6 +83,7 @@ public class InteractionPlaceOrder : ICharacterInteractionAction
     {
         if (manager.PlaceTransportOrder(order))
         {
+            order.IsPlaced = true;
             Debug.Log($"<color=green>[Order]</color> TransportOrder de {order.Quantity}x {order.ItemToTransport.ItemName} acceptée par {target.CharacterName}.");
 
             if (source.CharacterRelation != null) source.CharacterRelation.UpdateRelation(target, 2);

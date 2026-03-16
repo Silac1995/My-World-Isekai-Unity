@@ -20,6 +20,9 @@ public class TransportOrder
 
     public bool IsCompleted => DeliveredQuantity >= Quantity;
 
+    // Indique si la commande a été officiellement acceptée par le fournisseur via interaction
+    public bool IsPlaced { get; set; } = false;
+
     public TransportOrder(ItemSO item, int quantity, CommercialBuilding source, CommercialBuilding dest)
     {
         ItemToTransport = item;

@@ -17,11 +17,15 @@ public class JobLogisticsManager : Job
     private List<BuyOrder> _activeOrders = new List<BuyOrder>();
     public IReadOnlyList<BuyOrder> ActiveOrders => _activeOrders;
 
-    // Liste des commandes d'achat envoyées aux autres bâtiments fournisseurs par ce bâtiment
+    // Commandes d'achat qu'on a émises (en tant que client)
     private List<BuyOrder> _placedBuyOrders = new List<BuyOrder>();
     public IReadOnlyList<BuyOrder> PlacedBuyOrders => _placedBuyOrders;
 
-    // Liste des commandes de transport assignées aux livreurs
+    // Commandes de transport qu'on a émises pour satisfaire nos clients (en tant que fournisseur)
+    private List<TransportOrder> _placedTransportOrders = new List<TransportOrder>();
+    public IReadOnlyList<TransportOrder> PlacedTransportOrders => _placedTransportOrders;
+
+    // Commandes de transport (pour le TransporterBuilding)
     private List<TransportOrder> _activeTransportOrders = new List<TransportOrder>();
 
     // Liste des commandes de fabrication (Crafting) locales au bâtiment
@@ -511,8 +515,8 @@ public class JobLogisticsManager : Job
             int remainingToDispatch = buyOrder.Quantity - buyOrder.DeliveredQuantity - buyOrder.DispatchedQuantity;
             if (remainingToDispatch <= 0) continue;
 
-            // On vérifie aussi les pending
-            if (_pendingOrders.Any(p => p.Type == OrderType.Transport && p.TransportOrder.ItemToTransport == buyOrder.ItemToTransport && p.TransportOrder.Destination == buyOrder.Destination))
+            // On ne check plus _pendingOrders, on vérifie _placedTransportOrders pour éviter des doublons infinis
+            if (_placedTransportOrders.Any(t => t.ItemToTransport == buyOrder.ItemToTransport && t.Destination == buyOrder.Destination && !t.IsPlaced))
             {
                 continue;
             }
@@ -538,6 +542,7 @@ public class JobLogisticsManager : Job
 
                 buyOrder.RecordDispatch(remainingToDispatch);
 
+                _placedTransportOrders.Add(transportOrder); // Suivi local pour réessayer si échec
                 _pendingOrders.Enqueue(new PendingOrder(transportOrder, transporter));
                 Debug.Log($"<color=cyan>[Logistics]</color>   🚚 Expédition de {remainingToDispatch}x {buyOrder.ItemToTransport.ItemName} vers {buyOrder.Destination.BuildingName} préparée.");
             }
@@ -674,16 +679,34 @@ public class JobLogisticsManager : Job
     /// </summary>
     private void RetryUnplacedOrders()
     {
+        // Réessayer les BuyOrders
         foreach (var order in _placedBuyOrders)
         {
             if (!order.IsPlaced && !order.IsCompleted)
             {
-                // Vérifier si elle est DÉJÀ dans la file d'attente pour ne pas créer de doublons
                 bool alreadyInQueue = _pendingOrders.Any(p => p.Type == OrderType.Buy && p.BuyOrder == order);
                 if (!alreadyInQueue)
                 {
-                    Debug.Log($"<color=yellow>[Logistics]</color> {_worker.CharacterName} : La commande de {order.Quantity}x {order.ItemToTransport.ItemName} pour {order.Source.BuildingName} avait échoué. On retente.");
+                    Debug.Log($"<color=yellow>[Logistics]</color> {_worker.CharacterName} : La BuyOrder de {order.Quantity}x {order.ItemToTransport.ItemName} pour {order.Source.BuildingName} avait échoué. On retente.");
                     EnqueuePendingOrder(new PendingOrder(order, order.Source));
+                }
+            }
+        }
+
+        // Réessayer les TransportOrders
+        foreach (var order in _placedTransportOrders)
+        {
+            if (!order.IsPlaced && !order.IsCompleted)
+            {
+                bool alreadyInQueue = _pendingOrders.Any(p => p.Type == OrderType.Transport && p.TransportOrder == order);
+                if (!alreadyInQueue)
+                {
+                    var transporter = FindTransporterBuilding();
+                    if (transporter != null)
+                    {
+                        Debug.Log($"<color=yellow>[Logistics]</color> {_worker.CharacterName} : La TransportOrder de {order.Quantity}x {order.ItemToTransport.ItemName} vers {order.Destination.BuildingName} avait échoué. On retente.");
+                        EnqueuePendingOrder(new PendingOrder(order, transporter));
+                    }
                 }
             }
         }
