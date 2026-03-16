@@ -10,6 +10,7 @@ public class GoapAction_IdleInBuilding : GoapAction
     private Vector3 _wanderTarget;
     private bool _isComplete = false;
     private bool _isWalking = false;
+    private bool _hasChosenDestination = false;
     private float _waitTime = 0f;
     private float _maxWaitTime = 5f;
     private GatheringBuilding _building;
@@ -21,11 +22,7 @@ public class GoapAction_IdleInBuilding : GoapAction
 
     public override string ActionName => "IdleInBuilding";
 
-    // Précondition : le worker N'A PAS besoin de travailler (le bâtiment est "plein")
-    public override Dictionary<string, bool> Preconditions => new Dictionary<string, bool>
-    {
-        { "needsToWork", false }
-    };
+    public override Dictionary<string, bool> Preconditions => new Dictionary<string, bool>();
 
     // Effet : le worker est en train de se reposer/flâner
     public override Dictionary<string, bool> Effects => new Dictionary<string, bool>
@@ -33,17 +30,14 @@ public class GoapAction_IdleInBuilding : GoapAction
         { "isIdling", true }
     };
 
-    // Coût très faible pour que le planner le choisisse facilement quand `needsToWork` est false
+    // Coût très faible pour que le planner le choisisse facilement quand le but est d'idling
     public override float Cost => 0.5f;
 
     public override bool IsComplete => _isComplete;
 
     public override bool IsValid(Character worker)
     {
-        if (_building == null) return false;
-        
-        // Valide tant que le bâtiment n'a toujours pas besoin de ressources
-        return _building.AreAllRequestedResourcesGathered();
+        return _building != null;
     }
 
     public override void Execute(Character worker)
@@ -53,54 +47,56 @@ public class GoapAction_IdleInBuilding : GoapAction
         var movement = worker.CharacterMovement;
         if (movement == null) return;
 
-        // Si on n'est pas en train de marcher, on attend un peu puis on choisit une nouvelle destination
-        if (!_isWalking)
+        if (!_hasChosenDestination)
         {
-            _waitTime -= Time.deltaTime;
-            
-            if (_waitTime <= 0f)
+            // Trouver une destination aléatoire DANS la zone du bâtiment (ou DepositZone en fallback)
+            if (_building.BuildingZone != null)
             {
-                // Trouver une destination aléatoire DANS la zone du bâtiment (ou DepositZone en fallback)
-                if (_building.BuildingZone != null)
-                {
-                    Bounds bounds = _building.BuildingZone.bounds;
-                    float randomX = Random.Range(bounds.min.x, bounds.max.x);
-                    float randomZ = Random.Range(bounds.min.z, bounds.max.z);
-                    
-                    // Utiliser le Y du worker pour éviter d'être bloqué dans le toit du bâtiment
-                    _wanderTarget = new Vector3(randomX, worker.transform.position.y, randomZ);
-
-                    // S'assurer qu'on est sur le NavMesh avec un grand rayon de recherche (au cas où on tape un mur)
-                    if (UnityEngine.AI.NavMesh.SamplePosition(_wanderTarget, out UnityEngine.AI.NavMeshHit hit, 10.0f, UnityEngine.AI.NavMesh.AllAreas))
-                    {
-                        _wanderTarget = hit.position;
-                    }
-                }
-                else if (_building.DepositZone != null)
-                {
-                    _wanderTarget = _building.DepositZone.GetRandomPointInZone();
-                }
-                else
-                {
-                    // Fallback autour du centre du bâtiment
-                    Vector2 randomCircle = Random.insideUnitCircle * 3f;
-                    _wanderTarget = _building.transform.position + new Vector3(randomCircle.x, 0, randomCircle.y);
-                }
-
-                movement.Stop();
-                movement.SetDestination(_wanderTarget);
-                _isWalking = true;
+                Bounds bounds = _building.BuildingZone.bounds;
+                float randomX = Random.Range(bounds.min.x, bounds.max.x);
+                float randomZ = Random.Range(bounds.min.z, bounds.max.z);
                 
-                // Set the next wait time randomly between 2 and 6 seconds
-                _waitTime = Random.Range(2f, 6f);
+                // Utiliser le Y du worker pour éviter d'être bloqué dans le toit du bâtiment
+                _wanderTarget = new Vector3(randomX, worker.transform.position.y, randomZ);
+
+                // S'assurer qu'on est sur le NavMesh avec un grand rayon de recherche
+                if (UnityEngine.AI.NavMesh.SamplePosition(_wanderTarget, out UnityEngine.AI.NavMeshHit hit, 10.0f, UnityEngine.AI.NavMesh.AllAreas))
+                {
+                    _wanderTarget = hit.position;
+                }
             }
+            else if (_building.DepositZone != null)
+            {
+                _wanderTarget = _building.DepositZone.GetRandomPointInZone();
+            }
+            else
+            {
+                // Fallback autour du centre du bâtiment
+                Vector2 randomCircle = Random.insideUnitCircle * 3f;
+                _wanderTarget = _building.transform.position + new Vector3(randomCircle.x, 0, randomCircle.y);
+            }
+
+            movement.Stop();
+            movement.SetDestination(_wanderTarget);
+            _isWalking = true;
+            _hasChosenDestination = true;
         }
-        else
+        else if (_isWalking)
         {
             // Vérifier si on est arrivé à la destination de flânerie
             if (!movement.PathPending && (!movement.HasPath || movement.RemainingDistance <= movement.StoppingDistance + 0.5f))
             {
                 _isWalking = false;
+                _waitTime = Random.Range(2f, 6f);
+            }
+        }
+        else
+        {
+            // Attente sur place
+            _waitTime -= Time.deltaTime;
+            if (_waitTime <= 0f)
+            {
+                _isComplete = true; // Termine l'action pour permettre au planner de réévaluer le quota/les arbres
             }
         }
 
@@ -109,16 +105,15 @@ public class GoapAction_IdleInBuilding : GoapAction
         {
             worker.CharacterActions.ClearCurrentAction();
         }
-
-        // On ne met jamais IsComplete = true ici. 
-        // C'est IsValid() qui bloquera l'action quand le bâtiment aura à nouveau besoin de ressources.
-        // Ou le planner qui changera de plan.
     }
 
     public override void Exit(Character worker)
     {
         _isWalking = false;
         _isComplete = false;
+        _hasChosenDestination = false;
         _waitTime = 0f;
+        worker.CharacterMovement?.Stop();
+        worker.CharacterMovement?.ResetPath();
     }
 }

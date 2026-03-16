@@ -128,13 +128,22 @@ public class GoapAction_PickupLooseItem : GoapAction
         // 2. Marcher vers l'objet
         if (!movement.PathPending)
         {
+            // NEW: Abort if object was destroyed mid-walk
+            if (_targetWorldItem == null)
+            {
+                Debug.Log($"<color=red>[GOAP Pickup]</color> {worker.CharacterName} : La cible WorldItem a disparu pendant le trajet !");
+                _building.TaskManager?.UnclaimTask(_assignedTask);
+                _assignedTask = null;
+                _targetWorldItem = null;
+                _isComplete = true;
+                return;
+            }
+
             if (!movement.HasPath && movement.RemainingDistance > movement.StoppingDistance + 0.5f) 
             {
                 Debug.Log($"<color=red>[GOAP Pickup]</color> {worker.CharacterName} : Impossible d'atteindre l'objet. Blacklist.");
-                if (_targetWorldItem != null)
-                {
-                    worker.PathingMemory.RecordFailure(_targetWorldItem.gameObject.GetInstanceID());
-                }
+                
+                worker.PathingMemory.RecordFailure(_targetWorldItem.gameObject.GetInstanceID());
                 
                 // Le chemin a été effacé mais on n'est pas arrivé : on annule et on cherche de nouveau
                 _building.TaskManager?.UnclaimTask(_assignedTask);
@@ -222,6 +231,7 @@ public class GoapAction_PickupLooseItem : GoapAction
                 {
                     Debug.Log($"<color=green>[GOAP Pickup]</color> {worker.CharacterName} a mis {itemInstance.ItemSO.ItemName} dans son sac.");
                     _building.TaskManager?.CompleteTask(_assignedTask);
+                    _assignedTask = null;
                     _isComplete = true;
                 };
 
@@ -245,6 +255,7 @@ public class GoapAction_PickupLooseItem : GoapAction
             pickupAction.OnActionFinished += () =>
             {
                 _building.TaskManager?.CompleteTask(_assignedTask);
+                _assignedTask = null;
                 _isComplete = true;
             };
         }
@@ -257,11 +268,11 @@ public class GoapAction_PickupLooseItem : GoapAction
 
     public override void Exit(Character worker)
     {
-        if (_assignedTask != null && !_isComplete)
+        if (_assignedTask != null)
         {
             _building.TaskManager?.UnclaimTask(_assignedTask);
+            _assignedTask = null;
         }
-        _assignedTask = null;
         
         _isComplete = false;
         _pickupStarted = false;

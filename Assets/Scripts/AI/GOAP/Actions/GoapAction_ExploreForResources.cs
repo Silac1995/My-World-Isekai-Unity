@@ -231,6 +231,8 @@ public class GoapAction_ExploreForResources : GoapAction
 
     public override void Exit(Character worker)
     {
+        _isComplete = false;
+        _explorationAttempts = 0;
         _isMoving = false;
         worker.CharacterMovement?.ResetPath();
     }

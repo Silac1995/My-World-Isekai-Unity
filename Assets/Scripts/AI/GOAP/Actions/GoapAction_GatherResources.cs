@@ -132,8 +132,19 @@ public class GoapAction_GatherResources : GoapAction
         }
 
         // Phase 3 : Lancer la CharacterGatherAction quand on est arrivé
-        if (!_isGathering && _currentTarget != null)
+        if (!_isGathering)
         {
+            // NEW: Abort if object was destroyed mid-walk
+            if (_currentTarget == null)
+            {
+                Debug.Log($"<color=red>[GOAP Gather]</color> {worker.CharacterName} : La cible GatherableObject a disparu pendant le trajet !");
+                _building.TaskManager?.UnclaimTask(_assignedTask);
+                _assignedTask = null;
+                _currentTarget = null;
+                _isComplete = true;
+                return;
+            }
+
             if (!movement.PathPending)
             {
                 bool isAtTarget = false;
@@ -181,6 +192,7 @@ public class GoapAction_GatherResources : GoapAction
                             _building.TaskManager?.UnclaimTask(_assignedTask); // Remettre dans la file
                         }
                         
+                        _assignedTask = null;
                         _isComplete = true;
                     };
 
@@ -188,6 +200,7 @@ public class GoapAction_GatherResources : GoapAction
                     {
                         Debug.Log($"<color=orange>[GOAP Gather]</color> {worker.CharacterName} ne peut pas lancer la récolte.");
                         _building.TaskManager?.UnclaimTask(_assignedTask);
+                        _assignedTask = null;
                         _isComplete = true;
                     }
                 }
@@ -254,7 +267,7 @@ public class GoapAction_GatherResources : GoapAction
 
     public override void Exit(Character worker)
     {
-        if (_assignedTask != null && !_isComplete)
+        if (_assignedTask != null)
         {
             // On libère la tâche si elle n'a pas été complétée
             _building.TaskManager?.UnclaimTask(_assignedTask);
