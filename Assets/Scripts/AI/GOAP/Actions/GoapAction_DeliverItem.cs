@@ -52,7 +52,7 @@ namespace MWI.AI
             }
 
             _droppingItem = currentItem;
-            return new CharacterDropItem(worker, currentItem);
+            return new CharacterDropItem(worker, currentItem, true);
         }
 
         protected override void OnActionFinished()

@@ -14,6 +14,7 @@ public class WorldItem : MonoBehaviour
     public ItemInteractable ItemInteractable => _itemInteractable;
     public UnityEngine.Rendering.SortingGroup SortingGroup { get; private set; }
     public bool IsBeingCarried { get; set; } = false;
+    public bool FreezeOnGround { get; set; } = false;
 
     private void Awake()
     {
@@ -140,6 +141,19 @@ public class WorldItem : MonoBehaviour
             Debug.LogError($"<color=red>[Gather]</color> Le prefab de {instance.ItemSO.ItemName} n'a pas de composant WorldItem !");
             Object.Destroy(worldItemGo);
             return null;
+        }
+    }
+
+    private void OnCollisionEnter(Collision collision)
+    {
+        if (FreezeOnGround)
+        {
+            if (TryGetComponent(out Rigidbody rb))
+            {
+                rb.isKinematic = true;
+                FreezeOnGround = false; // Disable it so if it is carried again, it doesn't freeze immediately
+                Debug.Log($"<color=white>[WorldItem]</color> {gameObject.name} ground freeze engaged.");
+            }
         }
     }
 }

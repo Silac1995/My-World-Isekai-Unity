@@ -160,7 +160,7 @@ public class GoapAction_GatherStorageItems : GoapAction
                 Zone storageZone = _building.StorageZone != null ? _building.StorageZone : _building.MainRoom.GetComponent<Zone>();
                 Collider storageCol = storageZone != null ? storageZone.GetComponent<Collider>() : null;
 
-                HandleMovementTo(worker, _targetPos, out bool arrivedAtStorage, storageCol);
+                HandleMovementTo(worker, _targetPos, out bool arrivedAtStorage, storageCol, true);
                 if (arrivedAtStorage)
                 {
                     _currentState = GatherState.DroppingOff;
@@ -181,7 +181,7 @@ public class GoapAction_GatherStorageItems : GoapAction
                         return;
                     }
 
-                    var dropAction = new CharacterDropItem(worker, carriedItem);
+                    var dropAction = new CharacterDropItem(worker, carriedItem, true);
                     
                     // Si true: L'action a été acceptée et l'animation commence.
                     if (worker.CharacterActions.ExecuteAction(dropAction))
@@ -210,7 +210,18 @@ public class GoapAction_GatherStorageItems : GoapAction
     private void DetermineStoragePosition()
     {
         Zone storageZone = _building.StorageZone ?? _building.MainRoom.GetComponent<Zone>();
-        _targetPos = storageZone != null ? storageZone.GetRandomPointInZone() : _building.transform.position;
+        if (storageZone != null)
+        {
+            var bounds = storageZone.GetComponent<Collider>().bounds;
+            Vector3 center = bounds.center;
+            // Add a tiny variance so multiple workers don't path explicitly to the exact millimeter,
+            // but keep it very small so they stay heavily centralized.
+            _targetPos = center + new Vector3(Random.Range(-0.5f, 0.5f), 0, Random.Range(-0.5f, 0.5f));
+        }
+        else
+        {
+            _targetPos = _building.transform.position;
+        }
     }
 
     private void FinishDropoff(Character worker, ItemInstance item)
@@ -255,12 +266,12 @@ public class GoapAction_GatherStorageItems : GoapAction
         }
     }
 
-    private void HandleMovementTo(Character worker, Vector3 targetPos, out bool arrived, Collider targetCollider = null)
+    private void HandleMovementTo(Character worker, Vector3 targetPos, out bool arrived, Collider targetCollider = null, bool bypassEarlyExit = false)
     {
         arrived = false;
         var movement = worker.CharacterMovement;
 
-        if (NavMeshUtility.IsCharacterAtTargetZone(worker, targetCollider, 1.5f))
+        if (!bypassEarlyExit && NavMeshUtility.IsCharacterAtTargetZone(worker, targetCollider, 1.5f))
         {
             movement.ResetPath();
             arrived = true;

@@ -4,10 +4,12 @@ using UnityEngine.TextCore.Text;
 public class CharacterDropItem : CharacterAction
 {
     private ItemInstance _itemInstance;
+    private bool _freezeOnGround;
 
-    public CharacterDropItem(Character character, ItemInstance item) : base(character, 0.5f)
+    public CharacterDropItem(Character character, ItemInstance item, bool freezeOnGround = false) : base(character, 0.5f)
     {
         _itemInstance = item ?? throw new System.ArgumentNullException(nameof(item));
+        _freezeOnGround = freezeOnGround;
     }
 
     public override void OnStart()
@@ -45,7 +47,13 @@ public class CharacterDropItem : CharacterAction
         {
             Vector3 dropPos = character.transform.position + Vector3.up * 5f;
             Vector3 offset = new Vector3(Random.Range(-0.3f, 0.3f), 0, Random.Range(-0.3f, 0.3f));
-            WorldItem.SpawnWorldItem(_itemInstance, dropPos + offset);
+            WorldItem spawnedItem = WorldItem.SpawnWorldItem(_itemInstance, dropPos + offset);
+            
+            if (spawnedItem != null)
+            {
+                spawnedItem.FreezeOnGround = _freezeOnGround;
+            }
+
             Debug.Log($"Item {_itemInstance.ItemSO.ItemName} lache physiquement.");
         }
     }
