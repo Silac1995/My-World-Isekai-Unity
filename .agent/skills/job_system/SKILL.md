@@ -49,9 +49,9 @@ Crafting follows a specialized overlay of this system.
 Every `CommercialBuilding` that needs supply management has a `JobLogisticsManager`.
 - **Event-Driven & Physical**: Triggered by `OnWorkerPunchIn` (when the manager arrives at work) and `OnNewDay`.
 - **Pending Order Queue**: Orders (`BuyOrder`, `CraftingOrder`, `TransportOrder`) are not executed instantly. They are added to a `PendingOrder` queue. The manager's `Execute()` method pops these and pushes a `PlaceOrderBehaviour`, forcing the character to physically travel to the supplier.
-- **Shop Restock**: `CheckShopInventory()` scans `ItemsToSell` vs `Inventory` and enqueues orders for missing stock.
-- **Crafting Ingredients**: `CheckCraftingIngredients()` scans active `CraftingOrder`s, calculates missing materials based on `CraftingRecipe`, and enqueues `BuyOrder`s to fetch them.
-- **Order Types**: `BuyOrder` (ingredient/stock procurement), `CraftingOrder` (production request), and `TransportOrder` (physical delivery of completed goods).
+- **Shop Restock**: `CheckShopInventory()` scans `ItemsToSell` vs `Inventory` and enqueues `BuyOrder`s to a supplier for missing stock.
+- **Crafting Ingredients**: Suppliers receiving a `BuyOrder` scan their inventory. If missing, they enqueue an internal `CraftingOrder`. Missing ingredients for the `CraftingOrder` trigger `BuyOrder`s to other suppliers up the chain.
+- **Order Types**: `BuyOrder` (inter-building commercial contract), `CraftingOrder` (internal production request), and `TransportOrder` (physical delivery of completed goods).
 - **Duplicate Prevention**: Before placing/enqueuing an order, it checks if an order for that item is already active or pending.
 - **Expiration**: Orders have a `RemainingDays` counter. Expired orders trigger reputation penalties (`CharacterRelation.UpdateRelation`).
 

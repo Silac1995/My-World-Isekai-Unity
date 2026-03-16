@@ -276,4 +276,12 @@ public class GatheringBuilding : CommercialBuilding
             Debug.Log($"<color=yellow>[GatheringBuilding]</color> {employee.CharacterName} quitte {buildingName}.");
         }
     }
+
+    // === Methodes Globales Fournisseur ===
+
+    public override bool ProducesItem(ItemSO item)
+    {
+        // Un batiment de recolte produit tout ce qui est dans ses wanted resources.
+        return _wantedResources.Any(r => r.targetItem == item);
+    }
 }

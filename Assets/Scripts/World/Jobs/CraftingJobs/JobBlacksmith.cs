@@ -90,6 +90,7 @@ public class JobBlacksmith : JobCrafter
         _currentOrder = _manager.GetNextAvailableCraftingOrder();
         if (_currentOrder == null)
         {
+            // Logging removed here to avoid spamming every frame when idle
             return; // En attente de commandes
         }
 
@@ -109,8 +110,22 @@ public class JobBlacksmith : JobCrafter
 
         if (_currentStation == null)
         {
-            Debug.Log($"<color=orange>[JobBlacksmith]</color> {_worker.CharacterName} : Pas de station libre capable de crafter {_currentOrder.ItemToCraft.ItemName}.");
+            // Logging removed here to avoid spamming every frame when missing a station
             return; // Attendre qu'une station se libère
+        }
+
+        // Vérifier les ingrédients
+        if (_currentOrder.ItemToCraft.CraftingRecipe != null && _currentOrder.ItemToCraft.CraftingRecipe.Count > 0)
+        {
+            if (!cb.HasRequiredIngredients(_currentOrder.ItemToCraft.CraftingRecipe))
+            {
+                // Logging removed here to avoid spamming every frame when waiting for ingredients
+                return;
+            }
+            else
+            {
+                Debug.Log($"<color=cyan>[JobBlacksmith]</color> {_worker.CharacterName} : Ingrédients validés pour {_currentOrder.ItemToCraft.ItemName}. En route vers la forge !");
+            }
         }
 
         _currentStation.Reserve(_worker);
@@ -159,6 +174,19 @@ public class JobBlacksmith : JobCrafter
         // Vérifier si la station a pu crafter correctement
         if (_manager != null && _currentOrder != null)
         {
+            // Consommer les ingrédients
+            if (_workplace is CraftingBuilding cb && _currentOrder.ItemToCraft.CraftingRecipe != null)
+            {
+                foreach (var ingredient in _currentOrder.ItemToCraft.CraftingRecipe)
+                {
+                    for (int i = 0; i < ingredient.Amount; i++)
+                    {
+                        cb.TakeFromInventory(ingredient.Item);
+                        // ItemInstance n'est pas un MonoBehaviour, sa suppression de l'inventaire suffit.
+                    }
+                }
+            }
+
             _manager.UpdateCraftingOrderProgress(_currentOrder, 1);
         }
 

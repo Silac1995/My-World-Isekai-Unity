@@ -115,35 +115,27 @@ public class GoapAction_PlaceOrder : GoapAction
         worker.CharacterVisual?.FaceCharacter(targetWorker);
         targetWorker.CharacterVisual?.FaceCharacter(worker);
 
-        // Consume order from queue
-        _manager.DequeuePendingOrder();
-
-        if (pendingOrder.Type == JobLogisticsManager.OrderType.Crafting)
+        // Au lieu de transférer magiquement les données, on lance une interaction formelle.
+        // Cela respecte l'architecture dictée par les skills job_system et logistics_cycle.
+        InteractionPlaceOrder interaction = new InteractionPlaceOrder(worker, targetWorker, targetLogistics.Workplace, pendingOrder);
+        
+        // On demande au CharacterInteraction d'exécuter cette interaction
+        if (worker.CharacterInteraction != null)
         {
-            if (targetLogistics.PlaceCraftingOrder(pendingOrder.CraftingOrder))
+            if (worker.CharacterInteraction.StartInteractionWith(targetWorker, interaction))
             {
-                Debug.Log($"<color=green>[Logistics]</color> {worker.CharacterName} passe une commande (Craft) à {targetWorker.CharacterName}.");
-                worker.CharacterSpeech?.Say($"J'ai besoin de fabriquer {pendingOrder.CraftingOrder.Quantity}x {pendingOrder.CraftingOrder.ItemToCraft.ItemName}.");
-                UpdateRelationships(worker, targetWorker);
+                // Consume order from queue only if the interaction started successfully
+                _manager.DequeuePendingOrder();
+                Debug.Log($"<color=green>[Logistics]</color> {worker.CharacterName} débute l'interaction pour passer commande à {targetWorker.CharacterName}.");
+            }
+            else
+            {
+                Debug.LogWarning($"<color=orange>[Logistics]</color> L'interaction PlaceOrder a échoué à démarrer.");
             }
         }
-        else if (pendingOrder.Type == JobLogisticsManager.OrderType.Buy)
+        else
         {
-            if (targetLogistics.PlaceBuyOrder(pendingOrder.BuyOrder))
-            {
-                Debug.Log($"<color=green>[Logistics]</color> {worker.CharacterName} passe une commande (Achat) à {targetWorker.CharacterName}.");
-                worker.CharacterSpeech?.Say($"J'ai besoin de {pendingOrder.BuyOrder.Quantity}x {pendingOrder.BuyOrder.ItemToTransport.ItemName}.");
-                UpdateRelationships(worker, targetWorker);
-            }
-        }
-        else if (pendingOrder.Type == JobLogisticsManager.OrderType.Transport)
-        {
-            if (targetLogistics.PlaceTransportOrder(pendingOrder.TransportOrder))
-            {
-                Debug.Log($"<color=green>[Logistics]</color> {worker.CharacterName} demande une livraison à {targetWorker.CharacterName}.");
-                worker.CharacterSpeech?.Say($"Pouvez-vous livrer {pendingOrder.TransportOrder.Quantity}x {pendingOrder.TransportOrder.ItemToTransport.ItemName} ?");
-                UpdateRelationships(worker, targetWorker);
-            }
+            Debug.LogError($"<color=red>[Logistics]</color> {worker.CharacterName} n'a pas de composant CharacterInteraction !");
         }
 
         _isComplete = true; // Permet au Planner de passer à l'action suivante (ou de terminer ProcessOrders)

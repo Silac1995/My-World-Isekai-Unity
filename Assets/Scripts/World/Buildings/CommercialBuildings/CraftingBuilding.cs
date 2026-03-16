@@ -56,4 +56,17 @@ public abstract class CraftingBuilding : CommercialBuilding
             }
         }
     }
+
+    // === Methodes Globales Fournisseur ===
+
+    public override bool ProducesItem(ItemSO item)
+    {
+        return GetCraftableItems().Contains(item);
+    }
+
+    public override bool RequiresCraftingFor(ItemSO item)
+    {
+        // Les batiments d'artisanat fabriquent les items a la demande via des CraftingOrder
+        return ProducesItem(item);
+    }
 }

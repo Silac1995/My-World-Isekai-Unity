@@ -339,4 +339,22 @@ public abstract class CommercialBuilding : Building
         }
         return true;
     }
+
+    /// <summary>
+    /// Indique si ce bâtiment produit ou fournit l'item demandé.
+    /// Les sous-classes doivent override ceci pour exposer ce qu'elles offrent.
+    /// </summary>
+    public virtual bool ProducesItem(ItemSO item)
+    {
+        return false;
+    }
+
+    /// <summary>
+    /// Indique si la production de cet item nécessite de placer une commande de fabrication (CraftingOrder).
+    /// Si false, on peut directement envoyer un transporteur (TransportOrder) pour récupérer le stock (ex: Gatherer).
+    /// </summary>
+    public virtual bool RequiresCraftingFor(ItemSO item)
+    {
+        return false;
+    }
 }
