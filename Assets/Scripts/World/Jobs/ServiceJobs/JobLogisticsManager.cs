@@ -499,6 +499,15 @@ public class JobLogisticsManager : Job
             {
                 _placedBuyOrders.Remove(myOrder);
                 Debug.Log($"<color=green><h2>[ECONOMY]</h2></color> <color=yellow>CONGRATULATIONS !</color> La commande de {myOrder.Quantity}x {myOrder.ItemToTransport.ItemName} a été entièrement livrée à {myOrder.Destination.BuildingName} !");
+                
+                // --- Social Reward: Le client remercie le fournisseur. ---
+                Character clientBoss = myOrder.ClientBoss;
+                Character supplierBoss = myOrder.Source?.Owner;
+                
+                if (clientBoss != null && supplierBoss != null && clientBoss != supplierBoss)
+                {
+                    if (clientBoss.CharacterRelation != null) clientBoss.CharacterRelation.UpdateRelation(supplierBoss, 5);
+                }
             }
         }
     }
@@ -520,6 +529,15 @@ public class JobLogisticsManager : Job
             {
                 _activeOrders.Remove(myOrder);
                 Debug.Log($"<color=green>[JobLogisticsManager]</color> 🤝 Le client a acquitté avoir reçu {myOrder.Quantity}x {myOrder.ItemToTransport.ItemName} !");
+
+                // --- Social Reward: Le fournisseur est heureux du business complété. ---
+                Character clientBoss = myOrder.ClientBoss;
+                Character supplierBoss = myOrder.Source?.Owner;
+                
+                if (supplierBoss != null && clientBoss != null && supplierBoss != clientBoss)
+                {
+                    if (supplierBoss.CharacterRelation != null) supplierBoss.CharacterRelation.UpdateRelation(clientBoss, 5);
+                }
             }
         }
 

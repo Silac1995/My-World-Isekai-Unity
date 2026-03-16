@@ -33,13 +33,14 @@ Understanding `JobLogisticsManager` requires knowing its internal tracking lists
 ### 3. The Supply Chain Flow
 The lifecycle of an item moving between buildings involves several state changes:
 1. **Detection**: `OnWorkerPunchIn()` reads the `ShopBuilding` inventory. If stock is low, it calls `RequestStock()`, which creates a `BuyOrder`, adds it to `_placedBuyOrders`, and enqueues a `PendingOrder`.
-2. **Placement**: The logistics manager physically walks to the supplier and initiates `InteractionPlaceOrder`. The supplier accepts it and adds it to their `_activeOrders`.
+2. **Placement**: The logistics manager physically walks to the supplier and initiates `InteractionPlaceOrder`. The supplier accepts it and adds it to their `_activeOrders`. Both parties gain +2 relationship.
 3. **Fulfillment (Supplier Side)**: During `Execute()`, the supplier calls `ProcessActiveBuyOrders()`.
    - Checks physical stock minus `reservedStockThisTick`.
    - If enough stock: Reserves it, creates a `TransportOrder`, adds it to `_placedTransportOrders`, and enqueues a `PendingOrder` for the `TransporterBuilding`.
    - If not enough stock: Creates a `CraftingOrder` for the internal `JobCrafter`.
 4. **Delivery**: The `JobTransporter` physically moves items. When dropped, they trigger `NotifyDeliveryProgress()`.
-5. **Acknowledgment**: The supplier calls `AcknowledgeDeliveryProgress()`, which removes the `TransportOrder` from `_placedTransportOrders` and cleans up the completed `BuyOrder`.
+5. **Acknowledgment**: The supplier calls `AcknowledgeDeliveryProgress()`, which removes the `TransportOrder` from `_placedTransportOrders`.
+6. **Completion & Social Reward**: When the delivery is fully acknowledged, the `BuyOrder` is removed from both building's logs. The ClientBoss and SupplierBoss mutually grant each other +5 relationship points for a successful trade.
 
 ### 4. Stock Reservation (Anti-Double Booking)
 To prevent generating duplicate `TransportOrder`s for the same physical items, `JobLogisticsManager` uses a local `Dictionary<ItemSO, int> reservedStockThisTick` inside `ProcessActiveBuyOrders()`.
