@@ -3,15 +3,11 @@ using UnityEngine;
 
 namespace MWI.AI
 {
-    public class GoapAction_MoveToItem : GoapAction
+    public class GoapAction_MoveToItem : GoapAction_MoveToTarget
     {
         private JobTransporter _job;
-        private bool _isMoving = false;
-        private float _lastRouteRequestTime;
-        protected bool _isComplete = false;
 
         public override string ActionName => "Move To Item";
-        public override float Cost => 1f;
 
         public override Dictionary<string, bool> Preconditions => new Dictionary<string, bool>
         {
@@ -24,8 +20,6 @@ namespace MWI.AI
             { "atItem", true }
         };
 
-        public override bool IsComplete => _isComplete;
-
         public GoapAction_MoveToItem(JobTransporter job)
         {
             _job = job;
@@ -36,75 +30,18 @@ namespace MWI.AI
             return _job != null && _job.CurrentOrder != null && _job.TargetWorldItem != null;
         }
 
-        public override void Execute(Character worker)
+        protected override Collider GetTargetCollider(Character worker)
         {
-            if (_job.CurrentOrder == null || _job.TargetWorldItem == null)
-            {
-                _isComplete = true;
-                return;
-            }
-
-            var movement = worker.CharacterMovement;
-            if (movement == null) return;
-
-            bool isCloseEnough = false;
-            var workerCol = worker.Collider;
+            if (_job == null || _job.TargetWorldItem == null) return null;
             
-            if (_job.TargetWorldItem.ItemInteractable != null && _job.TargetWorldItem.ItemInteractable.InteractionZone != null && workerCol != null)
-            {
-                var zoneBounds = _job.TargetWorldItem.ItemInteractable.InteractionZone.bounds;
-                isCloseEnough = zoneBounds.Intersects(workerCol.bounds);
-
-                if (!isCloseEnough)
-                {
-                    Vector3 closestPoint = zoneBounds.ClosestPoint(worker.transform.position);
-                    closestPoint.y = 0;
-                    Vector3 charPos = worker.transform.position;
-                    charPos.y = 0;
-                    if (Vector3.Distance(charPos, closestPoint) <= 1f)
-                    {
-                        isCloseEnough = true;
-                    }
-                }
-            }
-            else
-            {
-                isCloseEnough = _isMoving && movement.RemainingDistance <= movement.StoppingDistance + 0.5f;
-            }
-
-            if (!isCloseEnough)
-            {
-                bool hasPathFailed = (UnityEngine.Time.time - _lastRouteRequestTime > 0.2f) && (movement.PathStatus == UnityEngine.AI.NavMeshPathStatus.PathInvalid || (!movement.HasPath && !movement.PathPending));
-
-                if (!_isMoving || hasPathFailed)
-                {
-                    Vector3 dest = _job.TargetWorldItem.transform.position;
-                    if (_job.TargetWorldItem.ItemInteractable != null && _job.TargetWorldItem.ItemInteractable.InteractionZone != null)
-                    {
-                        dest = _job.TargetWorldItem.ItemInteractable.InteractionZone.bounds.ClosestPoint(worker.transform.position);
-                    }
-                    
-                    movement.SetDestination(dest);
-                    _lastRouteRequestTime = UnityEngine.Time.time;
-                    _isMoving = true;
-                }
-            }
-            else
-            {
-                if (_isMoving)
-                {
-                    movement.Stop();
-                    _isMoving = false;
-                }
-                _isComplete = true;
-            }
+            var interactable = _job.TargetWorldItem.ItemInteractable;
+            return interactable != null ? interactable.InteractionZone : _job.TargetWorldItem.GetComponentInChildren<Collider>();
         }
 
-        public override void Exit(Character worker)
+        protected override Vector3 GetDestinationPoint(Character worker)
         {
-            _isComplete = false;
-            _isMoving = false;
-            worker.CharacterMovement?.Stop();
+            if (_job == null || _job.TargetWorldItem == null) return worker.transform.position;
+            return _job.TargetWorldItem.transform.position;
         }
     }
 }

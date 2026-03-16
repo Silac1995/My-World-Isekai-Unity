@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using MWI.AI;
 
 /// <summary>
 /// Action GOAP : Déposer les ressources récoltées à la zone de dépôt du building.
@@ -9,6 +10,7 @@ using UnityEngine;
 public class GoapAction_DepositResources : GoapAction
 {
     public override string ActionName => "DepositResources";
+    public override float Cost => 1f;
 
     public override Dictionary<string, bool> Preconditions => new Dictionary<string, bool>
     {
@@ -20,11 +22,11 @@ public class GoapAction_DepositResources : GoapAction
         { "hasDepositedResources", true }
     };
 
-    public override float Cost => 1f;
-
     private GatheringBuilding _building;
     private bool _isComplete = false;
     private bool _isMoving = false;
+    private bool _isDepositing = false;
+    private float _lastRouteRequestTime;
 
     public override bool IsComplete => _isComplete;
 
@@ -57,42 +59,58 @@ public class GoapAction_DepositResources : GoapAction
             return;
         }
 
-        // Phase 1 : Se déplacer vers la zone de dépôt
-        if (!_isMoving)
-        {
-            Vector3 destination = depositZone.GetRandomPointInZone();
-            movement.SetDestination(destination);
-            _isMoving = true;
-            return;
-        }
+        bool isCloseEnough = NavMeshUtility.IsCharacterAtTargetZone(worker, depositZone.GetComponent<Collider>(), 1f);
+        
+        // Try precise NavMesh state if bounds check failed
+        if (!isCloseEnough) isCloseEnough = _isMoving && NavMeshUtility.HasAgentReachedDestination(movement, 0.5f);
 
-        // Phase 2 : Vérifier si on est arrivé
-        if (!movement.PathPending)
+        if (!isCloseEnough)
         {
-            if (!movement.HasPath)
+            bool hasPathFailed = NavMeshUtility.HasPathFailed(movement, _lastRouteRequestTime, 0.2f);
+
+            if (!_isMoving || hasPathFailed)
             {
-                // Le chemin a été effacé (ex: par le combat), on doit relancer le déplacement
-                _isMoving = false;
+                // Navigate to the edge of the zone rather than raw center to prevent gridlock
+                Vector3 destination = NavMeshUtility.GetOptimalDestination(worker, depositZone.GetComponent<Collider>());
+                
+                movement.SetDestination(destination);
+                _lastRouteRequestTime = UnityEngine.Time.time;
+                _isMoving = true;
             }
-            else if (movement.RemainingDistance <= movement.StoppingDistance + 0.5f)
+        }
+        else
+        {
+            if (_isMoving)
             {
-                DepositItems(worker);
-                _isComplete = true;
+                movement.Stop();
+                movement.ResetPath();
+                _isMoving = false;
+                _isDepositing = true;
+            }
+
+            if (_isDepositing)
+            {
+                ProcessSequentialDeposit(worker);
             }
         }
     }
 
     /// <summary>
-    /// Dépose les items depuis le sac (wanted items) et/ou depuis les mains.
-    /// Lance l'action CharacterDropItem pour qu'ils soient spawnés physiquement
-    /// par le système d'animation et de CharacterAction centralisé.
+    /// Dépose séquentiellement les items depuis les mains puis le sac.
+    /// Évalué à chaque frame : attend que l'action CharacterDropItem en cours se termine
+    /// avant de déclencher la suivante, évitant le rejet par CharacterActions.
     /// </summary>
-    private void DepositItems(Character worker)
+    private void ProcessSequentialDeposit(Character worker)
     {
-        bool deposited = false;
+        // 1. Si une action de drop est DÉJÀ en cours, on attend qu'elle finisse.
+        if (worker.CharacterActions.CurrentAction is CharacterDropItem)
+        {
+            return;
+        }
+
         var acceptedItems = _building.GetAcceptedItems();
 
-        // 1. Déposer l'item porté dans les mains EN PREMIER (pour libérer l'animation)
+        // 2. Vérifier les mains en priorité
         var handsController = worker.CharacterVisual?.BodyPartsController?.HandsController;
         if (handsController != null && handsController.IsCarrying)
         {
@@ -100,23 +118,25 @@ public class GoapAction_DepositResources : GoapAction
             {
                 ItemInstance carriedItem = handsController.CarriedItem;
                 
-                // Exécuter l'action physique de drop (! La première action réussit, les suivantes pourraient échouer si exécutées à la même frame)
-                if (worker.CharacterActions.ExecuteAction(new CharacterDropItem(worker, carriedItem)))
+                var dropAction = new CharacterDropItem(worker, carriedItem);
+                dropAction.OnActionFinished += () => 
                 {
                     _building.RegisterGatheredItem(carriedItem.ItemSO);
-                    Debug.Log($"<color=green>[GOAP Deposit]</color> {worker.CharacterName} a physiquement lâché {carriedItem.ItemSO.ItemName} (mains) à la zone de dépôt.");
-                    deposited = true;
-                }
+                    Debug.Log($"<color=green>[GOAP Deposit]</color> {worker.CharacterName} a physiquement lâché {carriedItem.ItemSO.ItemName} (mains).");
+                };
+
+                worker.CharacterActions.ExecuteAction(dropAction);
+                return; // On attend la frame suivante pour revérifier l'état
             }
         }
 
-        // 2. Déposer les items acceptés depuis le sac (inventaire)
+        // 3. Vérifier le sac
         var equipment = worker.CharacterEquipment;
         if (equipment != null && equipment.HaveInventory())
         {
             var inventory = equipment.GetInventory();
 
-            // Parcourir les slots et déposer les items acceptés
+            // Trouver LE PROCHAIN item valide à déposer
             for (int i = inventory.ItemSlots.Count - 1; i >= 0; i--)
             {
                 var slot = inventory.ItemSlots[i];
@@ -125,31 +145,33 @@ public class GoapAction_DepositResources : GoapAction
                 ItemInstance item = slot.ItemInstance;
                 if (item == null) continue;
 
-                // Vérifier si c'est un item accepté
                 if (acceptedItems.Contains(item.ItemSO))
                 {
-                    // Lancer l'action de drop.
-                    // IMPORTANT : CharacterActions.ExecuteAction ne peut pas stacker 10 actions à la frame 1 si CanExecute() = false pdt une autre action.
-                    // Cependant, pour la version actuelle, on tente de drop ce qui est possible, GOAP replanifiera la suite au tick suivant !
-                    if (worker.CharacterActions.ExecuteAction(new CharacterDropItem(worker, item)))
+                    var dropAction = new CharacterDropItem(worker, item);
+                    dropAction.OnActionFinished += () => 
                     {
                         _building.RegisterGatheredItem(item.ItemSO);
-                        Debug.Log($"<color=green>[GOAP Deposit]</color> {worker.CharacterName} a libéré {item.ItemSO.ItemName} (sac) pour la zone de dépôt.");
-                        deposited = true;
-                    }
+                        Debug.Log($"<color=green>[GOAP Deposit]</color> {worker.CharacterName} a physiquement lâché {item.ItemSO.ItemName} (sac).");
+                    };
+
+                    worker.CharacterActions.ExecuteAction(dropAction);
+                    return; // On lance 1 seul item, on sort et on attend la frame suivante.
                 }
             }
         }
 
-        if (!deposited)
-        {
-            Debug.LogWarning($"<color=orange>[GOAP Deposit]</color> {worker.CharacterName} n'avait rien à déposer (ou a échoué l'action de drop) !");
-        }
+        // 4. Si le code arrive ici, c'est que `CurrentAction` n'est pas un Drop ET qu'aucun item valide n'a été trouvé.
+        // Cela signifie que nous avons fini de tout vider.
+        Debug.Log($"<color=cyan>[GOAP Deposit]</color> {worker.CharacterName} a terminé de déposer toutes ses ressources valides.");
+        _isComplete = true;
     }
 
     public override void Exit(Character worker)
     {
+        _isComplete = false;
         _isMoving = false;
+        _isDepositing = false;
+        worker.CharacterMovement?.Stop();
         worker.CharacterMovement?.ResetPath();
     }
 }

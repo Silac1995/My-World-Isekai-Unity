@@ -1,10 +1,11 @@
 using System.Collections.Generic;
 using UnityEngine;
+using MWI.AI;
 
 /// <summary>
 /// Action GOAP : Se rendre auprès du patron d'un bâtiment pour une interaction.
 /// </summary>
-public class GoapAction_GoToBoss : GoapAction
+public class GoapAction_GoToBoss : GoapAction_MoveToTarget
 {
     public override string ActionName => "GoToBoss";
 
@@ -19,16 +20,7 @@ public class GoapAction_GoToBoss : GoapAction
         { "atBossLocation", true }
     };
 
-    public override float Cost => 2f;
-
     private Character _boss;
-    private bool _isComplete = false;
-    private bool _isMoving = false;
-    
-    private Vector3 _lastTargetPos = Vector3.positiveInfinity;
-    private float _lastRouteRequestTime = 0f;
-
-    public override bool IsComplete => _isComplete;
 
     public GoapAction_GoToBoss(Character boss)
     {
@@ -40,37 +32,15 @@ public class GoapAction_GoToBoss : GoapAction
         return _boss != null && _boss.IsAlive();
     }
 
-    public override void Execute(Character worker)
+    protected override Collider GetTargetCollider(Character worker)
     {
-        if (_isComplete) return;
-
-        float dist = Vector3.Distance(worker.transform.position, _boss.transform.position);
-        if (dist <= 2.5f)
-        {
-            _isComplete = true;
-            worker.CharacterMovement?.Stop();
-            return;
-        }
-
-        Vector3 targetPos = _boss.transform.position;
-        var movement = worker.CharacterMovement;
-        
-        bool hasPathFailed = (UnityEngine.Time.time - _lastRouteRequestTime > 0.2f) && (movement.PathStatus == UnityEngine.AI.NavMeshPathStatus.PathInvalid || (!movement.HasPath && !movement.PathPending));
-
-        // Mise à jour dynamique de la destination si la cible bouge
-        if (!_isMoving || Vector3.Distance(_lastTargetPos, targetPos) > 1f || hasPathFailed)
-        {
-            movement?.SetDestination(targetPos);
-            _lastTargetPos = targetPos;
-            _lastRouteRequestTime = UnityEngine.Time.time;
-            _isMoving = true;
-        }
+        if (_boss == null) return null;
+        return _boss.Collider;
     }
 
-    public override void Exit(Character worker)
+    protected override Vector3 GetDestinationPoint(Character worker)
     {
-        _isComplete = false;
-        _isMoving = false;
-        worker.CharacterMovement?.Stop();
+        if (_boss == null) return worker.transform.position;
+        return _boss.transform.position;
     }
 }

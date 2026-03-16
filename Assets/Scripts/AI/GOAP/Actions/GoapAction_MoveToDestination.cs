@@ -3,15 +3,11 @@ using UnityEngine;
 
 namespace MWI.AI
 {
-    public class GoapAction_MoveToDestination : GoapAction
+    public class GoapAction_MoveToDestination : GoapAction_MoveToTarget
     {
         private JobTransporter _job;
-        private bool _isMoving = false;
-        private float _lastRouteRequestTime;
-        protected bool _isComplete = false;
 
         public override string ActionName => "Move To Destination";
-        public override float Cost => 1f;
 
         public override Dictionary<string, bool> Preconditions => new Dictionary<string, bool>
         {
@@ -23,8 +19,6 @@ namespace MWI.AI
         {
             { "atDestination", true }
         };
-
-        public override bool IsComplete => _isComplete;
 
         public GoapAction_MoveToDestination(JobTransporter job)
         {
@@ -65,65 +59,22 @@ namespace MWI.AI
             return true;
         }
 
-        public override void Execute(Character worker)
+        protected override Collider GetTargetCollider(Character worker)
         {
-            if (_job.CurrentOrder == null)
-            {
-                _isComplete = true;
-                return;
-            }
-
-            var movement = worker.CharacterMovement;
-            if (movement == null) return;
-
+            if (_job == null || _job.CurrentOrder == null || _job.CurrentOrder.Destination == null) return null;
+            
             CommercialBuilding destination = _job.CurrentOrder.Destination;
             Zone zone = destination.DeliveryZone ?? destination.MainRoom.GetComponent<Zone>();
-
-            bool isCloseEnough = false;
-
-            if (zone != null)
-            {
-                if (zone.GetComponent<Collider>().bounds.Contains(worker.transform.position))
-                {
-                    isCloseEnough = true;
-                }
-            }
-            else
-            {
-                if (Vector3.Distance(worker.transform.position, destination.transform.position) < 3f)
-                {
-                    isCloseEnough = true;
-                }
-            }
-
-            if (!isCloseEnough)
-            {
-                bool hasPathFailed = (UnityEngine.Time.time - _lastRouteRequestTime > 0.2f) && (movement.PathStatus == UnityEngine.AI.NavMeshPathStatus.PathInvalid || (!movement.HasPath && !movement.PathPending));
-
-                if (!_isMoving || hasPathFailed)
-                {
-                    Vector3 dest = zone != null ? zone.GetRandomPointInZone() : destination.transform.position;
-                    movement.SetDestination(dest);
-                    _lastRouteRequestTime = UnityEngine.Time.time;
-                    _isMoving = true;
-                }
-            }
-            else
-            {
-                if (_isMoving)
-                {
-                    movement.Stop();
-                    _isMoving = false;
-                }
-                _isComplete = true; // Arrived
-            }
+            return zone != null ? zone.GetComponent<Collider>() : null;
         }
 
-        public override void Exit(Character worker)
+        protected override Vector3 GetDestinationPoint(Character worker)
         {
-            _isComplete = false;
-            _isMoving = false;
-            worker.CharacterMovement?.Stop();
+            if (_job == null || _job.CurrentOrder == null || _job.CurrentOrder.Destination == null) return worker.transform.position;
+            
+            CommercialBuilding destination = _job.CurrentOrder.Destination;
+            Zone zone = destination.DeliveryZone ?? destination.MainRoom.GetComponent<Zone>();
+            return zone != null ? zone.GetRandomPointInZone() : destination.transform.position;
         }
     }
 }

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using System.Linq;
+using MWI.AI;
 
 /// <summary>
 /// Actions GOAP pour le LogisticsManager : Ramasse les WorldItems traînant dans le bâtiment
@@ -241,30 +242,37 @@ public class GoapAction_GatherStorageItems : GoapAction
         arrived = false;
         var movement = worker.CharacterMovement;
 
-        // Si on a un collider cible, on vérifie direct l'intersection des bounds
-        if (targetCollider != null)
+        if (NavMeshUtility.IsCharacterAtTargetZone(worker, targetCollider, 1f))
         {
-            var workerCol = worker.GetComponent<Collider>();
-            if (workerCol != null && targetCollider.bounds.Intersects(workerCol.bounds))
-            {
-                movement.ResetPath();
-                arrived = true;
-                return;
-            }
+            movement.ResetPath();
+            arrived = true;
+            return;
         }
-
-        float distance = Vector3.Distance(new Vector3(worker.transform.position.x, 0, worker.transform.position.z), new Vector3(targetPos.x, 0, targetPos.z));
 
         if (movement.PathPending) return;
 
-        if (!movement.HasPath || movement.RemainingDistance <= movement.StoppingDistance + 0.5f)
+        // If we don't have a path, we definitely haven't started moving. Start now.
+        if (!movement.HasPath)
         {
-            if (distance > movement.StoppingDistance + 0.5f)
+            movement.SetDestination(targetPos);
+            return;
+        }
+
+        // We have a path. Let's check if we reached the end of it.
+        if (movement.RemainingDistance <= movement.StoppingDistance + 0.5f)
+        {
+            float distance = Vector3.Distance(new Vector3(worker.transform.position.x, 0, worker.transform.position.z), new Vector3(targetPos.x, 0, targetPos.z));
+
+            if (targetCollider == null && distance > movement.StoppingDistance + 0.5f)
             {
+                // We reached the end of the computed NavMesh path, but we are still far physically from the raw coordinate.
+                // Could be blocked. Force a retry or push closer.
                 movement.SetDestination(targetPos);
             }
             else
             {
+                // We reached the end, and either we are close to the coordinate, OR we had a targetCollider (like an interaction zone) 
+                // but couldn't path inside it. Just yield to the interaction phase so it can fail cleanly if unreachable.
                 movement.ResetPath();
                 arrived = true;
             }

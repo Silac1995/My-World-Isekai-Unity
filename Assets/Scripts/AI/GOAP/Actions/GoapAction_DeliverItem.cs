@@ -3,14 +3,12 @@ using UnityEngine;
 
 namespace MWI.AI
 {
-    public class GoapAction_DeliverItem : GoapAction
+    public class GoapAction_DeliverItem : GoapAction_ExecuteCharacterAction
     {
         private JobTransporter _job;
-        private bool _isActionStarted = false;
-        protected bool _isComplete = false;
+        private ItemInstance _droppingItem;
 
         public override string ActionName => "Deliver Item";
-        public override float Cost => 1f;
 
         public override Dictionary<string, bool> Preconditions => new Dictionary<string, bool>
         {
@@ -23,8 +21,6 @@ namespace MWI.AI
             { "itemDelivered", true }
         };
 
-        public override bool IsComplete => _isComplete;
-
         public GoapAction_DeliverItem(JobTransporter job)
         {
             _job = job;
@@ -34,13 +30,12 @@ namespace MWI.AI
         {
             return _job != null && _job.CurrentOrder != null && _job.CurrentOrder.Destination != null;
         }
-
-        public override void Execute(Character worker)
+        
+        protected override CharacterAction PrepareAction(Character worker)
         {
             if (_job.CurrentOrder == null || _job.CarriedItems.Count == 0)
             {
-                _isComplete = true; 
-                return;
+                return null;
             }
 
             var currentItem = _job.CarriedItems[0];
@@ -53,40 +48,26 @@ namespace MWI.AI
                 // Transporter arrived empty-handed for this specific item.
                 Debug.Log($"<color=red>[DeliverItem]</color> {worker.CharacterName} n'a physiquement plus l'item {currentItem.ItemSO.ItemName}. Passage au suivant.");
                 _job.RemoveCarriedItem(currentItem);
-                _isActionStarted = false;
-                return;
+                return null;
             }
 
-            // Drop Phase
-            if (!_isActionStarted)
-            {
-                var dropAction = new CharacterDropItem(worker, currentItem);
-                if (worker.CharacterActions.ExecuteAction(dropAction))
-                {
-                    _isActionStarted = true;
-                }
-                else
-                {
-                    Debug.Log($"<color=orange>[DeliverItem]</color> {worker.CharacterName} patiente pour executer CharacterDropItem...");
-                }
-            }
-            else
-            {
-                // Wait for drop animation CharacterAction to resolve
-                if (!(worker.CharacterActions.CurrentAction is CharacterDropItem))
-                {
-                    // Item dropped!
-                    _job.NotifyDeliveryProgress(1);
-                    _job.RemoveCarriedItem(currentItem);
-                    _isActionStarted = false;
-                }
-            }
+            _droppingItem = currentItem;
+            return new CharacterDropItem(worker, currentItem);
+        }
+
+        protected override void OnActionFinished()
+        {
+            if (_job == null || _droppingItem == null) return;
+            
+            _job.NotifyDeliveryProgress(1);
+            _job.RemoveCarriedItem(_droppingItem);
+            _droppingItem = null;
         }
 
         public override void Exit(Character worker)
         {
-            _isComplete = false;
-            _isActionStarted = false;
+            base.Exit(worker);
+            _droppingItem = null;
         }
     }
 }
