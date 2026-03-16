@@ -48,11 +48,11 @@ Crafting follows a specialized overlay of this system.
 ### 5. Logistics Cycle (JobLogisticsManager)
 Every `CommercialBuilding` that needs supply management has a `JobLogisticsManager`.
 - **Event-Driven & Physical**: Triggered by `OnWorkerPunchIn` (when the manager arrives at work) and `OnNewDay`.
-- **Pending Order Queue**: Orders (`BuyOrder`, `CraftingOrder`, `TransportOrder`) are not executed instantly. They are added to a `PendingOrder` queue. The manager's `Execute()` method pops these and pushes a `PlaceOrderBehaviour`, forcing the character to physically travel to the supplier.
-- **Shop Restock**: `CheckShopInventory()` scans `ItemsToSell` vs `Inventory` and enqueues `BuyOrder`s to a supplier for missing stock.
-- **Crafting Ingredients**: Suppliers receiving a `BuyOrder` scan their inventory. If missing, they enqueue an internal `CraftingOrder`. Missing ingredients for the `CraftingOrder` trigger `BuyOrder`s to other suppliers up the chain.
+- **Pending Order Queue**: Orders (`BuyOrder`, `CraftingOrder`, `TransportOrder`) are not executed instantly. They are added to a `PendingOrder` queue. The manager's `Execute()` method pops these and pushes a `GoapAction_PlaceOrder`, forcing the character to physically travel to the target.
+- **Shop Restock & Crafting Ingredients**: Workplaces scan their inventories and enqueue `BuyOrder`s to suppliers for missing stock. If a supplier lacks items for a `BuyOrder`, they generate an internal `CraftingOrder`.
 - **Order Types**: `BuyOrder` (inter-building commercial contract), `CraftingOrder` (internal production request), and `TransportOrder` (physical delivery of completed goods).
-- **Duplicate Prevention**: Before placing/enqueuing an order, it checks if an order for that item is already active or pending.
+- **Physical Handshake (`IsPlaced`)**: Orders are only considered officially placed when `InteractionPlaceOrder` succeeds face-to-face. If the target is busy, the interaction fails, and the manager will retry later because the `IsPlaced` flag remains `false`.
+- **Duplicate Prevention**: Before placing/enqueuing an order, the manager checks local logs (`_placedBuyOrders`, `_placedTransportOrders`) to avoid duplicating requests that are already active or awaiting physical interaction.
 - **Expiration**: Orders have a `RemainingDays` counter. Expired orders trigger reputation penalties (`CharacterRelation.UpdateRelation`).
 
 ### 6. Transporter (JobTransporter)

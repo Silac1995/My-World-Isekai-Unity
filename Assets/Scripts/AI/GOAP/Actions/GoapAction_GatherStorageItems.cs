@@ -168,16 +168,19 @@ public class GoapAction_GatherStorageItems : GoapAction
             case GatherState.DroppingOff:
                 if (!_actionStarted)
                 {
-                    // L'item a été ramassé par CharacterPickUpItem (ou mis en main).
-                    // On cherche l'item dans l'inventaire du worker.
+                    // Cherche l'item dans l'inventaire du worker.
                     ItemInstance carriedItem = GetCarriedItem(worker);
                     if (carriedItem == null)
                     {
-                        _isComplete = true;
+                        // Plus rien en main ou dans le sac, on a fini la livraison physique. 
+                        // On retourne chercher s'il y a d'autres choses à ramasser.
+                        _currentState = GatherState.FindingItem;
                         return;
                     }
 
                     var dropAction = new CharacterDropItem(worker, carriedItem);
+                    
+                    // Si true: L'action a été acceptée et l'animation commence.
                     if (worker.CharacterActions.ExecuteAction(dropAction))
                     {
                         _actionStarted = true;
@@ -185,9 +188,16 @@ public class GoapAction_GatherStorageItems : GoapAction
                     }
                     else
                     {
-                        // Fallback destruction de l'équipement
-                        RemoveItemFromWorker(worker, carriedItem);
-                        FinishDropoff(worker, carriedItem);
+                        // Si false : L'animator est sûrement déjà occupé (ex: il est en train de drop l'item précédent du sac).
+                        // On ne fait RIEN, on reste dans le Fallback DroppingOff pour réessayer au prochain tick.
+                        // SAUF si le personnage est complètement coincé, auquel cas on force le vidage, mais le Drop normal
+                        // refuse juste parce qu'il y a un cooldown.
+                        if (worker.CharacterActions.CurrentAction == null)
+                        {
+                            // S'il n'y a AUCUNE action en cours mais que ça refuse, il est buggé. On purge manuellement.
+                            RemoveItemFromWorker(worker, carriedItem);
+                            FinishDropoff(worker, carriedItem);
+                        }
                     }
                 }
                 break;
@@ -210,14 +220,13 @@ public class GoapAction_GatherStorageItems : GoapAction
             _manager.OnItemGathered(item.ItemSO);
         }
 
-        _currentState = GatherState.FindingItem;
+        // On libère le verrou d'action
         _actionStarted = false;
         
-        // On vérifie s'il y a d'autres items, sinon on termine pour rendre la main
-        if (FindLooseWorldItem(worker) == null)
-        {
-            _isComplete = true;
-        }
+        // On reste dans l'état DroppingOff ! 
+        // Au prochain frame, le switch passera dans DroppingOff et appellera GetCarriedItem().
+        // S'il reste des objets dans le sac, ça relancera une action de drop !
+        // Si le sac est vide, le GetCarriedItem renverra null, et renverra vers FindingItem.
     }
 
     private ItemInstance GetCarriedItem(Character worker)

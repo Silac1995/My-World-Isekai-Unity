@@ -84,6 +84,7 @@ When a Supplier's LogisticsManager receives a `BuyOrder`:
 
 Once a `BuyOrder` has enough physical items in the supplier's inventory to be completed:
 1. Supplier's LogisticsManager spawns a `TransportOrder` (source = Supplier, dest = `BuyOrder.ClientBuilding`).
+   - **Duplicate Prevention**: The supplier subtracts the amount from `BuyOrder.DispatchedQuantity` to ensure it doesn't generate infinite duplicate `TransportOrder`s before the transporter physically arrives.
 2. Transporter from a `TransporterBuilding` is summoned:
    - Walks to source's `StorageZone`, takes items.
    - Walks to destination's `DeliveryZone`, adds items to Client's inventory.
@@ -101,14 +102,17 @@ When a `TransportOrder` is accepted:
 3. Transporter travels to the destination building's `DeliveryZone`, plays drop off animation, delivers items.
 4. `ShopBuilding.AddToInventory()` is called recursively.
 
-### 6. InteractionPlaceOrder (Mandatory)
+### 6. InteractionPlaceOrder & Retry Logic (Mandatory)
 
 **All orders MUST go through `InteractionPlaceOrder`** — character-to-character interaction:
 - `new InteractionPlaceOrder(BuyOrder)` — commercial contracts.
 - `new InteractionPlaceOrder(CraftingOrder)` — internal production.
 - `new InteractionPlaceOrder(TransportOrder)` — physical delivery routing.
 - Applies +2 relation boost on both sides.
-- Requires the target character to have a `JobLogisticsManager`.
+
+**The Retry Safety Net:**
+When `Execute(...)` succeeds, the order's `IsPlaced` flag becomes `true`. 
+If the interaction fails to launch (e.g., target is busy talking to someone else), the GOAP Action aborts cleanly. The `JobLogisticsManager` checks for its own orders with `IsPlaced == false` at the start of its next `Execute()` tick and pushes them back into the `_pendingOrders` queue to try the journey again later.
 
 ### 7. Shop Catalogue: ShopItemEntry
 

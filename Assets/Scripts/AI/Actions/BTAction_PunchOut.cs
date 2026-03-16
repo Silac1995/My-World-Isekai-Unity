@@ -11,15 +11,16 @@ namespace MWI.AI
     {
         private enum PunchOutPhase
         {
+            CleaningUpInventory,
             MovingToBuilding,
             PunchingOut
         }
 
-        private PunchOutPhase _currentPhase = PunchOutPhase.MovingToBuilding;
+        private PunchOutPhase _currentPhase = PunchOutPhase.CleaningUpInventory;
 
         protected override void OnEnter(Blackboard bb)
         {
-            _currentPhase = PunchOutPhase.MovingToBuilding;
+            _currentPhase = PunchOutPhase.CleaningUpInventory;
         }
 
         protected override BTNodeStatus OnExecute(Blackboard bb)
@@ -39,6 +40,8 @@ namespace MWI.AI
 
             switch (_currentPhase)
             {
+                case PunchOutPhase.CleaningUpInventory:
+                    return HandleCleaningUpInventory(self, movement, workplace);
                 case PunchOutPhase.MovingToBuilding:
                     return HandleMovementToBuilding(self, movement, workplace);
                 case PunchOutPhase.PunchingOut:
@@ -46,6 +49,87 @@ namespace MWI.AI
             }
 
             return BTNodeStatus.Failure;
+        }
+
+        private BTNodeStatus HandleCleaningUpInventory(Character self, CharacterMovement movement, CommercialBuilding workplace)
+        {
+            // Vérifier s'il a un objet en main ou dans son inventaire
+            var inventory = self.CharacterEquipment?.GetInventory();
+            ItemInstance carriedItem = null;
+
+            if (inventory != null && inventory.ItemSlots.Exists(s => !s.IsEmpty()))
+            {
+                carriedItem = inventory.ItemSlots.FindLast(s => !s.IsEmpty()).ItemInstance;
+            }
+            if (carriedItem == null)
+            {
+                carriedItem = self.CharacterVisual?.BodyPartsController?.HandsController?.CarriedItem;
+            }
+
+            // Si rien à nettoyer, on avance à la phase suivante
+            if (carriedItem == null)
+            {
+                _currentPhase = PunchOutPhase.MovingToBuilding;
+                return BTNodeStatus.Running;
+            }
+
+            // Si on porte qqch, on l'amène dans la StorageZone du bâtiment (ou au pire le centre)
+            Zone storageZone = workplace.StorageZone;
+            Zone deliveryZone = workplace.DeliveryZone;
+            Collider buildingZoneCol = workplace.BuildingZone;
+
+            Collider dropCol = null;
+            if (storageZone != null) dropCol = storageZone.GetComponent<Collider>();
+            else if (deliveryZone != null) dropCol = deliveryZone.GetComponent<Collider>();
+            else dropCol = buildingZoneCol;
+
+            Vector3 dropPos = dropCol != null ? dropCol.bounds.center : workplace.transform.position;
+            if (storageZone != null) dropPos = storageZone.GetRandomPointInZone();
+            else if (deliveryZone != null) dropPos = deliveryZone.GetRandomPointInZone();
+
+            // Arrivé ? On drop.
+            if (dropCol != null && dropCol.bounds.Contains(self.transform.position))
+            {
+                movement.Stop();
+                var dropAction = new CharacterDropItem(self, carriedItem);
+                
+                if (self.CharacterActions.ExecuteAction(dropAction))
+                {
+                    // Action acceptée, on laisse l'animation jouer. Au prochain appel, `carriedItem` vérifiera s'il en reste.
+                    // Si on était un gatherer/transporter, on réclame que l'objet aille dans le bâtiment pour éviter la perte:
+                    dropAction.OnActionFinished += () => 
+                    {
+                        workplace.AddToInventory(carriedItem);
+                        Debug.Log($"<color=cyan>[Punch Out]</color> {self.CharacterName} a déposé {carriedItem.ItemSO.ItemName} avant de quitter.");
+                    };
+                }
+                else
+                {
+                    // Fallback sécurité si action bloquée
+                    if (self.CharacterActions.CurrentAction == null)
+                    {
+                        if (inventory != null && inventory.HasAnyItemSO(new System.Collections.Generic.List<ItemSO> { carriedItem.ItemSO }))
+                        {
+                            inventory.RemoveItem(carriedItem, self);
+                        }
+                        else
+                        {
+                            self.CharacterVisual?.BodyPartsController?.HandsController?.DropCarriedItem();
+                        }
+                        workplace.AddToInventory(carriedItem);
+                    }
+                }
+            }
+            else
+            {
+                // Avancer vers la zone de drop
+                if (!movement.HasPath || movement.RemainingDistance <= movement.StoppingDistance + 0.5f)
+                {
+                    movement.SetDestination(dropPos);
+                }
+            }
+
+            return BTNodeStatus.Running;
         }
 
         private BTNodeStatus HandleMovementToBuilding(Character self, CharacterMovement movement, CommercialBuilding workplace)
