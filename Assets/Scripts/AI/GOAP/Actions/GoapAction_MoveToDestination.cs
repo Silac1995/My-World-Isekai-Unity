@@ -34,7 +34,9 @@ namespace MWI.AI
         public override bool IsValid(Character worker)
         {
             if (_job == null || _job.CurrentOrder == null || _job.CurrentOrder.Destination == null || _job.CarriedItems.Count == 0) 
+            {
                 return false;
+            }
 
             int remainingNeeded = _job.CurrentOrder.Quantity - _job.CurrentOrder.DeliveredQuantity;
             bool hasEnough = _job.CarriedItems.Count >= remainingNeeded;
@@ -53,10 +55,10 @@ namespace MWI.AI
                 }
             }
 
-            // Force a replan (loop back to LocateItem) if we don't have enough and can carry more
+            // Force a replan (loop back to LocateItem) ONLY if we don't have enough AND we can carry more
+            // If canCarryMore is false (e.g. inventory full OR no bag and hands are full), we MUST proceed to deliver what we have!
             if (!hasEnough && canCarryMore && !_job.ForceDeliverPartialBatch)
             {
-                Debug.Log($"<color=cyan>[MoveToDestination]</color> Wait! {worker.CharacterName} can still carry {(_job.CurrentOrder.ItemToTransport.ItemName)}. Returning to storage for more!");
                 return false; 
             }
 

@@ -33,6 +33,7 @@ namespace MWI.AI
 
         public override bool IsValid(Character worker)
         {
+            if (_isActionStarted) return true;
             return _job != null && _job.CurrentOrder != null && _job.TargetWorldItem != null && _job.CurrentOrder.Source != null;
         }
 
@@ -44,18 +45,18 @@ namespace MWI.AI
                 return;
             }
 
-            if (_job.TargetWorldItem == null || _job.TargetWorldItem.IsBeingCarried)
-            {
-                // Lost the race! Someone else destroyed/picked up the physical item
-                Debug.Log($"<color=orange>[PickupItem]</color> {_job.Worker.CharacterName} lost the race to pick up the item. Cooldown applied.");
-                _job.TargetWorldItem = null;
-                _job.WaitCooldown = 1.0f;
-                _isComplete = true;
-                return;
-            }
-
             if (!_isActionStarted)
             {
+                if (_job.TargetWorldItem == null || _job.TargetWorldItem.IsBeingCarried)
+                {
+                    // Lost the race! Someone else destroyed/picked up the physical item before we started grabbing it
+                    Debug.Log($"<color=orange>[PickupItem]</color> {_job.Worker.CharacterName} lost the race to pick up the item. Cooldown applied.");
+                    _job.TargetWorldItem = null;
+                    _job.WaitCooldown = 1.0f;
+                    // DO NOT set _isComplete = true here! If we do, the Job thinks we succeeded and proceeds empty-handed.
+                    return;
+                }
+
                 CommercialBuilding source = _job.CurrentOrder.Source;
                 WorldItem exactTarget = _job.TargetWorldItem;
                 
@@ -66,7 +67,7 @@ namespace MWI.AI
                     Debug.LogWarning($"<color=orange>[PickupItem]</color> Fantôme détecté ! {_job.Worker.CharacterName} lost the race in logic. Applying cooldown.");
                     _job.TargetWorldItem = null;
                     _job.WaitCooldown = 1.0f;
-                    _isComplete = true;
+                    // DO NOT set _isComplete = true here!
                     return;
                 }
 
@@ -79,11 +80,11 @@ namespace MWI.AI
                 }
                 else
                 {
-                    Debug.LogWarning($"<color=orange>[PickupItem]</color> {_job.Worker.CharacterName} n'a pas pu executer l'action (hors de portee ou mains pleines). Annulation.");
+                    Debug.LogWarning($"<color=orange>[PickupItem]</color> {_job.Worker.CharacterName} n'a pas pu executer l'action (hors de portee ou mains pleines). Annulation de la tentative, pas du job.");
                     source.AddToInventory(_takenItem); // Remettre dans l'inventaire logique !
-                    _job.WaitCooldown = 2f;
-                    _job.CancelCurrentOrder();
-                    _isComplete = true; 
+                    _job.TargetWorldItem = null;
+                    _job.WaitCooldown = 1.0f;
+                    // DO NOT set _isComplete = true here either!
                 }
             }
             else
@@ -100,11 +101,11 @@ namespace MWI.AI
                     }
                     else
                     {
-                        Debug.LogWarning($"<color=orange>[PickupItem]</color> {_job.Worker.CharacterName} n'a pas pu physiquement ramasser l'item.");
+                        Debug.LogWarning($"<color=orange>[PickupItem]</color> {_job.Worker.CharacterName} n'a pas pu physiquement ramasser l'item. Essai suivant.");
                         CommercialBuilding source = _job.CurrentOrder.Source;
                         if (source != null) source.AddToInventory(_takenItem);
-                        _job.WaitCooldown = 2f;
-                        _job.CancelCurrentOrder();
+                        _job.TargetWorldItem = null;
+                        _job.WaitCooldown = 1.0f;
                     }
                     
                     _isComplete = true;
