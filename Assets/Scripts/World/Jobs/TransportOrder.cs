@@ -23,6 +23,9 @@ public class TransportOrder
     // Indique si la commande a été officiellement acceptée par le fournisseur via interaction
     public bool IsPlaced { get; set; } = false;
 
+    // The physical ItemInstances explicitly reserved for this order from the source building's inventory
+    public System.Collections.Generic.List<ItemInstance> ReservedItems { get; private set; } = new System.Collections.Generic.List<ItemInstance>();
+
     public BuyOrder AssociatedBuyOrder { get; private set; }
 
     public TransportOrder(ItemSO item, int quantity, CommercialBuilding source, CommercialBuilding dest, BuyOrder associatedBuyOrder = null)
@@ -54,5 +57,21 @@ public class TransportOrder
     public void RemoveInTransit(int amount)
     {
         InTransitQuantity = Mathf.Max(0, InTransitQuantity - amount);
+    }
+
+    public void ReserveItem(ItemInstance item)
+    {
+        if (item != null && !ReservedItems.Contains(item))
+        {
+            ReservedItems.Add(item);
+        }
+    }
+
+    public void UnreserveItem(ItemInstance item)
+    {
+        if (item != null && ReservedItems.Contains(item))
+        {
+            ReservedItems.Remove(item);
+        }
     }
 }

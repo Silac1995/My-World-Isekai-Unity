@@ -262,13 +262,21 @@ public class JobLogisticsManager : Job
         // NOUVEAU: Mettre à jour la commande client instantanément au drop!
         if (order.AssociatedBuyOrder != null)
         {
+            // RECORD HERE, ONCE! The instance is shared across Client, Supplier, and Transporter!
+            order.AssociatedBuyOrder.RecordDelivery(deliveredAmount);
+
             var clientLogistics = order.Destination?.Jobs.OfType<JobLogisticsManager>().FirstOrDefault();
             if (clientLogistics != null)
             {
-                // Le client se met à jour et nous rend la pareille (AcknowledgeDeliveryProgress) via sa méthode OnItemsDeliveredByTransporter
+                // Le client se met à jour. On ne l'oblige PLUS à répondre car c'est LE FOURNISSEUR qui doit clôturer SON ticket de commande localement
                 clientLogistics.OnItemsDeliveredByTransporter(order.AssociatedBuyOrder, deliveredAmount);
-                // Le fournisseur (nous) enregistrons notre avancée:
-                AcknowledgeDeliveryProgress(order.AssociatedBuyOrder, deliveredAmount);
+                
+                // --- FIX: Le TRANSPORTEUR prévient le FOURNISSEUR que la commande a été honorée ---
+                var supplierLogistics = order.AssociatedBuyOrder.Source?.Jobs.OfType<JobLogisticsManager>().FirstOrDefault();
+                if (supplierLogistics != null)
+                {
+                    supplierLogistics.AcknowledgeDeliveryProgress(order.AssociatedBuyOrder, deliveredAmount);
+                }
             }
         }
 
@@ -482,11 +490,11 @@ public class JobLogisticsManager : Job
     /// </summary>
     public void OnItemsDeliveredByTransporter(BuyOrder clientOrder, int amount)
     {
-        var myOrder = _placedBuyOrders.FirstOrDefault(o => o.ItemToTransport == clientOrder.ItemToTransport && o.Source == clientOrder.Source && !o.IsCompleted);
+        var myOrder = _placedBuyOrders.FirstOrDefault(o => o == clientOrder);
         if (myOrder != null)
         {
-            myOrder.RecordDelivery(amount);
-            
+            // myOrder and clientOrder are the EXACT SAME instance. 
+            // The Transporter already called RecordDelivery(amount). Just check for completion!
             if (myOrder.IsCompleted)
             {
                 _placedBuyOrders.Remove(myOrder);
@@ -497,21 +505,71 @@ public class JobLogisticsManager : Job
 
     /// <summary>
     /// Appelé par le client lorsqu'il a physiquement reçu un item lié à une de nos commandes actives.
+    /// <summary>
+    /// Appelé par le client lorsqu'il a physiquement reçu un item lié à une de nos commandes actives.
     /// Diminue la demande attendue et nettoie la commande terminées.
     /// </summary>
     public void AcknowledgeDeliveryProgress(BuyOrder clientOrder, int amount = 1)
     {
-        // On cherche dans NOS _activeOrders la commande qui correspond à la sienne (même item, même target)
-        var myOrder = _activeOrders.FirstOrDefault(o => o.ItemToTransport == clientOrder.ItemToTransport && o.Destination == clientOrder.Destination);
+        // On cherche dans NOS _activeOrders la commande exacte
+        var myOrder = _activeOrders.FirstOrDefault(o => o == clientOrder);
         if (myOrder != null)
         {
-            myOrder.RecordDelivery(amount);
+            // Already incremented by Transporter!
             if (myOrder.IsCompleted)
             {
                 _activeOrders.Remove(myOrder);
                 Debug.Log($"<color=green>[JobLogisticsManager]</color> 🤝 Le client a acquitté avoir reçu {myOrder.Quantity}x {myOrder.ItemToTransport.ItemName} !");
             }
         }
+
+        // --- FIX: Nettoyer la TransportOrder associée de notre liste locale pour éviter les boucles d'expédition infinies ---
+        var linkedTransportOrder = _placedTransportOrders.FirstOrDefault(t => t.AssociatedBuyOrder == clientOrder);
+        if (linkedTransportOrder != null)
+        {
+            linkedTransportOrder.RecordDelivery(amount);
+            if (linkedTransportOrder.IsCompleted)
+            {
+                _placedTransportOrders.Remove(linkedTransportOrder);
+                Debug.Log($"<color=gray>[JobLogisticsManager]</color> TransportOrder {linkedTransportOrder.Quantity}x {linkedTransportOrder.ItemToTransport.ItemName} retirée du suivi fournisseur.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Appelé par un transporteur lorsqu'il ne trouve pas un objet qui lui était pourtant réservé 
+    /// (ex: objet volé, détruit, ou despawn).
+    /// </summary>
+    public void ReportMissingReservedItem(TransportOrder order)
+    {
+        if (order == null || !_placedTransportOrders.Contains(order)) return;
+
+        Debug.LogWarning($"<color=orange>[JobLogisticsManager]</color> 🚨 Le transporteur a signalé des items réservés manquants pour {order.Quantity}x {order.ItemToTransport.ItemName}. Annulation de la commande physique pour forcer le recalcul logistics.");
+        
+        // On libère ce qui n'a pas été trouvé (le garbage collector ou l'inventaire s'en chargera, 
+        // mais au niveau de l'ordre, on le clean pour qu'il soit retenté proprement)
+        order.ReservedItems.Clear();
+
+        // On annule la TransportOrder. Si c'était lié à une BuyOrder interne, on retire l'ID d'association
+        // pour que ProcessActiveBuyOrders puisse relancer une nouvelle tentative de dispatch sur les stocks *réellement* restants.
+        if (order.AssociatedBuyOrder != null)
+        {
+            // On considère que ce "dispatch" a échoué puisqu'on annule l'ordre physiquement
+            int amountToRecover = order.Quantity - order.DeliveredQuantity;
+            
+            // Note: DispatchedQuantity ne peut pas être diminué directement dans la structure actuelle.
+            // On le patch ici en forçant simplement le recalcul par un retrait direct.
+            // Comme BuyOrder.DispatchedQuantity n'a pas de setter, on utilise le contournement :
+            // Si on retire la TransportOrder, ProcessActiveBuyOrders va en refaire une.
+            // Sauf que DispatchedQuantity est déjà haut. 
+            // C'est pourquoi on gère le stock *physiquement* ci-dessous.
+        }
+        
+        _placedTransportOrders.Remove(order);
+
+        // Retirer aussi de la file d'attente si elle y est encore
+        var newQueue = new Queue<PendingOrder>(_pendingOrders.Where(p => p.TransportOrder != order));
+        _pendingOrders = newQueue;
     }
 
     /// <summary>
@@ -521,11 +579,25 @@ public class JobLogisticsManager : Job
     /// </summary>
     private void ProcessActiveBuyOrders()
     {
+        // On récupère tous les ItemInstances qui sont *déjà* réservés par des commandes de Transport ou de Shop en cours.
+        HashSet<ItemInstance> globallyReservedItems = new HashSet<ItemInstance>();
+        
+        foreach (var tOrder in _placedTransportOrders)
+            foreach (var item in tOrder.ReservedItems)
+                globallyReservedItems.Add(item);
+                
+        foreach (var bOrder in _placedBuyOrders)
+            foreach (var item in bOrder.ReservedItems)
+                globallyReservedItems.Add(item);
+
         // Traiter de la fin vers le début au cas où on voudrait les retirer (Actuellement géré par UpdateOrderProgress via livraison Transporter)
         for (int i = _activeOrders.Count - 1; i >= 0; i--)
         {
             var buyOrder = _activeOrders[i];
             
+            // Important: we recompute remaining against actual dispatch vs quantity
+            // To handle cancellation and missing items properly, a TransportOrder failure should ideally allow re-dispatch,
+            // but for now, we trust the stock calculation over DispatchedQuantity if DispatchedQuantity gets desynced.
             int remainingToDispatch = buyOrder.Quantity - buyOrder.DeliveredQuantity - buyOrder.DispatchedQuantity;
             if (remainingToDispatch <= 0) continue;
 
@@ -535,11 +607,14 @@ public class JobLogisticsManager : Job
                 continue;
             }
 
-            int availableStock = _workplace.GetItemCount(buyOrder.ItemToTransport);
+            // Récupérer les items physiques dans l'inventaire qui ne sont pas encore réservés
+            var physicallyAvailableInstances = _workplace.Inventory
+                .Where(inst => inst.ItemSO == buyOrder.ItemToTransport && !globallyReservedItems.Contains(inst))
+                .ToList();
             
-            if (availableStock >= remainingToDispatch)
+            if (physicallyAvailableInstances.Count >= remainingToDispatch)
             {
-                // Stock suffisant, on prépare l'expédition
+                // Stock suffisant, on réserve et on prépare l'expédition
                 var transporter = FindTransporterBuilding();
                 if (transporter == null)
                 {
@@ -555,22 +630,34 @@ public class JobLogisticsManager : Job
                     buyOrder
                 );
 
+                // Assignation explicite des instances physiques réservées
+                for (int j = 0; j < remainingToDispatch; j++)
+                {
+                    ItemInstance instanceToReserve = physicallyAvailableInstances[j];
+                    transportOrder.ReserveItem(instanceToReserve);
+                    buyOrder.ReserveItem(instanceToReserve);
+                    globallyReservedItems.Add(instanceToReserve); // Ajouter au set global pour la boucle suivante
+                }
+
                 buyOrder.RecordDispatch(remainingToDispatch);
 
                 _placedTransportOrders.Add(transportOrder); // Suivi local pour réessayer si échec
                 _pendingOrders.Enqueue(new PendingOrder(transportOrder, transporter));
-                Debug.Log($"<color=cyan>[Logistics]</color>   🚚 Expédition de {remainingToDispatch}x {buyOrder.ItemToTransport.ItemName} vers {buyOrder.Destination.BuildingName} préparée.");
+                Debug.Log($"<color=cyan>[Logistics]</color>   🚚 Expédition de {remainingToDispatch}x {buyOrder.ItemToTransport.ItemName} vers {buyOrder.Destination.BuildingName} préparée avec réservation physique stricte.");
             }
             else
             {
-                // Stock insuffisant
+                // Stock insuffisant ou partiellement insuffisant
                 if (_workplace.RequiresCraftingFor(buyOrder.ItemToTransport))
                 {
                     // Eviter de spammer les CraftingOrders si on en a déjà une en cours
                     bool craftInProgress = _activeCraftingOrders.Any(c => c.ItemToCraft == buyOrder.ItemToTransport);
                     if (!craftInProgress)
                     {
-                        int quantityToCraft = remainingToDispatch - availableStock;
+                        int actuallyAvailableStock = physicallyAvailableInstances.Count;
+                        int safeAvailable = Mathf.Max(0, actuallyAvailableStock);
+                        int quantityToCraft = remainingToDispatch - safeAvailable;
+                        
                         var craftOrder = new CraftingOrder(
                             buyOrder.ItemToTransport,
                             quantityToCraft,

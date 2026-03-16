@@ -1,146 +1,91 @@
 ---
 name: logistics-cycle
-description: The supply chain cycle between CommercialBuildings and JobLogisticsManagers — how shops restock via BuyOrders, order expiration, and inter-building logistics.
+description: The complete supply chain cycle and internal mechanics of JobLogisticsManager, detailing order queuing, stock reservation, and physical interactions.
 ---
 
-# Logistics Cycle
+# Logistics Cycle (JobLogisticsManager)
 
-This skill documents the complete supply chain that keeps shops stocked and buildings supplied. It covers how a `JobLogisticsManager` detects missing inventory, places commercial orders (`BuyOrder`) via character interactions, and how the crafted goods produce internal `CraftingOrder`s before flowing back through `TransporterBuilding`s.
+This skill documents the complete supply chain that keeps shops stocked and buildings supplied, with a deep dive into how `JobLogisticsManager` operates internally to prevent duplicate orders, manage stock reservations, and dispatch transporters.
 
 ## When to use this skill
 - To understand how a `ShopBuilding` restocks its inventory automatically.
-- To debug why a shop has empty shelves or why orders aren't being placed/delivered.
-- To add a new type of order or supply chain interaction between buildings.
-- To understand the full cycle: ShopBuilding → CraftingBuilding → TransporterBuilding → ShopBuilding.
+- To debug why a shop has empty shelves, why orders aren't being placed/delivered, or why transporters are duplicating orders.
+- To understand the internal list structures (`_activeOrders`, `_pendingOrders`, `_placedTransportOrders`) of `JobLogisticsManager`.
+- To safely modify `JobLogisticsManager` or `JobTransporter` without breaking the delicate order lifecycle.
 
 ## How to use it
 
-### 1. The Full Supply Chain Cycle
+### 1. The Core Responsibilities of JobLogisticsManager
+`JobLogisticsManager` acts as the brain of any commercial building. It handles:
+- **Inventory Monitoring**: Checking if `ShopEntries` fall below `MaxStock`.
+- **Supplier Sourcing**: Finding other buildings that produce missing items via `FindSupplierFor`.
+- **Order Queueing (`_pendingOrders`)**: Storing orders that need to be physically placed via character interactions.
+- **Fulfillment (`ProcessActiveBuyOrders`)**: Dispatching `TransportOrder`s to Transporters or `CraftingOrder`s to internal Crafters when clients request items.
 
-```
-ShopBuilding (needs items)
-  │
-  │  1. LogisticsManager punches in → CheckShopInventory()
-  │     Queues PendingOrder (physical visit to supplier)
-  ▼
-Work Cycle (JobLogisticsManager.Execute)
-  │  2. Dequeues PendingOrder → Pushes PlaceOrderBehaviour
-  │     Manager physically walks to Supplier building
-  │     Manager starts InteractionPlaceOrder with Supplier Manager, placing a BuyOrder
-  ▼
-CraftingBuilding (produces items)
-  │
-  │  3. Crafting Manager receives BuyOrder. Checks if they have the stock:
-  │     IF Stock YES → Skip to Step 6.
-  │     IF Stock NO → CheckCraftingIngredients().
-  │          Are ingredients missing? → Queue BuyOrder to another supplier (recursive).
-  │          All ingredients present? → Queue internal CraftingOrder.
-  │
-  │  4. JobCrafter picks up CraftingOrder (BTAction_PerformCraft)
-  │     Crafts the items → items go into building Inventory (StorageZone)
-  │
-  │  5. LogisticsManager sees completed CraftingOrder + items in Inventory
-  │     CraftingOrder fulfills the waiting BuyOrder requirements.
-  │     Queues TransportOrder (transport) for delivery to original ClientBuilding.
-  ▼
-TransporterBuilding (moves items)
-  │
-  │  6. LogisticsManager accepts TransportOrder
-  │     JobTransporter picks it up → physically carries items from Source StorageZone
-  ▼
-ShopBuilding (receives items)
-     7. Items delivered to Shop's Inventory (StorageZone). BuyOrder is Complete.
-```
+### 2. The Internal Order Lists
+Understanding `JobLogisticsManager` requires knowing its internal tracking lists. Never bypass these lists when modifying the system.
+- `_activeOrders (List<BuyOrder>)`: Commercial requests received from *other* clients. We are the supplier.
+- `_placedBuyOrders (List<BuyOrder>)`: Requests *we* made to suppliers. We are the client.
+- `_placedTransportOrders (List<TransportOrder>)`: Physical delivery requests we sent to a `TransporterBuilding` to deliver our items to our clients.
+- `_activeCraftingOrders (List<CraftingOrder>)`: Internal requests for our `JobCrafter`s to make items to fulfill `_activeOrders`.
+- `_pendingOrders (Queue<PendingOrder>)`: The physical "To-Do" list. Whenever the manager decides to place a Buy/Craft/Transport order, they queue it here. The GOAP action `GoapAction_PlaceOrder` dequeues these and physically walks the manager to the target to perform an `InteractionPlaceOrder`.
 
-The `JobLogisticsManager` checks inventory on **Punch-In** (arrival at work in ANY building):
-- `WorkBehaviour` → `WorkerStartingShift(worker)` → `CommercialBuilding` (base class) detects logistics worker → calls `OnWorkerPunchIn()`.
-- `OnWorkerPunchIn()` triggers:
-  - `CheckShopInventory()` if workplace is a `ShopBuilding`.
-  - `CheckCraftingIngredients()` if workplace is a `CraftingBuilding`.
-- `OnWorkerPunchIn()` is gated by `IsOwnerOrOnSchedule()`:
-  - **Owner** can act anytime.
-  - **Employees** only act during their scheduled `ScheduleActivity.Work` hours.
+### 3. The Supply Chain Flow
+The lifecycle of an item moving between buildings involves several state changes:
+1. **Detection**: `OnWorkerPunchIn()` reads the `ShopBuilding` inventory. If stock is low, it calls `RequestStock()`, which creates a `BuyOrder`, adds it to `_placedBuyOrders`, and enqueues a `PendingOrder`.
+2. **Placement**: The logistics manager physically walks to the supplier and initiates `InteractionPlaceOrder`. The supplier accepts it and adds it to their `_activeOrders`.
+3. **Fulfillment (Supplier Side)**: During `Execute()`, the supplier calls `ProcessActiveBuyOrders()`.
+   - Checks physical stock minus `reservedStockThisTick`.
+   - If enough stock: Reserves it, creates a `TransportOrder`, adds it to `_placedTransportOrders`, and enqueues a `PendingOrder` for the `TransporterBuilding`.
+   - If not enough stock: Creates a `CraftingOrder` for the internal `JobCrafter`.
+4. **Delivery**: The `JobTransporter` physically moves items. When dropped, they trigger `NotifyDeliveryProgress()`.
+5. **Acknowledgment**: The supplier calls `AcknowledgeDeliveryProgress()`, which removes the `TransportOrder` from `_placedTransportOrders` and cleans up the completed `BuyOrder`.
 
-### 2. Step 1: Client Places BuyOrder
+### 4. Stock Reservation (Anti-Double Booking)
+To prevent generating duplicate `TransportOrder`s for the same physical items, `JobLogisticsManager` uses a local `Dictionary<ItemSO, int> reservedStockThisTick` inside `ProcessActiveBuyOrders()`.
+- It tracks how many items are currently assigned to a `TransportOrder` *in the same evaluation frame*.
+- `actuallyAvailableStock = physicalStock - reservedStockThisTick`.
+- This ensures that if we have 10 items physically, we don't dynamically dispatch two separate orders demanding 10 items each.
 
-`CheckShopInventory()` or `CheckCraftingIngredients()` identifies missing items.
-```
-  ├─ FindSupplierFor(itemSO) → finds a CommercialBuilding (e.g., CraftingBuilding)
-  ├─ Provider LogisticsManager active?
-  ├─ Already ordered? → Skip
-  └─ Place BuyOrder via InteractionPlaceOrder
-       → _worker.CharacterInteraction.ForceExecuteInteraction(new InteractionPlaceOrder(...))
-```
+## Examples
 
-### 3. Step 2 & 3: Supplier Internal Production
-
-When a Supplier's LogisticsManager receives a `BuyOrder`:
-1. It registers the order as an active commitment.
-2. Internally, if not enough stock exists, a `CraftingOrder` is created (invisible to the external client).
-3. The `JobCrafter` natively checks active `CraftingOrder`s via `BTAction_PerformCraft`.
-4. The Crafter builds the `WorldItem`s and LogisticsManager stores them in the `StorageZone` (via `GoapAction_GatherStorageItems`).
-
-### 4. Step 4: Transport and Delivery (TransportOrder)
-
-Once a `BuyOrder` has enough physical items in the supplier's inventory to be completed:
-1. Supplier's LogisticsManager spawns a `TransportOrder` (source = Supplier, dest = `BuyOrder.ClientBuilding`).
-   - **Duplicate Prevention**: The supplier subtracts the amount from `BuyOrder.DispatchedQuantity` to ensure it doesn't generate infinite duplicate `TransportOrder`s before the transporter physically arrives.
-2. Transporter from a `TransporterBuilding` is summoned:
-   - Walks to source's `StorageZone`, takes items.
-   - Walks to destination's `DeliveryZone`, adds items to Client's inventory.
-3. Once fulfilled, the `BuyOrder` is removed from logs.
-
-### 5. Step 4-5: TransporterBuilding Delivers
-
-`TransporterBuilding` has:
-- 1 `JobLogisticsManager` ("Head of Logistics") — accepts `TransportOrder`s.
-- N `JobTransporter`s — physically carry items from source → destination.
-
-When a `TransportOrder` is accepted:
-1. A `JobTransporter` picks it up.
-2. Transporter walks to the source building's `StorageZone`, plays pick up animation, takes items from building Inventory into equipment.
-3. Transporter travels to the destination building's `DeliveryZone`, plays drop off animation, delivers items.
-4. `ShopBuilding.AddToInventory()` is called recursively.
-
-### 6. InteractionPlaceOrder & Retry Logic (Mandatory)
-
-**All orders MUST go through `InteractionPlaceOrder`** — character-to-character interaction:
-- `new InteractionPlaceOrder(BuyOrder)` — commercial contracts.
-- `new InteractionPlaceOrder(CraftingOrder)` — internal production.
-- `new InteractionPlaceOrder(TransportOrder)` — physical delivery routing.
-- Applies +2 relation boost on both sides.
-
-**The Retry Safety Net:**
-When `Execute(...)` succeeds, the order's `IsPlaced` flag becomes `true`. 
-If the interaction fails to launch (e.g., target is busy talking to someone else), the GOAP Action aborts cleanly. The `JobLogisticsManager` checks for its own orders with `IsPlaced == false` at the start of its next `Execute()` tick and pushes them back into the `_pendingOrders` queue to try the journey again later.
-
-### 7. Shop Catalogue: ShopItemEntry
-
+### Example 1: Debugging Phantom Transport Orders
+**Scenario**: A supplier keeps sending out transport orders to the TransporterBuilding, but there are no items left in the storage. Transporters arrive and find nothing.
+**Solution**: Check `JobLogisticsManager.ProcessActiveBuyOrders()`. Ensure that `reservedStockThisTick` is being correctly incremented relative to physical stock:
 ```csharp
-[System.Serializable]
-public struct ShopItemEntry
-{
-    public ItemSO Item;
-    public int MaxStock; // target stock (defaults to 5 if 0)
+int getReserved(ItemSO item) => reservedStockThisTick.ContainsKey(item) ? reservedStockThisTick[item] : 0;
+int actuallyAvailableStock = physicalStock - getReserved(buyOrder.ItemToTransport);
+
+if (actuallyAvailableStock >= remainingToDispatch) {
+    // Reserve it so the next BuyOrder in the loop doesn't claim it!
+    if (reservedStockThisTick.ContainsKey(buyOrder.ItemToTransport))
+        reservedStockThisTick[buyOrder.ItemToTransport] += remainingToDispatch;
+    else
+        reservedStockThisTick.Add(buyOrder.ItemToTransport, remainingToDispatch);
+        
+    // ... Queue TransportOrder ...
 }
 ```
-- `GetStockCount(ItemSO)` — count in inventory.
-- `NeedsRestock(ItemSO, maxStock)` — current stock < target?
 
-### 8. Order Types
+### Example 2: Safely Managing In-Transit Quantities
+**Scenario**: Transporters are refusing to pick up an active `TransportOrder` because they think it's already fully handled by other transporters, causing the delivery to permanently halt.
+**Solution**: When `JobTransporter` picks up an item, `AddInTransit(amount)` is called to lock the quota. You **must** ensure that `RemoveInTransit(amount)` is systematically called if the order completes, fails, or the item is dropped.
+```csharp
+public void CancelCurrentOrder()
+{
+    // Clean up the transit quota so other transporters can take over the job
+    if (CurrentOrder != null && CarriedItems.Count > 0)
+    {
+        CurrentOrder.RemoveInTransit(CarriedItems.Count);
+    }
+    CurrentOrder = null;
+    CarriedItems.Clear();
+}
+```
 
-| Type | Purpose | Placed By | Consumed By |
-|------|---------|-----------|-------------|
-| `BuyOrder` | Inter-building Commercial Contract | Client's LogisticsManager | Supplier's LogisticsManager |
-| `CraftingOrder` | Internal production request | Supplier's LogisticsManager | Supplier's `JobCrafter` |
-| `TransportOrder` | Physical movement request | Supplier's LogisticsManager | TransporterBuilding's `JobTransporter` |
-| Punch-in fires? | `[Shop] LogisticsManager X a pointé` in logs? |
-| Schedule ok? | `IsOwnerOrOnSchedule()` returns true? Check schedule. |
-| Supplier exists? | `CraftingBuilding` in scene with matching craftable item? |
-| Supplier has manager? | Supplier's `JobLogisticsManager` has a worker assigned? |
-| Order placed? | `[Order] BuyOrder de Nx ... acceptée` in logs? |
-| Crafter picks up? | `BTAction_PerformCraft` fires on CraftingBuilding? |
-| Transport ordered? | `TransportOrder` placed with `TransporterBuilding`? |
-| Transporter delivers? | `JobTransporter` picks up and delivers items? |
-| Ghost Deliveries? | Ensure `JobTransporter.NotifyDeliveryProgress` rigorously checks `CarriedItem != null` before granting progress. |
-| Manager freezes? | If the `JobLogisticsManager` freezes endlessly over loose items, verify their `GoapAction_GatherStorageItems` dynamically ignores the `FindingItem` phase if their hands are currently full. |
+### Example 3: Adding a New Order Segment
+If you introduce a new type of logistics transaction (e.g., `CleaningOrder`), you must adapt the full cycle:
+1. Update `struct PendingOrder` to include a constructor for `CleaningOrder`.
+2. In `JobLogisticsManager.Execute()`, evaluate active `CleaningOrder`s.
+3. Queue it using `_pendingOrders.Enqueue(new PendingOrder(cleaningOrder, targetBuilding))`.
+4. Ensure `InteractionPlaceOrder` acts as the handshake, supporting the passing of `CleaningOrder` to the target character/building.

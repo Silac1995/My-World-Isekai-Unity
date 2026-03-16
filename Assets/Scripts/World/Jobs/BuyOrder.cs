@@ -26,6 +26,9 @@ public class BuyOrder
     // Indique si la commande a été officiellement acceptée par le fournisseur via interaction
     public bool IsPlaced { get; set; } = false;
 
+    // The physical ItemInstances explicitly reserved for this order from the source building's inventory
+    public System.Collections.Generic.List<ItemInstance> ReservedItems { get; private set; } = new System.Collections.Generic.List<ItemInstance>();
+
     public BuyOrder(ItemSO item, int quantity, CommercialBuilding source, CommercialBuilding dest, int remainingDays, Character clientBoss, Character intermediaryBoss = null)
     {
         ItemToTransport = item;
@@ -57,5 +60,21 @@ public class BuyOrder
     public void RecordDispatch(int amount)
     {
         DispatchedQuantity += amount;
+    }
+
+    public void ReserveItem(ItemInstance item)
+    {
+        if (item != null && !ReservedItems.Contains(item))
+        {
+            ReservedItems.Add(item);
+        }
+    }
+
+    public void UnreserveItem(ItemInstance item)
+    {
+        if (item != null && ReservedItems.Contains(item))
+        {
+            ReservedItems.Remove(item);
+        }
     }
 }

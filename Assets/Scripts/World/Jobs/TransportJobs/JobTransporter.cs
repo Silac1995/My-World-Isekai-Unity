@@ -68,6 +68,8 @@ public class JobTransporter : Job
         if (CarriedItems.Contains(item))
         {
             CarriedItems.Remove(item);
+            if (CurrentOrder != null) CurrentOrder.RemoveInTransit(1);
+            
             if (CarriedItems.Count == 0)
             {
                 ForceDeliverPartialBatch = false;
@@ -298,6 +300,12 @@ public class JobTransporter : Job
             _currentAction = null;
         }
         _currentPlan = null;
+        
+        if (CurrentOrder != null && CarriedItems.Count > 0)
+        {
+            CurrentOrder.RemoveInTransit(CarriedItems.Count);
+        }
+        
         CarriedItems.Clear();
         TargetWorldItem = null;
         CurrentOrder = null;
@@ -345,7 +353,18 @@ public class JobTransporter : Job
 
             if (CurrentOrder.IsCompleted)
             {
+                if (CarriedItems.Count > 0)
+                {
+                    CurrentOrder.RemoveInTransit(CarriedItems.Count);
+                }
+                
                 CurrentOrder = null;
+                TargetWorldItem = null;
+                if (_currentAction != null)
+                {
+                    _currentAction.Exit(_worker);
+                    _currentAction = null;
+                }
                 _currentPlan = null;
                 CarriedItems.Clear(); 
             }
@@ -355,6 +374,12 @@ public class JobTransporter : Job
     public void CancelCurrentOrder()
     {
         Debug.Log($"<color=orange>[JobTransporter]</color> {_worker?.CharacterName} annule sa livraison en cours.");
+        
+        if (CurrentOrder != null && CarriedItems.Count > 0)
+        {
+            CurrentOrder.RemoveInTransit(CarriedItems.Count);
+        }
+        
         CurrentOrder = null;
         CarriedItems.Clear();
         TargetWorldItem = null;

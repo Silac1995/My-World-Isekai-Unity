@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 namespace MWI.AI
@@ -52,21 +53,28 @@ namespace MWI.AI
             {
                 // 3. Scan visible items (ItemInteractable inherits from InteractableObject)
                 List<ItemInteractable> visibleInteractables = awareness.GetVisibleInteractables<ItemInteractable>();
+                List<WorldItem> validItems = new List<WorldItem>();
                 
                 foreach (var itemInteractable in visibleInteractables)
                 {
                     WorldItem wi = itemInteractable != null ? itemInteractable.WorldItem : null;
-                    if (wi != null && wi.ItemInstance != null && wi.ItemInstance.ItemSO == wantedSO && !wi.IsBeingCarried)
+                    
+                    // --- NOUVEAU: Le livreur ne cible plus N'IMPORTE QUEL ITEM, mais EXCLUSIVEMENT ceux qui lui sont réservés ---
+                    if (wi != null && wi.ItemInstance != null && _job.CurrentOrder.ReservedItems.Contains(wi.ItemInstance) && !wi.IsBeingCarried)
                     {
                         if (worker.PathingMemory.IsBlacklisted(wi.gameObject.GetInstanceID())) continue;
 
                         // Logical verification: Ensure it's inside the source's inventory
                         if (source.GetItemCount(wantedSO) > 0)
                         {
-                            targetWorldItem = wi;
-                            break;
+                            validItems.Add(wi);
                         }
                     }
+                }
+                
+                if (validItems.Count > 0)
+                {
+                    targetWorldItem = validItems[Random.Range(0, validItems.Count)];
                 }
             }
             else
@@ -87,17 +95,36 @@ namespace MWI.AI
                 else
                 {
                     // Verify if items are logically there but not visible (maybe crafter hasn't dropped them yet)
-                    if (source.GetItemCount(wantedSO) > 0)
+                    // NOUVEAU: On vérifie *spécifiquement* si NOS items réservés sont encore dans l'inventaire physique du bâtiment.
+                    bool itemsStillInInventory = false;
+                    foreach (var reservedItem in _job.CurrentOrder.ReservedItems)
                     {
-                        Debug.Log($"<color=cyan>[LocateItem]</color> Les items sont dans l'inventaire mais pas encore par terre. {_job.Worker.CharacterName} patiente.");
+                        if (source.Inventory.Contains(reservedItem))
+                        {
+                            itemsStillInInventory = true;
+                            break;
+                        }
+                    }
+
+                    if (itemsStillInInventory)
+                    {
+                        Debug.Log($"<color=cyan>[LocateItem]</color> Les items réservés sont dans l'inventaire mais pas encore par terre. {_job.Worker.CharacterName} patiente.");
                         _job.WaitCooldown = 1f; // Check again in a bit
                         _isComplete = true;
                         return;
                     }
                     else
                     {
-                        Debug.LogWarning($"<color=orange>[LocateItem]</color> Plus de {wantedSO.ItemName} du tout chez {source.BuildingName}. Annulation.");
+                        Debug.LogWarning($"<color=orange>[LocateItem]</color> Les items réservés pour {wantedSO.ItemName} ont disparu de {source.BuildingName}. Annulation et notification logistique.");
                         _job.WaitCooldown = 2f;
+                        
+                        // Notifier le LogisticsManager que les items ont été volés/détruits
+                        var logisticsManager = source.Jobs.OfType<JobLogisticsManager>().FirstOrDefault();
+                        if (logisticsManager != null)
+                        {
+                            logisticsManager.ReportMissingReservedItem(_job.CurrentOrder);
+                        }
+
                         _job.CancelCurrentOrder();
                         _isComplete = true;
                         return;

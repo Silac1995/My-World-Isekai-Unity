@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 namespace MWI.AI
@@ -43,6 +44,13 @@ namespace MWI.AI
             {
                 // Lost the race! Someone else destroyed/picked up the physical item before we started grabbing it
                 Debug.Log($"<color=orange>[PickupItem]</color> {_job.Worker.CharacterName} lost the race to pick up the item. Cooldown applied.");
+                
+                var logisticsManager = _job.CurrentOrder.Source.Jobs.OfType<JobLogisticsManager>().FirstOrDefault();
+                if (logisticsManager != null) 
+                { 
+                    logisticsManager.ReportMissingReservedItem(_job.CurrentOrder); 
+                } 
+                
                 _job.TargetWorldItem = null;
                 _job.WaitCooldown = 1.0f;
                 return null;
@@ -51,11 +59,19 @@ namespace MWI.AI
             CommercialBuilding source = _job.CurrentOrder.Source;
             WorldItem exactTarget = _job.TargetWorldItem;
             
-            // Retirer n'importe quelle instance du même type de l'inventaire logique de la source
-            ItemInstance logicalItemFromShop = source.TakeFromInventory(exactTarget.ItemInstance.ItemSO);
-            if (logicalItemFromShop == null)
+            // --- FIX: On retire L'INSTANCE EXACTE de l'inventaire logistique du Shop, pas n'importe laquelle ---
+            ItemInstance logicalItemFromShop = exactTarget.ItemInstance;
+            bool success = source.RemoveExactItemFromInventory(logicalItemFromShop);
+            
+            if (!success)
             {
-                Debug.LogWarning($"<color=orange>[PickupItem]</color> Fantôme détecté ! {_job.Worker.CharacterName} lost the race in logic. Applying cooldown.");
+                Debug.LogWarning($"<color=orange>[PickupItem]</color> Instance reservee introuvable dans l'inventaire logique ! {_job.Worker.CharacterName} lost the race in logic. Applying cooldown.");
+                var logisticsManager = source.Jobs.OfType<JobLogisticsManager>().FirstOrDefault();
+                if (logisticsManager != null) 
+                { 
+                    logisticsManager.ReportMissingReservedItem(_job.CurrentOrder); 
+                }
+                
                 _job.TargetWorldItem = null;
                 _job.WaitCooldown = 1.0f;
                 return null;
@@ -93,7 +109,7 @@ namespace MWI.AI
             {
                 Debug.LogWarning($"<color=orange>[PickupItem]</color> {_job.Worker.CharacterName} n'a pas pu physiquement ramasser l'item. Essai suivant.");
                 CommercialBuilding source = _job.CurrentOrder.Source;
-                if (source != null) source.AddToInventory(_takenItem);
+                if (source != null) source.AddToInventory(_takenItem); // Refund if pickup physically failed
                 _job.TargetWorldItem = null;
                 _job.WaitCooldown = 1.0f;
             }

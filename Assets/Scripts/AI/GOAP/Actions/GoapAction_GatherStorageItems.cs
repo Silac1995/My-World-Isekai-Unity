@@ -49,8 +49,14 @@ public class GoapAction_GatherStorageItems : GoapAction
     {
         if (_isComplete || _building == null || _building.BuildingZone == null) return false;
 
-        var hands = worker.CharacterVisual?.BodyPartsController?.HandsController;
-        bool isCarrying = hands != null && !hands.AreHandsFree();
+        bool isCarrying = GetCarriedItem(worker) != null;
+
+        // Si on a des commandes en attente ET qu'on n'est pas déjà en train de transporter un objet, on invalide
+        // l'action pour forcer la GOAP à l'annuler et repasser sur GoapAction_PlaceOrder.
+        if (!isCarrying && _manager != null && _manager.HasPendingOrders)
+        {
+            return false;
+        }
 
         // Valide s'il y a un objet au sol (WorldItem) dans la zone du bâtiment, OU si on porte déjà qqchose
         _targetItem = FindLooseWorldItem(worker);
@@ -67,14 +73,20 @@ public class GoapAction_GatherStorageItems : GoapAction
         switch (_currentState)
         {
             case GatherState.FindingItem:
-                var hands = worker.CharacterVisual?.BodyPartsController?.HandsController;
-                bool isCarrying = hands != null && !hands.AreHandsFree();
+                bool isCarrying = GetCarriedItem(worker) != null;
                 
                 if (isCarrying)
                 {
                     DetermineStoragePosition();
                     _currentState = GatherState.MovingToStorage;
                     _actionStarted = false;
+                    return;
+                }
+
+                // If we are empty-handed AND we have a pending order, we should stop gathering and allow re-planning (so we prioritize PlaceOrder).
+                if (_manager != null && _manager.HasPendingOrders)
+                {
+                    _isComplete = true; // Prioritize PlaceOrder!
                     return;
                 }
 
