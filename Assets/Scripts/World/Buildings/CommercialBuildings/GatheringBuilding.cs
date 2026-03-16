@@ -12,7 +12,6 @@ public class GatheringResourceEntry
 {
     public ItemSO targetItem;
     public int minAmount = -1;      // -1 = illimité
-    [HideInInspector] public int currentAmount = 0;
 }
 
 /// <summary>
@@ -282,7 +281,10 @@ public class GatheringBuilding : CommercialBuilding
         }
 
         int totalRequiredAmount = entry.minAmount + activeOrdersDemand;
-        return entry.currentAmount >= totalRequiredAmount;
+        
+        // REFACTOR: Use the actual physical inventory count instead of a lifetime counter.
+        int actualStock = GetItemCount(entry.targetItem);
+        return actualStock >= totalRequiredAmount;
     }
 
     /// <summary>
@@ -306,8 +308,8 @@ public class GatheringBuilding : CommercialBuilding
         {
             if (entry.targetItem == item)
             {
-                entry.currentAmount++;
-                Debug.Log($"<color=cyan>[GatheringBuilding]</color> {buildingName} : {item.ItemName} récolté ({entry.currentAmount} en stock interne).");
+                int actualStock = GetItemCount(item);
+                Debug.Log($"<color=cyan>[GatheringBuilding]</color> {buildingName} : {item.ItemName} récolté ({actualStock} en stock physique réel).");
                 return true;
             }
         }
