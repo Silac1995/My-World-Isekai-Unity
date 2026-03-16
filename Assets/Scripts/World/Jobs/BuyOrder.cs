@@ -62,6 +62,11 @@ public class BuyOrder
         DispatchedQuantity += amount;
     }
 
+    public void CancelDispatch(int amount)
+    {
+        DispatchedQuantity = Mathf.Max(0, DispatchedQuantity - amount);
+    }
+
     public void ReserveItem(ItemInstance item)
     {
         if (item != null && !ReservedItems.Contains(item))

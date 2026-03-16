@@ -538,6 +538,19 @@ public class JobLogisticsManager : Job
     }
 
     /// <summary>
+    /// Annule et retire définitivement une TransportOrder de la file active du TransporterBuilding.
+    /// Appelé lorsqu'une commande est physiquement irréalisable (ex: items disparus).
+    /// </summary>
+    public void CancelActiveTransportOrder(TransportOrder order)
+    {
+        if (order != null && _activeTransportOrders.Contains(order))
+        {
+            _activeTransportOrders.Remove(order);
+            Debug.Log($"<color=orange>[JobLogisticsManager]</color> TransportOrder de {order.Quantity}x {order.ItemToTransport.ItemName} retirée définitivement de la file active (Échec).");
+        }
+    }
+
+    /// <summary>
     /// Appelé par un transporteur lorsqu'il ne trouve pas un objet qui lui était pourtant réservé 
     /// (ex: objet volé, détruit, ou despawn).
     /// </summary>
@@ -558,12 +571,8 @@ public class JobLogisticsManager : Job
             // On considère que ce "dispatch" a échoué puisqu'on annule l'ordre physiquement
             int amountToRecover = order.Quantity - order.DeliveredQuantity;
             
-            // Note: DispatchedQuantity ne peut pas être diminué directement dans la structure actuelle.
-            // On le patch ici en forçant simplement le recalcul par un retrait direct.
-            // Comme BuyOrder.DispatchedQuantity n'a pas de setter, on utilise le contournement :
-            // Si on retire la TransportOrder, ProcessActiveBuyOrders va en refaire une.
-            // Sauf que DispatchedQuantity est déjà haut. 
-            // C'est pourquoi on gère le stock *physiquement* ci-dessous.
+            // On informe la BuyOrder qu'elle n'est plus "dispatchée" pour cette quantité, forçant le fournisseur à réessayer.
+            order.AssociatedBuyOrder.CancelDispatch(amountToRecover);
         }
         
         _placedTransportOrders.Remove(order);
@@ -597,9 +606,9 @@ public class JobLogisticsManager : Job
             var buyOrder = _activeOrders[i];
             
             // Important: we recompute remaining against actual dispatch vs quantity
-            // To handle cancellation and missing items properly, a TransportOrder failure should ideally allow re-dispatch,
-            // but for now, we trust the stock calculation over DispatchedQuantity if DispatchedQuantity gets desynced.
-            int remainingToDispatch = buyOrder.Quantity - buyOrder.DeliveredQuantity - buyOrder.DispatchedQuantity;
+            // To handle cancellation and missing items properly, a TransportOrder failure allows re-dispatch,
+            // because CancelDispatch() physically lowered the count when the items were lost.
+            int remainingToDispatch = buyOrder.Quantity - buyOrder.DispatchedQuantity;
             if (remainingToDispatch <= 0) continue;
 
             // On ne check plus _pendingOrders, on vérifie _placedTransportOrders pour éviter des doublons infinis

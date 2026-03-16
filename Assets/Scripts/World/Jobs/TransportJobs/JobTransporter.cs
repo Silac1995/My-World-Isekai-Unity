@@ -371,7 +371,7 @@ public class JobTransporter : Job
         }
     }
 
-    public void CancelCurrentOrder()
+    public void CancelCurrentOrder(bool dropFromQueue = false)
     {
         Debug.Log($"<color=orange>[JobTransporter]</color> {_worker?.CharacterName} annule sa livraison en cours.");
         
@@ -380,6 +380,15 @@ public class JobTransporter : Job
             CurrentOrder.RemoveInTransit(CarriedItems.Count);
         }
         
+        if (dropFromQueue && CurrentOrder != null)
+        {
+            var myManager = _workplace.GetJobsOfType<JobLogisticsManager>().FirstOrDefault();
+            if (myManager != null)
+            {
+                myManager.CancelActiveTransportOrder(CurrentOrder);
+            }
+        }
+
         CurrentOrder = null;
         CarriedItems.Clear();
         TargetWorldItem = null;

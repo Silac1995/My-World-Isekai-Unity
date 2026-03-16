@@ -125,7 +125,7 @@ namespace MWI.AI
                             logisticsManager.ReportMissingReservedItem(_job.CurrentOrder);
                         }
 
-                        _job.CancelCurrentOrder();
+                        _job.CancelCurrentOrder(true);
                         _isComplete = true;
                         return;
                     }

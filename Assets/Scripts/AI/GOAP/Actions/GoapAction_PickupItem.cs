@@ -51,8 +51,7 @@ namespace MWI.AI
                     logisticsManager.ReportMissingReservedItem(_job.CurrentOrder); 
                 } 
                 
-                _job.TargetWorldItem = null;
-                _job.WaitCooldown = 1.0f;
+                _job.CancelCurrentOrder(true);
                 return null;
             }
 
@@ -72,8 +71,7 @@ namespace MWI.AI
                     logisticsManager.ReportMissingReservedItem(_job.CurrentOrder); 
                 }
                 
-                _job.TargetWorldItem = null;
-                _job.WaitCooldown = 1.0f;
+                _job.CancelCurrentOrder(true);
                 return null;
             }
 
