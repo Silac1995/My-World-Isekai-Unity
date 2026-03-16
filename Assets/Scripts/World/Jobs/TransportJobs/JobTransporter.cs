@@ -109,7 +109,8 @@ public class JobTransporter : Job
 
             _currentAction.Execute(_worker);
 
-            if (_currentAction.IsComplete)
+            // _currentAction may have been set to null by CancelCurrentOrder() internally inside Execute!
+            if (_currentAction != null && _currentAction.IsComplete)
             {
                 Debug.Log($"<color=cyan>[JobTransporter]</color> {_worker.CharacterName} : action {_currentAction.ActionName} terminée.");
                 _currentAction.Exit(_worker);

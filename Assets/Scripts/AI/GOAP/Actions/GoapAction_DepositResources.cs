@@ -84,15 +84,33 @@ public class GoapAction_DepositResources : GoapAction
 
     /// <summary>
     /// Dépose les items depuis le sac (wanted items) et/ou depuis les mains.
-    /// Les items sont spawnés en WorldItem au sol dans la deposit zone.
+    /// Lance l'action CharacterDropItem pour qu'ils soient spawnés physiquement
+    /// par le système d'animation et de CharacterAction centralisé.
     /// </summary>
     private void DepositItems(Character worker)
     {
         bool deposited = false;
-        Vector3 dropPos = worker.transform.position + Vector3.up * 0.2f;
         var acceptedItems = _building.GetAcceptedItems();
 
-        // 1. Déposer les items acceptés depuis le sac (inventaire)
+        // 1. Déposer l'item porté dans les mains EN PREMIER (pour libérer l'animation)
+        var handsController = worker.CharacterVisual?.BodyPartsController?.HandsController;
+        if (handsController != null && handsController.IsCarrying)
+        {
+            if (handsController.CarriedItem != null && acceptedItems.Contains(handsController.CarriedItem.ItemSO))
+            {
+                ItemInstance carriedItem = handsController.CarriedItem;
+                
+                // Exécuter l'action physique de drop (! La première action réussit, les suivantes pourraient échouer si exécutées à la même frame)
+                if (worker.CharacterActions.ExecuteAction(new CharacterDropItem(worker, carriedItem)))
+                {
+                    _building.RegisterGatheredItem(carriedItem.ItemSO);
+                    Debug.Log($"<color=green>[GOAP Deposit]</color> {worker.CharacterName} a physiquement lâché {carriedItem.ItemSO.ItemName} (mains) à la zone de dépôt.");
+                    deposited = true;
+                }
+            }
+        }
+
+        // 2. Déposer les items acceptés depuis le sac (inventaire)
         var equipment = worker.CharacterEquipment;
         if (equipment != null && equipment.HaveInventory())
         {
@@ -110,43 +128,22 @@ public class GoapAction_DepositResources : GoapAction
                 // Vérifier si c'est un item accepté
                 if (acceptedItems.Contains(item.ItemSO))
                 {
-                    // Retirer du sac
-                    inventory.RemoveItem(item, worker);
-
-                    // Spawn le WorldItem au sol
-                    Vector3 offset = new Vector3(Random.Range(-0.3f, 0.3f), 0, Random.Range(-0.3f, 0.3f));
-                    WorldItem.SpawnWorldItem(item, dropPos + offset);
-
-                    // Enregistrer au building
-                    _building.RegisterGatheredItem(item.ItemSO);
-                    Debug.Log($"<color=green>[GOAP Deposit]</color> {worker.CharacterName} a déposé {item.ItemSO.ItemName} (sac) à la zone de dépôt.");
-                    deposited = true;
-                }
-            }
-        }
-
-        // 2. Déposer l'item porté dans les mains (si accepté)
-        var handsController = worker.CharacterVisual?.BodyPartsController?.HandsController;
-        if (handsController != null && handsController.IsCarrying)
-        {
-            if (handsController.CarriedItem != null && acceptedItems.Contains(handsController.CarriedItem.ItemSO))
-            {
-                ItemInstance carriedItem = handsController.DropCarriedItem();
-                if (carriedItem != null)
-                {
-                    Vector3 offset = new Vector3(Random.Range(-0.3f, 0.3f), 0, Random.Range(-0.3f, 0.3f));
-                    WorldItem.SpawnWorldItem(carriedItem, dropPos + offset);
-
-                    _building.RegisterGatheredItem(carriedItem.ItemSO);
-                    Debug.Log($"<color=green>[GOAP Deposit]</color> {worker.CharacterName} a déposé {carriedItem.ItemSO.ItemName} (mains) à la zone de dépôt.");
-                    deposited = true;
+                    // Lancer l'action de drop.
+                    // IMPORTANT : CharacterActions.ExecuteAction ne peut pas stacker 10 actions à la frame 1 si CanExecute() = false pdt une autre action.
+                    // Cependant, pour la version actuelle, on tente de drop ce qui est possible, GOAP replanifiera la suite au tick suivant !
+                    if (worker.CharacterActions.ExecuteAction(new CharacterDropItem(worker, item)))
+                    {
+                        _building.RegisterGatheredItem(item.ItemSO);
+                        Debug.Log($"<color=green>[GOAP Deposit]</color> {worker.CharacterName} a libéré {item.ItemSO.ItemName} (sac) pour la zone de dépôt.");
+                        deposited = true;
+                    }
                 }
             }
         }
 
         if (!deposited)
         {
-            Debug.LogWarning($"<color=orange>[GOAP Deposit]</color> {worker.CharacterName} n'avait rien à déposer !");
+            Debug.LogWarning($"<color=orange>[GOAP Deposit]</color> {worker.CharacterName} n'avait rien à déposer (ou a échoué l'action de drop) !");
         }
     }
 

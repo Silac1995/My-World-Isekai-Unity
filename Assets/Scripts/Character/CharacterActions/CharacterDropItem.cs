@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using UnityEngine.TextCore.Text;
 
 public class CharacterDropItem : CharacterAction
@@ -43,7 +43,7 @@ public class CharacterDropItem : CharacterAction
 
         if (removed)
         {
-            Vector3 dropPos = character.transform.position + Vector3.up * 0.2f;
+            Vector3 dropPos = character.transform.position + Vector3.up * 5f;
             Vector3 offset = new Vector3(Random.Range(-0.3f, 0.3f), 0, Random.Range(-0.3f, 0.3f));
             WorldItem.SpawnWorldItem(_itemInstance, dropPos + offset);
             Debug.Log($"Item {_itemInstance.ItemSO.ItemName} lache physiquement.");
