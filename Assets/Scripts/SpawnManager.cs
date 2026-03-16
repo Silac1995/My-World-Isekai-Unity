@@ -149,6 +149,23 @@ public class SpawnManager : MonoBehaviour
             return null;
         }
 
+        // --- RANDOM NAMING ---
+        if (race != null && race.NameGenerator != null)
+        {
+            GenderType charGender = character.CharacterBio != null && character.CharacterBio.IsMale ? GenderType.Male : GenderType.Female;
+            character.CharacterName = race.NameGenerator.GenerateName(charGender);
+        }
+        
+        // Update the GameObject's name in the Unity Hierarchy
+        if (string.IsNullOrEmpty(character.CharacterName))
+        {
+            characterPrefabObj.name = race != null ? $"NPC_{race.RaceName}" : "Unknown_NPC";
+        }
+        else
+        {
+            characterPrefabObj.name = character.CharacterName;
+        }
+
         ApplyRandomColor(character);
 
         if (isPlayer)

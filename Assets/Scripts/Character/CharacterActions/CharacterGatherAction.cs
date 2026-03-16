@@ -1,3 +1,4 @@
+using System.Linq;
 using UnityEngine;
 
 /// <summary>
@@ -32,11 +33,11 @@ public class CharacterGatherAction : CharacterAction
         {
             if (!_target.InteractionZone.bounds.Contains(character.transform.position))
             {
-                // Fallback : On vérifie si on est au moins très proche du centre du collider (pour les petits colliders ou offsets)
+                // Fallback : On vérifie si on est au moins très proche du collider (pour les petits colliders ou offsets)
                 float dist = Vector3.Distance(character.transform.position, _target.InteractionZone.bounds.ClosestPoint(character.transform.position));
-                if (dist > 0.5f)
+                if (dist > 2.5f)
                 {
-                    Debug.LogWarning($"<color=orange>[Gather Action]</color> {character.CharacterName} est trop loin de la zone d'interaction de {_target.gameObject.name}.");
+                    Debug.LogWarning($"<color=orange>[Gather Action]</color> {character.CharacterName} est trop loin de la zone d'interaction de {_target.gameObject.name} (Dist: {dist}).");
                     return false;
                 }
             }
@@ -75,7 +76,17 @@ public class CharacterGatherAction : CharacterAction
         {
             // Spawn le WorldItem au sol devant le personnage
             Vector3 spawnPos = character.transform.position + character.transform.forward * 0.5f + Vector3.up * 0.3f;
-            WorldItem.SpawnWorldItem(_harvestedItem, spawnPos);
+            WorldItem spawnedItem = WorldItem.SpawnWorldItem(_harvestedItem, spawnPos);
+            
+            // Inscrire la ressource au sol comme tâche pour le bâtiment
+            if (spawnedItem != null && character.CharacterJob != null)
+            {
+                var workAssignment = character.CharacterJob.ActiveJobs.FirstOrDefault(j => j.AssignedJob is JobGatherer);
+                if (workAssignment != null && workAssignment.Workplace != null)
+                {
+                    workAssignment.Workplace.TaskManager?.RegisterTask(new PickupLooseItemTask(spawnedItem));
+                }
+            }
         }
     }
 

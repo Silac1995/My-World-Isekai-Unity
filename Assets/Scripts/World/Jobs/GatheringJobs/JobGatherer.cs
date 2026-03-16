@@ -118,6 +118,9 @@ public class JobGatherer : Job
         // Si on a des ressources mais qu'on a ENCORE de la place et qu'une zone existe, 
         // on ment au planner (hasResources=false) pour le forcer à continuer de Gather.
         bool hasResourcesForGoap = false;
+        bool allResourcesGathered = building.AreAllRequestedResourcesGathered();
+        bool needsToWork = !allResourcesGathered;
+
         if (hasAtLeastOneResource)
         {
             if (!hasFreeSpace)
@@ -126,23 +129,25 @@ public class JobGatherer : Job
             }
             else
             {
-                if (building.HasGatherableZone)
+                if (building.HasGatherableZone && needsToWork)
                 {
                     hasResourcesForGoap = false; // Continuer de gather
                 }
                 else
                 {
-                    hasResourcesForGoap = true; // Plus rien à gather -> aller déposer ce qu'on a
+                    hasResourcesForGoap = true; // Plus rien à gather ou fini le quota -> aller déposer ce qu'on a
                 }
             }
         }
 
-        bool allResourcesGathered = building.AreAllRequestedResourcesGathered();
-        bool needsToWork = !allResourcesGathered;
+        // Planification intelligente du Pickup vs Gather
+        bool looseItemExists = building.TaskManager != null && building.TaskManager.HasAvailableOrClaimedTask<PickupLooseItemTask>(_worker);
+        bool canGather = building.TaskManager != null && building.TaskManager.HasAvailableOrClaimedTask<GatherResourceTask>(_worker);
 
         var worldState = new Dictionary<string, bool>
         {
-            { "hasGatherZone", building.HasGatherableZone },
+            { "hasGatherZone", canGather },
+            { "looseItemExists", looseItemExists },
             { "hasResources", hasResourcesForGoap },
             { "hasDepositedResources", false },
             { "needsToWork", needsToWork },
@@ -154,6 +159,7 @@ public class JobGatherer : Job
         {
             new GoapAction_ExploreForResources(building),
             new GoapAction_GatherResources(building),
+            new GoapAction_PickupLooseItem(building),
             new GoapAction_DepositResources(building),
             new GoapAction_IdleInBuilding(building)
         };

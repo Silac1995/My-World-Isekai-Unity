@@ -15,6 +15,7 @@ MonoBehaviour:
   RaceName: Beast
   raceName: Beast
   Description: 
+  NameGenerator: {fileID: 11400000, guid: 7caab066a4b6ce645a85b6c1994df2c0, type: 2}
   characterVisualPreset: {fileID: 11400000, guid: 36ff85c4179d2e14c871d2af710bdac5, type: 2}
   character_prefabs:
   - {fileID: 5456933137695734175, guid: 7b374d387037c9647bef899d050bac5c, type: 3}
@@ -25,6 +26,7 @@ MonoBehaviour:
   BaseDexterity: 5
   BaseIntelligence: 5
   BaseEndurance: 5
+  BaseCharisma: 10
   BaseHealthOffset: 30
   HealthMultiplier: 0.3
   BaseStaminaOffset: 50

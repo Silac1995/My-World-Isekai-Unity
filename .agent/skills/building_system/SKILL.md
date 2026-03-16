@@ -59,10 +59,14 @@ A room that contains smaller nested sub-rooms.
 
 ### 4. Building (`Building.cs`)
 The top-level structure in the world.
-- **Inheritance:** Inherits from `ComplexRoom`. Sub-rooms typically act as the specific floors or separated areas of the building.
-- **Management:** Registers itself globally with the `BuildingManager` on `Start()`.
-- **Logistics Integration:** Holds a reference to a `_deliveryZone` which is essential for the Logistics cycle.
-- **Public access:** Has an outer `_buildingZone` (distinct from the main interior) for general traversal and random roaming around the property.
+- **Inheritance**: Inherits from `ComplexRoom`. Sub-rooms typically act as the specific floors or separated areas of the building.
+- **Management**: Registers itself globally with the `BuildingManager` on `Start()`.
+- **Logistics Integration**: Holds a reference to a `_deliveryZone` which is essential for the Logistics cycle.
+- **Public access**: Has an outer `_buildingZone` (distinct from the main interior) for general traversal and random roaming around the property.
+
+### 5. Commercial Building (`CommercialBuilding.cs`)
+A specialized structural entity handling jobs and economic tasks.
+- **Task Manager (`BuildingTaskManager`)**: Automatically attached module serving as a Blackboard. Manages a pool of `BuildingTask` objects. Instead of workers using expensive polling (raycasts/overlaps), tasks are registered here to be claimed sequentially using OCP-compliant logic (Open/Closed Principle) for dynamic behavior (e.g., Gatherers claiming trees).
 
 ---
 

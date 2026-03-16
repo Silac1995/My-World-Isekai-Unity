@@ -215,6 +215,12 @@ public class Character : MonoBehaviour
         // Applique dynamiquement toutes les stats (bases, offsets, multiplicateurs) depuis la race
         _stats.ApplyRaceStats(_race);
 
+        if (string.IsNullOrEmpty(_characterName) && _race.NameGenerator != null)
+        {
+            _characterName = _race.NameGenerator.GenerateName(_startingGender);
+            Debug.Log($"<color=cyan>[NameGenerator]</color> Named a new {_race.RaceName}: {_characterName}");
+        }
+
         if (_controller != null) _controller.Initialize();
     }
     #endregion

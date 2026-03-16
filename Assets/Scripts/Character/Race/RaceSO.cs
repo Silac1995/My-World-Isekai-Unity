@@ -8,6 +8,9 @@ public class RaceSO : ScriptableObject
     public string raceName; // Legacy field for CharacterVisual.cs compatibility
     [TextArea] public string Description;
     
+    [Header("Identity & Data")]
+    public RandomNameGeneratorSO NameGenerator;
+
     [Header("Visuals")]
     public CharacterVisualPresetSO characterVisualPreset;
     public System.Collections.Generic.List<GameObject> character_prefabs = new();

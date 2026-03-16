@@ -36,6 +36,7 @@ The physical anchor in the scene.
 - **Recruitment (`AskForJob`)**: For a character to get a position here, the Building must have a Boss (`HasOwner`), the position must exist locally, and it must be vacant.
 - **Punching In/Out**: Handled by strict `CharacterAction`s (`Action_PunchIn` / `Action_PunchOut`). A character cannot telepathically start working; their `WorkBehaviour` first pushes a `PunchInBehaviour` to physically navigate them inside `BuildingZone.bounds`, which then spawns the `Action_PunchIn` to call `WorkerStartingShift`.
 - **Physical Dispersion**: `GetWorkPosition(Character)` provides a point within the `BuildingZone` with a unique offset (based on InstanceID) to ensure workers don't stack on top of each other.
+- **Task Management (Blackboard Pattern)**: All Commercial Buildings require a `BuildingTaskManager`. Instead of workers individually running heavy `Physics.OverlapBox` queries every frame to find tasks, resources and systems register `BuildingTask`s (`GatherResourceTask`, `PickupLooseItemTask`) to the building. Workers use `TaskManager.ClaimBestTask<T>()` to claim work autonomously via GOAP without race conditions.
 
 ### 4. Crafting (CraftingBuilding & JobCrafter)
 Crafting follows a specialized overlay of this system.

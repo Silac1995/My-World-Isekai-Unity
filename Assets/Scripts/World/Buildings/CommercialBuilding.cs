@@ -7,6 +7,7 @@ using UnityEngine;
 /// Chaque type de building commercial (Bar, Shop...) hérite de cette classe
 /// et override InitializeJobs() pour définir ses postes de travail.
 /// </summary>
+[RequireComponent(typeof(BuildingTaskManager))]
 public abstract class CommercialBuilding : Building
 {
     [Header("Commercial")]
@@ -18,12 +19,16 @@ public abstract class CommercialBuilding : Building
     protected List<Character> _activeWorkersOnShift = new List<Character>();
     protected List<ItemInstance> _inventory = new List<ItemInstance>();
 
+    protected BuildingTaskManager _taskManager;
+
     public Character Owner => _owner;
     public Community OwnerCommunity => _ownerCommunity;
     public IReadOnlyList<Job> Jobs => _jobs;
     public IReadOnlyList<Character> ActiveWorkersOnShift => _activeWorkersOnShift;
     public Zone StorageZone => _storageZone;
     public IReadOnlyList<ItemInstance> Inventory => _inventory;
+    
+    public BuildingTaskManager TaskManager => _taskManager;
 
     /// <summary>
     /// Le building est opérationnel si tous les jobs sont occupés par un worker.
@@ -33,6 +38,13 @@ public abstract class CommercialBuilding : Building
     protected override void Awake()
     {
         base.Awake();
+        
+        _taskManager = gameObject.GetComponent<BuildingTaskManager>();
+        if (_taskManager == null)
+        {
+            _taskManager = gameObject.AddComponent<BuildingTaskManager>();
+        }
+        
         InitializeJobs();
     }
 

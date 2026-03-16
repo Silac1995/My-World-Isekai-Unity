@@ -129,17 +129,27 @@ public class GatheringBuilding : CommercialBuilding
                     break;
                 }
             }
-
-            if (foundValidResource) break;
         }
 
         if (foundValidResource)
         {
             SetGatherableZone(_gatheringAreaZone);
+            
+            // Register tasks for all valid gatherables found
+            TaskManager?.ClearAvailableTasksOfType<GatherResourceTask>();
+            foreach (var col in colliders)
+            {
+                GatherableObject gatherable = col.GetComponent<GatherableObject>() ?? col.GetComponentInParent<GatherableObject>();
+                if (gatherable != null && gatherable.CanGather() && gatherable.HasAnyOutput(wantedItems))
+                {
+                    TaskManager?.RegisterTask(new GatherResourceTask(gatherable));
+                }
+            }
         }
         else
         {
             ClearGatherableZone();
+            TaskManager?.ClearAvailableTasksOfType<GatherResourceTask>();
             Debug.Log($"<color=orange>[GatheringBuilding]</color> {buildingName} : Scan de _gatheringAreaZone n'a rien trouvé. Retour à l'exploration.");
         }
     }
