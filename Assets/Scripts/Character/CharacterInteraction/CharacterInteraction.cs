@@ -1,5 +1,7 @@
 using System;
 using UnityEngine;
+using UnityEngine.AI;
+using MWI.AI;
 
 public class CharacterInteraction : MonoBehaviour
 {
@@ -185,6 +187,13 @@ public class CharacterInteraction : MonoBehaviour
             {
                 if (!target.CharacterInteraction.IsPositioning && !target.CharacterInteraction.IsPositioned)
                 {
+                    // --- NOUVEAU: SÉCURITÉ NAVMESH POUR LES COMPTOIRS ---
+                    // On valide les positions sur le NavMesh pour éviter qu'elles ne soient à l'intérieur d'un meuble.
+                    if (NavMesh.SamplePosition(targetMeetingPos, out NavMeshHit tHit, 2.0f, NavMesh.AllAreas))
+                    {
+                        targetMeetingPos = tHit.position;
+                    }
+
                     target.CharacterInteraction.StartTargetPositioning(targetMeetingPos, _character);
                 }
                 
@@ -192,24 +201,31 @@ public class CharacterInteraction : MonoBehaviour
                 targetInPosition = target.CharacterInteraction.IsPositioned;
             }
 
+            if (NavMesh.SamplePosition(initiatorMeetingPos, out NavMeshHit iHit, 2.0f, NavMesh.AllAreas))
+            {
+                initiatorMeetingPos = iHit.position;
+            }
+
             float distDelta = Vector3.Distance(new Vector3(_character.transform.position.x, 0, _character.transform.position.z), 
                                                new Vector3(initiatorMeetingPos.x, 0, initiatorMeetingPos.z));
+
+            float zDiff = Mathf.Abs(_character.transform.position.z - targetPos.z);
+            float xDiff = Mathf.Abs(_character.transform.position.x - targetPos.x);
+            
+            // Alignement strict en Z (marge de 0.5) et distance minimale de 4 et max de 6 en X (avec légère tolérance pour le NavMesh)
+            bool isAlignedVisually = zDiff <= 0.5f && xDiff >= 3.8f && xDiff <= 6.2f;
 
             if (detector != null && targetInteractable != null)
             {
                 bool isOverlapping = detector.IsOverlapping(targetInteractable);
+                bool hasReachedTarget = NavMeshUtility.HasAgentReachedDestination(movement, 0.4f) || distDelta <= 0.2f;
                 
-                // On veut s'assurer qu'ils sont bien alignés visuellement sur Z et X (environ 4 de différence)
-                float zDiff = Mathf.Abs(_character.transform.position.z - (target.IsPlayer() ? targetPos.z : midpoint.z));
-                float xDiff = Mathf.Abs(_character.transform.position.x - (target.IsPlayer() ? targetPos.x : midpoint.x));
-                // On est tolérant sur la position pour valider l'arrivée
-                bool isAlignedVisually = zDiff <= 0.1f && distDelta <= 0.1f;
-
-                isCloseEnough = (isOverlapping && isAlignedVisually) || distDelta <= 0.05f;
+                isCloseEnough = (isOverlapping && isAlignedVisually && hasReachedTarget);
             }
             else
             {
-                isCloseEnough = distDelta <= 0.05f;
+                bool hasReachedTarget = NavMeshUtility.HasAgentReachedDestination(movement, 0.4f) || distDelta <= 0.2f;
+                isCloseEnough = (isAlignedVisually && hasReachedTarget);
             }
 
             if (isCloseEnough && targetInPosition)
@@ -326,7 +342,7 @@ public class CharacterInteraction : MonoBehaviour
             float distDelta = Vector3.Distance(new Vector3(_character.transform.position.x, 0, _character.transform.position.z), 
                                                new Vector3(destination.x, 0, destination.z));
 
-            if (distDelta <= 0.1f)
+            if (distDelta <= 0.2f || NavMeshUtility.HasAgentReachedDestination(movement, 0.4f))
             {
                 _character.CharacterVisual?.FaceCharacter(initiator);
                 SetPositioned(true);
