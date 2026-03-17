@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 
 public class ItemInteractable : InteractableObject
 {
@@ -11,6 +11,11 @@ public class ItemInteractable : InteractableObject
         if (_wasCollected) return false;
         _wasCollected = true;
         return true;
+    }
+
+    public void CancelCollect()
+    {
+        _wasCollected = false;
     }
 
     public WorldItem WorldItem

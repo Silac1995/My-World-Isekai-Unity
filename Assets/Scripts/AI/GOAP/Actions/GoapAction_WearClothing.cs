@@ -127,6 +127,12 @@ public class GoapAction_WearClothing : GoapAction
 
                 if (!_actionStarted)
                 {
+                    // FIX: Wait for the character to finish any current action before trying to equip
+                    if (worker.CharacterActions.CurrentAction != null)
+                    {
+                        return; // Wait next tick
+                    }
+
                     if (_targetInteractable.TryCollect())
                     {
                         CharacterEquipAction equipAction = new CharacterEquipAction(worker, equip);
@@ -141,6 +147,8 @@ public class GoapAction_WearClothing : GoapAction
                         }
                         else
                         {
+                            // FIX: If ExecuteAction fails, free the item so others can pick it up
+                            _targetInteractable.CancelCollect();
                             _isComplete = true;
                             return;
                         }

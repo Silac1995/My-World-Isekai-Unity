@@ -8,6 +8,7 @@ namespace MWI.AI
     {
         private JobTransporter _job;
         protected bool _isComplete = false;
+        private float _patienceTimer = 0f;
 
         public override string ActionName => "Locate Delivery Item";
         public override float Cost => 1f;
@@ -118,14 +119,32 @@ namespace MWI.AI
 
                     if (itemsStillInInventory)
                     {
-                        Debug.Log($"<color=cyan>[LocateItem]</color> Les items réservés sont dans l'inventaire mais pas encore par terre. {_job.Worker.CharacterName} patiente.");
-                        _job.WaitCooldown = 1f; // Check again in a bit
-                        _isComplete = true;
-                        return;
+                        _patienceTimer += UnityEngine.Time.deltaTime;
+                        if (_patienceTimer >= 10f) // 10 secondes maximum
+                        {
+                            Debug.LogWarning($"<color=orange>[LocateItem]</color> Le livreur {_job.Worker.CharacterName} a perdu patience. Les items n'ont jamais été lâchés. Annulation.");
+                            var logisticsManager = source.Jobs.OfType<JobLogisticsManager>().FirstOrDefault();
+                            if (logisticsManager != null)
+                            {
+                                logisticsManager.ReportMissingReservedItem(_job.CurrentOrder);
+                            }
+                            _job.CancelCurrentOrder(true);
+                            _isComplete = true;
+                            return;
+                        }
+
+                        // On ne met PAS _isComplete = true. On reste dans cette action et on attend.
+                        if (UnityEngine.Time.frameCount % 60 == 0) // Log 1 fois par seconde au lieu de spam
+                        {
+                            Debug.Log($"<color=cyan>[LocateItem]</color> Les items réservés sont dans l'inventaire mais pas par terre. {_job.Worker.CharacterName} patiente encore ({(int)(10f - _patienceTimer)}s).");
+                        }
+                        
+                        _job.WaitCooldown = 0.5f; 
+                        return; // On revient la prochaine frame
                     }
                     else
                     {
-                        Debug.LogWarning($"<color=orange>[LocateItem]</color> Les items réservés pour {wantedSO.ItemName} ont disparu de {source.BuildingName}. Annulation et notification logistique.");
+                        Debug.LogWarning($"<color=orange>[LocateItem]</color> Les items réservés pour {wantedSO.ItemName} n'existent plus physiquement. Annulation et notification logistique.");
                         _job.WaitCooldown = 2f;
                         
                         // Notifier le LogisticsManager que les items ont été volés/détruits
@@ -144,7 +163,7 @@ namespace MWI.AI
 
             _job.TargetWorldItem = targetWorldItem;
             _isComplete = true;
-            Debug.Log($"<color=cyan>[LocateItem]</color> {_job.Worker.CharacterName} a assigné TargetWorldItem: {(_job.TargetWorldItem != null ? _job.TargetWorldItem.name : "NULL")}. isComplete=true. FIN D'EXECUTION.");
+            Debug.Log($"<color=cyan>[LocateItem]</color> {_job.Worker.CharacterName} a assigné TargetWorldItem: {(_job.TargetWorldItem != null ? _job.TargetWorldItem.name : "NULL")}. isComplete=true.");
         }
 
         public override void Exit(Character worker)
