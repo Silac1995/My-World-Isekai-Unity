@@ -8,6 +8,7 @@ namespace MWI.AI
     {
         private JobTransporter _job;
         protected bool _isComplete = false;
+        private float _patienceTimer = 0f;
 
         public override string ActionName => "Locate Delivery Item";
         public override float Cost => 1f;
@@ -118,17 +119,28 @@ namespace MWI.AI
 
                     if (itemsStillInInventory)
                     {
-                        Debug.LogWarning($"<color=orange>[LocateItem]</color> Les items réservés sont dans l'inventaire logique mais pas trouvés physiquement ! {_job.Worker.CharacterName} effectue un audit de sécurité (RefreshStorageInventory).");
-                        
-                        // SANITY CHECK: Purge the inventory from logical ghosts directly
-                        source.RefreshStorageInventory();
+                        _patienceTimer += UnityEngine.Time.deltaTime;
+                        if (_patienceTimer >= 10f) // 10 secondes maximum
+                        {
+                            Debug.LogWarning($"<color=orange>[LocateItem]</color> Le livreur {_job.Worker.CharacterName} a perdu patience. Les items n'ont jamais été lâchés. Annulation.");
+                            var logisticsManager = source.Jobs.OfType<JobLogisticsManager>().FirstOrDefault();
+                            if (logisticsManager != null)
+                            {
+                                logisticsManager.ReportMissingReservedItem(_job.CurrentOrder);
+                            }
+                            _job.CancelCurrentOrder(true);
+                            _isComplete = true;
+                            return;
+                        }
 
-                        // Force the transporter to replan immediately after the audit.
-                        // Order will be cancelled implicitly by the refresh audit (which triggers ReportMissingReservedItem internally).
-                        _job.WaitCooldown = 2f;
-                        _job.CancelCurrentOrder(true);
-                        _isComplete = true;
-                        return;
+                        // On ne met PAS _isComplete = true. On reste dans cette action et on attend.
+                        if (UnityEngine.Time.frameCount % 60 == 0) // Log 1 fois par seconde au lieu de spam
+                        {
+                            Debug.Log($"<color=cyan>[LocateItem]</color> Les items réservés sont dans l'inventaire mais pas par terre. {_job.Worker.CharacterName} patiente encore ({(int)(10f - _patienceTimer)}s).");
+                        }
+                        
+                        _job.WaitCooldown = 0.5f; 
+                        return; // On revient la prochaine frame
                     }
                     else
                     {

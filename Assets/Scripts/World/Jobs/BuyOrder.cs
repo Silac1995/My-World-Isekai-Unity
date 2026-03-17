@@ -62,18 +62,6 @@ public class BuyOrder
         DispatchedQuantity += amount;
     }
 
-    /// <summary>
-    /// Ajoute une quantité supplémentaire à une commande existante.
-    /// Utilisé lorsque plusieurs besoins logistiques convergents demandent le même ressource physique au même fournisseur.
-    /// </summary>
-    public void AddQuantity(int amount)
-    {
-        if (amount > 0)
-        {
-            Quantity += amount;
-        }
-    }
-
     public void CancelDispatch(int amount)
     {
         DispatchedQuantity = Mathf.Max(0, DispatchedQuantity - amount);

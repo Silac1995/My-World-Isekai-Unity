@@ -159,15 +159,27 @@ public class JobLogisticsManager : Job
     {
         if (order == null || order.Quantity <= 0) return false;
 
-        _activeCraftingOrders.Add(order);
-        Debug.Log($"<color=cyan>[JobLogisticsManager]</color> Commande Craft reçue : {order.Quantity}x {order.ItemToCraft.ItemName}. Jours restants : {order.RemainingDays}");
-
-        // Vérification globale des besoins par rapport à l'inventaire + commandes en cours
-        if (_workplace is CraftingBuilding crafting)
+        // V?rification des ingrédients dans l'inventaire du bâtiment (ou StorageZone)
+        if (_workplace != null)
         {
-            CheckCraftingIngredients(crafting);
+            var recipe = order.ItemToCraft.CraftingRecipe;
+            foreach (var ingredient in recipe)
+            {
+                int needed = ingredient.Amount * order.Quantity;
+                int available = _workplace.GetItemCount(ingredient.Item);
+
+                if (available < needed)
+                {
+                    int toOrder = needed - available;
+                    Debug.Log($"<color=yellow>[Logistics]</color> Ingrédient manquant pour {order.ItemToCraft.ItemName} : {ingredient.Item.ItemName} ({available}/{needed}). Placement d'une commande...");
+                    
+                    RequestStock(ingredient.Item, toOrder);
+                }
+            }
         }
 
+        _activeCraftingOrders.Add(order);
+        Debug.Log($"<color=cyan>[JobLogisticsManager]</color> Commande Craft reçue : {order.Quantity}x {order.ItemToCraft.ItemName}. Jours restants : {order.RemainingDays}");
         return true;
     }
 
@@ -373,27 +385,15 @@ public class JobLogisticsManager : Job
             var itemSO = entry.Item;
             int maxStock = entry.MaxStock > 0 ? entry.MaxStock : 5;
             int currentStock = shop.GetStockCount(itemSO);
-            
-            // Calcul de la quantité déjà en cours de commande (pending + en livraison)
-            int alreadyOrdered = 0;
-            foreach (var buyOrder in _placedBuyOrders)
-            {
-                if (buyOrder.ItemToTransport == itemSO)
-                {
-                    alreadyOrdered += buyOrder.Quantity - buyOrder.DeliveredQuantity;
-                }
-            }
 
-            int virtualStock = currentStock + alreadyOrdered;
-
-            if (virtualStock >= maxStock)
+            if (!shop.NeedsRestock(itemSO, maxStock))
             {
-                Debug.Log($"<color=cyan>[Logistics]</color>   ✓ {itemSO.ItemName}: {currentStock} (physique) + {alreadyOrdered} (commandé) / {maxStock} — stock suffisant.");
+                Debug.Log($"<color=cyan>[Logistics]</color>   ✓ {itemSO.ItemName}: {currentStock}/{maxStock} — stock suffisant.");
                 continue;
             }
 
-            Debug.Log($"<color=yellow>[Logistics]</color>   ✗ {itemSO.ItemName}: {virtualStock}/{maxStock} — stock virtuel bas, commande nécessaire...");
-            int quantityToOrder = maxStock - virtualStock;
+            Debug.Log($"<color=yellow>[Logistics]</color>   ✗ {itemSO.ItemName}: {currentStock}/{maxStock} — stock bas, commande nécessaire...");
+            int quantityToOrder = maxStock - currentStock;
             RequestStock(itemSO, quantityToOrder);
         }
     }
@@ -404,8 +404,6 @@ public class JobLogisticsManager : Job
     /// </summary>
     private void CheckCraftingIngredients(CraftingBuilding building)
     {
-        Dictionary<ItemSO, int> totalNeeded = new Dictionary<ItemSO, int>();
-
         foreach (var order in _activeCraftingOrders)
         {
             var recipe = order.ItemToCraft.CraftingRecipe;
@@ -413,35 +411,14 @@ public class JobLogisticsManager : Job
 
             foreach (var ingredient in recipe)
             {
-                if (!totalNeeded.ContainsKey(ingredient.Item))
-                {
-                    totalNeeded[ingredient.Item] = 0;
-                }
-                totalNeeded[ingredient.Item] += ingredient.Amount * order.Quantity;
-            }
-        }
+                int needed = ingredient.Amount * order.Quantity;
+                int possessed = building.GetItemCount(ingredient.Item);
 
-        foreach (var kvp in totalNeeded)
-        {
-            ItemSO item = kvp.Key;
-            int needed = kvp.Value;
-            int possessed = building.GetItemCount(item);
-            
-            // Calcul de la quantité déjà en cours de commande (pending + en livraison)
-            int alreadyOrdered = 0;
-            foreach (var buyOrder in _placedBuyOrders)
-            {
-                if (buyOrder.ItemToTransport == item)
+                if (possessed < needed)
                 {
-                    alreadyOrdered += buyOrder.Quantity - buyOrder.DeliveredQuantity;
+                    int quantityToOrder = needed - possessed;
+                    RequestStock(ingredient.Item, quantityToOrder);
                 }
-            }
-
-            if (possessed + alreadyOrdered < needed)
-            {
-                int quantityToOrder = needed - (possessed + alreadyOrdered);
-                Debug.Log($"<color=yellow>[Logistics]</color> Ingrédient manquant (Global) : {item.ItemName} ({possessed + alreadyOrdered}/{needed}). Placement d'une commande de {quantityToOrder}x...");
-                RequestStock(item, quantityToOrder);
             }
         }
     }
@@ -465,18 +442,21 @@ public class JobLogisticsManager : Job
             return;
         }
 
-        // --- NOUVEAU: Vérifier si notre building n'a pas DÉJÀ une commande non placée pour ce même item et ce même fournisseur ---
-        var existingPending = _placedBuyOrders.FirstOrDefault(o => o.ItemToTransport == itemSO && o.Source == supplier && !o.IsPlaced);
-        if (existingPending != null)
+        // Vérifier si une BuyOrder est déjà en cours chez le fournisseur pour cet item
+        bool alreadyOrdered = supplierLogistics.ActiveOrders.Any(o => o.ItemToTransport == itemSO && o.Destination == _workplace);
+        if (alreadyOrdered)
         {
-            existingPending.AddQuantity(quantityToOrder);
-            Debug.Log($"<color=cyan>[Logistics]</color>   ➕ {itemSO.ItemName}: Ajout de {quantityToOrder}x à la commande en attente pour {supplier.BuildingName}.");
+            Debug.Log($"<color=cyan>[Logistics]</color>   ⏳ {itemSO.ItemName}: BuyOrder déjà en cours chez {supplier.BuildingName}.");
             return;
         }
 
-        // Si la commande est déjà placée chez le fournisseur (IsPlaced == true), on préfère en créer une nouvelle
-        // pour que le worker aille physiquement signer le nouveau contrat.
-        // Les risques de boucle infinie sont désormais gérés par CheckCraftingIngredients (qui soustrait les pending/placed).
+        // --- NOUVEAU: Vérifier si notre building n'a pas DÉJÀ une commande non placée pour ce même item et ce même fournisseur ---
+        bool alreadyPendingPlacement = _placedBuyOrders.Any(o => o.ItemToTransport == itemSO && o.Source == supplier && !o.IsPlaced);
+        if (alreadyPendingPlacement)
+        {
+            Debug.Log($"<color=cyan>[Logistics]</color>   ⏳ {itemSO.ItemName}: Une commande est déjà en attente d'être passée physiquement à {supplier.BuildingName}.");
+            return;
+        }
 
         var buyOrder = new BuyOrder(
             itemSO,
