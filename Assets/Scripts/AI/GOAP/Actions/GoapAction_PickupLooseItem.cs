@@ -144,6 +144,7 @@ public class GoapAction_PickupLooseItem : GoapAction
                 Debug.Log($"<color=red>[GOAP Pickup]</color> {worker.CharacterName} : Impossible d'atteindre l'objet. Blacklist.");
                 
                 worker.PathingMemory.RecordFailure(_targetWorldItem.gameObject.GetInstanceID());
+                _targetWorldItem.RecordUnreachable();
                 
                 // Le chemin a été effacé mais on n'est pas arrivé : on annule et on cherche de nouveau
                 _building.TaskManager?.UnclaimTask(_assignedTask);
@@ -263,6 +264,7 @@ public class GoapAction_PickupLooseItem : GoapAction
         {
             Debug.Log($"<color=orange>[GOAP Pickup]</color> {worker.CharacterName} ne peut ni stocker ni porter l'item. Blacklist temporaire.");
             worker.PathingMemory.RecordFailure(worldItem.gameObject.GetInstanceID());
+            worldItem.RecordUnreachable();
             _isComplete = true;
         }
     }

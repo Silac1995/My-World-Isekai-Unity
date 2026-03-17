@@ -16,6 +16,39 @@ public class WorldItem : MonoBehaviour
     public bool IsBeingCarried { get; set; } = false;
     public bool FreezeOnGround { get; set; } = false;
 
+    private int _unreachableCount = 0;
+    private const int MAX_UNREACHABLE_COUNT = 4;
+
+    public void RecordUnreachable()
+    {
+        _unreachableCount++;
+        if (_unreachableCount >= MAX_UNREACHABLE_COUNT)
+        {
+            RepositionFallback();
+            _unreachableCount = 0;
+        }
+    }
+
+    private void RepositionFallback()
+    {
+        // On cherche un point valide sur le NavMesh dans un rayon de 3 mètres
+        if (UnityEngine.AI.NavMesh.SamplePosition(transform.position, out UnityEngine.AI.NavMeshHit hit, 3.0f, UnityEngine.AI.NavMesh.AllAreas))
+        {
+            // On le téléporte un peu en hauteur pour qu'il retombe physiquement, signalant le mouvement
+            transform.position = hit.position + Vector3.up * 1f; 
+            if (TryGetComponent(out Rigidbody rb))
+            {
+                rb.isKinematic = false;
+                FreezeOnGround = true;
+            }
+            Debug.Log($"<color=cyan>[WorldItem]</color> {gameObject.name} repositionné organiquement car inaccessible trop de fois !");
+        }
+        else
+        {
+            Debug.LogWarning($"<color=orange>[WorldItem]</color> Impossible de trouver une zone de repli NavMesh pour {gameObject.name}.");
+        }
+    }
+
     private void Awake()
     {
         SortingGroup = GetComponent<UnityEngine.Rendering.SortingGroup>();

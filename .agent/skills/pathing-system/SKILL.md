@@ -48,6 +48,7 @@ Never implement raw distance or bounds checks directly inside a GOAP action unle
 
 1. **Detecting Failure**: In your movement evaluation loop (often checking `HasPathFailed`), extract the target's `InstanceID`.
 2. **Recording**: Call `bool blacklisted = worker.PathingMemory.RecordFailure(targetId)`.
+   - *Note on Items*: If the target `GameObject` is a `WorldItem` (or has a parent `WorldItem`), you **MUST** also call `worldItem.RecordUnreachable()`. This hooks into the organic self-healing system that allows dropped items to bounce away from blocked NavMesh areas after 4 failed attempts.
 3. **Aborting**: If `blacklisted` is true, immediately stop the movement (`movement.Stop(); movement.ResetPath();`) and cleanly fail/abort the action so GOAP or the BT can proceed.
 4. **Filtering Scans**: When using physics overlaps or lists to find targets (like gathering items), ignore objects where `worker.PathingMemory.IsBlacklisted(item.gameObject.GetInstanceID())` is true.
 
