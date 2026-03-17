@@ -208,10 +208,11 @@ public class JobLogisticsManager : Job
     /// </summary>
     public CraftingOrder GetNextAvailableCraftingOrder()
     {
-        if (_activeCraftingOrders.Count == 0) return null;
+        var pendingOrders = _activeCraftingOrders.Where(o => !o.IsCompleted).ToList();
+        if (pendingOrders.Count == 0) return null;
 
-        CraftingOrder nextOrder = _activeCraftingOrders[0];
-        foreach(var order in _activeCraftingOrders)
+        CraftingOrder nextOrder = pendingOrders[0];
+        foreach(var order in pendingOrders)
         {
             if(order.RemainingDays < nextOrder.RemainingDays)
             {
@@ -287,8 +288,8 @@ public class JobLogisticsManager : Job
         bool completed = order.RecordCraft(craftedAmount);
         if (completed)
         {
-            _activeCraftingOrders.Remove(order);
-            Debug.Log($"<color=green>[JobLogisticsManager]</color> Commande Craft {order.Quantity}x {order.ItemToCraft.ItemName} COMPLÉTÉE.");
+            // _activeCraftingOrders.Remove(order); // Conservé en mémoire pour prouver la réussite face aux vols
+            Debug.Log($"<color=green>[JobLogisticsManager]</color> Commande Craft {order.Quantity}x {order.ItemToCraft.ItemName} COMPLÉTÉE. Maintenue en mémoire temporairement.");
         }
     }
 
@@ -404,6 +405,8 @@ public class JobLogisticsManager : Job
 
         foreach (var order in _activeCraftingOrders)
         {
+            if (order.IsCompleted) continue; // Ignore finished orders
+            
             var recipe = order.ItemToCraft.CraftingRecipe;
             if (recipe == null) continue;
 
@@ -660,63 +663,110 @@ public class JobLogisticsManager : Job
             
             if (physicallyAvailableInstances.Count >= remainingToDispatch)
             {
-                // Stock suffisant, on réserve et on prépare l'expédition
-                var transporter = FindTransporterBuilding();
-                if (transporter == null)
+                // Stock suffisant, on expédie la totalité
+                DispatchTransportOrder(buyOrder, remainingToDispatch, physicallyAvailableInstances, globallyReservedItems);
+
+                // --- FIX: Cleanup any completed CraftingOrders for this item now that everything is shipped ---
+                var linkedCompletedCraft = _activeCraftingOrders.FirstOrDefault(c => c.IsCompleted && c.ItemToCraft == buyOrder.ItemToTransport);
+                if (linkedCompletedCraft != null)
                 {
-                    Debug.LogWarning($"<color=orange>[Logistics]</color> Aucun TransporterBuilding trouvé pour expédier {buyOrder.ItemToTransport.ItemName} à {buyOrder.Destination.BuildingName}.");
-                    continue; 
+                    _activeCraftingOrders.Remove(linkedCompletedCraft);
                 }
-
-                var transportOrder = new TransportOrder(
-                    buyOrder.ItemToTransport,
-                    remainingToDispatch,
-                    _workplace,
-                    buyOrder.Destination,
-                    buyOrder
-                );
-
-                // Assignation explicite des instances physiques réservées
-                for (int j = 0; j < remainingToDispatch; j++)
-                {
-                    ItemInstance instanceToReserve = physicallyAvailableInstances[j];
-                    transportOrder.ReserveItem(instanceToReserve);
-                    buyOrder.ReserveItem(instanceToReserve);
-                    globallyReservedItems.Add(instanceToReserve); // Ajouter au set global pour la boucle suivante
-                }
-
-                buyOrder.RecordDispatch(remainingToDispatch);
-
-                _placedTransportOrders.Add(transportOrder); // Suivi local pour réessayer si échec
-                _pendingOrders.Enqueue(new PendingOrder(transportOrder, transporter));
-                Debug.Log($"<color=cyan>[Logistics]</color>   🚚 Expédition de {remainingToDispatch}x {buyOrder.ItemToTransport.ItemName} vers {buyOrder.Destination.BuildingName} préparée avec réservation physique stricte.");
             }
             else
             {
                 // Stock insuffisant ou partiellement insuffisant
-                if (_workplace.RequiresCraftingFor(buyOrder.ItemToTransport))
+                bool craftInProgress = _activeCraftingOrders.Any(c => !c.IsCompleted && c.ItemToCraft == buyOrder.ItemToTransport);
+                
+                int actuallyAvailableStock = physicallyAvailableInstances.Count;
+                int safeAvailable = Mathf.Max(0, actuallyAvailableStock);
+                
+                var stolenProvenOrder = _activeCraftingOrders.FirstOrDefault(c => c.IsCompleted && c.ItemToCraft == buyOrder.ItemToTransport);
+
+                // --- FIX: Strict Batch Delivery Rule ---
+                // On n'expédie de fraction (Partial Delivery) QUE SI un vol est formellement prouvé
+                if (stolenProvenOrder != null)
                 {
-                    // Eviter de spammer les CraftingOrders si on en a déjà une en cours
-                    bool craftInProgress = _activeCraftingOrders.Any(c => c.ItemToCraft == buyOrder.ItemToTransport);
-                    if (!craftInProgress)
+                    Debug.LogWarning($"<color=orange>[Logistics]</color> 🚨 VOL DETECTÉ: Craft fini pour {buyOrder.ItemToTransport.ItemName} mais items manquants! Livraison partielle de {safeAvailable}.");
+                    
+                    if (safeAvailable > 0)
                     {
-                        int actuallyAvailableStock = physicallyAvailableInstances.Count;
-                        int safeAvailable = Mathf.Max(0, actuallyAvailableStock);
-                        int quantityToCraft = remainingToDispatch - safeAvailable;
-                        
+                        DispatchTransportOrder(buyOrder, safeAvailable, physicallyAvailableInstances, globallyReservedItems);
+                    }
+
+                    // On retire la commande volée de la mémoire pour éviter qu'elle trigger en boucle
+                    _activeCraftingOrders.Remove(stolenProvenOrder);
+                    
+                    // On recalcule ce qu'il reste à expédier pour relancer le craft manquant
+                    int newRemainingToDispatch = buyOrder.Quantity - buyOrder.DispatchedQuantity;
+                    if (newRemainingToDispatch > 0)
+                    {
                         var craftOrder = new CraftingOrder(
                             buyOrder.ItemToTransport,
-                            quantityToCraft,
+                            newRemainingToDispatch, // Craftera *uniquement* ce qui manque
                             buyOrder.RemainingDays,
                             _workplace.Owner,
                             buyOrder.Destination
                         );
                         PlaceCraftingOrder(craftOrder);
-                        Debug.Log($"<color=cyan>[Logistics]</color>   🔨 Génération d'un ordre de craft interne pour honorer la BuyOrder de {buyOrder.Destination.BuildingName}.");
+                        Debug.Log($"<color=cyan>[Logistics]</color>   🔨 Nouvelle commande de craft interne ({newRemainingToDispatch}x) lancée pour compenser le vol.");
+                    }
+                }
+                else
+                {
+                    // Comportement NORMAL: Attendre le stock total OU lancer le full craft si rien n'est en cours.
+                    if (_workplace.RequiresCraftingFor(buyOrder.ItemToTransport) && !craftInProgress)
+                    {
+                        var craftOrder = new CraftingOrder(
+                            buyOrder.ItemToTransport,
+                            remainingToDispatch, // Craftera la totalité demandée
+                            buyOrder.RemainingDays,
+                            _workplace.Owner,
+                            buyOrder.Destination
+                        );
+                        PlaceCraftingOrder(craftOrder);
+                        Debug.Log($"<color=cyan>[Logistics]</color>   🔨 Génération d'un ordre de craft interne pour la BuyOrder de {buyOrder.Destination.BuildingName}.");
                     }
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// Extrait la logique de création et d'inscription d'une TransportOrder physique.
+    /// Gère l'assignation des instances, du transpo et l'avancement de la commande de base.
+    /// </summary>
+    private void DispatchTransportOrder(BuyOrder buyOrder, int amountToDispatch, List<ItemInstance> availableInstances, HashSet<ItemInstance> globallyReservedItems)
+    {
+        var transporter = FindTransporterBuilding();
+        if (transporter == null)
+        {
+            Debug.LogWarning($"<color=orange>[Logistics]</color> Aucun TransporterBuilding trouvé pour expédier {buyOrder.ItemToTransport.ItemName} à {buyOrder.Destination.BuildingName}.");
+            return; 
+        }
+
+        var transportOrder = new TransportOrder(
+            buyOrder.ItemToTransport,
+            amountToDispatch,
+            _workplace,
+            buyOrder.Destination,
+            buyOrder
+        );
+
+        // Assignation explicite des instances physiques réservées
+        for (int j = 0; j < amountToDispatch; j++)
+        {
+            ItemInstance instanceToReserve = availableInstances[j];
+            transportOrder.ReserveItem(instanceToReserve);
+            buyOrder.ReserveItem(instanceToReserve);
+            globallyReservedItems.Add(instanceToReserve); // Ajouter au set global pour la boucle suivante
+        }
+
+        buyOrder.RecordDispatch(amountToDispatch);
+
+        _placedTransportOrders.Add(transportOrder); // Suivi local pour réessayer si échec
+        _pendingOrders.Enqueue(new PendingOrder(transportOrder, transporter));
+        Debug.Log($"<color=cyan>[Logistics]</color>   🚚 Expédition de {amountToDispatch}x {buyOrder.ItemToTransport.ItemName} vers {buyOrder.Destination.BuildingName} préparée avec réservation physique stricte.");
     }
 
     private CommercialBuilding FindSupplierFor(ItemSO item)
@@ -777,6 +827,8 @@ public class JobLogisticsManager : Job
 
         foreach (var order in _activeCraftingOrders)
         {
+            if (order.IsCompleted) continue; // Les commandes terminées ne peuvent pas expirer (elles attendent la livraison)
+
             order.DecreaseRemainingDays();
             if (order.RemainingDays <= 0)
             {
