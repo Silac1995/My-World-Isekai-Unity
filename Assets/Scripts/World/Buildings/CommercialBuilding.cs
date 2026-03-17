@@ -362,6 +362,64 @@ public abstract class CommercialBuilding : Building
         return foundItems;
     }
 
+    /// <summary>
+    /// Effectue un audit de sécurité (Sanity Check) entre l'inventaire logique (_inventory)
+    /// et les objets réellement présents physiquement au sol.
+    /// Utilisé lorsqu'un employé suspecte qu'un objet logique n'existe plus physiquement (bug, tombé sous la map, volé).
+    /// </summary>
+    public virtual void RefreshStorageInventory()
+    {
+        List<WorldItem> physicalItems = GetWorldItemsInStorage();
+        List<ItemInstance> ghostlyInstances = new List<ItemInstance>();
+
+        foreach (var logicalInstance in _inventory)
+        {
+            bool isPhysicallyPresent = false;
+
+            // Vérifier si un WorldItem physique correspond à cette instance logique
+            foreach (var worldItem in physicalItems)
+            {
+                if (worldItem.ItemInstance == logicalInstance)
+                {
+                    isPhysicallyPresent = true;
+                    break;
+                }
+            }
+
+            // Si ce n'est pas au sol ET que ce n'est PAS en train d'être porté par quelqu'un, c'est un fantôme !
+            if (!isPhysicallyPresent)
+            {
+                // Un check supplémentaire : a-t-il vraiment un porteur assigné ? 
+                // La propriété IsBeingCarried de WorldItem est liée au portage effectif.
+                // Dans notre architecture, si ItemInstance n'a pas de propriétaire actuel mais est perdu, on le supprime.
+                ghostlyInstances.Add(logicalInstance);
+            }
+        }
+
+        if (ghostlyInstances.Count > 0)
+        {
+            Debug.LogWarning($"<color=orange>[CommercialBuilding]</color> {buildingName} : Audit détecte {ghostlyInstances.Count} objets logiques sans réalité physique ! Nettoyage...");
+            
+            var logistics = _jobs.OfType<JobLogisticsManager>().FirstOrDefault();
+
+            foreach (var ghost in ghostlyInstances)
+            {
+                _inventory.Remove(ghost);
+
+                // Si cet objet fantôme était réservé par un logisticien pour une commande (Transport/Achats), on le signale.
+                if (logistics != null)
+                {
+                    // Trouver quelle commande avait réservé cet item fantôme
+                    var brokenTransportOrder = logistics.PlacedTransportOrders.FirstOrDefault(t => t.ReservedItems.Contains(ghost));
+                    if (brokenTransportOrder != null)
+                    {
+                        logistics.ReportMissingReservedItem(brokenTransportOrder);
+                    }
+                }
+            }
+        }
+    }
+
     public virtual bool HasRequiredIngredients(IEnumerable<CraftingIngredient> ingredients, int multiplier = 1)
     {
         foreach (var ingredient in ingredients)

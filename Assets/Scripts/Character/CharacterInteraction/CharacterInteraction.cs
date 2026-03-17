@@ -78,6 +78,13 @@ public class CharacterInteraction : MonoBehaviour
             return false;
         }
 
+        // --- PATHING MEMORY : Anti-boucle ---
+        if (_character.PathingMemory != null && _character.PathingMemory.IsBlacklisted(target.gameObject.GetInstanceID()))
+        {
+            Debug.LogWarning($"<color=orange>[Interaction]</color> {_character.CharacterName} ne peut pas atteindre {target.CharacterName} (Blacklisté).");
+            return false;
+        }
+
         Debug.Log($"<color=cyan>[Interaction]</color> {_character.CharacterName} démarre le positionnement pour {target.CharacterName}.");
 
         // --- POSITIONNEMENT DE L'INITIATEUR ---
@@ -129,9 +136,20 @@ public class CharacterInteraction : MonoBehaviour
             }
 
             timeoutTimer += Time.deltaTime;
-            if (timeoutTimer > TIMEOUT_DURATION)
+            
+            // On vérifie continuellement si le path a explicitement fail (pour fail plus vite que le timeout)
+            bool isPathFailedNow = movement != null && movement.Agent != null && (!movement.Agent.pathPending && movement.Agent.pathStatus == UnityEngine.AI.NavMeshPathStatus.PathInvalid);
+
+            if (timeoutTimer > TIMEOUT_DURATION || isPathFailedNow)
             {
-                Debug.LogWarning($"<color=orange>[Interaction]</color> Timeout de positionnement pour {_character.CharacterName} vers {target.CharacterName}. ABORT.");
+                Debug.LogWarning($"<color=orange>[Interaction]</color> Timeout ou Path Invalid pour {_character.CharacterName} vers {target.CharacterName}. ABORT.");
+                
+                // --- PATHING MEMORY : On enregistre l'échec pour éviter de boucler ---
+                if (_character.PathingMemory != null)
+                {
+                    _character.PathingMemory.RecordFailure(target.gameObject.GetInstanceID());
+                }
+
                 if (movement != null) movement.Stop();
                 EndInteraction();
                 yield break;
@@ -278,14 +296,29 @@ public class CharacterInteraction : MonoBehaviour
             if (initiator == null || (!initiator.CharacterInteraction.IsPositioning && !initiator.CharacterInteraction.IsInteracting))
             {
                 Debug.Log($"<color=orange>[Interaction Target]</color> L'initiateur a annulé ou disparu. { _character.CharacterName } abandonne le positionnement.");
+                
+                if (initiator != null && _character.PathingMemory != null)
+                {
+                    _character.PathingMemory.RecordFailure(initiator.gameObject.GetInstanceID());
+                }
+
                 EndInteraction();
                 yield break;
             }
 
             timeoutTimer += Time.deltaTime;
-            if (timeoutTimer > TIMEOUT_DURATION)
+            
+            bool isPathFailedNow = movement != null && movement.Agent != null && (!movement.Agent.pathPending && movement.Agent.pathStatus == UnityEngine.AI.NavMeshPathStatus.PathInvalid);
+
+            if (timeoutTimer > TIMEOUT_DURATION || isPathFailedNow)
             {
-                Debug.LogWarning($"<color=orange>[Interaction Target]</color> Timeout de positionnement pour { _character.CharacterName }.");
+                Debug.LogWarning($"<color=orange>[Interaction Target]</color> Timeout ou Path Failed de positionnement pour { _character.CharacterName }.");
+                
+                if (initiator != null && _character.PathingMemory != null)
+                {
+                    _character.PathingMemory.RecordFailure(initiator.gameObject.GetInstanceID());
+                }
+
                 EndInteraction();
                 yield break;
             }
