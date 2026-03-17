@@ -62,6 +62,15 @@ public class BuyOrder
         DispatchedQuantity += amount;
     }
 
+    public void AddQuantity(int amount)
+    {
+        if (amount > 0 && !IsPlaced)
+        {
+            Quantity += amount;
+            Debug.Log($"<color=green>[BuyOrder]</color> Quantite augmentee de {amount}. Nouvelle quantite: {Quantity} pour {ItemToTransport.ItemName}");
+        }
+    }
+
     public void CancelDispatch(int amount)
     {
         DispatchedQuantity = Mathf.Max(0, DispatchedQuantity - amount);
