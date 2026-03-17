@@ -1,4 +1,4 @@
-using UnityEngine;
+Ôªøusing UnityEngine;
 using UnityEngine.U2D.Animation;
 
 public abstract class WearableHandlerBase : MonoBehaviour
@@ -26,7 +26,7 @@ public abstract class WearableHandlerBase : MonoBehaviour
         // Update sur le container global
         if (_visualContainer != null) UpdatePartCategory(_visualContainer);
 
-        // Update sur les parties spÈcifiques
+        // Update sur les parties sp√©cifiques
         foreach (GameObject part in GetAllParts())
         {
             UpdatePartCategory(part);
@@ -59,13 +59,13 @@ public abstract class WearableHandlerBase : MonoBehaviour
 
     private void ApplyColorToAll(string subPartName, Color color)
     {
-        // 1. On vÈrifie d'abord dans le container visuel global (cas du Sac)
+        // 1. On v√©rifie d'abord dans le container visuel global (cas du Sac)
         if (_visualContainer != null)
         {
             ApplyColorToSpecificTransform(_visualContainer.transform, subPartName, color);
         }
 
-        // 2. On vÈrifie aussi dans les parties spÈcifiques (cas du Chest/Pants)
+        // 2. On v√©rifie aussi dans les parties sp√©cifiques (cas du Chest/Pants)
         foreach (GameObject part in GetAllParts())
         {
             if (part == null) continue;
@@ -73,7 +73,32 @@ public abstract class WearableHandlerBase : MonoBehaviour
         }
     }
 
-    // Extraction de la logique pour Èviter la rÈpÈtition
+    public void SetVisibility(bool isVisible)
+    {
+        // 1. Container Global
+        if (_visualContainer != null)
+        {
+            ApplyVisibilityToRenderers(_visualContainer, isVisible);
+        }
+
+        // 2. Parties sp√©cifiques
+        foreach (GameObject part in GetAllParts())
+        {
+            if (part == null) continue;
+            ApplyVisibilityToRenderers(part, isVisible);
+        }
+    }
+
+    private void ApplyVisibilityToRenderers(GameObject root, bool isVisible)
+    {
+        SpriteRenderer[] renderers = root.GetComponentsInChildren<SpriteRenderer>(true);
+        foreach (var sr in renderers)
+        {
+            sr.enabled = isVisible;
+        }
+    }
+
+    // Extraction de la logique pour √©viter la r√©p√©tition
     private void ApplyColorToSpecificTransform(Transform root, string subPartName, Color color)
     {
         // Find ne cherche que dans les enfants directs
