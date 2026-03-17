@@ -87,12 +87,6 @@ namespace MWI.AI
             CommercialBuilding source = _job.CurrentOrder.Source;
             if (source != null) source.AddToInventory(_takenItem); // Refund logic inventory
             
-            if (_job.TargetWorldItem != null)
-            {
-                worker.PathingMemory.RecordFailure(_job.TargetWorldItem.gameObject.GetInstanceID());
-                _job.TargetWorldItem.RecordUnreachable();
-            }
-
             _job.TargetWorldItem = null;
             _job.WaitCooldown = 1.0f;
             _takenItem = null;
@@ -114,13 +108,6 @@ namespace MWI.AI
                 Debug.LogWarning($"<color=orange>[PickupItem]</color> {_job.Worker.CharacterName} n'a pas pu physiquement ramasser l'item. Essai suivant.");
                 CommercialBuilding source = _job.CurrentOrder.Source;
                 if (source != null) source.AddToInventory(_takenItem); // Refund if pickup physically failed
-                
-                if (_job.TargetWorldItem != null)
-                {
-                    _job.Worker.PathingMemory.RecordFailure(_job.TargetWorldItem.gameObject.GetInstanceID());
-                    _job.TargetWorldItem.RecordUnreachable();
-                }
-
                 _job.TargetWorldItem = null;
                 _job.WaitCooldown = 1.0f;
             }

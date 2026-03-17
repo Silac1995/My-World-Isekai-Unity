@@ -95,12 +95,6 @@ public abstract class GoapAction_MoveToTarget : GoapAction
                     int targetId = targetCol != null ? targetCol.gameObject.GetInstanceID() : rawDest.GetHashCode();
                     bool nowBlacklisted = worker.PathingMemory.RecordFailure(targetId);
 
-                    if (targetCol != null)
-                    {
-                        var worldItem = targetCol.GetComponentInParent<WorldItem>();
-                        if (worldItem != null) worldItem.RecordUnreachable();
-                    }
-
                     if (nowBlacklisted)
                     {
                         // Stop moving entirely so GOAP can drop this plan
