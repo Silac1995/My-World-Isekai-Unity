@@ -170,8 +170,10 @@ public class JobTransporter : Job
 
             if (CarriedItems.Count > 0)
             {
-                int remainingNeeded = CurrentOrder.Quantity - CurrentOrder.DeliveredQuantity;
-                bool hasEnough = CarriedItems.Count >= remainingNeeded;
+                // InTransitQuantity already includes this worker's CarriedItems.Count since it's incremented during AddCarriedItem.
+                // If the global unfulfilled need is 0 or less, we have enough and should proceed to delivery.
+                int globallyStillNeeded = CurrentOrder.Quantity - CurrentOrder.DeliveredQuantity - CurrentOrder.InTransitQuantity;
+                bool hasEnough = globallyStillNeeded <= 0;
                 
                 bool canCarryMore = false;
                 if (_worker.CharacterEquipment != null)

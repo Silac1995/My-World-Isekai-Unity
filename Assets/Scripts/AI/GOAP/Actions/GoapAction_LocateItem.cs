@@ -95,6 +95,26 @@ namespace MWI.AI
             // 4. Fallback Handling
             if (targetWorldItem == null)
             {
+                // NOUVEAU: Si l'item n'est pas vu par CharacterAwareness (trop loin etc.), on scanne directement
+                // la StorageZone complète du bâtiment. Cela évite d'annuler faussement la commande 
+                // alors que l'item est parfaitement valide mais à 12 mètres de distance.
+                List<WorldItem> storageItems = source.GetWorldItemsInStorage();
+                foreach (WorldItem wi in storageItems)
+                {
+                    if (wi != null && wi.ItemInstance != null && _job.CurrentOrder.ReservedItems.Contains(wi.ItemInstance) && !wi.IsBeingCarried)
+                    {
+                        if (!worker.PathingMemory.IsBlacklisted(wi.gameObject.GetInstanceID()))
+                        {
+                            targetWorldItem = wi;
+                            Debug.Log($"<color=magenta>[LocateItem]</color> {_job.Worker.CharacterName} a trouvé l'item hors de portée visuelle via scan de zone: {targetWorldItem.name}");
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (targetWorldItem == null)
+            {
                 if (_job.CarriedItems.Count > 0)
                 {
                     Debug.LogWarning($"<color=orange>[LocateItem]</color> Plus de {wantedSO.ItemName} physiquement visible. {_job.Worker.CharacterName} lance la livraison ({_job.CarriedItems.Count} items).");
