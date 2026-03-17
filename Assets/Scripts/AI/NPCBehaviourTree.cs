@@ -146,8 +146,8 @@ public class NPCBehaviourTree : MonoBehaviour
         // Pause le BT si le controller est gelé (interactions, cinématiques, etc.)
         if (_character.Controller != null && _character.Controller.IsFrozen) return;
 
-        // Pause le BT pendant une interaction (évite les micro-mouvements)
-        if (_character.CharacterInteraction != null && _character.CharacterInteraction.IsInteracting) return;
+        // Pause le BT pendant une interaction ou pendant le positionnement de dialogue (évite les micro-mouvements ou conflits de pathing)
+        if (_character.CharacterInteraction != null && (_character.CharacterInteraction.IsInteracting || _character.CharacterInteraction.IsPositioning)) return;
 
         // Tick l'arbre
         BTNodeStatus status = _root.Execute(_blackboard);

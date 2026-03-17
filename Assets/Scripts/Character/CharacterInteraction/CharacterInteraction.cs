@@ -27,6 +27,7 @@ public class CharacterInteraction : MonoBehaviour
     
     // --- POSITIONNEMENT ---
     public bool IsPositioned { get; private set; }
+    public bool IsPositioning { get; private set; } // Nouveau: Indique qu'on se met en place pour interagir
     public void SetPositioned(bool value) => IsPositioned = value;
 
     private void Update()
@@ -138,22 +139,53 @@ public class CharacterInteraction : MonoBehaviour
 
             bool isCloseEnough = false;
 
+            bool targetInPosition = false;
+
+            // Target Pos Logic
             Vector3 targetPos = target.transform.position;
-            // Offset de 2 unités sur l'axe X pour le face-à-face (ici 4)
-            float xOffset = _character.transform.position.x > targetPos.x ? 4f : -4f;
-            Vector3 desiredPos = new Vector3(targetPos.x + xOffset, _character.transform.position.y, targetPos.z);
+            float currentDist = Vector3.Distance(_character.transform.position, target.transform.position);
+            
+            // --- DUAL POSITIONING SETUP ---
+            // On calcule le point médian (on divise la distance par 2 pour se rejoindre)
+            Vector3 midpoint = Vector3.Lerp(_character.transform.position, targetPos, 0.5f);
+            
+            // Si l'initiateur est à gauche, il doit finir à midpoint.x - 2, la cible à midpoint.x + 2 (soit 4 d'écart)
+            bool initiatorIsOnLeft = _character.transform.position.x < targetPos.x;
+            
+            Vector3 initiatorMeetingPos = initiatorIsOnLeft ? new Vector3(midpoint.x - 2f, _character.transform.position.y, midpoint.z) : new Vector3(midpoint.x + 2f, _character.transform.position.y, midpoint.z);
+            Vector3 targetMeetingPos = initiatorIsOnLeft ? new Vector3(midpoint.x + 2f, targetPos.y, midpoint.z) : new Vector3(midpoint.x - 2f, targetPos.y, midpoint.z);
+
+            // GESTION DU JOUEUR : S'il est la cible, on ne le force pas à bouger, l'initiateur s'adapte à LUI.
+            if (target.IsPlayer())
+            {
+                float xOffset = _character.transform.position.x > targetPos.x ? 4f : -4f;
+                initiatorMeetingPos = new Vector3(targetPos.x + xOffset, _character.transform.position.y, targetPos.z);
+                targetInPosition = true; // Le joueur est toujours considéré en position (passif)
+            }
+            // GESTION NPC : Si le NPC cible n'a pas encore commencé à se positionner, on lui dit d'y aller
+            else if (target.CharacterInteraction != null)
+            {
+                if (!target.CharacterInteraction.IsPositioning && !target.CharacterInteraction.IsPositioned)
+                {
+                    target.CharacterInteraction.StartTargetPositioning(targetMeetingPos, _character);
+                }
+                
+                // On vérifie s'il est arrivé
+                targetInPosition = target.CharacterInteraction.IsPositioned;
+            }
 
             float distDelta = Vector3.Distance(new Vector3(_character.transform.position.x, 0, _character.transform.position.z), 
-                                               new Vector3(desiredPos.x, 0, desiredPos.z));
+                                               new Vector3(initiatorMeetingPos.x, 0, initiatorMeetingPos.z));
 
             if (detector != null && targetInteractable != null)
             {
                 bool isOverlapping = detector.IsOverlapping(targetInteractable);
                 
-                // Le joueur exige un alignement parfait : même Z, distance X de 4. Pas plus, pas moins.
-                float zDiff = Mathf.Abs(_character.transform.position.z - targetPos.z);
-                float xDiff = Mathf.Abs(_character.transform.position.x - targetPos.x);
-                bool isAlignedVisually = zDiff <= 0.05f && Mathf.Abs(xDiff - 4f) <= 0.05f;
+                // On veut s'assurer qu'ils sont bien alignés visuellement sur Z et X (environ 4 de différence)
+                float zDiff = Mathf.Abs(_character.transform.position.z - (target.IsPlayer() ? targetPos.z : midpoint.z));
+                float xDiff = Mathf.Abs(_character.transform.position.x - (target.IsPlayer() ? targetPos.x : midpoint.x));
+                // On est tolérant sur la position pour valider l'arrivée
+                bool isAlignedVisually = zDiff <= 0.1f && distDelta <= 0.1f;
 
                 isCloseEnough = (isOverlapping && isAlignedVisually) || distDelta <= 0.05f;
             }
@@ -162,10 +194,11 @@ public class CharacterInteraction : MonoBehaviour
                 isCloseEnough = distDelta <= 0.05f;
             }
 
-            if (isCloseEnough)
+            if (isCloseEnough && targetInPosition)
             {
                 _character.CharacterVisual?.FaceCharacter(target);
                 SetPositioned(true);
+                IsPositioning = false;
                 if (movement != null) movement.Stop();
                 
                 ExecuteInteraction(target, forcedFirstAction, onPositioned);
@@ -173,6 +206,7 @@ public class CharacterInteraction : MonoBehaviour
             }
 
             SetPositioned(false);
+            IsPositioning = true;
             if (movement != null)
             {
                 movement.Resume();
@@ -183,10 +217,10 @@ public class CharacterInteraction : MonoBehaviour
                 // HasPathFailed = on a attendu 0.2s et on n'a ni chemin, ni chemin en cours, ou chemin invalide.
                 bool hasPathFailed = (Time.time - lastRouteRequestTime > 0.2f) && (movement.Agent.pathStatus == UnityEngine.AI.NavMeshPathStatus.PathInvalid || (!movement.Agent.hasPath && !movement.Agent.pathPending));
 
-                if (Vector3.Distance(lastDesiredPos, desiredPos) > 1f || hasPathFailed)
+                if (Vector3.Distance(lastDesiredPos, initiatorMeetingPos) > 1f || hasPathFailed)
                 {
-                    movement.SetDestination(desiredPos);
-                    lastDesiredPos = desiredPos;
+                    movement.SetDestination(initiatorMeetingPos);
+                    lastDesiredPos = initiatorMeetingPos;
                     lastRouteRequestTime = Time.time;
                 }
             }
@@ -213,6 +247,75 @@ public class CharacterInteraction : MonoBehaviour
                 
                 EndInteraction();
             }
+        }
+    }
+
+    // --- NOUVEAU: Logique de positionnement pour la cible ---
+    public void StartTargetPositioning(Vector3 targetMeetingPos, Character initiator)
+    {
+        if (_character.IsPlayer()) return; // Le joueur ne bouge pas automatiquement
+        
+        IsPositioning = true;
+        SetPositioned(false);
+        _character.CharacterVisual?.CharacterAnimator?.StopLocomotion();
+        
+        if (_activeDialogueCoroutine != null) StopCoroutine(_activeDialogueCoroutine);
+        _activeDialogueCoroutine = StartCoroutine(TargetPositioningRoutine(targetMeetingPos, initiator));
+    }
+
+    private System.Collections.IEnumerator TargetPositioningRoutine(Vector3 destination, Character initiator)
+    {
+        float timeoutTimer = 0f;
+        const float TIMEOUT_DURATION = 5f;
+        var movement = _character.CharacterMovement;
+        
+        float lastRouteRequestTime = 0f;
+        Vector3 lastDesiredPos = Vector3.positiveInfinity;
+
+        while (true)
+        {
+            // Vérification de sécurité: l'initiateur a-t-il annulé sa demande?
+            if (initiator == null || (!initiator.CharacterInteraction.IsPositioning && !initiator.CharacterInteraction.IsInteracting))
+            {
+                Debug.Log($"<color=orange>[Interaction Target]</color> L'initiateur a annulé ou disparu. { _character.CharacterName } abandonne le positionnement.");
+                EndInteraction();
+                yield break;
+            }
+
+            timeoutTimer += Time.deltaTime;
+            if (timeoutTimer > TIMEOUT_DURATION)
+            {
+                Debug.LogWarning($"<color=orange>[Interaction Target]</color> Timeout de positionnement pour { _character.CharacterName }.");
+                EndInteraction();
+                yield break;
+            }
+
+            float distDelta = Vector3.Distance(new Vector3(_character.transform.position.x, 0, _character.transform.position.z), 
+                                               new Vector3(destination.x, 0, destination.z));
+
+            if (distDelta <= 0.1f)
+            {
+                _character.CharacterVisual?.FaceCharacter(initiator);
+                SetPositioned(true);
+                IsPositioning = false;
+                if (movement != null) movement.Stop();
+                yield break;
+            }
+
+            if (movement != null)
+            {
+                movement.Resume();
+                bool hasPathFailed = (Time.time - lastRouteRequestTime > 0.2f) && (movement.Agent.pathStatus == UnityEngine.AI.NavMeshPathStatus.PathInvalid || (!movement.Agent.hasPath && !movement.Agent.pathPending));
+
+                if (Vector3.Distance(lastDesiredPos, destination) > 1f || hasPathFailed)
+                {
+                    movement.SetDestination(destination);
+                    lastDesiredPos = destination;
+                    lastRouteRequestTime = Time.time;
+                }
+            }
+
+            yield return null;
         }
     }
 
@@ -380,31 +483,44 @@ public class CharacterInteraction : MonoBehaviour
             _character.CharacterMovement.Stop();
         }
 
-        if (_currentTarget == null) return;
+        if (_currentTarget == null && !IsPositioning) return;
 
         Character previousTarget = _currentTarget;
         _currentTarget = null;
         IsPositioned = false;
+        IsPositioning = false;
 
         // Libérer le regard
         _character.CharacterVisual?.ClearLookTarget();
 
         // --- NEW: Clean up redundant movement plans towards the interlocutor ---
-        ClearRedundantMovement(previousTarget);
+        if (previousTarget != null)
+        {
+            ClearRedundantMovement(previousTarget);
+        }
 
         // --- NEW: Clear behaviours BEFORE unfreezing ---
         // This ensures the last command given to the movement system isn't 'Stop' 
         // after we've already tried to Resume via Unfreeze.
         
         // Target cleanup
-        if (previousTarget.Controller is NPCController targetNpc)
+        if (previousTarget != null)
         {
-            if (previousTarget.GetComponent<NPCBehaviourTree>() != null)
+            if (previousTarget.Controller is NPCController targetNpc)
             {
-                targetNpc.ClearBehaviours();
+                if (previousTarget.GetComponent<NPCBehaviourTree>() != null)
+                {
+                    targetNpc.ClearBehaviours();
+                }
+            }
+            if (previousTarget.Controller != null) previousTarget.Controller.Unfreeze();
+            
+            // Si la cible était aussi en train de se positionner vers nous passivement, on la libère
+            if (previousTarget.CharacterInteraction.IsPositioning)
+            {
+                previousTarget.CharacterInteraction.EndInteraction();
             }
         }
-        if (previousTarget.Controller != null) previousTarget.Controller.Unfreeze();
 
         // Initiator cleanup
         if (_character.Controller is NPCController initNpc)
@@ -417,11 +533,14 @@ public class CharacterInteraction : MonoBehaviour
         if (_character.Controller != null) _character.Controller.Unfreeze();
 
         _character.CharacterInteractable?.Release();
-        OnInteractionStateChanged?.Invoke(previousTarget, false);
-
-        if (previousTarget.CharacterInteraction.CurrentTarget == _character)
+        if (previousTarget != null)
         {
-            previousTarget.CharacterInteraction.EndInteraction();
+            OnInteractionStateChanged?.Invoke(previousTarget, false);
+
+            if (previousTarget.CharacterInteraction.CurrentTarget == _character)
+            {
+                previousTarget.CharacterInteraction.EndInteraction();
+            }
         }
     }
 
@@ -431,6 +550,7 @@ public class CharacterInteraction : MonoBehaviour
 
         CurrentTarget = target;
         IsPositioned = true; // La cible est passivement prête
+        IsPositioning = false; // Plus besoin
         
         // --- FACE-À-FACE IMMÉDIAT ---
         _character.CharacterVisual?.SetLookTarget(target);
