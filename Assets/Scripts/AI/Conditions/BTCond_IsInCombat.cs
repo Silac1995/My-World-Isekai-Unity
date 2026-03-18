@@ -35,7 +35,9 @@ namespace MWI.AI
         {
             _combatAction.Abort(bb);
             bb.Remove(Blackboard.KEY_BATTLE_MANAGER);
-            bb.Remove(Blackboard.KEY_COMBAT_TARGET);
+            // On ne supprime pas KEY_COMBAT_TARGET ici, car il est partagé et utilisé par la séquence d'agression.
+            // S'il est supprimé à chaque échec d'évaluation (chaque tick où IsInBattle est false),
+            // cela annule complètement l'approche de la BTAction_AttackTarget.
         }
     }
 }

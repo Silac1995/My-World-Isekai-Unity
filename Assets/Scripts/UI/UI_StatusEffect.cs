@@ -6,12 +6,19 @@ public class UI_StatusEffect : MonoBehaviour
 {
     [SerializeField] private Image _iconImage;
     [SerializeField] private TextMeshProUGUI _durationText;
+    [SerializeField] private TextMeshProUGUI _nameText;
     
     private CharacterStatusEffectInstance _currentEffect;
     
     public void Setup(CharacterStatusEffectInstance effect)
     {
         _currentEffect = effect;
+
+        if (_nameText != null)
+        {
+            _nameText.text = effect.StatusEffectName;
+        }
+
         if (effect.Icon != null)
         {
             _iconImage.sprite = effect.Icon;

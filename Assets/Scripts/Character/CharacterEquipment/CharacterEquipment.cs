@@ -578,7 +578,9 @@ public class CharacterEquipment : CharacterSystem
             ItemInstance droppedItem = handsController.DropCarriedItem();
             if (droppedItem != null)
             {
-                _character.DropItem(droppedItem);
+                // Au lieu de mettre en file d'attente une action (qui serait annulée par l'animation de mort/combat)
+                // On spawn physiquement l'objet au sol instantanément.
+                CharacterDropItem.ExecutePhysicalDrop(_character, droppedItem, false);
             }
         }
     }

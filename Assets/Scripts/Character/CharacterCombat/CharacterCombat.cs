@@ -95,8 +95,13 @@ public class CharacterCombat : CharacterSystem
         
         // Broadcast the change to all other subsystems securely via the Character hub
         _character.SetCombatState(enabled);
-        
         OnCombatModeChanged?.Invoke(enabled);
+
+        if (!enabled && _character.Stats != null && _character.Stats.Initiative != null)
+        {
+            // Remplir l'initiative pour être prêt au prochain combat même en cas de raté
+            _character.Stats.Initiative.IncreaseCurrentAmount(_character.Stats.Initiative.CurrentValue);
+        }
     }
     #endregion
 

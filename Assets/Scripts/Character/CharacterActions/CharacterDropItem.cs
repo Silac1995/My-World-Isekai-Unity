@@ -45,16 +45,27 @@ public class CharacterDropItem : CharacterAction
 
         if (removed)
         {
-            Vector3 dropPos = character.transform.position + Vector3.up * 1.5f;
-            Vector3 offset = new Vector3(Random.Range(-0.3f, 0.3f), 0, Random.Range(-0.3f, 0.3f));
-            WorldItem spawnedItem = WorldItem.SpawnWorldItem(_itemInstance, dropPos + offset);
-            
-            if (spawnedItem != null)
-            {
-                spawnedItem.FreezeOnGround = _freezeOnGround;
-            }
-
-            Debug.Log($"Item {_itemInstance.ItemSO.ItemName} lache physiquement.");
+            ExecutePhysicalDrop(character, _itemInstance, _freezeOnGround);
         }
+    }
+
+    /// <summary>
+    /// Helper statique pour forcer un drop physique immédiat sans passer par l'Animator.
+    /// Utile lors de la mort, de l'incapacitation ou de l'entrée en combat.
+    /// </summary>
+    public static void ExecutePhysicalDrop(Character owner, ItemInstance item, bool freeze)
+    {
+        if (owner == null || item == null) return;
+
+        Vector3 dropPos = owner.transform.position + Vector3.up * 1.5f;
+        Vector3 offset = new Vector3(Random.Range(-0.3f, 0.3f), 0, Random.Range(-0.3f, 0.3f));
+        WorldItem spawnedItem = WorldItem.SpawnWorldItem(item, dropPos + offset);
+        
+        if (spawnedItem != null)
+        {
+            spawnedItem.FreezeOnGround = freeze;
+        }
+
+        Debug.Log($"Item {item.ItemSO.ItemName} lache physiquement in-world.");
     }
 }
