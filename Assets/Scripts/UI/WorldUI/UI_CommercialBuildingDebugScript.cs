@@ -200,6 +200,21 @@ public class UI_CommercialBuildingDebugScript : MonoBehaviour
             }
         }
 
+        var activeTransport = logistics.ActiveTransportOrders;
+        if (activeTransport != null && activeTransport.Count > 0)
+        {
+            sb.AppendLine($"<color=#00FFFF>Active Transport Received ({activeTransport.Count}):</color>");
+            foreach (var o in activeTransport)
+            {
+                string itemName = o.ItemToTransport != null ? o.ItemToTransport.ItemName : "???";
+                string destName = o.Destination != null ? o.Destination.BuildingName : "???";
+                string sourceName = o.Source != null ? o.Source.BuildingName : "???";
+                
+                sb.AppendLine($"  - {itemName} <color=#888888>[{o.DeliveredQuantity} Deliv | {o.InTransitQuantity} Transit | {o.Quantity} Total]</color>");
+                sb.AppendLine($"    └ <color=#888888>Src: {sourceName} | Dst: {destName}</color>");
+            }
+        }
+
         var activeCrafting = logistics.ActiveCraftingOrders;
         if (activeCrafting != null && activeCrafting.Count > 0)
         {
@@ -211,7 +226,7 @@ public class UI_CommercialBuildingDebugScript : MonoBehaviour
             }
         }
 
-        if (activeOrders.Count == 0 && placedBuy.Count == 0 && placedTransport.Count == 0 && activeCrafting.Count == 0 && !logistics.HasPendingOrders)
+        if (activeOrders.Count == 0 && placedBuy.Count == 0 && placedTransport.Count == 0 && activeTransport.Count == 0 && activeCrafting.Count == 0 && !logistics.HasPendingOrders)
         {
             sb.AppendLine("<color=#888888>No active logistics operations.</color>");
         }

@@ -22,6 +22,7 @@ public class BuildingLogisticsManager : MonoBehaviour
 
     // Commandes de transport (pour le TransporterBuilding)
     private List<TransportOrder> _activeTransportOrders = new List<TransportOrder>();
+    public IReadOnlyList<TransportOrder> ActiveTransportOrders => _activeTransportOrders;
 
     // Liste des commandes de fabrication (Crafting) locales au bâtiment
     private List<CraftingOrder> _activeCraftingOrders = new List<CraftingOrder>();
@@ -74,16 +75,15 @@ public class BuildingLogisticsManager : MonoBehaviour
         _building = GetComponent<CommercialBuilding>();
     }
 
-    private void OnEnable()
+    private void Start()
     {
-        // On s'abonne à OnNewDay au moment de l'activation
         if (TimeManager.Instance != null)
         {
             TimeManager.Instance.OnNewDay += CheckExpiredOrders;
         }
     }
 
-    private void OnDisable()
+    private void OnDestroy()
     {
         if (TimeManager.Instance != null)
         {
@@ -237,6 +237,8 @@ public class BuildingLogisticsManager : MonoBehaviour
 
     public void OnWorkerPunchIn(Character worker)
     {
+        _building.RefreshStorageInventory();
+
         if (_building is ShopBuilding shop)
         {
             CheckShopInventory(shop, worker);
@@ -249,7 +251,6 @@ public class BuildingLogisticsManager : MonoBehaviour
 
     private void CheckShopInventory(ShopBuilding shop, Character worker)
     {
-        shop.RefreshStorageInventory();
         var entries = shop.ShopEntries;
         string workerName = worker != null ? worker.CharacterName : "?";
         Debug.Log($"<color=cyan>[BuildingLogisticsManager]</color> {workerName} vérifie l'inventaire de {shop.BuildingName} ({entries.Count} types d'items).");
@@ -280,7 +281,6 @@ public class BuildingLogisticsManager : MonoBehaviour
 
     private void CheckCraftingIngredients(CraftingBuilding building, Character worker = null)
     {
-        building.RefreshStorageInventory();
         Dictionary<ItemSO, int> globalIngredientNeeds = new Dictionary<ItemSO, int>();
 
         foreach (var order in _activeCraftingOrders)

@@ -43,16 +43,16 @@ Crafting follows a specialized overlay of this system.
 - **CraftingBuilding**: A specialized `CommercialBuilding`. It scans its `ComplexRoom`s to find `CraftingStation`s and compiles a list of what can be manufactured there via `GetCraftableItems()`. 
 - **JobCrafter**: The artisan job (e.g., Blacksmith).
    - **Requirements**: It requires the NPC to have a specific skill (`SkillSO`) and a minimum tier (`SkillTier` defined in `CharacterSkills`). Without this, the building refuses employment.
-   - **Demand-Driven Logic**: The artisan does not produce in a vacuum. Their Behaviour Tree checks that the building's `JobLogisticsManager` has an active **`CraftingOrder`** (which follows the same time and reputation penalty logic as a `BuyOrder`). If there is an order, they find the right station, play their animation, and produce the item.
+   - **Demand-Driven Logic**: The artisan does not produce in a vacuum. Their Behaviour Tree checks that the building's `BuildingLogisticsManager` has an active **`CraftingOrder`** (which follows the same time and reputation penalty logic as a `BuyOrder`). If there is an order, they find the right station, play their animation, and produce the item.
 
-### 5. Logistics Cycle (JobLogisticsManager)
-Every `CommercialBuilding` that needs supply management has a `JobLogisticsManager`.
-- **Event-Driven & Physical**: Triggered by `OnWorkerPunchIn` (when the manager arrives at work) and `OnNewDay`.
-- **Pending Order Queue**: Orders (`BuyOrder`, `CraftingOrder`, `TransportOrder`) are not executed instantly. They are added to a `PendingOrder` queue. The manager's `Execute()` method pops these and pushes a `GoapAction_PlaceOrder`, forcing the character to physically travel to the target.
+### 5. Logistics Cycle (BuildingLogisticsManager & JobLogisticsManager)
+Every `CommercialBuilding` that needs supply management has a `BuildingLogisticsManager` component and employs a `JobLogisticsManager` worker.
+- **Event-Driven & Physical**: Triggered by `OnWorkerPunchIn` natively on the Component (when the manager arrives at work) and `OnNewDay`.
+- **Pending Order Queue**: Orders (`BuyOrder`, `CraftingOrder`, `TransportOrder`) are not executed instantly. They are added to a `PendingOrder` queue in the building. The worker's GOAP `Execute()` method pops these and pushes a `GoapAction_PlaceOrder`, forcing the character to physically travel to the target.
 - **Shop Restock & Crafting Ingredients**: Workplaces scan their inventories and enqueue `BuyOrder`s to suppliers for missing stock. If a supplier lacks items for a `BuyOrder`, they generate an internal `CraftingOrder`.
 - **Order Types**: `BuyOrder` (inter-building commercial contract), `CraftingOrder` (internal production request), and `TransportOrder` (physical delivery of completed goods).
-- **Physical Handshake (`IsPlaced`)**: Orders are only considered officially placed when `InteractionPlaceOrder` succeeds face-to-face. If the target is busy, the interaction fails, and the manager will retry later because the `IsPlaced` flag remains `false`.
-- **Duplicate Prevention**: Before placing/enqueuing an order, the manager checks local logs (`_placedBuyOrders`, `_placedTransportOrders`) to avoid duplicating requests that are already active or awaiting physical interaction.
+- **Physical Handshake (`IsPlaced`)**: Orders are only considered officially placed when `InteractionPlaceOrder` succeeds face-to-face. If the target is busy, the interaction fails, and the GOAP action will retry later by re-queueing the order because the `IsPlaced` flag remains `false`.
+- **Duplicate Prevention**: Before placing/enqueuing an order, the `BuildingLogisticsManager` checks local logs (`_placedBuyOrders`, `_placedTransportOrders`) to avoid duplicating requests that are already active or awaiting physical interaction.
 - **Expiration**: Orders have a `RemainingDays` counter. Expired orders trigger reputation penalties (`CharacterRelation.UpdateRelation`).
 
 ### 6. Transporter (JobTransporter)
