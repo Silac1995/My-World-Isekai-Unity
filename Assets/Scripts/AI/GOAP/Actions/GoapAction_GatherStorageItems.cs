@@ -49,6 +49,13 @@ public class GoapAction_GatherStorageItems : GoapAction
     {
         if (_isComplete || _building == null || _building.BuildingZone == null) return false;
 
+        // Protection forte : si l'action physique de ramassage ou dépôt a commencé, 
+        // on maintient la GOAP Action valide pour lui laisser le temps de finir.
+        if (_actionStarted)
+        {
+            return true;
+        }
+
         bool isCarrying = GetCarriedItem(worker) != null;
 
         var bManager = _building?.LogisticsManager;

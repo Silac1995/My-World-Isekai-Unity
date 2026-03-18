@@ -111,7 +111,8 @@ public class CharacterInteraction : MonoBehaviour
         Vector3 initPos = initiator.transform.position;
         Vector3 targetPos = target.transform.position;
         bool initiatorIsOnLeft = initPos.x < targetPos.x;
-        float offset = 2f; // total distance 4f
+        
+        float[] offsetsToTest = new float[] { 2f, 2.5f, 3f }; // Total distances: 4f, 5f, 6f
 
         Vector3[] midpointsToTest = new Vector3[]
         {
@@ -122,31 +123,35 @@ public class CharacterInteraction : MonoBehaviour
             Vector3.Lerp(initPos, targetPos, 0.75f)
         };
 
-        foreach(var mid in midpointsToTest)
+        foreach(var offset in offsetsToTest)
         {
-            Vector3 testInit = initiatorIsOnLeft ? new Vector3(mid.x - offset, initPos.y, mid.z) : new Vector3(mid.x + offset, initPos.y, mid.z);
-            Vector3 testTarget = initiatorIsOnLeft ? new Vector3(mid.x + offset, targetPos.y, mid.z) : new Vector3(mid.x - offset, targetPos.y, mid.z);
-
-            // Test if both points are valid on NavMesh
-            if (UnityEngine.AI.NavMesh.SamplePosition(testInit, out UnityEngine.AI.NavMeshHit initHit, 1.0f, UnityEngine.AI.NavMesh.AllAreas) &&
-                UnityEngine.AI.NavMesh.SamplePosition(testTarget, out UnityEngine.AI.NavMeshHit targetHit, 1.0f, UnityEngine.AI.NavMesh.AllAreas))
+            foreach(var mid in midpointsToTest)
             {
-                // Verify they maintain perfect Z alignment and > 3f X distance
-                if (Mathf.Abs(initHit.position.z - targetHit.position.z) < 0.2f &&
-                    Mathf.Abs(initHit.position.x - targetHit.position.x) >= 3.0f)
+                Vector3 testInit = initiatorIsOnLeft ? new Vector3(mid.x - offset, initPos.y, mid.z) : new Vector3(mid.x + offset, initPos.y, mid.z);
+                Vector3 testTarget = initiatorIsOnLeft ? new Vector3(mid.x + offset, targetPos.y, mid.z) : new Vector3(mid.x - offset, targetPos.y, mid.z);
+
+                // Test if both points are valid on NavMesh
+                if (UnityEngine.AI.NavMesh.SamplePosition(testInit, out UnityEngine.AI.NavMeshHit initHit, 1.0f, UnityEngine.AI.NavMesh.AllAreas) &&
+                    UnityEngine.AI.NavMesh.SamplePosition(testTarget, out UnityEngine.AI.NavMeshHit targetHit, 1.0f, UnityEngine.AI.NavMesh.AllAreas))
                 {
-                    // Force exact Z alignment and rigid 4f spacing based on the best fit
-                    initiatorMeetingPos = new Vector3(initHit.position.x, initPos.y, initHit.position.z);
-                    targetMeetingPos = new Vector3(targetHit.position.x, targetPos.y, initHit.position.z);
-                    return;
+                    float xDist = Mathf.Abs(initHit.position.x - targetHit.position.x);
+                    // Verify they maintain perfect Z alignment and acceptable X distance (between ~3.5f and ~6.5f)
+                    if (Mathf.Abs(initHit.position.z - targetHit.position.z) < 0.2f && xDist >= 3.5f && xDist <= 6.5f)
+                    {
+                        // Force exact Z alignment and rigid spacing based on the best fit
+                        initiatorMeetingPos = new Vector3(initHit.position.x, initPos.y, initHit.position.z);
+                        targetMeetingPos = new Vector3(targetHit.position.x, targetPos.y, initHit.position.z);
+                        return;
+                    }
                 }
             }
         }
 
         // Fallback: Use exact midpoint without validation (will clip but guarantees visual alignment)
         Vector3 finalMid = midpointsToTest[0];
-        initiatorMeetingPos = initiatorIsOnLeft ? new Vector3(finalMid.x - offset, initPos.y, finalMid.z) : new Vector3(finalMid.x + offset, initPos.y, finalMid.z);
-        targetMeetingPos = initiatorIsOnLeft ? new Vector3(finalMid.x + offset, targetPos.y, finalMid.z) : new Vector3(finalMid.x - offset, targetPos.y, finalMid.z);
+        float fallBackOffset = offsetsToTest[0];
+        initiatorMeetingPos = initiatorIsOnLeft ? new Vector3(finalMid.x - fallBackOffset, initPos.y, finalMid.z) : new Vector3(finalMid.x + fallBackOffset, initPos.y, finalMid.z);
+        targetMeetingPos = initiatorIsOnLeft ? new Vector3(finalMid.x + fallBackOffset, targetPos.y, finalMid.z) : new Vector3(finalMid.x - fallBackOffset, targetPos.y, finalMid.z);
 
         // Sanity clamp X axis to NavMesh for safety, but enforce strict Z parity for 2.5D visual requirement
         if (UnityEngine.AI.NavMesh.SamplePosition(initiatorMeetingPos, out UnityEngine.AI.NavMeshHit finalInitHit, 2.0f, UnityEngine.AI.NavMesh.AllAreas))
@@ -206,7 +211,10 @@ public class CharacterInteraction : MonoBehaviour
             // GESTION DU JOUEUR : S'il est la cible, on ne le force pas à bouger, l'initiateur s'adapte à LUI.
             if (target.IsPlayer())
             {
-                float xOffset = _character.transform.position.x > targetPos.x ? 4f : -4f;
+                float currentDistX = Mathf.Abs(_character.transform.position.x - targetPos.x);
+                float finalXDist = Mathf.Clamp(currentDistX, 4f, 6f);
+                float xOffset = _character.transform.position.x > targetPos.x ? finalXDist : -finalXDist;
+                
                 // Force initiator to perfectly align Z with Player
                 Vector3 dynamicDesiredInit = new Vector3(targetPos.x + xOffset, _character.transform.position.y, targetPos.z);
                 
