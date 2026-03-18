@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -21,6 +22,11 @@ public class PlayerUI : MonoBehaviour
     [Header("UI Windows")]
     [SerializeField] private CharacterEquipmentUI _equipmentUI;
 
+    [Header("Status Effects")]
+    [SerializeField] private Transform _statusEffectsContainer;
+    [SerializeField] private UI_StatusEffect _statusEffectPrefab;
+
+    private Dictionary<CharacterStatusEffectInstance, UI_StatusEffect> _activeEffectUIs = new();
     private Character characterComponent;
 
     public void Initialize(GameObject newCharacter)
@@ -75,6 +81,18 @@ public class PlayerUI : MonoBehaviour
             _equipmentUI.Initialize(characterComponent);
         }
 
+        if (characterComponent.StatusManager != null)
+        {
+            characterComponent.StatusManager.OnStatusEffectAdded += HandleStatusEffectAdded;
+            characterComponent.StatusManager.OnStatusEffectRemoved += HandleStatusEffectRemoved;
+            
+            // Populate existing
+            foreach(var effect in characterComponent.StatusManager.ActiveEffects)
+            {
+                HandleStatusEffectAdded(effect);
+            }
+        }
+
         if (_buttonEquipmentUI != null)
         {
             _buttonEquipmentUI.onClick.RemoveAllListeners();
@@ -112,6 +130,15 @@ public class PlayerUI : MonoBehaviour
         this.character = null;
         this.characterComponent = null;
         if (playerName != null) playerName.text = "";
+
+        foreach (var kvp in _activeEffectUIs)
+        {
+            if (kvp.Value != null)
+            {
+                Destroy(kvp.Value.gameObject);
+            }
+        }
+        _activeEffectUIs.Clear();
     }
 
     private void CleanupEvents()
@@ -122,7 +149,38 @@ public class PlayerUI : MonoBehaviour
         }
 
         // Plus besoin de désabonner les actions ici, 
+        // Plus besoin de désabonner les actions ici, 
         // c'est UI_Action_ProgressBar qui s'en occupe !
+
+        if (characterComponent != null && characterComponent.StatusManager != null)
+        {
+            characterComponent.StatusManager.OnStatusEffectAdded -= HandleStatusEffectAdded;
+            characterComponent.StatusManager.OnStatusEffectRemoved -= HandleStatusEffectRemoved;
+        }
+    }
+
+    private void HandleStatusEffectAdded(CharacterStatusEffectInstance instance)
+    {
+        if (_statusEffectPrefab == null || _statusEffectsContainer == null) return;
+        
+        if (!_activeEffectUIs.ContainsKey(instance))
+        {
+            UI_StatusEffect newUI = Instantiate(_statusEffectPrefab, _statusEffectsContainer);
+            newUI.Setup(instance);
+            _activeEffectUIs.Add(instance, newUI);
+        }
+    }
+
+    private void HandleStatusEffectRemoved(CharacterStatusEffectInstance instance)
+    {
+        if (_activeEffectUIs.TryGetValue(instance, out UI_StatusEffect uiElement))
+        {
+            if (uiElement != null)
+            {
+                Destroy(uiElement.gameObject);
+            }
+            _activeEffectUIs.Remove(instance);
+        }
     }
 
     private void OnDestroy()

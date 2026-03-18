@@ -1088,7 +1088,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 1919224454290065110, guid: bcf1eea9ceffe55459083485e22660a5, type: 3}
       propertyPath: m_VersionIndex
-      value: 12209
+      value: 12212
       objectReference: {fileID: 0}
     - target: {fileID: 1945857671188992395, guid: bcf1eea9ceffe55459083485e22660a5, type: 3}
       propertyPath: m_Name
@@ -1392,7 +1392,7 @@ PrefabInstance:
       objectReference: {fileID: 2022418361}
     - target: {fileID: 8407666620020605695, guid: bcf1eea9ceffe55459083485e22660a5, type: 3}
       propertyPath: m_VersionIndex
-      value: 4849
+      value: 4852
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -7109,7 +7109,7 @@ PrefabInstance:
       objectReference: {fileID: 255273633}
     - target: {fileID: 1563251495863621474, guid: e77d7c4bb571b7844a1031c7a7e9a6d8, type: 3}
       propertyPath: m_VersionIndex
-      value: 8561
+      value: 8564
       objectReference: {fileID: 0}
     - target: {fileID: 1908222509836554634, guid: e77d7c4bb571b7844a1031c7a7e9a6d8, type: 3}
       propertyPath: _transporterCount
@@ -9266,7 +9266,7 @@ PrefabInstance:
       objectReference: {fileID: 1796318328}
     - target: {fileID: 7013122586924547130, guid: a4477ff05a156094798e960b1dca3af6, type: 3}
       propertyPath: m_VersionIndex
-      value: 10772
+      value: 10775
       objectReference: {fileID: 0}
     - target: {fileID: 7027126139522831226, guid: a4477ff05a156094798e960b1dca3af6, type: 3}
       propertyPath: m_Size.x
@@ -13433,7 +13433,7 @@ PrefabInstance:
       objectReference: {fileID: 281864188}
     - target: {fileID: 7138345688783401977, guid: cf8746b58cfecc543880c4a7798357d6, type: 3}
       propertyPath: m_VersionIndex
-      value: 8630
+      value: 8633
       objectReference: {fileID: 0}
     - target: {fileID: 7242065450663245948, guid: cf8746b58cfecc543880c4a7798357d6, type: 3}
       propertyPath: m_Mesh
@@ -13817,6 +13817,14 @@ PrefabInstance:
       propertyPath: _inventoryChannel
       value: 
       objectReference: {fileID: 11400000, guid: e393b19c00161514581a93763ba5e4d3, type: 2}
+    - target: {fileID: 1028637120156146445, guid: c0843e8669e1d8244ba3507bf39bacda, type: 3}
+      propertyPath: _statusEffectPrefab
+      value: 
+      objectReference: {fileID: 4017553586498137769, guid: 848623b3f87cf7b43b85593f81e75dea, type: 3}
+    - target: {fileID: 1028637120156146445, guid: c0843e8669e1d8244ba3507bf39bacda, type: 3}
+      propertyPath: _statusEffectsContainer
+      value: 
+      objectReference: {fileID: 8391819677957949339}
     - target: {fileID: 2364422128661428992, guid: c0843e8669e1d8244ba3507bf39bacda, type: 3}
       propertyPath: m_AnchorMax.y
       value: 0
@@ -13872,6 +13880,14 @@ PrefabInstance:
     - target: {fileID: 4419638629152559126, guid: c0843e8669e1d8244ba3507bf39bacda, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5039078023869093331, guid: c0843e8669e1d8244ba3507bf39bacda, type: 3}
+      propertyPath: m_AnchoredPosition.x
+      value: -873
+      objectReference: {fileID: 0}
+    - target: {fileID: 5039078023869093331, guid: c0843e8669e1d8244ba3507bf39bacda, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: -427
       objectReference: {fileID: 0}
     - target: {fileID: 5115761992067834628, guid: c0843e8669e1d8244ba3507bf39bacda, type: 3}
       propertyPath: m_Name
@@ -13934,6 +13950,11 @@ PrefabInstance:
 --- !u!224 &8391819677957949338 stripped
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 8529612224828995252, guid: c0843e8669e1d8244ba3507bf39bacda, type: 3}
+  m_PrefabInstance: {fileID: 8391819677957949337}
+  m_PrefabAsset: {fileID: 0}
+--- !u!224 &8391819677957949339 stripped
+RectTransform:
+  m_CorrespondingSourceObject: {fileID: 5039078023869093331, guid: c0843e8669e1d8244ba3507bf39bacda, type: 3}
   m_PrefabInstance: {fileID: 8391819677957949337}
   m_PrefabAsset: {fileID: 0}
 --- !u!114 &8391819677957949342

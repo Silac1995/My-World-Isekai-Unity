@@ -67,6 +67,16 @@ public class BattleManager : MonoBehaviour
     {
         if (_isBattleEnded) return;
 
+        // --- NOUVEAU : VERIFICATION DE FIN DE COMBAT EN CONTINU ---
+        // S'assure que le combat s'arrête instantanément même si un objet est détruit
+        // silencieusement sans tirer l'événement OnIncapacitated.
+        if (_battleTeamInitiator.IsTeamEliminated() || _battleTeamTarget.IsTeamEliminated())
+        {
+            Debug.Log($"<color=red>[Battle]</color> Elimination globale détectée. Fin du combat.");
+            EndBattle();
+            return;
+        }
+
         // Gestion du temps de combat (Ticks d'initiative)
         _tickTimer += Time.deltaTime;
         float tickPeriod = 1f / _ticksPerSecond;
@@ -611,15 +621,9 @@ public class BattleManager : MonoBehaviour
                   $"Team Initiateur : {initiatorAlive}/{_battleTeamInitiator.CharacterList.Count} ({initiatorNames}) | " +
                   $"Team Cible : {targetAlive}/{_battleTeamTarget.CharacterList.Count} ({targetNames})");
 
-        // 1. Vérifier si le combat est terminé (UNE des deux équipes principales est éliminée)
-        if (_battleTeamInitiator.IsTeamEliminated() || _battleTeamTarget.IsTeamEliminated())
-        {
-            Debug.Log($"<color=red>[Battle]</color> Elimination detectee. Fin du combat.");
-            EndBattle();
-            return;
-        }
+        // (La vérification globale d'élimination est maintenant gérée passivement dans l'Update)
 
-        // 2. Si le combat continue, on redirige ceux qui tapaient l'incapacité
+        // On libère simplement les slots d'engagements liés à ce personnage.
         RedirectIncapacitated(incapacitatedCharacter);
     }
 
@@ -653,7 +657,19 @@ public class BattleManager : MonoBehaviour
             {
                 character.OnIncapacitated -= HandleCharacterIncapacitated;
                 character.OnDeath -= HandleCharacterIncapacitated;
-                character.CharacterCombat.LeaveBattle();
+                
+                try 
+                {
+                    if (character.CharacterCombat != null)
+                    {
+                        character.CharacterCombat.LeaveBattle();
+                    }
+                }
+                catch (System.Exception e)
+                {
+                    Debug.LogError($"<color=red>[Battle]</color> Exception non-critique durant LeaveBattle pour {character.CharacterName} : {e.Message}. Le nettoyage continue.");
+                }
+                
                 LeaveCurrentEngagement(character); // Nettoie au cas où
             }
         }

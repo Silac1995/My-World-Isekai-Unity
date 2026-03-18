@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Unity.VisualScripting.Antlr3.Runtime.Misc;
 using UnityEngine;
@@ -39,9 +39,6 @@ public class CharacterStats : MonoBehaviour
     [SerializeField] private CriticalHitChance criticalHitChance;
     [SerializeField] private MoveSpeed moveSpeed;
 
-    [Space(10)]
-    [Header("Status Effects")]
-    [SerializeReference] private List<CharacterStatusEffectInstance> characterStatusEffectInstance = new();
 
 
     // === Getters publics ===
@@ -71,7 +68,6 @@ public class CharacterStats : MonoBehaviour
     public CriticalHitChance CriticalHitChance => criticalHitChance;
     public MoveSpeed MoveSpeed => moveSpeed;
 
-    public List<CharacterStatusEffectInstance> CharacterStatusEffectInstance => characterStatusEffectInstance;
 
     private void Awake()
     {
@@ -158,22 +154,7 @@ public class CharacterStats : MonoBehaviour
 
 
 
-    public void AddCharacterStatusEffects(CharacterStatusEffectInstance effect)
-    {
-        if (effect == null) return;
 
-        if (!characterStatusEffectInstance.Contains(effect))
-        {
-            characterStatusEffectInstance.Add(effect);
-        }
-    }
-
-    public void RemoveCharacterStatusEffects(CharacterStatusEffectInstance effect)
-    {
-        if (effect == null) return;
-
-        characterStatusEffectInstance.Remove(effect);
-    }
 
     public void RecalculateTertiaryStats()
     {

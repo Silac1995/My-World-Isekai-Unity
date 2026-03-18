@@ -10,6 +10,9 @@ public class CharacterStatusManager : CharacterSystem
     private List<CharacterStatusEffectInstance> _activeEffects = new List<CharacterStatusEffectInstance>();
     private List<CharacterStatusEffectInstance> _effectsToRemove = new List<CharacterStatusEffectInstance>();
 
+    public event System.Action<CharacterStatusEffectInstance> OnStatusEffectAdded;
+    public event System.Action<CharacterStatusEffectInstance> OnStatusEffectRemoved;
+
     public IReadOnlyList<CharacterStatusEffectInstance> ActiveEffects => _activeEffects.AsReadOnly();
 
     private void Start()
@@ -45,8 +48,7 @@ public class CharacterStatusManager : CharacterSystem
         
         Debug.Log($"<color=cyan>[StatusManager]</color> Effet appliqué : {effectAsset.StatusEffectName} sur {_character.name}");
 
-        // Notify Stats (optional if you want to keep the duplicate list, but better to centralize here)
-        _character.Stats.AddCharacterStatusEffects(instance);
+        OnStatusEffectAdded?.Invoke(instance);
     }
 
     public void RemoveEffect(CharacterStatusEffectInstance instance)
@@ -56,8 +58,8 @@ public class CharacterStatusManager : CharacterSystem
         if (_activeEffects.Remove(instance))
         {
             Debug.Log($"<color=cyan>[StatusManager]</color> Effet retiré : {instance.StatusEffectName} sur {_character.name}");
+            OnStatusEffectRemoved?.Invoke(instance);
             instance.Remove();
-            _character.Stats.RemoveCharacterStatusEffects(instance);
         }
     }
 

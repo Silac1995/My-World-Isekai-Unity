@@ -440,6 +440,8 @@ MonoBehaviour:
   _actionProgressBar: {fileID: 7675865628524708826}
   _healthBar: {fileID: 3564213331627894607}
   _equipmentUI: {fileID: 0}
+  _statusEffectsContainer: {fileID: 0}
+  _statusEffectPrefab: {fileID: 0}
 --- !u!1 &5586085509215323037
 GameObject:
   m_ObjectHideFlags: 0
