@@ -203,16 +203,14 @@ public class GoapAction_GatherStorageItems : GoapAction
                     }
                     else
                     {
-                        // Si false : L'animator est sûrement déjà occupé (ex: il est en train de drop l'item précédent du sac).
-                        // On ne fait RIEN, on reste dans le Fallback DroppingOff pour réessayer au prochain tick.
-                        // SAUF si le personnage est complètement coincé, auquel cas on force le vidage, mais le Drop normal
-                        // refuse juste parce qu'il y a un cooldown.
-                        if (worker.CharacterActions.CurrentAction == null)
+                        // L'action a été refusée (presque toujours parce qu'une action est DEJA en cours).
+                        // S'il est bloqué avec une action fantôme, purger et forcer la livraison.
+                        if (worker.CharacterActions.CurrentAction != null)
                         {
-                            // S'il n'y a AUCUNE action en cours mais que ça refuse, il est buggé. On purge manuellement.
-                            RemoveItemFromWorker(worker, carriedItem);
-                            FinishDropoff(worker, carriedItem);
+                            worker.CharacterActions.ClearCurrentAction();
                         }
+                        RemoveItemFromWorker(worker, carriedItem);
+                        FinishDropoff(worker, carriedItem);
                     }
                 }
                 break;
@@ -393,7 +391,12 @@ public class GoapAction_GatherStorageItems : GoapAction
             if (worker.PathingMemory.IsBlacklisted(worldItem.gameObject.GetInstanceID())) continue;
 
             // Ignore les items qui sont déjà dans la zone de stockage (pour éviter un Gather infini)
-            if (storageCol != null && storageCol.bounds.Contains(worldItem.transform.position)) continue;
+            if (storageCol != null)
+            {
+                // Vérification avec Y aplati pour inclure les objets en train de tomber ou lévitant légèrement
+                Vector3 flatPos = new Vector3(worldItem.transform.position.x, storageCol.bounds.center.y, worldItem.transform.position.z);
+                if (storageCol.bounds.Contains(flatPos)) continue;
+            }
 
             // Optional: check if it belongs to crafting output. 
             // Currently, any loose item in building zone gets stashed.

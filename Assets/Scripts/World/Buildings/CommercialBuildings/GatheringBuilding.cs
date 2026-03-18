@@ -281,20 +281,29 @@ public class GatheringBuilding : CommercialBuilding
         if (entry.minAmount <= 0) return false; // illimité
 
         int activeOrdersDemand = 0;
+        int reservedStock = 0;
+
         var managerList = _jobs.OfType<JobLogisticsManager>().ToList();
         if (managerList.Count > 0)
         {
             var logistics = managerList[0];
+            // On calcule la demande basée sur ce qui n'a pas encore été dispatché. 
+            // Si c'est dispatché, c'est en transite, et ça a déjà fait baisser le freeStock physiquement sans que ce soit entièrement livré,
+            // on ne doit plus le compter comme demande pour ne pas sur-récolter.
             activeOrdersDemand = logistics.ActiveOrders
                                 .Where(o => o.ItemToTransport == entry.targetItem)
-                                .Sum(o => o.Quantity - o.DeliveredQuantity);
+                                .Sum(o => o.Quantity - o.DispatchedQuantity);
+                                
+            reservedStock = logistics.GetReservedItemCount(entry.targetItem);
         }
 
         int totalRequiredAmount = entry.minAmount + activeOrdersDemand;
         
-        // REFACTOR: Use the actual physical inventory count instead of a lifetime counter.
-        int actualStock = GetItemCount(entry.targetItem);
-        return actualStock >= totalRequiredAmount;
+        // REFACTOR: Use the free inventory count to prevent stalls caused by reserved items,
+        // and prevent over-gathering while items are in transit.
+        int freeStock = GetItemCount(entry.targetItem) - reservedStock;
+        
+        return freeStock >= totalRequiredAmount;
     }
 
     /// <summary>

@@ -45,7 +45,7 @@ public class CharacterDropItem : CharacterAction
 
         if (removed)
         {
-            Vector3 dropPos = character.transform.position + Vector3.up * 5f;
+            Vector3 dropPos = character.transform.position + Vector3.up * 1.5f;
             Vector3 offset = new Vector3(Random.Range(-0.3f, 0.3f), 0, Random.Range(-0.3f, 0.3f));
             WorldItem spawnedItem = WorldItem.SpawnWorldItem(_itemInstance, dropPos + offset);
             

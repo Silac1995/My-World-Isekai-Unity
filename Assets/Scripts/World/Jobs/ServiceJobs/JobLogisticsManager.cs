@@ -36,6 +36,41 @@ public class JobLogisticsManager : Job
     private Queue<PendingOrder> _pendingOrders = new Queue<PendingOrder>();
     public bool HasPendingOrders => _pendingOrders.Count > 0;
 
+    /// <summary>
+    /// Calcule le nombre d'ItemInstances de ce type qui sont physiquement réservées par des commandes (Transport/Achats).
+    /// Utilisé pour obtenir le "Free Stock" du bâtiment.
+    /// </summary>
+    public int GetReservedItemCount(ItemSO itemSO)
+    {
+        HashSet<ItemInstance> reservedInstances = new HashSet<ItemInstance>();
+
+        foreach (var tOrder in _placedTransportOrders)
+        {
+            foreach (var item in tOrder.ReservedItems)
+            {
+                if (item.ItemSO == itemSO) reservedInstances.Add(item);
+            }
+        }
+
+        foreach (var bOrder in _placedBuyOrders)
+        {
+            foreach (var item in bOrder.ReservedItems)
+            {
+                if (item.ItemSO == itemSO) reservedInstances.Add(item);
+            }
+        }
+
+        foreach (var aOrder in _activeOrders)
+        {
+            foreach (var item in aOrder.ReservedItems)
+            {
+                if (item.ItemSO == itemSO) reservedInstances.Add(item);
+            }
+        }
+
+        return reservedInstances.Count;
+    }
+
     // GOAP
     private GoapGoal _logisticsGoal;
     private List<GoapAction> _availableActions;
@@ -365,6 +400,10 @@ public class JobLogisticsManager : Job
     /// </summary>
     private void CheckShopInventory(ShopBuilding shop)
     {
+        // 1. Audit physique : on s'assure que les objets logiques sont bien présents au sol
+        // S'ils ont été volés ou ont disparu, ils sont retirés de l'inventaire avant le calcul des besoins.
+        shop.RefreshStorageInventory();
+
         var entries = shop.ShopEntries;
 
         Debug.Log($"<color=cyan>[Logistics]</color> {_worker?.CharacterName ?? "?"} vérifie l'inventaire de {shop.BuildingName} ({entries.Count} types d'items).");
@@ -400,6 +439,9 @@ public class JobLogisticsManager : Job
     /// </summary>
     private void CheckCraftingIngredients(CraftingBuilding building)
     {
+        // 0. Audit physique de l'inventaire (vérifie les vols et disparitions avant de calculer les manques)
+        building.RefreshStorageInventory();
+
         // 1. Agréger TOUS les besoins en ingrédients pour TOUTES les commandes actives
         Dictionary<ItemSO, int> globalIngredientNeeds = new Dictionary<ItemSO, int>();
 
@@ -788,33 +830,65 @@ public class JobLogisticsManager : Job
 
     private void CheckExpiredBuyOrders()
     {
-        if (_activeOrders.Count == 0) return;
-
-        List<BuyOrder> expiredOrders = new List<BuyOrder>();
-
-        foreach (var order in _activeOrders)
+        // 1. Gérer les commandes que nous DEVONS honorer (Fournisseur)
+        if (_activeOrders.Count > 0)
         {
-            order.DecreaseRemainingDays();
-            if (order.RemainingDays <= 0)
+            List<BuyOrder> expiredSupplierOrders = new List<BuyOrder>();
+            foreach (var order in _activeOrders)
             {
-                expiredOrders.Add(order);
+                order.DecreaseRemainingDays();
+                if (order.RemainingDays <= 0)
+                {
+                    expiredSupplierOrders.Add(order);
+                }
+            }
+
+            foreach (var expired in expiredSupplierOrders)
+            {
+                _activeOrders.Remove(expired);
+                Debug.Log($"<color=red>[JobLogisticsManager]</color> Commande Client {expired.Quantity}x {expired.ItemToTransport.ItemName} EXPIRÉE chez le fournisseur.");
+
+                // Appliquer les conséquences sociales
+                if (_workplace != null && _workplace.Owner != null)
+                {
+                    Character workplaceBoss = _workplace.Owner;
+
+                    if (expired.ClientBoss != null && expired.ClientBoss.IsAlive())
+                    {
+                        expired.ClientBoss.CharacterRelation?.UpdateRelation(workplaceBoss, -25);
+                    }
+                }
             }
         }
 
-        foreach (var expired in expiredOrders)
+        // 2. Gérer les commandes que nous AVONS PLACÉ (Client)
+        if (_placedBuyOrders.Count > 0)
         {
-            _activeOrders.Remove(expired);
-            Debug.Log($"<color=red>[JobLogisticsManager]</color> Commande {expired.Quantity}x {expired.ItemToTransport.ItemName} EXPIRÉE.");
-
-            // Appliquer les conséquences sociales
-            if (_workplace != null && _workplace.Owner != null)
+            List<BuyOrder> expiredClientOrders = new List<BuyOrder>();
+            foreach (var order in _placedBuyOrders)
             {
-                Character workplaceBoss = _workplace.Owner;
-
-                if (expired.ClientBoss != null && expired.ClientBoss.IsAlive())
+                // Si la commande n'a pas encore été acceptée par le fournisseur,
+                // elle n'est pas dans son _activeOrders, donc il ne diminuera pas ses jours.
+                // On le fait donc nous-même côté client pour qu'elle expire quand même.
+                if (!order.IsPlaced)
                 {
-                    expired.ClientBoss.CharacterRelation?.UpdateRelation(workplaceBoss, -25);
+                    order.DecreaseRemainingDays();
                 }
+
+                if (order.RemainingDays <= 0)
+                {
+                    expiredClientOrders.Add(order);
+                }
+            }
+
+            foreach (var expired in expiredClientOrders)
+            {
+                _placedBuyOrders.Remove(expired);
+                Debug.Log($"<color=red>[JobLogisticsManager]</color> Notre commande de {expired.Quantity}x {expired.ItemToTransport.ItemName} a EXPIRÉ et est retirée de nos suivis client.");
+
+                // Nettoyer la file d'attente si elle n'a jamais pu être initiée physiquement
+                var newQueue = new Queue<PendingOrder>(_pendingOrders.Where(p => p.BuyOrder != expired));
+                _pendingOrders = newQueue;
             }
         }
     }
