@@ -106,6 +106,56 @@ public class CharacterInteraction : MonoBehaviour
         return true;
     }
 
+    private void CalculateValidMeetingPositions(Character initiator, Character target, out Vector3 initiatorMeetingPos, out Vector3 targetMeetingPos)
+    {
+        Vector3 initPos = initiator.transform.position;
+        Vector3 targetPos = target.transform.position;
+        bool initiatorIsOnLeft = initPos.x < targetPos.x;
+        float offset = 2f; // total distance 4f
+
+        Vector3[] midpointsToTest = new Vector3[]
+        {
+            Vector3.Lerp(initPos, targetPos, 0.5f), // Center
+            targetPos, // Shifted towards target
+            initPos, // Shifted towards initiator
+            Vector3.Lerp(initPos, targetPos, 0.25f),
+            Vector3.Lerp(initPos, targetPos, 0.75f)
+        };
+
+        foreach(var mid in midpointsToTest)
+        {
+            Vector3 testInit = initiatorIsOnLeft ? new Vector3(mid.x - offset, initPos.y, mid.z) : new Vector3(mid.x + offset, initPos.y, mid.z);
+            Vector3 testTarget = initiatorIsOnLeft ? new Vector3(mid.x + offset, targetPos.y, mid.z) : new Vector3(mid.x - offset, targetPos.y, mid.z);
+
+            // Test if both points are valid on NavMesh
+            if (UnityEngine.AI.NavMesh.SamplePosition(testInit, out UnityEngine.AI.NavMeshHit initHit, 1.0f, UnityEngine.AI.NavMesh.AllAreas) &&
+                UnityEngine.AI.NavMesh.SamplePosition(testTarget, out UnityEngine.AI.NavMeshHit targetHit, 1.0f, UnityEngine.AI.NavMesh.AllAreas))
+            {
+                // Verify they maintain perfect Z alignment and > 3f X distance
+                if (Mathf.Abs(initHit.position.z - targetHit.position.z) < 0.2f &&
+                    Mathf.Abs(initHit.position.x - targetHit.position.x) >= 3.0f)
+                {
+                    // Force exact Z alignment and rigid 4f spacing based on the best fit
+                    initiatorMeetingPos = new Vector3(initHit.position.x, initPos.y, initHit.position.z);
+                    targetMeetingPos = new Vector3(targetHit.position.x, targetPos.y, initHit.position.z);
+                    return;
+                }
+            }
+        }
+
+        // Fallback: Use exact midpoint without validation (will clip but guarantees visual alignment)
+        Vector3 finalMid = midpointsToTest[0];
+        initiatorMeetingPos = initiatorIsOnLeft ? new Vector3(finalMid.x - offset, initPos.y, finalMid.z) : new Vector3(finalMid.x + offset, initPos.y, finalMid.z);
+        targetMeetingPos = initiatorIsOnLeft ? new Vector3(finalMid.x + offset, targetPos.y, finalMid.z) : new Vector3(finalMid.x - offset, targetPos.y, finalMid.z);
+
+        // Sanity clamp X axis to NavMesh for safety, but enforce strict Z parity for 2.5D visual requirement
+        if (UnityEngine.AI.NavMesh.SamplePosition(initiatorMeetingPos, out UnityEngine.AI.NavMeshHit finalInitHit, 2.0f, UnityEngine.AI.NavMesh.AllAreas))
+            initiatorMeetingPos = new Vector3(finalInitHit.position.x, initiatorMeetingPos.y, initiatorMeetingPos.z);
+        
+        if (UnityEngine.AI.NavMesh.SamplePosition(targetMeetingPos, out UnityEngine.AI.NavMeshHit finalTargetHit, 2.0f, UnityEngine.AI.NavMesh.AllAreas))
+            targetMeetingPos = new Vector3(finalTargetHit.position.x, targetMeetingPos.y, initiatorMeetingPos.z);
+    }
+
     private System.Collections.IEnumerator MoveToInteractionRoutine(Character target, ICharacterInteractionAction forcedFirstAction, Action onPositioned)
     {
         float timeoutTimer = 0f;
@@ -117,6 +167,14 @@ public class CharacterInteraction : MonoBehaviour
         // Security checks against NaN/stutter loops for Navmesh
         float lastRouteRequestTime = 0f;
         Vector3 lastDesiredPos = Vector3.positiveInfinity;
+
+        // --- STATIC POSITIONING ---
+        Vector3 staticInitPos = Vector3.zero;
+        Vector3 staticTargetPos = Vector3.zero;
+        if (!target.IsPlayer())
+        {
+            CalculateValidMeetingPositions(_character, target, out staticInitPos, out staticTargetPos);
+        }
 
         while (true)
         {
@@ -138,28 +196,30 @@ public class CharacterInteraction : MonoBehaviour
             }
 
             bool isCloseEnough = false;
-
             bool targetInPosition = false;
 
             // Target Pos Logic
             Vector3 targetPos = target.transform.position;
-            float currentDist = Vector3.Distance(_character.transform.position, target.transform.position);
-            
-            // --- DUAL POSITIONING SETUP ---
-            // On calcule le point médian (on divise la distance par 2 pour se rejoindre)
-            Vector3 midpoint = Vector3.Lerp(_character.transform.position, targetPos, 0.5f);
-            
-            // Si l'initiateur est à gauche, il doit finir à midpoint.x - 2, la cible à midpoint.x + 2 (soit 4 d'écart)
-            bool initiatorIsOnLeft = _character.transform.position.x < targetPos.x;
-            
-            Vector3 initiatorMeetingPos = initiatorIsOnLeft ? new Vector3(midpoint.x - 2f, _character.transform.position.y, midpoint.z) : new Vector3(midpoint.x + 2f, _character.transform.position.y, midpoint.z);
-            Vector3 targetMeetingPos = initiatorIsOnLeft ? new Vector3(midpoint.x + 2f, targetPos.y, midpoint.z) : new Vector3(midpoint.x - 2f, targetPos.y, midpoint.z);
+            Vector3 initiatorMeetingPos = staticInitPos;
+            Vector3 targetMeetingPos = staticTargetPos;
 
             // GESTION DU JOUEUR : S'il est la cible, on ne le force pas à bouger, l'initiateur s'adapte à LUI.
             if (target.IsPlayer())
             {
                 float xOffset = _character.transform.position.x > targetPos.x ? 4f : -4f;
-                initiatorMeetingPos = new Vector3(targetPos.x + xOffset, _character.transform.position.y, targetPos.z);
+                // Force initiator to perfectly align Z with Player
+                Vector3 dynamicDesiredInit = new Vector3(targetPos.x + xOffset, _character.transform.position.y, targetPos.z);
+                
+                // Ensure dynamic desired is somewhat valid
+                if (UnityEngine.AI.NavMesh.SamplePosition(dynamicDesiredInit, out UnityEngine.AI.NavMeshHit hit, 2.0f, UnityEngine.AI.NavMesh.AllAreas))
+                {
+                    initiatorMeetingPos = new Vector3(hit.position.x, dynamicDesiredInit.y, hit.position.z);
+                }
+                else
+                {
+                    initiatorMeetingPos = dynamicDesiredInit;
+                }
+                targetMeetingPos = targetPos;
                 targetInPosition = true; // Le joueur est toujours considéré en position (passif)
             }
             // GESTION NPC : Si le NPC cible n'a pas encore commencé à se positionner, on lui dit d'y aller
@@ -177,21 +237,16 @@ public class CharacterInteraction : MonoBehaviour
             float distDelta = Vector3.Distance(new Vector3(_character.transform.position.x, 0, _character.transform.position.z), 
                                                new Vector3(initiatorMeetingPos.x, 0, initiatorMeetingPos.z));
 
-            if (detector != null && targetInteractable != null)
+            // NEW ARRIVAL LOGIC
+            if (movement != null && MWI.AI.NavMeshUtility.HasAgentReachedDestination(movement, 0.2f))
             {
-                bool isOverlapping = detector.IsOverlapping(targetInteractable);
-                
-                // On veut s'assurer qu'ils sont bien alignés visuellement sur Z et X (environ 4 de différence)
-                float zDiff = Mathf.Abs(_character.transform.position.z - (target.IsPlayer() ? targetPos.z : midpoint.z));
-                float xDiff = Mathf.Abs(_character.transform.position.x - (target.IsPlayer() ? targetPos.x : midpoint.x));
-                // On est tolérant sur la position pour valider l'arrivée
-                bool isAlignedVisually = zDiff <= 0.1f && distDelta <= 0.1f;
-
-                isCloseEnough = (isOverlapping && isAlignedVisually) || distDelta <= 0.05f;
+                isCloseEnough = true;
             }
-            else
+
+            // Fallback checking
+            if (distDelta <= 0.2f)
             {
-                isCloseEnough = distDelta <= 0.05f;
+                 isCloseEnough = true;
             }
 
             if (isCloseEnough && targetInPosition)
@@ -212,9 +267,6 @@ public class CharacterInteraction : MonoBehaviour
                 movement.Resume();
                 
                 // --- SÉCURITÉ DE THREAD NAVMESH ---
-                // Le NavMesh prend au moins 1 frame pour calculer le chemin (PathPending = true) puis basculer HasPath.
-                // Si on spamme SetDestination chaque frame, le calcul est réinitialisé et le PNJ stagne.
-                // HasPathFailed = on a attendu 0.2s et on n'a ni chemin, ni chemin en cours, ou chemin invalide.
                 bool hasPathFailed = (Time.time - lastRouteRequestTime > 0.2f) && (movement.Agent.pathStatus == UnityEngine.AI.NavMeshPathStatus.PathInvalid || (!movement.Agent.hasPath && !movement.Agent.pathPending));
 
                 if (Vector3.Distance(lastDesiredPos, initiatorMeetingPos) > 1f || hasPathFailed)
@@ -293,7 +345,19 @@ public class CharacterInteraction : MonoBehaviour
             float distDelta = Vector3.Distance(new Vector3(_character.transform.position.x, 0, _character.transform.position.z), 
                                                new Vector3(destination.x, 0, destination.z));
 
-            if (distDelta <= 0.1f)
+            bool isCloseEnough = false;
+
+            if (movement != null && MWI.AI.NavMeshUtility.HasAgentReachedDestination(movement, 0.2f))
+            {
+                isCloseEnough = true;
+            }
+
+            if (distDelta <= 0.2f)
+            {
+                isCloseEnough = true;
+            }
+
+            if (isCloseEnough)
             {
                 _character.CharacterVisual?.FaceCharacter(initiator);
                 SetPositioned(true);

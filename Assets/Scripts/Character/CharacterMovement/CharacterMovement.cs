@@ -24,6 +24,12 @@ public class CharacterMovement : MonoBehaviour
     private int _unstablePathFrames = 0;
     private const int MAX_UNSTABLE_FRAMES = 30; // ~0.6s à 50fps
 
+    // Gestion Stuck Detection
+    private float _stuckTimer = 0f;
+    private float _stuckCheckTimer = 0f;
+    private Vector3 _lastStuckCheckPos;
+    private bool _isSliding = false;
+
     // --- ENCAPSULATION DE L'AGENT ---
     public NavMeshAgent Agent => _agent;
     public bool PathPending => _agent != null && _agent.pathPending;
@@ -46,6 +52,7 @@ public class CharacterMovement : MonoBehaviour
         {
             _agent.updateRotation = false;
             _agent.updateUpAxis = false;
+            _agent.avoidancePriority = UnityEngine.Random.Range(30, 70);
         }
 
         if (_rb != null) _wasKinematic = _rb.isKinematic;
@@ -99,6 +106,52 @@ public class CharacterMovement : MonoBehaviour
             else
             {
                 _unstablePathFrames = 0;
+            }
+
+            // --- STUCK DETECTION SYSTEM ---
+            if (_agent.hasPath && !_agent.pathPending && _agent.remainingDistance > (_agent.stoppingDistance + 0.1f))
+            {
+                _stuckCheckTimer += Time.fixedDeltaTime;
+                if (_stuckCheckTimer >= 0.5f) // Eval every 0.5s
+                {
+                    float distMoved = Vector3.Distance(transform.position, _lastStuckCheckPos);
+                    
+                    if (distMoved < 0.2f) // Less than 0.2m in 0.5s = stuck
+                    {
+                        _stuckTimer += 0.5f;
+
+                        if (_stuckTimer >= 1.5f && !_isSliding)
+                        {
+                            _agent.obstacleAvoidanceType = ObstacleAvoidanceType.NoObstacleAvoidance;
+                            _isSliding = true;
+                        }
+                    }
+                    else
+                    {
+                        // Moving fine, cleanly reset
+                        _stuckTimer = 0f;
+                        if (_isSliding)
+                        {
+                            _agent.obstacleAvoidanceType = ObstacleAvoidanceType.HighQualityObstacleAvoidance;
+                            _isSliding = false;
+                        }
+                    }
+
+                    _lastStuckCheckPos = transform.position;
+                    _stuckCheckTimer = 0f;
+                }
+            }
+            else
+            {
+                // Reset everything if arrived or no path
+                _stuckCheckTimer = 0f;
+                _stuckTimer = 0f;
+                if (_isSliding)
+                {
+                    // Restauration de l'évitement si on le désactivait pour le slide
+                    _agent.obstacleAvoidanceType = ObstacleAvoidanceType.HighQualityObstacleAvoidance;
+                    _isSliding = false;
+                }
             }
         }
         else
@@ -181,6 +234,7 @@ public class CharacterMovement : MonoBehaviour
             _agent.ResetPath();
             _agent.velocity = Vector3.zero;
             _agent.obstacleAvoidanceType = ObstacleAvoidanceType.NoObstacleAvoidance; // Empêche d'être poussé pendant les dialogues
+            _isSliding = true; // Empêche notre système de resetter l'évitement par accident
         }
         if (_rb != null && !_rb.isKinematic) _rb.linearVelocity = Vector3.zero;
     }
@@ -193,7 +247,11 @@ public class CharacterMovement : MonoBehaviour
         {
             _agent.isStopped = false;
             _agent.obstacleAvoidanceType = ObstacleAvoidanceType.HighQualityObstacleAvoidance; // Rétablit l'évitement
+            _isSliding = false;
         }
+        _stuckTimer = 0f;
+        _stuckCheckTimer = 0f;
+        _lastStuckCheckPos = transform.position;
     }
 
     public void ForceResume()
