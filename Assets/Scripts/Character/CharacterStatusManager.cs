@@ -1,11 +1,8 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class CharacterStatusManager : MonoBehaviour
+public class CharacterStatusManager : CharacterSystem
 {
-    [Header("References")]
-    [SerializeField] private Character _character;
-
     [Header("Automatic Effects")]
     [SerializeField] private CharacterStatusEffect _unconsciousEffect;
     [SerializeField] private CharacterStatusEffect _outOfCombatEffect;
@@ -15,32 +12,24 @@ public class CharacterStatusManager : MonoBehaviour
 
     public IReadOnlyList<CharacterStatusEffectInstance> ActiveEffects => _activeEffects.AsReadOnly();
 
-    private void Awake()
-    {
-        if (_character == null) _character = GetComponent<Character>();
-    }
-
     private void Start()
     {
         if (_character != null)
         {
-            _character.OnUnconsciousChanged += HandleUnconsciousChanged;
             if (_character.CharacterCombat != null)
             {
-                _character.CharacterCombat.OnCombatModeChanged += HandleCombatModeChanged;
                 _character.CharacterCombat.OnBattleLeft += HandleBattleLeft;
             }
         }
     }
 
-    private void OnDestroy()
+    protected override void OnDisable()
     {
+        base.OnDisable();
         if (_character != null)
         {
-            _character.OnUnconsciousChanged -= HandleUnconsciousChanged;
             if (_character.CharacterCombat != null)
             {
-                _character.CharacterCombat.OnCombatModeChanged -= HandleCombatModeChanged;
                 _character.CharacterCombat.OnBattleLeft -= HandleBattleLeft;
             }
         }
@@ -124,9 +113,9 @@ public class CharacterStatusManager : MonoBehaviour
         }
     }
 
-    private void HandleUnconsciousChanged(bool unconscious)
+    protected override void HandleIncapacitated(Character character)
     {
-        if (unconscious)
+        if (_character.IsUnconscious)
         {
             // On n'applique la regen que si on n'est pas en combat (IsInBattle)
             bool isInBattle = _character.CharacterCombat != null && _character.CharacterCombat.IsInBattle;
@@ -134,14 +123,15 @@ public class CharacterStatusManager : MonoBehaviour
             if (!isInBattle && _unconsciousEffect != null && !HasEffect(_unconsciousEffect))
                 ApplyEffect(_unconsciousEffect);
         }
-        else
-        {
-            if (_unconsciousEffect != null && HasEffect(_unconsciousEffect))
-                RemoveEffect(_unconsciousEffect);
-        }
     }
 
-    private void HandleCombatModeChanged(bool isCombat)
+    protected override void HandleWakeUp(Character character)
+    {
+        if (_unconsciousEffect != null && HasEffect(_unconsciousEffect))
+            RemoveEffect(_unconsciousEffect);
+    }
+
+    protected override void HandleCombatStateChanged(bool isCombat)
     {
         if (_character == null || _character.Stats == null) return;
 

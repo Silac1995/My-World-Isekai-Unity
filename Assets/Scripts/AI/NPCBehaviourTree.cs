@@ -15,11 +15,8 @@ using MWI.AI;
 /// 7. SOCIAL (socialisation spontanée)
 /// 8. WANDER (fallback)
 /// </summary>
-public class NPCBehaviourTree : MonoBehaviour
+public class NPCBehaviourTree : CharacterSystem
 {
-    [Header("References")]
-    [SerializeField] private Character _character;
-
     [Header("Debug")]
     [SerializeField] private bool _debugLog = false;
     [SerializeField] private string _currentNodeName = "None";
@@ -51,13 +48,22 @@ public class NPCBehaviourTree : MonoBehaviour
     public Blackboard Blackboard => _blackboard;
     public Character Character => _character;
 
-    private void Awake()
+    protected override void Awake()
     {
-        if (_character == null)
-            _character = GetComponent<Character>();
+        base.Awake();
 
         // Chaque NPC a un offset différent pour ne pas tous ticker la même frame
         _frameOffset = GetInstanceID() % _tickInterval;
+    }
+
+    protected override void HandleIncapacitated(Character character)
+    {
+        CancelOrder();
+    }
+
+    protected override void HandleCombatStateChanged(bool inCombat)
+    {
+        if (inCombat) CancelOrder();
     }
 
     private void Start()

@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -7,10 +7,8 @@ using UnityEngine.U2D.Animation;
 
 
 
-public class CharacterVisual : MonoBehaviour
-
+public class CharacterVisual : CharacterSystem
 {
-
     [Header("Components")]
 
     [SerializeField] private Transform visualRoot;
@@ -25,7 +23,6 @@ public class CharacterVisual : MonoBehaviour
 
 
 
-    private Character character;
     private Coroutine _resizeCoroutine;
     private SpriteRenderer[] allRenderers;
 
@@ -71,7 +68,7 @@ public class CharacterVisual : MonoBehaviour
 
     public CharacterBodyPartsController BodyPartsController => bodyPartsController;
 
-    public Character Character => character;
+    // Base class already provides: public Character Character => _character;
 
     public CharacterAnimator CharacterAnimator => _characterAnimator;
 
@@ -162,7 +159,11 @@ public class CharacterVisual : MonoBehaviour
             if (isFacingRight == value) return;
 
             // Bloquer le flip pendant un knockback
-            if (character != null && character.CharacterMovement != null && character.CharacterMovement.IsKnockedBack)
+            if (_character != null && _character.CharacterMovement != null && _character.CharacterMovement.IsKnockedBack)
+                return;
+
+            // Bloquer le flip si le personnage est incapacité
+            if (_character != null && _character.IsIncapacitated)
                 return;
 
             // Anti-flicker : cooldown entre les flips
@@ -181,13 +182,13 @@ public class CharacterVisual : MonoBehaviour
 
 
 
-    private void Awake()
+    protected override void Awake()
 
     {
 
-        character = GetComponentInParent<Character>();
+        base.Awake();
 
-        if (character == null) Debug.LogError("[CharacterVisual] Aucun Character trouvé !");
+        if (_character == null) Debug.LogError("[CharacterVisual] Aucun Character trouvé !");
 
 
 
@@ -261,7 +262,10 @@ public class CharacterVisual : MonoBehaviour
         _lookTarget = null;
     }
 
-
+    protected override void HandleIncapacitated(Character c)
+    {
+        ClearLookTarget();
+    }
 
     public void UpdateFlip(Vector3 moveDir)
     {

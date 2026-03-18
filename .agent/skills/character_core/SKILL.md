@@ -19,6 +19,10 @@ Examples:
 - `character.Stats` -> Provides vital statistics.
 - `character.PathingMemory` -> Specialized memory container that tracks unreachable targets to prevent infinite evaluation/movement loops (self-cleaning on TimeManager resets via `OnDestroy()`).
 
+### CharacterSystem Pipeline (Decoupled Modules)
+All core character systems (`CharacterMovement`, `CharacterVisual`, `CharacterInteraction`, `CharacterActions`, `CharacterGameController`, `CharacterGoapController`, `NPCBehaviourTree`, `CharacterCombat`) now inherit from the abstract class **`CharacterSystem`**.
+This abstract base automatically caches `_character` during `Awake` and subscribes to essential lifecycle events (`OnIncapacitated`, `OnDeath`, `OnWakeUp`, `OnCombatStateChanged`). `Character.cs` no longer explicitly micro-manages the shutdown of its modules; each subsystem gracefully handles its own cleanup by overriding `HandleIncapacitated(Character)` or `HandleCombatStateChanged(bool)`.
+
 ## 2. Justice of the Peace and Availability (`IsFree()`)
 This is the ultimate safety method. `Character` scrutinizes all of its child components to tell the global system (GOAP, Player commands, Interactions) whether the character is allowed to be interrupted or is already busy.
 
@@ -34,12 +38,11 @@ This is the ultimate safety method. `Character` scrutinizes all of its child com
 `Character` is responsible for major state changes. You must never manually tinker with HP or the collider to "kill" someone.
 
 - **SetUnconscious(true)**:
+  - Triggers the `OnIncapacitated` event.
+  - Subsystems inheriting from `CharacterSystem` independently react to power down (e.g., `CharacterMovement.Stop()`, `NPCBehaviourTree.CancelOrder()`, `CharacterVisual.ClearLookTarget()`).
   - The entity becomes physically inert (Rigidbody switches to Kinematic so falls are managed).
-  - The AI brain (`Controller`) is turned off and its stack cleared.
-  - The `NavMeshAgent` is disabled (essential for Unity).
-  - The Animator switches to the Knockout state.
 - **Die()**:
-  - Performs the same routine (brain + navmesh deactivation).
+  - Performs the same routine (fires `OnDeath` and `OnIncapacitated`).
   - But death (`_isDead = true`) permanently overrides the rest.
 
 ## 4. Context Switching (The Brain)

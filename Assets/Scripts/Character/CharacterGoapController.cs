@@ -7,10 +7,8 @@ using UnityEngine;
 /// Contrairement au GOAP des Jobs (ex: JobGatherer), celui-ci gère les actions
 /// permanentes et les buts de vie du personnage.
 /// </summary>
-public class CharacterGoapController : MonoBehaviour
+public class CharacterGoapController : CharacterSystem
 {
-    [SerializeField] private Character _character;
-    
     [Header("Settings")]
     [SerializeField] private float _planReevaluationInterval = 2f;
     
@@ -26,9 +24,19 @@ public class CharacterGoapController : MonoBehaviour
     public GoapAction CurrentAction => _currentAction;
     public string CurrentGoalName => _currentGoal?.GoalName ?? "None";
 
-    private void Awake()
+    protected override void Awake()
     {
-        if (_character == null) _character = GetComponent<Character>();
+        base.Awake();
+    }
+
+    protected override void HandleIncapacitated(Character character)
+    {
+        CancelPlan();
+    }
+
+    protected override void HandleCombatStateChanged(bool inCombat)
+    {
+        if (inCombat) CancelPlan();
     }
 
     /// <summary>

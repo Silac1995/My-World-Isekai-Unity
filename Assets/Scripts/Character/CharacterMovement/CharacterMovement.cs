@@ -2,13 +2,12 @@ using UnityEngine;
 using UnityEngine.AI;
 
 [RequireComponent(typeof(Rigidbody))]
-public class CharacterMovement : MonoBehaviour
+public class CharacterMovement : CharacterSystem
 {
     [Header("Movement Settings")]
     [SerializeField] private float _acceleration = 50f;
     [SerializeField] private float _groundCheckDistance = 0.2f;
     [SerializeField] private LayerMask _groundLayer;
-    [SerializeField] Character _character;
 
     [Header("References")]
     [SerializeField] private Rigidbody _rb;
@@ -42,9 +41,9 @@ public class CharacterMovement : MonoBehaviour
     public Vector3 Velocity => GetVelocity();
     public bool IsKnockedBack => _knockbackTimer > 0;
 
-    private void Awake()
+    protected override void Awake()
     {
-        if (_character == null) _character = GetComponent<Character>();
+        base.Awake();
         if (_rb == null) _rb = GetComponent<Rigidbody>();
         if (_agent == null) _agent = GetComponent<NavMeshAgent>();
 
@@ -237,6 +236,11 @@ public class CharacterMovement : MonoBehaviour
             _isSliding = true; // Empêche notre système de resetter l'évitement par accident
         }
         if (_rb != null && !_rb.isKinematic) _rb.linearVelocity = Vector3.zero;
+    }
+
+    protected override void HandleIncapacitated(Character character)
+    {
+        Stop();
     }
 
     public void Resume()

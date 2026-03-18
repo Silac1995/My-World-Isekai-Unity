@@ -3,10 +3,9 @@ using System.Linq;
 using UnityEngine;
 using UnityEngine.AI;
 
-public abstract class CharacterGameController : MonoBehaviour
+public abstract class CharacterGameController : CharacterSystem
 {
     [SerializeField] protected CharacterVisual _characterVisual;
-    [SerializeField] protected Character _character;
     [SerializeField] protected CharacterMovement _characterMovement;
     protected bool _wasDoingAction;
     protected float _actionCooldownTimer;
@@ -42,12 +41,23 @@ public abstract class CharacterGameController : MonoBehaviour
     }
 
     // --- PROPRIÉTÉS DE COMPATIBILITÉ (Pour corriger tes erreurs) ---
-    public Character Character => _character;
     public NavMeshAgent Agent => _characterMovement != null ? _characterMovement.Agent : null;
     public CharacterMovement CharacterMovement => _characterMovement;
+    public Character Character => _character;
     public Animator Animator => (_characterVisual != null && _characterVisual.CharacterAnimator != null)
                                  ? _characterVisual.CharacterAnimator.Animator
                                  : null;
+
+    protected override void HandleIncapacitated(Character character)
+    {
+        enabled = false;
+        
+        if (this is NPCController npc)
+        {
+            npc.ClearBehaviours();
+        }
+    }
+
     public virtual void Initialize()
     {
         if (_character != null && !_character.IsAlive()) enabled = false;
@@ -95,8 +105,9 @@ public abstract class CharacterGameController : MonoBehaviour
         }
     }
 
-    protected virtual void OnDestroy()
+    protected override void OnDisable()
     {
+        base.OnDisable();
         if (_character != null && _character.CharacterActions != null)
         {
             _character.CharacterActions.OnActionStarted -= HandleActionStarted;

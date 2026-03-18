@@ -2,10 +2,8 @@ using System;
 using System.Collections;
 using UnityEngine;
 
-public class CharacterActions : MonoBehaviour
+public class CharacterActions : CharacterSystem
 {
-    [SerializeField] private Character _character;
-
     public Action<CharacterAction> OnActionStarted;
     public Action OnActionFinished;
     private float _actionStartTime; // Pour calculer la progression
@@ -129,10 +127,21 @@ public class CharacterActions : MonoBehaviour
     }
 
     // Si le personnage est détruit, on s'assure que tout s'arrête
-    private void OnDisable()
+    protected override void OnDisable()
     {
+        base.OnDisable();
         StopAllCoroutines();
         _currentAction = null;
         _actionRoutine = null;
+    }
+
+    protected override void HandleIncapacitated(Character character)
+    {
+        ClearCurrentAction();
+    }
+
+    protected override void HandleCombatStateChanged(bool inCombat)
+    {
+        if (inCombat) ClearCurrentAction();
     }
 }

@@ -85,6 +85,7 @@ public class Character : MonoBehaviour
     public event Action<Character> OnIncapacitated;
     public event Action<Character> OnWakeUp;
     public event Action<bool> OnUnconsciousChanged;
+    public event Action<bool> OnCombatStateChanged;
     #endregion
 
     #region Properties
@@ -373,18 +374,6 @@ public class Character : MonoBehaviour
             // On laisse le collider actif temporairement pour la physique de chute/recul
             if (_rb != null) _rb.isKinematic = true;
 
-            // 2. Arrêt des systèmes actifs
-            if (_characterMovement != null) _characterMovement.Stop();
-            if (_characterActions != null) _characterActions.ClearCurrentAction();
-            // Note : On ne retire plus le BattleManager ici pour permettre l'interaction/résurrection en combat.
-
-            // 3. Désactivation du cerveau
-            if (_controller != null)
-            {
-                if (_controller is NPCController npc) npc.ClearBehaviours();
-                _controller.enabled = false;
-            }
-
             // 4. Animation (Utilise le paramètre isDead pour le moment)
             if (_characterVisual != null && _characterVisual.CharacterAnimator != null)
             {
@@ -425,6 +414,11 @@ public class Character : MonoBehaviour
     public void WakeUp() => SetUnconscious(false);
     public void Faint() => SetUnconscious(true);
 
+    public void SetCombatState(bool inCombat)
+    {
+        OnCombatStateChanged?.Invoke(inCombat);
+    }
+
     public virtual void Die()
     {
         if (_isDead) return;
@@ -440,17 +434,7 @@ public class Character : MonoBehaviour
         // Le collider sera désactivé via DisableColliderAfterKnockback dans CharacterMovement
         if (_rb != null) _rb.isKinematic = true;
 
-        // 2. Arrêt des systèmes actifs
-        if (_characterMovement != null) _characterMovement.Stop();
-        if (_characterActions != null) _characterActions.ClearCurrentAction();
         if (_characterCombat != null) _characterCombat.ForceExitCombatMode();
-
-        // 3. Désactivation du cerveau
-        if (_controller != null)
-        {
-            if (_controller is NPCController npc) npc.ClearBehaviours();
-            _controller.enabled = false;
-        }
 
         if (_characterVisual != null && _characterVisual.CharacterAnimator != null)
         {

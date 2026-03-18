@@ -3,10 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
-public class CharacterCombat : MonoBehaviour
+public class CharacterCombat : CharacterSystem
 {
-    [SerializeField] private Character _character;
-
     [Header("Expertise & Memory")]
     [SerializeField] private List<CombatStyleExpertise> _knownStyles = new List<CombatStyleExpertise>();
     [SerializeField] private CombatStyleExpertise _currentCombatStyleExpertise;
@@ -36,8 +34,9 @@ public class CharacterCombat : MonoBehaviour
     public CombatStyleExpertise CurrentCombatStyleExpertise => _currentCombatStyleExpertise;
     public bool IsCombatMode => _isCombatMode;
 
-    private void Awake()
+    protected override void Awake()
     {
+        base.Awake();
         CombatStyleSO defaultStyle = Resources.Load<CombatStyleSO>("Data/CombatStyle/Barehands_NoStyle");
         if (defaultStyle != null)
         {
@@ -93,6 +92,10 @@ public class CharacterCombat : MonoBehaviour
 
         _isCombatMode = enabled;
         RefreshCurrentAnimator();
+        
+        // Broadcast the change to all other subsystems securely via the Character hub
+        _character.SetCombatState(enabled);
+        
         OnCombatModeChanged?.Invoke(enabled);
     }
     #endregion
@@ -434,17 +437,10 @@ public class CharacterCombat : MonoBehaviour
 
         _character.Stats.Health.DecreaseCurrentAmount(amount);
         _lastCombatActionTime = Time.time;
+        
+        // La méthode ChangeCombatMode déclenche naturellement HandleCombatStateChanged 
+        // dans les sous-systèmes, ce qui coupera automatiquement les interactions/actions en cours.
         ChangeCombatMode(true);
-
-        // SÉCURITÉ SUPPLÉMENTAIRE : Interrompre l'action et l'interaction en cours lors de tout dégât
-        if (_character.CharacterActions != null)
-        {
-            _character.CharacterActions.ClearCurrentAction();
-        }
-        if (_character.CharacterInteraction != null)
-        {
-            _character.CharacterInteraction.EndInteraction();
-        }
 
         OnDamageTaken?.Invoke(amount, type);
 

@@ -3,17 +3,13 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.U2D.Animation;
 
-public class CharacterEquipment : MonoBehaviour
+public class CharacterEquipment : CharacterSystem
 {
-    [SerializeField] private Character character;
     // Cet événement sera déclenché chaque fois qu'un équipement change
     public event Action OnEquipmentChanged;
 
-    public Character Character
-    {
-        get => character;
-        set => character = value;
-    }
+    // Raccourci de compatibilité pour le code existant
+    private Character character => _character;
 
     [Header("Combat")]
     [SerializeField] private WeaponInstance _weapon;
@@ -549,13 +545,42 @@ public class CharacterEquipment : MonoBehaviour
             return true;
         }
 
-        var handsController = character.CharacterVisual?.BodyPartsController?.HandsController;
+        var handsController = _character.CharacterVisual?.BodyPartsController?.HandsController;
         if (handsController != null && handsController.CarriedItem != null && handsController.CarriedItem.ItemSO == itemSO)
         {
             return true;
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Tente de prendre un objet spécifiquement dans les mains (via HandsController).
+    /// </summary>
+    public bool CarryItemInHand(ItemInstance item)
+    {
+        var handsController = _character.CharacterVisual?.BodyPartsController?.HandsController;
+        if (handsController != null && handsController.AreHandsFree())
+        {
+            return handsController.CarryItem(item);
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Fait tomber physiquement l'objet actuellement tenu dans les mains.
+    /// </summary>
+    public void DropItemFromHand()
+    {
+        var handsController = _character.CharacterVisual?.BodyPartsController?.HandsController;
+        if (handsController != null && handsController.IsCarrying)
+        {
+            ItemInstance droppedItem = handsController.DropCarriedItem();
+            if (droppedItem != null)
+            {
+                _character.DropItem(droppedItem);
+            }
+        }
     }
 
     /// <summary>
@@ -567,7 +592,7 @@ public class CharacterEquipment : MonoBehaviour
         if (item == null) return false;
 
         var inventory = GetInventory();
-        if (inventory != null && inventory.AddItem(item, character))
+        if (inventory != null && inventory.AddItem(item, _character))
         {
             if (_inventoryNotificationChannel != null)
                 _inventoryNotificationChannel.Raise();
@@ -575,12 +600,16 @@ public class CharacterEquipment : MonoBehaviour
             return true;
         }
 
-        var handsController = character.CharacterVisual?.BodyPartsController?.HandsController;
-        if (handsController != null && handsController.AreHandsFree())
-        {
-            return handsController.CarryItem(item);
-        }
+        return CarryItemInHand(item);
+    }
 
-        return false;
+    protected override void HandleIncapacitated(Character character)
+    {
+        DropItemFromHand();
+    }
+
+    protected override void HandleCombatStateChanged(bool inCombat)
+    {
+        if (inCombat) DropItemFromHand();
     }
 }

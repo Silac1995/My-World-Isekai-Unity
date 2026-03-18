@@ -1,9 +1,8 @@
 using System;
 using UnityEngine;
 
-public class CharacterInteraction : MonoBehaviour
+public class CharacterInteraction : CharacterSystem
 {
-    [SerializeField] private Character _character;
     [SerializeField] private Character _currentTarget;
     [SerializeField] private Collider _interactionZone;
     [SerializeField] private GameObject _interactionActionPrefab;
@@ -656,5 +655,21 @@ public class CharacterInteraction : MonoBehaviour
         if (npc == null) return;
         
         // Native movement manages itself through the Coroutine and CharacterMovement natively.
+    }
+
+    protected override void HandleIncapacitated(Character character)
+    {
+        if (IsInteractionProcessActive)
+        {
+            EndInteraction();
+        }
+    }
+
+    protected override void HandleCombatStateChanged(bool inCombat)
+    {
+        if (inCombat && IsInteractionProcessActive)
+        {
+            EndInteraction();
+        }
     }
 }
