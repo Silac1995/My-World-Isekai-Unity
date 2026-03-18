@@ -16,12 +16,13 @@ This skill details the architecture of the combat system in the project and the 
 ## How to use it
 
 ### 1. The BattleManager (Global Management)
-The `BattleManager` is the supreme entity of a battle, usually instantiated when a clash begins.
+The `BattleManager` is the supreme entity of a battle, usually instantiated when a clash begins. It strictly delegates its responsibilities to adhere to SOLID principles:
 - **BattleTeams**: It always maintains two teams (Initiator vs Target). We do *not* support 3-team free-for-alls in a single instance.
-- **CombatEngagement**: NEW SYSTEM. The BattleManager manages brawl "subgroups" (e.g., the Warrior hits the Mage, while the Archer hits the Rogue within the same battle). Handled by the internal `_activeEngagements` list.
-- **BattleZone**: A physical zone (`BoxCollider` isTrigger) and pathfinding volume (`NavMeshModifierVolume`) is dynamically generated at the center of the initial clash to mark the terrain.
+- **BattleZoneController**: A delegated pure C# class that handles the physical terrain. It dynamically generates the boundary (`BoxCollider` isTrigger), pathfinding deterrent (`NavMeshModifierVolume`), and visual `LineRenderer` to mark the combat zone.
+- **CombatEngagementCoordinator**: A delegated pure C# class that mathematically manages brawl "subgroups" (`_activeEngagements`). It computes spatial centers, merges nearby fights, and safely splits massive crowds to prevent actor overlapping.
+- **Victory Condition**: The manager continuously polls `.IsTeamEliminated()` in its `Update()` loop. This physical guarantee ensures the battle definitively ends if an entire team is wiped out or silently despawned, rather than relying exclusively on volatile event triggers.
+- **Robust Teardown**: Upon ending, the manager wraps `LeaveBattle` calls in a `try-catch` block to quarantine aggressive UI exceptions (like `PlayerUI` crashing) from aborting the shutdown script. It also unsubscribes all character events explicitly in `OnDestroy()` to prevent zombie memory leaks.
 - **Tick System**: It is the `BattleManager` that sets the pace (`PerformBattleTick()`), and *not the Update method of each character*.
-- **Performance**: Always guard expensive debug logic (e.g., `UpdateDebugEngagements`) with `#if UNITY_EDITOR` to ensure optimal performance in production builds.
 
 ### 2. CharacterCombat (Local Logic)
 This is the component every NPC/Player has in order to fight.
