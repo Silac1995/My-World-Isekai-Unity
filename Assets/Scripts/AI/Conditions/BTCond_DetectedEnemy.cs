@@ -34,17 +34,25 @@ namespace MWI.AI
                 if (self.CharacterTraits != null)
                 {
                     float aggressivity = self.CharacterTraits.GetAggressivity();
-                    float aggroChance = aggressivity * aggressivity * 0.3f;
 
-                    if (aggroChance > 0f && Random.value < aggroChance)
+                    // Gated curve to avoid permanent bloodbaths at low/medium aggressivity.
+                    // Must be highly aggressive (>= 0.7) to spontaneously attack a random stranger.
+                    if (aggressivity >= 0.7f)
                     {
-                        Debug.Log($"<color=red>[BT Aggro]</color> {self.CharacterName} attaque {target.CharacterName} spontanément !");
-                        if (self.CharacterSpeech != null)
-                            self.CharacterSpeech.Say("You're in my way!");
+                        // Ex: à 1.0 -> 0.3^2 = 0.09 * 0.2 = ~1.8% de chance par cible toutes les 2s
+                        // Ex: à 0.8 -> 0.1^2 = 0.01 * 0.2 = ~0.2% de chance par cible toutes les 2s
+                        float aggroChance = Mathf.Pow(aggressivity - 0.7f, 2f) * 0.2f;
 
-                        bb.Set(Blackboard.KEY_DETECTED_CHARACTER, target);
-                        bb.Set(Blackboard.KEY_COMBAT_TARGET, target);
-                        return BTNodeStatus.Success;
+                        if (aggroChance > 0f && Random.value < aggroChance)
+                        {
+                            Debug.Log($"<color=red>[BT Aggro]</color> {self.CharacterName} attaque {target.CharacterName} spontanément !");
+                            if (self.CharacterSpeech != null)
+                                self.CharacterSpeech.Say("You're in my way!");
+
+                            bb.Set(Blackboard.KEY_DETECTED_CHARACTER, target);
+                            bb.Set(Blackboard.KEY_COMBAT_TARGET, target);
+                            return BTNodeStatus.Success;
+                        }
                     }
                 }
 
@@ -52,9 +60,13 @@ namespace MWI.AI
                 var rel = self.CharacterRelation.GetRelationshipWith(target);
                 if (rel != null && rel.RelationValue <= -10)
                 {
-                    float aggroChance = 0.2f;
+                    // Much gentler curve: Base 2% chance (+1% per 0.1 aggro).
+                    // Prevents 25% coinflips every 2 seconds causing instant battles across town.
+                    float aggroChance = 0.02f;
                     if (self.CharacterTraits != null)
-                        aggroChance += self.CharacterTraits.GetAggressivity() * 0.5f;
+                    {
+                        aggroChance += self.CharacterTraits.GetAggressivity() * 0.10f;
+                    }
 
                     if (Random.value < aggroChance)
                     {
