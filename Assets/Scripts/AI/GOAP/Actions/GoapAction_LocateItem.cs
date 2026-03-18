@@ -156,7 +156,7 @@ namespace MWI.AI
                         _job.WaitCooldown = 2f;
                         
                         // Notifier le LogisticsManager que les items ont été volés/détruits
-                        var logisticsManager = source.Jobs.OfType<JobLogisticsManager>().FirstOrDefault();
+                        var logisticsManager = source.LogisticsManager;
                         if (logisticsManager != null)
                         {
                             logisticsManager.ReportMissingReservedItem(_job.CurrentOrder);

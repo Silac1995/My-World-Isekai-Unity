@@ -323,7 +323,7 @@ public class JobTransporter : Job
 
         if (_workplace != null)
         {
-            var manager = _workplace.GetJobsOfType<JobLogisticsManager>().FirstOrDefault();
+            var manager = _workplace.LogisticsManager;
             if (manager != null)
             {
                 TransportOrder next = manager.GetNextAvailableTransportOrder();
@@ -348,7 +348,7 @@ public class JobTransporter : Job
         if (CurrentOrder != null)
         {
             // Update the Transporter's internal LogisticsManager
-            var manager = _workplace.GetJobsOfType<JobLogisticsManager>().FirstOrDefault();
+            var manager = _workplace.LogisticsManager;
             if (manager != null)
             {
                 manager.UpdateTransportOrderProgress(CurrentOrder, amount);
@@ -385,7 +385,7 @@ public class JobTransporter : Job
         
         if (dropFromQueue && CurrentOrder != null)
         {
-            var myManager = _workplace.GetJobsOfType<JobLogisticsManager>().FirstOrDefault();
+            var myManager = _workplace.LogisticsManager;
             if (myManager != null)
             {
                 myManager.CancelActiveTransportOrder(CurrentOrder);

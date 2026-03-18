@@ -8,6 +8,7 @@ using UnityEngine;
 /// et override InitializeJobs() pour définir ses postes de travail.
 /// </summary>
 [RequireComponent(typeof(BuildingTaskManager))]
+[RequireComponent(typeof(BuildingLogisticsManager))]
 public abstract class CommercialBuilding : Building
 {
     [Header("Commercial")]
@@ -20,6 +21,7 @@ public abstract class CommercialBuilding : Building
     protected List<ItemInstance> _inventory = new List<ItemInstance>();
 
     protected BuildingTaskManager _taskManager;
+    protected BuildingLogisticsManager _logisticsManager;
 
     public Character Owner => _owner;
     public Community OwnerCommunity => _ownerCommunity;
@@ -29,6 +31,7 @@ public abstract class CommercialBuilding : Building
     public IReadOnlyList<ItemInstance> Inventory => _inventory;
     
     public BuildingTaskManager TaskManager => _taskManager;
+    public BuildingLogisticsManager LogisticsManager => _logisticsManager;
 
     /// <summary>
     /// Le building est opérationnel si tous les jobs sont occupés par un worker.
@@ -43,6 +46,12 @@ public abstract class CommercialBuilding : Building
         if (_taskManager == null)
         {
             _taskManager = gameObject.AddComponent<BuildingTaskManager>();
+        }
+        
+        _logisticsManager = gameObject.GetComponent<BuildingLogisticsManager>();
+        if (_logisticsManager == null)
+        {
+            _logisticsManager = gameObject.AddComponent<BuildingLogisticsManager>();
         }
         
         InitializeJobs();
@@ -400,20 +409,18 @@ public abstract class CommercialBuilding : Building
         {
             Debug.LogWarning($"<color=orange>[CommercialBuilding]</color> {buildingName} : Audit détecte {ghostlyInstances.Count} objets logiques sans réalité physique ! Nettoyage...");
             
-            var logistics = _jobs.OfType<JobLogisticsManager>().FirstOrDefault();
-
             foreach (var ghost in ghostlyInstances)
             {
                 _inventory.Remove(ghost);
 
                 // Si cet objet fantôme était réservé par un logisticien pour une commande (Transport/Achats), on le signale.
-                if (logistics != null)
+                if (LogisticsManager != null)
                 {
                     // Trouver quelle commande avait réservé cet item fantôme
-                    var brokenTransportOrder = logistics.PlacedTransportOrders.FirstOrDefault(t => t.ReservedItems.Contains(ghost));
+                    var brokenTransportOrder = LogisticsManager.PlacedTransportOrders.FirstOrDefault(t => t.ReservedItems.Contains(ghost));
                     if (brokenTransportOrder != null)
                     {
-                        logistics.ReportMissingReservedItem(brokenTransportOrder);
+                        LogisticsManager.ReportMissingReservedItem(brokenTransportOrder);
                     }
                 }
             }

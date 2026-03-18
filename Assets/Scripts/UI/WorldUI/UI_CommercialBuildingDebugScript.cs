@@ -12,6 +12,8 @@ public class UI_CommercialBuildingDebugScript : MonoBehaviour
     [SerializeField] private TextMeshProUGUI _ownerText;
     [SerializeField] private TextMeshProUGUI _jobsText;
     [SerializeField] private TextMeshProUGUI _taskManagerStateText;
+    [SerializeField] private TextMeshProUGUI _logisticsText;
+    [SerializeField] private TextMeshProUGUI _inventoryText;
 
     private void Update()
     {
@@ -20,6 +22,8 @@ public class UI_CommercialBuildingDebugScript : MonoBehaviour
         UpdateOwner();
         UpdateJobsAndWorkers();
         UpdateTaskManager();
+        UpdateLogisticsManager();
+        UpdateInventory();
     }
 
     private void UpdateOwner()
@@ -124,5 +128,122 @@ public class UI_CommercialBuildingDebugScript : MonoBehaviour
         }
 
         _taskManagerStateText.text = sb.ToString();
+    }
+
+    private void UpdateLogisticsManager()
+    {
+        if (_logisticsText == null) return;
+
+        var logistics = _building.GetComponent<BuildingLogisticsManager>();
+        if (logistics == null)
+        {
+            _logisticsText.text = "<color=#888888>No LogisticsManager attached.</color>";
+            return;
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.AppendLine("<b>Logistics Manager:</b>");
+
+        if (logistics.HasPendingOrders)
+        {
+            sb.AppendLine("<color=#FFA500>[!] Has Pending Orders in Queue</color>");
+        }
+
+        var activeOrders = logistics.ActiveOrders;
+        if (activeOrders != null && activeOrders.Count > 0)
+        {
+            sb.AppendLine($"<color=#00FFFF>Active Buy Orders Received ({activeOrders.Count}):</color>");
+            foreach (var o in activeOrders)
+            {
+                string itemName = o.ItemToTransport != null ? o.ItemToTransport.ItemName : "???";
+                string clientName = o.Destination != null ? o.Destination.BuildingName : "???";
+                string sourceName = o.Source != null ? o.Source.BuildingName : "???";
+                string clientBoss = o.ClientBoss != null ? o.ClientBoss.CharacterName : "None";
+                string interBoss = o.IntermediaryBoss != null ? o.IntermediaryBoss.CharacterName : "None";
+
+                sb.AppendLine($"  - {itemName} <color=#888888>[{o.DeliveredQuantity} Deliv | {o.DispatchedQuantity} Disp | {o.Quantity} Total]</color>");
+                sb.AppendLine($"    └ <color=#888888>Src: {sourceName} | Dst: {clientName}</color>");
+                sb.AppendLine($"    └ <color=#888888>Days: {o.RemainingDays} | Boss: {clientBoss} | Inter: {interBoss}</color>");
+            }
+        }
+
+        var placedBuy = logistics.PlacedBuyOrders;
+        if (placedBuy != null && placedBuy.Count > 0)
+        {
+            sb.AppendLine($"<color=#FFFF00>Placed Buy Orders ({placedBuy.Count}):</color>");
+            foreach (var o in placedBuy)
+            {
+                string itemName = o.ItemToTransport != null ? o.ItemToTransport.ItemName : "???";
+                string supplierName = o.Source != null ? o.Source.BuildingName : "???";
+                string clientName = o.Destination != null ? o.Destination.BuildingName : "???";
+                string clientBoss = o.ClientBoss != null ? o.ClientBoss.CharacterName : "None";
+                string interBoss = o.IntermediaryBoss != null ? o.IntermediaryBoss.CharacterName : "None";
+
+                sb.AppendLine($"  - {itemName} <color=#888888>[{o.DeliveredQuantity} Deliv | {o.DispatchedQuantity} Disp | {o.Quantity} Total]</color>");
+                sb.AppendLine($"    └ <color=#888888>Src: {supplierName} | Dst: {clientName}</color>");
+                sb.AppendLine($"    └ <color=#888888>Days: {o.RemainingDays} | Boss: {clientBoss} | Inter: {interBoss}</color>");
+            }
+        }
+
+        var placedTransport = logistics.PlacedTransportOrders;
+        if (placedTransport != null && placedTransport.Count > 0)
+        {
+            sb.AppendLine($"<color=#00FF00>Placed Transport ({placedTransport.Count}):</color>");
+            foreach (var o in placedTransport)
+            {
+                string itemName = o.ItemToTransport != null ? o.ItemToTransport.ItemName : "???";
+                string destName = o.Destination != null ? o.Destination.BuildingName : "???";
+                string sourceName = o.Source != null ? o.Source.BuildingName : "???";
+                
+                sb.AppendLine($"  - {itemName} <color=#888888>[{o.DeliveredQuantity} Deliv | {o.InTransitQuantity} Transit | {o.Quantity} Total]</color>");
+                sb.AppendLine($"    └ <color=#888888>Src: {sourceName} | Dst: {destName}</color>");
+            }
+        }
+
+        var activeCrafting = logistics.ActiveCraftingOrders;
+        if (activeCrafting != null && activeCrafting.Count > 0)
+        {
+            sb.AppendLine($"<color=#FFA500>Active Crafting ({activeCrafting.Count}):</color>");
+            foreach (var o in activeCrafting)
+            {
+                string itemName = o.ItemToCraft != null ? o.ItemToCraft.ItemName : "???";
+                sb.AppendLine($"  - {o.CraftedQuantity}/{o.Quantity}x {itemName} [Completed: {o.IsCompleted}]");
+            }
+        }
+
+        if (activeOrders.Count == 0 && placedBuy.Count == 0 && placedTransport.Count == 0 && activeCrafting.Count == 0 && !logistics.HasPendingOrders)
+        {
+            sb.AppendLine("<color=#888888>No active logistics operations.</color>");
+        }
+
+        _logisticsText.text = sb.ToString();
+    }
+
+    private void UpdateInventory()
+    {
+        if (_inventoryText == null) return;
+
+        StringBuilder sb = new StringBuilder();
+        sb.AppendLine("<b>Storage Inventory:</b>");
+
+        var inventory = _building.Inventory;
+        if (inventory == null || inventory.Count == 0)
+        {
+            sb.AppendLine("<color=#888888>Empty.</color>");
+        }
+        else
+        {
+            var grouped = inventory
+                .Where(i => i != null && i.ItemSO != null)
+                .GroupBy(i => i.ItemSO.ItemName);
+
+            sb.AppendLine($"<color=#00FF00>Total Items: {inventory.Count}</color>");
+            foreach (var group in grouped)
+            {
+                sb.AppendLine($"  - {group.Key}: {group.Count()}");
+            }
+        }
+
+        _inventoryText.text = sb.ToString();
     }
 }

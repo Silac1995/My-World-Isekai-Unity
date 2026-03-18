@@ -11,7 +11,7 @@ public class JobBlacksmith : JobCrafter
 
     private CraftingStation _currentStation;
     private CraftingOrder _currentOrder;
-    private JobLogisticsManager _manager;
+    private BuildingLogisticsManager _manager;
 
     public CraftingStation CurrentStation => _currentStation;
 
@@ -82,7 +82,7 @@ public class JobBlacksmith : JobCrafter
     {
         if (_manager == null)
         {
-            _manager = cb.GetJobsOfType<JobLogisticsManager>().FirstOrDefault();
+            _manager = cb.LogisticsManager;
         }
 
         if (_manager == null)

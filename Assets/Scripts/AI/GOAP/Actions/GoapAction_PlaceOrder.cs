@@ -24,6 +24,7 @@ public class GoapAction_PlaceOrder : GoapAction
     public override float Cost => 0.1f; // Doit être la priorité absolue (Cost très bas) par rapport au Gathering (0.5f)
 
     private JobLogisticsManager _manager;
+    private BuildingLogisticsManager BManager => (_manager != null && _manager.Workplace != null) ? _manager.Workplace.LogisticsManager : null;
     private bool _isComplete = false;
     private bool _isMoving = false;
 
@@ -36,37 +37,37 @@ public class GoapAction_PlaceOrder : GoapAction
 
     public override bool IsValid(Character worker)
     {
-        return _manager != null && _manager.HasPendingOrders && !_isComplete;
+        return BManager != null && BManager.HasPendingOrders && !_isComplete;
     }
 
     public override void Execute(Character worker)
     {
         if (_isComplete) return;
 
-        if (!_manager.HasPendingOrders)
+        if (BManager == null || !BManager.HasPendingOrders)
         {
             _isComplete = true;
             return;
         }
 
-        var pendingOrder = _manager.PeekPendingOrder();
+        var pendingOrder = BManager.PeekPendingOrder();
         var targetBuilding = pendingOrder.TargetBuilding;
 
         if (targetBuilding == null)
         {
-            _manager.DequeuePendingOrder();
+            BManager.DequeuePendingOrder();
             return; 
         }
 
-        var targetLogistics = targetBuilding.Jobs.OfType<JobLogisticsManager>().FirstOrDefault();
-        if (targetLogistics == null || targetLogistics.Worker == null)
+        var targetJobLogistics = targetBuilding.Jobs.OfType<JobLogisticsManager>().FirstOrDefault();
+        if (targetJobLogistics == null || targetJobLogistics.Worker == null)
         {
-            Debug.LogWarning($"<color=orange>[Logistics]</color> {targetBuilding.BuildingName} n'a pas de manager pour recevoir la commande.");
-            _manager.DequeuePendingOrder(); 
+            Debug.LogWarning($"<color=orange>[Logistics]</color> {targetBuilding.BuildingName} n'a pas de worker assigné pour recevoir la commande.");
+            BManager.DequeuePendingOrder(); 
             return; 
         }
 
-        var targetWorker = targetLogistics.Worker;
+        var targetWorker = targetJobLogistics.Worker;
         var movement = worker.CharacterMovement;
 
         if (movement == null) return;
@@ -106,19 +107,19 @@ public class GoapAction_PlaceOrder : GoapAction
         }
 
         // 4. Exécuter le transfert de la commande (Business Logic)
-        ExecuteOrderTransfer(worker, targetWorker, targetLogistics, pendingOrder);
+        ExecuteOrderTransfer(worker, targetWorker, targetBuilding, pendingOrder);
     }
 
-    private void ExecuteOrderTransfer(Character worker, Character targetWorker, JobLogisticsManager targetLogistics, JobLogisticsManager.PendingOrder firstOrder)
+    private void ExecuteOrderTransfer(Character worker, Character targetWorker, CommercialBuilding targetBuilding, BuildingLogisticsManager.PendingOrder firstOrder)
     {
         // Extraire TOUTES les commandes en attente pour CE bâtiment spécifique
-        List<JobLogisticsManager.PendingOrder> ordersForTarget = new List<JobLogisticsManager.PendingOrder>();
-        List<JobLogisticsManager.PendingOrder> remainingOrders = new List<JobLogisticsManager.PendingOrder>();
+        List<BuildingLogisticsManager.PendingOrder> ordersForTarget = new List<BuildingLogisticsManager.PendingOrder>();
+        List<BuildingLogisticsManager.PendingOrder> remainingOrders = new List<BuildingLogisticsManager.PendingOrder>();
 
-        while (_manager.HasPendingOrders)
+        while (BManager.HasPendingOrders)
         {
-            var pOrder = _manager.PeekPendingOrder();
-            _manager.DequeuePendingOrder();
+            var pOrder = BManager.PeekPendingOrder();
+            BManager.DequeuePendingOrder();
 
             if (pOrder.TargetBuilding == firstOrder.TargetBuilding)
             {
@@ -133,7 +134,7 @@ public class GoapAction_PlaceOrder : GoapAction
         // Remettre les commandes qui n'étaient pas pour ce bâtiment
         foreach(var remaining in remainingOrders)
         {
-            _manager.EnqueuePendingOrder(remaining);
+            BManager.EnqueuePendingOrder(remaining);
         }
 
         // Visuals (Face-à-face)
@@ -142,7 +143,7 @@ public class GoapAction_PlaceOrder : GoapAction
 
         // Au lieu de transférer magiquement les données, on lance une interaction formelle.
         // Cela respecte l'architecture dictée par les skills job_system et logistics_cycle.
-        InteractionPlaceOrder interaction = new InteractionPlaceOrder(worker, targetWorker, targetLogistics.Workplace, ordersForTarget);
+        InteractionPlaceOrder interaction = new InteractionPlaceOrder(worker, targetWorker, targetBuilding, ordersForTarget);
         
         // On demande au CharacterInteraction d'exécuter cette interaction
         if (worker.CharacterInteraction != null)
@@ -156,7 +157,7 @@ public class GoapAction_PlaceOrder : GoapAction
                 Debug.LogWarning($"<color=orange>[Logistics]</color> L'interaction PlaceOrder a échoué à démarrer (Cible occupée ?). Remise en file de {ordersForTarget.Count} commande(s).");
                 foreach(var failOrder in ordersForTarget)
                 {
-                    _manager.EnqueuePendingOrder(failOrder);
+                    BManager.EnqueuePendingOrder(failOrder);
                 }
             }
         }

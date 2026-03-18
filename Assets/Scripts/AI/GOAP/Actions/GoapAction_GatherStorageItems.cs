@@ -51,9 +51,11 @@ public class GoapAction_GatherStorageItems : GoapAction
 
         bool isCarrying = GetCarriedItem(worker) != null;
 
+        var bManager = _building?.LogisticsManager;
+
         // Si on a des commandes en attente ET qu'on n'est pas déjà en train de transporter un objet, on invalide
         // l'action pour forcer la GOAP à l'annuler et repasser sur GoapAction_PlaceOrder.
-        if (!isCarrying && _manager != null && _manager.HasPendingOrders)
+        if (!isCarrying && bManager != null && bManager.HasPendingOrders)
         {
             return false;
         }
@@ -83,8 +85,9 @@ public class GoapAction_GatherStorageItems : GoapAction
                     return;
                 }
 
+                var bManager = _building?.LogisticsManager;
                 // If we are empty-handed AND we have a pending order, we should stop gathering and allow re-planning (so we prioritize PlaceOrder).
-                if (_manager != null && _manager.HasPendingOrders)
+                if (bManager != null && bManager.HasPendingOrders)
                 {
                     _isComplete = true; // Prioritize PlaceOrder!
                     return;
@@ -239,9 +242,10 @@ public class GoapAction_GatherStorageItems : GoapAction
         _building.AddToInventory(item);
         Debug.Log($"<color=green>[Gathering]</color> {worker.CharacterName} a rangé {item.ItemSO.ItemName} dans le stockage.");
         
-        if (_manager != null)
+        var bManager = _building?.LogisticsManager;
+        if (bManager != null)
         {
-            _manager.OnItemGathered(item.ItemSO);
+            bManager.OnItemGathered(item.ItemSO);
         }
 
         // On libère le verrou d'action

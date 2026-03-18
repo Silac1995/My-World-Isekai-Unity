@@ -45,7 +45,7 @@ namespace MWI.AI
                 // Lost the race! Someone else destroyed/picked up the physical item before we started grabbing it
                 Debug.Log($"<color=orange>[PickupItem]</color> {_job.Worker.CharacterName} lost the race to pick up the item. Cooldown applied.");
                 
-                var logisticsManager = _job.CurrentOrder.Source.Jobs.OfType<JobLogisticsManager>().FirstOrDefault();
+                var logisticsManager = _job.CurrentOrder.Source.LogisticsManager;
                 if (logisticsManager != null) 
                 { 
                     logisticsManager.ReportMissingReservedItem(_job.CurrentOrder); 
@@ -65,7 +65,7 @@ namespace MWI.AI
             if (!success)
             {
                 Debug.LogWarning($"<color=orange>[PickupItem]</color> Instance reservee introuvable dans l'inventaire logique ! {_job.Worker.CharacterName} lost the race in logic. Applying cooldown.");
-                var logisticsManager = source.Jobs.OfType<JobLogisticsManager>().FirstOrDefault();
+                var logisticsManager = source.LogisticsManager;
                 if (logisticsManager != null) 
                 { 
                     logisticsManager.ReportMissingReservedItem(_job.CurrentOrder); 
