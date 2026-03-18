@@ -132,7 +132,7 @@ public class GoapAction_PickupLooseItem : GoapAction
             if (_targetWorldItem == null)
             {
                 Debug.Log($"<color=red>[GOAP Pickup]</color> {worker.CharacterName} : La cible WorldItem a disparu pendant le trajet !");
-                _building.TaskManager?.UnclaimTask(_assignedTask);
+                _building.TaskManager?.UnclaimTask(_assignedTask, worker);
                 _assignedTask = null;
                 _targetWorldItem = null;
                 _isComplete = true;
@@ -146,7 +146,7 @@ public class GoapAction_PickupLooseItem : GoapAction
                 worker.PathingMemory.RecordFailure(_targetWorldItem.gameObject.GetInstanceID());
                 
                 // Le chemin a été effacé mais on n'est pas arrivé : on annule et on cherche de nouveau
-                _building.TaskManager?.UnclaimTask(_assignedTask);
+                _building.TaskManager?.UnclaimTask(_assignedTask, worker);
                 _assignedTask = null;
                 _targetWorldItem = null;
                 return;
@@ -203,7 +203,7 @@ public class GoapAction_PickupLooseItem : GoapAction
                 if (!_isComplete) 
                 {
                     Debug.Log($"<color=red>[GOAP Pickup]</color> {worker.CharacterName} : Ramassage interrompu !");
-                    _building.TaskManager?.UnclaimTask(_assignedTask);
+                    _building.TaskManager?.UnclaimTask(_assignedTask, worker);
                     _assignedTask = null;
                     _isComplete = true;
                 }
@@ -271,7 +271,7 @@ public class GoapAction_PickupLooseItem : GoapAction
     {
         if (_assignedTask != null)
         {
-            _building.TaskManager?.UnclaimTask(_assignedTask);
+            _building.TaskManager?.UnclaimTask(_assignedTask, worker);
             _assignedTask = null;
         }
         

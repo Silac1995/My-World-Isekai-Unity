@@ -138,7 +138,7 @@ public class GoapAction_GatherResources : GoapAction
             if (_currentTarget == null)
             {
                 Debug.Log($"<color=red>[GOAP Gather]</color> {worker.CharacterName} : La cible GatherableObject a disparu pendant le trajet !");
-                _building.TaskManager?.UnclaimTask(_assignedTask);
+                _building.TaskManager?.UnclaimTask(_assignedTask, worker);
                 _assignedTask = null;
                 _currentTarget = null;
                 _isComplete = true;
@@ -189,7 +189,7 @@ public class GoapAction_GatherResources : GoapAction
                         }
                         else
                         {
-                            _building.TaskManager?.UnclaimTask(_assignedTask); // Remettre dans la file
+                            _building.TaskManager?.UnclaimTask(_assignedTask, worker); // Remettre dans la file
                         }
                         
                         _assignedTask = null;
@@ -199,7 +199,7 @@ public class GoapAction_GatherResources : GoapAction
                     if (!worker.CharacterActions.ExecuteAction(_gatherAction))
                     {
                         Debug.Log($"<color=orange>[GOAP Gather]</color> {worker.CharacterName} ne peut pas lancer la récolte.");
-                        _building.TaskManager?.UnclaimTask(_assignedTask);
+                        _building.TaskManager?.UnclaimTask(_assignedTask, worker);
                         _assignedTask = null;
                         _isComplete = true;
                     }
@@ -212,7 +212,7 @@ public class GoapAction_GatherResources : GoapAction
                     {
                         worker.PathingMemory.RecordFailure(_currentTarget.gameObject.GetInstanceID());
                     }
-                    _building.TaskManager?.UnclaimTask(_assignedTask);
+                    _building.TaskManager?.UnclaimTask(_assignedTask, worker);
                     _assignedTask = null;
                     _currentTarget = null;
                     _isComplete = true;
@@ -270,7 +270,7 @@ public class GoapAction_GatherResources : GoapAction
         if (_assignedTask != null)
         {
             // On libère la tâche si elle n'a pas été complétée
-            _building.TaskManager?.UnclaimTask(_assignedTask);
+            _building.TaskManager?.UnclaimTask(_assignedTask, worker);
             _assignedTask = null;
         }
 

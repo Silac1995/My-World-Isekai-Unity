@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -11,11 +12,16 @@ public abstract class BuildingTask
     public MonoBehaviour Target { get; protected set; }
 
     /// <summary>
-    /// The worker who has currently claimed this task.
+    /// The workers who have currently claimed this task.
     /// </summary>
-    public Character ClaimedBy { get; private set; }
+    public List<Character> ClaimedByWorkers { get; private set; } = new List<Character>();
 
-    public bool IsClaimed => ClaimedBy != null;
+    public bool IsClaimed => ClaimedByWorkers.Count > 0;
+    
+    /// <summary>
+    /// The maximum number of workers that can claim this task simultaneously.
+    /// </summary>
+    public virtual int MaxWorkers => 1;
 
     protected BuildingTask(MonoBehaviour target)
     {
@@ -27,13 +33,21 @@ public abstract class BuildingTask
     /// </summary>
     public abstract bool IsValid();
 
-    public void Claim(Character worker)
+    public virtual bool CanBeClaimed()
     {
-        ClaimedBy = worker;
+        return ClaimedByWorkers.Count < MaxWorkers;
     }
 
-    public void Unclaim()
+    public void Claim(Character worker)
     {
-        ClaimedBy = null;
+        if (!ClaimedByWorkers.Contains(worker))
+        {
+            ClaimedByWorkers.Add(worker);
+        }
+    }
+
+    public void Unclaim(Character worker)
+    {
+        ClaimedByWorkers.Remove(worker);
     }
 }

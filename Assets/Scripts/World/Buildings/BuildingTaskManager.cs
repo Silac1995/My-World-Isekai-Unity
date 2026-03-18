@@ -44,7 +44,7 @@ public class BuildingTaskManager : MonoBehaviour
 
         foreach (var task in _availableTasks.OfType<T>())
         {
-            if (task.IsValid() && (predicate == null || predicate(task)))
+            if (task.IsValid() && task.CanBeClaimed() && (predicate == null || predicate(task)))
             {
                 float dist = Vector3.Distance(worker.transform.position, task.Target.transform.position);
                 if (dist < bestDist)
@@ -57,9 +57,17 @@ public class BuildingTaskManager : MonoBehaviour
 
         if (bestTask != null)
         {
-            _availableTasks.Remove(bestTask);
             bestTask.Claim(worker);
-            _inProgressTasks.Add(bestTask);
+            
+            if (!bestTask.CanBeClaimed())
+            {
+                _availableTasks.Remove(bestTask);
+            }
+            
+            if (!_inProgressTasks.Contains(bestTask))
+            {
+                _inProgressTasks.Add(bestTask);
+            }
             Debug.Log($"<color=green>[TaskManager]</color> {worker.CharacterName} claimed task {typeof(T).Name} for {bestTask.Target.name}.");
         }
 
@@ -69,19 +77,23 @@ public class BuildingTaskManager : MonoBehaviour
     /// <summary>
     /// Removes the claim on a task and puts it back in the available pool.
     /// </summary>
-    public void UnclaimTask(BuildingTask task)
+    public void UnclaimTask(BuildingTask task, Character worker)
     {
         if (task != null && _inProgressTasks.Contains(task))
         {
-            _inProgressTasks.Remove(task);
-            task.Unclaim();
+            task.Unclaim(worker);
 
-            if (task.IsValid())
+            if (!task.IsClaimed)
+            {
+                _inProgressTasks.Remove(task);
+            }
+
+            if (task.IsValid() && task.CanBeClaimed() && !_availableTasks.Contains(task))
             {
                 _availableTasks.Add(task);
                 Debug.Log($"<color=orange>[TaskManager]</color> Task unclaimed and returned to pool: {task.GetType().Name} for {task.Target.name}.");
             }
-            else
+            else if (!task.IsValid())
             {
                 Debug.Log($"<color=orange>[TaskManager]</color> Task unclaimed but target invalid, discarded: {task.GetType().Name}.");
             }
@@ -117,12 +129,12 @@ public class BuildingTaskManager : MonoBehaviour
     /// </summary>
     public bool HasAvailableOrClaimedTask<T>(Character worker = null, System.Predicate<T> predicate = null) where T : BuildingTask
     {
-        bool hasAvailable = _availableTasks.OfType<T>().Any(t => t.IsValid() && (predicate == null || predicate(t)));
+        bool hasAvailable = _availableTasks.OfType<T>().Any(t => t.IsValid() && t.CanBeClaimed() && (predicate == null || predicate(t)));
         if (hasAvailable) return true;
 
         if (worker != null)
         {
-            return _inProgressTasks.OfType<T>().Any(t => t.ClaimedBy == worker && t.IsValid() && (predicate == null || predicate(t)));
+            return _inProgressTasks.OfType<T>().Any(t => t.ClaimedByWorkers.Contains(worker) && t.IsValid() && (predicate == null || predicate(t)));
         }
 
         return false;

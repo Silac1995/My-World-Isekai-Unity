@@ -122,7 +122,7 @@ public class UI_CommercialBuildingDebugScript : MonoBehaviour
             {
                 string taskType = task.GetType().Name;
                 string targetName = task.Target != null ? task.Target.name : "Null Target";
-                string workerName = task.ClaimedBy != null ? task.ClaimedBy.CharacterName : "Unknown Worker";
+                string workerName = task.IsClaimed ? string.Join(", ", task.ClaimedByWorkers.Select(w => w.CharacterName)) : "Unknown Worker";
                 sb.AppendLine($"  - {taskType} -> {targetName} <color=#00FF00>[{workerName}]</color>");
             }
         }

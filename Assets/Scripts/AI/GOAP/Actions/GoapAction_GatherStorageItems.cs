@@ -176,6 +176,25 @@ public class GoapAction_GatherStorageItems : GoapAction
                 Collider storageCol = storageZone != null ? storageZone.GetComponent<Collider>() : null;
 
                 HandleMovementTo(worker, _targetPos, out bool arrivedAtStorage, storageCol, true);
+
+                // [FIX]: Permit an early delivery if the character is physically inside the storage zone, 
+                // avoiding agents infinitely pushing each other at the exact _targetPos coordinate.
+                if (!arrivedAtStorage && storageCol != null)
+                {
+                    Vector3 flatWorkerPos = new Vector3(worker.transform.position.x, storageCol.bounds.center.y, worker.transform.position.z);
+                    Bounds safeBounds = storageCol.bounds;
+                    
+                    // We shrink the bounds by exactly the maximum drop offset (0.3 per side, so 0.6 total)
+                    // to guarantee the physical item won't fall outside the zone and trigger an infinite gather loop.
+                    safeBounds.Expand(-0.6f);
+                    
+                    if (safeBounds.Contains(flatWorkerPos))
+                    {
+                        worker.CharacterMovement.ResetPath();
+                        arrivedAtStorage = true;
+                    }
+                }
+
                 if (arrivedAtStorage)
                 {
                     _currentState = GatherState.DroppingOff;
@@ -227,9 +246,10 @@ public class GoapAction_GatherStorageItems : GoapAction
         {
             var bounds = storageZone.GetComponent<Collider>().bounds;
             Vector3 center = bounds.center;
-            // Add a tiny variance so multiple workers don't path explicitly to the exact millimeter,
-            // but keep it very small so they stay heavily centralized.
-            _targetPos = center + new Vector3(Random.Range(-0.5f, 0.5f), 0, Random.Range(-0.5f, 0.5f));
+            // Spread the targets dynamically within the inner 50% of the storage zone
+            float varX = Mathf.Max(bounds.extents.x * 0.5f, 0.1f);
+            float varZ = Mathf.Max(bounds.extents.z * 0.5f, 0.1f);
+            _targetPos = center + new Vector3(Random.Range(-varX, varX), 0, Random.Range(-varZ, varZ));
         }
         else
         {

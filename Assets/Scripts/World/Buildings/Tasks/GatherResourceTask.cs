@@ -7,6 +7,8 @@ public class GatherResourceTask : BuildingTask
 {
     private GatherableObject _gatherableTarget;
 
+    public override int MaxWorkers => 10; // Allow multiple gatherers on the same resource
+
     public GatherResourceTask(GatherableObject target) : base(target)
     {
         _gatherableTarget = target;
