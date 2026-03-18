@@ -1167,6 +1167,10 @@ PrefabInstance:
       propertyPath: m_Size.z
       value: 15
       objectReference: {fileID: 0}
+    - target: {fileID: 4927771276047822767, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: _building
+      value: 
+      objectReference: {fileID: -7333590944410843724}
     - target: {fileID: 6121509161196564493, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: m_Size.x
       value: 21
@@ -1206,6 +1210,10 @@ PrefabInstance:
     - target: {fileID: 6528054620988570630, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: m_Name
       value: Shop
+      objectReference: {fileID: 0}
+    - target: {fileID: 7099042916959401025, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: -28
       objectReference: {fileID: 0}
     - target: {fileID: 7289148798581441162, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: m_LocalPosition.x
@@ -1289,6 +1297,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 6528054620988570630, guid: 0266b0096947362429f7d224956a5096, type: 3}
       insertIndex: -1
       addedObject: {fileID: -7333590944410843724}
+    - targetCorrespondingSourceObject: {fileID: 6528054620988570630, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 7506146579037461148}
   m_SourcePrefab: {fileID: 100100000, guid: 0266b0096947362429f7d224956a5096, type: 3}
 --- !u!114 &4690730239702237897 stripped
 MonoBehaviour:
@@ -1393,8 +1404,27 @@ MonoBehaviour:
   _buildingZone: {fileID: 8333455769947060722}
   _deliveryZone: {fileID: 4690730239702237897}
   _owner: {fileID: 0}
+  _ownerCommunity:
+    communityName: 
+    level: 0
+    leader: {fileID: 0}
+    members: []
+    communityZones: []
+    ownedBuildings: []
   _storageZone: {fileID: 6942077358948493099}
   _itemsToSell:
   - Item: {fileID: 0}
     MaxStock: 0
   _vendorPoint: {fileID: 7459607895208990959}
+--- !u!114 &7506146579037461148
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9065137950495012345}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9f10052702582704cb2a410c1ef0af9b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BuildingTaskManager

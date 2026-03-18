@@ -9,6 +9,7 @@ TagManager:
   - BattleZone
   - Gatherable
   - Deposit
+  - Debug_World
   layers:
   - Default
   - TransparentFX

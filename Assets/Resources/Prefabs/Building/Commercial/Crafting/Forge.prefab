@@ -756,6 +756,10 @@ PrefabInstance:
       propertyPath: m_Size.z
       value: 10
       objectReference: {fileID: 0}
+    - target: {fileID: 4927771276047822767, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: _building
+      value: 
+      objectReference: {fileID: 8087778697939860842}
     - target: {fileID: 6121509161196564493, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: m_Size.x
       value: 34
@@ -787,6 +791,10 @@ PrefabInstance:
     - target: {fileID: 6528054620988570630, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: m_Name
       value: Forge
+      objectReference: {fileID: 0}
+    - target: {fileID: 7099042916959401025, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 20.39
       objectReference: {fileID: 0}
     - target: {fileID: 7289148798581441162, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: m_LocalPosition.x
@@ -866,6 +874,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 6528054620988570630, guid: 0266b0096947362429f7d224956a5096, type: 3}
       insertIndex: -1
       addedObject: {fileID: 4769992228224564470}
+    - targetCorrespondingSourceObject: {fileID: 6528054620988570630, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 2927187879297051370}
   m_SourcePrefab: {fileID: 100100000, guid: 0266b0096947362429f7d224956a5096, type: 3}
 --- !u!114 &476241650930320217 stripped
 MonoBehaviour:
@@ -966,6 +977,18 @@ MonoBehaviour:
   m_Center: {x: 0, y: 1, z: 0}
   m_Area: 0
   m_AffectedAgents: ffffffff
+--- !u!114 &2927187879297051370
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1945857671188992395}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9f10052702582704cb2a410c1ef0af9b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BuildingTaskManager
 --- !u!114 &2869944826478470843 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 7371631401807285046, guid: 0266b0096947362429f7d224956a5096, type: 3}
