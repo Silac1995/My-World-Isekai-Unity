@@ -87,8 +87,18 @@ public class BattleManager : MonoBehaviour
 
         if (_tickTimer >= tickPeriod)
         {
-            _tickTimer -= tickPeriod;
-            PerformBattleTick();
+            // Process as many ticks as needed to catch up with Time.deltaTime (especially on 8x speed)
+            int ticksToProcess = Mathf.FloorToInt(_tickTimer / tickPeriod);
+            
+            // Safety cap to prevent lockups on massive lag spikes
+            if (ticksToProcess > 30) ticksToProcess = 30;
+
+            for (int i = 0; i < ticksToProcess; i++)
+            {
+                PerformBattleTick();
+            }
+            
+            _tickTimer -= ticksToProcess * tickPeriod;
         }
 
 #if UNITY_EDITOR
