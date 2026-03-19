@@ -59,12 +59,6 @@ namespace MWI.AI
                 _currentDestination = _currentTarget.transform.position;
             }
 
-            if (_currentTarget == null || !_currentTarget.IsAlive())
-            {
-                self.CharacterMovement?.Stop();
-                return BTNodeStatus.Running; // En attente du BT pour changer la cible
-            }
-
             _isChargingTarget = false;
             var movement = self.CharacterMovement;
             if (movement == null) return BTNodeStatus.Failure;
@@ -72,6 +66,21 @@ namespace MWI.AI
             // --- SOFT ZONE : Tracking du temps hors zone ---
             if (_battleZone == null) _battleZone = _battleManager.GetComponent<BoxCollider>();
             bool isOutsideZone = _battleZone != null && !_battleZone.bounds.Contains(self.transform.position);
+
+            if (_currentTarget == null || !_currentTarget.IsAlive())
+            {
+                if (isOutsideZone)
+                {
+                    Vector3 returnPos = _battleZone.bounds.center;
+                    movement.Resume();
+                    movement.SetDestination(returnPos);
+                }
+                else
+                {
+                    self.CharacterMovement?.Stop();
+                }
+                return BTNodeStatus.Running; // En attente du BT pour changer la cible
+            }
             
             if (isOutsideZone)
             {

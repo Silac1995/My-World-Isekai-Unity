@@ -120,6 +120,8 @@ public class BattleManager : MonoBehaviour
 
     private void PerformBattleTick()
     {
+        _engagementCoordinator?.CleanupEngagements();
+
         foreach (var character in _allParticipants)
         {
             if (character == null || !character.IsAlive()) continue;

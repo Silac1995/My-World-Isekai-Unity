@@ -617,6 +617,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CharacterRelation
   _character: {fileID: 2536622428659117900}
   _relationships: []
+  _toastChannel: {fileID: 11400000, guid: ea961c82479cb974997317e89f3aa9b6, type: 2}
 --- !u!1 &4281310202761960642
 GameObject:
   m_ObjectHideFlags: 0
@@ -1729,8 +1730,8 @@ MonoBehaviour:
   armorLayer: {fileID: 0}
   _bagScript: {fileID: 0}
   _bagSockets: []
-  _inventoryNotificationChannel: {fileID: 0}
-  _toastChannel: {fileID: 0}
+  _inventoryNotificationChannel: {fileID: 11400000, guid: a7adff8442e34864fbb6fb819063967a, type: 2}
+  _toastChannel: {fileID: 11400000, guid: ea961c82479cb974997317e89f3aa9b6, type: 2}
 --- !u!1 &8922584864793057334
 GameObject:
   m_ObjectHideFlags: 0

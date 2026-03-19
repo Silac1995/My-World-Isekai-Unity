@@ -604,7 +604,7 @@ public class CharacterEquipment : CharacterSystem
                 // L'item a été retiré avec succès, on le fait spawner dans le monde
                 CharacterDropItem.ExecutePhysicalDrop(_character, itemToDrop, false);
 
-                if (_toastChannel != null)
+                if (_toastChannel != null && _character.IsPlayer())
                 {
                     _toastChannel.Raise(new MWI.UI.Notifications.ToastNotificationPayload(
                         message: $"Dropped {itemToDrop.ItemSO.ItemName}",
@@ -633,7 +633,7 @@ public class CharacterEquipment : CharacterSystem
             if (_inventoryNotificationChannel != null)
                 _inventoryNotificationChannel.Raise();
                 
-            if (_toastChannel != null)
+            if (_toastChannel != null && _character.IsPlayer())
             {
                 _toastChannel.Raise(new MWI.UI.Notifications.ToastNotificationPayload(
                     message: $"Picked up {item.ItemSO.ItemName}",
@@ -648,7 +648,7 @@ public class CharacterEquipment : CharacterSystem
 
         bool carriedInHand = CarryItemInHand(item);
         
-        if (carriedInHand && _toastChannel != null)
+        if (carriedInHand && _toastChannel != null && _character.IsPlayer())
         {
             _toastChannel.Raise(new MWI.UI.Notifications.ToastNotificationPayload(
                 message: $"Carrying {item.ItemSO.ItemName}",

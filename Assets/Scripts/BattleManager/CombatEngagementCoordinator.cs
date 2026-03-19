@@ -30,11 +30,6 @@ public class CombatEngagementCoordinator
         List<Character> aliveEnemies = opponentTeam.CharacterList.Where(e => e != null && e.IsAlive()).ToList();
         if (aliveEnemies.Count == 0) return null;
 
-        float viewRadius = attacker.CharacterAwareness != null ? attacker.CharacterAwareness.AwarenessRadius : 15f;
-
-        aliveEnemies = aliveEnemies.Where(e => Vector3.Distance(attacker.transform.position, e.transform.position) <= viewRadius).ToList();
-        if (aliveEnemies.Count == 0) return null;
-
         List<Character> availableTargets = new List<Character>();
         List<Character> fullTargets = new List<Character>();
 

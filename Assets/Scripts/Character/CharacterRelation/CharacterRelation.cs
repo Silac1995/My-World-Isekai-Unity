@@ -6,6 +6,9 @@ public class CharacterRelation : MonoBehaviour
     [SerializeField] private Character _character;
     [SerializeField] private List<Relationship> _relationships = new List<Relationship>();
 
+    [Header("Notifications")]
+    [SerializeField] private MWI.UI.Notifications.ToastNotificationChannel _toastChannel;
+
     public Character Character => _character;
     public List<Relationship> Relationships => _relationships;
 
@@ -109,5 +112,18 @@ public class CharacterRelation : MonoBehaviour
         }
 
         Debug.Log($"<color=white>[Sentiment]</color> L'avis de {_character.CharacterName} sur {target.CharacterName} est maintenant de {rel.RelationValue} ({rel.RelationType}) [Modif: {amount} -> {roundedAmount}]");
+
+        if (_toastChannel != null && _character.IsPlayer())
+        {
+            string sign = roundedAmount >= 0 ? "+" : "";
+            var toastType = roundedAmount >= 0 ? MWI.UI.Notifications.ToastType.Success : MWI.UI.Notifications.ToastType.Warning;
+            
+            _toastChannel.Raise(new MWI.UI.Notifications.ToastNotificationPayload(
+                message: $"{_character.CharacterName} \u2192 {target.CharacterName}: {sign}{roundedAmount} Relation",
+                type: toastType,
+                duration: 3f,
+                icon: null
+            ));
+        }
     }
 }
