@@ -55,16 +55,20 @@ namespace MWI.AI
                     
                     if (enemyToAttack != null)
                     {
-                        Debug.Log($"<color=green>[BT Assist]</color> {self.CharacterName} voit {target.CharacterName} en combat contre {enemyToAttack.CharacterName} et va l'aider !");
-                        
-                        if (self.CharacterSpeech != null)
-                            self.CharacterSpeech.Say(helpMsg);
+                        float viewRadius = self.CharacterAwareness != null ? self.CharacterAwareness.AwarenessRadius : 15f;
+                        if (Vector3.Distance(self.transform.position, enemyToAttack.transform.position) <= viewRadius)
+                        {
+                            Debug.Log($"<color=green>[BT Assist]</color> {self.CharacterName} voit {target.CharacterName} en combat contre {enemyToAttack.CharacterName} et va l'aider !");
+                            
+                            if (self.CharacterSpeech != null)
+                                self.CharacterSpeech.Say(helpMsg);
 
-                        self.CharacterCombat.JoinBattleAsAlly(target);
-                        
-                        // Définir la cible pour le BTAction_AttackTarget
-                        bb.Set(Blackboard.KEY_COMBAT_TARGET, enemyToAttack);
-                        return BTNodeStatus.Success;
+                            self.CharacterCombat.JoinBattleAsAlly(target);
+                            
+                            // Définir la cible pour le BTAction_AttackTarget
+                            bb.Set(Blackboard.KEY_COMBAT_TARGET, enemyToAttack);
+                            return BTNodeStatus.Success;
+                        }
                     }
                 }
             }

@@ -118,10 +118,10 @@ public class NPCBehaviourTree : CharacterSystem
         return new BTSelector(
             _legacySequence,    // 0. Imperative actions bypass the intelligent tree
             _orderNode,         // 1. Ordres (priorité max)
-            _punchOutNode,      // 1.5 Fin de shift forcé
             _combatNode,        // 2. Combat actif
             _entraideSequence,  // 3. Entraide
             _agressionSequence, // 4. Agression
+            _punchOutNode,      // 4.5 Fin de shift forcé (Must punch out before going home)
             _scheduleNode,      // 5. Schedule (Work/Sleep > Personal Goals)
             _goapNode,          // 6. GOAP (Life Goals / Proactive)
             _socialNode,        // 8. Social
@@ -155,6 +155,9 @@ public class NPCBehaviourTree : CharacterSystem
         // Pause le BT pendant une interaction ou pendant le positionnement de dialogue (évite les micro-mouvements ou conflits de pathing)
         if (_character.CharacterInteraction != null && (_character.CharacterInteraction.IsInteracting || _character.CharacterInteraction.IsPositioning)) return;
 
+        // NEW: Pause le BT pendant une action (ex: ramasser, travailler, crafter) pour ne pas être interrompu par l'emploi du temps
+        if (_character.CharacterActions != null && _character.CharacterActions.CurrentAction != null) return;
+
         // Tick l'arbre
         BTNodeStatus status = _root.Execute(_blackboard);
 
@@ -184,6 +187,12 @@ public class NPCBehaviourTree : CharacterSystem
         if (currentOrder != null && !currentOrder.IsComplete)
         {
             currentOrder.Cancel(_character);
+        }
+
+        // NEW: Interrompre l'action en cours pour forcer l'ordre (puisque l'action mettait le BT en pause)
+        if (_character.CharacterActions != null && _character.CharacterActions.CurrentAction != null)
+        {
+            _character.CharacterActions.ClearCurrentAction();
         }
 
         _blackboard.Set(Blackboard.KEY_CURRENT_ORDER, order);
