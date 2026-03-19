@@ -112,7 +112,23 @@ namespace MWI.Time
         // Helper to skip time (for debugging or sleeping)
         public void SkipToHour(int hour)
         {
-            _currentTime = (float)Mathf.Clamp(hour, 0, 23) / 24f;
+            int clampedHour = Mathf.Clamp(hour, 0, 23);
+
+            // Si on saute à une heure inférieure à l'heure actuelle, on a passé minuit (passage au lendemain).
+            if (clampedHour < CurrentHour)
+            {
+                CurrentDay++;
+                OnNewDay?.Invoke();
+            }
+
+            _currentTime = (float)clampedHour / 24f;
+
+            if (CurrentHour != _lastHour)
+            {
+                _lastHour = CurrentHour;
+                OnHourChanged?.Invoke(CurrentHour);
+            }
+
             UpdatePhase(true);
         }
     }

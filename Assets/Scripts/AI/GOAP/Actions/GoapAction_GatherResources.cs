@@ -97,8 +97,10 @@ public class GoapAction_GatherResources : GoapAction
             _assignedTask = _building.TaskManager?.ClaimBestTask<GatherResourceTask>(worker, task => 
             {
                 var interactable = task.Target as GatherableObject;
-                if (interactable == null) return true;
-                return !worker.PathingMemory.IsBlacklisted(interactable.gameObject.GetInstanceID());
+                if (interactable == null || worker.PathingMemory.IsBlacklisted(interactable.gameObject.GetInstanceID())) 
+                    return false;
+                
+                return interactable.HasAnyOutput(_building.GetWantedItems());
             });
             
             if (_assignedTask != null)

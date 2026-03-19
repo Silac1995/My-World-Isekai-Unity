@@ -11,7 +11,8 @@ using MWI.Time;
 public class GatheringResourceEntry
 {
     public ItemSO targetItem;
-    public int minAmount = -1;      // -1 = illimité
+    [Tooltip("La quantité maximum à stocker. Les gatherers s'arrêteront (sauf si de nouvelles BuyOrders arrivent). -1 = illimité.")]
+    public int maxQuantity = 50;
 }
 
 /// <summary>
@@ -274,11 +275,11 @@ public class GatheringBuilding : CommercialBuilding
 
     /// <summary>
     /// Evalue dynamiquement si un item a atteint son quota.
-    /// Quota = minAmount (stock de base du bâtiment) + demandes d'expédition (BuyOrders actives dans le LogisticsManager).
+    /// Quota = maxQuantity (stock cible du bâtiment) + demandes d'expédition (BuyOrders actives dans le LogisticsManager).
     /// </summary>
     private bool IsResourceAtLimit(GatheringResourceEntry entry)
     {
-        if (entry.minAmount <= 0) return false; // illimité
+        if (entry.maxQuantity < 0) return false; // illimité
 
         int activeOrdersDemand = 0;
         int reservedStock = 0;
@@ -295,7 +296,7 @@ public class GatheringBuilding : CommercialBuilding
             reservedStock = LogisticsManager.GetReservedItemCount(entry.targetItem);
         }
 
-        int totalRequiredAmount = entry.minAmount + activeOrdersDemand;
+        int totalRequiredAmount = entry.maxQuantity + activeOrdersDemand;
         
         // REFACTOR: Use the free inventory count to prevent stalls caused by reserved items,
         // and prevent over-gathering while items are in transit.

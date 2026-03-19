@@ -156,10 +156,16 @@ public class JobGatherer : Job
             canGather = building.TaskManager.HasAvailableOrClaimedTask<GatherResourceTask>(_worker, task => 
             {
                 var interactable = task.Target as GatherableObject;
-                return interactable != null && !_worker.PathingMemory.IsBlacklisted(interactable.gameObject.GetInstanceID());
+                if (interactable == null || _worker.PathingMemory.IsBlacklisted(interactable.gameObject.GetInstanceID())) return false;
+                
+                return interactable.HasAnyOutput(building.GetWantedItems());
             });
 
-            hasValidGatherTasks = building.TaskManager.HasAnyTaskOfType<GatherResourceTask>();
+            hasValidGatherTasks = building.TaskManager.HasAnyTaskOfType<GatherResourceTask>(task => 
+            {
+                var interactable = task.Target as GatherableObject;
+                return interactable != null && interactable.HasAnyOutput(building.GetWantedItems());
+            });
         }
 
         var worldState = new Dictionary<string, bool>
