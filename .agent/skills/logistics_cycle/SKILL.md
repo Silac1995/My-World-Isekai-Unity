@@ -38,10 +38,10 @@ The lifecycle of an item moving between buildings involves several state changes
 4. **Delivery**: `JobTransporter` physically moves items. `NotifyDeliveryProgress()` triggered on drop.
 5. **Acknowledgment**: Supplier calls `BuildingLogisticsManager.AcknowledgeDeliveryProgress()`, removes `TransportOrder` from `_placedTransportOrders`. 
 
-### 3. Order Expiration and Virtual Stock
-**Rule:** Ensure expired orders are cleaned from both the supplier's memory AND the client's memory.
+### 3. Order Expiration, Cancellation, and Virtual Stock
+**Rule:** Ensure expired or cancelled orders are systematically cleaned from both the supplier's memory AND the client's memory.
 - `CheckShopInventory` uses "Virtual Stock", which is Physical Stock + active uncompleted `_placedBuyOrders`.
-- If an order expires, the supplier drops it from `_activeOrders`, but the client must also drop it from `_placedBuyOrders`, otherwise Virtual Stock remains bloated infinitely.
+- If an order is canceled or expires, it must be removed from BOTH buildings. Use `CancelBuyOrder(BuyOrder)` to ensure the removal cascades to the counterpart building (Source/Destination) and drops linked pending `TransportOrder`s safely. This avoids desynchronization where a client awaits an order the supplier already deleted, or vice versa.
 - Partial deliveries check against `InTransitQuantity` globally, rather than just locally per transporter, to avoid over-delivery logic traps.
 
 [Note: Put detailed code implementation patterns in `examples/logistics_patterns.md` instead of cluttering this file.]

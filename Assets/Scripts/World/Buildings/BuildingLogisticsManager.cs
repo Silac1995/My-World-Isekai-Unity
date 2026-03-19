@@ -89,6 +89,65 @@ public class BuildingLogisticsManager : MonoBehaviour
         {
             TimeManager.Instance.OnNewDay -= CheckExpiredOrders;
         }
+
+        foreach (var order in _activeOrders.ToList())
+        {
+            CancelBuyOrder(order);
+        }
+        foreach (var order in _placedBuyOrders.ToList())
+        {
+            CancelBuyOrder(order);
+        }
+    }
+
+    public void CancelBuyOrder(BuyOrder order)
+    {
+        if (order == null) return;
+
+        bool wasRemoved = false;
+
+        if (_activeOrders.Contains(order))
+        {
+            _activeOrders.Remove(order);
+            wasRemoved = true;
+            Debug.Log($"<color=orange>[BuildingLogisticsManager]</color> {_building?.BuildingName} : BuyOrder annulée/retirée (Fournisseur) : {order.Quantity}x {order.ItemToTransport.ItemName}");
+        }
+
+        if (_placedBuyOrders.Contains(order))
+        {
+            _placedBuyOrders.Remove(order);
+            var newQueue = new Queue<PendingOrder>(_pendingOrders.Where(p => p.BuyOrder != order));
+            _pendingOrders = newQueue;
+            wasRemoved = true;
+            Debug.Log($"<color=orange>[BuildingLogisticsManager]</color> {_building?.BuildingName} : BuyOrder annulée/retirée (Client) : {order.Quantity}x {order.ItemToTransport.ItemName}");
+        }
+
+        // Remove any strictly linked TransportOrder that hasn't been physically sent yet
+        var linkedTransports = _placedTransportOrders.Where(t => t.AssociatedBuyOrder == order).ToList();
+        foreach (var lt in linkedTransports)
+        {
+            _placedTransportOrders.Remove(lt);
+            var newQueue = new Queue<PendingOrder>(_pendingOrders.Where(p => p.TransportOrder != lt));
+            _pendingOrders = newQueue;
+            Debug.Log($"<color=orange>[BuildingLogisticsManager]</color> {_building?.BuildingName} : TransportOrder liée annulée.");
+            
+            if (lt.Destination != null && lt.Destination.LogisticsManager != null)
+            {
+                lt.Destination.LogisticsManager.CancelActiveTransportOrder(lt);
+            }
+        }
+
+        if (!wasRemoved) return;
+
+        if (order.Source != null && order.Source != _building && order.Source.LogisticsManager != null)
+        {
+            order.Source.LogisticsManager.CancelBuyOrder(order);
+        }
+
+        if (order.Destination != null && order.Destination != _building && order.Destination.LogisticsManager != null)
+        {
+             order.Destination.LogisticsManager.CancelBuyOrder(order);
+        }
     }
 
     public int GetReservedItemCount(ItemSO itemSO)
@@ -606,7 +665,6 @@ public class BuildingLogisticsManager : MonoBehaviour
 
             foreach (var expired in expiredSupplierOrders)
             {
-                _activeOrders.Remove(expired);
                 Debug.Log($"<color=red>[BuildingLogisticsManager]</color> Commande Client {expired.Quantity}x {expired.ItemToTransport.ItemName} EXPIRÉE chez le fournisseur.");
 
                 if (_building != null && _building.Owner != null)
@@ -617,6 +675,8 @@ public class BuildingLogisticsManager : MonoBehaviour
                         expired.ClientBoss.CharacterRelation?.UpdateRelation(workplaceBoss, -25);
                     }
                 }
+
+                CancelBuyOrder(expired);
             }
         }
 
@@ -638,11 +698,9 @@ public class BuildingLogisticsManager : MonoBehaviour
 
             foreach (var expired in expiredClientOrders)
             {
-                _placedBuyOrders.Remove(expired);
                 Debug.Log($"<color=red>[BuildingLogisticsManager]</color> Notre commande de {expired.Quantity}x {expired.ItemToTransport.ItemName} a EXPIRÉ et est retirée de nos suivis client.");
 
-                var newQueue = new Queue<PendingOrder>(_pendingOrders.Where(p => p.BuyOrder != expired));
-                _pendingOrders = newQueue;
+                CancelBuyOrder(expired);
             }
         }
     }
