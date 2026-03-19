@@ -9,10 +9,6 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: cb89952efff64374a9d395339a8bbdf9, type: 3}
-  m_Name: Aggressive
-  m_EditorClassIdentifier: Assembly-CSharp::CharacterBehavioralTraitsSO
-  aggressivity: 0.72
-  sociability: 0.5
-  loyalty: 0.5
-  canCreateCommunity: 0
+  m_Script: {fileID: 11500000, guid: 7e15e0fdc5eeb7a408d5e8904b952a44, type: 3}
+  m_Name: NotificationEquipmentChannel
+  m_EditorClassIdentifier: Assembly-CSharp::MWI.UI.Notifications.NotificationChannel

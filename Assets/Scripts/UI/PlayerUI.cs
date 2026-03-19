@@ -14,6 +14,7 @@ public class PlayerUI : MonoBehaviour
 
     [Header("Notification Channels")]
     [SerializeField] private MWI.UI.Notifications.NotificationChannel _inventoryChannel;
+    [SerializeField] private MWI.UI.Notifications.ToastNotificationChannel _toastChannel;
 
     // Le seul lien nécessaire pour la barre d'action
     [SerializeField] private UI_Action_ProgressBar _actionProgressBar;
@@ -72,7 +73,7 @@ public class PlayerUI : MonoBehaviour
         // Push notification channels to the equipment system
         if (characterComponent.CharacterEquipment != null)
         {
-            characterComponent.CharacterEquipment.InitializeNotifications(_inventoryChannel);
+            characterComponent.CharacterEquipment.InitializeNotifications(_inventoryChannel, _toastChannel);
         }
 
         // Initialize the equipment UI if it's already active or for when it's opened

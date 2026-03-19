@@ -29,15 +29,18 @@ public class CharacterEquipment : CharacterSystem
 
     [Header("Notifications")]
     [SerializeField] private MWI.UI.Notifications.NotificationChannel _inventoryNotificationChannel;
+    [SerializeField] private MWI.UI.Notifications.ToastNotificationChannel _toastChannel;
 
-    public void InitializeNotifications(MWI.UI.Notifications.NotificationChannel inventoryChannel)
+    public void InitializeNotifications(MWI.UI.Notifications.NotificationChannel inventoryChannel, MWI.UI.Notifications.ToastNotificationChannel toastChannel = null)
     {
         _inventoryNotificationChannel = inventoryChannel;
+        _toastChannel = toastChannel;
     }
 
     public void ClearNotifications()
     {
         _inventoryNotificationChannel = null;
+        _toastChannel = null;
     }
 
     // Getters publics
@@ -585,24 +588,44 @@ public class CharacterEquipment : CharacterSystem
         }
     }
 
-    /// <summary>
-    /// Centralized method to pick up an item. 
-    /// Adds to inventory and triggers the notification system.
-    /// </summary>
     public bool PickUpItem(ItemInstance item)
     {
         if (item == null) return false;
 
         var inventory = GetInventory();
+        bool inventoryAdded = false;
+        
         if (inventory != null && inventory.AddItem(item, _character))
         {
             if (_inventoryNotificationChannel != null)
                 _inventoryNotificationChannel.Raise();
                 
+            if (_toastChannel != null)
+            {
+                _toastChannel.Raise(new MWI.UI.Notifications.ToastNotificationPayload(
+                    message: $"Picked up {item.ItemSO.ItemName}",
+                    type: MWI.UI.Notifications.ToastType.Info,
+                    duration: 3f,
+                    icon: item.ItemSO.Icon
+                ));
+            }
+                
             return true;
         }
 
-        return CarryItemInHand(item);
+        bool carriedInHand = CarryItemInHand(item);
+        
+        if (carriedInHand && _toastChannel != null)
+        {
+            _toastChannel.Raise(new MWI.UI.Notifications.ToastNotificationPayload(
+                message: $"Holding {item.ItemSO.ItemName}",
+                type: MWI.UI.Notifications.ToastType.Info,
+                duration: 3f,
+                icon: item.ItemSO.Icon
+            ));
+        }
+        
+        return carriedInHand;
     }
 
     protected override void HandleIncapacitated(Character character)

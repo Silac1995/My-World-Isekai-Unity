@@ -63,8 +63,44 @@ Transform:
   m_Children:
   - {fileID: 4077321751507558082}
   - {fileID: 5039078023869093331}
+  - {fileID: 7959991495635714417}
   m_Father: {fileID: 8261818567662733738}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1649277932714721804
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 7846755559401419888}
+  m_Layer: 0
+  m_Name: ToastContainer
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &7846755559401419888
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1649277932714721804}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 745356457753772938}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0.5, y: 0.5}
+  m_AnchorMax: {x: 0.5, y: 0.5}
+  m_AnchoredPosition: {x: 709.7844, y: 110.674805}
+  m_SizeDelta: {x: 450.7541, y: 416.7002}
+  m_Pivot: {x: 0.5, y: 0.5}
 --- !u!1 &2570029857561556135
 GameObject:
   m_ObjectHideFlags: 0
@@ -396,6 +432,8 @@ GameObject:
   m_Component:
   - component: {fileID: 4419638629152559126}
   - component: {fileID: 1028637120156146445}
+  - component: {fileID: 2199819582992947801}
+  - component: {fileID: 6207742524634790680}
   m_Layer: 0
   m_Name: UI_PlayerHUD
   m_TagString: Untagged
@@ -436,12 +474,45 @@ MonoBehaviour:
   playerName: {fileID: 8045141488222381506}
   _buttonEquipmentUI: {fileID: 1214737420693240702}
   _timeUI: {fileID: 5185239845626457343}
-  _inventoryChannel: {fileID: 0}
+  _inventoryChannel: {fileID: 11400000, guid: a7adff8442e34864fbb6fb819063967a, type: 2}
+  _toastChannel: {fileID: 11400000, guid: ea961c82479cb974997317e89f3aa9b6, type: 2}
   _actionProgressBar: {fileID: 7675865628524708826}
   _healthBar: {fileID: 3564213331627894607}
   _equipmentUI: {fileID: 0}
-  _statusEffectsContainer: {fileID: 0}
-  _statusEffectPrefab: {fileID: 0}
+  _statusEffectsContainer: {fileID: 5039078023869093331}
+  _statusEffectPrefab: {fileID: 4017553586498137769, guid: 848623b3f87cf7b43b85593f81e75dea, type: 3}
+--- !u!114 &2199819582992947801
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5115761992067834628}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ee15e3b826c2f4a44aa31e765a8bb17d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MWI.UI.Notifications.UI_ToastManager
+  _toastChannel: {fileID: 11400000, guid: ea961c82479cb974997317e89f3aa9b6, type: 2}
+  _toastPrefab: {fileID: 1680135161088435738, guid: dad782001eb07de40a1a6cbe71358b03, type: 3}
+  _toastContainer: {fileID: 7846755559401419888}
+  _initialPoolSize: 5
+--- !u!114 &6207742524634790680
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5115761992067834628}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6fcca9028e169f14dab7f16abfca6753, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MWI.UI.Notifications.UI_NotificationBadge
+  _channel: {fileID: 0}
+  _badgeObject: {fileID: 0}
+  _clearOnEnable: 0
+  _parentWindow: {fileID: 0}
 --- !u!1 &5586085509215323037
 GameObject:
   m_ObjectHideFlags: 0
@@ -604,16 +675,16 @@ RectTransform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 5711851273526497477}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 745356457753772938}
+  m_Father: {fileID: 7370916304269361212}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: -842, y: 510}
+  m_AnchoredPosition: {x: -865, y: -399}
   m_SizeDelta: {x: 200, y: 50}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &235252971348414209
@@ -747,10 +818,10 @@ RectTransform:
   m_LocalScale: {x: 0, y: 0, z: 0}
   m_ConstrainProportionsScale: 0
   m_Children:
-  - {fileID: 7959991495635714417}
   - {fileID: 5610807116673954702}
   - {fileID: 7717249170753982954}
   - {fileID: 8261818567662733738}
+  - {fileID: 7846755559401419888}
   m_Father: {fileID: 4419638629152559126}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}

@@ -1722,7 +1722,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 60a22f608d5adc741a8b87e75e60f2fe, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CharacterEquipment
-  character: {fileID: 2536622428659117900}
+  _character: {fileID: 0}
   _weaponSocket: {fileID: 0}
   underwearLayer: {fileID: 0}
   clothingLayer: {fileID: 0}
@@ -1730,6 +1730,7 @@ MonoBehaviour:
   _bagScript: {fileID: 0}
   _bagSockets: []
   _inventoryNotificationChannel: {fileID: 0}
+  _toastChannel: {fileID: 0}
 --- !u!1 &8922584864793057334
 GameObject:
   m_ObjectHideFlags: 0
