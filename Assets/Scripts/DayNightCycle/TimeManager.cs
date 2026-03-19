@@ -28,6 +28,11 @@ namespace MWI.Time
         public int CurrentHour => Mathf.FloorToInt(_currentTime * 24f);
         public int CurrentMinute => Mathf.FloorToInt(((_currentTime * 24f) % 1f) * 60f);
         public DayPhase CurrentPhase => _currentPhase;
+        
+        /// <summary>
+        /// Le jour actuel du jeu (commence à 1).
+        /// </summary>
+        public int CurrentDay { get; private set; } = 1;
 
         public event Action<DayPhase> OnPhaseChanged;
         public event Action OnNewDay;
@@ -59,6 +64,7 @@ namespace MWI.Time
             if (_currentTime >= 1f)
             {
                 _currentTime -= 1f;
+                CurrentDay++;
                 OnNewDay?.Invoke();
             }
 

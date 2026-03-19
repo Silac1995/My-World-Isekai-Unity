@@ -143,6 +143,7 @@ public class JobGatherer : Job
         // Planification intelligente du Pickup vs Gather
         bool looseItemExists = false;
         bool canGather = false;
+        bool hasValidGatherTasks = false;
         
         if (building.TaskManager != null)
         {
@@ -158,21 +159,12 @@ public class JobGatherer : Job
                 return interactable != null && !_worker.PathingMemory.IsBlacklisted(interactable.gameObject.GetInstanceID());
             });
 
-            // If we have a zone memory, but absolutely ZERO tasks exist for it (not even claimed ones), the zone is truly dead.
-            if (building.HasGatherableZone)
-            {
-                bool anyGatherTaskExists = building.TaskManager.HasAnyTaskOfType<GatherResourceTask>();
-                if (!anyGatherTaskExists)
-                {
-                    Debug.Log($"<color=orange>[JobGatherer]</color> {_worker.CharacterName}: The active gathering zone has 0 physical trees remaining. Clearing zone memory.");
-                    building.ClearGatherableZone();
-                }
-            }
+            hasValidGatherTasks = building.TaskManager.HasAnyTaskOfType<GatherResourceTask>();
         }
 
         var worldState = new Dictionary<string, bool>
         {
-            { "hasGatherZone", building.HasGatherableZone },
+            { "hasGatherZone", hasValidGatherTasks }, // True only if tasks exist, forces ExploreForResources
             { "looseItemExists", looseItemExists },
             { "hasResources", hasResourcesForGoap },
             { "hasDepositedResources", false },

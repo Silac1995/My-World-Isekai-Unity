@@ -40,14 +40,15 @@ public class GoapAction_ExploreForResources : GoapAction
 
     public override bool IsValid(Character worker)
     {
-        return _building != null && !_building.HasGatherableZone;
+        return _building != null;
     }
 
     public override void Execute(Character worker)
     {
         if (_isComplete) return;
 
-        if (_building.HasGatherableZone)
+        // Terminer l'exploration immédiatement si des tâches sont disponibles
+        if (_building.TaskManager != null && _building.TaskManager.HasAnyTaskOfType<GatherResourceTask>())
         {
             _isComplete = true;
             return;
@@ -115,31 +116,20 @@ public class GoapAction_ExploreForResources : GoapAction
 
             if (gatherable.HasAnyOutput(wantedItems))
             {
-                // 1. Chercher une Zone parente dans la hiérarchie
+                Debug.Log($"<color=green>[GOAP Explore]</color> {worker.CharacterName} a trouvé et ajouté un nouveau gatherable à la liste du bâtiment: {gatherable.gameObject.name} !");
+                _building.AddToTrackedGatherables(gatherable);
+
+                // On essaie quand même d'ajouter toute la zone autour si elle existe
                 Zone zone = gatherable.GetComponentInParent<Zone>();
+                if (zone == null) zone = FindZoneContaining(gatherable.transform.position);
+                if (zone == null) zone = FindNearestZone(gatherable.transform.position);
 
-                // 2. Sinon, chercher une Zone dont le collider contient la position du GatherableObject
-                if (zone == null)
+                if (zone != null && _building.GatherableZone != zone)
                 {
-                    zone = FindZoneContaining(gatherable.transform.position);
-                }
-
-                // 3. Sinon, chercher la Zone la plus proche
-                if (zone == null)
-                {
-                    zone = FindNearestZone(gatherable.transform.position);
-                }
-
-                if (zone != null)
-                {
-                    Debug.Log($"<color=green>[GOAP Explore]</color> {worker.CharacterName} a trouvé une zone de récolte : {zone.zoneName} (via {gatherable.gameObject.name}) !");
                     _building.ScanAndRegisterZone(zone);
-                    return true;
                 }
-                else
-                {
-                    Debug.LogWarning($"<color=orange>[GOAP Explore]</color> {worker.CharacterName} a trouvé {gatherable.gameObject.name} mais aucune Zone n'existe dans la scène. Crée une Zone (GatheringArea) autour de tes ressources !");
-                }
+
+                return true;
             }
         }
 

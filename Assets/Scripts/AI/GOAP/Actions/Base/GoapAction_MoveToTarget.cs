@@ -101,6 +101,7 @@ public abstract class GoapAction_MoveToTarget : GoapAction
                         movement.Stop();
                         movement.ResetPath();
                         _isMoving = false;
+                        _isComplete = true; // Fixes Infinite Loop
                         return; // Exit out, let GOAP fail it on IsValid or timeout
                     }
                     

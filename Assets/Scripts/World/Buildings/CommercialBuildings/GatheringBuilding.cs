@@ -130,14 +130,11 @@ public class GatheringBuilding : CommercialBuilding
         foreach (var col in colliders)
         {
             GatherableObject gatherable = col.GetComponent<GatherableObject>() ?? col.GetComponentInParent<GatherableObject>();
-            if (gatherable != null && gatherable.CanGather())
+            // Permet de considérer la zone comme valide même si la ressource est épuisée (pour écouter son respawn dynamique)
+            if (gatherable != null && gatherable.HasAnyOutput(wantedItems))
             {
-                // Vérifier si ce gatherable donne un item voulu
-                if (gatherable.HasAnyOutput(wantedItems))
-                {
-                    foundValidResource = true;
-                    break;
-                }
+                foundValidResource = true;
+                break;
             }
         }
 
@@ -145,35 +142,39 @@ public class GatheringBuilding : CommercialBuilding
         {
             SetGatherableZone(zone);
             
-            // Cleanup old subscriptions
-            ClearTrackedGatherables();
-
-            // Register tasks for all valid gatherables found
-            TaskManager?.ClearAvailableTasksOfType<GatherResourceTask>();
+            // On ne clear PLUS les anciens abonnements. La liste s'accumule !
+            
             foreach (var col in colliders)
             {
                 GatherableObject gatherable = col.GetComponent<GatherableObject>() ?? col.GetComponentInParent<GatherableObject>();
                 if (gatherable != null && gatherable.HasAnyOutput(wantedItems))
                 {
-                    // Track for respawn regardless of current state
-                    if (!_trackedGatherables.Contains(gatherable))
-                    {
-                        gatherable.OnRespawned += HandleGatherableRespawned;
-                        _trackedGatherables.Add(gatherable);
-                    }
-
-                    if (gatherable.CanGather())
-                    {
-                        TaskManager?.RegisterTask(new GatherResourceTask(gatherable));
-                    }
+                    AddToTrackedGatherables(gatherable);
                 }
             }
         }
         else
         {
-            ClearGatherableZone();
-            TaskManager?.ClearAvailableTasksOfType<GatherResourceTask>();
             Debug.Log($"<color=orange>[GatheringBuilding]</color> {buildingName} : Scan de {zone.zoneName} n'a rien trouvé. Retour à l'exploration.");
+        }
+    }
+
+    /// <summary>
+    /// Ajoute dynamiquement un gatherable à la liste du bâtiment pour qu'il soit traqué (respawns, etc.)
+    /// </summary>
+    public void AddToTrackedGatherables(GatherableObject gatherable)
+    {
+        if (gatherable == null) return;
+        
+        if (!_trackedGatherables.Contains(gatherable))
+        {
+            gatherable.OnRespawned += HandleGatherableRespawned;
+            _trackedGatherables.Add(gatherable);
+        }
+
+        if (gatherable.CanGather() && TaskManager != null)
+        {
+            TaskManager.RegisterTask(new GatherResourceTask(gatherable));
         }
     }
 
@@ -216,17 +217,16 @@ public class GatheringBuilding : CommercialBuilding
     }
 
     /// <summary>
-    /// Réinitialise la zone de récolte (ex: si la zone est épuisée).
-    /// Les employés devront explorer à nouveau.
+    /// Obsolète ou utilisé uniquement pour réinitialiser le focus UI. 
+    /// On ne wipe plus la mémoire des arbres traqués pour permettre le respawn.
     /// </summary>
     public void ClearGatherableZone()
     {
         if (_gatherableZone != null)
         {
-            Debug.Log($"<color=orange>[GatheringBuilding]</color> {buildingName} : zone de récolte {_gatherableZone.zoneName} épuisée ou invalide.");
+            Debug.Log($"<color=orange>[GatheringBuilding]</color> {buildingName} : zone de récolte {_gatherableZone.zoneName} effacée du focus principal.");
         }
         _gatherableZone = null;
-        ClearTrackedGatherables();
     }
 
     // === Gestion des ressources voulues ===

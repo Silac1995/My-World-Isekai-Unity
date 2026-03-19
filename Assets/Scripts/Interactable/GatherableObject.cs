@@ -14,11 +14,12 @@ public class GatherableObject : InteractableObject
     [SerializeField] private float _gatherDuration = 3f;
     [SerializeField] private bool _isDepletable = true;
     [SerializeField] private int _maxGatherCount = 5;
-    [SerializeField] private float _respawnTime = 60f;
+    [SerializeField, Tooltip("Nombre de jours in-game avant la réapparition de la ressource")] 
+    private int _respawnDelayDays = 1;
 
     private int _currentGatherCount = 0;
     private bool _isDepleted = false;
-    private float _respawnTimer = 0f;
+    private int _targetRespawnDay = 0;
 
     public event System.Action<GatherableObject> OnRespawned;
 
@@ -105,17 +106,30 @@ public class GatherableObject : InteractableObject
     }
 
     /// <summary>
-    /// Épuise la ressource. Cache les visuels et lance le timer de respawn.
+    /// Épuise la ressource. Cache les visuels et s'abonne à l'événement de nouveau jour.
     /// </summary>
     private void Deplete()
     {
         _isDepleted = true;
-        _respawnTimer = _respawnTime;
+
+        if (MWI.Time.TimeManager.Instance != null)
+        {
+            _targetRespawnDay = MWI.Time.TimeManager.Instance.CurrentDay + _respawnDelayDays;
+            MWI.Time.TimeManager.Instance.OnNewDay += HandleNewDay;
+        }
 
         if (_visualRoot != null)
             _visualRoot.SetActive(false);
 
-        Debug.Log($"<color=orange>[Gather]</color> {gameObject.name} est épuisé. Respawn dans {_respawnTime}s.");
+        Debug.Log($"<color=orange>[Gather]</color> {gameObject.name} est épuisé. Respawn prévu au jour {_targetRespawnDay}.");
+    }
+
+    private void HandleNewDay()
+    {
+        if (MWI.Time.TimeManager.Instance != null && MWI.Time.TimeManager.Instance.CurrentDay >= _targetRespawnDay)
+        {
+            Respawn();
+        }
     }
 
     /// <summary>
@@ -126,6 +140,9 @@ public class GatherableObject : InteractableObject
         _isDepleted = false;
         _currentGatherCount = 0;
 
+        if (MWI.Time.TimeManager.Instance != null)
+            MWI.Time.TimeManager.Instance.OnNewDay -= HandleNewDay;
+
         if (_visualRoot != null)
             _visualRoot.SetActive(true);
 
@@ -133,14 +150,11 @@ public class GatherableObject : InteractableObject
         OnRespawned?.Invoke(this);
     }
 
-    private void Update()
+    private void OnDestroy()
     {
-        if (!_isDepleted) return;
-
-        _respawnTimer -= UnityEngine.Time.deltaTime;
-        if (_respawnTimer <= 0f)
+        if (_isDepleted && MWI.Time.TimeManager.Instance != null)
         {
-            Respawn();
+            MWI.Time.TimeManager.Instance.OnNewDay -= HandleNewDay;
         }
     }
 }

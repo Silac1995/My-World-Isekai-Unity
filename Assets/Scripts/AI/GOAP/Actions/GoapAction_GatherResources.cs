@@ -26,8 +26,6 @@ public class GoapAction_GatherResources : GoapAction
 
     private GatheringBuilding _building;
     private bool _isComplete = false;
-    private bool _isMovingToZone = false;
-    private bool _arrivedAtZone = false;
     private bool _isGathering = false;
     private GatherableObject _currentTarget = null;
     private CharacterGatherAction _gatherAction = null;
@@ -93,14 +91,7 @@ public class GoapAction_GatherResources : GoapAction
             return;
         }
 
-        // Phase 1 : Se déplacer vers la zone de récolte
-        if (!_arrivedAtZone)
-        {
-            MoveToGatherZone(worker, movement);
-            return;
-        }
-
-        // Phase 2 : Trouver un objet à récolter (Arbre, etc.)
+        // Phase 1 : Trouver un objet à récolter (Arbre, etc.)
         if (_currentTarget == null && _assignedTask == null)
         {
             _assignedTask = _building.TaskManager?.ClaimBestTask<GatherResourceTask>(worker, task => 
@@ -131,7 +122,7 @@ public class GoapAction_GatherResources : GoapAction
             return;
         }
 
-        // Phase 3 : Lancer la CharacterGatherAction quand on est arrivé
+        // Phase 2 : Lancer la CharacterGatherAction quand on est arrivé
         if (!_isGathering)
         {
             // NEW: Abort if object was destroyed mid-walk
@@ -232,39 +223,6 @@ public class GoapAction_GatherResources : GoapAction
         }
     }
 
-    private void MoveToGatherZone(Character worker, CharacterMovement movement)
-    {
-        if (!_isMovingToZone)
-        {
-            // NEW CHECK : Si on est DÉJÀ dans la zone, on skip la marche d'entrée
-            BoxCollider box = _building.GatherableZone.GetComponent<BoxCollider>();
-            if (box != null && box.bounds.Contains(worker.transform.position))
-            {
-                _arrivedAtZone = true;
-                return;
-            }
-
-            Vector3 destination = _building.GatherableZone.GetRandomPointInZone();
-            movement.SetDestination(destination);
-            _isMovingToZone = true;
-            return;
-        }
-
-        if (!movement.PathPending)
-        {
-            if (!movement.HasPath)
-            {
-                _isMovingToZone = false;
-            }
-            else if (movement.RemainingDistance <= movement.StoppingDistance + 0.5f)
-            {
-                _arrivedAtZone = true;
-                _isMovingToZone = false;
-                Debug.Log($"<color=cyan>[GOAP Gather]</color> {worker.CharacterName} est arrivé à la zone de récolte.");
-            }
-        }
-    }
-
     public override void Exit(Character worker)
     {
         if (_assignedTask != null)
@@ -274,8 +232,6 @@ public class GoapAction_GatherResources : GoapAction
             _assignedTask = null;
         }
 
-        _isMovingToZone = false;
-        _arrivedAtZone = false;
         _isGathering = false;
         _currentTarget = null;
         worker.CharacterMovement?.ResetPath();
