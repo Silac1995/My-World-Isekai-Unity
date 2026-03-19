@@ -75,20 +75,20 @@ namespace MWI.UI.Notifications
             float timer = 0f;
             while (timer < _fadeDuration)
             {
-                timer += UnityEngine.Time.deltaTime;
+                timer += UnityEngine.Time.unscaledDeltaTime;
                 _canvasGroup.alpha = Mathf.Lerp(0f, 1f, timer / _fadeDuration);
                 yield return null;
             }
             _canvasGroup.alpha = 1f;
 
             // Hold
-            yield return new WaitForSeconds(holdDuration);
+            yield return new WaitForSecondsRealtime(holdDuration);
 
             // Fade Out
             timer = 0f;
             while (timer < _fadeDuration)
             {
-                timer += UnityEngine.Time.deltaTime;
+                timer += UnityEngine.Time.unscaledDeltaTime;
                 _canvasGroup.alpha = Mathf.Lerp(1f, 0f, timer / _fadeDuration);
                 yield return null;
             }

@@ -109,12 +109,12 @@ public class UI_HealthBar : MonoBehaviour
     private IEnumerator GhostDrainRoutine()
     {
         float delay = _instancedMaterial.GetFloat(ID_GhostDelay);
-        yield return new WaitForSeconds(delay);
+        yield return new WaitForSecondsRealtime(delay);
 
         while (_ghostFill > GetFillRatio() + 0.001f)
         {
             float speed = _instancedMaterial.GetFloat(ID_GhostSpeed);
-            _ghostFill  = Mathf.MoveTowards(_ghostFill, GetFillRatio(), speed * Time.deltaTime);
+            _ghostFill  = Mathf.MoveTowards(_ghostFill, GetFillRatio(), speed * Time.unscaledDeltaTime);
             _instancedMaterial.SetFloat(ID_GhostFill, _ghostFill);
             yield return null;
         }
@@ -130,7 +130,7 @@ public class UI_HealthBar : MonoBehaviour
 
         while (elapsed < _healFlashDuration)
         {
-            elapsed += Time.deltaTime;
+            elapsed += Time.unscaledDeltaTime;
             float flash = Mathf.Sin((elapsed / _healFlashDuration) * Mathf.PI);
             _instancedMaterial.SetFloat(ID_HealFlash, flash);
             yield return null;
