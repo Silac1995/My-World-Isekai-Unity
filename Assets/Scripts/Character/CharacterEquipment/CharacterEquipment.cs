@@ -588,6 +588,39 @@ public class CharacterEquipment : CharacterSystem
         }
     }
 
+    /// <summary>
+    /// Retire un objet spécifique de l'inventaire du sac et le fait tomber physiquement au sol.
+    /// </summary>
+    public bool DropItemFromInventory(ItemInstance itemToDrop)
+    {
+        if (itemToDrop == null) return false;
+
+        Inventory inventory = GetInventory();
+        if (inventory != null)
+        {
+            // On tente de retirer l'item de l'inventaire
+            if (inventory.RemoveItem(itemToDrop, _character))
+            {
+                // L'item a été retiré avec succès, on le fait spawner dans le monde
+                CharacterDropItem.ExecutePhysicalDrop(_character, itemToDrop, false);
+
+                if (_toastChannel != null)
+                {
+                    _toastChannel.Raise(new MWI.UI.Notifications.ToastNotificationPayload(
+                        message: $"Dropped {itemToDrop.ItemSO.ItemName}",
+                        type: MWI.UI.Notifications.ToastType.Warning,
+                        duration: 3f,
+                        icon: itemToDrop.ItemSO.Icon
+                    ));
+                }
+
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public bool PickUpItem(ItemInstance item)
     {
         if (item == null) return false;
@@ -618,7 +651,7 @@ public class CharacterEquipment : CharacterSystem
         if (carriedInHand && _toastChannel != null)
         {
             _toastChannel.Raise(new MWI.UI.Notifications.ToastNotificationPayload(
-                message: $"Holding {item.ItemSO.ItemName}",
+                message: $"Carrying {item.ItemSO.ItemName}",
                 type: MWI.UI.Notifications.ToastType.Info,
                 duration: 3f,
                 icon: item.ItemSO.Icon

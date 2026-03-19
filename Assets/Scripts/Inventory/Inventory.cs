@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using UnityEngine;
 
 [System.Serializable]
@@ -201,6 +201,39 @@ public class Inventory
             if (wasWeapon)
                 UpdateWeaponVisuals(character);
         }
+    }
+
+    /// <summary>
+    /// Retire un item de l'inventaire et le fait spawn physiquement dans le monde à la position donnée.
+    /// </summary>
+    public bool DropItem(ItemInstance item, Vector3 dropPosition, Character characterForVisualUpdate = null)
+    {
+        if (RemoveItem(item, characterForVisualUpdate))
+        {
+            Vector3 offset = new Vector3(Random.Range(-0.3f, 0.3f), 0, Random.Range(-0.3f, 0.3f));
+            WorldItem.SpawnWorldItem(item, dropPosition + offset);
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Retire un item au hasard de l'inventaire et le fait spawn dans le monde. (ex: sac troué)
+    /// </summary>
+    public ItemInstance DropRandomItem(Vector3 dropPosition, Character characterForVisualUpdate = null)
+    {
+        List<ItemSlot> filledSlots = _itemSlots.FindAll(s => !s.IsEmpty());
+        if (filledSlots.Count == 0) return null;
+
+        ItemSlot randomSlot = filledSlots[Random.Range(0, filledSlots.Count)];
+        ItemInstance itemToDrop = randomSlot.ItemInstance;
+
+        if (DropItem(itemToDrop, dropPosition, characterForVisualUpdate))
+        {
+            return itemToDrop;
+        }
+
+        return null;
     }
 
     public ItemSlot GetItemSlot(int index)
