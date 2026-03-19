@@ -243,6 +243,11 @@ public class CharacterMovement : CharacterSystem
         Stop();
     }
 
+    protected override void HandleWakeUp(Character character)
+    {
+        Resume();
+    }
+
     public void Resume()
     {
         if (_knockbackTimer > 0) return;

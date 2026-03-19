@@ -233,6 +233,7 @@ namespace MWI.AI
             if (self != null)
             {
                 self.CharacterMovement?.ResetPath();
+                self.CharacterMovement?.Resume();
                 self.CharacterVisual?.ClearLookTarget();
             }
             _currentTarget = null;

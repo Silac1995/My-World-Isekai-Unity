@@ -255,7 +255,7 @@ public class BuildingLogisticsManager : MonoBehaviour
                 var supplierLogistics = order.AssociatedBuyOrder.Source?.LogisticsManager;
                 if (supplierLogistics != null)
                 {
-                    supplierLogistics.AcknowledgeDeliveryProgress(order.AssociatedBuyOrder, deliveredAmount);
+                    supplierLogistics.AcknowledgeDeliveryProgress(order.AssociatedBuyOrder, order, deliveredAmount);
                 }
             }
         }
@@ -450,7 +450,7 @@ public class BuildingLogisticsManager : MonoBehaviour
         }
     }
 
-    public void AcknowledgeDeliveryProgress(BuyOrder clientOrder, int amount = 1)
+    public void AcknowledgeDeliveryProgress(BuyOrder clientOrder, TransportOrder exactTransportOrder, int amount = 1)
     {
         var myOrder = _activeOrders.FirstOrDefault(o => o == clientOrder);
         if (myOrder != null)
@@ -470,13 +470,12 @@ public class BuildingLogisticsManager : MonoBehaviour
             }
         }
 
-        var linkedTransportOrder = _placedTransportOrders.FirstOrDefault(t => t.AssociatedBuyOrder == clientOrder);
-        if (linkedTransportOrder != null)
+        if (exactTransportOrder != null && _placedTransportOrders.Contains(exactTransportOrder))
         {
-            if (linkedTransportOrder.IsCompleted)
+            if (exactTransportOrder.IsCompleted)
             {
-                _placedTransportOrders.Remove(linkedTransportOrder);
-                Debug.Log($"<color=gray>[BuildingLogisticsManager]</color> TransportOrder {linkedTransportOrder.Quantity}x {linkedTransportOrder.ItemToTransport.ItemName} retirée du suivi fournisseur.");
+                _placedTransportOrders.Remove(exactTransportOrder);
+                Debug.Log($"<color=gray>[BuildingLogisticsManager]</color> TransportOrder {exactTransportOrder.Quantity}x {exactTransportOrder.ItemToTransport.ItemName} retirée du suivi fournisseur.");
             }
         }
     }
@@ -487,7 +486,32 @@ public class BuildingLogisticsManager : MonoBehaviour
         {
             _activeTransportOrders.Remove(order);
             Debug.Log($"<color=orange>[BuildingLogisticsManager]</color> TransportOrder de {order.Quantity}x {order.ItemToTransport.ItemName} retirée définitivement de la file active (Échec).");
+            
+            if (order.Source != null && order.Source.LogisticsManager != null)
+            {
+                order.Source.LogisticsManager.ReportCancelledTransporter(order);
+            }
         }
+    }
+
+    public void ReportCancelledTransporter(TransportOrder order)
+    {
+        if (order == null || !_placedTransportOrders.Contains(order)) return;
+
+        Debug.LogWarning($"<color=orange>[BuildingLogisticsManager]</color> 🚨 Le transporteur a annulé la livraison pour {order.ItemToTransport.ItemName}. On annule le lien physique pour forcer la reprise.");
+        
+        order.ReservedItems.Clear();
+
+        if (order.AssociatedBuyOrder != null)
+        {
+            int amountToRecover = order.Quantity - order.DeliveredQuantity;
+            order.AssociatedBuyOrder.CancelDispatch(amountToRecover);
+        }
+        
+        _placedTransportOrders.Remove(order);
+        
+        var newQueue = new Queue<PendingOrder>(_pendingOrders.Where(p => p.TransportOrder != order));
+        _pendingOrders = newQueue;
     }
 
     public void ReportMissingReservedItem(TransportOrder order)
