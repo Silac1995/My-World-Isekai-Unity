@@ -53,6 +53,7 @@ MonoBehaviour:
   interactionPrompt: Press E to interact
   _interactionZone: {fileID: 805665600973762066}
   _rootgameObject: {fileID: 718778511601405242}
+  _rigidbody: {fileID: 6899146370233858579}
   _worldItem: {fileID: 8154045440721903422}
 --- !u!114 &8154045440721903422
 MonoBehaviour:

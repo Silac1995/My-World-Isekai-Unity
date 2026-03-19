@@ -5,6 +5,14 @@ description: The central hub of the entity. Dictates rules on the character's av
 
 # Character Core
 
+## 0. Character Prefab Structure
+The root (most parent) GameObject of a Character prefab contains the essential components that form the entity's foundation:
+- `Character.cs` (`Assets/Scripts/Character/Character.cs`)
+- `CharacterActions.cs` (`Assets/Scripts/Character/CharacterActions/CharacterActions.cs`)
+- `NPCController.cs` and `PlayerController.cs` (`Assets/Scripts/Character/CharacterControllers/NPCController.cs` and `Assets/Scripts/Character/CharacterControllers/PlayerController.cs`)
+- `Rigidbody`
+- `CapsuleCollider`
+
 The `Character.cs` script is the most important class of the entity. It is the Central Architecture (Facade Pattern) through which **everything** passes.
 
 ## 1. Facade Pattern (Obligations)

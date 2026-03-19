@@ -13,6 +13,7 @@ GameObject:
   - component: {fileID: -8496411767914472669}
   - component: {fileID: 3737938727703748292}
   - component: {fileID: -1564443919066118275}
+  - component: {fileID: 1121100925932323939}
   m_Layer: 0
   m_Name: Gatherable
   m_TagString: Gatherable
@@ -49,12 +50,13 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::GatherableObject
   interactionPrompt: Press E to interact
   _interactionZone: {fileID: 0}
-  _rootgameObject: {fileID: 0}
+  _rootgameObject: {fileID: 2445051778551144471}
+  _rigidbody: {fileID: 1121100925932323939}
   _outputItems: []
   _gatherDuration: 3
   _isDepletable: 1
   _maxGatherCount: 5
-  _respawnTime: 60
+  _respawnDelayDays: 1
   _visualRoot: {fileID: 0}
 --- !u!65 &-8496411767914472669
 BoxCollider:
@@ -109,3 +111,30 @@ MonoBehaviour:
   zoneType: 0
   zoneName: 
   _boundsTarget: {fileID: 0}
+--- !u!54 &1121100925932323939
+Rigidbody:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2445051778551144471}
+  serializedVersion: 5
+  m_Mass: 1
+  m_LinearDamping: 0
+  m_AngularDamping: 0.05
+  m_CenterOfMass: {x: 0, y: 0, z: 0}
+  m_InertiaTensor: {x: 1, y: 1, z: 1}
+  m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ImplicitCom: 1
+  m_ImplicitTensor: 1
+  m_UseGravity: 1
+  m_IsKinematic: 0
+  m_Interpolate: 0
+  m_Constraints: 0
+  m_CollisionDetection: 0

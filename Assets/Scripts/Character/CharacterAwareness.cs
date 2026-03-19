@@ -24,28 +24,36 @@ public class CharacterAwareness : MonoBehaviour
 
         float radius = AwarenessRadius;
         
-        // On ignore les gros triggers (zone de socialisation, etc) pour ne toucher que les colliders physiques liés aux Rigidbodies (Character, WorldItem)
-        Collider[] hitColliders = Physics.OverlapSphere(transform.position, radius, Physics.AllLayers, QueryTriggerInteraction.Ignore);
+        // On utilise Collide pour intercepter directement les InteractionZones
+        Collider[] hitColliders = Physics.OverlapSphere(transform.position, radius, Physics.AllLayers, QueryTriggerInteraction.Collide);
 
         List<InteractableObject> found = new List<InteractableObject>();
 
         foreach (var hit in hitColliders)
         {
-            // Le joueur veut explicitement détecter que le collider est lié à un Rigidbody (Character.cs ou WorldItem.cs)
-            if (hit.attachedRigidbody == null) continue;
+            // Détection directe, beaucoup plus performante que GetComponentInChildren
+            var interactable = hit.GetComponent<InteractableObject>() ?? hit.GetComponentInParent<InteractableObject>();
 
-            // On cherche l'InteractableObject via le rigging physique
-            var interactable = hit.attachedRigidbody.GetComponent<InteractableObject>() 
-                            ?? hit.GetComponent<InteractableObject>() 
-                            ?? hit.GetComponentInParent<InteractableObject>();
-
-            if (interactable != null)
+            if (interactable != null && interactable.RootGameObject != _character.gameObject)
             {
-                if (interactable.RootGameObject != _character.gameObject)
+                if (!found.Contains(interactable))
                 {
-                    if (!found.Contains(interactable))
+                    // Utilisation de la nouvelle propriété Rigidbody (demandée par l'utilisateur)
+                    // Garantit qu'on ne cible l'objet QUE si son corps physique est bien dans notre zone !
+                    if (interactable.Rigidbody != null)
                     {
-                        found.Add(interactable);
+                        if (Vector3.Distance(transform.position, interactable.Rigidbody.position) <= radius)
+                        {
+                            found.Add(interactable);
+                        }
+                    }
+                    else
+                    {
+                        // Fallback pour les objets statiques sans Rigidbody (Arbres, Bâtiments)
+                        if (Vector3.Distance(transform.position, interactable.transform.position) <= radius)
+                        {
+                            found.Add(interactable);
+                        }
                     }
                 }
             }
@@ -70,16 +78,17 @@ public class CharacterAwareness : MonoBehaviour
 
     private void OnTriggerEnter(Collider other)
     {
-        // On ne veut détecter que les objets physiques (rigidbody), pas les triggers géants d'autres personnages
-        if (other.isTrigger) return;
-
-        // Détection via CharacterInteractable (reversion du Rigidbody)
-        var interactable = other.attachedRigidbody != null 
-            ? other.attachedRigidbody.GetComponent<CharacterInteractable>() ?? other.GetComponentInParent<CharacterInteractable>()
-            : other.GetComponentInParent<CharacterInteractable>();
+        var interactable = other.GetComponent<CharacterInteractable>() ?? other.GetComponentInParent<CharacterInteractable>();
 
         if (interactable != null && interactable.Character != null && interactable.Character != _character)
         {
+            // On s'assure que leur Rigidbody physique vient bien de rentrer
+            if (interactable.Rigidbody != null)
+            {
+                if (Vector3.Distance(transform.position, interactable.Rigidbody.position) > AwarenessRadius)
+                    return; // Trop loin
+            }
+
             OnCharacterDetected?.Invoke(interactable.Character);
         }
     }
