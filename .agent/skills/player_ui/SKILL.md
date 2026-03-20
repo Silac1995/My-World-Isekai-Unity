@@ -76,8 +76,9 @@ Attach to any window icon button (e.g., Inventory Button).
 Attach to the actual **Window GameObject** (e.g., the Inventory frame). Set the matching channel in the inspector.
 
 **Responsibilities**:
-- **Event-Driven Clearing**: Automatically calls `channel.Clear()` on `OnEnable`. 
+- **Event-Driven Clearing**: Automatically calls `channel.Clear()` on `OnEnable` (if `Clear On Enable` is true).
 - This ensures the badge is cleared the moment the window is opened without using `Update()` polling.
+- **Granular Hover Clearing**: If `Clear On Enable` is disabled, clearing is deferred to child components (e.g., `UI_ItemSlot` triggering `CharacterEquipment.ClearInventoryNotification()`) once all specific elements flagged as `IsNewlyAdded` have been explicitly hovered over.
 
 ---
 

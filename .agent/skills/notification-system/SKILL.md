@@ -30,3 +30,4 @@ The reactive UI component attached to the visual badge (e.g., a red circle Image
 ### 3. Raising and Clearing
 - `NotificationChannel.Raise()`: Called by backend/gameplay logic when an event occurs.
 - `NotificationChannel.Clear()`: Called by UI logic when the player acknowledges the notification (e.g., by opening the relevant window or clicking the item).
+- **Element-By-Element Clearing (Hover)**: For granular control, a parent window can disable global auto-clearing. Instead, individual components (like `ItemInstance` / `UI_ItemSlot`) use localized `IsNewlyAdded` flags to display small badges, only calling a global `NotificationChannel.Clear()` when the user hovers over the final remaining new item.
