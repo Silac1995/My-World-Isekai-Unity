@@ -30,23 +30,6 @@ public class PlayerUI : MonoBehaviour
 
     private Character characterComponent;
 
-    private void Start()
-    {
-        if (character != null)
-        {
-            Initialize(character);
-        }
-        else
-        {
-            // Fallback: Aggressively seek out the player character at startup if not explicitly linked by SpawnManager yet
-            PlayerController player = UnityEngine.Object.FindAnyObjectByType<PlayerController>(FindObjectsInactive.Include);
-            if (player != null)
-            {
-                Initialize(player.gameObject);
-            }
-        }
-    }
-
     public void Initialize(GameObject newCharacter)
     {
         // On nettoie les anciens liens (Equipement, etc.)

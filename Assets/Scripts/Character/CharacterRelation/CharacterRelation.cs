@@ -144,14 +144,7 @@ public class CharacterRelation : MonoBehaviour
 
         Debug.Log($"<color=white>[Sentiment]</color> L'avis de {_character.CharacterName} sur {target.CharacterName} est maintenant de {rel.RelationValue} ({rel.RelationType}) [Modif: {amount} -> {roundedAmount}]");
 
-        rel.IsNewlyAdded = true;
-
         OnRelationsUpdated?.Invoke();
-
-        if (_relationNotificationChannel != null && _character.IsPlayer())
-        {
-            _relationNotificationChannel.Raise();
-        }
 
         if (_toastChannel != null && _character.IsPlayer())
         {
