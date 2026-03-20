@@ -42,12 +42,15 @@ public class CharacterStatusManager : CharacterSystem
     {
         if (effectAsset == null) return;
 
-        var existingInstance = _activeEffects.Find(i => i.SourceAsset == effectAsset);
-        if (existingInstance != null)
+        var existingInstances = _activeEffects.FindAll(i => i.SourceAsset == effectAsset);
+        int limit = Mathf.Max(1, effectAsset.MaxStacks);
+
+        if (existingInstances.Count >= limit)
         {
-            existingInstance.RefreshDuration();
-            Debug.Log($"<color=cyan>[StatusManager]</color> Effet rafraîchi : {effectAsset.StatusEffectName} sur {_character.name}");
-            return;
+            // We reached the max stacks. Replace the oldest instance with the new one.
+            var oldestInstance = existingInstances[0];
+            RemoveEffect(oldestInstance);
+            Debug.Log($"<color=cyan>[StatusManager]</color> Effet remplacé (Max stacks atteint) : {effectAsset.StatusEffectName} sur {_character.name}");
         }
 
         var instance = new CharacterStatusEffectInstance(effectAsset, caster, _character);
@@ -75,8 +78,8 @@ public class CharacterStatusManager : CharacterSystem
     {
         if (effectAsset == null) return;
 
-        var instance = _activeEffects.Find(i => i.SourceAsset == effectAsset);
-        if (instance != null)
+        var instances = _activeEffects.FindAll(i => i.SourceAsset == effectAsset);
+        foreach (var instance in instances)
         {
             RemoveEffect(instance);
         }

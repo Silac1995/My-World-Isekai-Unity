@@ -17,6 +17,9 @@ public class CharacterStatusEffect : ScriptableObject
     private Sprite icon;
     [SerializeField]
     private string description;
+    [SerializeField]
+    [Tooltip("Sets the maximum number of times this effect can stack. 0 or 1 means non-stackable.")]
+    private int maxStacks = 1;
 
     public string StatusEffectName => statusEffectName;
     public IReadOnlyList<StatusEffect> StatusEffects => statusEffects.AsReadOnly();
@@ -24,4 +27,5 @@ public class CharacterStatusEffect : ScriptableObject
     public GameObject VisualEffectPrefab => visualEffectPrefab;
     public Sprite Icon => icon;
     public string Description => description;
+    public int MaxStacks => maxStacks;
 }

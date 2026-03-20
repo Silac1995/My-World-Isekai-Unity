@@ -73,6 +73,7 @@ public class UI_PlayerInfo : MonoBehaviour
         {
             foreach (Transform child in _statusEffectsContainer)
             {
+                child.gameObject.SetActive(false);
                 Destroy(child.gameObject);
             }
         }
@@ -106,6 +107,7 @@ public class UI_PlayerInfo : MonoBehaviour
         {
             if (uiElement != null)
             {
+                uiElement.gameObject.SetActive(false);
                 Destroy(uiElement.gameObject);
             }
             _activeEffectUIs.Remove(instance);

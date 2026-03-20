@@ -19,14 +19,17 @@ public class UI_StatusEffect : MonoBehaviour
             _nameText.text = effect.StatusEffectName;
         }
 
-        if (effect.Icon != null)
+        if (_iconImage != null)
         {
-            _iconImage.sprite = effect.Icon;
-            _iconImage.enabled = true;
-        }
-        else
-        {
-            _iconImage.enabled = false;
+            if (effect.Icon != null)
+            {
+                _iconImage.sprite = effect.Icon;
+                _iconImage.enabled = true;
+            }
+            else
+            {
+                _iconImage.enabled = false;
+            }
         }
     }
     
