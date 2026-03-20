@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -11,6 +12,8 @@ public class CharacterRelation : MonoBehaviour
 
     public Character Character => _character;
     public List<Relationship> Relationships => _relationships;
+
+    public event Action OnRelationsUpdated;
 
     public Relationship GetRelationshipWith(Character otherCharacter)
     {
@@ -70,6 +73,8 @@ public class CharacterRelation : MonoBehaviour
             targetRelationSystem.AddRelationship(_character);
         }
 
+        OnRelationsUpdated?.Invoke();
+
         return newRel;
     }
 
@@ -112,6 +117,8 @@ public class CharacterRelation : MonoBehaviour
         }
 
         Debug.Log($"<color=white>[Sentiment]</color> L'avis de {_character.CharacterName} sur {target.CharacterName} est maintenant de {rel.RelationValue} ({rel.RelationType}) [Modif: {amount} -> {roundedAmount}]");
+
+        OnRelationsUpdated?.Invoke();
 
         if (_toastChannel != null && _character.IsPlayer())
         {

@@ -1,11 +1,12 @@
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.EventSystems;
 using TMPro;
 
-public class UI_ItemSlot : MonoBehaviour
+public class UI_ItemSlot : MonoBehaviour, IPointerClickHandler
 {
     [Header("UI Elements")]
-    [SerializeField] private Image _iconImage; // Garde-le au cas où, on pourra l'utiliser plus tard
+    [SerializeField] private Image _iconImage;
     [SerializeField] private TextMeshProUGUI _itemName;
 
     private UI_Inventory _uiInventory;
@@ -23,20 +24,33 @@ public class UI_ItemSlot : MonoBehaviour
     {
         if (_itemName == null) return;
 
-        // 1. On vérifie si le slot contient un item
         if (_itemSlot != null && _itemSlot.ItemInstance != null)
         {
             _itemName.text = _itemSlot.ItemInstance.CustomizedName;
         }
-        // 2. Si le slot est vide, on affiche son type/catégorie
         else if (_itemSlot != null)
         {
-            // On affiche la catégorie (ex: "Emplacement Tête") en gris
             _itemName.text = $"<color=#888888>{_itemSlot}</color>";
         }
         else
         {
             _itemName.text = "";
+        }
+    }
+
+    public void OnPointerClick(PointerEventData eventData)
+    {
+        // Right click to drop the item from inventory
+        if (eventData.button == PointerEventData.InputButton.Right)
+        {
+            if (_itemSlot != null && !_itemSlot.IsEmpty() && _uiInventory != null && _uiInventory.CharacterOwner != null)
+            {
+                var dropAction = new CharacterDropItem(_uiInventory.CharacterOwner, _itemSlot.ItemInstance, false);
+                dropAction.OnActionFinished += () => {
+                    if (_uiInventory != null) _uiInventory.RefreshDisplay();
+                };
+                _uiInventory.CharacterOwner.CharacterActions.ExecuteAction(dropAction);
+            }
         }
     }
 }

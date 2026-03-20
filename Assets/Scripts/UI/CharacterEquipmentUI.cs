@@ -1,4 +1,4 @@
-﻿using TMPro;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -51,7 +51,7 @@ public class CharacterEquipmentUI : MonoBehaviour
 
         if (_ui_inventory != null)
         {
-            _ui_inventory.Initialize(_character.CharacterEquipment.GetInventory());
+            _ui_inventory.Initialize(_character.CharacterEquipment.GetInventory(), _character);
         }
 
         if (_character.CharacterEquipment != null)
@@ -149,7 +149,7 @@ public class CharacterEquipmentUI : MonoBehaviour
 
         if (_ui_inventory != null)
         {
-            _ui_inventory.Initialize(_character.CharacterEquipment.GetInventory());
+            _ui_inventory.Initialize(_character.CharacterEquipment.GetInventory(), _character);
         }
     }
 

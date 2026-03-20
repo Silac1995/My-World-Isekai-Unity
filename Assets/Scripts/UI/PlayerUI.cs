@@ -10,6 +10,7 @@ public class PlayerUI : MonoBehaviour
     [Header("UI Components")]
     [SerializeField] private TextMeshProUGUI playerName;
     [SerializeField] private Button _buttonEquipmentUI;
+    [SerializeField] private Button _buttonRelationsUI;
     [SerializeField] private MWI.UI.TimeUI _timeUI;
 
     [Header("Notification Channels")]
@@ -22,6 +23,7 @@ public class PlayerUI : MonoBehaviour
 
     [Header("UI Windows")]
     [SerializeField] private CharacterEquipmentUI _equipmentUI;
+    [SerializeField] private UI_CharacterRelations _relationsUI;
 
     [Header("Status Effects")]
     [SerializeField] private Transform _statusEffectsContainer;
@@ -82,6 +84,11 @@ public class PlayerUI : MonoBehaviour
             _equipmentUI.Initialize(characterComponent);
         }
 
+        if (_relationsUI != null)
+        {
+            _relationsUI.Initialize(characterComponent);
+        }
+
         if (characterComponent.StatusManager != null)
         {
             characterComponent.StatusManager.OnStatusEffectAdded += HandleStatusEffectAdded;
@@ -99,6 +106,12 @@ public class PlayerUI : MonoBehaviour
             _buttonEquipmentUI.onClick.RemoveAllListeners();
             _buttonEquipmentUI.onClick.AddListener(ToggleEquipmentUI);
         }
+
+        if (_buttonRelationsUI != null)
+        {
+            _buttonRelationsUI.onClick.RemoveAllListeners();
+            _buttonRelationsUI.onClick.AddListener(ToggleRelationsUI);
+        }
     }
 
     public void ToggleEquipmentUI()
@@ -112,6 +125,20 @@ public class PlayerUI : MonoBehaviour
         if (!isCurrentlyActive && characterComponent != null)
         {
             _equipmentUI.Initialize(characterComponent);
+        }
+    }
+
+    public void ToggleRelationsUI()
+    {
+        if (_relationsUI == null) return;
+
+        bool isCurrentlyActive = _relationsUI.gameObject.activeSelf;
+        _relationsUI.gameObject.SetActive(!isCurrentlyActive);
+
+        // If we are opening it, re-initialize to be safe with the current character data
+        if (!isCurrentlyActive && characterComponent != null)
+        {
+            _relationsUI.Initialize(characterComponent);
         }
     }
 

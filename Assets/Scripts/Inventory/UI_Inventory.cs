@@ -8,24 +8,24 @@ public class UI_Inventory : MonoBehaviour
     [SerializeField] private GameObject _itemSlotPrefab;
     [SerializeField] private TextMeshProUGUI _inventoryCapacity;
 
-    // Le GameObject qui possède le GridLayoutGroup (ex: "Content")
+    // Le GameObject qui possede le GridLayoutGroup (ex: "Content")
     [SerializeField] private Transform _slotContainer;
 
     [Header("Data")]
     [SerializeField] private Inventory _inventory;
+    public Character CharacterOwner { get; private set; }
     private List<UI_ItemSlot> _instantiatedSlots = new List<UI_ItemSlot>();
 
-    public void Initialize(Inventory inventory)
+    public void Initialize(Inventory inventory, Character character = null)
     {
-        // On ne fait plus de return immédiat ici
         _inventory = inventory;
+        if (character != null) CharacterOwner = character;
 
         if (_inventory == null)
         {
-            Debug.LogWarning($"<color=orange>[UI_Inventory]</color> L'inventaire est null (Sac retiré).");
+            Debug.LogWarning($"<color=orange>[UI_Inventory]</color> L'inventaire est null (Sac retire).");
             if (_inventoryCapacity != null) _inventoryCapacity.text = "No Bag";
 
-            // IMPORTANT : On doit quand même appeler RefreshDisplay pour vider les slots visuels !
             RefreshDisplay();
             return;
         }
@@ -35,7 +35,6 @@ public class UI_Inventory : MonoBehaviour
 
     public void RefreshDisplay()
     {
-        // 1. Nettoyage (Toujours exécuté, que l'inventaire soit null ou non)
         foreach (var slot in _instantiatedSlots)
         {
             if (slot != null) Destroy(slot.gameObject);
@@ -47,16 +46,14 @@ public class UI_Inventory : MonoBehaviour
             if (child != null) Destroy(child.gameObject);
         }
 
-        // Si on n'a plus d'inventaire, on s'arrête APRÈS avoir nettoyé
         if (_inventory == null) return;
 
         if (_slotContainer == null)
         {
-            Debug.LogError($"<color=red>[UI_Inventory]</color> _slotContainer n'est pas assigné !");
+            Debug.LogError($"<color=red>[UI_Inventory]</color> _slotContainer n'est pas assigne !");
             return;
         }
 
-        // 2. Création (Uniquement si l'inventaire existe)
         if (_itemSlotPrefab == null) return;
 
         int occupiedSlots = 0;
@@ -73,7 +70,6 @@ public class UI_Inventory : MonoBehaviour
             }
         }
 
-        // 3. Capacité
         UpdateCapacityText(occupiedSlots, _inventory.Capacity);
     }
 
