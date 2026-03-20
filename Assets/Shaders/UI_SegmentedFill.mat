@@ -55,7 +55,7 @@ Material:
     - _GapColor: {r: 0, g: 0, b: 0, a: 1}
     - _GhostColor: {r: 1, g: 1, b: 1, a: 1}
     - _HealColor: {r: 0.39999998, g: 1, b: 0.5, a: 1}
-    - _HealthColor: {r: 0.09722328, g: 0.7264151, b: 0, a: 1}
+    - _HealthColor: {r: 0.11405122, g: 1, b: 0, a: 1}
     - _LowHealthColor: {r: 0.85, g: 0.17999998, b: 0.17999998, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

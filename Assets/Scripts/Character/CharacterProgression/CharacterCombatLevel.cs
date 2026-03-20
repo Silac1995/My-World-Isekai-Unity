@@ -22,6 +22,9 @@ public class CharacterCombatLevel : CharacterSystem
     [SerializeField] private ToastNotificationChannel _expToastChannel;
     [SerializeField] private NotificationChannel _statsBadgeChannel;
 
+    public event System.Action OnExperienceChanged;
+    public event System.Action OnLevelChanged;
+
     public int CurrentExperience => _currentExperience;
     public int StatPointsPerLevel => _statPointsPerLevel;
     public int UnassignedStatPoints => _unassignedStatPoints;
@@ -101,6 +104,7 @@ public class CharacterCombatLevel : CharacterSystem
             }
 
             CheckLevelUp();
+            OnExperienceChanged?.Invoke();
         }
     }
 
@@ -148,6 +152,8 @@ public class CharacterCombatLevel : CharacterSystem
                 AutoAllocateStats();
             }
         }
+        
+        OnLevelChanged?.Invoke();
     }
 
     private void AutoAllocateStats()
