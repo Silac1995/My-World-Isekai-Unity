@@ -571,6 +571,59 @@ MonoBehaviour:
   _currentTarget: {fileID: 0}
   _interactionZone: {fileID: 5383023488254193858}
   _interactionActionPrefab: {fileID: 7422820631460187334, guid: 8ddcc839afed96c409131b535aab38ac, type: 3}
+--- !u!1 &3647192851657958412
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 6731996095375712968}
+  - component: {fileID: 7806414935237473066}
+  m_Layer: 0
+  m_Name: Level
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &6731996095375712968
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3647192851657958412}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: -1.20455, y: 0.05719, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 6179432398992828966}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &7806414935237473066
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3647192851657958412}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e66b6542ea779e94982e7116ee4c1ce1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CharacterCombatLevel
+  _character: {fileID: 2536622428659117900}
+  _statPointsPerLevel: 5
+  _currentExperience: 1
+  _unassignedStatPoints: 0
+  _maxLevelDifference: 10
+  _maxXpReduction: 0.75
+  _maxXpBoost: 0.5
+  _levelHistory: []
+  _expToastChannel: {fileID: 11400000, guid: ea961c82479cb974997317e89f3aa9b6, type: 2}
 --- !u!1 &4064236070124105173
 GameObject:
   m_ObjectHideFlags: 0
@@ -659,6 +712,7 @@ Transform:
   - {fileID: 110975066696998304}
   - {fileID: 3576894322142989136}
   - {fileID: 7433225657293554030}
+  - {fileID: 6731996095375712968}
   - {fileID: 9190579779038921305}
   - {fileID: 673712489822227902}
   - {fileID: 6503437136188520673}
@@ -785,6 +839,7 @@ MonoBehaviour:
   _characterMentorship: {fileID: 7383321509428321023}
   _characterLocations: {fileID: 4198040619971064388}
   _characterGoap: {fileID: 8601409522411222074}
+  _characterCombatLevel: {fileID: 7806414935237473066}
   _testDialogue: {fileID: 0}
 --- !u!114 &2677209831397210094
 MonoBehaviour:
@@ -1779,7 +1834,7 @@ MonoBehaviour:
   _character: {fileID: 2536622428659117900}
   _debugLog: 0
   _currentNodeName: None
-  _tickInterval: 5
+  _tickIntervalSeconds: 0.1
 --- !u!1 &9133085128862771082
 GameObject:
   m_ObjectHideFlags: 0

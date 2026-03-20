@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using System.Linq;
 
 [RequireComponent(typeof(Collider))]
@@ -95,7 +95,8 @@ public class CombatStyleAttack : MonoBehaviour
             }
 
             _hitTargets.Add(target);
-            target.CharacterCombat.TakeDamage(damage, _combatStyleSO != null ? _combatStyleSO.DamageType : DamageType.Blunt);
+            
+            target.CharacterCombat.TakeDamage(damage, _combatStyleSO != null ? _combatStyleSO.DamageType : DamageType.Blunt, _character);
 
             // --- KNOCKBACK ---
             if (_combatStyleSO != null && _combatStyleSO.KnockbackForce > 0)

@@ -436,10 +436,11 @@ public class CharacterCombat : CharacterSystem
         }
     }
 
-    public void TakeDamage(float amount, DamageType type = DamageType.Blunt)
+    public void TakeDamage(float amount, DamageType type = DamageType.Blunt, Character source = null)
     {
-        if (_character.Stats == null || _character.Stats.Health == null) return;
+        if (_character.Stats == null || _character.Stats.Health == null || !_character.IsAlive()) return;
 
+        bool wasAlive = _character.IsAlive();
         _character.Stats.Health.DecreaseCurrentAmount(amount);
         _lastCombatActionTime = Time.time;
         
@@ -458,10 +459,20 @@ public class CharacterCombat : CharacterSystem
         {
             _character.SetUnconscious(true);
         }
+
+        // --- PROGRESSION EXP ---
+        if (source != null && source.CharacterCombatLevel != null && amount > 0)
+        {
+            int targetLevel = _character.CharacterCombatLevel != null ? _character.CharacterCombatLevel.CurrentLevel : 1;
+            bool isKill = wasAlive && !_character.IsAlive();
+            
+            int expGained = source.CharacterCombatLevel.CalculateCombatExp(targetLevel, isKill);
+            source.CharacterCombatLevel.AddExperience(expGained);
+        }
     }
 
     // Keep compatibility with old single arg call if needed
-    public void TakeDamage(float amount) => TakeDamage(amount, DamageType.Blunt);
+    public void TakeDamage(float amount) => TakeDamage(amount, DamageType.Blunt, null);
 
     public void UnlockCombatStyle(CombatStyleSO style)
     {

@@ -76,6 +76,14 @@ Combat massively relies on `CharacterStats`. It is critical to respect its archi
 - **Secondary Stats**: Base characteristics (Strength, Agility, Dexterity, Intelligence, Endurance, Charisma).
 - **Tertiary Stats**: Derived from secondary ones (PhysicalPower, MoveSpeed, DodgeChance, CriticalHitChance, etc.).
 
+### 6. Combat Progression (XP & Leveling)
+Combat directly drives character progression via the `CharacterCombatLevel` component (a `CharacterSystem`).
+- **XP Acquisition**: Characters gain raw Base XP for landing hits (e.g., 2) and defeating enemies (e.g., 15) in `CombatStyleAttack`.
+- **Dynamic Balancing (`CalculateCombatExp`)**:
+  - **Boost**: Hitting a target with a *higher* level grants up to a **+50%** XP multiplier (Caps at 10 level difference).
+  - **Malus**: Hitting a target with a *lower* level implies a penalty up to **-75%** XP (Caps at 10 level difference).
+- **Leveling Up**: Accumulating enough XP (scaling by 50 per level) automatically triggers `LevelUp()`. This logs a `CombatLevelEntry` to history and grants `_statPointsPerLevel` (default 5) as `_unassignedStatPoints` for the player/AI to distribute later.
+
 ## Tips & Troubleshooting
 - **A character never attacks**: 
   - Verify that the `BattleManager` is properly calling `.UpdateInitiativeTick()`.

@@ -81,6 +81,29 @@ Attach to the actual **Window GameObject** (e.g., the Inventory frame). Set the 
 
 ---
 
+### Window Management (UI_WindowBase)
+
+The Player HUD utilizes a consistent inheritance pattern for its functional windows (e.g., Equipment, Relations, Stats).
+
+#### Architecture
+All HUD windows inherit from `UI_WindowBase`, which provides centralized logic for:
+- Initializing the generic structure (referencing the main panel).
+- Handling the standard "Close Button" functionality natively.
+
+#### Implementing a New Window
+1. **Inheritance**: Create a new controller script inheriting from `UI_WindowBase` (e.g., `UI_CharacterStats`).
+2. **Initialization**: Provide an `Initialize(Character character)` method. In this method, subscribe to the relevant character data events using the **Push/Event-driven** model (e.g., `_character.Stats.OnStatsUpdated += HandleStatsUpdated`).
+3. **Memory Management**: Always override `protected virtual void OnDestroy()` to unsubscribe from these events, ensuring you call `base.OnDestroy()`.
+4. **Instantiation**: Use a Prefab Variant of `UI_WindowBase.prefab` to automatically inherit the close button and background structure.
+5. **HUD Integration**: In `PlayerUI.cs`, add a serialized reference to your new window (`_myNewUI`) and its toggle button (`_buttonMyNewUI`). Hook them up to toggle their active state alongside existing windows.
+
+#### Current Windows
+- **`UI_CharacterEquipment`**: Manages the inventory interaction logic. Uses `UI_NotificationClearer` to handle badges natively.
+- **`UI_CharacterRelations`**: Dynamically displays a list of `UI_RelationshipSlot` instances based on `CharacterRelation` events.
+- **`UI_CharacterStats`**: Dynamically maps and displays primary, secondary, and tertiary `CharacterStats` using `UI_StatSlot` components.
+
+---
+
 ## Stats Integration
 - `OnValueChanged(oldMax, newMax)`: Fired when the max value changes.
 - `OnAmountChanged(oldAmount, newAmount)`: Fired when current resource changes.

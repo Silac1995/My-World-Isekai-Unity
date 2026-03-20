@@ -59,7 +59,7 @@ public class Projectile : MonoBehaviour
 
         // Dégâts avec variance
         float finalDamage = _damage * Random.Range(0.7f, 1.3f);
-        target.CharacterCombat.TakeDamage(finalDamage, _damageType);
+        target.CharacterCombat.TakeDamage(finalDamage, _damageType, _owner);
 
         // Knockback
         if (_knockbackForce > 0 && target.CharacterMovement != null)

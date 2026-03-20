@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 
 public class PlayerController : CharacterGameController
 {
@@ -15,6 +15,17 @@ public class PlayerController : CharacterGameController
 
     protected override void Update()
     {
+        // Block player movement/action input if typing in any UI text field
+        if (UnityEngine.EventSystems.EventSystem.current != null && 
+            UnityEngine.EventSystems.EventSystem.current.currentSelectedGameObject != null && 
+            UnityEngine.EventSystems.EventSystem.current.currentSelectedGameObject.GetComponent<TMPro.TMP_InputField>() != null)
+        {
+            _inputDir = Vector3.zero;
+            base.Update();
+            Move();
+            return;
+        }
+
         float h = Input.GetAxisRaw("Horizontal");
         float v = Input.GetAxisRaw("Vertical");
         _inputDir = new Vector3(h, 0f, v).normalized;

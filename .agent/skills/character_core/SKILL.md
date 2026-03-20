@@ -31,6 +31,10 @@ Examples:
 All core character systems (`CharacterMovement`, `CharacterVisual`, `CharacterInteraction`, `CharacterActions`, `CharacterGameController`, `CharacterGoapController`, `NPCBehaviourTree`, `CharacterCombat`) now inherit from the abstract class **`CharacterSystem`**.
 This abstract base automatically caches `_character` during `Awake` and subscribes to essential lifecycle events (`OnIncapacitated`, `OnDeath`, `OnWakeUp`, `OnCombatStateChanged`). `Character.cs` no longer explicitly micro-manages the shutdown of its modules; each subsystem gracefully handles its own cleanup by overriding `HandleIncapacitated(Character)` or `HandleCombatStateChanged(bool)`.
 
+### System-to-System Communication (Inspector Linking)
+> [!IMPORTANT]
+> **New Architectural Rule**: Every time a `CharacterSystem` needs to call another `CharacterSystem` on the same entity, you **must use a [SerializeField]** to link them directly in the Unity Inspector instead of dynamically querying the Facade at runtime. This prevents missing component bugs and reduces rigid caching dependency. If you add a reference this way, always remind the user to link it in the prefab inspector!
+
 ## 2. Justice of the Peace and Availability (`IsFree()`)
 This is the ultimate safety method. `Character` scrutinizes all of its child components to tell the global system (GOAP, Player commands, Interactions) whether the character is allowed to be interrupted or is already busy.
 
