@@ -1,4 +1,4 @@
-﻿---
+---
 name: gameobject-component-get
 description: Get detailed information about a specific Component on a GameObject. Returns component type, enabled state, and optionally serialized fields and properties. Use this to inspect component data before modifying it. Use 'gameobject-find' tool to get the list of all components on the GameObject.
 ---
@@ -7,12 +7,8 @@ description: Get detailed information about a specific Component on a GameObject
 
 ## How to Call
 
-### CLI (Direct Tool Execution)
-
-Execute this tool directly via command line:
-
 ```bash
-npx unity-mcp-cli run-tool gameobject-component-get --input '{
+unity-mcp-cli run-tool gameobject-component-get --input '{
   "gameObjectRef": "string_value",
   "componentRef": "string_value",
   "includeFields": false,
@@ -20,6 +16,24 @@ npx unity-mcp-cli run-tool gameobject-component-get --input '{
   "deepSerialization": false
 }'
 ```
+
+> For complex input (multi-line strings, code), save the JSON to a file and use:
+> ```bash
+> unity-mcp-cli run-tool gameobject-component-get --input-file args.json
+> ```
+>
+> Or pipe via stdin (recommended):
+> ```bash
+> unity-mcp-cli run-tool gameobject-component-get --input-file - <<'EOF'
+> {"param": "value"}
+> EOF
+> ```
+
+
+### Troubleshooting
+
+If `unity-mcp-cli` is not found, either install it globally (`npm install -g unity-mcp-cli`) or use `npx unity-mcp-cli` instead.
+Read the /unity-initial-setup skill for detailed installation instructions.
 
 ## Input
 

@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 
 [System.Serializable]
 public class Relationship
@@ -8,6 +8,7 @@ public class Relationship
     [SerializeField] private int _relationValue;
     [SerializeField] private RelationshipType _relationshipType = RelationshipType.Stranger;
     [SerializeField] private bool _hasMet = false;
+    public bool IsNewlyAdded { get; set; } = false;
 
     // Constructeur mis à jour avec le propriétaire
     public Relationship(Character owner, Character relatedCharacter, int initialValue = 0, RelationshipType initialType = RelationshipType.Stranger)

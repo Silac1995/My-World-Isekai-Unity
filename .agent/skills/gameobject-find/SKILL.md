@@ -1,4 +1,4 @@
-﻿---
+---
 name: gameobject-find
 description: Finds specific GameObject by provided information in opened Prefab or in a Scene. First it looks for the opened Prefab, if any Prefab is opened it looks only there ignoring a scene. If no opened Prefab it looks into current active scene. Returns GameObject information and its children. Also, it returns Components preview just for the target GameObject.
 ---
@@ -7,12 +7,8 @@ description: Finds specific GameObject by provided information in opened Prefab 
 
 ## How to Call
 
-### CLI (Direct Tool Execution)
-
-Execute this tool directly via command line:
-
 ```bash
-npx unity-mcp-cli run-tool gameobject-find --input '{
+unity-mcp-cli run-tool gameobject-find --input '{
   "gameObjectRef": "string_value",
   "includeData": false,
   "includeComponents": false,
@@ -21,6 +17,24 @@ npx unity-mcp-cli run-tool gameobject-find --input '{
   "hierarchyDepth": 0
 }'
 ```
+
+> For complex input (multi-line strings, code), save the JSON to a file and use:
+> ```bash
+> unity-mcp-cli run-tool gameobject-find --input-file args.json
+> ```
+>
+> Or pipe via stdin (recommended):
+> ```bash
+> unity-mcp-cli run-tool gameobject-find --input-file - <<'EOF'
+> {"param": "value"}
+> EOF
+> ```
+
+
+### Troubleshooting
+
+If `unity-mcp-cli` is not found, either install it globally (`npm install -g unity-mcp-cli`) or use `npx unity-mcp-cli` instead.
+Read the /unity-initial-setup skill for detailed installation instructions.
 
 ## Input
 

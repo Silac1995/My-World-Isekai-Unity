@@ -9,6 +9,7 @@ public class CharacterRelation : MonoBehaviour
 
     [Header("Notifications")]
     [SerializeField] private MWI.UI.Notifications.ToastNotificationChannel _toastChannel;
+    [SerializeField] private MWI.UI.Notifications.NotificationChannel _relationNotificationChannel;
 
     public Character Character => _character;
     public List<Relationship> Relationships => _relationships;
@@ -18,6 +19,25 @@ public class CharacterRelation : MonoBehaviour
     public Relationship GetRelationshipWith(Character otherCharacter)
     {
         return _relationships.Find(r => r.RelatedCharacter == otherCharacter);
+    }
+
+    public void InitializeNotifications(MWI.UI.Notifications.NotificationChannel relationChannel, MWI.UI.Notifications.ToastNotificationChannel toastChannel = null)
+    {
+        _relationNotificationChannel = relationChannel;
+        if (toastChannel != null) _toastChannel = toastChannel;
+    }
+
+    public void ClearNotifications()
+    {
+        if (_relationNotificationChannel != null)
+        {
+            _relationNotificationChannel.Clear();
+        }
+    }
+
+    public bool HasNewRelations()
+    {
+        return _relationships.Exists(r => r.IsNewlyAdded);
     }
 
     // --- CHECKERS ---
@@ -63,6 +83,7 @@ public class CharacterRelation : MonoBehaviour
         if (existing != null) return existing;
 
         Relationship newRel = new Relationship(Character, otherCharacter);
+        newRel.IsNewlyAdded = true;
         _relationships.Add(newRel);
 
         Debug.Log($"<color=cyan>[Relation]</color> {_character.CharacterName} a rencontré {otherCharacter.CharacterName}");
@@ -74,6 +95,11 @@ public class CharacterRelation : MonoBehaviour
         }
 
         OnRelationsUpdated?.Invoke();
+
+        if (_relationNotificationChannel != null && _character.IsPlayer())
+        {
+            _relationNotificationChannel.Raise();
+        }
 
         return newRel;
     }
@@ -118,7 +144,14 @@ public class CharacterRelation : MonoBehaviour
 
         Debug.Log($"<color=white>[Sentiment]</color> L'avis de {_character.CharacterName} sur {target.CharacterName} est maintenant de {rel.RelationValue} ({rel.RelationType}) [Modif: {amount} -> {roundedAmount}]");
 
+        rel.IsNewlyAdded = true;
+
         OnRelationsUpdated?.Invoke();
+
+        if (_relationNotificationChannel != null && _character.IsPlayer())
+        {
+            _relationNotificationChannel.Raise();
+        }
 
         if (_toastChannel != null && _character.IsPlayer())
         {

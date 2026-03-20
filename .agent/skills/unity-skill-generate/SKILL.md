@@ -1,26 +1,26 @@
 ---
-name: console-clear-logs
-description: Clears the MCP log cache (used by console-get-logs) and the Unity Editor Console window. Useful for isolating errors related to a specific action by clearing logs before performing the action.
+name: unity-skill-generate
+description: Generate all skills from the existed Tools in the Unity Project.
 ---
 
-# Console / Clear Logs
+# Skill (Tool) / Generate All
 
 ## How to Call
 
 ```bash
-unity-mcp-cli run-tool console-clear-logs --input '{
-  "nothing": "string_value"
+unity-mcp-cli run-system-tool unity-skill-generate --input '{
+  "path": "string_value"
 }'
 ```
 
 > For complex input (multi-line strings, code), save the JSON to a file and use:
 > ```bash
-> unity-mcp-cli run-tool console-clear-logs --input-file args.json
+> unity-mcp-cli run-system-tool unity-skill-generate --input-file args.json
 > ```
 >
 > Or pipe via stdin (recommended):
 > ```bash
-> unity-mcp-cli run-tool console-clear-logs --input-file - <<'EOF'
+> unity-mcp-cli run-system-tool unity-skill-generate --input-file - <<'EOF'
 > {"param": "value"}
 > EOF
 > ```
@@ -35,7 +35,7 @@ Read the /unity-initial-setup skill for detailed installation instructions.
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `nothing` | `string` | No |  |
+| `path` | `string` | No | Path to the skills folder. If null or empty, the default path will be used. |
 
 ### Input JSON Schema
 
@@ -43,7 +43,7 @@ Read the /unity-initial-setup skill for detailed installation instructions.
 {
   "type": "object",
   "properties": {
-    "nothing": {
+    "path": {
       "type": "string"
     }
   }

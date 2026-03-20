@@ -459,8 +459,8 @@ public class Character : MonoBehaviour
         SwitchInteractionDetector<PlayerInteractionDetector, NPCInteractionDetector>();
 
         // Link with the centralized HUD
-        GameObject playerUIObj = GameObject.Find("UI_PlayerHUD");
-        if (playerUIObj != null && playerUIObj.TryGetComponent(out PlayerUI playerUI))
+        PlayerUI playerUI = UnityEngine.Object.FindAnyObjectByType<PlayerUI>(FindObjectsInactive.Include);
+        if (playerUI != null)
         {
             playerUI.Initialize(this.gameObject);
         }

@@ -61,7 +61,7 @@ public class UI_CharacterRelations : MonoBehaviour
             
             if (slotScript != null)
             {
-                slotScript.Setup(relationship);
+                slotScript.Setup(relationship, _character.CharacterRelation);
                 _spawnedSlots.Add(slotScript);
             }
         }

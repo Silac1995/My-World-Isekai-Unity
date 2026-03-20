@@ -16,6 +16,7 @@ public class PlayerUI : MonoBehaviour
 
     [Header("Notification Channels")]
     [SerializeField] private MWI.UI.Notifications.NotificationChannel _inventoryChannel;
+    [SerializeField] private MWI.UI.Notifications.NotificationChannel _relationsChannel;
     [SerializeField] private MWI.UI.Notifications.ToastNotificationChannel _toastChannel;
 
     // Le seul lien nécessaire pour la barre d'action
@@ -28,6 +29,23 @@ public class PlayerUI : MonoBehaviour
     [SerializeField] private UI_ChatBar _chatBar;
 
     private Character characterComponent;
+
+    private void Start()
+    {
+        if (character != null)
+        {
+            Initialize(character);
+        }
+        else
+        {
+            // Fallback: Aggressively seek out the player character at startup if not explicitly linked by SpawnManager yet
+            PlayerController player = UnityEngine.Object.FindAnyObjectByType<PlayerController>(FindObjectsInactive.Include);
+            if (player != null)
+            {
+                Initialize(player.gameObject);
+            }
+        }
+    }
 
     public void Initialize(GameObject newCharacter)
     {
@@ -78,6 +96,12 @@ public class PlayerUI : MonoBehaviour
         if (characterComponent.CharacterEquipment != null)
         {
             characterComponent.CharacterEquipment.InitializeNotifications(_inventoryChannel, _toastChannel);
+        }
+
+        // Push notification channels to the relation system
+        if (characterComponent.CharacterRelation != null)
+        {
+            characterComponent.CharacterRelation.InitializeNotifications(_relationsChannel, _toastChannel);
         }
 
         // Initialize the equipment UI if it's already active or for when it's opened
@@ -167,6 +191,11 @@ public class PlayerUI : MonoBehaviour
             characterComponent.CharacterEquipment.ClearNotifications();
         }
 
+        if (characterComponent != null && characterComponent.CharacterRelation != null)
+        {
+            characterComponent.CharacterRelation.ClearNotifications();
+        }
+
         this.character = null;
         this.characterComponent = null;
         if (_playerInfo != null)
@@ -184,6 +213,11 @@ public class PlayerUI : MonoBehaviour
         if (characterComponent != null && characterComponent.CharacterEquipment != null)
         {
             characterComponent.CharacterEquipment.ClearNotifications();
+        }
+
+        if (characterComponent != null && characterComponent.CharacterRelation != null)
+        {
+            characterComponent.CharacterRelation.ClearNotifications();
         }
 
         // Plus besoin de désabonner les actions ici, 

@@ -673,6 +673,7 @@ MonoBehaviour:
   _character: {fileID: 2536622428659117900}
   _relationships: []
   _toastChannel: {fileID: 11400000, guid: ea961c82479cb974997317e89f3aa9b6, type: 2}
+  _relationNotificationChannel: {fileID: 11400000, guid: 024e9612f55ae1b45ba94aaea97d6289, type: 2}
 --- !u!1 &4281310202761960642
 GameObject:
   m_ObjectHideFlags: 0
