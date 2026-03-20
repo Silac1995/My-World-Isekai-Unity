@@ -102,7 +102,7 @@ public class GoapAction_DepositResources : GoapAction
                 // Navigate to the center of the zone rather than the edge to ensure the item stays in
                 movement.SetDestination(targetCenter);
                 
-                _lastRouteRequestTime = UnityEngine.Time.time;
+                _lastRouteRequestTime = UnityEngine.Time.unscaledTime;
                 _isMoving = true;
             }
         }

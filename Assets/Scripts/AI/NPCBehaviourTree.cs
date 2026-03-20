@@ -41,9 +41,10 @@ public class NPCBehaviourTree : CharacterSystem
     private BTCond_NeedsToPunchOut _punchOutNode;
 
     [Header("Performance")]
-    [SerializeField] private int _tickInterval = 5; // Tick tous les N frames
+    [SerializeField] [Tooltip("Temps en secondes entre chaque tick du Behaviour Tree.")]
+    private float _tickIntervalSeconds = 0.1f; 
 
-    private int _frameOffset; // Décalage unique par NPC pour répartir la charge
+    private float _lastTickTime;
 
     public Blackboard Blackboard => _blackboard;
     public Character Character => _character;
@@ -52,8 +53,8 @@ public class NPCBehaviourTree : CharacterSystem
     {
         base.Awake();
 
-        // Chaque NPC a un offset différent pour ne pas tous ticker la même frame
-        _frameOffset = GetInstanceID() % _tickInterval;
+        // Stagger initial : chaque NPC commence son cycle à un moment légèrement différent
+        _lastTickTime = UnityEngine.Time.time + (GetInstanceID() % 10) * 0.02f;
     }
 
     protected override void HandleIncapacitated(Character character)
@@ -141,8 +142,10 @@ public class NPCBehaviourTree : CharacterSystem
     {
         if (!_isInitialized || _root == null) return;
 
-        // Stagger : chaque NPC tick seulement 1 frame sur N (sauf si forcé)
-        if (!_forceNextTick && (Time.frameCount + _frameOffset) % _tickInterval != 0) return;
+        // Stagger basé sur le temps plutôt que sur les frames pour supporter le Time.timeScale élevé (Fast-Forward).
+        if (!_forceNextTick && Time.time < _lastTickTime + _tickIntervalSeconds) return;
+
+        _lastTickTime = Time.time;
         _forceNextTick = false;
 
         // Le NPC n'est pas un joueur et doit être vivant

@@ -85,5 +85,11 @@ In multiplayer contexts, avoid sending network messages, syncing state, or trigg
 - **Tick-based or interval-based sync**: if periodic sync is required, use a fixed network tick rate or a timed interval rather than every frame.
 
 **Additionally:**
-- Never assume `Update()` runs at the same rate on all clients. Frame rates differ; always use authoritative server time or fixed ticks for anything gameplay-critical.
 - Separate client-side prediction logic (which may use `Update()`) from server-authoritative validation (which should be event or tick-driven).
+
+## 9. Time.timeScale and Game Speed Context
+The project uses a dynamic Game Speed controller (up to 8x "Giga Speed"). You must always write time-dependent code that scales flawlessly:
+- **Coroutines & UI:** Never use `WaitForSeconds` or `Time.deltaTime` for UI animations, Toast Notifications, or real-world UI pauses. Always use `WaitForSecondsRealtime` and `Time.unscaledDeltaTime` to prevent them from freezing when paused or rushing at 8x speed.
+- **Tick Throttling:** Never use `if (timer >= interval)` for game-simulation fixed loops. At high speeds, `Time.deltaTime` exceeds the interval entirely, processing only 1 tick per frame and causing the game to fall behind. Use a `for` loop to process accumulated `ticksToProcess` seamlessly.
+- **AI & Logic Staggers:** Never stagger AI using `Time.frameCount` (e.g. `if (Time.frameCount % 5 != 0) return;`). At 8x speed, 5 frames means almost a full in-game second of AI doing nothing. Always use `Time.time`-based staggering.
+- **Pathing Timeouts:** For async systems like `NavMesh.CalculatePath`, never use `Time.time` for the fail timeout. Use `Time.unscaledTime` so the algorithm always gets the exact same amount of real-world computing time (e.g., 0.2s) regardless of whether the simulation is paused or sped up.

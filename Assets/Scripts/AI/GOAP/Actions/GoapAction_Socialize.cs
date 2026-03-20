@@ -87,13 +87,13 @@ public class GoapAction_Socialize : GoapAction
         // 1. Déplacement vers la cible (Socialize trigger distance is roughly 1f here because we already take the edge)
         if (distance > 1.5f)
         {
-            bool hasPathFailed = (UnityEngine.Time.time - _lastRouteRequestTime > 0.2f) && (movement.PathStatus == UnityEngine.AI.NavMeshPathStatus.PathInvalid || (!movement.HasPath && !movement.PathPending));
+            bool hasPathFailed = (UnityEngine.Time.unscaledTime - _lastRouteRequestTime > 0.2f) && (movement.PathStatus == UnityEngine.AI.NavMeshPathStatus.PathInvalid || (!movement.HasPath && !movement.PathPending));
 
             if (!_isMoving || Vector3.Distance(_lastTargetPos, targetPos) > 1f || hasPathFailed)
             {
                 movement.SetDestination(targetPos);
                 _lastTargetPos = targetPos;
-                _lastRouteRequestTime = UnityEngine.Time.time;
+                _lastRouteRequestTime = UnityEngine.Time.unscaledTime;
                 _isMoving = true;
             }
             return;

@@ -67,13 +67,13 @@ public class GoapAction_GoShopping : GoapAction
 
             if (distance > 3f)
             {
-                bool hasPathFailed = (UnityEngine.Time.time - _lastRouteRequestTime > 0.2f) && (movement.PathStatus == UnityEngine.AI.NavMeshPathStatus.PathInvalid || (!movement.HasPath && !movement.PathPending));
+                bool hasPathFailed = (UnityEngine.Time.unscaledTime - _lastRouteRequestTime > 0.2f) && (movement.PathStatus == UnityEngine.AI.NavMeshPathStatus.PathInvalid || (!movement.HasPath && !movement.PathPending));
 
                 if (!_isMoving || Vector3.Distance(_lastTargetPos, targetPos) > 1f || hasPathFailed)
                 {
                     movement.SetDestination(_shop.transform.position);
                     _lastTargetPos = targetPos;
-                    _lastRouteRequestTime = UnityEngine.Time.time;
+                    _lastRouteRequestTime = UnityEngine.Time.unscaledTime;
                     _isMoving = true;
                 }
                 return;

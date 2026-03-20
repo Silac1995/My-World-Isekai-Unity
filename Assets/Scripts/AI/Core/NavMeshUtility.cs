@@ -67,7 +67,7 @@ namespace MWI.AI
         {
             if (movement == null) return true;
             
-            bool hasPassedThreshold = (UnityEngine.Time.time - timeSinceLastRequest) > minThresholdSeconds;
+            bool hasPassedThreshold = (UnityEngine.Time.unscaledTime - timeSinceLastRequest) > minThresholdSeconds;
             if (!hasPassedThreshold) return false;
 
             bool pathInvalid = movement.PathStatus == UnityEngine.AI.NavMeshPathStatus.PathInvalid;

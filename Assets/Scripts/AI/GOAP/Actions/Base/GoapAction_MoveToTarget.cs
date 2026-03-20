@@ -153,7 +153,7 @@ public abstract class GoapAction_MoveToTarget : GoapAction
 
                 movement.SetDestination(finalDest);
                 _lastTargetPos = rawDest; // Track the "real" destination for moving targets
-                _lastRouteRequestTime = UnityEngine.Time.time;
+                _lastRouteRequestTime = UnityEngine.Time.unscaledTime;
                 _isMoving = true;
             }
         }

@@ -274,13 +274,13 @@ public class CharacterInteraction : CharacterSystem
                 movement.Resume();
                 
                 // --- SÉCURITÉ DE THREAD NAVMESH ---
-                bool hasPathFailed = (Time.time - lastRouteRequestTime > 0.2f) && (movement.Agent.pathStatus == UnityEngine.AI.NavMeshPathStatus.PathInvalid || (!movement.Agent.hasPath && !movement.Agent.pathPending));
+                bool hasPathFailed = (Time.unscaledTime - lastRouteRequestTime > 0.2f) && (movement.Agent.pathStatus == UnityEngine.AI.NavMeshPathStatus.PathInvalid || (!movement.Agent.hasPath && !movement.Agent.pathPending));
 
                 if (Vector3.Distance(lastDesiredPos, initiatorMeetingPos) > 1f || hasPathFailed)
                 {
                     movement.SetDestination(initiatorMeetingPos);
                     lastDesiredPos = initiatorMeetingPos;
-                    lastRouteRequestTime = Time.time;
+                    lastRouteRequestTime = Time.unscaledTime;
                 }
             }
 
@@ -376,13 +376,13 @@ public class CharacterInteraction : CharacterSystem
             if (movement != null)
             {
                 movement.Resume();
-                bool hasPathFailed = (Time.time - lastRouteRequestTime > 0.2f) && (movement.Agent.pathStatus == UnityEngine.AI.NavMeshPathStatus.PathInvalid || (!movement.Agent.hasPath && !movement.Agent.pathPending));
+                bool hasPathFailed = (Time.unscaledTime - lastRouteRequestTime > 0.2f) && (movement.Agent.pathStatus == UnityEngine.AI.NavMeshPathStatus.PathInvalid || (!movement.Agent.hasPath && !movement.Agent.pathPending));
 
                 if (Vector3.Distance(lastDesiredPos, destination) > 1f || hasPathFailed)
                 {
                     movement.SetDestination(destination);
                     lastDesiredPos = destination;
-                    lastRouteRequestTime = Time.time;
+                    lastRouteRequestTime = Time.unscaledTime;
                 }
             }
 

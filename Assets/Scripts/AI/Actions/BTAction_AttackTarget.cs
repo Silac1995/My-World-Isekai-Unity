@@ -64,7 +64,7 @@ namespace MWI.AI
             else
             {
                 // Pas à portée : se rapprocher en évitant le spam NavMesh
-                bool hasPathFailed = (UnityEngine.Time.time - _lastRouteRequestTime > 0.2f) 
+                bool hasPathFailed = (UnityEngine.Time.unscaledTime - _lastRouteRequestTime > 0.2f) 
                                      && (movement.PathStatus == UnityEngine.AI.NavMeshPathStatus.PathInvalid 
                                      || (!movement.HasPath && !movement.PathPending));
 
@@ -72,7 +72,7 @@ namespace MWI.AI
                 {
                     movement.SetDestination(target.transform.position);
                     _lastTargetPos = target.transform.position;
-                    _lastRouteRequestTime = UnityEngine.Time.time;
+                    _lastRouteRequestTime = UnityEngine.Time.unscaledTime;
                 }
                 
                 bb.Set(Blackboard.KEY_COMBAT_TARGET, target);
