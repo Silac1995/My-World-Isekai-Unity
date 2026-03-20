@@ -7,7 +7,6 @@ public class CharacterEquipmentUI : MonoBehaviour
     [SerializeField] private Character _character;
     
     [Header("Window Components")]
-    [SerializeField] private Button _buttonClose;
     [SerializeField] private TextMeshProUGUI _selectedEquipmentLayer;
     [SerializeField] private UI_Inventory _ui_inventory;
 
@@ -66,8 +65,6 @@ public class CharacterEquipmentUI : MonoBehaviour
 
     private void SetupButtonEvents()
     {
-        _buttonClose?.onClick.AddListener(CloseUI);
-        
         _buttonArmorLayer?.onClick.AddListener(() => SwitchLayer(WearableLayerEnum.Armor));
         _buttonClothingLayer?.onClick.AddListener(() => SwitchLayer(WearableLayerEnum.Clothing));
         _buttonUnderwearLayer?.onClick.AddListener(() => SwitchLayer(WearableLayerEnum.Underwear));
@@ -82,7 +79,6 @@ public class CharacterEquipmentUI : MonoBehaviour
 
     private void RemoveAllButtonListeners()
     {
-        _buttonClose?.onClick.RemoveAllListeners();
         _buttonArmorLayer?.onClick.RemoveAllListeners();
         _buttonClothingLayer?.onClick.RemoveAllListeners();
         _buttonUnderwearLayer?.onClick.RemoveAllListeners();
