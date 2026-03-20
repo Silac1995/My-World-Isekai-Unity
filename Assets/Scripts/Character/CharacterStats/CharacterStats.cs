@@ -6,6 +6,8 @@ using UnityEngine;
 [System.Serializable]
 public class CharacterStats : MonoBehaviour
 {
+    public event Action OnStatsUpdated;
+
     [Header("References")]
     [SerializeField] private Character character;
     [SerializeField] private CharacterEquipment equipment;
@@ -176,6 +178,8 @@ public class CharacterStats : MonoBehaviour
         moveSpeed.UpdateFromLinkedStat();
 
         Debug.Log("<color=green>[Stats]</color> Statistiques dynamiques (Primaires & Tertiaires) recalculées.");
+        
+        OnStatsUpdated?.Invoke();
     }
 
     public CharacterBaseStats GetBaseStat(StatType statType)

@@ -11,6 +11,7 @@ public class PlayerUI : MonoBehaviour
     [SerializeField] private TextMeshProUGUI playerName;
     [SerializeField] private Button _buttonEquipmentUI;
     [SerializeField] private Button _buttonRelationsUI;
+    [SerializeField] private Button _buttonStatsUI;
     [SerializeField] private MWI.UI.TimeUI _timeUI;
 
     [Header("Notification Channels")]
@@ -24,6 +25,7 @@ public class PlayerUI : MonoBehaviour
     [Header("UI Windows")]
     [SerializeField] private CharacterEquipmentUI _equipmentUI;
     [SerializeField] private UI_CharacterRelations _relationsUI;
+    [SerializeField] private UI_CharacterStats _statsUI;
 
     [Header("Status Effects")]
     [SerializeField] private Transform _statusEffectsContainer;
@@ -89,6 +91,11 @@ public class PlayerUI : MonoBehaviour
             _relationsUI.Initialize(characterComponent);
         }
 
+        if (_statsUI != null)
+        {
+            _statsUI.Initialize(characterComponent);
+        }
+
         if (characterComponent.StatusManager != null)
         {
             characterComponent.StatusManager.OnStatusEffectAdded += HandleStatusEffectAdded;
@@ -111,6 +118,12 @@ public class PlayerUI : MonoBehaviour
         {
             _buttonRelationsUI.onClick.RemoveAllListeners();
             _buttonRelationsUI.onClick.AddListener(ToggleRelationsUI);
+        }
+
+        if (_buttonStatsUI != null)
+        {
+            _buttonStatsUI.onClick.RemoveAllListeners();
+            _buttonStatsUI.onClick.AddListener(ToggleStatsUI);
         }
     }
 
@@ -139,6 +152,19 @@ public class PlayerUI : MonoBehaviour
         if (!isCurrentlyActive && characterComponent != null)
         {
             _relationsUI.Initialize(characterComponent);
+        }
+    }
+
+    public void ToggleStatsUI()
+    {
+        if (_statsUI == null) return;
+
+        bool isCurrentlyActive = _statsUI.gameObject.activeSelf;
+        _statsUI.gameObject.SetActive(!isCurrentlyActive);
+
+        if (!isCurrentlyActive && characterComponent != null)
+        {
+            _statsUI.Initialize(characterComponent);
         }
     }
 
