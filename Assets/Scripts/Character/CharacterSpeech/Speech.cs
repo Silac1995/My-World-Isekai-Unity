@@ -25,27 +25,57 @@ public class Speech : MonoBehaviour
         _textElement.text = "";
         int charCount = 0;
 
-        // Vitesse personnalisée ou aléatoire (0.04 = Rapide, 0.06 = Plus lent)
-        float currentSpeed = typingSpeed > 0 ? typingSpeed : Random.Range(0.01f, 0.03f);
+        // Utilisation du paramètre s'il est > 0, sinon utilisation de la variable sérialisée
+        float currentSpeed = typingSpeed > 0f ? typingSpeed : _typingSpeed;
 
-        foreach (char letter in message.ToCharArray())
+        if (currentSpeed <= 0f)
         {
-            _textElement.text += letter;
-            charCount++;
-
-            if (letter != ' ' && charCount % 3 == 0 && voice != null && source != null)
-            {
-                AudioClip clipToPlay = voice.GetRandomClip();
-                if (clipToPlay != null)
-                {
-                    // On applique le pitch unique du personnage
-                    // Optionnel : on ajoute un tout petit offset pour le r�alisme
-                    source.pitch = characterPitch + Random.Range(-0.05f, 0.05f);
-                    source.PlayOneShot(clipToPlay);
-                }
-            }
-            yield return new WaitForSecondsRealtime(currentSpeed);
+            // Typage instantané
+            _textElement.text = message;
+            _typeRoutine = null;
+            onComplete?.Invoke();
+            yield break;
         }
+
+        float timeAccumulator = 0f;
+        char[] characters = message.ToCharArray();
+
+        while (charCount < characters.Length)
+        {
+            // Accumulateur de temps basé sur Time.unscaledDeltaTime pour la lisibilité
+            // Ce système permet d'afficher plusieurs lettres par frame si la vitesse est très rapide !
+            timeAccumulator += Time.unscaledDeltaTime;
+
+            int lettersToAdd = Mathf.FloorToInt(timeAccumulator / currentSpeed);
+
+            if (lettersToAdd > 0)
+            {
+                int lettersAdded = 0;
+                while (lettersAdded < lettersToAdd && charCount < characters.Length)
+                {
+                    char letter = characters[charCount];
+                    _textElement.text += letter;
+                    charCount++;
+                    lettersAdded++;
+                    
+                    if (letter != ' ' && charCount % 3 == 0 && voice != null && source != null)
+                    {
+                        AudioClip clipToPlay = voice.GetRandomClip();
+                        if (clipToPlay != null)
+                        {
+                            source.pitch = characterPitch + Random.Range(-0.05f, 0.05f);
+                            source.PlayOneShot(clipToPlay);
+                        }
+                    }
+                }
+                
+                // Soustraire le temps consommé
+                timeAccumulator -= lettersToAdd * currentSpeed;
+            }
+
+            yield return null; // Attendre la frame suivante
+        }
+
         _typeRoutine = null;
         onComplete?.Invoke();
     }

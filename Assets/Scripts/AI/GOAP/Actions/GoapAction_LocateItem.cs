@@ -124,6 +124,18 @@ namespace MWI.AI
                 }
                 else
                 {
+                    // NEW CHECK: Are the remaining items already picked up by another transporter?
+                    // Because multiple transporters can be assigned the same order.
+                    int accountedFor = _job.CurrentOrder.DeliveredQuantity + _job.CurrentOrder.InTransitQuantity;
+                    if (accountedFor >= _job.CurrentOrder.Quantity)
+                    {
+                        Debug.LogWarning($"<color=cyan>[LocateItem]</color> {_job.Worker.CharacterName} remarque que tous les items sont déjà en transit ou livrés. Abandon local de la commande.");
+                        _job.WaitCooldown = 1f;
+                        _job.CancelCurrentOrder(false); // DO NOT report missing items globally!
+                        _isComplete = true;
+                        return;
+                    }
+
                     // Verify if items are logically there but not visible (maybe crafter hasn't dropped them yet)
                     // NOUVEAU: On vérifie *spécifiquement* si NOS items réservés sont encore dans l'inventaire physique du bâtiment.
                     bool itemsStillInInventory = false;

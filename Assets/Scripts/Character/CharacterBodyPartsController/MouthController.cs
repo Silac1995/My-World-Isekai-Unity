@@ -1,4 +1,4 @@
-using System.Collections;
+ï»¿using System.Collections;
 using UnityEngine;
 
 public class MouthController : MonoBehaviour
@@ -26,13 +26,13 @@ public class MouthController : MonoBehaviour
             if (renderer.gameObject.name.ToLower().Contains("mouth"))
             {
                 _characterMouth = new CharacterMouth(_bodyPartsController, renderer.gameObject);
-                SetToNormal(); // État par défaut
+                SetToNormal(); // Ã‰tat par dÃ©faut
                 break;
             }
         }
     }
 
-    // --- Méthodes d'expressions fixes ---
+    // --- MÃ©thodes d'expressions fixes ---
 
     public void SetToNormal() => _characterMouth?.SetSprite("Mouth_normal");
 
@@ -66,23 +66,23 @@ public class MouthController : MonoBehaviour
         while (true)
         {
             SetToTalk01();
-            yield return new WaitForSeconds(_talkingSpeed);
+            yield return new WaitForSecondsRealtime(_talkingSpeed);
 
             SetToTalk02();
-            yield return new WaitForSeconds(_talkingSpeed);
+            yield return new WaitForSecondsRealtime(_talkingSpeed);
 
-            // Un petit passage par Normal ou Talk01 pour briser la répétition si tu veux
+            // Un petit passage par Normal ou Talk01 pour briser la rÃ©pÃ©tition si tu veux
             if (Random.value > 0.7f)
             {
                 SetToNormal();
-                yield return new WaitForSeconds(_talkingSpeed / 2);
+                yield return new WaitForSecondsRealtime(_talkingSpeed / 2);
             }
 
             SetToTalk01();
-            yield return new WaitForSeconds(_talkingSpeed);
+            yield return new WaitForSecondsRealtime(_talkingSpeed);
 
             SetToNormal();
-            yield return new WaitForSeconds(_talkingSpeed);
+            yield return new WaitForSecondsRealtime(_talkingSpeed);
         }
     }
 }

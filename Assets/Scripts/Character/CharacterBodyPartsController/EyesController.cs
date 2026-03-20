@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.U2D.Animation;
@@ -213,13 +213,13 @@ public class EyesController : MonoBehaviour
         {
             // Attente avant le prochain clignement
             float waitTime = Random.Range(minBlinkInterval, maxBlinkInterval);
-            yield return new WaitForSeconds(waitTime);
+            yield return new WaitForSecondsRealtime(waitTime);
 
             // Fermer les yeux
             SetEyesClosed(true);
 
             // Maintenir ferm� pendant blinkDuration
-            yield return new WaitForSeconds(blinkDuration);
+            yield return new WaitForSecondsRealtime(blinkDuration);
 
             // R�ouvrir
             SetEyesClosed(false);
