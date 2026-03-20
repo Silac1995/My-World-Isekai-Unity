@@ -78,11 +78,13 @@ Combat massively relies on `CharacterStats`. It is critical to respect its archi
 
 ### 6. Combat Progression (XP & Leveling)
 Combat directly drives character progression via the `CharacterCombatLevel` component (a `CharacterSystem`).
-- **XP Acquisition**: Characters gain raw Base XP for landing hits (e.g., 2) and defeating enemies (e.g., 15) in `CombatStyleAttack`.
+- **Centralized XP**: Experience is strictly awarded inside `CharacterCombat.TakeDamage()` to centralize standard hits, DoTs, and spells.
+- **Proportional EXP Acquisition**: Instead of flat per-hit XP, a target yields EXP proportionally to the exact amount of HP depleted relative to their MaxHP. Each character has a `BaseExpYield` (e.g., 50). Stripping 10% of their MAX HP instantly rewards 10% of their `BaseExpYield`. The system explicitly calculates `hpBefore - hpAfter` to prevent rewarding excessive EXP when executing an enemy with 1 HP left.
+- **Kill Bonus**: A minor +10% yield bonus is awarded for landing the killing blow.
 - **Dynamic Balancing (`CalculateCombatExp`)**:
-  - **Boost**: Hitting a target with a *higher* level grants up to a **+50%** XP multiplier (Caps at 10 level difference).
-  - **Malus**: Hitting a target with a *lower* level implies a penalty up to **-75%** XP (Caps at 10 level difference).
-- **Leveling Up**: Accumulating enough XP (scaling by 50 per level) automatically triggers `LevelUp()`. This logs a `CombatLevelEntry` to history and grants `_statPointsPerLevel` (default 5) as `_unassignedStatPoints` for the player/AI to distribute later.
+  - **Boost**: Hitting a target with a *higher* level grants up to a **+50%** multiplier (caps at 10 level difference).
+  - **Malus**: Hitting a target with a *lower* level implies a penalty up to **-75%** multiplier (caps at 10 level difference).
+- **Leveling Up**: Accumulating enough XP (scaling by 50 per level) automatically triggers `LevelUp()`. This logs a `CombatLevelEntry` to history, grants `_statPointsPerLevel` (default 5) as `_unassignedStatPoints` for the player/AI to distribute later, and **instantly heals the character for 30% of their Max HP**.
 
 ## Tips & Troubleshooting
 - **A character never attacks**: 

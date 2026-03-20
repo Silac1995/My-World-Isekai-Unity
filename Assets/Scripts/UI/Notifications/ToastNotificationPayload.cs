@@ -19,14 +19,16 @@ namespace MWI.UI.Notifications
         public Sprite Icon;
         public ToastType Type;
         public float Duration;
+        public Color BackgroundColor;
 
-        public ToastNotificationPayload(string message, ToastType type = ToastType.Info, float duration = 3f, string title = "", Sprite icon = null)
+        public ToastNotificationPayload(string message, ToastType type = ToastType.Info, float duration = 3f, string title = "", Sprite icon = null, Color? backgroundColor = null)
         {
             Title = title;
             Message = message;
             Icon = icon;
             Type = type;
             Duration = duration;
+            BackgroundColor = backgroundColor ?? Color.black;
         }
     }
 }

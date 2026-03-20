@@ -441,7 +441,11 @@ public class CharacterCombat : CharacterSystem
         if (_character.Stats == null || _character.Stats.Health == null || !_character.IsAlive()) return;
 
         bool wasAlive = _character.IsAlive();
+        
+        float hpBefore = _character.Stats.Health.CurrentAmount;
         _character.Stats.Health.DecreaseCurrentAmount(amount);
+        float hpAfter = Mathf.Max(0f, _character.Stats.Health.CurrentAmount);
+        float actualDamageDealt = hpBefore - hpAfter;
         _lastCombatActionTime = Time.time;
         
         // La méthode ChangeCombatMode déclenche naturellement HandleCombatStateChanged 
@@ -461,12 +465,17 @@ public class CharacterCombat : CharacterSystem
         }
 
         // --- PROGRESSION EXP ---
-        if (source != null && source.CharacterCombatLevel != null && amount > 0)
+        if (source != null && source.CharacterCombatLevel != null && actualDamageDealt > 0)
         {
             int targetLevel = _character.CharacterCombatLevel != null ? _character.CharacterCombatLevel.CurrentLevel : 1;
+            int targetYield = _character.CharacterCombatLevel != null ? _character.CharacterCombatLevel.BaseExpYield : 10;
+            
+            float maxHp = Mathf.Max(1f, _character.Stats.Health.MaxValue);
+            float damagePercentage = actualDamageDealt / maxHp;
+
             bool isKill = wasAlive && !_character.IsAlive();
             
-            int expGained = source.CharacterCombatLevel.CalculateCombatExp(targetLevel, isKill);
+            int expGained = source.CharacterCombatLevel.CalculateCombatExp(targetLevel, isKill, damagePercentage, targetYield);
             source.CharacterCombatLevel.AddExperience(expGained);
         }
     }

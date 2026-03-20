@@ -318,6 +318,8 @@ GameObject:
   - component: {fileID: 8919339282085374608}
   - component: {fileID: 4789373631635152152}
   - component: {fileID: 7247591595501710122}
+  - component: {fileID: 6208691154060512339}
+  - component: {fileID: 4132175472944145837}
   m_Layer: 5
   m_Name: UI_ToastElement
   m_TagString: Untagged
@@ -361,7 +363,7 @@ MonoBehaviour:
   _titleText: {fileID: 2858057772832255982}
   _messageText: {fileID: 1365540364345363155}
   _iconImage: {fileID: 0}
-  _backgroundImage: {fileID: 0}
+  _backgroundImage: {fileID: 4132175472944145837}
   _canvasGroup: {fileID: 7115604604731824448}
   _fadeDuration: 0.3
 --- !u!225 &7115604604731824448
@@ -439,3 +441,41 @@ MonoBehaviour:
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.ContentSizeFitter
   m_HorizontalFit: 0
   m_VerticalFit: 2
+--- !u!222 &6208691154060512339
+CanvasRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6747387497780411937}
+  m_CullTransparentMesh: 1
+--- !u!114 &4132175472944145837
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6747387497780411937}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
+  m_Material: {fileID: 0}
+  m_Color: {r: 0, g: 0, b: 0, a: 0.85}
+  m_RaycastTarget: 1
+  m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
+  m_Maskable: 1
+  m_OnCullStateChanged:
+    m_PersistentCalls:
+      m_Calls: []
+  m_Sprite: {fileID: 21300000, guid: 9875497077b8033498fea8058a1bd2d5, type: 3}
+  m_Type: 0
+  m_PreserveAspect: 0
+  m_FillCenter: 1
+  m_FillMethod: 4
+  m_FillAmount: 1
+  m_FillClockwise: 1
+  m_FillOrigin: 0
+  m_UseSpriteMesh: 0
+  m_PixelsPerUnitMultiplier: 1

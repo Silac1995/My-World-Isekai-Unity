@@ -95,9 +95,25 @@ public abstract class CharacterPrimaryStats : CharacterBaseStats
         CurrentAmount = Mathf.Max(0f, CurrentAmount - value);
     }
 
+    /// <summary>
+    /// Reduces CurrentAmount by a percentage of MaxValue (0.0 to 1.0).
+    /// </summary>
+    public void DecreaseCurrentAmountPercent(float percentage)
+    {
+        DecreaseCurrentAmount(MaxValue * Mathf.Clamp01(percentage));
+    }
+
     public void IncreaseCurrentAmount(float value)
     {
         CurrentAmount = Mathf.Min(MaxValue, CurrentAmount + value);
+    }
+
+    /// <summary>
+    /// Increases CurrentAmount by a percentage of MaxValue (0.0 to 1.0).
+    /// </summary>
+    public void IncreaseCurrentAmountPercent(float percentage)
+    {
+        IncreaseCurrentAmount(MaxValue * Mathf.Clamp01(percentage));
     }
 
     public bool IsFull()

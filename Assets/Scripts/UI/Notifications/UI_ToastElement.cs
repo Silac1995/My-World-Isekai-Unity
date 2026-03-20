@@ -53,7 +53,10 @@ namespace MWI.UI.Notifications
                 _iconImage.gameObject.SetActive(payload.Icon != null);
             }
 
-            // Optional: You could adjust the _backgroundImage.color based on payload.Type here
+            if (_backgroundImage != null)
+            {
+                _backgroundImage.color = payload.BackgroundColor;
+            }
 
             // Start Animation
             if (_activeRoutine != null)

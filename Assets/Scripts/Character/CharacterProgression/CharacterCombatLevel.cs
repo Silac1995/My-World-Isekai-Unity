@@ -9,6 +9,8 @@ public class CharacterCombatLevel : CharacterSystem
     [SerializeField] private int _unassignedStatPoints = 0;
 
     [Header("XP Balancing")]
+    [Tooltip("The total amount of EXP this character yields when defeated (100% HP lost).")]
+    [SerializeField] private int _baseExpYield = 50;
     [SerializeField] private float _maxLevelDifference = 10f;
     [SerializeField] private float _maxXpReduction = 0.75f; // Reduces XP up to 75% max for lower targets
     [SerializeField] private float _maxXpBoost = 0.5f;      // Boosts XP up to 50% max for higher targets
@@ -22,6 +24,7 @@ public class CharacterCombatLevel : CharacterSystem
     public int CurrentExperience => _currentExperience;
     public int StatPointsPerLevel => _statPointsPerLevel;
     public int UnassignedStatPoints => _unassignedStatPoints;
+    public int BaseExpYield => _baseExpYield;
     
     /// <summary>
     /// The character's level is the sum of his level list.
@@ -52,9 +55,14 @@ public class CharacterCombatLevel : CharacterSystem
         return 100 + (CurrentLevel - 1) * 50;
     }
 
-    public int CalculateCombatExp(int targetLevel, bool isKill)
+    public int CalculateCombatExp(int targetLevel, bool isKill, float damagePercentage, int targetExpYield)
     {
-        float baseExp = isKill ? 15f : 2f;
+        // Calculate the base EXP deserved based strictly on the % of MaxHP depleted
+        float baseExp = targetExpYield * damagePercentage;
+        
+        // Minor bonus to the player who actually executes the kill
+        if (isKill) baseExp += (targetExpYield * 0.1f); // 10% bonus for the killing blow
+
         int levelDiff = targetLevel - CurrentLevel;
         int absDiff = Mathf.Abs(levelDiff);
 
@@ -114,6 +122,12 @@ public class CharacterCombatLevel : CharacterSystem
 
         if (_character != null)
         {
+            // --- 30% Heal on Level Up ---
+            if (_character.Stats != null && _character.Stats.Health != null)
+            {
+                _character.Stats.Health.HealPercent(0.3f);
+            }
+
             Debug.Log($"<color=yellow>[Progression]</color> {_character.CharacterName} a atteint le niveau Combat {CurrentLevel} ! Points restants : {_unassignedStatPoints}");
             
             if (_expToastChannel != null && _character.Controller is PlayerController)

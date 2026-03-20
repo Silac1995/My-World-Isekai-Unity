@@ -6,6 +6,7 @@ public class UI_ChatBar : MonoBehaviour
     [SerializeField] private TMP_InputField _inputField;
     private PlayerController _localPlayerController;
     private int _lastSubmitFrame = -1;
+    private CanvasGroup _canvasGroup;
 
     private void Start()
     {
@@ -13,6 +14,13 @@ public class UI_ChatBar : MonoBehaviour
         {
             _inputField = GetComponentInChildren<TMP_InputField>();
         }
+
+        _canvasGroup = GetComponent<CanvasGroup>();
+        if (_canvasGroup == null)
+        {
+            _canvasGroup = gameObject.AddComponent<CanvasGroup>();
+        }
+        UpdateVisibility(false);
 
         if (_inputField != null)
         {
@@ -48,6 +56,23 @@ public class UI_ChatBar : MonoBehaviour
         if (_localPlayerController == null)
         {
             _localPlayerController = FindObjectOfType<PlayerController>();
+        }
+
+        if (_inputField != null)
+        {
+            UpdateVisibility(_inputField.isFocused);
+        }
+    }
+
+    private void UpdateVisibility(bool visible)
+    {
+        if (_canvasGroup != null)
+        {
+            _canvasGroup.alpha = visible ? 1f : 0f;
+            // Removed: _canvasGroup.interactable = visible;
+            // The CanvasGroup must remain interactable=true globally, 
+            // otherwise EventSystem refuses to `.Select()` the InputField via script!
+            _canvasGroup.blocksRaycasts = visible;
         }
     }
 
