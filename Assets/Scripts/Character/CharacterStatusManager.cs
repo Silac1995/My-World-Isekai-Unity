@@ -142,6 +142,8 @@ public class CharacterStatusManager : CharacterSystem
     {
         if (_unconsciousEffect != null && HasEffect(_unconsciousEffect))
             RemoveEffect(_unconsciousEffect);
+            
+        EvaluateOutOfCombatEffect();
     }
 
     protected override void HandleCombatStateChanged(bool isCombat)
@@ -157,7 +159,16 @@ public class CharacterStatusManager : CharacterSystem
                 ApplyEffect(_unconsciousEffect);
         }
 
-        // --- GESTION REGEN HORS COMBAT (MANUEL) ---
+        EvaluateOutOfCombatEffect();
+    }
+
+    private void EvaluateOutOfCombatEffect()
+    {
+        if (_character == null || _character.Stats == null) return;
+
+        bool isInBattle = _character.CharacterCombat != null && _character.CharacterCombat.IsInBattle;
+        bool isCombat = _character.CharacterCombat != null && _character.CharacterCombat.IsCombatMode;
+
         bool hasEnoughHealth = _character.Stats.Health.CurrentAmount >= _character.Stats.Health.MaxValue * 0.5f;
         bool shouldHaveOutOfCombat = !isCombat && !isInBattle && _character.IsAlive() && !_character.IsUnconscious && !hasEnoughHealth;
 
