@@ -130,11 +130,50 @@ public class CharacterCombatLevel : CharacterSystem
 
             Debug.Log($"<color=yellow>[Progression]</color> {_character.CharacterName} a atteint le niveau Combat {CurrentLevel} ! Points restants : {_unassignedStatPoints}");
             
-            if (_expToastChannel != null && _character.Controller is PlayerController)
+            if (_character.Controller is PlayerController)
             {
-                _expToastChannel.Raise(new ToastNotificationPayload($"Level Up! Combat Level {CurrentLevel}", ToastType.Success, 4f, "Progression"));
+                if (_expToastChannel != null)
+                {
+                    _expToastChannel.Raise(new ToastNotificationPayload($"Level Up! Combat Level {CurrentLevel}", ToastType.Success, 4f, "Progression"));
+                }
+            }
+            else
+            {
+                AutoAllocateStats();
             }
         }
+    }
+
+    private void AutoAllocateStats()
+    {
+        if (_character == null || _character.Stats == null) return;
+
+        StatType[] coreStats = new StatType[] 
+        { 
+            StatType.Strength, StatType.Agility, StatType.Dexterity, 
+            StatType.Intelligence, StatType.Endurance, StatType.Charisma 
+        };
+
+        while (_unassignedStatPoints > 0)
+        {
+            StatType randomStat = coreStats[UnityEngine.Random.Range(0, coreStats.Length)];
+            SpendStatPoint(randomStat);
+        }
+    }
+
+    public bool SpendStatPoint(StatType statType)
+    {
+        if (_unassignedStatPoints <= 0) return false;
+        if (_character == null || _character.Stats == null) return false;
+
+        CharacterBaseStats stat = _character.Stats.GetBaseStat(statType);
+        if (stat != null)
+        {
+            stat.IncreaseBaseValue(1f);
+            _unassignedStatPoints--;
+            return true;
+        }
+        return false;
     }
 
     public void AddLevel(CombatLevelEntry newLevel)

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using TMPro;
 
 public class UI_CharacterStats : UI_WindowBase
 {
@@ -9,8 +10,16 @@ public class UI_CharacterStats : UI_WindowBase
     [Header("UI References")]
     [SerializeField] private Transform _slotContainer;
     [SerializeField] private GameObject _statSlotPrefab;
+    [SerializeField] private TextMeshProUGUI _unassignedPointsText;
 
     private List<UI_StatSlot> _spawnedSlots = new List<UI_StatSlot>();
+
+    // We explicitly list the upgradable secondary stats
+    private readonly HashSet<StatType> _upgradableStats = new HashSet<StatType>
+    {
+        StatType.Strength, StatType.Agility, StatType.Dexterity, 
+        StatType.Intelligence, StatType.Endurance, StatType.Charisma
+    };
 
     // We explicitly list the stats we want to display.
     private readonly StatType[] _statsToDisplay = new StatType[]
@@ -61,25 +70,48 @@ public class UI_CharacterStats : UI_WindowBase
 
         ClearSlots();
 
+        int unassignedPoints = 0;
+        if (_character.CharacterCombatLevel != null)
+        {
+            unassignedPoints = _character.CharacterCombatLevel.UnassignedStatPoints;
+        }
+        
+        if (_unassignedPointsText != null)
+        {
+            _unassignedPointsText.text = unassignedPoints > 0 ? $"Unassigned Points: {unassignedPoints}" : "Unassigned Points: 0";
+        }
+
         foreach (StatType statType in _statsToDisplay)
         {
             var statObj = _character.Stats.GetBaseStat(statType);
             if (statObj != null)
             {
-                CreateSlot(statType.ToString(), statObj.CurrentValue.ToString("F1"));
+                bool canUpgrade = unassignedPoints > 0 && _upgradableStats.Contains(statType);
+                CreateSlot(statType, statObj.CurrentValue.ToString("F1"), canUpgrade);
             }
         }
     }
 
-    private void CreateSlot(string statName, string statValue)
+    private void CreateSlot(StatType statType, string statValue, bool canUpgrade)
     {
         GameObject newSlotObj = Instantiate(_statSlotPrefab, _slotContainer);
         UI_StatSlot slotScript = newSlotObj.GetComponent<UI_StatSlot>();
         
         if (slotScript != null)
         {
-            slotScript.Setup(statName, statValue);
+            slotScript.Setup(statType.ToString(), statValue, canUpgrade, () => OnUpgradeClicked(statType));
             _spawnedSlots.Add(slotScript);
+        }
+    }
+    
+    private void OnUpgradeClicked(StatType statType)
+    {
+        if (_character != null && _character.CharacterCombatLevel != null)
+        {
+            if (_character.CharacterCombatLevel.SpendStatPoint(statType))
+            {
+                RefreshDisplay();
+            }
         }
     }
 

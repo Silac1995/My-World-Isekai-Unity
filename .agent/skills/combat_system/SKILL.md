@@ -85,6 +85,8 @@ Combat directly drives character progression via the `CharacterCombatLevel` comp
   - **Boost**: Hitting a target with a *higher* level grants up to a **+50%** multiplier (caps at 10 level difference).
   - **Malus**: Hitting a target with a *lower* level implies a penalty up to **-75%** multiplier (caps at 10 level difference).
 - **Leveling Up**: Accumulating enough XP (scaling by 50 per level) automatically triggers `LevelUp()`. This logs a `CombatLevelEntry` to history, grants `_statPointsPerLevel` (default 5) as `_unassignedStatPoints` for the player/AI to distribute later, and **instantly heals the character for 30% of their Max HP**.
+  - **Player Allocation**: Manual via `SpendStatPoint()` in UI. Only Secondary Stats (Strength, Agility, Dexterity, Intelligence, Endurance, Charisma) are directly upgradeable.
+  - **NPC Allocation**: Handled internally via `AutoAllocateStats()`. They randomly reinvest all unspent attribute points evenly across the 6 core Secondary Stats to scale dynamically with the player.
 
 ## Tips & Troubleshooting
 - **A character never attacks**: 
