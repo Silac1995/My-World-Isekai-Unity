@@ -79,6 +79,11 @@ public class CharacterStatusEffectInstance
         }
     }
 
+    public void RefreshDuration()
+    {
+        remainingDuration = sourceAsset.Duration;
+    }
+
     public bool Tick(float deltaTime)
     {
         // Internal ticks (for DOTs)

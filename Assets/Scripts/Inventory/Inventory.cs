@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -6,6 +7,8 @@ public class Inventory
 {
     [SerializeField] private StorageWearableInstance _storageWearableInstance;
     [SerializeField] private List<ItemSlot> _itemSlots;
+
+    public event Action OnInventoryChanged;
 
     public StorageWearableInstance Owner => _storageWearableInstance;
     public List<ItemSlot> ItemSlots => _itemSlots;
@@ -148,6 +151,7 @@ public class Inventory
                 slot.ItemInstance = item;
                 item.IsNewlyAdded = true;
                 Debug.Log($"[Inventory] Misc ajouté : {item.CustomizedName}");
+                OnInventoryChanged?.Invoke();
                 return true;
             }
         }
@@ -167,6 +171,7 @@ public class Inventory
                 UpdateWeaponVisuals(character);
 
                 Debug.Log($"[Inventory] Arme ajoutée : {item.CustomizedName}");
+                OnInventoryChanged?.Invoke();
                 return true;
             }
         }
@@ -200,6 +205,7 @@ public class Inventory
                     UpdateWeaponVisuals(character);
 
                 Debug.Log($"[Inventory] {item.CustomizedName} retiré.");
+                OnInventoryChanged?.Invoke();
                 return true;
             }
         }
@@ -215,6 +221,8 @@ public class Inventory
 
             if (wasWeapon)
                 UpdateWeaponVisuals(character);
+
+            OnInventoryChanged?.Invoke();
         }
     }
 
@@ -225,7 +233,7 @@ public class Inventory
     {
         if (RemoveItem(item, characterForVisualUpdate))
         {
-            Vector3 offset = new Vector3(Random.Range(-0.3f, 0.3f), 0, Random.Range(-0.3f, 0.3f));
+            Vector3 offset = new Vector3(UnityEngine.Random.Range(-0.3f, 0.3f), 0, UnityEngine.Random.Range(-0.3f, 0.3f));
             WorldItem.SpawnWorldItem(item, dropPosition + offset);
             return true;
         }
@@ -240,7 +248,7 @@ public class Inventory
         List<ItemSlot> filledSlots = _itemSlots.FindAll(s => !s.IsEmpty());
         if (filledSlots.Count == 0) return null;
 
-        ItemSlot randomSlot = filledSlots[Random.Range(0, filledSlots.Count)];
+        ItemSlot randomSlot = filledSlots[UnityEngine.Random.Range(0, filledSlots.Count)];
         ItemInstance itemToDrop = randomSlot.ItemInstance;
 
         if (DropItem(itemToDrop, dropPosition, characterForVisualUpdate))

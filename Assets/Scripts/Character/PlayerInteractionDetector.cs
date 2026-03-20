@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -19,6 +19,14 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
     private void Update()
     {
         UpdateClosestTarget();
+
+        // Prevent interacting if the player is currently typing in an input field (e.g. chat)
+        if (UnityEngine.EventSystems.EventSystem.current != null &&
+            UnityEngine.EventSystems.EventSystem.current.currentSelectedGameObject != null &&
+            UnityEngine.EventSystems.EventSystem.current.currentSelectedGameObject.GetComponent<TMPro.TMP_InputField>() != null)
+        {
+            return;
+        }
 
         if (Input.GetKeyDown(KeyCode.E) && _currentInteractableObjectTarget != null)
         {

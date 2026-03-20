@@ -161,6 +161,12 @@ public class CharacterEquipment : CharacterSystem
                 {
                     if (targetLayer.IsAlreadyEquipped(wearable)) return;
 
+                    EquipmentInstance existingInstance = targetLayer.GetInstance(data.WearableType);
+                    if (existingInstance != null)
+                    {
+                        character.DropItem(existingInstance);
+                    }
+
                     Debug.Log($"<color=green>[Equip]</color> {data.ItemName} vers {data.EquipmentLayer}");
                     targetLayer.Equip(wearable);
                     OnEquipmentChanged?.Invoke();

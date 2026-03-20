@@ -4,7 +4,7 @@ using TMPro;
 public class UI_ChatBar : MonoBehaviour
 {
     [SerializeField] private TMP_InputField _inputField;
-    private PlayerController _localPlayerController;
+    private Character _character;
     private int _lastSubmitFrame = -1;
     private CanvasGroup _canvasGroup;
 
@@ -40,6 +40,11 @@ public class UI_ChatBar : MonoBehaviour
         }
     }
 
+    public void Initialize(Character character)
+    {
+        _character = character;
+    }
+
     private void Update()
     {
         // Try to focus chat if player presses Enter while not focused
@@ -50,12 +55,6 @@ public class UI_ChatBar : MonoBehaviour
                 _inputField.ActivateInputField();
                 _inputField.Select();
             }
-        }
-        
-        // Caching PlayerController optimally instead of heavy searching every frame.
-        if (_localPlayerController == null)
-        {
-            _localPlayerController = FindObjectOfType<PlayerController>();
         }
 
         if (_inputField != null)
@@ -94,12 +93,11 @@ public class UI_ChatBar : MonoBehaviour
             return;
         }
 
-        if (_localPlayerController != null)
+        if (_character != null)
         {
-            var character = _localPlayerController.GetComponent<Character>();
-            if (character != null && character.CharacterSpeech != null)
+            if (_character.CharacterSpeech != null)
             {
-                character.CharacterSpeech.Say(text);
+                _character.CharacterSpeech.Say(text);
                 
                 if (_inputField != null)
                 {
@@ -113,12 +111,12 @@ public class UI_ChatBar : MonoBehaviour
             }
             else
             {
-                Debug.LogWarning("<color=orange>[UI_ChatBar]</color> Local player does not have a Character or CharacterSpeech component.");
+                Debug.LogWarning("<color=orange>[UI_ChatBar]</color> Local player does not have a CharacterSpeech component.");
             }
         }
         else
         {
-            Debug.LogWarning("<color=orange>[UI_ChatBar]</color> PlayerController not found. Cannot send chat message.");
+            Debug.LogWarning("<color=orange>[UI_ChatBar]</color> Character not set. Cannot send chat message.");
         }
     }
 }

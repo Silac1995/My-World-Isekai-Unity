@@ -18,6 +18,11 @@ public class UI_Inventory : MonoBehaviour
 
     public void Initialize(Inventory inventory, Character character = null)
     {
+        if (_inventory != null)
+        {
+            _inventory.OnInventoryChanged -= RefreshDisplay;
+        }
+
         _inventory = inventory;
         if (character != null) CharacterOwner = character;
 
@@ -30,7 +35,16 @@ public class UI_Inventory : MonoBehaviour
             return;
         }
 
+        _inventory.OnInventoryChanged += RefreshDisplay;
         RefreshDisplay();
+    }
+
+    private void OnDestroy()
+    {
+        if (_inventory != null)
+        {
+            _inventory.OnInventoryChanged -= RefreshDisplay;
+        }
     }
 
     public void RefreshDisplay()

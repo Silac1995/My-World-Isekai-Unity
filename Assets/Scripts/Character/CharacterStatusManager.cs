@@ -42,6 +42,14 @@ public class CharacterStatusManager : CharacterSystem
     {
         if (effectAsset == null) return;
 
+        var existingInstance = _activeEffects.Find(i => i.SourceAsset == effectAsset);
+        if (existingInstance != null)
+        {
+            existingInstance.RefreshDuration();
+            Debug.Log($"<color=cyan>[StatusManager]</color> Effet rafraîchi : {effectAsset.StatusEffectName} sur {_character.name}");
+            return;
+        }
+
         var instance = new CharacterStatusEffectInstance(effectAsset, caster, _character);
         _activeEffects.Add(instance);
         instance.Apply();

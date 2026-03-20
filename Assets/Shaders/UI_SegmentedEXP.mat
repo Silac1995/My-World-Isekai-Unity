@@ -7,7 +7,7 @@ Material:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: UI_SegmentedFill
+  m_Name: UI_SegmentedEXP
   m_Shader: {fileID: 4800000, guid: 7c86a6902ecbe2b4db6ec72dd2dc071b, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
@@ -30,33 +30,25 @@ Material:
     m_Ints: []
     m_Floats:
     - _ColorMask: 15
-    - _EdgeSoftness: 0.0088
-    - _FillAmount: 0.515
-    - _GapWidth: 0.068
-    - _GhostAmount: 1
-    - _GhostDelay: 2.8
-    - _GhostDrainSpeed: 0.2
-    - _GhostFill: 0.66
-    - _HPPerSegment: 500
-    - _HealFlash: 0.56
-    - _LowHealthThreshold: 0.45
-    - _MaxHP: 10
-    - _ShineSharpness: 10.7
-    - _ShineStrength: 0.168
+    - _EdgeSoftness: 0.002
+    - _FillAmount: 0.573
+    - _GhostDelay: 0.5
+    - _GhostDrainSpeed: 0.5
+    - _GhostFill: 0.777
+    - _HealFlash: 0
+    - _LowHealthThreshold: 0.472
+    - _ShineStrength: 0.15
     - _Stencil: 0
     - _StencilComp: 8
     - _StencilOp: 0
     - _StencilReadMask: 255
     - _StencilWriteMask: 255
-    - _UseUIAlphaClip: 0
     m_Colors:
-    - _BgColor: {r: 0.079999976, g: 0.079999976, b: 0.079999976, a: 1}
     - _Color: {r: 1, g: 1, b: 1, a: 1}
-    - _EmptyColor: {r: 0.01886791, g: 0.01886791, b: 0.01886791, a: 1}
-    - _GapColor: {r: 0, g: 0, b: 0, a: 1}
-    - _GhostColor: {r: 4, g: 0, b: 0, a: 1}
-    - _HealColor: {r: 0.8018868, g: 0, b: 0, a: 1}
-    - _HealthColor: {r: 0.25066888, g: 0.4528302, b: 0.20291919, a: 1}
-    - _LowHealthColor: {r: 0.85, g: 0.17999998, b: 0.17999998, a: 1}
+    - _EmptyColor: {r: 0.0754717, g: 0.0754717, b: 0.0754717, a: 1}
+    - _GhostColor: {r: 0.1981132, g: 0.15149832, b: 0, a: 1}
+    - _HealColor: {r: 1, g: 1, b: 1, a: 1}
+    - _HealthColor: {r: 0.60786355, g: 0.65882355, b: 0, a: 1}
+    - _LowHealthColor: {r: 0.8, g: 0.2, b: 0.2, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

@@ -25,9 +25,10 @@ public class UI_PlayerInfo : MonoBehaviour
         CleanupEvents();
         _lastCharacter = characterComponent;
 
+        ClearUI();
+
         if (characterComponent == null)
         {
-            ClearUI();
             return;
         }
 
@@ -68,11 +69,11 @@ public class UI_PlayerInfo : MonoBehaviour
     {
         if (_playerNameText != null) _playerNameText.text = "";
 
-        foreach (var kvp in _activeEffectUIs)
+        if (_statusEffectsContainer != null)
         {
-            if (kvp.Value != null)
+            foreach (Transform child in _statusEffectsContainer)
             {
-                Destroy(kvp.Value.gameObject);
+                Destroy(child.gameObject);
             }
         }
         _activeEffectUIs.Clear();

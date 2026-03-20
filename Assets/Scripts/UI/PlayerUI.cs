@@ -25,6 +25,7 @@ public class PlayerUI : MonoBehaviour
     [SerializeField] private CharacterEquipmentUI _equipmentUI;
     [SerializeField] private UI_CharacterRelations _relationsUI;
     [SerializeField] private UI_CharacterStats _statsUI;
+    [SerializeField] private UI_ChatBar _chatBar;
 
     private Character characterComponent;
 
@@ -66,6 +67,11 @@ public class PlayerUI : MonoBehaviour
         if (_playerInfo != null)
         {
             _playerInfo.Initialize(characterComponent);
+        }
+
+        if (_chatBar != null)
+        {
+            _chatBar.Initialize(characterComponent);
         }
 
         // Push notification channels to the equipment system
@@ -166,6 +172,10 @@ public class PlayerUI : MonoBehaviour
         if (_playerInfo != null)
         {
             _playerInfo.Initialize(null);
+        }
+        if (_chatBar != null)
+        {
+            _chatBar.Initialize(null);
         }
     }
 
