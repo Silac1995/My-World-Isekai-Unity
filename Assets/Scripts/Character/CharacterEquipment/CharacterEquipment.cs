@@ -43,6 +43,14 @@ public class CharacterEquipment : CharacterSystem
         _toastChannel = null;
     }
 
+    public void ClearInventoryNotification()
+    {
+        if (_inventoryNotificationChannel != null)
+        {
+            _inventoryNotificationChannel.Clear();
+        }
+    }
+
     // Getters publics
     public UnderwearLayer UnderwearLayer => underwearLayer;
     public ClothingLayer ClothingLayer => clothingLayer;

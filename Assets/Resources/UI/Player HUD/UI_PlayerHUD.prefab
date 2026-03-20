@@ -723,7 +723,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MWI.UI.Notifications.UI_NotificationBadge
   _channel: {fileID: 11400000, guid: 50f77503e7342c44f98065645853cec3, type: 2}
   _badgeObject: {fileID: 7966608825217746806}
-  _clearOnEnable: 1
+  _clearOnEnable: 0
   _parentWindow: {fileID: 6214965556515728238}
 --- !u!1 &5115761992067834628
 GameObject:
@@ -1960,7 +1960,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MWI.UI.Notifications.UI_NotificationBadge
   _channel: {fileID: 11400000, guid: a7adff8442e34864fbb6fb819063967a, type: 2}
   _badgeObject: {fileID: 314552088013618738}
-  _clearOnEnable: 1
+  _clearOnEnable: 0
   _parentWindow: {fileID: 8928307182906985084}
 --- !u!1001 &2454958685990908134
 PrefabInstance:

@@ -3,12 +3,11 @@ using UnityEngine.UI;
 using UnityEngine.EventSystems;
 using TMPro;
 using TMPro;
-
 public class UI_ItemSlot : MonoBehaviour, IPointerClickHandler, IPointerEnterHandler
 {
-    [Header("UI Elements")]
     [SerializeField] private Image _iconImage;
     [SerializeField] private TextMeshProUGUI _itemName;
+    [SerializeField] private GameObject _newBadge;
 
     private UI_Inventory _uiInventory;
     private ItemSlot _itemSlot;
@@ -37,6 +36,12 @@ public class UI_ItemSlot : MonoBehaviour, IPointerClickHandler, IPointerEnterHan
         {
             _itemName.text = "";
         }
+
+        if (_newBadge != null)
+        {
+            bool isNew = _itemSlot != null && _itemSlot.ItemInstance != null && _itemSlot.ItemInstance.IsNewlyAdded;
+            _newBadge.SetActive(isNew);
+        }
     }
 
     public void OnPointerClick(PointerEventData eventData)
@@ -51,6 +56,24 @@ public class UI_ItemSlot : MonoBehaviour, IPointerClickHandler, IPointerEnterHan
                     if (_uiInventory != null) _uiInventory.RefreshDisplay();
                 };
                 _uiInventory.CharacterOwner.CharacterActions.ExecuteAction(dropAction);
+            }
+        }
+    }
+
+    public void OnPointerEnter(PointerEventData eventData)
+    {
+        if (_itemSlot != null && _itemSlot.ItemInstance != null && _itemSlot.ItemInstance.IsNewlyAdded)
+        {
+            _itemSlot.ItemInstance.IsNewlyAdded = false;
+            UpdateVisuals();
+
+            if (_uiInventory != null && _uiInventory.CharacterOwner != null)
+            {
+                var equipment = _uiInventory.CharacterOwner.CharacterEquipment;
+                if (equipment != null && equipment.HaveInventory() && !equipment.GetInventory().HasNewItems())
+                {
+                    equipment.ClearInventoryNotification();
+                }
             }
         }
     }
