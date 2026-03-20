@@ -619,11 +619,13 @@ MonoBehaviour:
   _statPointsPerLevel: 5
   _currentExperience: 1
   _unassignedStatPoints: 0
+  _baseExpYield: 50
   _maxLevelDifference: 10
   _maxXpReduction: 0.75
   _maxXpBoost: 0.5
   _levelHistory: []
   _expToastChannel: {fileID: 11400000, guid: ea961c82479cb974997317e89f3aa9b6, type: 2}
+  _statsBadgeChannel: {fileID: 11400000, guid: 50f77503e7342c44f98065645853cec3, type: 2}
 --- !u!1 &4064236070124105173
 GameObject:
   m_ObjectHideFlags: 0

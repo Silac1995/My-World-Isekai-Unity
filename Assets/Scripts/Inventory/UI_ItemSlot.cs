@@ -2,8 +2,9 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
 using TMPro;
+using TMPro;
 
-public class UI_ItemSlot : MonoBehaviour, IPointerClickHandler
+public class UI_ItemSlot : MonoBehaviour, IPointerClickHandler, IPointerEnterHandler
 {
     [Header("UI Elements")]
     [SerializeField] private Image _iconImage;

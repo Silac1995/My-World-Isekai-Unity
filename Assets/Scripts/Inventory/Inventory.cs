@@ -109,6 +109,19 @@ public class Inventory
         return false;
     }
 
+    public bool HasNewItems()
+    {
+        if (_itemSlots == null) return false;
+        foreach (var slot in _itemSlots)
+        {
+            if (!slot.IsEmpty() && slot.ItemInstance.IsNewlyAdded)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /// <summary>
     /// Ajoute l'objet en passant le Character pour les mises à jour visuelles.
     /// </summary>
@@ -133,6 +146,7 @@ public class Inventory
             if (slot is MiscSlot && slot.IsEmpty() && slot.CanAcceptItem(item))
             {
                 slot.ItemInstance = item;
+                item.IsNewlyAdded = true;
                 Debug.Log($"[Inventory] Misc ajouté : {item.CustomizedName}");
                 return true;
             }
@@ -147,6 +161,7 @@ public class Inventory
             if (slot is WeaponSlot && slot.IsEmpty() && slot.CanAcceptItem(item))
             {
                 slot.ItemInstance = item;
+                item.IsNewlyAdded = true;
 
                 // On utilise le paramètre character pour mettre à jour le visuel
                 UpdateWeaponVisuals(character);

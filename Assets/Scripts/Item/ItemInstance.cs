@@ -1,16 +1,17 @@
-using UnityEngine;
+ï»¿using UnityEngine;
 using UnityEngine.U2D.Animation;
 
 [System.Serializable]
 public abstract class ItemInstance
 {
-    [SerializeField] protected ItemSO _itemSO; // Changé en protected
+    [SerializeField] protected ItemSO _itemSO; // Changï¿½ en protected
     [SerializeField] protected string _customizedName;
+    public bool IsNewlyAdded { get; set; } = false;
 
     [SerializeField] private Color _primaryColor = new Color(0, 0, 0, 0);
     [SerializeField] private Color _secondaryColor = new Color(0, 0, 0, 0);
 
-    // Constructeur protégé car la classe est abstraite
+    // Constructeur protï¿½gï¿½ car la classe est abstraite
     protected ItemInstance(ItemSO data)
     {
         _itemSO = data;
@@ -52,17 +53,17 @@ public abstract class ItemInstance
             Transform part = visualTransform.Find(partName);
             if (part == null) continue;
 
-            // 1. On s'assure que la library est à jour (si présente sur l'enfant)
+            // 1. On s'assure que la library est ï¿½ jour (si prï¿½sente sur l'enfant)
             if (part.TryGetComponent(out SpriteLibrary library))
             {
                 library.spriteLibraryAsset = _itemSO.SpriteLibraryAsset;
             }
 
-            // 2. FORCE la catégorie avec celle du ScriptableObject
+            // 2. FORCE la catï¿½gorie avec celle du ScriptableObject
             if (part.TryGetComponent(out SpriteResolver resolver))
             {
                 string currentLabel = resolver.GetLabel();
-                // On ré-applique explicitement la catégorie du SO
+                // On rï¿½-applique explicitement la catï¿½gorie du SO
                 resolver.SetCategoryAndLabel(_itemSO.CategoryName, currentLabel);
             }
 
@@ -84,7 +85,7 @@ public abstract class ItemInstance
         Transform visualTransform = worldObject.transform.Find("Visual");
         if (visualTransform == null) return;
 
-        // On définit nos parties et on s'en sert aussi comme Labels
+        // On dï¿½finit nos parties et on s'en sert aussi comme Labels
         string[] visualParts = { "Line", "Color_Main", "Color_Primary", "Color_Secondary" };
 
         foreach (string partName in visualParts)
@@ -98,14 +99,14 @@ public abstract class ItemInstance
                 library.spriteLibraryAsset = _itemSO.SpriteLibraryAsset;
             }
 
-            // 2. Initialisation du Resolver (Catégorie ET Label)
+            // 2. Initialisation du Resolver (Catï¿½gorie ET Label)
             if (part.TryGetComponent(out SpriteResolver resolver))
             {
                 // On utilise partName ("Line", "Color_Main", etc.) comme Label
-                // car c'est ainsi que tes sprites sont nommés dans ta Sprite Library Asset
+                // car c'est ainsi que tes sprites sont nommï¿½s dans ta Sprite Library Asset
                 resolver.SetCategoryAndLabel(_itemSO.CategoryName, partName);
 
-                // On force la mise à jour visuelle immédiate
+                // On force la mise ï¿½ jour visuelle immï¿½diate
                 resolver.ResolveSpriteToSpriteRenderer();
             }
 

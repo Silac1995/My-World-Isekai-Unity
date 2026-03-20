@@ -18,7 +18,7 @@ Gameplay code "Raises" a notification on the channel. UI code listens to the cha
 
 ### 1. NotificationChannel (ScriptableObject)
 The central communication hub.
-**Rule:** Create one `NotificationChannel` per distinct notification domain (e.g., `SO_InventoryNotificationChannel`, `SO_SkillsNotificationChannel`).
+**Rule:** Create one `NotificationChannel` per distinct notification domain (e.g., `NotificationInventoryChannel`, `NotificationSkillsChannel`, `NotificationStatsChannel`).
 - Gameplay scripts only need a reference to this channel to trigger notifications.
 - The UI completely ignores the source of the notification.
 

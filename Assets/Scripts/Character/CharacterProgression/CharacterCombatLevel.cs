@@ -20,6 +20,7 @@ public class CharacterCombatLevel : CharacterSystem
 
     [Header("Notifications")]
     [SerializeField] private ToastNotificationChannel _expToastChannel;
+    [SerializeField] private NotificationChannel _statsBadgeChannel;
 
     public int CurrentExperience => _currentExperience;
     public int StatPointsPerLevel => _statPointsPerLevel;
@@ -136,6 +137,11 @@ public class CharacterCombatLevel : CharacterSystem
                 {
                     _expToastChannel.Raise(new ToastNotificationPayload($"Level Up! Combat Level {CurrentLevel}", ToastType.Success, 4f, "Progression"));
                 }
+                
+                if (_statsBadgeChannel != null && _unassignedStatPoints > 0)
+                {
+                    _statsBadgeChannel.Raise();
+                }
             }
             else
             {
@@ -171,6 +177,12 @@ public class CharacterCombatLevel : CharacterSystem
         {
             stat.IncreaseBaseValue(1f);
             _unassignedStatPoints--;
+            
+            if (_unassignedStatPoints <= 0 && _statsBadgeChannel != null)
+            {
+                _statsBadgeChannel.Clear();
+            }
+            
             return true;
         }
         return false;
