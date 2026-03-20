@@ -118,7 +118,7 @@ public class CharacterSpeech : MonoBehaviour
 
     private IEnumerator HideSpeechAfterDelay(float delay)
     {
-        yield return new WaitForSeconds(delay);
+        yield return new WaitForSecondsRealtime(delay);
         if (_speechBubblePrefab != null) _speechBubblePrefab.SetActive(false);
         _hideCoroutine = null;
     }

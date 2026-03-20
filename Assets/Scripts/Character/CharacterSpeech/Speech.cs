@@ -44,7 +44,7 @@ public class Speech : MonoBehaviour
                     source.PlayOneShot(clipToPlay);
                 }
             }
-            yield return new WaitForSeconds(currentSpeed);
+            yield return new WaitForSecondsRealtime(currentSpeed);
         }
         _typeRoutine = null;
         onComplete?.Invoke();

@@ -478,7 +478,7 @@ public class CharacterInteraction : CharacterSystem
                 // If it was an invitation, we wait an extra bit for the response bubble to be readable
                 if (actionExecuted is InteractionInvitation)
                 {
-                    yield return new WaitForSeconds(2.0f);
+                    yield return new WaitForSecondsRealtime(2.0f);
                 }
             }
 
@@ -493,7 +493,7 @@ public class CharacterInteraction : CharacterSystem
             }
 
             float randomDelay = UnityEngine.Random.Range(1.0f, 2.5f); // Délai réduit car on attend déjà la fin de la bulle
-            yield return new WaitForSeconds(randomDelay);
+            yield return new WaitForSecondsRealtime(randomDelay);
 
             // 3. Inversion des rôles pour le tour suivant
             Character nextSpeaker = currentListener;
@@ -527,7 +527,7 @@ public class CharacterInteraction : CharacterSystem
 
         // --- DÉLAI DE FIN D'INTERACTION ---
         // Petit délai supplémentaire (ex: 2 secondes) pour que les personnages ne s'enfuient pas immédiatement
-        yield return new WaitForSeconds(2.0f);
+        yield return new WaitForSecondsRealtime(2.0f);
 
         Debug.Log($"<color=cyan>[Dialogue]</color> Fin de la séquence après {totalExchanges} échanges.");
         EndInteraction();
