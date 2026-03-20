@@ -3,11 +3,16 @@ using UnityEngine.UI;
 using UnityEngine.EventSystems;
 using TMPro;
 using TMPro;
-public class UI_ItemSlot : MonoBehaviour, IPointerClickHandler, IPointerEnterHandler
+public class UI_ItemSlot : MonoBehaviour, IPointerClickHandler, IPointerEnterHandler, IPointerExitHandler
 {
     [SerializeField] private Image _iconImage;
     [SerializeField] private TextMeshProUGUI _itemName;
     [SerializeField] private GameObject _newBadge;
+
+    [Header("Hover Effect")]
+    [SerializeField] private Color _normalColor = new Color(0.15f, 0.15f, 0.15f, 0.8f);
+    [SerializeField] private Color _hoverColor = new Color(0.05f, 0.05f, 0.05f, 0.9f);
+    private Image _backgroundImage;
 
     private UI_Inventory _uiInventory;
     private ItemSlot _itemSlot;
@@ -16,6 +21,11 @@ public class UI_ItemSlot : MonoBehaviour, IPointerClickHandler, IPointerEnterHan
     {
         _uiInventory = ui_inventory;
         _itemSlot = itemSlot;
+        _backgroundImage = GetComponent<Image>();
+        if (_backgroundImage != null)
+        {
+            _backgroundImage.color = _normalColor;
+        }
 
         UpdateVisuals();
     }
@@ -62,6 +72,11 @@ public class UI_ItemSlot : MonoBehaviour, IPointerClickHandler, IPointerEnterHan
 
     public void OnPointerEnter(PointerEventData eventData)
     {
+        if (_backgroundImage != null)
+        {
+            _backgroundImage.color = _hoverColor;
+        }
+
         if (_itemSlot != null && _itemSlot.ItemInstance != null && _itemSlot.ItemInstance.IsNewlyAdded)
         {
             _itemSlot.ItemInstance.IsNewlyAdded = false;
@@ -75,6 +90,14 @@ public class UI_ItemSlot : MonoBehaviour, IPointerClickHandler, IPointerEnterHan
                     equipment.ClearInventoryNotification();
                 }
             }
+        }
+    }
+
+    public void OnPointerExit(PointerEventData eventData)
+    {
+        if (_backgroundImage != null)
+        {
+            _backgroundImage.color = _normalColor;
         }
     }
 }

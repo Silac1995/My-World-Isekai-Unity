@@ -3424,7 +3424,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CharacterEquipmentUI
   _character: {fileID: 0}
-  _buttonClose: {fileID: 0}
   _selectedEquipmentLayer: {fileID: 176805485306977810}
   _ui_inventory: {fileID: 2759183692453118705}
   _buttonArmorLayer: {fileID: 8909352301940658977}
