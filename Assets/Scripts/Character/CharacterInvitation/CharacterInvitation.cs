@@ -51,6 +51,8 @@ public class CharacterInvitation : MonoBehaviour
 
         // Stop moving to visually acknowledge the invitation
         if (_character.CharacterMovement != null)
+        // Stop moving to visually acknowledge the invitation (NPCs only — players retain control)
+        if (!_character.IsPlayer() && _character.CharacterMovement != null)
         {
             _character.CharacterMovement.Stop();
         }
@@ -111,12 +113,7 @@ public class CharacterInvitation : MonoBehaviour
     public void StartFollowingTarget(Character target)
     {
         StopFollowingTarget();
-        
-        // Players retain manual control instead of auto-following
-        if (!_character.IsPlayer())
-        {
-            _followCoroutine = StartCoroutine(FollowTargetRoutine(target));
-        }
+        _followCoroutine = StartCoroutine(FollowTargetRoutine(target));
     }
 
     /// <summary>
