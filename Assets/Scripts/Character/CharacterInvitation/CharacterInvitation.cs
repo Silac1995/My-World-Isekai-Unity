@@ -54,12 +54,6 @@ public class CharacterInvitation : MonoBehaviour
             return;
         }
 
-        // Stop moving to visually acknowledge the invitation (NPCs only — players retain control)
-        if (!_character.IsPlayer() && _character.CharacterMovement != null)
-        {
-            _character.CharacterMovement.Stop();
-        }
-
         // Start the delayed response coroutine
         _pendingCoroutine = StartCoroutine(ProcessInvitation(invitation, source));
     }
@@ -122,7 +116,12 @@ public class CharacterInvitation : MonoBehaviour
     public void StartFollowingTarget(Character target)
     {
         StopFollowingTarget();
-        _followCoroutine = StartCoroutine(FollowTargetRoutine(target));
+        
+        // Players retain manual control instead of auto-following
+        if (!_character.IsPlayer())
+        {
+            _followCoroutine = StartCoroutine(FollowTargetRoutine(target));
+        }
     }
 
     /// <summary>
