@@ -48,6 +48,12 @@ public class CharacterInvitation : MonoBehaviour
             return;
         }
 
+        // Stop moving to visually acknowledge the invitation
+        if (_character.CharacterMovement != null)
+        {
+            _character.CharacterMovement.Stop();
+        }
+
         // Start the delayed response coroutine
         _pendingCoroutine = StartCoroutine(ProcessInvitation(invitation, source));
     }

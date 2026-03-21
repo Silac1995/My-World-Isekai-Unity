@@ -438,7 +438,7 @@ public class CharacterInteraction : CharacterSystem
 
         // --- FREEZE DE LA CIBLE ET DE L'INITIATEUR ---
         if (target.Controller != null && !target.IsPlayer()) target.Controller.Freeze();
-        if (_character.Controller != null) _character.Controller.Freeze();
+        if (_character.Controller != null && !_character.IsPlayer()) _character.Controller.Freeze();
 
         if (_activeDialogueCoroutine != null) StopCoroutine(_activeDialogueCoroutine);
         _activeDialogueCoroutine = StartCoroutine(DialogueSequence(_character, target, forcedFirstAction));
