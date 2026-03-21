@@ -136,9 +136,15 @@ namespace MWI.AI
                 if (!isWithinRange || isXTooClose || !isZAligned)
                 {
                     if (isXTooClose)
-                        _currentDestination = CalculateEscapeDestination(self.transform.position, _currentTarget.transform.position, self);
-                    _isChargingTarget = true;
-                    _currentDestination = _currentTarget.transform.position;
+                    {
+                        _currentDestination = CalculateEscapeDestination(self.transform.position, _currentTarget.transform.position, self, attackRange);
+                        _isChargingTarget = false;
+                    }
+                    else
+                    {
+                        _isChargingTarget = true;
+                        _currentDestination = _currentTarget.transform.position;
+                    }
                 }
                 else
                 {
@@ -164,7 +170,10 @@ namespace MWI.AI
             else
             {
                 _readyStartTime = 0;
-                bool tooClose = distToTarget < PREFERRED_X_GAP * 0.75f;
+                float attackRange = self.CharacterCombat?.CurrentCombatStyleExpertise?.Style?.MeleeRange ?? 3.5f;
+                float escapeRadius = Mathf.Clamp(attackRange * 0.8f, X_FLIP_SAFETY + 0.5f, PREFERRED_X_GAP);
+                
+                bool tooClose = distToTarget < escapeRadius * 0.9f;
                 bool tooFar = distToTarget > MAX_DISTANCE;
                 bool timerExpired = UnityEngine.Time.time - _lastMoveTime > _moveInterval;
                 bool canUpdate = UnityEngine.Time.time - _lastMoveTime > 1.5f;
@@ -173,7 +182,7 @@ namespace MWI.AI
                 {
                     if (tooClose)
                     {
-                        _currentDestination = CalculateEscapeDestination(self.transform.position, _currentTarget.transform.position, self);
+                        _currentDestination = CalculateEscapeDestination(self.transform.position, _currentTarget.transform.position, self, attackRange);
                     }
                     else
                     {
@@ -218,7 +227,7 @@ namespace MWI.AI
             return _currentTarget.transform.position;
         }
 
-        private Vector3 CalculateEscapeDestination(Vector3 selfPos, Vector3 targetPos, Character self)
+        private Vector3 CalculateEscapeDestination(Vector3 selfPos, Vector3 targetPos, Character self, float attackRange)
         {
             float xDir;
             if (Mathf.Abs(selfPos.x - targetPos.x) < 0.1f && _currentTarget != null) 
@@ -230,7 +239,7 @@ namespace MWI.AI
                 xDir = (selfPos.x > targetPos.x) ? 1f : -1f;
             }
             
-            float radius = PREFERRED_X_GAP;
+            float radius = Mathf.Clamp(attackRange * 0.8f, X_FLIP_SAFETY + 0.5f, PREFERRED_X_GAP);
             Vector3 offset = new Vector3(xDir * radius, 0, UnityEngine.Random.Range(-1.5f, 1.5f));
             
             return targetPos + offset;
