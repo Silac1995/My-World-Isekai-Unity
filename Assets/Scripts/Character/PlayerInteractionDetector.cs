@@ -7,6 +7,10 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
     [SerializeField] private GameObject interactionPromptPrefab;
     [SerializeField] private List<InteractableObject> nearbyInteractables = new List<InteractableObject>();
     private GameObject currentPromptUI;
+    private float eHoldTime = 0f;
+    private bool isHoldingE = false;
+    private const float HOLD_THRESHOLD = 0.4f;
+    private PlayerUI _playerUI;
 
     protected override void Awake()
     {
@@ -18,6 +22,8 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
 
     private void Update()
     {
+        if (Character.TryGetComponent(out Unity.Netcode.NetworkObject netObj) && netObj.IsSpawned && !netObj.IsOwner) return;
+
         UpdateClosestTarget();
 
         // Prevent interacting if the player is currently typing in an input field (e.g. chat)
@@ -28,38 +34,85 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
             return;
         }
 
+        if (_playerUI == null)
+            _playerUI = UnityEngine.Object.FindAnyObjectByType<PlayerUI>(FindObjectsInactive.Include);
+
         if (Input.GetKeyDown(KeyCode.E) && _currentInteractableObjectTarget != null)
         {
-            try
+            isHoldingE = true;
+            eHoldTime = 0f;
+        }
+
+        if (Input.GetKey(KeyCode.E) && isHoldingE)
+        {
+            eHoldTime += Time.deltaTime;
+
+            if (eHoldTime >= HOLD_THRESHOLD)
             {
-                // 1. SI C'EST UN PERSONNAGE, ON VÉRIFIE LES ÉTATS
-                if (_currentInteractableObjectTarget is CharacterInteractable charInteractable)
+                isHoldingE = false; // Stop tracking hold
+                var options = _currentInteractableObjectTarget.GetHoldInteractionOptions(Character);
+                if (options != null && options.Count > 0)
                 {
-                    Character targetChar = charInteractable.Character;
-                    if (targetChar == null) return;
+                    OpenInteractionMenu(options);
+                }
+                else
+                {
+                    ExecuteNormalInteract();
+                }
+            }
+        }
 
-                    if (!Character.IsFree() || !targetChar.IsFree())
-                    {
-                        Debug.LogWarning($"<color=yellow>[Interaction]</color> Interaction impossible : " +
-                            $"{(!Character.IsFree() ? "Le joueur est occupé" : "La cible est en combat/interaction")}");
-                        return;
-                    }
+        if (Input.GetKeyUp(KeyCode.E) && isHoldingE)
+        {
+            isHoldingE = false; // Released before threshold
+            ExecuteNormalInteract();
+        }
+    }
 
-                    if (Character.CharacterInteraction.IsInteracting &&
-                        Character.CharacterInteraction.CurrentTarget == targetChar)
-                    {
-                        Character.CharacterInteraction.EndInteraction();
-                        return;
-                    }
+    private void ExecuteNormalInteract()
+    {
+        if (_currentInteractableObjectTarget == null) return;
+        try
+        {
+            // 1. SI C'EST UN PERSONNAGE, ON VÉRIFIE LES ÉTATS
+            if (_currentInteractableObjectTarget is CharacterInteractable charInteractable)
+            {
+                Character targetChar = charInteractable.Character;
+                if (targetChar == null) return;
+
+                if (!Character.IsFree() || !targetChar.IsFree())
+                {
+                    Debug.LogWarning($"<color=yellow>[Interaction]</color> Interaction impossible : " +
+                        $"{(!Character.IsFree() ? "Le joueur est occupé" : "La cible est en combat/interaction")}");
+                    return;
                 }
 
-                // 2. TOUS LES TYPES : on délègue à l'Interact() de chaque sous-classe
-                _currentInteractableObjectTarget.Interact(Character);
+                if (Character.CharacterInteraction.IsInteracting &&
+                    Character.CharacterInteraction.CurrentTarget == targetChar)
+                {
+                    Character.CharacterInteraction.EndInteraction();
+                    return;
+                }
             }
-            catch (System.Exception ex)
-            {
-                Debug.LogError($"<color=red>[Interaction Error]</color> Sur {_currentInteractableObjectTarget.name}: {ex.ToString()}");
-            }
+
+            // 2. TOUS LES TYPES : on délègue à l'Interact() de chaque sous-classe
+            _currentInteractableObjectTarget.Interact(Character);
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogError($"<color=red>[Interaction Error]</color> Sur {_currentInteractableObjectTarget.name}: {ex.ToString()}");
+        }
+    }
+
+    private void OpenInteractionMenu(List<InteractableObject.InteractionOption> options)
+    {
+        if (_playerUI != null)
+        {
+            _playerUI.OpenInteractionMenu(options);
+        }
+        else
+        {
+            ExecuteNormalInteract();
         }
     }
 
@@ -78,6 +131,10 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
             {
                 Destroy(currentPromptUI);
                 currentPromptUI = null;
+            }
+            if (_playerUI != null)
+            {
+                _playerUI.CloseInteractionMenu();
             }
             return;
         }
@@ -101,6 +158,10 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
                 {
                     Destroy(currentPromptUI);
                     currentPromptUI = null;
+                }
+                if (_playerUI != null)
+                {
+                    _playerUI.CloseInteractionMenu();
                 }
             }
 
@@ -137,7 +198,7 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
                 return;
             }
 
-            promptUIComponent.SetTarget(_currentInteractableObjectTarget.transform);
+            promptUIComponent.SetTarget(_currentInteractableObjectTarget.transform, _currentInteractableObjectTarget.interactionPrompt);
             string targetName = _currentInteractableObjectTarget.TryGetComponent(out CharacterInteractable characterInteractable) && characterInteractable.Character != null
                 ? characterInteractable.Character.name
                 : _currentInteractableObjectTarget.name;
@@ -147,6 +208,8 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
 
     protected override void OnTriggerEnter(Collider other)
     {
+        if (Character.TryGetComponent(out Unity.Netcode.NetworkObject netObj) && netObj.IsSpawned && !netObj.IsOwner) return;
+        
         // --- LA CORRECTION EST ICI ---
         // On vérifie si le collider qui a détecté l'entrée est bien l'InteractionZone du joueur
         // Si c'est l'Awareness ou un autre collider enfant, on ignore.
@@ -169,6 +232,8 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
 
     protected override void OnTriggerExit(Collider other)
     {
+        if (Character.TryGetComponent(out Unity.Netcode.NetworkObject netObj) && netObj.IsSpawned && !netObj.IsOwner) return;
+
         // On applique la même logique pour la sortie
         if (other.TryGetComponent(out InteractableObject interactable))
         {
@@ -185,6 +250,10 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
                     {
                         Destroy(currentPromptUI);
                         currentPromptUI = null;
+                    }
+                    if (_playerUI != null)
+                    {
+                        _playerUI.CloseInteractionMenu();
                     }
                 }
             }

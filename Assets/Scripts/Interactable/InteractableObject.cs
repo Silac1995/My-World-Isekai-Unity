@@ -28,4 +28,15 @@ public abstract class InteractableObject : MonoBehaviour
     // On peut aussi mettre à jour les méthodes de survol pour savoir qui survole
     public virtual void OnCharacterEnter(Character interactor) { }
     public virtual void OnCharacterExit(Character interactor) { }
+
+    public struct InteractionOption
+    {
+        public string Name;
+        public System.Action Action;
+    }
+
+    public virtual System.Collections.Generic.List<InteractionOption> GetHoldInteractionOptions(Character interactor)
+    {
+        return null;
+    }
 }

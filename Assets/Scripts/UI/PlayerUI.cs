@@ -27,6 +27,7 @@ public class PlayerUI : MonoBehaviour
     [SerializeField] private UI_CharacterRelations _relationsUI;
     [SerializeField] private UI_CharacterStats _statsUI;
     [SerializeField] private UI_ChatBar _chatBar;
+    [SerializeField] private UI_InteractionMenu _interactionMenu;
 
     private Character characterComponent;
 
@@ -165,7 +166,27 @@ public class PlayerUI : MonoBehaviour
         }
     }
 
+    public void OpenInteractionMenu(List<InteractableObject.InteractionOption> options)
+    {
+        if (_interactionMenu == null)
+        {
+            Debug.LogWarning("PlayerUI: UI_InteractionMenu component not assigned!");
+            return;
+        }
 
+        _interactionMenu.gameObject.SetActive(true);
+        _interactionMenu.Initialize(options);
+    }
+
+    public void CloseInteractionMenu()
+    {
+        if (_interactionMenu != null && _interactionMenu.gameObject.activeSelf)
+        {
+            _interactionMenu.CloseMenu();
+        }
+    }
+
+    
 
     private void ClearUI()
     {

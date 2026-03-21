@@ -7,14 +7,14 @@ public class InteractionPromptUI : MonoBehaviour
     private Transform target;
     private Collider targetCollider;
 
-    public void SetTarget(Transform followTarget)
+    public void SetTarget(Transform followTarget, string customPromptText = "Press [E]")
     {
         target = followTarget;
-        // On récupère le collider principal (celui du corps)
+        // On rÃ©cupÃ¨re le collider principal (celui du corps)
         targetCollider = followTarget.GetComponentInChildren<Collider>();
 
         if (promptText != null)
-            promptText.text = "Press [E]";
+            promptText.text = customPromptText;
     }
 
     private void LateUpdate()
@@ -29,7 +29,7 @@ public class InteractionPromptUI : MonoBehaviour
 
         if (targetCollider != null)
         {
-            // Utilise le centre géométrique exact du collider (X, Y, Z)
+            // Utilise le centre gÃ©omÃ©trique exact du collider (X, Y, Z)
             targetPos = targetCollider.bounds.center;
         }
         else
@@ -40,7 +40,7 @@ public class InteractionPromptUI : MonoBehaviour
 
         transform.position = targetPos;
 
-        // Toujours face à la caméra
+        // Toujours face Ã  la camÃ©ra
         if (Camera.main != null)
         {
             transform.rotation = Quaternion.LookRotation(transform.position - Camera.main.transform.position);

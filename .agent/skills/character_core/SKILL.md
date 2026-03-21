@@ -58,7 +58,7 @@ This is the ultimate safety method. `Character` scrutinizes all of its child com
   - But death (`_isDead = true`) permanently overrides the rest.
 
 ## 4. Context Switching (The Brain)
-A character in your game can switch from an autonomous civilian AI (NPC) to a Player-controlled Avatar with a snap of a finger.
+**A Player is exactly like an NPC character.** They share the exact same `Character` object, underlying components, stats, and game logic. A character in your game can switch from an autonomous civilian AI (NPC) to a Player-controlled Avatar with a snap of a finger just by swapping the active controller.
 
 - `SwitchToPlayer()`: 
   - Swaps controllers and interaction detectors.
