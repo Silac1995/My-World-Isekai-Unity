@@ -1,13 +1,15 @@
 using UnityEngine;
+using UnityEngine.UI;
 using TMPro;
 
 public class InteractionPromptUI : MonoBehaviour
 {
     [SerializeField] private TextMeshProUGUI promptText;
+    [SerializeField] private Image fillBar;
     private Transform target;
     private Collider targetCollider;
 
-    public void SetTarget(Transform followTarget, string customPromptText = "Press [E]")
+    public void SetTarget(Transform followTarget, string customPromptText = "E")
     {
         target = followTarget;
         // On récupère le collider principal (celui du corps)
@@ -15,6 +17,16 @@ public class InteractionPromptUI : MonoBehaviour
 
         if (promptText != null)
             promptText.text = customPromptText;
+            
+        SetFillAmount(0f);
+    }
+
+    public void SetFillAmount(float fillAmount)
+    {
+        if (fillBar != null)
+        {
+            fillBar.fillAmount = Mathf.Clamp01(fillAmount);
+        }
     }
 
     private void LateUpdate()

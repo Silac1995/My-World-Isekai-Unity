@@ -7,6 +7,7 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
     [SerializeField] private GameObject interactionPromptPrefab;
     [SerializeField] private List<InteractableObject> nearbyInteractables = new List<InteractableObject>();
     private GameObject currentPromptUI;
+    private InteractionPromptUI currentPromptComponent;
     private float eHoldTime = 0f;
     private bool isHoldingE = false;
     private const float HOLD_THRESHOLD = 0.4f;
@@ -41,11 +42,13 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
         {
             isHoldingE = true;
             eHoldTime = 0f;
+            if (currentPromptComponent != null) currentPromptComponent.SetFillAmount(0f);
         }
 
         if (Input.GetKey(KeyCode.E) && isHoldingE)
         {
             eHoldTime += Time.deltaTime;
+            if (currentPromptComponent != null) currentPromptComponent.SetFillAmount(eHoldTime / HOLD_THRESHOLD);
 
             if (eHoldTime >= HOLD_THRESHOLD)
             {
@@ -65,6 +68,7 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
         if (Input.GetKeyUp(KeyCode.E) && isHoldingE)
         {
             isHoldingE = false; // Released before threshold
+            if (currentPromptComponent != null) currentPromptComponent.SetFillAmount(0f);
             ExecuteNormalInteract();
         }
     }
@@ -131,6 +135,7 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
             {
                 Destroy(currentPromptUI);
                 currentPromptUI = null;
+                currentPromptComponent = null;
             }
             if (_playerUI != null)
             {
@@ -158,6 +163,7 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
                 {
                     Destroy(currentPromptUI);
                     currentPromptUI = null;
+                    currentPromptComponent = null;
                 }
                 if (_playerUI != null)
                 {
@@ -195,10 +201,12 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
                 Debug.LogError("Le prefab interactionPromptPrefab n'a pas de composant InteractionPromptUI.", this);
                 Destroy(currentPromptUI);
                 currentPromptUI = null;
+                currentPromptComponent = null;
                 return;
             }
 
-            promptUIComponent.SetTarget(_currentInteractableObjectTarget.transform, _currentInteractableObjectTarget.interactionPrompt);
+            currentPromptComponent = promptUIComponent;
+            currentPromptComponent.SetTarget(_currentInteractableObjectTarget.transform, "E");
             string targetName = _currentInteractableObjectTarget.TryGetComponent(out CharacterInteractable characterInteractable) && characterInteractable.Character != null
                 ? characterInteractable.Character.name
                 : _currentInteractableObjectTarget.name;
@@ -250,6 +258,7 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
                     {
                         Destroy(currentPromptUI);
                         currentPromptUI = null;
+                        currentPromptComponent = null;
                     }
                     if (_playerUI != null)
                     {

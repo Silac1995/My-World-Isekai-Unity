@@ -10,6 +10,7 @@ public class CharacterInteraction : CharacterSystem
     public Collider InteractionZone => _interactionZone;
     public event Action<Character, bool> OnInteractionStateChanged;
     private Coroutine _activeDialogueCoroutine;
+    private ICharacterInteractionAction _playerPendingAction;
     
     // Suivi de la cible actuelle d'approche pour le désabonnement
     private Character _pendingTarget;
@@ -459,9 +460,17 @@ public class CharacterInteraction : CharacterSystem
             }
             else if (currentSpeaker.IsPlayer())
             {
-                // Si c'est le joueur, pour l'instant on fait juste un Talk basique par défaut 
-                actionExecuted = new InteractionTalk();
-                actionExecuted.Execute(currentSpeaker, currentListener);
+                // Wait for player to manually trigger an action via HUD Menu
+                _playerPendingAction = null;
+                while (_playerPendingAction == null && IsInteracting)
+                {
+                    yield return null;
+                }
+
+                if (!IsInteracting) break;
+
+                actionExecuted = _playerPendingAction;
+                _playerPendingAction = null;
             }
 
             // --- NEW/FIX: Wait if an invitation is pending (thinking/responding phase) ---
@@ -560,6 +569,7 @@ public class CharacterInteraction : CharacterSystem
         _currentTarget = null;
         IsPositioned = false;
         IsPositioning = false;
+        _playerPendingAction = null;
 
         // Libérer le regard
         _character.CharacterVisual?.ClearLookTarget();
@@ -646,6 +656,11 @@ public class CharacterInteraction : CharacterSystem
 
         Debug.Log($"<color=green>[Interaction]</color> {_character.CharacterName} exécute {action.GetType().Name} sur {_currentTarget.CharacterName}");
         action.Execute(_character, _currentTarget);
+
+        if (_activeDialogueCoroutine != null)
+        {
+            _playerPendingAction = action;
+        }
     }
 
     private void ClearRedundantMovement(Character target)

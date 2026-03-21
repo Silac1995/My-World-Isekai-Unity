@@ -24,7 +24,13 @@ public class CharacterInteractable : InteractableObject
 
         Debug.Log($"<color=cyan>[Interaction]</color> {interactor.CharacterName} commence une interaction exclusive avec {_character.CharacterName}");
 
-        var startAction = new CharacterStartInteraction(interactor, _character);
+        ICharacterInteractionAction firstAction = null;
+        if (interactor.IsPlayer())
+        {
+            firstAction = new InteractionTalk();
+        }
+
+        var startAction = new CharacterStartInteraction(interactor, _character, firstAction);
 
         // On excute l'action
         interactor.CharacterActions.ExecuteAction(startAction);

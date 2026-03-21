@@ -1,6 +1,6 @@
 ---
 name: dialogue-system
-description: Manages scripted conversations with player input advancement, using the speech bubble system and ScriptableObjects.
+description: Manages scripted conversations with player input advancement, and defines the rules of generic/dynamic interactive dialogue.
 ---
 
 # Dialogue System
@@ -52,3 +52,10 @@ if (player.GetComponent<DialogueManager>().IsInDialogue) {
     // Prevent other actions
 }
 ```
+
+## 5. Generic/Dynamic Dialogues (CharacterInteraction)
+Unlike `DialogueSO` scripted sequences, generic dialogues are fully dynamic, conversational exchanges handled automatically or manually between characters.
+- **Location**: Managed natively by `CharacterInteraction.cs` (via the `DialogueSequence` coroutine) and related to the Social System (`social_system/SKILL.md`).
+- **Mechanic**: Reverses Speaker and Listener roles up to a `MAX_EXCHANGES` limit (default 6). Wait times are artificially injected strictly between speech bubbles.
+- **Player Involvement**: If the Speaker is the Player, the sequence automatically **pauses** (`WaitUntil`). The conversation halts until the Player manually triggers an interaction action (e.g., Talk, Insult, via the Hold 'E' HUD Menu or by tapping 'E' to greet).
+- **NPC Involvement**: If the Speaker is an NPC, they will automatically formulate an appropriate `ICharacterInteractionAction` (via `GetRandomSocialAction()`) based on their personality and current drives, resulting in spontaneous dialogue and relationship shifting without player intervention.
