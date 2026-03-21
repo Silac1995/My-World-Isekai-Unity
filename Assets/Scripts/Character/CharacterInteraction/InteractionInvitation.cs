@@ -25,6 +25,12 @@ public abstract class InteractionInvitation : ICharacterInteractionAction
         if (target.CharacterInvitation != null)
         {
             target.CharacterInvitation.ReceiveInvitation(this, source);
+            
+            // The source must follow the target (and freeze its own AI logic) while waiting for the response
+            if (source.CharacterInvitation != null)
+            {
+                source.CharacterInvitation.StartFollowingTarget(target);
+            }
         }
         else
         {

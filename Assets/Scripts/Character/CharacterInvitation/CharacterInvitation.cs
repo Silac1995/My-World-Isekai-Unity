@@ -26,6 +26,7 @@ public class CharacterInvitation : MonoBehaviour
     public bool HasPendingInvitation { get; private set; }
 
     private Coroutine _pendingCoroutine;
+    private Coroutine _followCoroutine;
 
     private void Awake()
     {
@@ -109,6 +110,13 @@ public class CharacterInvitation : MonoBehaviour
     public void StartFollowingTarget(Character target)
     {
         StopFollowingTarget();
+        
+        // --- NEW: Freeze the AI so the sender's standard behaviors (Wander, work) don't try to override FollowTargetRoutine ---
+        if (_character.Controller != null && !_character.IsPlayer())
+        {
+            _character.Controller.Freeze();
+        }
+
         _followCoroutine = StartCoroutine(FollowTargetRoutine(target));
     }
 
@@ -122,6 +130,15 @@ public class CharacterInvitation : MonoBehaviour
         {
             StopCoroutine(_followCoroutine);
             _followCoroutine = null;
+            
+            // Resume regular behaviour only if an interaction wasn't started
+            if (_character.Controller != null && !_character.IsPlayer())
+            {
+                if (_character.CharacterInteraction == null || !_character.CharacterInteraction.IsInteractionProcessActive)
+                {
+                    _character.Controller.Unfreeze();
+                }
+            }
         }
     }
 
@@ -132,24 +149,35 @@ public class CharacterInvitation : MonoBehaviour
                target.CharacterInvitation.HasPendingInvitation &&
                _character.CharacterMovement != null)
         {
+            float distanceToTarget = Vector3.Distance(_character.transform.position, target.transform.position);
             bool inRange = false;
+            Vector3 destination = target.transform.position;
 
             if (target.CharacterInteractable != null && target.CharacterInteractable.InteractionZone != null)
             {
-                Collider zone = target.CharacterInteractable.InteractionZone;
-                Vector3 closestPoint = zone.ClosestPoint(_character.transform.position);
-                float distanceToZone = Vector3.Distance(_character.transform.position, closestPoint);
+                Collider targetZone = target.CharacterInteractable.InteractionZone;
+                
+                // Use Rigidbody position (center of mass) instead of transform.position (feet)
+                // This correctly respects 3D shape offsets and avoids vertical displacement errors.
+                Vector3 sourcePos = _character.Rigidbody != null ? _character.Rigidbody.position : _character.transform.position;
+                
+                // Destination is ideally slightly closer than the center but SetDestination can just aim for the target
+                destination = target.transform.position;
 
+                // We calculate distance from our Rigidbody exactly to the border of the target's InteractionZone
+                Vector3 closestPointOnTargetZone = targetZone.ClosestPoint(sourcePos);
+                float distanceToZoneBorder = Vector3.Distance(sourcePos, closestPointOnTargetZone);
+                
                 // Margin to account for the character's own radius
-                if (distanceToZone <= 0.5f)
+                if (distanceToZoneBorder <= 0.5f)
                 {
                     inRange = true;
                 }
             }
             else
             {
-                // Fallback to a hardcoded distance if there is no interaction zone
-                if (Vector3.Distance(_character.transform.position, target.transform.position) <= 2.0f)
+                // Fallback conversational distance if zones are missing
+                if (distanceToTarget <= 2.0f)
                 {
                     inRange = true;
                 }
@@ -161,12 +189,21 @@ public class CharacterInvitation : MonoBehaviour
             }
             else
             {
-                _character.CharacterMovement.SetDestination(target.transform.position);
+                _character.CharacterMovement.SetDestination(destination);
             }
 
             yield return new WaitForSeconds(0.5f);
         }
         _followCoroutine = null;
+        
+        // Follow loop ended naturally. Unfreeze if interaction hasn't activated.
+        if (_character.Controller != null && !_character.IsPlayer())
+        {
+            if (_character.CharacterInteraction == null || !_character.CharacterInteraction.IsInteractionProcessActive)
+            {
+                _character.Controller.Unfreeze();
+            }
+        }
     }
 
     // ──────────────────────────────────────────────
