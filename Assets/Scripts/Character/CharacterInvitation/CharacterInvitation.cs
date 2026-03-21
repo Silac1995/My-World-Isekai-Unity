@@ -26,7 +26,6 @@ public class CharacterInvitation : MonoBehaviour
     public bool HasPendingInvitation { get; private set; }
 
     private Coroutine _pendingCoroutine;
-    private Coroutine _followCoroutine;
 
     private void Awake()
     {
@@ -47,6 +46,12 @@ public class CharacterInvitation : MonoBehaviour
             Debug.Log($"<color=orange>[Invitation]</color> {_character.CharacterName} is already considering another invitation, auto-refusing.");
             invitation.OnRefused(source, _character);
             return;
+        }
+
+        // Stop moving to visually acknowledge the invitation (NPCs only — players retain control)
+        if (!_character.IsPlayer() && _character.CharacterMovement != null)
+        {
+            _character.CharacterMovement.Stop();
         }
 
         // Start the delayed response coroutine
@@ -104,12 +109,7 @@ public class CharacterInvitation : MonoBehaviour
     public void StartFollowingTarget(Character target)
     {
         StopFollowingTarget();
-        
-        // Players retain manual control instead of auto-following
-        if (!_character.IsPlayer())
-        {
-            _followCoroutine = StartCoroutine(FollowTargetRoutine(target));
-        }
+        _followCoroutine = StartCoroutine(FollowTargetRoutine(target));
     }
 
     /// <summary>
@@ -172,8 +172,6 @@ public class CharacterInvitation : MonoBehaviour
     // ──────────────────────────────────────────────
     //  EVALUATION
     // ──────────────────────────────────────────────
-
-
 
     /// <summary>
     /// Evaluates whether this character accepts an invitation from the source.

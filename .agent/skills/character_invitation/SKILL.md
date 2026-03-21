@@ -35,12 +35,15 @@ This is a `MonoBehaviour` attached to the Character.
 - When an `InteractionInvitation` is submitted to it via `.ReceiveInvitation()`, it starts a Coroutine.
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 - If the target is an NPC, they will stop moving to visually "think" about the invitation. If the target is the player, they retain full movement control.
 - The player target retains full movement control and can freely walk away while considering the invitation.
 - While the target is thinking during the `_responseDelay`, the **source character will follow the target**. This is managed via the `StartFollowingTarget` routine which auto-halts once the target responds.
 =======
 >>>>>>> parent of b311ee0 (Source follows target while invitation pending)
 
+=======
+>>>>>>> parent of b311ee0 (Source follows target while invitation pending)
 =======
 >>>>>>> parent of b311ee0 (Source follows target while invitation pending)
 - It waits for a delay (`_responseDelay`, default 3 seconds) to "think".
