@@ -48,15 +48,7 @@ public class CharacterInvitation : MonoBehaviour
             return;
         }
 
-<<<<<<< HEAD
-=======
-        // Stop moving to visually acknowledge the invitation
-        if (_character.CharacterMovement != null)
-        {
-            _character.CharacterMovement.Stop();
-        }
 
->>>>>>> parent of b311ee0 (Source follows target while invitation pending)
         // Start the delayed response coroutine
         _pendingCoroutine = StartCoroutine(ProcessInvitation(invitation, source));
     }
@@ -100,7 +92,7 @@ public class CharacterInvitation : MonoBehaviour
         _pendingCoroutine = null;
     }
 
-<<<<<<< HEAD
+
     // ──────────────────────────────────────────────
     //  FOLLOWING (Source/Sender side)
     // ──────────────────────────────────────────────
@@ -182,8 +174,7 @@ public class CharacterInvitation : MonoBehaviour
     //  EVALUATION
     // ──────────────────────────────────────────────
 
-=======
->>>>>>> parent of b311ee0 (Source follows target while invitation pending)
+
     /// <summary>
     /// Evaluates whether this character accepts an invitation from the source.
     /// Uses relationship quality and sociability to determine acceptance.

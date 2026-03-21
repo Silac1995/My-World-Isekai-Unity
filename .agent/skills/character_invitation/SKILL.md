@@ -39,6 +39,7 @@ This is a `MonoBehaviour` attached to the Character.
 - While the target is thinking during the `_responseDelay`, the **source character will follow the target**. This is managed via the `StartFollowingTarget` routine which auto-halts once the target responds.
 =======
 >>>>>>> parent of b311ee0 (Source follows target while invitation pending)
+
 - It waits for a delay (`_responseDelay`, default 3 seconds) to "think".
 - Then, it calls the evaluation logic. 
 - If `EvaluateCustomInvitation()` returns null, it performs the standard calculation:
