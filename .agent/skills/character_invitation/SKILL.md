@@ -33,9 +33,7 @@ To create a new invitation, you must create a child class (e.g., `InteractionJoi
 ### 2. `CharacterInvitation` (The Local Receiver)
 This is a `MonoBehaviour` attached to the Character. 
 - When an `InteractionInvitation` is submitted to it via `.ReceiveInvitation()`, it starts a Coroutine.
-- If the target is an NPC, they will stop moving to visually "think" about the invitation.
-- The player target retains full movement control and can freely walk away while considering the invitation.
-- While the target is thinking during the `_responseDelay`, the **source character will follow the target**. This is managed via the `StartFollowingTarget` routine which auto-halts once the target responds.
+- The character stops moving to visually "think" about the invitation.
 - It waits for a delay (`_responseDelay`, default 3 seconds) to "think".
 - Then, it calls the evaluation logic. 
 - If `EvaluateCustomInvitation()` returns null, it performs the standard calculation:
