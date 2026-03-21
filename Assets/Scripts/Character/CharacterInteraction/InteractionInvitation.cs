@@ -25,6 +25,12 @@ public abstract class InteractionInvitation : ICharacterInteractionAction
         if (target.CharacterInvitation != null)
         {
             target.CharacterInvitation.ReceiveInvitation(this, source);
+
+            // 3. Source follows the target while the invitation is pending
+            if (source.CharacterInvitation != null)
+            {
+                source.CharacterInvitation.StartFollowingTarget(target);
+            }
         }
         else
         {
