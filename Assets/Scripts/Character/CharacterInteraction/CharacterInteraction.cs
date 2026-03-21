@@ -11,6 +11,16 @@ public class CharacterInteraction : CharacterSystem
     public event Action<Character, bool> OnInteractionStateChanged;
     public event Action<Character> OnPlayerTurnStarted;
     public event Action<Character> OnPlayerTurnEnded;
+    /// <summary>
+    /// Fired every frame during the player's turn with a normalized timer value (1.0 → 0.0).
+    /// </summary>
+    public event Action<float> OnPlayerTurnTimerUpdated;
+
+    // Internal helpers so DialogueSequence can fire events on the correct CharacterInteraction
+    // (the currentSpeaker's, not necessarily the initiator's).
+    internal void NotifyPlayerTurnStarted(Character listener) => OnPlayerTurnStarted?.Invoke(listener);
+    internal void NotifyPlayerTurnEnded(Character listener) => OnPlayerTurnEnded?.Invoke(listener);
+    internal void NotifyPlayerTurnTimerUpdated(float value) => OnPlayerTurnTimerUpdated?.Invoke(value);
     private Coroutine _activeDialogueCoroutine;
     private ICharacterInteractionAction _playerPendingAction;
     
@@ -462,28 +472,31 @@ public class CharacterInteraction : CharacterSystem
             }
             else if (currentSpeaker.IsPlayer())
             {
-                // Wait for player to manually trigger an action via HUD Menu
-                OnPlayerTurnStarted?.Invoke(currentListener);
-                _playerPendingAction = null;
+                // Fire events on the PLAYER'S CharacterInteraction so PlayerInteractionDetector receives them
+                var playerInteraction = currentSpeaker.CharacterInteraction;
+                playerInteraction.NotifyPlayerTurnStarted(currentListener);
+                playerInteraction._playerPendingAction = null;
                 float waitTimer = 0f;
                 const float PLAYER_WAIT_DELAY = 8f;
 
-                while (_playerPendingAction == null && IsInteracting && waitTimer < PLAYER_WAIT_DELAY)
+                while (playerInteraction._playerPendingAction == null && IsInteracting && waitTimer < PLAYER_WAIT_DELAY)
                 {
                     waitTimer += Time.deltaTime;
+                    float normalized = Mathf.Clamp01(1f - (waitTimer / PLAYER_WAIT_DELAY));
+                    playerInteraction.NotifyPlayerTurnTimerUpdated(normalized);
                     yield return null;
                 }
 
-                OnPlayerTurnEnded?.Invoke(currentListener);
+                playerInteraction.NotifyPlayerTurnEnded(currentListener);
 
-                if (!IsInteracting || _playerPendingAction == null)
+                if (!IsInteracting || playerInteraction._playerPendingAction == null)
                 {
                     Debug.Log("<color=yellow>[Interaction]</color> Le joueur n'a pas répondu à temps ou l'interaction a été rompue. Fin de l'échange.");
                     break;
                 }
 
-                actionExecuted = _playerPendingAction;
-                _playerPendingAction = null;
+                actionExecuted = playerInteraction._playerPendingAction;
+                playerInteraction._playerPendingAction = null;
             }
 
             // --- NEW/FIX: Wait if an invitation is pending (thinking/responding phase) ---
@@ -584,6 +597,14 @@ public class CharacterInteraction : CharacterSystem
         IsPositioning = false;
         _playerPendingAction = null;
 
+        // --- Safety: notify turn ended + interaction state for abrupt interruptions ---
+        // Works for all characters, not just the player.
+        if (_character.IsPlayer())
+        {
+            OnPlayerTurnEnded?.Invoke(previousTarget);
+        }
+        OnInteractionStateChanged?.Invoke(previousTarget, false);
+
         // Libérer le regard
         _character.CharacterVisual?.ClearLookTarget();
 
@@ -629,8 +650,6 @@ public class CharacterInteraction : CharacterSystem
         _character.CharacterInteractable?.Release();
         if (previousTarget != null)
         {
-            OnInteractionStateChanged?.Invoke(previousTarget, false);
-
             if (previousTarget.CharacterInteraction.CurrentTarget == _character)
             {
                 previousTarget.CharacterInteraction.EndInteraction();
@@ -670,7 +689,9 @@ public class CharacterInteraction : CharacterSystem
         Debug.Log($"<color=green>[Interaction]</color> {_character.CharacterName} exécute {action.GetType().Name} sur {_currentTarget.CharacterName}");
         action.Execute(_character, _currentTarget);
 
-        if (_activeDialogueCoroutine != null)
+        // Always set _playerPendingAction when in an interaction.
+        // The DialogueSequence reads this from the player's CharacterInteraction.
+        if (IsInteracting)
         {
             _playerPendingAction = action;
         }

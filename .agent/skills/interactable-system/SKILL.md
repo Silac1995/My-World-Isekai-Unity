@@ -40,6 +40,23 @@ Used for resource nodes (trees, rocks, ore veins).
 - **Outputs**: Produces items from a predefined `_outputItems` list (as `ItemSO`).
 - **Depletion**: Tracks `_currentGatherCount`. Once it hits `_maxGatherCount`, the object becomes depleted (`_isDepleted = true`), hides its visuals, and waits for a `_respawnTime` before it can be gathered again.
 
+## Player Input & Interaction Menus
+
+The `PlayerInteractionDetector` evaluates player input to differentiate between quick interactions and extended actions:
+
+### 1. Tap E (Quick Action)
+- Automatically delegates to the interactable's `Interact()` method.
+- For a `CharacterInteractable`, this defaults to sending an `InteractionStartDialogue` invitation (requesting a conversation).
+
+### 2. Hold E (Extended Options)
+- Pressing and holding "E" fills up a progress bar managed by `InteractionPromptUI`.
+- Once the hold threshold is reached, instead of firing `Interact()`, it pulls `GetHoldInteractionOptions()` from the target.
+- These options (e.g., *Follow Me*, *Greet*) are displayed dynamically in a radial or list context menu via the `PlayerUI`.
+
+### 3. Dynamic Dialogue Menu
+- When an interaction dialogue officially starts (i.e. it is the player's turn in a turn-based dialogue sequence), the `PlayerInteractionDetector` subscribes to `OnPlayerTurnStarted`.
+- It dynamically pulls `GetDialogueInteractionOptions()` (e.g., *Talk*, *Insult*) and displays them in the context menu.
+
 ## When to use this skill
 - When creating a new interactable object in the game world.
 - When scripting logic that requires a character to interact with an item, NPC, or resource node.

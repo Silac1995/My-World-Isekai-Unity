@@ -98,6 +98,21 @@ All HUD windows inherit from `UI_WindowBase`, which provides centralized logic f
 4. **Instantiation**: Use a Prefab Variant of `UI_WindowBase.prefab` to automatically inherit the close button and background structure.
 5. **HUD Integration**: In `PlayerUI.cs`, add a serialized reference to your new window (`_myNewUI`) and its toggle button (`_buttonMyNewUI`). Hook them up to toggle their active state alongside existing windows.
 
+---
+
+### Dynamic Interaction Menu
+The `PlayerUI` handles displaying context-sensitive actions through `OpenInteractionMenu(List<InteractionOption> options)`.
+
+**Usage**:
+- **Extended World Actions**: Triggered by the `PlayerInteractionDetector` when the player *holds* the interaction key. Shows actions like "Greet", "Follow", "Carry".
+- **Turn-based Dialogue**: Triggered when `OnPlayerTurnStarted` fires during a conversation. Shows choices like "Talk" or "Insult".
+
+**Implementation Details**:
+- Action callbacks defined in the `InteractionOption` are executed directly when the corresponding UI button is clicked. 
+- For dialogue, the action should call `interactor.CharacterInteraction.PerformInteraction(action)` to register the player's choice and advance the turn logic.
+
+---
+
 #### Current Windows
 - **`UI_CharacterEquipment`**: Manages the inventory interaction logic. Uses `UI_NotificationClearer` to handle badges natively.
 - **`UI_CharacterRelations`**: Dynamically displays a list of `UI_RelationshipSlot` instances based on `CharacterRelation` events.

@@ -186,6 +186,22 @@ public class PlayerUI : MonoBehaviour
         }
     }
 
+    public void SetInteractionMenuInteractable(bool interactable)
+    {
+        if (_interactionMenu != null)
+        {
+            _interactionMenu.SetOptionsInteractable(interactable);
+        }
+    }
+
+    public void UpdateInteractionMenuTimer(float normalizedValue)
+    {
+        if (_interactionMenu != null)
+        {
+            _interactionMenu.UpdateTimer(normalizedValue);
+        }
+    }
+
     
 
     private void ClearUI()

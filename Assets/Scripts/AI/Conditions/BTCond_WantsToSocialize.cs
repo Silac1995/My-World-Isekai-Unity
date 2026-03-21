@@ -65,7 +65,11 @@ namespace MWI.AI
                     _isMoving = false;
                 }
 
-                self.CharacterInteraction.StartInteractionWith(_activeTarget);
+                var invitation = new InteractionStartDialogue();
+                if (invitation.CanExecute(self, _activeTarget))
+                {
+                    invitation.Execute(self, _activeTarget);
+                }
                 _activeTarget = null;
                 return BTNodeStatus.Success; // Terminé
             }

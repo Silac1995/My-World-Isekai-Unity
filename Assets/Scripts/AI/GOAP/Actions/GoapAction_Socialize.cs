@@ -107,14 +107,13 @@ public class GoapAction_Socialize : GoapAction
             _lastTargetPos = Vector3.positiveInfinity;
         }
 
-        // 3. Déclencher l'interaction
-        bool success = worker.CharacterInteraction.StartInteractionWith(_target, onPositioned: () => 
-        {
-            // Logique éventuelle une fois positionné
-        });
+        // 3. Déclencher l'invitation
+        var invitation = new InteractionStartDialogue();
+        bool canStart = invitation.CanExecute(worker, _target);
 
-        if (success)
+        if (canStart)
         {
+            invitation.Execute(worker, _target);
             _hasStartedInteraction = true;
         }
         else

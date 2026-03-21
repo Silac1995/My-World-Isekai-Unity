@@ -24,8 +24,20 @@ public class CharacterStartInteraction : CharacterAction
         character.CharacterVisual?.FaceTarget(_target.transform.position);
         _target.CharacterVisual?.FaceTarget(character.transform.position);
 
-        // 2. Logique : Creer le lien
-        character.CharacterInteraction.StartInteractionWith(_target, _forcedAction);
+        // 2. Logique : If the action is an invitation (e.g. InteractionStartDialogue),
+        //    send it as an async invitation — OnAccepted will start the interaction.
+        //    Otherwise, pass it as a forcedFirstAction to StartInteractionWith.
+        if (_forcedAction is InteractionInvitation invitation)
+        {
+            if (invitation.CanExecute(character, _target))
+            {
+                invitation.Execute(character, _target);
+            }
+        }
+        else
+        {
+            character.CharacterInteraction.StartInteractionWith(_target, _forcedAction);
+        }
 
         Finish();
     }

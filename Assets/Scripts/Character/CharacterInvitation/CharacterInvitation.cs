@@ -13,7 +13,7 @@ public class CharacterInvitation : MonoBehaviour
 
     [Header("Settings")]
     [Tooltip("Time in seconds the character takes to 'think' before responding.")]
-    [SerializeField] private float _responseDelay = 3f;
+    [SerializeField] private float _responseDelay = 1f;
 
     [Tooltip("Maximum time to wait for a response. After this, invitation is auto-refused.")]
     [SerializeField] private float _responseTimeout = 10f;
@@ -105,7 +105,7 @@ public class CharacterInvitation : MonoBehaviour
             return customEval.Value;
         }
 
-        float acceptChance = 0.3f; // Base 30% chance for strangers
+        float acceptChance = 0.8f; // Base 80% chance for strangers
 
         // --- RELATION-BASED ---
         if (_character.CharacterRelation != null)
@@ -115,7 +115,7 @@ public class CharacterInvitation : MonoBehaviour
             {
                 if (_character.CharacterRelation.IsFriend(source))
                 {
-                    acceptChance = 0.85f; // Friends: 85% base
+                    acceptChance = 1.0f; // Friends: 100% base
                 }
                 else if (_character.CharacterRelation.IsEnemy(source))
                 {
@@ -123,8 +123,8 @@ public class CharacterInvitation : MonoBehaviour
                 }
                 else
                 {
-                    // Acquaintance: scale based on relation value (0-20 → 30-60%)
-                    acceptChance = Mathf.Lerp(0.3f, 0.6f, Mathf.Clamp01(rel.RelationValue / 20f));
+                    // Acquaintance: scale based on relation value (0-20 → 80-95%)
+                    acceptChance = Mathf.Lerp(0.8f, 0.95f, Mathf.Clamp01(rel.RelationValue / 20f));
                 }
             }
         }

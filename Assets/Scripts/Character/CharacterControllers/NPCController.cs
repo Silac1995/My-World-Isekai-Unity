@@ -297,7 +297,11 @@ public class NPCController : CharacterGameController
                     _character.CharacterSpeech.Say("Taking a break too, right? Need to stretch my hands.");
 
                 if (target != null && target.IsAlive())
-                    _character.CharacterInteraction.StartInteractionWith(target);
+                {
+                    var invitation = new InteractionStartDialogue();
+                    if (invitation.CanExecute(_character, target))
+                        invitation.Execute(_character, target);
+                }
             }
             return;
         }
@@ -311,7 +315,11 @@ public class NPCController : CharacterGameController
             {
                 Debug.Log($"<color=cyan>[Social - Stranger]</color> {_character.CharacterName} s'approche de l'inconnu {target.CharacterName} (Sociabilité: {sociability:P0})");
                 if (target != null && target.IsAlive())
-                    _character.CharacterInteraction.StartInteractionWith(target);
+                {
+                    var invitation = new InteractionStartDialogue();
+                    if (invitation.CanExecute(_character, target))
+                        invitation.Execute(_character, target);
+                }
             }
             return;
         }
@@ -353,7 +361,11 @@ public class NPCController : CharacterGameController
                 _character.CharacterSpeech.Say("Hey! You!");
 
             if (target != null && target.IsAlive())
-                _character.CharacterInteraction.StartInteractionWith(target);
+            {
+                var invitation = new InteractionStartDialogue();
+                if (invitation.CanExecute(_character, target))
+                    invitation.Execute(_character, target);
+            }
         }
     }
 

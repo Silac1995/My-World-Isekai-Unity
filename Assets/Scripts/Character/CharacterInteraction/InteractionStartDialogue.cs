@@ -22,7 +22,8 @@ public class InteractionStartDialogue : InteractionInvitation
     {
         // When accepted, directly lock them into the interaction WITHOUT another forced action,
         // so `DialogueSequence` hits Tour 0 smoothly.
-        target.CharacterInteraction.StartInteractionWith(source, null);
+        // The source initiated the dialogue, so the source starts the interaction
+        source.CharacterInteraction.StartInteractionWith(target, null);
     }
 
     public override string GetAcceptMessage() => "Sure thing!";

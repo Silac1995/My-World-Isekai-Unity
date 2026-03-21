@@ -72,7 +72,7 @@ public class CharacterInteractable : InteractableObject
             Action = () =>
             {
                 var action = new InteractionTalk();
-                _character.CharacterInteraction.PerformInteraction(action);
+                interactor.CharacterInteraction.PerformInteraction(action);
             }
         });
 
@@ -82,7 +82,17 @@ public class CharacterInteractable : InteractableObject
             Action = () =>
             {
                 var action = new InteractionInsult();
-                _character.CharacterInteraction.PerformInteraction(action);
+                interactor.CharacterInteraction.PerformInteraction(action);
+            }
+        });
+
+        options.Add(new InteractionOption
+        {
+            Name = "Goodbye",
+            Action = () =>
+            {
+                var action = new InteractionGoodbye();
+                interactor.CharacterInteraction.PerformInteraction(action);
             }
         });
 

@@ -27,8 +27,10 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
 
         if (Character != null && Character.CharacterInteraction != null)
         {
+            Character.CharacterInteraction.OnInteractionStateChanged += HandleInteractionStateChanged;
             Character.CharacterInteraction.OnPlayerTurnStarted += HandlePlayerTurnStarted;
             Character.CharacterInteraction.OnPlayerTurnEnded += HandlePlayerTurnEnded;
+            Character.CharacterInteraction.OnPlayerTurnTimerUpdated += HandlePlayerTurnTimerUpdated;
         }
     }
 
@@ -36,24 +38,95 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
     {
         if (Character != null && Character.CharacterInteraction != null)
         {
+            Character.CharacterInteraction.OnInteractionStateChanged -= HandleInteractionStateChanged;
             Character.CharacterInteraction.OnPlayerTurnStarted -= HandlePlayerTurnStarted;
             Character.CharacterInteraction.OnPlayerTurnEnded -= HandlePlayerTurnEnded;
+            Character.CharacterInteraction.OnPlayerTurnTimerUpdated -= HandlePlayerTurnTimerUpdated;
         }
     }
 
+    /// <summary>
+    /// Ensures the _playerUI reference is resolved. Called lazily by event handlers
+    /// since events can fire before the first Update() call.
+    /// </summary>
+    private void EnsurePlayerUI()
+    {
+        if (_playerUI == null)
+            _playerUI = UnityEngine.Object.FindAnyObjectByType<PlayerUI>(FindObjectsInactive.Include);
+    }
+
+    /// <summary>
+    /// Called when the interaction formally starts or ends.
+    /// Opens the menu (locked) when the interaction begins, closes it when it ends.
+    /// </summary>
+    private void HandleInteractionStateChanged(Character target, bool started)
+    {
+        EnsurePlayerUI();
+        if (_playerUI == null) return;
+
+        if (started)
+        {
+            // Try to get the interactable from proximity detection first
+            var interactable = _currentInteractableObjectTarget;
+
+            // Fallback: resolve from the interaction target's CharacterInteractable
+            if (interactable == null && target != null)
+            {
+                interactable = target.GetComponent<CharacterInteractable>();
+            }
+
+            if (interactable != null)
+            {
+                var options = interactable.GetDialogueInteractionOptions(Character);
+                if (options != null && options.Count > 0)
+                {
+                    _playerUI.OpenInteractionMenu(options);
+                    _playerUI.SetInteractionMenuInteractable(false);
+                    _playerUI.UpdateInteractionMenuTimer(1f);
+                }
+            }
+        }
+        else
+        {
+            _playerUI.CloseInteractionMenu();
+        }
+    }
+
+    /// <summary>
+    /// Called when it becomes the player's turn — unlock the buttons.
+    /// </summary>
     private void HandlePlayerTurnStarted(Character listener)
     {
-        if (_currentInteractableObjectTarget == null) return;
-        var options = _currentInteractableObjectTarget.GetDialogueInteractionOptions(Character);
-        if (options != null && options.Count > 0)
+        EnsurePlayerUI();
+        if (_playerUI != null)
         {
-            if (_playerUI != null) _playerUI.OpenInteractionMenu(options);
+            _playerUI.SetInteractionMenuInteractable(true);
+            _playerUI.UpdateInteractionMenuTimer(1f);
         }
     }
 
+    /// <summary>
+    /// Called when the player's turn ends — lock the buttons again.
+    /// </summary>
     private void HandlePlayerTurnEnded(Character listener)
     {
-        if (_playerUI != null) _playerUI.CloseInteractionMenu();
+        EnsurePlayerUI();
+        if (_playerUI != null)
+        {
+            _playerUI.SetInteractionMenuInteractable(false);
+        }
+    }
+
+    /// <summary>
+    /// Called every frame during the player's turn with a normalized timer value.
+    /// </summary>
+    private void HandlePlayerTurnTimerUpdated(float normalizedValue)
+    {
+        EnsurePlayerUI();
+        if (_playerUI != null)
+        {
+            _playerUI.UpdateInteractionMenuTimer(normalizedValue);
+        }
     }
 
     private void Update()
