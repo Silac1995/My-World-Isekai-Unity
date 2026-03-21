@@ -54,7 +54,6 @@ public class CharacterInvitation : MonoBehaviour
             _character.CharacterMovement.Stop();
         }
 
-
         // Start the delayed response coroutine
         _pendingCoroutine = StartCoroutine(ProcessInvitation(invitation, source));
     }
