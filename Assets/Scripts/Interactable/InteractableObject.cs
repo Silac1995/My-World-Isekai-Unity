@@ -39,4 +39,9 @@ public abstract class InteractableObject : MonoBehaviour
     {
         return null;
     }
+
+    public virtual System.Collections.Generic.List<InteractionOption> GetDialogueInteractionOptions(Character interactor)
+    {
+        return null;
+    }
 }

@@ -304,8 +304,12 @@ public class Character : MonoBehaviour
 
         if (_characterActions != null && _characterActions.CurrentAction != null)
         {
-            reason = _characterActions.CurrentAction is CharacterCraftAction ? CharacterBusyReason.Crafting : CharacterBusyReason.DoingAction;
-            return false;
+            // Allow CharacterStartInteraction to bypass IsFree because it invokes StartInteractionWith itself
+            if (!(_characterActions.CurrentAction is CharacterStartInteraction))
+            {
+                reason = _characterActions.CurrentAction is CharacterCraftAction ? CharacterBusyReason.Crafting : CharacterBusyReason.DoingAction;
+                return false;
+            }
         }
 
         reason = CharacterBusyReason.None;

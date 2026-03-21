@@ -9,6 +9,8 @@ public class CharacterInteraction : CharacterSystem
 
     public Collider InteractionZone => _interactionZone;
     public event Action<Character, bool> OnInteractionStateChanged;
+    public event Action<Character> OnPlayerTurnStarted;
+    public event Action<Character> OnPlayerTurnEnded;
     private Coroutine _activeDialogueCoroutine;
     private ICharacterInteractionAction _playerPendingAction;
     
@@ -461,13 +463,24 @@ public class CharacterInteraction : CharacterSystem
             else if (currentSpeaker.IsPlayer())
             {
                 // Wait for player to manually trigger an action via HUD Menu
+                OnPlayerTurnStarted?.Invoke(currentListener);
                 _playerPendingAction = null;
-                while (_playerPendingAction == null && IsInteracting)
+                float waitTimer = 0f;
+                const float PLAYER_WAIT_DELAY = 8f;
+
+                while (_playerPendingAction == null && IsInteracting && waitTimer < PLAYER_WAIT_DELAY)
                 {
+                    waitTimer += Time.deltaTime;
                     yield return null;
                 }
 
-                if (!IsInteracting) break;
+                OnPlayerTurnEnded?.Invoke(currentListener);
+
+                if (!IsInteracting || _playerPendingAction == null)
+                {
+                    Debug.Log("<color=yellow>[Interaction]</color> Le joueur n'a pas répondu à temps ou l'interaction a été rompue. Fin de l'échange.");
+                    break;
+                }
 
                 actionExecuted = _playerPendingAction;
                 _playerPendingAction = null;

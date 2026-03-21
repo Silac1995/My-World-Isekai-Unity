@@ -16,9 +16,44 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
     protected override void Awake()
     {
         base.Awake(); // Initialise le Character du parent
-        interactionPromptPrefab = Resources.Load<GameObject>("UI/InteractionPrompt");
+        
+        // Load dynamically only if it wasn't assigned in the Unity Inspector
         if (interactionPromptPrefab == null)
-            Debug.LogError("UI/InteractionPrompt not found in Resources!");
+        {
+            interactionPromptPrefab = Resources.Load<GameObject>("UI/Interaction/InteractionPrompt");
+            if (interactionPromptPrefab == null)
+                Debug.LogError("UI/Interaction/InteractionPrompt not found in Resources!");
+        }
+
+        if (Character != null && Character.CharacterInteraction != null)
+        {
+            Character.CharacterInteraction.OnPlayerTurnStarted += HandlePlayerTurnStarted;
+            Character.CharacterInteraction.OnPlayerTurnEnded += HandlePlayerTurnEnded;
+        }
+    }
+
+    private void OnDestroy()
+    {
+        if (Character != null && Character.CharacterInteraction != null)
+        {
+            Character.CharacterInteraction.OnPlayerTurnStarted -= HandlePlayerTurnStarted;
+            Character.CharacterInteraction.OnPlayerTurnEnded -= HandlePlayerTurnEnded;
+        }
+    }
+
+    private void HandlePlayerTurnStarted(Character listener)
+    {
+        if (_currentInteractableObjectTarget == null) return;
+        var options = _currentInteractableObjectTarget.GetDialogueInteractionOptions(Character);
+        if (options != null && options.Count > 0)
+        {
+            if (_playerUI != null) _playerUI.OpenInteractionMenu(options);
+        }
+    }
+
+    private void HandlePlayerTurnEnded(Character listener)
+    {
+        if (_playerUI != null) _playerUI.CloseInteractionMenu();
     }
 
     private void Update()
@@ -56,7 +91,7 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
                 var options = _currentInteractableObjectTarget.GetHoldInteractionOptions(Character);
                 if (options != null && options.Count > 0)
                 {
-                    OpenInteractionMenu(options);
+                    if (_playerUI != null) _playerUI.OpenInteractionMenu(options);
                 }
                 else
                 {

@@ -570,7 +570,7 @@ MonoBehaviour:
   _character: {fileID: 2536622428659117900}
   _currentTarget: {fileID: 0}
   _interactionZone: {fileID: 5383023488254193858}
-  _interactionActionPrefab: {fileID: 7422820631460187334, guid: 8ddcc839afed96c409131b535aab38ac, type: 3}
+  _interactionActionPrefab: {fileID: 5961681653653169777, guid: 9d3890f897b0c0248af1c6b783cd9d82, type: 3}
 --- !u!1 &3647192851657958412
 GameObject:
   m_ObjectHideFlags: 0
@@ -894,7 +894,6 @@ MonoBehaviour:
   selfCharacter: {fileID: 2536622428659117900}
   interactionPromptPrefab: {fileID: 5061019214615508109, guid: fddc61452bf665749af40f04d627bf08, type: 3}
   nearbyInteractables: []
-  interactionMenuPrefab: {fileID: 5961681653653169777, guid: 9d3890f897b0c0248af1c6b783cd9d82, type: 3}
 --- !u!114 &3369343900060323110
 MonoBehaviour:
   m_ObjectHideFlags: 0

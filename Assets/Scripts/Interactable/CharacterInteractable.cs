@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Collections.Generic;
 
 public class CharacterInteractable : InteractableObject
 {
@@ -12,28 +13,13 @@ public class CharacterInteractable : InteractableObject
     {
         if (interactor == null || _character == null) return;
 
-        // --- VRIFICATION ATOMIQUE ---
-        if (_isBusy)
-        {
-            Debug.Log($"<color=orange>[Interaction]</color> {interactor.CharacterName} essaie de parler  {_character.CharacterName} mais il est dj occup !");
-            return;
-        }
-
-        // On bloque l'accs immdiatement
-        _isBusy = true;
-
         Debug.Log($"<color=cyan>[Interaction]</color> {interactor.CharacterName} commence une interaction exclusive avec {_character.CharacterName}");
 
-        ICharacterInteractionAction firstAction = null;
         if (interactor.IsPlayer())
         {
-            firstAction = new InteractionTalk();
+            var startAction = new CharacterStartInteraction(interactor, _character, new InteractionStartDialogue());
+            interactor.CharacterActions.ExecuteAction(startAction);
         }
-
-        var startAction = new CharacterStartInteraction(interactor, _character, firstAction);
-
-        // On excute l'action
-        interactor.CharacterActions.ExecuteAction(startAction);
     }
 
     /// <summary>
@@ -45,38 +31,58 @@ public class CharacterInteractable : InteractableObject
         Debug.Log($"<color=grey>[Interaction]</color> {_character.CharacterName} est maintenant libre.");
     }
 
-    public override System.Collections.Generic.List<InteractionOption> GetHoldInteractionOptions(Character interactor)
+    public override List<InteractionOption> GetHoldInteractionOptions(Character interactor)
     {
-        var options = new System.Collections.Generic.List<InteractionOption>();
+        if (_character == null) return null;
 
-        options.Add(new InteractionOption {
+        var options = new List<InteractionOption>();
+
+        // For now, Follow and Spontaneous Talk are available outside of interaction.
+        options.Add(new InteractionOption
+        {
+            Name = "Follow Me",
+            Action = () =>
+            {
+                Debug.Log($"{interactor.CharacterName} is asking {_character.CharacterName} to follow them.");
+            }
+        });
+
+        options.Add(new InteractionOption
+        {
+            Name = "Greet",
+            Action = () =>
+            {
+                var action = new InteractionSpontaneousTalk();
+                action.Execute(interactor, _character);
+            }
+        });
+
+        return options;
+    }
+
+    public override List<InteractionOption> GetDialogueInteractionOptions(Character interactor)
+    {
+        if (_character == null || _character.CharacterInteraction == null) return null;
+
+        var options = new List<InteractionOption>();
+
+        options.Add(new InteractionOption
+        {
             Name = "Talk",
-            Action = () => {
-                ICharacterInteractionAction talkAction = new InteractionTalk();
-                interactor.CharacterInteraction.PerformInteraction(talkAction);
+            Action = () =>
+            {
+                var action = new InteractionTalk();
+                _character.CharacterInteraction.PerformInteraction(action);
             }
         });
 
-        options.Add(new InteractionOption {
-            Name = "Follow",
-            Action = () => {
-                ICharacterInteractionAction followAction = new InteractionAskToFollow();
-                interactor.CharacterInteraction.PerformInteraction(followAction);
-            }
-        });
-
-        options.Add(new InteractionOption {
+        options.Add(new InteractionOption
+        {
             Name = "Insult",
-            Action = () => {
-                ICharacterInteractionAction insultAction = new InteractionInsult();
-                interactor.CharacterInteraction.PerformInteraction(insultAction);
-            }
-        });
-
-        options.Add(new InteractionOption {
-            Name = "Fight",
-            Action = () => {
-                interactor.CharacterCombat.StartFight(_character);
+            Action = () =>
+            {
+                var action = new InteractionInsult();
+                _character.CharacterInteraction.PerformInteraction(action);
             }
         });
 
