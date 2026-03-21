@@ -26,6 +26,7 @@ public class CharacterInvitation : MonoBehaviour
     public bool HasPendingInvitation { get; private set; }
 
     private Coroutine _pendingCoroutine;
+    private Coroutine _followCoroutine;
 
     private void Awake()
     {
@@ -53,6 +54,7 @@ public class CharacterInvitation : MonoBehaviour
         {
             _character.CharacterMovement.Stop();
         }
+
 
         // Start the delayed response coroutine
         _pendingCoroutine = StartCoroutine(ProcessInvitation(invitation, source));
@@ -96,6 +98,88 @@ public class CharacterInvitation : MonoBehaviour
         HasPendingInvitation = false;
         _pendingCoroutine = null;
     }
+
+    // ──────────────────────────────────────────────
+    //  FOLLOWING (Source/Sender side)
+    // ──────────────────────────────────────────────
+
+    /// <summary>
+    /// Called on the SOURCE's CharacterInvitation to follow the target
+    /// while the invitation is pending. Stops automatically when the
+    /// target's HasPendingInvitation becomes false.
+    /// </summary>
+    public void StartFollowingTarget(Character target)
+    {
+        StopFollowingTarget();
+        
+        // Players retain manual control instead of auto-following
+        if (!_character.IsPlayer())
+        {
+            _followCoroutine = StartCoroutine(FollowTargetRoutine(target));
+        }
+    }
+
+    /// <summary>
+    /// Explicitly stops the follow coroutine. Called by ProcessInvitation
+    /// on the target's side when the invitation resolves.
+    /// </summary>
+    public void StopFollowingTarget()
+    {
+        if (_followCoroutine != null)
+        {
+            StopCoroutine(_followCoroutine);
+            _followCoroutine = null;
+        }
+    }
+
+    private IEnumerator FollowTargetRoutine(Character target)
+    {
+        while (target != null &&
+               target.CharacterInvitation != null &&
+               target.CharacterInvitation.HasPendingInvitation &&
+               _character.CharacterMovement != null)
+        {
+            bool inRange = false;
+
+            if (target.CharacterInteractable != null && target.CharacterInteractable.InteractionZone != null)
+            {
+                Collider zone = target.CharacterInteractable.InteractionZone;
+                Vector3 closestPoint = zone.ClosestPoint(_character.transform.position);
+                float distanceToZone = Vector3.Distance(_character.transform.position, closestPoint);
+
+                // Margin to account for the character's own radius
+                if (distanceToZone <= 0.5f)
+                {
+                    inRange = true;
+                }
+            }
+            else
+            {
+                // Fallback to a hardcoded distance if there is no interaction zone
+                if (Vector3.Distance(_character.transform.position, target.transform.position) <= 2.0f)
+                {
+                    inRange = true;
+                }
+            }
+
+            if (inRange)
+            {
+                _character.CharacterMovement.Stop();
+            }
+            else
+            {
+                _character.CharacterMovement.SetDestination(target.transform.position);
+            }
+
+            yield return new WaitForSeconds(0.5f);
+        }
+        _followCoroutine = null;
+    }
+
+    // ──────────────────────────────────────────────
+    //  EVALUATION
+    // ──────────────────────────────────────────────
+
 
     /// <summary>
     /// Evaluates whether this character accepts an invitation from the source.
