@@ -26,6 +26,7 @@ public class CharacterInvitation : MonoBehaviour
     public bool HasPendingInvitation { get; private set; }
 
     private Coroutine _pendingCoroutine;
+    private Coroutine _followCoroutine;
 
     private void Awake()
     {
@@ -47,7 +48,6 @@ public class CharacterInvitation : MonoBehaviour
             invitation.OnRefused(source, _character);
             return;
         }
-
 
         // Start the delayed response coroutine
         _pendingCoroutine = StartCoroutine(ProcessInvitation(invitation, source));
@@ -91,7 +91,6 @@ public class CharacterInvitation : MonoBehaviour
         HasPendingInvitation = false;
         _pendingCoroutine = null;
     }
-
 
     // ──────────────────────────────────────────────
     //  FOLLOWING (Source/Sender side)
@@ -173,6 +172,7 @@ public class CharacterInvitation : MonoBehaviour
     // ──────────────────────────────────────────────
     //  EVALUATION
     // ──────────────────────────────────────────────
+
 
 
     /// <summary>
