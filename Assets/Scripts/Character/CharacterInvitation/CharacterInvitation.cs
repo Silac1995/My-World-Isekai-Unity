@@ -26,7 +26,6 @@ public class CharacterInvitation : MonoBehaviour
     public bool HasPendingInvitation { get; private set; }
 
     private Coroutine _pendingCoroutine;
-    private Coroutine _followCoroutine;
 
     private void Awake()
     {
