@@ -23,7 +23,7 @@ public class GoapAction_PickupLooseItem : GoapAction
 
     public override float Cost => 0.5f;
 
-    private GatheringBuilding _building;
+    private HarvestingBuilding _building;
     private bool _isComplete = false;
     private bool _pickupStarted = false;
     private WorldItem _targetWorldItem = null;
@@ -31,7 +31,7 @@ public class GoapAction_PickupLooseItem : GoapAction
 
     public override bool IsComplete => _isComplete;
 
-    public GoapAction_PickupLooseItem(GatheringBuilding building)
+    public GoapAction_PickupLooseItem(HarvestingBuilding building)
     {
         _building = building;
     }

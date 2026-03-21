@@ -288,7 +288,7 @@ public class HandsController : MonoBehaviour
         if (_carriedVisual.TryGetComponent(out WorldItem worldItem))
         {
             worldItem.Initialize(item);
-            worldItem.IsBeingCarried = true; // Empêche les autres gatherers de le voler
+            worldItem.IsBeingCarried = true; // Empêche les autres harvesters de le voler
 
             // --- GESTION DU SORTING GROUP ---
             if (worldItem.SortingGroup != null)

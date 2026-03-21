@@ -3,7 +3,7 @@ using System.Collections.Generic;
 /// <summary>
 /// Un but GOAP : un état du monde désiré.
 /// Le planner cherche une séquence d'actions pour atteindre cet état.
-/// Ex: { "hasDepositedResources" = true } pour un Gatherer.
+/// Ex: { "hasDepositedResources" = true } pour un Harvester.
 /// </summary>
 [System.Serializable]
 public class GoapGoal

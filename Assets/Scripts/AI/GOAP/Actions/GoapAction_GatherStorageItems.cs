@@ -93,7 +93,7 @@ public class GoapAction_GatherStorageItems : GoapAction
                 }
 
                 var bManager = _building?.LogisticsManager;
-                // If we are empty-handed AND we have a pending order, we should stop gathering and allow re-planning (so we prioritize PlaceOrder).
+                // If we are empty-handed AND we have a pending order, we should stop harvesting and allow re-planning (so we prioritize PlaceOrder).
                 if (bManager != null && bManager.HasPendingOrders)
                 {
                     _isComplete = true; // Prioritize PlaceOrder!
@@ -267,12 +267,12 @@ public class GoapAction_GatherStorageItems : GoapAction
     private void FinishDropoff(Character worker, ItemInstance item)
     {
         _building.AddToInventory(item);
-        Debug.Log($"<color=green>[Gathering]</color> {worker.CharacterName} a rangé {item.ItemSO.ItemName} dans le stockage.");
+        Debug.Log($"<color=green>[Harvesting]</color> {worker.CharacterName} a rangé {item.ItemSO.ItemName} dans le stockage.");
         
         var bManager = _building?.LogisticsManager;
         if (bManager != null)
         {
-            bManager.OnItemGathered(item.ItemSO);
+            bManager.OnItemHarvested(item.ItemSO);
         }
 
         // On libère le verrou d'action
@@ -387,9 +387,9 @@ public class GoapAction_GatherStorageItems : GoapAction
         BoxCollider storageCol = storageZone != null ? storageZone.GetComponent<BoxCollider>() : null;
         
         Zone depositZone = null;
-        if (_building is GatheringBuilding gatheringBuilding)
+        if (_building is HarvestingBuilding harvestingBuilding)
         {
-            depositZone = gatheringBuilding.DepositZone;
+            depositZone = harvestingBuilding.DepositZone;
         }
         BoxCollider depositCol = depositZone != null ? depositZone.GetComponent<BoxCollider>() : null;
         

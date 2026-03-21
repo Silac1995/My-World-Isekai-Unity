@@ -4,7 +4,7 @@ using UnityEngine;
 
 /// <summary>
 /// Contrôleur central pour le GOAP lié à l'individu (vie, besoins, objectifs personnels).
-/// Contrairement au GOAP des Jobs (ex: JobGatherer), celui-ci gère les actions
+/// Contrairement au GOAP des Jobs (ex: JobHarvester), celui-ci gère les actions
 /// permanentes et les buts de vie du personnage.
 /// </summary>
 public class CharacterGoapController : CharacterSystem

@@ -27,7 +27,7 @@ public abstract class Job
     public virtual string CurrentActionName => string.Empty;
 
     /// <summary>
-    /// Utilisé pour le debug. Retourne le nom de l'objectif GOAP en cours (ex: "Gather10Wood").
+    /// Utilisé pour le debug. Retourne le nom de l'objectif GOAP en cours (ex: "Harvest10Wood").
     /// </summary>
     public virtual string CurrentGoalName => string.Empty;
 
@@ -90,7 +90,7 @@ public abstract class Job
 
     /// <summary>
     /// Spécifie s'il y a actuellement du travail à faire concrètement pour ce job.
-    /// Par exemple, un JobGatherer retourne faux si toutes les ressources sont réunies
+    /// Par exemple, un JobHarvester retourne faux si toutes les ressources sont réunies
     /// et que le reste a été déposé. Utilisé pour donner des pauses aux NPCs.
     /// </summary>
     public virtual bool HasWorkToDo()

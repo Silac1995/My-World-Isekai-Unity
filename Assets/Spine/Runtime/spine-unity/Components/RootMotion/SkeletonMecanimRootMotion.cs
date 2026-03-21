@@ -118,7 +118,7 @@ namespace Spine.Unity {
 		}
 
 		protected override Vector2 CalculateAnimationsMovementDelta () {
-			// Note: movement delta is not gathered after animation but
+			// Note: movement delta is not harvested after animation but
 			// in OnClipApplied after every applied animation.
 			Vector2 result = movementDelta;
 			movementDelta = Vector2.zero;
@@ -126,7 +126,7 @@ namespace Spine.Unity {
 		}
 
 		protected override float CalculateAnimationsRotationDelta () {
-			// Note: movement delta is not gathered after animation but
+			// Note: movement delta is not harvested after animation but
 			// in OnClipApplied after every applied animation.
 			float result = rotationDelta;
 			rotationDelta = 0;

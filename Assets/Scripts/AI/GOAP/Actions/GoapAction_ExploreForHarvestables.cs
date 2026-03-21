@@ -2,29 +2,29 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// Action GOAP : Explorer pour trouver une zone contenant des GatherableObject
-/// qui produisent les items voulus par le GatheringBuilding.
-/// Le gatherer se déplace aléatoirement, scanne les GatherableObject proches,
+/// Action GOAP : Explorer pour trouver une zone contenant des Harvestable
+/// qui produisent les items voulus par le HarvestingBuilding.
+/// Le harvester se déplace aléatoirement, scanne les Harvestable proches,
 /// et quand il en trouve un compatible, il met à jour la zone du building.
 /// </summary>
-public class GoapAction_ExploreForResources : GoapAction
+public class GoapAction_ExploreForHarvestables : GoapAction
 {
-    public override string ActionName => "ExploreForResources";
+    public override string ActionName => "ExploreForHarvestables";
 
     public override Dictionary<string, bool> Preconditions => new Dictionary<string, bool>
     {
-        { "hasGatherZone", false },
+        { "hasHarvestZone", false },
         { "hasResources", false }
     };
 
     public override Dictionary<string, bool> Effects => new Dictionary<string, bool>
     {
-        { "hasGatherZone", true }
+        { "hasHarvestZone", true }
     };
 
     public override float Cost => 3f;
 
-    private GatheringBuilding _building;
+    private HarvestingBuilding _building;
     private bool _isComplete = false;
     private bool _isMoving = false;
     private float _searchRadius = 30f;
@@ -33,7 +33,7 @@ public class GoapAction_ExploreForResources : GoapAction
 
     public override bool IsComplete => _isComplete;
 
-    public GoapAction_ExploreForResources(GatheringBuilding building)
+    public GoapAction_ExploreForHarvestables(HarvestingBuilding building)
     {
         _building = building;
     }
@@ -48,7 +48,7 @@ public class GoapAction_ExploreForResources : GoapAction
         if (_isComplete) return;
 
         // Terminer l'exploration immédiatement si des tâches sont disponibles
-        if (_building.TaskManager != null && _building.TaskManager.HasAnyTaskOfType<GatherResourceTask>())
+        if (_building.TaskManager != null && _building.TaskManager.HasAnyTaskOfType<HarvestResourceTask>())
         {
             _isComplete = true;
             return;
@@ -61,8 +61,8 @@ public class GoapAction_ExploreForResources : GoapAction
             return;
         }
 
-        // Scanner les GatherableObject via CharacterAwareness (chaque tick)
-        if (ScanForGatherableObjects(worker))
+        // Scanner les Harvestable via CharacterAwareness (chaque tick)
+        if (ScanForHarvestables(worker))
         {
             _isComplete = true;
             return;
@@ -96,11 +96,11 @@ public class GoapAction_ExploreForResources : GoapAction
     }
 
     /// <summary>
-    /// Scanne les GatherableObject via CharacterAwareness.
+    /// Scanne les Harvestable via CharacterAwareness.
     /// Cherche d'abord une Zone parente dans la hiérarchie,
-    /// sinon cherche une Zone dont le collider contient le GatherableObject.
+    /// sinon cherche une Zone dont le collider contient le Harvestable.
     /// </summary>
-    private bool ScanForGatherableObjects(Character worker)
+    private bool ScanForHarvestables(Character worker)
     {
         var wantedItems = _building.GetWantedItems();
         if (wantedItems.Count == 0) return false;
@@ -108,23 +108,23 @@ public class GoapAction_ExploreForResources : GoapAction
         var awareness = worker.CharacterAwareness;
         if (awareness == null) return false;
 
-        var visibleGatherables = awareness.GetVisibleInteractables<GatherableObject>();
+        var visibleHarvestables = awareness.GetVisibleInteractables<Harvestable>();
 
-        foreach (var gatherable in visibleGatherables)
+        foreach (var harvestable in visibleHarvestables)
         {
-            if (!gatherable.CanGather()) continue;
+            if (!harvestable.CanHarvest()) continue;
 
-            if (gatherable.HasAnyOutput(wantedItems))
+            if (harvestable.HasAnyOutput(wantedItems))
             {
-                Debug.Log($"<color=green>[GOAP Explore]</color> {worker.CharacterName} a trouvé et ajouté un nouveau gatherable à la liste du bâtiment: {gatherable.gameObject.name} !");
-                _building.AddToTrackedGatherables(gatherable);
+                Debug.Log($"<color=green>[GOAP Explore]</color> {worker.CharacterName} a trouvé et ajouté un nouveau harvestable à la liste du bâtiment: {harvestable.gameObject.name} !");
+                _building.AddToTrackedHarvestables(harvestable);
 
                 // On essaie quand même d'ajouter toute la zone autour si elle existe
-                Zone zone = gatherable.GetComponentInParent<Zone>();
-                if (zone == null) zone = FindZoneContaining(gatherable.transform.position);
-                if (zone == null) zone = FindNearestZone(gatherable.transform.position);
+                Zone zone = harvestable.GetComponentInParent<Zone>();
+                if (zone == null) zone = FindZoneContaining(harvestable.transform.position);
+                if (zone == null) zone = FindNearestZone(harvestable.transform.position);
 
-                if (zone != null && _building.GatherableZone != zone)
+                if (zone != null && _building.HarvestableZone != zone)
                 {
                     _building.ScanAndRegisterZone(zone);
                 }

@@ -5,7 +5,7 @@ description: Architecture of the commercial Shop System, from Logistics restocks
 
 # Shop System
 
-This document details how the Shop Economy functions, which acts as the final destination for items crafted or gathered in the world. 
+This document details how the Shop Economy functions, which acts as the final destination for items crafted or harvested in the world. 
 The system relies on a continuous loop of: **Restocking (Logistics)** -> **Waiting for Customers (Vendor)** -> **Queuing & Buying (Customers)**.
 
 ## Architecture & Responsibilities

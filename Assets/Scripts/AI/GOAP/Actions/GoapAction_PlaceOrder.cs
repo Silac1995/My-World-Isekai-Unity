@@ -21,7 +21,7 @@ public class GoapAction_PlaceOrder : GoapAction
         { "hasPendingOrders", false }
     };
 
-    public override float Cost => 0.1f; // Doit être la priorité absolue (Cost très bas) par rapport au Gathering (0.5f)
+    public override float Cost => 0.1f; // Doit être la priorité absolue (Cost très bas) par rapport au Harvesting (0.5f)
 
     private JobLogisticsManager _manager;
     private BuildingLogisticsManager BManager => (_manager != null && _manager.Workplace != null) ? _manager.Workplace.LogisticsManager : null;

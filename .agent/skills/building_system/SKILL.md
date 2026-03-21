@@ -70,7 +70,7 @@ The top-level structure in the world.
 
 ### 5. Commercial Building (`CommercialBuilding.cs`)
 A specialized structural entity handling jobs and economic tasks.
-- **Task Manager (`BuildingTaskManager`)**: Automatically attached module serving as a Blackboard. Manages a pool of `BuildingTask` objects. Instead of workers using expensive polling (raycasts/overlaps), tasks are registered here to be claimed sequentially using OCP-compliant logic (Open/Closed Principle) for dynamic behavior (e.g., Gatherers claiming trees).
+- **Task Manager (`BuildingTaskManager`)**: Automatically attached module serving as a Blackboard. Manages a pool of `BuildingTask` objects. Instead of workers using expensive polling (raycasts/overlaps), tasks are registered here to be claimed sequentially using OCP-compliant logic (Open/Closed Principle) for dynamic behavior (e.g., Harvesters claiming trees).
 - **Logistics Manager (`BuildingLogisticsManager`)**: Automatically attached module handling the supply chain data, inventory checks, and order queues (BuyOrders, CraftingOrders, TransportOrders). Separated from the worker (`JobLogisticsManager`) to ensure data persists.
 
 ---

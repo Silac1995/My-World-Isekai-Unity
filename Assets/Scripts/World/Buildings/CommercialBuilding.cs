@@ -448,7 +448,7 @@ public abstract class CommercialBuilding : Building
 
     /// <summary>
     /// Indique si la production de cet item nécessite de placer une commande de fabrication (CraftingOrder).
-    /// Si false, on peut directement envoyer un transporteur (TransportOrder) pour récupérer le stock (ex: Gatherer).
+    /// Si false, on peut directement envoyer un transporteur (TransportOrder) pour récupérer le stock (ex: Harvester).
     /// </summary>
     public virtual bool RequiresCraftingFor(ItemSO item)
     {

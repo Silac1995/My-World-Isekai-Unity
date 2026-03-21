@@ -4,7 +4,7 @@ using MWI.AI;
 
 /// <summary>
 /// Action GOAP : Déposer les ressources récoltées à la zone de dépôt du building.
-/// Le gatherer se déplace vers la depositZone et y dépose les items
+/// Le harvester se déplace vers la depositZone et y dépose les items
 /// depuis son sac (inventaire) ou depuis ses mains (carry).
 /// </summary>
 public class GoapAction_DepositResources : GoapAction
@@ -22,7 +22,7 @@ public class GoapAction_DepositResources : GoapAction
         { "hasDepositedResources", true }
     };
 
-    private GatheringBuilding _building;
+    private HarvestingBuilding _building;
     private bool _isComplete = false;
     private bool _isMoving = false;
     private bool _isDepositing = false;
@@ -30,7 +30,7 @@ public class GoapAction_DepositResources : GoapAction
 
     public override bool IsComplete => _isComplete;
 
-    public GoapAction_DepositResources(GatheringBuilding building)
+    public GoapAction_DepositResources(HarvestingBuilding building)
     {
         _building = building;
     }
@@ -149,7 +149,7 @@ public class GoapAction_DepositResources : GoapAction
                 var dropAction = new CharacterDropItem(worker, carriedItem, true);
                 dropAction.OnActionFinished += () => 
                 {
-                    _building.RegisterGatheredItem(carriedItem.ItemSO);
+                    _building.RegisterHarvestedItem(carriedItem.ItemSO);
                     Debug.Log($"<color=green>[GOAP Deposit]</color> {worker.CharacterName} a physiquement lâché {carriedItem.ItemSO.ItemName} (mains).");
                 };
 
@@ -178,7 +178,7 @@ public class GoapAction_DepositResources : GoapAction
                     var dropAction = new CharacterDropItem(worker, item, true);
                     dropAction.OnActionFinished += () => 
                     {
-                        _building.RegisterGatheredItem(item.ItemSO);
+                        _building.RegisterHarvestedItem(item.ItemSO);
                         Debug.Log($"<color=green>[GOAP Deposit]</color> {worker.CharacterName} a physiquement lâché {item.ItemSO.ItemName} (sac).");
                     };
 

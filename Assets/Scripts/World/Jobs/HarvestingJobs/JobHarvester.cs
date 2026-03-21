@@ -3,30 +3,30 @@ using System.Linq;
 using UnityEngine;
 
 /// <summary>
-/// Job de type Gatherer : récolte des ressources selon ce que le GatheringBuilding dicte.
+/// Job de type Harvester : récolte des ressources selon ce que le HarvestingBuilding dicte.
 /// Utilise le système GOAP pour planifier ses actions :
-/// 1. Explorer pour trouver une zone de GatherableObject (si pas encore trouvée)
+/// 1. Explorer pour trouver une zone de Harvestable (si pas encore trouvée)
 /// 2. Se rendre à la zone et récolter
 /// 3. Déposer les ressources à la zone de dépôt
 /// Puis recommencer le cycle.
 /// </summary>
-public class JobGatherer : Job
+public class JobHarvester : Job
 {
     private string _jobTitle;
 
     public override string JobTitle => _jobTitle;
-    public override JobCategory Category => JobCategory.Gatherer;
+    public override JobCategory Category => JobCategory.Harvester;
 
     // GOAP
-    private GoapGoal _gatherGoal;
+    private GoapGoal _harvestGoal;
     private List<GoapAction> _availableActions;
     private Queue<GoapAction> _currentPlan;
     private GoapAction _currentAction;
 
     public override string CurrentActionName => _currentAction != null ? _currentAction.ActionName : "Planning / Idle";
-    public override string CurrentGoalName => _gatherGoal != null ? _gatherGoal.GoalName : "No Goal";
+    public override string CurrentGoalName => _harvestGoal != null ? _harvestGoal.GoalName : "No Goal";
 
-    public JobGatherer(string jobTitle = "Gatherer")
+    public JobHarvester(string jobTitle = "Harvester")
     {
         _jobTitle = jobTitle;
     }
@@ -37,7 +37,7 @@ public class JobGatherer : Job
     /// </summary>
     public override void Execute()
     {
-        if (_workplace == null || !(_workplace is GatheringBuilding gathering)) return;
+        if (_workplace == null || !(_workplace is HarvestingBuilding harvesting)) return;
 
         // Si on a une action en cours, l'exécuter
         if (_currentAction != null)
@@ -45,7 +45,7 @@ public class JobGatherer : Job
             // Vérifier que l'action est encore valide
             if (!_currentAction.IsValid(_worker))
             {
-                Debug.Log($"<color=orange>[JobGatherer]</color> {_worker.CharacterName} : action {_currentAction.ActionName} invalide, replanification...");
+                Debug.Log($"<color=orange>[JobHarvester]</color> {_worker.CharacterName} : action {_currentAction.ActionName} invalide, replanification...");
                 _currentAction.Exit(_worker);
                 _currentAction = null;
                 _currentPlan = null;
@@ -56,7 +56,7 @@ public class JobGatherer : Job
 
             if (_currentAction.IsComplete)
             {
-                Debug.Log($"<color=cyan>[JobGatherer]</color> {_worker.CharacterName} : action {_currentAction.ActionName} terminée.");
+                Debug.Log($"<color=cyan>[JobHarvester]</color> {_worker.CharacterName} : action {_currentAction.ActionName} terminée.");
                 _currentAction.Exit(_worker);
                 _currentAction = null;
 
@@ -68,13 +68,13 @@ public class JobGatherer : Job
         }
 
         // Pas d'action en cours → Planifier
-        PlanNextActions(gathering);
+        PlanNextActions(harvesting);
     }
 
     /// <summary>
     /// Construit le world state actuel et lance le planner avec un nouvel objectif calculé dynamiquement.
     /// </summary>
-    private void PlanNextActions(GatheringBuilding building)
+    private void PlanNextActions(HarvestingBuilding building)
     {
         // Construire le world state
         bool hasAtLeastOneResource = false;
@@ -118,8 +118,8 @@ public class JobGatherer : Job
         // Si on a des ressources mais qu'on a ENCORE de la place et qu'une zone existe, 
         // on ment au planner (hasResources=false) pour le forcer à continuer de Gather.
         bool hasResourcesForGoap = false;
-        bool allResourcesGathered = building.AreAllRequestedResourcesGathered();
-        bool needsToWork = !allResourcesGathered;
+        bool allResourcesHarvested = building.AreAllRequestedResourcesHarvested();
+        bool needsToWork = !allResourcesHarvested;
 
         if (hasAtLeastOneResource)
         {
@@ -129,7 +129,7 @@ public class JobGatherer : Job
             }
             else
             {
-                if (building.HasGatherableZone && needsToWork)
+                if (building.HasHarvestableZone && needsToWork)
                 {
                     hasResourcesForGoap = false; // Continuer de gather
                 }
@@ -142,8 +142,8 @@ public class JobGatherer : Job
 
         // Planification intelligente du Pickup vs Gather
         bool looseItemExists = false;
-        bool canGather = false;
-        bool hasValidGatherTasks = false;
+        bool canHarvest = false;
+        bool hasValidHarvestTasks = false;
         
         if (building.TaskManager != null)
         {
@@ -153,24 +153,24 @@ public class JobGatherer : Job
                 return interactable != null && !_worker.PathingMemory.IsBlacklisted(interactable.gameObject.GetInstanceID());
             });
 
-            canGather = building.TaskManager.HasAvailableOrClaimedTask<GatherResourceTask>(_worker, task => 
+            canHarvest = building.TaskManager.HasAvailableOrClaimedTask<HarvestResourceTask>(_worker, task => 
             {
-                var interactable = task.Target as GatherableObject;
+                var interactable = task.Target as Harvestable;
                 if (interactable == null || _worker.PathingMemory.IsBlacklisted(interactable.gameObject.GetInstanceID())) return false;
                 
                 return interactable.HasAnyOutput(building.GetWantedItems());
             });
 
-            hasValidGatherTasks = building.TaskManager.HasAnyTaskOfType<GatherResourceTask>(task => 
+            hasValidHarvestTasks = building.TaskManager.HasAnyTaskOfType<HarvestResourceTask>(task => 
             {
-                var interactable = task.Target as GatherableObject;
+                var interactable = task.Target as Harvestable;
                 return interactable != null && interactable.HasAnyOutput(building.GetWantedItems());
             });
         }
 
         var worldState = new Dictionary<string, bool>
         {
-            { "hasGatherZone", hasValidGatherTasks }, // True only if tasks exist, forces ExploreForResources
+            { "hasHarvestZone", hasValidHarvestTasks }, // True only if tasks exist, forces ExploreForResources
             { "looseItemExists", looseItemExists },
             { "hasResources", hasResourcesForGoap },
             { "hasDepositedResources", false },
@@ -181,8 +181,8 @@ public class JobGatherer : Job
         // Créer les actions fraîches (chaque instance est stateful)
         _availableActions = new List<GoapAction>
         {
-            new GoapAction_ExploreForResources(building),
-            new GoapAction_GatherResources(building),
+            new GoapAction_ExploreForHarvestables(building),
+            new GoapAction_HarvestResources(building),
             new GoapAction_PickupLooseItem(building),
             new GoapAction_DepositResources(building),
             new GoapAction_IdleInBuilding(building)
@@ -191,8 +191,8 @@ public class JobGatherer : Job
         // Définir l'objectif prioritaire
         GoapGoal targetGoal;
         
-        bool trulyFinishedWork = allResourcesGathered && !hasAtLeastOneResource;
-        bool stuckWaitingForTrees = building.HasGatherableZone && !canGather && !looseItemExists && !hasAtLeastOneResource;
+        bool trulyFinishedWork = allResourcesHarvested && !hasAtLeastOneResource;
+        bool stuckWaitingForTrees = building.HasHarvestableZone && !canHarvest && !looseItemExists && !hasAtLeastOneResource;
 
         if (trulyFinishedWork || stuckWaitingForTrees)
         {
@@ -200,10 +200,10 @@ public class JobGatherer : Job
         }
         else
         {
-            targetGoal = new GoapGoal("GatherAndDeposit", new Dictionary<string, bool> { { "hasDepositedResources", true } }, priority: 1);
+            targetGoal = new GoapGoal("HarvestAndDeposit", new Dictionary<string, bool> { { "hasDepositedResources", true } }, priority: 1);
         }
 
-        _gatherGoal = targetGoal; // On sauvegarde l'objectif courant pour l'UI de Debug
+        _harvestGoal = targetGoal; // On sauvegarde l'objectif courant pour l'UI de Debug
         
         // Planifier
         _currentPlan = GoapPlanner.Plan(worldState, _availableActions, targetGoal);
@@ -211,26 +211,26 @@ public class JobGatherer : Job
         if (_currentPlan != null && _currentPlan.Count > 0)
         {
             _currentAction = _currentPlan.Dequeue();
-            Debug.Log($"<color=green>[JobGatherer]</color> {_worker.CharacterName} : nouveau plan ! Première action → {_currentAction.ActionName}");
+            Debug.Log($"<color=green>[JobHarvester]</color> {_worker.CharacterName} : nouveau plan ! Première action → {_currentAction.ActionName}");
         }
         else
         {
-            Debug.Log($"<color=orange>[JobGatherer]</color> {_worker.CharacterName} : impossible de planifier.");
+            Debug.Log($"<color=orange>[JobHarvester]</color> {_worker.CharacterName} : impossible de planifier.");
         }
     }
 
     public override bool CanExecute()
     {
-        return base.CanExecute() && _workplace is GatheringBuilding;
+        return base.CanExecute() && _workplace is HarvestingBuilding;
     }
 
     /// <summary>
-    /// Spécifie si le gatherer a encore de la récolte ou du dépôt à faire.
+    /// Spécifie si le harvester a encore de la récolte ou du dépôt à faire.
     /// Renvoie Faux s'il n'a plus rien sur lui et que le batiment n'a plus besoin de rien.
     /// </summary>
     public override bool HasWorkToDo()
     {
-        if (_workplace is not GatheringBuilding building) return false;
+        if (_workplace is not HarvestingBuilding building) return false;
 
         bool hasAtLeastOneResource = _worker.CharacterEquipment != null && 
                                      _worker.CharacterEquipment.HaveInventory() && 
@@ -244,12 +244,12 @@ public class JobGatherer : Job
             }
         }
 
-        bool allResourcesGathered = building.AreAllRequestedResourcesGathered();
+        bool allResourcesHarvested = building.AreAllRequestedResourcesHarvested();
 
         // Le travail est fini si : 
         // 1. On n'a plus rien sur nous pour déposer
         // 2. Le batiment a toutes les ressources voulues OU il n'y a plus de zone avec ressources
-        if (allResourcesGathered && !hasAtLeastOneResource)
+        if (allResourcesHarvested && !hasAtLeastOneResource)
         {
             return false;
         }
@@ -258,7 +258,7 @@ public class JobGatherer : Job
     }
 
     /// <summary>
-    /// Les gatherers commencent tôt le matin.
+    /// Les harvesters commencent tôt le matin.
     /// </summary>
     public override List<ScheduleEntry> GetWorkSchedule()
     {
@@ -275,9 +275,9 @@ public class JobGatherer : Job
     {
         base.Assign(worker, workplace);
 
-        if (workplace is GatheringBuilding gathering)
+        if (workplace is HarvestingBuilding harvesting)
         {
-            gathering.AddEmployee(worker);
+            harvesting.AddEmployee(worker);
         }
     }
 
@@ -286,9 +286,9 @@ public class JobGatherer : Job
     /// </summary>
     public override void Unassign()
     {
-        if (_workplace is GatheringBuilding gathering && _worker != null)
+        if (_workplace is HarvestingBuilding harvesting && _worker != null)
         {
-            gathering.RemoveEmployee(_worker);
+            harvesting.RemoveEmployee(_worker);
         }
 
         // Cleanup GOAP

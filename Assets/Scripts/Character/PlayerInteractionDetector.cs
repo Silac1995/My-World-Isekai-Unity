@@ -248,18 +248,20 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
             {
                 _currentInteractableObjectTarget.OnCharacterExit(Character);
                 _currentInteractableObjectTarget = null;
-            }
-            if (currentPromptUI != null)
-            {
-                Destroy(currentPromptUI);
-                currentPromptUI = null;
-                currentPromptComponent = null;
-            }
-            // Only close the menu if the player is NOT in an active interaction
-            // AND the menu hasn't been locked by the player already committing to an action
-            if (_playerUI != null && !Character.CharacterInteraction.IsInteracting && !_playerUI.IsInteractionMenuLocked())
-            {
-                _playerUI.CloseInteractionMenu();
+            
+                if (currentPromptUI != null)
+                {
+                    Destroy(currentPromptUI);
+                    currentPromptUI = null;
+                    currentPromptComponent = null;
+                }
+                
+                // Only close the menu if the player is NOT in an active interaction
+                // AND the menu hasn't been locked by the player already committing to an action
+                if (_playerUI != null && !Character.CharacterInteraction.IsInteracting && !_playerUI.IsInteractionMenuLocked())
+                {
+                    _playerUI.CloseInteractionMenu();
+                }
             }
             return;
         }

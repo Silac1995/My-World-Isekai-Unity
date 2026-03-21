@@ -96,7 +96,7 @@ namespace MWI.AI
                 if (self.CharacterActions.ExecuteAction(dropAction))
                 {
                     // Action acceptée, on laisse l'animation jouer. Au prochain appel, `carriedItem` vérifiera s'il en reste.
-                    // Si on était un gatherer/transporter, on réclame que l'objet aille dans le bâtiment pour éviter la perte:
+                    // Si on était un harvester/transporter, on réclame que l'objet aille dans le bâtiment pour éviter la perte:
                     dropAction.OnActionFinished += () => 
                     {
                         workplace.AddToInventory(carriedItem);

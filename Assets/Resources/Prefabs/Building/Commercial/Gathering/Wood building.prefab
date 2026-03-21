@@ -13,7 +13,7 @@ GameObject:
   - component: {fileID: 424049965849016657}
   - component: {fileID: 460726151524295576}
   m_Layer: 0
-  m_Name: GatheringZone
+  m_Name: HarvestingZone
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -658,6 +658,70 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 118040675392360716, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 118040675392360716, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_AnchorMin.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 118040675392360716, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_AnchoredPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 118040675392360716, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 454824707844098560, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 454824707844098560, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_AnchorMin.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 454824707844098560, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_SizeDelta.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 454824707844098560, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_SizeDelta.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 454824707844098560, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_AnchoredPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 454824707844098560, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 835293850683989940, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 835293850683989940, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_AnchorMin.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 835293850683989940, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_SizeDelta.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 835293850683989940, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_SizeDelta.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 835293850683989940, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_AnchoredPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 835293850683989940, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 1165821406091813789, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: m_fontSize
       value: 14
@@ -665,6 +729,22 @@ PrefabInstance:
     - target: {fileID: 1165821406091813789, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: m_fontSizeBase
       value: 14
+      objectReference: {fileID: 0}
+    - target: {fileID: 2337483750409059148, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2337483750409059148, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_AnchorMin.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2337483750409059148, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_AnchoredPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2337483750409059148, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 3164724048811914063, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: m_AnchorMax.y
@@ -890,6 +970,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 6528054620988570630, guid: 0266b0096947362429f7d224956a5096, type: 3}
       insertIndex: -1
       addedObject: {fileID: 2324777126058058136}
+    - targetCorrespondingSourceObject: {fileID: 6528054620988570630, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 5657082450934536352}
   m_SourcePrefab: {fileID: 100100000, guid: 0266b0096947362429f7d224956a5096, type: 3}
 --- !u!4 &426415073984036635 stripped
 Transform:
@@ -988,11 +1071,11 @@ MonoBehaviour:
   _storageZone: {fileID: 4309535885151927115}
   _wantedResources:
   - targetItem: {fileID: 11400000, guid: a3f0471c4178efd4b9b5efdb38aea516, type: 2}
-    minAmount: -1
-  _gathererCount: 2
-  _gathererJobTitle: Gatherer
+    maxQuantity: 50
+  _harvesterCount: 2
+  _harvesterJobTitle: Harvester
   _depositZone: {fileID: 3359805275942087306}
-  _gatheringAreaZone: {fileID: 460726151524295576}
+  _harvestingAreaZone: {fileID: 460726151524295576}
 --- !u!114 &2324777126058058136
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1005,6 +1088,18 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9f10052702582704cb2a410c1ef0af9b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BuildingTaskManager
+--- !u!114 &5657082450934536352
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2761951707981523353}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 93e04e1e8920d194498e4213da95ce30, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BuildingLogisticsManager
 --- !u!65 &2900277757222118802 stripped
 BoxCollider:
   m_CorrespondingSourceObject: {fileID: 6121509161196564493, guid: 0266b0096947362429f7d224956a5096, type: 3}

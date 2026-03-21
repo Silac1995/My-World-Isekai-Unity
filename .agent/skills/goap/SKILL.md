@@ -6,7 +6,7 @@ description: Rules for using GOAP to dictate the daily life and ultimate goals o
 # GOAP System
 
 This skill defines how to use and extend the GOAP (Goal-Oriented Action Planning) system. 
-**Important:** The GOAP in this project is not just a job queue manager (e.g., Gatherer). It is designed to be the orchestrator of the NPC's **daily life**, based on **ultimate goals**.
+**Important:** The GOAP in this project is not just a job queue manager (e.g., Harvester). It is designed to be the orchestrator of the NPC's **daily life**, based on **ultimate goals**.
 
 ## Global Concept: GOAP as a "Life Manager"
 GOAP gives the NPC a global and organic direction. Rather than saying "Go chop wood," we give the NPC a life Goal. 
@@ -14,7 +14,7 @@ GOAP gives the NPC a global and organic direction. Rather than saying "Go chop w
 Examples of ultimate goals:
 - **Starting a family**: The GOAP Planner will prioritize daily life actions leading to this goal (Talking with NPCs, targeting the opposite sex, flirting, marrying, having children).
 - **Being the best martial artist**: The Planner will chain training actions (finding a dojo, fighting opponents, improving on a CombatSO).
-- **Financial ambition**: Amassing wealth (which will push them to find a job like Gatherer and deposit resources).
+- **Financial ambition**: Amassing wealth (which will push them to find a job like Harvester and deposit resources).
 
 The GOAP manages the long/medium-term plan (Needs, Jobs, Socializing), while the Behaviour Tree (BT) handles short-term survival (reacting to aggression, fleeing, executing schedules).
 
@@ -52,7 +52,7 @@ description: Rules for using GOAP to dictate the daily life and ultimate goals o
 # GOAP System
 
 This skill defines how to use and extend the GOAP (Goal-Oriented Action Planning) system. 
-**Important:** The GOAP in this project is not just a job queue manager (e.g., Gatherer). It is designed to be the orchestrator of the NPC's **daily life**, based on **ultimate goals**.
+**Important:** The GOAP in this project is not just a job queue manager (e.g., Harvester). It is designed to be the orchestrator of the NPC's **daily life**, based on **ultimate goals**.
 
 ## Global Concept: GOAP as a "Life Manager"
 GOAP gives the NPC a global and organic direction. Rather than saying "Go chop wood," we give the NPC a life Goal. 
@@ -60,7 +60,7 @@ GOAP gives the NPC a global and organic direction. Rather than saying "Go chop w
 Examples of ultimate goals:
 - **Starting a family**: The GOAP Planner will prioritize daily life actions leading to this goal (Talking with NPCs, targeting the opposite sex, flirting, marrying, having children).
 - **Being the best martial artist**: The Planner will chain training actions (finding a dojo, fighting opponents, improving on a CombatSO).
-- **Financial ambition**: Amassing wealth (which will push them to find a job like Gatherer and deposit resources).
+- **Financial ambition**: Amassing wealth (which will push them to find a job like Harvester and deposit resources).
 
 The GOAP manages the long/medium-term plan (Needs, Jobs, Socializing), while the Behaviour Tree (BT) handles short-term survival (reacting to aggression, fleeing, executing schedules).
 

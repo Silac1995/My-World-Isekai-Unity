@@ -2,29 +2,29 @@ using System.Linq;
 using UnityEngine;
 
 /// <summary>
-/// CharacterAction pour récolter un GatherableObject.
+/// CharacterAction pour récolter un Harvestable.
 /// Le personnage joue une animation de récolte, attend la durée,
-/// puis récolte l'item du GatherableObject.
+/// puis récolte l'item du Harvestable.
 /// </summary>
-public class CharacterGatherAction : CharacterAction
+public class CharacterHarvestAction : CharacterAction
 {
-    private GatherableObject _target;
+    private Harvestable _target;
     private ItemSO _harvestedItem;
 
     /// <summary>L'item récolté après l'action (null si pas encore fini)</summary>
     public ItemSO HarvestedItem => _harvestedItem;
 
-    public CharacterGatherAction(Character character, GatherableObject target)
-        : base(character, target != null ? target.GatherDuration : 1f)
+    public CharacterHarvestAction(Character character, Harvestable target)
+        : base(character, target != null ? target.HarvestDuration : 1f)
     {
         _target = target;
     }
 
     public override bool CanExecute()
     {
-        if (_target == null || !_target.CanGather())
+        if (_target == null || !_target.CanHarvest())
         {
-            Debug.LogWarning($"<color=orange>[Gather Action]</color> {character.CharacterName} ne peut pas récolter : cible invalide ou épuisée.");
+            Debug.LogWarning($"<color=orange>[Harvest Action]</color> {character.CharacterName} ne peut pas récolter : cible invalide ou épuisée.");
             return false;
         }
 
@@ -37,7 +37,7 @@ public class CharacterGatherAction : CharacterAction
                 float dist = Vector3.Distance(character.transform.position, _target.InteractionZone.bounds.ClosestPoint(character.transform.position));
                 if (dist > 2.5f)
                 {
-                    Debug.LogWarning($"<color=orange>[Gather Action]</color> {character.CharacterName} est trop loin de la zone d'interaction de {_target.gameObject.name} (Dist: {dist}).");
+                    Debug.LogWarning($"<color=orange>[Harvest Action]</color> {character.CharacterName} est trop loin de la zone d'interaction de {_target.gameObject.name} (Dist: {dist}).");
                     return false;
                 }
             }
@@ -48,7 +48,7 @@ public class CharacterGatherAction : CharacterAction
             float dist = Vector3.Distance(character.transform.position, _target.transform.position);
             if (dist > 3f)
             {
-                Debug.LogWarning($"<color=orange>[Gather Action]</color> {character.CharacterName} est trop loin pour récolter {_target.gameObject.name} (pas de zone d'interaction).");
+                Debug.LogWarning($"<color=orange>[Harvest Action]</color> {character.CharacterName} est trop loin pour récolter {_target.gameObject.name} (pas de zone d'interaction).");
                 return false;
             }
         }
@@ -58,19 +58,19 @@ public class CharacterGatherAction : CharacterAction
 
     public override void OnStart()
     {
-        Debug.Log($"<color=cyan>[Gather Action]</color> {character.CharacterName} commence à récolter {_target.gameObject.name}...");
+        Debug.Log($"<color=cyan>[Harvest Action]</color> {character.CharacterName} commence à récolter {_target.gameObject.name}...");
     }
 
     public override void OnApplyEffect()
     {
-        if (_target == null || !_target.CanGather())
+        if (_target == null || !_target.CanHarvest())
         {
-            Debug.LogWarning($"<color=orange>[Gather Action]</color> {character.CharacterName} : la cible a disparu ou est épuisée.");
+            Debug.LogWarning($"<color=orange>[Harvest Action]</color> {character.CharacterName} : la cible a disparu ou est épuisée.");
             return;
         }
 
         // Récolter l'item (retourne le ItemSO)
-        _harvestedItem = _target.Gather(character);
+        _harvestedItem = _target.Harvest(character);
 
         if (_harvestedItem != null)
         {
@@ -81,7 +81,7 @@ public class CharacterGatherAction : CharacterAction
             // Inscrire la ressource au sol comme tâche pour le bâtiment
             if (spawnedItem != null && character.CharacterJob != null)
             {
-                var workAssignment = character.CharacterJob.ActiveJobs.FirstOrDefault(j => j.AssignedJob is JobGatherer);
+                var workAssignment = character.CharacterJob.ActiveJobs.FirstOrDefault(j => j.AssignedJob is JobHarvester);
                 if (workAssignment != null && workAssignment.Workplace != null)
                 {
                     workAssignment.Workplace.TaskManager?.RegisterTask(new PickupLooseItemTask(spawnedItem));
@@ -93,6 +93,6 @@ public class CharacterGatherAction : CharacterAction
     public override void OnCancel()
     {
         base.OnCancel();
-        Debug.Log($"<color=orange>[Gather Action]</color> {character.CharacterName} a annulé sa récolte.");
+        Debug.Log($"<color=orange>[Harvest Action]</color> {character.CharacterName} a annulé sa récolte.");
     }
 }

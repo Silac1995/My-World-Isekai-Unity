@@ -424,7 +424,7 @@ public class BuildingLogisticsManager : MonoBehaviour
         Debug.Log($"<color=cyan>[BuildingLogisticsManager]</color>   📦 Enregistrement d'une commande d'achat (BuyOrder) de {quantityToOrder}x {itemSO.ItemName} auprès de {supplier.BuildingName}.");
     }
 
-    public void OnItemGathered(ItemSO itemSO)
+    public void OnItemHarvested(ItemSO itemSO)
     {
         Debug.Log($"<color=gray>[BuildingLogisticsManager]</color> L'item {itemSO.ItemName} a été physiquement déplacé de la zone de livraison vers le stockage.");
     }

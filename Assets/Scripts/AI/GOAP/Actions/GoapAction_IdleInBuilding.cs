@@ -13,9 +13,9 @@ public class GoapAction_IdleInBuilding : GoapAction
     private bool _hasChosenDestination = false;
     private float _waitTime = 0f;
     private float _maxWaitTime = 5f;
-    private GatheringBuilding _building;
+    private HarvestingBuilding _building;
 
-    public GoapAction_IdleInBuilding(GatheringBuilding building)
+    public GoapAction_IdleInBuilding(HarvestingBuilding building)
     {
         _building = building;
     }

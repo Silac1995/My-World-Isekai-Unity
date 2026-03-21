@@ -6,7 +6,7 @@ namespace MWI.AI
         DefendTarget,
         PatrolZone,
         HealTarget,
-        GatherResource, // Stub — pas encore implémenté
+        HarvestResource, // Stub — pas encore implémenté
         CraftItem       // Stub — pas encore implémenté
     }
 }

@@ -68,6 +68,12 @@ Because the game supports Multiplayer, the exchange system is designed to handle
 - **Invitations**: Player A invites Player B. Player B receives a UI prompt. If Player B takes longer than 10 seconds to respond, the invitation Self-Destructs, freeing Player A.
 - **Turns**: The sequence is paused on *both* sides depending on whose turn it is. If Player A takes too long to select a dialogue option (e.g., more than 15-30 seconds), the interaction must forcefully Time Out and `EndInteraction()` to prevent greifing/locking Player B in place.
 
+## 5. Overriding & Interruptions
+
+If an interaction is forcefully interrupted by a new one (e.g. Player forces an interaction on an NPC who was walking to start a different one):
+- **Coroutine Cancellation**: `SetInteractionTargetInternal(...)` must strictly cancel the existing `_activeDialogueCoroutine` (or movement routine) before starting the new one. Failure to do so will cause the old routine to finish in the background, which will inadvertently call `EndInteraction()` and prematurely destroy the new Interaction state (and any associated player UI).
+
 ## Tips & Troubleshooting
 - **"The UI Action triggered the NPC instead of the Player"**: Ensure that `InteractionOption` delegates always call `interactor.CharacterInteraction.PerformInteraction(action)` instead of the target's interaction component.
 - **"NPCs keep interrupting each other"**: Ensure AI nodes formally spawn an `InteractionInvitation` rather than forcing a direct `StartInteractionWith()`, respecting the target's `IsFree()` status.
+- **"Interaction Menu closes randomly"**: Check if the target NPC had a lingering interaction coroutine that finished and called `EndInteraction()` in the background. Ensure their previous coroutine was properly stopped when the player interrupted them.

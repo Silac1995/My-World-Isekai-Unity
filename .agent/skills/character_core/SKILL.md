@@ -66,7 +66,7 @@ This is the ultimate safety method. `Character` scrutinizes all of its child com
 - `SwitchToNPC()`: 
   - Reverts controllers and reactivates NavMesh.
   ## 5. Character Actions and Movement Control
-The `CharacterActions` component manages distinct, timed actions (Gathering, Crafting, Attacking). These actions are integrated into the `CharacterGameController` via an event-driven system to manage character availability and movement.
+The `CharacterActions` component manages distinct, timed actions (Harvesting, Crafting, Attacking). These actions are integrated into the `CharacterGameController` via an event-driven system to manage character availability and movement.
 
 - **`OnActionStarted`**: Triggered when a `CharacterAction` begins. The controller automatically stops movement and sets the `isDoingAction` animator bool (if the action allows it).
 - **`OnActionFinished`**: Triggered when an action ends or is cancelled. This initiates a short **Action Cooldown** (default: 0.5s) before the character can resume navigation.

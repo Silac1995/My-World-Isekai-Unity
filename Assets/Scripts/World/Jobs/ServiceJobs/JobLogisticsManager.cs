@@ -4,7 +4,7 @@ using UnityEngine;
 
 /// <summary>
 /// Gère la réception et la distribution des commandes (BuyOrders) pour un bâtiment.
-/// Inclus dans TransporterBuilding et les bâtiments nécessitant des expéditions (ex: GatheringBuilding).
+/// Inclus dans TransporterBuilding et les bâtiments nécessitant des expéditions (ex: HarvestingBuilding).
 /// La logique de données est désormais gérée par BuildingLogisticsManager.
 /// </summary>
 public class JobLogisticsManager : Job

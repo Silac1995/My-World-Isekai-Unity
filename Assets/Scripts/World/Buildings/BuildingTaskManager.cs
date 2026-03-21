@@ -3,7 +3,7 @@ using System.Linq;
 using UnityEngine;
 
 /// <summary>
-/// Centralized manager for handling BuildingTasks (Gathering, Pickup, etc.) within a CommercialBuilding.
+/// Centralized manager for handling BuildingTasks (Harvesting, Pickup, etc.) within a CommercialBuilding.
 /// </summary>
 public class BuildingTaskManager : MonoBehaviour
 {

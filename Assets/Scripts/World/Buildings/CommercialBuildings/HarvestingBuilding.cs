@@ -4,53 +4,53 @@ using UnityEngine;
 using MWI.Time;
 
 /// <summary>
-/// Entrée de configuration pour une ressource voulue par un GatheringBuilding.
+/// Entrée de configuration pour une ressource voulue par un HarvestingBuilding.
 /// Chaque entrée définit quel item le building veut récolter et en quelle quantité max.
 /// </summary>
 [System.Serializable]
-public class GatheringResourceEntry
+public class HarvestingResourceEntry
 {
     public ItemSO targetItem;
-    [Tooltip("La quantité maximum à stocker. Les gatherers s'arrêteront (sauf si de nouvelles BuyOrders arrivent). -1 = illimité.")]
+    [Tooltip("La quantité maximum à stocker. Les harvesters s'arrêteront (sauf si de nouvelles BuyOrders arrivent). -1 = illimité.")]
     public int maxQuantity = 50;
 }
 
 /// <summary>
 /// Building commercial pour les lieux de récolte (Mine, Camp de bûcheron, Ferme...).
-/// Configure les ressources voulues, le nombre de gatherers, et la zone de dépôt.
-/// Les employés explorent pour trouver une zone de GatherableObject, puis récoltent.
+/// Configure les ressources voulues, le nombre de harvesters, et la zone de dépôt.
+/// Les employés explorent pour trouver une zone de Harvestable, puis récoltent.
 /// </summary>
-public class GatheringBuilding : CommercialBuilding
+public class HarvestingBuilding : CommercialBuilding
 {
-    public override BuildingType BuildingType => BuildingType.GatheringSite;
+    public override BuildingType BuildingType => BuildingType.HarvestingSite;
 
-    [Header("Gathering Config")]
-    [SerializeField] private List<GatheringResourceEntry> _wantedResources = new List<GatheringResourceEntry>();
-    [SerializeField] private int _gathererCount = 2;
-    [SerializeField] private string _gathererJobTitle = "Gatherer";
+    [Header("Harvesting Config")]
+    [SerializeField] private List<HarvestingResourceEntry> _wantedResources = new List<HarvestingResourceEntry>();
+    [SerializeField] private int _harvesterCount = 2;
+    [SerializeField] private string _harvesterJobTitle = "Harvester";
 
     [Header("Zones")]
     [SerializeField] private Zone _depositZone;
     [SerializeField, Tooltip("Optionnel: Zone à scanner automatiquement chaque jour pour trouver des ressources. Au lieu de laisser les workers explorer.")]
-    private Zone _gatheringAreaZone;
+    private Zone _harvestingAreaZone;
 
     // Runtime : zone de récolte découverte par les employés (ou assignée via le scan)
-    private Zone _gatherableZone;
+    private Zone _harvestableZone;
 
     // Runtime : liste des employés (Characters assignés)
     private List<Character> _employees = new List<Character>();
 
-    // Runtime : list of scanned gatherable objects we are tracking for respawn events
-    private List<GatherableObject> _trackedGatherables = new List<GatherableObject>();
+    // Runtime : list of scanned harvestable objects we are tracking for respawn events
+    private List<Harvestable> _trackedHarvestables = new List<Harvestable>();
 
     // === Accesseurs publics ===
 
-    public IReadOnlyList<GatheringResourceEntry> WantedResources => _wantedResources;
+    public IReadOnlyList<HarvestingResourceEntry> WantedResources => _wantedResources;
     public Zone DepositZone => _depositZone;
-    public Zone GatherableZone => _gatherableZone;
+    public Zone HarvestableZone => _harvestableZone;
     public IReadOnlyList<Character> Employees => _employees;
-    public bool HasGatherableZone => _gatherableZone != null;
-    public int GathererCount => _gathererCount;
+    public bool HasHarvestableZone => _harvestableZone != null;
+    public int HarvesterCount => _harvesterCount;
 
     // === Initialisation ===
 
@@ -58,7 +58,7 @@ public class GatheringBuilding : CommercialBuilding
     {
         if (TimeManager.Instance != null)
         {
-            TimeManager.Instance.OnNewDay += ScanGatheringArea;
+            TimeManager.Instance.OnNewDay += ScanHarvestingArea;
         }
     }
 
@@ -66,7 +66,7 @@ public class GatheringBuilding : CommercialBuilding
     {
         if (TimeManager.Instance != null)
         {
-            TimeManager.Instance.OnNewDay -= ScanGatheringArea;
+            TimeManager.Instance.OnNewDay -= ScanHarvestingArea;
         }
     }
 
@@ -74,31 +74,31 @@ public class GatheringBuilding : CommercialBuilding
     {
         base.Start();
         // Premier scan au démarrage
-        ScanGatheringArea();
+        ScanHarvestingArea();
     }
 
     protected override void InitializeJobs()
     {
-        for (int i = 0; i < _gathererCount; i++)
+        for (int i = 0; i < _harvesterCount; i++)
         {
-            _jobs.Add(new JobGatherer(_gathererJobTitle));
+            _jobs.Add(new JobHarvester(_harvesterJobTitle));
         }
 
         _jobs.Add(new JobLogisticsManager("Logistics Manager"));
 
-        Debug.Log($"<color=green>[GatheringBuilding]</color> {buildingName} initialisé avec {_gathererCount} {_gathererJobTitle}(s) et 1 Manager.");
+        Debug.Log($"<color=green>[HarvestingBuilding]</color> {buildingName} initialisé avec {_harvesterCount} {_harvesterJobTitle}(s) et 1 Manager.");
     }
 
     // === Gestion de la zone de récolte ===
 
     /// <summary>
-    /// Scanne la zone de récolte assignée (_gatheringAreaZone) pour voir s'il reste des ressources voulues.
+    /// Scanne la zone de récolte assignée (_harvestingAreaZone) pour voir s'il reste des ressources voulues.
     /// Appelé automatiquement au début de chaque jour (OnNewDay).
     /// </summary>
-    public void ScanGatheringArea()
+    public void ScanHarvestingArea()
     {
-        if (_gatheringAreaZone == null) return;
-        ScanAndRegisterZone(_gatheringAreaZone);
+        if (_harvestingAreaZone == null) return;
+        ScanAndRegisterZone(_harvestingAreaZone);
     }
 
     /// <summary>
@@ -121,7 +121,7 @@ public class GatheringBuilding : CommercialBuilding
         if (wantedItems.Count == 0)
         {
             // Le building ne veut plus rien (tout est plein)
-            if (_gatherableZone != null) ClearGatherableZone();
+            if (_harvestableZone != null) ClearHarvestableZone();
             return;
         }
 
@@ -130,9 +130,9 @@ public class GatheringBuilding : CommercialBuilding
         Collider[] colliders = Physics.OverlapBox(center, halfExtents, boxCol.transform.rotation, Physics.AllLayers, QueryTriggerInteraction.Collide);
         foreach (var col in colliders)
         {
-            GatherableObject gatherable = col.GetComponent<GatherableObject>() ?? col.GetComponentInParent<GatherableObject>();
+            Harvestable harvestable = col.GetComponent<Harvestable>() ?? col.GetComponentInParent<Harvestable>();
             // Permet de considérer la zone comme valide même si la ressource est épuisée (pour écouter son respawn dynamique)
-            if (gatherable != null && gatherable.HasAnyOutput(wantedItems))
+            if (harvestable != null && harvestable.HasAnyOutput(wantedItems))
             {
                 foundValidResource = true;
                 break;
@@ -141,93 +141,93 @@ public class GatheringBuilding : CommercialBuilding
 
         if (foundValidResource)
         {
-            SetGatherableZone(zone);
+            SetHarvestableZone(zone);
             
             // On ne clear PLUS les anciens abonnements. La liste s'accumule !
             
             foreach (var col in colliders)
             {
-                GatherableObject gatherable = col.GetComponent<GatherableObject>() ?? col.GetComponentInParent<GatherableObject>();
-                if (gatherable != null && gatherable.HasAnyOutput(wantedItems))
+                Harvestable harvestable = col.GetComponent<Harvestable>() ?? col.GetComponentInParent<Harvestable>();
+                if (harvestable != null && harvestable.HasAnyOutput(wantedItems))
                 {
-                    AddToTrackedGatherables(gatherable);
+                    AddToTrackedHarvestables(harvestable);
                 }
             }
         }
         else
         {
-            Debug.Log($"<color=orange>[GatheringBuilding]</color> {buildingName} : Scan de {zone.zoneName} n'a rien trouvé. Retour à l'exploration.");
+            Debug.Log($"<color=orange>[HarvestingBuilding]</color> {buildingName} : Scan de {zone.zoneName} n'a rien trouvé. Retour à l'exploration.");
         }
     }
 
     /// <summary>
-    /// Ajoute dynamiquement un gatherable à la liste du bâtiment pour qu'il soit traqué (respawns, etc.)
+    /// Ajoute dynamiquement un harvestable à la liste du bâtiment pour qu'il soit traqué (respawns, etc.)
     /// </summary>
-    public void AddToTrackedGatherables(GatherableObject gatherable)
+    public void AddToTrackedHarvestables(Harvestable harvestable)
     {
-        if (gatherable == null) return;
+        if (harvestable == null) return;
         
-        if (!_trackedGatherables.Contains(gatherable))
+        if (!_trackedHarvestables.Contains(harvestable))
         {
-            gatherable.OnRespawned += HandleGatherableRespawned;
-            _trackedGatherables.Add(gatherable);
+            harvestable.OnRespawned += HandleHarvestableRespawned;
+            _trackedHarvestables.Add(harvestable);
         }
 
-        if (gatherable.CanGather() && TaskManager != null)
+        if (harvestable.CanHarvest() && TaskManager != null)
         {
-            TaskManager.RegisterTask(new GatherResourceTask(gatherable));
+            TaskManager.RegisterTask(new HarvestResourceTask(harvestable));
         }
     }
 
-    private void HandleGatherableRespawned(GatherableObject gatherable)
+    private void HandleHarvestableRespawned(Harvestable harvestable)
     {
-        if (gatherable != null && TaskManager != null)
+        if (harvestable != null && TaskManager != null)
         {
             // Only register if we still want this item type
             var wantedItems = GetWantedItems();
-            if (wantedItems.Count > 0 && gatherable.HasAnyOutput(wantedItems))
+            if (wantedItems.Count > 0 && harvestable.HasAnyOutput(wantedItems))
             {
-                Debug.Log($"<color=green>[GatheringBuilding]</color> {buildingName} noticed {gatherable.name} respawned! Re-registering task.");
-                TaskManager.RegisterTask(new GatherResourceTask(gatherable));
+                Debug.Log($"<color=green>[HarvestingBuilding]</color> {buildingName} noticed {harvestable.name} respawned! Re-registering task.");
+                TaskManager.RegisterTask(new HarvestResourceTask(harvestable));
             }
         }
     }
 
-    private void ClearTrackedGatherables()
+    private void ClearTrackedHarvestables()
     {
-        foreach (var gatherable in _trackedGatherables)
+        foreach (var harvestable in _trackedHarvestables)
         {
-            if (gatherable != null)
+            if (harvestable != null)
             {
-                gatherable.OnRespawned -= HandleGatherableRespawned;
+                harvestable.OnRespawned -= HandleHarvestableRespawned;
             }
         }
-        _trackedGatherables.Clear();
+        _trackedHarvestables.Clear();
     }
 
     /// <summary>
     /// Appelé par un employé explorateur quand il a trouvé une zone contenant
-    /// des GatherableObject avec les items voulus.
+    /// des Harvestable avec les items voulus.
     /// </summary>
-    public void SetGatherableZone(Zone zone)
+    public void SetHarvestableZone(Zone zone)
     {
         if (zone == null) return;
 
-        _gatherableZone = zone;
-        Debug.Log($"<color=green>[GatheringBuilding]</color> {buildingName} : zone de récolte trouvée → {zone.zoneName}.");
+        _harvestableZone = zone;
+        Debug.Log($"<color=green>[HarvestingBuilding]</color> {buildingName} : zone de récolte trouvée → {zone.zoneName}.");
     }
 
     /// <summary>
     /// Obsolète ou utilisé uniquement pour réinitialiser le focus UI. 
     /// On ne wipe plus la mémoire des arbres traqués pour permettre le respawn.
     /// </summary>
-    public void ClearGatherableZone()
+    public void ClearHarvestableZone()
     {
-        if (_gatherableZone != null)
+        if (_harvestableZone != null)
         {
-            Debug.Log($"<color=orange>[GatheringBuilding]</color> {buildingName} : zone de récolte {_gatherableZone.zoneName} effacée du focus principal.");
+            Debug.Log($"<color=orange>[HarvestingBuilding]</color> {buildingName} : zone de récolte {_harvestableZone.zoneName} effacée du focus principal.");
         }
-        _gatherableZone = null;
+        _harvestableZone = null;
     }
 
     // === Gestion des ressources voulues ===
@@ -277,7 +277,7 @@ public class GatheringBuilding : CommercialBuilding
     /// Evalue dynamiquement si un item a atteint son quota.
     /// Quota = maxQuantity (stock cible du bâtiment) + demandes d'expédition (BuyOrders actives dans le LogisticsManager).
     /// </summary>
-    private bool IsResourceAtLimit(GatheringResourceEntry entry)
+    private bool IsResourceAtLimit(HarvestingResourceEntry entry)
     {
         if (entry.maxQuantity < 0) return false; // illimité
 
@@ -299,7 +299,7 @@ public class GatheringBuilding : CommercialBuilding
         int totalRequiredAmount = entry.maxQuantity + activeOrdersDemand;
         
         // REFACTOR: Use the free inventory count to prevent stalls caused by reserved items,
-        // and prevent over-gathering while items are in transit.
+        // and prevent over-harvesting while items are in transit.
         int freeStock = GetItemCount(entry.targetItem) - reservedStock;
         
         return freeStock >= totalRequiredAmount;
@@ -309,7 +309,7 @@ public class GatheringBuilding : CommercialBuilding
     /// Vérifie si TOUTES les ressources demandées ont atteint leur limite maximale.
     /// Utilisé pour ordonner aux employés de se reposer.
     /// </summary>
-    public bool AreAllRequestedResourcesGathered()
+    public bool AreAllRequestedResourcesHarvested()
     {
         return !NeedsResources();
     }
@@ -318,7 +318,7 @@ public class GatheringBuilding : CommercialBuilding
     /// Enregistre un item récolté. Incrémente le compteur de la ressource correspondante.
     /// Retourne true si l'item était bien voulu.
     /// </summary>
-    public bool RegisterGatheredItem(ItemSO item)
+    public bool RegisterHarvestedItem(ItemSO item)
     {
         if (item == null) return false;
 
@@ -327,7 +327,7 @@ public class GatheringBuilding : CommercialBuilding
             if (entry.targetItem == item)
             {
                 int actualStock = GetItemCount(item);
-                Debug.Log($"<color=cyan>[GatheringBuilding]</color> {buildingName} : {item.ItemName} récolté ({actualStock} en stock physique réel).");
+                Debug.Log($"<color=cyan>[HarvestingBuilding]</color> {buildingName} : {item.ItemName} récolté ({actualStock} en stock physique réel).");
                 return true;
             }
         }
@@ -345,7 +345,7 @@ public class GatheringBuilding : CommercialBuilding
         if (employee != null && !_employees.Contains(employee))
         {
             _employees.Add(employee);
-            Debug.Log($"<color=yellow>[GatheringBuilding]</color> {employee.CharacterName} rejoint {buildingName} comme employé.");
+            Debug.Log($"<color=yellow>[HarvestingBuilding]</color> {employee.CharacterName} rejoint {buildingName} comme employé.");
         }
     }
 
@@ -356,7 +356,7 @@ public class GatheringBuilding : CommercialBuilding
     {
         if (employee != null && _employees.Remove(employee))
         {
-            Debug.Log($"<color=yellow>[GatheringBuilding]</color> {employee.CharacterName} quitte {buildingName}.");
+            Debug.Log($"<color=yellow>[HarvestingBuilding]</color> {employee.CharacterName} quitte {buildingName}.");
         }
     }
 

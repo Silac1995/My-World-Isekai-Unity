@@ -8,7 +8,7 @@ description: Instructions and architecture for the Toast Notification system, in
 The Toast Notification System is used to show brief, non-intrusive messages to the user (e.g., "Picked up Item", "Level Up", "Experience Gained"). It uses a decoupled event-driven architecture with an Object Pool to prevent memory allocations during gameplay.
 
 ## When to use this skill
-- When you need to inform the player about an action without interrupting their gameplay (e.g., gathering, crafting, picking up an item).
+- When you need to inform the player about an action without interrupting their gameplay (e.g., harvesting, crafting, picking up an item).
 - When debugging issues where toasts aren't appearing or are crashing the UI.
 
 ## The Decoupled Object Pool Architecture

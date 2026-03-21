@@ -7,21 +7,21 @@ using UnityEngine;
 /// Produit une liste d'ItemSO quand un personnage le récolte.
 /// Peut s'épuiser après un nombre de récoltes et respawn après un délai.
 /// </summary>
-public class GatherableObject : InteractableObject
+public class Harvestable : InteractableObject
 {
-    [Header("Gatherable")]
+    [Header("Harvestable")]
     [SerializeField] private List<ItemSO> _outputItems = new List<ItemSO>();
-    [SerializeField] private float _gatherDuration = 3f;
+    [SerializeField] private float _harvestDuration = 3f;
     [SerializeField] private bool _isDepletable = true;
-    [SerializeField] private int _maxGatherCount = 5;
+    [SerializeField] private int _maxHarvestCount = 5;
     [SerializeField, Tooltip("Nombre de jours in-game avant la réapparition de la ressource")] 
     private int _respawnDelayDays = 1;
 
-    private int _currentGatherCount = 0;
+    private int _currentHarvestCount = 0;
     private bool _isDepleted = false;
     private int _targetRespawnDay = 0;
 
-    public event System.Action<GatherableObject> OnRespawned;
+    public event System.Action<Harvestable> OnRespawned;
 
     // Visuels (optionnel)
     [Header("Visuals")]
@@ -31,17 +31,17 @@ public class GatherableObject : InteractableObject
     public IReadOnlyList<ItemSO> OutputItems => _outputItems;
 
     /// <summary>Temps nécessaire pour une récolte</summary>
-    public float GatherDuration => _gatherDuration;
+    public float HarvestDuration => _harvestDuration;
 
     /// <summary>L'objet est-il épuisé ?</summary>
     public bool IsDepleted => _isDepleted;
 
     /// <summary>Peut-on récolter cet objet ?</summary>
-    public bool CanGather() => !_isDepleted && _outputItems.Count > 0;
+    public bool CanHarvest() => !_isDepleted && _outputItems.Count > 0;
 
     /// <summary>
     /// Vérifie si cet objet produit un item spécifique.
-    /// Utilisé par les gatherers pour trouver des zones compatibles.
+    /// Utilisé par les harvesters pour trouver des zones compatibles.
     /// </summary>
     public bool HasOutput(ItemSO item)
     {
@@ -63,14 +63,14 @@ public class GatherableObject : InteractableObject
     }
 
     /// <summary>
-    /// Interaction : lance une CharacterGatherAction pour récolter avec animation et durée.
+    /// Interaction : lance une CharacterHarvestAction pour récolter avec animation et durée.
     /// </summary>
     public override void Interact(Character interactor)
     {
-        if (interactor == null || !CanGather()) return;
+        if (interactor == null || !CanHarvest()) return;
         if (interactor.CharacterActions == null) return;
 
-        var gatherAction = new CharacterGatherAction(interactor, this);
+        var gatherAction = new CharacterHarvestAction(interactor, this);
         interactor.CharacterActions.ExecuteAction(gatherAction);
     }
 
@@ -78,21 +78,21 @@ public class GatherableObject : InteractableObject
     /// Récolte et fait spawn l'item en WorldItem dans le monde.
     /// Retourne l'ItemSO récolté (null si échec).
     /// </summary>
-    public ItemSO Gather(Character gatherer)
+    public ItemSO Harvest(Character harvester)
     {
-        if (gatherer == null || !CanGather()) return null;
+        if (harvester == null || !CanHarvest()) return null;
 
         ItemSO harvestedItem = GetRandomOutput();
         if (harvestedItem == null) return null;
 
-        _currentGatherCount++;
+        _currentHarvestCount++;
 
-        if (_isDepletable && _currentGatherCount >= _maxGatherCount)
+        if (_isDepletable && _currentHarvestCount >= _maxHarvestCount)
         {
             Deplete();
         }
 
-        Debug.Log($"<color=green>[Gather]</color> {gatherer.CharacterName} a récolté {harvestedItem.ItemName}.");
+        Debug.Log($"<color=green>[Harvest]</color> {harvester.CharacterName} a récolté {harvestedItem.ItemName}.");
         return harvestedItem;
     }
 
@@ -121,7 +121,7 @@ public class GatherableObject : InteractableObject
         if (_visualRoot != null)
             _visualRoot.SetActive(false);
 
-        Debug.Log($"<color=orange>[Gather]</color> {gameObject.name} est épuisé. Respawn prévu au jour {_targetRespawnDay}.");
+        Debug.Log($"<color=orange>[Harvest]</color> {gameObject.name} est épuisé. Respawn prévu au jour {_targetRespawnDay}.");
     }
 
     private void HandleNewDay()
@@ -138,7 +138,7 @@ public class GatherableObject : InteractableObject
     private void Respawn()
     {
         _isDepleted = false;
-        _currentGatherCount = 0;
+        _currentHarvestCount = 0;
 
         if (MWI.Time.TimeManager.Instance != null)
             MWI.Time.TimeManager.Instance.OnNewDay -= HandleNewDay;
@@ -146,7 +146,7 @@ public class GatherableObject : InteractableObject
         if (_visualRoot != null)
             _visualRoot.SetActive(true);
 
-        Debug.Log($"<color=green>[Gather]</color> {gameObject.name} a respawn !");
+        Debug.Log($"<color=green>[Harvest]</color> {gameObject.name} a respawn !");
         OnRespawned?.Invoke(this);
     }
 
