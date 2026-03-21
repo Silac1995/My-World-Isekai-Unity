@@ -180,6 +180,7 @@ public class PlayerUI : MonoBehaviour
 
     public void CloseInteractionMenu()
     {
+        Debug.LogWarning($"<color=orange>[PlayerUI]</color> CloseInteractionMenu called. StackTrace:\n{System.Environment.StackTrace}");
         if (_interactionMenu != null && _interactionMenu.gameObject.activeSelf)
         {
             _interactionMenu.CloseMenu();

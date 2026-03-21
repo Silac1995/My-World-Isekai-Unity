@@ -61,8 +61,12 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
     /// </summary>
     private void HandleInteractionStateChanged(Character target, bool started)
     {
+        if (!Character.IsPlayer()) return;
+
         EnsurePlayerUI();
         if (_playerUI == null) return;
+
+        Debug.Log($"<color=cyan>[PlayerInteractionDetector]</color> HandleInteractionStateChanged called for Character: {Character.name}, Target: {(target != null ? target.name : "null")}, Started: {started}");
 
         if (started)
         {
@@ -97,6 +101,8 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
     /// </summary>
     private void HandlePlayerTurnStarted(Character listener)
     {
+        if (!Character.IsPlayer()) return;
+
         EnsurePlayerUI();
         if (_playerUI != null)
         {
@@ -110,6 +116,8 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
     /// </summary>
     private void HandlePlayerTurnEnded(Character listener)
     {
+        if (!Character.IsPlayer()) return;
+
         EnsurePlayerUI();
         if (_playerUI != null)
         {
@@ -122,6 +130,8 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
     /// </summary>
     private void HandlePlayerTurnTimerUpdated(float normalizedValue)
     {
+        if (!Character.IsPlayer()) return;
+
         EnsurePlayerUI();
         if (_playerUI != null)
         {

@@ -661,6 +661,19 @@ public class CharacterInteraction : CharacterSystem
     {
         if (!_character.IsFree()) return; // Fail-safe supplémentaire
 
+        // Stop any pending interaction coroutines (e.g. walking to another NPC)
+        if (_activeDialogueCoroutine != null)
+        {
+            StopCoroutine(_activeDialogueCoroutine);
+            _activeDialogueCoroutine = null;
+        }
+
+        if (_pendingTarget != null)
+        {
+            _pendingTarget.CharacterInteraction.OnInteractionStateChanged -= HandleTargetStateChanged;
+            _pendingTarget = null;
+        }
+
         CurrentTarget = target;
         IsPositioned = true; // La cible est passivement prête
         IsPositioning = false; // Plus besoin
