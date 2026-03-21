@@ -246,8 +246,8 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
                 currentPromptComponent = null;
             }
             // Only close the menu if the player is NOT in an active interaction
-            // (the interaction events manage the menu during an interaction)
-            if (_playerUI != null && !Character.CharacterInteraction.IsInteracting)
+            // AND the menu hasn't been locked by the player already committing to an action
+            if (_playerUI != null && !Character.CharacterInteraction.IsInteracting && !_playerUI.IsInteractionMenuLocked())
             {
                 _playerUI.CloseInteractionMenu();
             }
@@ -275,7 +275,7 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
                     currentPromptUI = null;
                     currentPromptComponent = null;
                 }
-                if (_playerUI != null && !Character.CharacterInteraction.IsInteracting)
+                if (_playerUI != null && !Character.CharacterInteraction.IsInteracting && !_playerUI.IsInteractionMenuLocked())
                 {
                     _playerUI.CloseInteractionMenu();
                 }

@@ -57,11 +57,14 @@ public class UI_InteractionMenu : MonoBehaviour
         UpdateTimer(1f);
     }
 
+    public bool IsLocked { get; private set; }
+
     /// <summary>
     /// Enable or disable all ACTIVE option buttons (locked = not the player's turn).
     /// </summary>
     public void SetOptionsInteractable(bool interactable)
     {
+        IsLocked = !interactable;
         foreach (var btn in _pool)
         {
             if (btn != null && btn.gameObject.activeSelf)

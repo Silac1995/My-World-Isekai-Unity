@@ -111,6 +111,9 @@ public class CharacterInvitation : MonoBehaviour
     {
         StopFollowingTarget();
         
+        // --- NEW: The player controls their own movement, no auto-follow needed.
+        if (_character.IsPlayer()) return;
+
         // --- NEW: Freeze the AI so the sender's standard behaviors (Wander, work) don't try to override FollowTargetRoutine ---
         if (_character.Controller != null && !_character.IsPlayer())
         {

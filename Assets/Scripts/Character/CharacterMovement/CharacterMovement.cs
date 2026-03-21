@@ -174,6 +174,13 @@ public class CharacterMovement : CharacterSystem
     {
         if (_knockbackTimer > 0) return;
 
+        // If the player provides directional input while the character is forced-stopped (e.g. from an interaction)
+        // This acts as a manual override to break out of the stopped state.
+        if (_isStopped && direction.sqrMagnitude > 0.1f)
+        {
+            Resume();
+        }
+
         _desiredDirection = direction;
         _targetSpeed = speed;
 

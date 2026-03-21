@@ -186,6 +186,11 @@ public class PlayerUI : MonoBehaviour
         }
     }
 
+    public bool IsInteractionMenuLocked()
+    {
+        return _interactionMenu != null && _interactionMenu.gameObject.activeSelf && _interactionMenu.IsLocked;
+    }
+
     public void SetInteractionMenuInteractable(bool interactable)
     {
         if (_interactionMenu != null)
