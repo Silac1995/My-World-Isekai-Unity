@@ -6,7 +6,6 @@ using UnityEngine;
 /// Receives invitations and responds after a configurable delay,
 /// based on relationship quality and personality traits.
 /// If no response is given before the timeout, the invitation is refused.
-/// Also manages following behavior for the invitation source.
 /// </summary>
 public class CharacterInvitation : MonoBehaviour
 {
@@ -27,16 +26,11 @@ public class CharacterInvitation : MonoBehaviour
     public bool HasPendingInvitation { get; private set; }
 
     private Coroutine _pendingCoroutine;
-    private Coroutine _followCoroutine;
 
     private void Awake()
     {
         if (_character == null) _character = GetComponent<Character>();
     }
-
-    // ──────────────────────────────────────────────
-    //  RECEIVING (Target side)
-    // ──────────────────────────────────────────────
 
     /// <summary>
     /// Called by InteractionInvitation.Execute() to send an invitation to this character.
@@ -54,6 +48,15 @@ public class CharacterInvitation : MonoBehaviour
             return;
         }
 
+<<<<<<< HEAD
+=======
+        // Stop moving to visually acknowledge the invitation
+        if (_character.CharacterMovement != null)
+        {
+            _character.CharacterMovement.Stop();
+        }
+
+>>>>>>> parent of b311ee0 (Source follows target while invitation pending)
         // Start the delayed response coroutine
         _pendingCoroutine = StartCoroutine(ProcessInvitation(invitation, source));
     }
@@ -69,18 +72,11 @@ public class CharacterInvitation : MonoBehaviour
         if (source == null || !source.IsAlive() || _character == null || !_character.IsAlive())
         {
             HasPendingInvitation = false;
-            // Stop the source from following since the invitation is over
-            if (source != null && source.CharacterInvitation != null)
-                source.CharacterInvitation.StopFollowingTarget();
             yield break;
         }
 
         // Evaluate the response
         bool accepted = EvaluateInvitation(invitation, source);
-
-        // Stop the source from following — invitation is resolved
-        if (source.CharacterInvitation != null)
-            source.CharacterInvitation.StopFollowingTarget();
 
         // React
         if (accepted)
@@ -104,6 +100,7 @@ public class CharacterInvitation : MonoBehaviour
         _pendingCoroutine = null;
     }
 
+<<<<<<< HEAD
     // ──────────────────────────────────────────────
     //  FOLLOWING (Source/Sender side)
     // ──────────────────────────────────────────────
@@ -185,6 +182,8 @@ public class CharacterInvitation : MonoBehaviour
     //  EVALUATION
     // ──────────────────────────────────────────────
 
+=======
+>>>>>>> parent of b311ee0 (Source follows target while invitation pending)
     /// <summary>
     /// Evaluates whether this character accepts an invitation from the source.
     /// Uses relationship quality and sociability to determine acceptance.
@@ -251,11 +250,5 @@ public class CharacterInvitation : MonoBehaviour
             _pendingCoroutine = null;
         }
         HasPendingInvitation = false;
-    }
-
-    private void OnDestroy()
-    {
-        StopFollowingTarget();
-        CancelPendingInvitation();
     }
 }
