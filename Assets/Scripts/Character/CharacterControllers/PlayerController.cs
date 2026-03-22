@@ -9,9 +9,14 @@ public class PlayerController : CharacterGameController
     private const float PATH_UPDATE_INTERVAL = 0.2f;
     private bool _wasInBattleLastFrame = false;
 
+    // --- Combat AI State (Mimicking NPC Behavior) ---
+    private CombatTacticalPacer _combatPacer;
+
     public override void Initialize()
     {
         base.Initialize();
+        
+        _combatPacer = new CombatTacticalPacer(_character);
 
         if (_character.Rigidbody != null)
             _character.Rigidbody.interpolation = RigidbodyInterpolation.Interpolate;
@@ -85,22 +90,41 @@ public class PlayerController : CharacterGameController
             
             if (battleTarget != null)
             {
-                float distance = Vector3.Distance(transform.position, battleTarget.transform.position);
-                float engagementDistance = 2.5f; // Hardcoded default engagement distance
+                var battleManager = _character.CharacterCombat.CurrentBattleManager;
+                float distToTarget = Vector3.Distance(transform.position, battleTarget.transform.position);
+                float attackRange = _character.CharacterCombat.CurrentCombatStyleExpertise?.Style?.MeleeRange ?? 3.5f;
+                
+                Vector3 targetDestination = _combatPacer.GetTacticalDestination(battleTarget, attackRange, false);
+                float distanceToDestination = Vector3.Distance(transform.position, targetDestination);
+                float engagementTolerance = 0.5f; 
 
-                if (distance > engagementDistance)
+                bool isWithinAttackRange = distToTarget <= attackRange * 0.9f;
+                float dx = Mathf.Abs(transform.position.x - battleTarget.transform.position.x);
+                float zDist = Mathf.Abs(transform.position.z - battleTarget.transform.position.z);
+                bool isXTooClose = dx < 1.5f;
+                bool isZAligned = zDist <= 1.5f;
+
+                if (isWithinAttackRange && !isXTooClose && isZAligned)
+                {
+                    _characterMovement.Stop();
+                    Vector3 direction = battleTarget.transform.position - transform.position;
+                    _characterVisual?.UpdateFlip(direction);
+                }
+                else if (distanceToDestination > engagementTolerance)
                 {
                     if (Time.time >= _nextPathUpdateTime)
                     {
                         _nextPathUpdateTime = Time.time + PATH_UPDATE_INTERVAL;
                         _characterMovement.ForceResume();
-                        _characterMovement.SetDestination(battleTarget.transform.position);
+                        _characterMovement.SetDestination(targetDestination);
                     }
+                    
+                    Vector3 direction = battleTarget.transform.position - transform.position;
+                    _characterVisual?.UpdateFlip(direction);
                 }
                 else
                 {
                     _characterMovement.Stop();
-                    // Face target
                     Vector3 direction = battleTarget.transform.position - transform.position;
                     _characterVisual?.UpdateFlip(direction);
                 }

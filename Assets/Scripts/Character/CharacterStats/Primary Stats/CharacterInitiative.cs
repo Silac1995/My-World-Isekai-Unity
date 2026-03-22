@@ -12,6 +12,11 @@ public class CharacterInitiative : CharacterPrimaryStats
         return IsFull();
     }
 
+    public bool IsReadyToDecide()
+    {
+        return currentAmount >= (CurrentValue * 0.7f);
+    }
+
     public void ResetInitiative()
     {
         currentAmount = 0f;

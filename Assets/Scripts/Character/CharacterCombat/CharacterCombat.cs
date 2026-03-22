@@ -34,6 +34,26 @@ public class CharacterCombat : CharacterSystem
     public CombatStyleExpertise CurrentCombatStyleExpertise => _currentCombatStyleExpertise;
     public bool IsCombatMode => _isCombatMode;
 
+    [Header("Combat Intents")]
+    public Func<bool> PlannedAction { get; private set; }
+    public Character PlannedTarget { get; private set; }
+    public event Action<Character, Func<bool>> OnActionIntentDecided;
+
+    public void SetActionIntent(Func<bool> action, Character target)
+    {
+        PlannedAction = action;
+        PlannedTarget = target;
+        OnActionIntentDecided?.Invoke(target, action);
+    }
+
+    public void ClearActionIntent()
+    {
+        PlannedAction = null;
+        PlannedTarget = null;
+    }
+
+    public bool HasPlannedAction => PlannedAction != null;
+
     protected override void Awake()
     {
         base.Awake();

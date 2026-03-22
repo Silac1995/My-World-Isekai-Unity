@@ -18,6 +18,7 @@ public class CharacterMovement : CharacterSystem
     private bool _isStopped = false;
     private float _knockbackTimer = 0f;
     private bool _wasKinematic = false;
+    private bool _wasAgentEnabled = false;
 
     // Gestion de la stabilité du chemin
     private int _unstablePathFrames = 0;
@@ -77,11 +78,10 @@ public class CharacterMovement : CharacterSystem
                 // Fin du knockback normal : On restaure l'état original
                 if (_rb != null) _rb.isKinematic = _wasKinematic;
                 
-                // On ne réactive l'agent QUE pour ceux qui en ont besoin (NPCs cinématiques)
-                // Le joueur (non-cinématique) reste libre de ses mouvements physiques.
-                if (_agent != null && _wasKinematic)
+                // Restauration exacte de l'état du NavMeshAgent avant le coup
+                if (_agent != null)
                 {
-                    _agent.enabled = true;
+                    _agent.enabled = _wasAgentEnabled;
                 }
             }
             return;
@@ -234,6 +234,10 @@ public class CharacterMovement : CharacterSystem
 
         _isStopped = true;
         _unstablePathFrames = 0;
+        
+        // Sécurité : On s'assure d'effacer les inputs physiques résiduels quand on force l'arrêt
+        _desiredDirection = Vector3.zero;
+
         if (_agent != null && _agent.isOnNavMesh)
         {
             _agent.isStopped = true;
@@ -287,10 +291,11 @@ public class CharacterMovement : CharacterSystem
 
         // --- MÉMOIRE ROBUSTE ---
         // On ne sauvegarde l'état que si on n'est pas déjà en knockback.
-        // Cela évite d'écraser _wasKinematic par "false" (NPC en vol) lors d'un deuxième coup.
+        // Cela évite d'écraser l'état original lors d'un deuxième coup consécutif en plein vol.
         if (_knockbackTimer <= 0)
         {
             _wasKinematic = _rb.isKinematic;
+            _wasAgentEnabled = _agent != null && _agent.enabled;
         }
 
         // --- INTERRUPTION DES ACTIONS ---
