@@ -16,10 +16,6 @@ public class CharacterMeleeAttackAction : CharacterCombatAction
     {
         base.OnStart();
 
-        // --- SHOUT ---
-        // On dclenche un cri de guerre au dbut de l'action
-        character.CharacterSpeech?.Say("I will fuck you up!");
-
         var animHandler = character.CharacterVisual?.CharacterAnimator;
         if (animHandler != null)
         {

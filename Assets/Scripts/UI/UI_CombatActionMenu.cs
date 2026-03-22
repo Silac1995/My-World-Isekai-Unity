@@ -79,7 +79,7 @@ public class UI_CombatActionMenu : MonoBehaviour
 
         if (hasIntent)
         {
-            _attackButtonText.text = $"<color=yellow>{baseText} [Queued]</color>";
+            _attackButtonText.text = $"<color=blue>{baseText} [Queued]</color>";
         }
         else
         {

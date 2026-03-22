@@ -120,8 +120,6 @@ public class PlayerController : CharacterGameController
 
     public void Move()
     {
-        if (_character.CharacterActions.CurrentAction != null) return;
-
         bool needsNavMesh = _currentOrder != null;
 
         if (needsNavMesh && !_wasNavMeshActiveLastFrame)
@@ -134,6 +132,8 @@ public class PlayerController : CharacterGameController
             _characterMovement.Stop();
         }
         _wasNavMeshActiveLastFrame = needsNavMesh;
+
+        if (_character.CharacterActions.CurrentAction != null) return;
 
         if (_currentOrder != null)
         {
