@@ -31,7 +31,12 @@ public class CombatTacticalPacer
             _lastBattleTarget = target;
             _lastMoveTime = Time.time;
             _moveInterval = Random.Range(5f, 7f);
-            if (target != null) _currentDestination = target.transform.position;
+            
+            var bm = _self.CharacterCombat.CurrentBattleManager;
+            if (target != null) 
+            {
+                _currentDestination = CalculateSafeDestination(target, bm);
+            }
         }
 
         if (target == null) return _self.transform.position;

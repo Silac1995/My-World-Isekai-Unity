@@ -82,7 +82,9 @@ namespace MWI.AI
                 {
                     // Force movement into optimal valid strike position instead of target origin
                     float side = (_self.transform.position.x < currentTarget.transform.position.x) ? -1f : 1f;
-                    Vector3 optimalStrikePos = currentTarget.transform.position + new Vector3(side * optimalXDist, 0, 0);
+                    // Stagger the Z axis based on InstanceID to avoid everyone collapsing into a single unified position while striking
+                    float staggeredZ = (Mathf.Abs(_self.GetInstanceID()) % 3 - 1) * 0.45f;
+                    Vector3 optimalStrikePos = currentTarget.transform.position + new Vector3(side * optimalXDist, 0, staggeredZ);
 
                     if (UnityEngine.Time.time - _lastPathUpdateTime > 0.3f && Vector3.Distance(movement.Destination, optimalStrikePos) > 0.5f)
                     {
