@@ -2,7 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
-
+using Unity.Netcode;
 using UnityEngine.U2D.Animation;
 
 
@@ -26,7 +26,10 @@ public class CharacterVisual : CharacterSystem
     private Coroutine _resizeCoroutine;
     private SpriteRenderer[] allRenderers;
 
-    private bool isFacingRight = true;
+    private NetworkVariable<bool> _netIsFacingRight = new NetworkVariable<bool>(
+        true, 
+        NetworkVariableReadPermission.Everyone, 
+        NetworkVariableWritePermission.Owner);
 
     // --- Look Target : cible persistante pour orienter le regard ---
     private Transform _lookTarget;
@@ -147,16 +150,11 @@ public class CharacterVisual : CharacterSystem
 
 
     public bool IsFacingRight
-
     {
-
-        get => isFacingRight;
-
+        get => _netIsFacingRight.Value;
         set
-
         {
-
-            if (isFacingRight == value) return;
+            if (_netIsFacingRight.Value == value) return;
 
             // Bloquer le flip pendant un knockback
             if (_character != null && _character.CharacterMovement != null && _character.CharacterMovement.IsKnockedBack)
@@ -169,13 +167,36 @@ public class CharacterVisual : CharacterSystem
             // Anti-flicker : cooldown entre les flips
             if (Time.time - _lastFlipTime < FLIP_COOLDOWN) return;
 
-            isFacingRight = value;
-            _lastFlipTime = Time.time;
-
-            ApplyFlip();
-
+            // Only the owner can change the NetworkVariable
+            if (IsOwner)
+            {
+                _netIsFacingRight.Value = value;
+                _lastFlipTime = Time.time;
+                ApplyFlip();
+            }
         }
+    }
 
+    public override void OnNetworkSpawn()
+    {
+        base.OnNetworkSpawn();
+        _netIsFacingRight.OnValueChanged += OnFacingDirectionChanged;
+        ApplyFlip(); 
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        base.OnNetworkDespawn();
+        _netIsFacingRight.OnValueChanged -= OnFacingDirectionChanged;
+    }
+
+    private void OnFacingDirectionChanged(bool previousValue, bool newValue)
+    {
+        if (!IsOwner)
+        {
+            _lastFlipTime = Time.time;
+            ApplyFlip();
+        }
     }
 
     #endregion
@@ -295,7 +316,7 @@ public class CharacterVisual : CharacterSystem
             if (_lookTarget != null)
             {
                 float moveX = velocity.x;
-                float facingDir = isFacingRight ? 1f : -1f;
+                float facingDir = IsFacingRight ? 1f : -1f;
 
                 if (Mathf.Abs(moveX) > 0.1f)
                 {
@@ -333,8 +354,7 @@ public class CharacterVisual : CharacterSystem
         // On applique le scale sur le transform local (ou le visualRoot si tu préfères)
 
         Vector3 scale = transform.localScale;
-
-        scale.x = Mathf.Abs(scale.x) * (isFacingRight ? 1 : -1);
+        scale.x = Mathf.Abs(scale.x) * (IsFacingRight ? 1 : -1);
 
         transform.localScale = scale;
 

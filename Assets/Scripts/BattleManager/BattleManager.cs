@@ -1,8 +1,9 @@
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using Unity.Netcode;
 
-public class BattleManager : MonoBehaviour
+public class BattleManager : NetworkBehaviour
 {
     [Header("Settings")]
     [SerializeField] private List<BattleTeam> _teams = new List<BattleTeam>();
@@ -37,6 +38,8 @@ public class BattleManager : MonoBehaviour
 
     public void Initialize(Character initiator, Character target)
     {
+        if (!IsServer) return;
+
         if (initiator == null || target == null) return;
 
         // 1. Setup des équipes (On s'assure qu'il n'y en a QUE 2)
@@ -66,11 +69,49 @@ public class BattleManager : MonoBehaviour
         _zoneController.DrawBattleZoneOutline();
 
         Debug.Log($"<color=orange>[Battle]</color> Combat lance : {initiator.name} vs {target.name}");
+
+        var initNet = initiator.GetComponent<NetworkObject>();
+        var targNet = target.GetComponent<NetworkObject>();
+        if (initNet != null && targNet != null)
+        {
+            InitializeClientRpc(initNet, targNet);
+        }
+    }
+
+    [ClientRpc]
+    private void InitializeClientRpc(NetworkObjectReference initiatorRef, NetworkObjectReference targetRef)
+    {
+        if (IsServer) return; // Server already initialized
+
+        if (initiatorRef.TryGet(out NetworkObject iNet) && targetRef.TryGet(out NetworkObject tNet))
+        {
+            Character initiator = iNet.GetComponent<Character>();
+            Character target = tNet.GetComponent<Character>();
+
+            _teams.Clear();
+            _battleTeamInitiator = new BattleTeam();
+            _battleTeamTarget = new BattleTeam();
+
+            _battleTeamInitiator.AddCharacter(initiator);
+            _battleTeamTarget.AddCharacter(target);
+
+            _teams.Add(_battleTeamInitiator);
+            _teams.Add(_battleTeamTarget);
+
+            _zoneController = new BattleZoneController(this, _battleZoneModifier, _battleZoneLine, _baseBattleZoneSize, _perParticipantGrowthRate, _participantsPerTier);
+            _engagementCoordinator = new CombatEngagementCoordinator(this);
+
+            _zoneController.CreateBattleZone(initiator, target);
+            RegisterParticipants(); // Client sets its own tracking!
+            _engagementCoordinator.RequestEngagement(initiator, target);
+            _zoneController.DrawBattleZoneOutline();
+        }
     }
 
     private void Update()
     {
         if (_isBattleEnded) return;
+        if (!IsServer) return; // Seul le serveur gère la logique de combat
 
         // --- NOUVEAU : VERIFICATION DE FIN DE COMBAT EN CONTINU ---
         // S'assure que le combat s'arrête instantanément même si un objet est détruit
@@ -319,7 +360,26 @@ public class BattleManager : MonoBehaviour
         _engagementCoordinator?.ClearAll();
 
         Debug.Log("<color=red>[Battle]</color> Le combat est TERMINÉ.");
-        Destroy(gameObject);
+        if (NetworkObject != null && NetworkObject.IsSpawned)
+            NetworkObject.Despawn(true);
+        else 
+            Destroy(gameObject);
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        base.OnNetworkDespawn();
+        if (!IsServer)
+        {
+            foreach (var character in _allParticipants)
+            {
+                if (character != null && character.CharacterCombat != null)
+                {
+                    character.CharacterCombat.LeaveBattle();
+                }
+            }
+            _engagementCoordinator?.ClearAll();
+        }
     }
 
     private void OnDestroy()

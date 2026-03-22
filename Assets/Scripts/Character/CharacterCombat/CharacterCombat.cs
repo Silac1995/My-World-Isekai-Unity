@@ -429,6 +429,10 @@ public class CharacterCombat : CharacterSystem
         if (!ValidateFight(target)) return;
 
         GameObject instanceGo = Instantiate(_battleManagerPrefab);
+        
+        var netObj = instanceGo.GetComponent<NetworkObject>();
+        if (netObj != null) netObj.Spawn(true);
+
         BattleManager manager = instanceGo.GetComponent<BattleManager>();
 
         if (manager == null)
@@ -493,7 +497,6 @@ public class CharacterCombat : CharacterSystem
     [Rpc(SendTo.Server)]
     private void RequestSpawnHitboxServerRpc(bool isFacingRight)
     {
-        if (_character.CharacterVisual != null) _character.CharacterVisual.IsFacingRight = isFacingRight;
         SpawnHitboxNatively();
     }
 

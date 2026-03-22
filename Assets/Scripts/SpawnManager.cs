@@ -140,6 +140,17 @@ public class SpawnManager : MonoBehaviour
             return null;
         }
 
+        // Si c'est un NPC, on supprime immédiatement le NetworkRigidbody (s'il existe)
+        // pour qu'il n'entre pas en conflit avec le NavMeshAgent.
+        if (!isPlayer)
+        {
+            var netRb = characterPrefabObj.GetComponent<Unity.Netcode.Components.NetworkRigidbody>();
+            if (netRb != null)
+            {
+                DestroyImmediate(netRb);
+            }
+        }
+
         // Si le réseau tourne, on doit Spawn() l'objet réseau
         if (Unity.Netcode.NetworkManager.Singleton != null && Unity.Netcode.NetworkManager.Singleton.IsServer)
         {
