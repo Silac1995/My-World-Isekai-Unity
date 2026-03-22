@@ -32,10 +32,10 @@ This is the component every NPC/Player has in order to fight.
   - The `.ConsumeInitiative()` method resets initiative to 0 after a successful attack.
   - The `.UpdateInitiativeTick(amount)` method is **called by the BattleManager** to fill the bar.
 - **Action Intent & Execution (`CombatAILogic.cs`)**: Actions are no longer executed blindly by UI buttons or Behaviour Trees.
-  - `SetActionIntent(Action, target)` logs what the character *intends* to do.
+  - `SetActionIntent(Action, target)` logs what the character *intends* to do. It instantly synchronizes `CharacterVisual.SetLookAtTarget` and securely pushes the target change to the `CombatEngagementCoordinator` to keep group formations up-to-date even before the attack resolves.
   - `CombatAILogic.Tick(target)` is the shared brain for both Players and NPCs. It handles all tactical pacing. It moves the character into valid strike range (evaluating `MeleeRange`, X-depth limits `< 1.5f`, and Z-alignment `<= 1.5f`) and ONLY calls `ExecuteAction` when perfectly positioned and `IsReadyToAct` is true.
   - While waiting for Initiative, `CombatAILogic` pulls random safe fallback points using `CombatTacticalPacer.GetTacticalDestination()`.
-  - For standard hits, NPCs automatically pull intents when ready. Players strictly declare intents via `UI_CombatActionMenu`.
+  - For standard hits, NPCs automatically pull intents (and register them in Phase 1) when ready. Players strictly declare intents via `UI_CombatActionMenu`.
 
 ### 3. Weapons & Styles (3-Layer Architecture)
 

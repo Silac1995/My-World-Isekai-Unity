@@ -33,8 +33,17 @@ namespace MWI.AI
             var movement = _self.CharacterMovement;
             if (movement == null) return false;
 
-            if (currentTarget == null || !currentTarget.IsAlive())
+            bool doLog = UnityEngine.Time.frameCount % 60 == 0; // Log once a second per character
+
+            if (currentTarget == null)
             {
+                if (doLog) Debug.Log($"<color=red>[CombatAI]</color> {_self.CharacterName} target is NULL! Stopping movement.");
+                movement.Stop();
+                return true; 
+            }
+            if (!currentTarget.IsAlive())
+            {
+                if (doLog) Debug.Log($"<color=red>[CombatAI]</color> {_self.CharacterName} target {currentTarget.CharacterName} is DEAD! Stopping movement.");
                 movement.Stop();
                 return true; 
             }
@@ -49,54 +58,22 @@ namespace MWI.AI
             _isChargingTarget = false;
             
             // 1. AUTO-DECIDE INTENT (NPC at 70%)
-            float optimalXDist = Mathf.Max(1.0f, attackRange * 0.8f);
-
+            // The AI acts exactly like a Player pressing the "Attack" button -> it queues the intent immediately.
             if (_autoDecideIntent && isReadyToDecide && !_self.CharacterCombat.HasPlannedAction)
             {
-                if (_readyStartTime <= 0) _readyStartTime = UnityEngine.Time.time;
-                float timeReady = UnityEngine.Time.time - _readyStartTime;
-
-                float dx = Mathf.Abs(_self.transform.position.x - currentTarget.transform.position.x);
-                float zDist = Mathf.Abs(_self.transform.position.z - currentTarget.transform.position.z);
-                bool isWithinRange = distToTarget <= attackRange;
-                bool isXTooClose = dx < (optimalXDist * 0.7f);
-                bool isZAligned = zDist <= 0.6f;
-
-                if (!isWithinRange || isXTooClose || !isZAligned)
-                {
-                    _isChargingTarget = !isXTooClose;
-                }
-                else
-                {
-                    movement.Stop();
-                }
-
-                bool targetIsStationary = currentTarget.CharacterMovement != null && currentTarget.CharacterMovement.GetVelocity().sqrMagnitude < 0.01f;
-                bool forcedStrike = timeReady > 3.0f;
-                
-                bool targetIsAggressiveTowardsUs = false;
-                if (currentTarget.Controller is NPCController targetNpc && targetNpc.HasBehaviourTree && targetNpc.BehaviourTree.Blackboard != null)
-                {
-                    Character itsTarget = targetNpc.BehaviourTree.Blackboard.Get<Character>(Blackboard.KEY_COMBAT_TARGET);
-                    if (itsTarget == _self) targetIsAggressiveTowardsUs = true;
-                }
-                bool patienceThresholdMet = timeReady > 1.5f || targetIsAggressiveTowardsUs || forcedStrike;
-
-                if (isWithinRange && !isXTooClose && isZAligned && (targetIsStationary || patienceThresholdMet))
-                {
-                    movement.Stop();
-                    _self.CharacterVisual?.FaceTarget(currentTarget.transform.position);
-                    
-                    // Lock in the intent automatically!
-                    _self.CharacterCombat.SetActionIntent(() => _self.CharacterCombat.Attack(), currentTarget);
-                }
+                if (doLog) Debug.Log($"<color=orange>[CombatAI]</color> {_self.CharacterName} [Phase 1] Auto-deciding action: Attack Intent locked!");
+                _self.CharacterCombat.SetActionIntent(() => _self.CharacterCombat.Attack(), currentTarget);
             }
 
             // 2. EXECUTION PHASE (Player/NPC when an Intent is queued)
             if (_self.CharacterCombat != null && _self.CharacterCombat.HasPlannedAction)
             {
+                _isChargingTarget = true;
+                
+                float optimalXDist = Mathf.Max(1.0f, attackRange * 0.8f);
                 float dx = Mathf.Abs(_self.transform.position.x - currentTarget.transform.position.x);
                 float zDist = Mathf.Abs(_self.transform.position.z - currentTarget.transform.position.z);
+                
                 bool isWithinRange = distToTarget <= attackRange; 
                 bool isXTooClose = dx < (optimalXDist * 0.7f);
                 bool isZAligned = zDist <= 0.6f;
@@ -109,6 +86,7 @@ namespace MWI.AI
 
                     if (UnityEngine.Time.time - _lastPathUpdateTime > 0.3f && Vector3.Distance(movement.Destination, optimalStrikePos) > 0.5f)
                     {
+                        if (doLog) Debug.Log($"<color=orange>[CombatAI]</color> {_self.CharacterName} [Phase 2] Moving into optimal strike pos: {optimalStrikePos}");
                         movement.SetDestination(optimalStrikePos);
                         _lastPathUpdateTime = UnityEngine.Time.time;
                     }
@@ -121,28 +99,38 @@ namespace MWI.AI
 
                     if (isReadyToAct)
                     {
+                        if (doLog) Debug.Log($"<color=orange>[CombatAI]</color> {_self.CharacterName} [Phase 2] Executing Action!");
                         _self.CharacterCombat.ExecuteAction(_self.CharacterCombat.PlannedAction);
-                        _self.CharacterCombat.ClearActionIntent();
-                        _readyStartTime = 0;
+                        
+                        // Only clear the intent automatically if this is an AI deciding its own actions.
+                        // For the player, the intent remains queued until toggled off, creating an auto-attack loop!
+                        if (_autoDecideIntent)
+                        {
+                            _self.CharacterCombat.ClearActionIntent();
+                        }
                         return true;
+                    }
+                    else
+                    {
+                        if (doLog) Debug.Log($"<color=orange>[CombatAI]</color> {_self.CharacterName} [Phase 2] In position but waiting for full initiative (isReadyToAct).");
                     }
                 }
             }
             else
             {
                 // 3. CLEANUP & PACING FALLBACK (Only tactical movement when NO ACTION is planned)
-                if (!isReadyToDecide || !_autoDecideIntent)
-                {
-                    _readyStartTime = 0;
-                }
-
-                // Apply Tactics safely
-                Vector3 finalPos = _combatPacer.GetTacticalDestination(currentTarget, attackRange, false);
+                // Apply Tactics safely. Use _isChargingTarget to let the pacer know if we are aggressive or retreating.
+                Vector3 finalPos = _combatPacer.GetTacticalDestination(currentTarget, attackRange, _isChargingTarget);
                 
                 if (UnityEngine.Time.time - _lastPathUpdateTime > 0.5f && Vector3.Distance(movement.Destination, finalPos) > 0.5f)
                 {
+                    if (doLog) Debug.Log($"<color=orange>[CombatAI]</color> {_self.CharacterName} [Phase 3] Dispatching to Tactical Dest: {finalPos}");
                     movement.SetDestination(finalPos);
                     _lastPathUpdateTime = UnityEngine.Time.time;
+                }
+                else
+                {
+                    if (doLog) Debug.Log($"<color=orange>[CombatAI]</color> {_self.CharacterName} [Phase 3] Not enough time passed to re-path, or already near destination. Distance: {Vector3.Distance(movement.Destination, finalPos)}");
                 }
             }
 

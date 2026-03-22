@@ -33,6 +33,7 @@ public class BattleManager : MonoBehaviour
 
     public List<BattleTeam> BattleTeams => _teams;
     public bool IsBattleEnded => _isBattleEnded;
+    public CombatEngagementCoordinator Coordinator => _engagementCoordinator;
 
     public void Initialize(Character initiator, Character target)
     {

@@ -43,6 +43,17 @@ public class CharacterCombat : CharacterSystem
     {
         PlannedAction = action;
         PlannedTarget = target;
+        
+        if (_character != null && _character.CharacterVisual != null)
+        {
+            _character.CharacterVisual.SetLookTarget(target);
+        }
+
+        if (target != null && IsInBattle && CurrentBattleManager != null && CurrentBattleManager.Coordinator != null)
+        {
+            CurrentBattleManager.Coordinator.RequestEngagement(_character, target);
+        }
+
         OnActionIntentDecided?.Invoke(target, action);
     }
 
@@ -50,6 +61,11 @@ public class CharacterCombat : CharacterSystem
     {
         PlannedAction = null;
         PlannedTarget = null;
+        
+        if (_character != null && _character.CharacterVisual != null)
+        {
+            _character.CharacterVisual.ClearLookTarget();
+        }
     }
 
     public bool HasPlannedAction => PlannedAction != null;
