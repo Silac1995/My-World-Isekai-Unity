@@ -498,6 +498,9 @@ public class Character : MonoBehaviour
         ConfigureNavMesh(isNPC);
     }
 
+    // Stores the original interpolation mode so we can restore it when returning to Player control
+    private RigidbodyInterpolation _savedInterpolation = RigidbodyInterpolation.None;
+
     public void ConfigureNavMesh(bool enabled)
     {
         if (_cachedNavMeshAgent == null) return;
@@ -510,6 +513,11 @@ public class Character : MonoBehaviour
                 _rb.linearVelocity = Vector3.zero;
                 _rb.angularVelocity = Vector3.zero;
                 _rb.isKinematic = true;
+                
+                // CRITICAL FIX: Interpolation on a kinematic rigidbody fights the NavMeshAgent's translation,
+                // causing extreme stutter and slow movement. We must disable it while the agent controls the transform.
+                _savedInterpolation = _rb.interpolation;
+                _rb.interpolation = RigidbodyInterpolation.None;
             }
 
             // 2. Enable and configure agent
@@ -532,6 +540,7 @@ public class Character : MonoBehaviour
             if (_rb != null && _controller is PlayerController) // Keep NPCs kinematic
             {
                 _rb.isKinematic = false;
+                _rb.interpolation = _savedInterpolation; // Restore smooth WASD movement
             }
         }
     }

@@ -101,6 +101,9 @@ public class PlayerController : CharacterGameController
 
     protected override void UpdateFlip()
     {
+        // CombatAILogic strictly handles facing the target during combat. Do not override it.
+        if (_currentOrder is PlayerCombatCommand) return;
+
         if (_inputDir.x != 0)
         {
             _characterVisual?.UpdateFlip(_inputDir);

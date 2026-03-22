@@ -31,10 +31,11 @@ This is the component every NPC/Player has in order to fight.
   - The `.IsReadyToAct` method checks if the Initiative (in Stats) is full.
   - The `.ConsumeInitiative()` method resets initiative to 0 after a successful attack.
   - The `.UpdateInitiativeTick(amount)` method is **called by the BattleManager** to fill the bar.
-- **Attack(target)**: Dynamic choice. 
-  - If the character has a `RangedCombatStyleSO` equipped AND the target is beyond `MeleeRange`, it performs a `RangedAttack()`.
-  - Otherwise, it performs a `MeleeAttack()`.
-  - Note: Ranged weapons fallback to Melee at close range (e.g., hitting someone with a bow).
+- **Action Intent & Execution (`CombatAILogic.cs`)**: Actions are no longer executed blindly by UI buttons or Behaviour Trees.
+  - `SetActionIntent(Action, target)` logs what the character *intends* to do.
+  - `CombatAILogic.Tick(target)` is the shared brain for both Players and NPCs. It handles all tactical pacing. It moves the character into valid strike range (evaluating `MeleeRange`, X-depth limits `< 1.5f`, and Z-alignment `<= 1.5f`) and ONLY calls `ExecuteAction` when perfectly positioned and `IsReadyToAct` is true.
+  - While waiting for Initiative, `CombatAILogic` pulls random safe fallback points using `CombatTacticalPacer.GetTacticalDestination()`.
+  - For standard hits, NPCs automatically pull intents when ready. Players strictly declare intents via `UI_CombatActionMenu`.
 
 ### 3. Weapons & Styles (3-Layer Architecture)
 
