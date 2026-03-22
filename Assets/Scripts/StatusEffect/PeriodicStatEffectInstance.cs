@@ -27,9 +27,9 @@ public class PeriodicStatEffectInstance : StatusEffectInstance
     {
         timer += deltaTime;
         
-        if (timer >= 1f)
+        int ticksToProcess = Mathf.FloorToInt(timer);
+        if (ticksToProcess > 0)
         {
-            float amountToApply = valuePerSecond * Mathf.Floor(timer);
             timer %= 1f;
 
             if (target != null && target.Stats != null)
@@ -38,21 +38,24 @@ public class PeriodicStatEffectInstance : StatusEffectInstance
                 
                 if (stat is CharacterPrimaryStats primaryStat)
                 {
-                    float finalAmount = amountToApply;
+                    float singleTickAmount = valuePerSecond;
                     if (sourceEffect.IsPercentage)
                     {
-                        finalAmount = (amountToApply / 100f) * primaryStat.MaxValue;
+                        singleTickAmount = (valuePerSecond / 100f) * primaryStat.MaxValue;
                     }
 
-                    if (finalAmount > 0)
+                    for (int i = 0; i < ticksToProcess; i++)
                     {
-                        primaryStat.IncreaseCurrentAmount(finalAmount);
-                        Debug.Log($"<color=green>[Status]</color> Regénération périodique sur {target.name} : +{finalAmount:F2} {sourceEffect.TargetStat}. Nouveau montant : {primaryStat.CurrentAmount:F1}/{primaryStat.CurrentValue}");
-                    }
-                    else if (finalAmount < 0)
-                    {
-                        primaryStat.DecreaseCurrentAmount(-finalAmount);
-                        Debug.Log($"<color=red>[Status]</color> Dégâts périodiques sur {target.name} : {finalAmount:F2} {sourceEffect.TargetStat}. Nouveau montant : {primaryStat.CurrentAmount:F1}/{primaryStat.CurrentValue}");
+                        if (singleTickAmount > 0)
+                        {
+                            primaryStat.IncreaseCurrentAmount(singleTickAmount);
+                            Debug.Log($"<color=green>[Status]</color> Regénération périodique sur {target.name} : +{singleTickAmount:F2} {sourceEffect.TargetStat}. Nouveau montant : {primaryStat.CurrentAmount:F1}/{primaryStat.CurrentValue}");
+                        }
+                        else if (singleTickAmount < 0)
+                        {
+                            primaryStat.DecreaseCurrentAmount(-singleTickAmount);
+                            Debug.Log($"<color=red>[Status]</color> Dégâts périodiques sur {target.name} : {singleTickAmount:F2} {sourceEffect.TargetStat}. Nouveau montant : {primaryStat.CurrentAmount:F1}/{primaryStat.CurrentValue}");
+                        }
                     }
                 }
                 else

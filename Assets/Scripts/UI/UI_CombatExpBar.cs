@@ -94,7 +94,7 @@ public class UI_CombatExpBar : MonoBehaviour
         // Add Experience behaves like a "heal" in visual terms (fills up)
         if (newFill > _currentFill)
         {
-            OnExperienceGained();
+            OnExperienceGained(newFill >= 0.999f);
         }
         else if (newFill < _currentFill)
         {
@@ -113,7 +113,7 @@ public class UI_CombatExpBar : MonoBehaviour
         AnimateToShader();
 
         if (_levelUpCoroutine != null) StopCoroutine(_levelUpCoroutine);
-        _levelUpCoroutine = StartCoroutine(LevelUpFlashRoutine());
+        _levelUpCoroutine = StartCoroutine(LevelUpFlashRoutine(true));
     }
 
     // ── Visual effects ────────────────────────────────────
@@ -129,7 +129,7 @@ public class UI_CombatExpBar : MonoBehaviour
         _ghostCoroutine = StartCoroutine(GhostDrainRoutine());
     }
 
-    private void OnExperienceGained()
+    private void OnExperienceGained(bool isMax)
     {
         if (_instancedMaterial == null) return;
 
@@ -137,7 +137,7 @@ public class UI_CombatExpBar : MonoBehaviour
         // We will sync it with the primary fill animation so it doesn't pop ahead.
 
         if (_levelUpCoroutine != null) StopCoroutine(_levelUpCoroutine);
-        _levelUpCoroutine = StartCoroutine(LevelUpFlashRoutine()); // Flash briefly when gaining exp
+        _levelUpCoroutine = StartCoroutine(LevelUpFlashRoutine(isMax)); // Flash briefly when gaining exp
     }
 
     // ── Coroutines ───────────────────────────────────────────────
@@ -160,8 +160,15 @@ public class UI_CombatExpBar : MonoBehaviour
         _ghostCoroutine = null;
     }
 
-    private IEnumerator LevelUpFlashRoutine()
+    private IEnumerator LevelUpFlashRoutine(bool withSparkles)
     {
+        if (withSparkles && _barImage != null)
+        {
+            // Spawns a procedural GPU Shader explosion over the bar.
+            // Will only render locally on this canvas, avoiding multiplayer syncing overhead.
+            UI_SparkleBurst.Spawn(_barImage.rectTransform, _expColor, 0.6f);
+        }
+
         float elapsed = 0f;
         float duration = _levelUpFlashDuration;
 
