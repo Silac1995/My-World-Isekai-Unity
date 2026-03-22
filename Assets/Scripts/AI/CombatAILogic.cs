@@ -49,6 +49,8 @@ namespace MWI.AI
             _isChargingTarget = false;
             
             // 1. AUTO-DECIDE INTENT (NPC at 70%)
+            float optimalXDist = Mathf.Max(1.0f, attackRange * 0.8f);
+
             if (_autoDecideIntent && isReadyToDecide && !_self.CharacterCombat.HasPlannedAction)
             {
                 if (_readyStartTime <= 0) _readyStartTime = UnityEngine.Time.time;
@@ -56,9 +58,9 @@ namespace MWI.AI
 
                 float dx = Mathf.Abs(_self.transform.position.x - currentTarget.transform.position.x);
                 float zDist = Mathf.Abs(_self.transform.position.z - currentTarget.transform.position.z);
-                bool isWithinRange = distToTarget <= (attackRange * 0.9f);
-                bool isXTooClose = dx < 1.5f;
-                bool isZAligned = zDist <= 1.5f;
+                bool isWithinRange = distToTarget <= attackRange;
+                bool isXTooClose = dx < (optimalXDist * 0.7f);
+                bool isZAligned = zDist <= 0.6f;
 
                 if (!isWithinRange || isXTooClose || !isZAligned)
                 {
@@ -80,7 +82,7 @@ namespace MWI.AI
                 }
                 bool patienceThresholdMet = timeReady > 1.5f || targetIsAggressiveTowardsUs || forcedStrike;
 
-                if (distToTarget <= attackRange && zDist <= 1.5f && (targetIsStationary || patienceThresholdMet))
+                if (isWithinRange && !isXTooClose && isZAligned && (targetIsStationary || patienceThresholdMet))
                 {
                     movement.Stop();
                     _self.CharacterVisual?.FaceTarget(currentTarget.transform.position);
@@ -95,16 +97,19 @@ namespace MWI.AI
             {
                 float dx = Mathf.Abs(_self.transform.position.x - currentTarget.transform.position.x);
                 float zDist = Mathf.Abs(_self.transform.position.z - currentTarget.transform.position.z);
-                bool isWithinRange = distToTarget <= (attackRange * 0.9f); // Slightly inner range to ensure solid hit
-                bool isXTooClose = dx < 1.5f;
-                bool isZAligned = zDist <= 1.5f;
+                bool isWithinRange = distToTarget <= attackRange; 
+                bool isXTooClose = dx < (optimalXDist * 0.7f);
+                bool isZAligned = zDist <= 0.6f;
 
                 if (!isWithinRange || isXTooClose || !isZAligned)
                 {
-                    // Force movement into valid strike position
-                    if (UnityEngine.Time.time - _lastPathUpdateTime > 0.3f && Vector3.Distance(movement.Destination, currentTarget.transform.position) > 0.5f)
+                    // Force movement into optimal valid strike position instead of target origin
+                    float side = (_self.transform.position.x < currentTarget.transform.position.x) ? -1f : 1f;
+                    Vector3 optimalStrikePos = currentTarget.transform.position + new Vector3(side * optimalXDist, 0, 0);
+
+                    if (UnityEngine.Time.time - _lastPathUpdateTime > 0.3f && Vector3.Distance(movement.Destination, optimalStrikePos) > 0.5f)
                     {
-                        movement.SetDestination(currentTarget.transform.position);
+                        movement.SetDestination(optimalStrikePos);
                         _lastPathUpdateTime = UnityEngine.Time.time;
                     }
                 }

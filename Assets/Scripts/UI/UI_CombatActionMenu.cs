@@ -11,7 +11,6 @@ public class UI_CombatActionMenu : MonoBehaviour
 
     private Character _character;
     private CharacterCombat _characterCombat;
-    private CharacterInitiative _initiativeStat;
 
     public void Initialize(Character character)
     {
@@ -21,10 +20,6 @@ public class UI_CombatActionMenu : MonoBehaviour
         if (_character != null)
         {
             _characterCombat = _character.CharacterCombat;
-            if (_character.Stats != null)
-            {
-                _initiativeStat = _character.Stats.Initiative;
-            }
 
             if (_characterCombat != null)
             {
@@ -43,8 +38,8 @@ public class UI_CombatActionMenu : MonoBehaviour
 
     private void Update()
     {
-        // Continuously check initiative and combat status to toggle the menu
         UpdateMenuVisibility();
+        UpdateVisuals();
     }
 
     private void HandleCombatModeChanged(bool isInCombat)
@@ -54,32 +49,41 @@ public class UI_CombatActionMenu : MonoBehaviour
 
     private void UpdateMenuVisibility()
     {
-        if (_character == null || _characterCombat == null || _initiativeStat == null || _menuContainer == null)
+        if (_character == null || _characterCombat == null || _menuContainer == null)
         {
             if (_menuContainer != null) _menuContainer.SetActive(false);
             return;
         }
 
-        // Only show if in battle and initiative is ready
-        bool shouldShow = _characterCombat.IsInBattle && _initiativeStat.IsReady();
+        // Only show if in battle
+        bool shouldShow = _characterCombat.IsInBattle;
         
         if (_menuContainer.activeSelf != shouldShow)
         {
             _menuContainer.SetActive(shouldShow);
         }
+    }
 
-        if (shouldShow && _attackButtonText != null)
+    private void UpdateVisuals()
+    {
+        if (!_menuContainer.activeSelf || _attackButtonText == null || _characterCombat == null) return;
+
+        bool hasIntent = _characterCombat.HasPlannedAction;
+        
+        string baseText = "Melee Attack";
+        if (_characterCombat.CurrentCombatStyleExpertise != null && 
+            _characterCombat.CurrentCombatStyleExpertise.Style is RangedCombatStyleSO)
         {
-            // Dynamic attack text based on weapon
-            if (_characterCombat.CurrentCombatStyleExpertise != null && 
-                _characterCombat.CurrentCombatStyleExpertise.Style is RangedCombatStyleSO)
-            {
-                _attackButtonText.text = "Ranged Attack";
-            }
-            else
-            {
-                _attackButtonText.text = "Melee Attack";
-            }
+            baseText = "Ranged Attack";
+        }
+
+        if (hasIntent)
+        {
+            _attackButtonText.text = $"<color=yellow>{baseText} [Queued]</color>";
+        }
+        else
+        {
+            _attackButtonText.text = baseText;
         }
     }
 
@@ -87,15 +91,17 @@ public class UI_CombatActionMenu : MonoBehaviour
     {
         if (_character == null || _characterCombat == null) return;
 
+        // Toggle logic: if an action is already queued, cancel it.
+        if (_characterCombat.HasPlannedAction)
+        {
+            _characterCombat.ClearActionIntent();
+            return;
+        }
+
         Character target = _characterCombat.CurrentBattleManager?.GetBestTargetFor(_character);
         
         // Instead of executing immediately, we lock the intent.
-        // The shared CombatAILogic in the PlayerController will smoothly navigate the player into precise range 
-        // to execute this intent!
         _characterCombat.SetActionIntent(() => _characterCombat.Attack(target), target);
-        
-        // Hide immediately to prevent double clicks
-        if (_menuContainer != null) _menuContainer.SetActive(false);
     }
 
     private void Unsubscribe()
