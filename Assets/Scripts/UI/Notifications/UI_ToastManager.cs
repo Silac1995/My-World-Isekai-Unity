@@ -53,7 +53,8 @@ namespace MWI.UI.Notifications
 
         private UI_ToastElement CreatePooledElement()
         {
-            UI_ToastElement newToast = Instantiate(_toastPrefab, _toastContainer);
+            // The 'false' parameter prevents the Canvas Scaler from squishing the RectTransform scale!
+            UI_ToastElement newToast = Instantiate(_toastPrefab, _toastContainer, false);
             newToast.gameObject.SetActive(false);
             _toastPool.Enqueue(newToast);
             return newToast;

@@ -75,7 +75,7 @@ namespace MWI.UI
             // Populate UI data
             if (_titleText != null)
             {
-                _titleText.text = "New Invitation";
+                _titleText.text = source.CharacterName;
                 _titleText.gameObject.SetActive(true);
             }
 
@@ -104,6 +104,7 @@ namespace MWI.UI
 
         private void OnAcceptClicked()
         {
+            Debug.Log("<color=cyan>[UI_InvitationPrompt]</color> OnAcceptClicked FIRED.");
             if (_currentCharacterInvitation != null)
             {
                 _currentCharacterInvitation.ResolvePlayerInvitation(true);
@@ -113,6 +114,7 @@ namespace MWI.UI
 
         private void OnRefuseClicked()
         {
+            Debug.Log("<color=cyan>[UI_InvitationPrompt]</color> OnRefuseClicked FIRED.");
             if (_currentCharacterInvitation != null)
             {
                 _currentCharacterInvitation.ResolvePlayerInvitation(false);
