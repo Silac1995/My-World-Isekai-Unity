@@ -15,14 +15,23 @@ public class UI_TargetIndicator : MonoBehaviour
     [Tooltip("How far the indicator floats up and down (in Canvas pixels).")]
     [SerializeField] private float _bobAmplitude = 10.0f;
 
+    private void EnsureInitialized()
+    {
+        if (_image == null)
+        {
+            _image = GetComponent<Image>();
+            if (_image != null && _image.material != null)
+            {
+                _instancedMaterial = new Material(_image.material);
+                _image.material = _instancedMaterial;
+                ApplyAnimationSettings();
+            }
+        }
+    }
+
     private void Awake()
     {
-        _image = GetComponent<Image>();
-        _instancedMaterial = new Material(_image.material);
-        _image.material = _instancedMaterial;
-
-        // Apply initial animation settings from Inspector
-        ApplyAnimationSettings();
+        EnsureInitialized();
     }
 
     private void OnValidate()
@@ -75,6 +84,8 @@ public class UI_TargetIndicator : MonoBehaviour
     {
         if (max <= 0) return;
         float percent = current / max;
+        
+        EnsureInitialized();
         
         if (_instancedMaterial != null)
         {
