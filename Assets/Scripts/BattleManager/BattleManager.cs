@@ -111,19 +111,21 @@ public class BattleManager : NetworkBehaviour
     private void Update()
     {
         if (_isBattleEnded) return;
-        if (!IsServer) return; // Seul le serveur gère la logique de combat
 
         // --- NOUVEAU : VERIFICATION DE FIN DE COMBAT EN CONTINU ---
-        // S'assure que le combat s'arrête instantanément même si un objet est détruit
-        // silencieusement sans tirer l'événement OnIncapacitated.
-        if (_battleTeamInitiator.IsTeamEliminated() || _battleTeamTarget.IsTeamEliminated())
+        // Seul le serveur valide la fin du combat.
+        if (IsServer)
         {
-            Debug.Log($"<color=red>[Battle]</color> Elimination globale détectée. Fin du combat.");
-            EndBattle();
-            return;
+            if (_battleTeamInitiator.IsTeamEliminated() || _battleTeamTarget.IsTeamEliminated())
+            {
+                Debug.Log($"<color=red>[Battle]</color> Elimination globale détectée. Fin du combat.");
+                EndBattle();
+                return;
+            }
         }
 
-        // Gestion du temps de combat (Ticks d'initiative)
+        // Ticks d'initiative autorisés sur TOUS les clients pour la prédiction locale !
+        // Gestion du temps de combat 
         _tickTimer += Time.deltaTime;
         float tickPeriod = 1f / _ticksPerSecond;
 

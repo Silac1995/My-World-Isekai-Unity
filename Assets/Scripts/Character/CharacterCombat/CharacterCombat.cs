@@ -527,9 +527,32 @@ public class CharacterCombat : CharacterSystem
         {
             attackScript.Initialize(_character, _bonusMeleeMaxTargets);
         }
+
+        // --- SAFETY TIMEOUT ---
+        // Ensure the hitbox gets destroyed anyway if the despawn animation event is interrupted (stun, death, lag)
+        Destroy(_activeCombatStyleInstance, 2.0f);
     }
 
     public void DespawnCombatStyleAttackInstance()
+    {
+        if (IsOwner && !IsServer)
+        {
+            RequestDespawnHitboxServerRpc();
+        }
+
+        if (IsServer)
+        {
+            DespawnHitboxNatively();
+        }
+    }
+
+    [Rpc(SendTo.Server)]
+    private void RequestDespawnHitboxServerRpc()
+    {
+        DespawnHitboxNatively();
+    }
+
+    private void DespawnHitboxNatively()
     {
         if (_activeCombatStyleInstance != null)
         {

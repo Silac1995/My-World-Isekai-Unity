@@ -16,10 +16,9 @@ public class NPCController : CharacterGameController
 
     [Header("AI Controllers")]
     [SerializeField] private NPCBehaviourTree _behaviourTree;
-    [SerializeField] private CharacterGoapController _goapController;
 
     public NPCBehaviourTree BehaviourTree => _behaviourTree;
-    public CharacterGoapController GoapController => _goapController;
+    public CharacterGoapController GoapController => _character != null ? _character.CharacterGoap : null;
     public bool HasBehaviourTree => _behaviourTree != null;
 
     // --- LEGACY AI STACK (To be removed in Phase 4) ---
@@ -48,14 +47,6 @@ public class NPCController : CharacterGameController
             _behaviourTree = GetComponentInParent<NPCBehaviourTree>();
             if (_behaviourTree == null)
                 _behaviourTree = GetComponent<NPCBehaviourTree>();
-        }
-
-        // Chercher le GoapController sur le même GameObject si pas assigné dans l'inspecteur
-        if (_goapController == null)
-        {
-            _goapController = GetComponentInParent<CharacterGoapController>();
-            if (_goapController == null)
-                _goapController = GetComponent<CharacterGoapController>();
         }
 
         if (HasBehaviourTree)
