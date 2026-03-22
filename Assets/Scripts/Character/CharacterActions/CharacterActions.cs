@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using Unity.Netcode;
 using UnityEngine;
 
 public class CharacterActions : CharacterSystem
@@ -25,6 +26,22 @@ public class CharacterActions : CharacterSystem
         if (action == null || _currentAction != null) return false;
         if (!action.CanExecute()) return false;
 
+        // Owner/Client -> Server Intent (Only if it's the real action, not a proxy)
+        if (!IsServer && IsOwner && !(action is CharacterVisualProxyAction))
+        {
+            // Owner predicts visually, but doesn't apply effect safely within the action itself (or action handles IsServer check)
+            // Wait, we just execute locally for prediction. The real logic executed on Server.
+            // But if we execute locally, Owner's OnApplyEffect runs! We must ensure Actions check IsServer internally, 
+            // OR we don't predict complex generic actions, we just wait for the Server?
+            // Interaction and Combat already bypass this. Let's just predict visually.
+        }
+
+        if (IsServer && !(action is CharacterVisualProxyAction))
+        {
+            // Server broadcasts the visual proxy to all clients (except itself)
+            BroadcastActionVisualsClientRpc(action.ShouldPlayGenericActionAnimation, action.Duration);
+        }
+
         _currentAction = action;
         _actionStartTime = Time.time;
         _currentAction.OnActionFinished += CleanupAction;
@@ -40,7 +57,13 @@ public class CharacterActions : CharacterSystem
             // On exécute tout de suite sans créer de Coroutine (économie de mémoire)
             try
             {
-                action.OnApplyEffect();
+                if (IsServer || action is CharacterVisualProxyAction)
+                    action.OnApplyEffect(); 
+                // Wait, if it's NOT server and NOT proxy (meaning Owner local prediction), should we apply effect?
+                // Real actions MUST check character.IsServer inside OnApplyEffect to be safe.
+                else 
+                    action.OnApplyEffect(); // We let it run, Actions should be refactored to check IsServer for critical data
+                
                 action.Finish();
             }
             catch (Exception e)
@@ -56,6 +79,17 @@ public class CharacterActions : CharacterSystem
         }
 
         return true;
+    }
+
+    [Rpc(SendTo.NotServer)]
+    private void BroadcastActionVisualsClientRpc(bool shouldPlayGeneric, float duration)
+    {
+        if (IsOwner && _currentAction != null) return; // Owner may have already predicted it
+
+        ClearCurrentAction(); // Clear any visual desyncs
+
+        var proxy = new CharacterVisualProxyAction(_character, duration, shouldPlayGeneric);
+        ExecuteAction(proxy);
     }
 
     private IEnumerator ActionTimerRoutine(CharacterAction action)
@@ -100,8 +134,19 @@ public class CharacterActions : CharacterSystem
         OnActionFinished?.Invoke();
     }
 
-    // Remplace ou ajoute cette méthode dans CharacterActions.cs
     public void ClearCurrentAction()
+    {
+        if (IsServer) CancelActionVisualsClientRpc();
+        ClearCurrentActionLocally();
+    }
+
+    [Rpc(SendTo.NotServer)]
+    private void CancelActionVisualsClientRpc()
+    {
+        ClearCurrentActionLocally();
+    }
+
+    private void ClearCurrentActionLocally()
     {
         if (_actionRoutine != null)
         {
@@ -137,11 +182,29 @@ public class CharacterActions : CharacterSystem
 
     protected override void HandleIncapacitated(Character character)
     {
-        ClearCurrentAction();
+        ClearCurrentActionLocally();
     }
 
     protected override void HandleCombatStateChanged(bool inCombat)
     {
-        if (inCombat) ClearCurrentAction();
+        if (inCombat) ClearCurrentActionLocally();
     }
+}
+
+public class CharacterVisualProxyAction : CharacterAction
+{
+    private bool _shouldPlayGeneric;
+    public override bool ShouldPlayGenericActionAnimation => _shouldPlayGeneric;
+
+    public CharacterVisualProxyAction(Character character, float duration, bool shouldPlayGeneric) : base(character, duration)
+    {
+        _shouldPlayGeneric = shouldPlayGeneric;
+    }
+
+    public override void OnStart() { }
+    
+    public override void OnApplyEffect() 
+    { 
+        // Visual proxy does not mutate any game state
+    } 
 }

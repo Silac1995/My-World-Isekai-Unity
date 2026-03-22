@@ -1,4 +1,5 @@
 using System;
+using Unity.Netcode;
 using UnityEngine;
 
 public class CharacterInteraction : CharacterSystem
@@ -78,6 +79,16 @@ public class CharacterInteraction : CharacterSystem
     {
         if (target == null || _currentTarget == target) return false;
         
+        if (IsOwner && !IsServer)
+        {
+            ulong targetId = target.NetworkObject != null ? target.NetworkObject.NetworkObjectId : 0;
+            string actionType = forcedFirstAction != null ? forcedFirstAction.GetType().AssemblyQualifiedName : "";
+            RequestStartInteractionServerRpc(targetId, actionType);
+            return true;
+        }
+
+        if (!IsServer && !IsOwner) return false; // Non-authoritative entity cannot dictate interactions
+
         // --- SÉCURITÉ : Personnages occupés ou incapacités ---
         if (!_character.IsFree())
         {
@@ -97,6 +108,8 @@ public class CharacterInteraction : CharacterSystem
         {
             // Arrêter l'animation de marche immédiatement
             _character.CharacterVisual?.CharacterAnimator?.StopLocomotion();
+            
+            if (_character.Controller != null) _character.Controller.Freeze();
 
             // --- NOUVEAU: S'abonner à l'état de la cible pour annuler si elle devient occupée ---
             if (_pendingTarget != null)
@@ -116,6 +129,45 @@ public class CharacterInteraction : CharacterSystem
             ExecuteInteraction(target, forcedFirstAction, onPositioned);
         }
         return true;
+    }
+
+    [Rpc(SendTo.Server)]
+    private void RequestStartInteractionServerRpc(ulong targetId, string forcedActionType)
+    {
+        if (NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(targetId, out var netObj))
+        {
+            Character target = netObj.GetComponent<Character>();
+            
+            ICharacterInteractionAction action = null;
+            if (!string.IsNullOrEmpty(forcedActionType))
+            {
+                Type type = Type.GetType(forcedActionType);
+                if (type != null) action = (ICharacterInteractionAction)Activator.CreateInstance(type);
+            }
+            StartInteractionWith(target, action, null);
+        }
+    }
+
+    [Rpc(SendTo.Server)]
+    internal void RequestInvitationServerRpc(ulong targetId, string invitationType)
+    {
+        if (NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(targetId, out var netObj))
+        {
+            Character target = netObj.GetComponent<Character>();
+            
+            if (target != null && !string.IsNullOrEmpty(invitationType))
+            {
+                Type type = Type.GetType(invitationType);
+                if (type != null) 
+                {
+                    var invitation = (InteractionInvitation)Activator.CreateInstance(type);
+                    if (invitation.CanExecute(_character, target))
+                    {
+                        invitation.Execute(_character, target);
+                    }
+                }
+            }
+        }
     }
 
     private void CalculateValidMeetingPositions(Character initiator, Character target, out Vector3 initiatorMeetingPos, out Vector3 targetMeetingPos)
@@ -331,6 +383,8 @@ public class CharacterInteraction : CharacterSystem
         SetPositioned(false);
         _character.CharacterVisual?.CharacterAnimator?.StopLocomotion();
         
+        if (_character.Controller != null) _character.Controller.Freeze();
+        
         if (_activeDialogueCoroutine != null) StopCoroutine(_activeDialogueCoroutine);
         _activeDialogueCoroutine = StartCoroutine(TargetPositioningRoutine(targetMeetingPos, initiator));
     }
@@ -399,6 +453,13 @@ public class CharacterInteraction : CharacterSystem
                 }
             }
 
+            if (movement != null && MWI.AI.NavMeshUtility.HasPathFailed(movement, lastRouteRequestTime, 0.4f))
+            {
+                Debug.LogWarning($"<color=orange>[Interaction]</color> Path Failed pour { _character.CharacterName } (cible inatteignable).");
+                EndInteraction();
+                yield break;
+            }
+
             yield return null;
         }
     }
@@ -440,10 +501,42 @@ public class CharacterInteraction : CharacterSystem
         if (target.Controller != null && !target.IsPlayer()) target.Controller.Freeze();
         if (_character.Controller != null && !_character.IsPlayer()) _character.Controller.Freeze();
 
+        ulong targetId = target.NetworkObject != null ? target.NetworkObject.NetworkObjectId : 0;
+        SyncInteractionStateClientRpc(targetId, true);
+
         if (_activeDialogueCoroutine != null) StopCoroutine(_activeDialogueCoroutine);
         _activeDialogueCoroutine = StartCoroutine(DialogueSequence(_character, target, forcedFirstAction));
         
         onPositioned?.Invoke();
+    }
+
+    [Rpc(SendTo.NotServer)]
+    private void SyncInteractionStateClientRpc(ulong targetId, bool isInteracting)
+    {
+        Character target = null;
+        if (targetId > 0 && NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(targetId, out var netObj))
+            target = netObj.GetComponent<Character>();
+
+        if (isInteracting)
+        {
+            CurrentTarget = target;
+            IsPositioned = true;
+            IsPositioning = false;
+            _character.CharacterVisual?.SetLookTarget(target);
+            OnInteractionStateChanged?.Invoke(target, true);
+        }
+        else
+        {
+            Character previousTarget = _currentTarget;
+            _currentTarget = null;
+            IsPositioned = false;
+            IsPositioning = false;
+            _playerPendingAction = null;
+            
+            if (_character.IsPlayer()) OnPlayerTurnEnded?.Invoke(previousTarget);
+            OnInteractionStateChanged?.Invoke(previousTarget, false);
+            _character.CharacterVisual?.ClearLookTarget();
+        }
     }
 
     private System.Collections.IEnumerator DialogueSequence(Character initiator, Character target, ICharacterInteractionAction forcedFirstAction = null)
@@ -472,9 +565,12 @@ public class CharacterInteraction : CharacterSystem
             }
             else if (currentSpeaker.IsPlayer())
             {
-                // Fire events on the PLAYER'S CharacterInteraction so PlayerInteractionDetector receives them
                 var playerInteraction = currentSpeaker.CharacterInteraction;
-                playerInteraction.NotifyPlayerTurnStarted(currentListener);
+                
+                // Trigger Owner Client's UI Native Timer and Event
+                ulong listenerId = currentListener.NetworkObject != null ? currentListener.NetworkObject.NetworkObjectId : 0;
+                playerInteraction.NotifyPlayerTurnStartedClientRpc(listenerId);
+                
                 playerInteraction._playerPendingAction = null;
                 float waitTimer = 0f;
                 const float PLAYER_WAIT_DELAY = 8f;
@@ -482,12 +578,11 @@ public class CharacterInteraction : CharacterSystem
                 while (playerInteraction._playerPendingAction == null && IsInteracting && waitTimer < PLAYER_WAIT_DELAY)
                 {
                     waitTimer += Time.deltaTime;
-                    float normalized = Mathf.Clamp01(1f - (waitTimer / PLAYER_WAIT_DELAY));
-                    playerInteraction.NotifyPlayerTurnTimerUpdated(normalized);
+                    // Note: Client UI ticks its own timer natively. We just wait on the server.
                     yield return null;
                 }
 
-                playerInteraction.NotifyPlayerTurnEnded(currentListener);
+                playerInteraction.NotifyPlayerTurnEndedClientRpc(listenerId);
 
                 if (!IsInteracting || playerInteraction._playerPendingAction == null)
                 {
@@ -566,6 +661,45 @@ public class CharacterInteraction : CharacterSystem
 
         Debug.Log($"<color=cyan>[Dialogue]</color> Fin de la séquence après {totalExchanges} échanges.");
         EndInteraction();
+    }
+
+    private Coroutine _clientTimerCoroutine;
+
+    [Rpc(SendTo.Owner)]
+    private void NotifyPlayerTurnStartedClientRpc(ulong listenerId)
+    {
+        Character listener = null;
+        if (listenerId > 0 && NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(listenerId, out var netObj))
+            listener = netObj.GetComponent<Character>();
+
+        NotifyPlayerTurnStarted(listener);
+        
+        if (_clientTimerCoroutine != null) StopCoroutine(_clientTimerCoroutine);
+        _clientTimerCoroutine = StartCoroutine(ClientTurnTimerRoutine(8f)); // Hardcoded PLAYER_WAIT_DELAY
+    }
+
+    private System.Collections.IEnumerator ClientTurnTimerRoutine(float duration)
+    {
+        float timer = 0f;
+        while (timer < duration)
+        {
+            timer += Time.deltaTime;
+            NotifyPlayerTurnTimerUpdated(Mathf.Clamp01(1f - (timer / duration)));
+            yield return null;
+        }
+    }
+
+    [Rpc(SendTo.Owner)]
+    private void NotifyPlayerTurnEndedClientRpc(ulong listenerId)
+    {
+        if (_clientTimerCoroutine != null) StopCoroutine(_clientTimerCoroutine);
+        _clientTimerCoroutine = null;
+
+        Character listener = null;
+        if (listenerId > 0 && NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(listenerId, out var netObj))
+            listener = netObj.GetComponent<Character>();
+
+        NotifyPlayerTurnEnded(listener);
     }
 
     public void EndInteraction()
@@ -655,6 +789,8 @@ public class CharacterInteraction : CharacterSystem
                 previousTarget.CharacterInteraction.EndInteraction();
             }
         }
+        
+        if (IsServer) SyncInteractionStateClientRpc(0, false);
     }
 
     internal void SetInteractionTargetInternal(Character target)
@@ -690,12 +826,12 @@ public class CharacterInteraction : CharacterSystem
     public void PerformInteraction(ICharacterInteractionAction action)
     {
         if (action == null) return;
-
         if (_currentTarget == null) return;
+        if (!IsPositioned) return;
 
-        if (!IsPositioned)
+        if (IsOwner && !IsServer)
         {
-            Debug.LogWarning($"<color=orange>[Interaction]</color> {_character.CharacterName} n'est pas encore en place (attendu 10f en X et aligné Z).");
+            PerformInteractionServerRpc(action.GetType().AssemblyQualifiedName);
             return;
         }
 
@@ -707,6 +843,24 @@ public class CharacterInteraction : CharacterSystem
         if (IsInteracting)
         {
             _playerPendingAction = action;
+        }
+    }
+
+    [Rpc(SendTo.Server)]
+    private void PerformInteractionServerRpc(string actionTypeName)
+    {
+        try
+        {
+            Type actionType = Type.GetType(actionTypeName);
+            if (actionType != null && typeof(ICharacterInteractionAction).IsAssignableFrom(actionType))
+            {
+                var action = (ICharacterInteractionAction)Activator.CreateInstance(actionType);
+                PerformInteraction(action);
+            }
+        }
+        catch (Exception e)
+        {
+            Debug.LogError($"[Interaction] Failed to deserialize action type {actionTypeName}: {e.Message}");
         }
     }
 

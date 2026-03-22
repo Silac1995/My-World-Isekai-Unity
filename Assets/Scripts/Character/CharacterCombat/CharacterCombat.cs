@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Unity.Netcode;
@@ -73,7 +74,7 @@ public class CharacterCombat : CharacterSystem
     protected override void Awake()
     {
         base.Awake();
-        CombatStyleSO defaultStyle = Resources.Load<CombatStyleSO>("Data/CombatStyle/Barehands_NoStyle");
+        CombatStyleSO defaultStyle = Resources.Load<CombatStyleSO>("Data/CombatStyle/Barehands_Nameless");
         if (defaultStyle != null)
         {
             if (!_knownStyles.Any(e => e.Style == defaultStyle))
@@ -157,6 +158,7 @@ public class CharacterCombat : CharacterSystem
         if (!_character.IsAlive()) return false;
         
         ulong targetId = (target != null && target.NetworkObject != null) ? target.NetworkObject.NetworkObjectId : 0;
+        bool isFacingRight = _character.CharacterVisual != null ? _character.CharacterVisual.IsFacingRight : true;
 
         if (IsOwner)
         {
@@ -166,11 +168,11 @@ public class CharacterCombat : CharacterSystem
 
             if (!IsServer)
             {
-                RequestAttackRpc(targetId);
+                RequestAttackRpc(targetId, isFacingRight);
             }
             else
             {
-                BroadcastAttackRpc(targetId);
+                BroadcastAttackRpc(targetId, isFacingRight);
             }
             return true;
         }
@@ -179,7 +181,7 @@ public class CharacterCombat : CharacterSystem
             bool success = ExecuteAttackLocally(target);
             if (!success) return false;
 
-            BroadcastAttackRpc(targetId);
+            BroadcastAttackRpc(targetId, isFacingRight);
             return true;
         }
 
@@ -187,24 +189,28 @@ public class CharacterCombat : CharacterSystem
     }
 
     [Rpc(SendTo.Server)]
-    private void RequestAttackRpc(ulong targetNetworkObjectId)
+    private void RequestAttackRpc(ulong targetNetworkObjectId, bool isFacingRight)
     {
         Character target = null;
         if (targetNetworkObjectId > 0 && NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(targetNetworkObjectId, out var netObj))
             target = netObj.GetComponent<Character>();
 
+        if (_character.CharacterVisual != null) _character.CharacterVisual.IsFacingRight = isFacingRight;
+
         ExecuteAttackLocally(target);
-        BroadcastAttackRpc(targetNetworkObjectId);
+        BroadcastAttackRpc(targetNetworkObjectId, isFacingRight);
     }
 
     [Rpc(SendTo.NotServer)]
-    private void BroadcastAttackRpc(ulong targetNetworkObjectId)
+    private void BroadcastAttackRpc(ulong targetNetworkObjectId, bool isFacingRight)
     {
         if (IsOwner) return; // Owner already predicted it
 
         Character target = null;
         if (targetNetworkObjectId > 0 && NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(targetNetworkObjectId, out var netObj))
             target = netObj.GetComponent<Character>();
+
+        if (_character.CharacterVisual != null) _character.CharacterVisual.IsFacingRight = isFacingRight;
 
         ExecuteAttackLocally(target);
     }
@@ -461,12 +467,44 @@ public class CharacterCombat : CharacterSystem
     #endregion
 
     #region Animation Events
+    private float _lastHitboxSpawnTime;
+
     public void SpawnCombatStyleAttackInstance()
     {
         if (_currentCombatStyleExpertise == null || _currentCombatStyleExpertise.Style == null) return;
         
         // Seuls les styles melee ont un hitbox prefab
         if (_currentCombatStyleExpertise.Style is not MeleeCombatStyleSO meleeStyle) return;
+
+        // If we are Owner but not Server, we tell the Server that the impact frame has been reached 
+        // to guarantee it fires, bypassing unreliable synced AnimationEvents!
+        if (IsOwner && !IsServer)
+        {
+            bool isFacingRight = _character.CharacterVisual != null ? _character.CharacterVisual.IsFacingRight : true;
+            RequestSpawnHitboxServerRpc(isFacingRight);
+        }
+
+        if (IsServer)
+        {
+            SpawnHitboxNatively(); // Fallback for Host checking its own events, or receiving them
+        }
+    }
+
+    [Rpc(SendTo.Server)]
+    private void RequestSpawnHitboxServerRpc(bool isFacingRight)
+    {
+        if (_character.CharacterVisual != null) _character.CharacterVisual.IsFacingRight = isFacingRight;
+        SpawnHitboxNatively();
+    }
+
+    private void SpawnHitboxNatively()
+    {
+        if (_currentCombatStyleExpertise == null || _currentCombatStyleExpertise.Style == null) return;
+        if (_currentCombatStyleExpertise.Style is not MeleeCombatStyleSO meleeStyle) return;
+
+        // Prevent double spawn if AnimationEvent managed to fire AND RPC arrived
+        if (Time.time - _lastHitboxSpawnTime < 0.2f) return; 
+        _lastHitboxSpawnTime = Time.time;
 
         GameObject prefab = meleeStyle.HitboxPrefab;
         if (prefab == null) return;

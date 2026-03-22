@@ -709,8 +709,8 @@ GameObject:
   - component: {fileID: 3369343900060323110}
   - component: {fileID: 8530357501166543435}
   - component: {fileID: 4916404909723457133}
-  - component: {fileID: 4739557321559680592}
-  - component: {fileID: 2038470363406112137}
+  - component: {fileID: 5299695379469090348}
+  - component: {fileID: -4722674590919664742}
   m_Layer: 8
   m_Name: Character_Default
   m_TagString: Character
@@ -825,7 +825,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 2563509225
+  GlobalObjectIdHash: 3352754046
   InScenePlacedSourceGlobalObjectIdHash: 0
   DeferredDespawnTick: 0
   Ownership: 1
@@ -990,7 +990,7 @@ MonoBehaviour:
   _character: {fileID: 2536622428659117900}
   _characterVisual: {fileID: 4467461276411840628}
   _characterMovement: {fileID: 6790967677183771991}
---- !u!114 &4739557321559680592
+--- !u!114 &5299695379469090348
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -999,11 +999,11 @@ MonoBehaviour:
   m_GameObject: {fileID: 4281310202761960642}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: da52bf8bbc1de48cfb221a6ff30f7972, type: 3}
+  m_Script: {fileID: 11500000, guid: d1f8d7bab091be34d978b11a6d035014, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Unity.Multiplayer.Center.NetcodeForGameObjectsExample::Unity.Multiplayer.Center.NetcodeForGameObjectsExample.ClientNetworkTransform
+  m_EditorClassIdentifier: Assembly-CSharp::Unity.Netcode.Components.ClientNetworkTransform
   ShowTopMostFoldoutHeaderGroup: 1
-  NetworkTransformExpanded: 0
+  NetworkTransformExpanded: 1
   AutoOwnerAuthorityTickOffset: 1
   PositionInterpolationType: 0
   RotationInterpolationType: 0
@@ -1036,7 +1036,7 @@ MonoBehaviour:
   SwitchTransformSpaceWhenParented: 0
   Interpolate: 1
   SlerpPosition: 0
---- !u!114 &2038470363406112137
+--- !u!114 &-4722674590919664742
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}

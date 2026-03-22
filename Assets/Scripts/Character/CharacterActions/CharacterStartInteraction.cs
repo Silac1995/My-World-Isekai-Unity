@@ -25,13 +25,20 @@ public class CharacterStartInteraction : CharacterAction
         _target.CharacterVisual?.FaceTarget(character.transform.position);
 
         // 2. Logique : If the action is an invitation (e.g. InteractionStartDialogue),
-        //    send it as an async invitation — OnAccepted will start the interaction.
-        //    Otherwise, pass it as a forcedFirstAction to StartInteractionWith.
+        //    send it to the server. The server must handle it so the target
+        //    NPC freezes and responds natively.
         if (_forcedAction is InteractionInvitation invitation)
         {
-            if (invitation.CanExecute(character, _target))
+            if (character.IsOwner && !character.IsServer)
             {
-                invitation.Execute(character, _target);
+                character.CharacterInteraction.RequestInvitationServerRpc(_target.NetworkObject.NetworkObjectId, invitation.GetType().AssemblyQualifiedName);
+            }
+            else if (character.IsServer)
+            {
+                if (invitation.CanExecute(character, _target))
+                {
+                    invitation.Execute(character, _target);
+                }
             }
         }
         else
