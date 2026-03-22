@@ -88,6 +88,10 @@ Combat directly drives character progression via the `CharacterCombatLevel` comp
   - **Player Allocation**: Manual via `SpendStatPoint()` in UI. Only Secondary Stats (Strength, Agility, Dexterity, Intelligence, Endurance, Charisma) are directly upgradeable.
   - **NPC Allocation**: Handled internally via `AutoAllocateStats()`. They randomly reinvest all unspent attribute points evenly across the 6 core Secondary Stats to scale dynamically with the player.
 
+### 7. Targeting & Visual Feedback
+- **Click-to-Target**: Handled via the UI layer (`UI_PlayerTargeting`) which directly commands the logical `CharacterVisual.SetLookTarget(transform)`.
+- **Shader-Driven Target Indicator**: Active target UI elements (like the crosshair ring) must dynamically lerp their colors (Green -> Yellow -> Red) based on the target's missing health (`Stats.Health.OnAmountChanged`). Obeying the strict **Shader-First** rule, this must be pushed exclusively through `Material.SetFloat("_HealthPercent")` on a custom unlit UI shader to avoid CPU color manipulation and prevent Canvas batching breaks.
+
 ## Tips & Troubleshooting
 - **A character never attacks**: 
   - Verify that the `BattleManager` is properly calling `.UpdateInitiativeTick()`.

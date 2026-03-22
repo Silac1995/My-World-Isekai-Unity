@@ -331,6 +331,7 @@ GameObject:
   - component: {fileID: 2649951400993070715}
   - component: {fileID: 4919399480143584613}
   - component: {fileID: 5387257838189536016}
+  - component: {fileID: 1387249910408085260}
   m_Layer: 0
   m_Name: TargetIndicator
   m_TagString: Untagged
@@ -377,7 +378,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
-  m_Material: {fileID: 0}
+  m_Material: {fileID: 2100000, guid: 595dee3d4ce2af94d970321187c3e85e, type: 2}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
@@ -395,6 +396,20 @@ MonoBehaviour:
   m_FillOrigin: 0
   m_UseSpriteMesh: 0
   m_PixelsPerUnitMultiplier: 1
+--- !u!114 &1387249910408085260
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2600563225992587876}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8533fe254148caf44898d365a8fd7bc6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UI_TargetIndicator
+  _bobSpeed: 5
+  _bobAmplitude: 10
 --- !u!1 &2982689734940517044
 GameObject:
   m_ObjectHideFlags: 0
@@ -439,7 +454,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2d54f5ac700f5af47b277569834a3e89, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::UI_PlayerTargeting
-  _targetIndicator: {fileID: 2649951400993070715}
+  _targetIndicator: {fileID: 1387249910408085260}
   _yOffset: 1
   _targetingLayerMask:
     serializedVersion: 2

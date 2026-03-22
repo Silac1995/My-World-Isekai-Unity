@@ -3,9 +3,11 @@ using UnityEngine;
 public class UI_PlayerTargeting : MonoBehaviour
 {
     private Character _character;
+    private Transform _lastTrackedTarget;
 
     [Header("UI Elements")]
-    [SerializeField] private RectTransform _targetIndicator;
+    [SerializeField] private UI_TargetIndicator _targetIndicator;
+    [Tooltip("Base height offset above the target.")]
     [SerializeField] private float _yOffset = 1.0f;
 
     [Header("Targeting Settings")]
@@ -15,6 +17,7 @@ public class UI_PlayerTargeting : MonoBehaviour
     public void Initialize(Character character)
     {
         _character = character;
+        _lastTrackedTarget = null;
     }
 
     private void Update()
@@ -31,24 +34,38 @@ public class UI_PlayerTargeting : MonoBehaviour
 
         if (_character.CharacterVisual.HasLookTarget)
         {
+            Transform activeTarget = _character.CharacterVisual.LookTarget;
+
+            if (_lastTrackedTarget != activeTarget)
+            {
+                _lastTrackedTarget = activeTarget;
+                _targetIndicator.SetTarget(activeTarget);
+            }
+
             if (!_targetIndicator.gameObject.activeSelf)
                 _targetIndicator.gameObject.SetActive(true);
 
-            Transform activeTarget = _character.CharacterVisual.LookTarget;
             Vector3 worldPos = activeTarget.position + Vector3.up * _yOffset;
             
             // Try to use the collider's center if available
             var col = activeTarget.GetComponentInChildren<Collider>();
             if (col != null)
             {
-                worldPos = col.bounds.center;
+                // Base it off the true center of the object instead of its pivot (feet)
+                worldPos = col.bounds.center + Vector3.up * _yOffset;
             }
 
             Vector3 screenPos = Camera.main.WorldToScreenPoint(worldPos);
-            _targetIndicator.position = screenPos;
+            _targetIndicator.transform.position = screenPos;
         }
         else
         {
+            if (_lastTrackedTarget != null)
+            {
+                _lastTrackedTarget = null;
+                _targetIndicator.SetTarget(null);
+            }
+
             if (_targetIndicator.gameObject.activeSelf)
                 _targetIndicator.gameObject.SetActive(false);
         }
