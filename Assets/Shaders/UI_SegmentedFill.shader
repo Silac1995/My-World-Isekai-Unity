@@ -9,6 +9,7 @@ Shader "UI/SegmentedFill"
         _FillAmount ("Fill Amount", Range(0, 1)) = 1.0
         _GhostFill ("Ghost Fill", Range(0, 1)) = 1.0
         _HealFlash ("Heal Flash", Range(0, 1)) = 0.0
+        _FlashWholeBarToggle ("Flash Whole Bar", Float) = 0.0
 
         [Header(Colors)]
         [HDR] _HealthColor ("Primary Color", Color) = (0.2, 0.8, 0.2, 1)
@@ -95,6 +96,7 @@ Shader "UI/SegmentedFill"
             float _FillAmount;
             float _GhostFill;
             float _HealFlash;
+            float _FlashWholeBarToggle;
 
             fixed4 _HealthColor;
             fixed4 _LowHealthColor;
@@ -135,8 +137,8 @@ Shader "UI/SegmentedFill"
                 float lowHealthFactor = smoothstep(_LowHealthThreshold + 0.1, _LowHealthThreshold - 0.1, _FillAmount);
                 fixed4 primaryColor = lerp(_HealthColor, _LowHealthColor, lowHealthFactor);
 
-                // 4. Flash additive effect
-                primaryColor += _HealColor * _HealFlash;
+                // 4. Flash additive effect for standard bars (only the filled part)
+                primaryColor += _HealColor * _HealFlash * (1.0 - _FlashWholeBarToggle);
 
                 // 5. Compose the Layers
                 // Start with Background empty color
@@ -149,7 +151,10 @@ Shader "UI/SegmentedFill"
                 // Add Main Fill Color layering over Ghost
                 finalColor = lerp(finalColor, primaryColor, fillMask);
 
-                // 6. Subtle top shine for UI volume
+                // 6. Flash additive effect applied over EVERYTHING (only for EXP bars)
+                finalColor += _HealColor * _HealFlash * _FlashWholeBarToggle;
+
+                // 7. Subtle top shine for UI volume
                 float shine = smoothstep(0.5, 1.0, uv.y) * _ShineStrength;
                 finalColor.rgb += shine * ghostMask; // Shine over anything filled (ghost + main)
 

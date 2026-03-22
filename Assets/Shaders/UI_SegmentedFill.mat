@@ -31,18 +31,20 @@ Material:
     m_Floats:
     - _ColorMask: 15
     - _EdgeSoftness: 0.0088
-    - _FillAmount: 0.515
+    - _FillAmount: 0.421
+    - _FlashWholeBarToggle: 0
     - _GapWidth: 0.068
     - _GhostAmount: 1
     - _GhostDelay: 2.8
     - _GhostDrainSpeed: 0.2
     - _GhostFill: 0.66
     - _HPPerSegment: 500
-    - _HealFlash: 0.56
+    - _HealFlash: 0.707
     - _LowHealthThreshold: 0.45
     - _MaxHP: 10
     - _ShineSharpness: 10.7
     - _ShineStrength: 0.168
+    - _SparkleAmount: 0
     - _Stencil: 0
     - _StencilComp: 8
     - _StencilOp: 0
@@ -52,11 +54,11 @@ Material:
     m_Colors:
     - _BgColor: {r: 0.079999976, g: 0.079999976, b: 0.079999976, a: 1}
     - _Color: {r: 1, g: 1, b: 1, a: 1}
-    - _EmptyColor: {r: 0.01886791, g: 0.01886791, b: 0.01886791, a: 1}
+    - _EmptyColor: {r: 0.13207549, g: 0.037878256, b: 0.014328947, a: 1}
     - _GapColor: {r: 0, g: 0, b: 0, a: 1}
-    - _GhostColor: {r: 4, g: 0, b: 0, a: 1}
-    - _HealColor: {r: 0.8018868, g: 0, b: 0, a: 1}
-    - _HealthColor: {r: 0.25066888, g: 0.4528302, b: 0.20291919, a: 1}
-    - _LowHealthColor: {r: 0.85, g: 0.17999998, b: 0.17999998, a: 1}
+    - _GhostColor: {r: 5.3403134, g: 0, b: 1.0001451, a: 1}
+    - _HealColor: {r: 0.3663186, g: 0.8, b: 0, a: 1}
+    - _HealthColor: {r: 0.19398585, g: 0.4433962, b: 0.11084905, a: 1}
+    - _LowHealthColor: {r: 0.23455065, g: 0.33245158, b: 0.20507877, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

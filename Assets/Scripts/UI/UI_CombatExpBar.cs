@@ -39,6 +39,7 @@ public class UI_CombatExpBar : MonoBehaviour
     private static readonly int ID_FillAmount      = Shader.PropertyToID("_FillAmount");
     private static readonly int ID_GhostFill       = Shader.PropertyToID("_GhostFill");
     private static readonly int ID_HealFlash       = Shader.PropertyToID("_HealFlash");
+    private static readonly int ID_FlashWhole      = Shader.PropertyToID("_FlashWholeBarToggle");
     private static readonly int ID_GhostDelay      = Shader.PropertyToID("_GhostDelay");
     private static readonly int ID_GhostSpeed      = Shader.PropertyToID("_GhostDrainSpeed");
     private static readonly int ID_HealthColor     = Shader.PropertyToID("_HealthColor");
@@ -65,6 +66,7 @@ public class UI_CombatExpBar : MonoBehaviour
             _instancedMaterial.SetColor(ID_LowHealthColor, _expColor);
             _instancedMaterial.SetColor(ID_GhostColor, _ghostColor);
             _instancedMaterial.SetColor(ID_HealColor, _flashColor);
+            _instancedMaterial.SetFloat(ID_FlashWhole, 1f); // Enable full-bar flash for Level Ups
         }
 
         _targetExpSys.OnExperienceChanged += HandleExperienceChanged;
@@ -136,8 +138,11 @@ public class UI_CombatExpBar : MonoBehaviour
         // Do not snap ghost up instantly here. 
         // We will sync it with the primary fill animation so it doesn't pop ahead.
 
-        if (_levelUpCoroutine != null) StopCoroutine(_levelUpCoroutine);
-        _levelUpCoroutine = StartCoroutine(LevelUpFlashRoutine(isMax)); // Flash briefly when gaining exp
+        if (isMax)
+        {
+            if (_levelUpCoroutine != null) StopCoroutine(_levelUpCoroutine);
+            _levelUpCoroutine = StartCoroutine(LevelUpFlashRoutine(true)); // Flash when reaching FULL exp
+        }
     }
 
     // ── Coroutines ───────────────────────────────────────────────

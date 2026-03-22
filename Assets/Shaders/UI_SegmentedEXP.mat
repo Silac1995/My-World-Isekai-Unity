@@ -32,6 +32,7 @@ Material:
     - _ColorMask: 15
     - _EdgeSoftness: 0.002
     - _FillAmount: 0.573
+    - _FlashWholeBarToggle: 0
     - _GhostDelay: 0.5
     - _GhostDrainSpeed: 0.5
     - _GhostFill: 0.777
