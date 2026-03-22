@@ -47,12 +47,11 @@ public class UI_PlayerTargeting : MonoBehaviour
 
             Vector3 worldPos = activeTarget.position + Vector3.up * _yOffset;
             
-            // Try to use the collider's center if available
             var col = activeTarget.GetComponentInChildren<Collider>();
             if (col != null)
             {
-                // Base it off the true center of the object instead of its pivot (feet)
-                worldPos = col.bounds.center + Vector3.up * _yOffset;
+                // Anchor to the true top-center of the object's physical bounds
+                worldPos = new Vector3(col.bounds.center.x, col.bounds.max.y, col.bounds.center.z) + Vector3.up * _yOffset;
             }
 
             Vector3 screenPos = Camera.main.WorldToScreenPoint(worldPos);
