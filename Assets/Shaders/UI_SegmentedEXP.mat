@@ -36,8 +36,9 @@ Material:
     - _GhostDrainSpeed: 0.5
     - _GhostFill: 0.777
     - _HealFlash: 0
-    - _LowHealthThreshold: 0.472
+    - _LowHealthThreshold: 0
     - _ShineStrength: 0.15
+    - _SparkleAmount: 0.431
     - _Stencil: 0
     - _StencilComp: 8
     - _StencilOp: 0

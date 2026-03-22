@@ -71,10 +71,38 @@ public class CharacterStats : MonoBehaviour
     public MoveSpeed MoveSpeed => moveSpeed;
 
 
+    private Action<float, float> _onSecondaryStatChanged;
+
     private void Awake()
     {
         CreateStats();
+        SubscribeToSecondaryStats();
         RecalculateTertiaryStats();
+    }
+
+    private void SubscribeToSecondaryStats()
+    {
+        _onSecondaryStatChanged = (oldValue, newValue) => RecalculateTertiaryStats();
+        
+        strength.OnValueChanged += _onSecondaryStatChanged;
+        agility.OnValueChanged += _onSecondaryStatChanged;
+        dexterity.OnValueChanged += _onSecondaryStatChanged;
+        intelligence.OnValueChanged += _onSecondaryStatChanged;
+        endurance.OnValueChanged += _onSecondaryStatChanged;
+        charisma.OnValueChanged += _onSecondaryStatChanged;
+    }
+
+    private void OnDestroy()
+    {
+        if (_onSecondaryStatChanged != null)
+        {
+            if (strength != null) strength.OnValueChanged -= _onSecondaryStatChanged;
+            if (agility != null) agility.OnValueChanged -= _onSecondaryStatChanged;
+            if (dexterity != null) dexterity.OnValueChanged -= _onSecondaryStatChanged;
+            if (intelligence != null) intelligence.OnValueChanged -= _onSecondaryStatChanged;
+            if (endurance != null) endurance.OnValueChanged -= _onSecondaryStatChanged;
+            if (charisma != null) charisma.OnValueChanged -= _onSecondaryStatChanged;
+        }
     }
 
     private void CreateStats()
