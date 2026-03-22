@@ -498,7 +498,7 @@ public class Character : MonoBehaviour
         ConfigureNavMesh(isNPC);
     }
 
-    private void ConfigureNavMesh(bool enabled)
+    public void ConfigureNavMesh(bool enabled)
     {
         if (_cachedNavMeshAgent == null) return;
         _cachedNavMeshAgent.enabled = enabled;

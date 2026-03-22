@@ -120,6 +120,14 @@ The `PlayerUI` handles displaying context-sensitive actions through `OpenInterac
 
 ---
 
+### Combat & Targeting UI
+In combat (or specialized click-to-move states), the HUD takes over input handling using specific manager components:
+
+- **`UI_PlayerTargeting`**: Manages the Point-and-Click system on screen space. Casts rays on `Input.GetMouseButtonDown(0)` to select `InteractableObject`s or `Character`s, isolating targeting visual logic from the `PlayerController`.
+- **`UI_CombatActionMenu`**: An initiative-driven HUD piece that pops up when a player's `CharacterInitiative.IsReady()` flag is met. It handles action selections (e.g., "Melee Attack", "Ranged Attack") based on the player's active Combat Mode and passes the intent back to `CharacterCombat.Attack()`.
+
+---
+
 ## Stats Integration
 - `OnValueChanged(oldMax, newMax)`: Fired when the max value changes.
 - `OnAmountChanged(oldAmount, newAmount)`: Fired when current resource changes.

@@ -5,6 +5,10 @@ public class PlayerController : CharacterGameController
     private Vector3 _inputDir = Vector3.zero;
     private bool _isCrouching = false;
 
+    private float _nextPathUpdateTime = 0f;
+    private const float PATH_UPDATE_INTERVAL = 0.2f;
+    private bool _wasInBattleLastFrame = false;
+
     public override void Initialize()
     {
         base.Initialize();
@@ -36,12 +40,9 @@ public class PlayerController : CharacterGameController
             _character.CharacterCombat.ToggleCombatMode();
         }
 
-        if (Input.GetKeyDown(KeyCode.K))
+        if (!_character.CharacterCombat.IsInBattle && Input.GetKeyDown(KeyCode.L))
         {
-            if (!_character.CharacterCombat.IsInBattle || _character.CharacterCombat.IsReadyToAct)
-            {
-                _character.CharacterCombat.ExecuteAction(() => _character.CharacterCombat.MeleeAttack());
-            }
+            _character.CharacterCombat.Attack(null);
         }
 
         base.Update();
@@ -63,16 +64,66 @@ public class PlayerController : CharacterGameController
     {
         if (_character.CharacterActions.CurrentAction != null) return;
 
-        Vector3 cameraForward = Vector3.Scale(Camera.main.transform.forward, new Vector3(1, 0, 1)).normalized;
-        Vector3 moveDir = _inputDir.z * cameraForward + _inputDir.x * Camera.main.transform.right;
+        bool currentInBattle = _character.CharacterCombat != null && _character.CharacterCombat.IsInBattle;
 
-        if (moveDir.magnitude > 0.1f && !_isCrouching)
+        // Transition logic for NavMesh
+        if (currentInBattle && !_wasInBattleLastFrame)
         {
-            _characterMovement.SetDesiredDirection(moveDir, _character.MovementSpeed);
+            _character.ConfigureNavMesh(true);
+        }
+        else if (!currentInBattle && _wasInBattleLastFrame)
+        {
+            _character.ConfigureNavMesh(false);
+            _characterMovement.Stop();
+        }
+        _wasInBattleLastFrame = currentInBattle;
+
+        if (currentInBattle)
+        {
+            // AI-like autonomous movement
+            Character battleTarget = _character.CharacterCombat.CurrentBattleManager?.GetBestTargetFor(_character);
+            
+            if (battleTarget != null)
+            {
+                float distance = Vector3.Distance(transform.position, battleTarget.transform.position);
+                float engagementDistance = 2.5f; // Hardcoded default engagement distance
+
+                if (distance > engagementDistance)
+                {
+                    if (Time.time >= _nextPathUpdateTime)
+                    {
+                        _nextPathUpdateTime = Time.time + PATH_UPDATE_INTERVAL;
+                        _characterMovement.ForceResume();
+                        _characterMovement.SetDestination(battleTarget.transform.position);
+                    }
+                }
+                else
+                {
+                    _characterMovement.Stop();
+                    // Face target
+                    Vector3 direction = battleTarget.transform.position - transform.position;
+                    _characterVisual?.UpdateFlip(direction);
+                }
+            }
+            else
+            {
+                _characterMovement.Stop();
+            }
         }
         else
         {
-            _characterMovement.SetDesiredDirection(Vector3.zero, 0f);
+            // Manual WASD Control
+            Vector3 cameraForward = Vector3.Scale(Camera.main.transform.forward, new Vector3(1, 0, 1)).normalized;
+            Vector3 moveDir = _inputDir.z * cameraForward + _inputDir.x * Camera.main.transform.right;
+
+            if (moveDir.magnitude > 0.1f && !_isCrouching)
+            {
+                _characterMovement.SetDesiredDirection(moveDir, _character.MovementSpeed);
+            }
+            else
+            {
+                _characterMovement.SetDesiredDirection(Vector3.zero, 0f);
+            }
         }
     }
 }

@@ -21,6 +21,10 @@ public class PlayerUI : MonoBehaviour
 
     // Le seul lien nécessaire pour la barre d'action
     [SerializeField] private UI_Action_ProgressBar _actionProgressBar;
+    
+    [Header("Combat UI")]
+    [SerializeField] private UI_CombatActionMenu _combatActionMenu;
+    [SerializeField] private UI_PlayerTargeting _playerTargeting;
 
     [Header("UI Windows")]
     [SerializeField] private CharacterEquipmentUI _equipmentUI;
@@ -69,6 +73,16 @@ public class PlayerUI : MonoBehaviour
         if (_playerInfo != null)
         {
             _playerInfo.Initialize(characterComponent);
+        }
+
+        if (_combatActionMenu != null)
+        {
+            _combatActionMenu.Initialize(characterComponent);
+        }
+
+        if (_playerTargeting != null)
+        {
+            _playerTargeting.Initialize(characterComponent);
         }
 
         if (_chatBar != null)
@@ -227,6 +241,14 @@ public class PlayerUI : MonoBehaviour
         if (_playerInfo != null)
         {
             _playerInfo.Initialize(null);
+        }
+        if (_combatActionMenu != null)
+        {
+            _combatActionMenu.Initialize(null);
+        }
+        if (_playerTargeting != null)
+        {
+            _playerTargeting.Initialize(null);
         }
         if (_chatBar != null)
         {
