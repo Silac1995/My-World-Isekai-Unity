@@ -140,6 +140,7 @@ public class NPCBehaviourTree : CharacterSystem
 
     private void Update()
     {
+        if (!IsServer) return;
         if (!_isInitialized || _root == null) return;
 
         // Stagger basé sur le temps plutôt que sur les frames pour supporter le Time.timeScale élevé (Fast-Forward).

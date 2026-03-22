@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using System.Linq;
 
-public class CharacterNeeds : MonoBehaviour
+public class CharacterNeeds : CharacterSystem
 {
     [SerializeField] private Character _character;
     private List<CharacterNeed> _allNeeds = new List<CharacterNeed>();

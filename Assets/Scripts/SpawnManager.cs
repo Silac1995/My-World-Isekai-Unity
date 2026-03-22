@@ -8,6 +8,9 @@ public class SpawnManager : MonoBehaviour
     [SerializeField] private GameObject spawnGameObject;
     [SerializeField] private GameObject _defaultItemPrefab;
 
+    public Vector3 DefaultSpawnPosition => spawnGameObject != null ? spawnGameObject.transform.position : Vector3.zero;
+    public Quaternion DefaultSpawnRotation => spawnGameObject != null ? spawnGameObject.transform.rotation : Quaternion.identity;
+
     private CharacterPersonalitySO[] _availablePersonalities;
     private CharacterBehavioralTraitsSO[] _availableTraits;
 
@@ -137,17 +140,43 @@ public class SpawnManager : MonoBehaviour
             return null;
         }
 
-        if (!SetupInteractionDetector(characterPrefabObj, isPlayer))
+        // Si le réseau tourne, on doit Spawn() l'objet réseau
+        if (Unity.Netcode.NetworkManager.Singleton != null && Unity.Netcode.NetworkManager.Singleton.IsServer)
+        {
+            if (characterPrefabObj.TryGetComponent(out Unity.Netcode.NetworkObject netObj))
+            {
+                if (!netObj.IsSpawned)
+                {
+                    // L'objet réseau va appeler InitializeSpawnedCharacter(this, null, isMyPlayer) via OnNetworkSpawn.
+                    netObj.Spawn(true);
+                    
+                    // Note: Les arguments "race" et "personality" passés à Initialize ne sont PAS synchronisés
+                    // car ce sont des données de host. L'OnNetworkSpawn fera un setup aléatoire par défaut.
+                    return character;
+                }
+            }
+        }
+
+        if (!InitializeSpawnedCharacter(character, race, isPlayer, personality))
         {
             Destroy(characterPrefabObj);
             return null;
         }
 
-        if (!InitializeCharacter(characterPrefabObj, race, visualPrefab))
+        return character;
+    }
+
+    public bool InitializeSpawnedCharacter(Character character, RaceSO race, bool isPlayerObject, bool isLocalOwner = false, CharacterPersonalitySO personality = null)
+    {
+        // Default Race fallback so that missing references don't break logic
+        if (race == null) 
         {
-            Destroy(characterPrefabObj);
-            return null;
+            race = Resources.Load<RaceSO>("Data/Races/Human");
         }
+
+        if (!SetupInteractionDetector(character.gameObject, isPlayerObject)) return false;
+
+        if (!InitializeCharacter(character.gameObject, race, null)) return false;
 
         // --- RANDOM NAMING ---
         if (race != null && race.NameGenerator != null)
@@ -159,27 +188,16 @@ public class SpawnManager : MonoBehaviour
         // Update the GameObject's name in the Unity Hierarchy
         if (string.IsNullOrEmpty(character.CharacterName))
         {
-            characterPrefabObj.name = race != null ? $"NPC_{race.RaceName}" : "Unknown_NPC";
+            character.gameObject.name = race != null ? $"NPC_{race.RaceName}" : "Unknown_NPC";
         }
         else
         {
-            characterPrefabObj.name = character.CharacterName;
+            character.gameObject.name = character.CharacterName;
         }
 
         ApplyRandomColor(character);
 
-        if (isPlayer)
-        {
-            CameraFollow cameraFollow = Camera.main?.GetComponent<CameraFollow>();
-            if (cameraFollow != null) cameraFollow.SetGameObject(characterPrefabObj);
-
-            // Lien avec l'UI du joueur
-            PlayerUI playerUI = UnityEngine.Object.FindAnyObjectByType<PlayerUI>(FindObjectsInactive.Include);
-            if (playerUI != null)
-            {
-                playerUI.Initialize(characterPrefabObj);
-            }
-        }
+        // Local ownership (UI & Camera) is now strictly handled by Character.SwitchToPlayer()
 
         float randomSize = Random.Range(0f, 200f);
         character.CharacterVisual.ResizeCharacter(randomSize);
@@ -258,7 +276,7 @@ public class SpawnManager : MonoBehaviour
         }
 
         // --- LOGIQUE D'EMPLOI AUTOMATIQUE ---
-        if (!isPlayer && character.CharacterJob != null && BuildingManager.Instance != null && BuildingManager.Instance.allBuildings.Count > 0)
+        if (!isPlayerObject && character.CharacterJob != null && BuildingManager.Instance != null && BuildingManager.Instance.allBuildings.Count > 0)
         {
             // 1. Tente d'abord de devenir propriétaire d'un bâtiment commercial libre
             CommercialBuilding unownedCommercial = BuildingManager.Instance.FindUnownedCommercialBuilding();
@@ -270,7 +288,7 @@ public class SpawnManager : MonoBehaviour
             }
         }
 
-        return character;
+        return true;
     }
 
     private bool SetupInteractionDetector(GameObject obj, bool isPlayer)

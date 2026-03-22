@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using MWI.Time;
 
-public class CharacterMentorship : MonoBehaviour
+public class CharacterMentorship : CharacterSystem
 {
     [SerializeField] private Character _character;
     

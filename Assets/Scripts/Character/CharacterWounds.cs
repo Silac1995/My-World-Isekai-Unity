@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class CharacterWounds : MonoBehaviour
+public class CharacterWounds : CharacterSystem
 {
     [Header("Settings")]
     [SerializeField] private WoundDataSO _woundData;

@@ -1,11 +1,13 @@
 using UnityEngine;
 
+using Unity.Netcode;
+
 /// <summary>
 /// Base class for all sub-components that make up a Character. 
 /// Automatically handles references and core lifecycle events (Incapacitation, Death, WakeUp) 
 /// so subsystems don't need to manually subscribe or be strictly managed by Character.cs.
 /// </summary>
-public abstract class CharacterSystem : MonoBehaviour
+public abstract class CharacterSystem : NetworkBehaviour
 {
     [SerializeField] protected Character _character;
 

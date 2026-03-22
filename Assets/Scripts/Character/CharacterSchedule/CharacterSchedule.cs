@@ -8,7 +8,7 @@ using MWI.Time;
 /// Écoute le TimeManager et applique le bon behaviour à chaque changement d'heure.
 /// Les jobs injectent automatiquement leurs créneaux de travail.
 /// </summary>
-public class CharacterSchedule : MonoBehaviour
+public class CharacterSchedule : CharacterSystem
 {
     [SerializeField] private Character _character;
     [SerializeField] private TimeManager _timeManager;

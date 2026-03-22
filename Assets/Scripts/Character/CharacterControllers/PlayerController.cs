@@ -30,73 +30,80 @@ public class PlayerController : CharacterGameController
 
     protected override void Update()
     {
-        // Block player movement/action input if typing in any UI text field
-        if (UnityEngine.EventSystems.EventSystem.current != null && 
-            UnityEngine.EventSystems.EventSystem.current.currentSelectedGameObject != null && 
-            UnityEngine.EventSystems.EventSystem.current.currentSelectedGameObject.GetComponent<TMPro.TMP_InputField>() != null)
+        if (IsOwner)
         {
-            _inputDir = Vector3.zero;
-            base.Update();
-            Move();
-            return;
-        }
-
-        float h = Input.GetAxisRaw("Horizontal");
-        float v = Input.GetAxisRaw("Vertical");
-        _inputDir = new Vector3(h, 0f, v).normalized;
-        _isCrouching = Input.GetKey(KeyCode.C);
-
-        if (_inputDir.sqrMagnitude > 0.1f && _currentOrder != null)
-        {
-            // ZQSD cancels any movement command instantly, BUT NOT if we are forced into combat AI
-            if (!(_currentOrder is PlayerCombatCommand))
+            // Block player movement/action input if typing in any UI text field
+            if (UnityEngine.EventSystems.EventSystem.current != null && 
+                UnityEngine.EventSystems.EventSystem.current.currentSelectedGameObject != null && 
+                UnityEngine.EventSystems.EventSystem.current.currentSelectedGameObject.GetComponent<TMPro.TMP_InputField>() != null)
             {
+                _inputDir = Vector3.zero;
+                base.Update();
+                Move();
+                return;
+            }
+
+            float h = Input.GetAxisRaw("Horizontal");
+            float v = Input.GetAxisRaw("Vertical");
+            _inputDir = new Vector3(h, 0f, v).normalized;
+            _isCrouching = Input.GetKey(KeyCode.C);
+
+            if (_inputDir.sqrMagnitude > 0.1f && _currentOrder != null)
+            {
+                // ZQSD cancels any movement command instantly, BUT NOT if we are forced into combat AI
+                if (!(_currentOrder is PlayerCombatCommand))
+                {
+                    SetOrder(null);
+                }
+                else
+                {
+                    // In combat, WASD is ignored for movement
+                    _inputDir = Vector3.zero;
+                }
+            }
+
+            // Right-click to move (standard RPG/MOBA)
+            if (Input.GetMouseButtonDown(1) && !_character.CharacterCombat.IsInBattle)
+            {
+                Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+                if (Physics.Raycast(ray, out RaycastHit hit, 100f))
+                {
+                    SetOrder(new PlayerMoveCommand(hit.point));
+                }
+            }
+
+            // Auto-Trigger Combat Command when in battle. The command handles pacing and action execution.
+            if (_character.CharacterCombat.IsInBattle && !(_currentOrder is PlayerCombatCommand))
+            {
+                Character battleTarget = _character.CharacterCombat.CurrentBattleManager?.GetBestTargetFor(_character);
+                if (battleTarget != null)
+                {
+                    SetOrder(new PlayerCombatCommand(_character, battleTarget));
+                }
+            }
+            else if (!_character.CharacterCombat.IsInBattle && _currentOrder is PlayerCombatCommand)
+            {
+                // Exit combat gracefully
                 SetOrder(null);
             }
-            else
+
+            if (Input.GetKeyDown(KeyCode.J))
             {
-                // In combat, WASD is ignored for movement
-                _inputDir = Vector3.zero;
+                _character.CharacterCombat.ToggleCombatMode();
             }
-        }
 
-        // Right-click to move (standard RPG/MOBA)
-        if (Input.GetMouseButtonDown(1) && !_character.CharacterCombat.IsInBattle)
-        {
-            Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-            if (Physics.Raycast(ray, out RaycastHit hit, 100f))
+            if (!_character.CharacterCombat.IsInBattle && Input.GetKeyDown(KeyCode.L))
             {
-                SetOrder(new PlayerMoveCommand(hit.point));
+                _character.CharacterCombat.Attack(null);
             }
-        }
-
-        // Auto-Trigger Combat Command when in battle. The command handles pacing and action execution.
-        if (_character.CharacterCombat.IsInBattle && !(_currentOrder is PlayerCombatCommand))
-        {
-            Character battleTarget = _character.CharacterCombat.CurrentBattleManager?.GetBestTargetFor(_character);
-            if (battleTarget != null)
-            {
-                SetOrder(new PlayerCombatCommand(_character, battleTarget));
-            }
-        }
-        else if (!_character.CharacterCombat.IsInBattle && _currentOrder is PlayerCombatCommand)
-        {
-            // Exit combat gracefully
-            SetOrder(null);
-        }
-
-        if (Input.GetKeyDown(KeyCode.J))
-        {
-            _character.CharacterCombat.ToggleCombatMode();
-        }
-
-        if (!_character.CharacterCombat.IsInBattle && Input.GetKeyDown(KeyCode.L))
-        {
-            _character.CharacterCombat.Attack(null);
         }
 
         base.Update();
-        Move();
+        
+        if (IsOwner)
+        {
+            Move();
+        }
     }
 
     protected override void UpdateFlip()

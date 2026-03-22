@@ -4,7 +4,7 @@ using Unity.VisualScripting.Antlr3.Runtime.Misc;
 using UnityEngine;
 
 [System.Serializable]
-public class CharacterStats : MonoBehaviour, ISaveable
+public class CharacterStats : CharacterSystem, ISaveable
 {
     public event Action OnStatsUpdated;
 

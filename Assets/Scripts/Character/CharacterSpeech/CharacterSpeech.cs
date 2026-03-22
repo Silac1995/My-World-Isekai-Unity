@@ -3,7 +3,7 @@ using System.Collections;
 using System;
 using Random = UnityEngine.Random;
 
-public class CharacterSpeech : MonoBehaviour
+public class CharacterSpeech : CharacterSystem
 {
     [SerializeField] private Character _character;
     [SerializeField] private GameObject _speechBubblePrefab;

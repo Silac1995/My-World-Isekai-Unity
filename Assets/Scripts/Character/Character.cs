@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using Unity.Netcode;
 using UnityEngine.AI;
 using System.Collections.Generic;
 using MWI.Time;
@@ -18,7 +19,8 @@ public enum CharacterBusyReason
 }
 
 [RequireComponent(typeof(CapsuleCollider), typeof(Rigidbody))]
-public class Character : MonoBehaviour
+
+public class Character : NetworkBehaviour
 {
     #region Serialized Fields
     [Header("Basic Info")]
@@ -144,6 +146,57 @@ public class Character : MonoBehaviour
         Shader.SetGlobalVector("_Body", _rb.position);
     }
     #region Unity Lifecycle
+    public override void OnNetworkSpawn()
+    {
+        base.OnNetworkSpawn();
+
+        // Very important: IsOwner is true for the Host for ALL NPCs in the scene.
+        // We only want the local client's specific avatar to become a "Player" with UI and Camera,
+        // but ALL instances of a PlayerObject must use PlayerController logic.
+        bool isPlayerObject = IsSpawned && NetworkObject.IsPlayerObject;
+        bool isLocalOwner = IsSpawned && IsOwner;
+
+        // The Host's player bypasses ConnectionApprovalCallback in many NGO versions.
+        // The first frame of instantiation is chaotic (NavMeshAgent snaps, NetworkTransform initializes).
+        // Therefore, we delay the teleport by exactly 1 frame so it successfully overrides everything cleanly.
+        if (IsServer && NetworkObject.IsPlayerObject && OwnerClientId == NetworkManager.ServerClientId)
+        {
+            StartCoroutine(DelayedHostTeleport());
+        }
+
+        if (SpawnManager.Instance != null)
+        {
+            // Fully initialize the character using the identical logic from SpawnManager
+            SpawnManager.Instance.InitializeSpawnedCharacter(this, null, isPlayerObject, isLocalOwner);
+        }
+        else
+        {
+            Debug.LogError("[Character] SpawnManager.Instance is null! Could not fully initialize network character.");
+            if (isPlayerObject) SwitchToPlayer();
+            else SwitchToNPC();
+        }
+    }
+
+    private System.Collections.IEnumerator DelayedHostTeleport()
+    {
+        yield return null; // Wait 1 frame
+        
+        if (SpawnManager.Instance != null && SpawnManager.Instance.DefaultSpawnPosition != Vector3.zero)
+        {
+            if (CharacterMovement != null) 
+            {
+                CharacterMovement.Warp(SpawnManager.Instance.DefaultSpawnPosition);
+            }
+            else 
+            {
+                transform.position = SpawnManager.Instance.DefaultSpawnPosition;
+            }
+            transform.rotation = SpawnManager.Instance.DefaultSpawnRotation;
+            
+            Debug.Log($"<color=green>[Host]</color> Teleported Host avatar to exactly {SpawnManager.Instance.DefaultSpawnPosition}");
+        }
+    }
+
     protected virtual void Awake()
     {
         if (!ValidateRequiredComponents()) return;
@@ -462,11 +515,14 @@ public class Character : MonoBehaviour
         SwitchController<PlayerController>(GetComponent<NPCController>());
         SwitchInteractionDetector<PlayerInteractionDetector, NPCInteractionDetector>();
 
-        // Link with the centralized HUD
-        PlayerUI playerUI = UnityEngine.Object.FindAnyObjectByType<PlayerUI>(FindObjectsInactive.Include);
-        if (playerUI != null)
+        if (IsSpawned && IsOwner)
         {
-            playerUI.Initialize(this.gameObject);
+            CameraFollow cameraFollow = Camera.main?.GetComponent<CameraFollow>();
+            if (cameraFollow != null) cameraFollow.SetGameObject(gameObject);
+
+            // Link with the centralized HUD
+            PlayerUI playerUI = UnityEngine.Object.FindAnyObjectByType<PlayerUI>(FindObjectsInactive.Include);
+            if (playerUI != null) playerUI.Initialize(gameObject);
         }
     }
 

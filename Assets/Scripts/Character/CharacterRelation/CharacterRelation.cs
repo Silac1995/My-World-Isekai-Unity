@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class CharacterRelation : MonoBehaviour
+public class CharacterRelation : CharacterSystem
 {
     [SerializeField] private Character _character;
     [SerializeField] private List<Relationship> _relationships = new List<Relationship>();

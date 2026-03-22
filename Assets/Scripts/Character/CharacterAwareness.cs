@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using System.Linq;
 
-public class CharacterAwareness : MonoBehaviour
+public class CharacterAwareness : CharacterSystem
 {
     [SerializeField] private Character _character;
     [SerializeField] private CapsuleCollider _awarenessCollider; 

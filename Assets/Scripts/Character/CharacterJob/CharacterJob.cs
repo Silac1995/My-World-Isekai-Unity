@@ -14,7 +14,7 @@ public class JobAssignment
 /// Composant attaché au personnage pour gérer ses différents jobs actuels.
 /// Permet d'assigner, quitter, et exécuter plusieurs jobs dans des CommercialBuilding.
 /// </summary>
-public class CharacterJob : MonoBehaviour
+public class CharacterJob : CharacterSystem
 {
     [SerializeField] private Character _character;
 

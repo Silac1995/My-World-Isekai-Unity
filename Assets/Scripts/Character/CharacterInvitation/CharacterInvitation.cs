@@ -7,7 +7,7 @@ using UnityEngine;
 /// based on relationship quality and personality traits.
 /// If no response is given before the timeout, the invitation is refused.
 /// </summary>
-public class CharacterInvitation : MonoBehaviour
+public class CharacterInvitation : CharacterSystem
 {
     [SerializeField] private Character _character;
 

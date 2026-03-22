@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class CharacterSkills : MonoBehaviour
+public class CharacterSkills : CharacterSystem
 {
     [SerializeField]
     private Character _character;

@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
-public class CharacterLocations : MonoBehaviour
+public class CharacterLocations : CharacterSystem
 {
     [Header("References")]
     [SerializeField] private Character _character;

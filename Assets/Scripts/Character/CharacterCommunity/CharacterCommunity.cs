@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class CharacterCommunity : MonoBehaviour
+public class CharacterCommunity : CharacterSystem
 {
     [SerializeField] private Character _character;
     [Header("Debug")]

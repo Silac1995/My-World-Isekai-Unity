@@ -1,6 +1,6 @@
 using UnityEngine;
 
-public class CharacterTraits : MonoBehaviour
+public class CharacterTraits : CharacterSystem
 {
     [Header("Behavioral Profile")]
     [Tooltip("ScriptableObject defining this character's behavioral biases.")]

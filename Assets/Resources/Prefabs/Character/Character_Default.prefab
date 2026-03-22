@@ -44,6 +44,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fd400535d1f5458449eaeaf8968783f0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CharacterGoapController
+  ShowTopMostFoldoutHeaderGroup: 1
   _character: {fileID: 2536622428659117900}
   _planReevaluationInterval: 2
 --- !u!1 &226592772466241420
@@ -143,6 +144,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b861cbb555490c941b6508ab491d0a94, type: 3}
   m_Name: 
   m_EditorClassIdentifier: '::'
+  ShowTopMostFoldoutHeaderGroup: 1
+  _character: {fileID: 2536622428659117900}
   _character: {fileID: 2536622428659117900}
   _speechBubblePrefab: {fileID: 4254001979599385014}
   _bodyPartsController: {fileID: 1007890653781899237}
@@ -291,6 +294,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0d2885347e2ad98479aed56b744b96ee, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CharacterSchedule
+  ShowTopMostFoldoutHeaderGroup: 1
+  _character: {fileID: 2536622428659117900}
   _character: {fileID: 2536622428659117900}
   _timeManager: {fileID: 0}
   _entries: []
@@ -382,6 +387,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8f16f22612a1b6b4ba8751aa3d10f01a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CharacterCommunity
+  ShowTopMostFoldoutHeaderGroup: 1
+  _character: {fileID: 2536622428659117900}
   _character: {fileID: 2536622428659117900}
   _debugCommunityName: New Community
 --- !u!1 &1948936245242239289
@@ -428,6 +435,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fe97ab2d70d8dca46a03cd930198370b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CharacterJob
+  ShowTopMostFoldoutHeaderGroup: 1
+  _character: {fileID: 2536622428659117900}
   _character: {fileID: 2536622428659117900}
   _activeJobs: []
 --- !u!1 &2019085881905274253
@@ -474,6 +483,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 23be460de80a7964b8c18c9cc684c8b1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CharacterProfile
+  ShowTopMostFoldoutHeaderGroup: 1
+  _character: {fileID: 2536622428659117900}
   _character: {fileID: 2536622428659117900}
   _personality: {fileID: 0}
 --- !u!1 &2279493750954164827
@@ -520,6 +531,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a680bc89727f70c428b8cebeb26b1da8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CharacterStatusManager
+  ShowTopMostFoldoutHeaderGroup: 1
   _character: {fileID: 2536622428659117900}
   _unconsciousEffect: {fileID: 11400000, guid: 8b53042cad11a914cb6d5847dc93f505, type: 2}
   _outOfCombatEffect: {fileID: 11400000, guid: 4bb0a5072ebeb5b4a9c039f3d6d8ef4c, type: 2}
@@ -567,6 +579,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e324887878c9e2e42b8da3491c9a0b15, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CharacterInteraction
+  ShowTopMostFoldoutHeaderGroup: 1
   _character: {fileID: 2536622428659117900}
   _currentTarget: {fileID: 0}
   _interactionZone: {fileID: 5383023488254193858}
@@ -615,6 +628,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e66b6542ea779e94982e7116ee4c1ce1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CharacterCombatLevel
+  ShowTopMostFoldoutHeaderGroup: 1
   _character: {fileID: 2536622428659117900}
   _statPointsPerLevel: 5
   _currentExperience: 1
@@ -670,6 +684,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ed61d997ab6127642b9df9f7e1bec0ce, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CharacterRelation
+  ShowTopMostFoldoutHeaderGroup: 1
+  _character: {fileID: 2536622428659117900}
   _character: {fileID: 2536622428659117900}
   _relationships: []
   _toastChannel: {fileID: 11400000, guid: ea961c82479cb974997317e89f3aa9b6, type: 2}
@@ -685,6 +701,7 @@ GameObject:
   - component: {fileID: 6179432398992828966}
   - component: {fileID: 3937668831498777898}
   - component: {fileID: 6020922162625289283}
+  - component: {fileID: -3286438699394139037}
   - component: {fileID: 2536622428659117900}
   - component: {fileID: 2677209831397210094}
   - component: {fileID: 4447047040555525631}
@@ -692,6 +709,8 @@ GameObject:
   - component: {fileID: 3369343900060323110}
   - component: {fileID: 8530357501166543435}
   - component: {fileID: 4916404909723457133}
+  - component: {fileID: 4739557321559680592}
+  - component: {fileID: 2038470363406112137}
   m_Layer: 8
   m_Name: Character_Default
   m_TagString: Character
@@ -794,6 +813,31 @@ CapsuleCollider:
   m_Height: 1
   m_Direction: 1
   m_Center: {x: 0, y: 0, z: 0}
+--- !u!114 &-3286438699394139037
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4281310202761960642}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
+  GlobalObjectIdHash: 2563509225
+  InScenePlacedSourceGlobalObjectIdHash: 0
+  DeferredDespawnTick: 0
+  Ownership: 1
+  AlwaysReplicateAsRoot: 0
+  SynchronizeTransform: 1
+  ActiveSceneSynchronization: 0
+  SceneMigrationSynchronization: 1
+  SpawnWithObservers: 1
+  DontDestroyWithOwner: 0
+  AutoObjectParentSync: 1
+  SyncOwnerTransformWhenParented: 1
+  AllowOwnerToParent: 0
 --- !u!114 &2536622428659117900
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -806,6 +850,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3244fac3036c53948b0080368868d48b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  ShowTopMostFoldoutHeaderGroup: 1
   _characterName: Unnamed
   _startingGender: 0
   _characterBio:
@@ -856,6 +901,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6856d573fe0f6ee43a91c183d8ab04ad, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  ShowTopMostFoldoutHeaderGroup: 1
   _character: {fileID: 2536622428659117900}
 --- !u!195 &4447047040555525631
 NavMeshAgent:
@@ -919,6 +965,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 15e157fd7a7d4414c81edfc3e15fbddd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NPCController
+  ShowTopMostFoldoutHeaderGroup: 1
   _character: {fileID: 2536622428659117900}
   _characterVisual: {fileID: 4467461276411840628}
   _characterMovement: {fileID: 6790967677183771991}
@@ -939,9 +986,73 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d80e33d08b31122458e1efa25b3850ae, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerController
+  ShowTopMostFoldoutHeaderGroup: 1
   _character: {fileID: 2536622428659117900}
   _characterVisual: {fileID: 4467461276411840628}
   _characterMovement: {fileID: 6790967677183771991}
+--- !u!114 &4739557321559680592
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4281310202761960642}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: da52bf8bbc1de48cfb221a6ff30f7972, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.Multiplayer.Center.NetcodeForGameObjectsExample::Unity.Multiplayer.Center.NetcodeForGameObjectsExample.ClientNetworkTransform
+  ShowTopMostFoldoutHeaderGroup: 1
+  NetworkTransformExpanded: 0
+  AutoOwnerAuthorityTickOffset: 1
+  PositionInterpolationType: 0
+  RotationInterpolationType: 0
+  ScaleInterpolationType: 0
+  PositionLerpSmoothing: 1
+  PositionMaxInterpolationTime: 0.1
+  RotationLerpSmoothing: 1
+  RotationMaxInterpolationTime: 0.1
+  ScaleLerpSmoothing: 1
+  ScaleMaxInterpolationTime: 0.1
+  AuthorityMode: 0
+  TickSyncChildren: 0
+  UseUnreliableDeltas: 0
+  SyncPositionX: 1
+  SyncPositionY: 1
+  SyncPositionZ: 1
+  SyncRotAngleX: 1
+  SyncRotAngleY: 1
+  SyncRotAngleZ: 1
+  SyncScaleX: 1
+  SyncScaleY: 1
+  SyncScaleZ: 1
+  PositionThreshold: 0.001
+  RotAngleThreshold: 0.01
+  ScaleThreshold: 0.01
+  UseQuaternionSynchronization: 0
+  UseQuaternionCompression: 0
+  UseHalfFloatPrecision: 0
+  InLocalSpace: 0
+  SwitchTransformSpaceWhenParented: 0
+  Interpolate: 1
+  SlerpPosition: 0
+--- !u!114 &2038470363406112137
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4281310202761960642}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f6c0be61502bb534f922ebb746851216, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.Components.NetworkRigidbody
+  ShowTopMostFoldoutHeaderGroup: 1
+  NetworkRigidbodyBaseExpanded: 0
+  UseRigidBodyForMotion: 0
+  AutoUpdateKinematicState: 1
+  AutoSetKinematicOnDespawn: 1
 --- !u!1 &4418266412928403763
 GameObject:
   m_ObjectHideFlags: 0
@@ -986,6 +1097,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 87ee1e204c713b948a917f73da9734fa, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CharacterStats
+  ShowTopMostFoldoutHeaderGroup: 1
+  _character: {fileID: 0}
   character: {fileID: 2536622428659117900}
   equipment: {fileID: 8408755073701722020}
   health:
@@ -1112,6 +1225,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: de90f5951359f294a9776f9c90b81ed1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CharacterLocations
+  ShowTopMostFoldoutHeaderGroup: 1
+  _character: {fileID: 2536622428659117900}
   _character: {fileID: 2536622428659117900}
   homeZone: {fileID: 0}
   workZone: {fileID: 0}
@@ -1187,6 +1302,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a90d5a089297cf74ca2786298ce345ab, type: 3}
   m_Name: 
   m_EditorClassIdentifier: '::'
+  ShowTopMostFoldoutHeaderGroup: 1
+  _character: {fileID: 2536622428659117900}
   _character: {fileID: 2536622428659117900}
   _awarenessCollider: {fileID: 5955514400556626450}
 --- !u!1 &5246753746272467509
@@ -1237,6 +1354,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ee1b65159ca17344696dca81369752f5, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  ShowTopMostFoldoutHeaderGroup: 1
   _character: {fileID: 2536622428659117900}
   visualRoot: {fileID: 1385890570874089402}
   bodyPartsController: {fileID: 1007890653781899237}
@@ -1355,6 +1473,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3a0ce1566afd2ff469693d72d037b8b6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CharacterMentorship
+  ShowTopMostFoldoutHeaderGroup: 1
+  _character: {fileID: 2536622428659117900}
   _character: {fileID: 2536622428659117900}
   _currentMentor: {fileID: 0}
   _learningSubject: {fileID: 0}
@@ -1410,6 +1530,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 06b6697c76a944341b45adbc3ee248a8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CharacterWounds
+  ShowTopMostFoldoutHeaderGroup: 1
+  _character: {fileID: 2536622428659117900}
   _woundData: {fileID: 11400000, guid: 4ec6d22c09eac7048a9efe053d97e0ae, type: 2}
   _maxWounds: 10
   _woundRadius: 0.5
@@ -1461,6 +1583,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0edce19ba03f5fa46869b9a505a10907, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CharacterNeeds
+  ShowTopMostFoldoutHeaderGroup: 1
+  _character: {fileID: 2536622428659117900}
   _character: {fileID: 2536622428659117900}
 --- !u!1 &6266563702013865810
 GameObject:
@@ -1506,6 +1630,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 244f96c5510126c4b850f5c84ac63bab, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CharacterTraits
+  ShowTopMostFoldoutHeaderGroup: 1
+  _character: {fileID: 0}
   behavioralTraitsProfile: {fileID: 0}
 --- !u!1 &7020132060276875520
 GameObject:
@@ -1579,6 +1705,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 72dfa85ab02c44a4ebbd5e0a433b2bbd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CharacterMovement
+  ShowTopMostFoldoutHeaderGroup: 1
   _character: {fileID: 2536622428659117900}
   _acceleration: 50
   _groundCheckDistance: 0.2
@@ -1678,6 +1805,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3b7a6fbc7fe3fd448bf79e1f1c12817d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CharacterInvitation
+  ShowTopMostFoldoutHeaderGroup: 1
+  _character: {fileID: 2536622428659117900}
   _character: {fileID: 2536622428659117900}
   _responseDelay: 3
   _responseTimeout: 10
@@ -1725,6 +1854,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1dba3f9b5a9c4624ca7d45544f3a7db9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: '::'
+  ShowTopMostFoldoutHeaderGroup: 1
   _character: {fileID: 2536622428659117900}
   _knownStyles: []
   _currentCombatStyleExpertise:
@@ -1781,6 +1911,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 60a22f608d5adc741a8b87e75e60f2fe, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CharacterEquipment
+  ShowTopMostFoldoutHeaderGroup: 1
   _character: {fileID: 0}
   _weaponSocket: {fileID: 0}
   underwearLayer: {fileID: 0}
@@ -1834,6 +1965,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6ad6a5dca354b54458d3d49dbf5834eb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NPCBehaviourTree
+  ShowTopMostFoldoutHeaderGroup: 1
   _character: {fileID: 2536622428659117900}
   _debugLog: 0
   _currentNodeName: None
@@ -1882,6 +2014,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ed1699f83fdffdd41ae6e70032285ee3, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CharacterSkills
+  ShowTopMostFoldoutHeaderGroup: 1
+  _character: {fileID: 2536622428659117900}
   _character: {fileID: 2536622428659117900}
   _skills: []
 --- !u!1001 &2837313653771678447

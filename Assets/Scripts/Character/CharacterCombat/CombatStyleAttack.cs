@@ -56,6 +56,11 @@ public class CombatStyleAttack : MonoBehaviour
 
     private void Update()
     {
+        // ONLY the Server executes hitbox logic to prevent multi-hit desyncs
+        if (Unity.Netcode.NetworkManager.Singleton != null && 
+            Unity.Netcode.NetworkManager.Singleton.IsListening && 
+            !Unity.Netcode.NetworkManager.Singleton.IsServer) return;
+
         if (_hitTargets.Count >= _finalMaxTargets || _potentialTargets.Count == 0) return;
 
         // --- TRI PAR PRIORITÉ ET DISTANCE ---
@@ -139,6 +144,11 @@ public class CombatStyleAttack : MonoBehaviour
 
     private void OnTriggerEnter(Collider other)
     {
+        // ONLY the Server registers potential targets
+        if (Unity.Netcode.NetworkManager.Singleton != null && 
+            Unity.Netcode.NetworkManager.Singleton.IsListening && 
+            !Unity.Netcode.NetworkManager.Singleton.IsServer) return;
+
         Character target = other.GetComponentInParent<Character>();
         
         if (target == null) return;

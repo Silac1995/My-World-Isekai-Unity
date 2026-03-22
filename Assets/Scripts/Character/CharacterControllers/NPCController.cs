@@ -66,11 +66,11 @@ public class NPCController : CharacterGameController
         else
         {
             // Mode legacy : on garde l'ancien système
-            if (_character.CharacterAwareness != null)
+            if (_character.CharacterAwareness != null && IsServer)
             {
                 _character.CharacterAwareness.OnCharacterDetected += HandleCharacterDetected;
             }
-            ResetStackTo(new WanderBehaviour(this));
+            if (IsServer) ResetStackTo(new WanderBehaviour(this));
         }
     }
 
@@ -432,6 +432,8 @@ public class NPCController : CharacterGameController
 
     private void OnTriggerEnter(Collider other)
     {
+        if (!IsServer) return;
+        
         if (other.CompareTag("BattleZone"))
         {
             if (other.TryGetComponent<BattleManager>(out var manager))

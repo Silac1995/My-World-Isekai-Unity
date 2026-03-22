@@ -1,6 +1,6 @@
 using UnityEngine;
 
-public class CharacterProfile : MonoBehaviour
+public class CharacterProfile : CharacterSystem
 {
     [SerializeField] private Character _character;
     [SerializeField] private CharacterPersonalitySO _personality;

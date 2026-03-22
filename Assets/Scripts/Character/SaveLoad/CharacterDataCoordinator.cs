@@ -5,8 +5,10 @@ using System.Threading.Tasks;
 using UnityEngine;
 using Newtonsoft.Json;
 
+using Unity.Netcode;
+
 [RequireComponent(typeof(Character))]
-public class CharacterDataCoordinator : MonoBehaviour
+public class CharacterDataCoordinator : NetworkBehaviour
 {
     private Character _character;
     

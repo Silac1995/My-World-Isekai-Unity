@@ -1,6 +1,6 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
+using Unity.Netcode;
 using UnityEngine;
 
 public class CharacterCombat : CharacterSystem
@@ -156,12 +156,66 @@ public class CharacterCombat : CharacterSystem
     {
         if (!_character.IsAlive()) return false;
         
+        ulong targetId = (target != null && target.NetworkObject != null) ? target.NetworkObject.NetworkObjectId : 0;
+
+        if (IsOwner)
+        {
+            // Owner locally predicts the visual attack
+            bool success = ExecuteAttackLocally(target);
+            if (!success) return false;
+
+            if (!IsServer)
+            {
+                RequestAttackRpc(targetId);
+            }
+            else
+            {
+                BroadcastAttackRpc(targetId);
+            }
+            return true;
+        }
+        else if (IsServer) // NPC or Server-controlled entity
+        {
+            bool success = ExecuteAttackLocally(target);
+            if (!success) return false;
+
+            BroadcastAttackRpc(targetId);
+            return true;
+        }
+
+        return false;
+    }
+
+    [Rpc(SendTo.Server)]
+    private void RequestAttackRpc(ulong targetNetworkObjectId)
+    {
+        Character target = null;
+        if (targetNetworkObjectId > 0 && NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(targetNetworkObjectId, out var netObj))
+            target = netObj.GetComponent<Character>();
+
+        ExecuteAttackLocally(target);
+        BroadcastAttackRpc(targetNetworkObjectId);
+    }
+
+    [Rpc(SendTo.NotServer)]
+    private void BroadcastAttackRpc(ulong targetNetworkObjectId)
+    {
+        if (IsOwner) return; // Owner already predicted it
+
+        Character target = null;
+        if (targetNetworkObjectId > 0 && NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(targetNetworkObjectId, out var netObj))
+            target = netObj.GetComponent<Character>();
+
+        ExecuteAttackLocally(target);
+    }
+
+    private bool ExecuteAttackLocally(Character target)
+    {
         _lastCombatActionTime = Time.time;
         ChangeCombatMode(true);
 
         if (_character.CharacterActions == null) return false;
 
-        // Si le style actuel est Ranged et que la cible est au-delà de la portée melee, tir à distance
         if (target != null 
             && _currentCombatStyleExpertise?.Style is RangedCombatStyleSO rangedStyle)
         {
@@ -172,7 +226,6 @@ public class CharacterCombat : CharacterSystem
             }
         }
 
-        // Sinon, attaque melee (même pour une arme ranged au corps-à-corps)
         return MeleeAttack();
     }
 
@@ -240,6 +293,7 @@ public class CharacterCombat : CharacterSystem
 
     public void JoinBattleAsAlly(Character friend)
     {
+        if (!IsServer) return; // Only Server manages physical battles
         if (friend == null || !friend.CharacterCombat.IsInBattle) return;
         if (IsInBattle) return;
 
@@ -270,6 +324,8 @@ public class CharacterCombat : CharacterSystem
     public void StartFight(Character target)
     {
         if (target == null) return;
+        
+        if (!IsServer) return; // ONLY SERVER CAN SPAWN/MANAGE BATTLES
 
         // --- PÉNALITÉ DE RELATION ---
         // On baisse la relation des deux côtés de 10 points car un combat commence
@@ -476,16 +532,17 @@ public class CharacterCombat : CharacterSystem
     {
         if (_character.Stats == null || _character.Stats.Health == null || !_character.IsAlive()) return;
 
+        // ONLY the Server executes the raw physical damage calculation and EXP
+        if (!IsServer) return;
+
         bool wasAlive = _character.IsAlive();
-        
         float hpBefore = _character.Stats.Health.CurrentAmount;
+        
         _character.Stats.Health.DecreaseCurrentAmount(amount);
         float hpAfter = Mathf.Max(0f, _character.Stats.Health.CurrentAmount);
         float actualDamageDealt = hpBefore - hpAfter;
-        _lastCombatActionTime = Time.time;
         
-        // La méthode ChangeCombatMode déclenche naturellement HandleCombatStateChanged 
-        // dans les sous-systèmes, ce qui coupera automatiquement les interactions/actions en cours.
+        _lastCombatActionTime = Time.time;
         ChangeCombatMode(true);
 
         OnDamageTaken?.Invoke(amount, type);
@@ -495,7 +552,7 @@ public class CharacterCombat : CharacterSystem
             _character.CharacterVisual.CharacterBlink.Blink();
         }
 
-        if (_character.Stats.Health.CurrentAmount <= 0)
+        if (hpAfter <= 0)
         {
             _character.SetUnconscious(true);
         }
@@ -514,6 +571,36 @@ public class CharacterCombat : CharacterSystem
             int expGained = source.CharacterCombatLevel.CalculateCombatExp(targetLevel, isKill, damagePercentage, targetYield);
             source.CharacterCombatLevel.AddExperience(expGained);
         }
+
+        // Sync HP change and visuals to all clients
+        ulong sourceId = (source != null && source.NetworkObject != null) ? source.NetworkObject.NetworkObjectId : 0;
+        SyncDamageClientRpc(amount, type, hpAfter, sourceId);
+    }
+
+    [Rpc(SendTo.NotServer)]
+    private void SyncDamageClientRpc(float amount, DamageType type, float serverHpAfter, ulong sourceId)
+    {
+        if (_character.Stats == null || _character.Stats.Health == null) return;
+
+        // Force exactly the Server's HP
+        _character.Stats.Health.CurrentAmount = serverHpAfter;
+
+        _lastCombatActionTime = Time.time;
+        ChangeCombatMode(true);
+
+        OnDamageTaken?.Invoke(amount, type);
+
+        if (_character.CharacterVisual != null && _character.CharacterVisual.CharacterBlink != null)
+        {
+            _character.CharacterVisual.CharacterBlink.Blink();
+        }
+
+        if (serverHpAfter <= 0)
+        {
+            _character.SetUnconscious(true);
+        }
+
+        // Note: Clients do not execute EXP progression logic. That remains Server-only.
     }
 
     // Keep compatibility with old single arg call if needed
