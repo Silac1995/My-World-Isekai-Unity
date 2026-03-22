@@ -60,11 +60,11 @@ MonoBehaviour:
   m_ChildAlignment: 0
   m_Spacing: 10
   m_ChildForceExpandWidth: 0
-  m_ChildForceExpandHeight: 1
-  m_ChildControlWidth: 1
-  m_ChildControlHeight: 1
-  m_ChildScaleWidth: 0
-  m_ChildScaleHeight: 0
+  m_ChildForceExpandHeight: 0
+  m_ChildControlWidth: 0
+  m_ChildControlHeight: 0
+  m_ChildScaleWidth: 1
+  m_ChildScaleHeight: 1
   m_ReverseArrangement: 0
 --- !u!114 &2751176825862609525
 MonoBehaviour:
@@ -92,6 +92,7 @@ GameObject:
   - component: {fileID: 3891362976225922540}
   - component: {fileID: 1109212004719596567}
   - component: {fileID: 3524298560123460546}
+  - component: {fileID: 4510005795564394298}
   m_Layer: 0
   m_Name: Text_StatValue
   m_TagString: Untagged
@@ -113,10 +114,10 @@ RectTransform:
   m_Children: []
   m_Father: {fileID: 8416745576512627205}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 0, y: 0}
+  m_AnchorMin: {x: 0, y: 1}
+  m_AnchorMax: {x: 0, y: 1}
+  m_AnchoredPosition: {x: 105.825, y: -20}
+  m_SizeDelta: {x: 35.17, y: 30}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &1109212004719596567
 CanvasRenderer:
@@ -218,6 +219,20 @@ MonoBehaviour:
   m_hasFontAssetChanged: 0
   m_baseMaterial: {fileID: 0}
   m_maskOffset: {x: 0, y: 0, z: 0, w: 0}
+--- !u!114 &4510005795564394298
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2547852103695888554}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3245ec927659c4140ac4f8d17403cc18, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.ContentSizeFitter
+  m_HorizontalFit: 2
+  m_VerticalFit: 0
 --- !u!1 &4304614406854950801
 GameObject:
   m_ObjectHideFlags: 0
@@ -254,7 +269,7 @@ RectTransform:
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 200, y: 50}
+  m_SizeDelta: {x: 44.9, y: 50}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &4835507900164951850
 CanvasRenderer:
@@ -381,6 +396,7 @@ GameObject:
   - component: {fileID: 7139915885856390606}
   - component: {fileID: 8289968750576402002}
   - component: {fileID: 4821451482696610826}
+  - component: {fileID: 908855222183734141}
   m_Layer: 0
   m_Name: Text_StatName
   m_TagString: Untagged
@@ -402,10 +418,10 @@ RectTransform:
   m_Children: []
   m_Father: {fileID: 8416745576512627205}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 0, y: 0}
+  m_AnchorMin: {x: 0, y: 1}
+  m_AnchorMax: {x: 0, y: 1}
+  m_AnchoredPosition: {x: 44.12, y: -20}
+  m_SizeDelta: {x: 68.24, y: 30}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &8289968750576402002
 CanvasRenderer:
@@ -507,6 +523,20 @@ MonoBehaviour:
   m_hasFontAssetChanged: 0
   m_baseMaterial: {fileID: 0}
   m_maskOffset: {x: 0, y: 0, z: 0, w: 0}
+--- !u!114 &908855222183734141
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4849470984510165569}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3245ec927659c4140ac4f8d17403cc18, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.ContentSizeFitter
+  m_HorizontalFit: 2
+  m_VerticalFit: 0
 --- !u!1 &9188210483075223045
 GameObject:
   m_ObjectHideFlags: 0
@@ -545,7 +575,7 @@ RectTransform:
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 0, y: 0}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 0, y: 0}
+  m_SizeDelta: {x: 34.96, y: 30}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &757749685637170771
 CanvasRenderer:
@@ -568,7 +598,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_Color: {r: 0.29169634, g: 0.3612115, b: 0.6509434, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1

@@ -834,7 +834,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MWI.UI.Notifications.UI_ToastManager
   _toastChannel: {fileID: 11400000, guid: ea961c82479cb974997317e89f3aa9b6, type: 2}
-  _toastPrefab: {fileID: 6828587052395877930, guid: 1a2d3c169f1cabe45adfb116d4e4ca3f, type: 3}
+  _toastPrefab: {fileID: 1521832660572552137, guid: 1a2d3c169f1cabe45adfb116d4e4ca3f, type: 3}
   _toastContainer: {fileID: 7846755559401419888}
   _initialPoolSize: 10
 --- !u!1 &5586085509215323037
@@ -3768,11 +3768,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 1202915504975643731, guid: 2acb635e5d040094da0995e9f8912aca, type: 3}
       propertyPath: m_AnchoredPosition.x
-      value: 1320
+      value: 965
       objectReference: {fileID: 0}
     - target: {fileID: 1202915504975643731, guid: 2acb635e5d040094da0995e9f8912aca, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: 964
+      value: 839
       objectReference: {fileID: 0}
     - target: {fileID: 1202915504975643731, guid: 2acb635e5d040094da0995e9f8912aca, type: 3}
       propertyPath: m_LocalEulerAnglesHint.x
