@@ -113,6 +113,14 @@ The `PlayerUI` handles displaying context-sensitive actions through `OpenInterac
 
 ---
 
+### Invitation Prompt UI
+Distinct from the passive `ToastNotificationSystem`, the `UI_InvitationPrompt` is an interactive popup requiring player input (Accept/Refuse).
+- `PlayerUI` holds a reference to the `UI_InvitationPrompt` prefab/component.
+- During initialization, it binds the `CharacterInvitation` events (`OnPlayerInvitationReceived`, `OnPlayerInvitationResolved`) to the prompt.
+- The prompt drives its own visibility natively without `Update()` polling, and fires `ResolvePlayerInvitation()` back to the game logic when the player decides.
+
+---
+
 #### Current Windows
 - **`UI_CharacterEquipment`**: Manages the inventory interaction logic. Uses `UI_NotificationClearer` to handle badges natively.
 - **`UI_CharacterRelations`**: Dynamically displays a list of `UI_RelationshipSlot` instances based on `CharacterRelation` events.

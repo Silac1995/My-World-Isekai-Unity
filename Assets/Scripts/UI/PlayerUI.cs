@@ -32,6 +32,7 @@ public class PlayerUI : MonoBehaviour
     [SerializeField] private UI_CharacterStats _statsUI;
     [SerializeField] private UI_ChatBar _chatBar;
     [SerializeField] private UI_InteractionMenu _interactionMenu;
+    [SerializeField] private MWI.UI.UI_InvitationPrompt _invitationPrompt;
 
     private Character characterComponent;
 
@@ -88,6 +89,11 @@ public class PlayerUI : MonoBehaviour
         if (_chatBar != null)
         {
             _chatBar.Initialize(characterComponent);
+        }
+
+        if (_invitationPrompt != null && characterComponent.CharacterInvitation != null)
+        {
+            _invitationPrompt.Initialize(characterComponent.CharacterInvitation);
         }
 
         // Push notification channels to the equipment system
@@ -253,6 +259,10 @@ public class PlayerUI : MonoBehaviour
         if (_chatBar != null)
         {
             _chatBar.Initialize(null);
+        }
+        if (_invitationPrompt != null)
+        {
+            _invitationPrompt.Initialize(null);
         }
     }
 

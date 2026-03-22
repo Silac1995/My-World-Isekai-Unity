@@ -35,9 +35,9 @@ This is a `MonoBehaviour` attached to the Character.
 - When an `InteractionInvitation` is submitted to it via `.ReceiveInvitation()`, it starts a Coroutine.
 - If the target is an NPC, they will stop moving to visually "think" about the invitation. If the target is the player, they retain full movement control.
 - While the target is thinking during the `_responseDelay`, the **source character will follow the target**. This is managed via the `StartFollowingTarget` routine which auto-halts once the target responds.
-- It waits for a delay (`_responseDelay`, default 3 seconds) to "think".
-- Then, it calls the evaluation logic. 
-- If `EvaluateCustomInvitation()` returns null, it performs the standard calculation:
+- For **NPCs**, it waits for a delay (`_responseDelay`, default 3 seconds) to "think", then calls the automated evaluation logic. 
+- For the **Player**, it fires the `OnPlayerInvitationReceived` event (picked up by the UI) and waits indefinitely or until a timeout for `ResolvePlayerInvitation(bool)` to receive the explicit player choice, bypassing the automated social math.
+- (NPCs only) If `EvaluateCustomInvitation()` returns null, it performs the standard calculation:
   - Friend = 85% chance to accept.
   - Stranger = ~30% - 60% depending on the relation gauge.
   - Enemy = 5%.

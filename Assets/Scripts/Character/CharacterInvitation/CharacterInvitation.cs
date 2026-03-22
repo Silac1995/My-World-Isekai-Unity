@@ -27,6 +27,11 @@ public class CharacterInvitation : MonoBehaviour
 
     private Coroutine _pendingCoroutine;
     private Coroutine _followCoroutine;
+    private bool? _playerResponse;
+
+    public event System.Action<InteractionInvitation, Character> OnPlayerInvitationReceived;
+    public event System.Action<float> OnPlayerInvitationTimerUpdated;
+    public event System.Action OnPlayerInvitationResolved;
 
     private void Awake()
     {
@@ -63,39 +68,98 @@ public class CharacterInvitation : MonoBehaviour
     {
         HasPendingInvitation = true;
 
-        // Wait for the "thinking" delay
-        yield return new WaitForSeconds(_responseDelay);
-
-        // Safety checks after delay
-        if (source == null || !source.IsAlive() || _character == null || !_character.IsAlive())
+        if (_character.IsPlayer())
         {
-            HasPendingInvitation = false;
-            yield break;
-        }
+            _playerResponse = null;
+            OnPlayerInvitationReceived?.Invoke(invitation, source);
 
-        // Evaluate the response
-        bool accepted = EvaluateInvitation(invitation, source);
+            float timer = 0f;
+            while (_playerResponse == null && timer < _responseTimeout)
+            {
+                timer += Time.deltaTime;
+                OnPlayerInvitationTimerUpdated?.Invoke(timer / _responseTimeout);
+                
+                if (source == null || !source.IsAlive() || _character == null || !_character.IsAlive())
+                {
+                    HasPendingInvitation = false;
+                    OnPlayerInvitationResolved?.Invoke();
+                    yield break;
+                }
+                
+                yield return null;
+            }
 
-        // React
-        if (accepted)
-        {
-            if (_character.CharacterSpeech != null)
-                _character.CharacterSpeech.Say(invitation.GetAcceptMessage());
+            OnPlayerInvitationResolved?.Invoke();
 
-            invitation.OnAccepted(source, _character);
-            Debug.Log($"<color=green>[Invitation]</color> {_character.CharacterName} accepted {source.CharacterName}'s invitation!");
+            if (source == null || !source.IsAlive() || _character == null || !_character.IsAlive())
+            {
+                HasPendingInvitation = false;
+                yield break;
+            }
+
+            bool accepted = _playerResponse ?? false;
+
+            if (accepted)
+            {
+                if (_character.CharacterSpeech != null)
+                    _character.CharacterSpeech.Say(invitation.GetAcceptMessage());
+
+                invitation.OnAccepted(source, _character);
+                Debug.Log($"<color=green>[Invitation]</color> {_character.CharacterName} accepted {source.CharacterName}'s invitation!");
+            }
+            else
+            {
+                if (_character.CharacterSpeech != null)
+                    _character.CharacterSpeech.Say(invitation.GetRefuseMessage());
+
+                invitation.OnRefused(source, _character);
+                Debug.Log($"<color=orange>[Invitation]</color> {_character.CharacterName} refused {source.CharacterName}'s invitation.");
+            }
         }
         else
         {
-            if (_character.CharacterSpeech != null)
-                _character.CharacterSpeech.Say(invitation.GetRefuseMessage());
+            // Wait for the "thinking" delay
+            yield return new WaitForSeconds(_responseDelay);
 
-            invitation.OnRefused(source, _character);
-            Debug.Log($"<color=orange>[Invitation]</color> {_character.CharacterName} refused {source.CharacterName}'s invitation.");
+            // Safety checks after delay
+            if (source == null || !source.IsAlive() || _character == null || !_character.IsAlive())
+            {
+                HasPendingInvitation = false;
+                yield break;
+            }
+
+            // Evaluate the response
+            bool accepted = EvaluateInvitation(invitation, source);
+
+            // React
+            if (accepted)
+            {
+                if (_character.CharacterSpeech != null)
+                    _character.CharacterSpeech.Say(invitation.GetAcceptMessage());
+
+                invitation.OnAccepted(source, _character);
+                Debug.Log($"<color=green>[Invitation]</color> {_character.CharacterName} accepted {source.CharacterName}'s invitation!");
+            }
+            else
+            {
+                if (_character.CharacterSpeech != null)
+                    _character.CharacterSpeech.Say(invitation.GetRefuseMessage());
+
+                invitation.OnRefused(source, _character);
+                Debug.Log($"<color=orange>[Invitation]</color> {_character.CharacterName} refused {source.CharacterName}'s invitation.");
+            }
         }
 
         HasPendingInvitation = false;
         _pendingCoroutine = null;
+    }
+
+    public void ResolvePlayerInvitation(bool accept)
+    {
+        if (HasPendingInvitation && _character != null && _character.IsPlayer())
+        {
+            _playerResponse = accept;
+        }
     }
 
     // ──────────────────────────────────────────────
@@ -279,5 +343,6 @@ public class CharacterInvitation : MonoBehaviour
             _pendingCoroutine = null;
         }
         HasPendingInvitation = false;
+        OnPlayerInvitationResolved?.Invoke();
     }
 }
