@@ -1,23 +1,29 @@
 using UnityEngine;
 
+using MWI.CharacterControllers.Commands;
+
 public class PlayerController : CharacterGameController
 {
     private Vector3 _inputDir = Vector3.zero;
     private bool _isCrouching = false;
+    private bool _wasNavMeshActiveLastFrame = false;
 
-    private bool _wasInBattleLastFrame = false;
+    private IPlayerCommand _currentOrder;
 
-    // --- Combat AI State (Mimicking NPC Behavior) ---
-    private MWI.AI.CombatAILogic _combatAILogic;
+    public void SetOrder(IPlayerCommand newOrder)
+    {
+        if (_currentOrder != null) _currentOrder.OnCancelled(this);
+        _currentOrder = newOrder;
 
-    private Vector3? _clickDestination = null;
+        if (newOrder == null && _character.CharacterCombat != null)
+        {
+            _character.CharacterCombat.ClearActionIntent();
+        }
+    }
 
     public override void Initialize()
     {
         base.Initialize();
-        
-        _combatAILogic = new MWI.AI.CombatAILogic(_character, autoDecideIntent: false);
-
         if (_character.Rigidbody != null)
             _character.Rigidbody.interpolation = RigidbodyInterpolation.Interpolate;
     }
@@ -40,9 +46,18 @@ public class PlayerController : CharacterGameController
         _inputDir = new Vector3(h, 0f, v).normalized;
         _isCrouching = Input.GetKey(KeyCode.C);
 
-        if (_inputDir.sqrMagnitude > 0.1f)
+        if (_inputDir.sqrMagnitude > 0.1f && _currentOrder != null)
         {
-            _clickDestination = null; // ZQSD cancels click-to-move
+            // ZQSD cancels any movement command instantly, BUT NOT if we are forced into combat AI
+            if (!(_currentOrder is PlayerCombatCommand))
+            {
+                SetOrder(null);
+            }
+            else
+            {
+                // In combat, WASD is ignored for movement
+                _inputDir = Vector3.zero;
+            }
         }
 
         // Right-click to move (standard RPG/MOBA)
@@ -51,8 +66,23 @@ public class PlayerController : CharacterGameController
             Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
             if (Physics.Raycast(ray, out RaycastHit hit, 100f))
             {
-                _clickDestination = hit.point;
+                SetOrder(new PlayerMoveCommand(hit.point));
             }
+        }
+
+        // Auto-Trigger Combat Command when in battle. The command handles pacing and action execution.
+        if (_character.CharacterCombat.IsInBattle && !(_currentOrder is PlayerCombatCommand))
+        {
+            Character battleTarget = _character.CharacterCombat.CurrentBattleManager?.GetBestTargetFor(_character);
+            if (battleTarget != null)
+            {
+                SetOrder(new PlayerCombatCommand(_character, battleTarget));
+            }
+        }
+        else if (!_character.CharacterCombat.IsInBattle && _currentOrder is PlayerCombatCommand)
+        {
+            // Exit combat gracefully
+            SetOrder(null);
         }
 
         if (Input.GetKeyDown(KeyCode.J))
@@ -66,8 +96,6 @@ public class PlayerController : CharacterGameController
         }
 
         base.Update();
-
-        // Appeler explicitement Move() ici si tu veux que l'input soit traité à chaque frame
         Move();
     }
 
@@ -77,9 +105,9 @@ public class PlayerController : CharacterGameController
         {
             _characterVisual?.UpdateFlip(_inputDir);
         }
-        else if (_clickDestination.HasValue)
+        else if (_currentOrder != null && _characterMovement.HasPath)
         {
-            Vector3 dir = _clickDestination.Value - transform.position;
+            Vector3 dir = _characterMovement.Destination - transform.position;
             if (dir.sqrMagnitude > 0.1f)
             {
                 _characterVisual?.UpdateFlip(dir);
@@ -91,61 +119,25 @@ public class PlayerController : CharacterGameController
     {
         if (_character.CharacterActions.CurrentAction != null) return;
 
-        bool currentInBattle = _character.CharacterCombat != null && _character.CharacterCombat.IsInBattle;
+        bool needsNavMesh = _currentOrder != null;
 
-        // Transition logic for NavMesh (Battle or Click-To-Move)
-        bool needsNavMesh = currentInBattle || _clickDestination.HasValue;
-
-        if (needsNavMesh && !_wasInBattleLastFrame)
+        if (needsNavMesh && !_wasNavMeshActiveLastFrame)
         {
             _character.ConfigureNavMesh(true);
-            if (_character.Rigidbody != null) 
-            {
-                _character.Rigidbody.isKinematic = true; // Prevent physics stuttering while NavMesh controls movement
-            }
         }
-        else if (!needsNavMesh && _wasInBattleLastFrame)
+        else if (!needsNavMesh && _wasNavMeshActiveLastFrame)
         {
             _character.ConfigureNavMesh(false);
-            if (_character.Rigidbody != null) 
-            {
-                _character.Rigidbody.isKinematic = false; // Restore physical movement for WASD
-            }
             _characterMovement.Stop();
         }
-        _wasInBattleLastFrame = needsNavMesh;
+        _wasNavMeshActiveLastFrame = needsNavMesh;
 
-        if (currentInBattle)
+        if (_currentOrder != null)
         {
-            _clickDestination = null; // Combat mode overrides click-to-move
-            
-            // Shared autonomous pacing logic (stutter-free, intent-driven)
-            Character battleTarget = _character.CharacterCombat.CurrentBattleManager?.GetBestTargetFor(_character);
-            
-            if (battleTarget != null)
+            bool isFinished = _currentOrder.Tick(this, _characterMovement);
+            if (isFinished)
             {
-                _combatAILogic.Tick(battleTarget);
-            }
-            else
-            {
-                _characterMovement.Stop();
-            }
-        }
-        else if (_clickDestination.HasValue)
-        {
-            // Click-to-move execution
-            if (Vector3.Distance(transform.position, _clickDestination.Value) > _characterMovement.StoppingDistance + 0.1f)
-            {
-                _characterMovement.Resume();
-                if (Vector3.Distance(_characterMovement.Destination, _clickDestination.Value) > 0.5f)
-                {
-                    _characterMovement.SetDestination(_clickDestination.Value, _character.MovementSpeed);
-                }
-            }
-            else
-            {
-                _characterMovement.Stop();
-                _clickDestination = null; // Reached destination, turn off NavMesh automatically next frame
+                SetOrder(null);
             }
         }
         else

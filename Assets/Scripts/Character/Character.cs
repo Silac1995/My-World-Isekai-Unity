@@ -501,11 +501,38 @@ public class Character : MonoBehaviour
     public void ConfigureNavMesh(bool enabled)
     {
         if (_cachedNavMeshAgent == null) return;
-        _cachedNavMeshAgent.enabled = enabled;
+        
         if (enabled)
         {
+            // 1. Lock physics BEFORE enabling the agent
+            if (_rb != null)
+            {
+                _rb.linearVelocity = Vector3.zero;
+                _rb.angularVelocity = Vector3.zero;
+                _rb.isKinematic = true;
+            }
+
+            // 2. Enable and configure agent
+            _cachedNavMeshAgent.enabled = true;
+            if (_cachedNavMeshAgent.isOnNavMesh) _cachedNavMeshAgent.isStopped = false;
             _cachedNavMeshAgent.updatePosition = true;
             _cachedNavMeshAgent.updateRotation = false;
+        }
+        else
+        {
+            // 1. Stop and disable agent BEFORE unlocking physics
+            if (_cachedNavMeshAgent.isOnNavMesh)
+            {
+                _cachedNavMeshAgent.isStopped = true;
+                _cachedNavMeshAgent.ResetPath();
+            }
+            _cachedNavMeshAgent.enabled = false;
+
+            // 2. Unlock physics
+            if (_rb != null && _controller is PlayerController) // Keep NPCs kinematic
+            {
+                _rb.isKinematic = false;
+            }
         }
     }
 

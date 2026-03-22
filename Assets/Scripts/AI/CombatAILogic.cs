@@ -11,6 +11,7 @@ namespace MWI.AI
         private float _readyStartTime;
         private bool _isChargingTarget;
         private bool _autoDecideIntent;
+        private float _lastPathUpdateTime;
 
         public CombatAILogic(Character self, bool autoDecideIntent)
         {
@@ -101,10 +102,10 @@ namespace MWI.AI
                 if (!isWithinRange || isXTooClose || !isZAligned)
                 {
                     // Force movement into valid strike position
-                    // Only update destination if target has moved significantly from current path goal, or time has passed
-                    if (Vector3.Distance(movement.Destination, currentTarget.transform.position) > 0.5f)
+                    if (UnityEngine.Time.time - _lastPathUpdateTime > 0.3f && Vector3.Distance(movement.Destination, currentTarget.transform.position) > 0.5f)
                     {
                         movement.SetDestination(currentTarget.transform.position);
+                        _lastPathUpdateTime = UnityEngine.Time.time;
                     }
                 }
                 else
@@ -133,9 +134,10 @@ namespace MWI.AI
                 // Apply Tactics safely
                 Vector3 finalPos = _combatPacer.GetTacticalDestination(currentTarget, attackRange, false);
                 
-                if (Vector3.Distance(movement.Destination, finalPos) > 0.5f)
+                if (UnityEngine.Time.time - _lastPathUpdateTime > 0.5f && Vector3.Distance(movement.Destination, finalPos) > 0.5f)
                 {
                     movement.SetDestination(finalPos);
+                    _lastPathUpdateTime = UnityEngine.Time.time;
                 }
             }
 
