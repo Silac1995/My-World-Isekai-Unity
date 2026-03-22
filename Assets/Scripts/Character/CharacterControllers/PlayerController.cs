@@ -5,18 +5,18 @@ public class PlayerController : CharacterGameController
     private Vector3 _inputDir = Vector3.zero;
     private bool _isCrouching = false;
 
-    private float _nextPathUpdateTime = 0f;
-    private const float PATH_UPDATE_INTERVAL = 0.2f;
     private bool _wasInBattleLastFrame = false;
 
     // --- Combat AI State (Mimicking NPC Behavior) ---
-    private CombatTacticalPacer _combatPacer;
+    private MWI.AI.CombatAILogic _combatAILogic;
+
+    private Vector3? _clickDestination = null;
 
     public override void Initialize()
     {
         base.Initialize();
         
-        _combatPacer = new CombatTacticalPacer(_character);
+        _combatAILogic = new MWI.AI.CombatAILogic(_character, autoDecideIntent: false);
 
         if (_character.Rigidbody != null)
             _character.Rigidbody.interpolation = RigidbodyInterpolation.Interpolate;
@@ -40,6 +40,21 @@ public class PlayerController : CharacterGameController
         _inputDir = new Vector3(h, 0f, v).normalized;
         _isCrouching = Input.GetKey(KeyCode.C);
 
+        if (_inputDir.sqrMagnitude > 0.1f)
+        {
+            _clickDestination = null; // ZQSD cancels click-to-move
+        }
+
+        // Right-click to move (standard RPG/MOBA)
+        if (Input.GetMouseButtonDown(1) && !_character.CharacterCombat.IsInBattle)
+        {
+            Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+            if (Physics.Raycast(ray, out RaycastHit hit, 100f))
+            {
+                _clickDestination = hit.point;
+            }
+        }
+
         if (Input.GetKeyDown(KeyCode.J))
         {
             _character.CharacterCombat.ToggleCombatMode();
@@ -56,12 +71,19 @@ public class PlayerController : CharacterGameController
         Move();
     }
 
-    // Changé de public à protected pour correspondre au parent
     protected override void UpdateFlip()
     {
         if (_inputDir.x != 0)
         {
             _characterVisual?.UpdateFlip(_inputDir);
+        }
+        else if (_clickDestination.HasValue)
+        {
+            Vector3 dir = _clickDestination.Value - transform.position;
+            if (dir.sqrMagnitude > 0.1f)
+            {
+                _characterVisual?.UpdateFlip(dir);
+            }
         }
     }
 
@@ -71,72 +93,64 @@ public class PlayerController : CharacterGameController
 
         bool currentInBattle = _character.CharacterCombat != null && _character.CharacterCombat.IsInBattle;
 
-        // Transition logic for NavMesh
-        if (currentInBattle && !_wasInBattleLastFrame)
+        // Transition logic for NavMesh (Battle or Click-To-Move)
+        bool needsNavMesh = currentInBattle || _clickDestination.HasValue;
+
+        if (needsNavMesh && !_wasInBattleLastFrame)
         {
             _character.ConfigureNavMesh(true);
+            if (_character.Rigidbody != null) 
+            {
+                _character.Rigidbody.isKinematic = true; // Prevent physics stuttering while NavMesh controls movement
+            }
         }
-        else if (!currentInBattle && _wasInBattleLastFrame)
+        else if (!needsNavMesh && _wasInBattleLastFrame)
         {
             _character.ConfigureNavMesh(false);
+            if (_character.Rigidbody != null) 
+            {
+                _character.Rigidbody.isKinematic = false; // Restore physical movement for WASD
+            }
             _characterMovement.Stop();
         }
-        _wasInBattleLastFrame = currentInBattle;
+        _wasInBattleLastFrame = needsNavMesh;
 
         if (currentInBattle)
         {
-            // AI-like autonomous movement
+            _clickDestination = null; // Combat mode overrides click-to-move
+            
+            // Shared autonomous pacing logic (stutter-free, intent-driven)
             Character battleTarget = _character.CharacterCombat.CurrentBattleManager?.GetBestTargetFor(_character);
             
             if (battleTarget != null)
             {
-                var battleManager = _character.CharacterCombat.CurrentBattleManager;
-                float distToTarget = Vector3.Distance(transform.position, battleTarget.transform.position);
-                float attackRange = _character.CharacterCombat.CurrentCombatStyleExpertise?.Style?.MeleeRange ?? 3.5f;
-                
-                Vector3 targetDestination = _combatPacer.GetTacticalDestination(battleTarget, attackRange, false);
-                float distanceToDestination = Vector3.Distance(transform.position, targetDestination);
-                float engagementTolerance = 0.5f; 
-
-                bool isWithinAttackRange = distToTarget <= attackRange * 0.9f;
-                float dx = Mathf.Abs(transform.position.x - battleTarget.transform.position.x);
-                float zDist = Mathf.Abs(transform.position.z - battleTarget.transform.position.z);
-                bool isXTooClose = dx < 1.5f;
-                bool isZAligned = zDist <= 1.5f;
-
-                if (isWithinAttackRange && !isXTooClose && isZAligned)
-                {
-                    _characterMovement.Stop();
-                    Vector3 direction = battleTarget.transform.position - transform.position;
-                    _characterVisual?.UpdateFlip(direction);
-                }
-                else if (distanceToDestination > engagementTolerance)
-                {
-                    if (Time.time >= _nextPathUpdateTime)
-                    {
-                        _nextPathUpdateTime = Time.time + PATH_UPDATE_INTERVAL;
-                        _characterMovement.ForceResume();
-                        _characterMovement.SetDestination(targetDestination);
-                    }
-                    
-                    Vector3 direction = battleTarget.transform.position - transform.position;
-                    _characterVisual?.UpdateFlip(direction);
-                }
-                else
-                {
-                    _characterMovement.Stop();
-                    Vector3 direction = battleTarget.transform.position - transform.position;
-                    _characterVisual?.UpdateFlip(direction);
-                }
+                _combatAILogic.Tick(battleTarget);
             }
             else
             {
                 _characterMovement.Stop();
             }
         }
+        else if (_clickDestination.HasValue)
+        {
+            // Click-to-move execution
+            if (Vector3.Distance(transform.position, _clickDestination.Value) > _characterMovement.StoppingDistance + 0.1f)
+            {
+                _characterMovement.Resume();
+                if (Vector3.Distance(_characterMovement.Destination, _clickDestination.Value) > 0.5f)
+                {
+                    _characterMovement.SetDestination(_clickDestination.Value, _character.MovementSpeed);
+                }
+            }
+            else
+            {
+                _characterMovement.Stop();
+                _clickDestination = null; // Reached destination, turn off NavMesh automatically next frame
+            }
+        }
         else
         {
-            // Manual WASD Control
+            // Manual WASD Control (Physical)
             Vector3 cameraForward = Vector3.Scale(Camera.main.transform.forward, new Vector3(1, 0, 1)).normalized;
             Vector3 moveDir = _inputDir.z * cameraForward + _inputDir.x * Camera.main.transform.right;
 

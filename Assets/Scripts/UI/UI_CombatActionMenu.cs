@@ -89,7 +89,10 @@ public class UI_CombatActionMenu : MonoBehaviour
 
         Character target = _characterCombat.CurrentBattleManager?.GetBestTargetFor(_character);
         
-        _characterCombat.ExecuteAction(() => _characterCombat.Attack(target));
+        // Instead of executing immediately, we lock the intent.
+        // The shared CombatAILogic in the PlayerController will smoothly navigate the player into precise range 
+        // to execute this intent!
+        _characterCombat.SetActionIntent(() => _characterCombat.Attack(target), target);
         
         // Hide immediately to prevent double clicks
         if (_menuContainer != null) _menuContainer.SetActive(false);
