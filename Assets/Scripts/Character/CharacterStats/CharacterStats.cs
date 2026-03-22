@@ -4,7 +4,7 @@ using Unity.VisualScripting.Antlr3.Runtime.Misc;
 using UnityEngine;
 
 [System.Serializable]
-public class CharacterStats : MonoBehaviour
+public class CharacterStats : MonoBehaviour, ISaveable
 {
     public event Action OnStatsUpdated;
 
@@ -248,6 +248,62 @@ public class CharacterStats : MonoBehaviour
             case SecondaryStatType.Endurance: return endurance.Value;
             case SecondaryStatType.Charisma: return charisma.Value;
             default: return 1f;
+        }
+    }
+
+    // --- ISAVEABLE IMPLEMENTATION ---
+    public string SaveKey => "CharacterStats";
+
+    [System.Serializable]
+    public struct StatsSaveData
+    {
+        public float strength;
+        public float agility;
+        public float dexterity;
+        public float intelligence;
+        public float endurance;
+        public float charisma;
+
+        public float currentHealth;
+        public float currentMana;
+        public float currentStamina;
+    }
+
+    public object CaptureState()
+    {
+        return new StatsSaveData
+        {
+            strength = strength.BaseValue,
+            agility = agility.BaseValue,
+            dexterity = dexterity.BaseValue,
+            intelligence = intelligence.BaseValue,
+            endurance = endurance.BaseValue,
+            charisma = charisma.BaseValue,
+
+            currentHealth = health.CurrentAmount,
+            currentMana = mana.CurrentAmount,
+            currentStamina = stamina.CurrentAmount
+        };
+    }
+
+    public void RestoreState(object state)
+    {
+        // state will be passed dynamically with the exactly captured type
+        if (state is StatsSaveData data)
+        {
+            strength.SetBaseValue(data.strength);
+            agility.SetBaseValue(data.agility);
+            dexterity.SetBaseValue(data.dexterity);
+            intelligence.SetBaseValue(data.intelligence);
+            endurance.SetBaseValue(data.endurance);
+            charisma.SetBaseValue(data.charisma);
+
+            // Recalculate max values BEFORE setting current amount limits
+            RecalculateTertiaryStats();
+
+            health.CurrentAmount = data.currentHealth;
+            mana.CurrentAmount = data.currentMana;
+            stamina.CurrentAmount = data.currentStamina;
         }
     }
 }
