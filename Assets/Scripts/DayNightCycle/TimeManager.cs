@@ -1,9 +1,10 @@
 using UnityEngine;
 using System;
+using Unity.Netcode;
 
 namespace MWI.Time
 {
-    public class TimeManager : MonoBehaviour
+    public class TimeManager : MonoBehaviour, ISaveable
     {
         public static TimeManager Instance { get; private set; }
 
@@ -48,6 +49,25 @@ namespace MWI.Time
             _currentTime = (float)_startHour / 24f;
             _lastHour = _startHour;
             UpdatePhase(true);
+
+            // Defer ISaveable registration until SaveManager is ready
+            Invoke(nameof(RegisterWithSaveManager), 0.5f);
+        }
+
+        private void RegisterWithSaveManager()
+        {
+            if (SaveManager.Instance != null)
+            {
+                SaveManager.Instance.RegisterWorldSaveable(this);
+            }
+        }
+
+        private void OnDestroy()
+        {
+            if (SaveManager.Instance != null)
+            {
+                SaveManager.Instance.UnregisterWorldSaveable(this);
+            }
         }
 
         private void Update()
@@ -74,6 +94,12 @@ namespace MWI.Time
             {
                 _lastHour = currentHour;
                 OnHourChanged?.Invoke(currentHour);
+
+                // Periodic atomic save (only if server/host)
+                if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer && SaveManager.Instance != null)
+                {
+                    _ = SaveManager.Instance.SaveWorldAsync();
+                }
             }
 
             UpdatePhase(false);
@@ -131,5 +157,39 @@ namespace MWI.Time
 
             UpdatePhase(true);
         }
+
+        #region ISaveable Implementation
+
+        public string SaveKey => "TimeManager_Data";
+
+        [Serializable]
+        public class TimeSaveData
+        {
+            public int Day;
+            public float Time01;
+        }
+
+        public object CaptureState()
+        {
+            return new TimeSaveData
+            {
+                Day = CurrentDay,
+                Time01 = _currentTime
+            };
+        }
+
+        public void RestoreState(object state)
+        {
+            if (state is TimeSaveData data)
+            {
+                CurrentDay = data.Day;
+                _currentTime = data.Time01;
+                _lastHour = CurrentHour;
+                UpdatePhase(true);
+                Debug.Log($"<color=green>[TimeManager]</color> Time restored from save: Day {CurrentDay}, {CurrentHour:00}:{CurrentMinute:00}");
+            }
+        }
+
+        #endregion
     }
 }
