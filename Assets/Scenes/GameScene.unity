@@ -14583,13 +14583,17 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 93969398940759483, guid: 2eac64ad7561d8c4f999a30cda5b79d3, type: 3}
+      propertyPath: m_Enabled
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 4169745778880177397, guid: 2eac64ad7561d8c4f999a30cda5b79d3, type: 3}
       propertyPath: m_LocalPosition.x
-      value: 164.03308
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 4169745778880177397, guid: 2eac64ad7561d8c4f999a30cda5b79d3, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 21.01
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 4169745778880177397, guid: 2eac64ad7561d8c4f999a30cda5b79d3, type: 3}
       propertyPath: m_LocalPosition.z
@@ -14623,22 +14627,6 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
-    - target: {fileID: 5923418923681295565, guid: 2eac64ad7561d8c4f999a30cda5b79d3, type: 3}
-      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_Target
-      value: 
-      objectReference: {fileID: 1579484321720142279}
-    - target: {fileID: 5923418923681295565, guid: 2eac64ad7561d8c4f999a30cda5b79d3, type: 3}
-      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_MethodName
-      value: Click_StartSolo
-      objectReference: {fileID: 0}
-    - target: {fileID: 6907985734395010696, guid: 2eac64ad7561d8c4f999a30cda5b79d3, type: 3}
-      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_Target
-      value: 
-      objectReference: {fileID: 1579484321720142279}
-    - target: {fileID: 6907985734395010696, guid: 2eac64ad7561d8c4f999a30cda5b79d3, type: 3}
-      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_MethodName
-      value: Click_JoinMultiplayer
-      objectReference: {fileID: 0}
     - target: {fileID: 7221111293948470345, guid: 2eac64ad7561d8c4f999a30cda5b79d3, type: 3}
       propertyPath: m_Name
       value: SessionManager
@@ -14648,17 +14636,6 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 2eac64ad7561d8c4f999a30cda5b79d3, type: 3}
---- !u!114 &1579484321720142279 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 1880132361173114815, guid: 2eac64ad7561d8c4f999a30cda5b79d3, type: 3}
-  m_PrefabInstance: {fileID: 1579484321720142278}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f74de78d8c0c44840b37cb1894946743, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::UI_SessionManager
 --- !u!1001 &5028348882598182433
 PrefabInstance:
   m_ObjectHideFlags: 0

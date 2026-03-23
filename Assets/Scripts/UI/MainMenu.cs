@@ -49,6 +49,10 @@ public class MainMenu : MonoBehaviour
         LoadScene(gameSceneName);
     }
 
+    [Header("Network Input")]
+    public TMPro.TMP_InputField ipInputField;
+    public TMPro.TMP_InputField portInputField;
+
     /// <summary>
     /// Starts the game as a Multiplayer Client
     /// </summary>
@@ -56,8 +60,25 @@ public class MainMenu : MonoBehaviour
     {
         GameSessionManager.AutoStartNetwork = true;
         GameSessionManager.IsHost = false;
-        GameSessionManager.TargetIP = "anbuwpr8ly.localto.net";
-        GameSessionManager.TargetPort = 7731;
+
+        if (ipInputField != null && !string.IsNullOrEmpty(ipInputField.text))
+        {
+            GameSessionManager.TargetIP = ipInputField.text.Trim();
+        }
+        else
+        {
+            GameSessionManager.TargetIP = "anbuwpr8ly.localto.net";
+        }
+
+        if (portInputField != null && ushort.TryParse(portInputField.text.Trim(), out ushort port))
+        {
+            GameSessionManager.TargetPort = port;
+        }
+        else
+        {
+            GameSessionManager.TargetPort = 6547;
+        }
+
         LoadScene(gameSceneName);
     }
 
