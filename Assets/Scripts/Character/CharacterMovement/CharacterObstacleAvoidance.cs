@@ -24,7 +24,11 @@ public class CharacterObstacleAvoidance : MonoBehaviour
         if (desiredDirection.sqrMagnitude < 0.01f)
             return desiredDirection;
 
-        Vector3 origin = transform.position + Vector3.up * 0.5f; // Cast from chest height
+        Vector3 bottomOffset = transform.position;
+        Collider col = GetComponentInChildren<Collider>();
+        if (col != null) bottomOffset = new Vector3(transform.position.x, col.bounds.min.y, transform.position.z);
+
+        Vector3 origin = bottomOffset + Vector3.up * 0.5f; // Cast from roughly chest height relative to bottom
         Vector3 forward = desiredDirection.normalized;
         Vector3 rightOffset = Quaternion.Euler(0, _sideRayAngle, 0) * forward;
         Vector3 leftOffset = Quaternion.Euler(0, -_sideRayAngle, 0) * forward;
@@ -77,7 +81,11 @@ public class CharacterObstacleAvoidance : MonoBehaviour
     {
         if (!Application.isPlaying) return;
 
-        Vector3 origin = transform.position + Vector3.up * 0.5f;
+        Vector3 bottomOffset = transform.position;
+        Collider col = GetComponentInChildren<Collider>();
+        if (col != null) bottomOffset = new Vector3(transform.position.x, col.bounds.min.y, transform.position.z);
+
+        Vector3 origin = bottomOffset + Vector3.up * 0.5f;
         Vector3 forward = transform.forward; // fallback for visualization, but runtime uses desiredDirection
 
         Gizmos.color = Color.red;

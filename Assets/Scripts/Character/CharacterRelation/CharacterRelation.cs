@@ -92,7 +92,7 @@ public class CharacterRelation : CharacterSystem
                 if (syncData.HasMet) existing.SetAsMet();
                 _relationships.Add(existing);
 
-                if (_relationNotificationChannel != null && _character.IsPlayer())
+                if (_relationNotificationChannel != null && _character.IsPlayer() && _character.IsOwner)
                 {
                     _relationNotificationChannel.Raise();
                 }
@@ -106,7 +106,7 @@ public class CharacterRelation : CharacterSystem
                     int difference = syncData.RelationValue - existing.RelationValue;
                     existing.RelationValue = syncData.RelationValue;
 
-                    if (_toastChannel != null && _character.IsPlayer())
+                    if (_toastChannel != null && _character.IsPlayer() && _character.IsOwner)
                     {
                         string sign = difference >= 0 ? "+" : "";
                         var toastType = difference >= 0 ? MWI.UI.Notifications.ToastType.Success : MWI.UI.Notifications.ToastType.Warning;
@@ -268,7 +268,7 @@ public class CharacterRelation : CharacterSystem
 
         OnRelationsUpdated?.Invoke();
 
-        if (_relationNotificationChannel != null && _character.IsPlayer())
+        if (_relationNotificationChannel != null && _character.IsPlayer() && _character.IsOwner)
         {
             _relationNotificationChannel.Raise();
         }
@@ -322,7 +322,7 @@ public class CharacterRelation : CharacterSystem
 
         OnRelationsUpdated?.Invoke();
 
-        if (_toastChannel != null && _character.IsPlayer())
+        if (_toastChannel != null && _character.IsPlayer() && _character.IsOwner)
         {
             string sign = roundedAmount >= 0 ? "+" : "";
             var toastType = roundedAmount >= 0 ? MWI.UI.Notifications.ToastType.Success : MWI.UI.Notifications.ToastType.Warning;

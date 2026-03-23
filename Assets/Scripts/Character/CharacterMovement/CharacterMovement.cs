@@ -207,10 +207,19 @@ public class CharacterMovement : CharacterSystem
         if (!IsGrounded()) return;
 
         Vector3 forward = moveDir.normalized;
+        
+        // Find the absolute bottom of the physics collider to accurately trace the floor.
+        Vector3 bottomOffset = transform.position;
+        Collider col = _character != null ? _character.Collider : GetComponentInChildren<Collider>();
+        if (col != null)
+        {
+            bottomOffset = new Vector3(transform.position.x, col.bounds.min.y, transform.position.z);
+        }
+
         // Small margin from ground to detect the actual step face
-        Vector3 lowerOrigin = transform.position + Vector3.up * 0.05f; 
+        Vector3 lowerOrigin = bottomOffset + Vector3.up * 0.05f; 
         // Height clearance ray
-        Vector3 upperOrigin = transform.position + Vector3.up * _stepHeight; 
+        Vector3 upperOrigin = bottomOffset + Vector3.up * _stepHeight; 
 
         // Do we hit a vertical obstacle at foot level?
         if (Physics.Raycast(lowerOrigin, forward, out RaycastHit hitLower, _stepDetectDistance, _groundLayer, QueryTriggerInteraction.Ignore))
@@ -390,6 +399,12 @@ public class CharacterMovement : CharacterSystem
     public bool IsGrounded()
     {
         Vector3 origin = transform.position + Vector3.up * 0.1f;
+        Collider col = _character != null ? _character.Collider : GetComponentInChildren<Collider>();
+        if (col != null)
+        {
+            origin = new Vector3(transform.position.x, col.bounds.min.y + 0.1f, transform.position.z);
+        }
+
         return Physics.Raycast(origin, Vector3.down, _groundCheckDistance, _groundLayer, QueryTriggerInteraction.Ignore);
     }
 

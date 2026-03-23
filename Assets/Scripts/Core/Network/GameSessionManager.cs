@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -11,6 +12,8 @@ public class GameSessionManager : MonoBehaviour
     public static ushort TargetPort = 7777;
 
     public static string SelectedPlayerRace = "Human";
+
+    private Dictionary<ulong, string> _pendingClientRaces = new Dictionary<ulong, string>();
 
     private void Awake()
     {
@@ -53,6 +56,38 @@ public class GameSessionManager : MonoBehaviour
         {
             ShowToast("Connected to Server!", MWI.UI.Notifications.ToastType.Success);
         }
+
+        if (NetworkManager.Singleton.IsServer)
+        {
+            if (_pendingClientRaces.TryGetValue(clientId, out string requestedRace))
+            {
+                _pendingClientRaces.Remove(clientId);
+
+                Vector3 spawnPos = SpawnManager.Instance != null ? SpawnManager.Instance.DefaultSpawnPosition : Vector3.zero;
+                Quaternion spawnRot = SpawnManager.Instance != null ? SpawnManager.Instance.DefaultSpawnRotation : Quaternion.identity;
+
+                // Custom manual spawn via loaded Race Data
+                RaceSO requestedRaceSO = Resources.Load<RaceSO>($"Data/Races/{requestedRace}") ?? Resources.Load<RaceSO>("Data/Races/Human");
+
+                // Needs the visual prefab associated with the race, or a default fallback
+                GameObject visualPrefab = requestedRaceSO != null && requestedRaceSO.character_prefabs != null && requestedRaceSO.character_prefabs.Count > 0 
+                                          ? requestedRaceSO.character_prefabs[0] 
+                                          : NetworkManager.Singleton.NetworkConfig.PlayerPrefab;
+
+                GameObject playerObj = Instantiate(visualPrefab, spawnPos, spawnRot);
+
+                if (playerObj.TryGetComponent(out Character character))
+                {
+                    character.NetworkRaceId.Value = new Unity.Collections.FixedString64Bytes(requestedRace);
+                }
+
+                if (playerObj.TryGetComponent(out Unity.Netcode.NetworkObject netObj))
+                {
+                    netObj.SpawnAsPlayerObject(clientId, true);
+                    Debug.Log($"<color=cyan>[GameSession]</color> Spawned PlayerObject for Client {clientId} with race {requestedRace}");
+                }
+            }
+        }
     }
 
     private void HandleClientDisconnect(ulong clientId)
@@ -61,6 +96,11 @@ public class GameSessionManager : MonoBehaviour
         if (clientId == NetworkManager.Singleton.LocalClientId && !IsHost)
         {
             ShowToast("Disconnected or failed to reach host.", MWI.UI.Notifications.ToastType.Error);
+        }
+        
+        if (NetworkManager.Singleton.IsServer)
+        {
+            _pendingClientRaces.Remove(clientId);
         }
     }
 
@@ -93,28 +133,8 @@ public class GameSessionManager : MonoBehaviour
             requestedRace = System.Text.Encoding.ASCII.GetString(request.Payload);
         }
 
-        Vector3 spawnPos = SpawnManager.Instance != null ? SpawnManager.Instance.DefaultSpawnPosition : Vector3.zero;
-        Quaternion spawnRot = SpawnManager.Instance != null ? SpawnManager.Instance.DefaultSpawnRotation : Quaternion.identity;
-
-        // Custom manual spawn via loaded Race Data
-        RaceSO requestedRaceSO = Resources.Load<RaceSO>($"Data/Races/{requestedRace}") ?? Resources.Load<RaceSO>("Data/Races/Human");
-
-        // Needs the visual prefab associated with the race, or a default fallback
-        GameObject visualPrefab = requestedRaceSO != null && requestedRaceSO.character_prefabs != null && requestedRaceSO.character_prefabs.Count > 0 
-                                  ? requestedRaceSO.character_prefabs[0] 
-                                  : NetworkManager.Singleton.NetworkConfig.PlayerPrefab;
-
-        GameObject playerObj = Instantiate(visualPrefab, spawnPos, spawnRot);
-
-        if (playerObj.TryGetComponent(out Character character))
-        {
-            character.NetworkRaceId.Value = new Unity.Collections.FixedString64Bytes(requestedRace);
-        }
-
-        if (playerObj.TryGetComponent(out Unity.Netcode.NetworkObject netObj))
-        {
-            netObj.SpawnAsPlayerObject(request.ClientNetworkId, true);
-        }
+        // Store it for when the client fully connects
+        _pendingClientRaces[request.ClientNetworkId] = requestedRace;
     }
 
     public void StartSolo()
