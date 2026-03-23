@@ -829,6 +829,12 @@ public class CharacterInteraction : CharacterSystem
         ClearRedundantMovement(target);
 
         OnInteractionStateChanged?.Invoke(target, true);
+
+        if (IsServer)
+        {
+            ulong targetId = target.NetworkObject != null ? target.NetworkObject.NetworkObjectId : 0;
+            SyncInteractionStateClientRpc(targetId, true);
+        }
     }
 
     public void PerformInteraction(ICharacterInteractionAction action)

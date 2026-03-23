@@ -152,6 +152,19 @@ public class Character : NetworkBehaviour
     void Update()
     {
         Shader.SetGlobalVector("_Body", _rb.position);
+
+        // --- STRICT MULTIPLAYER PHYSICS LOCK ---
+        // Prevents any local physics (like gravity) from fighting NetworkTransform on non-authoritative clients.
+        // If another script accidentally changes isKinematic to false, this snaps it back immediately.
+        if (IsSpawned && !IsOwner && !IsServer)
+        {
+            if (_rb != null && !_rb.isKinematic)
+            {
+                _rb.isKinematic = true;
+                _rb.linearVelocity = Vector3.zero;
+                _rb.angularVelocity = Vector3.zero;
+            }
+        }
     }
     #region Unity Lifecycle
     public override void OnNetworkSpawn()
@@ -634,10 +647,23 @@ public class Character : NetworkBehaviour
             }
 
             // 2. Enable and configure agent
-            _cachedNavMeshAgent.enabled = true;
-            if (_cachedNavMeshAgent.isOnNavMesh) _cachedNavMeshAgent.isStopped = false;
-            _cachedNavMeshAgent.updatePosition = true;
-            _cachedNavMeshAgent.updateRotation = false;
+            bool shouldEnableAgent = true;
+            if (IsSpawned && !IsServer && !IsOwner)
+            {
+                shouldEnableAgent = false;
+            }
+
+            if (shouldEnableAgent)
+            {
+                _cachedNavMeshAgent.enabled = true;
+                if (_cachedNavMeshAgent.isOnNavMesh) _cachedNavMeshAgent.isStopped = false;
+                _cachedNavMeshAgent.updatePosition = true;
+                _cachedNavMeshAgent.updateRotation = false;
+            }
+            else
+            {
+                _cachedNavMeshAgent.enabled = false;
+            }
         }
         else
         {

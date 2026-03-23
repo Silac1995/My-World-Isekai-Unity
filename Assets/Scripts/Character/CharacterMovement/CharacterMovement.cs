@@ -164,12 +164,9 @@ public class CharacterMovement : CharacterSystem
                 }
             }
 
-            // Assistance physique pour les micro-marches même en mode NavMesh
-            if (_agent.hasPath && _agent.velocity.sqrMagnitude > 0.01f)
-            {
-                Vector3 navDir = _agent.velocity.normalized;
-                HandleStepUp(navDir);
-            }
+                        // Removed HandleStepUp for NavMeshAgent because NavMesh handles its own stepping.
+            // Using MovePosition while a NavMeshAgent is active causes vertical fighting that broadcasts
+            // a continuous wobble to all networked clients.
         }
         else
         {

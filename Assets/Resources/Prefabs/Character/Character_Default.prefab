@@ -703,8 +703,8 @@ GameObject:
   - component: {fileID: 3369343900060323110}
   - component: {fileID: 8530357501166543435}
   - component: {fileID: 4916404909723457133}
-  - component: {fileID: 8812472788410355661}
-  - component: {fileID: 3756079976363282922}
+  - component: {fileID: -5519882187932071788}
+  - component: {fileID: 2759773711538085477}
   m_Layer: 8
   m_Name: Character_Default
   m_TagString: Character
@@ -883,6 +883,78 @@ MonoBehaviour:
   _characterLocations: {fileID: 4198040619971064388}
   _characterGoap: {fileID: 8601409522411222074}
   _characterCombatLevel: {fileID: 7806414935237473066}
+  NetworkRaceId:
+    UpdateTraits:
+      MinSecondsBetweenUpdates: 0
+      MaxSecondsBetweenUpdates: 0
+    m_InternalValue:
+      utf8LengthInBytes: 0
+      bytes:
+        offset0000:
+          byte0000: 0
+          byte0001: 0
+          byte0002: 0
+          byte0003: 0
+          byte0004: 0
+          byte0005: 0
+          byte0006: 0
+          byte0007: 0
+          byte0008: 0
+          byte0009: 0
+          byte0010: 0
+          byte0011: 0
+          byte0012: 0
+          byte0013: 0
+          byte0014: 0
+          byte0015: 0
+        offset0016:
+          byte0000: 0
+          byte0001: 0
+          byte0002: 0
+          byte0003: 0
+          byte0004: 0
+          byte0005: 0
+          byte0006: 0
+          byte0007: 0
+          byte0008: 0
+          byte0009: 0
+          byte0010: 0
+          byte0011: 0
+          byte0012: 0
+          byte0013: 0
+          byte0014: 0
+          byte0015: 0
+        offset0032:
+          byte0000: 0
+          byte0001: 0
+          byte0002: 0
+          byte0003: 0
+          byte0004: 0
+          byte0005: 0
+          byte0006: 0
+          byte0007: 0
+          byte0008: 0
+          byte0009: 0
+          byte0010: 0
+          byte0011: 0
+          byte0012: 0
+          byte0013: 0
+          byte0014: 0
+          byte0015: 0
+        byte0048: 0
+        byte0049: 0
+        byte0050: 0
+        byte0051: 0
+        byte0052: 0
+        byte0053: 0
+        byte0054: 0
+        byte0055: 0
+        byte0056: 0
+        byte0057: 0
+        byte0058: 0
+        byte0059: 0
+        byte0060: 0
+        byte0061: 0
   _testDialogue: {fileID: 0}
 --- !u!114 &2677209831397210094
 MonoBehaviour:
@@ -984,7 +1056,7 @@ MonoBehaviour:
   _character: {fileID: 2536622428659117900}
   _characterVisual: {fileID: 4467461276411840628}
   _characterMovement: {fileID: 6790967677183771991}
---- !u!114 &8812472788410355661
+--- !u!114 &-5519882187932071788
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -1030,7 +1102,7 @@ MonoBehaviour:
   SwitchTransformSpaceWhenParented: 0
   Interpolate: 1
   SlerpPosition: 0
---- !u!114 &3756079976363282922
+--- !u!114 &2759773711538085477
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
