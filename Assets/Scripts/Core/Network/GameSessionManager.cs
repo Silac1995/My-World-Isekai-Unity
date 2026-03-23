@@ -10,6 +10,8 @@ public class GameSessionManager : MonoBehaviour
     public static string TargetIP = "127.0.0.1";
     public static ushort TargetPort = 7777;
 
+    public static string SelectedPlayerRace = "Human";
+
     private void Awake()
     {
         if (Instance == null) Instance = this;
@@ -79,14 +81,39 @@ public class GameSessionManager : MonoBehaviour
 
     private void ApprovalCheck(NetworkManager.ConnectionApprovalRequest request, NetworkManager.ConnectionApprovalResponse response)
     {
-        // For testing, approve all connections and spawn the player object.
+        // Approve all connections
         response.Approved = true;
-        response.CreatePlayerObject = true;
+        
+        // Disable automatic player spawning so we can instantiate custom prefabs with custom settings!
+        response.CreatePlayerObject = false;
 
-        if (SpawnManager.Instance != null)
+        string requestedRace = "Human";
+        if (request.Payload != null && request.Payload.Length > 0)
         {
-            response.Position = SpawnManager.Instance.DefaultSpawnPosition;
-            response.Rotation = SpawnManager.Instance.DefaultSpawnRotation;
+            requestedRace = System.Text.Encoding.ASCII.GetString(request.Payload);
+        }
+
+        Vector3 spawnPos = SpawnManager.Instance != null ? SpawnManager.Instance.DefaultSpawnPosition : Vector3.zero;
+        Quaternion spawnRot = SpawnManager.Instance != null ? SpawnManager.Instance.DefaultSpawnRotation : Quaternion.identity;
+
+        // Custom manual spawn via loaded Race Data
+        RaceSO requestedRaceSO = Resources.Load<RaceSO>($"Data/Races/{requestedRace}") ?? Resources.Load<RaceSO>("Data/Races/Human");
+
+        // Needs the visual prefab associated with the race, or a default fallback
+        GameObject visualPrefab = requestedRaceSO != null && requestedRaceSO.character_prefabs != null && requestedRaceSO.character_prefabs.Count > 0 
+                                  ? requestedRaceSO.character_prefabs[0] 
+                                  : NetworkManager.Singleton.NetworkConfig.PlayerPrefab;
+
+        GameObject playerObj = Instantiate(visualPrefab, spawnPos, spawnRot);
+
+        if (playerObj.TryGetComponent(out Character character))
+        {
+            character.NetworkRaceId.Value = new Unity.Collections.FixedString64Bytes(requestedRace);
+        }
+
+        if (playerObj.TryGetComponent(out Unity.Netcode.NetworkObject netObj))
+        {
+            netObj.SpawnAsPlayerObject(request.ClientNetworkId, true);
         }
     }
 
@@ -97,6 +124,8 @@ public class GameSessionManager : MonoBehaviour
         {
             transport.SetConnectionData("127.0.0.1", 7777, "0.0.0.0");
         }
+
+        NetworkManager.Singleton.NetworkConfig.ConnectionData = System.Text.Encoding.ASCII.GetBytes(SelectedPlayerRace);
 
         if (NetworkManager.Singleton.StartHost())
         {
@@ -120,6 +149,8 @@ public class GameSessionManager : MonoBehaviour
             string cleanIP = TargetIP.Contains(":") ? TargetIP.Split(':')[0] : TargetIP;
             transport.SetConnectionData(cleanIP, TargetPort);
         }
+
+        NetworkManager.Singleton.NetworkConfig.ConnectionData = System.Text.Encoding.ASCII.GetBytes(SelectedPlayerRace);
 
         if (NetworkManager.Singleton.StartClient())
         {

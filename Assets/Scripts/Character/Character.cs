@@ -65,6 +65,14 @@ public class Character : NetworkBehaviour
     [SerializeField] private CharacterCombatLevel _characterCombatLevel;
     #endregion
 
+    #region Network Variables
+    public NetworkVariable<Unity.Collections.FixedString64Bytes> NetworkRaceId = new NetworkVariable<Unity.Collections.FixedString64Bytes>(
+        "",
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server
+    );
+    #endregion
+
     #region Private Fields
     private Transform _visualRoot;
     private GameObject _currentVisualInstance;
@@ -164,10 +172,17 @@ public class Character : NetworkBehaviour
             StartCoroutine(DelayedHostTeleport());
         }
 
+        // LOAD CUSTOMIZATION FROM NETWORK VARIABLES
+        RaceSO networkRace = null;
+        if (!NetworkRaceId.Value.IsEmpty)
+        {
+            networkRace = Resources.Load<RaceSO>($"Data/Races/{NetworkRaceId.Value}");
+        }
+
         if (SpawnManager.Instance != null)
         {
             // Fully initialize the character using the identical logic from SpawnManager
-            SpawnManager.Instance.InitializeSpawnedCharacter(this, null, isPlayerObject, isLocalOwner);
+            SpawnManager.Instance.InitializeSpawnedCharacter(this, networkRace, isPlayerObject, isLocalOwner);
         }
         else
         {

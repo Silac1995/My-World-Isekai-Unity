@@ -455,20 +455,23 @@ public class CharacterMovement : CharacterSystem
 
     private void OnDrawGizmos()
     {
+        // Scale the gizmos dynamically based on your step detect distance (which correlates to character scale)
+        float vizSize = _stepDetectDistance > 0f ? _stepDetectDistance : 1f;
+
         // Draw the real physics position, not the visual one
         Gizmos.color = Color.red;
-        Gizmos.DrawWireSphere(transform.position, 0.15f); // pivot
+        Gizmos.DrawWireSphere(transform.position, vizSize * 1.5f); // pivot
 
         if (_rb != null)
         {
             Gizmos.color = Color.cyan;
-            Gizmos.DrawWireSphere(_rb.position, 0.1f); // rb position
+            Gizmos.DrawWireSphere(_rb.position, vizSize * 1.25f); // rb position
         }
 
         if (_agent != null)
         {
             Gizmos.color = Color.green;
-            Gizmos.DrawWireSphere(_agent.nextPosition, 0.1f); // agent position
+            Gizmos.DrawWireSphere(_agent.nextPosition, vizSize * 1.0f); // agent position
         }
     }
 }

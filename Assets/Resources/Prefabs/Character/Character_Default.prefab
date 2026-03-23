@@ -1703,6 +1703,7 @@ MonoBehaviour:
     m_Bits: 1025
   _stepHeight: 0.3
   _stepSmooth: 0.08
+  _stepDetectDistance: 0.6
   _obstacleAvoidance: {fileID: 1241756377111732569}
   _rb: {fileID: 3937668831498777898}
   _agent: {fileID: 4447047040555525631}

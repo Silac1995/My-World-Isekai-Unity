@@ -187,11 +187,14 @@ public class SpawnManager : MonoBehaviour
             {
                 if (!netObj.IsSpawned)
                 {
-                    // L'objet réseau va appeler InitializeSpawnedCharacter(this, null, isMyPlayer) via OnNetworkSpawn.
+                    if (race != null)
+                    {
+                        character.NetworkRaceId.Value = new Unity.Collections.FixedString64Bytes(race.name);
+                    }
+
+                    // L'objet réseau va appeler InitializeSpawnedCharacter via OnNetworkSpawn.
                     netObj.Spawn(true);
                     
-                    // Note: Les arguments "race" et "personality" passés à Initialize ne sont PAS synchronisés
-                    // car ce sont des données de host. L'OnNetworkSpawn fera un setup aléatoire par défaut.
                     return character;
                 }
             }
