@@ -19,7 +19,13 @@ public struct RelationSyncData : INetworkSerializable, IEquatable<RelationSyncDa
         serializer.SerializeValue(ref HasMet);
     }
 
-    public bool Equals(RelationSyncData other) => TargetId == other.TargetId;
+    public bool Equals(RelationSyncData other) 
+    {
+        return TargetId == other.TargetId && 
+               RelationValue == other.RelationValue && 
+               RelationType == other.RelationType && 
+               HasMet == other.HasMet;
+    }
 }
 
 public class CharacterRelation : CharacterSystem
@@ -49,7 +55,7 @@ public class CharacterRelation : CharacterSystem
         base.OnNetworkSpawn();
         _networkRelations.OnListChanged += HandleNetworkRelationsChanged;
 
-        if (IsClient)
+        if (IsClient && !IsServer)
         {
             foreach (var syncData in _networkRelations)
             {
@@ -86,12 +92,34 @@ public class CharacterRelation : CharacterSystem
                 existing = new Relationship(Character, target, syncData.RelationValue, syncData.RelationType);
                 if (syncData.HasMet) existing.SetAsMet();
                 _relationships.Add(existing);
+
+                if (_relationNotificationChannel != null && _character.IsPlayer())
+                {
+                    _relationNotificationChannel.Raise();
+                }
+
                 OnRelationsUpdated?.Invoke();
             }
             else
             {
                 if (existing.RelationValue != syncData.RelationValue)
+                {
+                    int difference = syncData.RelationValue - existing.RelationValue;
                     existing.RelationValue = syncData.RelationValue;
+
+                    if (_toastChannel != null && _character.IsPlayer())
+                    {
+                        string sign = difference >= 0 ? "+" : "";
+                        var toastType = difference >= 0 ? MWI.UI.Notifications.ToastType.Success : MWI.UI.Notifications.ToastType.Warning;
+                        
+                        _toastChannel.Raise(new MWI.UI.Notifications.ToastNotificationPayload(
+                            message: $"{_character.CharacterName} \u2192 {target.CharacterName}: {sign}{difference} Relation",
+                            type: toastType,
+                            duration: 3f,
+                            icon: null
+                        ));
+                    }
+                }
                 
                 existing.SetRelationshipType(syncData.RelationType);
                 

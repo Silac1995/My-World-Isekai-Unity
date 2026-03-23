@@ -1,5 +1,7 @@
+
 using System.Collections;
 using UnityEngine;
+using Unity.Netcode;
 
 /// <summary>
 /// MonoBehaviour attached to characters to handle invitation responses.
@@ -55,13 +57,66 @@ public class CharacterInvitation : CharacterSystem
         }
 
         // Stop moving to visually acknowledge the invitation (NPCs only — players retain control)
-        if (!_character.IsPlayer() && _character.CharacterMovement != null)
+        if (IsServer && !_character.IsPlayer() && _character.CharacterMovement != null)
         {
             _character.CharacterMovement.Stop();
         }
 
+        if (IsServer && _character.IsPlayer() && !IsOwner)
+        {
+            ulong sourceId = source.NetworkObject != null ? source.NetworkObject.NetworkObjectId : 0;
+            string message = invitation.GetInvitationMessage(source, _character);
+            ReceiveInvitationClientRpc(message, sourceId);
+        }
+
         // Start the delayed response coroutine
         _pendingCoroutine = StartCoroutine(ProcessInvitation(invitation, source));
+    }
+
+    private class ClientDummyInvitation : InteractionInvitation
+    {
+        private string _message;
+        public ClientDummyInvitation(string message) { _message = message; }
+        public override bool CanExecute(Character source, Character target) => true;
+        public override string GetInvitationMessage(Character source, Character target) => _message;
+        public override void OnAccepted(Character source, Character target) {}
+    }
+
+    [Rpc(SendTo.Owner)]
+    private void ReceiveInvitationClientRpc(string message, ulong sourceId)
+    {
+        if (IsServer) return;
+
+        InteractionInvitation invitation = new ClientDummyInvitation(message);
+        
+        if (NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(sourceId, out NetworkObject sourceObj))
+        {
+            Character source = sourceObj.GetComponent<Character>();
+            _pendingCoroutine = StartCoroutine(ProcessInvitationClient(invitation, source));
+        }
+    }
+
+    private IEnumerator ProcessInvitationClient(InteractionInvitation invitation, Character source)
+    {
+        HasPendingInvitation = true;
+        _playerResponse = null;
+        OnPlayerInvitationReceived?.Invoke(invitation, source);
+
+        float timer = 0f;
+        while (_playerResponse == null && timer < _responseTimeout)
+        {
+            timer += Time.deltaTime;
+            OnPlayerInvitationTimerUpdated?.Invoke(timer / _responseTimeout);
+            
+            if (source == null || !source.IsAlive() || _character == null || !_character.IsAlive())
+            {
+                break;
+            }
+            yield return null;
+        }
+
+        HasPendingInvitation = false;
+        OnPlayerInvitationResolved?.Invoke();
     }
 
     private IEnumerator ProcessInvitation(InteractionInvitation invitation, Character source)
@@ -159,7 +214,17 @@ public class CharacterInvitation : CharacterSystem
         if (HasPendingInvitation && _character != null && _character.IsPlayer())
         {
             _playerResponse = accept;
+            if (!IsServer && IsOwner)
+            {
+                ResolvePlayerInvitationServerRpc(accept);
+            }
         }
+    }
+
+    [Rpc(SendTo.Server)]
+    private void ResolvePlayerInvitationServerRpc(bool accept)
+    {
+        _playerResponse = accept;
     }
 
     // ──────────────────────────────────────────────

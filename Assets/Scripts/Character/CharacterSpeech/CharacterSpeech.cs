@@ -59,17 +59,21 @@ public class CharacterSpeech : CharacterSystem
 
     public void Say(string message, float duration = 3f, float typingSpeed = 0f)
     {
+        Debug.Log($"<color=cyan>[Speech]</color> {gameObject.name} Say() called. IsServer: {IsServer}, IsClient: {IsClient}, IsOwner: {IsOwner}. Message: {message}");
         if (IsServer) 
         {
+            Debug.Log($"<color=cyan>[Speech]</color> {gameObject.name} sending SayClientRpc to NotServer...");
             SayClientRpc(message, duration, typingSpeed);
             ExecuteSayLocally(message, duration, typingSpeed);
         }
         else if (IsOwner)
         {
+            Debug.Log($"<color=cyan>[Speech]</color> {gameObject.name} sending SayServerRpc as Owner...");
             SayServerRpc(message, duration, typingSpeed);
         }
         else 
         {
+            Debug.LogWarning($"<color=orange>[Speech]</color> {gameObject.name} Say() called by non-Owner Client. Forcing ExecuteSayLocally (not synced).");
             ExecuteSayLocally(message, duration, typingSpeed);
         }
     }
@@ -84,14 +88,22 @@ public class CharacterSpeech : CharacterSystem
     [Rpc(SendTo.NotServer)]
     private void SayClientRpc(string message, float duration, float typingSpeed)
     {
+        Debug.Log($"<color=cyan>[Speech] CLIENT RPC RECEIVED</color> {gameObject.name} received SayClientRpc! IsServer: {IsServer}, IsClient: {IsClient}");
         ExecuteSayLocally(message, duration, typingSpeed);
     }
 
     private void ExecuteSayLocally(string message, float duration, float typingSpeed)
     {
-        if (_speechBubblePrefab == null) return;
+        if (_speechBubblePrefab == null)
+        {
+            Debug.LogError($"<color=red>[Speech]</color> {gameObject.name} ExecuteSayLocally FAILED: _speechBubblePrefab is NULL!");
+            return;
+        }
+
+        Debug.Log($"<color=cyan>[Speech]</color> {gameObject.name} Executing locally: '{message}'");
         if (_hideCoroutine != null) StopCoroutine(_hideCoroutine);
         _bodyPartsController?.MouthController?.StartTalking();
+        
         if (_speechBubblePrefab.TryGetComponent<Speech>(out var speechScript))
         {
             _speechBubblePrefab.SetActive(true);
@@ -99,6 +111,11 @@ public class CharacterSpeech : CharacterSystem
                 _bodyPartsController?.MouthController?.StopTalking();
                 _hideCoroutine = StartCoroutine(HideSpeechAfterDelay(duration));
             });
+            Debug.Log($"<color=cyan>[Speech]</color> {gameObject.name} Local Speech bubble activated and Setup called!");
+        }
+        else
+        {
+            Debug.LogError($"<color=red>[Speech]</color> {gameObject.name} FAILED: _speechBubblePrefab does not have a Speech component!");
         }
     }
 
