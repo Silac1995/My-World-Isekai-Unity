@@ -25,7 +25,12 @@ public class PlayerController : CharacterGameController
     {
         base.Initialize();
         if (_character.Rigidbody != null)
-            _character.Rigidbody.interpolation = RigidbodyInterpolation.Interpolate;
+        {
+            if (IsOwner)
+                _character.Rigidbody.interpolation = RigidbodyInterpolation.Interpolate;
+            else
+                _character.Rigidbody.interpolation = RigidbodyInterpolation.None; // Let NetworkTransform handle it
+        }
     }
 
     protected override void Update()

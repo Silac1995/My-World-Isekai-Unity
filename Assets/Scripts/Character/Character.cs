@@ -576,8 +576,19 @@ public class Character : NetworkBehaviour
         }
 
         bool isNPC = typeof(TTarget) == typeof(NPCController);
-        if (_rb != null) _rb.isKinematic = isNPC;
         ConfigureNavMesh(isNPC);
+        
+        if (_rb != null)
+        {
+            if (IsSpawned && !IsOwner)
+            {
+                _rb.isKinematic = true;
+            }
+            else
+            {
+                _rb.isKinematic = isNPC;
+            }
+        }
     }
 
     // Stores the original interpolation mode so we can restore it when returning to Player control
@@ -621,8 +632,11 @@ public class Character : NetworkBehaviour
             // 2. Unlock physics
             if (_rb != null && _controller is PlayerController) // Keep NPCs kinematic
             {
-                _rb.isKinematic = false;
-                _rb.interpolation = _savedInterpolation; // Restore smooth WASD movement
+                if (!IsSpawned || IsOwner)
+                {
+                    _rb.isKinematic = false;
+                    _rb.interpolation = _savedInterpolation; // Restore smooth WASD movement
+                }
             }
         }
     }
