@@ -9,6 +9,12 @@ public class CharacterMovement : CharacterSystem
     [SerializeField] private float _groundCheckDistance = 0.2f;
     [SerializeField] private LayerMask _groundLayer;
 
+    [Header("Step & Obstacle Handling")]
+    [SerializeField] private float _stepHeight = 0.3f;
+    [SerializeField] private float _stepSmooth = 0.08f;
+    [SerializeField] private float _stepDetectDistance = 0.6f;
+    [SerializeField] private CharacterObstacleAvoidance _obstacleAvoidance;
+
     [Header("References")]
     [SerializeField] private Rigidbody _rb;
     [SerializeField] private NavMeshAgent _agent;
@@ -47,6 +53,7 @@ public class CharacterMovement : CharacterSystem
         base.Awake();
         if (_rb == null) _rb = GetComponent<Rigidbody>();
         if (_agent == null) _agent = GetComponent<NavMeshAgent>();
+        if (_obstacleAvoidance == null) _obstacleAvoidance = GetComponent<CharacterObstacleAvoidance>();
 
         if (_agent != null)
         {
@@ -156,6 +163,13 @@ public class CharacterMovement : CharacterSystem
                     _isSliding = false;
                 }
             }
+
+            // Assistance physique pour les micro-marches même en mode NavMesh
+            if (_agent.hasPath && _agent.velocity.sqrMagnitude > 0.01f)
+            {
+                Vector3 navDir = _agent.velocity.normalized;
+                HandleStepUp(navDir);
+            }
         }
         else
         {
@@ -165,13 +179,63 @@ public class CharacterMovement : CharacterSystem
 
     private void ApplyPhysicalMovement()
     {
-        Vector3 targetVelocity = _desiredDirection * _targetSpeed;
+        Vector3 moveDir = _desiredDirection;
+
+        // Proactive raycast steering against walls and corners
+        if (_obstacleAvoidance != null && moveDir.sqrMagnitude > 0f)
+        {
+            moveDir = _obstacleAvoidance.GetAvoidanceDirection(moveDir);
+        }
+
+        Vector3 targetVelocity = moveDir * _targetSpeed;
         Vector3 currentVelocity = _rb.linearVelocity;
 
         float velX = (targetVelocity.x - currentVelocity.x) * _acceleration;
         float velZ = (targetVelocity.z - currentVelocity.z) * _acceleration;
 
         _rb.AddForce(new Vector3(velX, 0, velZ), ForceMode.Acceleration);
+
+        // Assist physics engine over small vertical steps (e.g. stairs, 1-pixel height ridges)
+        if (moveDir.sqrMagnitude > 0.01f)
+        {
+            HandleStepUp(moveDir);
+        }
+    }
+
+    private void HandleStepUp(Vector3 moveDir)
+    {
+        if (!IsGrounded()) return;
+
+        Vector3 forward = moveDir.normalized;
+        // Small margin from ground to detect the actual step face
+        Vector3 lowerOrigin = transform.position + Vector3.up * 0.05f; 
+        // Height clearance ray
+        Vector3 upperOrigin = transform.position + Vector3.up * _stepHeight; 
+
+        // Do we hit a vertical obstacle at foot level?
+        if (Physics.Raycast(lowerOrigin, forward, out RaycastHit hitLower, _stepDetectDistance, _groundLayer, QueryTriggerInteraction.Ignore))
+        {
+            float hitAngle = Vector3.Angle(Vector3.up, hitLower.normal);
+            // Only step up if the obstacle is relatively steep (not a regular ramp we can easily walk up)
+            if (hitAngle > 45f) 
+            {
+                // Is there clearance at max step height?
+                if (!Physics.Raycast(upperOrigin, forward, out RaycastHit hitUpper, _stepDetectDistance + 0.1f, _groundLayer, QueryTriggerInteraction.Ignore))
+                {
+                    // Use MovePosition instead of modifying position directly
+                    Vector3 newPos = _rb.position + Vector3.up * _stepSmooth;
+                    _rb.MovePosition(newPos);
+
+                    // Cancel negative Y velocity to prevent gravity from immediately pushing down
+                    if (_rb.linearVelocity.y < 0)
+                    {
+                        Vector3 vel = _rb.linearVelocity;
+                        vel.y = 0f;
+                        _rb.linearVelocity = vel;
+                    }
+                }
+            }
+        }
     }
 
     public void SetDesiredDirection(Vector3 direction, float speed)
@@ -326,7 +390,7 @@ public class CharacterMovement : CharacterSystem
     public bool IsGrounded()
     {
         Vector3 origin = transform.position + Vector3.up * 0.1f;
-        return Physics.Raycast(origin, Vector3.down, _groundCheckDistance, _groundLayer);
+        return Physics.Raycast(origin, Vector3.down, _groundCheckDistance, _groundLayer, QueryTriggerInteraction.Ignore);
     }
 
     public void Warp(Vector3 position)
@@ -387,5 +451,24 @@ public class CharacterMovement : CharacterSystem
         }
 
         return _empiricalVelocity;
+    }
+
+    private void OnDrawGizmos()
+    {
+        // Draw the real physics position, not the visual one
+        Gizmos.color = Color.red;
+        Gizmos.DrawWireSphere(transform.position, 0.15f); // pivot
+
+        if (_rb != null)
+        {
+            Gizmos.color = Color.cyan;
+            Gizmos.DrawWireSphere(_rb.position, 0.1f); // rb position
+        }
+
+        if (_agent != null)
+        {
+            Gizmos.color = Color.green;
+            Gizmos.DrawWireSphere(_agent.nextPosition, 0.1f); // agent position
+        }
     }
 }

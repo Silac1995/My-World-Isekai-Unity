@@ -735,6 +735,7 @@ Transform:
   - {fileID: 378579971513508917}
   - {fileID: 2098499672776739634}
   - {fileID: 215557950362507917}
+  - {fileID: 5546370973633396037}
   - {fileID: 8052248722467460333}
   - {fileID: 2146869985690736942}
   - {fileID: 3661421223759161407}
@@ -1699,7 +1700,10 @@ MonoBehaviour:
   _groundCheckDistance: 0.2
   _groundLayer:
     serializedVersion: 2
-    m_Bits: 1
+    m_Bits: 1025
+  _stepHeight: 0.3
+  _stepSmooth: 0.08
+  _obstacleAvoidance: {fileID: 1241756377111732569}
   _rb: {fileID: 3937668831498777898}
   _agent: {fileID: 4447047040555525631}
 --- !u!1 &7038462132579949301
@@ -1854,6 +1858,56 @@ MonoBehaviour:
   _speedMultiplierInitiative: 0.1
   _currentBattleManager: {fileID: 0}
   _battleManagerPrefab: {fileID: 7708501793112527945, guid: 51209fa04a478a445980530b546d4dab, type: 3}
+--- !u!1 &8118076459611819401
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 5546370973633396037}
+  - component: {fileID: 1241756377111732569}
+  m_Layer: 9
+  m_Name: ObstacleAvoidance
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &5546370973633396037
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8118076459611819401}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: -1.20455, y: 0.05719, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 6179432398992828966}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1241756377111732569
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8118076459611819401}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 88503d7443f20a64bbb89dd2f6c6cf79, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CharacterObstacleAvoidance
+  _rayDistance: 1
+  _sideRayAngle: 45
+  _obstacleMask:
+    serializedVersion: 2
+    m_Bits: 1025
+  _avoidanceStrength: 0.5
 --- !u!1 &8637028065392131947
 GameObject:
   m_ObjectHideFlags: 0
