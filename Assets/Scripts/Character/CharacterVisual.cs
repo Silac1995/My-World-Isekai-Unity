@@ -348,16 +348,12 @@ public class CharacterVisual : CharacterSystem
     public bool HasALookTarget() => _lookTarget != null;
 
     private void ApplyFlip()
-
     {
-
-        // On applique le scale sur le transform local (ou le visualRoot si tu préfères)
-
-        Vector3 scale = transform.localScale;
+        // On applique le scale sur le visualRoot pour éviter les conflits avec le NetworkTransform !
+        Transform target = visualRoot != null ? visualRoot : transform;
+        Vector3 scale = target.localScale;
         scale.x = Mathf.Abs(scale.x) * (IsFacingRight ? 1 : -1);
-
-        transform.localScale = scale;
-
+        target.localScale = scale;
     }
 
 

@@ -57,6 +57,12 @@ public class CharacterDropItem : CharacterAction
     {
         if (owner == null || item == null) return;
 
+        if (Unity.Netcode.NetworkManager.Singleton != null && !Unity.Netcode.NetworkManager.Singleton.IsServer)
+        {
+            Debug.LogWarning($"<color=orange>[CharacterDropItem]</color> ExecutePhysicalDrop aborted on Client because it lacks Authority.");
+            return;
+        }
+
         Vector3 dropPos = owner.transform.position + Vector3.up * 1.5f;
         Vector3 offset = new Vector3(Random.Range(-0.3f, 0.3f), 0, Random.Range(-0.3f, 0.3f));
         WorldItem spawnedItem = WorldItem.SpawnWorldItem(item, dropPos + offset);

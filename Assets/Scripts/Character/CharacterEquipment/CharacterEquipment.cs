@@ -2,9 +2,176 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.U2D.Animation;
+using Unity.Netcode;
+using Unity.Collections;
 
 public class CharacterEquipment : CharacterSystem
 {
+    private NetworkList<NetworkEquipmentSyncData> _networkEquipment;
+
+    protected override void Awake()
+    {
+        base.Awake();
+        _networkEquipment = new NetworkList<NetworkEquipmentSyncData>(
+            null,
+            NetworkVariableReadPermission.Everyone,
+            NetworkVariableWritePermission.Server
+        );
+    }
+
+    public override void OnNetworkSpawn()
+    {
+        base.OnNetworkSpawn();
+        _networkEquipment.OnListChanged += OnEquipmentListChanged;
+
+        if (IsClient && !IsServer)
+        {
+            FullSyncFromNetwork();
+        }
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        base.OnNetworkDespawn();
+        _networkEquipment.OnListChanged -= OnEquipmentListChanged;
+    }
+
+    private void UpdateNetworkSlot(ushort slotId, ItemInstance instance)
+    {
+        if (!IsServer) return;
+
+        for (int i = 0; i < _networkEquipment.Count; i++)
+        {
+            if (_networkEquipment[i].SlotId == slotId)
+            {
+                _networkEquipment.RemoveAt(i);
+                break;
+            }
+        }
+
+        if (instance != null && instance.ItemSO != null)
+        {
+            _networkEquipment.Add(new NetworkEquipmentSyncData
+            {
+                SlotId = slotId,
+                ItemId = new FixedString64Bytes(instance.ItemSO.ItemId),
+                JsonData = new FixedString4096Bytes(JsonUtility.ToJson(instance))
+            });
+        }
+    }
+
+    private void OnEquipmentListChanged(NetworkListEvent<NetworkEquipmentSyncData> changeEvent)
+    {
+        if (IsServer) return; // Le serveur fait ça de manière locale
+
+        if (changeEvent.Type == NetworkListEvent<NetworkEquipmentSyncData>.EventType.Add ||
+            changeEvent.Type == NetworkListEvent<NetworkEquipmentSyncData>.EventType.Insert ||
+            changeEvent.Type == NetworkListEvent<NetworkEquipmentSyncData>.EventType.Value)
+        {
+            ApplyEquipmentData(changeEvent.Value);
+        }
+        else if (changeEvent.Type == NetworkListEvent<NetworkEquipmentSyncData>.EventType.Remove ||
+                 changeEvent.Type == NetworkListEvent<NetworkEquipmentSyncData>.EventType.RemoveAt)
+        {
+            RemoveEquipmentData(changeEvent.Value.SlotId);
+        }
+        else if (changeEvent.Type == NetworkListEvent<NetworkEquipmentSyncData>.EventType.Clear)
+        {
+            // optionnel: clear all
+        }
+    }
+
+    private void FullSyncFromNetwork()
+    {
+        foreach (var data in _networkEquipment)
+        {
+            ApplyEquipmentData(data);
+        }
+    }
+
+    private void ApplyEquipmentData(NetworkEquipmentSyncData data)
+    {
+        string id = data.ItemId.ToString();
+        ItemSO[] allItems = Resources.LoadAll<ItemSO>("Data/Item");
+        ItemSO so = Array.Find(allItems, match => match.ItemId == id);
+
+        if (so != null)
+        {
+            ItemInstance instance = so.CreateInstance();
+            JsonUtility.FromJsonOverwrite(data.JsonData.ToString(), instance);
+            instance.ItemSO = so;
+
+            ApplyEquipmentVisually(data.SlotId, instance);
+        }
+    }
+
+    private void ApplyEquipmentVisually(ushort slotId, ItemInstance instance)
+    {
+        if (slotId == 0 && instance is WeaponInstance weapon)
+        {
+            _weapon = weapon;
+            UpdateWeaponVisual();
+            OnEquipmentChanged?.Invoke();
+        }
+        else if (slotId == 1 && instance is BagInstance bag)
+        {
+            _bag = bag;
+            UpdateBagVisual(true);
+            OnEquipmentChanged?.Invoke();
+        }
+        else if (instance is WearableInstance wearable && wearable.ItemSO is WearableSO so)
+        {
+            EquipmentLayer targetLayer = GetTargetLayer(so.EquipmentLayer);
+            if (targetLayer != null)
+            {
+                targetLayer.Equip(wearable);
+                OnEquipmentChanged?.Invoke();
+            }
+        }
+    }
+
+    private void RemoveEquipmentData(ushort slotId)
+    {
+        if (slotId == 0)
+        {
+            _weapon = null;
+            UpdateWeaponVisual();
+            OnEquipmentChanged?.Invoke();
+        }
+        else if (slotId == 1)
+        {
+            _bag = null;
+            UpdateBagVisual(false);
+            OnEquipmentChanged?.Invoke();
+        }
+        else
+        {
+            WearableLayerEnum layer = WearableLayerEnum.Underwear;
+            if (slotId >= 300) layer = WearableLayerEnum.Armor;
+            else if (slotId >= 200) layer = WearableLayerEnum.Clothing;
+
+            int typeVal = slotId % 100;
+            WearableType type = (WearableType)typeVal;
+
+            EquipmentLayer targetLayer = GetTargetLayer(layer);
+            if (targetLayer != null)
+            {
+                targetLayer.Unequip(type);
+                OnEquipmentChanged?.Invoke();
+            }
+        }
+    }
+
+    private ushort GetSlotId(WearableLayerEnum layer, WearableType type)
+    {
+        int layerOffset = layer switch {
+            WearableLayerEnum.Underwear => 100,
+            WearableLayerEnum.Clothing => 200,
+            WearableLayerEnum.Armor => 300,
+            _ => 1000
+        };
+        return (ushort)(layerOffset + (int)type);
+    }
     // Cet événement sera déclenché chaque fois qu'un équipement change
     public event Action OnEquipmentChanged;
 
@@ -169,6 +336,7 @@ public class CharacterEquipment : CharacterSystem
 
                     Debug.Log($"<color=green>[Equip]</color> {data.ItemName} vers {data.EquipmentLayer}");
                     targetLayer.Equip(wearable);
+                    UpdateNetworkSlot(GetSlotId(data.EquipmentLayer, data.WearableType), wearable);
                     OnEquipmentChanged?.Invoke();
                 }
             }
@@ -184,6 +352,7 @@ public class CharacterEquipment : CharacterSystem
 
         // 2. Mise à jour de TOUTE la chaîne (Visuel + Animator)
         UpdateWeaponVisual();
+        UpdateNetworkSlot(0, weapon);
     }
     /// <summary>
     /// Déséquipe l'arme actuelle et repasse en mode civil.
@@ -196,6 +365,7 @@ public class CharacterEquipment : CharacterSystem
         _weapon = null;
 
         UpdateWeaponVisual(); // Désactive le socket + remet l'animator civil
+        UpdateNetworkSlot(0, null);
         OnEquipmentChanged?.Invoke();
     }
 
@@ -209,6 +379,7 @@ public class CharacterEquipment : CharacterSystem
 
         _bag = newBag;
         UpdateBagVisual(true);
+        UpdateNetworkSlot(1, newBag);
         Debug.Log($"<color=green>[Equip-Bag]</color> {newBag.ItemSO.ItemName} équipé sur le slot global.");
     }
 
@@ -232,6 +403,7 @@ public class CharacterEquipment : CharacterSystem
         // 2. On nettoie la référence et on cache les visuels
         _bag = null;
         UpdateBagVisual(false);
+        UpdateNetworkSlot(1, null);
     }
 
     private void UpdateBagVisual(bool show)
@@ -403,6 +575,7 @@ public class CharacterEquipment : CharacterSystem
 
             // 2. On vide le slot (visuel + data)
             targetLayer.Unequip(slotType);
+            UpdateNetworkSlot(GetSlotId(layerType, slotType), null);
             OnEquipmentChanged?.Invoke();
 
             // 3. On fait tomber l'instance qu'on a sauvegardée
@@ -683,5 +856,24 @@ public class CharacterEquipment : CharacterSystem
     protected override void HandleCombatStateChanged(bool inCombat)
     {
         if (inCombat) DropItemFromHand();
+    }
+}
+
+public struct NetworkEquipmentSyncData : INetworkSerializable, IEquatable<NetworkEquipmentSyncData>
+{
+    public ushort SlotId; // 0=Weapon, 1=Bag, 100+ = Underwear, 200+ = Clothing, 300+ = Armor
+    public FixedString64Bytes ItemId;
+    public FixedString4096Bytes JsonData;
+
+    public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
+    {
+        serializer.SerializeValue(ref SlotId);
+        serializer.SerializeValue(ref ItemId);
+        serializer.SerializeValue(ref JsonData);
+    }
+
+    public bool Equals(NetworkEquipmentSyncData other)
+    {
+        return SlotId == other.SlotId && ItemId == other.ItemId && JsonData == other.JsonData;
     }
 }

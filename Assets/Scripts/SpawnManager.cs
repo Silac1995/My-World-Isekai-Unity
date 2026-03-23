@@ -48,6 +48,12 @@ public class SpawnManager : MonoBehaviour
 
     public ItemInstance SpawnItem(ItemSO data, Vector3 pos)
     {
+        if (Unity.Netcode.NetworkManager.Singleton != null && !Unity.Netcode.NetworkManager.Singleton.IsServer)
+        {
+            Debug.LogError($"<color=red>[SpawnManager]</color> SpawnItem can only be called by the Server!");
+            return null;
+        }
+
         // 1. On instancie TOUJOURS le prefab par défaut (la "coquille" WorldItem)
         if (_defaultItemPrefab == null)
         {
@@ -78,6 +84,21 @@ public class SpawnManager : MonoBehaviour
         {
             worldItemComponent.Initialize(instance);
 
+            worldItemComponent.SetNetworkData(new NetworkItemData
+            {
+                ItemId = new Unity.Collections.FixedString64Bytes(data.ItemId),
+                JsonData = new Unity.Collections.FixedString4096Bytes(JsonUtility.ToJson(instance))
+            });
+
+            if (worldItemGo.TryGetComponent(out Unity.Netcode.NetworkObject netObj))
+            {
+                netObj.Spawn(true);
+            }
+            else
+            {
+                Debug.LogWarning($"<color=orange>[SpawnManager]</color> _defaultItemPrefab missing NetworkObject component!");
+            }
+
             // --- NOUVELLE LOGIQUE D'ÉJECTION ---
             if (worldItemGo.TryGetComponent(out Rigidbody rb))
             {
@@ -105,6 +126,12 @@ public class SpawnManager : MonoBehaviour
 
     public void SpawnCopyOfItem(ItemInstance existingInstance, Vector3 pos)
     {
+        if (Unity.Netcode.NetworkManager.Singleton != null && !Unity.Netcode.NetworkManager.Singleton.IsServer)
+        {
+            Debug.LogError($"<color=red>[SpawnManager]</color> SpawnCopyOfItem can only be called by the Server!");
+            return;
+        }
+
         if (existingInstance == null) return;
 
         // On récupère le prefab depuis le SO de l'instance existante
@@ -122,6 +149,17 @@ public class SpawnManager : MonoBehaviour
         {
             if (worldItem == null) worldItem = go.GetComponentInChildren<WorldItem>();
             worldItem.Initialize(existingInstance);
+
+            worldItem.SetNetworkData(new NetworkItemData
+            {
+                ItemId = new Unity.Collections.FixedString64Bytes(existingInstance.ItemSO.ItemId),
+                JsonData = new Unity.Collections.FixedString4096Bytes(JsonUtility.ToJson(existingInstance))
+            });
+
+            if (go.TryGetComponent(out Unity.Netcode.NetworkObject netObj))
+            {
+                netObj.Spawn(true);
+            }
         }
     }
 

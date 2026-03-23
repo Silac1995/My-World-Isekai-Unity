@@ -1,7 +1,9 @@
 using UnityEngine;
+using Unity.Netcode;
+using Unity.Collections;
 
 [RequireComponent(typeof(UnityEngine.Rendering.SortingGroup))]
-public class WorldItem : MonoBehaviour
+public class WorldItem : NetworkBehaviour
 {
     [Header("References")]
     [SerializeField] private Transform _visualRoot; // Glisse l'objet "Visual" de ton prefab ici
@@ -16,9 +18,66 @@ public class WorldItem : MonoBehaviour
     public bool IsBeingCarried { get; set; } = false;
     public bool FreezeOnGround { get; set; } = false;
 
+    [SerializeField]
+    private NetworkVariable<NetworkItemData> _networkItemData = new NetworkVariable<NetworkItemData>(
+        new NetworkItemData(),
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server
+    );
+
+    public void SetNetworkData(NetworkItemData data)
+    {
+        _networkItemData.Value = data;
+    }
+
     private void Awake()
     {
         SortingGroup = GetComponent<UnityEngine.Rendering.SortingGroup>();
+    }
+
+    public override void OnNetworkSpawn()
+    {
+        _networkItemData.OnValueChanged += OnItemDataChanged;
+
+        // Apply data if joining late as a client
+        if (IsClient && !IsServer)
+        {
+            ApplyNetworkData(_networkItemData.Value);
+        }
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        _networkItemData.OnValueChanged -= OnItemDataChanged;
+    }
+
+    private void OnItemDataChanged(NetworkItemData previousValue, NetworkItemData newValue)
+    {
+        if (IsClient && !IsServer)
+        {
+            ApplyNetworkData(newValue);
+        }
+    }
+
+    private void ApplyNetworkData(NetworkItemData data)
+    {
+        if (data.ItemId.IsEmpty) return;
+
+        string id = data.ItemId.ToString();
+        ItemSO[] allItems = Resources.LoadAll<ItemSO>("Data/Item");
+        ItemSO so = System.Array.Find(allItems, match => match.ItemId == id);
+
+        if (so != null)
+        {
+            ItemInstance instance = so.CreateInstance();
+            JsonUtility.FromJsonOverwrite(data.JsonData.ToString(), instance);
+            instance.ItemSO = so; 
+            Initialize(instance);
+        }
+        else
+        {
+            Debug.LogError($"<color=red>[WorldItem]</color> Could not find ItemSO with ID: {id} in Resources/Data/Item");
+        }
     }
 
     public void Initialize(ItemInstance instance)
@@ -89,6 +148,12 @@ public class WorldItem : MonoBehaviour
     /// </summary>
     public static WorldItem SpawnWorldItem(ItemSO itemSO, Vector3 position)
     {
+        if (NetworkManager.Singleton != null && !NetworkManager.Singleton.IsServer)
+        {
+            Debug.LogError($"<color=red>[WorldItem]</color> SpawnWorldItem can only be called by the Server!");
+            return null;
+        }
+
         GameObject prefab = itemSO.WorldItemPrefab;
         if (prefab == null)
         {
@@ -104,6 +169,23 @@ public class WorldItem : MonoBehaviour
         if (worldItemGo.TryGetComponent(out WorldItem worldItem))
         {
             worldItem.Initialize(instance);
+
+            // Setup Network Data for synchronization
+            worldItem._networkItemData.Value = new NetworkItemData
+            {
+                ItemId = new FixedString64Bytes(itemSO.ItemId),
+                JsonData = new FixedString4096Bytes(JsonUtility.ToJson(instance))
+            };
+
+            if (worldItemGo.TryGetComponent(out NetworkObject netObj))
+            {
+                netObj.Spawn(true);
+            }
+            else
+            {
+                Debug.LogWarning($"<color=orange>[Gather]</color> WorldItemPrefab for {itemSO.ItemName} missing NetworkObject component!");
+            }
+
             return worldItem;
         }
         else
@@ -119,6 +201,12 @@ public class WorldItem : MonoBehaviour
     /// </summary>
     public static WorldItem SpawnWorldItem(ItemInstance instance, Vector3 position)
     {
+        if (NetworkManager.Singleton != null && !NetworkManager.Singleton.IsServer)
+        {
+            Debug.LogError($"<color=red>[WorldItem]</color> SpawnWorldItem can only be called by the Server!");
+            return null;
+        }
+
         if (instance == null || instance.ItemSO == null) return null;
 
         GameObject prefab = instance.ItemSO.WorldItemPrefab;
@@ -134,6 +222,22 @@ public class WorldItem : MonoBehaviour
         if (worldItemGo.TryGetComponent(out WorldItem worldItem))
         {
             worldItem.Initialize(instance);
+
+            worldItem._networkItemData.Value = new NetworkItemData
+            {
+                ItemId = new FixedString64Bytes(instance.ItemSO.ItemId),
+                JsonData = new FixedString4096Bytes(JsonUtility.ToJson(instance))
+            };
+
+            if (worldItemGo.TryGetComponent(out NetworkObject netObj))
+            {
+                netObj.Spawn(true);
+            }
+            else
+            {
+                Debug.LogWarning($"<color=orange>[Gather]</color> WorldItemPrefab for {instance.ItemSO.ItemName} missing NetworkObject component!");
+            }
+
             return worldItem;
         }
         else
@@ -155,5 +259,17 @@ public class WorldItem : MonoBehaviour
                 Debug.Log($"<color=white>[WorldItem]</color> {gameObject.name} ground freeze engaged.");
             }
         }
+    }
+}
+
+public struct NetworkItemData : INetworkSerializable
+{
+    public FixedString64Bytes ItemId;
+    public FixedString4096Bytes JsonData;
+
+    public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
+    {
+        serializer.SerializeValue(ref ItemId);
+        serializer.SerializeValue(ref JsonData);
     }
 }

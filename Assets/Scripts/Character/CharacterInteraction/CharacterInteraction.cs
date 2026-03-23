@@ -492,10 +492,18 @@ public class CharacterInteraction : CharacterSystem
 
         // --- GESTION DE LA RELATION ---
         Relationship rel = _character.CharacterRelation.AddRelationship(target);
-        if (rel != null) rel.SetAsMet();
+        if (rel != null) 
+        {
+            rel.SetAsMet();
+            _character.CharacterRelation.SyncRelationshipToNetwork(rel);
+        }
 
         Relationship targetRel = target.CharacterRelation.GetRelationshipWith(_character);
-        if (targetRel != null) targetRel.SetAsMet();
+        if (targetRel != null) 
+        {
+            targetRel.SetAsMet();
+            target.CharacterRelation.SyncRelationshipToNetwork(targetRel);
+        }
 
         // --- FREEZE DE LA CIBLE ET DE L'INITIATEUR ---
         if (target.Controller != null && !target.IsPlayer()) target.Controller.Freeze();

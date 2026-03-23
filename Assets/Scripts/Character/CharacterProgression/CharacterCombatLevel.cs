@@ -1,6 +1,8 @@
 using UnityEngine;
 using System.Collections.Generic;
+using Unity.Netcode;
 using MWI.UI.Notifications;
+
 public class CharacterCombatLevel : CharacterSystem
 {
     [Header("Progression Settings")]
@@ -94,18 +96,34 @@ public class CharacterCombatLevel : CharacterSystem
 
     public void AddExperience(int amount)
     {
-        if (amount > 0)
+        if (amount <= 0) return;
+
+        if (IsServer)
         {
-            _currentExperience += amount;
-
-            if (_expToastChannel != null && _character != null && _character.Controller is PlayerController)
-            {
-                _expToastChannel.Raise(new ToastNotificationPayload($"+{amount} EXP", ToastType.Info, 2f));
-            }
-
-            CheckLevelUp();
-            OnExperienceChanged?.Invoke();
+            AddExperienceLocally(amount);
+            SyncExperienceRpc(amount);
         }
+    }
+
+    [Rpc(SendTo.Owner)]
+    private void SyncExperienceRpc(int amount)
+    {
+        if (IsServer) return; // Server already predicted it
+        AddExperienceLocally(amount);
+    }
+
+    private void AddExperienceLocally(int amount)
+    {
+        _currentExperience += amount;
+
+        // ONLY show Toast if this is the actual local Player playing!
+        if (_expToastChannel != null && _character != null && _character.Controller is PlayerController && IsOwner)
+        {
+            _expToastChannel.Raise(new ToastNotificationPayload($"+{amount} EXP", ToastType.Info, 2f));
+        }
+
+        CheckLevelUp();
+        OnExperienceChanged?.Invoke();
     }
 
     private void CheckLevelUp()
@@ -127,15 +145,15 @@ public class CharacterCombatLevel : CharacterSystem
 
         if (_character != null)
         {
-            // --- 30% Heal on Level Up ---
-            if (_character.Stats != null && _character.Stats.Health != null)
+            // Heal only on the Server to prevent double-dipping, the DamageRpc or next tick will sync it
+            if (IsServer && _character.Stats != null && _character.Stats.Health != null)
             {
                 _character.Stats.Health.HealPercent(0.3f);
             }
 
             Debug.Log($"<color=yellow>[Progression]</color> {_character.CharacterName} a atteint le niveau Combat {CurrentLevel} ! Points restants : {_unassignedStatPoints}");
             
-            if (_character.Controller is PlayerController)
+            if (_character.Controller is PlayerController && IsOwner)
             {
                 if (_expToastChannel != null)
                 {
@@ -147,7 +165,7 @@ public class CharacterCombatLevel : CharacterSystem
                     _statsBadgeChannel.Raise();
                 }
             }
-            else
+            else if (IsServer && !(_character.Controller is PlayerController))
             {
                 AutoAllocateStats();
             }

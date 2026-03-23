@@ -70,7 +70,11 @@ public class CharacterMovement : CharacterSystem
                 // MAIS on finit de désactiver sa physique propre (qu'on avait laissée active pour le vol plané)
                 if (_character != null && !_character.IsAlive())
                 {
-                    if (_rb != null) _rb.isKinematic = true;
+                    if (_rb != null) 
+                    {
+                        _rb.isKinematic = true;
+                        _rb.useGravity = false;
+                    }
                     if (_character.Collider != null) _character.Collider.enabled = false;
                     return;
                 }

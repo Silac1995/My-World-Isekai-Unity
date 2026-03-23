@@ -430,9 +430,19 @@ public class Character : NetworkBehaviour
 
         if (unconscious)
         {
-            // 1. Désactivation physique (partielle pour permettre le knockback)
-            // On laisse le collider actif temporairement pour la physique de chute/recul
-            if (_rb != null) _rb.isKinematic = true;
+            // 1. Désactivation physique
+            if (_rb != null) 
+            {
+                _rb.isKinematic = true;
+                if (TryGetComponent<Unity.Netcode.Components.NetworkRigidbody>(out var netRb)) netRb.enabled = false;
+            }
+            
+            // Si le personnage ne vole pas dans les airs suite à un knockback, on désactive immédiatement le collider au sol
+            if (_characterMovement != null && !_characterMovement.IsKnockedBack)
+            {
+                if (_col != null) _col.enabled = false;
+                if (_rb != null) _rb.useGravity = false;
+            }
 
             // 4. Animation (Utilise le paramètre isDead pour le moment)
             if (_characterVisual != null && _characterVisual.CharacterAnimator != null)
@@ -450,7 +460,12 @@ public class Character : NetworkBehaviour
         {
             // --- RÉVEIL ---
             if (_col != null) _col.enabled = true;
-            if (_rb != null) _rb.isKinematic = IsPlayer() ? false : true; // Rétablir selon le type de controller
+            if (_rb != null) 
+            {
+                _rb.useGravity = true;
+                _rb.isKinematic = IsPlayer() ? false : true; // Rétablir selon le type de controller
+                if (TryGetComponent<Unity.Netcode.Components.NetworkRigidbody>(out var netRb)) netRb.enabled = true;
+            }
 
             if (_controller != null)
             {
@@ -490,9 +505,20 @@ public class Character : NetworkBehaviour
         _isUnconscious = false; // La mort prime sur l'inconscience
         OnDeath?.Invoke(this);
 
-        // 1. Désactivation physique (partielle pour permettre le knockback)
-        // Le collider sera désactivé via DisableColliderAfterKnockback dans CharacterMovement
-        if (_rb != null) _rb.isKinematic = true;
+        // 1. Désactivation physique
+        if (_rb != null) 
+        {
+            _rb.isKinematic = true;
+            if (TryGetComponent<Unity.Netcode.Components.NetworkRigidbody>(out var netRb)) netRb.enabled = false;
+        }
+
+        // Le collider sera désactivé par CharacterMovement si on subit un knockback.
+        // Sinon, on le désactive tout de suite pour ne pas bloquer les autres joueurs (corps mort)
+        if (_characterMovement != null && !_characterMovement.IsKnockedBack)
+        {
+            if (_col != null) _col.enabled = false;
+            if (_rb != null) _rb.useGravity = false;
+        }
 
         if (_characterCombat != null) _characterCombat.ForceExitCombatMode();
 

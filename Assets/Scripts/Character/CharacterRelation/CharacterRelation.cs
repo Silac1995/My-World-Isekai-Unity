@@ -1,11 +1,33 @@
 using System;
 using System.Collections.Generic;
+using Unity.Netcode;
 using UnityEngine;
+
+[System.Serializable]
+public struct RelationSyncData : INetworkSerializable, IEquatable<RelationSyncData>
+{
+    public ulong TargetId;
+    public int RelationValue;
+    public RelationshipType RelationType;
+    public bool HasMet;
+
+    public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
+    {
+        serializer.SerializeValue(ref TargetId);
+        serializer.SerializeValue(ref RelationValue);
+        serializer.SerializeValue(ref RelationType);
+        serializer.SerializeValue(ref HasMet);
+    }
+
+    public bool Equals(RelationSyncData other) => TargetId == other.TargetId;
+}
 
 public class CharacterRelation : CharacterSystem
 {
     [SerializeField] private Character _character;
     [SerializeField] private List<Relationship> _relationships = new List<Relationship>();
+    
+    private NetworkList<RelationSyncData> _networkRelations;
 
     [Header("Notifications")]
     [SerializeField] private MWI.UI.Notifications.ToastNotificationChannel _toastChannel;
@@ -16,9 +38,130 @@ public class CharacterRelation : CharacterSystem
 
     public event Action OnRelationsUpdated;
 
+    protected override void Awake()
+    {
+        base.Awake();
+        _networkRelations = new NetworkList<RelationSyncData>();
+    }
+
+    public override void OnNetworkSpawn()
+    {
+        base.OnNetworkSpawn();
+        _networkRelations.OnListChanged += HandleNetworkRelationsChanged;
+
+        if (IsClient)
+        {
+            foreach (var syncData in _networkRelations)
+            {
+                ApplySyncDataLocal(syncData);
+            }
+        }
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        base.OnNetworkDespawn();
+        if (_networkRelations != null)
+        {
+            _networkRelations.OnListChanged -= HandleNetworkRelationsChanged;
+        }
+    }
+
+    private void HandleNetworkRelationsChanged(NetworkListEvent<RelationSyncData> changeEvent)
+    {
+        if (IsServer) return; // Server manages local list naturally
+        ApplySyncDataLocal(changeEvent.Value);
+    }
+
+    private void ApplySyncDataLocal(RelationSyncData syncData)
+    {
+        if (NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(syncData.TargetId, out var netObj))
+        {
+            Character target = netObj.GetComponent<Character>();
+            if (target == null) return;
+
+            Relationship existing = _relationships.Find(r => r.RelatedCharacter == target);
+            if (existing == null)
+            {
+                existing = new Relationship(Character, target, syncData.RelationValue, syncData.RelationType);
+                if (syncData.HasMet) existing.SetAsMet();
+                _relationships.Add(existing);
+                OnRelationsUpdated?.Invoke();
+            }
+            else
+            {
+                if (existing.RelationValue != syncData.RelationValue)
+                    existing.RelationValue = syncData.RelationValue;
+                
+                existing.SetRelationshipType(syncData.RelationType);
+                
+                if (syncData.HasMet) existing.SetAsMet();
+                else existing.SetAsNotMet();
+                
+                OnRelationsUpdated?.Invoke();
+            }
+        }
+    }
+
+    private void UpdateNetworkList(Relationship rel)
+    {
+        if (!IsServer || rel == null || rel.RelatedCharacter == null || rel.RelatedCharacter.NetworkObject == null) return;
+
+        ulong targetId = rel.RelatedCharacter.NetworkObject.NetworkObjectId;
+        RelationSyncData syncData = new RelationSyncData
+        {
+            TargetId = targetId,
+            RelationValue = rel.RelationValue,
+            RelationType = rel.RelationType,
+            HasMet = rel.HasMet
+        };
+
+        for (int i = 0; i < _networkRelations.Count; i++)
+        {
+            if (_networkRelations[i].TargetId == targetId)
+            {
+                if (_networkRelations[i].RelationValue != syncData.RelationValue || 
+                    _networkRelations[i].RelationType != syncData.RelationType || 
+                    _networkRelations[i].HasMet != syncData.HasMet)
+                {
+                    _networkRelations[i] = syncData;
+                }
+                return;
+            }
+        }
+        
+        _networkRelations.Add(syncData);
+    }
+
+    public void SyncRelationshipToNetwork(Relationship rel)
+    {
+        if (IsServer)
+        {
+            UpdateNetworkList(rel);
+        }
+    }
+
     public Relationship GetRelationshipWith(Character otherCharacter)
     {
-        return _relationships.Find(r => r.RelatedCharacter == otherCharacter);
+        Relationship rel = _relationships.Find(r => r.RelatedCharacter == otherCharacter);
+        
+        // Late-joiner safety: If we don't have it locally, check if it's in the NetworkList
+        if (rel == null && !IsServer && otherCharacter != null && otherCharacter.NetworkObject != null)
+        {
+            ulong targetId = otherCharacter.NetworkObject.NetworkObjectId;
+            foreach (var syncData in _networkRelations)
+            {
+                if (syncData.TargetId == targetId)
+                {
+                    rel = new Relationship(Character, otherCharacter, syncData.RelationValue, syncData.RelationType);
+                    if (syncData.HasMet) rel.SetAsMet();
+                    _relationships.Add(rel);
+                    break;
+                }
+            }
+        }
+        
+        return rel;
     }
 
     public void InitializeNotifications(MWI.UI.Notifications.NotificationChannel relationChannel, MWI.UI.Notifications.ToastNotificationChannel toastChannel = null)
@@ -79,6 +222,8 @@ public class CharacterRelation : CharacterSystem
     // Ajoute une nouvelle relation (Bilatéral : ils se connaissent)
     public Relationship AddRelationship(Character otherCharacter)
     {
+        if (!IsServer) return GetRelationshipWith(otherCharacter);
+        
         Relationship existing = GetRelationshipWith(otherCharacter);
         if (existing != null) return existing;
 
@@ -101,11 +246,15 @@ public class CharacterRelation : CharacterSystem
             _relationNotificationChannel.Raise();
         }
 
+        UpdateNetworkList(newRel);
+
         return newRel;
     }
 
     public void UpdateRelation(Character target, int amount)
     {
+        if (!IsServer) return;
+        
         Relationship rel = GetRelationshipWith(target);
 
         if (rel == null)
@@ -158,5 +307,7 @@ public class CharacterRelation : CharacterSystem
                 icon: null
             ));
         }
+
+        UpdateNetworkList(rel);
     }
 }
