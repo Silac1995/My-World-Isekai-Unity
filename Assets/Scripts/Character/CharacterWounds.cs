@@ -11,7 +11,6 @@ public class CharacterWounds : CharacterSystem
     [SerializeField] private bool _debugNoMask = false;
 
     [Header("References")]
-    [SerializeField] private Character _character;
     [SerializeField] private Transform _visualParent;
 
     private Queue<GameObject> _activeWounds = new Queue<GameObject>();

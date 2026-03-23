@@ -4,7 +4,6 @@ using System.Linq;
 
 public class CharacterAwareness : CharacterSystem
 {
-    [SerializeField] private Character _character;
     [SerializeField] private CapsuleCollider _awarenessCollider; 
 
     public event System.Action<Character> OnCharacterDetected;

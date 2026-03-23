@@ -53,6 +53,7 @@ public void RequestActionRpc(int actionId) { /* Logic */ }
 - **NetworkObject:** Must be at the root of the prefab. Nested `NetworkObject`s are prohibited.
 - **Registration:** Prefabs MUST be registered in the `NetworkManager`'s NetworkPrefabs list.
 - **Spawning:** Only the server can call `Spawn()`. Use `networkObject.Despawn(true)` for cleanup.
+- **NetworkBehaviour Integrity (CRITICAL):** NEVER use `DestroyImmediate()` or `Destroy()` on a `NetworkBehaviour` component on a network instance. Doing so before or after `Spawn()` corrupts the array indices matching Server to Client prefabs, causing all subsequent RPCs and NetworkVariables to silently fail or route to wrong components. To turn off a networking component, strictly use `component.enabled = false`.
 
 ### 6. Scene Management
 - **NetworkSceneManager:** Use `LoadScene` via the `NetworkManager.Singleton.SceneManager`.

@@ -30,7 +30,6 @@ public struct RelationSyncData : INetworkSerializable, IEquatable<RelationSyncDa
 
 public class CharacterRelation : CharacterSystem
 {
-    [SerializeField] private Character _character;
     [SerializeField] private List<Relationship> _relationships = new List<Relationship>();
     
     private NetworkList<RelationSyncData> _networkRelations;

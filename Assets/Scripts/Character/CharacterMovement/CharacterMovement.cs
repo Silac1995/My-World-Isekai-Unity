@@ -331,11 +331,27 @@ public class CharacterMovement : CharacterSystem
 
     public void Warp(Vector3 position)
     {
-        if (_agent != null)
+        if (_agent != null && _agent.enabled && _agent.isOnNavMesh)
+        {
+            _agent.Warp(position);
+        }
+        else if (_rb != null)
+        {
+            _rb.position = position;
+        }
+        else
         {
             transform.position = position;
-            _agent.Warp(position);
-            _agent.enabled = true;
+        }
+
+        // --- CRITICAL FIX ---
+        // Completely kill all physical momentum. If the character fell for 1 frame before 
+        // the warp, preserving that downward velocity will make them clip through the floor 
+        // at their destination!
+        if (_rb != null)
+        {
+            _rb.linearVelocity = Vector3.zero;
+            _rb.angularVelocity = Vector3.zero;
         }
     }
 

@@ -6,7 +6,6 @@ using Random = UnityEngine.Random;
 
 public class CharacterSpeech : CharacterSystem
 {
-    [SerializeField] private Character _character;
     [SerializeField] private GameObject _speechBubblePrefab;
     [SerializeField] private CharacterBodyPartsController _bodyPartsController;
 
@@ -154,7 +153,7 @@ public class CharacterSpeech : CharacterSystem
     [Rpc(SendTo.NotServer)]
     private void SayScriptedClientRpc(string message, float typingSpeed)
     {
-        if (IsOwner) return; // Prevent double execution if Owner already ran it locally
+        if (IsOwner && !IsServer) return; // Prevent double execution if Client Owner already ran it locally
         ExecuteSayScriptedLocally(message, typingSpeed, null); // Callbacks not supported over net
     }
 
@@ -212,7 +211,7 @@ public class CharacterSpeech : CharacterSystem
     [Rpc(SendTo.NotServer)]
     private void CloseSpeechClientRpc()
     {
-        if (IsOwner) return; // Owner already executed locally 
+        if (IsOwner && !IsServer) return; // Client Owner already executed locally 
         ExecuteCloseSpeechLocally();
     }
 

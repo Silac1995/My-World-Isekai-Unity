@@ -16,7 +16,6 @@ public class JobAssignment
 /// </summary>
 public class CharacterJob : CharacterSystem
 {
-    [SerializeField] private Character _character;
 
     [SerializeField] private List<JobAssignment> _activeJobs = new List<JobAssignment>();
     private CommercialBuilding _ownedBuilding; // Lieu dont il est prioritaire

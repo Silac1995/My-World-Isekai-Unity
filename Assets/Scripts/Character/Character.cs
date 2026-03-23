@@ -464,7 +464,7 @@ public class Character : NetworkBehaviour
             {
                 _rb.useGravity = true;
                 _rb.isKinematic = IsPlayer() ? false : true; // Rétablir selon le type de controller
-                if (TryGetComponent<Unity.Netcode.Components.NetworkRigidbody>(out var netRb)) netRb.enabled = true;
+                if (TryGetComponent<Unity.Netcode.Components.NetworkRigidbody>(out var netRb)) netRb.enabled = IsPlayer();
             }
 
             if (_controller != null)
@@ -578,6 +578,11 @@ public class Character : NetworkBehaviour
         bool isNPC = typeof(TTarget) == typeof(NPCController);
         ConfigureNavMesh(isNPC);
         
+        if (TryGetComponent<Unity.Netcode.Components.NetworkRigidbody>(out var netRb))
+        {
+            netRb.enabled = !isNPC;
+        }
+
         if (_rb != null)
         {
             if (IsSpawned && !IsOwner)

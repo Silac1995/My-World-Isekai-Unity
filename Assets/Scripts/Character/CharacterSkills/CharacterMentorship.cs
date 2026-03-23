@@ -5,7 +5,6 @@ using MWI.Time;
 
 public class CharacterMentorship : CharacterSystem
 {
-    [SerializeField] private Character _character;
     
     [Header("Student Data")]
     [SerializeField] private Character _currentMentor;
