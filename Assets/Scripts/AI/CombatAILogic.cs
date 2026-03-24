@@ -1,5 +1,6 @@
 using UnityEngine;
 using System;
+using System.Linq;
 
 namespace MWI.AI
 {
@@ -82,12 +83,42 @@ namespace MWI.AI
                 {
                     // Force movement into optimal valid strike position instead of target origin
                     float side = (_self.transform.position.x < currentTarget.transform.position.x) ? -1f : 1f;
+<<<<<<< HEAD
                     
                     // Expanded stagger: 7 unique Z positions instead of 3 to prevent overlap
                     int staggerIndex = Mathf.Abs(_self.GetInstanceID()) % 7;
                     float staggeredZ = (staggerIndex - 3) * 0.5f; // -1.5 to 1.5
                     float staggeredX = Mathf.Abs(staggeredZ) * 0.2f; // Step back slightly on the X-axis to avoid visual clipping
                     
+=======
+
+                    // Expanded fallback stagger: 7 unique Z positions instead of 3
+                    int staggerIndex = Mathf.Abs(_self.GetInstanceID()) % 7;
+                    float staggeredZ = (staggerIndex - 3) * 0.6f; // -1.8 to 1.8
+                    float staggeredX = 0f;
+
+                    // Perfect stagger based on their tactical formation slot
+                    if (_self.CharacterCombat != null && _self.CharacterCombat.CurrentBattleManager != null)
+                    {
+                        var bm = _self.CharacterCombat.CurrentBattleManager;
+                        var coordinator = bm.Coordinator;
+                        if (coordinator != null)
+                        {
+                            var engagement = coordinator.ActiveEngagements.FirstOrDefault(e => 
+                                e.GroupA.Members.Contains(_self) || e.GroupB.Members.Contains(_self));
+
+                            if (engagement != null)
+                            {
+                                Vector3 assignedPos = engagement.GetAssignedPosition(_self);
+                                staggeredZ = assignedPos.z - currentTarget.transform.position.z;
+                                
+                                // Step back slightly on the X-axis for characters further out on Z to avoid visual clipping
+                                staggeredX = Mathf.Abs(staggeredZ) * 0.2f;
+                            }
+                        }
+                    }
+
+>>>>>>> parent of 50e9d8c (Revert Combat AILogic and TacticalPacer overlap fixes)
                     Vector3 optimalStrikePos = currentTarget.transform.position + new Vector3(side * (optimalXDist + staggeredX), 0, staggeredZ);
 
                     if (UnityEngine.Time.time - _lastPathUpdateTime > 0.3f && Vector3.Distance(movement.Destination, optimalStrikePos) > 0.5f)
