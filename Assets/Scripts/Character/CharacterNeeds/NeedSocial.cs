@@ -25,6 +25,12 @@ public class NeedSocial : CharacterNeed
     public void IncreaseValue(float amount) => _currentValue = Mathf.Clamp(_currentValue + amount, 0, _maxValue);
     public void DecreaseValue(float amount) => _currentValue = Mathf.Clamp(_currentValue - amount, 0, _maxValue);
 
+    public override float CurrentValue 
+    { 
+        get => _currentValue; 
+        set => _currentValue = Mathf.Clamp(value, 0, _maxValue); 
+    }
+
     public bool IsLow() => _currentValue <= _lowThreshold;
 
     public override bool IsActive()

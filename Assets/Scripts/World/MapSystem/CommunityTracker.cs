@@ -34,6 +34,15 @@ namespace MWI.WorldSystem
     }
 
     [Serializable]
+    public class ResourcePoolEntry
+    {
+        public string ResourceId;
+        public float CurrentAmount;
+        public float MaxAmount;             // Derived from HarvestableDensity * map area
+        public double LastHarvestedDay;     // For regeneration math
+    }
+
+    [Serializable]
     public class CommunityData
     {
         public string MapId;
@@ -48,7 +57,9 @@ namespace MWI.WorldSystem
 
         // Dynamic City Growth
         public List<BuildingSaveData> ConstructedBuildings = new List<BuildingSaveData>();
+        public List<ResourcePoolEntry> ResourcePools = new List<ResourcePoolEntry>();
 
+        public bool IsPredefinedMap;
         [NonSerialized] public int CurrentDailyPopulation;
         [NonSerialized] public bool IsHibernating; 
     }
@@ -86,6 +97,12 @@ namespace MWI.WorldSystem
         public CommunityData GetCommunity(string mapId)
         {
             return _communities.Find(c => c.MapId == mapId);
+        }
+
+        public void AddCommunity(CommunityData community)
+        {
+            if (GetCommunity(community.MapId) != null) return;
+            _communities.Add(community);
         }
 
         private void Awake()

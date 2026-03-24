@@ -44,4 +44,10 @@ The lifecycle of an item moving between buildings involves several state changes
 - If an order is canceled or expires, it must be removed from BOTH buildings. Use `CancelBuyOrder(BuyOrder)` to ensure the removal cascades to the counterpart building (Source/Destination) and drops linked pending `TransportOrder`s safely. This avoids desynchronization where a client awaits an order the supplier already deleted, or vice versa.
 - Partial deliveries check against `InTransitQuantity` globally, rather than just locally per transporter, to avoid over-delivery logic traps.
 
+### 4. V2 Virtual Stock Injection (Harvesting & Raw Resources)
+In V2 of the macro-simulation, raw resources do not physically exist in map inventories until they are harvested or transported.
+- The `VirtualResourceSupplier` (inheriting from `CommercialBuilding`) handles raw material sourcing directly from the `CommunityData.ResourcePools`. 
+- When `BuildingLogisticsManager` processes a `BuyOrder`, it calls `_building.TryFulfillOrder(BuyOrder, remainingToDispatch)`.
+- If the building is a `VirtualResourceSupplier`, it dynamically calls `ItemSO.CreateInstance()` to inject actual physical `ItemInstance` objects into its own inventory (depleting the virtual pool) in the same frame, allowing the logistics manager to instantly generate a `TransportOrder` to pick them up.
+
 [Note: Put detailed code implementation patterns in `examples/logistics_patterns.md` instead of cluttering this file.]

@@ -17,6 +17,13 @@ namespace MWI.WorldSystem
     }
 
     [Serializable]
+    public class HibernatedNeedData
+    {
+        public string NeedType;
+        public float Value;
+    }
+
+    [Serializable]
     public class HibernatedNPCData
     {
         public string CharacterId;
@@ -43,6 +50,12 @@ namespace MWI.WorldSystem
         public int SleepHourStarts; // Default e.g. 22
         public int WorkHourStarts;  // Default e.g. 8
         public int FreeTimeStarts;  // Default e.g. 18
+        
+        // V2 Job State
+        public bool HasHarvesterJob;
+        
+        // V2 Needs
+        public List<HibernatedNeedData> SavedNeeds = new List<HibernatedNeedData>();
         
         // TODO for V2: Insert Inventory list, GOAP state snippet, Need levels, etc.
     }

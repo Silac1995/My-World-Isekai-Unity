@@ -454,4 +454,12 @@ public abstract class CommercialBuilding : Building
     {
         return false;
     }
+
+    /// <summary>
+    /// V2 Logistics hook for dynamic virtual stock generation (like HarvestingBuildings).
+    /// </summary>
+    public virtual bool TryFulfillOrder(BuyOrder order, int amount)
+    {
+        return false;
+    }
 }

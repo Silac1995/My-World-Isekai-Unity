@@ -558,6 +558,9 @@ public class BuildingLogisticsManager : MonoBehaviour
                 continue;
             }
 
+            // V2 Logistics: Let virtual buildings (like HarvestingBuilding) inject physical instances dynamically
+            _building.TryFulfillOrder(buyOrder, remainingToDispatch);
+
             var physicallyAvailableInstances = _building.Inventory
                 .Where(inst => inst.ItemSO == buyOrder.ItemToTransport && !globallyReservedItems.Contains(inst))
                 .ToList();

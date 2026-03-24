@@ -22,6 +22,15 @@ namespace MWI.WorldSystem
         [SerializeField] private int _activePlayerCount = 0;
 
         private BoxCollider _mapTrigger;
+        public NetworkVariable<bool> IsActive = new NetworkVariable<bool>(false);
+        
+        [Header("Biome & Map Type")]
+        [Tooltip("The biome defining resource density and yields for Offline Growth.")]
+        public BiomeDefinition Biome;
+        
+        [Tooltip("If true, the terrain is hand-crafted and not procedurally spawned by the MapPrefabRegistry.")]
+        public bool IsPredefinedMap;
+
         private HashSet<ulong> _activePlayers = new HashSet<ulong>();
         private MapSaveData _hibernationData;
 
@@ -47,6 +56,22 @@ namespace MWI.WorldSystem
             Invoke(nameof(CheckHibernationState), 1f);
         }
 
+        private void Start()
+        {
+            if (IsServer)
+            {
+                if (_timeManager != null)
+                {
+                    _timeManager.OnNewDay += OnNewDay;
+                }
+
+                if (!IsHibernating)
+                {
+                    SpawnVirtualBuildings();
+                }
+            }
+        }
+
         public override void OnNetworkDespawn()
         {
             base.OnNetworkDespawn();
@@ -56,6 +81,11 @@ namespace MWI.WorldSystem
             if (NetworkManager.Singleton != null)
             {
                 NetworkManager.Singleton.OnClientDisconnectCallback -= HandleClientDisconnect;
+            }
+
+            if (_timeManager != null)
+            {
+                _timeManager.OnNewDay -= OnNewDay;
             }
         }
 
@@ -114,6 +144,68 @@ namespace MWI.WorldSystem
                 _activePlayerCount = _activePlayers.Count;
                 Debug.Log($"<color=cyan>[MapController]</color> Player {clientId} left '{MapId}'. Total: {_activePlayerCount}");
                 CheckHibernationState();
+            }
+        }
+
+        #endregion
+
+        #region Resource Harvesting & Virtual Buildings
+
+        public ResourcePoolEntry GetResourcePool(string resourceId)
+        {
+            if (CommunityTracker.Instance == null) return null;
+            var community = CommunityTracker.Instance.GetCommunity(MapId);
+            if (community == null || community.ResourcePools == null) return null;
+
+            return community.ResourcePools.Find(p => p.ResourceId == resourceId);
+        }
+
+        private void SpawnVirtualBuildings()
+        {
+            if (Biome == null || Biome.Harvestables == null) return;
+            
+            // Clean up any existing ones first
+            foreach (Transform child in transform)
+            {
+                if (child.GetComponent<VirtualResourceSupplier>() != null)
+                {
+                    Destroy(child.gameObject);
+                }
+            }
+
+            foreach (var resDef in Biome.Harvestables)
+            {
+                GameObject supplierGO = new GameObject($"VirtualResourceSupplier_{resDef.ResourceId}");
+                supplierGO.transform.SetParent(this.transform);
+                var supplier = supplierGO.AddComponent<VirtualResourceSupplier>();
+                supplier.Initialize(resDef.ResourceId, this);
+            }
+        }
+
+        private void OnNewDay()
+        {
+            if (Biome == null || Biome.Harvestables == null) return;
+            
+            CommunityData community = null;
+            if (CommunityTracker.Instance != null)
+            {
+                community = CommunityTracker.Instance.GetCommunity(MapId);
+            }
+
+            if (community?.ResourcePools == null) return;
+
+            foreach (var pool in community.ResourcePools)
+            {
+                var entry = Biome.Harvestables.FirstOrDefault(h => h.ResourceId == pool.ResourceId);
+                if (entry == null) continue;
+
+                double daysSinceHarvest = _timeManager.CurrentDay - (pool.LastHarvestedDay > 0 ? pool.LastHarvestedDay : _timeManager.CurrentDay);
+                if (daysSinceHarvest >= entry.RegenerationDays || entry.RegenerationDays == 0)
+                {
+                    // Regenerate by BaseYieldQuantity
+                    pool.CurrentAmount = Mathf.Min(pool.CurrentAmount + Mathf.CeilToInt(entry.BaseYieldQuantity), pool.MaxAmount);
+                    pool.LastHarvestedDay = _timeManager.CurrentDay;
+                }
             }
         }
 
@@ -185,6 +277,25 @@ namespace MWI.WorldSystem
                         npcData.HomePosition = tracker.HomePosition.Value;
                     }
 
+                    // Extract Build/Harvest Flags
+                    if (npc.TryGetComponent(out CharacterJob charJob))
+                    {
+                        npcData.HasHarvesterJob = charJob.HasJobOfType<JobHarvester>();
+                    }
+
+                    // Extract Needs
+                    if (npc.CharacterNeeds != null)
+                    {
+                        foreach (var need in npc.CharacterNeeds.AllNeeds)
+                        {
+                            npcData.SavedNeeds.Add(new HibernatedNeedData 
+                            { 
+                                NeedType = need.GetType().Name,
+                                Value = need.CurrentValue 
+                            });
+                        }
+                    }
+
                     _hibernationData.HibernatedNPCs.Add(npcData);
 
                     // 2. Despawn & Destroy the physical instance
@@ -196,6 +307,15 @@ namespace MWI.WorldSystem
                     {
                         Destroy(npc.gameObject);
                     }
+                }
+            }
+
+            // 3. Destroy Virtual Harvesting Buildings
+            foreach (Transform child in transform)
+            {
+                if (child.GetComponent<VirtualResourceSupplier>() != null)
+                {
+                    Destroy(child.gameObject);
                 }
             }
 
@@ -269,6 +389,9 @@ namespace MWI.WorldSystem
                         }
                     }
                 }
+
+                // 4. Spawn Virtual Harvesting Buildings for Logistics
+                SpawnVirtualBuildings();
             }
 
             if (_hibernationData != null && _hibernationData.HibernatedNPCs.Count > 0)
@@ -302,6 +425,19 @@ namespace MWI.WorldSystem
 
                     GameObject inst = Instantiate(prefab, npcData.Position, npcData.Rotation);
                     
+                    // Inject caught-up needs back
+                    if (inst.TryGetComponent(out Character spawnedChar) && spawnedChar.CharacterNeeds != null)
+                    {
+                        foreach (var savedNeed in npcData.SavedNeeds)
+                        {
+                            var liveNeed = spawnedChar.CharacterNeeds.AllNeeds.FirstOrDefault(n => n.GetType().Name == savedNeed.NeedType);
+                            if (liveNeed != null)
+                            {
+                                liveNeed.CurrentValue = savedNeed.Value;
+                            }
+                        }
+                    }
+
                     if (inst.TryGetComponent(out NetworkObject netObj))
                     {
                         netObj.Spawn(true);

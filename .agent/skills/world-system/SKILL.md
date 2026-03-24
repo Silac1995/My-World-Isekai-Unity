@@ -16,13 +16,14 @@ Because Maps are physically distant, Unity NGO's **Interest Management** natural
 ## 2. Map Hibernation (Performance)
 To support thousands of NPCs and hundreds of Maps locally, we use Map Hibernation.
 *   **Activation:** The `MapController` tracks active players. When `PlayerCount == 0`, the Map enters Hibernation.
-*   **Phase 1 (Pause):** All NPCs on the Map are serialized into `HibernatedNPCData` (inside `MapSaveData`), extracting only pure logic (Stats, Schedule target, Inventory) and position. The actual heavy Unity `GameObject` (and `NavMeshAgent`, `Animator`, `NetworkObject`) is DESPAWNED and DESTROYED. The Map is visually dead.
+*   **Phase 1 (Pause):** All NPCs on the Map are serialized into `HibernatedNPCData` (inside `MapSaveData`), extracting only pure logic (Stats, Schedule target, Inventory, Needs) and position. The actual heavy Unity `GameObject` (and `NavMeshAgent`, `Animator`, `NetworkObject`) is DESPAWNED and DESTROYED. The Map is visually dead.
 *   **Phase 2 (Wake Up):** When the first player re-enters the dormant Map, the `MapController` immediately calls the `MacroSimulator`.
 
 ## 3. Macro-Simulation (Catch-Up Math)
 The `MacroSimulator` operates entirely off-screen when a Map wakes up.
 *   It calculates the absolute time delta (`DeltaTime = CurrentTime - HibernationTime`).
 *   It looks at each `HibernatedNPCData` and mathematically computes what the NPC *would* have done during that gap.
+*   **Offline Needs Decay:** It calculates how much time has passed and subtracts that from the serialized `CharacterNeed.CurrentValue` (e.g., Hunger, Social), ensuring NPCs wake up with accurate stat depletion proportionate to the `DeltaTime`.
 *   **Simulation vs Realtime:** Rather than simulating every frame of walking, the MacroSimulator just skips them to the end of their current scheduled task (e.g., if it's 8:00 AM, snap position to Blacksmith Forge).
 *   Once simulated, the Server reinstantiates the Prefab at the new position, assigns the updated stats, and calls `Spawn()` to sync with the entering client.
 

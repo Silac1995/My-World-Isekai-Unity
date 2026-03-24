@@ -28,6 +28,7 @@ namespace MWI.Time
                 CommunityData community = CommunityTracker.Instance.GetCommunity(savedData.MapId);
                 if (community != null)
                 {
+                    SimulateResourceHarvesting(community, savedData, daysPassed);
                     SimulateCityGrowth(community, daysPassed);
                 }
             }
@@ -38,6 +39,63 @@ namespace MWI.Time
             foreach (var npc in savedData.HibernatedNPCs)
             {
                 SimulateNPCCatchUp(npc, savedData.MapId, currentHour, hoursPassed);
+            }
+        }
+
+        private static void SimulateResourceHarvesting(CommunityData community, MapSaveData savedData, double daysPassed)
+        {
+            // Skip if no MapController can be found to provide the Biome
+            MapController map = null;
+            MapController[] activeMaps = Object.FindObjectsByType<MapController>(FindObjectsSortMode.None);
+            foreach (var m in activeMaps)
+            {
+                if (m.MapId == community.MapId)
+                {
+                    map = m;
+                    break;
+                }
+            }
+
+            if (map == null || map.Biome == null || map.Biome.Harvestables.Count == 0) return;
+
+            int harvesterCount = 0;
+            foreach (var npc in savedData.HibernatedNPCs)
+            {
+                if (npc.HasHarvesterJob) harvesterCount++;
+            }
+
+            if (harvesterCount == 0) return;
+
+            // Simple deterministic output based on daysPassed and workers
+            // e.g., 1 worker gets BaseYieldQuantity per day
+            foreach (var resDef in map.Biome.Harvestables)
+            {
+                float totalYield = harvesterCount * resDef.BaseYieldQuantity * (float)daysPassed * resDef.Weight;
+
+                if (totalYield <= 0) continue;
+
+                var pool = community.ResourcePools.Find(p => p.ResourceId == resDef.ResourceId);
+                if (pool == null)
+                {
+                    pool = new ResourcePoolEntry
+                    {
+                        ResourceId = resDef.ResourceId,
+                        CurrentAmount = 0,
+                        // Rough MaxAmount estimation based on density, will refine in V2
+                        MaxAmount = map.Biome.HarvestableDensity * 1000f, 
+                        LastHarvestedDay = 0
+                    };
+                    community.ResourcePools.Add(pool);
+                }
+
+                // Actually, if we are harvesting, we *subtract* from the pool or add to an inventory?
+                // The prompt says: "Add HarvestYield to NPC or city inventory. Decrement resource pool"
+                // For now, track the total gathered offline by ADDING to the community pool representing gathered stock. 
+                // Or if pool represents un-harvested trees, we decrement it.
+                // We'll treat CurrentAmount as "Gathered Resources" for City Growth to use.
+                pool.CurrentAmount += totalYield;
+
+                Debug.Log($"<color=orange>[MacroSim]</color> Offline Harvesting: {harvesterCount} harvesters gathered {totalYield:F1} {resDef.ResourceId} in {community.MapId}");
             }
         }
 
@@ -134,6 +192,18 @@ namespace MWI.Time
             {
                 // Edge case handling for Option 1: NPC structurally belongs in City B right now, but Map A is waking up.
                 // We leave them exactly where they went to sleep in Map A. When they spawn, their live GOAP will issue a pathing order to Map B via doors.
+            }
+
+            // Tier 2: Offline Needs Decay
+            foreach (var need in npcData.SavedNeeds)
+            {
+                if (need.NeedType == "NeedSocial")
+                {
+                    // Rate is 45 per day according to CharacterNeeds.cs HandleNewDay (45/24 = 1.875)
+                    float drainRate = 45f / 24f;
+                    need.Value -= (hoursPassed * drainRate);
+                    if (need.Value < 0) need.Value = 0;
+                }
             }
         }
 
