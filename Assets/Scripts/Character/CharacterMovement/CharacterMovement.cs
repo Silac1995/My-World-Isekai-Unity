@@ -96,13 +96,24 @@ public class CharacterMovement : CharacterSystem
                     return;
                 }
 
-                // Fin du knockback normal : On restaure l'état original
-                if (_rb != null) _rb.isKinematic = _wasKinematic;
+                // Fin du knockback normal : On restaure l'état
+                // IMPORTANT: If the character has entered combat DURING the knockback window,
+                // the pre-knockback state (_wasAgentEnabled=false, _wasKinematic=false) is STALE.
+                // We must respect the current combat state instead of blindly restoring.
+                bool isNowInCombat = _character != null && _character.CharacterCombat != null && _character.CharacterCombat.IsInBattle;
                 
-                // Restauration exacte de l'état du NavMeshAgent avant le coup
-                if (_agent != null)
+                if (isNowInCombat)
                 {
-                    _agent.enabled = _wasAgentEnabled;
+                    // Combat requires NavMeshAgent ON and Rigidbody kinematic
+                    if (_rb != null) _rb.isKinematic = true;
+                    if (_agent != null) _agent.enabled = true;
+                    Debug.Log($"<color=yellow>[Movement]</color> {name} knockback ended — combat active, forcing NavMesh ON.");
+                }
+                else
+                {
+                    // Restore to pre-knockback state (WASD mode)
+                    if (_rb != null) _rb.isKinematic = _wasKinematic;
+                    if (_agent != null) _agent.enabled = _wasAgentEnabled;
                 }
             }
             return;

@@ -70,15 +70,15 @@ namespace MWI.AI
             {
                 _isChargingTarget = true;
                 
-                float optimalXDist = Mathf.Max(1.0f, attackRange * 0.8f);
                 float dx = Mathf.Abs(_self.transform.position.x - currentTarget.transform.position.x);
                 float zDist = Mathf.Abs(_self.transform.position.z - currentTarget.transform.position.z);
                 
                 bool isWithinRange = distToTarget <= attackRange; 
-                bool isXTooClose = dx < (optimalXDist * 0.7f);
-                bool isZAligned = zDist <= 0.6f;
+                bool isZAligned = zDist <= 1.2f;
 
-                if (!isWithinRange || isXTooClose || !isZAligned)
+                // Attack is allowed if within range AND Z-aligned. 
+                // isXTooClose is only used for repositioning, NOT for blocking attacks.
+                if (!isWithinRange || !isZAligned)
                 {
                     // Force movement into optimal valid strike position instead of target origin
                     float side = (_self.transform.position.x < currentTarget.transform.position.x) ? -1f : 1f;

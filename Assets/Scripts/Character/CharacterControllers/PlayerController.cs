@@ -110,6 +110,7 @@ public class PlayerController : CharacterGameController
 
                 if (battleTarget != null)
                 {
+                    Debug.Log($"<color=green>[PlayerCtrl]</color> {_character.CharacterName} entering combat mode vs {battleTarget.CharacterName}. NavMesh will be enabled.");
                     SetOrder(new PlayerCombatCommand(_character, battleTarget));
                 }
             }
@@ -165,6 +166,17 @@ public class PlayerController : CharacterGameController
         {
             _character.ConfigureNavMesh(true);
         }
+        else if (needsNavMesh && _wasNavMeshActiveLastFrame)
+        {
+            // Safety: If something externally disabled our NavAgent (e.g. knockback recovery
+            // restoring pre-combat WASD state), re-enable it immediately.
+            var agent = _character.CharacterMovement?.Agent;
+            if (agent != null && !agent.enabled)
+            {
+                Debug.Log($"<color=yellow>[PlayerCtrl]</color> NavAgent was externally disabled while in combat. Re-enabling.");
+                _character.ConfigureNavMesh(true);
+            }
+        }
         else if (!needsNavMesh && _wasNavMeshActiveLastFrame)
         {
             _character.ConfigureNavMesh(false);
@@ -172,7 +184,10 @@ public class PlayerController : CharacterGameController
         }
         _wasNavMeshActiveLastFrame = needsNavMesh;
 
-        if (_character.CharacterActions.CurrentAction != null) return;
+        // Allow CombatAILogic to keep ticking during hit reactions — it handles its own
+        // action gating via initiative checks. Only block non-combat orders during actions.
+        if (_character.CharacterActions.CurrentAction != null && !(_currentOrder is PlayerCombatCommand))
+            return;
 
         if (_currentOrder != null)
         {
