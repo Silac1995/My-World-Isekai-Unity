@@ -235,6 +235,34 @@ public class BattleManager : NetworkBehaviour
 
     public void AddParticipant(Character newParticipant, Character target, bool asAlly = false)
     {
+        if (!IsServer) return;
+        if (newParticipant == null || target == null || _isBattleEnded) return;
+
+        AddParticipantInternal(newParticipant, target, asAlly);
+
+        ulong newParticipantId = newParticipant.NetworkObject != null ? newParticipant.NetworkObject.NetworkObjectId : 0;
+        ulong targetId = target.NetworkObject != null ? target.NetworkObject.NetworkObjectId : 0;
+
+        if (newParticipantId > 0 && targetId > 0)
+        {
+            AddParticipantClientRpc(newParticipantId, targetId, asAlly);
+        }
+    }
+
+    [ClientRpc]
+    private void AddParticipantClientRpc(ulong newParticipantId, ulong targetId, bool asAlly)
+    {
+        if (IsServer) return;
+
+        if (Unity.Netcode.NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(newParticipantId, out var pObj) &&
+            Unity.Netcode.NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(targetId, out var tObj))
+        {
+            AddParticipantInternal(pObj.GetComponent<Character>(), tObj.GetComponent<Character>(), asAlly);
+        }
+    }
+
+    private void AddParticipantInternal(Character newParticipant, Character target, bool asAlly)
+    {
         if (newParticipant == null || target == null || _isBattleEnded) return;
 
         // On trouve l'équipe de la cible

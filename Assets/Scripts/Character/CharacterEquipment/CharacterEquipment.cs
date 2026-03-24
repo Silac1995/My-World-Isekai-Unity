@@ -791,7 +791,7 @@ public class CharacterEquipment : CharacterSystem
                 // L'item a été retiré avec succès, on le fait spawner dans le monde
                 CharacterDropItem.ExecutePhysicalDrop(_character, itemToDrop, false);
 
-                if (_toastChannel != null && _character.IsPlayer())
+                if (_toastChannel != null && _character.IsPlayer() && _character.IsOwner)
                 {
                     _toastChannel.Raise(new MWI.UI.Notifications.ToastNotificationPayload(
                         message: $"Dropped {itemToDrop.ItemSO.ItemName}",

@@ -218,6 +218,7 @@ public class CharacterCombat : CharacterSystem
     private bool ExecuteAttackLocally(Character target)
     {
         _lastCombatActionTime = Time.time;
+        _hitboxSpawnedForAction = false;
         ChangeCombatMode(true);
 
         if (_character.CharacterActions == null) return false;
@@ -471,7 +472,7 @@ public class CharacterCombat : CharacterSystem
     #endregion
 
     #region Animation Events
-    private float _lastHitboxSpawnTime;
+    private bool _hitboxSpawnedForAction = false;
 
     public void SpawnCombatStyleAttackInstance()
     {
@@ -506,8 +507,8 @@ public class CharacterCombat : CharacterSystem
         if (_currentCombatStyleExpertise.Style is not MeleeCombatStyleSO meleeStyle) return;
 
         // Prevent double spawn if AnimationEvent managed to fire AND RPC arrived
-        if (Time.time - _lastHitboxSpawnTime < 0.2f) return; 
-        _lastHitboxSpawnTime = Time.time;
+        if (_hitboxSpawnedForAction) return; 
+        _hitboxSpawnedForAction = true;
 
         GameObject prefab = meleeStyle.HitboxPrefab;
         if (prefab == null) return;

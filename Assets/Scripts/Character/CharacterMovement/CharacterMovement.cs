@@ -9,6 +9,12 @@ public class CharacterMovement : CharacterSystem
     [SerializeField] private float _groundCheckDistance = 0.2f;
     [SerializeField] private LayerMask _groundLayer;
 
+    [Header("Step & Obstacle Handling")]
+    [SerializeField] private float _stepHeight = 0.3f;
+    [SerializeField] private float _stepSmooth = 0.08f;
+    [SerializeField] private float _stepDetectDistance = 0.6f;
+    [SerializeField] private CharacterObstacleAvoidance _obstacleAvoidance;
+
     [Header("References")]
     [SerializeField] private Rigidbody _rb;
     [SerializeField] private NavMeshAgent _agent;
@@ -47,6 +53,7 @@ public class CharacterMovement : CharacterSystem
         base.Awake();
         if (_rb == null) _rb = GetComponent<Rigidbody>();
         if (_agent == null) _agent = GetComponent<NavMeshAgent>();
+        if (_obstacleAvoidance == null) _obstacleAvoidance = GetComponent<CharacterObstacleAvoidance>();
 
         if (_agent != null)
         {
@@ -156,6 +163,10 @@ public class CharacterMovement : CharacterSystem
                     _isSliding = false;
                 }
             }
+
+                        // Removed HandleStepUp for NavMeshAgent because NavMesh handles its own stepping.
+            // Using MovePosition while a NavMeshAgent is active causes vertical fighting that broadcasts
+            // a continuous wobble to all networked clients.
         }
         else
         {
@@ -165,13 +176,72 @@ public class CharacterMovement : CharacterSystem
 
     private void ApplyPhysicalMovement()
     {
-        Vector3 targetVelocity = _desiredDirection * _targetSpeed;
+        Vector3 moveDir = _desiredDirection;
+
+        // Proactive raycast steering against walls and corners
+        if (_obstacleAvoidance != null && moveDir.sqrMagnitude > 0f)
+        {
+            moveDir = _obstacleAvoidance.GetAvoidanceDirection(moveDir);
+        }
+
+        Vector3 targetVelocity = moveDir * _targetSpeed;
         Vector3 currentVelocity = _rb.linearVelocity;
 
         float velX = (targetVelocity.x - currentVelocity.x) * _acceleration;
         float velZ = (targetVelocity.z - currentVelocity.z) * _acceleration;
 
         _rb.AddForce(new Vector3(velX, 0, velZ), ForceMode.Acceleration);
+
+        // Assist physics engine over small vertical steps (e.g. stairs, 1-pixel height ridges)
+        if (moveDir.sqrMagnitude > 0.01f)
+        {
+            HandleStepUp(moveDir);
+        }
+    }
+
+    private void HandleStepUp(Vector3 moveDir)
+    {
+        if (!IsGrounded()) return;
+
+        Vector3 forward = moveDir.normalized;
+        
+        // Find the absolute bottom of the physics collider to accurately trace the floor.
+        Vector3 bottomOffset = transform.position;
+        Collider col = _character != null ? _character.Collider : GetComponentInChildren<Collider>();
+        if (col != null)
+        {
+            bottomOffset = new Vector3(transform.position.x, col.bounds.min.y, transform.position.z);
+        }
+
+        // Small margin from ground to detect the actual step face
+        Vector3 lowerOrigin = bottomOffset + Vector3.up * 0.05f; 
+        // Height clearance ray
+        Vector3 upperOrigin = bottomOffset + Vector3.up * _stepHeight; 
+
+        // Do we hit a vertical obstacle at foot level?
+        if (Physics.Raycast(lowerOrigin, forward, out RaycastHit hitLower, _stepDetectDistance, _groundLayer, QueryTriggerInteraction.Ignore))
+        {
+            float hitAngle = Vector3.Angle(Vector3.up, hitLower.normal);
+            // Only step up if the obstacle is relatively steep (not a regular ramp we can easily walk up)
+            if (hitAngle > 45f) 
+            {
+                // Is there clearance at max step height?
+                if (!Physics.Raycast(upperOrigin, forward, out RaycastHit hitUpper, _stepDetectDistance + 0.1f, _groundLayer, QueryTriggerInteraction.Ignore))
+                {
+                    // Use MovePosition instead of modifying position directly
+                    Vector3 newPos = _rb.position + Vector3.up * _stepSmooth;
+                    _rb.MovePosition(newPos);
+
+                    // Cancel negative Y velocity to prevent gravity from immediately pushing down
+                    if (_rb.linearVelocity.y < 0)
+                    {
+                        Vector3 vel = _rb.linearVelocity;
+                        vel.y = 0f;
+                        _rb.linearVelocity = vel;
+                    }
+                }
+            }
+        }
     }
 
     public void SetDesiredDirection(Vector3 direction, float speed)
@@ -326,16 +396,38 @@ public class CharacterMovement : CharacterSystem
     public bool IsGrounded()
     {
         Vector3 origin = transform.position + Vector3.up * 0.1f;
-        return Physics.Raycast(origin, Vector3.down, _groundCheckDistance, _groundLayer);
+        Collider col = _character != null ? _character.Collider : GetComponentInChildren<Collider>();
+        if (col != null)
+        {
+            origin = new Vector3(transform.position.x, col.bounds.min.y + 0.1f, transform.position.z);
+        }
+
+        return Physics.Raycast(origin, Vector3.down, _groundCheckDistance, _groundLayer, QueryTriggerInteraction.Ignore);
     }
 
     public void Warp(Vector3 position)
     {
-        if (_agent != null)
+        if (_agent != null && _agent.enabled && _agent.isOnNavMesh)
+        {
+            _agent.Warp(position);
+        }
+        else if (_rb != null)
+        {
+            _rb.position = position;
+        }
+        else
         {
             transform.position = position;
-            _agent.Warp(position);
-            _agent.enabled = true;
+        }
+
+        // --- CRITICAL FIX ---
+        // Completely kill all physical momentum. If the character fell for 1 frame before 
+        // the warp, preserving that downward velocity will make them clip through the floor 
+        // at their destination!
+        if (_rb != null)
+        {
+            _rb.linearVelocity = Vector3.zero;
+            _rb.angularVelocity = Vector3.zero;
         }
     }
 
@@ -371,5 +463,27 @@ public class CharacterMovement : CharacterSystem
         }
 
         return _empiricalVelocity;
+    }
+
+    private void OnDrawGizmos()
+    {
+        // Scale the gizmos dynamically based on your step detect distance (which correlates to character scale)
+        float vizSize = _stepDetectDistance > 0f ? _stepDetectDistance : 1f;
+
+        // Draw the real physics position, not the visual one
+        Gizmos.color = Color.red;
+        Gizmos.DrawWireSphere(transform.position, vizSize * 1.5f); // pivot
+
+        if (_rb != null)
+        {
+            Gizmos.color = Color.cyan;
+            Gizmos.DrawWireSphere(_rb.position, vizSize * 1.25f); // rb position
+        }
+
+        if (_agent != null)
+        {
+            Gizmos.color = Color.green;
+            Gizmos.DrawWireSphere(_agent.nextPosition, vizSize * 1.0f); // agent position
+        }
     }
 }

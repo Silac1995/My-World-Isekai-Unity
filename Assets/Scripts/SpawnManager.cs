@@ -11,6 +11,9 @@ public class SpawnManager : MonoBehaviour
     public Vector3 DefaultSpawnPosition => spawnGameObject != null ? spawnGameObject.transform.position : Vector3.zero;
     public Quaternion DefaultSpawnRotation => spawnGameObject != null ? spawnGameObject.transform.rotation : Quaternion.identity;
 
+    [Header("Fallbacks")]
+    [SerializeField] private RaceSO _defaultFallbackRace;
+
     private CharacterPersonalitySO[] _availablePersonalities;
     private CharacterBehavioralTraitsSO[] _availableTraits;
 
@@ -178,16 +181,7 @@ public class SpawnManager : MonoBehaviour
             return null;
         }
 
-        // Si c'est un NPC, on supprime immédiatement le NetworkRigidbody (s'il existe)
-        // pour qu'il n'entre pas en conflit avec le NavMeshAgent.
-        if (!isPlayer)
-        {
-            var netRb = characterPrefabObj.GetComponent<Unity.Netcode.Components.NetworkRigidbody>();
-            if (netRb != null)
-            {
-                DestroyImmediate(netRb);
-            }
-        }
+        // (Removed DestroyImmediate logic for NetworkRigidbody. Character.cs now disables it gracefully to preserve NetworkBehaviour indexing)
 
         // Si le réseau tourne, on doit Spawn() l'objet réseau
         if (Unity.Netcode.NetworkManager.Singleton != null && Unity.Netcode.NetworkManager.Singleton.IsServer)
@@ -196,11 +190,14 @@ public class SpawnManager : MonoBehaviour
             {
                 if (!netObj.IsSpawned)
                 {
-                    // L'objet réseau va appeler InitializeSpawnedCharacter(this, null, isMyPlayer) via OnNetworkSpawn.
+                    if (race != null)
+                    {
+                        character.NetworkRaceId.Value = new Unity.Collections.FixedString64Bytes(race.name);
+                    }
+
+                    // L'objet réseau va appeler InitializeSpawnedCharacter via OnNetworkSpawn.
                     netObj.Spawn(true);
                     
-                    // Note: Les arguments "race" et "personality" passés à Initialize ne sont PAS synchronisés
-                    // car ce sont des données de host. L'OnNetworkSpawn fera un setup aléatoire par défaut.
                     return character;
                 }
             }
@@ -220,7 +217,8 @@ public class SpawnManager : MonoBehaviour
         // Default Race fallback so that missing references don't break logic
         if (race == null) 
         {
-            race = Resources.Load<RaceSO>("Data/Races/Human");
+            race = _defaultFallbackRace;
+            if (race == null) Debug.LogError("[SpawnManager] Fallback race is null! Assign it in the Inspector.");
         }
 
         if (!SetupInteractionDetector(character.gameObject, isPlayerObject)) return false;

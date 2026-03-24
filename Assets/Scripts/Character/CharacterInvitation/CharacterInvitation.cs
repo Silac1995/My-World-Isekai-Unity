@@ -11,7 +11,6 @@ using Unity.Netcode;
 /// </summary>
 public class CharacterInvitation : CharacterSystem
 {
-    [SerializeField] private Character _character;
 
     [Header("Settings")]
     [Tooltip("Time in seconds the character takes to 'think' before responding.")]

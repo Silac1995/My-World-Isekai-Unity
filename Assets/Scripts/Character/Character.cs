@@ -65,6 +65,14 @@ public class Character : NetworkBehaviour
     [SerializeField] private CharacterCombatLevel _characterCombatLevel;
     #endregion
 
+    #region Network Variables
+    public NetworkVariable<Unity.Collections.FixedString64Bytes> NetworkRaceId = new NetworkVariable<Unity.Collections.FixedString64Bytes>(
+        "",
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server
+    );
+    #endregion
+
     #region Private Fields
     private Transform _visualRoot;
     private GameObject _currentVisualInstance;
@@ -144,6 +152,19 @@ public class Character : NetworkBehaviour
     void Update()
     {
         Shader.SetGlobalVector("_Body", _rb.position);
+
+        // --- STRICT MULTIPLAYER PHYSICS LOCK ---
+        // Prevents any local physics (like gravity) from fighting NetworkTransform on non-authoritative clients.
+        // If another script accidentally changes isKinematic to false, this snaps it back immediately.
+        if (IsSpawned && !IsOwner && !IsServer)
+        {
+            if (_rb != null && !_rb.isKinematic)
+            {
+                _rb.isKinematic = true;
+                _rb.linearVelocity = Vector3.zero;
+                _rb.angularVelocity = Vector3.zero;
+            }
+        }
     }
     #region Unity Lifecycle
     public override void OnNetworkSpawn()
@@ -164,10 +185,24 @@ public class Character : NetworkBehaviour
             StartCoroutine(DelayedHostTeleport());
         }
 
+        // LOAD CUSTOMIZATION FROM NETWORK VARIABLES
+        RaceSO networkRace = null;
+        if (!NetworkRaceId.Value.IsEmpty)
+        {
+            if (GameSessionManager.Instance != null)
+            {
+                networkRace = GameSessionManager.Instance.GetRace(NetworkRaceId.Value.ToString());
+            }
+            else
+            {
+                Debug.LogWarning("[Character] Cannot lookup race because GameSessionManager is missing in the scene!");
+            }
+        }
+
         if (SpawnManager.Instance != null)
         {
             // Fully initialize the character using the identical logic from SpawnManager
-            SpawnManager.Instance.InitializeSpawnedCharacter(this, null, isPlayerObject, isLocalOwner);
+            SpawnManager.Instance.InitializeSpawnedCharacter(this, networkRace, isPlayerObject, isLocalOwner);
         }
         else
         {
@@ -464,7 +499,7 @@ public class Character : NetworkBehaviour
             {
                 _rb.useGravity = true;
                 _rb.isKinematic = IsPlayer() ? false : true; // Rétablir selon le type de controller
-                if (TryGetComponent<Unity.Netcode.Components.NetworkRigidbody>(out var netRb)) netRb.enabled = true;
+                if (TryGetComponent<Unity.Netcode.Components.NetworkRigidbody>(out var netRb)) netRb.enabled = IsPlayer();
             }
 
             if (_controller != null)
@@ -576,8 +611,24 @@ public class Character : NetworkBehaviour
         }
 
         bool isNPC = typeof(TTarget) == typeof(NPCController);
-        if (_rb != null) _rb.isKinematic = isNPC;
         ConfigureNavMesh(isNPC);
+        
+        if (TryGetComponent<Unity.Netcode.Components.NetworkRigidbody>(out var netRb))
+        {
+            netRb.enabled = !isNPC;
+        }
+
+        if (_rb != null)
+        {
+            if (IsSpawned && !IsOwner)
+            {
+                _rb.isKinematic = true;
+            }
+            else
+            {
+                _rb.isKinematic = isNPC;
+            }
+        }
     }
 
     // Stores the original interpolation mode so we can restore it when returning to Player control
@@ -603,10 +654,23 @@ public class Character : NetworkBehaviour
             }
 
             // 2. Enable and configure agent
-            _cachedNavMeshAgent.enabled = true;
-            if (_cachedNavMeshAgent.isOnNavMesh) _cachedNavMeshAgent.isStopped = false;
-            _cachedNavMeshAgent.updatePosition = true;
-            _cachedNavMeshAgent.updateRotation = false;
+            bool shouldEnableAgent = true;
+            if (IsSpawned && !IsServer && !IsOwner)
+            {
+                shouldEnableAgent = false;
+            }
+
+            if (shouldEnableAgent)
+            {
+                _cachedNavMeshAgent.enabled = true;
+                if (_cachedNavMeshAgent.isOnNavMesh) _cachedNavMeshAgent.isStopped = false;
+                _cachedNavMeshAgent.updatePosition = true;
+                _cachedNavMeshAgent.updateRotation = false;
+            }
+            else
+            {
+                _cachedNavMeshAgent.enabled = false;
+            }
         }
         else
         {
@@ -621,8 +685,11 @@ public class Character : NetworkBehaviour
             // 2. Unlock physics
             if (_rb != null && _controller is PlayerController) // Keep NPCs kinematic
             {
-                _rb.isKinematic = false;
-                _rb.interpolation = _savedInterpolation; // Restore smooth WASD movement
+                if (!IsSpawned || IsOwner)
+                {
+                    _rb.isKinematic = false;
+                    _rb.interpolation = _savedInterpolation; // Restore smooth WASD movement
+                }
             }
         }
     }

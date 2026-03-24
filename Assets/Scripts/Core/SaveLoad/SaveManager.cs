@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using UnityEngine;
+using MWI.WorldSystem;
 
 public class SaveManager : MonoBehaviour
 {
@@ -74,7 +75,67 @@ public class SaveManager : MonoBehaviour
         }
 
         currentWorldSlot = slot;
+        RegisterPredefinedMaps();
         OnLoadCompleted?.Invoke();
         Debug.Log($"<color=green>[SaveManager]</color> World Slot {slot} loaded successfully.");
+    }
+
+    private void RegisterPredefinedMaps()
+    {
+        // Find all hand-placed MapControllers in the scene
+        var allMaps = UnityEngine.Object.FindObjectsByType<MapController>(FindObjectsSortMode.None);
+        
+        foreach (var map in allMaps)
+        {
+            if (!map.IsPredefinedMap) continue;
+
+            var tracker = MWI.WorldSystem.CommunityTracker.Instance;
+            if (tracker == null) continue; // Safety check
+
+            // If this map has no existing save entry, create a default one
+            if (tracker.GetCommunity(map.MapId) == null)
+            {
+                var newCommunity = new MWI.WorldSystem.CommunityData()
+                {
+                    MapId = map.MapId,
+                    IsPredefinedMap = true,
+                    Tier = MWI.WorldSystem.CommunityTier.RoamingCamp,
+                    // Inherit biome resource pool from the MapController's BiomeDefinition
+                    ResourcePools = map.Biome != null 
+                        ? BuildResourcePool(map.Biome, map) 
+                        : new List<MWI.WorldSystem.ResourcePoolEntry>(),
+                    ConstructedBuildings = new List<MWI.WorldSystem.BuildingSaveData>()
+                };
+
+                tracker.AddCommunity(newCommunity);
+                Debug.Log($"<color=cyan>[SaveManager]</color> Registered predefined map '{map.MapId}'.");
+            }
+            else
+            {
+                Debug.Log($"<color=cyan>[SaveManager]</color> Predefined map '{map.MapId}' already has save data. Skipping.");
+            }
+        }
+    }
+
+    private List<MWI.WorldSystem.ResourcePoolEntry> BuildResourcePool(BiomeDefinition biome, MapController map)
+    {
+        var pool = new List<MWI.WorldSystem.ResourcePoolEntry>();
+        
+        var boxCollider = map.GetComponent<BoxCollider>();
+        if (boxCollider == null) return pool;
+
+        float mapArea = boxCollider.bounds.size.x * boxCollider.bounds.size.z;
+
+        foreach (var entry in biome.Harvestables)
+        {
+            pool.Add(new MWI.WorldSystem.ResourcePoolEntry()
+            {
+                ResourceId = entry.ResourceId,
+                MaxAmount = mapArea * biome.HarvestableDensity * entry.Weight, // using Weight as defined in HarvestableEntry
+                CurrentAmount = mapArea * biome.HarvestableDensity * entry.Weight,
+                LastHarvestedDay = 0
+            });
+        }
+        return pool;
     }
 }

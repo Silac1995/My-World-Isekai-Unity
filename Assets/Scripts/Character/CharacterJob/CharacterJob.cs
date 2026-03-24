@@ -5,7 +5,7 @@ using UnityEngine;
 [System.Serializable]
 public class JobAssignment
 {
-    public Job AssignedJob;
+    [SerializeReference] public Job AssignedJob;
     public CommercialBuilding Workplace;
     public List<ScheduleEntry> WorkScheduleEntries = new List<ScheduleEntry>();
 }
@@ -16,7 +16,6 @@ public class JobAssignment
 /// </summary>
 public class CharacterJob : CharacterSystem
 {
-    [SerializeField] private Character _character;
 
     [SerializeField] private List<JobAssignment> _activeJobs = new List<JobAssignment>();
     private CommercialBuilding _ownedBuilding; // Lieu dont il est prioritaire
@@ -219,6 +218,44 @@ public class CharacterJob : CharacterSystem
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Forcefully assigns a job, dissolving any existing overlapping jobs the character might have.
+    /// Used by Community Leaders to impose work.
+    /// </summary>
+    public bool ForceAssignJob(Job job, CommercialBuilding building)
+    {
+        if (job == null || building == null) return false;
+
+        var newEntries = job.GetWorkSchedule();
+        
+        // Find all overlapping jobs
+        List<Job> jobsToQuit = new List<Job>();
+        foreach (var newEntry in newEntries)
+        {
+            foreach (var activeJob in _activeJobs)
+            {
+                foreach (var existingEntry in activeJob.WorkScheduleEntries)
+                {
+                    if (newEntry.startHour < existingEntry.endHour && existingEntry.startHour < newEntry.endHour)
+                    {
+                        if (!jobsToQuit.Contains(activeJob.AssignedJob)) 
+                            jobsToQuit.Add(activeJob.AssignedJob);
+                    }
+                }
+            }
+        }
+
+        // Quit the overlapping jobs (which clears the schedule)
+        foreach (var overlappingJob in jobsToQuit)
+        {
+            Debug.LogWarning($"<color=orange>[CharacterJob]</color> {_character.CharacterName} is forced to quit {overlappingJob.JobTitle} to make room for an imposed job.");
+            QuitJob(overlappingJob);
+        }
+
+        // Now take the job normally, it will pass DoesScheduleOverlap
+        return TakeJob(job, building);
     }
 
     /// <summary>

@@ -5,7 +5,6 @@ using UnityEngine;
 public class CharacterLocations : CharacterSystem
 {
     [Header("References")]
-    [SerializeField] private Character _character;
 
     [Header("Assigned Zones")]
     public Zone homeZone;

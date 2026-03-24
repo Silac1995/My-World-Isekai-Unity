@@ -15,9 +15,16 @@ public class Speech : MonoBehaviour
 
     public void Setup(Character owner, string message, AudioSource source, VoiceSO voice, float characterPitch, float typingSpeed = 0f, System.Action onComplete = null)
     {
-        _character = owner;
-        if (_typeRoutine != null) StopCoroutine(_typeRoutine);
-        _typeRoutine = StartCoroutine(TypeMessage(message, source, voice, characterPitch, typingSpeed, onComplete));
+        try 
+        {
+            _character = owner;
+            if (_typeRoutine != null) StopCoroutine(_typeRoutine);
+            _typeRoutine = StartCoroutine(TypeMessage(message, source, voice, characterPitch, typingSpeed, onComplete));
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"<color=red>[Speech CRASH]</color> Exception in Setup: {e.Message}\n{e.StackTrace}");
+        }
     }
 
     private IEnumerator TypeMessage(string message, AudioSource source, VoiceSO voice, float characterPitch, float typingSpeed, System.Action onComplete)

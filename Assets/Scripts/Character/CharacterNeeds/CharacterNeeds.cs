@@ -5,7 +5,6 @@ using System.Linq;
 
 public class CharacterNeeds : CharacterSystem
 {
-    [SerializeField] private Character _character;
     private List<CharacterNeed> _allNeeds = new List<CharacterNeed>();
     public List<CharacterNeed> AllNeeds => _allNeeds;
     

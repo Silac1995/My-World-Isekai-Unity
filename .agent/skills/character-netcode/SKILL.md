@@ -34,6 +34,12 @@ Because the project was initially solo-focused, you must forcefully decouple **"
 #### Step 4: Visual Broadcast (ClientRpc)
 - If the action requires a generic visual effect (Swinging a Sword, Playing Particles, Voice lines), the Server blasts a `ClientRpc` to all clients (excluding the Owner if they already predicted it) so they see the same animation.
 
+#### Step 5: Physics Sync (NetworkRigidbody) for Hybrid Prefabs
+- Because NPCs and Players share the same Prefab, they share the same list of `NetworkBehaviour`s.
+- **Players** (WASD) require `NetworkRigidbody` to sync physics forces and velocity.
+- **NPCs** (NavMeshAgent) do not need it, as `NetworkTransform` safely syncs their kinematic positions.
+- **CRITICAL:** Do NOT `DestroyImmediate()` the `NetworkRigidbody` on the server when spawning an NPC. This breaks the `NetworkBehaviour` index mapping, dropping RPCs like Speech. Always gracefully toggle it: `netRb.enabled = false` during `SwitchToNPC()` and `true` during `SwitchToPlayer()`.
+
 ### 2. Hitbox Protection (`CombatStyleAttack.cs`)
 - Any physical hitbox triggering an overlap sphere or `OnTriggerEnter` must be gated by `if (!IsServer) return;`.
 - Clients spawn Hitbox visuals, but they trigger ZERO damage. Only the Host's invisible overlap validates hits to prevent "double-dipping" damage from multiple clients visually spawning the same spell.

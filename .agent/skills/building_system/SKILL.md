@@ -34,9 +34,12 @@ classDiagram
     class Building {
         +string buildingName
         +BuildingType _buildingType
+        +BuildingState CurrentState
         +Collider _buildingZone
         +Zone _deliveryZone
         +AttemptInstallFurniture()
+        +ContributeMaterial()
+        +BuildInstantly()
     }
     class CommercialBuilding {
         +BuildingTaskManager TaskManager
@@ -65,6 +68,7 @@ A room that contains smaller nested sub-rooms.
 The top-level structure in the world.
 - **Inheritance**: Inherits from `ComplexRoom`. Sub-rooms typically act as the specific floors or separated areas of the building.
 - **Management**: Registers itself globally with the `BuildingManager` on `Start()`.
+- **Construction & States**: Buildings manage a native `CurrentState` (`BuildingState.UnderConstruction` or `Complete`). They can require `_constructionRequirements` (a list of `CraftingIngredient`s) to be placed. Players/NPCs populate this using `ContributeMaterial(ItemSO, amount)`, which triggers `OnConstructionComplete` when full. Alternatively, `BuildInstantly()` bypasses the requirements.
 - **Logistics Integration**: Holds a reference to a `_deliveryZone` which is essential for the Logistics cycle.
 - **Public access**: Has an outer `_buildingZone` (distinct from the main interior) for general traversal and random roaming around the property.
 

@@ -10,7 +10,6 @@ using MWI.Time;
 /// </summary>
 public class CharacterSchedule : CharacterSystem
 {
-    [SerializeField] private Character _character;
     [SerializeField] private TimeManager _timeManager;
 
     [Header("Schedule")]

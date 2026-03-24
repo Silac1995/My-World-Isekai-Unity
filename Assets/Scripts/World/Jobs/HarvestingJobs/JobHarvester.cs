@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using MWI.WorldSystem;
 
 /// <summary>
 /// Job de type Harvester : récolte des ressources selon ce que le HarvestingBuilding dicte.
@@ -10,12 +11,15 @@ using UnityEngine;
 /// 3. Déposer les ressources à la zone de dépôt
 /// Puis recommencer le cycle.
 /// </summary>
+[System.Serializable]
 public class JobHarvester : Job
 {
-    private string _jobTitle;
+    [SerializeField] private string _jobTitle;
+    [SerializeField] private JobType _jobType;
 
     public override string JobTitle => _jobTitle;
     public override JobCategory Category => JobCategory.Harvester;
+    public override JobType Type => _jobType;
 
     // GOAP
     private GoapGoal _harvestGoal;
@@ -26,9 +30,10 @@ public class JobHarvester : Job
     public override string CurrentActionName => _currentAction != null ? _currentAction.ActionName : "Planning / Idle";
     public override string CurrentGoalName => _harvestGoal != null ? _harvestGoal.GoalName : "No Goal";
 
-    public JobHarvester(string jobTitle = "Harvester")
+    public JobHarvester(string jobTitle = "Harvester", JobType jobType = JobType.None)
     {
         _jobTitle = jobTitle;
+        _jobType = jobType;
     }
 
     /// <summary>

@@ -6,20 +6,28 @@ public class MainMenu : MonoBehaviour
 {
     [Header("Boutons du Menu")]
     public Button playButton;
+    public Button btnStartSolo;
+    public Button btnMultiplayer;
     public Button settingsButton;
     public Button creditsButton;
     public Button quitButton;
 
-    [Header("Noms des Scènes")]
+    [Header("Noms des ScÃ¨nes")]
     public string gameSceneName = "GameScene";
     public string settingsSceneName = "SettingsScene";
     public string creditsSceneName = "CreditsScene";
 
     void Start()
     {
-        // Assigner les méthodes aux boutons si ils sont définis
+        // Assigner les mÃ©thodes aux boutons si ils sont dÃ©finis
         if (playButton != null)
             playButton.onClick.AddListener(() => LoadScene(gameSceneName));
+
+        if (btnStartSolo != null)
+            btnStartSolo.onClick.AddListener(StartSolo);
+
+        if (btnMultiplayer != null)
+            btnMultiplayer.onClick.AddListener(JoinMultiplayer);
 
         if (settingsButton != null)
             settingsButton.onClick.AddListener(() => LoadScene(settingsSceneName));
@@ -32,53 +40,96 @@ public class MainMenu : MonoBehaviour
     }
 
     /// <summary>
-    /// Charge une scène par son nom
+    /// Starts the game as a Solo/Host
     /// </summary>
-    /// <param name="sceneName">Le nom de la scène à charger</param>
+    public void StartSolo()
+    {
+        GameSessionManager.AutoStartNetwork = true;
+        GameSessionManager.IsHost = true;
+        LoadScene(gameSceneName);
+    }
+
+    [Header("Network Input")]
+    public TMPro.TMP_InputField ipInputField;
+    public TMPro.TMP_InputField portInputField;
+
+    /// <summary>
+    /// Starts the game as a Multiplayer Client
+    /// </summary>
+    public void JoinMultiplayer()
+    {
+        GameSessionManager.AutoStartNetwork = true;
+        GameSessionManager.IsHost = false;
+
+        if (ipInputField != null && !string.IsNullOrEmpty(ipInputField.text))
+        {
+            GameSessionManager.TargetIP = ipInputField.text.Trim();
+        }
+        else
+        {
+            GameSessionManager.TargetIP = "anbuwpr8ly.localto.net";
+        }
+
+        if (portInputField != null && ushort.TryParse(portInputField.text.Trim(), out ushort port))
+        {
+            GameSessionManager.TargetPort = port;
+        }
+        else
+        {
+            GameSessionManager.TargetPort = 6547;
+        }
+
+        LoadScene(gameSceneName);
+    }
+
+    /// <summary>
+    /// Charge une scÃ¨ne par son nom
+    /// </summary>
+    /// <param name="sceneName">Le nom de la scÃ¨ne Ã  charger</param>
     public void LoadScene(string sceneName)
     {
         if (!string.IsNullOrEmpty(sceneName))
         {
-            Debug.Log($"Chargement de la scène: {sceneName}");
+            Debug.Log($"Chargement de la scÃ¨ne: {sceneName}");
             SceneManager.LoadScene(sceneName);
         }
         else
         {
-            Debug.LogError("Nom de scène invalide!");
+            Debug.LogError("Nom de scÃ¨ne invalide!");
         }
     }
 
     /// <summary>
-    /// Charge une scène par son index
+    /// Charge une scÃ¨ne par son index
     /// </summary>
-    /// <param name="sceneIndex">L'index de la scène à charger</param>
+    /// <param name="sceneIndex">L'index de la scÃ¨ne Ã  charger</param>
     public void LoadSceneByIndex(int sceneIndex)
     {
         if (sceneIndex >= 0 && sceneIndex < SceneManager.sceneCountInBuildSettings)
         {
-            Debug.Log($"Chargement de la scène index: {sceneIndex}");
+            Debug.Log($"Chargement de la scÃ¨ne index: {sceneIndex}");
             SceneManager.LoadScene(sceneIndex);
         }
         else
         {
-            Debug.LogError("Index de scène invalide!");
+            Debug.LogError("Index de scÃ¨ne invalide!");
         }
     }
 
     /// <summary>
-    /// Charge une scène de manière asynchrone
+    /// Charge une scÃ¨ne de maniÃ¨re asynchrone
     /// </summary>
-    /// <param name="sceneName">Le nom de la scène à charger</param>
+    /// <param name="sceneName">Le nom de la scÃ¨ne Ã  charger</param>
     public void LoadSceneAsync(string sceneName)
     {
         if (!string.IsNullOrEmpty(sceneName))
         {
-            Debug.Log($"Chargement asynchrone de la scène: {sceneName}");
+            Debug.Log($"Chargement asynchrone de la scÃ¨ne: {sceneName}");
             StartCoroutine(LoadSceneAsyncCoroutine(sceneName));
         }
         else
         {
-            Debug.LogError("Nom de scène invalide!");
+            Debug.LogError("Nom de scÃ¨ne invalide!");
         }
     }
 
@@ -86,7 +137,7 @@ public class MainMenu : MonoBehaviour
     {
         AsyncOperation asyncLoad = SceneManager.LoadSceneAsync(sceneName);
 
-        // Optionnel: empêcher l'activation automatique de la scène
+        // Optionnel: empÃªcher l'activation automatique de la scÃ¨ne
         // asyncLoad.allowSceneActivation = false;
 
         while (!asyncLoad.isDone)
@@ -114,7 +165,7 @@ public class MainMenu : MonoBehaviour
     }
 
     /// <summary>
-    /// Retourne au menu principal depuis une autre scène
+    /// Retourne au menu principal depuis une autre scÃ¨ne
     /// </summary>
     public void ReturnToMainMenu()
     {
@@ -122,7 +173,7 @@ public class MainMenu : MonoBehaviour
     }
 
     /// <summary>
-    /// Redémarre la scène actuelle
+    /// RedÃ©marre la scÃ¨ne actuelle
     /// </summary>
     public void RestartCurrentScene()
     {

@@ -3,8 +3,6 @@ using UnityEngine;
 
 public class CharacterSkills : CharacterSystem
 {
-    [SerializeField]
-    private Character _character;
     
     [SerializeField]
     private List<SkillInstance> _skills = new List<SkillInstance>();

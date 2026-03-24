@@ -6,7 +6,6 @@ using Random = UnityEngine.Random;
 
 public class CharacterSpeech : CharacterSystem
 {
-    [SerializeField] private Character _character;
     [SerializeField] private GameObject _speechBubblePrefab;
     [SerializeField] private CharacterBodyPartsController _bodyPartsController;
 
@@ -94,28 +93,35 @@ public class CharacterSpeech : CharacterSystem
 
     private void ExecuteSayLocally(string message, float duration, float typingSpeed)
     {
-        if (_speechBubblePrefab == null)
+        try 
         {
-            Debug.LogError($"<color=red>[Speech]</color> {gameObject.name} ExecuteSayLocally FAILED: _speechBubblePrefab is NULL!");
-            return;
-        }
+            if (_speechBubblePrefab == null)
+            {
+                Debug.LogError($"<color=red>[Speech]</color> {gameObject.name} ExecuteSayLocally FAILED: _speechBubblePrefab is NULL!");
+                return;
+            }
 
-        Debug.Log($"<color=cyan>[Speech]</color> {gameObject.name} Executing locally: '{message}'");
-        if (_hideCoroutine != null) StopCoroutine(_hideCoroutine);
-        _bodyPartsController?.MouthController?.StartTalking();
-        
-        if (_speechBubblePrefab.TryGetComponent<Speech>(out var speechScript))
-        {
-            _speechBubblePrefab.SetActive(true);
-            speechScript.Setup(_character, message, _audioSource, _voiceSO, _voicePitch, typingSpeed, () => {
-                _bodyPartsController?.MouthController?.StopTalking();
-                _hideCoroutine = StartCoroutine(HideSpeechAfterDelay(duration));
-            });
-            Debug.Log($"<color=cyan>[Speech]</color> {gameObject.name} Local Speech bubble activated and Setup called!");
+            Debug.Log($"<color=cyan>[Speech]</color> {gameObject.name} Executing locally: '{message}'");
+            if (_hideCoroutine != null) StopCoroutine(_hideCoroutine);
+            _bodyPartsController?.MouthController?.StartTalking();
+            
+            if (_speechBubblePrefab.TryGetComponent<Speech>(out var speechScript))
+            {
+                _speechBubblePrefab.SetActive(true);
+                speechScript.Setup(_character, message, _audioSource, _voiceSO, _voicePitch, typingSpeed, () => {
+                    _bodyPartsController?.MouthController?.StopTalking();
+                    _hideCoroutine = StartCoroutine(HideSpeechAfterDelay(duration));
+                });
+                Debug.Log($"<color=cyan>[Speech]</color> {gameObject.name} Local Speech bubble activated and Setup called!");
+            }
+            else
+            {
+                Debug.LogError($"<color=red>[Speech]</color> {gameObject.name} FAILED: _speechBubblePrefab does not have a Speech component!");
+            }
         }
-        else
+        catch (System.Exception e)
         {
-            Debug.LogError($"<color=red>[Speech]</color> {gameObject.name} FAILED: _speechBubblePrefab does not have a Speech component!");
+            Debug.LogError($"<color=red>[Speech CRASH]</color> Exception in ExecuteSayLocally: {e.Message}\n{e.StackTrace}");
         }
     }
 
@@ -147,7 +153,7 @@ public class CharacterSpeech : CharacterSystem
     [Rpc(SendTo.NotServer)]
     private void SayScriptedClientRpc(string message, float typingSpeed)
     {
-        if (IsOwner) return; // Prevent double execution if Owner already ran it locally
+        if (IsOwner && !IsServer) return; // Prevent double execution if Client Owner already ran it locally
         ExecuteSayScriptedLocally(message, typingSpeed, null); // Callbacks not supported over net
     }
 
@@ -205,7 +211,7 @@ public class CharacterSpeech : CharacterSystem
     [Rpc(SendTo.NotServer)]
     private void CloseSpeechClientRpc()
     {
-        if (IsOwner) return; // Owner already executed locally 
+        if (IsOwner && !IsServer) return; // Client Owner already executed locally 
         ExecuteCloseSpeechLocally();
     }
 

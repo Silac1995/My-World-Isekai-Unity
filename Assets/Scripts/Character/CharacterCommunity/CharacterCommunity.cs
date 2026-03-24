@@ -3,7 +3,6 @@ using UnityEngine;
 
 public class CharacterCommunity : CharacterSystem
 {
-    [SerializeField] private Character _character;
     [Header("Debug")]
     [SerializeField] private string _debugCommunityName = "New Community";
 

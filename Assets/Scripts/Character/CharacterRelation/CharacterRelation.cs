@@ -30,7 +30,6 @@ public struct RelationSyncData : INetworkSerializable, IEquatable<RelationSyncDa
 
 public class CharacterRelation : CharacterSystem
 {
-    [SerializeField] private Character _character;
     [SerializeField] private List<Relationship> _relationships = new List<Relationship>();
     
     private NetworkList<RelationSyncData> _networkRelations;
@@ -59,7 +58,7 @@ public class CharacterRelation : CharacterSystem
         {
             foreach (var syncData in _networkRelations)
             {
-                ApplySyncDataLocal(syncData);
+                ApplySyncDataLocal(syncData, isInitialSync: true);
             }
         }
     }
@@ -76,10 +75,10 @@ public class CharacterRelation : CharacterSystem
     private void HandleNetworkRelationsChanged(NetworkListEvent<RelationSyncData> changeEvent)
     {
         if (IsServer) return; // Server manages local list naturally
-        ApplySyncDataLocal(changeEvent.Value);
+        ApplySyncDataLocal(changeEvent.Value, isInitialSync: false);
     }
 
-    private void ApplySyncDataLocal(RelationSyncData syncData)
+    private void ApplySyncDataLocal(RelationSyncData syncData, bool isInitialSync)
     {
         if (NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(syncData.TargetId, out var netObj))
         {
@@ -91,9 +90,15 @@ public class CharacterRelation : CharacterSystem
             {
                 existing = new Relationship(Character, target, syncData.RelationValue, syncData.RelationType);
                 if (syncData.HasMet) existing.SetAsMet();
+                
+                if (!isInitialSync)
+                {
+                    existing.IsNewlyAdded = true;
+                }
+                
                 _relationships.Add(existing);
 
-                if (_relationNotificationChannel != null && _character.IsPlayer())
+                if (!isInitialSync && _relationNotificationChannel != null && _character.IsPlayer() && _character.IsOwner)
                 {
                     _relationNotificationChannel.Raise();
                 }
@@ -107,7 +112,7 @@ public class CharacterRelation : CharacterSystem
                     int difference = syncData.RelationValue - existing.RelationValue;
                     existing.RelationValue = syncData.RelationValue;
 
-                    if (_toastChannel != null && _character.IsPlayer())
+                    if (!isInitialSync && _toastChannel != null && _character.IsPlayer() && _character.IsOwner)
                     {
                         string sign = difference >= 0 ? "+" : "";
                         var toastType = difference >= 0 ? MWI.UI.Notifications.ToastType.Success : MWI.UI.Notifications.ToastType.Warning;
@@ -269,7 +274,7 @@ public class CharacterRelation : CharacterSystem
 
         OnRelationsUpdated?.Invoke();
 
-        if (_relationNotificationChannel != null && _character.IsPlayer())
+        if (_relationNotificationChannel != null && _character.IsPlayer() && _character.IsOwner)
         {
             _relationNotificationChannel.Raise();
         }
@@ -323,7 +328,7 @@ public class CharacterRelation : CharacterSystem
 
         OnRelationsUpdated?.Invoke();
 
-        if (_toastChannel != null && _character.IsPlayer())
+        if (_toastChannel != null && _character.IsPlayer() && _character.IsOwner)
         {
             string sign = roundedAmount >= 0 ? "+" : "";
             var toastType = roundedAmount >= 0 ? MWI.UI.Notifications.ToastType.Success : MWI.UI.Notifications.ToastType.Warning;

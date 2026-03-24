@@ -20,11 +20,19 @@ public class Building : ComplexRoom
     [Header("Logistics Phase")]
     [SerializeField] protected Zone _deliveryZone;
 
+    [Header("Construction")]
+    [SerializeField] protected List<CraftingIngredient> _constructionRequirements = new List<CraftingIngredient>();
+    protected Dictionary<ItemSO, int> _contributedMaterials = new Dictionary<ItemSO, int>();
+
     public string BuildingName => buildingName;
     public virtual BuildingType BuildingType => _buildingType;
     public bool IsPublicLocation => _isPublicLocation;
     public Collider BuildingZone => _buildingZone;
     public Zone DeliveryZone => _deliveryZone;
+    
+    public MWI.WorldSystem.BuildingState CurrentState { get; protected set; } = MWI.WorldSystem.BuildingState.Complete;
+    public bool IsUnderConstruction => CurrentState == MWI.WorldSystem.BuildingState.UnderConstruction;
+    public System.Action OnConstructionComplete;
 
     public ComplexRoom MainRoom => this;
 
@@ -43,6 +51,16 @@ public class Building : ComplexRoom
             {
                 if (r != this) AddSubRoom(r);
             }
+        }
+
+        // Initialize state based on requirements
+        if (_constructionRequirements != null && _constructionRequirements.Count > 0)
+        {
+            CurrentState = MWI.WorldSystem.BuildingState.UnderConstruction;
+        }
+        else
+        {
+            CurrentState = MWI.WorldSystem.BuildingState.Complete;
         }
     }
 
@@ -154,5 +172,80 @@ public class Building : ComplexRoom
             }
         }
         return items;
+    }
+
+    /// <summary>
+    /// Forcibly builds the building instantly, bypassing all material requirements.
+    /// </summary>
+    public virtual void BuildInstantly()
+    {
+        if (CurrentState == MWI.WorldSystem.BuildingState.Complete) return;
+
+        CurrentState = MWI.WorldSystem.BuildingState.Complete;
+        _contributedMaterials.Clear();
+        Debug.Log($"<color=green>[Building]</color> {buildingName} has been built instantly.");
+        OnConstructionComplete?.Invoke();
+    }
+
+    /// <summary>
+    /// Contributes a material to the construction progress.
+    /// </summary>
+    public virtual void ContributeMaterial(ItemSO item, int amount)
+    {
+        if (CurrentState == MWI.WorldSystem.BuildingState.Complete) return;
+        if (item == null || amount <= 0) return;
+
+        if (!_contributedMaterials.ContainsKey(item))
+        {
+            _contributedMaterials[item] = 0;
+        }
+
+        _contributedMaterials[item] += amount;
+        Debug.Log($"[Building] Contributed {amount}x {item.ItemName} to {buildingName} construction.");
+
+        CheckConstructionCompletion();
+    }
+
+    protected virtual void CheckConstructionCompletion()
+    {
+        if (CurrentState == MWI.WorldSystem.BuildingState.Complete) return;
+
+        bool isFinished = true;
+
+        foreach (var req in _constructionRequirements)
+        {
+            int contributed = _contributedMaterials.TryGetValue(req.Item, out int c) ? c : 0;
+            if (contributed < req.Amount)
+            {
+                isFinished = false;
+                break;
+            }
+        }
+
+        if (isFinished)
+        {
+            CurrentState = MWI.WorldSystem.BuildingState.Complete;
+            Debug.Log($"<color=green>[Building]</color> {buildingName} has finished construction!");
+            OnConstructionComplete?.Invoke();
+        }
+    }
+
+    /// <summary>
+    /// Checks what materials are still outstanding for construction.
+    /// </summary>
+    public virtual Dictionary<ItemSO, int> GetPendingMaterials()
+    {
+        var pending = new Dictionary<ItemSO, int>();
+        if (CurrentState == MWI.WorldSystem.BuildingState.Complete) return pending;
+
+        foreach (var req in _constructionRequirements)
+        {
+            int contributed = _contributedMaterials.TryGetValue(req.Item, out int c) ? c : 0;
+            if (contributed < req.Amount)
+            {
+                pending[req.Item] = req.Amount - contributed;
+            }
+        }
+        return pending;
     }
 }

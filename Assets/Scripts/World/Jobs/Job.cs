@@ -1,11 +1,13 @@
 using System.Collections.Generic;
 using UnityEngine;
+using MWI.WorldSystem;
 
 /// <summary>
 /// Classe mère abstraite pour tous les jobs.
 /// Chaque type de job (Barman, Serveur, Vendeur...) hérite de cette classe
 /// et override Execute() pour coder sa logique spécifique.
 /// </summary>
+[System.Serializable]
 public abstract class Job
 {
     /// <summary>Nom du poste (ex: "Barman", "Serveur")</summary>
@@ -13,6 +15,9 @@ public abstract class Job
 
     /// <summary>Catégorie du job (Service, Artisan, etc.)</summary>
     public abstract JobCategory Category { get; }
+
+    /// <summary>V2: Type précis pour la simulation offline (Yields etc)</summary>
+    public virtual JobType Type => JobType.None;
 
     protected Character _worker;
     protected CommercialBuilding _workplace;

@@ -2,9 +2,6 @@
 
 public class CameraFollow : MonoBehaviour
 {
-    [Header("Camera Position")]
-    [SerializeField] private float minZPosition = 60f;
-
     [Header("Zoom Settings")]
     [SerializeField] private float minOffsetY = 13f;
     [SerializeField] private float maxOffsetY = 18f;
@@ -63,15 +60,14 @@ public class CameraFollow : MonoBehaviour
         float offsetY = Mathf.Lerp(minOffsetY, maxOffsetY, _currentZoom);
         float offsetZ = Mathf.Lerp(minOffsetZ, maxOffsetZ, _currentZoom);
 
-        // Calcul de la position Z avec offset et limite minimum
-        float desiredZ = target.position.z + offsetZ;
-        float clampedZ = Mathf.Max(desiredZ, minZPosition);
+        // Calcul de la position Z avec offset
+        float targetZ = target.position.z + offsetZ;
 
         // Position cible ideale (sans occlusion)
         Vector3 idealPos = new Vector3(
             target.position.x,
             target.position.y + offsetY,
-            clampedZ
+            targetZ
         );
 
         // --- OCCLUSION AVOIDANCE ---
