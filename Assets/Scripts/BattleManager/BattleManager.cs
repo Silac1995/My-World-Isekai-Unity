@@ -81,31 +81,57 @@ public class BattleManager : NetworkBehaviour
     [ClientRpc]
     private void InitializeClientRpc(NetworkObjectReference initiatorRef, NetworkObjectReference targetRef)
     {
-        if (IsServer) return; // Server already initialized
+        if (IsServer) return;
 
-        if (initiatorRef.TryGet(out NetworkObject iNet) && targetRef.TryGet(out NetworkObject tNet))
+        if (!initiatorRef.TryGet(out NetworkObject iNet) || !targetRef.TryGet(out NetworkObject tNet))
         {
-            Character initiator = iNet.GetComponent<Character>();
-            Character target = tNet.GetComponent<Character>();
-
-            _teams.Clear();
-            _battleTeamInitiator = new BattleTeam();
-            _battleTeamTarget = new BattleTeam();
-
-            _battleTeamInitiator.AddCharacter(initiator);
-            _battleTeamTarget.AddCharacter(target);
-
-            _teams.Add(_battleTeamInitiator);
-            _teams.Add(_battleTeamTarget);
-
-            _zoneController = new BattleZoneController(this, _battleZoneModifier, _battleZoneLine, _baseBattleZoneSize, _perParticipantGrowthRate, _participantsPerTier);
-            _engagementCoordinator = new CombatEngagementCoordinator(this);
-
-            _zoneController.CreateBattleZone(initiator, target);
-            RegisterParticipants(); // Client sets its own tracking!
-            _engagementCoordinator.RequestEngagement(initiator, target);
-            _zoneController.DrawBattleZoneOutline();
+            Debug.LogError($"<color=red>[Battle Client]</color> InitializeClientRpc: could not resolve NetworkObjects.");
+            return;
         }
+
+        Character initiator = iNet.GetComponent<Character>();
+        Character target = tNet.GetComponent<Character>();
+
+        // IDEMPOTENT: If coordinator was already lazily created by an earlier AddParticipantClientRpc,
+        // just merge the original combatants into the existing teams. Don't clear everything.
+        if (_engagementCoordinator != null && _teams.Count > 0)
+        {
+            Debug.Log($"<color=cyan>[Battle Client]</color> InitializeClientRpc (late merge): adding original {initiator?.CharacterName} + {target?.CharacterName}");
+            if (initiator != null && GetTeamOf(initiator) == null)
+            {
+                _battleTeamInitiator.AddCharacter(initiator);
+                RegisterCharacter(initiator);
+            }
+            if (target != null && GetTeamOf(target) == null)
+            {
+                _battleTeamTarget.AddCharacter(target);
+                RegisterCharacter(target);
+            }
+            _engagementCoordinator.RequestEngagement(initiator, target);
+            _zoneController?.CreateBattleZone(initiator, target);
+            _zoneController?.DrawBattleZoneOutline();
+            return;
+        }
+
+        // Normal first-time initialization on client
+        _teams.Clear();
+        _battleTeamInitiator = new BattleTeam();
+        _battleTeamTarget = new BattleTeam();
+
+        _battleTeamInitiator.AddCharacter(initiator);
+        _battleTeamTarget.AddCharacter(target);
+
+        _teams.Add(_battleTeamInitiator);
+        _teams.Add(_battleTeamTarget);
+
+        _zoneController = new BattleZoneController(this, _battleZoneModifier, _battleZoneLine, _baseBattleZoneSize, _perParticipantGrowthRate, _participantsPerTier);
+        _engagementCoordinator = new CombatEngagementCoordinator(this);
+
+        _zoneController.CreateBattleZone(initiator, target);
+        RegisterParticipants();
+        _engagementCoordinator.RequestEngagement(initiator, target);
+        _zoneController.DrawBattleZoneOutline();
+        Debug.Log($"<color=cyan>[Battle Client]</color> InitializeClientRpc completed: {initiator?.CharacterName} vs {target?.CharacterName}");
     }
 
     private void Update()
@@ -230,7 +256,7 @@ public class BattleManager : NetworkBehaviour
         character.OnDeath += HandleCharacterIncapacitated;
 
         UpdateBattleZoneWith(character);
-        Debug.Log($"<color=white>[Battle]</color> {character.CharacterName} a rejoint le combat.");
+        Debug.Log($"<color=white>[Battle]</color> {character.CharacterName} joined combat. IsInBattle={character.CharacterCombat?.IsInBattle}. IsServer={IsServer}");
     }
 
     public void AddParticipant(Character newParticipant, Character target, bool asAlly = false)
@@ -243,40 +269,104 @@ public class BattleManager : NetworkBehaviour
         ulong newParticipantId = newParticipant.NetworkObject != null ? newParticipant.NetworkObject.NetworkObjectId : 0;
         ulong targetId = target.NetworkObject != null ? target.NetworkObject.NetworkObjectId : 0;
 
+        // Compute the server-authoritative team index AFTER placement.
+        // This makes the client independent of GetTeamOf(target) which would fail if
+        // InitializeClientRpc hasn't arrived yet (RPC race condition).
+        BattleTeam assignedTeam = GetTeamOf(newParticipant);
+        int teamIndex = (assignedTeam == _battleTeamInitiator) ? 0 : 1;
+
         if (newParticipantId > 0 && targetId > 0)
         {
-            AddParticipantClientRpc(newParticipantId, targetId, asAlly);
+            AddParticipantClientRpc(newParticipantId, targetId, teamIndex);
         }
     }
 
     [ClientRpc]
-    private void AddParticipantClientRpc(ulong newParticipantId, ulong targetId, bool asAlly)
+    private void AddParticipantClientRpc(ulong newParticipantId, ulong targetId, int teamIndex)
     {
         if (IsServer) return;
 
-        if (Unity.Netcode.NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(newParticipantId, out var pObj) &&
-            Unity.Netcode.NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(targetId, out var tObj))
+        Debug.Log($"<color=cyan>[Battle Client]</color> AddParticipantClientRpc received. newId={newParticipantId} targetId={targetId} teamIndex={teamIndex}");
+
+        // LAZY INIT: If InitializeClientRpc hasn't arrived yet (RPC ordering race condition),
+        // create teams and coordinator now so the participant can be properly registered.
+        EnsureClientInitialized();
+
+        if (!Unity.Netcode.NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(newParticipantId, out var pObj) ||
+            !Unity.Netcode.NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(targetId, out var tObj))
         {
-            AddParticipantInternal(pObj.GetComponent<Character>(), tObj.GetComponent<Character>(), asAlly);
+            Debug.LogError($"<color=red>[Battle Client]</color> AddParticipantClientRpc: could not resolve NetworkObjects.");
+            return;
+        }
+
+        Character newParticipant = pObj.GetComponent<Character>();
+        Character target = tObj.GetComponent<Character>();
+
+        if (newParticipant == null || target == null)
+        {
+            Debug.LogError($"<color=red>[Battle Client]</color> AddParticipantClientRpc: Character component missing.");
+            return;
+        }
+
+        // Place new participant directly into the server-determined team by index.
+        // This avoids needing GetTeamOf(target) which fails when teams are empty or the target
+        // hasn't been registered yet from InitializeClientRpc.
+        BattleTeam team = (teamIndex == 0) ? _battleTeamInitiator : _battleTeamTarget;
+        if (!team.CharacterList.Contains(newParticipant))
+            team.AddCharacter(newParticipant);
+
+        // Ensure the target is in the OPPOSITE team if not already registered.
+        if (GetTeamOf(target) == null)
+        {
+            BattleTeam oppositeTeam = (teamIndex == 0) ? _battleTeamTarget : _battleTeamInitiator;
+            oppositeTeam.AddCharacter(target);
+            RegisterCharacter(target);
+        }
+
+        RegisterCharacter(newParticipant);
+
+        // Register engagement so GetBestTargetFor works for this participant.
+        _engagementCoordinator?.RequestEngagement(newParticipant, target);
+
+        Debug.Log($"<color=cyan>[Battle Client]</color> {newParticipant.CharacterName} joined team {teamIndex} vs {target.CharacterName}. IsInBattle={newParticipant.CharacterCombat?.IsInBattle}");
+    }
+
+    /// <summary>
+    /// Lazily initializes teams and coordinator on the client if InitializeClientRpc
+    /// hasn't arrived yet. This handles the RPC ordering race condition where
+    /// AddParticipantClientRpc arrives before InitializeClientRpc.
+    /// </summary>
+    private void EnsureClientInitialized()
+    {
+        if (_engagementCoordinator == null)
+            _engagementCoordinator = new CombatEngagementCoordinator(this);
+        if (_zoneController == null)
+            _zoneController = new BattleZoneController(this, _battleZoneModifier, _battleZoneLine, _baseBattleZoneSize, _perParticipantGrowthRate, _participantsPerTier);
+        if (_teams.Count == 0)
+        {
+            _battleTeamInitiator = new BattleTeam();
+            _battleTeamTarget = new BattleTeam();
+            _teams.Add(_battleTeamInitiator);
+            _teams.Add(_battleTeamTarget);
         }
     }
 
+    /// <summary>
+    /// Server-only internal method to place a participant in the correct team.
+    /// </summary>
     private void AddParticipantInternal(Character newParticipant, Character target, bool asAlly)
     {
         if (newParticipant == null || target == null || _isBattleEnded) return;
 
-        // On trouve l'équipe de la cible
         BattleTeam targetTeam = GetTeamOf(target);
         if (targetTeam == null) return;
 
         if (asAlly)
         {
-            // On le met dans la MÊME équipe que la cible
             targetTeam.AddCharacter(newParticipant);
         }
         else
         {
-            // On le met dans l'équipe ADVERSE de la cible
             BattleTeam enemyTeam = (targetTeam == _battleTeamInitiator) ? _battleTeamTarget : _battleTeamInitiator;
             enemyTeam.AddCharacter(newParticipant);
         }

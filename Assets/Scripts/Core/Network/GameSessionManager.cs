@@ -196,12 +196,14 @@ public class GameSessionManager : MonoBehaviour
         }
     }
 
+    [Header("UI Notifications")]
+    [SerializeField] private MWI.UI.Notifications.ToastNotificationChannel _generalToastChannel;
+
     private void ShowToast(string message, MWI.UI.Notifications.ToastType type)
     {
-        var channel = Resources.Load<MWI.UI.Notifications.ToastNotificationChannel>("Data/UI/ToastGeneralChannel");
-        if (channel != null)
+        if (_generalToastChannel != null)
         {
-            channel.Raise(new MWI.UI.Notifications.ToastNotificationPayload(
+            _generalToastChannel.Raise(new MWI.UI.Notifications.ToastNotificationPayload(
                 message: message,
                 type: type,
                 duration: 4f,
@@ -210,7 +212,7 @@ public class GameSessionManager : MonoBehaviour
         }
         else
         {
-            Debug.LogWarning("[GameSession] Toast channel not found in Resources.");
+            Debug.LogWarning("[GameSession] Toast channel not assigned in Inspector.");
         }
     }
 }
