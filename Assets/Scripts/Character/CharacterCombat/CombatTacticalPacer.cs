@@ -7,7 +7,6 @@ public class CombatTacticalPacer
     private Vector3 _currentDestination;
     private float _lastMoveTime;
     private float _moveInterval;
-    private bool _wasChargingTarget;
     
     private const float PREFERRED_X_GAP = 4.0f;  
     private const float X_FLIP_SAFETY = 1.5f;    
@@ -73,13 +72,6 @@ public class CombatTacticalPacer
         bool timerExpired = Time.time - _lastMoveTime > _moveInterval;
         bool canUpdate = Time.time - _lastMoveTime > 1.5f;
 
-        // Force a tactical update if we just finished an attack (transitioned from charging to pacing)
-        if (!isChargingTarget && _wasChargingTarget)
-        {
-            timerExpired = true;
-            canUpdate = true;
-        }
-
         if (canUpdate && (tooClose || tooFar || timerExpired) && !isChargingTarget)
         {
             if (tooClose)
@@ -100,7 +92,6 @@ public class CombatTacticalPacer
         }
 
         Vector3 finalPos = _currentDestination;
-        _wasChargingTarget = isChargingTarget;
 
         // Apply soft bounds clamp if we are not actively charging to attack
         if (battleZone != null && !battleZone.bounds.Contains(finalPos) && !isChargingTarget)
@@ -140,10 +131,7 @@ public class CombatTacticalPacer
         }
         
         float radius = Mathf.Clamp(attackRange * 0.8f, X_FLIP_SAFETY + 0.5f, PREFERRED_X_GAP);
-        
-        // Use instance ID for deterministic pseudo-random stagger on Z to prevent retreating enemies from overlapping
-        float staggeredZ = ((Mathf.Abs(_self.GetInstanceID()) % 5) - 2) * 0.8f;
-        Vector3 offset = new Vector3(xDir * radius, 0, staggeredZ);
+        Vector3 offset = new Vector3(xDir * radius, 0, Random.Range(-1.5f, 1.5f));
         
         return targetPos + offset;
     }
