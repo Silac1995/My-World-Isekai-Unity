@@ -1,0 +1,24 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2f57784182f3d0d479ce71e4aba0d146, type: 3}
+  m_Name: WorldSettingsData
+  m_EditorClassIdentifier: Assembly-CSharp::MWI.WorldSystem.WorldSettingsData
+  ProximityChunkSize: 75
+  SettlementMinPopulation: 3
+  SettlementSustainedDays: 3
+  CityMinPopulation: 15
+  CitySustainedDays: 30
+  ReclamationMinPopulation: 2
+  ReclamationSustainedDays: 2
+  DissolutionGracePeriodDays: 7
+  SlotOffsetDistance: 10000
+  SlotRecycleCooldownDays: 30

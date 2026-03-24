@@ -10,8 +10,9 @@ GameObject:
   m_Component:
   - component: {fileID: 2863687129262977189}
   - component: {fileID: 462750250221607311}
+  - component: {fileID: 3279468191250265719}
   m_Layer: 0
-  m_Name: CommunityManager
+  m_Name: CommunityTracker
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -46,3 +47,17 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MWI.World.Community.CommunityManager
   activeCommunities: []
   _defaultCampSize: {x: 15, y: 10, z: 15}
+--- !u!114 &3279468191250265719
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9182771655719996897}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f5ad2d1c9d9a2434fb40bb1b7e8d1b92, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MWI.WorldSystem.CommunityTracker
+  _settings: {fileID: 0}
+  _mapControllerPrefab: {fileID: 0}
