@@ -614,6 +614,11 @@ public class Character : NetworkBehaviour
             netRb.enabled = !isNPC;
         }
 
+        if (TryGetComponent<Unity.Netcode.Components.NetworkTransform>(out var netTransform))
+        {
+            netTransform.SyncPositionY = !isNPC;
+        }
+
         if (_rb != null)
         {
             if (IsSpawned && !IsOwner)

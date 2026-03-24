@@ -67,6 +67,9 @@ public class CharacterMovement : CharacterSystem
 
     private void FixedUpdate()
     {
+        // Non-authoritative clients should NEVER drive their own physics
+        if (IsSpawned && !IsOwner && !IsServer) return;
+
         if (_knockbackTimer > 0)
         {
             _knockbackTimer -= Time.fixedDeltaTime;
