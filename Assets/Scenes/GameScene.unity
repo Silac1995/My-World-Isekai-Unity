@@ -1007,7 +1007,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   spawnGameObject: {fileID: 1546354848}
   _defaultItemPrefab: {fileID: 718778511601405242, guid: d05bd27244da29941a5703671cff1688, type: 3}
-  _defaultFallbackRace: {fileID: 11400000, guid: c7c83dd86f371d549be6433a12ea6e62, type: 2}
 --- !u!114 &231686118
 MonoBehaviour:
   m_ObjectHideFlags: 0

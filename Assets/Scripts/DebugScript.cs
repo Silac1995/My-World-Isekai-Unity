@@ -101,6 +101,7 @@ public class DebugScript : MonoBehaviour
 
     private void LoadRaces()
     {
+        RaceSO[] races = Resources.LoadAll<RaceSO>("Data/Races");
         availableRaces.Clear();
         if (GameSessionManager.Instance != null && GameSessionManager.Instance.AvailableRaces != null)
         {
