@@ -26,10 +26,11 @@ Because the project was initially solo-focused, you must forcefully decouple **"
 - It must send a `ServerRpc(targetId)` to ask for permission / execution.
 - *Exception:* You may spawn visuals locally for Client-Side Prediction, but NO state changes (no damage, no spending mana).
 
-#### Step 3: Server Execution & Arbitration
+#### Step 3: Server Execution & Asset Resolution
 - The Server receives the RPC, validates conditions (Range, Cooldown, Hitboxes).
 - The Server modifies the core state (decreases HP, consumes item).
 - For interactions, the Server locks the NPC and dictates the Dialogue State globally.
+- **CRITICAL - ASSET RESOLUTION:** Never use `Resources.Load()` or Editor-only `AssetDatabase` string-based lookups to resolve data (e.g., `RaceSO`, visual prefabs) coming from a NetworkVariable or RPC. Always maintain an authoritative registry (like `GameSessionManager.Instance.AvailableRaces`) and resolve via matching logic to guarantee the game works perfectly in Standalone Builds.
 
 #### Step 4: Visual Broadcast (ClientRpc)
 - If the action requires a generic visual effect (Swinging a Sword, Playing Particles, Voice lines), the Server blasts a `ClientRpc` to all clients (excluding the Owner if they already predicted it) so they see the same animation.

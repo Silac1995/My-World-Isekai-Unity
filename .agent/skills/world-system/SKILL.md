@@ -24,8 +24,10 @@ The `MacroSimulator` operates entirely off-screen when a Map wakes up.
 *   It calculates the absolute time delta (`DeltaTime = CurrentTime - HibernationTime`).
 *   It looks at each `HibernatedNPCData` and mathematically computes what the NPC *would* have done during that gap.
 *   **Offline Needs Decay:** It calculates how much time has passed and subtracts that from the serialized `CharacterNeed.CurrentValue` (e.g., Hunger, Social), ensuring NPCs wake up with accurate stat depletion proportionate to the `DeltaTime`.
+*   **Persistent Character Progression:** It handles extraction and injection of logic unique to the NPC (e.g. `CharacterBlueprints.UnlockedBuildingIds`) to ensure the city-building capabilities are consistent across Map Hibernation and Wake-Up phases.
+*   **Offline City Growth:** Driven entirely by the `Community` Leader's `CharacterBlueprints` knowledge. The Simulator filters the `BuildingRegistry` by the Leader's known `UnlockedBuildingIds`, checks which are missing in the community, and spawns scaffold data respecting the `CommunityPriority`.
 *   **Simulation vs Realtime:** Rather than simulating every frame of walking, the MacroSimulator just skips them to the end of their current scheduled task (e.g., if it's 8:00 AM, snap position to Blacksmith Forge).
-*   Once simulated, the Server reinstantiates the Prefab at the new position, assigns the updated stats, and calls `Spawn()` to sync with the entering client.
+*   Once simulated, the Server reinstantiates the Prefab at the new position, assigns the updated stats and blueprint data, and calls `Spawn()` to sync with the entering client.
 
 ## 4. Map Transitions
 Transitions are standardized via `MapTransitionDoor`.
@@ -51,3 +53,6 @@ While dynamic open-world content uses centroid-stamping, pure instanced content 
 *   Slots are separated by a constant (e.g., 40,000 units on the X-axis).
 *   The Allocator guarantees slot persistence via `WorldSaveManager`.
 *   Unused slots are managed via a Lazy Recycling FreeList (30-day cooldown) to prevent stale saves from warping NPCs into the void.
+
+## 8. Debugging & Visualization
+*   **MapControllerDebugUI:** A UI component attached to a Canvas within the Map environment. It visualizes the real-time state of the Map (Active vs Hibernating), tracks the exact `ActivePlayers` list, and displays macro-simulation metrics from `HibernationData` (such as the number of hibernated NPCs and items, and the last saved simulation time). This is crucial for verifying that the transition between live simulation and macro-simulation works perfectly off-screen.

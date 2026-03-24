@@ -43,10 +43,33 @@ community.DeclareIndependence();
 
 ### 3. Community Assets & Building Ownership
 While a `CommercialBuilding` is strictly owned by an **individual** character (`Character _owner`), the community automatically tracks the assets of its members.
-- **Tracking**: When a character becomes the owner of a building via `CommercialBuilding.SetOwner()`, that building is automatically added to their current community's `ownedBuildings` list.
-- **Privileges**: Owner privileges (like bypassing schedules in `JobLogisticsManager`) remain strictly with the individual owner, not the entire community.
+*   **Tracking**: When a character becomes the owner of a building via `CommercialBuilding.SetOwner()`, that building is automatically added to their current community's `ownedBuildings` list.
+*   **Privileges**: Owner privileges (like bypassing schedules in `JobLogisticsManager`) remain strictly with the individual owner, not the entire community.
 
-### 4. Manual and Global Management
+### 4. Community Growth & Leader Blueprints
+City growth is fundamentally tied to the **Community Leader**.
+*   **Offline / Macro-Simulation**: The `MacroSimulator` extracts the Leader's `CharacterBlueprints.UnlockedBuildingIds`. It compares this knowledge against the `WorldSettingsData.BuildingRegistry`.
+*   **Priority Filtering**: The simulator only constructs buildings that the Leader knows how to build, filtering out those already present in the community. It selects the next building to construct based on the `CommunityPriority` defined in the registry.
+*   This ensures that a community's technological progression is intimately linked to the survival and knowledge of its leader, rather than arbitrary global unlocks.
+
+### 5. Community Leadership and Blueprints
+A community tracks its recognized leader via `CommunityData.LeaderNpcId`. The leader has unique authority over the evolution and workforce of the community.
+
+**Blueprint Knowledge (`CharacterBlueprints.cs`)**:
+Every character can contain a `CharacterBlueprints` component, storing a list of `PrefabId` strings representing their construction knowledge.
+- During city growth, the system checks the Leader's `UnlockedBuildingIds`.
+- It cross-references this with the `BuildingRegistry` in `WorldSettingsData`, which defines a `CommunityPriority` for each building.
+- The community will autonomously grow by selecting the highest-priority missing building that the Leader knows how to build.
+- This knowledge persists during map hibernation by serializing the IDs into `HibernatedNPCData`.
+
+**Imposing Jobs**:
+The recognized leader can unilaterally bypass individual character schedules to assign work.
+```csharp
+// Forcefully assigning a job to a citizen, bypassing their own schedule decisions
+CommunityTracker.Instance.ImposeJobOnCitizen(mapId, leaderId, citizen, job, building);
+```
+
+### 6. Manual and Global Management
 The `CommunityManager` serves as a global registry and visualization tool. Use it for administrative tasks or scripted setups.
 
 ```csharp
@@ -54,7 +77,7 @@ The `CommunityManager` serves as a global registry and visualization tool. Use i
 Community newComm = CommunityManager.Instance.CreateNewCommunity(founder, "Ancient Guild");
 ```
 
-### 2. Managing Membership
+### 7. Managing Membership
 Always use the `AddMember` and `RemoveMember` methods to ensure proper synchronization between the `Community` and the character's `CharacterCommunity` component.
 
 ```csharp
@@ -65,7 +88,7 @@ community.AddMember(newCharacter);
 community.RemoveMember(leavingCharacter);
 ```
 
-### 3. Hierarchy
+### 8. Hierarchy
 Communities can be nested to create complex social structures.
 
 ```csharp
@@ -73,7 +96,7 @@ Communities can be nested to create complex social structures.
 parentCommunity.AddSubCommunity(subCommunity);
 ```
 
-### 4. Territory (Zones)
+### 9. Territory (Zones)
 Communities "own" physical space via the `Zone` system. Zones are instantiated and registered through the manager.
 
 ```csharp
@@ -86,7 +109,7 @@ Zone campZone = CommunityManager.Instance.EstablishCommunityZone(
 );
 ```
 
-### 5. Community Levels
+### 10. Community Levels
 Communities can evolve using the `CommunityLevel` enum (e.g., `SmallGroup`, `Camp`, `Village`).
 
 ```csharp

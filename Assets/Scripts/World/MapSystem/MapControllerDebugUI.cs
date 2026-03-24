@@ -1,7 +1,7 @@
 using UnityEngine;
 using TMPro;
 using System.Text;
-using MWI.World.System;
+using MWI.WorldSystem;
 using Unity.Netcode;
 using System.Linq;
 
@@ -69,8 +69,8 @@ namespace MWI.World.UI
             if (_mapController == null) return;
 
             // Header Info
-            if (txtMapName != null) txtMapName.text = $"<b>Map:</b> {_mapController.MapName}";
-            if (txtGameState != null) txtGameState.text = $"<b>State:</b> {(_mapController.IsMapActive ? "<color=green>Active</color>" : "<color=yellow>Hibernating</color>")}";
+            if (txtMapName != null) txtMapName.text = $"<b>Map:</b> {_mapController.MapId}";
+            if (txtGameState != null) txtGameState.text = $"<b>State:</b> {(!_mapController.IsHibernating ? "<color=green>Active</color>" : "<color=yellow>Hibernating</color>")}";
             if (txtOwnerId != null) txtOwnerId.text = $"<b>OwnerId:</b> {(_mapController.NetworkObject != null ? _mapController.NetworkObject.OwnerClientId.ToString() : "N/A")}";
             if (txtIsServer != null) txtIsServer.text = $"<b>IsServer:</b> {(_mapController.IsServer ? "<color=green>True</color>" : "<color=red>False</color>")}";
 
@@ -102,10 +102,10 @@ namespace MWI.World.UI
 
             if (hasData)
             {
-                if (txtLastSavedTime != null) txtLastSavedTime.text = $"<b>Last Saved:</b> {data.lastSavedTime:F2}";
-                if (txtSubscribers != null) txtSubscribers.text = $"<b>Subscribers:</b> {(data.SubscribedClientIds != null ? data.SubscribedClientIds.Count.ToString() : "0")}";
-                if (txtNpcsCount != null) txtNpcsCount.text = $"<b>Hibernated NPCs:</b> {(data.hibernatedNPCs != null ? data.hibernatedNPCs.Count.ToString() : "0")}";
-                if (txtItemsCount != null) txtItemsCount.text = $"<b>Hibernated Items:</b> {(data.hibernatedItems != null ? data.hibernatedItems.Count.ToString() : "0")}";
+                if (txtLastSavedTime != null) txtLastSavedTime.text = $"<b>Last Saved:</b> {data.LastHibernationTime:F2}";
+                if (txtSubscribers != null) txtSubscribers.text = $"<b>Subscribers:</b> N/A";
+                if (txtNpcsCount != null) txtNpcsCount.text = $"<b>Hibernated NPCs:</b> {(data.HibernatedNPCs != null ? data.HibernatedNPCs.Count.ToString() : "0")}";
+                if (txtItemsCount != null) txtItemsCount.text = $"<b>Hibernated Items:</b> N/A";
             }
             else
             {
