@@ -1,0 +1,75 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d2ab358b84dd14b478ab6425c7febcda, type: 3}
+  m_Name: JobYieldRegistry_Default
+  m_EditorClassIdentifier: Assembly-CSharp::MWI.WorldSystem.JobYieldRegistry
+  _recipes:
+  - Job: 1
+    Outputs:
+    - ResourceId: wood
+      BaseAmountPerDay: 5
+      SkillMultiplierWeight: 0
+  - Job: 2
+    Outputs:
+    - ResourceId: wood
+      BaseAmountPerDay: 5
+      SkillMultiplierWeight: 0
+  - Job: 3
+    Outputs:
+    - ResourceId: wood
+      BaseAmountPerDay: 5
+      SkillMultiplierWeight: 0
+  - Job: 4
+    Outputs:
+    - ResourceId: wood
+      BaseAmountPerDay: 5
+      SkillMultiplierWeight: 0
+  - Job: 5
+    Outputs:
+    - ResourceId: wood
+      BaseAmountPerDay: 5
+      SkillMultiplierWeight: 0
+  - Job: 6
+    Outputs:
+    - ResourceId: wood
+      BaseAmountPerDay: 5
+      SkillMultiplierWeight: 0
+  - Job: 7
+    Outputs:
+    - ResourceId: wood
+      BaseAmountPerDay: 5
+      SkillMultiplierWeight: 0
+  - Job: 8
+    Outputs:
+    - ResourceId: wood
+      BaseAmountPerDay: 5
+      SkillMultiplierWeight: 0
+  - Job: 9
+    Outputs:
+    - ResourceId: wood
+      BaseAmountPerDay: 5
+      SkillMultiplierWeight: 0
+  - Job: 10
+    Outputs:
+    - ResourceId: wood
+      BaseAmountPerDay: 5
+      SkillMultiplierWeight: 0
+  - Job: 11
+    Outputs:
+    - ResourceId: wood
+      BaseAmountPerDay: 5
+      SkillMultiplierWeight: 0
+  - Job: 12
+    Outputs:
+    - ResourceId: wood
+      BaseAmountPerDay: 5
+      SkillMultiplierWeight: 0

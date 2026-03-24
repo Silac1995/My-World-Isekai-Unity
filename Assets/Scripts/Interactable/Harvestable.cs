@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using MWI.Interactables;
 
 /// <summary>
 /// Objet récoltable dans le monde (arbre, roche, veine de minerai...).
@@ -10,6 +11,7 @@ using UnityEngine;
 public class Harvestable : InteractableObject
 {
     [Header("Harvestable")]
+    [SerializeField] private HarvestableCategory _category = HarvestableCategory.Wood;
     [SerializeField] private List<ItemSO> _outputItems = new List<ItemSO>();
     [SerializeField] private float _harvestDuration = 3f;
     [SerializeField] private bool _isDepletable = true;
@@ -29,6 +31,9 @@ public class Harvestable : InteractableObject
 
     /// <summary>Items que cet objet peut produire</summary>
     public IReadOnlyList<ItemSO> OutputItems => _outputItems;
+
+    /// <summary>Catégorie de ressource pour filtrage</summary>
+    public HarvestableCategory Category => _category;
 
     /// <summary>Temps nécessaire pour une récolte</summary>
     public float HarvestDuration => _harvestDuration;

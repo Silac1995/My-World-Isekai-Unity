@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using MWI.WorldSystem;
 
 /// <summary>
 /// Classe mère abstraite pour tous les jobs.
@@ -13,6 +14,9 @@ public abstract class Job
 
     /// <summary>Catégorie du job (Service, Artisan, etc.)</summary>
     public abstract JobCategory Category { get; }
+
+    /// <summary>V2: Type précis pour la simulation offline (Yields etc)</summary>
+    public virtual JobType Type => JobType.None;
 
     protected Character _worker;
     protected CommercialBuilding _workplace;

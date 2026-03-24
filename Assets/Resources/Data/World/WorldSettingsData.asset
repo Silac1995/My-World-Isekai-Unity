@@ -22,3 +22,8 @@ MonoBehaviour:
   DissolutionGracePeriodDays: 7
   SlotOffsetDistance: 10000
   SlotRecycleCooldownDays: 30
+  RoamingCampPrefab: {fileID: 0}
+  SettlementPrefab: {fileID: 0}
+  EstablishedCityPrefab: {fileID: 0}
+  GenericScaffoldPrefab: {fileID: 0}
+  BuildingRegistry: []

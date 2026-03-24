@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using MWI.Time;
+using MWI.WorldSystem;
 
 /// <summary>
 /// Entrée de configuration pour une ressource voulue par un HarvestingBuilding.
@@ -28,6 +29,7 @@ public class HarvestingBuilding : CommercialBuilding
     [SerializeField] private List<HarvestingResourceEntry> _wantedResources = new List<HarvestingResourceEntry>();
     [SerializeField] private int _harvesterCount = 2;
     [SerializeField] private string _harvesterJobTitle = "Harvester";
+    [SerializeField] private JobType _harvesterJobType = JobType.None;
 
     [Header("Zones")]
     [SerializeField] private Zone _depositZone;
@@ -81,7 +83,7 @@ public class HarvestingBuilding : CommercialBuilding
     {
         for (int i = 0; i < _harvesterCount; i++)
         {
-            _jobs.Add(new JobHarvester(_harvesterJobTitle));
+            _jobs.Add(new JobHarvester(_harvesterJobTitle, _harvesterJobType));
         }
 
         _jobs.Add(new JobLogisticsManager("Logistics Manager"));

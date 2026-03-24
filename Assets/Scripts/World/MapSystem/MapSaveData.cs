@@ -53,6 +53,7 @@ namespace MWI.WorldSystem
         
         // V2 Job State
         public bool HasHarvesterJob;
+        public JobType SavedJobType;
         
         // V2 Needs
         public List<HibernatedNeedData> SavedNeeds = new List<HibernatedNeedData>();

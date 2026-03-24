@@ -89,8 +89,8 @@ namespace MWI.WorldSystem
         [SerializeField] private WorldSettingsData _settings;
         [SerializeField] private GameObject _mapControllerPrefab;
 
-        private List<CommunityData> _communities = new List<CommunityData>();
-        private List<RoamingClusterData> _pendingClusters = new List<RoamingClusterData>();
+        [SerializeField] private List<CommunityData> _communities = new List<CommunityData>();
+        [SerializeField] private List<RoamingClusterData> _pendingClusters = new List<RoamingClusterData>();
 
         public string SaveKey => "CommunityTracker_Data";
 

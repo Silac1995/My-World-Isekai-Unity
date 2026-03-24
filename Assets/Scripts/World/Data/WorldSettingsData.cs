@@ -57,6 +57,9 @@ namespace MWI.WorldSystem
         [Tooltip("Generic scaffolding visual used when a building is UnderConstruction.")]
         public GameObject GenericScaffoldPrefab;
         
+        [Tooltip("Defines offline resource production rates based on job type.")]
+        public JobYieldRegistry JobYields;
+
         [Tooltip("List of dynamic buildings that can be constructed offline.")]
         public List<BuildingRegistryEntry> BuildingRegistry = new List<BuildingRegistryEntry>();
 

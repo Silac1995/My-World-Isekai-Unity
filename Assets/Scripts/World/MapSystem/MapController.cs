@@ -28,6 +28,10 @@ namespace MWI.WorldSystem
         [Tooltip("The biome defining resource density and yields for Offline Growth.")]
         public BiomeDefinition Biome;
         
+        [Header("Simulation")]
+        [Tooltip("The registry for offline job yields.")]
+        public JobYieldRegistry JobYields;
+
         [Tooltip("If true, the terrain is hand-crafted and not procedurally spawned by the MapPrefabRegistry.")]
         public bool IsPredefinedMap;
 
@@ -277,10 +281,13 @@ namespace MWI.WorldSystem
                         npcData.HomePosition = tracker.HomePosition.Value;
                     }
 
-                    // Extract Build/Harvest Flags
+                    // Extract Build/Harvest Flags and JobType
                     if (npc.TryGetComponent(out CharacterJob charJob))
                     {
                         npcData.HasHarvesterJob = charJob.HasJobOfType<JobHarvester>();
+                        
+                        var currentJob = charJob.CurrentJob;
+                        npcData.SavedJobType = currentJob != null ? currentJob.Type : JobType.None;
                     }
 
                     // Extract Needs
@@ -397,7 +404,7 @@ namespace MWI.WorldSystem
             if (_hibernationData != null && _hibernationData.HibernatedNPCs.Count > 0)
             {
                 // 4. Run MacroSimulator catch-up on NPCs
-                MacroSimulator.SimulateCatchUp(_hibernationData, _timeManager.CurrentDay, _timeManager.CurrentTime01);
+                MacroSimulator.SimulateCatchUp(_hibernationData, _timeManager.CurrentDay, _timeManager.CurrentTime01, JobYields);
 
                 // 5. Spawn NPCs at their simulated positions
                 foreach (var npcData in _hibernationData.HibernatedNPCs)
