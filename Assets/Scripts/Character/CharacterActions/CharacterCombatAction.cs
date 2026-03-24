@@ -3,6 +3,7 @@ using UnityEngine;
 public abstract class CharacterCombatAction : CharacterAction
 {
     public override bool ShouldPlayGenericActionAnimation => false;
+    public override bool IsReplicatedInternally => true;
 
     protected CharacterCombatAction(Character character, float duration = 0f) 
         : base(character, duration)

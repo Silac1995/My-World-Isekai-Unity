@@ -36,7 +36,7 @@ public class CharacterActions : CharacterSystem
             // Interaction and Combat already bypass this. Let's just predict visually.
         }
 
-        if (IsServer && !(action is CharacterVisualProxyAction))
+        if (IsServer && !(action is CharacterVisualProxyAction) && !action.IsReplicatedInternally)
         {
             // Server broadcasts the visual proxy to all clients (except itself)
             BroadcastActionVisualsClientRpc(action.ShouldPlayGenericActionAnimation, action.Duration);

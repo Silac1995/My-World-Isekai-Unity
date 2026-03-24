@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 public abstract class CharacterAction
 {
@@ -12,6 +12,12 @@ public abstract class CharacterAction
     /// Les actions de combat l'outrepassent pour viter les conflits d'animation.
     /// </summary>
     public virtual bool ShouldPlayGenericActionAnimation => true;
+
+    /// <summary>
+    /// Si true, cette action gre sa propre rplication via des RPC spcifiques (ex: BroadcastAttackRpc).
+    /// CharacterActions ne la rpliquera donc pas via BroadcastActionVisualsClientRpc.
+    /// </summary>
+    public virtual bool IsReplicatedInternally => false;
 
     protected CharacterAction(Character character, float duration = 0f)
     {

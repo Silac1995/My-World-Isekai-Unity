@@ -576,6 +576,8 @@ public class CharacterCombat : CharacterSystem
                 if (controller != null)
                 {
                     animHandler.Animator.runtimeAnimatorController = controller;
+                    animHandler.CacheParameters();
+                    animHandler.CacheClipDurations();
                 }
             }
             else
@@ -584,6 +586,8 @@ public class CharacterCombat : CharacterSystem
                 if (animHandler.CivilAnimatorController != null)
                 {
                     animHandler.Animator.runtimeAnimatorController = animHandler.CivilAnimatorController;
+                    animHandler.CacheParameters();
+                    animHandler.CacheClipDurations();
                 }
             }
 
