@@ -7,8 +7,11 @@ namespace MWI.WorldSystem
     [Serializable]
     public struct BuildingRegistryEntry
     {
+        [Tooltip("The ID used to reference this building across save files and blueprints.")]
         public string PrefabId;
         public GameObject BuildingPrefab;
+        [Tooltip("Higher number = higher priority for community leaders to build this first when missing.")]
+        public int CommunityPriority;
     }
 
     [CreateAssetMenu(fileName = "WorldSettingsData", menuName = "MWI/World/WorldSettingsData")]

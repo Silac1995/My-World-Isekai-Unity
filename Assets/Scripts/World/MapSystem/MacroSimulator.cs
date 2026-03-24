@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using MWI.WorldSystem;
 
@@ -93,11 +95,11 @@ namespace MWI.Time
             // 5. City Growth
             if (community != null && daysPassed >= 1.0)
             {
-                SimulateCityGrowth(community, daysPassed);
+                SimulateCityGrowth(community, daysPassed, savedData);
             }
         }
 
-        private static void SimulateCityGrowth(CommunityData community, double daysPassed)
+        private static void SimulateCityGrowth(CommunityData community, double daysPassed, MapSaveData mapData)
         {
             // Max 1 new building per 7 offline days to prevent massive lag spikes/runaway growth
             int maxNewBuildings = Mathf.FloorToInt((float)daysPassed / 7f);
@@ -122,10 +124,33 @@ namespace MWI.Time
             WorldSettingsData settings = Resources.Load<WorldSettingsData>("Data/World/WorldSettingsData");
             if (settings == null || settings.BuildingRegistry.Count == 0) return;
 
-            int addedCount = 0;
-            while (addedCount < maxNewBuildings)
+            // Find the leader's offline data
+            var leaderData = mapData.HibernatedNPCs.FirstOrDefault(n => n.CharacterId == community.LeaderNpcId);
+            if (leaderData == null) 
             {
-                var randomPrefabEntry = settings.BuildingRegistry[UnityEngine.Random.Range(0, settings.BuildingRegistry.Count)];
+                Debug.LogWarning($"<color=yellow>[MacroSim]</color> Community {community.MapId} has no Leader offline data. Skipping growth.");
+                return;
+            }
+
+            // Filter registry by what the leader knows, except buildings already constructed
+            var knownBuildings = leaderData.UnlockedBuildingIds;
+            
+            var availableToBuild = settings.BuildingRegistry
+                .Where(entry => knownBuildings.Contains(entry.PrefabId))
+                .Where(entry => !community.ConstructedBuildings.Any(cb => cb.PrefabId == entry.PrefabId))
+                .OrderByDescending(entry => entry.CommunityPriority)
+                .ToList();
+
+            if (availableToBuild.Count == 0)
+            {
+                Debug.Log($"<color=yellow>[MacroSim]</color> Leader '{community.LeaderNpcId}' knows no new missing buildings. Growth paused.");
+                return;
+            }
+
+            int addedCount = 0;
+            while (addedCount < maxNewBuildings && availableToBuild.Count > 0)
+            {
+                var bestEntry = availableToBuild[0];
 
                 Vector3 randomOffset = new Vector3(
                     UnityEngine.Random.Range(-30f, 30f), 
@@ -136,7 +161,7 @@ namespace MWI.Time
                 BuildingSaveData newBuilding = new BuildingSaveData
                 {
                     BuildingId = System.Guid.NewGuid().ToString(),
-                    PrefabId = randomPrefabEntry.PrefabId,
+                    PrefabId = bestEntry.PrefabId,
                     Position = randomOffset,
                     Rotation = Quaternion.identity, // TODO: Randomize 90 degree increments
                     State = BuildingState.UnderConstruction,
@@ -145,6 +170,9 @@ namespace MWI.Time
 
                 community.ConstructedBuildings.Add(newBuilding);
                 addedCount++;
+                
+                availableToBuild.RemoveAt(0);
+
                 Debug.Log($"<color=cyan>[MacroSim]</color> Offline growth started scaffold for {newBuilding.PrefabId} in {community.MapId}");
             }
         }

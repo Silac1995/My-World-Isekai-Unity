@@ -38,6 +38,9 @@ namespace MWI.WorldSystem
         private HashSet<ulong> _activePlayers = new HashSet<ulong>();
         private MapSaveData _hibernationData;
 
+        // Exposed for Debug UI
+        public System.Collections.Generic.IEnumerable<ulong> ActivePlayers => _activePlayers;
+        public MapSaveData HibernationData => _hibernationData;
         // Dependencies
         private TimeManager _timeManager => TimeManager.Instance;
 
@@ -291,6 +294,12 @@ namespace MWI.WorldSystem
                         npcData.SavedJobType = currentJob != null ? currentJob.Type : JobType.None;
                     }
 
+                    // Extract Blueprint Knowledge
+                    if (npc.TryGetComponent(out CharacterSystem.CharacterBlueprints blueprints))
+                    {
+                        npcData.UnlockedBuildingIds.AddRange(blueprints.UnlockedBuildingIds);
+                    }
+
                     // Extract Needs
                     if (npc.CharacterNeeds != null)
                     {
@@ -445,6 +454,12 @@ namespace MWI.WorldSystem
 
                     GameObject inst = Instantiate(prefab, npcData.Position, npcData.Rotation);
                     
+                    // Inject blueprint knowledge back
+                    if (inst.TryGetComponent(out CharacterSystem.CharacterBlueprints blueprints))
+                    {
+                        blueprints.SetUnlockedBuildings(npcData.UnlockedBuildingIds);
+                    }
+
                     // Inject caught-up needs back
                     if (inst.TryGetComponent(out Character spawnedChar) && spawnedChar.CharacterNeeds != null)
                     {

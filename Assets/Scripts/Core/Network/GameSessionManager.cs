@@ -12,9 +12,22 @@ public class GameSessionManager : MonoBehaviour
     public static ushort TargetPort = 7777;
 
     public static string SelectedPlayerRace = "Human";
+    [SerializeField] private List<RaceSO> _availableRaces = new List<RaceSO>();
+    [SerializeField] private RaceSO _defaultFallbackRace;
+
+    public System.Collections.Generic.IReadOnlyList<RaceSO> AvailableRaces => _availableRaces;
+    public RaceSO GetRace(string raceName)
+    {
+        RaceSO race = _availableRaces.Find(r => r.name == raceName);
+        if (race == null)
+        {
+            Debug.LogWarning($"[GameSession] Race '{raceName}' not found in available races. Using fallback.");
+            return _defaultFallbackRace;
+        }
+        return race;
+    }
 
     private Dictionary<ulong, string> _pendingClientRaces = new Dictionary<ulong, string>();
-
     private void Awake()
     {
         if (Instance == null) Instance = this;

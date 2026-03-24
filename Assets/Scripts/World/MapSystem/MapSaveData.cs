@@ -59,6 +59,9 @@ namespace MWI.WorldSystem
         // V2 Needs
         public List<HibernatedNeedData> SavedNeeds = new List<HibernatedNeedData>();
         
+        // Character Knowledge
+        public List<string> UnlockedBuildingIds = new List<string>();
+        
         // TODO for V2: Insert Inventory list, GOAP state snippet, Need levels, etc.
     }
 }

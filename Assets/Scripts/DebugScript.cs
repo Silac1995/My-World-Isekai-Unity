@@ -101,9 +101,11 @@ public class DebugScript : MonoBehaviour
 
     private void LoadRaces()
     {
-        RaceSO[] races = Resources.LoadAll<RaceSO>("Data/Races");
         availableRaces.Clear();
-        availableRaces.AddRange(races);
+        if (GameSessionManager.Instance != null && GameSessionManager.Instance.AvailableRaces != null)
+        {
+            availableRaces.AddRange(GameSessionManager.Instance.AvailableRaces);
+        }
 
         raceDropdown.ClearOptions();
         List<string> options = new List<string>();

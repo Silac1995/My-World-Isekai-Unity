@@ -7,6 +7,7 @@ public class SpawnManager : MonoBehaviour
 
     [SerializeField] private GameObject spawnGameObject;
     [SerializeField] private GameObject _defaultItemPrefab;
+    [SerializeField] private RaceSO _defaultFallbackRace;
 
     public Vector3 DefaultSpawnPosition => spawnGameObject != null ? spawnGameObject.transform.position : Vector3.zero;
     public Quaternion DefaultSpawnRotation => spawnGameObject != null ? spawnGameObject.transform.rotation : Quaternion.identity;
@@ -214,7 +215,8 @@ public class SpawnManager : MonoBehaviour
         // Default Race fallback so that missing references don't break logic
         if (race == null) 
         {
-            race = Resources.Load<RaceSO>("Data/Races/Human");
+            race = _defaultFallbackRace;
+            if (race == null) Debug.LogWarning("[SpawnManager] Fallback race is missing in inspector!");
         }
 
         if (!SetupInteractionDetector(character.gameObject, isPlayerObject)) return false;

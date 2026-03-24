@@ -189,7 +189,10 @@ public class Character : NetworkBehaviour
         RaceSO networkRace = null;
         if (!NetworkRaceId.Value.IsEmpty)
         {
-            networkRace = Resources.Load<RaceSO>($"Data/Races/{NetworkRaceId.Value}");
+            if (GameSessionManager.Instance != null)
+                networkRace = GameSessionManager.Instance.GetRace(NetworkRaceId.Value.ToString());
+            else
+                Debug.LogWarning("[Character] GameSessionManager not found. Cannot fetch network race.");
         }
 
         if (SpawnManager.Instance != null)
