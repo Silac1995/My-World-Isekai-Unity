@@ -125,8 +125,39 @@ public class WanderBehaviour : IAIBehaviour
                 }
             }
 
-            Vector2 randomCircle = Random.insideUnitCircle * _walkRadius;
-            Vector3 randomPos = new Vector3(randomCircle.x, 0, randomCircle.y) + self.transform.position;
+            Bounds? mapBounds = null;
+            if (self.TryGetComponent(out CharacterMapTracker tracker) && !string.IsNullOrEmpty(tracker.CurrentMapID.Value.ToString()))
+            {
+                string mapId = tracker.CurrentMapID.Value.ToString();
+                var maps = UnityEngine.Object.FindObjectsByType<MWI.WorldSystem.MapController>(UnityEngine.FindObjectsSortMode.None);
+                foreach (var m in maps)
+                {
+                    if (m.MapId == mapId)
+                    {
+                        if (m.TryGetComponent(out Collider mapCollider))
+                        {
+                            mapBounds = mapCollider.bounds;
+                        }
+                        break;
+                    }
+                }
+            }
+
+            Vector3 randomPos;
+            if (mapBounds.HasValue)
+            {
+                randomPos = new Vector3(
+                    Random.Range(mapBounds.Value.min.x, mapBounds.Value.max.x),
+                    self.transform.position.y,
+                    Random.Range(mapBounds.Value.min.z, mapBounds.Value.max.z)
+                );
+            }
+            else
+            {
+                Vector2 randomCircle = Random.insideUnitCircle * _walkRadius;
+                randomPos = new Vector3(randomCircle.x, 0, randomCircle.y) + self.transform.position;
+            }
+
             Vector3 biasedPos = randomPos + finalDirectionBias;
 
             if (NavMesh.SamplePosition(biasedPos, out NavMeshHit hit, _walkRadius, NavMesh.AllAreas))

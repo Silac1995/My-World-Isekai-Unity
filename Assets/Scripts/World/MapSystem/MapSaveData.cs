@@ -28,6 +28,7 @@ namespace MWI.WorldSystem
     {
         public string CharacterId;
         public string PrefabName; // Quick way to know what to spawn
+        public uint PrefabHash; // Proper NGO GUID matching
 
         // V1 Simple Data: Position and Basic State
         public Vector3 Position;

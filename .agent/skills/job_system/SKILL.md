@@ -20,6 +20,7 @@ This is the component (MonoBehaviour) attached to the character.
 - **Assignment Dictionaries (`JobAssignment`)**: Allows a character to have multiple jobs.
 - **The Time Safeguard (`DoesScheduleOverlap`)**: When attempting to take a job (`TakeJob`), this algorithm checks that none of their current positions conflict with the new working hours of this job. 
 - **AI Injection (`InjectWorkSchedule`)**: On success, `CharacterJob` will force the time slots (e.g., 8 AM - 5 PM Work) into the character's routine planner (`CharacterSchedule`), which will physically lead them to work.
+- **Forced Imposition (`ForceAssignJob`)**: A Community Leader (`CommunityTracker.ImposeJobOnCitizen`) can forcefully assign a job. This intentionally dissolves and quits any existing overlapping jobs the character might have to make room for the new schedule, completely bypassing their choice.
 - **Ownership**: Stores whether the character is the Boss/Owner of the Building.
 
 ### 2. The Role (`Job`)
@@ -33,7 +34,7 @@ Pure abstract C# class. This is the essence of the position (e.g., "Bartender").
 ### 3. The Location (`CommercialBuilding`)
 The physical anchor in the scene.
 - **Administration**: The building instantiates all its own Jobs in the abstract array (via `InitializeJobs()`).
-- **Recruitment (`AskForJob`)**: For a character to get a position here, the Building must have a Boss (`HasOwner`), the position must exist locally, and it must be vacant.
+- **Recruitment (`AskForJob`)**: For a character to volunteer for a position, the Building must have a direct Boss (`HasOwner`) OR exist in a map governed by a macro Community Leader (`HasCommunityLeader()`). The position must exist locally and be vacant. Alternatively, a Community Leader can forcefully assign work via `CommunityTracker.ImposeJobOnCitizen()`.
 - **Punching In/Out**: Handled by strict `CharacterAction`s (`Action_PunchIn` / `Action_PunchOut`). A character cannot telepathically start working; their `WorkBehaviour` first pushes a `PunchInBehaviour` to physically navigate them inside `BuildingZone.bounds`, which then spawns the `Action_PunchIn` to call `WorkerStartingShift`.
 - **Physical Dispersion**: `GetWorkPosition(Character)` provides a point within the `BuildingZone` with a unique offset (based on InstanceID) to ensure workers don't stack on top of each other.
 - **Task Management (Blackboard Pattern)**: All Commercial Buildings require a `BuildingTaskManager`. Instead of workers individually running heavy `Physics.OverlapBox` queries every frame to find tasks, resources and systems register `BuildingTask`s (`HarvestResourceTask`, `PickupLooseItemTask`) to the building. Workers use `TaskManager.ClaimBestTask<T>()` to claim work autonomously via GOAP without race conditions.

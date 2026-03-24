@@ -11,10 +11,11 @@ using MWI.WorldSystem;
 /// 3. Déposer les ressources à la zone de dépôt
 /// Puis recommencer le cycle.
 /// </summary>
+[System.Serializable]
 public class JobHarvester : Job
 {
-    private string _jobTitle;
-    private JobType _jobType;
+    [SerializeField] private string _jobTitle;
+    [SerializeField] private JobType _jobType;
 
     public override string JobTitle => _jobTitle;
     public override JobCategory Category => JobCategory.Harvester;

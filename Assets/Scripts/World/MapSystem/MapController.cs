@@ -270,6 +270,7 @@ namespace MWI.WorldSystem
                     {
                         CharacterId = npc.CharacterName, 
                         PrefabName = npc.gameObject.name.Replace("(Clone)", "").Trim(),
+                        PrefabHash = npc.NetworkObject != null ? npc.NetworkObject.PrefabIdHash : 0,
                         Position = npc.transform.position,
                         Rotation = npc.transform.rotation
                     };
@@ -358,13 +359,14 @@ namespace MWI.WorldSystem
                     if (child.gameObject.name.Contains("Prefab")) hasTerrain = true;
                 }
 
-                if (!hasTerrain)
+                if (!IsPredefinedMap && !hasTerrain)
                 {
                     GameObject terrainPrefab = settings.GetPrefabForTier(community.Tier);
                     if (terrainPrefab != null)
                     {
                         GameObject terrain = Instantiate(terrainPrefab, transform.position, Quaternion.identity);
                         terrain.transform.SetParent(this.transform);
+                        terrain.name = terrainPrefab.name + "_TerrainPrefab";
                         if (terrain.TryGetComponent(out NetworkObject terrainNet))
                         {
                             terrainNet.Spawn();
@@ -416,10 +418,21 @@ namespace MWI.WorldSystem
                     {
                         foreach (var networkPrefab in NetworkManager.Singleton.NetworkConfig.Prefabs.Prefabs)
                         {
-                            if (networkPrefab.Prefab != null && networkPrefab.Prefab.name == npcData.PrefabName)
+                            if (networkPrefab.Prefab != null)
                             {
-                                prefab = networkPrefab.Prefab;
-                                break;
+                                // Priority 1: Match by NGO hash (Guarantees exact prefab even if GameObject was renamed in scene)
+                                if (npcData.PrefabHash != 0 && networkPrefab.Prefab.TryGetComponent(out NetworkObject prefabNetObj) && prefabNetObj.PrefabIdHash == npcData.PrefabHash)
+                                {
+                                    prefab = networkPrefab.Prefab;
+                                    break;
+                                }
+
+                                // Priority 2: Fallback to exact name match
+                                if (prefab == null && networkPrefab.Prefab.name == npcData.PrefabName)
+                                {
+                                    prefab = networkPrefab.Prefab;
+                                    // Don't break; keep looking in case strict Hash match is found later in the list
+                                }
                             }
                         }
                     }

@@ -7,6 +7,7 @@ using MWI.WorldSystem;
 /// Chaque type de job (Barman, Serveur, Vendeur...) hérite de cette classe
 /// et override Execute() pour coder sa logique spécifique.
 /// </summary>
+[System.Serializable]
 public abstract class Job
 {
     /// <summary>Nom du poste (ex: "Barman", "Serveur")</summary>

@@ -50,6 +50,7 @@ namespace MWI.WorldSystem
         public CommunityTier Tier;
         
         public Vector2Int OriginChunk;
+        public string LeaderNpcId; // UUID of the Character who leads this community
         
         // Progression
         public int DayStartedSustaining;
@@ -103,6 +104,33 @@ namespace MWI.WorldSystem
         {
             if (GetCommunity(community.MapId) != null) return;
             _communities.Add(community);
+        }
+
+        /// <summary>
+        /// Allows the recognized leader of a community to forcefully assign a job to a citizen.
+        /// </summary>
+        public bool ImposeJobOnCitizen(string mapId, string leaderId, Character citizen, Job job, CommercialBuilding building)
+        {
+            if (citizen == null || job == null || building == null) return false;
+
+            CommunityData comm = GetCommunity(mapId);
+            if (comm == null)
+            {
+                Debug.LogWarning($"<color=orange>[CommunityTracker]</color> Cannot impose job. Map {mapId} not found.");
+                return false;
+            }
+
+            if (string.IsNullOrEmpty(comm.LeaderNpcId) || comm.LeaderNpcId != leaderId)
+            {
+                Debug.LogWarning($"<color=red>[CommunityTracker]</color> Character {leaderId} is not the recognized leader of {mapId}. Cannot impose job.");
+                return false;
+            }
+
+            if (citizen.CharacterJob != null)
+            {
+                return citizen.CharacterJob.ForceAssignJob(job, building);
+            }
+            return false;
         }
 
         private void Awake()
@@ -369,9 +397,16 @@ namespace MWI.WorldSystem
                 return;
             }
 
-            // 1. Allocate Slot
+            // 1. Allocate Logical Slot (mainly for instanced interiors later, but we keep the ID)
             comm.SlotIndex = WorldOffsetAllocator.Instance.AllocateSlotIndex();
-            Vector3 worldPos = WorldOffsetAllocator.Instance.GetOffsetVector(comm.SlotIndex);
+            
+            // Override physical placement: Drop MapController exactly at the chunk's centroid on the open world plane
+            float chunkSize = _settings != null ? _settings.ProximityChunkSize : 75f;
+            Vector3 worldPos = new Vector3(
+                comm.OriginChunk.x * chunkSize + (chunkSize / 2f), 
+                0, 
+                comm.OriginChunk.y * chunkSize + (chunkSize / 2f)
+            );
 
             // 2. Instantiate MapController
             if (_mapControllerPrefab != null)
@@ -385,11 +420,13 @@ namespace MWI.WorldSystem
                 }
 
                 // 2.5 Instantiate physical terrain prefab for the Settlement
+                // This will stamp the village layout (tents, fences, fires) right onto the open world terrain
                 GameObject terrainPrefab = _settings.GetPrefabForTier(comm.Tier);
                 if (terrainPrefab != null)
                 {
                     GameObject terrain = Instantiate(terrainPrefab, worldPos, Quaternion.identity);
                     terrain.transform.SetParent(mapObj.transform); // Attach to MapController
+                    terrain.name = terrainPrefab.name + "_TerrainPrefab"; // Prevents MapController WakeUp duplication
                     if (terrain.TryGetComponent(out NetworkObject terrainNet))
                     {
                         terrainNet.Spawn();
@@ -397,7 +434,6 @@ namespace MWI.WorldSystem
                 }
 
                 // 3. Migrate founding NPCs
-                float chunkSize = _settings != null ? _settings.ProximityChunkSize : 75f;
                 Character[] allCharacters = FindObjectsByType<Character>(FindObjectsSortMode.None);
                 foreach (var c in allCharacters)
                 {
@@ -412,7 +448,7 @@ namespace MWI.WorldSystem
                     {
                         Debug.Log($"<color=yellow>[CommunityTracker]</color> Migrating NPC {c.CharacterName} to newly founded Settlement Map {comm.MapId}");
                         
-                        // Set Map Tracking & Anchors
+                        // Set Map Tracking & Anchors to the centroid of the new settlement
                         if (c.TryGetComponent(out CharacterMapTracker tracker))
                         {
                             tracker.SetCurrentMap(comm.MapId);
@@ -420,11 +456,14 @@ namespace MWI.WorldSystem
                             tracker.HomePosition.Value = worldPos;
                         }
                         
-                        // Physically Warp
-                        if (c.TryGetComponent(out CharacterMovement movement))
+                        // We DO NOT warp the NPCs. They are already standing here on the open world plane!
+                        
+                        // Assign the first migrated NPC as the Community Leader
+                        if (string.IsNullOrEmpty(comm.LeaderNpcId))
                         {
-                            Vector3 randomOffset = new Vector3(UnityEngine.Random.Range(-3f, 3f), 0, UnityEngine.Random.Range(-3f, 3f));
-                            movement.Warp(worldPos + randomOffset);
+                            comm.LeaderNpcId = c.CharacterName;
+                            // Add a visual/log confirmation
+                            Debug.Log($"<color=magenta>[CommunityTracker]</color> Character '{c.CharacterName}' is now the LEADER of '{comm.MapId}'!");
                         }
                     }
                 }

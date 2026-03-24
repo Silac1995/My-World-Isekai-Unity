@@ -39,14 +39,15 @@ Transitions are standardized via `MapTransitionDoor`.
 *   **No Cross-Map Physics:** A projectile from Map A will never reach Map B. Do not attempt it. Any inter-map effects (e.g. economy shipments) must be calculated purely via Math in the `JobLogisticsManager`, not via physical objects driving across the emptiness.
 *   **Character Maps are Authoritative:** Always rely on `CharacterMapTracker.CurrentMapID.Value` to know what map a character belongs to.
 
-## 6. Dynamic City System
-The physical generation of Maps is entirely data-driven, driven by NPC clustering behaviors.
+## 6. Dynamic City System (Open-World Stamping)
+The Physical generation of Maps is entirely data-driven, triggered by NPC clustering behaviors.
 *   **WorldSettingsData:** Defines thresholds for communities (ProximityChunkSize, SustainedDays, MinimumPopulation).
 *   **CommunityTracker:** A Server-side heartbeat that monitors NPC populations. It evaluates the map state machine: `Roaming Camp -> Settlement -> Established City -> Abandoned City -> Reclaimed`. It triggers physical chunk instantiations upon promotion.
+*   **Open-World Stamping:** When a new dynamic map (e.g. Settlement) is formed, the `CommunityTracker` asks the `WorldOffsetAllocator` for a **logical Slot ID** (for saving/data separation) but overrides the physical placement to spawn the `MapController` anchor exactly at the NPC cluster's centroid on the main open-world plane. The NPCs roam freely and are never warped away.
 *   **Abandoned Cities:** Cities never truly dissolve. If population drops to 0 for a prolonged baseline, the city turns "Abandoned", hibernates infinitely at 0 CPU cost, and retains its world slot permanently.
 
-## 7. Offset Allocation
-Map spatial coordinates are governed solely by the `WorldOffsetAllocator`.
-*   Slots are separated by a constant (e.g., 10,000 units on the X-axis).
+## 7. Offset Allocation (Instanced Cells)
+While dynamic open-world content uses centroid-stamping, pure instanced content (like Dungeons, specific Buildings, or isolated narrative maps) uses the `WorldOffsetAllocator`'s physical spatial coordinates.
+*   Slots are separated by a constant (e.g., 40,000 units on the X-axis).
 *   The Allocator guarantees slot persistence via `WorldSaveManager`.
-*   Unused or theoretically freed slots (if a system were to destroy a map) are managed via a Lazy Recycling FreeList (30-day cooldown) to prevent stale saves from warping NPCs into the void.
+*   Unused slots are managed via a Lazy Recycling FreeList (30-day cooldown) to prevent stale saves from warping NPCs into the void.

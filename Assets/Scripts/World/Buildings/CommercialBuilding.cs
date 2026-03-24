@@ -34,9 +34,9 @@ public abstract class CommercialBuilding : Building
     public BuildingLogisticsManager LogisticsManager => _logisticsManager;
 
     /// <summary>
-    /// Le building est opérationnel si tous les jobs sont occupés par un worker.
+    /// Le building est opérationnel si tous les jobs sont occupés par un worker et s'il a terminé sa construction.
     /// </summary>
-    public bool IsOperational => _jobs.Count > 0 && _jobs.TrueForAll(j => j.IsAssigned);
+    public bool IsOperational => !IsUnderConstruction && _jobs.Count > 0 && _jobs.TrueForAll(j => j.IsAssigned);
 
     protected override void Awake()
     {
@@ -182,17 +182,34 @@ public abstract class CommercialBuilding : Building
     public bool HasOwner => _owner != null && _owner.IsAlive();
 
     /// <summary>
-    /// Un personnage demande un job au boss de ce building.
+    /// Checks if this building is located in a map that has a recognized Community Leader.
+    /// </summary>
+    public bool HasCommunityLeader()
+    {
+        var mapController = GetComponentInParent<MWI.WorldSystem.MapController>();
+        if (mapController != null && MWI.WorldSystem.CommunityTracker.Instance != null)
+        {
+            var comm = MWI.WorldSystem.CommunityTracker.Instance.GetCommunity(mapController.MapId);
+            if (comm != null && !string.IsNullOrEmpty(comm.LeaderNpcId))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Un personnage demande un job au boss de ce building (ou au leader de la communauté).
     /// Retourne true si l'embauche est acceptée.
     /// </summary>
     public bool AskForJob(Character applicant, Job job)
     {
         if (applicant == null || job == null) return false;
 
-        // Il faut un boss pour embaucher
-        if (!HasOwner)
+        // Il faut un boss pour embaucher (boss direct ou leader de communauté)
+        if (!HasOwner && !HasCommunityLeader())
         {
-            Debug.Log($"<color=red>[Building]</color> {buildingName} n'a pas de boss. Personne ne peut embaucher.");
+            Debug.Log($"<color=red>[Building]</color> {buildingName} n'a pas de boss ni de leader de communauté. Personne ne peut embaucher.");
             return false;
         }
 
