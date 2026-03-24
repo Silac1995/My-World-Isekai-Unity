@@ -9,6 +9,8 @@ namespace MWI.WorldSystem
     {
         public string PrefabId;
         public GameObject BuildingPrefab;
+        [Tooltip("Higher number = higher priority for construction.")]
+        public int CommunityPriority;
     }
 
     [CreateAssetMenu(fileName = "WorldSettingsData", menuName = "MWI/World/WorldSettingsData")]

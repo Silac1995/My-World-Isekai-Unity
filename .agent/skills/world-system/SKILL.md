@@ -46,7 +46,12 @@ The Physical generation of Maps is entirely data-driven, triggered by NPC cluste
 *   **Open-World Stamping:** When a new dynamic map (e.g. Settlement) is formed, the `CommunityTracker` asks the `WorldOffsetAllocator` for a **logical Slot ID** (for saving/data separation) but overrides the physical placement to spawn the `MapController` anchor exactly at the NPC cluster's centroid on the main open-world plane. The NPCs roam freely and are never warped away.
 *   **Abandoned Cities:** Cities never truly dissolve. If population drops to 0 for a prolonged baseline, the city turns "Abandoned", hibernates infinitely at 0 CPU cost, and retains its world slot permanently.
 
-## 7. Offset Allocation (Instanced Cells)
+## 7. Community Leader Evolution
+Once a `RoamingCamp` is promoted to a `Settlement`, the first migrated NPC is officially designated as the **Community Leader** (`LeaderNpcId` in `CommunityData`). Growth and construction in the city are solely driven by this leader to ensure parity between active and offline simulation.
+*   **Active Simulation:** The leader uses `BTAction_ManageCommunity.cs` during their daily AI cycle. They evaluate the current population (e.g., 1 building allowed per 3 citizens) and check if the community is currently building anything. If requirements are met, the leader finds an empty spot inside the `MapController` bounds, registers a new `BuildingState.UnderConstruction` to `CommunityData`, and physically spawns a Scaffold prefab. Logistics then take over to supply materials.
+*   **Macro-Simulation (Hibernated):** When the map sleeps, `MacroSimulator.cs` calculates offline growth mathematically. However, this growth **only occurs if the Leader is physically present** in the hibernated map data. If the leader is missing (e.g. killed or migrating), offline growth halts completely, preserving simulation integrity.
+
+## 8. Offset Allocation (Instanced Cells)
 While dynamic open-world content uses centroid-stamping, pure instanced content (like Dungeons, specific Buildings, or isolated narrative maps) uses the `WorldOffsetAllocator`'s physical spatial coordinates.
 *   Slots are separated by a constant (e.g., 40,000 units on the X-axis).
 *   The Allocator guarantees slot persistence via `WorldSaveManager`.

@@ -38,6 +38,9 @@ namespace MWI.WorldSystem
         private HashSet<ulong> _activePlayers = new HashSet<ulong>();
         private MapSaveData _hibernationData;
 
+        public HashSet<ulong> ActivePlayers => _activePlayers;
+        public MapSaveData HibernationData => _hibernationData;
+
         // Dependencies
         private TimeManager _timeManager => TimeManager.Instance;
 
@@ -304,6 +307,12 @@ namespace MWI.WorldSystem
                         }
                     }
 
+                    // Extract Blueprints
+                    if (npc.TryGetComponent(out CharacterSystem.CharacterBlueprints blueprints))
+                    {
+                        npcData.UnlockedBuildingIds.AddRange(blueprints.GetUnlockedBuildingIds());
+                    }
+
                     _hibernationData.HibernatedNPCs.Add(npcData);
 
                     // 2. Despawn & Destroy the physical instance
@@ -455,6 +464,15 @@ namespace MWI.WorldSystem
                             {
                                 liveNeed.CurrentValue = savedNeed.Value;
                             }
+                        }
+                    }
+
+                    // Inject blueprints back
+                    if (inst.TryGetComponent(out CharacterSystem.CharacterBlueprints blueprints))
+                    {
+                        foreach (var bpId in npcData.UnlockedBuildingIds)
+                        {
+                            blueprints.UnlockBlueprint(bpId);
                         }
                     }
 

@@ -80,6 +80,30 @@ PrefabInstance:
       propertyPath: m_Center.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 4257137119194508598, guid: 646be7a73a1c3894c8bab774fd844b6b, type: 3}
+      propertyPath: m_SizeDelta.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7266835365059310178, guid: 646be7a73a1c3894c8bab774fd844b6b, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7266835365059310178, guid: 646be7a73a1c3894c8bab774fd844b6b, type: 3}
+      propertyPath: m_AnchorMin.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7266835365059310178, guid: 646be7a73a1c3894c8bab774fd844b6b, type: 3}
+      propertyPath: m_SizeDelta.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7266835365059310178, guid: 646be7a73a1c3894c8bab774fd844b6b, type: 3}
+      propertyPath: m_AnchoredPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7266835365059310178, guid: 646be7a73a1c3894c8bab774fd844b6b, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 8172288352403909900, guid: 646be7a73a1c3894c8bab774fd844b6b, type: 3}
       propertyPath: Biome
       value: 
