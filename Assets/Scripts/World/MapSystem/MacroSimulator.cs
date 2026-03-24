@@ -22,11 +22,74 @@ namespace MWI.Time
 
             Debug.Log($"<color=orange>[MacroSim]</color> Fast-forwarding Map '{savedData.MapId}' by {hoursPassed:F2} in-game hours.");
 
+            // 1. City Growth Catch-Up
+            if (CommunityTracker.Instance != null && daysPassed >= 1.0)
+            {
+                CommunityData community = CommunityTracker.Instance.GetCommunity(savedData.MapId);
+                if (community != null)
+                {
+                    SimulateCityGrowth(community, daysPassed);
+                }
+            }
+
+            // 2. NPC Schedule Catch-Up
             int currentHour = Mathf.FloorToInt(currentTime01 * 24f);
 
             foreach (var npc in savedData.HibernatedNPCs)
             {
                 SimulateNPCCatchUp(npc, savedData.MapId, currentHour, hoursPassed);
+            }
+        }
+
+        private static void SimulateCityGrowth(CommunityData community, double daysPassed)
+        {
+            // Max 1 new building per 7 offline days to prevent massive lag spikes/runaway growth
+            int maxNewBuildings = Mathf.FloorToInt((float)daysPassed / 7f);
+            
+            // Advance any under-construction buildings first
+            foreach (var b in community.ConstructedBuildings)
+            {
+                if (b.State == BuildingState.UnderConstruction)
+                {
+                    b.ConstructionProgress += (float)daysPassed * 0.2f; // Arbitrary 5 days to build
+                    if (b.ConstructionProgress >= 1f)
+                    {
+                        b.ConstructionProgress = 1f;
+                        b.State = BuildingState.Complete;
+                        Debug.Log($"<color=green>[MacroSim]</color> Offline construction finished for {b.PrefabId} in {community.MapId}");
+                    }
+                }
+            }
+
+            if (maxNewBuildings <= 0) return;
+
+            WorldSettingsData settings = Resources.Load<WorldSettingsData>("Data/World/WorldSettingsData");
+            if (settings == null || settings.BuildingRegistry.Count == 0) return;
+
+            int addedCount = 0;
+            while (addedCount < maxNewBuildings)
+            {
+                var randomPrefabEntry = settings.BuildingRegistry[UnityEngine.Random.Range(0, settings.BuildingRegistry.Count)];
+
+                Vector3 randomOffset = new Vector3(
+                    UnityEngine.Random.Range(-30f, 30f), 
+                    0f, 
+                    UnityEngine.Random.Range(-30f, 30f)
+                );
+                
+                BuildingSaveData newBuilding = new BuildingSaveData
+                {
+                    BuildingId = System.Guid.NewGuid().ToString(),
+                    PrefabId = randomPrefabEntry.PrefabId,
+                    Position = randomOffset,
+                    Rotation = Quaternion.identity, // TODO: Randomize 90 degree increments
+                    State = BuildingState.UnderConstruction,
+                    ConstructionProgress = 0f
+                };
+
+                community.ConstructedBuildings.Add(newBuilding);
+                addedCount++;
+                Debug.Log($"<color=cyan>[MacroSim]</color> Offline growth started scaffold for {newBuilding.PrefabId} in {community.MapId}");
             }
         }
 

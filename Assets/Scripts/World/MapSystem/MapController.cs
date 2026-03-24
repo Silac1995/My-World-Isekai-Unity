@@ -172,11 +172,18 @@ namespace MWI.WorldSystem
                     // Serialize to V1 Dumb Data
                     HibernatedNPCData npcData = new HibernatedNPCData()
                     {
-                        CharacterId = npc.CharacterName, // Assuming Name is unique for now, will replace with True GUID later
+                        CharacterId = npc.CharacterName, 
                         PrefabName = npc.gameObject.name.Replace("(Clone)", "").Trim(),
                         Position = npc.transform.position,
                         Rotation = npc.transform.rotation
                     };
+
+                    // Extract Tier 1 V2 GOAP Anchors
+                    if (npc.TryGetComponent(out CharacterMapTracker tracker))
+                    {
+                        npcData.HomeMapId = tracker.HomeMapId.Value.ToString();
+                        npcData.HomePosition = tracker.HomePosition.Value;
+                    }
 
                     _hibernationData.HibernatedNPCs.Add(npcData);
 
@@ -206,20 +213,90 @@ namespace MWI.WorldSystem
 
             Debug.Log($"<color=green>[MapController]</color> Map '{MapId}' Waking Up! Simulating {deltaDays:F2} offline days.");
 
+            // Get Community Data for Map Tier and Buildings
+            CommunityData community = null;
+            if (CommunityTracker.Instance != null)
+            {
+                community = CommunityTracker.Instance.GetCommunity(MapId);
+            }
+
+            WorldSettingsData settings = Resources.Load<WorldSettingsData>("Data/World/WorldSettingsData");
+            if (community != null && settings != null)
+            {
+                // 1. Spawn base terrain prefab (tier)
+                // Note: Only spawn if it doesn't already exist as a child (e.g. from immediate promotion)
+                bool hasTerrain = false;
+                foreach (Transform child in transform)
+                {
+                    if (child.gameObject.name.Contains("Prefab")) hasTerrain = true;
+                }
+
+                if (!hasTerrain)
+                {
+                    GameObject terrainPrefab = settings.GetPrefabForTier(community.Tier);
+                    if (terrainPrefab != null)
+                    {
+                        GameObject terrain = Instantiate(terrainPrefab, transform.position, Quaternion.identity);
+                        terrain.transform.SetParent(this.transform);
+                        if (terrain.TryGetComponent(out NetworkObject terrainNet))
+                        {
+                            terrainNet.Spawn();
+                        }
+                    }
+                }
+
+                // 2 & 3. Spawn completed and under-construction buildings
+                if (community.ConstructedBuildings != null)
+                {
+                    foreach (var bSave in community.ConstructedBuildings)
+                    {
+                        GameObject bPrefab = settings.GetBuildingPrefab(bSave.PrefabId);
+                        
+                        if (bSave.State == BuildingState.UnderConstruction && settings.GenericScaffoldPrefab != null)
+                        {
+                            bPrefab = settings.GenericScaffoldPrefab;
+                        }
+
+                        if (bPrefab != null)
+                        {
+                            Vector3 worldPos = transform.position + bSave.Position;
+                            GameObject bObj = Instantiate(bPrefab, worldPos, bSave.Rotation);
+                            bObj.transform.SetParent(this.transform);
+                            if (bObj.TryGetComponent(out NetworkObject bNet))
+                            {
+                                bNet.Spawn();
+                            }
+                        }
+                    }
+                }
+            }
+
             if (_hibernationData != null && _hibernationData.HibernatedNPCs.Count > 0)
             {
-                // V1 Simulation: Use external MacroSimulator to process elapsed time
+                // 4. Run MacroSimulator catch-up on NPCs
                 MacroSimulator.SimulateCatchUp(_hibernationData, _timeManager.CurrentDay, _timeManager.CurrentTime01);
 
-                // Respawn
+                // 5. Spawn NPCs at their simulated positions
                 foreach (var npcData in _hibernationData.HibernatedNPCs)
                 {
-                    // NOTE: Hardcoding 'Prefabs/' path for now, adjust based on project structure
-                    GameObject prefab = Resources.Load<GameObject>($"Prefabs/{npcData.PrefabName}");
+                    GameObject prefab = null;
                     
+                    // Optimization: Use NGO's pre-loaded prefab registry instead of disk I/O (Resources.Load)
+                    if (NetworkManager.Singleton != null && NetworkManager.Singleton.NetworkConfig != null)
+                    {
+                        foreach (var networkPrefab in NetworkManager.Singleton.NetworkConfig.Prefabs.Prefabs)
+                        {
+                            if (networkPrefab.Prefab != null && networkPrefab.Prefab.name == npcData.PrefabName)
+                            {
+                                prefab = networkPrefab.Prefab;
+                                break;
+                            }
+                        }
+                    }
+
                     if (prefab == null)
                     {
-                        Debug.LogError($"[MapController] Could not find prefab {npcData.PrefabName} to wake up {npcData.CharacterId}!");
+                        Debug.LogError($"[MapController] Could not find prefab {npcData.PrefabName} in NetworkManager to wake up {npcData.CharacterId}!");
                         continue;
                     }
 
@@ -232,7 +309,9 @@ namespace MWI.WorldSystem
                 }
             }
 
-            _hibernationData = null; // Clear data so it doesn't leak memory while map is awake
+            // Safety: Only clear hibernation data AFTER a successful full spawn loop.
+            // If the server crashes mid-wake, data isn't lost.
+            _hibernationData = null; 
         }
 
         // (RunMacroSimulation_V1 removed, see MacroSimulator.cs)

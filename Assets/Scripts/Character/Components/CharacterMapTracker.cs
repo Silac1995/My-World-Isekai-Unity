@@ -14,6 +14,20 @@ public class CharacterMapTracker : NetworkBehaviour
         NetworkVariableWritePermission.Server
     );
 
+    [Tooltip("The ID of the Map this Character considers Home.")]
+    public NetworkVariable<FixedString32Bytes> HomeMapId = new NetworkVariable<FixedString32Bytes>(
+        "",
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server
+    );
+
+    [Tooltip("The specific world position the Character considers Home.")]
+    public NetworkVariable<Vector3> HomePosition = new NetworkVariable<Vector3>(
+        Vector3.zero,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server
+    );
+
     private void Awake()
     {
         _character = GetComponent<Character>();

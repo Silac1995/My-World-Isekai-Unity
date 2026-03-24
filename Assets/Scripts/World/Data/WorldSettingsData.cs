@@ -1,7 +1,16 @@
+using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace MWI.WorldSystem
 {
+    [Serializable]
+    public struct BuildingRegistryEntry
+    {
+        public string PrefabId;
+        public GameObject BuildingPrefab;
+    }
+
     [CreateAssetMenu(fileName = "WorldSettingsData", menuName = "MWI/World/WorldSettingsData")]
     public class WorldSettingsData : ScriptableObject
     {
@@ -36,5 +45,39 @@ namespace MWI.WorldSystem
         public float SlotOffsetDistance = 10000f;
         [Tooltip("Days a released slot must wait before being safely recycled.")]
         public int SlotRecycleCooldownDays = 30;
+        [Header("Community Tracker: Prefab Registry")]
+        [Tooltip("Physical terrain/building prefab spawned for a Roaming Camp.")]
+        public GameObject RoamingCampPrefab;
+        [Tooltip("Physical terrain/building prefab spawned for a Settlement.")]
+        public GameObject SettlementPrefab;
+        [Tooltip("Physical terrain/building prefab spawned for an Established City.")]
+        public GameObject EstablishedCityPrefab;
+
+        [Header("Dynamic Building Registry")]
+        [Tooltip("Generic scaffolding visual used when a building is UnderConstruction.")]
+        public GameObject GenericScaffoldPrefab;
+        
+        [Tooltip("List of dynamic buildings that can be constructed offline.")]
+        public List<BuildingRegistryEntry> BuildingRegistry = new List<BuildingRegistryEntry>();
+
+        public GameObject GetPrefabForTier(CommunityTier tier)
+        {
+            switch (tier)
+            {
+                case CommunityTier.RoamingCamp: return RoamingCampPrefab;
+                case CommunityTier.Settlement: return SettlementPrefab;
+                case CommunityTier.EstablishedCity: return EstablishedCityPrefab;
+                default: return null;
+            }
+        }
+
+        public GameObject GetBuildingPrefab(string prefabId)
+        {
+            foreach (var entry in BuildingRegistry)
+            {
+                if (entry.PrefabId == prefabId) return entry.BuildingPrefab;
+            }
+            return null;
+        }
     }
 }

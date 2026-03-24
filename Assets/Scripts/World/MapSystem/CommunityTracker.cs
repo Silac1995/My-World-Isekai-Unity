@@ -14,6 +14,25 @@ namespace MWI.WorldSystem
         AbandonedCity = 3
     }
 
+    public enum BuildingState
+    {
+        UnderConstruction = 0,
+        Complete = 1,
+        Ruined = 2
+    }
+
+    [Serializable]
+    public class BuildingSaveData
+    {
+        public string BuildingId;        // GUID - unique per instance
+        public string PrefabId;          // Registry key, NOT a path
+        public Vector3 Position;
+        public Quaternion Rotation;
+        public string OwnerNpcId;
+        public BuildingState State;      // UnderConstruction, Complete, Ruined
+        public float ConstructionProgress; // 0-1, only relevant if UnderConstruction
+    }
+
     [Serializable]
     public class CommunityData
     {
@@ -26,6 +45,9 @@ namespace MWI.WorldSystem
         // Progression
         public int DayStartedSustaining;
         public int DayDroppedBelowThreshold = -1;
+
+        // Dynamic City Growth
+        public List<BuildingSaveData> ConstructedBuildings = new List<BuildingSaveData>();
 
         [NonSerialized] public int CurrentDailyPopulation;
         [NonSerialized] public bool IsHibernating; 
@@ -60,6 +82,11 @@ namespace MWI.WorldSystem
         private List<RoamingClusterData> _pendingClusters = new List<RoamingClusterData>();
 
         public string SaveKey => "CommunityTracker_Data";
+
+        public CommunityData GetCommunity(string mapId)
+        {
+            return _communities.Find(c => c.MapId == mapId);
+        }
 
         private void Awake()
         {
@@ -340,6 +367,18 @@ namespace MWI.WorldSystem
                     mapObj.GetComponent<NetworkObject>().Spawn();
                 }
 
+                // 2.5 Instantiate physical terrain prefab for the Settlement
+                GameObject terrainPrefab = _settings.GetPrefabForTier(comm.Tier);
+                if (terrainPrefab != null)
+                {
+                    GameObject terrain = Instantiate(terrainPrefab, worldPos, Quaternion.identity);
+                    terrain.transform.SetParent(mapObj.transform); // Attach to MapController
+                    if (terrain.TryGetComponent(out NetworkObject terrainNet))
+                    {
+                        terrainNet.Spawn();
+                    }
+                }
+
                 // 3. Migrate founding NPCs
                 float chunkSize = _settings != null ? _settings.ProximityChunkSize : 75f;
                 Character[] allCharacters = FindObjectsByType<Character>(FindObjectsSortMode.None);
@@ -354,8 +393,22 @@ namespace MWI.WorldSystem
 
                     if (Mathf.Abs(comm.OriginChunk.x - chunk.x) <= 1 && Mathf.Abs(comm.OriginChunk.y - chunk.y) <= 1)
                     {
-                        // A placeholder for GOAP migration 
-                        Debug.Log($"[CommunityTracker] Migrating NPC {c.CharacterName} to newly founded Settlement Map {comm.MapId}");
+                        Debug.Log($"<color=yellow>[CommunityTracker]</color> Migrating NPC {c.CharacterName} to newly founded Settlement Map {comm.MapId}");
+                        
+                        // Set Map Tracking & Anchors
+                        if (c.TryGetComponent(out CharacterMapTracker tracker))
+                        {
+                            tracker.SetCurrentMap(comm.MapId);
+                            tracker.HomeMapId.Value = comm.MapId;
+                            tracker.HomePosition.Value = worldPos;
+                        }
+                        
+                        // Physically Warp
+                        if (c.TryGetComponent(out CharacterMovement movement))
+                        {
+                            Vector3 randomOffset = new Vector3(UnityEngine.Random.Range(-3f, 3f), 0, UnityEngine.Random.Range(-3f, 3f));
+                            movement.Warp(worldPos + randomOffset);
+                        }
                     }
                 }
             }
