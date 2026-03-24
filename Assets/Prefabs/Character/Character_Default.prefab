@@ -435,9 +435,6 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   _character: {fileID: 2536622428659117900}
   _activeJobs: []
-  references:
-    version: 2
-    RefIds: []
 --- !u!1 &2019085881905274253
 GameObject:
   m_ObjectHideFlags: 0
@@ -638,52 +635,6 @@ MonoBehaviour:
   _levelHistory: []
   _expToastChannel: {fileID: 11400000, guid: ea961c82479cb974997317e89f3aa9b6, type: 2}
   _statsBadgeChannel: {fileID: 11400000, guid: 50f77503e7342c44f98065645853cec3, type: 2}
---- !u!1 &3690621089041149927
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 561484185586358613}
-  - component: {fileID: 4711079606244309919}
-  m_Layer: 0
-  m_Name: Blueprint
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &561484185586358613
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3690621089041149927}
-  serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -1.20455, y: 0.05719, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 6179432398992828966}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &4711079606244309919
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3690621089041149927}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 6b8b8096ddb3d08418bc73b445f87aec, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::MWI.CharacterSystem.CharacterBlueprints
-  _unlockedBuildingIds:
-  - B000_lumberyard
 --- !u!1 &4064236070124105173
 GameObject:
   m_ObjectHideFlags: 0
@@ -787,7 +738,6 @@ Transform:
   - {fileID: 5546370973633396037}
   - {fileID: 8052248722467460333}
   - {fileID: 2146869985690736942}
-  - {fileID: 561484185586358613}
   - {fileID: 3661421223759161407}
   - {fileID: 1436431929447272827}
   - {fileID: 4804915670603790754}
@@ -870,7 +820,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 2563509225
+  GlobalObjectIdHash: 3352754046
   InScenePlacedSourceGlobalObjectIdHash: 0
   DeferredDespawnTick: 0
   Ownership: 1

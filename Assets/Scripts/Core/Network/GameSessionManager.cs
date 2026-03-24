@@ -11,26 +11,9 @@ public class GameSessionManager : MonoBehaviour
     public static string TargetIP = "127.0.0.1";
     public static ushort TargetPort = 7777;
 
-    [Header("Race Data")]
-    [SerializeField] private List<RaceSO> _availableRaces = new List<RaceSO>();
-    [SerializeField] private RaceSO _defaultFallbackRace;
-
-    public System.Collections.Generic.IReadOnlyList<RaceSO> AvailableRaces => _availableRaces;
-
     public static string SelectedPlayerRace = "Human";
 
     private Dictionary<ulong, string> _pendingClientRaces = new Dictionary<ulong, string>();
-
-    public RaceSO GetRace(string raceName)
-    {
-        RaceSO race = _availableRaces.Find(r => r.name == raceName);
-        if (race == null)
-        {
-            Debug.LogWarning($"[GameSession] Race '{raceName}' not found in available races. Using fallback.");
-            return _defaultFallbackRace;
-        }
-        return race;
-    }
 
     private void Awake()
     {
@@ -84,7 +67,7 @@ public class GameSessionManager : MonoBehaviour
                 Quaternion spawnRot = SpawnManager.Instance != null ? SpawnManager.Instance.DefaultSpawnRotation : Quaternion.identity;
 
                 // Custom manual spawn via loaded Race Data
-                RaceSO requestedRaceSO = GetRace(requestedRace);
+                RaceSO requestedRaceSO = Resources.Load<RaceSO>($"Data/Races/{requestedRace}") ?? Resources.Load<RaceSO>("Data/Races/Human");
 
                 // Needs the visual prefab associated with the race, or a default fallback
                 GameObject visualPrefab = requestedRaceSO != null && requestedRaceSO.character_prefabs != null && requestedRaceSO.character_prefabs.Count > 0 

@@ -27,7 +27,4 @@ MonoBehaviour:
   EstablishedCityPrefab: {fileID: 5024601865890748534, guid: 8ccfe432e3d3a72439e33d11a270f770, type: 3}
   GenericScaffoldPrefab: {fileID: 0}
   JobYields: {fileID: 11400000, guid: a79eb94fd1085cc468d9fe87fc9df4a6, type: 2}
-  BuildingRegistry:
-  - PrefabId: B000_lumberyard
-    BuildingPrefab: {fileID: 2761951707981523353, guid: a4477ff05a156094798e960b1dca3af6, type: 3}
-    CommunityPriority: 7
+  BuildingRegistry: []

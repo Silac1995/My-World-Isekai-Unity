@@ -1,6 +1,5 @@
 using UnityEngine;
 using MWI.WorldSystem;
-using System.Linq;
 
 namespace MWI.Time
 {
@@ -92,21 +91,13 @@ namespace MWI.Time
             }
 
             // 5. City Growth
-            bool hasLeader = false;
-            HibernatedNPCData leaderData = null;
-            if (community != null && !string.IsNullOrEmpty(community.LeaderNpcId))
+            if (community != null && daysPassed >= 1.0)
             {
-                leaderData = savedData.HibernatedNPCs.Find(n => n.CharacterId == community.LeaderNpcId);
-                hasLeader = leaderData != null;
-            }
-
-            if (community != null && daysPassed >= 1.0 && hasLeader)
-            {
-                SimulateCityGrowth(community, daysPassed, leaderData.UnlockedBuildingIds);
+                SimulateCityGrowth(community, daysPassed);
             }
         }
 
-        private static void SimulateCityGrowth(CommunityData community, double daysPassed, System.Collections.Generic.List<string> unlockedBuildingIds)
+        private static void SimulateCityGrowth(CommunityData community, double daysPassed)
         {
             // Max 1 new building per 7 offline days to prevent massive lag spikes/runaway growth
             int maxNewBuildings = Mathf.FloorToInt((float)daysPassed / 7f);
@@ -131,22 +122,10 @@ namespace MWI.Time
             WorldSettingsData settings = Resources.Load<WorldSettingsData>("Data/World/WorldSettingsData");
             if (settings == null || settings.BuildingRegistry.Count == 0) return;
 
-            if (unlockedBuildingIds == null || unlockedBuildingIds.Count == 0) return; // Leader knows nothing
-
-            // Filter registry by what the leader knows
-            var knownBuildings = settings.BuildingRegistry
-                .Where(b => unlockedBuildingIds.Contains(b.PrefabId))
-                .ToList();
-
-            if (knownBuildings.Count == 0) return;
-
-            // Sort by priority (highest first)
-            knownBuildings.Sort((a, b) => b.CommunityPriority.CompareTo(a.CommunityPriority));
-
             int addedCount = 0;
             while (addedCount < maxNewBuildings)
             {
-                var targetBuildingEntry = knownBuildings[0];
+                var randomPrefabEntry = settings.BuildingRegistry[UnityEngine.Random.Range(0, settings.BuildingRegistry.Count)];
 
                 Vector3 randomOffset = new Vector3(
                     UnityEngine.Random.Range(-30f, 30f), 
@@ -157,7 +136,7 @@ namespace MWI.Time
                 BuildingSaveData newBuilding = new BuildingSaveData
                 {
                     BuildingId = System.Guid.NewGuid().ToString(),
-                    PrefabId = targetBuildingEntry.PrefabId,
+                    PrefabId = randomPrefabEntry.PrefabId,
                     Position = randomOffset,
                     Rotation = Quaternion.identity, // TODO: Randomize 90 degree increments
                     State = BuildingState.UnderConstruction,

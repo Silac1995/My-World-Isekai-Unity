@@ -1007,7 +1007,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   spawnGameObject: {fileID: 1546354848}
   _defaultItemPrefab: {fileID: 718778511601405242, guid: d05bd27244da29941a5703671cff1688, type: 3}
-  _defaultFallbackRace: {fileID: 11400000, guid: c7c83dd86f371d549be6433a12ea6e62, type: 2}
 --- !u!114 &231686118
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3981,10 +3980,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e27d5cf29adb1564d81049bb6b75ec6c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CameraFollow
+  minZPosition: 60
   minOffsetY: 13
   maxOffsetY: 18
   minOffsetZ: -12.5
-  maxOffsetZ: -23.5
+  maxOffsetZ: -169
   zoomSpeed: 2
   zoomSmoothing: 8
   followSmoothing: 0.15
@@ -6871,7 +6871,7 @@ PrefabInstance:
       objectReference: {fileID: 714004452}
     - target: {fileID: 7013122586924547130, guid: a4477ff05a156094798e960b1dca3af6, type: 3}
       propertyPath: m_VersionIndex
-      value: 10286
+      value: 10268
       objectReference: {fileID: 0}
     - target: {fileID: 8600657245120563755, guid: a4477ff05a156094798e960b1dca3af6, type: 3}
       propertyPath: m_AnchorMax.y
@@ -9650,26 +9650,6 @@ PrefabInstance:
       propertyPath: m_Name
       value: SessionManager
       objectReference: {fileID: 0}
-    - target: {fileID: 8928948637660124398, guid: 2eac64ad7561d8c4f999a30cda5b79d3, type: 3}
-      propertyPath: _defaultFallbackRace
-      value: 
-      objectReference: {fileID: 11400000, guid: c7c83dd86f371d549be6433a12ea6e62, type: 2}
-    - target: {fileID: 8928948637660124398, guid: 2eac64ad7561d8c4f999a30cda5b79d3, type: 3}
-      propertyPath: _availableRaces.Array.size
-      value: 3
-      objectReference: {fileID: 0}
-    - target: {fileID: 8928948637660124398, guid: 2eac64ad7561d8c4f999a30cda5b79d3, type: 3}
-      propertyPath: '_availableRaces.Array.data[0]'
-      value: 
-      objectReference: {fileID: 11400000, guid: c7c83dd86f371d549be6433a12ea6e62, type: 2}
-    - target: {fileID: 8928948637660124398, guid: 2eac64ad7561d8c4f999a30cda5b79d3, type: 3}
-      propertyPath: '_availableRaces.Array.data[1]'
-      value: 
-      objectReference: {fileID: 11400000, guid: 6b790af165d64cb4497bb8de0f1b7b80, type: 2}
-    - target: {fileID: 8928948637660124398, guid: 2eac64ad7561d8c4f999a30cda5b79d3, type: 3}
-      propertyPath: '_availableRaces.Array.data[2]'
-      value: 
-      objectReference: {fileID: 11400000, guid: 97ded1aa1c6a07c4f95f9ba4d5c86aae, type: 2}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -10175,12 +10155,12 @@ SceneRoots:
   m_Roots:
   - {fileID: 961739753}
   - {fileID: 231686116}
-  - {fileID: 1579484321720142278}
   - {fileID: 698416841}
   - {fileID: 766569499}
   - {fileID: 1376194483}
   - {fileID: 5028348882598182433}
   - {fileID: 1546354849}
+  - {fileID: 1579484321720142278}
   - {fileID: 1575275824}
   - {fileID: 1144193956}
   - {fileID: 8391819677957949337}

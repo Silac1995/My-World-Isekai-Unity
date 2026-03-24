@@ -101,24 +101,15 @@ public class DebugScript : MonoBehaviour
 
     private void LoadRaces()
     {
+        RaceSO[] races = Resources.LoadAll<RaceSO>("Data/Races");
         availableRaces.Clear();
-
-        if (GameSessionManager.Instance != null)
-        {
-            availableRaces.AddRange(GameSessionManager.Instance.AvailableRaces);
-        }
-        else
-        {
-            Debug.LogWarning("[DebugScript] GameSessionManager.Instance is null. Cannot load races.");
-        }
-
-        if (raceDropdown == null) return;
+        availableRaces.AddRange(races);
 
         raceDropdown.ClearOptions();
         List<string> options = new List<string>();
         foreach (RaceSO race in availableRaces)
         {
-            options.Add(race != null ? race.raceName : "Unknown");
+            options.Add(race.raceName);
         }
         raceDropdown.AddOptions(options);
         raceDropdown.RefreshShownValue();
