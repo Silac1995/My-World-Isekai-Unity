@@ -15,7 +15,7 @@ MonoBehaviour:
   _styleName: Nameless fist
   _meleeRange: 3.5
   _scalingStat: 0
-  _statMultiplier: 0.3
+  _statMultiplier: 1
   _damageType: 0
   _baseDamage: 5
   _physicalPowerPercentage: 0.3

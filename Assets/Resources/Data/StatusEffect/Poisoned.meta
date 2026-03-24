@@ -1,5 +1,9 @@
 fileFormatVersion: 2
+<<<<<<< HEAD
 guid: 7a80bfde2582599429edb6867d20d191
+=======
+guid: 900f0e7d5957d6f41a17694546925d95
+>>>>>>> parent of e52632d (Reorganize Resources into Assets and update scripts)
 folderAsset: yes
 DefaultImporter:
   externalObjects: {}

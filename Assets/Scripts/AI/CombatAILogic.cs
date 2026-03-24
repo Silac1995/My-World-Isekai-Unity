@@ -82,13 +82,9 @@ namespace MWI.AI
                 {
                     // Force movement into optimal valid strike position instead of target origin
                     float side = (_self.transform.position.x < currentTarget.transform.position.x) ? -1f : 1f;
-                    
-                    // Expanded stagger: 7 unique Z positions instead of 3 to prevent overlap
-                    int staggerIndex = Mathf.Abs(_self.GetInstanceID()) % 7;
-                    float staggeredZ = (staggerIndex - 3) * 0.5f; // -1.5 to 1.5
-                    float staggeredX = Mathf.Abs(staggeredZ) * 0.2f; // Step back slightly on the X-axis to avoid visual clipping
-                    
-                    Vector3 optimalStrikePos = currentTarget.transform.position + new Vector3(side * (optimalXDist + staggeredX), 0, staggeredZ);
+                    // Stagger the Z axis based on InstanceID to avoid everyone collapsing into a single unified position while striking
+                    float staggeredZ = (Mathf.Abs(_self.GetInstanceID()) % 3 - 1) * 0.45f;
+                    Vector3 optimalStrikePos = currentTarget.transform.position + new Vector3(side * optimalXDist, 0, staggeredZ);
 
                     if (UnityEngine.Time.time - _lastPathUpdateTime > 0.3f && Vector3.Distance(movement.Destination, optimalStrikePos) > 0.5f)
                     {
