@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.AI;
+using Unity.Netcode;
 
 [RequireComponent(typeof(Rigidbody))]
 public class CharacterMovement : CharacterSystem
@@ -35,6 +36,12 @@ public class CharacterMovement : CharacterSystem
     private float _stuckCheckTimer = 0f;
     private Vector3 _lastStuckCheckPos;
     private bool _isSliding = false;
+
+    // --- VELOCITY SMOOTHING FOR REMOTE CLIENTS ---
+    // ClientNetworkTransform interpolation can stall between network ticks,
+    // causing _empiricalVelocity to briefly drop to zero and flicker walk animations.
+    private Vector3 _smoothedEmpiricalVelocity;
+    private const float VELOCITY_SMOOTH_SPEED = 8f;
 
     // --- ENCAPSULATION DE L'AGENT ---
     public NavMeshAgent Agent => _agent;
@@ -396,6 +403,16 @@ public class CharacterMovement : CharacterSystem
         _isStopped = false; 
     }
 
+    /// <summary>
+    /// Server broadcasts knockback to all clients so client-owned characters
+    /// (using ClientNetworkTransform) apply the force locally on the authoritative side.
+    /// </summary>
+    [Rpc(SendTo.NotServer)]
+    public void ApplyKnockbackClientRpc(Vector3 force)
+    {
+        ApplyKnockback(force);
+    }
+
     public bool IsGrounded()
     {
         Vector3 origin = transform.position + Vector3.up * 0.1f;
@@ -447,6 +464,23 @@ public class CharacterMovement : CharacterSystem
         if (Time.deltaTime > 0f)
         {
             _empiricalVelocity = (transform.position - _lastPosition) / Time.deltaTime;
+
+            // For remote characters (non-authoritative), smooth the velocity to avoid
+            // animation flickering caused by ClientNetworkTransform interpolation gaps.
+            // Authoritative instances (Owner or Server) use raw velocity for responsiveness.
+            bool isRemote = IsSpawned && !IsOwner && !IsServer;
+            if (isRemote)
+            {
+                _smoothedEmpiricalVelocity = Vector3.Lerp(
+                    _smoothedEmpiricalVelocity,
+                    _empiricalVelocity,
+                    Time.deltaTime * VELOCITY_SMOOTH_SPEED
+                );
+            }
+            else
+            {
+                _smoothedEmpiricalVelocity = _empiricalVelocity;
+            }
         }
         _lastPosition = transform.position;
     }
@@ -465,7 +499,10 @@ public class CharacterMovement : CharacterSystem
                 return _rb.linearVelocity;
         }
 
-        return _empiricalVelocity;
+        // For remote characters, return the smoothed velocity to prevent
+        // walk animation flickering from network interpolation gaps.
+        bool isRemote = IsSpawned && !IsOwner && !IsServer;
+        return isRemote ? _smoothedEmpiricalVelocity : _empiricalVelocity;
     }
 
     private void OnDrawGizmos()

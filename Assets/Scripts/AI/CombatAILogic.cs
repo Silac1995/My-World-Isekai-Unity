@@ -82,9 +82,19 @@ namespace MWI.AI
                 {
                     // Force movement into optimal valid strike position instead of target origin
                     float side = (_self.transform.position.x < currentTarget.transform.position.x) ? -1f : 1f;
-                    // Stagger the Z axis based on InstanceID to avoid everyone collapsing into a single unified position while striking
-                    float staggeredZ = (Mathf.Abs(_self.GetInstanceID()) % 3 - 1) * 0.45f;
-                    Vector3 optimalStrikePos = currentTarget.transform.position + new Vector3(side * optimalXDist, 0, staggeredZ);
+                    
+                    // Expanded stagger: 7 unique Z positions instead of 3 to prevent overlap
+                    int staggerIndex = Mathf.Abs(_self.GetInstanceID()) % 7;
+                    float staggeredZ = (staggerIndex - 3) * 0.5f; // -1.5 to 1.5
+                    
+                    // CRITICAL FIX: To prevent the hypotenuse from pushing the attacker outside the attack range,
+                    // calculate the exact required X distance using Pythagorean theorem (X^2 = D^2 - Z^2)
+                    // We target a hypotenuse slightly less than attackRange to guarantee Phase 3 is triggered.
+                    float targetHypotenuse = Mathf.Max(1.0f, attackRange - 0.2f);
+                    float xSqr = Mathf.Max(0.1f, (targetHypotenuse * targetHypotenuse) - (staggeredZ * staggeredZ));
+                    float calculatedX = Mathf.Sqrt(xSqr);
+
+                    Vector3 optimalStrikePos = currentTarget.transform.position + new Vector3(side * calculatedX, 0, staggeredZ);
 
                     if (UnityEngine.Time.time - _lastPathUpdateTime > 0.3f && Vector3.Distance(movement.Destination, optimalStrikePos) > 0.5f)
                     {

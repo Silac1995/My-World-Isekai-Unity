@@ -67,7 +67,11 @@ public class Projectile : MonoBehaviour
             Vector3 knockbackDir = (target.transform.position - transform.position).normalized;
             knockbackDir.y = 0;
             if (knockbackDir == Vector3.zero) knockbackDir = transform.forward;
-            target.CharacterMovement.ApplyKnockback(knockbackDir * _knockbackForce);
+            Vector3 knockbackForceVec = knockbackDir * _knockbackForce;
+            target.CharacterMovement.ApplyKnockback(knockbackForceVec);
+            // Broadcast to clients so client-owned characters apply knockback on
+            // their authoritative side (ClientNetworkTransform gives owner authority)
+            target.CharacterMovement.ApplyKnockbackClientRpc(knockbackForceVec);
         }
 
         // Déclencher un combat si pas déjà en bataille

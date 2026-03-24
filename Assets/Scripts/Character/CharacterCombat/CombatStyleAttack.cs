@@ -125,7 +125,11 @@ public class CombatStyleAttack : MonoBehaviour
 
                 if (target.CharacterMovement != null)
                 {
-                    target.CharacterMovement.ApplyKnockback(knockbackDir * finalForce);
+                    Vector3 knockbackForceVec = knockbackDir * finalForce;
+                    target.CharacterMovement.ApplyKnockback(knockbackForceVec);
+                    // Broadcast to clients so client-owned characters apply knockback on
+                    // their authoritative side (ClientNetworkTransform gives owner authority)
+                    target.CharacterMovement.ApplyKnockbackClientRpc(knockbackForceVec);
                 }
             }
 

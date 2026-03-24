@@ -81,6 +81,33 @@ public class PlayerController : CharacterGameController
             if (_character.CharacterCombat.IsInBattle && !(_currentOrder is PlayerCombatCommand))
             {
                 Character battleTarget = _character.CharacterCombat.CurrentBattleManager?.GetBestTargetFor(_character);
+                
+                // Fallback: If GetBestTargetFor returns null (e.g. the host was attacked, not the
+                // attacker, and the engagement coordinator hasn't registered them yet), pick any
+                // alive opponent from the opposing team and request an engagement.
+                if (battleTarget == null)
+                {
+                    var bm = _character.CharacterCombat.CurrentBattleManager;
+                    var opponentTeam = bm?.GetOpponentTeamOf(_character);
+                    if (opponentTeam != null)
+                    {
+                        battleTarget = opponentTeam.CharacterList.Find(c => c != null && c.IsAlive());
+                        if (battleTarget != null)
+                        {
+                            bm.Coordinator?.RequestEngagement(_character, battleTarget);
+                            Debug.Log($"<color=yellow>[PlayerCtrl]</color> {_character.CharacterName} fallback engagement requested against {battleTarget.CharacterName}");
+                        }
+                        else
+                        {
+                            Debug.LogWarning($"<color=red>[PlayerCtrl]</color> {_character.CharacterName} IsInBattle but no alive opponents found in opponent team!");
+                        }
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"<color=red>[PlayerCtrl]</color> {_character.CharacterName} IsInBattle but GetOpponentTeamOf returned null! BM={bm}");
+                    }
+                }
+
                 if (battleTarget != null)
                 {
                     SetOrder(new PlayerCombatCommand(_character, battleTarget));
