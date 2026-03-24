@@ -5,8 +5,10 @@ public class CombatTacticalPacer
     private Character _self;
     private Character _lastBattleTarget;
     private Vector3 _currentDestination;
+    private Vector3 _currentWanderJitter;
     private float _lastMoveTime;
     private float _moveInterval;
+    private bool _wasChargingTarget;
     
     private const float PREFERRED_X_GAP = 4.0f;  
     private const float X_FLIP_SAFETY = 1.5f;    
@@ -65,12 +67,31 @@ public class CombatTacticalPacer
         }
 
         float distToTarget = Vector3.Distance(_self.transform.position, target.transform.position);
-        float escapeRadius = Mathf.Clamp(attackRange * 0.8f, X_FLIP_SAFETY + 0.5f, PREFERRED_X_GAP);
+
+        // Melee vs Ranged behaviors
+        float escapeRadius;
+        if (attackRange <= 4.0f) 
+        {
+            // Melee fighters only step back to prevent model clipping, standing their ground
+            escapeRadius = 1.2f; 
+        }
+        else 
+        {
+            // Ranged fighters actively kite to maintain distance
+            escapeRadius = attackRange * 0.6f;
+        }
         
-        bool tooClose = distToTarget < escapeRadius * 0.9f;
+        bool tooClose = distToTarget < escapeRadius;
         bool tooFar = distToTarget > MAX_DISTANCE;
         bool timerExpired = Time.time - _lastMoveTime > _moveInterval;
         bool canUpdate = Time.time - _lastMoveTime > 1.5f;
+
+        // Force a tactical update if we just finished an attack (transitioned from charging to pacing)
+        if (!isChargingTarget && _wasChargingTarget)
+        {
+            timerExpired = true;
+            canUpdate = true;
+        }
 
         if (canUpdate && (tooClose || tooFar || timerExpired) && !isChargingTarget)
         {
@@ -80,7 +101,10 @@ public class CombatTacticalPacer
             }
             else
             {
-                _currentDestination = CalculateSafeDestination(target, battleManager);
+                Vector3 basePos = CalculateSafeDestination(target, battleManager);
+                // Inject random wander jitter to ensure they don't freeze indefinitely when timer expires
+                _currentWanderJitter = new Vector3(Random.Range(-1.5f, 1.5f), 0, Random.Range(-1.5f, 1.5f));
+                _currentDestination = basePos + _currentWanderJitter;
             }
 
             _moveInterval = Random.Range(5f, 7f);
@@ -92,6 +116,7 @@ public class CombatTacticalPacer
         }
 
         Vector3 finalPos = _currentDestination;
+        _wasChargingTarget = isChargingTarget;
 
         // Apply soft bounds clamp if we are not actively charging to attack
         if (battleZone != null && !battleZone.bounds.Contains(finalPos) && !isChargingTarget)
@@ -123,6 +148,7 @@ public class CombatTacticalPacer
         float xDir;
         if (Mathf.Abs(selfPos.x - targetPos.x) < 0.1f && _lastBattleTarget != null) 
         {
+            // S'ils sont parfaitement juxtaposés, on force une direction basée sur l'ID pour être déterministe
             xDir = (_self.GetInstanceID() > _lastBattleTarget.GetInstanceID()) ? 1f : -1f;
         }
         else 
@@ -130,8 +156,12 @@ public class CombatTacticalPacer
             xDir = (selfPos.x > targetPos.x) ? 1f : -1f;
         }
         
-        float radius = Mathf.Clamp(attackRange * 0.8f, X_FLIP_SAFETY + 0.5f, PREFERRED_X_GAP);
-        Vector3 offset = new Vector3(xDir * radius, 0, Random.Range(-1.5f, 1.5f));
+        // Retreat distance varies based on fighting style
+        float retreatDistance = attackRange <= 4.0f ? 2.5f : attackRange * 0.8f;
+
+        // Use instance ID for deterministic pseudo-random stagger on Z to prevent retreating enemies from overlapping
+        float staggeredZ = ((Mathf.Abs(_self.GetInstanceID()) % 5) - 2) * 0.8f;
+        Vector3 offset = new Vector3(xDir * retreatDistance, 0, staggeredZ);
         
         return targetPos + offset;
     }
