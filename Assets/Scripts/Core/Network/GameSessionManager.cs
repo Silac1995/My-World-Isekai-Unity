@@ -92,6 +92,13 @@ public class GameSessionManager : MonoBehaviour
                 if (playerObj.TryGetComponent(out Character character))
                 {
                     character.NetworkRaceId.Value = new Unity.Collections.FixedString64Bytes(requestedRace);
+
+                    // Pre-generate deterministic name so all clients see the same one
+                    GenderType gender = character.CharacterBio != null && character.CharacterBio.IsMale ? GenderType.Male : GenderType.Female;
+                    if (requestedRaceSO != null && requestedRaceSO.NameGenerator != null)
+                        character.NetworkCharacterName.Value = new Unity.Collections.FixedString64Bytes(requestedRaceSO.NameGenerator.GenerateName(gender));
+
+                    character.NetworkVisualSeed.Value = UnityEngine.Random.Range(int.MinValue, int.MaxValue);
                 }
 
                 if (playerObj.TryGetComponent(out Unity.Netcode.NetworkObject netObj))

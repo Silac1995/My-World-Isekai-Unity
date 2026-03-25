@@ -188,9 +188,16 @@ public class SpawnManager : MonoBehaviour
                         character.NetworkRaceId.Value = new Unity.Collections.FixedString64Bytes(race.name);
                     }
 
+                    // Pre-generate deterministic data on server so all clients get the same values
+                    GenderType gender = character.CharacterBio != null && character.CharacterBio.IsMale ? GenderType.Male : GenderType.Female;
+                    if (race != null && race.NameGenerator != null)
+                        character.NetworkCharacterName.Value = new Unity.Collections.FixedString64Bytes(race.NameGenerator.GenerateName(gender));
+
+                    character.NetworkVisualSeed.Value = Random.Range(int.MinValue, int.MaxValue);
+
                     // L'objet réseau va appeler InitializeSpawnedCharacter via OnNetworkSpawn.
                     netObj.Spawn(true);
-                    
+
                     return character;
                 }
             }
@@ -208,23 +215,38 @@ public class SpawnManager : MonoBehaviour
     public bool InitializeSpawnedCharacter(Character character, RaceSO race, bool isPlayerObject, bool isLocalOwner = false, CharacterPersonalitySO personality = null)
     {
         // Default Race fallback so that missing references don't break logic
-        if (race == null) 
+        if (race == null)
         {
             race = _defaultFallbackRace;
             if (race == null) Debug.LogWarning("[SpawnManager] Fallback race is missing in inspector!");
+        }
+
+        // --- DETERMINISTIC SEED ---
+        // Use the networked seed so all clients produce identical random values.
+        // Offline (non-networked) spawns generate a fresh seed locally.
+        int seed = (character.IsSpawned && character.NetworkVisualSeed.Value != 0)
+            ? character.NetworkVisualSeed.Value
+            : Random.Range(int.MinValue, int.MaxValue);
+        System.Random rng = new System.Random(seed);
+
+        // --- NETWORKED NAME ---
+        // Apply the server-generated name before InitializeRace (which also generates names if empty)
+        if (character.IsSpawned && !character.NetworkCharacterName.Value.IsEmpty)
+        {
+            character.CharacterName = character.NetworkCharacterName.Value.ToString();
         }
 
         if (!SetupInteractionDetector(character.gameObject, isPlayerObject)) return false;
 
         if (!InitializeCharacter(character.gameObject, race, null)) return false;
 
-        // --- RANDOM NAMING ---
-        if (race != null && race.NameGenerator != null)
+        // --- NAMING (only if not already set from network) ---
+        if (string.IsNullOrEmpty(character.CharacterName) && race != null && race.NameGenerator != null)
         {
             GenderType charGender = character.CharacterBio != null && character.CharacterBio.IsMale ? GenderType.Male : GenderType.Female;
             character.CharacterName = race.NameGenerator.GenerateName(charGender);
         }
-        
+
         // Update the GameObject's name in the Unity Hierarchy
         if (string.IsNullOrEmpty(character.CharacterName))
         {
@@ -235,11 +257,11 @@ public class SpawnManager : MonoBehaviour
             character.gameObject.name = character.CharacterName;
         }
 
-        ApplyRandomColor(character);
+        ApplyRandomColor(character, rng);
 
         // Local ownership (UI & Camera) is now strictly handled by Character.SwitchToPlayer()
 
-        float randomSize = Random.Range(0f, 200f);
+        float randomSize = (float)(rng.NextDouble() * 200.0);
         character.CharacterVisual.ResizeCharacter(randomSize);
         character.CharacterVisual.RequestAutoResize();
         character.CharacterVisual.ApplyPresetFromRace(race);
@@ -247,7 +269,7 @@ public class SpawnManager : MonoBehaviour
         // --- GESTION DE LA PERSONNALITÉ ---
         if (personality == null && _availablePersonalities != null && _availablePersonalities.Length > 0)
         {
-            personality = _availablePersonalities[Random.Range(0, _availablePersonalities.Length)];
+            personality = _availablePersonalities[rng.Next(0, _availablePersonalities.Length)];
         }
 
         if (character.CharacterProfile != null && personality != null)
@@ -259,7 +281,7 @@ public class SpawnManager : MonoBehaviour
         // --- GESTION DES TRAITS COMPORTEMENTAUX ---
         if (_availableTraits != null && _availableTraits.Length > 0 && character.CharacterTraits != null)
         {
-            CharacterBehavioralTraitsSO randomTrait = _availableTraits[Random.Range(0, _availableTraits.Length)];
+            CharacterBehavioralTraitsSO randomTrait = _availableTraits[rng.Next(0, _availableTraits.Length)];
             character.CharacterTraits.behavioralTraitsProfile = randomTrait;
             Debug.Log($"<color=cyan>[Spawn]</color> {character.CharacterName} a reçu le profil comportemental : {randomTrait.name}");
         }
@@ -313,16 +335,16 @@ public class SpawnManager : MonoBehaviour
         return true;
     }
 
-    private bool ApplyRandomColor(Character character)
+    private bool ApplyRandomColor(Character character, System.Random rng)
     {
         CharacterVisual cv = character.GetComponentInChildren<CharacterVisual>();
         if (cv == null) return false;
 
         try
         {
-            cv.BodyPartsController.HairController.SetGlobalHairColor(Random.ColorHSV());
-            cv.ApplyColor(CharacterVisual.VisualPart.Hair, Random.ColorHSV());
-            cv.BodyPartsController.EyesController.SetAllPupilsColor(Random.ColorHSV());
+            cv.BodyPartsController.HairController.SetGlobalHairColor(RandomColorHSV(rng));
+            cv.ApplyColor(CharacterVisual.VisualPart.Hair, RandomColorHSV(rng));
+            cv.BodyPartsController.EyesController.SetAllPupilsColor(RandomColorHSV(rng));
             cv.SkinColor = ColorUtils.HexToColor("E6CEBD");
         }
         catch (System.Exception ex)
@@ -332,5 +354,13 @@ public class SpawnManager : MonoBehaviour
         }
 
         return true;
+    }
+
+    private static Color RandomColorHSV(System.Random rng, float minS = 0f, float maxS = 1f, float minV = 0f, float maxV = 1f)
+    {
+        float h = (float)rng.NextDouble();
+        float s = minS + (float)(rng.NextDouble() * (maxS - minS));
+        float v = minV + (float)(rng.NextDouble() * (maxV - minV));
+        return Color.HSVToRGB(h, s, v);
     }
 }
