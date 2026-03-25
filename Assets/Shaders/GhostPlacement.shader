@@ -69,7 +69,7 @@ Shader "MWI/GhostPlacement"
             {
                 UNITY_SETUP_INSTANCE_ID(input);
 
-                half4 texColor = TEXTURE2D_SAMPLE(_MainTex, sampler_MainTex, input.uv);
+                half4 texColor = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, input.uv);
 
                 // Use texture alpha to preserve sprite silhouette,
                 // but override RGB with the ghost tint color.
@@ -133,7 +133,7 @@ Shader "MWI/GhostPlacement"
 
             half4 frag(Varyings input) : SV_Target
             {
-                half4 texColor = TEXTURE2D_SAMPLE(_MainTex, sampler_MainTex, input.uv);
+                half4 texColor = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, input.uv);
                 clip(texColor.a * _Color.a - 0.01);
                 return 0;
             }
