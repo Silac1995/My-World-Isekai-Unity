@@ -52,11 +52,29 @@ public class CharacterMapTracker : NetworkBehaviour
             movement.Warp(resolvedPosition);
         }
 
-        // 2. Set new Map state
+        // 2. If the server resolved a different position (e.g. first interior visit),
+        //    tell the client to warp there. ClientNetworkTransform is owner-authoritative,
+        //    so only the client can move itself.
+        if (resolvedPosition != targetPosition)
+        {
+            WarpClientRpc(resolvedPosition);
+        }
+
+        // 3. Set new Map state
         SetCurrentMap(targetMapIdStr);
 
-        // 3. Notify source and destination MapControllers for hibernation handoff
+        // 4. Notify source and destination MapControllers for hibernation handoff
         MapController.NotifyPlayerTransition(OwnerClientId, previousMapId, targetMapIdStr);
+    }
+
+    [ClientRpc]
+    private void WarpClientRpc(Vector3 position)
+    {
+        if (!IsOwner) return;
+        if (TryGetComponent(out CharacterMovement movement))
+        {
+            movement.Warp(position);
+        }
     }
 
     /// <summary>
