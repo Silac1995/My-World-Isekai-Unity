@@ -1,4 +1,6 @@
 using UnityEngine;
+using System.Collections.Generic;
+using System.Linq;
 
 using MWI.CharacterControllers.Commands;
 
@@ -9,6 +11,9 @@ public class PlayerController : CharacterGameController
     private bool _wasNavMeshActiveLastFrame = false;
 
     private IPlayerCommand _currentOrder;
+
+    // --- TAB Targeting ---
+    private UI_PlayerTargeting _targeting;
 
     public void SetOrder(IPlayerCommand newOrder)
     {
@@ -31,6 +36,15 @@ public class PlayerController : CharacterGameController
             else
                 _character.Rigidbody.interpolation = RigidbodyInterpolation.None; // Let NetworkTransform handle it
         }
+    }
+
+    /// <summary>
+    /// Lazily resolves the UI_PlayerTargeting reference.
+    /// </summary>
+    private void EnsureTargeting()
+    {
+        if (_targeting == null)
+            _targeting = UnityEngine.Object.FindAnyObjectByType<UI_PlayerTargeting>(FindObjectsInactive.Include);
     }
 
     protected override void Update()
@@ -75,6 +89,12 @@ public class PlayerController : CharacterGameController
                 {
                     SetOrder(new PlayerMoveCommand(hit.point));
                 }
+            }
+
+            // --- TAB: Cycle-select the closest interactable within awareness range ---
+            if (Input.GetKeyDown(KeyCode.Tab))
+            {
+                HandleTabTargeting();
             }
 
             // Auto-Trigger Combat Command when in battle. The command handles pacing and action execution.
@@ -136,6 +156,48 @@ public class PlayerController : CharacterGameController
         if (IsOwner)
         {
             Move();
+        }
+    }
+
+    /// <summary>
+    /// Handles TAB key press to cycle-select interactables within the awareness zone.
+    /// Sorts visible interactables by distance and selects the closest one,
+    /// or cycles to the next if the closest is already selected.
+    /// </summary>
+    private void HandleTabTargeting()
+    {
+        EnsureTargeting();
+        if (_targeting == null) return;
+
+        var awareness = _character.CharacterAwareness;
+        if (awareness == null) return;
+
+        List<InteractableObject> visible = awareness.GetVisibleInteractables();
+        if (visible == null || visible.Count == 0)
+        {
+            _targeting.ClearSelection();
+            return;
+        }
+
+        // Sort by distance from the player
+        visible = visible
+            .OrderBy(i => Vector3.Distance(transform.position, 
+                i.Rigidbody != null ? i.Rigidbody.position : i.transform.position))
+            .ToList();
+
+        InteractableObject currentSelection = _targeting.SelectedInteractable;
+
+        if (currentSelection == null || !visible.Contains(currentSelection))
+        {
+            // Nothing selected or current selection left awareness range — pick closest
+            _targeting.SelectInteractable(visible[0]);
+        }
+        else
+        {
+            // Current selection is in the list — cycle to the next one
+            int currentIndex = visible.IndexOf(currentSelection);
+            int nextIndex = (currentIndex + 1) % visible.Count;
+            _targeting.SelectInteractable(visible[nextIndex]);
         }
     }
 

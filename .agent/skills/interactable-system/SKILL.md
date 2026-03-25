@@ -61,10 +61,50 @@ The `PlayerInteractionDetector` evaluates player input to differentiate between 
 - **Player-Only Guarding**: Event subscriptions in `PlayerInteractionDetector` (`OnInteractionStateChanged`, `OnPlayerTurnStarted`, etc.) MUST be strictly guarded with an `if (!Character.IsPlayer()) return;` check. This prevents the Player's HUD from reacting to background NPC-to-NPC interactions.
 - **Menu Closure Efficiency**: The `PlayerUI.CloseInteractionMenu()` should only be called once when the target changes or is lost, **instead of polling every empty frame**. Check if the target was actually lost (`if (_currentInteractableObjectTarget != null)`) before destroying the UI prompt and closing the menu to preserve performance and prevent log spam.
 
+## 5. Targeted Selection System
+
+When multiple interactables are near each other, the player can **click** or **TAB** to select a specific target. This selection **locks** the E-key interaction to that target, overriding proximity-based auto-targeting.
+
+### Architecture
+
+The system is layered across three components:
+
+| Layer | Component | Responsibility |
+|-------|-----------|---------------|
+| **UI Input** | `UI_PlayerTargeting` | Click raycast → stores `SelectedInteractable`, manages `LookTarget` |
+| **Interaction** | `PlayerInteractionDetector` | Reads selection, locks E-key to selected target, issues auto-navigate |
+| **Controller** | `PlayerController` | TAB key cycles through visible interactables via `CharacterAwareness` |
+
+### Click-to-Select
+- `UI_PlayerTargeting.UpdateTargeting()` raycasts on left-click.
+- If the hit is an `InteractableObject` or a `Character` (with `CharacterInteractable`), it calls `SelectInteractable()`.
+- `SelectInteractable()` stores the reference AND sets `CharacterVisual.SetLookTarget()` so the sprite faces the target and the `UI_TargetIndicator` tracks it.
+- **UI Layer Guard**: Clicks on UI elements (`EventSystem.IsPointerOverGameObject()`) are ignored — they do NOT clear the selection.
+- Clicking empty world space calls `ClearSelection()`.
+
+### TAB Cycling
+- `PlayerController` handles `KeyCode.Tab` input.
+- Queries `Character.CharacterAwareness.GetVisibleInteractables()` for all interactables within the awareness radius.
+- Sorts by distance and selects the closest, or cycles to the next if the closest is already selected.
+- Calls `UI_PlayerTargeting.SelectInteractable()`.
+
+### E-Key Interaction with Selection
+When a selection exists in `UI_PlayerTargeting`:
+1. **Target IS in `nearbyInteractables`** (player's rigidbody is inside target's InteractionZone) → interact immediately, same as before.
+2. **Target is NOT in `nearbyInteractables`** → pressing E issues a `PlayerInteractCommand` (IPlayerCommand) that auto-navigates the player via NavMeshAgent to the target. On arrival (when `nearbyInteractables` contains the target), it triggers the interaction automatically.
+3. **No selection** → falls back to existing proximity-based closest-target behavior.
+
+### Rules
+- **Never bypass the InteractionZone check**: Even with a selected target, the player's rigidbody MUST physically enter the target's InteractionZone before the interaction fires.
+- **Selection overrides proximity**: While a target is selected, the E-prompt and interaction are locked to it. The closest-proximity auto-targeting is fully bypassed.
+- **WASD cancels auto-navigate**: If the player presses a directional key while a `PlayerInteractCommand` is active, the command is cancelled immediately (standard `IPlayerCommand` behavior).
+- **Combat overrides everything**: When `IsInBattle`, the `PlayerCombatCommand` takes full control. TAB and E-interaction are effectively bypassed.
+
 ## When to use this skill
 - When creating a new interactable object in the game world.
 - When scripting logic that requires a character to interact with an item, NPC, or resource node.
 - When debugging issues where interactions do not fire (ensure the Character's Rigidbody `_rb` is physically within the `_interactionZone`!).
+- When modifying click-targeting, TAB cycling, or the auto-navigate-to-interact flow.
 
 ## How to use it
 1. Ensure the object's GameObject structure includes a `Collider` set up as a trigger for the `_interactionZone`.
