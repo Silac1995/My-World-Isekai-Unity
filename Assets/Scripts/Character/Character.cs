@@ -63,6 +63,7 @@ public class Character : NetworkBehaviour
     [SerializeField] private CharacterLocations _characterLocations;
     [SerializeField] private CharacterGoapController _characterGoap;
     [SerializeField] private CharacterCombatLevel _characterCombatLevel;
+    [SerializeField] private CharacterBlueprints _characterBlueprints;
     #endregion
 
     #region Network Variables
@@ -134,6 +135,7 @@ public class Character : NetworkBehaviour
     public CharacterLocations CharacterLocations => _characterLocations;
     public CharacterGoapController CharacterGoap => _characterGoap;
     public CharacterCombatLevel CharacterCombatLevel => _characterCombatLevel;
+    public CharacterBlueprints CharacterBlueprints => _characterBlueprints;
 
     public NavMeshAgent NavMesh => _cachedNavMeshAgent;
     public TimeManager TimeManager => _timeManager != null ? _timeManager : TimeManager.Instance;
@@ -259,6 +261,7 @@ public class Character : NetworkBehaviour
         if (_characterLocations == null) _characterLocations = GetComponent<CharacterLocations>();
         if (_characterGoap == null) _characterGoap = GetComponent<CharacterGoapController>();
         if (_characterCombatLevel == null) _characterCombatLevel = GetComponent<CharacterCombatLevel>();
+        if (_characterBlueprints == null) _characterBlueprints = GetComponent<CharacterBlueprints>();
         if (_characterInteraction == null) _characterInteraction = GetComponent<CharacterInteraction>();
         if (_characterNeeds == null) _characterNeeds = GetComponent<CharacterNeeds>();
         if (_characterCombat == null) _characterCombat = GetComponent<CharacterCombat>();

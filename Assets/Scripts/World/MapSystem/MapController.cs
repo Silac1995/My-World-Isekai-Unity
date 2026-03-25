@@ -295,7 +295,7 @@ namespace MWI.WorldSystem
                     }
 
                     // Extract Blueprint Knowledge
-                    if (npc.TryGetComponent(out CharacterSystem.CharacterBlueprints blueprints))
+                    if (npc.TryGetComponent(out CharacterBlueprints blueprints))
                     {
                         npcData.UnlockedBuildingIds.AddRange(blueprints.UnlockedBuildingIds);
                     }
@@ -455,7 +455,7 @@ namespace MWI.WorldSystem
                     GameObject inst = Instantiate(prefab, npcData.Position, npcData.Rotation);
                     
                     // Inject blueprint knowledge back
-                    if (inst.TryGetComponent(out CharacterSystem.CharacterBlueprints blueprints))
+                    if (inst.TryGetComponent(out CharacterBlueprints blueprints))
                     {
                         blueprints.SetUnlockedBuildings(npcData.UnlockedBuildingIds);
                     }

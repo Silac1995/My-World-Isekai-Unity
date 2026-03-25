@@ -1055,11 +1055,12 @@ MonoBehaviour:
   _boundsTarget: {fileID: 1509406451548798437}
   _roomName: 
   _subRooms: []
-  buildingName: Woodcutting building
+  buildingName: Lumberyard building
   _isPublicLocation: 0
   _buildingType: 6
   _buildingZone: {fileID: 2900277757222118802}
   _deliveryZone: {fileID: 1909922971633180329}
+  _constructionRequirements: []
   _owner: {fileID: 0}
   _ownerCommunity:
     communityName: 
@@ -1074,6 +1075,7 @@ MonoBehaviour:
     maxQuantity: 50
   _harvesterCount: 2
   _harvesterJobTitle: Harvester
+  _harvesterJobType: 0
   _depositZone: {fileID: 3359805275942087306}
   _harvestingAreaZone: {fileID: 460726151524295576}
 --- !u!114 &2324777126058058136

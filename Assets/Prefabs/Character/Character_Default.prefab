@@ -435,6 +435,9 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   _character: {fileID: 2536622428659117900}
   _activeJobs: []
+  references:
+    version: 2
+    RefIds: []
 --- !u!1 &2019085881905274253
 GameObject:
   m_ObjectHideFlags: 0
@@ -705,6 +708,7 @@ GameObject:
   - component: {fileID: 4916404909723457133}
   - component: {fileID: -5519882187932071788}
   - component: {fileID: 2759773711538085477}
+  - component: {fileID: 7595531508830883030}
   m_Layer: 8
   m_Name: Character_Default
   m_TagString: Character
@@ -750,12 +754,13 @@ Transform:
   - {fileID: 3706432557554459124}
   - {fileID: 1924734681815570623}
   - {fileID: 3172325109970845519}
+  - {fileID: 95981129722925135}
   - {fileID: 1466266365639762753}
   - {fileID: 1385890570874089402}
   - {fileID: 7548370862418862157}
   - {fileID: 4629397348468206407}
   - {fileID: 6993029267619590529}
-  - {fileID: 95981129722925135}
+  - {fileID: 7796172211879004190}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!54 &3937668831498777898
@@ -883,6 +888,7 @@ MonoBehaviour:
   _characterLocations: {fileID: 4198040619971064388}
   _characterGoap: {fileID: 8601409522411222074}
   _characterCombatLevel: {fileID: 7806414935237473066}
+  _characterBlueprints: {fileID: 8824244859434443465}
   NetworkRaceId:
     UpdateTraits:
       MinSecondsBetweenUpdates: 0
@@ -1119,6 +1125,27 @@ MonoBehaviour:
   UseRigidBodyForMotion: 0
   AutoUpdateKinematicState: 1
   AutoSetKinematicOnDespawn: 1
+--- !u!114 &7595531508830883030
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4281310202761960642}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 65e327fe4bbe0524092a9fcc0d17f79b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MWI.WorldSystem.BuildingPlacementManager
+  ShowTopMostFoldoutHeaderGroup: 1
+  _groundLayer:
+    serializedVersion: 2
+    m_Bits: 1
+  _obstacleLayer:
+    serializedVersion: 2
+    m_Bits: 0
+  _ghostMaterialValid: {fileID: 2100000, guid: 2355107420148c14fa2d7aed19a6f0e2, type: 2}
+  _ghostMaterialInvalid: {fileID: 2100000, guid: 0ebd97f12b174f94ab6e52b1876209e2, type: 2}
 --- !u!1 &4418266412928403763
 GameObject:
   m_ObjectHideFlags: 0
@@ -1601,6 +1628,77 @@ MonoBehaviour:
   _sortingOrderOffset: 1
   _debugNoMask: 1
   _visualParent: {fileID: 1385890570874089402}
+--- !u!1 &6076029091468818005
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 7796172211879004190}
+  - component: {fileID: 8824244859434443465}
+  - component: {fileID: 3143325427494173382}
+  m_Layer: 0
+  m_Name: BuildingPlacementManagement
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &7796172211879004190
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6076029091468818005}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: -1.20455, y: 0.05719, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 6179432398992828966}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &8824244859434443465
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6076029091468818005}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e67fa5c91fa83164aabe06ce1fd70b97, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MWI.CharacterSystem.CharacterBlueprints
+  ShowTopMostFoldoutHeaderGroup: 1
+  _character: {fileID: 2536622428659117900}
+  _unlockedBuildingIds:
+  - B000-Lumberyard
+  _maxPlacementRange: 30
+--- !u!114 &3143325427494173382
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6076029091468818005}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 65e327fe4bbe0524092a9fcc0d17f79b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MWI.WorldSystem.BuildingPlacementManager
+  ShowTopMostFoldoutHeaderGroup: 1
+  _groundLayer:
+    serializedVersion: 2
+    m_Bits: 1025
+  _obstacleLayer:
+    serializedVersion: 2
+    m_Bits: 0
+  _ghostMaterialValid: {fileID: 2100000, guid: 2355107420148c14fa2d7aed19a6f0e2, type: 2}
+  _ghostMaterialInvalid: {fileID: 2100000, guid: 0ebd97f12b174f94ab6e52b1876209e2, type: 2}
 --- !u!1 &6078244054854696647
 GameObject:
   m_ObjectHideFlags: 0

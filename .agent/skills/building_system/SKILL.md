@@ -102,3 +102,41 @@ The base class for interactable or static objects inside rooms.
 - Always ensure `Zone` colliders have `isTrigger = true` and perfectly encapsulate their interior visual meshes, as their size dictates the generated `FurnitureGrid`.
 - Query `Furniture` availability starting from the `ComplexRoom` or `Building` level to let recursive logic find the nearest or first-available furniture in the entire property.
 - When an NPC needs to drop items off or use the shop, rely on the properties like `_deliveryZone` stored natively on the `Building` component.
+
+---
+
+## Building Placement System
+
+Player and NPC building placement follows a shared validation pipeline.
+
+### Key Files
+| File | Purpose |
+|---|---|
+| `BuildingPlacementManager.cs` | Ghost visual, mouse positioning, validation, `RequestPlacementServerRpc` |
+| `UI_BuildingPlacementMenu.cs` | Lists unlocked blueprints, instant mode toggle |
+| `UI_BuildingEntry.cs` | Single entry row: icon + name + click handler |
+| `CharacterBlueprints.cs` | Stores `UnlockedBuildingIds` and `MaxPlacementRange` |
+| `WorldSettingsData.cs` | `BuildingRegistry` (PrefabId → BuildingPrefab mapping) |
+
+### Placement Flow (Player)
+1. Player opens `UI_BuildingPlacementMenu` via the HUD "Build" button.
+2. Selects a building → `BuildingPlacementManager.StartPlacement(prefabId)`.
+3. Ghost prefab follows mouse cursor (raycast on `_groundLayer`).
+4. Ghost material changes (valid = green, invalid = red) based on `ValidatePlacement()`.
+5. **Left-Click** confirms → `RequestPlacementServerRpc` spawns the building server-side.
+6. **Right-Click / Escape** cancels placement.
+
+### Validation Rules
+- **Range**: `Vector3.Distance(character, target) <= CharacterBlueprints.MaxPlacementRange`.
+- **Obstacle overlap**: `Physics.OverlapBox` using the building's `BuildingZone` collider against `_obstacleLayer`.
+- `ValidatePlacement(Vector3)` is **public** so NPC AI systems can call it directly.
+
+### Instant Build Mode
+- Toggled via `SetInstantMode(bool)` on `BuildingPlacementManager`.
+- UI exposes this as a `Toggle` in the placement menu.
+- When active, the ServerRpc calls `building.BuildInstantly()` after spawning, bypassing construction requirements.
+
+### Server Authority
+- The ghost is client-local only (NetworkObject disabled on the ghost prefab).
+- Actual building spawn happens exclusively on the Server via `RequestPlacementServerRpc`.
+- The Server re-validates the prefab ID against `WorldSettingsData.BuildingRegistry` before instantiation.

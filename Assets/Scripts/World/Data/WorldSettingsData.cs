@@ -9,6 +9,8 @@ namespace MWI.WorldSystem
     {
         [Tooltip("The ID used to reference this building across save files and blueprints.")]
         public string PrefabId;
+        public string BuildingName;
+        public Sprite Icon;
         public GameObject BuildingPrefab;
         [Tooltip("Higher number = higher priority for community leaders to build this first when missing.")]
         public int CommunityPriority;

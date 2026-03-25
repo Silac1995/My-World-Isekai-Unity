@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using MWI.WorldSystem;
 
 public class PlayerUI : MonoBehaviour
 {
@@ -12,6 +13,7 @@ public class PlayerUI : MonoBehaviour
     [SerializeField] private Button _buttonEquipmentUI;
     [SerializeField] private Button _buttonRelationsUI;
     [SerializeField] private Button _buttonStatsUI;
+    [SerializeField] private Button _buttonBuildingUI;
     [SerializeField] private MWI.UI.TimeUI _timeUI;
 
     [Header("Notification Channels")]
@@ -30,6 +32,7 @@ public class PlayerUI : MonoBehaviour
     [SerializeField] private CharacterEquipmentUI _equipmentUI;
     [SerializeField] private UI_CharacterRelations _relationsUI;
     [SerializeField] private UI_CharacterStats _statsUI;
+    [SerializeField] private MWI.UI.Building.UI_BuildingPlacementMenu _buildingUI;
     [SerializeField] private UI_ChatBar _chatBar;
     [SerializeField] private UI_InteractionMenu _interactionMenu;
     [SerializeField] private MWI.UI.UI_InvitationPrompt _invitationPrompt;
@@ -124,6 +127,17 @@ public class PlayerUI : MonoBehaviour
             _statsUI.Initialize(characterComponent);
         }
 
+        if (_buildingUI != null)
+        {
+            _buildingUI.Initialize(characterComponent);
+        }
+
+        BuildingPlacementManager placementManager = characterComponent.GetComponent<BuildingPlacementManager>();
+        if (placementManager != null)
+        {
+            placementManager.Initialize(characterComponent);
+        }
+
         // Status effects now handled by UI_PlayerInfo
 
         if (_buttonEquipmentUI != null)
@@ -142,6 +156,12 @@ public class PlayerUI : MonoBehaviour
         {
             _buttonStatsUI.onClick.RemoveAllListeners();
             _buttonStatsUI.onClick.AddListener(ToggleStatsUI);
+        }
+
+        if (_buttonBuildingUI != null)
+        {
+            _buttonBuildingUI.onClick.RemoveAllListeners();
+            _buttonBuildingUI.onClick.AddListener(ToggleBuildingUI);
         }
     }
 
@@ -183,6 +203,19 @@ public class PlayerUI : MonoBehaviour
         if (!isCurrentlyActive && characterComponent != null)
         {
             _statsUI.Initialize(characterComponent);
+        }
+    }
+
+    public void ToggleBuildingUI()
+    {
+        if (_buildingUI == null) return;
+
+        bool isCurrentlyActive = _buildingUI.gameObject.activeSelf;
+        _buildingUI.gameObject.SetActive(!isCurrentlyActive);
+
+        if (!isCurrentlyActive && characterComponent != null)
+        {
+            _buildingUI.Initialize(characterComponent);
         }
     }
 
