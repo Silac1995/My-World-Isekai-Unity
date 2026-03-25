@@ -31,6 +31,10 @@ namespace MWI.WorldSystem
         public string OwnerNpcId;
         public BuildingState State;      // UnderConstruction, Complete, Ruined
         public float ConstructionProgress; // 0-1, only relevant if UnderConstruction
+
+        // Interior map data (null/-1 if no interior has been spawned yet)
+        public string InteriorMapId;
+        public int InteriorSlotIndex = -1;
     }
 
     [Serializable]

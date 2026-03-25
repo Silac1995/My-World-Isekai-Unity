@@ -7,14 +7,16 @@ public class CharacterMapTransitionAction : CharacterAction
     private readonly MapTransitionDoor _door;
     private readonly string _targetMapId;
     private readonly Vector3 _targetPosition;
+    private readonly float _fadeDuration;
 
-    public CharacterMapTransitionAction(Character character, MapTransitionDoor door, string targetMapId, Vector3 targetPosition, float fadeDuration) 
+    public CharacterMapTransitionAction(Character character, MapTransitionDoor door, string targetMapId, Vector3 targetPosition, float fadeDuration)
         : base(character, duration: fadeDuration)
     {
         _character = character;
         _door = door;
         _targetMapId = targetMapId;
         _targetPosition = targetPosition;
+        _fadeDuration = fadeDuration;
     }
 
     public override void OnStart()
@@ -23,6 +25,12 @@ public class CharacterMapTransitionAction : CharacterAction
         if (_character.TryGetComponent(out CharacterMovement movement))
         {
             movement.Stop();
+        }
+
+        // Fade to black for the local player (hidden behind fade, NPCs/remote players skip)
+        if (_character.IsOwner || _character.IsLocalPlayer)
+        {
+            ScreenFadeManager.Instance?.FadeOut(_fadeDuration * 0.5f);
         }
     }
 
@@ -35,16 +43,19 @@ public class CharacterMapTransitionAction : CharacterAction
             {
                 movement.Warp(_targetPosition);
             }
-            
+
             // Send authoritative request cleanly via separated Tracker component
             if (_character.TryGetComponent(out CharacterMapTracker tracker))
             {
                 tracker.RequestTransitionServerRpc(_targetMapId, _targetPosition);
             }
-            else 
+            else
             {
                 Debug.LogError($"[MapSystem] {_character.name} missing CharacterMapTracker for ServerRpc!");
             }
+
+            // Fade back in after warp
+            ScreenFadeManager.Instance?.FadeIn(_fadeDuration * 0.5f);
         }
         else if (_character.IsServer) // NPC logic, no prediction needed, just direct mutate
         {
@@ -52,7 +63,7 @@ public class CharacterMapTransitionAction : CharacterAction
             {
                 movement.Warp(_targetPosition);
             }
-            
+
             if (_character.TryGetComponent(out CharacterMapTracker tracker))
             {
                 tracker.SetCurrentMap(_targetMapId);
@@ -66,6 +77,12 @@ public class CharacterMapTransitionAction : CharacterAction
         if (_character.TryGetComponent(out CharacterMovement movement))
         {
             movement.Resume();
+        }
+
+        // Cancel any active fade if the action was interrupted
+        if (_character.IsOwner || _character.IsLocalPlayer)
+        {
+            ScreenFadeManager.Instance?.FadeIn(0.1f);
         }
     }
 }

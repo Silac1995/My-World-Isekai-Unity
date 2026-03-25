@@ -12,6 +12,8 @@ namespace MWI.WorldSystem
         public string BuildingName;
         public Sprite Icon;
         public GameObject BuildingPrefab;
+        [Tooltip("Prefab for the building interior map. Contains MapController, floor, walls, exit door, NavMeshSurface. Leave null for non-enterable buildings.")]
+        public GameObject InteriorPrefab;
         [Tooltip("Higher number = higher priority for community leaders to build this first when missing.")]
         public int CommunityPriority;
     }
@@ -50,6 +52,8 @@ namespace MWI.WorldSystem
         public float SlotOffsetDistance = 10000f;
         [Tooltip("Days a released slot must wait before being safely recycled.")]
         public int SlotRecycleCooldownDays = 30;
+        [Tooltip("Y offset for interior maps to separate them from ground-level maps.")]
+        public float InteriorYOffset = 5000f;
         [Header("Community Tracker: Prefab Registry")]
         [Tooltip("Physical terrain/building prefab spawned for a Roaming Camp.")]
         public GameObject RoamingCampPrefab;
@@ -84,6 +88,15 @@ namespace MWI.WorldSystem
             foreach (var entry in BuildingRegistry)
             {
                 if (entry.PrefabId == prefabId) return entry.BuildingPrefab;
+            }
+            return null;
+        }
+
+        public GameObject GetInteriorPrefab(string prefabId)
+        {
+            foreach (var entry in BuildingRegistry)
+            {
+                if (entry.PrefabId == prefabId) return entry.InteriorPrefab;
             }
             return null;
         }

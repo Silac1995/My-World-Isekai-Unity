@@ -12,7 +12,7 @@ namespace MWI.WorldSystem
         [Header("Map Settings")]
         [Tooltip("Unique ID matching the Decoupled Character Save (e.g. World_Aethelgard_Region_North)")]
         public string MapId;
-        
+
         [Tooltip("Use this to determine if the map is visually loaded or offset")]
         public bool IsInteriorOffset = false;
 
@@ -23,11 +23,11 @@ namespace MWI.WorldSystem
 
         private BoxCollider _mapTrigger;
         public NetworkVariable<bool> IsActive = new NetworkVariable<bool>(false);
-        
+
         [Header("Biome & Map Type")]
         [Tooltip("The biome defining resource density and yields for Offline Growth.")]
         public BiomeDefinition Biome;
-        
+
         [Header("Simulation")]
         [Tooltip("The registry for offline job yields.")]
         public JobYieldRegistry JobYields;
@@ -44,6 +44,38 @@ namespace MWI.WorldSystem
         // Dependencies
         private TimeManager _timeManager => TimeManager.Instance;
 
+        // --- Static MapId -> MapController registry for fast lookup ---
+        private static readonly Dictionary<string, MapController> _mapRegistry = new Dictionary<string, MapController>();
+
+        /// <summary>
+        /// Looks up a MapController by its MapId. Returns null if not found.
+        /// </summary>
+        public static MapController GetByMapId(string mapId)
+        {
+            if (string.IsNullOrEmpty(mapId)) return null;
+            _mapRegistry.TryGetValue(mapId, out var controller);
+            return controller;
+        }
+
+        /// <summary>
+        /// Notifies source and destination MapControllers about a player transition.
+        /// Ensures hibernation/wake-up triggers before physics colliders update.
+        /// </summary>
+        public static void NotifyPlayerTransition(ulong clientId, string fromMapId, string toMapId)
+        {
+            var sourceMap = GetByMapId(fromMapId);
+            if (sourceMap != null)
+            {
+                sourceMap.ForcePlayerTransition(clientId, entering: false);
+            }
+
+            var destMap = GetByMapId(toMapId);
+            if (destMap != null)
+            {
+                destMap.ForcePlayerTransition(clientId, entering: true);
+            }
+        }
+
         private void Awake()
         {
             _mapTrigger = GetComponent<BoxCollider>();
@@ -53,6 +85,12 @@ namespace MWI.WorldSystem
         public override void OnNetworkSpawn()
         {
             base.OnNetworkSpawn();
+
+            // Register in the static lookup so any code can find this map by ID
+            if (!string.IsNullOrEmpty(MapId))
+            {
+                _mapRegistry[MapId] = this;
+            }
 
             if (!IsServer) return;
 
@@ -82,9 +120,15 @@ namespace MWI.WorldSystem
         public override void OnNetworkDespawn()
         {
             base.OnNetworkDespawn();
-            
+
+            // Unregister from static lookup
+            if (!string.IsNullOrEmpty(MapId) && _mapRegistry.TryGetValue(MapId, out var registered) && registered == this)
+            {
+                _mapRegistry.Remove(MapId);
+            }
+
             if (!IsServer) return;
-            
+
             if (NetworkManager.Singleton != null)
             {
                 NetworkManager.Singleton.OnClientDisconnectCallback -= HandleClientDisconnect;
