@@ -14,8 +14,9 @@ public enum CharacterBusyReason
     Unconscious,
     InCombat,
     Interacting,
-    Teaching,
     Crafting,
+    Teaching,
+    Building,
     DoingAction
 }
 
@@ -81,6 +82,7 @@ public class Character : NetworkBehaviour
     private NavMeshAgent _cachedNavMeshAgent;
     private bool _isDead;
     private bool _isUnconscious;
+    private bool _isBuilding;
     private TimeManager _timeManager;
     private CharacterParty _currentParty;
     private CharacterPathingMemory _pathingMemory;
@@ -99,6 +101,7 @@ public class Character : NetworkBehaviour
     public event Action<Character> OnWakeUp;
     public event Action<bool> OnUnconsciousChanged;
     public event Action<bool> OnCombatStateChanged;
+    public event Action<bool> OnBuildingStateChanged;
     #endregion
 
     #region Properties
@@ -138,6 +141,7 @@ public class Character : NetworkBehaviour
     public CharacterCombatLevel CharacterCombatLevel => _characterCombatLevel;
     public CharacterBlueprints CharacterBlueprints => _characterBlueprints;
     public BuildingPlacementManager PlacementManager => _characterBlueprints != null ? _characterBlueprints.PlacementManager : null;
+    public bool IsBuilding => _isBuilding;
 
     public NavMeshAgent NavMesh => _cachedNavMeshAgent;
     public TimeManager TimeManager => _timeManager != null ? _timeManager : TimeManager.Instance;
@@ -385,6 +389,12 @@ public class Character : NetworkBehaviour
             return false;
         }
 
+        if (_isBuilding)
+        {
+            reason = CharacterBusyReason.Building;
+            return false;
+        }
+
         if (_characterMentorship != null && _characterMentorship.IsCurrentlyTeaching)
         {
             reason = CharacterBusyReason.Teaching;
@@ -408,6 +418,13 @@ public class Character : NetworkBehaviour
     public bool IsFree() 
     {
         return IsFree(out _);
+    }
+
+    public void SetBuildingState(bool active)
+    {
+        if (_isBuilding == active) return;
+        _isBuilding = active;
+        OnBuildingStateChanged?.Invoke(_isBuilding);
     }
 
     #region Party Logic

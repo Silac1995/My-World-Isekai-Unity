@@ -25,10 +25,12 @@ namespace MWI.UI.Building
 
         private CharacterBlueprints _blueprints;
         private BuildingPlacementManager _placementManager;
+        private Character _character;
 
         public void Initialize(Character character)
         {
             if (character == null) return;
+            _character = character;
             _blueprints = character.CharacterBlueprints;
             _placementManager = _blueprints.PlacementManager;
 
@@ -42,7 +44,41 @@ namespace MWI.UI.Building
                     _placementManager.SetInstantMode(_instantModeToggle.isOn);
             }
 
+            // Subscribe to state changes (for auto-close)
+            _character.OnBuildingStateChanged -= HandleBuildingStateChanged;
+            _character.OnBuildingStateChanged += HandleBuildingStateChanged;
+
             RefreshMenu();
+        }
+
+        protected override void OnDestroy()
+        {
+            base.OnDestroy();
+            if (_character != null)
+            {
+                _character.OnBuildingStateChanged -= HandleBuildingStateChanged;
+            }
+        }
+
+        public override void OpenWindow()
+        {
+            base.OpenWindow();
+            if (_character != null) _character.SetBuildingState(true);
+        }
+
+        public override void CloseWindow()
+        {
+            if (_character != null) _character.SetBuildingState(false);
+            base.CloseWindow();
+        }
+
+        private void HandleBuildingStateChanged(bool active)
+        {
+            // If building mode was cancelled externally (e.g. combat), close the UI
+            if (!active && gameObject.activeSelf)
+            {
+                base.CloseWindow(); // Close without triggering SetBuildingState(false) again
+            }
         }
 
         public void RefreshMenu()
@@ -71,7 +107,6 @@ namespace MWI.UI.Building
             if (_placementManager != null)
             {
                 _placementManager.StartPlacement(prefabId);
-                CloseWindow();
             }
         }
 

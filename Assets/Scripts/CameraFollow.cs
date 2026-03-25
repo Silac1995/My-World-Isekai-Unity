@@ -13,6 +13,10 @@ public class CameraFollow : MonoBehaviour
     [SerializeField] private float zoomSpeed = 2f;
     [SerializeField] private float zoomSmoothing = 8f;
     [SerializeField] private float followSmoothing = 0.15f;
+    
+    [Header("Building Mode")]
+    [SerializeField] private float buildingOffsetY = 25f;
+    [SerializeField] private float buildingOffsetZ = -30f;
 
     [Header("Camera Rotation")]
     [Range(0f, 90f)]
@@ -33,6 +37,7 @@ public class CameraFollow : MonoBehaviour
     private Camera _camera;
     private float _targetZoom = 0.5f;
     private float _currentZoom = 0.5f;
+    private float _previousZoom = 0.5f;
     private Vector3 _smoothVelocity;
     private float _currentOcclusionT = 1f; // 1 = position normale, 0 = au plus pres du perso
 
@@ -44,24 +49,44 @@ public class CameraFollow : MonoBehaviour
             _camera.transparencySortMode = TransparencySortMode.CustomAxis;
             _camera.transparencySortAxis = new Vector3(0, 0, 1);
         }
+
+        if (playerUI == null)
+        {
+            playerUI = Object.FindFirstObjectByType<PlayerUI>();
+        }
     }
 
     private void LateUpdate()
     {
         if (target == null) return;
 
-        // Zoom via scroll
-        float scroll = Input.GetAxis("Mouse ScrollWheel");
-        if (Mathf.Abs(scroll) > 0.01f)
+        // Zoom via scroll - Disabled during building mode
+        bool isBuilding = character != null && character.IsBuilding;
+        if (!isBuilding)
         {
-            _targetZoom = Mathf.Clamp01(_targetZoom - scroll * zoomSpeed);
+            float scroll = Input.GetAxis("Mouse ScrollWheel");
+            if (Mathf.Abs(scroll) > 0.01f)
+            {
+                _targetZoom = Mathf.Clamp01(_targetZoom - scroll * zoomSpeed);
+            }
         }
 
         _currentZoom = Mathf.Lerp(_currentZoom, _targetZoom, Time.deltaTime * zoomSmoothing);
+        
+        float offsetY, offsetZ;
 
-        // Interpolation des offsets selon le zoom
-        float offsetY = Mathf.Lerp(minOffsetY, maxOffsetY, _currentZoom);
-        float offsetZ = Mathf.Lerp(minOffsetZ, maxOffsetZ, _currentZoom);
+        if (isBuilding)
+        {
+            // When building, we use the specific building offsets
+            offsetY = Mathf.Lerp(minOffsetY, buildingOffsetY, _currentZoom);
+            offsetZ = Mathf.Lerp(minOffsetZ, buildingOffsetZ, _currentZoom);
+        }
+        else
+        {
+            // Normal zoom interpolation
+            offsetY = Mathf.Lerp(minOffsetY, maxOffsetY, _currentZoom);
+            offsetZ = Mathf.Lerp(minOffsetZ, maxOffsetZ, _currentZoom);
+        }
 
         // Calcul de la position Z avec offset. On retire l'ancienne limite pour suivre librement.
         float desiredZ = target.position.z + offsetZ;
@@ -128,12 +153,49 @@ public class CameraFollow : MonoBehaviour
 
     public void SetTarget(Transform newTarget, GameObject go)
     {
+        if (character != null)
+        {
+            character.OnBuildingStateChanged -= HandleBuildingStateChanged;
+        }
+
         target = newTarget;
         if (go != null)
         {
             character = go.GetComponent<Character>();
+            if (character != null)
+            {
+                character.OnBuildingStateChanged += HandleBuildingStateChanged;
+                // Sync initial state
+                HandleBuildingStateChanged(character.IsBuilding);
+            }
+            
             CharacterEquipmentUI uiEquip = Object.FindFirstObjectByType<CharacterEquipmentUI>();
             if (uiEquip != null) uiEquip.SetupUI(character);
+        }
+        else
+        {
+            character = null;
+        }
+    }
+
+    private void HandleBuildingStateChanged(bool active)
+    {
+        if (active)
+        {
+            _previousZoom = _targetZoom;
+            _targetZoom = 1f; // We reuse 1f to represent "Fully using the building offsets"
+        }
+        else
+        {
+            _targetZoom = _previousZoom;
+        }
+    }
+
+    private void OnDestroy()
+    {
+        if (character != null)
+        {
+            character.OnBuildingStateChanged -= HandleBuildingStateChanged;
         }
     }
 }

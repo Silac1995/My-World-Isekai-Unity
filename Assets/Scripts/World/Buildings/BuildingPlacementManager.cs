@@ -10,7 +10,7 @@ namespace MWI.WorldSystem
     /// Validation (range + obstacle) is shared so NPCs can reuse the same rules.
     /// Server-authoritative: the actual building is spawned via ServerRpc.
     /// </summary>
-    public class BuildingPlacementManager : NetworkBehaviour
+    public class BuildingPlacementManager : CharacterSystem
     {
         [Header("Settings")]
         [SerializeField] private LayerMask _groundLayer;
@@ -54,7 +54,8 @@ namespace MWI.WorldSystem
 
         public void StartPlacement(string prefabId)
         {
-            CancelPlacement();
+            // We only clear the ghost/selection to stay in building mode (keep UI open)
+            ClearGhost();
             EnsureSettings();
 
             if (_settings == null)
@@ -83,11 +84,23 @@ namespace MWI.WorldSystem
 
             _ghostInstance.name = "PlacementGhost_" + prefabId;
             _isPlacementActive = true;
-
+        
+            // Ensure character state is set (in case it was started without the UI, though unlikely now)
+            if (_character != null && !_character.IsBuilding)
+                _character.SetBuildingState(true);
+            
             ApplyGhostMaterials(_ghostMaterialValid);
         }
 
         public void CancelPlacement()
+        {
+            ClearGhost();
+            
+            if (_character != null)
+                _character.SetBuildingState(false);
+        }
+
+        private void ClearGhost()
         {
             if (_ghostInstance != null)
             {
@@ -97,6 +110,21 @@ namespace MWI.WorldSystem
             _isPlacementActive = false;
             _activePrefabId = string.Empty;
             _ghostBuildingComponent = null;
+        }
+
+        protected override void HandleIncapacitated(Character character)
+        {
+            base.HandleIncapacitated(character);
+            CancelPlacement();
+        }
+
+        protected override void HandleCombatStateChanged(bool inCombat)
+        {
+            base.HandleCombatStateChanged(inCombat);
+            if (inCombat)
+            {
+                CancelPlacement();
+            }
         }
 
         // ────────────────────── Frame Update (Player only) ──────────────────────
@@ -136,12 +164,19 @@ namespace MWI.WorldSystem
                         _ghostInstance.transform.rotation,
                         _isInstantMode
                     );
-                    CancelPlacement();
+                    // We call ClearGhost instead of CancelPlacement to keep the UI open
+                    ClearGhost();
                 }
             }
 
-            // Right-Click or Escape: Cancel placement
-            if (Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.Escape))
+            // Right-Click: Cancel current selection but keep building mode active
+            if (Input.GetMouseButtonDown(1))
+            {
+                ClearGhost();
+            }
+
+            // Escape: Exit building mode completely
+            if (Input.GetKeyDown(KeyCode.Escape))
             {
                 CancelPlacement();
             }

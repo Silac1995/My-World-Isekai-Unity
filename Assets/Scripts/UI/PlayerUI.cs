@@ -211,12 +211,17 @@ public class PlayerUI : MonoBehaviour
     {
         if (_buildingUI == null) return;
 
-        bool isCurrentlyActive = _buildingUI.gameObject.activeSelf;
-        _buildingUI.gameObject.SetActive(!isCurrentlyActive);
-
-        if (!isCurrentlyActive && characterComponent != null)
+        if (_buildingUI.gameObject.activeSelf)
         {
-            _buildingUI.Initialize(characterComponent);
+            _buildingUI.CloseWindow();
+        }
+        else
+        {
+            if (characterComponent != null)
+            {
+                _buildingUI.Initialize(characterComponent);
+            }
+            _buildingUI.OpenWindow();
         }
     }
 

@@ -136,6 +136,19 @@ Player and NPC building placement follows a shared validation pipeline.
 - UI exposes this as a `Toggle` in the placement menu.
 - When active, the ServerRpc calls `building.BuildInstantly()` after spawning, bypassing construction requirements.
 
+### State Management & Interactions
+Building mode is integrated into the core `Character` state machine to ensure consistency:
+- **Character State**: `Character.IsBuilding` flag and `OnBuildingStateChanged` event.
+- **Busy Logic**: When building, `Character.IsFree()` returns `false` with `CharacterBusyReason.Building`. This prevents overlapping actions (e.g. starting a craft while placing).
+- **Auto-Interruption**: `BuildingPlacementManager` inherits from `CharacterSystem`. It automatically calls `CancelPlacement()` if the character enters combat or becomes incapacitated.
+- **UI Sync**: `UI_BuildingPlacementMenu` subscribes to `OnBuildingStateChanged`. If the state is cancelled externally (combat), the menu automatically closes.
+
+### Camera Integration
+The camera system reacts to building state changes for improved UX:
+- **Auto Zoom**: When a character enters building mode, `CameraFollow` smoothly zooms out to the maximum allowed distance (`_targetZoom = 1f`).
+- **Scroll Lock**: Manual mouse wheel zoom is disabled during placement to prevent accidental perspective shifts.
+- **Restore Zoom**: Upon exiting building mode (completion or cancellation), the camera restores the previous zoom level.
+
 ### Server Authority
 - The ghost is client-local only (NetworkObject disabled on the ghost prefab).
 - Actual building spawn happens exclusively on the Server via `RequestPlacementServerRpc`.
