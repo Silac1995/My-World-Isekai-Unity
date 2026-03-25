@@ -46,6 +46,7 @@ The Physical generation of Maps is entirely data-driven, triggered by NPC cluste
 *   **WorldSettingsData:** Defines thresholds for communities (ProximityChunkSize, SustainedDays, MinimumPopulation).
 *   **CommunityTracker:** A Server-side heartbeat that monitors NPC populations. It evaluates the map state machine: `Roaming Camp -> Settlement -> Established City -> Abandoned City -> Reclaimed`. It triggers physical chunk instantiations upon promotion.
 *   **Open-World Stamping:** When a new dynamic map (e.g. Settlement) is formed, the `CommunityTracker` asks the `WorldOffsetAllocator` for a **logical Slot ID** (for saving/data separation) but overrides the physical placement to spawn the `MapController` anchor exactly at the NPC cluster's centroid on the main open-world plane. The NPCs roam freely and are never warped away.
+*   **Building Identity:** Dynamic buildings in these maps must not use hardcoded IDs. Each `Building` component generates a unique `NetworkBuildingId` (GUID) on spawn to ensure that multiple instances of the same shop prefab can each link to their own unique interior Map slot.
 *   **Abandoned Cities:** Cities never truly dissolve. If population drops to 0 for a prolonged baseline, the city turns "Abandoned", hibernates infinitely at 0 CPU cost, and retains its world slot permanently.
 
 ## 7. Offset Allocation (Instanced Cells)

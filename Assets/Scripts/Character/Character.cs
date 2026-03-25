@@ -86,6 +86,12 @@ public class Character : NetworkBehaviour
         NetworkVariableReadPermission.Everyone,
         NetworkVariableWritePermission.Server
     );
+
+    public NetworkVariable<Unity.Collections.FixedString64Bytes> NetworkCharacterId = new NetworkVariable<Unity.Collections.FixedString64Bytes>(
+        "",
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server
+    );
     #endregion
 
     #region Private Fields
@@ -166,8 +172,27 @@ public class Character : NetworkBehaviour
     public Transform VisualRoot => _visualRoot;
     public GameObject CurrentVisualInstance => _currentVisualInstance;
     public RigTypeSO RigType => rigType;
+
+    /// <summary>
+    /// Persistent unique identifier for this character. Generated on first spawn, survives reconnects.
+    /// </summary>
+    public string CharacterId => NetworkCharacterId.Value.ToString();
     #endregion
 
+
+    /// <summary>
+    /// Finds a spawned Character by its persistent UUID. Returns null if not found.
+    /// </summary>
+    public static Character FindByUUID(string uuid)
+    {
+        if (string.IsNullOrEmpty(uuid)) return null;
+
+        foreach (var c in FindObjectsByType<Character>(FindObjectsSortMode.None))
+        {
+            if (c.CharacterId == uuid) return c;
+        }
+        return null;
+    }
 
     void Update()
     {
@@ -190,6 +215,12 @@ public class Character : NetworkBehaviour
     public override void OnNetworkSpawn()
     {
         base.OnNetworkSpawn();
+
+        // Generate a persistent UUID on the server if not already set (e.g., from save data)
+        if (IsServer && NetworkCharacterId.Value.IsEmpty)
+        {
+            NetworkCharacterId.Value = Guid.NewGuid().ToString("N");
+        }
 
         // Very important: IsOwner is true for the Host for ALL NPCs in the scene.
         // We only want the local client's specific avatar to become a "Player" with UI and Camera,

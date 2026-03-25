@@ -11,11 +11,10 @@ using MWI.WorldSystem;
 public class BuildingInteriorDoor : MapTransitionDoor
 {
     [Header("Building Interior")]
-    [SerializeField] private string _buildingId;
-    [SerializeField] private string _prefabId;
-
     [Tooltip("The MapId of the exterior map this door sits on.")]
     [SerializeField] private string _exteriorMapId;
+
+    private Building _parentBuilding;
 
     [Tooltip("Local offset within the interior prefab for the entry point.")]
     [SerializeField] private Vector3 _interiorEntryLocalOffset = new Vector3(0f, 0f, 2f);
@@ -23,10 +22,16 @@ public class BuildingInteriorDoor : MapTransitionDoor
     [Tooltip("Offset from this door's position where the character spawns when exiting back to exterior.")]
     [SerializeField] private Vector3 _returnOffset = new Vector3(0f, 0f, -2f);
 
-    public string BuildingId => _buildingId;
-    public string PrefabId => _prefabId;
+    public string BuildingId => _checkBuilding() ? _parentBuilding.BuildingId : "";
+    public string PrefabId => _checkBuilding() ? _parentBuilding.PrefabId : "";
     public string ExteriorMapId => _exteriorMapId;
     public Vector3 ReturnWorldPosition => transform.position + _returnOffset;
+
+    private bool _checkBuilding()
+    {
+        if (_parentBuilding == null) _parentBuilding = GetComponentInParent<Building>();
+        return _parentBuilding != null;
+    }
 
     public override void Interact(Character interactor)
     {
@@ -58,14 +63,14 @@ public class BuildingInteriorDoor : MapTransitionDoor
     /// </summary>
     public string GetInteriorMapId()
     {
-        return $"{_exteriorMapId}_Interior_{_buildingId}";
+        return $"{_exteriorMapId}_Interior_{BuildingId}";
     }
 
     private Vector3 ResolveTargetPosition()
     {
         // If the registry already knows this interior (repeat visits), use the real position
         if (BuildingInteriorRegistry.Instance != null &&
-            BuildingInteriorRegistry.Instance.TryGetInterior(_buildingId, out var record))
+            BuildingInteriorRegistry.Instance.TryGetInterior(BuildingId, out var record))
         {
             Vector3 interiorOrigin = WorldOffsetAllocator.Instance.GetInteriorOffsetVector(record.SlotIndex);
             return interiorOrigin + _interiorEntryLocalOffset;

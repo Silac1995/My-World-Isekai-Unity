@@ -71,6 +71,8 @@ The top-level structure in the world.
 - **Construction & States**: Buildings manage a native `CurrentState` (`BuildingState.UnderConstruction` or `Complete`). They can require `_constructionRequirements` (a list of `CraftingIngredient`s) to be placed. Players/NPCs populate this using `ContributeMaterial(ItemSO, amount)`, which triggers `OnConstructionComplete` when full. Alternatively, `BuildInstantly()` bypasses the requirements.
 - **Logistics Integration**: Holds a reference to a `_deliveryZone` which is essential for the Logistics cycle.
 - **Public access**: Has an outer `_buildingZone` (distinct from the main interior) for general traversal and random roaming around the property.
+- **Dynamic Identity**: In dynamic city environments, buildings generate a unique `NetworkBuildingId` (GUID) on `OnNetworkSpawn`. This UUID is used to link the building to its specific interior map instance.
+- **Prefab ID**: The `PrefabId` string is used for registry lookups in `WorldSettingsData` but is NOT unique per instance.
 
 ### 5. Commercial Building (`CommercialBuilding.cs`)
 A specialized structural entity handling jobs and economic tasks.
@@ -153,3 +155,26 @@ The camera system reacts to building state changes for improved UX:
 - The ghost is client-local only (NetworkObject disabled on the ghost prefab).
 - Actual building spawn happens exclusively on the Server via `RequestPlacementServerRpc`.
 - The Server re-validates the prefab ID against `WorldSettingsData.BuildingRegistry` before instantiation.
+
+## Building Interiors
+
+Interiors use the **Spatial Offset Architecture** (usually at `y=5000`).
+
+### 1. Linking Exterior to Interior
+The connection is established via the **`BuildingInteriorDoor.cs`** component on the exterior building.
+- **Lazy Spawning:** The interior is only spawned when the first player interacts with the door.
+- **Deterministic ID:** The interior `MapId` is computed by combining the exterior `MapId` and the building's dynamic `BuildingId`. This ensures that even identical prefabs have isolated interior maps.
+
+### 2. Interior Prefab Requirements
+Every Interior Prefab root must contain:
+- `MapController` (Is Interior Offset = True)
+- `NetworkObject`
+- `NavMeshSurface`
+- One or more `Room` components (for furniture placement).
+- `MapTransitionDoor` (to exit back to the exterior).
+
+### 3. Transition Flow
+1. **Interact:** Player clicks `BuildingInteriorDoor`.
+2. **Server Check:** Server ensures the interior map is spawned and valid.
+3. **Teleport:** `CharacterMapTransitionAction` warps the player to the interior's local offset.
+4. **Hibernation:** When all players leave, the interior `MapController` hibernates the map to save resources.

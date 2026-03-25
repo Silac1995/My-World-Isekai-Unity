@@ -22,6 +22,7 @@ MonoBehaviour:
   DissolutionGracePeriodDays: 7
   SlotOffsetDistance: 10000
   SlotRecycleCooldownDays: 30
+  InteriorYOffset: 5000
   RoamingCampPrefab: {fileID: 4476412768407588135, guid: 9fec4a156d91d8d47b858c33e0ae63f1, type: 3}
   SettlementPrefab: {fileID: 3346460054329482797, guid: 3702070e1a0e1e549a12e82fb550d935, type: 3}
   EstablishedCityPrefab: {fileID: 5024601865890748534, guid: 8ccfe432e3d3a72439e33d11a270f770, type: 3}
@@ -32,9 +33,17 @@ MonoBehaviour:
     BuildingName: Lumberyard
     Icon: {fileID: 0}
     BuildingPrefab: {fileID: 2761951707981523353, guid: a4477ff05a156094798e960b1dca3af6, type: 3}
+    InteriorPrefab: {fileID: 0}
     CommunityPriority: 7
   - PrefabId: B001-Crafting
     BuildingName: Crafting Building
     Icon: {fileID: 0}
     BuildingPrefab: {fileID: 1945857671188992395, guid: bcf1eea9ceffe55459083485e22660a5, type: 3}
+    InteriorPrefab: {fileID: 0}
+    CommunityPriority: 7
+  - PrefabId: B002-SmallHouseA
+    BuildingName: Small house
+    Icon: {fileID: 0}
+    BuildingPrefab: {fileID: 7153458554410679557, guid: 1fd58c35117c7fc4699772b5fb2696c0, type: 3}
+    InteriorPrefab: {fileID: 9017848905533882618, guid: f742208c61724314f8b4c68e32f00069, type: 3}
     CommunityPriority: 7

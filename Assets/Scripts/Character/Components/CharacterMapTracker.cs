@@ -9,14 +9,14 @@ public class CharacterMapTracker : NetworkBehaviour
     private Character _character;
 
     [Tooltip("The ID of the Map/Region this Character is currently in.")]
-    public NetworkVariable<FixedString32Bytes> CurrentMapID = new NetworkVariable<FixedString32Bytes>(
+    public NetworkVariable<FixedString128Bytes> CurrentMapID = new NetworkVariable<FixedString128Bytes>(
         "",
         NetworkVariableReadPermission.Everyone,
         NetworkVariableWritePermission.Server
     );
 
     [Tooltip("The ID of the Map this Character considers Home.")]
-    public NetworkVariable<FixedString32Bytes> HomeMapId = new NetworkVariable<FixedString32Bytes>(
+    public NetworkVariable<FixedString128Bytes> HomeMapId = new NetworkVariable<FixedString128Bytes>(
         "",
         NetworkVariableReadPermission.Everyone,
         NetworkVariableWritePermission.Server
@@ -38,7 +38,7 @@ public class CharacterMapTracker : NetworkBehaviour
     /// Called by the Client's CharacterMapTransitionAction AFTER it predicts the Warp locally.
     /// </summary>
     [ServerRpc(RequireOwnership = true)]
-    public void RequestTransitionServerRpc(FixedString32Bytes targetMapId, Vector3 targetPosition)
+    public void RequestTransitionServerRpc(FixedString128Bytes targetMapId, Vector3 targetPosition)
     {
         string previousMapId = CurrentMapID.Value.ToString();
         string targetMapIdStr = targetMapId.ToString();

@@ -212,9 +212,9 @@ public class CharacterSchedule : CharacterSystem
         // --- SÉCURITÉ POUR NE PAS RE-RÉINITIALISER EN BOUCLE ---
         if (activity == ScheduleActivity.Wander && npc.HasBehaviour<WanderBehaviour>()) return;
         if (activity == ScheduleActivity.Teach && npc.HasBehaviour<GiveLessonBehaviour>()) return;
-        if (activity == ScheduleActivity.Sleep && npc.HasBehaviour<WanderBehaviour>()) return; 
-        if (activity == ScheduleActivity.Leisure && npc.HasBehaviour<WanderBehaviour>()) return; 
-        if (activity == ScheduleActivity.GoHome && npc.HasBehaviour<WanderBehaviour>()) return;
+        if (activity == ScheduleActivity.Sleep && npc.HasBehaviour<SleepBehaviour>()) return;
+        if (activity == ScheduleActivity.Leisure && npc.HasBehaviour<WanderBehaviour>()) return;
+        if (activity == ScheduleActivity.GoHome && npc.HasBehaviour<GoHomeBehaviour>()) return;
 
         // Mode legacy : on push le behaviour manuellement
         IAIBehaviour newBehaviour = activity switch
@@ -222,9 +222,9 @@ public class CharacterSchedule : CharacterSystem
             ScheduleActivity.Work => new WanderBehaviour(npc), // Fallback, Job/Work est pure BT maintenant
             ScheduleActivity.Wander => new WanderBehaviour(npc),
             ScheduleActivity.Teach => new GiveLessonBehaviour(),
-            ScheduleActivity.Sleep => new WanderBehaviour(npc),
+            ScheduleActivity.Sleep => new SleepBehaviour(npc),
             ScheduleActivity.Leisure => new WanderBehaviour(npc),
-            ScheduleActivity.GoHome => new WanderBehaviour(npc),
+            ScheduleActivity.GoHome => new GoHomeBehaviour(npc),
             _ => new WanderBehaviour(npc)
         };
 

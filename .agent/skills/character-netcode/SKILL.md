@@ -45,6 +45,13 @@ Because the project was initially solo-focused, you must forcefully decouple **"
 - Any physical hitbox triggering an overlap sphere or `OnTriggerEnter` must be gated by `if (!IsServer) return;`.
 - Clients spawn Hitbox visuals, but they trigger ZERO damage. Only the Host's invisible overlap validates hits to prevent "double-dipping" damage from multiple clients visually spawning the same spell.
 
+### 3. Persistent Character Identity (UUID)
+To ensure characters are uniquely identifiable across sessions, reconnects, and Map Hibernation:
+- Each `Character` generates a `NetworkCharacterId` (GUID) on its first `OnNetworkSpawn` (server-side).
+- This ID remains stable for the lifetime of that character instance.
+- **Usage:** Always use `CharacterId` (the string wrapper for the network variable) when referencing a character in data structures, building ownership, or narrative save files.
+- **Lookup:** Use `Character.FindByUUID(string uuid)` to locate a spawned character instance by its persistent ID.
+
 ## Verification Checklist
 - [ ] Does this specific CharacterSystem use NetworkVariables for persistent data?
 - [ ] Do Client actions trigger a ServerRpc instead of running local logic?

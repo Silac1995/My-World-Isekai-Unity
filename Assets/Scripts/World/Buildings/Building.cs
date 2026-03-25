@@ -3,6 +3,8 @@ using System.Linq;
 using Unity.Netcode;
 using UnityEngine;
 using MWI.WorldSystem;
+using System;
+using Unity.Collections;
 
 /// <summary>
 /// Classe abstraite mère de tous les bâtiments.
@@ -26,12 +28,55 @@ public class Building : ComplexRoom
     [SerializeField] protected List<CraftingIngredient> _constructionRequirements = new List<CraftingIngredient>();
     protected Dictionary<ItemSO, int> _contributedMaterials = new Dictionary<ItemSO, int>();
 
+    [Header("Identity (Dynamic)")]
+    [SerializeField] protected string _prefabId; // Registry lookup ID (e.g. "Shop_Armor_A")
+    
+    public NetworkVariable<FixedString64Bytes> NetworkBuildingId = new NetworkVariable<FixedString64Bytes>(
+        "",
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server
+    );
+
     public string BuildingName => buildingName;
     public virtual BuildingType BuildingType => _buildingType;
     public bool IsPublicLocation => _isPublicLocation;
     public Collider BuildingZone => _buildingZone;
     public Zone DeliveryZone => _deliveryZone;
-    
+    public string PrefabId => _prefabId;
+    public string BuildingId => NetworkBuildingId.Value.ToString();
+
+    /// <summary>
+    /// True if a spawned interior MapController exists for this building.
+    /// </summary>
+    public bool HasInterior
+    {
+        get
+        {
+            if (BuildingInteriorRegistry.Instance == null) return false;
+            return BuildingInteriorRegistry.Instance.TryGetInterior(BuildingId, out _);
+        }
+    }
+
+    /// <summary>
+    /// Returns the interior MapController for this building, or null if none spawned yet.
+    /// </summary>
+    public MapController GetInteriorMap()
+    {
+        if (BuildingInteriorRegistry.Instance == null) return null;
+        if (!BuildingInteriorRegistry.Instance.TryGetInterior(BuildingId, out var record)) return null;
+        return MapController.GetByMapId(record.InteriorMapId);
+    }
+
+    /// <summary>
+    /// Returns the interior map ID for this building, or null if no interior registered.
+    /// </summary>
+    public string GetInteriorMapId()
+    {
+        if (BuildingInteriorRegistry.Instance == null) return null;
+        if (!BuildingInteriorRegistry.Instance.TryGetInterior(BuildingId, out var record)) return null;
+        return record.InteriorMapId;
+    }
+
     private NetworkVariable<MWI.WorldSystem.BuildingState> _currentState = new NetworkVariable<MWI.WorldSystem.BuildingState>(
         MWI.WorldSystem.BuildingState.Complete,
         NetworkVariableReadPermission.Everyone,
@@ -72,6 +117,17 @@ public class Building : ComplexRoom
             {
                 _currentState.Value = MWI.WorldSystem.BuildingState.Complete;
             }
+        }
+    }
+
+    public override void OnNetworkSpawn()
+    {
+        base.OnNetworkSpawn();
+
+        if (IsServer && NetworkBuildingId.Value.IsEmpty)
+        {
+            NetworkBuildingId.Value = Guid.NewGuid().ToString("N");
+            Debug.Log($"<color=green>[Building]</color> Generated unique ID for {buildingName}: {BuildingId}");
         }
     }
 
@@ -152,8 +208,8 @@ public class Building : ComplexRoom
     {
         if (_buildingZone != null)
         {
-            float randomX = Random.Range(_buildingZone.bounds.min.x, _buildingZone.bounds.max.x);
-            float randomZ = Random.Range(_buildingZone.bounds.min.z, _buildingZone.bounds.max.z);
+            float randomX = UnityEngine.Random.Range(_buildingZone.bounds.min.x, _buildingZone.bounds.max.x);
+            float randomZ = UnityEngine.Random.Range(_buildingZone.bounds.min.z, _buildingZone.bounds.max.z);
             Vector3 targetPoint = new Vector3(randomX, yCoord, randomZ);
 
             if (UnityEngine.AI.NavMesh.SamplePosition(targetPoint, out UnityEngine.AI.NavMeshHit hit, 10f, UnityEngine.AI.NavMesh.AllAreas))
