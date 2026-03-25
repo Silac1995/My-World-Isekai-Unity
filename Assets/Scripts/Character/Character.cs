@@ -650,7 +650,12 @@ public class Character : NetworkBehaviour
 
         if (TryGetComponent<Unity.Netcode.Components.NetworkTransform>(out var netTransform))
         {
-            netTransform.SyncPositionY = !isNPC;
+            // Always sync Y so late-joining clients receive the correct height.
+            // For NPCs, raise the threshold to filter out NavMeshAgent micro-adjustments
+            // that cause visible vertical wobble on clients.
+            netTransform.SyncPositionY = true;
+            if (isNPC)
+                netTransform.PositionThreshold = 0.4f;
         }
 
         if (_rb != null)

@@ -261,7 +261,7 @@ public class SpawnManager : MonoBehaviour
 
         // Local ownership (UI & Camera) is now strictly handled by Character.SwitchToPlayer()
 
-        float randomSize = (float)(rng.NextDouble() * 200.0);
+        float randomSize = Random.Range(0f, 200f);
         character.CharacterVisual.ResizeCharacter(randomSize);
         character.CharacterVisual.RequestAutoResize();
         character.CharacterVisual.ApplyPresetFromRace(race);
