@@ -170,13 +170,6 @@ public class WorldItem : NetworkBehaviour
         {
             worldItem.Initialize(instance);
 
-            // Setup Network Data for synchronization
-            worldItem._networkItemData.Value = new NetworkItemData
-            {
-                ItemId = new FixedString64Bytes(itemSO.ItemId),
-                JsonData = new FixedString4096Bytes(JsonUtility.ToJson(instance))
-            };
-
             if (worldItemGo.TryGetComponent(out NetworkObject netObj))
             {
                 netObj.Spawn(true);
@@ -185,6 +178,13 @@ public class WorldItem : NetworkBehaviour
             {
                 Debug.LogWarning($"<color=orange>[Gather]</color> WorldItemPrefab for {itemSO.ItemName} missing NetworkObject component!");
             }
+
+            // Setup Network Data after Spawn so OnValueChanged fires on connected clients
+            worldItem._networkItemData.Value = new NetworkItemData
+            {
+                ItemId = new FixedString64Bytes(itemSO.ItemId),
+                JsonData = new FixedString4096Bytes(JsonUtility.ToJson(instance))
+            };
 
             return worldItem;
         }
@@ -223,12 +223,6 @@ public class WorldItem : NetworkBehaviour
         {
             worldItem.Initialize(instance);
 
-            worldItem._networkItemData.Value = new NetworkItemData
-            {
-                ItemId = new FixedString64Bytes(instance.ItemSO.ItemId),
-                JsonData = new FixedString4096Bytes(JsonUtility.ToJson(instance))
-            };
-
             if (worldItemGo.TryGetComponent(out NetworkObject netObj))
             {
                 netObj.Spawn(true);
@@ -238,6 +232,13 @@ public class WorldItem : NetworkBehaviour
                 Debug.LogWarning($"<color=orange>[Gather]</color> WorldItemPrefab for {instance.ItemSO.ItemName} missing NetworkObject component!");
             }
 
+            // Setup Network Data after Spawn so OnValueChanged fires on connected clients
+            worldItem._networkItemData.Value = new NetworkItemData
+            {
+                ItemId = new FixedString64Bytes(instance.ItemSO.ItemId),
+                JsonData = new FixedString4096Bytes(JsonUtility.ToJson(instance))
+            };
+
             return worldItem;
         }
         else
@@ -245,6 +246,28 @@ public class WorldItem : NetworkBehaviour
             Debug.LogError($"<color=red>[Gather]</color> Le prefab de {instance.ItemSO.ItemName} n'a pas de composant WorldItem !");
             Object.Destroy(worldItemGo);
             return null;
+        }
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    public void RequestInteractServerRpc(ulong interactorNetworkObjectId)
+    {
+        if (!NetworkManager.SpawnManager.SpawnedObjects.TryGetValue(interactorNetworkObjectId, out NetworkObject interactorNetObj))
+            return;
+
+        Character interactor = interactorNetObj.GetComponent<Character>();
+        if (interactor == null || _itemInstance == null) return;
+
+        if (_itemInstance is WearableInstance wearable)
+        {
+            var action = new CharacterEquipAction(interactor, wearable);
+            interactor.CharacterActions.ExecuteAction(action);
+            NetworkObject.Despawn(true);
+        }
+        else
+        {
+            var action = new CharacterPickUpItem(interactor, _itemInstance, gameObject);
+            interactor.CharacterActions.ExecuteAction(action);
         }
     }
 

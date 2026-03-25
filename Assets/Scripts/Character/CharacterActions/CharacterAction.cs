@@ -8,14 +8,19 @@ public abstract class CharacterAction
     public float Duration { get; set; }
 
     /// <summary>
-    /// Si true, le CharacterGameController dclenchera le boolen 'isDoingAction' dans l'Animator.
-    /// Les actions de combat l'outrepassent pour viter les conflits d'animation.
+    /// Si true, le CharacterGameController déclenchera le booléen 'isDoingAction' dans l'Animator.
+    /// Les actions de combat l'outrepassent pour éviter les conflits d'animation.
     /// </summary>
     public virtual bool ShouldPlayGenericActionAnimation => true;
 
     /// <summary>
-    /// Si true, cette action gre sa propre rplication via des RPC spcifiques (ex: BroadcastAttackRpc).
-    /// CharacterActions ne la rpliquera donc pas via BroadcastActionVisualsClientRpc.
+    /// Nom de l'action pour l'affichage UI.
+    /// </summary>
+    public virtual string ActionName => GetType().Name;
+
+    /// <summary>
+    /// Si true, cette action gère sa propre réplication via des RPC spécifiques (ex: BroadcastAttackRpc).
+    /// CharacterActions ne la répliquera donc pas via BroadcastActionVisualsClientRpc.
     /// </summary>
     public virtual bool IsReplicatedInternally => false;
 
@@ -25,15 +30,15 @@ public abstract class CharacterAction
         this.Duration = duration;
     }
 
-    // Nouvelle mthode de validation
+    // Nouvelle méthode de validation
     public virtual bool CanExecute() => true;
 
     public abstract void OnStart();
     public abstract void OnApplyEffect();
 
     /// <summary>
-    /// Appel quand l'action est annule (ex: ClearCurrentAction).
-    /// Permet de dsabonner des vnements pour viter les memory leaks.
+    /// Appelé quand l'action est annulée (ex: ClearCurrentAction).
+    /// Permet de désabonner des événements pour éviter les memory leaks.
     /// </summary>
     public virtual void OnCancel() { }
 

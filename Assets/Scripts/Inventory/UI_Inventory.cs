@@ -28,7 +28,7 @@ public class UI_Inventory : MonoBehaviour
 
         if (_inventory == null)
         {
-            Debug.LogWarning($"<color=orange>[UI_Inventory]</color> L'inventaire est null (Sac retire).");
+            Debug.Log($"<color=orange>[UI_Inventory]</color> No inventory active (Bag unequipped).");
             if (_inventoryCapacity != null) _inventoryCapacity.text = "No Bag";
 
             RefreshDisplay();

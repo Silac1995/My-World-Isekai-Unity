@@ -1,4 +1,5 @@
 using UnityEngine;
+using Unity.Netcode;
 
 public class CharacterPickUpItem : CharacterAction
 {
@@ -45,7 +46,11 @@ public class CharacterPickUpItem : CharacterAction
         {
             if (_worldObject != null)
             {
-                Object.Destroy(_worldObject);
+                var netObj = _worldObject.GetComponent<NetworkObject>();
+                if (netObj != null && netObj.IsSpawned)
+                    netObj.Despawn(true);
+                else
+                    Object.Destroy(_worldObject);
             }
         }
         else

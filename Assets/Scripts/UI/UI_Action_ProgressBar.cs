@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 
@@ -10,10 +10,10 @@ public class UI_Action_ProgressBar : MonoBehaviour
     [SerializeField] private Image _fillImage;
     [SerializeField] private TextMeshProUGUI _actionNameText;
 
-    // Cette m?thode est appel?e par PlayerUI
+    // Cette méthode est appelée par PlayerUI
     public void InitializeCharacterActions(CharacterActions actions)
     {
-        Unsubscribe(); // S?curit? fuite m?moire
+        Unsubscribe(); // Sécurité fuite mémoire
 
         _characterActions = actions;
 
@@ -23,7 +23,7 @@ public class UI_Action_ProgressBar : MonoBehaviour
             _characterActions.OnActionFinished += HandleActionEnded;
         }
 
-        // On se cache par d?faut au d?marrage
+        // On se cache par défaut au démarrage
         gameObject.SetActive(false);
     }
 
@@ -41,12 +41,12 @@ public class UI_Action_ProgressBar : MonoBehaviour
         gameObject.SetActive(true);
         
         if (_actionNameText != null)
-            _actionNameText.text = action.GetType().Name.Replace("Character", "");
+            _actionNameText.text = action.ActionName.Replace("Character", "");
     }
 
     private void HandleActionEnded()
     {
-        // On dispara?t compl?tement
+        // On disparaît complètement
         gameObject.SetActive(false);
     }
 

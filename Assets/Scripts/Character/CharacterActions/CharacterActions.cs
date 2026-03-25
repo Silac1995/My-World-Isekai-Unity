@@ -29,17 +29,14 @@ public class CharacterActions : CharacterSystem
         // Owner/Client -> Server Intent (Only if it's the real action, not a proxy)
         if (!IsServer && IsOwner && !(action is CharacterVisualProxyAction))
         {
-            // Owner predicts visually, but doesn't apply effect safely within the action itself (or action handles IsServer check)
-            // Wait, we just execute locally for prediction. The real logic executed on Server.
-            // But if we execute locally, Owner's OnApplyEffect runs! We must ensure Actions check IsServer internally, 
-            // OR we don't predict complex generic actions, we just wait for the Server?
-            // Interaction and Combat already bypass this. Let's just predict visually.
+            // Owner predicts visually.
         }
 
         if (IsServer && !(action is CharacterVisualProxyAction) && !action.IsReplicatedInternally)
         {
-            // Server broadcasts the visual proxy to all clients (except itself)
-            BroadcastActionVisualsClientRpc(action.ShouldPlayGenericActionAnimation, action.Duration);
+            // Server broadcasts the visual proxy to all clients
+            // MODIFICATION: Add ActionName to sync UI display
+            BroadcastActionVisualsClientRpc(action.ShouldPlayGenericActionAnimation, action.Duration, action.ActionName);
         }
 
         _currentAction = action;
@@ -54,15 +51,12 @@ public class CharacterActions : CharacterSystem
         // 2. GESTION DU FLUX (Instantané vs Temporisé)
         if (action.Duration <= 0)
         {
-            // On exécute tout de suite sans créer de Coroutine (économie de mémoire)
             try
             {
                 if (IsServer || action is CharacterVisualProxyAction)
                     action.OnApplyEffect(); 
-                // Wait, if it's NOT server and NOT proxy (meaning Owner local prediction), should we apply effect?
-                // Real actions MUST check character.IsServer inside OnApplyEffect to be safe.
                 else 
-                    action.OnApplyEffect(); // We let it run, Actions should be refactored to check IsServer for critical data
+                    action.OnApplyEffect(); 
                 
                 action.Finish();
             }
@@ -74,7 +68,6 @@ public class CharacterActions : CharacterSystem
         }
         else
         {
-            // On ne crée la coroutine que si nécessaire
             _actionRoutine = StartCoroutine(ActionTimerRoutine(_currentAction));
         }
 
@@ -82,13 +75,13 @@ public class CharacterActions : CharacterSystem
     }
 
     [Rpc(SendTo.NotServer)]
-    private void BroadcastActionVisualsClientRpc(bool shouldPlayGeneric, float duration)
+    private void BroadcastActionVisualsClientRpc(bool shouldPlayGeneric, float duration, string actionName)
     {
         if (IsOwner && _currentAction != null) return; // Owner may have already predicted it
 
         ClearCurrentAction(); // Clear any visual desyncs
 
-        var proxy = new CharacterVisualProxyAction(_character, duration, shouldPlayGeneric);
+        var proxy = new CharacterVisualProxyAction(_character, duration, shouldPlayGeneric, actionName);
         ExecuteAction(proxy);
     }
 
@@ -96,22 +89,16 @@ public class CharacterActions : CharacterSystem
     {
         if (action == null) yield break;
 
-        // On attend la durée prévue
         if (action.Duration > 0)
         {
             yield return new WaitForSeconds(action.Duration);
         }
 
-        // --- SÉCURITÉ ---
-        // Si l'action a été annulée ou terminée entre temps (ClearCurrentAction), on arrête tout.
         if (_currentAction != action) yield break;
 
         try
         {
-            // On applique l'effet
             action.OnApplyEffect();
-
-            // On termine l'action (ce qui déclenchera CleanupAction via l'event)
             action.Finish();
         }
         catch (Exception e)
@@ -156,8 +143,8 @@ public class CharacterActions : CharacterSystem
 
         if (_currentAction != null)
         {
-            _currentAction.OnActionFinished -= CleanupAction; // Désabonnement important
-            _currentAction.OnCancel(); // Permet à l'action de se désabonner (évite memory leaks)
+            _currentAction.OnActionFinished -= CleanupAction;
+            _currentAction.OnCancel(); 
 
             var animHandler = _character.CharacterVisual?.CharacterAnimator;
             if (animHandler != null)
@@ -171,7 +158,6 @@ public class CharacterActions : CharacterSystem
         _currentAction = null;
     }
 
-    // Si le personnage est détruit, on s'assure que tout s'arrête
     protected override void OnDisable()
     {
         base.OnDisable();
@@ -194,11 +180,14 @@ public class CharacterActions : CharacterSystem
 public class CharacterVisualProxyAction : CharacterAction
 {
     private bool _shouldPlayGeneric;
+    private string _proxyActionName;
     public override bool ShouldPlayGenericActionAnimation => _shouldPlayGeneric;
+    public override string ActionName => _proxyActionName;
 
-    public CharacterVisualProxyAction(Character character, float duration, bool shouldPlayGeneric) : base(character, duration)
+    public CharacterVisualProxyAction(Character character, float duration, bool shouldPlayGeneric, string actionName) : base(character, duration)
     {
         _shouldPlayGeneric = shouldPlayGeneric;
+        _proxyActionName = actionName;
     }
 
     public override void OnStart() { }

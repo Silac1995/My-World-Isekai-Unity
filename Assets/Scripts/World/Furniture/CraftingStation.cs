@@ -57,39 +57,22 @@ public class CraftingStation : Furniture
             return null;
         }
 
-        // Prefab world depuis le SO
-        GameObject prefab = item.WorldItemPrefab;
-        if (prefab == null)
+        if (SpawnManager.Instance == null)
         {
-            Debug.LogError($"<color=red>[Crafting]</color> Pas de prefab sur le SO {item.ItemName} !");
+            Debug.LogError($"<color=red>[Crafting]</color> SpawnManager.Instance est null !");
             return null;
         }
 
         // Position de sortie
         Vector3 spawnPos = _outputPoint != null ? _outputPoint.position : transform.position + Vector3.up * 0.5f;
 
-        // 1. Instancier le prefab WorldItem
-        GameObject worldItemGo = Object.Instantiate(prefab, spawnPos, Quaternion.identity);
-        worldItemGo.name = $"WorldItem_{item.ItemName}";
-
-        // 2. Créer l'instance de données
+        // 1. Créer l'instance de données avec les couleurs choisies
         ItemInstance instance = item.CreateInstance();
-
-        // Application des couleurs choisies
         if (primaryColor.a > 0f) instance.SetPrimaryColor(primaryColor);
         if (secondaryColor.a > 0f) instance.SetSecondaryColor(secondaryColor);
 
-        // 3. Lier au WorldItem
-        if (worldItemGo.TryGetComponent(out WorldItem worldItem))
-        {
-            worldItem.Initialize(instance);
-        }
-        else
-        {
-            Debug.LogError($"<color=red>[Crafting]</color> Le prefab n'a pas de composant WorldItem !");
-            Object.Destroy(worldItemGo);
-            return null;
-        }
+        // 2. Spawn réseau via SpawnManager (visible par tous les clients)
+        SpawnManager.Instance.SpawnCopyOfItem(instance, spawnPos);
 
         Debug.Log($"<color=green>[Crafting]</color> {crafter.CharacterName} a crafté {item.ItemName} à {FurnitureName} !");
         return instance;

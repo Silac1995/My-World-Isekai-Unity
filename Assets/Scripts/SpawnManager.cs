@@ -85,14 +85,14 @@ public class SpawnManager : MonoBehaviour
         {
             worldItemComponent.Initialize(instance);
 
-            worldItemComponent.SetNetworkData(new NetworkItemData
-            {
-                ItemId = new Unity.Collections.FixedString64Bytes(data.ItemId),
-                JsonData = new Unity.Collections.FixedString4096Bytes(JsonUtility.ToJson(instance))
-            });
-
             if (worldItemGo.TryGetComponent(out Unity.Netcode.NetworkObject netObj))
             {
+                worldItemComponent.SetNetworkData(new NetworkItemData
+                {
+                    ItemId = new Unity.Collections.FixedString64Bytes(data.ItemId),
+                    JsonData = new Unity.Collections.FixedString4096Bytes(JsonUtility.ToJson(instance))
+                });
+
                 netObj.Spawn(true);
             }
             else
@@ -135,12 +135,7 @@ public class SpawnManager : MonoBehaviour
 
         if (existingInstance == null) return;
 
-        // On récupère le prefab depuis le SO de l'instance existante
-        GameObject prefabToSpawn = existingInstance.ItemSO.ItemPrefab != null
-                                    ? existingInstance.ItemSO.ItemPrefab
-                                    : _defaultItemPrefab;
-
-        GameObject go = Instantiate(prefabToSpawn, pos, Quaternion.identity);
+        GameObject go = Instantiate(_defaultItemPrefab, pos, Quaternion.identity);
         go.name = $"WorldItem_{existingInstance.CustomizedName}_Copy";
 
         // On applique les propriétés sauvegardées (couleurs, library)
@@ -151,16 +146,16 @@ public class SpawnManager : MonoBehaviour
             if (worldItem == null) worldItem = go.GetComponentInChildren<WorldItem>();
             worldItem.Initialize(existingInstance);
 
+            if (go.TryGetComponent(out Unity.Netcode.NetworkObject netObj))
+            {
+                netObj.Spawn(true);
+            }
+
             worldItem.SetNetworkData(new NetworkItemData
             {
                 ItemId = new Unity.Collections.FixedString64Bytes(existingInstance.ItemSO.ItemId),
                 JsonData = new Unity.Collections.FixedString4096Bytes(JsonUtility.ToJson(existingInstance))
             });
-
-            if (go.TryGetComponent(out Unity.Netcode.NetworkObject netObj))
-            {
-                netObj.Spawn(true);
-            }
         }
     }
 

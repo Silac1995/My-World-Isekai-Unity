@@ -39,29 +39,8 @@ public class ItemInteractable : InteractableObject
     public override void Interact(Character interactor)
     {
         if (interactor == null) return;
+        if (WorldItem == null || WorldItem.NetworkObject == null || !WorldItem.NetworkObject.IsSpawned) return;
 
-        var instance = ItemInstance;
-        if (instance == null)
-        {
-            Debug.LogWarning("[Interaction] Pas d'instance. Objet deja ramasse.");
-            return;
-        }
-
-        GameObject rootToDestroy = RootGameObject;
-
-        // A. EQUIPEMENT PORTABLE (Vetements, sacs...)
-        if (instance is WearableInstance wearable)
-        {
-            CharacterEquipAction equipAction = new CharacterEquipAction(interactor, wearable);
-            interactor.CharacterActions.ExecuteAction(equipAction);
-            if (rootToDestroy != null) Object.Destroy(rootToDestroy);
-            Debug.Log("[Equip] " + wearable.CustomizedName + " porte.");
-        }
-        // B. ARME OU OBJET DIVERS (On ramasse dans inventaire)
-        else
-        {
-            CharacterPickUpItem pickUpAction = new CharacterPickUpItem(interactor, instance, rootToDestroy);
-            interactor.CharacterActions.ExecuteAction(pickUpAction);
-        }
+        WorldItem.RequestInteractServerRpc(interactor.NetworkObject.NetworkObjectId);
     }
 }
