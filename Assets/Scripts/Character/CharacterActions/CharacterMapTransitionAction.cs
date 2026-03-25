@@ -39,9 +39,15 @@ public class CharacterMapTransitionAction : CharacterAction
         // Prediction: Client warps instantly for seamless feel
         if (_character.IsOwner || _character.IsLocalPlayer)
         {
-            if (_character.TryGetComponent(out CharacterMovement movement))
+            // Only predict warp if we know the real position (repeat visits).
+            // On first visit, _targetPosition is Vector3.zero — let the server
+            // resolve the correct interior position and warp authoritatively.
+            if (_targetPosition != Vector3.zero)
             {
-                movement.Warp(_targetPosition);
+                if (_character.TryGetComponent(out CharacterMovement movement))
+                {
+                    movement.Warp(_targetPosition);
+                }
             }
 
             // Send authoritative request cleanly via separated Tracker component

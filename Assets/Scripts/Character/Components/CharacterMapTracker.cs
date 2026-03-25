@@ -125,36 +125,53 @@ public class CharacterMapTracker : NetworkBehaviour
             string buildingId = ExtractBuildingId(targetMapId);
             string exteriorMapId = ExtractExteriorMapId(targetMapId);
 
-            if (!string.IsNullOrEmpty(buildingId) && !string.IsNullOrEmpty(exteriorMapId))
+            if (string.IsNullOrEmpty(buildingId))
             {
-                // Find the door to get the prefabId and exterior door position
-                var door = FindDoorForBuilding(buildingId);
-                if (door != null)
-                {
-                    var record = BuildingInteriorRegistry.Instance.RegisterInterior(
-                        buildingId, door.PrefabId, exteriorMapId, door.ReturnWorldPosition
-                    );
-
-                    if (record != null)
-                    {
-                        WorldSettingsData settings = Resources.Load<WorldSettingsData>("Data/World/WorldSettingsData");
-                        if (settings != null)
-                        {
-                            GameObject interiorPrefab = settings.GetInteriorPrefab(record.PrefabId);
-                            if (interiorPrefab != null)
-                            {
-                                BuildingInteriorSpawner.SpawnInterior(record, interiorPrefab);
-                                Vector3 interiorOrigin = WorldOffsetAllocator.Instance.GetInteriorOffsetVector(record.SlotIndex);
-                                return interiorOrigin;
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    Debug.LogError($"[CharacterMapTracker] Could not find BuildingInteriorDoor for building '{buildingId}' to lazy-spawn interior.");
-                }
+                Debug.LogError($"[CharacterMapTracker] Could not extract BuildingId from interior map ID '{targetMapId}'.");
+                return clientPosition;
             }
+
+            // Find the door to get the prefabId and exterior door position
+            var door = FindDoorForBuilding(buildingId);
+            if (door == null)
+            {
+                Debug.LogError($"[CharacterMapTracker] Could not find BuildingInteriorDoor for building '{buildingId}' to lazy-spawn interior.");
+                return clientPosition;
+            }
+
+            // Use the door's exterior map ID if we couldn't extract one (e.g. fallback "World" prefix)
+            if (string.IsNullOrEmpty(exteriorMapId))
+            {
+                exteriorMapId = door.ExteriorMapId;
+            }
+
+            var record = BuildingInteriorRegistry.Instance.RegisterInterior(
+                buildingId, door.PrefabId, exteriorMapId, door.ReturnWorldPosition
+            );
+
+            if (record == null)
+            {
+                Debug.LogError($"[CharacterMapTracker] Failed to register interior for building '{buildingId}'.");
+                return clientPosition;
+            }
+
+            WorldSettingsData settings = Resources.Load<WorldSettingsData>("Data/World/WorldSettingsData");
+            if (settings == null)
+            {
+                Debug.LogError("[CharacterMapTracker] WorldSettingsData not found at 'Data/World/WorldSettingsData'.");
+                return clientPosition;
+            }
+
+            GameObject interiorPrefab = settings.GetInteriorPrefab(record.PrefabId);
+            if (interiorPrefab == null)
+            {
+                Debug.LogError($"[CharacterMapTracker] No InteriorPrefab found for PrefabId '{record.PrefabId}' in WorldSettingsData.");
+                return clientPosition;
+            }
+
+            BuildingInteriorSpawner.SpawnInterior(record, interiorPrefab);
+            Vector3 interiorOrigin = WorldOffsetAllocator.Instance.GetInteriorOffsetVector(record.SlotIndex);
+            return interiorOrigin;
         }
 
         return clientPosition;

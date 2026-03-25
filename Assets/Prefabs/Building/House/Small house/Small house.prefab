@@ -698,7 +698,7 @@ MonoBehaviour:
   _buildingZone: {fileID: 7867093204667330830}
   _deliveryZone: {fileID: 0}
   _constructionRequirements: []
-  _prefabId: Small_house_A
+  _prefabId: B002-SmallHouseA
   NetworkBuildingId:
     UpdateTraits:
       MinSecondsBetweenUpdates: 0
