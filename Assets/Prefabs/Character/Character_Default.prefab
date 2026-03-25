@@ -1679,6 +1679,7 @@ MonoBehaviour:
   _character: {fileID: 2536622428659117900}
   _unlockedBuildingIds:
   - B000-Lumberyard
+  - B001-Crafting
   _placementManager: {fileID: 3143325427494173382}
   _maxPlacementRange: 30
 --- !u!114 &3143325427494173382

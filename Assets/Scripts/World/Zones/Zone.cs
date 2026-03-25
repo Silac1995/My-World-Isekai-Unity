@@ -2,10 +2,11 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
 using Unity.AI.Navigation;
+using Unity.Netcode;
 
 [RequireComponent(typeof(BoxCollider))]
 [RequireComponent(typeof(NavMeshModifierVolume))]
-public class Zone : MonoBehaviour
+public class Zone : NetworkBehaviour
 {
     public ZoneType zoneType;
     public string zoneName;

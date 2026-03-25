@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using System.Linq;
+using Unity.Netcode;
 using UnityEngine;
+using MWI.WorldSystem;
 
 /// <summary>
 /// Classe abstraite mère de tous les bâtiments.
@@ -30,8 +32,14 @@ public class Building : ComplexRoom
     public Collider BuildingZone => _buildingZone;
     public Zone DeliveryZone => _deliveryZone;
     
-    public MWI.WorldSystem.BuildingState CurrentState { get; protected set; } = MWI.WorldSystem.BuildingState.Complete;
-    public bool IsUnderConstruction => CurrentState == MWI.WorldSystem.BuildingState.UnderConstruction;
+    private NetworkVariable<MWI.WorldSystem.BuildingState> _currentState = new NetworkVariable<MWI.WorldSystem.BuildingState>(
+        MWI.WorldSystem.BuildingState.Complete,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server
+    );
+
+    public MWI.WorldSystem.BuildingState CurrentState => _currentState.Value;
+    public bool IsUnderConstruction => _currentState.Value == MWI.WorldSystem.BuildingState.UnderConstruction;
     public System.Action OnConstructionComplete;
 
     public ComplexRoom MainRoom => this;
@@ -53,19 +61,25 @@ public class Building : ComplexRoom
             }
         }
 
-        // Initialize state based on requirements
-        if (_constructionRequirements != null && _constructionRequirements.Count > 0)
+        // Initialize state based on requirements (only on server)
+        if (IsServer)
         {
-            CurrentState = MWI.WorldSystem.BuildingState.UnderConstruction;
-        }
-        else
-        {
-            CurrentState = MWI.WorldSystem.BuildingState.Complete;
+            if (_constructionRequirements != null && _constructionRequirements.Count > 0)
+            {
+                _currentState.Value = MWI.WorldSystem.BuildingState.UnderConstruction;
+            }
+            else
+            {
+                _currentState.Value = MWI.WorldSystem.BuildingState.Complete;
+            }
         }
     }
 
     protected virtual void Start()
     {
+        // Subscribe to state changes on all clients
+        _currentState.OnValueChanged += HandleStateChanged;
+
         // Register in Start to ensure BuildingManager.Instance is initialized
         if (BuildingManager.Instance != null)
         {
@@ -74,6 +88,14 @@ public class Building : ComplexRoom
         else
         {
             Debug.LogWarning($"<color=orange>[Building]</color> {buildingName} n'a pas pu s'enregistrer car BuildingManager n'est pas dans la scène.");
+        }
+    }
+
+    private void HandleStateChanged(MWI.WorldSystem.BuildingState previousValue, MWI.WorldSystem.BuildingState newValue)
+    {
+        if (newValue == MWI.WorldSystem.BuildingState.Complete)
+        {
+            OnConstructionComplete?.Invoke();
         }
     }
 
@@ -179,12 +201,13 @@ public class Building : ComplexRoom
     /// </summary>
     public virtual void BuildInstantly()
     {
-        if (CurrentState == MWI.WorldSystem.BuildingState.Complete) return;
+        if (!IsServer) return; // Modification of state must happen on server
+        if (_currentState.Value == MWI.WorldSystem.BuildingState.Complete) return;
 
-        CurrentState = MWI.WorldSystem.BuildingState.Complete;
+        _currentState.Value = MWI.WorldSystem.BuildingState.Complete;
         _contributedMaterials.Clear();
         Debug.Log($"<color=green>[Building]</color> {buildingName} has been built instantly.");
-        OnConstructionComplete?.Invoke();
+        // OnConstructionComplete will be triggered by state change callback
     }
 
     /// <summary>
@@ -224,9 +247,9 @@ public class Building : ComplexRoom
 
         if (isFinished)
         {
-            CurrentState = MWI.WorldSystem.BuildingState.Complete;
+            _currentState.Value = MWI.WorldSystem.BuildingState.Complete;
             Debug.Log($"<color=green>[Building]</color> {buildingName} has finished construction!");
-            OnConstructionComplete?.Invoke();
+            // OnConstructionComplete will be triggered by state change callback
         }
     }
 

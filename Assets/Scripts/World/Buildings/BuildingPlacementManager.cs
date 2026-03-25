@@ -235,11 +235,18 @@ namespace MWI.WorldSystem
 
             GameObject buildingObj = Instantiate(entry.BuildingPrefab, position, rotation);
 
-            // Spawn on the network first
+            // Spawn on the network
             var netObj = buildingObj.GetComponent<NetworkObject>();
             if (netObj != null)
             {
                 netObj.Spawn();
+            }
+            else
+            {
+                Debug.LogError($"[BuildingPlacementManager] Prefab for '{prefabId}' is missing a NetworkObject component! It will only exist on the Server/Host.");
+                // Destroy to prevent desync where host has a building that clients don't see
+                Destroy(buildingObj);
+                return;
             }
 
             // If instant mode, skip construction requirements

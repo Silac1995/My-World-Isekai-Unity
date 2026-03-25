@@ -33,3 +33,8 @@ MonoBehaviour:
     Icon: {fileID: 0}
     BuildingPrefab: {fileID: 2761951707981523353, guid: a4477ff05a156094798e960b1dca3af6, type: 3}
     CommunityPriority: 7
+  - PrefabId: B001-Crafting
+    BuildingName: Crafting Building
+    Icon: {fileID: 0}
+    BuildingPrefab: {fileID: 1945857671188992395, guid: bcf1eea9ceffe55459083485e22660a5, type: 3}
+    CommunityPriority: 7
