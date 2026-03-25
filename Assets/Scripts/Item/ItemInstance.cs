@@ -50,8 +50,7 @@ public abstract class ItemInstance
 
         foreach (string partName in visualParts)
         {
-            // RECURSIVE SEARCH: Fix for nested prefabs
-            Transform part = FindChildRecursive(visualTransform, partName);
+            Transform part = visualTransform.Find(partName);
             if (part == null) continue;
 
             if (part.TryGetComponent(out SpriteLibrary library))
@@ -86,8 +85,7 @@ public abstract class ItemInstance
 
         foreach (string partName in visualParts)
         {
-            // RECURSIVE SEARCH: Fix for nested prefabs
-            Transform part = FindChildRecursive(visualTransform, partName);
+            Transform part = visualTransform.Find(partName);
             if (part == null) continue;
 
             if (part.TryGetComponent(out SpriteLibrary library))
@@ -111,14 +109,5 @@ public abstract class ItemInstance
         }
     }
 
-    private Transform FindChildRecursive(Transform parent, string name)
-    {
-        if (parent.name == name) return parent;
-        foreach (Transform child in parent)
-        {
-            Transform result = FindChildRecursive(child, name);
-            if (result != null) return result;
-        }
-        return null;
-    }
+
 }

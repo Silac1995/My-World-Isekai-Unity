@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::WearableSO
   category_name: 01_tshirt
   _spriteLibrary: {fileID: 7108339969198208228, guid: 48f02b820b1ea544d858945ff32a59bc, type: 3}
-  itemId: 
+  itemId: 101
   itemName: T-shirt
   description: A simple T-shirt
   icon: {fileID: 0}

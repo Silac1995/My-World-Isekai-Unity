@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::WearableSO
   category_name: 01_jeans
   _spriteLibrary: {fileID: 7108339969198208228, guid: b8faecbc49b85d443b8558449dd87c2f, type: 3}
-  itemId: 
+  itemId: 102
   itemName: Jeans
   description: A pair of jeans
   icon: {fileID: 0}

@@ -101,8 +101,7 @@ public abstract class WearableHandlerBase : MonoBehaviour
     // Extraction de la logique pour éviter la répétition
     private void ApplyColorToSpecificTransform(Transform root, string subPartName, Color color)
     {
-        // On cherche récursivement car le prefab peut être niché sous le root
-        Transform child = FindChildRecursive(root, subPartName);
+        Transform child = root.Find(subPartName);
         if (child != null && child.TryGetComponent(out SpriteRenderer sr))
         {
             sr.color = color;
@@ -116,17 +115,5 @@ public abstract class WearableHandlerBase : MonoBehaviour
         {
             lib.spriteLibraryAsset = _spriteLibraryAsset;
         }
-    }
-
-    private Transform FindChildRecursive(Transform parent, string name)
-    {
-        if (parent.name == name) return parent;
-
-        foreach (Transform child in parent)
-        {
-            Transform result = FindChildRecursive(child, name);
-            if (result != null) return result;
-        }
-        return null;
     }
 }
