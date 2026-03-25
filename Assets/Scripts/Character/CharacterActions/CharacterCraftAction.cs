@@ -55,16 +55,22 @@ public class CharacterCraftAction : CharacterAction
 
     public override void OnApplyEffect()
     {
-        if (_station != null && _itemToCraft != null)
+        if (_station == null || _itemToCraft == null)
         {
-            _station.Craft(_itemToCraft, character, _primaryColor, _secondaryColor);
+            Debug.LogWarning($"<color=orange>[Action]</color> {character.CharacterName} a annulé son craft car la station ou l'objet n'existe plus.");
+            return;
+        }
 
-            // Si c'est le joueur, il la libère en fermant la fenêtre UI.
-            // Pour les NPCs, c'est géré par PerformCraftBehaviour.Exit() ou l'action appelante.
+        var actions = character.CharacterActions;
+        if (actions != null && !actions.IsServer)
+        {
+            // Client owner: delegate to server via RPC
+            actions.RequestCraftServerRpc(_itemToCraft.ItemId, _primaryColor, _secondaryColor, _station.transform.position);
         }
         else
         {
-            Debug.LogWarning($"<color=orange>[Action]</color> {character.CharacterName} a annulé son craft car la station ou l'objet n'existe plus.");
+            // Server (or offline): execute directly
+            _station.Craft(_itemToCraft, character, _primaryColor, _secondaryColor);
         }
     }
 

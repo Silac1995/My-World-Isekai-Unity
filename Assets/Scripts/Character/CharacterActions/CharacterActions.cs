@@ -27,9 +27,10 @@ public class CharacterActions : CharacterSystem
         if (!action.CanExecute()) return false;
 
         // Owner/Client -> Server Intent (Only if it's the real action, not a proxy)
-        if (!IsServer && IsOwner && !(action is CharacterVisualProxyAction))
+        if (!IsServer && IsOwner && !(action is CharacterVisualProxyAction) && !action.IsReplicatedInternally)
         {
-            // Owner predicts visually.
+            // Ask the server to broadcast visuals to everyone else
+            NotifyActionStartedServerRpc(action.ShouldPlayGenericActionAnimation, action.Duration, action.ActionName);
         }
 
         if (IsServer && !(action is CharacterVisualProxyAction) && !action.IsReplicatedInternally)
@@ -72,6 +73,51 @@ public class CharacterActions : CharacterSystem
         }
 
         return true;
+    }
+
+    [Rpc(SendTo.Server)]
+    private void NotifyActionStartedServerRpc(bool shouldPlayGeneric, float duration, string actionName)
+    {
+        // Server relays the visual proxy to all clients (excluding the owner who already predicted it)
+        BroadcastActionVisualsClientRpc(shouldPlayGeneric, duration, actionName);
+    }
+
+    [Rpc(SendTo.Server)]
+    public void RequestCraftServerRpc(string itemId, Color primaryColor, Color secondaryColor, Vector3 stationPosition)
+    {
+        ItemSO[] allItems = Resources.LoadAll<ItemSO>("Data/Item");
+        ItemSO itemSO = System.Array.Find(allItems, match => match.ItemId == itemId);
+        if (itemSO == null)
+        {
+            Debug.LogWarning($"[CharacterActions] Server: Could not find ItemSO with ID '{itemId}'");
+            return;
+        }
+
+        CraftingStation station = FindCraftingStationNear(stationPosition);
+        if (station == null)
+        {
+            Debug.LogWarning($"[CharacterActions] Server: Could not find CraftingStation near {stationPosition}");
+            return;
+        }
+
+        station.Craft(itemSO, _character, primaryColor, secondaryColor);
+    }
+
+    private CraftingStation FindCraftingStationNear(Vector3 position, float maxDistance = 2f)
+    {
+        CraftingStation[] stations = UnityEngine.Object.FindObjectsOfType<CraftingStation>();
+        CraftingStation best = null;
+        float bestDist = maxDistance;
+        foreach (var s in stations)
+        {
+            float dist = Vector3.Distance(s.transform.position, position);
+            if (dist < bestDist)
+            {
+                bestDist = dist;
+                best = s;
+            }
+        }
+        return best;
     }
 
     [Rpc(SendTo.NotServer)]
