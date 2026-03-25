@@ -18,7 +18,7 @@ namespace MWI.WorldSystem
         [SerializeField] private Material _ghostMaterialValid;
         [SerializeField] private Material _ghostMaterialInvalid;
 
-        private WorldSettingsData _settings;
+        [SerializeField] private WorldSettingsData _settings;
         private GameObject _ghostInstance;
         private string _activePrefabId;
         private Building _ghostBuildingComponent;
@@ -35,6 +35,11 @@ namespace MWI.WorldSystem
             _character = character;
 
             EnsureSettings();
+        }
+
+        public void SetSettings(WorldSettingsData settings)
+        {
+            _settings = settings;
         }
 
         /// <summary>

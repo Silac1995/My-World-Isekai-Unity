@@ -5,6 +5,7 @@ using UnityEngine.AI;
 using System.Collections.Generic;
 using MWI.Time;
 using MWI.AI;
+using MWI.WorldSystem;
 
 public enum CharacterBusyReason
 {
@@ -136,6 +137,7 @@ public class Character : NetworkBehaviour
     public CharacterGoapController CharacterGoap => _characterGoap;
     public CharacterCombatLevel CharacterCombatLevel => _characterCombatLevel;
     public CharacterBlueprints CharacterBlueprints => _characterBlueprints;
+    public BuildingPlacementManager PlacementManager => _characterBlueprints != null ? _characterBlueprints.PlacementManager : null;
 
     public NavMeshAgent NavMesh => _cachedNavMeshAgent;
     public TimeManager TimeManager => _timeManager != null ? _timeManager : TimeManager.Instance;

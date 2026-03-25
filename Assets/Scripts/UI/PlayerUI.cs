@@ -132,9 +132,10 @@ public class PlayerUI : MonoBehaviour
             _buildingUI.Initialize(characterComponent);
         }
 
-        BuildingPlacementManager placementManager = characterComponent.GetComponent<BuildingPlacementManager>();
-        if (placementManager != null)
+        BuildingPlacementManager placementManager = characterComponent.PlacementManager;
+        if (placementManager != null && _buildingUI != null)
         {
+            placementManager.SetSettings(_buildingUI.WorldSettings);
             placementManager.Initialize(characterComponent);
         }
 

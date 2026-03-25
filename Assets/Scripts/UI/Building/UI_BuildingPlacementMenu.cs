@@ -20,6 +20,8 @@ namespace MWI.UI.Building
 
         [Header("Instant Mode (Cheat)")]
         [SerializeField] private Toggle _instantModeToggle;
+        
+        public WorldSettingsData WorldSettings => _worldSettings;
 
         private CharacterBlueprints _blueprints;
         private BuildingPlacementManager _placementManager;
@@ -28,7 +30,7 @@ namespace MWI.UI.Building
         {
             if (character == null) return;
             _blueprints = character.CharacterBlueprints;
-            _placementManager = character.GetComponent<BuildingPlacementManager>();
+            _placementManager = _blueprints.PlacementManager;
 
             // Wire up instant mode toggle
             if (_instantModeToggle != null)

@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using MWI.WorldSystem;
 
 /// <summary>
 /// Component added to Character prefabs to store which building IDs they know how to construct.
@@ -12,8 +13,11 @@ public class CharacterBlueprints : CharacterSystem
     [SerializeField] private List<string> _unlockedBuildingIds = new List<string>();
 
     [Header("Placement Settings")]
+    [SerializeField] private BuildingPlacementManager _placementManager;
     [Tooltip("Maximum distance from the character to place a building.")]
     [SerializeField] private float _maxPlacementRange = 10f;
+
+    public BuildingPlacementManager PlacementManager => _placementManager;
 
     /// <summary>
     /// Read-only access to the currently known blueprint IDs.
