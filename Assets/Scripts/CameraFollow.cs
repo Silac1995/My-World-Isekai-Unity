@@ -62,14 +62,8 @@ public class CameraFollow : MonoBehaviour
 
         // Zoom via scroll - Disabled during building mode
         bool isBuilding = character != null && character.IsBuilding;
-        if (!isBuilding)
-        {
-            float scroll = Input.GetAxis("Mouse ScrollWheel");
-            if (Mathf.Abs(scroll) > 0.01f)
-            {
-                _targetZoom = Mathf.Clamp01(_targetZoom - scroll * zoomSpeed);
-            }
-        }
+        float scroll = Input.GetAxis("Mouse ScrollWheel");
+        _targetZoom = Mathf.Clamp01(_targetZoom - scroll * zoomSpeed);
 
         _currentZoom = Mathf.Lerp(_currentZoom, _targetZoom, Time.deltaTime * zoomSmoothing);
         
