@@ -149,17 +149,29 @@ public class CombatStyleAttack : MonoBehaviour
     private void OnTriggerEnter(Collider other)
     {
         // ONLY the Server registers potential targets
-        if (Unity.Netcode.NetworkManager.Singleton != null && 
-            Unity.Netcode.NetworkManager.Singleton.IsListening && 
+        if (Unity.Netcode.NetworkManager.Singleton != null &&
+            Unity.Netcode.NetworkManager.Singleton.IsListening &&
             !Unity.Netcode.NetworkManager.Singleton.IsServer) return;
 
+        // Existing Character detection
         Character target = other.GetComponentInParent<Character>();
-        
-        if (target == null) return;
-        if (target == _character) return;
-        if (!target.IsAlive()) return;
-        if (_hitTargets.Contains(target) || _potentialTargets.Contains(target)) return;
 
-        _potentialTargets.Add(target);
+        if (target != null)
+        {
+            if (target == _character) return;
+            if (!target.IsAlive()) return;
+            if (_hitTargets.Contains(target) || _potentialTargets.Contains(target)) return;
+
+            _potentialTargets.Add(target);
+            return;
+        }
+
+        // Non-Character IDamageable (doors, destructibles)
+        IDamageable damageable = other.GetComponentInParent<IDamageable>();
+        if (damageable != null && damageable.CanBeDamaged())
+        {
+            float damage = GetDamage() * Random.Range(0.7f, 1.3f);
+            damageable.TakeDamage(damage, _character);
+        }
     }
 }
