@@ -15,6 +15,10 @@ public abstract class ItemSO : ScriptableObject
     [SerializeField] protected GameObject worldItem_prefab;
     [SerializeField] private ItemWeight _weight = ItemWeight.Medium;
 
+    [Header("Tier")]
+    [Tooltip("Item tier level. 0 = untiered. Higher tiers unlock progression-gated content.")]
+    [SerializeField] private int _tier = 0;
+
     public string ItemId => itemId;
     public string ItemName => itemName;
     public string Description => description;
@@ -24,6 +28,7 @@ public abstract class ItemSO : ScriptableObject
     public GameObject WorldItemPrefab => worldItem_prefab;
     public SpriteLibraryAsset SpriteLibraryAsset => _spriteLibrary;
     public ItemWeight Weight => _weight;
+    public int Tier => _tier;
     public abstract System.Type InstanceType { get; }
 
     [Header("Crafting Requirements")]
