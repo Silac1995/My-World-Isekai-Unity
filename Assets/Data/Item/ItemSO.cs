@@ -51,4 +51,6 @@ public struct CraftingIngredient
 {
     public ItemSO Item;
     public int Amount;
+    [Tooltip("If true, the item is required as a reference but not consumed (e.g., original key for copying).")]
+    public bool IsReferenceOnly;
 }
