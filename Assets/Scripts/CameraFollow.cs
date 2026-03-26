@@ -185,6 +185,29 @@ public class CameraFollow : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Instantly teleports the camera to the correct follow position,
+    /// bypassing SmoothDamp. Call this after ForceWarp / map transitions
+    /// to avoid the camera slowly panning across thousands of units.
+    /// </summary>
+    public void SnapToTarget()
+    {
+        if (target == null) return;
+
+        float offsetY = Mathf.Lerp(minOffsetY, maxOffsetY, _currentZoom);
+        float offsetZ = Mathf.Lerp(minOffsetZ, maxOffsetZ, _currentZoom);
+
+        transform.position = new Vector3(
+            target.position.x,
+            target.position.y + offsetY,
+            target.position.z + offsetZ
+        );
+
+        // Reset SmoothDamp velocity so it doesn't overshoot after the snap
+        _smoothVelocity = Vector3.zero;
+        _currentOcclusionT = 1f;
+    }
+
     private void OnDestroy()
     {
         if (character != null)

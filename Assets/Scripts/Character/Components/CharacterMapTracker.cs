@@ -84,7 +84,7 @@ public class CharacterMapTracker : NetworkBehaviour
         Debug.Log($"<color=lime>[MapTracker]</color> WarpClientRpc received: position={position}, IsOwner={IsOwner}");
         if (!IsOwner) return;
 
-        CharacterMovement mov = _character.GetComponentInChildren<CharacterMovement>();
+        CharacterMovement mov = _character.CharacterMovement;
         if (mov != null)
         {
             Debug.Log($"<color=lime>[MapTracker]</color> Client ForceWarp to {position}. Before={transform.position}");
@@ -97,6 +97,10 @@ public class CharacterMapTracker : NetworkBehaviour
             Debug.LogWarning($"<color=orange>[MapTracker]</color> No CharacterMovement found! Falling back to direct transform.position = {position}");
             transform.position = position;
         }
+
+        // Snap camera to avoid smooth pan across thousands of units
+        CameraFollow cam = Camera.main?.GetComponent<CameraFollow>();
+        cam?.SnapToTarget();
     }
 
     /// <summary>

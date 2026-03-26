@@ -44,6 +44,7 @@ public class CharacterMapTransitionAction : CharacterAction
             {
                 Debug.Log($"<color=cyan>[MapTransition]</color> Client predicting ForceWarp to {_targetPosition}");
                 _character.CharacterMovement?.ForceWarp(_targetPosition);
+                SnapCamera();
             }
             else
             {
@@ -84,5 +85,11 @@ public class CharacterMapTransitionAction : CharacterAction
         {
             ScreenFadeManager.Instance?.FadeIn(0.1f);
         }
+    }
+
+    private void SnapCamera()
+    {
+        CameraFollow cam = Camera.main?.GetComponent<CameraFollow>();
+        cam?.SnapToTarget();
     }
 }
