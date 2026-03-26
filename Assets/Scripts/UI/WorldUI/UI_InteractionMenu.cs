@@ -10,13 +10,17 @@ public class UI_InteractionMenu : MonoBehaviour
     [SerializeField] private Image _timerBar;
 
     private readonly List<Button> _pool = new List<Button>();
+    private bool _lockAfterClick;
 
     /// <param name="lockByDefault">
-    /// When true (default), all buttons start disabled — used by combat turn system.
-    /// When false, each button respects its InteractionOption.IsDisabled state.
+    /// When true (default), all buttons start disabled and lock after each click
+    /// — used by combat turn system where only one action per turn is allowed.
+    /// When false, buttons respect InteractionOption.IsDisabled and stay clickable after use.
     /// </param>
     public void Initialize(List<InteractableObject.InteractionOption> options, bool lockByDefault = true)
     {
+        _lockAfterClick = lockByDefault;
+
         // 1. Deactivate all pooled buttons
         foreach (var btn in _pool)
         {
@@ -46,11 +50,17 @@ public class UI_InteractionMenu : MonoBehaviour
 
             // Capture for closure
             var action = options[i].Action;
+            var optionName = options[i].Name;
+            var toggleName = options[i].ToggleName;
+            var label = txt;
             btn.onClick.AddListener(() =>
             {
                 action?.Invoke();
-                // Lock all buttons immediately — one action per menu open
-                SetOptionsInteractable(false);
+                // Swap button text if ToggleName is set (e.g., Lock ↔ Unlock)
+                if (!string.IsNullOrEmpty(toggleName) && label != null)
+                    label.text = label.text == optionName ? toggleName : optionName;
+                if (_lockAfterClick)
+                    SetOptionsInteractable(false);
             });
 
             // Per-button disabled state

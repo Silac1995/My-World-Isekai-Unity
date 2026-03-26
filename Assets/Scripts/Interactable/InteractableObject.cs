@@ -37,6 +37,10 @@ public abstract class InteractableObject : MonoBehaviour
         /// When true, the button is shown but grayed out / not clickable.
         /// </summary>
         public bool IsDisabled;
+        /// <summary>
+        /// If set, clicking the button swaps its label between Name and ToggleName.
+        /// </summary>
+        public string ToggleName;
     }
 
     public virtual System.Collections.Generic.List<InteractionOption> GetHoldInteractionOptions(Character interactor)

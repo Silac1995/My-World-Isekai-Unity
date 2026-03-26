@@ -137,6 +137,7 @@ public class MapTransitionDoor : InteractableObject
             options.Add(new InteractionOption
             {
                 Name = lockLabel,
+                ToggleName = isLocked ? "Lock" : "Unlock",
                 Action = () =>
                 {
                     if (doorLock.IsLocked.Value)

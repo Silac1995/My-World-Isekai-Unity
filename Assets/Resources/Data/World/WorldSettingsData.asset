@@ -40,10 +40,16 @@ MonoBehaviour:
     Icon: {fileID: 0}
     BuildingPrefab: {fileID: 1945857671188992395, guid: bcf1eea9ceffe55459083485e22660a5, type: 3}
     InteriorPrefab: {fileID: 0}
-    CommunityPriority: 7
+    CommunityPriority: 6
   - PrefabId: B002-SmallHouseA
     BuildingName: Small house
     Icon: {fileID: 0}
-    BuildingPrefab: {fileID: 169671309145649435, guid: 603785d3d208be3489ae39bc0a4c4149, type: 3}
+    BuildingPrefab: {fileID: 8102288729684650878, guid: 8a3406ba3f26764478d04877b8d81db5, type: 3}
     InteriorPrefab: {fileID: 8816410813988337591, guid: b8c70d17ef73f7744b0b3b08f31796fc, type: 3}
-    CommunityPriority: 7
+    CommunityPriority: 3
+  - PrefabId: B003-MediumHouseA
+    BuildingName: Medium house
+    Icon: {fileID: 0}
+    BuildingPrefab: {fileID: 7621944366838805257, guid: 756bcda2155bb7b49979c63d3e421831, type: 3}
+    InteriorPrefab: {fileID: 7854107599248192519, guid: 7461a9cf6956142408743195b7ed11a7, type: 3}
+    CommunityPriority: 3
