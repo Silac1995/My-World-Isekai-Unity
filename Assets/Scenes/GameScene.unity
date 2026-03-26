@@ -7011,7 +7011,7 @@ PrefabInstance:
       objectReference: {fileID: 714004452}
     - target: {fileID: 7013122586924547130, guid: a4477ff05a156094798e960b1dca3af6, type: 3}
       propertyPath: m_VersionIndex
-      value: 10334
+      value: 10337
       objectReference: {fileID: 0}
     - target: {fileID: 8600657245120563755, guid: a4477ff05a156094798e960b1dca3af6, type: 3}
       propertyPath: m_AnchorMax.y

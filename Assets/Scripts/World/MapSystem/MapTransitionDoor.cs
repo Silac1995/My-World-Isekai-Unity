@@ -25,22 +25,24 @@ public class MapTransitionDoor : InteractableObject
         DoorHealth doorHealth = GetComponent<DoorHealth>();
 
         // Broken doors are always passable (lock bypassed)
-        bool isBroken = doorHealth != null && doorHealth.IsBroken.Value;
+        bool isBroken = doorHealth != null && doorHealth.IsSpawned && doorHealth.IsBroken.Value;
 
-        if (!isBroken && doorLock != null && doorLock.IsLocked.Value)
+        if (!isBroken && doorLock != null && doorLock.IsSpawned && doorLock.IsLocked.Value)
         {
             // Check if interactor has a matching key
             KeyInstance key = interactor.CharacterEquipment?.FindKeyForLock(doorLock.LockId, doorLock.RequiredTier);
             if (key != null)
             {
                 // Unlock the door (don't walk through yet)
-                doorLock.RequestUnlockServerRpc();
+                if (doorLock.IsSpawned)
+                    doorLock.RequestUnlockServerRpc();
                 return;
             }
             else
             {
                 // No key — jiggle + feedback
-                doorLock.RequestJiggleServerRpc();
+                if (doorLock.IsSpawned)
+                    doorLock.RequestJiggleServerRpc();
                 return;
             }
         }
@@ -104,7 +106,7 @@ public class MapTransitionDoor : InteractableObject
         DoorHealth doorHealth = GetComponent<DoorHealth>();
 
         // Lock/Unlock options (requires matching key)
-        if (doorLock != null)
+        if (doorLock != null && doorLock.IsSpawned)
         {
             bool isBroken = doorHealth != null && doorHealth.IsBroken.Value;
             KeyInstance key = interactor.CharacterEquipment?.FindKeyForLock(doorLock.LockId, doorLock.RequiredTier);
@@ -131,7 +133,7 @@ public class MapTransitionDoor : InteractableObject
         }
 
         // Repair option (broken door)
-        if (doorHealth != null && doorHealth.IsBroken.Value)
+        if (doorHealth != null && doorHealth.IsSpawned && doorHealth.IsBroken.Value)
         {
             options.Add(new InteractionOption
             {

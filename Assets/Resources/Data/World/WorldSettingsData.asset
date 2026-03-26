@@ -44,6 +44,6 @@ MonoBehaviour:
   - PrefabId: B002-SmallHouseA
     BuildingName: Small house
     Icon: {fileID: 0}
-    BuildingPrefab: {fileID: 7153458554410679557, guid: 1fd58c35117c7fc4699772b5fb2696c0, type: 3}
-    InteriorPrefab: {fileID: 9017848905533882618, guid: f742208c61724314f8b4c68e32f00069, type: 3}
+    BuildingPrefab: {fileID: 169671309145649435, guid: 603785d3d208be3489ae39bc0a4c4149, type: 3}
+    InteriorPrefab: {fileID: 8816410813988337591, guid: b8c70d17ef73f7744b0b3b08f31796fc, type: 3}
     CommunityPriority: 7

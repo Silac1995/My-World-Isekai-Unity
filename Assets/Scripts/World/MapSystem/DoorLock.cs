@@ -1,5 +1,6 @@
 using Unity.Netcode;
 using UnityEngine;
+using MWI.WorldSystem;
 
 /// <summary>
 /// Networked lock component for doors. Add to the same GameObject as MapTransitionDoor.
