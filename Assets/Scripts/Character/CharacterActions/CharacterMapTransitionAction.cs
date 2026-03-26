@@ -22,7 +22,9 @@ public class CharacterMapTransitionAction : CharacterAction
     public override void OnStart()
     {
         // Stop the character to prevent walking away during transition
-        if (_character.TryGetComponent(out CharacterMovement movement))
+        // NOTE: CharacterMovement may be on a child GameObject — use GetComponentInChildren.
+        CharacterMovement movement = _character.GetComponentInChildren<CharacterMovement>();
+        if (movement != null)
         {
             movement.Stop();
         }
@@ -47,7 +49,8 @@ public class CharacterMapTransitionAction : CharacterAction
             if (_targetPosition != Vector3.zero)
             {
                 Debug.Log($"<color=cyan>[MapTransition]</color> Client predicting ForceWarp to {_targetPosition}");
-                if (_character.TryGetComponent(out CharacterMovement movement))
+                CharacterMovement movement = _character.GetComponentInChildren<CharacterMovement>();
+                if (movement != null)
                 {
                     movement.ForceWarp(_targetPosition);
                 }
@@ -73,7 +76,8 @@ public class CharacterMapTransitionAction : CharacterAction
         }
         else if (_character.IsServer) // NPC logic, no prediction needed, just direct mutate
         {
-            if (_character.TryGetComponent(out CharacterMovement movement))
+            CharacterMovement movement = _character.GetComponentInChildren<CharacterMovement>();
+            if (movement != null)
             {
                 movement.ForceWarp(_targetPosition);
             }
@@ -88,7 +92,8 @@ public class CharacterMapTransitionAction : CharacterAction
     public override void OnCancel()
     {
         // Restore movement if interrupted (e.g., attacked)
-        if (_character.TryGetComponent(out CharacterMovement movement))
+        CharacterMovement movement = _character.GetComponentInChildren<CharacterMovement>();
+        if (movement != null)
         {
             movement.Resume();
         }

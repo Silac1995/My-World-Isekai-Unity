@@ -36,7 +36,12 @@ public static class BuildingInteriorSpawner
         mapController.MapId = record.InteriorMapId;
         mapController.IsInteriorOffset = true;
 
-        // Configure the exit door to point back to the exterior map
+        // Store exit info on MapController as NetworkVariables — these replicate to all clients,
+        // unlike MonoBehaviour fields on the exit door which only exist on the server instance.
+        // Exit doors read these via GetComponentInParent<MapController>() at interaction time.
+        // NOTE: NetworkVariables can only be written AFTER Spawn(), so we defer this below.
+
+        // Configure the exit door to point back to the exterior map (server-side only, for host)
         MapTransitionDoor[] doors = instance.GetComponentsInChildren<MapTransitionDoor>(true);
         int exitDoorCount = 0;
         foreach (var door in doors)
@@ -82,7 +87,12 @@ public static class BuildingInteriorSpawner
             Debug.LogWarning($"[BuildingInteriorSpawner] Interior '{record.InteriorMapId}' has no NetworkObject. It will not be networked.");
         }
 
-        Debug.Log($"<color=green>[BuildingInteriorSpawner]</color> Spawned interior '{record.InteriorMapId}' at {offset}.");
+        // Set NetworkVariables AFTER Spawn() so they replicate to remote clients.
+        // This is the authoritative exit info that all clients can read.
+        mapController.ExteriorMapId.Value = record.ExteriorMapId;
+        mapController.ExteriorReturnPosition.Value = record.ExteriorDoorPosition;
+
+        Debug.Log($"<color=green>[BuildingInteriorSpawner]</color> Spawned interior '{record.InteriorMapId}' at {offset}. ExteriorMapId='{record.ExteriorMapId}', ExteriorReturnPos={record.ExteriorDoorPosition}");
         return mapController;
     }
 }

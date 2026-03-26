@@ -30,11 +30,12 @@ The `MacroSimulator` operates entirely off-screen when a Map wakes up.
 *   Once simulated, the Server reinstantiates the Prefab at the new position, assigns the updated stats and blueprint data, and calls `Spawn()` to sync with the entering client.
 
 ## 4. Map Transitions
-Transitions are standardized via `MapTransitionDoor`.
-*   Players interact (`Click`) with a door.
-*   The `CharacterMapTransitionAction` runs locally (fades screen, warps locally for instant snap).
-*   The `CharacterMapTracker` is invoked via `[ServerRpc]`, alerting the Server of the warp. The Server executes the warp authoritatively.
-*   The Server updates the `CurrentMapID` and triggers a save to the decoupled `ICharacterData` file (Rule 20).
+Transitions are standardized via `MapTransitionDoor` (exterior-to-exterior) and `BuildingInteriorDoor` (exterior-to-interior).
+*   Players interact with a door. `CharacterMapTransitionAction` fades screen via `ScreenFadeManager`, then warps.
+*   Cross-NavMesh teleports (building interiors at y=5000) **must** use `CharacterMovement.ForceWarp()`, not `Warp()`. ForceWarp disables the NavMeshAgent, teleports via `transform.position`, then re-enables the agent after 2 frames.
+*   The `CharacterMapTracker` is invoked via `RequestTransitionServerRpc` (`FixedString128Bytes` for map IDs). The server resolves interior positions via `ResolveInteriorPosition()` (lazy-spawns if needed) and sends `WarpClientRpc` back if the position changed (ClientNetworkTransform is owner-authoritative).
+*   The Server updates the `CurrentMapID` and notifies source/destination MapControllers via `MapController.NotifyPlayerTransition()` for hibernation handoff.
+*   See `building-system` SKILL.md for full interior transition architecture.
 
 ## 5. Development Rules
 *   **Do not rely on `FindObjectOfType`:** Maps hibernate, so GameObjects will completely disappear. Only search serialized data structures (like a hypothetical `WorldManager.HibernatedData`) if trying to locate an off-screen NPC.

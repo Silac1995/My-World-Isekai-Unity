@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using Unity.Netcode;
+using Unity.Collections;
 using MWI.Time;
 using System.Linq;
 
@@ -15,6 +16,17 @@ namespace MWI.WorldSystem
 
         [Tooltip("Use this to determine if the map is visually loaded or offset")]
         public bool IsInteriorOffset = false;
+
+        [Header("Interior Exit Info (Replicated)")]
+        [Tooltip("For interiors: the exterior map ID to return to. Set by BuildingInteriorSpawner.")]
+        public NetworkVariable<FixedString128Bytes> ExteriorMapId = new NetworkVariable<FixedString128Bytes>(
+            "", NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server
+        );
+
+        [Tooltip("For interiors: the world position to warp to when exiting. Set by BuildingInteriorSpawner.")]
+        public NetworkVariable<Vector3> ExteriorReturnPosition = new NetworkVariable<Vector3>(
+            Vector3.zero, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server
+        );
 
         [Header("Runtime State")]
         public int ConnectedPlayersCount = 0;

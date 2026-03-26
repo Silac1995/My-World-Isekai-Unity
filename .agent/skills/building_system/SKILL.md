@@ -158,23 +158,65 @@ The camera system reacts to building state changes for improved UX:
 
 ## Building Interiors
 
-Interiors use the **Spatial Offset Architecture** (usually at `y=5000`).
+Interiors use the **Spatial Offset Architecture** (placed at `y=5000` via `WorldOffsetAllocator.GetInteriorOffsetVector()`). They are **lazy-spawned** on first entry and **hibernate independently** when empty.
+
+### Key Files
+| File | Purpose |
+|---|---|
+| `BuildingInteriorDoor.cs` | Exterior entrance door (inherits `MapTransitionDoor : InteractableObject`) |
+| `BuildingInteriorRegistry.cs` | Server singleton mapping BuildingId → InteriorRecord, ISaveable |
+| `BuildingInteriorSpawner.cs` | Static helper that instantiates + configures interior prefabs |
+| `CharacterMapTracker.cs` | Server-side lazy-spawn in `ResolveInteriorPosition()`, `WarpClientRpc` |
+| `CharacterMapTransitionAction.cs` | Client-side fade + warp action, uses `ForceWarp` |
+| `ScreenFadeManager.cs` | Client-only fade-to-black overlay (uses `Time.unscaledDeltaTime`) |
 
 ### 1. Linking Exterior to Interior
-The connection is established via the **`BuildingInteriorDoor.cs`** component on the exterior building.
-- **Lazy Spawning:** The interior is only spawned when the first player interacts with the door.
-- **Deterministic ID:** The interior `MapId` is computed by combining the exterior `MapId` and the building's dynamic `BuildingId`. This ensures that even identical prefabs have isolated interior maps.
+The connection is established via **`BuildingInteriorDoor.cs`** on the exterior building.
+- **Auto-detection:** The door derives `BuildingId` and `PrefabId` from `GetComponentInParent<Building>()`. The `ExteriorMapId` is auto-detected from the interactor's `CurrentMapID`, a parent `MapController`, or falls back to `"World"`.
+- **Deterministic ID:** Interior `MapId` = `"{ExteriorMapId}_Interior_{BuildingId}"`. Both client and server can compute this independently.
+- **Lazy Spawning:** The interior is only spawned when the first player interacts with the door. The server handles this in `CharacterMapTracker.ResolveInteriorPosition()`.
 
 ### 2. Interior Prefab Requirements
 Every Interior Prefab root must contain:
-- `MapController` (Is Interior Offset = True)
+- `MapController` (spawner sets `IsInteriorOffset = true` and `MapId` at runtime)
 - `NetworkObject`
-- `NavMeshSurface`
-- One or more `Room` components (for furniture placement).
-- `MapTransitionDoor` (to exit back to the exterior).
+- `NavMeshSurface` (must be baked in the prefab relative to root)
+- One or more `Room` components (for furniture placement)
+- A plain `MapTransitionDoor` for the exit door (**NOT** `BuildingInteriorDoor`)
+  - The exit door can have a `TargetSpawnPoint` in the prefab for editor preview, but `BuildingInteriorSpawner` **clears it at runtime** and uses `TargetPositionOffset` instead (computed as `exteriorReturnPos - exitDoor.transform.position`)
 
-### 3. Transition Flow
-1. **Interact:** Player clicks `BuildingInteriorDoor`.
-2. **Server Check:** Server ensures the interior map is spawned and valid.
-3. **Teleport:** `CharacterMapTransitionAction` warps the player to the interior's local offset.
-4. **Hibernation:** When all players leave, the interior `MapController` hibernates the map to save resources.
+### 3. Transition Flow (Enter)
+1. Player interacts with `BuildingInteriorDoor`.
+2. Door computes `interiorMapId` and `targetPosition` (Vector3.zero on first visit, real position on repeat visits).
+3. `CharacterMapTransitionAction.OnStart()` fades to black (`ScreenFadeManager`).
+4. `OnApplyEffect()`: Client calls `ForceWarp` if position is known, then sends `RequestTransitionServerRpc`.
+5. **Server** (`ResolveInteriorPosition`): On first visit, registers the interior in `BuildingInteriorRegistry`, spawns via `BuildingInteriorSpawner`, resolves the interior offset position.
+6. If the server resolved a different position than the client sent, it sends `WarpClientRpc` back to the owning client.
+7. `WarpClientRpc` calls `CharacterMovement.ForceWarp()` on the client (owner-authoritative via `ClientNetworkTransform`).
+
+### 4. Transition Flow (Exit)
+1. Player interacts with the plain `MapTransitionDoor` inside the interior.
+2. `MapTransitionDoor.Interact()` computes `dest = transform.position + TargetPositionOffset` (which resolves to the exterior return position).
+3. Same `CharacterMapTransitionAction` flow: fade, `ForceWarp`, `RequestTransitionServerRpc`.
+4. Interior `MapController` hibernates when player count reaches 0.
+
+### 5. ForceWarp (Cross-NavMesh Teleport)
+`CharacterMovement.ForceWarp(Vector3)` is required for all interior transitions because the source and destination have separate NavMesh surfaces.
+- Disables `NavMeshAgent` before teleporting (prevents snap-back to old NavMesh).
+- Sets `transform.position` and `Rigidbody.position` directly.
+- Sets Rigidbody to kinematic during teleport to prevent gravity interference.
+- Re-enables the agent after **2 frames** (coroutine) so the destination NavMesh is ready.
+- Regular `Warp()` must NOT be used for cross-map teleports — `NavMeshAgent.Warp` silently fails if the destination has no NavMesh.
+
+### 6. Important Gotchas
+- **FixedString size:** Map IDs use `FixedString128Bytes` (not 32) because interior IDs can be 50+ chars.
+- **CharacterMovement location:** Use `_character.GetComponentInChildren<CharacterMovement>()`, not `TryGetComponent`, as it may be on a child GameObject.
+- **ClientNetworkTransform:** Characters use owner-authoritative networking. The server cannot move the client — it must send `WarpClientRpc` for the client to move itself.
+- **Exit door TargetSpawnPoint:** `BuildingInteriorSpawner` must null out any prefab-assigned `TargetSpawnPoint` on exit doors, otherwise it overrides the computed `TargetPositionOffset`.
+- **Building.HasInterior / GetInteriorMap():** Helpers on `Building` to query the registry. Used by NPC systems to check if a building has a spawned interior.
+
+### 7. BuildingInteriorRegistry (ISaveable)
+- Singleton with `Dictionary<string, InteriorRecord>` keyed by `BuildingId`.
+- `InteriorRecord`: `BuildingId`, `InteriorMapId`, `SlotIndex`, `ExteriorMapId`, `ExteriorDoorPosition`, `PrefabId`.
+- On `RestoreState()`, respawns all interior MapControllers via `BuildingInteriorSpawner`.
+- Allocates spatial slots via `WorldOffsetAllocator.AllocateSlotIndex()`.

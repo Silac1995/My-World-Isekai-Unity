@@ -461,7 +461,7 @@ public class CharacterMovement : CharacterSystem
     /// </summary>
     public void ForceWarp(Vector3 position)
     {
-        Debug.Log($"<color=magenta>[CharacterMovement]</color> ForceWarp called: target={position}, current={transform.position}");
+        Debug.Log($"<color=magenta>[CharacterMovement]</color> ForceWarp called: target={position}, current={transform.position}, charRoot={(_character != null ? _character.transform.position.ToString() : "null")}");
 
         // Disable agent so it doesn't fight the teleport or snap back to the old NavMesh
         bool agentWasEnabled = _agent != null && _agent.enabled;
@@ -479,10 +479,25 @@ public class CharacterMovement : CharacterSystem
             _rb.position = position;
         }
 
+        // Move the Character root transform (NetworkObject/ClientNetworkTransform).
+        // CharacterMovement lives on a child GameObject, so setting transform.position
+        // only moves the child. The network syncs the root Character's transform,
+        // so we MUST move the root for ClientNetworkTransform to replicate correctly.
+        if (_character != null && _character.transform != transform)
+        {
+            Rigidbody rootRb = _character.GetComponent<Rigidbody>();
+            if (rootRb != null)
+            {
+                rootRb.isKinematic = true;
+                rootRb.position = position;
+            }
+            _character.transform.position = position;
+        }
+
         transform.position = position;
         KillMomentum();
 
-        Debug.Log($"<color=magenta>[CharacterMovement]</color> ForceWarp position set: transform.position={transform.position}");
+        Debug.Log($"<color=magenta>[CharacterMovement]</color> ForceWarp position set: transform.position={transform.position}, charRoot={(_character != null ? _character.transform.position.ToString() : "null")}");
 
         // Re-enable agent after a delay so the destination NavMesh has time to be ready
         if (agentWasEnabled)
@@ -521,6 +536,16 @@ public class CharacterMovement : CharacterSystem
         if (_rb != null)
         {
             _rb.isKinematic = wasKinematic;
+        }
+
+        // Restore root Character Rigidbody kinematic state as well
+        if (_character != null && _character.transform != transform)
+        {
+            Rigidbody rootRb = _character.GetComponent<Rigidbody>();
+            if (rootRb != null)
+            {
+                rootRb.isKinematic = wasKinematic;
+            }
         }
 
         _forceWarpCoroutine = null;
