@@ -36,23 +36,31 @@ public class CharacterMapTransitionAction : CharacterAction
 
     public override void OnApplyEffect()
     {
+        Debug.Log($"<color=cyan>[MapTransition]</color> OnApplyEffect: IsOwner={_character.IsOwner}, IsLocalPlayer={_character.IsLocalPlayer}, IsServer={_character.IsServer}, targetMapId='{_targetMapId}', targetPos={_targetPosition}");
+
         // Prediction: Client warps instantly for seamless feel
         if (_character.IsOwner || _character.IsLocalPlayer)
         {
             // Only predict warp if we know the real position (repeat visits).
             // On first visit, _targetPosition is Vector3.zero — let the server
-            // resolve the correct interior position and warp authoritatively.
+            // resolve the correct interior position and warp via WarpClientRpc.
             if (_targetPosition != Vector3.zero)
             {
+                Debug.Log($"<color=cyan>[MapTransition]</color> Client predicting ForceWarp to {_targetPosition}");
                 if (_character.TryGetComponent(out CharacterMovement movement))
                 {
-                    movement.Warp(_targetPosition);
+                    movement.ForceWarp(_targetPosition);
                 }
+            }
+            else
+            {
+                Debug.Log("<color=cyan>[MapTransition]</color> First visit — skipping client warp, waiting for server WarpClientRpc.");
             }
 
             // Send authoritative request cleanly via separated Tracker component
             if (_character.TryGetComponent(out CharacterMapTracker tracker))
             {
+                Debug.Log($"<color=cyan>[MapTransition]</color> Sending RequestTransitionServerRpc('{_targetMapId}', {_targetPosition})");
                 tracker.RequestTransitionServerRpc(_targetMapId, _targetPosition);
             }
             else
@@ -67,7 +75,7 @@ public class CharacterMapTransitionAction : CharacterAction
         {
             if (_character.TryGetComponent(out CharacterMovement movement))
             {
-                movement.Warp(_targetPosition);
+                movement.ForceWarp(_targetPosition);
             }
 
             if (_character.TryGetComponent(out CharacterMapTracker tracker))

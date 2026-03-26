@@ -77,9 +77,10 @@ public class BuildingInteriorDoor : MapTransitionDoor
         // Try to get the actual interior position from the registry (works after first spawn)
         Vector3 targetPosition = ResolveTargetPosition();
 
-        // Set the base class fields so the action is created correctly
+        Debug.Log($"<color=cyan>[BuildingInteriorDoor]</color> Interact: interiorMapId='{interiorMapId}', targetPos={targetPosition}, buildingId='{BuildingId}', exteriorMapId='{ExteriorMapId}'");
+
+        // Set the base class fields (TargetMapId for consistency; position is passed directly)
         TargetMapId = interiorMapId;
-        TargetSpawnPoint = null;
 
         var transitionAction = new CharacterMapTransitionAction(
             interactor, this, interiorMapId, targetPosition, FadeDuration

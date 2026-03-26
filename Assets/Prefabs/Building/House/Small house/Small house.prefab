@@ -827,7 +827,7 @@ PrefabInstance:
     - target: {fileID: 7646721323473516824, guid: db769f6d2b18ad545ba20a2599543a57, type: 3}
       propertyPath: _rootgameObject
       value: 
-      objectReference: {fileID: 7153458554410679557}
+      objectReference: {fileID: 0}
     - target: {fileID: 7751662038261150082, guid: db769f6d2b18ad545ba20a2599543a57, type: 3}
       propertyPath: m_VersionIndex
       value: 3552

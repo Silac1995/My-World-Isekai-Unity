@@ -43,13 +43,19 @@ public class CharacterMapTracker : NetworkBehaviour
         string previousMapId = CurrentMapID.Value.ToString();
         string targetMapIdStr = targetMapId.ToString();
 
+        Debug.Log($"<color=yellow>[MapTracker]</color> ServerRpc received: targetMapId='{targetMapIdStr}', clientPos={targetPosition}, previousMap='{previousMapId}'");
+
         // Lazy-spawn interior if this transition targets a building interior
         Vector3 resolvedPosition = ResolveInteriorPosition(targetMapIdStr, targetPosition);
 
+        Debug.Log($"<color=yellow>[MapTracker]</color> ResolvedPosition={resolvedPosition} (clientSent={targetPosition}, changed={resolvedPosition != targetPosition})");
+
         // 1. Authoritative Warp on Server
-        if (TryGetComponent(out CharacterMovement movement))
+        CharacterMovement movement = _character.GetComponentInChildren<CharacterMovement>();
+        if (movement != null)
         {
-            movement.Warp(resolvedPosition);
+            movement.ForceWarp(resolvedPosition);
+            Debug.Log($"<color=yellow>[MapTracker]</color> Server ForceWarp done. transform.position={transform.position}");
         }
 
         // 2. If the server resolved a different position (e.g. first interior visit),
@@ -57,7 +63,12 @@ public class CharacterMapTracker : NetworkBehaviour
         //    so only the client can move itself.
         if (resolvedPosition != targetPosition)
         {
+            Debug.Log($"<color=yellow>[MapTracker]</color> Sending WarpClientRpc({resolvedPosition})");
             WarpClientRpc(resolvedPosition);
+        }
+        else
+        {
+            Debug.Log("<color=yellow>[MapTracker]</color> Positions match — no WarpClientRpc needed.");
         }
 
         // 3. Set new Map state
@@ -70,10 +81,21 @@ public class CharacterMapTracker : NetworkBehaviour
     [ClientRpc]
     private void WarpClientRpc(Vector3 position)
     {
+        Debug.Log($"<color=lime>[MapTracker]</color> WarpClientRpc received: position={position}, IsOwner={IsOwner}");
         if (!IsOwner) return;
-        if (TryGetComponent(out CharacterMovement movement))
+
+        CharacterMovement mov = _character.GetComponentInChildren<CharacterMovement>();
+        if (mov != null)
         {
-            movement.Warp(position);
+            Debug.Log($"<color=lime>[MapTracker]</color> Client ForceWarp to {position}. Before={transform.position}");
+            mov.ForceWarp(position);
+            Debug.Log($"<color=lime>[MapTracker]</color> Client ForceWarp done. After={transform.position}");
+        }
+        else
+        {
+            // Fallback: direct transform teleport
+            Debug.LogWarning($"<color=orange>[MapTracker]</color> No CharacterMovement found! Falling back to direct transform.position = {position}");
+            transform.position = position;
         }
     }
 

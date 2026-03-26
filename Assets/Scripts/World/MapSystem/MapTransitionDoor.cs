@@ -21,6 +21,8 @@ public class MapTransitionDoor : InteractableObject
 
         Vector3 dest = TargetSpawnPoint != null ? TargetSpawnPoint.position : transform.position + TargetPositionOffset;
 
+        Debug.Log($"<color=cyan>[MapTransitionDoor]</color> {GetType().Name} '{name}' Interact: TargetMapId='{TargetMapId}', doorPos={transform.position}, TargetSpawnPoint={(TargetSpawnPoint != null ? TargetSpawnPoint.name : "null")}, TargetPositionOffset={TargetPositionOffset}, dest={dest}");
+
         var transitionAction = new CharacterMapTransitionAction(interactor, this, TargetMapId, dest, FadeDuration);
         interactor.CharacterActions.ExecuteAction(transitionAction);
     }

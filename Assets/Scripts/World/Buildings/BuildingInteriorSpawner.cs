@@ -38,13 +38,32 @@ public static class BuildingInteriorSpawner
 
         // Configure the exit door to point back to the exterior map
         MapTransitionDoor[] doors = instance.GetComponentsInChildren<MapTransitionDoor>(true);
+        int exitDoorCount = 0;
         foreach (var door in doors)
         {
             // Skip BuildingInteriorDoor (entrance doors); only configure plain exit doors
-            if (door is BuildingInteriorDoor) continue;
+            if (door is BuildingInteriorDoor)
+            {
+                Debug.Log($"<color=yellow>[BuildingInteriorSpawner]</color> Skipping BuildingInteriorDoor '{door.name}' on '{door.gameObject.name}'.");
+                continue;
+            }
 
+            // Clear any prefab-assigned spawn point — it points inside the interior, not outside.
+            // We use TargetPositionOffset instead to compute the exterior return position.
+            door.TargetSpawnPoint = null;
+
+            // TargetPositionOffset is added to the door's own position in MapTransitionDoor.Interact(),
+            // so we compute the delta from the exit door's world position to the exterior return position.
+            Vector3 delta = record.ExteriorDoorPosition - door.transform.position;
             door.TargetMapId = record.ExteriorMapId;
-            door.TargetPositionOffset = record.ExteriorDoorPosition;
+            door.TargetPositionOffset = delta;
+            exitDoorCount++;
+            Debug.Log($"<color=green>[BuildingInteriorSpawner]</color> Exit door '{door.name}' configured: TargetMapId='{record.ExteriorMapId}', doorPos={door.transform.position}, exteriorReturnPos={record.ExteriorDoorPosition}, offset={delta}");
+        }
+
+        if (exitDoorCount == 0)
+        {
+            Debug.LogWarning($"<color=orange>[BuildingInteriorSpawner]</color> No exit doors found in interior prefab for '{record.PrefabId}'! Total MapTransitionDoors found: {doors.Length}");
         }
 
         // Spawn on network

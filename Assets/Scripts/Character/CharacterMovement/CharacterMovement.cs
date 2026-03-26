@@ -451,10 +451,83 @@ public class CharacterMovement : CharacterSystem
             transform.position = position;
         }
 
-        // --- CRITICAL FIX ---
-        // Completely kill all physical momentum. If the character fell for 1 frame before 
-        // the warp, preserving that downward velocity will make them clip through the floor 
-        // at their destination!
+        KillMomentum();
+    }
+
+    /// <summary>
+    /// Teleports the character to a position, bypassing NavMeshAgent constraints.
+    /// Used for cross-NavMesh teleports (e.g. entering/exiting building interiors)
+    /// where the destination NavMesh may differ from the current one.
+    /// </summary>
+    public void ForceWarp(Vector3 position)
+    {
+        Debug.Log($"<color=magenta>[CharacterMovement]</color> ForceWarp called: target={position}, current={transform.position}");
+
+        // Disable agent so it doesn't fight the teleport or snap back to the old NavMesh
+        bool agentWasEnabled = _agent != null && _agent.enabled;
+        if (_agent != null && _agent.enabled)
+        {
+            _agent.enabled = false;
+        }
+
+        // Disable rigidbody gravity temporarily so physics doesn't pull us during the teleport
+        bool wasKinematic = false;
+        if (_rb != null)
+        {
+            wasKinematic = _rb.isKinematic;
+            _rb.isKinematic = true;
+            _rb.position = position;
+        }
+
+        transform.position = position;
+        KillMomentum();
+
+        Debug.Log($"<color=magenta>[CharacterMovement]</color> ForceWarp position set: transform.position={transform.position}");
+
+        // Re-enable agent after a delay so the destination NavMesh has time to be ready
+        if (agentWasEnabled)
+        {
+            if (_forceWarpCoroutine != null) StopCoroutine(_forceWarpCoroutine);
+            _forceWarpCoroutine = StartCoroutine(ReenableAgentDelayed(position, wasKinematic));
+        }
+        else if (_rb != null)
+        {
+            _rb.isKinematic = wasKinematic;
+        }
+    }
+
+    private Coroutine _forceWarpCoroutine;
+
+    private System.Collections.IEnumerator ReenableAgentDelayed(Vector3 position, bool wasKinematic)
+    {
+        // Wait 2 frames for the interior's NavMesh to be fully available
+        yield return null;
+        yield return null;
+
+        if (_agent != null)
+        {
+            _agent.enabled = true;
+            if (_agent.isOnNavMesh)
+            {
+                _agent.Warp(position);
+                Debug.Log($"<color=magenta>[CharacterMovement]</color> Agent re-enabled and warped to {position}. isOnNavMesh={_agent.isOnNavMesh}");
+            }
+            else
+            {
+                Debug.LogWarning($"<color=orange>[CharacterMovement]</color> Agent re-enabled but NOT on NavMesh at {position}. transform.position={transform.position}");
+            }
+        }
+
+        if (_rb != null)
+        {
+            _rb.isKinematic = wasKinematic;
+        }
+
+        _forceWarpCoroutine = null;
+    }
+
+    private void KillMomentum()
+    {
         if (_rb != null)
         {
             _rb.linearVelocity = Vector3.zero;
