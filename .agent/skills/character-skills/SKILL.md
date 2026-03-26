@@ -63,6 +63,15 @@ Used in specialized jobs like `JobBlacksmith.cs`:
 - Character skills are intended to be saved in independent local character files (e.g., `.json` or `.dat`).
 - **Standard**: Use `ICharacterData` for serialization (Integrate via `SaveManager`). Skills are serialized as a list of `SkillInstance` data.
 
+## Notable Skills
+
+### Locksmith (`Assets/Resources/Data/Skills/Locksmith.asset`)
+- **SkillID**: S02
+- **Stat Influences**: Dexterity (0.5), Intelligence (0.3)
+- **Tier Gating**: `SkillTier.GetMaxCopyableTier()` extension method maps skill tier to max copyable key tier:
+  - Novice → Tier 1, Intermediate → Tier 2, Advanced → Tier 3, Professional → Tier 4, Master → Tier 5, Legendary → any tier (`int.MaxValue`)
+- **Key Copying**: Crafting recipe where the original key has `CraftingIngredient.IsReferenceOnly = true` (not consumed). See the **door-lock-system** skill for full details.
+
 ## Implementation Checklist
 - [ ] Is the new skill defined as a `SkillSO` in `Assets/Data/Skills/`?
 - [ ] Are stat influences balanced (e.g., Blacksmithing scaled by Strength/Dexterity)?

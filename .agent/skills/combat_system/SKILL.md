@@ -93,6 +93,19 @@ Combat directly drives character progression via the `CharacterCombatLevel` comp
 - **Click-to-Target**: Handled via the UI layer (`UI_PlayerTargeting`) which directly commands the logical `CharacterVisual.SetLookTarget(transform)`.
 - **Shader-Driven Target Indicator**: Active target UI elements (like the crosshair ring) must dynamically lerp their colors (Green -> Yellow -> Red) based on the target's missing health (`Stats.Health.OnAmountChanged`). Obeying the strict **Shader-First** rule, this must be pushed exclusively through `Material.SetFloat("_HealthPercent")` on a custom unlit UI shader to avoid CPU color manipulation and prevent Canvas batching breaks.
 
+### 8. IDamageable Interface & Destructible Objects
+
+The combat system supports damaging non-Character objects (e.g., doors) via the `IDamageable` interface (`Assets/Scripts/Combat/IDamageable.cs`):
+- `void TakeDamage(float damage, Character attacker)`
+- `bool CanBeDamaged()`
+
+**CombatStyleAttack integration** (`Assets/Scripts/Character/CharacterCombat/CombatStyleAttack.cs`):
+- `OnTriggerEnter()` first checks for `Character` (standard combat). If no Character is found, it falls back to checking for `IDamageable` on the collider's GameObject.
+- Damage applied to `IDamageable` uses `GetDamage() * Random.Range(0.7f, 1.3f)` for variance, matching Character damage calculations.
+- Only objects where `CanBeDamaged()` returns `true` receive damage.
+
+**DoorHealth** (`Assets/Scripts/World/MapSystem/DoorHealth.cs`) is the primary `IDamageable` implementation for doors. See the **door-lock-system** skill for details on breakable doors, repair mechanics, and damage resistance.
+
 ## Tips & Troubleshooting
 - **A character never attacks**: 
   - Verify that the `BattleManager` is properly calling `.UpdateInitiativeTick()`.

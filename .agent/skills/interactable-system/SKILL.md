@@ -53,6 +53,14 @@ The `PlayerInteractionDetector` evaluates player input to differentiate between 
 - Once the hold threshold is reached, instead of firing `Interact()`, it pulls `GetHoldInteractionOptions()` from the target.
 - These options (e.g., *Follow Me*, *Greet*) are displayed dynamically in a radial or list context menu via the `PlayerUI`.
 
+### Door Hold Menu (Lock / Unlock / Repair)
+`MapTransitionDoor` and `BuildingInteriorDoor` override `GetHoldInteractionOptions()` to provide door-specific actions when the player holds E:
+- **"Unlock"** — shown when: door is locked, player has a matching key, door is not broken.
+- **"Lock"** — shown when: door is unlocked, player has a matching key, door is not broken.
+- **"Repair"** — shown when: door is broken (requires `DoorHealth` component).
+
+These options call the corresponding `DoorLock` / `DoorHealth` ServerRpcs. All checks are guarded with `doorLock.IsSpawned` before reading `NetworkVariable.Value` or calling RPCs. See the **door-lock-system** skill for full details.
+
 ### 3. Dynamic Dialogue Menu
 - When an interaction dialogue officially starts (i.e. it is the player's turn in a turn-based dialogue sequence), the `PlayerInteractionDetector` subscribes to `OnPlayerTurnStarted`.
 - It dynamically pulls `GetDialogueInteractionOptions()` (e.g., *Talk*, *Insult*) and displays them in the context menu.

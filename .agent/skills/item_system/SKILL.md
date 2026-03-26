@@ -39,6 +39,30 @@ This is the Hub component responsible for attaching an `ItemInstance` to the cha
 - **The Special Case of the Bag (`BagInstance`)**: A bag is a `WearableType.Bag`. When equipped, `CharacterEquipment` awakens the sockets physically attached to the character's back (`_bagSockets`), then visually instantiates the weapons located **inside** this `Inventory` linked to the bag.
 - > **Equip vs Unequip**: The use of `character.DropItem` is the pivotal function. It simultaneously manages stripping the player's local visual and spawning the `WorldItem` where the drop took place.
 
+### 6. Item Tier System
+All items have a base `int _tier` field on `ItemSO` (default 0 = untiered). Tier is used for gating mechanics:
+- **Keys**: `KeySO.Tier >= DoorLock.RequiredTier` to open a door.
+- **Locksmith skill**: Skill tier determines the max key tier that can be copied.
+
+### 7. Keys (`KeySO` / `KeyInstance`)
+Keys are a specialized item type for the door lock system.
+
+#### KeySO (`Assets/Data/Item/KeySO.cs`)
+- Extends `MiscSO` with a `string _lockId` field.
+- `_lockId` is for **static doors only** (dungeons, quest doors). **Leave empty** for building keys — the LockId is assigned at runtime.
+- Inherits `int Tier` from `ItemSO`.
+
+#### KeyInstance (`Assets/Scripts/Item/KeyInstance.cs`)
+- Extends `MiscInstance` with a runtime `_runtimeLockId` override.
+- `string LockId` property: returns `_runtimeLockId` if set, else falls back to `KeySO.LockId`.
+- `SetLockId(string lockId)`: Call this when creating keys for specific building instances (e.g., `key.SetLockId(building.BuildingId)`).
+- **Key lookup**: `CharacterEquipment.FindKeyForLock(string lockId, int requiredTier)` scans inventory slots and hands (`HandsController.CarriedItem`), matching on `KeyInstance.LockId == lockId && KeySO.Tier >= requiredTier`.
+
+### 8. Crafting: Reference-Only Ingredients
+`CraftingIngredient` has a `bool IsReferenceOnly` field (default `false`).
+- When `true`, the ingredient is **not consumed** during crafting — it's used as a reference input.
+- Primary use case: key copying recipes where the original key is a reference input (not consumed), and only raw materials are consumed.
+
 ### 5. Carrying in Hands (`HandsController`)
 When an item cannot be stored in the inventory (bag full or missing), the character can carry a single item in their hands.
 - **Priority**: The system always prioritizes the inventory. Hands are a "last resort" for carrying world objects.
