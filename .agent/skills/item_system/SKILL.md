@@ -38,3 +38,12 @@ This is the Hub component responsible for attaching an `ItemInstance` to the cha
 - **Layer System (`Layer`)**: The character has multiple clothing layers (`UnderwearLayer`, `ClothingLayer`, `ArmorLayer`). Equipping an item requires finding the right `TargetLayer` and injecting the instance into it.
 - **The Special Case of the Bag (`BagInstance`)**: A bag is a `WearableType.Bag`. When equipped, `CharacterEquipment` awakens the sockets physically attached to the character's back (`_bagSockets`), then visually instantiates the weapons located **inside** this `Inventory` linked to the bag.
 - > **Equip vs Unequip**: The use of `character.DropItem` is the pivotal function. It simultaneously manages stripping the player's local visual and spawning the `WorldItem` where the drop took place.
+
+### 5. Carrying in Hands (`HandsController`)
+When an item cannot be stored in the inventory (bag full or missing), the character can carry a single item in their hands.
+- **Priority**: The system always prioritizes the inventory. Hands are a "last resort" for carrying world objects.
+- **Visual Attachment**: Managed by `HandsController.cs`. It instantiates the `WorldItemPrefab` at the right hand's finger bone (identified via `SpriteSkin` or `bone_Fingers_R`).
+- **Sorting Logic**: To ensure the item appears naturally "inside" the hand, its `SortingGroup` is set to `handSortingOrder - 1`, placing it behind the fingers.
+- **Animations**: Carrying an item forces the hand into a `"fist"` pose. The item visual is automatically destroyed, and the hand returns to `"normal"` when dropped.
+- **Safety Measures**: Items in hands are automatically dropped when the character enters a combat state or becomes incapacitated (Unconscious/Death) to ensure hands are free for combat or physics-driven death anims.
+- **Physics**: Carried visuals have their `Rigidbody` set to kinematic and colliders disabled to avoid character movement glitches.
