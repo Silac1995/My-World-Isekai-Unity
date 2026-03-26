@@ -21,6 +21,10 @@ public class BuildingInteriorRegistry : MonoBehaviour, ISaveable
         public string ExteriorMapId;
         public Vector3 ExteriorDoorPosition;
         public string PrefabId;
+
+        // Door state persistence (survives hibernation)
+        public bool IsLocked = true;
+        public float DoorCurrentHealth = -1f; // -1 means use prefab default
     }
 
     [Serializable]
@@ -71,6 +75,20 @@ public class BuildingInteriorRegistry : MonoBehaviour, ISaveable
         {
             Instance = null;
         }
+    }
+
+    /// <summary>
+    /// Finds an InteriorRecord by matching the exterior door position.
+    /// Used by DoorLock for paired interior door sound propagation.
+    /// </summary>
+    public InteriorRecord FindRecordByDoorPosition(Vector3 doorPosition, float tolerance = 1f)
+    {
+        foreach (var record in _interiors.Values)
+        {
+            if (Vector3.Distance(record.ExteriorDoorPosition, doorPosition) <= tolerance)
+                return record;
+        }
+        return null;
     }
 
     /// <summary>
