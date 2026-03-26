@@ -44,6 +44,7 @@ public static class BuildingInteriorSpawner
         // Configure the exit door to point back to the exterior map (server-side only, for host)
         MapTransitionDoor[] doors = instance.GetComponentsInChildren<MapTransitionDoor>(true);
         int exitDoorCount = 0;
+        Vector3 entryPosition = offset; // fallback: MapController root position
         foreach (var door in doors)
         {
             // Skip BuildingInteriorDoor (entrance doors); only configure plain exit doors
@@ -53,7 +54,19 @@ public static class BuildingInteriorSpawner
                 continue;
             }
 
-            // Clear any prefab-assigned spawn point — it points inside the interior, not outside.
+            // Capture the spawn point position BEFORE clearing it — this is where
+            // players should appear when entering the interior (near the exit door).
+            if (door.TargetSpawnPoint != null)
+            {
+                entryPosition = door.TargetSpawnPoint.position;
+            }
+            else
+            {
+                // No spawn point set — use the exit door's own position as entry point
+                entryPosition = door.transform.position;
+            }
+
+            // Clear the prefab-assigned spawn point — it points inside the interior, not outside.
             // We use TargetPositionOffset instead to compute the exterior return position.
             door.TargetSpawnPoint = null;
 
@@ -63,7 +76,7 @@ public static class BuildingInteriorSpawner
             door.TargetMapId = record.ExteriorMapId;
             door.TargetPositionOffset = delta;
             exitDoorCount++;
-            Debug.Log($"<color=green>[BuildingInteriorSpawner]</color> Exit door '{door.name}' configured: TargetMapId='{record.ExteriorMapId}', doorPos={door.transform.position}, exteriorReturnPos={record.ExteriorDoorPosition}, offset={delta}");
+            Debug.Log($"<color=green>[BuildingInteriorSpawner]</color> Exit door '{door.name}' configured: TargetMapId='{record.ExteriorMapId}', doorPos={door.transform.position}, exteriorReturnPos={record.ExteriorDoorPosition}, offset={delta}, entryPos={entryPosition}");
         }
 
         if (exitDoorCount == 0)
@@ -91,8 +104,9 @@ public static class BuildingInteriorSpawner
         // This is the authoritative exit info that all clients can read.
         mapController.ExteriorMapId.Value = record.ExteriorMapId;
         mapController.ExteriorReturnPosition.Value = record.ExteriorDoorPosition;
+        mapController.InteriorEntryPosition.Value = entryPosition;
 
-        Debug.Log($"<color=green>[BuildingInteriorSpawner]</color> Spawned interior '{record.InteriorMapId}' at {offset}. ExteriorMapId='{record.ExteriorMapId}', ExteriorReturnPos={record.ExteriorDoorPosition}");
+        Debug.Log($"<color=green>[BuildingInteriorSpawner]</color> Spawned interior '{record.InteriorMapId}' at {offset}. ExteriorMapId='{record.ExteriorMapId}', ExteriorReturnPos={record.ExteriorDoorPosition}, EntryPos={entryPosition}");
         return mapController;
     }
 }

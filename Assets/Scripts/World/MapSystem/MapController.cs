@@ -28,6 +28,11 @@ namespace MWI.WorldSystem
             Vector3.zero, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server
         );
 
+        [Tooltip("For interiors: the world position where players appear when entering (near exit door). Set by BuildingInteriorSpawner.")]
+        public NetworkVariable<Vector3> InteriorEntryPosition = new NetworkVariable<Vector3>(
+            Vector3.zero, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server
+        );
+
         [Header("Runtime State")]
         public int ConnectedPlayersCount = 0;
         public bool IsHibernating = false;

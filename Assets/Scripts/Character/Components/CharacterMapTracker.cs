@@ -147,14 +147,15 @@ public class CharacterMapTracker : NetworkBehaviour
             {
                 if (record.InteriorMapId == targetMapId)
                 {
-                    // Interior already exists — use the correct position
-                    Vector3 interiorOrigin = WorldOffsetAllocator.Instance.GetInteriorOffsetVector(record.SlotIndex);
-                    // If client sent Vector3.zero (first-visit placeholder), correct it
-                    if (clientPosition == Vector3.zero)
+                    // Interior already exists — use entry position from MapController
+                    MapController interiorMap = MapController.GetByMapId(record.InteriorMapId);
+                    if (interiorMap != null && interiorMap.InteriorEntryPosition.Value != Vector3.zero)
                     {
-                        return interiorOrigin;
+                        return interiorMap.InteriorEntryPosition.Value;
                     }
-                    return clientPosition;
+                    // Fallback to raw origin
+                    Vector3 interiorOrigin = WorldOffsetAllocator.Instance.GetInteriorOffsetVector(record.SlotIndex);
+                    return interiorOrigin;
                 }
             }
         }
@@ -209,7 +210,14 @@ public class CharacterMapTracker : NetworkBehaviour
                 return clientPosition;
             }
 
-            BuildingInteriorSpawner.SpawnInterior(record, interiorPrefab);
+            MapController spawnedMap = BuildingInteriorSpawner.SpawnInterior(record, interiorPrefab);
+
+            // Use the entry position set by the spawner (near the exit door / spawn point)
+            if (spawnedMap != null && spawnedMap.InteriorEntryPosition.Value != Vector3.zero)
+            {
+                return spawnedMap.InteriorEntryPosition.Value;
+            }
+            // Fallback to raw origin
             Vector3 interiorOrigin = WorldOffsetAllocator.Instance.GetInteriorOffsetVector(record.SlotIndex);
             return interiorOrigin;
         }

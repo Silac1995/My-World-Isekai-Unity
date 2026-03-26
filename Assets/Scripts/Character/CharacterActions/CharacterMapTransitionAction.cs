@@ -21,13 +21,7 @@ public class CharacterMapTransitionAction : CharacterAction
 
     public override void OnStart()
     {
-        // Stop the character to prevent walking away during transition
-        // NOTE: CharacterMovement may be on a child GameObject — use GetComponentInChildren.
-        CharacterMovement movement = _character.GetComponentInChildren<CharacterMovement>();
-        if (movement != null)
-        {
-            movement.Stop();
-        }
+        _character.CharacterMovement?.Stop();
 
         // Fade to black for the local player (hidden behind fade, NPCs/remote players skip)
         if (_character.IsOwner || _character.IsLocalPlayer)
@@ -49,11 +43,7 @@ public class CharacterMapTransitionAction : CharacterAction
             if (_targetPosition != Vector3.zero)
             {
                 Debug.Log($"<color=cyan>[MapTransition]</color> Client predicting ForceWarp to {_targetPosition}");
-                CharacterMovement movement = _character.GetComponentInChildren<CharacterMovement>();
-                if (movement != null)
-                {
-                    movement.ForceWarp(_targetPosition);
-                }
+                _character.CharacterMovement?.ForceWarp(_targetPosition);
             }
             else
             {
@@ -76,11 +66,7 @@ public class CharacterMapTransitionAction : CharacterAction
         }
         else if (_character.IsServer) // NPC logic, no prediction needed, just direct mutate
         {
-            CharacterMovement movement = _character.GetComponentInChildren<CharacterMovement>();
-            if (movement != null)
-            {
-                movement.ForceWarp(_targetPosition);
-            }
+            _character.CharacterMovement?.ForceWarp(_targetPosition);
 
             if (_character.TryGetComponent(out CharacterMapTracker tracker))
             {
@@ -91,12 +77,7 @@ public class CharacterMapTransitionAction : CharacterAction
 
     public override void OnCancel()
     {
-        // Restore movement if interrupted (e.g., attacked)
-        CharacterMovement movement = _character.GetComponentInChildren<CharacterMovement>();
-        if (movement != null)
-        {
-            movement.Resume();
-        }
+        _character.CharacterMovement?.Resume();
 
         // Cancel any active fade if the action was interrupted
         if (_character.IsOwner || _character.IsLocalPlayer)

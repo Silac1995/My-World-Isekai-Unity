@@ -122,12 +122,12 @@ public class BuildingInteriorDoor : MapTransitionDoor
 
     private Vector3 ResolveTargetPosition()
     {
-        // If the registry already knows this interior (repeat visits), use the real position
-        if (BuildingInteriorRegistry.Instance != null &&
-            BuildingInteriorRegistry.Instance.TryGetInterior(BuildingId, out var record))
+        // If the interior MapController exists, use its replicated entry position
+        string interiorMapId = GetInteriorMapId();
+        MapController interiorMap = MapController.GetByMapId(interiorMapId);
+        if (interiorMap != null && interiorMap.InteriorEntryPosition.Value != Vector3.zero)
         {
-            Vector3 interiorOrigin = WorldOffsetAllocator.Instance.GetInteriorOffsetVector(record.SlotIndex);
-            return interiorOrigin + _interiorEntryLocalOffset;
+            return interiorMap.InteriorEntryPosition.Value;
         }
 
         // First visit: position is unknown until server spawns the interior.
