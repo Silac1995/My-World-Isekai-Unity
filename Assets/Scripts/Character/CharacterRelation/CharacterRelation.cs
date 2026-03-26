@@ -324,7 +324,7 @@ public class CharacterRelation : CharacterSystem
             rel.DecreaseRelationValue(-roundedAmount);
         }
 
-        Debug.Log($"<color=white>[Sentiment]</color> L'avis de {_character.CharacterName} sur {target.CharacterName} est maintenant de {rel.RelationValue} ({rel.RelationType}) [Modif: {amount} -> {roundedAmount}]");
+        // Debug.Log($"<color=white>[Sentiment]</color> L'avis de {_character.CharacterName} sur {target.CharacterName} est maintenant de {rel.RelationValue} ({rel.RelationType}) [Modif: {amount} -> {roundedAmount}]");
 
         OnRelationsUpdated?.Invoke();
 

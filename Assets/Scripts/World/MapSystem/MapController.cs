@@ -75,6 +75,24 @@ namespace MWI.WorldSystem
         }
 
         /// <summary>
+        /// Finds the exterior MapController whose trigger bounds contain the given world position.
+        /// Returns null if no map contains the position (open world).
+        /// </summary>
+        public static MapController GetMapAtPosition(Vector3 worldPosition)
+        {
+            foreach (var kvp in _mapRegistry)
+            {
+                MapController map = kvp.Value;
+                if (map == null || map.IsInteriorOffset) continue;
+                if (map._mapTrigger != null && map._mapTrigger.bounds.Contains(worldPosition))
+                {
+                    return map;
+                }
+            }
+            return null;
+        }
+
+        /// <summary>
         /// Notifies source and destination MapControllers about a player transition.
         /// Ensures hibernation/wake-up triggers before physics colliders update.
         /// </summary>
@@ -107,6 +125,11 @@ namespace MWI.WorldSystem
             if (!string.IsNullOrEmpty(MapId))
             {
                 _mapRegistry[MapId] = this;
+                Debug.Log($"<color=cyan>[MapController:OnNetworkSpawn]</color> Registered '{MapId}' in _mapRegistry. Total maps: {_mapRegistry.Count}");
+            }
+            else
+            {
+                Debug.LogWarning($"<color=yellow>[MapController:OnNetworkSpawn]</color> MapId is EMPTY! This map won't be findable by GetMapAtPosition or GetByMapId. GameObject='{gameObject.name}'");
             }
 
             if (!IsServer) return;
@@ -114,8 +137,12 @@ namespace MWI.WorldSystem
             // Subscribe to NetworkManager disconnects to ensure _activePlayers doesn't drift
             NetworkManager.Singleton.OnClientDisconnectCallback += HandleClientDisconnect;
 
-            // Optional: Delay the initial check slightly so players have time to spawn
-            Invoke(nameof(CheckHibernationState), 1f);
+            // Detect players already overlapping this trigger (e.g. map spawned on top of them)
+            DetectOverlappingPlayers();
+
+            // Delay the initial hibernation check to give OnTriggerEnter time to fire
+            Debug.Log($"<color=cyan>[MapController:OnNetworkSpawn]</color> Scheduling CheckHibernationState in 3s for '{MapId}'. ActivePlayers={_activePlayers.Count}");
+            Invoke(nameof(CheckHibernationState), 3f);
         }
 
         private void Start()
@@ -127,6 +154,9 @@ namespace MWI.WorldSystem
                     _timeManager.OnNewDay += OnNewDay;
                 }
 
+                // Ensure this map has a CommunityData entry so buildings can be saved
+                EnsureCommunityData();
+
                 if (!IsHibernating)
                 {
                     SpawnVirtualBuildings();
@@ -134,9 +164,43 @@ namespace MWI.WorldSystem
             }
         }
 
+        /// <summary>
+        /// Ensures a CommunityData entry exists for this map in CommunityTracker.
+        /// Predefined maps and dynamically spawned maps both need this for building persistence.
+        /// </summary>
+        private void EnsureCommunityData()
+        {
+            if (string.IsNullOrEmpty(MapId)) return;
+            if (CommunityTracker.Instance == null) return;
+
+            CommunityData existing = CommunityTracker.Instance.GetCommunity(MapId);
+            if (existing != null) return;
+
+            // Auto-create a CommunityData entry for this map
+            // Set OriginChunk from actual position so NPC proximity matching works correctly
+            float chunkSize = 75f; // Match CommunityTracker default
+            Vector2Int originChunk = new Vector2Int(
+                Mathf.FloorToInt(transform.position.x / chunkSize),
+                Mathf.FloorToInt(transform.position.z / chunkSize)
+            );
+            CommunityData newCommunity = new CommunityData
+            {
+                MapId = this.MapId,
+                Tier = IsPredefinedMap ? CommunityTier.EstablishedCity : CommunityTier.RoamingCamp,
+                IsPredefinedMap = this.IsPredefinedMap,
+                OriginChunk = originChunk
+            };
+
+            CommunityTracker.Instance.AddCommunity(newCommunity);
+            Debug.Log($"<color=green>[MapController]</color> Auto-created CommunityData for map '{MapId}' (IsPredefined={IsPredefinedMap}, Tier={newCommunity.Tier}).");
+        }
+
         public override void OnNetworkDespawn()
         {
             base.OnNetworkDespawn();
+
+            Debug.LogWarning($"<color=red>[MapController:OnNetworkDespawn]</color> Map '{MapId}' is being DESPAWNED! Stack trace will follow.");
+            Debug.LogWarning($"<color=red>[MapController:OnNetworkDespawn]</color> StackTrace: {System.Environment.StackTrace}");
 
             // Unregister from static lookup
             if (!string.IsNullOrEmpty(MapId) && _mapRegistry.TryGetValue(MapId, out var registered) && registered == this)
@@ -215,6 +279,57 @@ namespace MWI.WorldSystem
             }
         }
 
+        /// <summary>
+        /// Scans for player characters already inside this map's trigger bounds.
+        /// Required because Unity's OnTriggerEnter doesn't fire for objects that
+        /// were already overlapping when the trigger was created (e.g. settlement promotion).
+        /// </summary>
+        public void DetectOverlappingPlayers()
+        {
+            if (_mapTrigger == null)
+            {
+                Debug.LogError($"<color=red>[MapController:DetectOverlapping]</color> _mapTrigger is NULL for '{MapId}'!");
+                return;
+            }
+
+            Debug.Log($"<color=cyan>[MapController:DetectOverlapping]</color> Scanning for players in '{MapId}'. TriggerCenter={_mapTrigger.bounds.center}, TriggerExtents={_mapTrigger.bounds.extents}");
+
+            Collider[] overlapping = Physics.OverlapBox(
+                _mapTrigger.bounds.center,
+                _mapTrigger.bounds.extents,
+                Quaternion.identity
+            );
+
+            Debug.Log($"<color=cyan>[MapController:DetectOverlapping]</color> OverlapBox found {overlapping.Length} colliders.");
+
+            int playersFound = 0;
+            foreach (var col in overlapping)
+            {
+                if (col.CompareTag("Character") && col.TryGetComponent(out Character character))
+                {
+                    bool isPlayer = character.NetworkObject != null && character.NetworkObject.IsPlayerObject;
+                    Debug.Log($"<color=cyan>[MapController:DetectOverlapping]</color> Character '{character.CharacterName}' at {character.transform.position} — IsPlayer={isPlayer}");
+
+                    if (isPlayer)
+                    {
+                        playersFound++;
+                        if (_activePlayers.Add(character.OwnerClientId))
+                        {
+                            _activePlayerCount = _activePlayers.Count;
+                            Debug.Log($"<color=cyan>[MapController:DetectOverlapping]</color> Added player {character.OwnerClientId} to '{MapId}'. Total={_activePlayerCount}");
+                        }
+                    }
+                }
+            }
+
+            Debug.Log($"<color=cyan>[MapController:DetectOverlapping]</color> Result for '{MapId}': {playersFound} players found, {_activePlayers.Count} active.");
+
+            if (_activePlayers.Count > 0)
+            {
+                CheckWakeUp();
+            }
+        }
+
         #endregion
 
         #region Resource Harvesting & Virtual Buildings
@@ -283,6 +398,7 @@ namespace MWI.WorldSystem
 
         private void CheckHibernationState()
         {
+            Debug.Log($"<color=cyan>[MapController:CheckHibernation]</color> Map '{MapId}': ActivePlayers={_activePlayers.Count}, IsHibernating={IsHibernating}");
             if (_activePlayers.Count == 0 && !IsHibernating)
             {
                 Hibernate();
@@ -309,7 +425,10 @@ namespace MWI.WorldSystem
             if (IsHibernating) return;
 
             IsHibernating = true;
-            Debug.Log($"<color=orange>[MapController]</color> Map '{MapId}' entering Hibernation (0 players).");
+            Debug.Log($"<color=orange>[MapController:Hibernate]</color> Map '{MapId}' entering Hibernation.");
+
+            // Ensure CommunityData exists before saving buildings
+            EnsureCommunityData();
 
             _hibernationData = new MapSaveData()
             {
@@ -318,9 +437,8 @@ namespace MWI.WorldSystem
             };
 
             // 1. Find all NPCs inside this Map
-            // Using OverlapBox is safer than tracking every single NPC manually, 
-            // ensuring we grab any NPC physically standing in the map boundaries right now.
             Collider[] colliders = Physics.OverlapBox(_mapTrigger.bounds.center, _mapTrigger.bounds.extents, Quaternion.identity);
+            Debug.Log($"<color=orange>[MapController:Hibernate]</color> OverlapBox found {colliders.Length} colliders in '{MapId}'.");
             
             foreach (var col in colliders)
             {
@@ -388,6 +506,60 @@ namespace MWI.WorldSystem
                 }
             }
 
+            // 2.5 Sync live building state to ConstructedBuildings, then despawn
+            CommunityData community = null;
+            if (CommunityTracker.Instance != null)
+            {
+                community = CommunityTracker.Instance.GetCommunity(MapId);
+                Debug.Log($"<color=orange>[MapController:Hibernate]</color> CommunityTracker lookup for MapId='{MapId}': {(community != null ? "FOUND" : "NULL — buildings WILL NOT be saved!")}");
+            }
+            else
+            {
+                Debug.LogError($"<color=red>[MapController:Hibernate]</color> CommunityTracker.Instance is NULL! Cannot save buildings for '{MapId}'.");
+            }
+
+            HashSet<Building> processedBuildings = new HashSet<Building>();
+            foreach (var col in colliders)
+            {
+                Building building = col.GetComponent<Building>() ?? col.GetComponentInParent<Building>();
+                if (building == null || !processedBuildings.Add(building)) continue;
+
+                Debug.Log($"<color=orange>[MapController:Hibernate]</color> Found building '{building.BuildingName}' (ID={building.BuildingId}, PrefabId={building.PrefabId}) at {building.transform.position}");
+
+                // Sync state to save data (auto-register if not yet tracked)
+                if (community != null)
+                {
+                    var saveEntry = community.ConstructedBuildings.Find(b => b.BuildingId == building.BuildingId);
+                    if (saveEntry != null)
+                    {
+                        saveEntry.State = building.CurrentState;
+                        Debug.Log($"<color=orange>[MapController:Hibernate]</color> Updated existing save entry for '{building.BuildingName}'. State={saveEntry.State}");
+                    }
+                    else
+                    {
+                        var newEntry = BuildingSaveData.FromBuilding(building, transform.position);
+                        community.ConstructedBuildings.Add(newEntry);
+                        Debug.Log($"<color=cyan>[MapController:Hibernate]</color> Auto-registered untracked building '{building.BuildingName}' into '{MapId}'. PrefabId='{newEntry.PrefabId}', RelPos={newEntry.Position}");
+                    }
+                }
+                else
+                {
+                    Debug.LogError($"<color=red>[MapController:Hibernate]</color> CANNOT save building '{building.BuildingName}' — no CommunityData for MapId='{MapId}'! This building will be LOST on wake-up.");
+                }
+
+                // Despawn the live building (WakeUp re-instantiates from ConstructedBuildings)
+                if (building.NetworkObject != null && building.NetworkObject.IsSpawned)
+                {
+                    building.NetworkObject.Despawn(true);
+                    Debug.Log($"<color=orange>[MapController:Hibernate]</color> Despawned building '{building.BuildingName}'.");
+                }
+                else
+                {
+                    Destroy(building.gameObject);
+                    Debug.Log($"<color=orange>[MapController:Hibernate]</color> Destroyed (non-networked) building '{building.BuildingName}'.");
+                }
+            }
+
             // 3. Destroy Virtual Harvesting Buildings
             foreach (Transform child in transform)
             {
@@ -397,7 +569,7 @@ namespace MWI.WorldSystem
                 }
             }
 
-            Debug.Log($"<color=orange>[MapController]</color> Map '{MapId}' Hibernated. {_hibernationData.HibernatedNPCs.Count} NPCs serialized and despawned.");
+            Debug.Log($"<color=orange>[MapController]</color> Map '{MapId}' Hibernated. {_hibernationData.HibernatedNPCs.Count} NPCs and {processedBuildings.Count} buildings serialized and despawned.");
         }
 
         private void WakeUp()
@@ -409,16 +581,26 @@ namespace MWI.WorldSystem
             double currentTime = GetAbsoluteTimeInDays();
             double deltaDays = currentTime - (_hibernationData?.LastHibernationTime ?? currentTime);
 
-            Debug.Log($"<color=green>[MapController]</color> Map '{MapId}' Waking Up! Simulating {deltaDays:F2} offline days.");
+            Debug.Log($"<color=green>[MapController:WakeUp]</color> Map '{MapId}' Waking Up! Simulating {deltaDays:F2} offline days.");
+
+            // Ensure CommunityData exists before restoring buildings
+            EnsureCommunityData();
 
             // Get Community Data for Map Tier and Buildings
             CommunityData community = null;
             if (CommunityTracker.Instance != null)
             {
                 community = CommunityTracker.Instance.GetCommunity(MapId);
+                Debug.Log($"<color=green>[MapController:WakeUp]</color> CommunityTracker lookup for MapId='{MapId}': {(community != null ? $"FOUND (Tier={community.Tier}, Buildings={community.ConstructedBuildings?.Count ?? 0})" : "NULL — no buildings to respawn!")}");
+            }
+            else
+            {
+                Debug.LogError($"<color=red>[MapController:WakeUp]</color> CommunityTracker.Instance is NULL!");
             }
 
             WorldSettingsData settings = Resources.Load<WorldSettingsData>("Data/World/WorldSettingsData");
+            Debug.Log($"<color=green>[MapController:WakeUp]</color> WorldSettingsData loaded: {(settings != null ? "OK" : "NULL")}");
+
             if (community != null && settings != null)
             {
                 // 1. Spawn base terrain prefab (tier)
@@ -447,26 +629,53 @@ namespace MWI.WorldSystem
                 // 2 & 3. Spawn completed and under-construction buildings
                 if (community.ConstructedBuildings != null)
                 {
+                    Debug.Log($"<color=green>[MapController:WakeUp]</color> Respawning {community.ConstructedBuildings.Count} buildings for '{MapId}'...");
                     foreach (var bSave in community.ConstructedBuildings)
                     {
                         GameObject bPrefab = settings.GetBuildingPrefab(bSave.PrefabId);
-                        
+                        Debug.Log($"<color=green>[MapController:WakeUp]</color> Building '{bSave.BuildingId}': PrefabId='{bSave.PrefabId}', State={bSave.State}, RelPos={bSave.Position}, PrefabFound={bPrefab != null}");
+
                         if (bSave.State == BuildingState.UnderConstruction && settings.GenericScaffoldPrefab != null)
                         {
                             bPrefab = settings.GenericScaffoldPrefab;
+                            Debug.Log($"<color=green>[MapController:WakeUp]</color> Using scaffold prefab for under-construction building.");
                         }
 
                         if (bPrefab != null)
                         {
                             Vector3 worldPos = transform.position + bSave.Position;
+                            Debug.Log($"<color=green>[MapController:WakeUp]</color> Instantiating at worldPos={worldPos} (mapPos={transform.position} + relPos={bSave.Position})");
                             GameObject bObj = Instantiate(bPrefab, worldPos, bSave.Rotation);
-                            bObj.transform.SetParent(this.transform);
                             if (bObj.TryGetComponent(out NetworkObject bNet))
                             {
+                                // Spawn first (NetworkVariables require spawned state)
                                 bNet.Spawn();
+                                // Parent after spawn to avoid SpawnStateException
+                                bObj.transform.SetParent(this.transform);
+
+                                // Restore the original BuildingId from save data
+                                // (OnNetworkSpawn generates a new GUID — we must overwrite it)
+                                Building restoredBuilding = bObj.GetComponent<Building>();
+                                if (restoredBuilding != null)
+                                {
+                                    restoredBuilding.NetworkBuildingId.Value = bSave.BuildingId;
+                                    Debug.Log($"<color=green>[MapController:WakeUp]</color> Building '{bSave.PrefabId}' restored with ID={bSave.BuildingId} at {worldPos}.");
+                                }
+                            }
+                            else
+                            {
+                                Debug.LogWarning($"<color=yellow>[MapController:WakeUp]</color> Building prefab '{bSave.PrefabId}' has no NetworkObject!");
                             }
                         }
+                        else
+                        {
+                            Debug.LogError($"<color=red>[MapController:WakeUp]</color> Could not find prefab for PrefabId='{bSave.PrefabId}'! Building LOST. Check WorldSettingsData.BuildingRegistry.");
+                        }
                     }
+                }
+                else
+                {
+                    Debug.Log($"<color=green>[MapController:WakeUp]</color> No ConstructedBuildings list for '{MapId}'.");
                 }
 
                 // 4. Spawn Virtual Harvesting Buildings for Logistics

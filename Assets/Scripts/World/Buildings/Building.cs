@@ -37,6 +37,16 @@ public class Building : ComplexRoom
         NetworkVariableWritePermission.Server
     );
 
+    /// <summary>
+    /// The character ID of whoever originally placed this building.
+    /// Distinct from CommercialBuilding.Owner (who runs the business).
+    /// </summary>
+    public NetworkVariable<FixedString64Bytes> PlacedByCharacterId = new NetworkVariable<FixedString64Bytes>(
+        "",
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server
+    );
+
     public string BuildingName => buildingName;
     public virtual BuildingType BuildingType => _buildingType;
     public bool IsPublicLocation => _isPublicLocation;
@@ -152,6 +162,21 @@ public class Building : ComplexRoom
         if (newValue == MWI.WorldSystem.BuildingState.Complete)
         {
             OnConstructionComplete?.Invoke();
+
+            // Sync state to CommunityData so hibernation save data stays accurate
+            if (IsServer && MWI.WorldSystem.CommunityTracker.Instance != null)
+            {
+                foreach (var comm in MWI.WorldSystem.CommunityTracker.Instance.GetAllCommunities())
+                {
+                    var entry = comm.ConstructedBuildings.Find(b => b.BuildingId == BuildingId);
+                    if (entry != null)
+                    {
+                        entry.State = MWI.WorldSystem.BuildingState.Complete;
+                        entry.ConstructionProgress = 1f;
+                        break;
+                    }
+                }
+            }
         }
     }
 

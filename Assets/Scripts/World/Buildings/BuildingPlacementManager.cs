@@ -1,6 +1,7 @@
 using UnityEngine;
 using Unity.Netcode;
 using MWI.WorldSystem;
+using MWI.UI.Notifications;
 
 namespace MWI.WorldSystem
 {
@@ -18,12 +19,16 @@ namespace MWI.WorldSystem
         [SerializeField] private Material _ghostMaterialValid;
         [SerializeField] private Material _ghostMaterialInvalid;
 
+        [Header("Notifications")]
+        [SerializeField] private ToastNotificationChannel _toastChannel;
+
         [SerializeField] private WorldSettingsData _settings;
         private GameObject _ghostInstance;
         private string _activePrefabId;
         private Building _ghostBuildingComponent;
         private bool _isPlacementActive;
         private bool _isInstantMode;
+        private bool _permissionToastShown; // Prevents spamming toast every frame
 
         public bool IsPlacementActive => _isPlacementActive;
 
@@ -109,6 +114,7 @@ namespace MWI.WorldSystem
             _isPlacementActive = false;
             _activePrefabId = string.Empty;
             _ghostBuildingComponent = null;
+            _permissionToastShown = false;
         }
 
         protected override void HandleIncapacitated(Character character)
@@ -145,8 +151,27 @@ namespace MWI.WorldSystem
             {
                 _ghostInstance.transform.position = hit.point;
 
+                bool hasPermission = HasCommunityPlacementPermission(hit.point);
                 bool isValid = ValidatePlacement(hit.point);
                 ApplyGhostMaterials(isValid ? _ghostMaterialValid : _ghostMaterialInvalid);
+
+                // Show toast once when entering a denied zone
+                if (!hasPermission && !_permissionToastShown)
+                {
+                    _permissionToastShown = true;
+                    if (_toastChannel != null)
+                    {
+                        _toastChannel.Raise(new ToastNotificationPayload(
+                            message: "You don't have permission to build here. Ask a community leader for a Build Permit.",
+                            type: ToastType.Warning,
+                            duration: 4f
+                        ));
+                    }
+                }
+                else if (hasPermission)
+                {
+                    _permissionToastShown = false;
+                }
             }
         }
 
@@ -207,6 +232,9 @@ namespace MWI.WorldSystem
                 if (overlaps.Length > 0) return false;
             }
 
+            // 3. Community zone permission check
+            if (!HasCommunityPlacementPermission(position)) return false;
+
             return true;
         }
 
@@ -221,6 +249,33 @@ namespace MWI.WorldSystem
             }
         }
 
+        /// <summary>
+        /// Checks whether the placing character has permission to build inside a community zone.
+        /// Open world (no map) always returns true. Leaders and permit-holders are allowed.
+        /// </summary>
+        private bool HasCommunityPlacementPermission(Vector3 position)
+        {
+            MapController map = MapController.GetMapAtPosition(position);
+            if (map == null) return true; // Open world — no restriction
+
+            if (CommunityTracker.Instance == null) return true;
+            CommunityData community = CommunityTracker.Instance.GetCommunity(map.MapId);
+            if (community == null) return true; // Map with no community data — allow
+
+            // If the community has no leaders at all, there's no authority to deny placement
+            if (community.LeaderIds.Count == 0) return true;
+
+            string characterId = _character != null ? _character.CharacterId : "";
+
+            // Leaders can always place
+            if (community.IsLeader(characterId)) return true;
+
+            // Non-leaders need a build permit
+            if (community.HasPermit(characterId)) return true;
+
+            return false;
+        }
+
         // ────────────────────── Server-Authoritative Spawn ──────────────────────
 
         [ServerRpc]
@@ -228,6 +283,24 @@ namespace MWI.WorldSystem
         {
             EnsureSettings();
             if (_settings == null) return;
+
+            // Server-side permission re-validation
+            if (!HasCommunityPlacementPermission(position))
+            {
+                Debug.LogWarning($"<color=red>[BuildingPlacementManager]</color> Server rejected placement: no permission for community zone.");
+                return;
+            }
+
+            // Consume a build permit if applicable (leaders don't need permits)
+            MapController map = MapController.GetMapAtPosition(position);
+            if (map != null && CommunityTracker.Instance != null && _character != null)
+            {
+                CommunityData community = CommunityTracker.Instance.GetCommunity(map.MapId);
+                if (community != null && !community.IsLeader(_character.CharacterId))
+                {
+                    community.ConsumePermit(_character.CharacterId);
+                }
+            }
 
             var entry = _settings.BuildingRegistry.Find(e => e.PrefabId == prefabId);
             if (entry.BuildingPrefab == null) return;
@@ -255,6 +328,58 @@ namespace MWI.WorldSystem
                 if (building != null)
                 {
                     building.BuildInstantly();
+                }
+            }
+
+            // Register with MapController for hibernation persistence
+            RegisterBuildingWithMap(buildingObj, position);
+        }
+
+        /// <summary>
+        /// Finds the MapController containing the position, parents the building to it,
+        /// and adds it to the community's ConstructedBuildings for hibernation persistence.
+        /// </summary>
+        private void RegisterBuildingWithMap(GameObject buildingObj, Vector3 worldPosition)
+        {
+            Building building = buildingObj.GetComponent<Building>();
+            if (building == null) return;
+
+            // Tag who placed this building
+            if (_character != null)
+            {
+                building.PlacedByCharacterId.Value = _character.CharacterId;
+            }
+
+            Debug.Log($"<color=yellow>[BuildingPlacementManager:Register]</color> Trying GetMapAtPosition({worldPosition}) for building '{building.BuildingName}' (ID={building.BuildingId}, PrefabId={building.PrefabId})");
+
+            MapController map = MapController.GetMapAtPosition(worldPosition);
+            if (map == null)
+            {
+                Debug.LogWarning($"<color=yellow>[BuildingPlacementManager:Register]</color> GetMapAtPosition returned NULL for position {worldPosition}. Building '{building.BuildingName}' placed in open world. Building will NOT survive map hibernation unless a MapController is created later.");
+                return;
+            }
+
+            Debug.Log($"<color=yellow>[BuildingPlacementManager:Register]</color> Found map '{map.MapId}' for building at {worldPosition}.");
+
+            // Parent to MapController (server-side organizational hierarchy)
+            buildingObj.transform.SetParent(map.transform);
+
+            // Add to CommunityData.ConstructedBuildings
+            if (CommunityTracker.Instance != null)
+            {
+                CommunityData community = CommunityTracker.Instance.GetCommunity(map.MapId);
+                if (community != null)
+                {
+                    if (!community.ConstructedBuildings.Exists(b => b.BuildingId == building.BuildingId))
+                    {
+                        var saveData = BuildingSaveData.FromBuilding(building, map.transform.position);
+                        community.ConstructedBuildings.Add(saveData);
+                        Debug.Log($"<color=green>[BuildingPlacementManager]</color> Building '{building.BuildingName}' registered with map '{map.MapId}'. Total buildings: {community.ConstructedBuildings.Count}");
+                    }
+                }
+                else
+                {
+                    Debug.LogWarning($"<color=orange>[BuildingPlacementManager]</color> MapController '{map.MapId}' has no CommunityData. Building will not survive hibernation.");
                 }
             }
         }

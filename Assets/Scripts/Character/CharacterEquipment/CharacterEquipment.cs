@@ -198,6 +198,9 @@ public class CharacterEquipment : CharacterSystem
     [SerializeField] private MWI.UI.Notifications.NotificationChannel _inventoryNotificationChannel;
     [SerializeField] private MWI.UI.Notifications.ToastNotificationChannel _toastChannel;
 
+    // Le systeme de toasts est maintenant centralisé via UI_Toast
+    // private ToastNotificationChannel _toastChannel;
+
     public void InitializeNotifications(MWI.UI.Notifications.NotificationChannel inventoryChannel, MWI.UI.Notifications.ToastNotificationChannel toastChannel = null)
     {
         _inventoryNotificationChannel = inventoryChannel;

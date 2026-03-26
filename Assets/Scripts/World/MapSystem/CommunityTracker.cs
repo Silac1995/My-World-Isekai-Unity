@@ -35,6 +35,46 @@ namespace MWI.WorldSystem
         // Interior map data (null/-1 if no interior has been spawned yet)
         public string InteriorMapId;
         public int InteriorSlotIndex = -1;
+
+        // Who originally placed this building (distinct from CommercialBuilding.Owner who runs the business)
+        public string PlacedByCharacterId;
+
+        /// <summary>
+        /// Creates a BuildingSaveData entry from a live Building, storing position
+        /// relative to the given map center.
+        /// </summary>
+        public static BuildingSaveData FromBuilding(Building building, Vector3 mapCenter)
+        {
+            return new BuildingSaveData
+            {
+                BuildingId = building.BuildingId,
+                PrefabId = building.PrefabId,
+                Position = building.transform.position - mapCenter,
+                Rotation = building.transform.rotation,
+                OwnerNpcId = "",
+                State = building.CurrentState,
+                ConstructionProgress = building.CurrentState == BuildingState.Complete ? 1f : 0f,
+                PlacedByCharacterId = building.PlacedByCharacterId.Value.ToString()
+            };
+        }
+    }
+
+    [Serializable]
+    public class BuildPermit
+    {
+        public string CharacterId;        // Who received the permit
+        public string GrantedByLeaderId;  // Which leader approved it
+        public int RemainingPlacements;   // How many buildings they can still place
+        public string MapId;              // Which zone this permit applies to
+    }
+
+    [Serializable]
+    public class PendingBuildingClaim
+    {
+        public string BuildingId;
+        public string OwnerCharacterId;
+        public int DayClaimed;            // Game day when claim was initiated
+        public int TimeoutDays = 7;       // Auto-claim after this many days
     }
 
     [Serializable]
@@ -54,7 +94,30 @@ namespace MWI.WorldSystem
         public CommunityTier Tier;
         
         public Vector2Int OriginChunk;
-        public string LeaderNpcId; // UUID of the Character who leads this community
+        public string LeaderNpcId; // Primary leader UUID
+        public List<string> LeaderIds = new List<string>(); // All leaders (primary is first)
+
+        /// <summary>
+        /// Returns true if the given character ID is a recognized leader of this community.
+        /// </summary>
+        public bool IsLeader(string characterId)
+        {
+            if (string.IsNullOrEmpty(characterId)) return false;
+            return LeaderIds.Contains(characterId);
+        }
+
+        /// <summary>
+        /// Adds a leader to the community. If this is the first leader, also sets LeaderNpcId (primary).
+        /// </summary>
+        public void AddLeader(string characterId)
+        {
+            if (string.IsNullOrEmpty(characterId) || LeaderIds.Contains(characterId)) return;
+            LeaderIds.Add(characterId);
+            if (string.IsNullOrEmpty(LeaderNpcId))
+            {
+                LeaderNpcId = characterId;
+            }
+        }
         
         // Progression
         public int DayStartedSustaining;
@@ -64,9 +127,61 @@ namespace MWI.WorldSystem
         public List<BuildingSaveData> ConstructedBuildings = new List<BuildingSaveData>();
         public List<ResourcePoolEntry> ResourcePools = new List<ResourcePoolEntry>();
 
+        // Build Permits (granted by leaders to non-leaders)
+        public List<BuildPermit> BuildPermits = new List<BuildPermit>();
+
+        // Pending building claims (for buildings whose owner was absent at expansion time)
+        public List<PendingBuildingClaim> PendingBuildingClaims = new List<PendingBuildingClaim>();
+
         public bool IsPredefinedMap;
         [NonSerialized] public int CurrentDailyPopulation;
-        [NonSerialized] public bool IsHibernating; 
+        [NonSerialized] public bool IsHibernating;
+
+        /// <summary>
+        /// Grants a build permit allowing a character to place buildings in this zone.
+        /// </summary>
+        public void GrantPermit(string characterId, string leaderId, int count)
+        {
+            // Stack onto existing permit if one exists
+            var existing = BuildPermits.Find(p => p.CharacterId == characterId && p.MapId == MapId);
+            if (existing != null)
+            {
+                existing.RemainingPlacements += count;
+                return;
+            }
+
+            BuildPermits.Add(new BuildPermit
+            {
+                CharacterId = characterId,
+                GrantedByLeaderId = leaderId,
+                RemainingPlacements = count,
+                MapId = MapId
+            });
+        }
+
+        /// <summary>
+        /// Returns true if the character has an active build permit for this zone.
+        /// </summary>
+        public bool HasPermit(string characterId)
+        {
+            return BuildPermits.Exists(p => p.CharacterId == characterId && p.MapId == MapId && p.RemainingPlacements > 0);
+        }
+
+        /// <summary>
+        /// Consumes one placement from the character's permit. Returns true if successful.
+        /// </summary>
+        public bool ConsumePermit(string characterId)
+        {
+            var permit = BuildPermits.Find(p => p.CharacterId == characterId && p.MapId == MapId && p.RemainingPlacements > 0);
+            if (permit == null) return false;
+
+            permit.RemainingPlacements--;
+            if (permit.RemainingPlacements <= 0)
+            {
+                BuildPermits.Remove(permit);
+            }
+            return true;
+        }
     }
 
     [Serializable]
@@ -110,6 +225,8 @@ namespace MWI.WorldSystem
             _communities.Add(community);
         }
 
+        public IReadOnlyList<CommunityData> GetAllCommunities() => _communities;
+
         /// <summary>
         /// Allows the recognized leader of a community to forcefully assign a job to a citizen.
         /// </summary>
@@ -124,9 +241,9 @@ namespace MWI.WorldSystem
                 return false;
             }
 
-            if (string.IsNullOrEmpty(comm.LeaderNpcId) || comm.LeaderNpcId != leaderId)
+            if (!comm.IsLeader(leaderId))
             {
-                Debug.LogWarning($"<color=red>[CommunityTracker]</color> Character {leaderId} is not the recognized leader of {mapId}. Cannot impose job.");
+                Debug.LogWarning($"<color=red>[CommunityTracker]</color> Character {leaderId} is not a recognized leader of {mapId}. Cannot impose job.");
                 return false;
             }
 
@@ -184,6 +301,7 @@ namespace MWI.WorldSystem
             if (!NetworkManager.Singleton.IsServer) return;
 
             EvaluatePopulations();
+            ProcessPendingBuildingClaims();
         }
 
         private void EvaluatePopulations()
@@ -191,8 +309,10 @@ namespace MWI.WorldSystem
             int currentDay = TimeManager.Instance.CurrentDay;
             float chunkSize = _settings != null ? _settings.ProximityChunkSize : 75f;
 
+            Debug.Log($"<color=yellow>[CommunityTracker:Evaluate]</color> Day={currentDay}, ChunkSize={chunkSize}, Communities={_communities.Count}, PendingClusters={_pendingClusters.Count}");
+
             // 1. Reset metrics and assume all maps are offline (hibernating)
-            foreach (var comm in _communities) 
+            foreach (var comm in _communities)
             {
                 comm.CurrentDailyPopulation = 0;
                 comm.IsHibernating = true; 
@@ -238,6 +358,16 @@ namespace MWI.WorldSystem
                     if (!unstructuredChunks.ContainsKey(chunk)) unstructuredChunks[chunk] = 0;
                     unstructuredChunks[chunk]++;
                 }
+            }
+
+            // Debug: Log unstructured chunk populations
+            foreach (var kvp in unstructuredChunks)
+            {
+                Debug.Log($"<color=yellow>[CommunityTracker:Evaluate]</color> Unstructured chunk {kvp.Key}: {kvp.Value} NPCs");
+            }
+            foreach (var comm in _communities)
+            {
+                Debug.Log($"<color=yellow>[CommunityTracker:Evaluate]</color> Community '{comm.MapId}' (Tier={comm.Tier}, OriginChunk={comm.OriginChunk}): Pop={comm.CurrentDailyPopulation}");
             }
 
             ProcessExistingCommunities(currentDay);
@@ -339,12 +469,15 @@ namespace MWI.WorldSystem
         {
             if (_settings == null) return;
 
+            Debug.Log($"<color=yellow>[CommunityTracker:PendingClusters]</color> Processing {_pendingClusters.Count} pending clusters, {unstructuredChunks.Count} unstructured chunks with 3+ NPCs");
+
             // 1. Update existing pending clusters
             for (int i = _pendingClusters.Count - 1; i >= 0; i--)
             {
                 var cluster = _pendingClusters[i];
                 if (unstructuredChunks.TryGetValue(cluster.Chunk, out int pop))
                 {
+                    Debug.Log($"<color=yellow>[CommunityTracker:PendingClusters]</color> Cluster at {cluster.Chunk}: pop={pop}, age={currentDay - cluster.DayDiscovered} days (need 3+ pop and 3+ days)");
                     if (pop >= 3) // Hardcoding "3" as roaming camp minimum
                     {
                         if (currentDay - cluster.DayDiscovered >= 3) // Hardcoding 3 days
@@ -395,32 +528,56 @@ namespace MWI.WorldSystem
             comm.Tier = CommunityTier.Settlement;
             comm.DayStartedSustaining = currentDay;
 
+            Debug.Log($"<color=magenta>[CommunityTracker:Promote]</color> Promoting '{comm.MapId}' to Settlement. OriginChunk={comm.OriginChunk}, Day={currentDay}");
+
             if (WorldOffsetAllocator.Instance == null)
             {
-                Debug.LogError("[CommunityTracker] WorldOffsetAllocator is missing! Cannot promote Settlement to a physical slot.");
+                Debug.LogError("[CommunityTracker:Promote] WorldOffsetAllocator is missing! Cannot promote Settlement to a physical slot.");
                 return;
             }
 
-            // 1. Allocate Logical Slot (mainly for instanced interiors later, but we keep the ID)
+            // 1. Allocate Logical Slot
             comm.SlotIndex = WorldOffsetAllocator.Instance.AllocateSlotIndex();
-            
-            // Override physical placement: Drop MapController exactly at the chunk's centroid on the open world plane
+            Debug.Log($"<color=magenta>[CommunityTracker:Promote]</color> Allocated SlotIndex={comm.SlotIndex}");
+
             float chunkSize = _settings != null ? _settings.ProximityChunkSize : 75f;
             Vector3 worldPos = new Vector3(
-                comm.OriginChunk.x * chunkSize + (chunkSize / 2f), 
-                0, 
+                comm.OriginChunk.x * chunkSize + (chunkSize / 2f),
+                0,
                 comm.OriginChunk.y * chunkSize + (chunkSize / 2f)
             );
+            Debug.Log($"<color=magenta>[CommunityTracker:Promote]</color> WorldPos={worldPos}, ChunkSize={chunkSize}");
 
             // 2. Instantiate MapController
             if (_mapControllerPrefab != null)
             {
+                Debug.Log($"<color=magenta>[CommunityTracker:Promote]</color> Instantiating MapController prefab '{_mapControllerPrefab.name}' at {worldPos}");
                 GameObject mapObj = Instantiate(_mapControllerPrefab, worldPos, Quaternion.identity);
                 MapController mapController = mapObj.GetComponent<MapController>();
                 if (mapController != null)
                 {
                     mapController.MapId = comm.MapId;
-                    mapObj.GetComponent<NetworkObject>().Spawn();
+                    var netObj = mapObj.GetComponent<NetworkObject>();
+                    if (netObj != null)
+                    {
+                        netObj.Spawn();
+                        Debug.Log($"<color=magenta>[CommunityTracker:Promote]</color> MapController spawned. MapId='{comm.MapId}', IsSpawned={netObj.IsSpawned}, GO active={mapObj.activeSelf}");
+                    }
+                    else
+                    {
+                        Debug.LogError($"<color=red>[CommunityTracker:Promote]</color> MapController prefab has NO NetworkObject!");
+                    }
+
+                    // Log trigger bounds
+                    var trigger = mapObj.GetComponent<BoxCollider>();
+                    if (trigger != null)
+                    {
+                        Debug.Log($"<color=magenta>[CommunityTracker:Promote]</color> MapController trigger: center={trigger.bounds.center}, extents={trigger.bounds.extents}, isTrigger={trigger.isTrigger}");
+                    }
+                }
+                else
+                {
+                    Debug.LogError($"<color=red>[CommunityTracker:Promote]</color> MapController prefab has NO MapController component!");
                 }
 
                 // 2.5 Instantiate physical terrain prefab for the Settlement
@@ -462,15 +619,17 @@ namespace MWI.WorldSystem
                         
                         // We DO NOT warp the NPCs. They are already standing here on the open world plane!
                         
-                        // Assign the first migrated NPC as the Community Leader
+                        // Assign the first migrated NPC as the Community Leader (primary)
                         if (string.IsNullOrEmpty(comm.LeaderNpcId))
                         {
-                            comm.LeaderNpcId = c.CharacterName;
-                            // Add a visual/log confirmation
-                            Debug.Log($"<color=magenta>[CommunityTracker]</color> Character '{c.CharacterName}' is now the LEADER of '{comm.MapId}'!");
+                            comm.AddLeader(c.CharacterName);
+                            Debug.Log($"<color=magenta>[CommunityTracker]</color> Character '{c.CharacterName}' is now the PRIMARY LEADER of '{comm.MapId}'!");
                         }
                     }
                 }
+
+                // 4. Adopt existing buildings within the new map bounds
+                AdoptExistingBuildings(mapController, comm);
             }
             else
             {
@@ -478,6 +637,188 @@ namespace MWI.WorldSystem
             }
 
             Debug.Log($"<color=green>[CommunityTracker]</color> Roaming Camp promoted to SETTLEMENT! MapID: {comm.MapId} at Slot {comm.SlotIndex}");
+        }
+
+        // ────────────────────── Building Adoption ──────────────────────
+
+        /// <summary>
+        /// Discovers existing buildings within the MapController's bounds and adopts them
+        /// into the community. Unowned buildings are auto-claimed. Owned buildings trigger
+        /// negotiation or are queued as pending claims if the owner is absent.
+        /// </summary>
+        private void AdoptExistingBuildings(MapController mapController, CommunityData comm)
+        {
+            if (mapController == null) return;
+
+            BoxCollider trigger = mapController.GetComponent<BoxCollider>();
+            if (trigger == null) return;
+
+            Collider[] colliders = Physics.OverlapBox(
+                trigger.bounds.center,
+                trigger.bounds.extents,
+                Quaternion.identity
+            );
+
+            int currentDay = TimeManager.Instance != null ? TimeManager.Instance.CurrentDay : 0;
+            HashSet<Building> processed = new HashSet<Building>();
+            int adoptedCount = 0;
+
+            foreach (var col in colliders)
+            {
+                Building building = col.GetComponent<Building>() ?? col.GetComponentInParent<Building>();
+                if (building == null || !processed.Add(building)) continue;
+
+                // Skip if already registered in any community
+                bool alreadyOwned = false;
+                foreach (var c in _communities)
+                {
+                    if (c.ConstructedBuildings.Exists(b => b.BuildingId == building.BuildingId))
+                    {
+                        alreadyOwned = true;
+                        break;
+                    }
+                }
+                if (alreadyOwned) continue;
+
+                string ownerId = building.PlacedByCharacterId.Value.ToString();
+
+                if (string.IsNullOrEmpty(ownerId))
+                {
+                    // No owner — auto-claim
+                    building.transform.SetParent(mapController.transform);
+                    comm.ConstructedBuildings.Add(BuildingSaveData.FromBuilding(building, mapController.transform.position));
+                    adoptedCount++;
+                }
+                else
+                {
+                    // Has an owner — try to negotiate or queue pending claim
+                    Character owner = Character.FindByUUID(ownerId);
+
+                    if (owner != null && owner.IsAlive())
+                    {
+                        // Owner is present — a leader will negotiate via invitation
+                        Character leader = FindLeaderCharacter(comm);
+                        if (leader != null)
+                        {
+                            var negotiation = new InteractionNegotiateBuildingClaim(building, comm, mapController);
+                            if (negotiation.CanExecute(leader, owner))
+                            {
+                                negotiation.Execute(leader, owner);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // Owner is absent — queue pending claim with timeout
+                        comm.PendingBuildingClaims.Add(new PendingBuildingClaim
+                        {
+                            BuildingId = building.BuildingId,
+                            OwnerCharacterId = ownerId,
+                            DayClaimed = currentDay,
+                            TimeoutDays = 7
+                        });
+                        Debug.Log($"<color=yellow>[CommunityTracker]</color> Queued pending claim for building '{building.BuildingName}' (owner absent). Auto-claim in 7 days.");
+                    }
+                }
+            }
+
+            if (adoptedCount > 0)
+            {
+                Debug.Log($"<color=green>[CommunityTracker]</color> Adopted {adoptedCount} unowned building(s) into Settlement '{comm.MapId}'.");
+            }
+        }
+
+        /// <summary>
+        /// Finds the live Character object for the primary leader of a community.
+        /// </summary>
+        private Character FindLeaderCharacter(CommunityData comm)
+        {
+            if (string.IsNullOrEmpty(comm.LeaderNpcId)) return null;
+            return Character.FindByUUID(comm.LeaderNpcId);
+        }
+
+        /// <summary>
+        /// Processes pending building claims across all communities.
+        /// Auto-claims buildings whose timeout has expired.
+        /// Attempts negotiation if the owner has returned.
+        /// </summary>
+        private void ProcessPendingBuildingClaims()
+        {
+            int currentDay = TimeManager.Instance != null ? TimeManager.Instance.CurrentDay : 0;
+
+            foreach (var comm in _communities)
+            {
+                if (comm.PendingBuildingClaims == null || comm.PendingBuildingClaims.Count == 0) continue;
+
+                MapController map = MapController.GetByMapId(comm.MapId);
+
+                for (int i = comm.PendingBuildingClaims.Count - 1; i >= 0; i--)
+                {
+                    var claim = comm.PendingBuildingClaims[i];
+
+                    // Check if the building was already claimed by other means
+                    if (comm.ConstructedBuildings.Exists(b => b.BuildingId == claim.BuildingId))
+                    {
+                        comm.PendingBuildingClaims.RemoveAt(i);
+                        continue;
+                    }
+
+                    // Auto-claim after timeout
+                    if (currentDay - claim.DayClaimed >= claim.TimeoutDays)
+                    {
+                        AutoClaimPendingBuilding(claim, comm, map);
+                        comm.PendingBuildingClaims.RemoveAt(i);
+                        continue;
+                    }
+
+                    // If the owner has returned, attempt negotiation
+                    Character owner = Character.FindByUUID(claim.OwnerCharacterId);
+                    if (owner != null && owner.IsAlive() && map != null)
+                    {
+                        Character leader = FindLeaderCharacter(comm);
+                        Building building = FindLiveBuildingById(claim.BuildingId);
+                        if (leader != null && building != null)
+                        {
+                            var negotiation = new InteractionNegotiateBuildingClaim(building, comm, map);
+                            if (negotiation.CanExecute(leader, owner))
+                            {
+                                negotiation.Execute(leader, owner);
+                                comm.PendingBuildingClaims.RemoveAt(i);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Auto-claims a building after the pending claim timeout expires.
+        /// </summary>
+        private void AutoClaimPendingBuilding(PendingBuildingClaim claim, CommunityData comm, MapController map)
+        {
+            Building building = FindLiveBuildingById(claim.BuildingId);
+            if (building == null)
+            {
+                Debug.LogWarning($"<color=orange>[CommunityTracker]</color> Pending claim auto-expired but building '{claim.BuildingId}' no longer exists.");
+                return;
+            }
+
+            if (map != null)
+            {
+                building.transform.SetParent(map.transform);
+            }
+
+            comm.ConstructedBuildings.Add(BuildingSaveData.FromBuilding(building, map != null ? map.transform.position : Vector3.zero));
+            Debug.Log($"<color=green>[CommunityTracker]</color> Auto-claimed building '{building.BuildingName}' into community '{comm.MapId}' (owner timeout).");
+        }
+
+        /// <summary>
+        /// Finds a live Building instance by its BuildingId across all spawned buildings.
+        /// </summary>
+        private Building FindLiveBuildingById(string buildingId)
+        {
+            if (BuildingManager.Instance == null) return null;
+            return BuildingManager.Instance.FindBuildingById(buildingId);
         }
 
         #region ISaveable Implementation

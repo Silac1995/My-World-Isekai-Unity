@@ -6,6 +6,8 @@ using MWI.WorldSystem;
 
 public class PlayerUI : MonoBehaviour
 {
+    public static PlayerUI Instance { get; private set; }
+
     [SerializeField] private GameObject character;
 
     [Header("UI Components")]
@@ -38,6 +40,19 @@ public class PlayerUI : MonoBehaviour
     [SerializeField] private MWI.UI.UI_InvitationPrompt _invitationPrompt;
 
     private Character characterComponent;
+
+    private void Awake()
+    {
+        if (Instance == null)
+        {
+            Instance = this;
+        }
+        else if (Instance != this)
+        {
+            Debug.LogWarning("[PlayerUI] Multiple instances detected! Destroying the new one.");
+            Destroy(gameObject);
+        }
+    }
 
     public void Initialize(GameObject newCharacter)
     {
@@ -140,6 +155,12 @@ public class PlayerUI : MonoBehaviour
         }
 
         // Status effects now handled by UI_PlayerInfo
+
+        // Initialize the global static helper for toasts
+        if (_toastChannel != null)
+        {
+            MWI.UI.Notifications.UI_Toast.Initialize(_toastChannel);
+        }
 
         if (_buttonEquipmentUI != null)
         {
@@ -324,6 +345,10 @@ public class PlayerUI : MonoBehaviour
 
     private void OnDestroy()
     {
+        if (Instance == this)
+        {
+            Instance = null;
+        }
         CleanupEvents();
     }
 }

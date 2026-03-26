@@ -1,6 +1,7 @@
 using Unity.Netcode;
 using UnityEngine;
 using MWI.WorldSystem;
+using MWI.UI.Notifications;
 
 public class MapTransitionDoor : InteractableObject
 {
@@ -43,6 +44,13 @@ public class MapTransitionDoor : InteractableObject
                 // No key — jiggle + feedback
                 if (doorLock.IsSpawned)
                     doorLock.RequestJiggleServerRpc();
+
+                // Toast notification for the local player who is attempting to interact
+                if (interactor.IsOwner)
+                {
+                    UI_Toast.Show("the door is locked");
+                }
+
                 return;
             }
         }

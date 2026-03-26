@@ -232,3 +232,75 @@ Building doors (both `BuildingInteriorDoor` on the exterior and the exit `MapTra
 - **Paired door sync**: All doors with the same LockId are linked via a static registry. Lock/unlock/jiggle on one propagates to all paired doors.
 - **No nested NetworkObjects**: `DoorLock` and `DoorHealth` sit on the door child GameObject but use the parent building's `NetworkObject`. **Never** add a separate `NetworkObject` to the door child.
 - **IsSpawned guards**: All `NetworkVariable` reads and RPC calls on `DoorLock`/`DoorHealth` must be guarded with `doorLock.IsSpawned` to handle cases where the `NetworkObject` hasn't spawned yet.
+
+---
+
+## Building-Map Registration & Hibernation
+
+Player-placed buildings are registered with the `MapController` they're placed inside, ensuring they survive map hibernation.
+
+### Key Flow
+1. **On placement** (`BuildingPlacementManager.RequestPlacementServerRpc`):
+   - `MapController.GetMapAtPosition(position)` finds the containing map
+   - Building is parented to the MapController via `SetParent()`
+   - A `BuildingSaveData` entry is added to `CommunityData.ConstructedBuildings`
+   - `Building.PlacedByCharacterId` is set to the placing character's UUID
+2. **On hibernation** (`MapController.Hibernate()`): Buildings are synced to save data and despawned (matching the NPC pattern)
+3. **On wake-up** (`MapController.WakeUp()`): Buildings are re-instantiated from `ConstructedBuildings`
+4. **Construction completion** (`Building.HandleStateChanged`): State is synced back to the matching `ConstructedBuildings` entry
+
+### `MapController.GetMapAtPosition(Vector3)`
+Static utility that iterates `_mapRegistry`, skips interiors, returns the first map whose `_mapTrigger.bounds.Contains(position)`. Returns null for open world.
+
+### `BuildingSaveData.FromBuilding(Building, Vector3 mapCenter)`
+Static factory creating a save entry with position **relative** to map center.
+
+### `Building.PlacedByCharacterId`
+`NetworkVariable<FixedString64Bytes>` tracking who originally placed the building. Distinct from `CommercialBuilding.Owner` (business operator).
+
+---
+
+## Community Territory & Build Permits
+
+### Leadership Model
+- `CommunityData.LeaderIds`: `List<string>` of all leader character IDs (primary leader is first)
+- `CommunityData.LeaderNpcId`: The primary leader (backward-compatible)
+- `CommunityData.IsLeader(characterId)`: Checks if a character is any leader
+- `CommunityData.AddLeader(characterId)`: Adds a leader, sets primary if first
+
+### Placement Permissions
+Buildings can only be placed inside a community zone by:
+1. **Community leaders** (in `LeaderIds`) — always allowed
+2. **Permit holders** — characters who obtained a `BuildPermit` from a leader
+
+Non-leaders without a permit see a **red ghost** (placement denied). Open world has no restrictions.
+
+### Build Permit System
+- `BuildPermit`: `CharacterId`, `GrantedByLeaderId`, `RemainingPlacements`, `MapId`
+- `CommunityData.GrantPermit()` / `HasPermit()` / `ConsumePermit()` methods
+- Permits stack if granted multiple times
+- Consumed on the server in `RequestPlacementServerRpc` after successful placement
+
+### `InteractionRequestBuildPermit`
+Extends `InteractionInvitation`. A non-leader asks a community leader for permission to build. NPC leaders evaluate based on relationship score. On acceptance, a `BuildPermit` is granted.
+
+---
+
+## Community Expansion & Building Adoption
+
+When `CommunityTracker.PromoteToSettlement()` creates a new MapController, it discovers existing buildings in the new zone.
+
+### Adoption Rules
+- **Unowned buildings** (`PlacedByCharacterId` empty): Auto-claimed immediately
+- **Owned buildings (owner present)**: Leader sends `InteractionNegotiateBuildingClaim` invitation
+- **Owned buildings (owner absent)**: Queued as `PendingBuildingClaim` with 7-day timeout
+
+### `InteractionNegotiateBuildingClaim`
+Extends `InteractionInvitation`. Community leader negotiates with the building owner. NPC evaluation is relationship-based. On acceptance, building is parented to the MapController and added to `ConstructedBuildings`.
+
+### Pending Building Claims
+- `PendingBuildingClaim`: `BuildingId`, `OwnerCharacterId`, `DayClaimed`, `TimeoutDays`
+- Processed daily in `CommunityTracker.HandleNewDay()`
+- If owner returns: negotiation invitation triggered
+- If timeout expires: auto-claimed into community
+- `BuildingManager.FindBuildingById(id)` resolves live Building instances

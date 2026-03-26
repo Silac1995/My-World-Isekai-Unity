@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: WorldSettingsData
   m_EditorClassIdentifier: Assembly-CSharp::MWI.WorldSystem.WorldSettingsData
   ProximityChunkSize: 75
-  SettlementMinPopulation: 3
+  SettlementMinPopulation: 1
   SettlementSustainedDays: 3
   CityMinPopulation: 15
   CitySustainedDays: 30

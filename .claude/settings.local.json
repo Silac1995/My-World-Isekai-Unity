@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(where.exe unity-mcp-cli:*)",
+      "Read(//c/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity/$APPDATA/npm/**)",
+      "Read(//c/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity/$LOCALAPPDATA/npm/**)",
+      "Read(//c/Users/Kevin/AppData/Roaming/**)",
+      "Read(//c/Users/Kevin/AppData/Local/**)"
+    ]
+  }
+}

@@ -38,6 +38,15 @@ public class BuildingManager : MonoBehaviour
     }
 
     /// <summary>
+    /// Finds a registered building by its unique BuildingId (GUID).
+    /// </summary>
+    public Building FindBuildingById(string buildingId)
+    {
+        if (string.IsNullOrEmpty(buildingId)) return null;
+        return allBuildings.Find(b => b.BuildingId == buildingId);
+    }
+
+    /// <summary>
     /// Retire un bâtiment de la liste globale.
     /// </summary>
     public void UnregisterBuilding(Building building)

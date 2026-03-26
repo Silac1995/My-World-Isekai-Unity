@@ -1,5 +1,6 @@
 using UnityEngine;
 using MWI.WorldSystem;
+using MWI.UI.Notifications;
 
 /// <summary>
 /// Exterior door placed on a Building that teleports the interactor into
@@ -72,6 +73,10 @@ public class BuildingInteriorDoor : MapTransitionDoor
             else
             {
                 doorLock.RequestJiggleServerRpc();
+                if (interactor.IsOwner)
+                {
+                    UI_Toast.Show("the door is locked");
+                }
                 return;
             }
         }
