@@ -33,6 +33,10 @@ public abstract class InteractableObject : MonoBehaviour
     {
         public string Name;
         public System.Action Action;
+        /// <summary>
+        /// When true, the button is shown but grayed out / not clickable.
+        /// </summary>
+        public bool IsDisabled;
     }
 
     public virtual System.Collections.Generic.List<InteractionOption> GetHoldInteractionOptions(Character interactor)

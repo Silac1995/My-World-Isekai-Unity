@@ -234,7 +234,7 @@ public class PlayerUI : MonoBehaviour
         }
 
         _interactionMenu.gameObject.SetActive(true);
-        _interactionMenu.Initialize(options);
+        _interactionMenu.Initialize(options, lockByDefault: false);
     }
 
     public void CloseInteractionMenu()

@@ -105,40 +105,56 @@ public class MapTransitionDoor : InteractableObject
         DoorLock doorLock = GetComponent<DoorLock>();
         DoorHealth doorHealth = GetComponent<DoorHealth>();
 
-        // Lock/Unlock options (requires matching key)
-        if (doorLock != null && doorLock.IsSpawned)
-        {
-            bool isBroken = doorHealth != null && doorHealth.IsBroken.Value;
-            KeyInstance key = interactor.CharacterEquipment?.FindKeyForLock(doorLock.LockId, doorLock.RequiredTier);
+        bool isBroken = doorHealth != null && doorHealth.IsSpawned && doorHealth.IsBroken.Value;
+        bool isLocked = doorLock != null && doorLock.IsSpawned && doorLock.IsLocked.Value;
+        bool canPass = isBroken || !isLocked;
 
-            if (key != null && !isBroken)
-            {
-                if (doorLock.IsLocked.Value)
-                {
-                    options.Add(new InteractionOption
-                    {
-                        Name = "Unlock",
-                        Action = () => doorLock.RequestUnlockServerRpc()
-                    });
-                }
-                else
-                {
-                    options.Add(new InteractionOption
-                    {
-                        Name = "Lock",
-                        Action = () => doorLock.RequestLockServerRpc()
-                    });
-                }
-            }
+        // --- Enter / Leave (always shown, disabled when locked) ---
+        string enterLabel = "Enter";
+        var parentMap = GetComponentInParent<MapController>();
+        if (parentMap != null && parentMap.IsSpawned)
+        {
+            string extMap = parentMap.ExteriorMapId.Value.ToString();
+            if (!string.IsNullOrEmpty(extMap))
+                enterLabel = "Leave";
         }
 
-        // Repair option (broken door)
-        if (doorHealth != null && doorHealth.IsSpawned && doorHealth.IsBroken.Value)
+        var door = this;
+        options.Add(new InteractionOption
+        {
+            Name = enterLabel,
+            Action = () => door.Interact(interactor)
+        });
+
+        // --- Lock / Unlock (single button, shown if DoorLock exists) ---
+        if (doorLock != null && doorLock.IsSpawned)
+        {
+            string lockLabel = isLocked ? "Unlock" : "Lock";
+            // TODO: Re-enable key check after testing
+            // KeyInstance key = interactor.CharacterEquipment?.FindKeyForLock(doorLock.LockId, doorLock.RequiredTier);
+            // bool canToggle = key != null && !isBroken;
+
+            options.Add(new InteractionOption
+            {
+                Name = lockLabel,
+                Action = () =>
+                {
+                    if (doorLock.IsLocked.Value)
+                        doorLock.RequestUnlockServerRpc();
+                    else
+                        doorLock.RequestLockServerRpc();
+                }
+            });
+        }
+
+        // --- Repair (shown if DoorHealth exists, disabled when not broken) ---
+        if (doorHealth != null && doorHealth.IsSpawned)
         {
             options.Add(new InteractionOption
             {
                 Name = "Repair",
-                Action = () => doorHealth.RequestRepairServerRpc()
+                Action = () => doorHealth.RequestRepairServerRpc(),
+                IsDisabled = !isBroken
             });
         }
 
