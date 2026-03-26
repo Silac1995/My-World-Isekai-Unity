@@ -20,6 +20,31 @@ public class MapTransitionDoor : InteractableObject
             return;
         }
 
+        // --- Door Lock / Broken Check ---
+        DoorLock doorLock = GetComponent<DoorLock>();
+        DoorHealth doorHealth = GetComponent<DoorHealth>();
+
+        // Broken doors are always passable (lock bypassed)
+        bool isBroken = doorHealth != null && doorHealth.IsBroken.Value;
+
+        if (!isBroken && doorLock != null && doorLock.IsLocked.Value)
+        {
+            // Check if interactor has a matching key
+            KeyInstance key = interactor.CharacterEquipment?.FindKeyForLock(doorLock.LockId, doorLock.RequiredTier);
+            if (key != null)
+            {
+                // Unlock the door (don't walk through yet)
+                doorLock.RequestUnlockServerRpc();
+                return;
+            }
+            else
+            {
+                // No key — jiggle + feedback
+                doorLock.RequestJiggleServerRpc();
+                return;
+            }
+        }
+
         string targetMapId = TargetMapId;
         Vector3 dest = TargetSpawnPoint != null ? TargetSpawnPoint.position : transform.position + TargetPositionOffset;
 
@@ -69,5 +94,52 @@ public class MapTransitionDoor : InteractableObject
 
         var transitionAction = new CharacterMapTransitionAction(interactor, this, targetMapId, dest, FadeDuration);
         interactor.CharacterActions.ExecuteAction(transitionAction);
+    }
+
+    public override System.Collections.Generic.List<InteractionOption> GetHoldInteractionOptions(Character interactor)
+    {
+        var options = new System.Collections.Generic.List<InteractionOption>();
+
+        DoorLock doorLock = GetComponent<DoorLock>();
+        DoorHealth doorHealth = GetComponent<DoorHealth>();
+
+        // Lock/Unlock options (requires matching key)
+        if (doorLock != null)
+        {
+            bool isBroken = doorHealth != null && doorHealth.IsBroken.Value;
+            KeyInstance key = interactor.CharacterEquipment?.FindKeyForLock(doorLock.LockId, doorLock.RequiredTier);
+
+            if (key != null && !isBroken)
+            {
+                if (doorLock.IsLocked.Value)
+                {
+                    options.Add(new InteractionOption
+                    {
+                        Name = "Unlock",
+                        Action = () => doorLock.RequestUnlockServerRpc()
+                    });
+                }
+                else
+                {
+                    options.Add(new InteractionOption
+                    {
+                        Name = "Lock",
+                        Action = () => doorLock.RequestLockServerRpc()
+                    });
+                }
+            }
+        }
+
+        // Repair option (broken door)
+        if (doorHealth != null && doorHealth.IsBroken.Value)
+        {
+            options.Add(new InteractionOption
+            {
+                Name = "Repair",
+                Action = () => doorHealth.RequestRepairServerRpc()
+            });
+        }
+
+        return options.Count > 0 ? options : null;
     }
 }
