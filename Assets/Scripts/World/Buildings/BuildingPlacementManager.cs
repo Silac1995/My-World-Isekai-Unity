@@ -24,7 +24,6 @@ namespace MWI.WorldSystem
         private Building _ghostBuildingComponent;
         private bool _isPlacementActive;
         private bool _isInstantMode;
-        private Character _character;
 
         public bool IsPlacementActive => _isPlacementActive;
 

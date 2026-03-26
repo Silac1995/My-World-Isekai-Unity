@@ -37,6 +37,13 @@ public class CharacterMapTransitionAction : CharacterAction
         // Prediction: Client warps instantly for seamless feel
         if (_character.IsOwner || _character.IsLocalPlayer)
         {
+            // Reset selected interactable when map changes (entering/leaving house)
+            var targeting = Object.FindAnyObjectByType<UI_PlayerTargeting>(FindObjectsInactive.Include);
+            if (targeting != null)
+            {
+                targeting.ClearSelection();
+            }
+
             // Only predict warp if we know the real position (repeat visits).
             // On first visit, _targetPosition is Vector3.zero — let the server
             // resolve the correct interior position and warp via WarpClientRpc.
