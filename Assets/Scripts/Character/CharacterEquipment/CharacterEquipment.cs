@@ -745,6 +745,46 @@ public class CharacterEquipment : CharacterSystem
     }
 
     /// <summary>
+    /// Searches inventory and hands for a KeyInstance whose LockId matches
+    /// and whose Tier meets or exceeds the required tier.
+    /// Returns the first match or null.
+    /// </summary>
+    public KeyInstance FindKeyForLock(string lockId, int requiredTier = 0)
+    {
+        if (string.IsNullOrEmpty(lockId)) return null;
+
+        // Check bag inventory first
+        var inventory = GetInventory();
+        if (inventory != null)
+        {
+            foreach (var slot in inventory.ItemSlots)
+            {
+                if (slot.IsEmpty()) continue;
+                if (slot.ItemInstance is KeyInstance key &&
+                    key.KeyData != null &&
+                    key.KeyData.LockId == lockId &&
+                    key.KeyData.Tier >= requiredTier)
+                {
+                    return key;
+                }
+            }
+        }
+
+        // Check hands
+        var handsController = _character.CharacterVisual?.BodyPartsController?.HandsController;
+        if (handsController != null &&
+            handsController.CarriedItem is KeyInstance handKey &&
+            handKey.KeyData != null &&
+            handKey.KeyData.LockId == lockId &&
+            handKey.KeyData.Tier >= requiredTier)
+        {
+            return handKey;
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Tente de prendre un objet spécifiquement dans les mains (via HandsController).
     /// </summary>
     public bool CarryItemInHand(ItemInstance item)
