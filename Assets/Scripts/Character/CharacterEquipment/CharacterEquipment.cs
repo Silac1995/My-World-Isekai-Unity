@@ -761,8 +761,8 @@ public class CharacterEquipment : CharacterSystem
             {
                 if (slot.IsEmpty()) continue;
                 if (slot.ItemInstance is KeyInstance key &&
+                    key.LockId == lockId &&
                     key.KeyData != null &&
-                    key.KeyData.LockId == lockId &&
                     key.KeyData.Tier >= requiredTier)
                 {
                     return key;
@@ -774,8 +774,8 @@ public class CharacterEquipment : CharacterSystem
         var handsController = _character.CharacterVisual?.BodyPartsController?.HandsController;
         if (handsController != null &&
             handsController.CarriedItem is KeyInstance handKey &&
+            handKey.LockId == lockId &&
             handKey.KeyData != null &&
-            handKey.KeyData.LockId == lockId &&
             handKey.KeyData.Tier >= requiredTier)
         {
             return handKey;

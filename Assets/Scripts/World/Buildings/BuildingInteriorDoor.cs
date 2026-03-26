@@ -55,6 +55,27 @@ public class BuildingInteriorDoor : MapTransitionDoor
             return;
         }
 
+        // --- Door Lock / Broken Check ---
+        DoorLock doorLock = GetComponent<DoorLock>();
+        DoorHealth doorHealth = GetComponent<DoorHealth>();
+
+        bool isBroken = doorHealth != null && doorHealth.IsSpawned && doorHealth.IsBroken.Value;
+
+        if (!isBroken && doorLock != null && doorLock.IsSpawned && doorLock.IsLocked.Value)
+        {
+            KeyInstance key = interactor.CharacterEquipment?.FindKeyForLock(doorLock.LockId, doorLock.RequiredTier);
+            if (key != null)
+            {
+                doorLock.RequestUnlockServerRpc();
+                return;
+            }
+            else
+            {
+                doorLock.RequestJiggleServerRpc();
+                return;
+            }
+        }
+
         // Auto-detect exterior map from interactor if not already set
         if (string.IsNullOrEmpty(_exteriorMapId) && interactor.TryGetComponent(out CharacterMapTracker tracker))
         {

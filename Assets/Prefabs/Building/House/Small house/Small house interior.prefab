@@ -422,6 +422,10 @@ PrefabInstance:
       propertyPath: m_Size.z
       value: 20
       objectReference: {fileID: 0}
+    - target: {fileID: 8677159405518243222, guid: dec60b61b8f53ed49aa4e6269f8db526, type: 3}
+      propertyPath: _lockId
+      value: 
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects:

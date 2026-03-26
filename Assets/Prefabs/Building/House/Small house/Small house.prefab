@@ -636,6 +636,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Interior Door
       objectReference: {fileID: 0}
+    - target: {fileID: 3868755654970319264, guid: f9bfe32b4f4fbe5478baff6603414957, type: 3}
+      propertyPath: _lockId
+      value: 
+      objectReference: {fileID: 0}
     - target: {fileID: 5401096553801462189, guid: f9bfe32b4f4fbe5478baff6603414957, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0

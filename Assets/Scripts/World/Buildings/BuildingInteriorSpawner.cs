@@ -75,6 +75,15 @@ public static class BuildingInteriorSpawner
             Vector3 delta = record.ExteriorDoorPosition - door.transform.position;
             door.TargetMapId = record.ExteriorMapId;
             door.TargetPositionOffset = delta;
+
+            // Set LockId on interior exit door to match the exterior door.
+            // Both derive from BuildingId so they auto-pair in the static registry.
+            DoorLock exitLock = door.GetComponent<DoorLock>();
+            if (exitLock != null)
+            {
+                exitLock.SetLockId(record.BuildingId);
+            }
+
             exitDoorCount++;
             Debug.Log($"<color=green>[BuildingInteriorSpawner]</color> Exit door '{door.name}' configured: TargetMapId='{record.ExteriorMapId}', doorPos={door.transform.position}, exteriorReturnPos={record.ExteriorDoorPosition}, offset={delta}, entryPos={entryPosition}");
         }
