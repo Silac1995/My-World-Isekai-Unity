@@ -106,6 +106,23 @@ public static class BuildingInteriorSpawner
         mapController.ExteriorReturnPosition.Value = record.ExteriorDoorPosition;
         mapController.InteriorEntryPosition.Value = entryPosition;
 
+        // Restore persisted door lock/health state
+        DoorLock[] doorLocks = instance.GetComponentsInChildren<DoorLock>(true);
+        foreach (var dl in doorLocks)
+        {
+            dl.IsLocked.Value = record.IsLocked;
+        }
+
+        DoorHealth[] doorHealths = instance.GetComponentsInChildren<DoorHealth>(true);
+        foreach (var dh in doorHealths)
+        {
+            if (record.DoorCurrentHealth >= 0f)
+            {
+                dh.CurrentHealth.Value = record.DoorCurrentHealth;
+                dh.IsBroken.Value = record.DoorCurrentHealth <= 0f;
+            }
+        }
+
         Debug.Log($"<color=green>[BuildingInteriorSpawner]</color> Spawned interior '{record.InteriorMapId}' at {offset}. ExteriorMapId='{record.ExteriorMapId}', ExteriorReturnPos={record.ExteriorDoorPosition}, EntryPos={entryPosition}");
         return mapController;
     }
