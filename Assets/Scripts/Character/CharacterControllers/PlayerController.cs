@@ -132,6 +132,15 @@ public class PlayerController : CharacterGameController
                 {
                     Debug.Log($"<color=green>[PlayerCtrl]</color> {_character.CharacterName} entering combat mode vs {battleTarget.CharacterName}. NavMesh will be enabled.");
                     SetOrder(new PlayerCombatCommand(_character, battleTarget));
+
+                    // Sync the target indicator and PlannedTarget to the initial battle target
+                    EnsureTargeting();
+                    if (_targeting != null)
+                    {
+                        var charInteractable = battleTarget.CharacterInteractable;
+                        if (charInteractable != null)
+                            _targeting.SelectInteractable(charInteractable);
+                    }
                 }
             }
             else if (!_character.CharacterCombat.IsInBattle && _currentOrder is PlayerCombatCommand)

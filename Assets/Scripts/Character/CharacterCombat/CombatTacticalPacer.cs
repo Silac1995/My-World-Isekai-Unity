@@ -9,9 +9,9 @@ public class CombatTacticalPacer
     private float _lastMoveTime;
     private float _moveInterval;
     
-    private const float PREFERRED_X_GAP = 6.0f;  
-    private const float X_FLIP_SAFETY = 1.5f;    
-    private const float MAX_DISTANCE = 9.0f;    
+    private const float PREFERRED_X_GAP = 5.0f;
+    private const float X_FLIP_SAFETY = 1.5f;
+    private const float MAX_DISTANCE = 10.0f;
     
     // Soft zone constraint
     private const float SOFT_ZONE_MARGIN = 5f; 
@@ -22,7 +22,7 @@ public class CombatTacticalPacer
     {
         _self = self;
         _lastMoveTime = Time.time;
-        _moveInterval = Random.Range(3f, 5f);
+        _moveInterval = Random.Range(5f, 8f);
     }
 
     public Vector3 GetTacticalDestination(Character target, float attackRange, bool isChargingTarget)
@@ -31,7 +31,7 @@ public class CombatTacticalPacer
         {
             _lastBattleTarget = target;
             _lastMoveTime = Time.time;
-            _moveInterval = Random.Range(3f, 5f);
+            _moveInterval = Random.Range(5f, 8f);
             
             var bm = _self.CharacterCombat.CurrentBattleManager;
             if (target != null) 
@@ -72,7 +72,7 @@ public class CombatTacticalPacer
         if (attackRange <= 4.0f) 
         {
             // Melee fighters only step back to prevent model clipping, standing their ground
-            escapeRadius = 5.0f; // Increased from 1.8f
+            escapeRadius = 2.5f;
         }
         else 
         {
@@ -99,7 +99,7 @@ public class CombatTacticalPacer
                 _currentDestination = basePos + _currentWanderJitter;
             }
 
-            _moveInterval = Random.Range(3f, 5f);
+            _moveInterval = Random.Range(5f, 8f);
             _lastMoveTime = Time.time;
         }
         else if (isChargingTarget)

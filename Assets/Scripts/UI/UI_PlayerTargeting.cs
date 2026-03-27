@@ -55,7 +55,7 @@ public class UI_PlayerTargeting : MonoBehaviour
                 _targetIndicator.gameObject.SetActive(true);
 
             Vector3 worldPos = activeTarget.position + Vector3.up * _yOffset;
-            
+
             var col = activeTarget.GetComponentInChildren<Collider>();
             if (col != null)
             {
@@ -81,69 +81,67 @@ public class UI_PlayerTargeting : MonoBehaviour
 
     private void UpdateTargeting()
     {
-        if (Input.GetMouseButtonDown(0))
+        if (!Input.GetMouseButtonDown(0)) return;
+
+        // Guard: Do NOT process clicks that land on UI elements (buttons, panels, etc.)
+        if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
+            return;
+
+        Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+        if (!Physics.Raycast(ray, out RaycastHit hit, 100f, _targetingLayerMask))
         {
-            // Guard: Do NOT process clicks that land on UI elements (buttons, panels, etc.)
-            if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
-            {
-                return;
-            }
+            Debug.Log("[Targeting] Raycast missed. Clearing selection.");
+            ClearSelection();
+            return;
+        }
 
-            Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-            if (Physics.Raycast(ray, out RaycastHit hit, 100f, _targetingLayerMask))
-            {
-                Debug.Log($"[Targeting] Raycast hit collider: {hit.collider.gameObject.name} at {hit.point}");
+        Debug.Log($"[Targeting] Raycast hit: {hit.collider.gameObject.name}, attachedRB={hit.collider.attachedRigidbody != null}");
 
-                // Require clicking on a collider that is driven by a Rigidbody
-                if (hit.collider.attachedRigidbody == null)
-                {
-                    Debug.Log($"[Targeting] The hit collider '{hit.collider.name}' does not have an attached Rigidbody. Clearing target.");
-                    ClearSelection();
-                    return;
-                }
+        // Require clicking on a collider that is driven by a Rigidbody
+        if (hit.collider.attachedRigidbody == null)
+        {
+            ClearSelection();
+            return;
+        }
 
-                var interactable = hit.collider.GetComponentInParent<InteractableObject>();
-                var character = hit.collider.GetComponentInParent<Character>();
-
-                if (interactable != null)
-                {
-                    Debug.Log($"[Targeting] Valid Rigidbody belongs to InteractableObject: {interactable.gameObject.name}. Setting target.");
-                    SelectInteractable(interactable);
-                }
-                else if (character != null && character != _character)
-                {
-                    // Resolve the Character's CharacterInteractable so we have a proper InteractableObject reference
-                    var charInteractable = character.GetComponent<CharacterInteractable>();
-                    if (charInteractable != null)
-                    {
-                        Debug.Log($"[Targeting] Valid Rigidbody belongs to Character: {character.gameObject.name}. Setting target via CharacterInteractable.");
-                        SelectInteractable(charInteractable);
-                    }
-                    else
-                    {
-                        Debug.Log($"[Targeting] Character {character.gameObject.name} has no CharacterInteractable. Setting LookTarget only.");
-                        _selectedInteractable = null;
-                        _character.CharacterVisual.SetLookTarget(character.transform);
-                    }
-                }
-                else
-                {
-                    Debug.Log("[Targeting] Hit a Rigidbody, but it is neither an InteractableObject nor another Character. Clearing target.");
-                    ClearSelection();
-                }
-            }
-            else
-            {
-                ClearSelection();
-            }
+        // Resolve the hit into an InteractableObject through the same path TAB uses
+        InteractableObject resolved = ResolveInteractableFromHit(hit.collider);
+        if (resolved != null)
+        {
+            Debug.Log($"[Targeting] Resolved to: {resolved.gameObject.name}");
+            SelectInteractable(resolved);
+        }
+        else
+        {
+            Debug.Log("[Targeting] ResolveInteractableFromHit returned null. Clearing.");
+            ClearSelection();
         }
     }
 
     /// <summary>
-    /// Selects an InteractableObject as the current target. 
-    /// Sets the LookTarget on CharacterVisual so the sprite faces the target 
-    /// and the target indicator tracks it.
-    /// Called by click raycast or externally by TAB cycling.
+    /// Resolves a hit collider into the correct InteractableObject to select.
+    /// Characters always resolve to their root CharacterInteractable so both
+    /// click and TAB go through the exact same SelectInteractable path.
+    /// </summary>
+    private InteractableObject ResolveInteractableFromHit(Collider hitCollider)
+    {
+        // Characters always resolve to the root CharacterInteractable via the facade
+        var character = hitCollider.GetComponentInParent<Character>();
+        if (character != null && character != _character)
+        {
+            var charInteractable = character.CharacterInteractable;
+            if (charInteractable != null)
+                return charInteractable;
+
+            // No CharacterInteractable — fall through to generic InteractableObject search
+        }
+
+        return hitCollider.GetComponentInParent<InteractableObject>();
+    }
+
+    /// <summary>
+    /// Single entry point for selecting a target. Both click and TAB converge here.
+    /// Sets the LookTarget, target indicator, and PlannedTarget (if in battle).
     /// </summary>
     public void SelectInteractable(InteractableObject target)
     {
@@ -155,16 +153,14 @@ public class UI_PlayerTargeting : MonoBehaviour
 
         _selectedInteractable = target;
         _character.CharacterVisual.SetLookTarget(target.transform);
-        Debug.Log($"<color=cyan>[Targeting]</color> Selected interactable: {target.name}");
 
         // If in battle, propagate the target to CharacterCombat so the turn system knows who to act on
         if (_character.CharacterCombat != null && _character.CharacterCombat.IsInBattle)
         {
-            var targetCharacter = target.GetComponent<Character>();
+            var targetCharacter = target.GetComponentInParent<Character>();
             if (targetCharacter != null)
             {
                 _character.CharacterCombat.SetPlannedTarget(targetCharacter);
-                Debug.Log($"<color=cyan>[Targeting]</color> PlannedTarget set to: {targetCharacter.CharacterName}");
             }
         }
     }
@@ -174,10 +170,6 @@ public class UI_PlayerTargeting : MonoBehaviour
     /// </summary>
     public void ClearSelection()
     {
-        if (_selectedInteractable != null || _character.CharacterVisual.HasLookTarget)
-        {
-            Debug.Log("[Targeting] Clearing selection.");
-        }
         _selectedInteractable = null;
         _character.CharacterVisual.SetLookTarget((Transform)null);
     }

@@ -240,13 +240,12 @@ public class BattleManager : NetworkBehaviour
             character.CharacterCombat.JoinBattle(this);
             character.CharacterCombat.ConsumeInitiative();
 
-            if (!character.IsPlayer())
+            // Auto-engage ALL characters (including players) with their best enemy.
+            // For players, the PlayerController can override this later via SetPlannedTarget.
+            Character bestEnemy = _engagementCoordinator?.GetBestTargetFor(character);
+            if (bestEnemy != null)
             {
-                Character bestEnemy = _engagementCoordinator?.GetBestTargetFor(character);
-                if (bestEnemy != null)
-                {
-                    _engagementCoordinator?.RequestEngagement(character, bestEnemy);
-                }
+                _engagementCoordinator?.RequestEngagement(character, bestEnemy);
             }
         }
 

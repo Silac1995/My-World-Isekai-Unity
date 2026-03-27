@@ -77,7 +77,7 @@ public class CombatEngagementCoordinator
 
         LeaveCurrentEngagement(attacker);
 
-        CombatEngagement engagement = _activeEngagements.Find(e => 
+        CombatEngagement engagement = _activeEngagements.Find(e =>
             e.GroupA.Members.Contains(target) || e.GroupB.Members.Contains(target)
         );
 
@@ -96,7 +96,7 @@ public class CombatEngagementCoordinator
 
                 Vector3 engagementCenter = Vector3.zero;
                 bool hasCenter = false;
-                
+
                 if (existing.GroupA.TryGetCenter(out Vector3 centerA) && existing.GroupB.TryGetCenter(out Vector3 centerB))
                 {
                     engagementCenter = (centerA + centerB) / 2f;
@@ -127,10 +127,13 @@ public class CombatEngagementCoordinator
 
         if (engagement == null)
         {
+            // Only create NEW engagements between opponents — allies can join existing ones above
+            if (!_manager.AreOpponents(attacker, target)) return null;
+
             if (targetTeam != null && attackerTeam != null)
             {
                 engagement = new CombatEngagement(_manager, targetTeam, attackerTeam);
-                engagement.JoinEngagement(target); 
+                engagement.JoinEngagement(target);
                 _activeEngagements.Add(engagement);
             }
         }

@@ -87,7 +87,7 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
             // Fallback: resolve from the interaction target's CharacterInteractable
             if (interactable == null && target != null)
             {
-                interactable = target.GetComponent<CharacterInteractable>();
+                interactable = target.CharacterInteractable;
             }
 
             if (interactable != null)

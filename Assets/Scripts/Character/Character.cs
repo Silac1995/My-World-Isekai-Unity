@@ -323,6 +323,7 @@ public class Character : NetworkBehaviour
         if (_characterMovement == null) _characterMovement = GetComponent<CharacterMovement>();
         if (_characterVisual == null) _characterVisual = GetComponentInChildren<CharacterVisual>();
         if (_characterAwareness == null) _characterAwareness = GetComponentInChildren<CharacterAwareness>();
+        if (_characterInteractable == null) _characterInteractable = GetComponentInChildren<CharacterInteractable>();
         if (_characterAbilities == null) _characterAbilities = GetComponent<CharacterAbilities>();
         if (_characterBookKnowledge == null) _characterBookKnowledge = GetComponent<CharacterBookKnowledge>();
 

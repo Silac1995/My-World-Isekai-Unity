@@ -22,9 +22,11 @@ Three classes with clear separation of concerns:
 |-------|------|----------------|
 | `PartyData` | Plain C# class | What the party **is** (data) |
 | `PartyRegistry` | Static class | Where to **find** parties (lookup) |
-| `CharacterPartyController` | `CharacterSystem` MonoBehaviour | What a character **does** in a party (behavior) |
+| `CharacterParty` | `CharacterSystem` MonoBehaviour | What a character **does** in a party (behavior) |
 
 All files live in `Assets/Scripts/Character/CharacterParty/`.
+
+> **Naming note:** The component is named `CharacterParty` (not `CharacterPartyController`) to match the existing convention: `CharacterCombat`, `CharacterJob`, `CharacterInvitation`, etc. The old `CharacterParty.cs` data class is replaced by `PartyData.cs`.
 
 ---
 
@@ -40,16 +42,18 @@ Replaces the existing `CharacterParty.cs`. Plain C# class, no MonoBehaviour.
 - `LeaderId` : string — CharacterId UUID (not a direct reference, survives hibernation)
 - `MemberIds` : List\<string\> — CharacterId UUIDs
 - `FollowMode` : PartyFollowMode enum — `{ Strict, Loose }`
-- `State` : PartyState enum — `{ Active, LeaderlessHold, Gathering }`
+- `State` : PartyState enum — `{ Active, LeaderlessHold, Gathering }` — **transient, not persisted.** Resets to `Active` on load. Gathering state is inherently transient (a mid-gather server restart simply cancels the gather).
 
 Uses CharacterId UUIDs instead of direct `Character` references so party data survives hibernation, disconnects, and map transitions without dangling references. Live `Character` objects are resolved on demand via `Character.FindByUUID()`.
+
+**Important:** All `Character.FindByUUID()` calls must null-check. For members on hibernated maps, the UUID exists in `PartyData.MemberIds` but resolves to null. Gathering only considers members where `FindByUUID() != null`. Toast notifications to players on hibernated maps are queued for reconnect.
 
 ### PartyFollowMode Enum
 
 `Assets/Scripts/Character/CharacterParty/PartyFollowMode.cs`
 
 - `Strict` — NPC members pathfind to the leader at all times when free. Default.
-- `Loose` — NPC members act independently (schedule, GOAP, wander within community territory). Only available on `MapType.Region` maps owned by a community.
+- `Loose` — NPC members act independently (schedule, GOAP, wander within community territory). Only available on `MapType.Region` maps owned by a community. **When the party transitions out of a community-owned Region, FollowMode automatically reverts to Strict.**
 
 ### PartyState Enum
 
@@ -75,11 +79,13 @@ GetAllParties() -> IEnumerable<PartyData>  // for MacroSimulator enumeration
 
 The reverse lookup `_characterToParty` gives O(1) for the most common query: "what party is this character in?"
 
+**Boot loading:** On server start, `SaveManager` loads all persisted `PartyData` entries from the world save file and calls `PartyRegistry.Register()` for each. This happens during `SaveManager`'s existing initialization sequence, before any `MapController.OnNetworkSpawn` fires. A `PartyRegistry.Clear()` method resets both dictionaries on shutdown.
+
 ---
 
-## 2. CharacterPartyController
+## 2. CharacterParty (Component)
 
-`CharacterPartyController : CharacterSystem` — attached to **every** character, even if not in a party. Mirrors how `CharacterCombat`, `CharacterJob`, etc. work. Dormant until a party forms.
+`CharacterParty : CharacterSystem` — attached to **every** character, even if not in a party. Mirrors how `CharacterCombat`, `CharacterJob`, etc. work. Dormant until a party forms.
 
 ### State
 
@@ -87,55 +93,68 @@ The reverse lookup `_characterToParty` gives O(1) for the most common query: "wh
 - `_followCoroutine` : Coroutine — active follow loop (NPC-only)
 - `_gatherCoroutine` : Coroutine — gathering loop
 - `_isGathered` : bool — has this member reached the gather zone
-- `_gatherZone` : BoxCollider — trigger collider, disabled by default. Enabled during gathering.
+- `_gatherZone` : BoxCollider — on a **child GameObject** (e.g., "GatherZone") with a dedicated layer/tag so it is ignored by `MapController.OnTriggerEnter` and other physics systems. Trigger collider, disabled by default. Enabled during gathering.
 - `_gatheredMemberIds` : HashSet\<string\> — members currently inside the gather zone
+- `[SerializeField] SkillSO _leadershipSkill` — reference to the Leadership SkillSO asset, assigned in the Character prefab. Used by `CreateParty()`, `CanExecute()`, and auto-promote logic.
+
+### Network Synchronization
+
+Party operations execute on the **server**. Clients need party state for UI (HUD panel, toast notifications, gathering progress). Synchronization uses:
+
+- `NetworkVariable<FixedString64Bytes> _networkPartyId` — synced to all clients. The client's `UI_PartyPanel` reads this to know if the local player is in a party and which one.
+- **ClientRpc** notifications for discrete events: `NotifyJoinedPartyClientRpc`, `NotifyLeftPartyClientRpc`, `NotifyGatheringStartedClientRpc`, `NotifyMemberKickedClientRpc`, etc. These fire the local C# events that the UI consumes.
+- `NetworkVariable<byte> _networkPartyState` — synced to all clients (cast from `PartyState` enum). Drives gathering UI on member clients.
+- `NetworkVariable<byte> _networkFollowMode` — synced to all clients. Drives follow mode toggle display.
+
+The local C# events (`OnJoinedParty`, `OnLeftParty`, etc.) are raised **on both server and client** — on the server directly, on clients via the ClientRpc handlers.
 
 ### Follow Logic (server-only, NPC members only)
 
 - When `FollowMode == Strict` and member is free (`IsFree()`): sets blackboard flag `IsInPartyFollow = true`. The BT node `BTCond_IsInPartyFollow` picks it up and pathfinds to the leader.
 - When `FollowMode == Loose` on a community-owned region: clears the flag. Member runs normal BT (schedule, GOAP, wander within territory).
 - **Player members are never auto-moved.** They follow on their own. They receive toast notifications if the leader starts gathering.
+- **Follow uses `CharacterMovement` directly** (pathfind via `SetDestination`), NOT a `CharacterAction`. This means following does **not** affect `IsFree()` — no oscillation risk. The BT action node calls `CharacterMovement.SetDestination()` and `CharacterMovement.Stop()` directly, same pattern as `CharacterInvitation.FollowTargetRoutine`.
 
 ### BT Integration
 
 New BT node: `BTCond_IsInPartyFollow` with child action `BTAction_FollowPartyLeader`.
 
-Priority position in `NPCBehaviourTree`:
+**Exact insertion point** in `NPCBehaviourTree.BuildTree()`: insert after `_agressionSequence` (index 4) and before `_punchOutNode` (index 5) in the `BTSelector` children list. All subsequent nodes shift down one index.
 
 ```
-1.  Legacy/Imperative
-2.  Orders
-3.  Combat
-4.  Entraide (friend in danger)
-5.  Aggression (enemy detected)
-→   5.5 Party Follow  ← NEW
-6.  PunchOut
-7.  Schedule
-8.  GOAP
-9.  Social
-10. Wander
+0.  Legacy/Imperative
+1.  Orders
+2.  Combat
+3.  Entraide (friend in danger)
+4.  Aggression (enemy detected)
+5.  Party Follow  ← NEW (inserted here)
+6.  PunchOut (was index 5)
+7.  Schedule (was index 6)
+8.  GOAP (was index 7)
+9.  Social (was index 8)
+10. Wander (was index 9)
 ```
 
 Combat/aggression override party follow (members can fight). Party follow overrides schedule/wander/social (members don't wander off). The controller sets/clears the blackboard flag; the BT node reads it.
 
 ### Gathering Logic (server-only)
 
-Triggered when the leader's `CharacterMapTransitionAction` is detected and the target map is `MapType.Region` or `MapType.Dungeon`.
+Triggered when the leader interacts with a `MapTransitionDoor` or enters a `MapTransitionZone` and the target map is `MapType.Region` or `MapType.Dungeon`.
 
 **Flow:**
 
 1. Leader interacts with a `MapTransitionDoor` or enters a `MapTransitionZone`
-2. `CharacterMapTransitionAction` starts on the leader
-3. System detects: leader is in a party AND target is Region/Dungeon
-4. **Cancel** the transition action
-5. Leader's `CharacterPartyController.StartGathering(targetMapId, targetPosition)`:
+2. `MapTransitionDoor.Interact()` checks: is interactor a party leader AND target map is Region/Dungeon?
+3. **Yes** → calls `CharacterParty.StartGathering(targetMapId, targetPosition)` **instead of** creating the `CharacterMapTransitionAction`. The transition action is never started — no race condition.
+4. **No** (solo, interior, arena) → current behavior unchanged, `CharacterMapTransitionAction` executes normally
+5. `StartGathering(targetMapId, targetPosition)`:
    - Stop leader's movement (immobilize)
    - Enable `_gatherZone` BoxCollider at leader's position
    - Set `PartyData.State = Gathering`
-   - Notify all members: BT flag for NPCs, toast for player members
+   - Notify all members: BT flag for NPCs, toast for player members ("Your party leader is waiting for you")
 6. NPC members pathfind to the gather collider
-7. `OnTriggerEnter`: member enters gather zone → add to `_gatheredMemberIds`
-8. `OnTriggerExit`: member leaves gather zone → remove from `_gatheredMemberIds`
+7. `OnTriggerEnter` on the gather zone child object: member enters → add to `_gatheredMemberIds`
+8. `OnTriggerExit` on the gather zone child object: member leaves → remove from `_gatheredMemberIds`
 9. **Player leader**: once all free members are gathered, auto-proceed. If any are busy → prompt: "[Name] is still in combat. Leave without them? [Yes / Wait]"
 10. **NPC leader**: configurable timeout (e.g., 30s) → proceed with whoever is gathered
 
@@ -150,21 +169,37 @@ Triggered when the leader's `CharacterMapTransitionAction` is detected and the t
 
 ### Gather Collider
 
-- `BoxCollider _gatherZone` on `CharacterPartyController`, `isTrigger = true`, disabled by default
+- `BoxCollider _gatherZone` on a **child GameObject** of the character (e.g., "GatherZone"), set to a dedicated physics layer (e.g., "PartyGather") that does **not** interact with the "Character" or "MapTrigger" layers. This prevents `MapController.OnTriggerEnter` from double-counting or registering phantom entries.
+- `isTrigger = true`, disabled by default
 - Enabled when `State = Gathering`, disabled when gathering ends
 - Size configurable (e.g., 3x3 around the leader)
-- `OnTriggerEnter`/`OnTriggerExit` track which party members are inside
+- The child GameObject has a small script (`PartyGatherZone`) that forwards `OnTriggerEnter`/`OnTriggerExit` events to the parent `CharacterParty` component.
+
+### Leader Enters Interior
+
+When the leader enters a `MapType.Interior` map (e.g., walks into a shop):
+- Party stays `Active` — no disband, no gathering
+- Follow flag is cleared for members on a different map (they're now "separated")
+- NPC members idle near the door the leader entered (last known leader position on the exterior map)
+- When the leader exits back to the same exterior map, follow resumes automatically
+- If the leader is on a different map from a member, that member's `CharacterParty` skips follow ticks (leader `FindByUUID()` returns a character on a different map — detected via `CharacterMapTracker`)
+
+### Non-Leader Members at Transition Points
+
+Non-leader party members can use `MapTransitionDoor` and `MapTransitionZone` **freely** without triggering gathering. Only the leader triggers the gathering flow. If a non-leader member transitions to a different map:
+- Toast notification to the player leader: "[Name] has left the region"
+- Member becomes "separated" — still in the party, follow resumes if they return to the leader's map
 
 ### Party Lifecycle (server-only)
 
-- `CreateParty(name = null)` — requires Leadership skill. Name defaults to `$"{leader.CharacterName}'s Party"`. Generates PartyData, registers in PartyRegistry.
+- `CreateParty(name = null)` — requires Leadership skill (checked via `_leadershipSkill` SerializeField reference). Name defaults to `$"{leader.CharacterName}'s Party"`. Generates PartyData, registers in PartyRegistry.
 - `JoinCharacterParty(Character leader)` — convenience method: checks if leader has a party, if so joins it.
-- `JoinParty(partyId)` — called after `PartyInvitation` accepted. Adds to `PartyData.MemberIds`.
+- `JoinParty(partyId)` — called after `PartyInvitation` accepted. Adds to `PartyData.MemberIds`. **Precondition:** if the character is already in a different party, they must `LeaveParty()` first. This is enforced in `JoinParty()` — auto-leave the old party before joining the new one.
 - `LeaveParty()` — removes from member list, clears blackboard flag, stops coroutines, clears local state.
 - `KickMember(characterId)` — leader-only. Works even if target is offline (removes UUID from member list).
 - `PromoteLeader(characterId)` — leader-only. Transfers leadership.
 - Leader unconscious → `PartyState.LeaderlessHold`, clears follow flags. On wake-up → resume `PartyState.Active`.
-- Leader dies → auto-promote next member. New leader gets Leadership skill at level 1 via `CharacterSkills.AddSkill()` if they don't have it. If no members left → disband and unregister from PartyRegistry.
+- Leader dies → auto-promote next member. New leader gets Leadership skill at level 1 via `CharacterSkills.AddSkill(_leadershipSkill)` if they don't have it. If no members left → disband and unregister from PartyRegistry.
 
 ### Reconnect Flow (server-only)
 
@@ -187,11 +222,19 @@ OnGatheringComplete()
 OnMemberKicked(string characterId)
 ```
 
+These events fire on both server and client (server directly, client via ClientRpc handlers).
+
 ### Cleanup (OnDestroy)
 
+Two subscription layers to clean up:
+
+1. **Inherited `CharacterSystem` subscriptions** (auto-managed by base class): `_character.OnDeath`, `_character.OnIncapacitated`, `_character.OnWakeUp` — these handle self-incapacitation (e.g., this member falls unconscious).
+
+2. **Manual leader subscriptions** (managed by `CharacterParty`): when this character joins a party, it subscribes to the **leader's** `Character.OnDeath`, `Character.OnUnconsciousChanged`, `Character.OnWakeUp` events. These must be explicitly unsubscribed in `OnDestroy` and when the leader changes (promote, leader dies, leave party).
+
+Additional cleanup:
 - Stop `_followCoroutine` and `_gatherCoroutine`
-- Unsubscribe from leader's `OnDeath`, `OnUnconsciousChanged`, `OnWakeUp`
-- Clear blackboard flag
+- Clear blackboard flag (`IsInPartyFollow = false`)
 - If this was the last member, disband and unregister from `PartyRegistry`
 
 ---
@@ -222,17 +265,20 @@ Arena         // No party gathering
 For doorless region borders. A trigger collider at the edge of a `MapController.Region`.
 
 - `OnTriggerEnter`: detects a `Character` entering the zone
-  - **Party leader** → stop movement, start gathering flow
+  - **Party leader** → stop movement, call `CharacterParty.StartGathering()`
   - **Non-leader party member** → toast notification to the player leader: "[Name] is approaching the border"
   - **Solo character** → normal transition behavior
 - Holds `TargetMapId` and `TargetPosition` like `MapTransitionDoor`
-- Calls into `CharacterPartyController.StartGathering()` — same as door. Gathering logic lives in the controller, not the transition point.
+- Calls into `CharacterParty.StartGathering()` — same as door. Gathering logic lives in the controller, not the transition point.
 
 ### Changes to MapTransitionDoor
 
-- Before starting `CharacterMapTransitionAction`, check: is interactor a party leader AND target map is Region/Dungeon?
-- **Yes** → the `CharacterMapTransitionAction` starts but gets cancelled by the `CharacterPartyController` which takes over with gathering mode
-- **No** (solo, interior, arena) → current behavior unchanged
+In `MapTransitionDoor.Interact()`, before creating `CharacterMapTransitionAction`:
+
+1. Resolve the target `MapController` via `MapController.GetByMapId(targetMapId)`
+2. Check: is interactor a party leader AND `targetMap.Type` is `Region` or `Dungeon`?
+3. **Yes** → call `interactor.CharacterParty.StartGathering(targetMapId, dest)` and **return** (do not create `CharacterMapTransitionAction`)
+4. **No** → current behavior unchanged
 
 ---
 
@@ -248,7 +294,7 @@ Plugs into the existing `CharacterInvitation` pipeline with zero new infrastruct
 CanExecute(source, target):
   - source must have Leadership skill
   - source must be party leader (or will auto-create party)
-  - target must not already be in source's party
+  - target must not already be in ANY party (not just source's party)
   - target must be alive and free
   - party must not be full (Leadership skill level determines max size)
 
@@ -256,7 +302,7 @@ GetInvitationMessage(source, target):
   → "Want to join my group?"
 
 OnAccepted(source, target):
-  → target.CharacterPartyController.JoinParty(source.CurrentParty.PartyId)
+  → target.CharacterParty.JoinParty(source.CurrentParty.PartyId)
 
 OnRefused(source, target):
   → Empty. No relation impact.
@@ -289,16 +335,22 @@ Uses the existing `SkillSO` system — no framework changes needed.
 - `StatInfluences`: Sociability scaling (via `CharacterTraits.GetSociability()`)
 - `LevelBonuses`: passive stat boosts at milestones (future)
 
+Referenced at runtime via `[SerializeField] SkillSO _leadershipSkill` on `CharacterParty`, assigned in the Character prefab. No `Resources.Load` needed.
+
 ### Party Size Formula
 
-Base party size: 2 (leader + 1 member)
-Per Leadership level: +1 member
-Example: Leadership level 5 → max 7 members
+```
+MaxPartySize = Mathf.Min(2 + leadershipLevel, 8)
+```
+
+Base: 2 (leader + 1 member). Per Leadership level: +1. Hard cap: 8 regardless of level.
+
+Example: Leadership level 5 → max 7 members. Leadership level 10 → still max 8.
 
 ### Skill Acquisition
 
 - **Creating a party** requires the Leadership skill (checked in `CreateParty()` and `PartyInvitation.CanExecute()`)
-- **Inheriting leadership** (auto-promote on leader death) grants Leadership at level 1 via `CharacterSkills.AddSkill()` if the character doesn't have it
+- **Inheriting leadership** (auto-promote on leader death) grants Leadership at level 1 via `CharacterSkills.AddSkill(_leadershipSkill)` if the character doesn't have it
 - Leadership XP gained naturally through leading (future: XP on successful gathering, transitions, party activities)
 
 ---
@@ -309,11 +361,11 @@ Example: Leadership level 5 → max 7 members
 
 - "Create Party" button visible when: player has Leadership skill AND is not in a party
 - Optional name input field — defaults to `"{PlayerName}'s Party"` if left empty
-- Creates party immediately via `CharacterPartyController.CreateParty()`
+- Creates party immediately via `CharacterParty.CreateParty()`
 
 ### Party View
 
-- Visible only when the local player is in a party
+- Visible only when the local player is in a party (reads `_networkPartyId` NetworkVariable)
 - Shows: party name, follow mode, member list with status indicators
 - Each member entry: name, health bar (if visible), status icon (following, in combat, gathering, separated)
 
@@ -339,6 +391,8 @@ OnFollowModeChanged → update toggle state
 OnMemberKicked → remove entry
 ```
 
+These events are raised on the client via ClientRpc handlers in `CharacterParty`.
+
 ---
 
 ## 7. Toast Notifications
@@ -354,6 +408,7 @@ Via existing `ToastNotificationChannel`:
 | Member near border | "[Name] is approaching the border" |
 | Leader gathering | "Your party leader is leaving the region" |
 | Leader waiting | "Your party leader is waiting for you" |
+| Member left region | "[Name] has left the region" |
 
 ---
 
@@ -367,13 +422,15 @@ Via existing `ToastNotificationChannel`:
 
 Saved fields: `PartyId`, `PartyName`, `LeaderId`, `MemberIds`, `FollowMode`
 
-On server boot, all PartyData entries are loaded into `PartyRegistry`.
+`State` is **not** persisted — it is transient and resets to `Active` on load.
+
+**Boot sequence:** During `SaveManager` initialization (before any `MapController.OnNetworkSpawn`), all persisted `PartyData` entries are loaded and registered via `PartyRegistry.Register()`. This ensures parties are available for lookup when characters spawn or maps wake up. `PartyRegistry.Clear()` is called on server shutdown.
 
 ### HibernatedNPCData
 
 - Add `PartyId : string` field
 - On hibernation: NPC's PartyId is preserved
-- On wake-up: look up PartyId in `PartyRegistry`, re-link `CharacterPartyController`
+- On wake-up: look up PartyId in `PartyRegistry`, re-link `CharacterParty`
 
 ### Macro-Simulation Catch-Up (Party-Aware)
 
@@ -383,7 +440,7 @@ On server boot, all PartyData entries are loaded into `PartyRegistry`.
 ### Cross-Map Parties
 
 - Members can be on different maps (e.g., one got left behind). `PartyData.MemberIds` is map-agnostic — just UUIDs.
-- Follow logic only activates for members on the **same map** as the leader
+- Follow logic only activates for members on the **same map** as the leader (checked via `CharacterMapTracker`)
 - Separated members entering the leader's map later → follow resumes automatically
 
 ---
@@ -396,7 +453,8 @@ On server boot, all PartyData entries are loaded into `PartyRegistry`.
 | `PartyRegistry.cs` | `Assets/Scripts/Character/CharacterParty/` | Static class |
 | `PartyFollowMode.cs` | `Assets/Scripts/Character/CharacterParty/` | Enum |
 | `PartyState.cs` | `Assets/Scripts/Character/CharacterParty/` | Enum |
-| `CharacterPartyController.cs` | `Assets/Scripts/Character/CharacterParty/` | CharacterSystem MonoBehaviour |
+| `CharacterParty.cs` | `Assets/Scripts/Character/CharacterParty/` | CharacterSystem MonoBehaviour |
+| `PartyGatherZone.cs` | `Assets/Scripts/Character/CharacterParty/` | MonoBehaviour (trigger forwarder on child GO) |
 | `PartyInvitation.cs` | `Assets/Scripts/Character/CharacterParty/` | InteractionInvitation subclass |
 | `MapType.cs` | `Assets/Scripts/World/MapSystem/` | Enum |
 | `MapTransitionZone.cs` | `Assets/Scripts/World/MapSystem/` | MonoBehaviour (trigger collider) |
@@ -409,10 +467,11 @@ On server boot, all PartyData entries are loaded into `PartyRegistry`.
 
 | File | Change |
 |------|--------|
-| `Character.cs` | Add `CharacterPartyController` reference + property. Remove old `CharacterParty` stubs. |
+| `Character.cs` | Add `CharacterParty` reference + property. Remove old party stubs (`_currentParty`, `CreateParty()`, `SetParty()`, `Invite()`). |
 | `MapController.cs` | Add `MapType _mapType` field. Replace `IsInteriorOffset` with `MapType` check. |
-| `MapTransitionDoor.cs` | Check for party leader before transition — delegate to gathering if applicable. |
-| `NPCBehaviourTree.cs` | Add `BTCond_IsInPartyFollow` node at priority 5.5. |
+| `MapTransitionDoor.cs` | In `Interact()`: check for party leader + Region/Dungeon target → call `CharacterParty.StartGathering()` instead of creating transition action. |
+| `NPCBehaviourTree.cs` | Insert `BTCond_IsInPartyFollow` node after `_agressionSequence` (index 4) and before `_punchOutNode` in the `BTSelector` children list. |
 | `HibernatedNPCData` | Add `PartyId` field. |
 | `ICharacterData` | Add `PartyId` field. |
 | `MacroSimulator` | Party-aware position snap during catch-up. |
+| `SaveManager` | Load persisted `PartyData` into `PartyRegistry` during initialization. |

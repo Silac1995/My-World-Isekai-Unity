@@ -35,6 +35,14 @@ namespace MWI.AI
 
             bool doLog = UnityEngine.Time.frameCount % 60 == 0; // Log once a second per character
 
+            // If the character has manually selected a PlannedTarget (player click or queued intent),
+            // override the coordinator-assigned currentTarget so all movement and execution aim at it.
+            Character plannedTarget = _self.CharacterCombat?.PlannedTarget;
+            if (plannedTarget != null && plannedTarget.IsAlive())
+            {
+                currentTarget = plannedTarget;
+            }
+
             if (currentTarget == null)
             {
                 if (doLog) Debug.Log($"<color=red>[CombatAI]</color> {_self.CharacterName} target is NULL! Stopping movement.");

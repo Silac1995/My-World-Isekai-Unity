@@ -42,9 +42,10 @@ public class CharacterCombat : CharacterSystem
 
     public void SetActionIntent(Func<bool> action, Character target)
     {
+        Debug.Log($"<color=cyan>[Combat]</color> {_character.CharacterName} SetActionIntent → PlannedTarget: {PlannedTarget?.CharacterName ?? "null"} → {target?.CharacterName ?? "null"}");
         PlannedAction = action;
         PlannedTarget = target;
-        
+
         if (_character != null && _character.CharacterVisual != null)
         {
             _character.CharacterVisual.SetLookTarget(target);
@@ -60,6 +61,7 @@ public class CharacterCombat : CharacterSystem
 
     public void ClearActionIntent()
     {
+        Debug.Log($"<color=cyan>[Combat]</color> {_character.CharacterName} ClearActionIntent → PlannedTarget: {PlannedTarget?.CharacterName ?? "null"} → null");
         PlannedAction = null;
         PlannedTarget = null;
 
@@ -75,6 +77,7 @@ public class CharacterCombat : CharacterSystem
     /// </summary>
     public void SetPlannedTarget(Character target)
     {
+        Debug.Log($"<color=cyan>[Combat]</color> {_character.CharacterName} SetPlannedTarget → PlannedTarget: {PlannedTarget?.CharacterName ?? "null"} → {target?.CharacterName ?? "null"}");
         PlannedTarget = target;
 
         if (target != null && IsInBattle && CurrentBattleManager != null && CurrentBattleManager.Coordinator != null)

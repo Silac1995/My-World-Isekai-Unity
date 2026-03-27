@@ -9793,7 +9793,7 @@ PrefabInstance:
       objectReference: {fileID: 3847113653297405302, guid: c0a908113b519814ebaecf932332542b, type: 3}
     - target: {fileID: 3279468191250265719, guid: 25c1f619b228e29449b01e4350bfa0ca, type: 3}
       propertyPath: _communities.Array.size
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 9182771655719996897, guid: 25c1f619b228e29449b01e4350bfa0ca, type: 3}
       propertyPath: m_Name
