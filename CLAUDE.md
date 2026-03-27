@@ -22,6 +22,15 @@ These rules are **mandatory** and apply to every conversation, every task, and e
 13. High-level modules must depend on abstractions (interfaces), not concrete implementations.
 14. Use Dependency Injection wherever possible instead of direct class references.
 
+## Character GameObject Hierarchy
+
+The Character entity uses a **Facade + Child Hierarchy** pattern:
+- The root `Character` GameObject holds `Character.cs`, which acts as the single facade and dependency point for all subsystems.
+- Each character subsystem (e.g., `CharacterCombat`, `CharacterMovement`, `CharacterNeeds`) lives on its own **child GameObject** with only the scripts it needs. This keeps the Inspector navigable and scopes each system clearly.
+- Every subsystem script holds a reference to the root `Character` component (not to other subsystems directly).
+- **Cross-system communication must always go through `Character`** — a subsystem must never cache or call another subsystem directly. This enforces a single dependency graph and prevents circular coupling.
+- When adding a new character system: create a child GameObject, add the script there, expose it as a `[SerializeField]` on `Character.cs`, and auto-assign it in `Awake()` via `GetComponentInChildren<>()` as a fallback.
+
 ## C# Standards
 
 15. Always name private attributes with an underscore prefix (e.g., `_privateVariable`).

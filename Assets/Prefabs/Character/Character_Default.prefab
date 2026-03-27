@@ -533,6 +533,7 @@ MonoBehaviour:
   _character: {fileID: 2536622428659117900}
   _unconsciousEffect: {fileID: 11400000, guid: 8b53042cad11a914cb6d5847dc93f505, type: 2}
   _outOfCombatEffect: {fileID: 11400000, guid: 4bb0a5072ebeb5b4a9c039f3d6d8ef4c, type: 2}
+  _outOfBreathEffect: {fileID: 0}
 --- !u!1 &2965803382657509719
 GameObject:
   m_ObjectHideFlags: 0
@@ -734,7 +735,9 @@ Transform:
   - {fileID: 3576894322142989136}
   - {fileID: 7433225657293554030}
   - {fileID: 6731996095375712968}
+  - {fileID: 6916331169481560989}
   - {fileID: 9190579779038921305}
+  - {fileID: 4145912298166482651}
   - {fileID: 673712489822227902}
   - {fileID: 6503437136188520673}
   - {fileID: 378579971513508917}
@@ -890,6 +893,8 @@ MonoBehaviour:
   _characterGoap: {fileID: 8601409522411222074}
   _characterCombatLevel: {fileID: 7806414935237473066}
   _characterBlueprints: {fileID: 8824244859434443465}
+  _characterAbilities: {fileID: 7442086241848868557}
+  _characterBookKnowledge: {fileID: 8645682828846456051}
   NetworkRaceId:
     UpdateTraits:
       MinSecondsBetweenUpdates: 0
@@ -1701,7 +1706,11 @@ MonoBehaviour:
     baseValue: 0
     currentValue: 0
     minValue: 0
-  castingSpeed:
+  spellCasting:
+    baseValue: 0
+    currentValue: 0
+    minValue: 0
+  combatCasting:
     baseValue: 0
     currentValue: 0
     minValue: 0
@@ -1725,6 +1734,53 @@ MonoBehaviour:
     baseValue: 0
     currentValue: 0
     minValue: 0
+--- !u!1 &4622655805988065165
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 4145912298166482651}
+  - component: {fileID: 8645682828846456051}
+  m_Layer: 0
+  m_Name: Book knowledge
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &4145912298166482651
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4622655805988065165}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 7.16961, y: 6.82059, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 6179432398992828966}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &8645682828846456051
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4622655805988065165}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b3a2f759b576f334d90249e59d8da667, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CharacterBookKnowledge
+  ShowTopMostFoldoutHeaderGroup: 1
+  _character: {fileID: 2536622428659117900}
+  _readingLog: []
 --- !u!1 &4730159897314925435
 GameObject:
   m_ObjectHideFlags: 0
@@ -2027,6 +2083,64 @@ MonoBehaviour:
     _teachingSubject: {fileID: 0}
     _enrolledStudents: []
   _mentorClassZonePrefab: {fileID: 1486305583445089330, guid: 17ba6025ed6c68649864a3f5c1d8427c, type: 3}
+--- !u!1 &5836643846151691997
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 6916331169481560989}
+  - component: {fileID: 7442086241848868557}
+  m_Layer: 0
+  m_Name: Abilities
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &6916331169481560989
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5836643846151691997}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 6179432398992828966}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &7442086241848868557
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5836643846151691997}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 577d2e4068dd4c74a90da9b14b02e5e1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CharacterAbilities
+  ShowTopMostFoldoutHeaderGroup: 1
+  _character: {fileID: 2536622428659117900}
+  _knownPhysicalAbilities: []
+  _knownSpells: []
+  _knownPassives: []
+  _passiveSlots:
+  - _data: {fileID: 0}
+    _internalCooldownRemaining: 0
+  - _data: {fileID: 0}
+    _internalCooldownRemaining: 0
+  - _data: {fileID: 0}
+    _internalCooldownRemaining: 0
+  - _data: {fileID: 0}
+    _internalCooldownRemaining: 0
 --- !u!1 &6033310835848199150
 GameObject:
   m_ObjectHideFlags: 0
