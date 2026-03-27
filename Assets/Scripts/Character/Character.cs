@@ -66,6 +66,7 @@ public class Character : NetworkBehaviour
     [SerializeField] private CharacterGoapController _characterGoap;
     [SerializeField] private CharacterCombatLevel _characterCombatLevel;
     [SerializeField] private CharacterBlueprints _characterBlueprints;
+    [SerializeField] private CharacterAbilities _characterAbilities;
     #endregion
 
     #region Network Variables
@@ -158,6 +159,7 @@ public class Character : NetworkBehaviour
     public CharacterGoapController CharacterGoap => _characterGoap;
     public CharacterCombatLevel CharacterCombatLevel => _characterCombatLevel;
     public CharacterBlueprints CharacterBlueprints => _characterBlueprints;
+    public CharacterAbilities CharacterAbilities => _characterAbilities;
     public BuildingPlacementManager PlacementManager => _characterBlueprints != null ? _characterBlueprints.PlacementManager : null;
     public bool IsBuilding => _isBuilding;
 
@@ -319,7 +321,8 @@ public class Character : NetworkBehaviour
         if (_characterMovement == null) _characterMovement = GetComponent<CharacterMovement>();
         if (_characterVisual == null) _characterVisual = GetComponentInChildren<CharacterVisual>();
         if (_characterAwareness == null) _characterAwareness = GetComponentInChildren<CharacterAwareness>();
-        
+        if (_characterAbilities == null) _characterAbilities = GetComponent<CharacterAbilities>();
+
         _cachedNavMeshAgent = GetComponent<NavMeshAgent>();
         _isDead = false;
         _isUnconscious = false;

@@ -448,6 +448,25 @@ public class CharacterMentorship : CharacterSystem
                 }
             }
         }
+        else if (subject is AbilitySO abilitySO)
+        {
+            CharacterAbilities abilities = _character.CharacterAbilities;
+            if (abilities == null) return;
+
+            if (abilities.KnowsAbility(abilitySO))
+            {
+                Graduate(abilitySO);
+                return;
+            }
+
+            _learningProgress += finalXP;
+            if (_learningProgress >= 100f)
+            {
+                abilities.LearnAbility(abilitySO);
+                _learningProgress = 0f;
+                Debug.Log($"<color=cyan>[Mentorship]</color> {_character.CharacterName} learned ability: {abilitySO.AbilityName}!");
+            }
+        }
     }
 
     /// <summary>
@@ -513,6 +532,17 @@ public class CharacterMentorship : CharacterSystem
                 {
                     subjects.Add(expertise.Style);
                 }
+            }
+        }
+
+        // 3. Known Abilities (all known abilities are teachable)
+        CharacterAbilities charAbilities = _character.CharacterAbilities;
+        if (charAbilities != null)
+        {
+            foreach (var ability in charAbilities.AllKnownAbilities())
+            {
+                if (ability?.Data != null)
+                    subjects.Add(ability.Data);
             }
         }
 

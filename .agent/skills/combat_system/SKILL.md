@@ -106,8 +106,63 @@ The combat system supports damaging non-Character objects (e.g., doors) via the 
 
 **DoorHealth** (`Assets/Scripts/World/MapSystem/DoorHealth.cs`) is the primary `IDamageable` implementation for doors. See the **door-lock-system** skill for details on breakable doors, repair mechanics, and damage resistance.
 
+### 9. Combat Ability System
+
+Characters can learn and equip active abilities (6 slots) and passive abilities (4 slots). Abilities are managed by the `CharacterAbilities` component (`Assets/Scripts/Character/CharacterAbilities/CharacterAbilities.cs`).
+
+#### A. Ability Types (ScriptableObject Hierarchy)
+All abilities inherit from `AbilitySO` (`Assets/Scripts/Abilities/Data/AbilitySO.cs`):
+- **`PhysicalAbilitySO`**: Weapon-bound (requires specific `WeaponType`), costs **Stamina**, no cooldown. If you learn sword abilities from two different CombatStyles, all sword abilities are available when any sword is equipped.
+- **`SpellSO`**: Weapon-independent, costs **Mana**, has **cooldown** and **cast time**. Cast time scales with Dexterity via `ComputeCastTime(castingSpeed)`. If reduced to 5% or less of base cast time, the spell becomes instant.
+- **`PassiveAbilitySO`**: Event-triggered reactions with 9 trigger conditions: `OnDamageTaken`, `OnCriticalHitDealt`, `OnKill`, `OnDodge`, `OnBattleStart`, `OnInitiativeFull`, `OnAllyDamaged`, `OnLowHPThreshold`, `OnStatusEffectApplied`. Each passive has a trigger chance, internal cooldown, and reaction effects.
+
+#### B. Runtime Instances (`Assets/Scripts/Abilities/Runtime/`)
+- **`PhysicalAbilityInstance`**: `CanUse()` checks stamina + weapon type match.
+- **`SpellInstance`**: `CanUse()` checks mana + cooldown. Tracks `_remainingCooldown`.
+- **`PassiveAbilityInstance`**: `TryTrigger()` checks condition match + cooldown + chance roll.
+
+#### C. Execution Flow
+1. `CharacterCombat.UseAbility(slotIndex, target)` is the entry point.
+2. Follows the same Owner-predict -> Server-validate -> Broadcast RPC pattern as `Attack()`.
+3. Creates either `CharacterPhysicalAbilityAction` or `CharacterSpellCastAction` (both extend `CharacterCombatAction`).
+4. Physical abilities: consume stamina on `OnStart()`, spawn hitbox via animation events.
+5. Spells: consume mana on `OnStart()`, apply effect on `OnApplyEffect()` (after cast time). If interrupted, `OnCancel()` refunds mana.
+6. Passive triggers: hooked into `TakeDamage()`, `JoinBattle()`, `UpdateInitiativeTick()`, and `CharacterStatusManager.ApplyEffect()`. Server-only evaluation.
+
+#### D. Stamina Cost for Basic Attacks
+- All basic melee/ranged attacks now consume Stamina (added in `ExecuteAttackLocally()`).
+- Melee cost: `BASE_COST (3) + PhysicalPower * 0.1`
+- Ranged cost: flat `5`
+- When stamina fully depletes: **Out of Breath** status effect applied (initiative fills slower, -70% physical damage). Removed automatically when stamina fully recovers.
+
+#### E. DamageType Expansion
+The `DamageType` enum now includes: `Blunt, Slashing, Piercing, Fire, Ice, Lightning, Holy, Dark`.
+
+#### F. AI Integration
+`CombatAILogic.DecideAbilityOrAttack()` provides simple heuristic NPC ability selection: heal self if HP < 40%, 30% chance to use a damage ability, fallback to basic attack.
+
+#### G. Learning
+Abilities are learned via the mentorship system (`CharacterMentorship.ReceiveLessonTick()` has an `AbilitySO` branch). All known abilities are teachable. Architecture supports future book/scroll learning via `IAbilitySource` interface.
+
+### 10. Damage Type Categories
+Physical damage types: **Blunt**, **Slashing**, **Piercing**.
+Magical damage types: **Fire**, **Ice**, **Lightning**, **Holy**, **Dark**.
+Weapons use physical types. Spells typically use magical types.
+
 ## Tips & Troubleshooting
-- **A character never attacks**: 
+- **A character never attacks**:
   - Verify that the `BattleManager` is properly calling `.UpdateInitiativeTick()`.
   - Check `WeaponInstance.CanFire()`. A magazine-based weapon won't fire if empty.
+  - Check if Stamina is depleted — basic attacks now require Stamina.
 - **Ranged attack accuracy**: Projectiles travel in a straight line towards the target's position at the moment of firing. They do not "home in" on the target.
+- **Ability won't fire**:
+  - Check `AbilityInstance.CanUse()` — verifies resource cost, cooldown, and weapon match.
+  - Physical abilities require the correct `WeaponType` equipped.
+  - Spells require cooldown to be 0 and enough Mana.
+- **Passive never triggers**:
+  - Verify the passive is equipped in one of the 4 passive slots (not just known).
+  - Check internal cooldown isn't blocking repeated triggers.
+  - Passives are server-only — check `IsServer` context.
+- **Out of Breath not applying**:
+  - Verify `_outOfBreathEffect` is assigned on the `CharacterStatusManager` component.
+  - It's a permanent-duration effect removed when `Stamina.CurrentAmount >= Stamina.MaxValue`.

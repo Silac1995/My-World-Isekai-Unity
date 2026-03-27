@@ -215,6 +215,11 @@ public class CharacterCombat : CharacterSystem
         ExecuteAttackLocally(target);
     }
 
+    // Stamina cost constants for basic attacks
+    private const float BASE_MELEE_STAMINA_COST = 3f;
+    private const float STAMINA_POWER_SCALING_RATIO = 0.1f;
+    private const float FLAT_RANGED_STAMINA_COST = 5f;
+
     private bool ExecuteAttackLocally(Character target)
     {
         _lastCombatActionTime = Time.time;
@@ -222,6 +227,22 @@ public class CharacterCombat : CharacterSystem
         ChangeCombatMode(true);
 
         if (_character.CharacterActions == null) return false;
+
+        // Server-only: consume stamina for basic attacks
+        if (IsServer && _character.Stats?.Stamina != null)
+        {
+            float staminaCost = CalculateBasicAttackStaminaCost();
+            if (_character.Stats.Stamina.CurrentAmount < staminaCost)
+                return false;
+
+            _character.Stats.Stamina.DecreaseCurrentAmount(staminaCost);
+
+            // Trigger Out of Breath when stamina fully depletes
+            if (_character.Stats.Stamina.CurrentAmount <= 0f)
+            {
+                _character.StatusManager?.ApplyOutOfBreathEffect();
+            }
+        }
 
         if (target != null 
             && _currentCombatStyleExpertise?.Style is RangedCombatStyleSO rangedStyle)
@@ -234,6 +255,15 @@ public class CharacterCombat : CharacterSystem
         }
 
         return MeleeAttack();
+    }
+
+    private float CalculateBasicAttackStaminaCost()
+    {
+        bool isRanged = _currentCombatStyleExpertise?.Style is RangedCombatStyleSO;
+        if (isRanged) return FLAT_RANGED_STAMINA_COST;
+
+        float physicalPower = _character.Stats?.PhysicalPower?.CurrentValue ?? 0f;
+        return BASE_MELEE_STAMINA_COST + physicalPower * STAMINA_POWER_SCALING_RATIO;
     }
 
     public bool MeleeAttack()
@@ -253,6 +283,96 @@ public class CharacterCombat : CharacterSystem
         ChangeCombatMode(!_isCombatMode);
         if (_isCombatMode) _lastCombatActionTime = Time.time;
     }
+    #endregion
+
+    #region Ability Execution
+
+    /// <summary>
+    /// Uses an ability from the character's active ability slot.
+    /// Follows the same Owner-predict → Server-validate → Broadcast pattern as Attack().
+    /// </summary>
+    public bool UseAbility(int slotIndex, Character target = null)
+    {
+        if (!_character.IsAlive()) return false;
+        if (_character.CharacterAbilities == null) return false;
+
+        AbilityInstance ability = _character.CharacterAbilities.GetActiveSlot(slotIndex);
+        if (ability == null) return false;
+
+        ulong targetId = target != null && target.NetworkObject != null ? target.NetworkObject.NetworkObjectId : 0;
+
+        if (IsOwner)
+        {
+            bool success = ExecuteAbilityLocally(ability, target);
+            if (!success) return false;
+            if (!IsServer) RequestUseAbilityRpc(slotIndex, targetId);
+            else BroadcastUseAbilityRpc(slotIndex, targetId);
+            return true;
+        }
+        else if (IsServer)
+        {
+            bool success = ExecuteAbilityLocally(ability, target);
+            if (!success) return false;
+            BroadcastUseAbilityRpc(slotIndex, targetId);
+            return true;
+        }
+
+        return false;
+    }
+
+    private bool ExecuteAbilityLocally(AbilityInstance ability, Character target)
+    {
+        _lastCombatActionTime = Time.time;
+        ChangeCombatMode(true);
+
+        if (_character.CharacterActions == null) return false;
+
+        CharacterAction action = ability switch
+        {
+            PhysicalAbilityInstance physical => new CharacterPhysicalAbilityAction(_character, physical, target),
+            SpellInstance spell => new CharacterSpellCastAction(_character, spell, target),
+            _ => null
+        };
+
+        if (action == null) return false;
+        return _character.CharacterActions.ExecuteAction(action);
+    }
+
+    [Rpc(SendTo.Server)]
+    private void RequestUseAbilityRpc(int slotIndex, ulong targetNetworkObjectId)
+    {
+        if (!IsServer) return;
+
+        Character target = null;
+        if (targetNetworkObjectId > 0 && NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(targetNetworkObjectId, out var netObj))
+            target = netObj.GetComponent<Character>();
+
+        // Server validates and broadcasts
+        AbilityInstance ability = _character.CharacterAbilities?.GetActiveSlot(slotIndex);
+        if (ability == null) return;
+
+        if (ExecuteAbilityLocally(ability, target))
+        {
+            BroadcastUseAbilityRpc(slotIndex, targetNetworkObjectId);
+        }
+    }
+
+    [Rpc(SendTo.NotServer)]
+    private void BroadcastUseAbilityRpc(int slotIndex, ulong targetNetworkObjectId)
+    {
+        if (IsOwner) return; // Owner already predicted locally
+
+        Character target = null;
+        if (targetNetworkObjectId > 0 && NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(targetNetworkObjectId, out var netObj))
+            target = netObj.GetComponent<Character>();
+
+        AbilityInstance ability = _character.CharacterAbilities?.GetActiveSlot(slotIndex);
+        if (ability != null)
+        {
+            ExecuteAbilityLocally(ability, target);
+        }
+    }
+
     #endregion
 
     #region Equipment Bridge
@@ -289,13 +409,23 @@ public class CharacterCombat : CharacterSystem
         // 3. On applique le Random Range sur la valeur plafonnée
         float totalGain = cappedGain * UnityEngine.Random.Range(0.7f, 1.3f);
         
+        bool wasReady = _character.Stats.Initiative.IsReady();
         _character.Stats.Initiative.IncreaseCurrentAmount(totalGain);
+
+        // Passive trigger: OnInitiativeFull (fire once when initiative becomes ready)
+        if (!wasReady && _character.Stats.Initiative.IsReady())
+        {
+            _character.CharacterAbilities?.OnPassiveTriggerEvent(PassiveTriggerCondition.OnInitiativeFull, _character, null);
+        }
     }
 
     public void JoinBattle(BattleManager manager)
     {
         _currentBattleManager = manager;
         ChangeCombatMode(true);
+
+        // Passive trigger: OnBattleStart
+        _character.CharacterAbilities?.OnPassiveTriggerEvent(PassiveTriggerCondition.OnBattleStart, _character, null);
     }
 
     public void JoinBattleAsAlly(Character friend)
@@ -621,21 +751,32 @@ public class CharacterCombat : CharacterSystem
             _character.CharacterVisual.CharacterBlink.Blink();
         }
 
+        // --- PASSIVE TRIGGERS: OnDamageTaken ---
+        _character.CharacterAbilities?.OnPassiveTriggerEvent(PassiveTriggerCondition.OnDamageTaken, source, _character);
+
+        // --- PASSIVE TRIGGERS: OnLowHPThreshold ---
+        _character.CharacterAbilities?.OnPassiveTriggerEvent(PassiveTriggerCondition.OnLowHPThreshold, source, _character);
+
         if (hpAfter <= 0)
         {
             _character.SetUnconscious(true);
+
+            // --- PASSIVE TRIGGERS: OnKill (notify the source) ---
+            if (wasAlive && source != null)
+            {
+                source.CharacterAbilities?.OnPassiveTriggerEvent(PassiveTriggerCondition.OnKill, source, _character);
+            }
         }
 
         // --- PROGRESSION EXP ---
+        bool isKill = wasAlive && !_character.IsAlive();
         if (source != null && source.CharacterCombatLevel != null && actualDamageDealt > 0)
         {
             int targetLevel = _character.CharacterCombatLevel != null ? _character.CharacterCombatLevel.CurrentLevel : 1;
             int targetYield = _character.CharacterCombatLevel != null ? _character.CharacterCombatLevel.BaseExpYield : 10;
-            
+
             float maxHp = Mathf.Max(1f, _character.Stats.Health.MaxValue);
             float damagePercentage = actualDamageDealt / maxHp;
-
-            bool isKill = wasAlive && !_character.IsAlive();
             
             int expGained = source.CharacterCombatLevel.CalculateCombatExp(targetLevel, isKill, damagePercentage, targetYield);
             source.CharacterCombatLevel.AddExperience(expGained);

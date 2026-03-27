@@ -61,8 +61,9 @@ namespace MWI.AI
             // The AI acts exactly like a Player pressing the "Attack" button -> it queues the intent immediately.
             if (_autoDecideIntent && isReadyToDecide && !_self.CharacterCombat.HasPlannedAction)
             {
-                if (doLog) Debug.Log($"<color=orange>[CombatAI]</color> {_self.CharacterName} [Phase 1] Auto-deciding action: Attack Intent locked!");
-                _self.CharacterCombat.SetActionIntent(() => _self.CharacterCombat.Attack(), currentTarget);
+                Func<bool> chosenAction = DecideAbilityOrAttack(currentTarget);
+                if (doLog) Debug.Log($"<color=orange>[CombatAI]</color> {_self.CharacterName} [Phase 1] Auto-deciding action: Intent locked!");
+                _self.CharacterCombat.SetActionIntent(chosenAction, currentTarget);
             }
 
             // 2. EXECUTION PHASE (Player/NPC when an Intent is queued)
@@ -150,6 +151,49 @@ namespace MWI.AI
             _self.CharacterVisual?.UpdateFlip(dirToTarget);
 
             return true;
+        }
+
+        /// <summary>
+        /// Simple heuristic: evaluate equipped active abilities and pick the best one,
+        /// or fall back to basic attack. Can be expanded via GOAP goals later.
+        /// </summary>
+        private Func<bool> DecideAbilityOrAttack(Character target)
+        {
+            var abilities = _self.CharacterAbilities;
+            if (abilities == null)
+                return () => _self.CharacterCombat.Attack();
+
+            // Check each active slot for a usable ability
+            for (int i = 0; i < CharacterAbilities.ACTIVE_SLOT_COUNT; i++)
+            {
+                var slot = abilities.GetActiveSlot(i);
+                if (slot == null || !slot.CanUse(target)) continue;
+
+                // Heal spell heuristic: use if HP below 40%
+                if (slot is SpellInstance spell && spell.SpellData.TargetType == AbilityTargetType.Self)
+                {
+                    if (_self.Stats?.Health != null)
+                    {
+                        float hpPercent = _self.Stats.Health.CurrentAmount / _self.Stats.Health.MaxValue;
+                        if (hpPercent < 0.4f)
+                        {
+                            int slotIndex = i;
+                            return () => _self.CharacterCombat.UseAbility(slotIndex, _self);
+                        }
+                    }
+                    continue; // Skip self-buff if HP is fine
+                }
+
+                // 30% chance to use a damage ability instead of basic attack
+                if (UnityEngine.Random.value < 0.3f)
+                {
+                    int slotIndex = i;
+                    return () => _self.CharacterCombat.UseAbility(slotIndex, target);
+                }
+            }
+
+            // Default: basic attack
+            return () => _self.CharacterCombat.Attack();
         }
     }
 }

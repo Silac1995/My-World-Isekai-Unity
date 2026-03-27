@@ -6,6 +6,7 @@ public class CharacterStatusManager : CharacterSystem
     [Header("Automatic Effects")]
     [SerializeField] private CharacterStatusEffect _unconsciousEffect;
     [SerializeField] private CharacterStatusEffect _outOfCombatEffect;
+    [SerializeField] private CharacterStatusEffect _outOfBreathEffect;
 
     private List<CharacterStatusEffectInstance> _activeEffects = new List<CharacterStatusEffectInstance>();
     private List<CharacterStatusEffectInstance> _effectsToRemove = new List<CharacterStatusEffectInstance>();
@@ -60,6 +61,9 @@ public class CharacterStatusManager : CharacterSystem
         Debug.Log($"<color=cyan>[StatusManager]</color> Effet appliqué : {effectAsset.StatusEffectName} sur {_character.name}");
 
         OnStatusEffectAdded?.Invoke(instance);
+
+        // Passive trigger: OnStatusEffectApplied
+        _character.CharacterAbilities?.OnPassiveTriggerEvent(PassiveTriggerCondition.OnStatusEffectApplied, caster, _character);
     }
 
     public void RemoveEffect(CharacterStatusEffectInstance instance)
@@ -109,6 +113,15 @@ public class CharacterStatusManager : CharacterSystem
         }
 
         if (_character == null || _character.Stats == null) return;
+
+        // Out of Breath: remove when stamina fully recovers
+        if (_outOfBreathEffect != null && HasEffect(_outOfBreathEffect))
+        {
+            if (_character.Stats.Stamina != null && _character.Stats.Stamina.CurrentAmount >= _character.Stats.Stamina.MaxValue)
+            {
+                RemoveEffect(_outOfBreathEffect);
+            }
+        }
 
         // Seuil d'arrêt Regen Hors Combat : 50% de la vie max
         if (_outOfCombatEffect != null && HasEffect(_outOfCombatEffect))
@@ -181,6 +194,15 @@ public class CharacterStatusManager : CharacterSystem
         {
             if (_outOfCombatEffect != null && HasEffect(_outOfCombatEffect))
                 RemoveEffect(_outOfCombatEffect);
+        }
+    }
+
+    public void ApplyOutOfBreathEffect()
+    {
+        if (_outOfBreathEffect != null && !HasEffect(_outOfBreathEffect))
+        {
+            ApplyEffect(_outOfBreathEffect);
+            Debug.Log($"<color=cyan>[StatusManager]</color> {_character.CharacterName} is Out of Breath!");
         }
     }
 
