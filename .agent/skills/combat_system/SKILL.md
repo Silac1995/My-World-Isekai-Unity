@@ -113,7 +113,8 @@ Characters can learn and equip active abilities (6 slots) and passive abilities 
 #### A. Ability Types (ScriptableObject Hierarchy)
 All abilities inherit from `AbilitySO` (`Assets/Scripts/Abilities/Data/AbilitySO.cs`):
 - **`PhysicalAbilitySO`**: Weapon-bound (requires specific `WeaponType`), costs **Stamina**, no cooldown. If you learn sword abilities from two different CombatStyles, all sword abilities are available when any sword is equipped.
-- **`SpellSO`**: Weapon-independent, costs **Mana**, has **cooldown** and **cast time**. Cast time scales with Dexterity via `ComputeCastTime(castingSpeed)`. If reduced to 5% or less of base cast time, the spell becomes instant.
+- **`SpellSO`**: Weapon-independent, costs **Mana**, has **cooldown** and **cast time**. Cast time scales with `SpellCasting` (Dexterity-linked) via division formula: `baseCastTime / (1 + spellCastingValue)`. Per-ability `_instantCastThreshold` (default 5%) determines when the spell becomes instant.
+- **`PhysicalAbilitySO`** also supports optional cast time via `_baseCastTime`, reduced by `CombatCasting` (Agility-linked) using the same formula. Default threshold is 10%.
 - **`PassiveAbilitySO`**: Event-triggered reactions with 9 trigger conditions: `OnDamageTaken`, `OnCriticalHitDealt`, `OnKill`, `OnDodge`, `OnBattleStart`, `OnInitiativeFull`, `OnAllyDamaged`, `OnLowHPThreshold`, `OnStatusEffectApplied`. Each passive has a trigger chance, internal cooldown, and reaction effects.
 
 #### B. Runtime Instances (`Assets/Scripts/Abilities/Runtime/`)
@@ -138,11 +139,23 @@ All abilities inherit from `AbilitySO` (`Assets/Scripts/Abilities/Data/AbilitySO
 #### E. DamageType Expansion
 The `DamageType` enum now includes: `Blunt, Slashing, Piercing, Fire, Ice, Lightning, Holy, Dark`.
 
-#### F. AI Integration
-`CombatAILogic.DecideAbilityOrAttack()` provides simple heuristic NPC ability selection: heal self if HP < 40%, 30% chance to use a damage ability, fallback to basic attack.
+#### F. Support Abilities
+Both `PhysicalAbilitySO` and `SpellSO` implement `IStatRestoreAbility`, allowing any ability to restore/drain stats on cast:
+- `AbilityPurpose` enum (Offensive/Support) on the base `AbilitySO`.
+- `StatRestoreEntry` struct: `stat`, `value`, `isPercentage`. Processed by `StatRestoreProcessor.ApplyRestores()`.
+- `IStatRestoreAbility` interface: `StatRestoresOnTarget` and `StatRestoresOnSelf`.
+- Applied server-side in `OnApplyEffect()` of both `CharacterPhysicalAbilityAction` and `CharacterSpellCastAction`.
 
-#### G. Learning
-Abilities are learned via the mentorship system (`CharacterMentorship.ReceiveLessonTick()` has an `AbilitySO` branch). All known abilities are teachable. Architecture supports future book/scroll learning via `IAbilitySource` interface.
+#### G. AI Integration
+`CombatAILogic.DecideAbilityOrAttack()` uses resource-scanning heuristics:
+1. Scans HP/Stamina/Mana pools for the most urgent need.
+2. If a resource is critical (< 20%): 80% chance to use a matching Support ability. If low (< 40%): 30% chance.
+3. Uses `FindSlotForStat()` to locate Support abilities that restore the needed stat, and `FindSlotWithSelfRestore()` for offensive abilities with self-heal.
+4. Falls back to offensive abilities (30% chance) or basic attack.
+5. Server-only: `_self.IsServer` guard prevents client-side desync.
+
+#### H. Learning
+Abilities are learned via the mentorship system (`CharacterMentorship.ReceiveLessonTick()` has an `AbilitySO` branch). All known abilities are teachable. Books can also teach abilities via `IAbilitySource` interface — see the item-system SKILL.md for the book system.
 
 ### 10. Damage Type Categories
 Physical damage types: **Blunt**, **Slashing**, **Piercing**.

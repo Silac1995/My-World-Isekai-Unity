@@ -9,6 +9,9 @@ public abstract class AbilitySO : ScriptableObject
     [SerializeField][TextArea] private string _description;
     [SerializeField] private Sprite _icon;
 
+    [Header("Purpose")]
+    [SerializeField] private AbilityPurpose _purpose = AbilityPurpose.Offensive;
+
     [Header("Targeting")]
     [SerializeField] private AbilityTargetType _targetType = AbilityTargetType.SingleEnemy;
     [SerializeField] private float _range = 3.5f;
@@ -18,6 +21,7 @@ public abstract class AbilitySO : ScriptableObject
     [SerializeField] private List<CharacterStatusEffect> _statusEffectsOnSelf;
     [SerializeField] private GameObject _visualPrefab;
 
+    public AbilityPurpose Purpose => _purpose;
     public string AbilityId => _abilityId;
     public string AbilityName => _abilityName;
     public string Description => _description;

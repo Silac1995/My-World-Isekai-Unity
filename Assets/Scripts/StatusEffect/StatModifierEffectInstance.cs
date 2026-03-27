@@ -7,6 +7,7 @@ public class StatModifierEffectInstance : StatusEffectInstance
     private Character caster;
     private Character target;
     private List<StatsModifier> modifiers;
+    private bool _isApplied = false;
 
     public Character Caster => caster;
     public Character Target => target;
@@ -28,6 +29,8 @@ public class StatModifierEffectInstance : StatusEffectInstance
 
     public override void Apply()
     {
+        if (_isApplied) return;
+        _isApplied = true;
         if (target == null || target.Stats == null) return;
 
         foreach (var mod in modifiers)
@@ -44,6 +47,8 @@ public class StatModifierEffectInstance : StatusEffectInstance
 
     public override void Remove()
     {
+        if (!_isApplied) return;
+        _isApplied = false;
         if (target == null || target.Stats == null) return;
 
         foreach (var mod in modifiers)
@@ -55,6 +60,34 @@ public class StatModifierEffectInstance : StatusEffectInstance
             }
         }
         
+        target.Stats.RecalculateTertiaryStats();
+    }
+
+    public override void Suspend()
+    {
+        if (!_isApplied) return;
+        _isApplied = false;
+        if (target == null || target.Stats == null) return;
+        foreach (var mod in modifiers)
+        {
+            var stat = target.Stats.GetBaseStat(mod.StatType);
+            if (stat != null)
+                stat.RemoveAllModifiersFromSource(this);
+        }
+        target.Stats.RecalculateTertiaryStats();
+    }
+
+    public override void Resume()
+    {
+        if (_isApplied) return;
+        _isApplied = true;
+        if (target == null || target.Stats == null) return;
+        foreach (var mod in modifiers)
+        {
+            var stat = target.Stats.GetBaseStat(mod.StatType);
+            if (stat != null)
+                stat.ApplyModifier(new StatModifier(mod.Value, this));
+        }
         target.Stats.RecalculateTertiaryStats();
     }
 }

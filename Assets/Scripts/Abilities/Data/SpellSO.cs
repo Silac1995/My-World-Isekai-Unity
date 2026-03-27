@@ -1,7 +1,8 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 [CreateAssetMenu(menuName = "Abilities/Spell")]
-public class SpellSO : AbilitySO
+public class SpellSO : AbilitySO, IStatRestoreAbility
 {
     [Header("Spell")]
     [SerializeField] private float _manaCost = 15f;
@@ -18,6 +19,10 @@ public class SpellSO : AbilitySO
     [Tooltip("If reduced cast time falls to this fraction of base or below, ability becomes instant. Default 5%.")]
     private float _instantCastThreshold = 0.05f;
 
+    [Header("Stat Restores")]
+    [SerializeField] private List<StatRestoreEntry> _statRestoresOnTarget = new List<StatRestoreEntry>();
+    [SerializeField] private List<StatRestoreEntry> _statRestoresOnSelf = new List<StatRestoreEntry>();
+
     public float ManaCost => _manaCost;
     public float BaseCastTime => _baseCastTime;
     public float Cooldown => _cooldown;
@@ -30,6 +35,9 @@ public class SpellSO : AbilitySO
     public GameObject ProjectilePrefab => _projectilePrefab;
     public float ProjectileSpeed => _projectileSpeed;
     public float InstantCastThreshold => _instantCastThreshold;
+
+    public IReadOnlyList<StatRestoreEntry> StatRestoresOnTarget => _statRestoresOnTarget.AsReadOnly();
+    public IReadOnlyList<StatRestoreEntry> StatRestoresOnSelf => _statRestoresOnSelf.AsReadOnly();
 
     public override AbilityCategory Category => AbilityCategory.Spell;
 

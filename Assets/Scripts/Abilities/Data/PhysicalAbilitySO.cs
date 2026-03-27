@@ -1,7 +1,8 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 [CreateAssetMenu(menuName = "Abilities/Physical Ability")]
-public class PhysicalAbilitySO : AbilitySO
+public class PhysicalAbilitySO : AbilitySO, IStatRestoreAbility
 {
     [Header("Physical Ability")]
     [SerializeField] private float _staminaCost = 10f;
@@ -23,6 +24,10 @@ public class PhysicalAbilitySO : AbilitySO
     [Tooltip("If reduced cast time falls to this fraction of base or below, ability becomes instant. Default 10%.")]
     private float _instantCastThreshold = 0.10f;
 
+    [Header("Stat Restores")]
+    [SerializeField] private List<StatRestoreEntry> _statRestoresOnTarget = new List<StatRestoreEntry>();
+    [SerializeField] private List<StatRestoreEntry> _statRestoresOnSelf = new List<StatRestoreEntry>();
+
     public float StaminaCost => _staminaCost;
     public WeaponType RequiredWeaponType => _requiredWeaponType;
     public float DamageMultiplier => _damageMultiplier;
@@ -34,6 +39,9 @@ public class PhysicalAbilitySO : AbilitySO
     public float AnimationDuration => _animationDuration;
     public float BaseCastTime => _baseCastTime;
     public float InstantCastThreshold => _instantCastThreshold;
+
+    public IReadOnlyList<StatRestoreEntry> StatRestoresOnTarget => _statRestoresOnTarget.AsReadOnly();
+    public IReadOnlyList<StatRestoreEntry> StatRestoresOnSelf => _statRestoresOnSelf.AsReadOnly();
 
     public override AbilityCategory Category => AbilityCategory.Physical;
 

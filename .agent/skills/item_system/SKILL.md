@@ -71,3 +71,28 @@ When an item cannot be stored in the inventory (bag full or missing), the charac
 - **Animations**: Carrying an item forces the hand into a `"fist"` pose. The item visual is automatically destroyed, and the hand returns to `"normal"` when dropped.
 - **Safety Measures**: Items in hands are automatically dropped when the character enters a combat state or becomes incapacitated (Unconscious/Death) to ensure hands are free for combat or physics-driven death anims.
 - **Physics**: Carried visuals have their `Rigidbody` set to kinematic and colliders disabled to avoid character movement glitches.
+
+### 6. Book System
+
+Books are a specialized item type for reading content and learning abilities/skills.
+
+#### Data Layer
+- **`BookSO`** (`Assets/Data/Item/BookSO.cs`): Extends `MiscSO`, implements `IAbilitySource`. Contains `_pages` (list of text), `_teachesAbility`, `_teachesSkill`, `_readingDifficulty`, and `_isWritable`.
+- **`BookInstance`** (`Assets/Scripts/Item/BookInstance.cs`): Extends `MiscInstance`. Dual identity system:
+  - `_instanceUid`: Unique per physical book item (for inventory tracking).
+  - `_contentId`: Shared across copies of the same content (for reading progress). Pre-authored books use the SO asset name; custom-written books get a unique GUID.
+- **Custom books**: `FinalizeWriting()` allows player-authored content with custom pages, teaching references, and author name. Custom refs resolve lazily from serialized IDs via `Resources.Load`.
+
+#### Character System
+- **`CharacterBookKnowledge`** (`Assets/Scripts/Character/CharacterBookKnowledge.cs`): `CharacterSystem` + `ISaveable`. Tracks `BookReadingEntry` per `contentId`.
+  - `GetReadingSpeed()`: `BASE_READING_RATE * (1 + Intelligence * 0.05)`.
+  - `AddProgress()`: Increments progress, triggers `OnBookCompleted()` when full.
+  - `OnBookCompleted()`: Calls `CharacterAbilities.LearnAbility()` and/or logs skill learning.
+  - `Update()`: Ticks the active `CharacterReadBookAction` if present.
+- **`CharacterReadBookAction`** (`Assets/Scripts/Character/CharacterActions/CharacterReadBookAction.cs`): Continuous action (`Duration = float.MaxValue`). Ticked by `CharacterBookKnowledge.Update()`. Progress saved to reading log on cancel.
+
+#### Key Rules
+- Book copies share reading progress via `contentId` — reading one copy progresses all copies of the same content.
+- Books are NOT consumed on completion.
+- Reading speed scales with Intelligence.
+- `Character.CharacterBookKnowledge` property added to `Character.cs` with auto-resolution in initialization.

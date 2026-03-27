@@ -59,7 +59,7 @@ namespace MWI.AI
             
             // 1. AUTO-DECIDE INTENT (NPC at 70%)
             // The AI acts exactly like a Player pressing the "Attack" button -> it queues the intent immediately.
-            if (_autoDecideIntent && isReadyToDecide && !_self.CharacterCombat.HasPlannedAction)
+            if (_self.IsServer && _autoDecideIntent && isReadyToDecide && !_self.CharacterCombat.HasPlannedAction)
             {
                 Func<bool> chosenAction = DecideAbilityOrAttack(currentTarget);
                 if (doLog) Debug.Log($"<color=orange>[CombatAI]</color> {_self.CharacterName} [Phase 1] Auto-deciding action: Intent locked!");
@@ -153,38 +153,63 @@ namespace MWI.AI
             return true;
         }
 
-        /// <summary>
-        /// Simple heuristic: evaluate equipped active abilities and pick the best one,
-        /// or fall back to basic attack. Can be expanded via GOAP goals later.
-        /// </summary>
         private Func<bool> DecideAbilityOrAttack(Character target)
         {
             var abilities = _self.CharacterAbilities;
             if (abilities == null)
                 return () => _self.CharacterCombat.Attack();
 
-            // Check each active slot for a usable ability
+            var stats = _self.Stats;
+
+            // 1. Scan resource pools — find most urgent need
+            float hpPercent = stats.Health.CurrentAmount / Mathf.Max(stats.Health.MaxValue, 1f);
+            float staminaPercent = stats.Stamina.CurrentAmount / Mathf.Max(stats.Stamina.MaxValue, 1f);
+            float manaPercent = stats.Mana.CurrentAmount / Mathf.Max(stats.Mana.MaxValue, 1f);
+
+            StatType? urgentNeed = null;
+            float urgentPercent = 1f;
+
+            if (hpPercent < urgentPercent) { urgentNeed = StatType.Health; urgentPercent = hpPercent; }
+            if (staminaPercent < urgentPercent) { urgentNeed = StatType.Stamina; urgentPercent = staminaPercent; }
+            if (manaPercent < urgentPercent) { urgentNeed = StatType.Mana; urgentPercent = manaPercent; }
+
+            bool isCritical = urgentPercent < 0.20f;
+            bool isLow = urgentPercent < 0.40f;
+
+            // 2. Try to find a support ability for the urgent need
+            if (urgentNeed.HasValue && isLow)
+            {
+                float useChance = isCritical ? 0.80f : 0.30f;
+                if (UnityEngine.Random.value <= useChance)
+                {
+                    int supportSlot = FindSlotForStat(abilities, AbilityPurpose.Support, urgentNeed.Value, target);
+                    if (supportSlot >= 0)
+                    {
+                        var slot = abilities.GetActiveSlot(supportSlot);
+                        Character abilityTarget = (slot.Data.TargetType == AbilityTargetType.Self) ? _self : target;
+                        int idx = supportSlot;
+                        return () => _self.CharacterCombat.UseAbility(idx, abilityTarget);
+                    }
+
+                    if (isCritical)
+                    {
+                        int hybridSlot = FindSlotWithSelfRestore(abilities, urgentNeed.Value, target);
+                        if (hybridSlot >= 0)
+                        {
+                            int idx = hybridSlot;
+                            return () => _self.CharacterCombat.UseAbility(idx, target);
+                        }
+                    }
+                }
+            }
+
+            // 3. Fallback: pick an offensive ability (30% chance) or basic attack
             for (int i = 0; i < CharacterAbilities.ACTIVE_SLOT_COUNT; i++)
             {
                 var slot = abilities.GetActiveSlot(i);
                 if (slot == null || !slot.CanUse(target)) continue;
+                if (slot.Data.Purpose != AbilityPurpose.Offensive) continue;
 
-                // Heal spell heuristic: use if HP below 40%
-                if (slot is SpellInstance spell && spell.SpellData.TargetType == AbilityTargetType.Self)
-                {
-                    if (_self.Stats?.Health != null)
-                    {
-                        float hpPercent = _self.Stats.Health.CurrentAmount / _self.Stats.Health.MaxValue;
-                        if (hpPercent < 0.4f)
-                        {
-                            int slotIndex = i;
-                            return () => _self.CharacterCombat.UseAbility(slotIndex, _self);
-                        }
-                    }
-                    continue; // Skip self-buff if HP is fine
-                }
-
-                // 30% chance to use a damage ability instead of basic attack
                 if (UnityEngine.Random.value < 0.3f)
                 {
                     int slotIndex = i;
@@ -192,8 +217,40 @@ namespace MWI.AI
                 }
             }
 
-            // Default: basic attack
             return () => _self.CharacterCombat.Attack();
+        }
+
+        private int FindSlotForStat(CharacterAbilities abilities, AbilityPurpose purpose, StatType need, Character target)
+        {
+            for (int i = 0; i < CharacterAbilities.ACTIVE_SLOT_COUNT; i++)
+            {
+                var slot = abilities.GetActiveSlot(i);
+                if (slot == null || !slot.CanUse(target)) continue;
+                if (slot.Data.Purpose != purpose) continue;
+                if (slot.Data is IStatRestoreAbility restorer)
+                {
+                    foreach (var r in restorer.StatRestoresOnSelf)
+                        if (r.stat == need && r.value > 0f) return i;
+                    foreach (var r in restorer.StatRestoresOnTarget)
+                        if (r.stat == need && r.value > 0f) return i;
+                }
+            }
+            return -1;
+        }
+
+        private int FindSlotWithSelfRestore(CharacterAbilities abilities, StatType need, Character target)
+        {
+            for (int i = 0; i < CharacterAbilities.ACTIVE_SLOT_COUNT; i++)
+            {
+                var slot = abilities.GetActiveSlot(i);
+                if (slot == null || !slot.CanUse(target)) continue;
+                if (slot.Data is IStatRestoreAbility restorer)
+                {
+                    foreach (var r in restorer.StatRestoresOnSelf)
+                        if (r.stat == need && r.value > 0f) return i;
+                }
+            }
+            return -1;
         }
     }
 }

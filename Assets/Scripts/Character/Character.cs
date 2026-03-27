@@ -67,6 +67,7 @@ public class Character : NetworkBehaviour
     [SerializeField] private CharacterCombatLevel _characterCombatLevel;
     [SerializeField] private CharacterBlueprints _characterBlueprints;
     [SerializeField] private CharacterAbilities _characterAbilities;
+    [SerializeField] private CharacterBookKnowledge _characterBookKnowledge;
     #endregion
 
     #region Network Variables
@@ -160,6 +161,7 @@ public class Character : NetworkBehaviour
     public CharacterCombatLevel CharacterCombatLevel => _characterCombatLevel;
     public CharacterBlueprints CharacterBlueprints => _characterBlueprints;
     public CharacterAbilities CharacterAbilities => _characterAbilities;
+    public CharacterBookKnowledge CharacterBookKnowledge => _characterBookKnowledge;
     public BuildingPlacementManager PlacementManager => _characterBlueprints != null ? _characterBlueprints.PlacementManager : null;
     public bool IsBuilding => _isBuilding;
 
@@ -322,6 +324,7 @@ public class Character : NetworkBehaviour
         if (_characterVisual == null) _characterVisual = GetComponentInChildren<CharacterVisual>();
         if (_characterAwareness == null) _characterAwareness = GetComponentInChildren<CharacterAwareness>();
         if (_characterAbilities == null) _characterAbilities = GetComponent<CharacterAbilities>();
+        if (_characterBookKnowledge == null) _characterBookKnowledge = GetComponent<CharacterBookKnowledge>();
 
         _cachedNavMeshAgent = GetComponent<NavMeshAgent>();
         _isDead = false;

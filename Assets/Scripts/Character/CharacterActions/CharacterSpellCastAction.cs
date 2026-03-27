@@ -150,6 +150,13 @@ public class CharacterSpellCastAction : CharacterCombatAction
                 }
             }
         }
+
+        if (_spell.Data is IStatRestoreAbility restorer)
+        {
+            Character restoreTarget = ResolveTarget();
+            StatRestoreProcessor.ApplyRestores(restorer.StatRestoresOnTarget, restoreTarget);
+            StatRestoreProcessor.ApplyRestores(restorer.StatRestoresOnSelf, character);
+        }
     }
 
     private void ApplyAoEDamage(SpellSO spellData, float damage)

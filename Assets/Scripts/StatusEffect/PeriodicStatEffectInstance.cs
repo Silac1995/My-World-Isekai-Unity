@@ -8,6 +8,7 @@ public class PeriodicStatEffectInstance : StatusEffectInstance
     
     private float valuePerSecond;
     private float timer;
+    private bool _isSuspended = false;
 
     public PeriodicStatEffectInstance(PeriodicStatEffect sourceEffect, Character caster, Character target)
     {
@@ -23,8 +24,19 @@ public class PeriodicStatEffectInstance : StatusEffectInstance
     public override void Apply() { }
     public override void Remove() { }
 
+    public override void Suspend()
+    {
+        _isSuspended = true;
+    }
+
+    public override void Resume()
+    {
+        _isSuspended = false;
+    }
+
     public override void Tick(float deltaTime)
     {
+        if (_isSuspended) return;
         timer += deltaTime;
         
         int ticksToProcess = Mathf.FloorToInt(timer);

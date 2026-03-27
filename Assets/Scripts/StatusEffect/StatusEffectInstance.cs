@@ -10,4 +10,6 @@ public abstract class StatusEffectInstance
     /// Called every frame by the StatusManager.
     /// </summary>
     public virtual void Tick(float deltaTime) { }
+    public virtual void Suspend() { }
+    public virtual void Resume() { }
 }

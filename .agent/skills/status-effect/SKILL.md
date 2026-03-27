@@ -44,3 +44,23 @@ The `StatusEffect` is an abstract base class (`ScriptableObject`) representing t
 - `CharacterStatusEffect` -> Defines the duration, UI representation (icon, description), and visual effects (prefab), wrapping multiple underlying effects.
 - `CharacterStatusEffectInstance` -> The runtime instance of the wrapper tracking time and source.
 - `StatusEffect` -> The abstract base defining the mechanical parameter changes (`StatsModifier`).
+
+## Suspend Condition System
+
+Status effects can now **suspend** (pause their modifiers/ticks) when a character stat threshold is met, while the effect's **duration keeps ticking**. This is NOT removal — the effect pauses and can resume.
+
+### Data Layer
+- `StatusEffectSuspendCondition` (struct in `StatusEffectSuspendCondition.cs`): Defines `statType`, `threshold`, `isPercentage`, and `ComparisonType` (AboveOrEqual / BelowOrEqual).
+- `CharacterStatusEffect` (SO): Has `_hasSuspendCondition` toggle and `_suspendCondition` field. `OnValidate()` enforces that `isPercentage` is only valid for Primary stats (Health/Mana/Stamina/Initiative).
+
+### Runtime Layer
+- `StatusEffectInstance` base class: Has `virtual Suspend()` and `virtual Resume()` methods.
+- `StatModifierEffectInstance`: Tracks `_isApplied` state. `Suspend()` removes modifiers from stats. `Resume()` re-applies them. Guards prevent double-apply/remove.
+- `PeriodicStatEffectInstance`: Tracks `_isSuspended` state. `Tick()` early-returns when suspended. Timer is NOT reset — picks up where it left off.
+- `CharacterStatusEffectInstance.Tick()`: Evaluates suspend condition once per second (anti-chatter guard via `SUSPEND_CHECK_INTERVAL = 1f`). When suspended, child effects don't tick but duration always decrements.
+
+### Key Rules
+- Duration **always** ticks, even while suspended. The effect will expire normally.
+- Anti-chatter: Conditions are only re-evaluated every 1 second to prevent rapid suspend/resume oscillation.
+- `isPercentage` compares against `CurrentAmount / MaxValue` for Primary stats. Secondary/Tertiary stats always use absolute `CurrentValue`.
+- Hardcoded effects (Out of Breath, Unconscious) use full removal behavior via `CharacterStatusManager`, NOT the suspend system.

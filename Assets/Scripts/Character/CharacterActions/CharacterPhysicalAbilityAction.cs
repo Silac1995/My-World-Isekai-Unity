@@ -89,5 +89,14 @@ public class CharacterPhysicalAbilityAction : CharacterCombatAction
                     _target.StatusManager?.ApplyEffect(effect, character);
             }
         }
+
+        if (_ability.Data is IStatRestoreAbility restorer)
+        {
+            if (character.IsServer)
+            {
+                StatRestoreProcessor.ApplyRestores(restorer.StatRestoresOnTarget, _target);
+                StatRestoreProcessor.ApplyRestores(restorer.StatRestoresOnSelf, character);
+            }
+        }
     }
 }
