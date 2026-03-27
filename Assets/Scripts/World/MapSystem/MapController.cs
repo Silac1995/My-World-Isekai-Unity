@@ -38,6 +38,10 @@ namespace MWI.WorldSystem
         public bool IsHibernating = false;
         [SerializeField] private int _activePlayerCount = 0;
 
+        [Header("Hibernation")]
+        [Tooltip("Master switch for NPC/Building hibernation. When disabled, NPCs stay alive regardless of player presence.")]
+        [SerializeField] private bool _hibernationEnabled = false;
+
         private BoxCollider _mapTrigger;
         public NetworkVariable<bool> IsActive = new NetworkVariable<bool>(false);
 
@@ -398,6 +402,8 @@ namespace MWI.WorldSystem
 
         private void CheckHibernationState()
         {
+            if (!_hibernationEnabled) return;
+
             Debug.Log($"<color=cyan>[MapController:CheckHibernation]</color> Map '{MapId}': ActivePlayers={_activePlayers.Count}, IsHibernating={IsHibernating}");
             if (_activePlayers.Count == 0 && !IsHibernating)
             {
@@ -407,6 +413,8 @@ namespace MWI.WorldSystem
 
         private void CheckWakeUp()
         {
+            if (!_hibernationEnabled) return;
+
             if (_activePlayers.Count > 0 && IsHibernating)
             {
                 WakeUp();

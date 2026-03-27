@@ -237,6 +237,14 @@ Building doors (both `BuildingInteriorDoor` on the exterior and the exit `MapTra
 
 ## Building-Map Registration & Hibernation
 
+> **STATUS: HIBERNATION DISABLED** — `MapController._hibernationEnabled` is `false` by default.
+> The NPC/Building despawn-on-exit and respawn-on-enter system is fully implemented but disabled
+> due to unresolved issues with NPC visual restoration (2D Animation bone corruption) and
+> combat knockback falsely triggering OnTriggerExit → full hibernate cycle mid-fight.
+> When re-enabling, ensure: (1) NPC identity/visual data is restored correctly from
+> `HibernatedNPCData.RaceId/CharacterName/VisualSeed`, (2) a grace period prevents
+> knockback-triggered hibernation, (3) Spine2D visual system is integrated.
+
 Player-placed buildings are registered with the `MapController` they're placed inside, ensuring they survive map hibernation.
 
 ### Key Flow
@@ -246,8 +254,14 @@ Player-placed buildings are registered with the `MapController` they're placed i
    - A `BuildingSaveData` entry is added to `CommunityData.ConstructedBuildings`
    - `Building.PlacedByCharacterId` is set to the placing character's UUID
 2. **On hibernation** (`MapController.Hibernate()`): Buildings are synced to save data and despawned (matching the NPC pattern)
-3. **On wake-up** (`MapController.WakeUp()`): Buildings are re-instantiated from `ConstructedBuildings`
+3. **On wake-up** (`MapController.WakeUp()`): Buildings are re-instantiated from `ConstructedBuildings`, with `BuildingId` restored (not regenerated) to prevent duplication
 4. **Construction completion** (`Building.HandleStateChanged`): State is synced back to the matching `ConstructedBuildings` entry
+
+### Known Issues (For When Re-Enabling)
+- **NPC visual data**: `HibernatedNPCData` now saves `RaceId`, `CharacterName`, `VisualSeed` but restoration was untested with current 2D Animation system. Spine2D migration should fix bone deformation crashes.
+- **Combat knockback**: Player can be knocked outside MapController trigger → OnTriggerExit → player count 0 → Hibernate fires mid-combat. Fix: add a 2-3s grace period in `CheckHibernationState` before calling `Hibernate()`.
+- **Community auto-creation**: `EnsureCommunityData()` creates a CommunityData with no leaders for predefined maps. Permission check allows everyone to build when `LeaderIds.Count == 0`.
+- **Predefined map OriginChunk**: Auto-created CommunityData now uses the map's actual world position for `OriginChunk` (not default `(0,0)`).
 
 ### `MapController.GetMapAtPosition(Vector3)`
 Static utility that iterates `_mapRegistry`, skips interiors, returns the first map whose `_mapTrigger.bounds.Contains(position)`. Returns null for open world.
