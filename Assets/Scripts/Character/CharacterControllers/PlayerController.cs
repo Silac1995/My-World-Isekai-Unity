@@ -241,8 +241,9 @@ public class PlayerController : CharacterGameController
         {
             // Safety: If something externally disabled our NavAgent (e.g. knockback recovery
             // restoring pre-combat WASD state), re-enable it immediately.
+            // BUT: do NOT override during active knockback — physics must stay in control.
             var agent = _character.CharacterMovement?.Agent;
-            if (agent != null && !agent.enabled)
+            if (agent != null && !agent.enabled && !_character.CharacterMovement.IsKnockedBack)
             {
                 Debug.Log($"<color=yellow>[PlayerCtrl]</color> NavAgent was externally disabled while in combat. Re-enabling.");
                 _character.ConfigureNavMesh(true);
