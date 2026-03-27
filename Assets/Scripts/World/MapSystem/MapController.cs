@@ -450,11 +450,15 @@ namespace MWI.WorldSystem
                     // Serialize to V1 Dumb Data
                     HibernatedNPCData npcData = new HibernatedNPCData()
                     {
-                        CharacterId = npc.CharacterName, 
+                        CharacterId = npc.CharacterId,
                         PrefabName = npc.gameObject.name.Replace("(Clone)", "").Trim(),
                         PrefabHash = npc.NetworkObject != null ? npc.NetworkObject.PrefabIdHash : 0,
                         Position = npc.transform.position,
-                        Rotation = npc.transform.rotation
+                        Rotation = npc.transform.rotation,
+                        // Identity & Visuals — critical for proper respawn
+                        RaceId = npc.NetworkRaceId.Value.ToString(),
+                        CharacterName = npc.NetworkCharacterName.Value.ToString(),
+                        VisualSeed = npc.NetworkVisualSeed.Value
                     };
 
                     // Extract Tier 1 V2 GOAP Anchors
@@ -730,15 +734,26 @@ namespace MWI.WorldSystem
                         blueprints.SetUnlockedBuildings(npcData.UnlockedBuildingIds);
                     }
 
-                    // Inject caught-up needs back
-                    if (inst.TryGetComponent(out Character spawnedChar) && spawnedChar.CharacterNeeds != null)
+                    // Restore identity & visual data BEFORE spawn so OnNetworkSpawn reads correct values
+                    if (inst.TryGetComponent(out Character spawnedChar))
                     {
-                        foreach (var savedNeed in npcData.SavedNeeds)
+                        if (!string.IsNullOrEmpty(npcData.RaceId))
+                            spawnedChar.NetworkRaceId.Value = new Unity.Collections.FixedString64Bytes(npcData.RaceId);
+                        if (!string.IsNullOrEmpty(npcData.CharacterName))
+                            spawnedChar.NetworkCharacterName.Value = new Unity.Collections.FixedString64Bytes(npcData.CharacterName);
+                        if (npcData.VisualSeed != 0)
+                            spawnedChar.NetworkVisualSeed.Value = npcData.VisualSeed;
+
+                        // Inject caught-up needs back
+                        if (spawnedChar.CharacterNeeds != null)
                         {
-                            var liveNeed = spawnedChar.CharacterNeeds.AllNeeds.FirstOrDefault(n => n.GetType().Name == savedNeed.NeedType);
-                            if (liveNeed != null)
+                            foreach (var savedNeed in npcData.SavedNeeds)
                             {
-                                liveNeed.CurrentValue = savedNeed.Value;
+                                var liveNeed = spawnedChar.CharacterNeeds.AllNeeds.FirstOrDefault(n => n.GetType().Name == savedNeed.NeedType);
+                                if (liveNeed != null)
+                                {
+                                    liveNeed.CurrentValue = savedNeed.Value;
+                                }
                             }
                         }
                     }

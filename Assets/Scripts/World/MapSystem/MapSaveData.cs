@@ -61,7 +61,10 @@ namespace MWI.WorldSystem
         
         // Character Knowledge
         public List<string> UnlockedBuildingIds = new List<string>();
-        
-        // TODO for V2: Insert Inventory list, GOAP state snippet, Need levels, etc.
+
+        // Character Identity & Visuals (required for proper respawn)
+        public string RaceId;           // NetworkRaceId — needed for visual preset + name generation
+        public string CharacterName;    // NetworkCharacterName — display name
+        public int VisualSeed;          // NetworkVisualSeed — deterministic visual variation
     }
 }
