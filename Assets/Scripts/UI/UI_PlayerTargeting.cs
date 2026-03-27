@@ -152,16 +152,23 @@ public class UI_PlayerTargeting : MonoBehaviour
         }
 
         _selectedInteractable = target;
-        _character.CharacterVisual.SetLookTarget(target.transform);
 
-        // If in battle, propagate the target to CharacterCombat so the turn system knows who to act on
-        if (_character.CharacterCombat != null && _character.CharacterCombat.IsInBattle)
+        // If the target is a character, always use the root Character transform for the LookTarget
+        // so the indicator collider lookup finds the same collider regardless of selection method.
+        var targetCharacter = target.GetComponentInParent<Character>();
+        if (targetCharacter != null)
         {
-            var targetCharacter = target.GetComponentInParent<Character>();
-            if (targetCharacter != null)
+            _character.CharacterVisual.SetLookTarget(targetCharacter.transform);
+
+            // If in battle, propagate the target to CharacterCombat so the turn system knows who to act on
+            if (_character.CharacterCombat != null && _character.CharacterCombat.IsInBattle)
             {
                 _character.CharacterCombat.SetPlannedTarget(targetCharacter);
             }
+        }
+        else
+        {
+            _character.CharacterVisual.SetLookTarget(target.transform);
         }
     }
 

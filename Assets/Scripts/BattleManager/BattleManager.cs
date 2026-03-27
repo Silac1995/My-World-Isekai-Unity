@@ -436,8 +436,8 @@ public class BattleManager : NetworkBehaviour
 
     private void RedirectIncapacitated(Character victim)
     {
+        _engagementCoordinator?.LeaveCurrentEngagement(victim);
         _engagementCoordinator?.CleanupEngagements();
-        // Le BT (BTCond_IsInCombat) se chargera naturellement de recibler au prochain tick.
     }
 
 
