@@ -62,10 +62,24 @@ public class CharacterCombat : CharacterSystem
     {
         PlannedAction = null;
         PlannedTarget = null;
-        
+
         if (_character != null && _character.CharacterVisual != null)
         {
             _character.CharacterVisual.ClearLookTarget();
+        }
+    }
+
+    /// <summary>
+    /// Sets only the planned target without changing the planned action.
+    /// Called by UI targeting when the player clicks a character during battle.
+    /// </summary>
+    public void SetPlannedTarget(Character target)
+    {
+        PlannedTarget = target;
+
+        if (target != null && IsInBattle && CurrentBattleManager != null && CurrentBattleManager.Coordinator != null)
+        {
+            CurrentBattleManager.Coordinator.RequestEngagement(_character, target);
         }
     }
 

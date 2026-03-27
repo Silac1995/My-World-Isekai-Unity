@@ -156,6 +156,17 @@ public class UI_PlayerTargeting : MonoBehaviour
         _selectedInteractable = target;
         _character.CharacterVisual.SetLookTarget(target.transform);
         Debug.Log($"<color=cyan>[Targeting]</color> Selected interactable: {target.name}");
+
+        // If in battle, propagate the target to CharacterCombat so the turn system knows who to act on
+        if (_character.CharacterCombat != null && _character.CharacterCombat.IsInBattle)
+        {
+            var targetCharacter = target.GetComponent<Character>();
+            if (targetCharacter != null)
+            {
+                _character.CharacterCombat.SetPlannedTarget(targetCharacter);
+                Debug.Log($"<color=cyan>[Targeting]</color> PlannedTarget set to: {targetCharacter.CharacterName}");
+            }
+        }
     }
 
     /// <summary>
