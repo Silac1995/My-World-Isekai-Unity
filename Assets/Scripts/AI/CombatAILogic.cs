@@ -75,7 +75,7 @@ namespace MWI.AI
                 float zDist = Mathf.Abs(_self.transform.position.z - currentTarget.transform.position.z);
                 
                 bool isWithinRange = distToTarget <= attackRange; 
-                bool isZAligned = zDist <= 1.2f;
+                bool isZAligned = zDist <= 1.6f; // Increased from 1.2f to encompass full staggeredZ range (-1.5 to 1.5)
 
                 // Attack is allowed if within range AND Z-aligned. 
                 // isXTooClose is only used for repositioning, NOT for blocking attacks.
@@ -112,7 +112,7 @@ namespace MWI.AI
 
                     if (isReadyToAct)
                     {
-                        if (doLog) Debug.Log($"<color=orange>[CombatAI]</color> {_self.CharacterName} [Phase 2] Executing Action!");
+                        if (doLog) Debug.Log($"<color=orange>[CombatAI]</color> {_self.CharacterName} [Phase 2] Executing Action! Distance: {distToTarget:F2}/{attackRange:F2}, Z-Dist: {zDist:F2}");
                         _self.CharacterCombat.ExecuteAction(_self.CharacterCombat.PlannedAction);
                         
                         // Only clear the intent automatically if this is an AI deciding its own actions.

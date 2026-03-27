@@ -740,6 +740,10 @@ public class Character : NetworkBehaviour
                 if (_cachedNavMeshAgent.isOnNavMesh) _cachedNavMeshAgent.isStopped = false;
                 _cachedNavMeshAgent.updatePosition = true;
                 _cachedNavMeshAgent.updateRotation = false;
+                
+                // Centrally enforce snappy movement and let visuals handle rotation via flipping
+                _cachedNavMeshAgent.acceleration = 50f;
+                _cachedNavMeshAgent.angularSpeed = 0f;
             }
             else
             {

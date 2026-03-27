@@ -32,12 +32,12 @@ public class SpellInstance : AbilityInstance
     }
 
     /// <summary>
-    /// Computes the actual cast time factoring in the owner's CastingSpeed (Dexterity-derived).
+    /// Computes the actual cast time factoring in the owner's SpellCasting (Dexterity-derived).
     /// Returns 0 if instant cast.
     /// </summary>
     public float ComputeCastTime()
     {
-        float castingSpeed = _owner?.Stats?.CastingSpeed?.CurrentValue ?? 0f;
+        float castingSpeed = _owner?.Stats?.SpellCasting?.CurrentValue ?? 0f;
         return SpellData.ComputeCastTime(castingSpeed);
     }
 

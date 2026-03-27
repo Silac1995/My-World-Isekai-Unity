@@ -34,7 +34,8 @@ public class CharacterStats : CharacterSystem, ISaveable
     [SerializeField] private Speed speed;
     [SerializeField] private DodgeChance dodgeChance;
     [SerializeField] private Accuracy accuracy;
-    [SerializeField] private CastingSpeed castingSpeed;
+    [SerializeField] private SpellCasting spellCasting;
+    [SerializeField] private CombatCasting combatCasting;
     [SerializeField] private MagicalPower magicalPower;
     [SerializeField] private ManaRegenRate manaRegenRate;
     [SerializeField] private StaminaRegenRate staminaRegenRate;
@@ -63,7 +64,8 @@ public class CharacterStats : CharacterSystem, ISaveable
     public Speed Speed => speed;
     public DodgeChance DodgeChance => dodgeChance;
     public Accuracy Accuracy => accuracy;
-    public CastingSpeed CastingSpeed => castingSpeed;
+    public SpellCasting SpellCasting => spellCasting;
+    public CombatCasting CombatCasting => combatCasting;
     public MagicalPower MagicalPower => magicalPower;
     public ManaRegenRate ManaRegenRate => manaRegenRate;
     public StaminaRegenRate StaminaRegenRate => staminaRegenRate;
@@ -126,7 +128,8 @@ public class CharacterStats : CharacterSystem, ISaveable
         speed = new Speed(this, agility, 1f);
         dodgeChance = new DodgeChance(this, agility, 1f);
         accuracy = new Accuracy(this, dexterity, 1f);
-        castingSpeed = new CastingSpeed(this, dexterity, 1f);
+        spellCasting = new SpellCasting(this, dexterity, 1f);
+        combatCasting = new CombatCasting(this, agility, 1f);
         magicalPower = new MagicalPower(this, intelligence, 1f);
         manaRegenRate = new ManaRegenRate(this, intelligence, 1f);
         staminaRegenRate = new StaminaRegenRate(this, endurance, 1f);
@@ -172,7 +175,8 @@ public class CharacterStats : CharacterSystem, ISaveable
         Speed.UpdateScaling(race.SpeedMultiplier, race.BaseSpeedOffset);
         DodgeChance.UpdateScaling(race.DodgeChanceMultiplier, race.BaseDodgeChanceOffset);
         Accuracy.UpdateScaling(race.AccuracyMultiplier, race.BaseAccuracyOffset);
-        CastingSpeed.UpdateScaling(race.CastingSpeedMultiplier, race.BaseCastingSpeedOffset);
+        SpellCasting.UpdateScaling(race.SpellCastingMultiplier, race.BaseSpellCastingOffset);
+        CombatCasting.UpdateScaling(race.CombatCastingMultiplier, race.BaseCombatCastingOffset);
         MagicalPower.UpdateScaling(race.MagicalPowerMultiplier, race.BaseMagicalPowerOffset);
         ManaRegenRate.UpdateScaling(race.ManaRegenRateMultiplier, race.BaseManaRegenRateOffset);
         StaminaRegenRate.UpdateScaling(race.StaminaRegenRateMultiplier, race.BaseStaminaRegenRateOffset);
@@ -198,7 +202,8 @@ public class CharacterStats : CharacterSystem, ISaveable
         speed.UpdateFromLinkedStat();
         dodgeChance.UpdateFromLinkedStat();
         accuracy.UpdateFromLinkedStat();
-        castingSpeed.UpdateFromLinkedStat();
+        spellCasting.UpdateFromLinkedStat();
+        combatCasting.UpdateFromLinkedStat();
         magicalPower.UpdateFromLinkedStat();
         manaRegenRate.UpdateFromLinkedStat();
         staminaRegenRate.UpdateFromLinkedStat();
@@ -228,7 +233,8 @@ public class CharacterStats : CharacterSystem, ISaveable
             StatType.Speed => speed,
             StatType.Dodge => dodgeChance,
             StatType.Accuracy => accuracy,
-            StatType.CastingSpeed => castingSpeed,
+            StatType.SpellCasting => spellCasting,
+            StatType.CombatCasting => combatCasting,
             StatType.MagicalPower => magicalPower,
             StatType.ManaRegen => manaRegenRate,
             StatType.StaminaRegen => staminaRegenRate,

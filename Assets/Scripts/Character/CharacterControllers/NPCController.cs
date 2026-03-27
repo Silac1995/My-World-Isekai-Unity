@@ -28,17 +28,6 @@ public class NPCController : CharacterGameController
     public override void Initialize()
     {
         base.Initialize();
-
-        if (_characterMovement != null && _character != null)
-        {
-            var agent = _characterMovement.Agent; 
-            if (agent != null)
-            {
-                agent.speed = _character.MovementSpeed;
-                agent.acceleration = 50f;
-                agent.angularSpeed = 0f;
-            }
-        }
         if (Agent != null) Agent.updateRotation = false;
 
         // Chercher le BT sur le même GameObject si pas assigné dans l'inspecteur

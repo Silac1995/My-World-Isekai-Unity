@@ -17,13 +17,21 @@ public class CharacterPhysicalAbilityAction : CharacterCombatAction
         _ability = ability;
         _target = target;
 
-        // Try to get animation-driven duration if available
-        var animHandler = character.CharacterVisual?.CharacterAnimator;
-        if (animHandler != null)
+        float castTime = _ability.ComputeCastTime();
+        if (castTime > 0f)
         {
-            float clipDuration = animHandler.GetMeleeAttackDuration();
-            if (clipDuration > 0f)
-                Duration = clipDuration + 0.1f;
+            Duration = castTime;
+        }
+        else
+        {
+            // Instant: use animation duration (preserve current behavior)
+            var animHandler = character.CharacterVisual?.CharacterAnimator;
+            if (animHandler != null)
+            {
+                float clipDuration = animHandler.GetMeleeAttackDuration();
+                if (clipDuration > 0f)
+                    Duration = clipDuration + 0.1f;
+            }
         }
     }
 

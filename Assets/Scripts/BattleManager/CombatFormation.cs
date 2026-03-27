@@ -17,8 +17,8 @@ public class CombatFormation
     private Dictionary<Character, SlotPosition> _assignedSlots = new Dictionary<Character, SlotPosition>();
     
     // Configuration des rangées (Rows)
-    private const float ROW_0_RADIUS = 2.5f; // Melee
-    private const float ROW_1_RADIUS = 4.5f; // Mid-range
+    private const float ROW_0_RADIUS = 6.0f; // Melee
+    private const float ROW_1_RADIUS = 6.5f; // Mid-range
     private const float ROW_2_RADIUS = 7.0f; // Ranged / Caster
     
     // Nombre de slots par rangée

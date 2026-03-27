@@ -14,6 +14,9 @@ public class SpellSO : AbilitySO
     [SerializeField] private float _aoeRadius = 0f;
     [SerializeField] private GameObject _projectilePrefab;
     [SerializeField] private float _projectileSpeed = 15f;
+    [SerializeField, Range(0f, 1f)]
+    [Tooltip("If reduced cast time falls to this fraction of base or below, ability becomes instant. Default 5%.")]
+    private float _instantCastThreshold = 0.05f;
 
     public float ManaCost => _manaCost;
     public float BaseCastTime => _baseCastTime;
@@ -26,26 +29,19 @@ public class SpellSO : AbilitySO
     public bool IsProjectile => _projectilePrefab != null;
     public GameObject ProjectilePrefab => _projectilePrefab;
     public float ProjectileSpeed => _projectileSpeed;
+    public float InstantCastThreshold => _instantCastThreshold;
 
     public override AbilityCategory Category => AbilityCategory.Spell;
 
-    /// <summary>
-    /// Computes the actual cast time after Dexterity reduction.
-    /// If reduced to 5% or less of the base, it becomes instant (0).
-    /// </summary>
-    /// <param name="castingSpeedValue">The character's CastingSpeed tertiary stat value.</param>
-    public float ComputeCastTime(float castingSpeedValue)
+    public float ComputeCastTime(float spellCastingValue)
     {
-        // CastingSpeed reduces cast time. Higher = faster.
-        // Formula: baseCastTime * (1 - reduction), where reduction scales with castingSpeed.
-        // Clamped so it never goes negative.
-        float reduction = Mathf.Clamp01(castingSpeedValue * 0.01f);
-        float castTime = _baseCastTime * (1f - reduction);
+        if (_baseCastTime <= 0f) return 0f;
 
-        // If reduced to 5% or less of original, treat as instant
-        if (castTime <= _baseCastTime * 0.05f)
+        float reducedTime = _baseCastTime / (1f + spellCastingValue);
+
+        if (reducedTime <= _baseCastTime * _instantCastThreshold)
             return 0f;
 
-        return Mathf.Max(0f, castTime);
+        return reducedTime;
     }
 }

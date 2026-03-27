@@ -28,4 +28,10 @@ public class PhysicalAbilityInstance : AbilityInstance
 
         return true;
     }
+
+    public float ComputeCastTime()
+    {
+        float combatCasting = _owner?.Stats?.CombatCasting?.CurrentValue ?? 0f;
+        return PhysicalData.ComputeCastTime(combatCasting);
+    }
 }

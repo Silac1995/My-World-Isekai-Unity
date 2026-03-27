@@ -21,13 +21,13 @@ MonoBehaviour:
   - {fileID: 5456933137695734175, guid: 7b374d387037c9647bef899d050bac5c, type: 3}
   - {fileID: 5722855078630121073, guid: 0ac29b0de8149704287ff029d3a05e46, type: 3}
   bonusSpeed: 2
-  BaseStrength: 5
-  BaseAgility: 5
-  BaseDexterity: 5
-  BaseIntelligence: 5
-  BaseEndurance: 5
-  BaseCharisma: 10
-  BaseHealthOffset: 30
+  BaseStrength: 3
+  BaseAgility: 3
+  BaseDexterity: 3
+  BaseIntelligence: 3
+  BaseEndurance: 3
+  BaseCharisma: 3
+  BaseHealthOffset: 45
   HealthMultiplier: 0.3
   BaseStaminaOffset: 50
   StaminaMultiplier: 10
@@ -45,8 +45,10 @@ MonoBehaviour:
   DodgeChanceMultiplier: 0.8
   BaseAccuracyOffset: 1
   AccuracyMultiplier: 1
-  BaseCastingSpeedOffset: 1
-  CastingSpeedMultiplier: 1
+  BaseSpellCastingOffset: 0
+  SpellCastingMultiplier: 1
+  BaseCombatCastingOffset: 0
+  CombatCastingMultiplier: 1
   BaseMagicalPowerOffset: 1
   MagicalPowerMultiplier: 1
   BaseManaRegenRateOffset: 0

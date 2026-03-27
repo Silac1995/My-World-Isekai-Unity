@@ -9,9 +9,9 @@ public class CombatTacticalPacer
     private float _lastMoveTime;
     private float _moveInterval;
     
-    private const float PREFERRED_X_GAP = 2.5f;  
+    private const float PREFERRED_X_GAP = 6.0f;  
     private const float X_FLIP_SAFETY = 1.5f;    
-    private const float MAX_DISTANCE = 6.0f;    
+    private const float MAX_DISTANCE = 9.0f;    
     
     // Soft zone constraint
     private const float SOFT_ZONE_MARGIN = 5f; 
@@ -72,7 +72,7 @@ public class CombatTacticalPacer
         if (attackRange <= 4.0f) 
         {
             // Melee fighters only step back to prevent model clipping, standing their ground
-            escapeRadius = 1.2f; 
+            escapeRadius = 5.0f; // Increased from 1.8f
         }
         else 
         {
@@ -147,7 +147,7 @@ public class CombatTacticalPacer
             xDir = (selfPos.x > targetPos.x) ? 1f : -1f;
         }
         
-        float radius = Mathf.Clamp(attackRange * 0.8f, X_FLIP_SAFETY + 0.5f, PREFERRED_X_GAP);
+        float radius = Mathf.Max(PREFERRED_X_GAP, attackRange * 0.9f);
         Vector3 offset = new Vector3(xDir * radius, 0, Random.Range(-1.5f, 1.5f));
         
         return targetPos + offset;
