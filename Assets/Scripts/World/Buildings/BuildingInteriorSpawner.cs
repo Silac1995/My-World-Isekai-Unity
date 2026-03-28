@@ -34,7 +34,7 @@ public static class BuildingInteriorSpawner
         }
 
         mapController.MapId = record.InteriorMapId;
-        mapController.IsInteriorOffset = true;
+        mapController.SetMapType(MapType.Interior);
 
         // Store exit info on MapController as NetworkVariables — these replicate to all clients,
         // unlike MonoBehaviour fields on the exit door which only exist on the server instance.

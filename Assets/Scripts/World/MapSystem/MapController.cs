@@ -14,8 +14,17 @@ namespace MWI.WorldSystem
         [Tooltip("Unique ID matching the Decoupled Character Save (e.g. World_Aethelgard_Region_North)")]
         public string MapId;
 
-        [Tooltip("Use this to determine if the map is visually loaded or offset")]
-        public bool IsInteriorOffset = false;
+        [SerializeField] private MapType _mapType = MapType.Region;
+        public MapType Type => _mapType;
+
+        [System.Obsolete("Use Type == MapType.Interior instead")]
+        public bool IsInteriorOffset => _mapType == MapType.Interior;
+
+        /// <summary>
+        /// Sets the map type at runtime. Used by BuildingInteriorSpawner to mark
+        /// dynamically spawned interiors before the NetworkObject is spawned.
+        /// </summary>
+        public void SetMapType(MapType mapType) => _mapType = mapType;
 
         [Header("Interior Exit Info (Replicated)")]
         [Tooltip("For interiors: the exterior map ID to return to. Set by BuildingInteriorSpawner.")]
