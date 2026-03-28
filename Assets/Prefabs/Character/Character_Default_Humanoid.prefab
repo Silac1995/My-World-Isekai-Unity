@@ -1940,11 +1940,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 1499034854403634377, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       propertyPath: m_AnchoredPosition.x
-      value: -1.4789999
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 1499034854403634377, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: 6.72
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 1499034854403634377, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       propertyPath: m_ConstrainProportionsScale
@@ -1952,11 +1952,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 1568726918119539838, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       propertyPath: m_LocalPosition.x
-      value: -0.57
+      value: 0.6
       objectReference: {fileID: 0}
     - target: {fileID: 1568726918119539838, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       propertyPath: m_LocalPosition.y
-      value: -0.31574917
+      value: 5
       objectReference: {fileID: 0}
     - target: {fileID: 1625456642069661774, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       propertyPath: m_AnchorMax.y
@@ -2180,11 +2180,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3706432557554459124, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       propertyPath: m_LocalPosition.x
-      value: 3
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 3706432557554459124, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 8
+      value: 10
       objectReference: {fileID: 0}
     - target: {fileID: 3937668831498777898, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       propertyPath: m_Constraints
@@ -2504,7 +2504,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8047995628688359888, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       propertyPath: m_HorizontalAlignment
-      value: 8
+      value: 32
       objectReference: {fileID: 0}
     - target: {fileID: 8408755073701722020, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       propertyPath: _bagScript

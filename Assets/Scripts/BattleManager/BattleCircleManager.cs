@@ -134,17 +134,12 @@ public class BattleCircleManager : CharacterSystem
         if (_activeCircles.ContainsKey(target)) return;
 
         // In solo testing two BattleCircleManagers may run with conflicting perspectives.
-        // If another manager already placed a circle on this target:
-        //   • For our OWN character: destroy the old one and replace it (our perspective wins).
-        //   • For any other character: skip — the other manager already claimed it.
+        // If another manager already placed a circle, destroy it — the last manager to run
+        // (the local player's) owns all circle colors. Object.Destroy is deferred to end-of-frame
+        // so the replacement circle we spawn below survives.
         var existingCircle = target.GetComponentInChildren<BattleGroundCircle>();
         if (existingCircle != null)
-        {
-            if (target == _character)
-                Object.Destroy(existingCircle.gameObject);
-            else
-                return;
-        }
+            Object.Destroy(existingCircle.gameObject);
 
         // Parent to character's root transform (not visual transform — avoids sprite flip issues).
         // World rotation Euler(-90,0,0) lays the quad flat in the XZ plane regardless of parent orientation.
