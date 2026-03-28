@@ -82,7 +82,9 @@ public class BattleZoneController
         emission.rateOverTime = _particleSettings.Rate;
 
         var velocity = _particles.velocityOverLifetime;
+        velocity.x = new ParticleSystem.MinMaxCurve(0f, 0f);
         velocity.y = new ParticleSystem.MinMaxCurve(_particleSettings.DriftY.x, _particleSettings.DriftY.y);
+        velocity.z = new ParticleSystem.MinMaxCurve(0f, 0f);
     }
 
     private void ResolveZoneOverlap()

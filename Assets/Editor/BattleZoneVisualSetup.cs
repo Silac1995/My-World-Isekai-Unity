@@ -148,9 +148,9 @@ public static class BattleZoneVisualSetup
         // Velocity over Lifetime — slight upward drift
         var velocityOverLifetime = ps.velocityOverLifetime;
         velocityOverLifetime.enabled = true;
-        velocityOverLifetime.x = new ParticleSystem.MinMaxCurve(0f);
+        velocityOverLifetime.x = new ParticleSystem.MinMaxCurve(0f, 0f);
         velocityOverLifetime.y = new ParticleSystem.MinMaxCurve(0.1f, 0.3f);
-        velocityOverLifetime.z = new ParticleSystem.MinMaxCurve(0f);
+        velocityOverLifetime.z = new ParticleSystem.MinMaxCurve(0f, 0f);
         velocityOverLifetime.space = ParticleSystemSimulationSpace.World;
 
         // Renderer
