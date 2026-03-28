@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
+using MWI.AI;
+using MWI.WorldSystem;
 
 public class CharacterParty : CharacterSystem
 {
@@ -20,6 +22,10 @@ public class CharacterParty : CharacterSystem
 
     // --- Runtime State ---
     private PartyData _partyData;
+
+    // --- Gather Zone State ---
+    private HashSet<string> _gatheredMemberIds = new();
+    private PartyGatherZone _gatherZone;
 
     // --- Public Accessors ---
     public PartyData PartyData => _partyData;
@@ -93,6 +99,7 @@ public class CharacterParty : CharacterSystem
         NotifyJoinedPartyClientRpc(_partyData.PartyId, _partyData.PartyName);
         NotifyPartyMemberJoinedClientRpc(_character.CharacterName);
         Debug.Log($"<color=cyan>[CharacterParty]</color> {_character.CharacterName} joined party '{_partyData.PartyName}'");
+        UpdateFollowState();
         return true;
     }
 
@@ -119,6 +126,7 @@ public class CharacterParty : CharacterSystem
             NotifyLeaderChangedClientRpc(_partyData.LeaderId);
         }
         if (_partyData.MemberCount == 0) PartyRegistry.Unregister(partyId);
+        ClearFollowState();
         _partyData = null;
         SyncNetworkVariables();
         OnLeftParty?.Invoke();
@@ -164,6 +172,7 @@ public class CharacterParty : CharacterSystem
         _partyData.FollowMode = mode;
         _networkFollowMode.Value = (byte)mode;
         OnFollowModeChanged?.Invoke(mode);
+        UpdateAllMembersFollowState();
     }
 
     public void DisbandParty()
@@ -186,6 +195,7 @@ public class CharacterParty : CharacterSystem
         if (!IsServer) return;
         UnsubscribeFromLeader();
         string partyName = _partyData?.PartyName ?? "the party";
+        ClearFollowState();
         _partyData = null;
         SyncNetworkVariables();
         OnLeftParty?.Invoke();
@@ -197,6 +207,7 @@ public class CharacterParty : CharacterSystem
     {
         if (!IsServer) return;
         UnsubscribeFromLeader();
+        ClearFollowState();
         _partyData = null;
         SyncNetworkVariables();
         OnLeftParty?.Invoke();
@@ -238,6 +249,7 @@ public class CharacterParty : CharacterSystem
     {
         if (!IsServer || !IsInParty) return;
         if (_partyData.State == PartyState.LeaderlessHold) SetPartyState(PartyState.Active);
+        UpdateAllMembersFollowState();
     }
 
     private void SubscribeToLeader(Character leader)
@@ -280,6 +292,7 @@ public class CharacterParty : CharacterSystem
         _partyData.State = state;
         _networkPartyState.Value = (byte)state;
         OnPartyStateChanged?.Invoke(state);
+        UpdateAllMembersFollowState();
     }
 
     private void SyncNetworkVariables()
@@ -349,6 +362,93 @@ public class CharacterParty : CharacterSystem
     private void OnNetworkPartyIdChanged(FixedString64Bytes prev, FixedString64Bytes next) { }
     private void OnNetworkPartyStateChanged(byte prev, byte next) { OnPartyStateChanged?.Invoke((PartyState)next); }
     private void OnNetworkFollowModeChanged(byte prev, byte next) { OnFollowModeChanged?.Invoke((PartyFollowMode)next); }
+
+    // GATHER ZONE CALLBACKS (Server-Only)
+    public void OnGatherZoneEnter(Character character)
+    {
+        if (!IsServer || _partyData == null) return;
+        if (_partyData.State != PartyState.Gathering) return;
+        if (!_partyData.IsMember(character.CharacterId)) return;
+        _gatheredMemberIds.Add(character.CharacterId);
+        Debug.Log($"<color=cyan>[CharacterParty]</color> {character.CharacterName} entered gather zone ({_gatheredMemberIds.Count}/{_partyData.MemberCount})");
+    }
+
+    public void OnGatherZoneExit(Character character)
+    {
+        if (!IsServer || _partyData == null) return;
+        _gatheredMemberIds.Remove(character.CharacterId);
+    }
+
+    // =============================================
+    //  FOLLOW LOGIC (Server-Only)
+    // =============================================
+
+    /// <summary>
+    /// Updates the blackboard follow flag for this NPC member.
+    /// Server-only. Only affects NPCs.
+    /// </summary>
+    public void UpdateFollowState()
+    {
+        if (!IsServer || !IsInParty) return;
+        if (_character.IsPlayer()) return;
+        if (IsPartyLeader) return;
+
+        Character leader = Character.FindByUUID(_partyData.LeaderId);
+        bool shouldFollow = _partyData.State == PartyState.Active
+                         && _partyData.FollowMode == PartyFollowMode.Strict
+                         && leader != null
+                         && leader.IsAlive()
+                         && IsOnSameMap(leader);
+
+        // Access the NPC's blackboard through the controller -> behaviour tree
+        NPCController controller = _character.Controller as NPCController;
+        if (controller == null || controller.BehaviourTree == null) return;
+
+        Blackboard bb = controller.BehaviourTree.Blackboard;
+        if (bb == null) return;
+
+        if (shouldFollow)
+        {
+            bb.Set(Blackboard.KEY_PARTY_FOLLOW, leader);
+        }
+        else
+        {
+            bb.Remove(Blackboard.KEY_PARTY_FOLLOW);
+        }
+    }
+
+    public void ClearFollowState()
+    {
+        if (_character.IsPlayer()) return;
+
+        NPCController controller = _character.Controller as NPCController;
+        if (controller == null) return;
+
+        controller.BehaviourTree?.Blackboard?.Remove(Blackboard.KEY_PARTY_FOLLOW);
+    }
+
+    private bool IsOnSameMap(Character other)
+    {
+        if (other == null) return false;
+        var myMap = _character.GetComponentInParent<MapController>();
+        var otherMap = other.GetComponentInParent<MapController>();
+        if (myMap == null || otherMap == null) return false;
+        return myMap.MapId == otherMap.MapId;
+    }
+
+    /// <summary>
+    /// Broadcasts UpdateFollowState() to all NPC members in the party.
+    /// </summary>
+    public void UpdateAllMembersFollowState()
+    {
+        if (_partyData == null) return;
+        foreach (string memberId in _partyData.MemberIds)
+        {
+            Character member = Character.FindByUUID(memberId);
+            if (member != null && member.CharacterParty != null)
+                member.CharacterParty.UpdateFollowState();
+        }
+    }
 
     // CLEANUP
     protected override void OnDisable()
