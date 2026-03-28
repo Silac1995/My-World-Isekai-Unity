@@ -5,7 +5,8 @@ using UnityEngine;
 /// <summary>
 /// Local-player orchestrator for battle ground circle indicators.
 /// Extends CharacterSystem — lives on a dedicated child GameObject of the Character prefab.
-/// Only activates on the owning client (IsOwner guard).
+/// Only activates for human player characters that are the local owner.
+/// NPCs never activate this (they have no CharacterGameController).
 /// </summary>
 public class BattleCircleManager : CharacterSystem
 {
@@ -22,7 +23,8 @@ public class BattleCircleManager : CharacterSystem
     protected override void OnEnable()
     {
         base.OnEnable();
-        if (_character != null && _character.CharacterCombat != null)
+        // Only subscribe for human player characters (Controller is null on NPCs)
+        if (_character != null && _character.CharacterCombat != null && _character.Controller != null)
         {
             _character.CharacterCombat.OnBattleJoined += HandleBattleJoined;
             _character.CharacterCombat.OnBattleLeft += HandleBattleLeft;
@@ -31,7 +33,7 @@ public class BattleCircleManager : CharacterSystem
 
     protected override void OnDisable()
     {
-        if (_character != null && _character.CharacterCombat != null)
+        if (_character != null && _character.CharacterCombat != null && _character.Controller != null)
         {
             _character.CharacterCombat.OnBattleJoined -= HandleBattleJoined;
             _character.CharacterCombat.OnBattleLeft -= HandleBattleLeft;
