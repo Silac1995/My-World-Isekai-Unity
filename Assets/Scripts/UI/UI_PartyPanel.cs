@@ -116,11 +116,23 @@ public class UI_PartyPanel : MonoBehaviour
             bool isLeader = data.IsLeader(memberId);
 
             GameObject entry = Instantiate(_memberEntryPrefab, _memberListContainer);
-            TMP_Text nameText = entry.GetComponentInChildren<TMP_Text>();
-            if (nameText != null)
+
+            UI_PartyMemberSlot slot = entry.GetComponent<UI_PartyMemberSlot>();
+            if (slot != null)
             {
-                string prefix = isLeader ? "[L] " : "";
-                nameText.text = $"{prefix}{memberName}";
+                string status = member != null && member.IsAlive() ? "" : "Dead";
+                // HUD panel is read-only — no leader controls, no kick/promote callbacks
+                slot.Setup(memberId, memberName, isLeader, status, false, null, null);
+            }
+            else
+            {
+                // Fallback if prefab doesn't have UI_PartyMemberSlot
+                TMP_Text nameText = entry.GetComponentInChildren<TMP_Text>();
+                if (nameText != null)
+                {
+                    string prefix = isLeader ? "[L] " : "";
+                    nameText.text = $"{prefix}{memberName}";
+                }
             }
 
             _spawnedEntries.Add(entry);
