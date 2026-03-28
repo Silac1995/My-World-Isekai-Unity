@@ -205,7 +205,7 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
             if (eHoldTime >= HOLD_THRESHOLD)
             {
                 isHoldingE = false; // Stop tracking hold
-                if (_currentInteractableObjectTarget == null) { eHoldTime = 0f; break; }
+                if (_currentInteractableObjectTarget == null) { eHoldTime = 0f; return; }
                 var options = _currentInteractableObjectTarget.GetHoldInteractionOptions(Character);
                 if (options != null && options.Count > 0)
                 {
