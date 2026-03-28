@@ -251,7 +251,10 @@ public class CharacterCombat : CharacterSystem
         {
             float staminaCost = CalculateBasicAttackStaminaCost();
             if (_character.Stats.Stamina.CurrentAmount < staminaCost)
+            {
+                Debug.LogWarning($"<color=yellow>[Combat]</color> {_character.CharacterName} cannot attack — stamina {_character.Stats.Stamina.CurrentAmount:F1}/{staminaCost:F1} insufficient.");
                 return false;
+            }
 
             _character.Stats.Stamina.DecreaseCurrentAmount(staminaCost);
 

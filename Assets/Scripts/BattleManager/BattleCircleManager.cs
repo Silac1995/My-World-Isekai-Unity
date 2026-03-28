@@ -18,27 +18,43 @@ public class BattleCircleManager : CharacterSystem
 
     private readonly Dictionary<Character, BattleGroundCircle> _activeCircles = new();
     private BattleManager _cachedBattleManager;
+    private bool _isSubscribed;
+
+    /// <summary>
+    /// Only ONE BattleCircleManager manages circles per client.
+    /// In production only one player character exists per client so this is always correct.
+    /// In solo testing the first player character to enable wins.
+    /// </summary>
+    private static BattleCircleManager _localInstance;
 
     #region Lifecycle
 
     protected override void OnEnable()
     {
         base.OnEnable();
-        // Only subscribe for human player characters (Controller is null on NPCs)
-        if (_character != null && _character.CharacterCombat != null && _character.Controller != null)
-        {
-            _character.CharacterCombat.OnBattleJoined += HandleBattleJoined;
-            _character.CharacterCombat.OnBattleLeft += HandleBattleLeft;
-        }
+        if (_character == null || _character.CharacterCombat == null || _character.Controller == null)
+            return;
+
+        // Only one BattleCircleManager per client — first to enable wins.
+        if (_localInstance != null && _localInstance != this)
+            return;
+
+        _localInstance = this;
+        _isSubscribed = true;
+        _character.CharacterCombat.OnBattleJoined += HandleBattleJoined;
+        _character.CharacterCombat.OnBattleLeft += HandleBattleLeft;
     }
 
     protected override void OnDisable()
     {
-        if (_character != null && _character.CharacterCombat != null && _character.Controller != null)
+        if (_isSubscribed && _character != null && _character.CharacterCombat != null)
         {
             _character.CharacterCombat.OnBattleJoined -= HandleBattleJoined;
             _character.CharacterCombat.OnBattleLeft -= HandleBattleLeft;
+            _isSubscribed = false;
         }
+        if (_localInstance == this)
+            _localInstance = null;
         CleanupAll();
         base.OnDisable();
     }
@@ -132,14 +148,6 @@ public class BattleCircleManager : CharacterSystem
     {
         if (target == null || _battleCirclePrefab == null) return;
         if (_activeCircles.ContainsKey(target)) return;
-
-        // In solo testing two BattleCircleManagers may run with conflicting perspectives.
-        // If another manager already placed a circle, destroy it — the last manager to run
-        // (the local player's) owns all circle colors. Object.Destroy is deferred to end-of-frame
-        // so the replacement circle we spawn below survives.
-        var existingCircle = target.GetComponentInChildren<BattleGroundCircle>();
-        if (existingCircle != null)
-            Object.Destroy(existingCircle.gameObject);
 
         // Parent to character's root transform (not visual transform — avoids sprite flip issues).
         // World rotation Euler(-90,0,0) lays the quad flat in the XZ plane regardless of parent orientation.
