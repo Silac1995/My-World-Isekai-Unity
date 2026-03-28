@@ -36,7 +36,9 @@ namespace MWI.AI
             if (self != null && self.CharacterMovement != null)
                 self.CharacterMovement.Stop();
 
-            bb.Remove(Blackboard.KEY_PARTY_FOLLOW);
+            // Do NOT remove KEY_PARTY_FOLLOW here — CharacterParty owns that key.
+            // Removing it would prevent the node from activating again on the next tick
+            // after being preempted by a higher-priority node (combat, etc.).
         }
     }
 }
