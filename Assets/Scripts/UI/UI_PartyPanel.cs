@@ -4,20 +4,24 @@ using TMPro;
 
 /// <summary>
 /// Party HUD panel. Shows party members, leader controls, and gathering status.
+/// Bound to a Character via PlayerUI.Initialize().
 /// </summary>
 public class UI_PartyPanel : MonoBehaviour
 {
-    [Header("References")]
-    [SerializeField] private GameObject _panelRoot;
+    [Header("Sections")]
     [SerializeField] private GameObject _createPartySection;
     [SerializeField] private GameObject _partyViewSection;
+
+    [Header("Create Party")]
     [SerializeField] private TMP_InputField _partyNameInput;
     [SerializeField] private Button _createPartyButton;
-    [SerializeField] private Button _disbandButton;
-    [SerializeField] private Button _leaveButton;
-    [SerializeField] private Transform _memberListContainer;
+
+    [Header("Party View")]
     [SerializeField] private TMP_Text _partyNameText;
     [SerializeField] private TMP_Text _followModeText;
+    [SerializeField] private Transform _memberListContainer;
+    [SerializeField] private Button _disbandButton;
+    [SerializeField] private Button _leaveButton;
 
     private Character _localCharacter;
     private CharacterParty _localParty;
@@ -30,9 +34,11 @@ public class UI_PartyPanel : MonoBehaviour
             _disbandButton.onClick.AddListener(OnDisbandClicked);
         if (_leaveButton != null)
             _leaveButton.onClick.AddListener(OnLeaveClicked);
-
-        HideAll();
     }
+
+    // =============================================
+    //  BIND / UNBIND (called by PlayerUI)
+    // =============================================
 
     public void Bind(Character localCharacter)
     {
@@ -41,7 +47,11 @@ public class UI_PartyPanel : MonoBehaviour
         _localCharacter = localCharacter;
         _localParty = localCharacter?.CharacterParty;
 
-        if (_localParty == null) return;
+        if (_localParty == null)
+        {
+            HideAll();
+            return;
+        }
 
         _localParty.OnJoinedParty += HandleJoinedParty;
         _localParty.OnLeftParty += HandleLeftParty;
@@ -65,23 +75,45 @@ public class UI_PartyPanel : MonoBehaviour
 
         _localCharacter = null;
         _localParty = null;
+        HideAll();
     }
+
+    // =============================================
+    //  UI STATE
+    // =============================================
 
     private void RefreshUI()
     {
-        if (_localParty == null || !_localParty.IsInParty)
+        if (_localParty == null)
         {
-            ShowCreateSection();
+            HideAll();
             return;
         }
 
-        ShowPartyView();
+        if (_localParty.IsInParty)
+        {
+            ShowPartyView();
+        }
+        else
+        {
+            ShowCreateSection();
+        }
     }
 
     private void ShowCreateSection()
     {
         if (_createPartySection != null) _createPartySection.SetActive(true);
         if (_partyViewSection != null) _partyViewSection.SetActive(false);
+
+        // Disable create button if player doesn't have Leadership skill
+        if (_createPartyButton != null)
+        {
+            bool canCreate = _localCharacter != null
+                && _localCharacter.CharacterSkills != null
+                && _localParty != null
+                && !_localParty.IsInParty;
+            _createPartyButton.interactable = canCreate;
+        }
     }
 
     private void ShowPartyView()
@@ -99,18 +131,19 @@ public class UI_PartyPanel : MonoBehaviour
             _followModeText.text = _localParty.CurrentFollowMode.ToString();
 
         bool isLeader = _localParty.IsPartyLeader;
-        if (_disbandButton != null)
-            _disbandButton.gameObject.SetActive(isLeader);
-        if (_leaveButton != null)
-            _leaveButton.gameObject.SetActive(!isLeader);
+        if (_disbandButton != null) _disbandButton.gameObject.SetActive(isLeader);
+        if (_leaveButton != null) _leaveButton.gameObject.SetActive(!isLeader);
     }
 
     private void HideAll()
     {
-        if (_panelRoot != null) _panelRoot.SetActive(false);
+        if (_createPartySection != null) _createPartySection.SetActive(false);
+        if (_partyViewSection != null) _partyViewSection.SetActive(false);
     }
 
-    // --- Button Handlers ---
+    // =============================================
+    //  BUTTON HANDLERS
+    // =============================================
 
     private void OnCreatePartyClicked()
     {
@@ -129,7 +162,9 @@ public class UI_PartyPanel : MonoBehaviour
         _localParty?.LeaveParty();
     }
 
-    // --- Event Handlers ---
+    // =============================================
+    //  EVENT HANDLERS
+    // =============================================
 
     private void HandleJoinedParty(PartyData data) => RefreshUI();
     private void HandleLeftParty() => RefreshUI();

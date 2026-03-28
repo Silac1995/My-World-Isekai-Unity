@@ -38,6 +38,9 @@ public class PlayerUI : MonoBehaviour
     [SerializeField] private UI_ChatBar _chatBar;
     [SerializeField] private UI_InteractionMenu _interactionMenu;
     [SerializeField] private MWI.UI.UI_InvitationPrompt _invitationPrompt;
+    [SerializeField] private UI_PartyPanel _partyPanel;
+    [SerializeField] private UI_PartyWindow _partyWindow;
+    [SerializeField] private Button _buttonPartyUI;
 
     private Character characterComponent;
 
@@ -114,6 +117,16 @@ public class PlayerUI : MonoBehaviour
             _invitationPrompt.Initialize(characterComponent.CharacterInvitation);
         }
 
+        if (_partyPanel != null)
+        {
+            _partyPanel.Bind(characterComponent);
+        }
+
+        if (_partyWindow != null)
+        {
+            _partyWindow.Initialize(characterComponent);
+        }
+
         // Push notification channels to the equipment system
         if (characterComponent.CharacterEquipment != null)
         {
@@ -185,6 +198,12 @@ public class PlayerUI : MonoBehaviour
             _buttonBuildingUI.onClick.RemoveAllListeners();
             _buttonBuildingUI.onClick.AddListener(ToggleBuildingUI);
         }
+
+        if (_buttonPartyUI != null)
+        {
+            _buttonPartyUI.onClick.RemoveAllListeners();
+            _buttonPartyUI.onClick.AddListener(TogglePartyUI);
+        }
     }
 
     public void ToggleEquipmentUI()
@@ -225,6 +244,19 @@ public class PlayerUI : MonoBehaviour
         if (!isCurrentlyActive && characterComponent != null)
         {
             _statsUI.Initialize(characterComponent);
+        }
+    }
+
+    public void TogglePartyUI()
+    {
+        if (_partyWindow == null) return;
+
+        bool isCurrentlyActive = _partyWindow.gameObject.activeSelf;
+        _partyWindow.gameObject.SetActive(!isCurrentlyActive);
+
+        if (!isCurrentlyActive && characterComponent != null)
+        {
+            _partyWindow.Initialize(characterComponent);
         }
     }
 
@@ -323,6 +355,14 @@ public class PlayerUI : MonoBehaviour
         if (_invitationPrompt != null)
         {
             _invitationPrompt.Initialize(null);
+        }
+        if (_partyPanel != null)
+        {
+            _partyPanel.Unbind();
+        }
+        if (_partyWindow != null)
+        {
+            _partyWindow.Initialize(null);
         }
     }
 
