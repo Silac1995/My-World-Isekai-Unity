@@ -27,6 +27,12 @@ public class CharacterParty : CharacterSystem
     private HashSet<string> _gatheredMemberIds = new();
     private PartyGatherZone _gatherZone;
 
+    // --- Gathering ---
+    private string _gatherTargetMapId;
+    private Vector3 _gatherTargetPosition;
+    private Coroutine _gatherCoroutine;
+    private GameObject _gatherZoneGO;
+
     // --- Public Accessors ---
     public PartyData PartyData => _partyData;
     public bool IsInParty => _partyData != null;
@@ -380,6 +386,163 @@ public class CharacterParty : CharacterSystem
     }
 
     // =============================================
+    //  GATHERING LOGIC (Server-Only)
+    // =============================================
+
+    /// <summary>
+    /// Called by MapTransitionDoor or MapTransitionZone when the leader tries to transition
+    /// to a Region or Dungeon map.
+    /// </summary>
+    public void StartGathering(string targetMapId, Vector3 targetPosition)
+    {
+        if (!IsServer || !IsInParty || !IsPartyLeader) return;
+        if (_partyData.State == PartyState.Gathering) return;
+
+        _gatherTargetMapId = targetMapId;
+        _gatherTargetPosition = targetPosition;
+        _gatheredMemberIds.Clear();
+        _gatheredMemberIds.Add(_character.CharacterId); // Leader is always gathered
+
+        _character.CharacterMovement.Stop();
+
+        EnableGatherZone();
+        SetPartyState(PartyState.Gathering);
+        OnGatheringStarted?.Invoke();
+        NotifyGatheringStartedClientRpc();
+
+        UpdateAllMembersFollowState();
+
+        if (!_character.IsPlayer())
+        {
+            _gatherCoroutine = StartCoroutine(NPCGatherTimeoutRoutine(30f));
+        }
+        else
+        {
+            _gatherCoroutine = StartCoroutine(PlayerGatherCheckRoutine());
+        }
+
+        Debug.Log($"<color=cyan>[CharacterParty]</color> {_character.CharacterName} started gathering for transition to {targetMapId}");
+    }
+
+    public void ProceedTransition()
+    {
+        if (!IsServer || _partyData.State != PartyState.Gathering) return;
+
+        if (_gatherCoroutine != null)
+        {
+            StopCoroutine(_gatherCoroutine);
+            _gatherCoroutine = null;
+        }
+
+        foreach (string memberId in _gatheredMemberIds)
+        {
+            Character member = Character.FindByUUID(memberId);
+            if (member == null) continue;
+
+            var transitionAction = new CharacterMapTransitionAction(
+                member, null, _gatherTargetMapId, _gatherTargetPosition, 0.5f);
+            member.CharacterActions.ExecuteAction(transitionAction);
+        }
+
+        DisableGatherZone();
+        _gatheredMemberIds.Clear();
+        SetPartyState(PartyState.Active);
+
+        if (_partyData.FollowMode == PartyFollowMode.Loose)
+        {
+            SetFollowMode(PartyFollowMode.Strict);
+        }
+
+        OnGatheringComplete?.Invoke();
+        Debug.Log($"<color=cyan>[CharacterParty]</color> Gathering complete, transitioning party to {_gatherTargetMapId}");
+    }
+
+    public void CancelGathering()
+    {
+        if (!IsServer || _partyData.State != PartyState.Gathering) return;
+
+        if (_gatherCoroutine != null)
+        {
+            StopCoroutine(_gatherCoroutine);
+            _gatherCoroutine = null;
+        }
+
+        DisableGatherZone();
+        _gatheredMemberIds.Clear();
+        SetPartyState(PartyState.Active);
+        UpdateAllMembersFollowState();
+    }
+
+    private System.Collections.IEnumerator NPCGatherTimeoutRoutine(float timeout)
+    {
+        yield return new WaitForSecondsRealtime(timeout);
+        ProceedTransition();
+    }
+
+    private System.Collections.IEnumerator PlayerGatherCheckRoutine()
+    {
+        while (_partyData != null && _partyData.State == PartyState.Gathering)
+        {
+            yield return new WaitForSecondsRealtime(0.5f);
+
+            int totalMembers = _partyData.MemberCount;
+            int gathered = _gatheredMemberIds.Count;
+            int busy = 0;
+
+            foreach (string memberId in _partyData.MemberIds)
+            {
+                Character member = Character.FindByUUID(memberId);
+                if (member != null && !member.IsFree() && !_gatheredMemberIds.Contains(memberId))
+                    busy++;
+            }
+
+            int freeUngathered = totalMembers - gathered - busy;
+
+            if (freeUngathered <= 0 && busy == 0)
+            {
+                ProceedTransition();
+                yield break;
+            }
+        }
+    }
+
+    // GATHER ZONE MANAGEMENT
+    private void EnableGatherZone()
+    {
+        if (_gatherZoneGO == null)
+        {
+            _gatherZoneGO = new GameObject("GatherZone");
+            _gatherZoneGO.transform.SetParent(transform);
+            _gatherZoneGO.transform.localPosition = Vector3.zero;
+
+            int partyGatherLayer = LayerMask.NameToLayer("PartyGather");
+            if (partyGatherLayer >= 0)
+                _gatherZoneGO.layer = partyGatherLayer;
+
+            BoxCollider col = _gatherZoneGO.AddComponent<BoxCollider>();
+            col.isTrigger = true;
+            col.size = new Vector3(6f, 4f, 6f);
+
+            _gatherZone = _gatherZoneGO.AddComponent<PartyGatherZone>();
+            _gatherZone.Initialize(this);
+        }
+
+        _gatherZoneGO.SetActive(true);
+    }
+
+    private void DisableGatherZone()
+    {
+        if (_gatherZoneGO != null)
+            _gatherZoneGO.SetActive(false);
+    }
+
+    [Rpc(SendTo.NotServer)]
+    private void NotifyGatheringStartedClientRpc()
+    {
+        OnGatheringStarted?.Invoke();
+    }
+
+    // =============================================
     //  FOLLOW LOGIC (Server-Only)
     // =============================================
 
@@ -453,6 +616,12 @@ public class CharacterParty : CharacterSystem
     // CLEANUP
     protected override void OnDisable()
     {
+        if (_gatherCoroutine != null)
+        {
+            StopCoroutine(_gatherCoroutine);
+            _gatherCoroutine = null;
+        }
+        DisableGatherZone();
         UnsubscribeFromLeader();
         base.OnDisable();
     }
