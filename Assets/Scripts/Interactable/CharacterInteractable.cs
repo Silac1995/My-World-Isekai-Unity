@@ -85,19 +85,12 @@ public class CharacterInteractable : InteractableObject
                         Name = "Invite to Party",
                         Action = () =>
                         {
-                            if (interactorParty.IsServer)
-                            {
-                                // Host: run invitation directly
-                                if (!interactorParty.IsInParty) interactorParty.CreateParty();
-                                invitation.Execute(interactor, targetRef);
-                            }
-                            else
-                            {
-                                // Client: send to server
-                                ulong targetNetId = targetRef.NetworkObject != null
-                                    ? targetRef.NetworkObject.NetworkObjectId : 0;
-                                interactorParty.RequestInviteToPartyServerRpc(targetNetId);
-                            }
+                            // Always route through ServerRpc — the invitation flow
+                            // (ReceiveInvitation, ProcessInvitation, OnAccepted) needs
+                            // server authority. Works for both host and client.
+                            ulong targetNetId = targetRef.NetworkObject != null
+                                ? targetRef.NetworkObject.NetworkObjectId : 0;
+                            interactorParty.RequestInviteToPartyServerRpc(targetNetId);
                         }
                     });
                 }
