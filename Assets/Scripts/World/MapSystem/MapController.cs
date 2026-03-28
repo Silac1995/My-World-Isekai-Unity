@@ -513,6 +513,10 @@ namespace MWI.WorldSystem
                         }
                     }
 
+                    // Extract Party membership
+                    if (npc.CharacterParty != null && npc.CharacterParty.IsInParty)
+                        npcData.PartyId = npc.CharacterParty.PartyData.PartyId;
+
                     _hibernationData.HibernatedNPCs.Add(npcData);
 
                     // 2. Despawn & Destroy the physical instance

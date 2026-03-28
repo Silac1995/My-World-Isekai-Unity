@@ -96,6 +96,7 @@ public class DebugScript : MonoBehaviour
 
         ItemSO itemToSpawn = availableItems[itemsSOList.value];
         Vector3 pos = spawnPoint != null ? spawnPoint.position : Vector3.zero;
+        Debug.Log($"<color=yellow>[DebugScript-DEBUG]</color> SpawnItem: spawnPoint={(spawnPoint != null ? "SET" : "NULL")}, pos={pos}");
         SpawnManager.Instance.SpawnItem(itemToSpawn, pos);
     }
 
@@ -154,6 +155,7 @@ public class DebugScript : MonoBehaviour
             number = Mathf.Max(1, parsed);
 
         Vector3 pos = spawnPoint != null ? spawnPoint.position : Vector3.zero;
+        Debug.Log($"<color=yellow>[DebugScript-DEBUG]</color> SpawnCharacters: spawnPoint={(spawnPoint != null ? "SET" : "NULL")}, pos={pos}");
 
         for (int i = 0; i < number; i++)
         {
