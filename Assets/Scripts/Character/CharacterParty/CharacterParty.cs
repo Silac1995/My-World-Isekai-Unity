@@ -11,6 +11,7 @@ public class CharacterParty : CharacterSystem
 {
     // --- Serialized References ---
     [SerializeField] private SkillSO _leadershipSkill;
+    public SkillSO LeadershipSkill => _leadershipSkill;
     [SerializeField] private ToastNotificationChannel _toastChannel;
 
     // --- Network Variables ---

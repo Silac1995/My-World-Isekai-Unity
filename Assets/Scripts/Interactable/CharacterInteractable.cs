@@ -57,6 +57,29 @@ public class CharacterInteractable : InteractableObject
             }
         });
 
+        // Party invitation — only if interactor is a party leader (or has Leadership and can create one)
+        if (interactor.CharacterParty != null)
+        {
+            CharacterParty interactorParty = interactor.CharacterParty;
+            bool isLeader = interactorParty.IsPartyLeader;
+            bool canCreateAndInvite = !interactorParty.IsInParty
+                && interactor.CharacterSkills != null
+                && interactor.CharacterSkills.HasSkill(interactorParty.LeadershipSkill);
+
+            if (isLeader || canCreateAndInvite)
+            {
+                var invitation = new PartyInvitation(interactorParty.LeadershipSkill);
+                if (invitation.CanExecute(interactor, _character))
+                {
+                    options.Add(new InteractionOption
+                    {
+                        Name = "Invite to Party",
+                        Action = () => invitation.Execute(interactor, _character)
+                    });
+                }
+            }
+        }
+
         return options;
     }
 
