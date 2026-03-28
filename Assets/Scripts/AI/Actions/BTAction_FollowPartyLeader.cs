@@ -7,10 +7,9 @@ namespace MWI.AI
         private const float FOLLOW_DISTANCE = 5f;
         private const float MIN_MEMBER_SPACING = 1.5f;
         private const float DIRECTION_SMOOTH_SPEED = 2f;
+        private const float LEADER_MOVING_THRESHOLD = 0.3f;
 
-        // Smoothed direction used for positioning — prevents followers from
-        // criss-crossing the leader on quick direction reversals.
-        private Vector3 _smoothedLeaderDir = Vector3.forward;
+        private Vector3 _smoothedLeaderDir;
         private bool _initialized = false;
 
         protected override BTNodeStatus OnExecute(Blackboard bb)
@@ -21,7 +20,7 @@ namespace MWI.AI
             Character leader = bb.Get<Character>(Blackboard.KEY_PARTY_FOLLOW);
             if (leader == null || !leader.IsAlive()) return BTNodeStatus.Failure;
 
-            UpdateSmoothedDirection(leader);
+            UpdateSmoothedDirection(self, leader);
 
             Vector3 targetPos = GetFollowPosition(self, leader);
             float distance = Vector3.Distance(self.transform.position, targetPos);
@@ -36,26 +35,45 @@ namespace MWI.AI
             return BTNodeStatus.Running;
         }
 
-        private void UpdateSmoothedDirection(Character leader)
+        private void UpdateSmoothedDirection(Character self, Character leader)
         {
-            Vector3 rawDir = leader.CharacterMovement != null
-                ? leader.CharacterMovement.LastMoveDirection
-                : Vector3.forward;
+            Vector3 leaderVelocity = leader.CharacterMovement != null
+                ? leader.CharacterMovement.Velocity
+                : Vector3.zero;
+
+            Vector3 flatVel = new Vector3(leaderVelocity.x, 0f, leaderVelocity.z);
+            bool leaderIsMoving = flatVel.sqrMagnitude > LEADER_MOVING_THRESHOLD * LEADER_MOVING_THRESHOLD;
 
             if (!_initialized)
             {
-                _smoothedLeaderDir = rawDir;
+                if (leaderIsMoving)
+                {
+                    // Leader is moving — initialize from their travel direction
+                    _smoothedLeaderDir = flatVel.normalized;
+                }
+                else
+                {
+                    // Leader is stationary — use direction from follower toward leader
+                    // so the follower just approaches naturally
+                    Vector3 toLeader = leader.transform.position - self.transform.position;
+                    toLeader.y = 0f;
+                    _smoothedLeaderDir = toLeader.sqrMagnitude > 0.01f
+                        ? toLeader.normalized
+                        : Vector3.forward;
+                }
                 _initialized = true;
                 return;
             }
 
-            // Slowly lerp toward the leader's current direction.
-            // This means quick reversals take ~1s to fully propagate,
-            // so followers drift smoothly instead of snapping across.
-            _smoothedLeaderDir = Vector3.Slerp(
-                _smoothedLeaderDir, rawDir,
-                Time.deltaTime * DIRECTION_SMOOTH_SPEED
-            ).normalized;
+            // Only update formation direction when the leader is actively moving.
+            // When stationary, keep the current formation direction frozen.
+            if (leaderIsMoving)
+            {
+                _smoothedLeaderDir = Vector3.Slerp(
+                    _smoothedLeaderDir, flatVel.normalized,
+                    UnityEngine.Time.deltaTime * DIRECTION_SMOOTH_SPEED
+                ).normalized;
+            }
         }
 
         private Vector3 GetFollowPosition(Character self, Character leader)
