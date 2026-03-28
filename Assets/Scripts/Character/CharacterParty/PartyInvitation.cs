@@ -13,7 +13,7 @@ public class PartyInvitation : InteractionInvitation
     {
         if (source == null || target == null) return false;
         if (source == target) return false;
-        if (!target.IsAlive() || !target.IsFree()) return false;
+        if (!target.IsAlive()) return false;
 
         // Source must have Leadership skill
         if (_leadershipSkill != null && !source.CharacterSkills.HasSkill(_leadershipSkill)) return false;
