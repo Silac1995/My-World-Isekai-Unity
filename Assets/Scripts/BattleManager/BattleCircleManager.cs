@@ -20,29 +20,18 @@ public class BattleCircleManager : CharacterSystem
     private BattleManager _cachedBattleManager;
     private bool _isSubscribed;
 
-    /// <summary>
-    /// Only ONE BattleCircleManager manages circles per client.
-    /// In production only one player character exists per client so this is always correct.
-    /// In solo testing the first player character to enable wins.
-    /// </summary>
-    private static BattleCircleManager _localInstance;
-
     #region Lifecycle
 
     protected override void OnEnable()
     {
         base.OnEnable();
-        if (_character == null || _character.CharacterCombat == null || _character.Controller == null)
-            return;
-
-        // Only one BattleCircleManager per client — first to enable wins.
-        if (_localInstance != null && _localInstance != this)
-            return;
-
-        _localInstance = this;
-        _isSubscribed = true;
-        _character.CharacterCombat.OnBattleJoined += HandleBattleJoined;
-        _character.CharacterCombat.OnBattleLeft += HandleBattleLeft;
+        if (_isSubscribed) return; // guard against double OnEnable
+        if (_character != null && _character.CharacterCombat != null)
+        {
+            _character.CharacterCombat.OnBattleJoined += HandleBattleJoined;
+            _character.CharacterCombat.OnBattleLeft += HandleBattleLeft;
+            _isSubscribed = true;
+        }
     }
 
     protected override void OnDisable()
@@ -53,8 +42,6 @@ public class BattleCircleManager : CharacterSystem
             _character.CharacterCombat.OnBattleLeft -= HandleBattleLeft;
             _isSubscribed = false;
         }
-        if (_localInstance == this)
-            _localInstance = null;
         CleanupAll();
         base.OnDisable();
     }
@@ -65,7 +52,7 @@ public class BattleCircleManager : CharacterSystem
 
     private void HandleBattleJoined(BattleManager manager)
     {
-        if (!IsOwner) return;
+        if (!ShouldManageCircles()) return;
 
         // Defensive: clear any leftover circles from a prior battle (rapid re-engagement)
         CleanupAll();
@@ -95,7 +82,7 @@ public class BattleCircleManager : CharacterSystem
 
     private void HandleBattleLeft()
     {
-        if (!IsOwner) return;
+        if (!ShouldManageCircles()) return;
 
         // Unsubscribe from cached BattleManager (null-safe — BattleManager may be destroyed)
         if (_cachedBattleManager != null)
@@ -109,7 +96,7 @@ public class BattleCircleManager : CharacterSystem
 
     private void HandleParticipantAdded(Character newParticipant)
     {
-        if (!IsOwner || _cachedBattleManager == null) return;
+        if (!ShouldManageCircles() || _cachedBattleManager == null) return;
         if (_activeCircles.ContainsKey(newParticipant)) return;
 
         BattleTeam localTeam = _cachedBattleManager.BattleTeams.FirstOrDefault(t => t.IsAlly(_character));
@@ -197,6 +184,16 @@ public class BattleCircleManager : CharacterSystem
             return Mathf.Max(rend.bounds.extents.x, rend.bounds.extents.z);
 
         return 0.5f; // sensible default if no bounds found
+    }
+
+    /// <summary>
+    /// True only for the local human player's character.
+    /// IsLocalPlayer is set by NetworkObject.SpawnAsPlayerObject() — NPCs and remote
+    /// players' characters always return false.
+    /// </summary>
+    private bool ShouldManageCircles()
+    {
+        return _character != null && _character.IsSpawned && _character.IsLocalPlayer;
     }
 
     /// <summary>
