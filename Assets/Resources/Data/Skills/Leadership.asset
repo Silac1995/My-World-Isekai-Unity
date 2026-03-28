@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9854ab9cd25473f498cfec74f6c9c677, type: 3}
   m_Name: Leadership
   m_EditorClassIdentifier: Assembly-CSharp::SkillSO
-  SkillID: leadership
+  SkillID: skill01-leadership
   SkillName: Leadership
   Description: The ability to lead and manage a party of adventurers.
   Icon: {fileID: 0}
