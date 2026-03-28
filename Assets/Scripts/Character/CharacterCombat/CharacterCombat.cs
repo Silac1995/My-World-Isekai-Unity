@@ -529,7 +529,9 @@ public class CharacterCombat : CharacterSystem
             foreach (var p in battle.BattleTeams.SelectMany(t => t.CharacterList))
             {
                 bool isFriend = _character.CharacterRelation != null && _character.CharacterRelation.IsFriend(p);
-                bool sameParty = _character.CurrentParty != null && _character.CurrentParty == p.CurrentParty;
+                bool sameParty = _character.CharacterParty != null && _character.CharacterParty.IsInParty
+                    && p.CharacterParty != null && p.CharacterParty.IsInParty
+                    && _character.CharacterParty.PartyData.PartyId == p.CharacterParty.PartyData.PartyId;
 
                 if (isFriend || sameParty)
                 {
@@ -545,7 +547,9 @@ public class CharacterCombat : CharacterSystem
             foreach (var p in battle.BattleTeams.SelectMany(t => t.CharacterList))
             {
                 bool isFriend = target.CharacterRelation != null && target.CharacterRelation.IsFriend(p);
-                bool sameParty = target.CurrentParty != null && target.CurrentParty == p.CurrentParty;
+                bool sameParty = target.CharacterParty != null && target.CharacterParty.IsInParty
+                    && p.CharacterParty != null && p.CharacterParty.IsInParty
+                    && target.CharacterParty.PartyData.PartyId == p.CharacterParty.PartyData.PartyId;
 
                 if (isFriend || sameParty)
                 {

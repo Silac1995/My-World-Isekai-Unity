@@ -70,6 +70,7 @@ public class Character : NetworkBehaviour
     [SerializeField] private CharacterBookKnowledge _characterBookKnowledge;
     [SerializeField] private BattleCircleManager _battleCircleManager;
     [SerializeField] private FloatingTextSpawner _floatingTextSpawner;
+    [SerializeField] private CharacterParty _characterParty;
     #endregion
 
     #region Network Variables
@@ -106,7 +107,6 @@ public class Character : NetworkBehaviour
     private bool _isUnconscious;
     private bool _isBuilding;
     private TimeManager _timeManager;
-    private CharacterParty _currentParty;
     private CharacterPathingMemory _pathingMemory;
 
     // Ressources statiques partagées
@@ -143,7 +143,7 @@ public class Character : NetworkBehaviour
     public CharacterInteraction CharacterInteraction => _characterInteraction ?? throw new NullReferenceException($"CharacterInteraction non initialisé sur {gameObject.name}");
     public CharacterEquipment CharacterEquipment => _equipment;
     public CharacterRelation CharacterRelation => _characterRelation;
-    public CharacterParty CurrentParty => _currentParty;
+    public CharacterParty CharacterParty => _characterParty;
     public CharacterCommunity CharacterCommunity => _characterCommunity;
     public CharacterInteractable CharacterInteractable => _characterInteractable;
     public CharacterCombat CharacterCombat => _characterCombat;
@@ -332,6 +332,7 @@ public class Character : NetworkBehaviour
         if (_characterBookKnowledge == null) _characterBookKnowledge = GetComponent<CharacterBookKnowledge>();
         if (_battleCircleManager == null) _battleCircleManager = GetComponentInChildren<BattleCircleManager>();
         if (_floatingTextSpawner == null) _floatingTextSpawner = GetComponentInChildren<FloatingTextSpawner>();
+        if (_characterParty == null) _characterParty = GetComponentInChildren<CharacterParty>();
 
         _cachedNavMeshAgent = GetComponent<NavMeshAgent>();
         _isDead = false;
@@ -484,42 +485,9 @@ public class Character : NetworkBehaviour
     }
 
     #region Party Logic
-    public bool IsInParty() => _currentParty != null;
+    public bool IsInParty() => _characterParty != null && _characterParty.IsInParty;
 
-    public bool IsPartyLeader()
-    {
-        return IsInParty() && _currentParty.IsLeader(this);
-    }
-
-    public void CreateParty(string partyName)
-    {
-        if (_currentParty != null)
-        {
-            _currentParty.RemoveMember(this);
-        }
-        _currentParty = new CharacterParty(partyName, this);
-    }
-
-    public void SetParty(CharacterParty party)
-    {
-        _currentParty = party;
-    }
-
-    public void Invite(Character target)
-    {
-        if (target == null || target == this) return;
-        
-        if (_currentParty == null)
-        {
-            CreateParty($"{_characterName}'s Group");
-        }
-
-        if (IsPartyLeader())
-        {
-            // Pour l'instant on l'ajoute directement (intégration avec les interactions à venir)
-            _currentParty.AddMember(target);
-        }
-    }
+    public bool IsPartyLeader() => _characterParty != null && _characterParty.IsPartyLeader;
     #endregion
 
     public virtual void SetUnconscious(bool unconscious)
