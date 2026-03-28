@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -35,6 +36,8 @@ public class BattleManager : NetworkBehaviour
     public List<BattleTeam> BattleTeams => _teams;
     public bool IsBattleEnded => _isBattleEnded;
     public CombatEngagementCoordinator Coordinator => _engagementCoordinator;
+
+    public event Action<Character> OnParticipantAdded;
 
     public void Initialize(Character initiator, Character target)
     {
@@ -256,6 +259,8 @@ public class BattleManager : NetworkBehaviour
 
         UpdateBattleZoneWith(character);
         Debug.Log($"<color=white>[Battle]</color> {character.CharacterName} joined combat. IsInBattle={character.CharacterCombat?.IsInBattle}. IsServer={IsServer}");
+
+        OnParticipantAdded?.Invoke(character);
     }
 
     public void AddParticipant(Character newParticipant, Character target, bool asAlly = false)
