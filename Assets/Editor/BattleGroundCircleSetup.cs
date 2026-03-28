@@ -14,6 +14,7 @@ public static class BattleGroundCircleSetup
 {
     private const string SHADER_PATH = "Assets/Shaders/BattleGroundCircle.shader";
     private const string ALLY_MAT_PATH = "Assets/Materials/BattleGroundCircle_Ally_Mat.mat";
+    private const string PARTY_MAT_PATH = "Assets/Materials/BattleGroundCircle_Party_Mat.mat";
     private const string ENEMY_MAT_PATH = "Assets/Materials/BattleGroundCircle_Enemy_Mat.mat";
     private const string PREFAB_PATH = "Assets/Prefabs/BattleGroundCircle.prefab";
     private const string PC_RENDERER_PATH = "Assets/Settings/PC_Renderer.asset";
@@ -114,6 +115,24 @@ public static class BattleGroundCircleSetup
             Debug.Log($"[BattleCircleSetup] Ally material already exists at {ALLY_MAT_PATH}");
         }
 
+        // Create Party material (Green)
+        if (!File.Exists(PARTY_MAT_PATH))
+        {
+            var partyMat = new Material(shader);
+            partyMat.SetColor("_Color", new Color(0.2f, 1.0f, 0.3f, 0.7f));
+            partyMat.SetFloat("_InnerRadius", 0.3f);
+            partyMat.SetFloat("_OuterRadius", 0.5f);
+            partyMat.SetFloat("_Softness", 0.05f);
+            partyMat.SetFloat("_PulseSpeed", 2.0f);
+            partyMat.SetFloat("_PulseIntensity", 0.15f);
+            AssetDatabase.CreateAsset(partyMat, PARTY_MAT_PATH);
+            Debug.Log($"<color=green>[BattleCircleSetup]</color> Created party material at {PARTY_MAT_PATH}");
+        }
+        else
+        {
+            Debug.Log($"[BattleCircleSetup] Party material already exists at {PARTY_MAT_PATH}");
+        }
+
         // Create Enemy material (Red)
         if (!File.Exists(ENEMY_MAT_PATH))
         {
@@ -177,6 +196,7 @@ public static class BattleGroundCircleSetup
         // Load the battle circle prefab and materials
         var circlePrefab = AssetDatabase.LoadAssetAtPath<GameObject>(PREFAB_PATH);
         var allyMat = AssetDatabase.LoadAssetAtPath<Material>(ALLY_MAT_PATH);
+        var partyMat = AssetDatabase.LoadAssetAtPath<Material>(PARTY_MAT_PATH);
         var enemyMat = AssetDatabase.LoadAssetAtPath<Material>(ENEMY_MAT_PATH);
 
         if (circlePrefab == null)
@@ -198,12 +218,16 @@ public static class BattleGroundCircleSetup
             string assetPath = AssetDatabase.GetAssetPath(prefab);
             var prefabRoot = PrefabUtility.LoadPrefabContents(assetPath);
 
-            // Check if BattleCircleManager child already exists
+            // If BattleCircleManager already exists, patch in party material and save
             var existingManager = prefabRoot.GetComponentInChildren<BattleCircleManager>();
             if (existingManager != null)
             {
-                Debug.Log($"[BattleCircleSetup] {prefabPath} already has BattleCircleManager");
+                var existSO = new SerializedObject(existingManager);
+                existSO.FindProperty("_partyMaterial").objectReferenceValue = partyMat;
+                existSO.ApplyModifiedProperties();
+                PrefabUtility.SaveAsPrefabAsset(prefabRoot, assetPath);
                 PrefabUtility.UnloadPrefabContents(prefabRoot);
+                Debug.Log($"[BattleCircleSetup] {prefabPath} — patched _partyMaterial on existing BattleCircleManager");
                 continue;
             }
 
@@ -226,6 +250,9 @@ public static class BattleGroundCircleSetup
 
             var allyProp = so.FindProperty("_allyMaterial");
             allyProp.objectReferenceValue = allyMat;
+
+            var partyProp = so.FindProperty("_partyMaterial");
+            partyProp.objectReferenceValue = partyMat;
 
             var enemyProp = so.FindProperty("_enemyMaterial");
             enemyProp.objectReferenceValue = enemyMat;

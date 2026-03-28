@@ -389,6 +389,7 @@ MonoBehaviour:
   _character: {fileID: 2536622428659117900}
   _battleCirclePrefab: {fileID: 4128249314074683128, guid: 157a1d1bd74bd88448ab6408bd4070ab, type: 3}
   _allyMaterial: {fileID: 2100000, guid: 9560c2c3b7ff69b448f41d703dd7af3f, type: 2}
+  _partyMaterial: {fileID: 2100000, guid: caaa19b1ae173d9418f0a71ed3ce807e, type: 2}
   _enemyMaterial: {fileID: 2100000, guid: f777a362251cd6c43b3dbc05632694f0, type: 2}
 --- !u!1 &1821471009812425830
 GameObject:

@@ -13,6 +13,7 @@ public class BattleCircleManager : CharacterSystem
     [Header("Battle Circle Settings")]
     [SerializeField] private GameObject _battleCirclePrefab;
     [SerializeField] private Material _allyMaterial;
+    [SerializeField] private Material _partyMaterial;
     [SerializeField] private Material _enemyMaterial;
 
     private readonly Dictionary<Character, BattleGroundCircle> _activeCircles = new();
@@ -132,10 +133,18 @@ public class BattleCircleManager : CharacterSystem
         if (target == null || _battleCirclePrefab == null) return;
         if (_activeCircles.ContainsKey(target)) return;
 
-        // If another BattleCircleManager already spawned a circle on this character
-        // (can happen in testing when two player-characters are in the same scene),
-        // skip — first spawner wins and owns the cleanup.
-        if (target.GetComponentInChildren<BattleGroundCircle>() != null) return;
+        // In solo testing two BattleCircleManagers may run with conflicting perspectives.
+        // If another manager already placed a circle on this target:
+        //   • For our OWN character: destroy the old one and replace it (our perspective wins).
+        //   • For any other character: skip — the other manager already claimed it.
+        var existingCircle = target.GetComponentInChildren<BattleGroundCircle>();
+        if (existingCircle != null)
+        {
+            if (target == _character)
+                Object.Destroy(existingCircle.gameObject);
+            else
+                return;
+        }
 
         // Parent to character's root transform (not visual transform — avoids sprite flip issues).
         // World rotation Euler(-90,0,0) lays the quad flat in the XZ plane regardless of parent orientation.
@@ -150,7 +159,7 @@ public class BattleCircleManager : CharacterSystem
         circleGO.transform.localScale = new Vector3(diameter, diameter, 1f);
 
         BattleGroundCircle circle = circleGO.GetComponent<BattleGroundCircle>();
-        Material material = isAlly ? _allyMaterial : _enemyMaterial;
+        Material material = PickMaterial(target, isAlly);
         circle.Initialize(material);
 
         _activeCircles[target] = circle;
@@ -185,6 +194,28 @@ public class BattleCircleManager : CharacterSystem
             return Mathf.Max(rend.bounds.extents.x, rend.bounds.extents.z);
 
         return 0.5f; // sensible default if no bounds found
+    }
+
+    /// <summary>
+    /// Party member (green) > Ally (blue) > Enemy (red).
+    /// A character is a "party member" if they share the same party as the local player.
+    /// The local player themselves also gets the party color when in a party.
+    /// </summary>
+    private Material PickMaterial(Character target, bool isAlly)
+    {
+        if (!isAlly)
+            return _enemyMaterial;
+
+        // Check if both the local player and the target share a party
+        if (_partyMaterial != null
+            && _character.IsInParty()
+            && target.IsInParty()
+            && _character.CharacterParty.PartyData.PartyId == target.CharacterParty.PartyData.PartyId)
+        {
+            return _partyMaterial;
+        }
+
+        return _allyMaterial;
     }
 
     private void CleanupAll()

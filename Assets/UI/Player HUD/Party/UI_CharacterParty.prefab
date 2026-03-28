@@ -2590,15 +2590,31 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 3691344203255236939, guid: c1d2ba641e1a8574e9bd96101cb49745, type: 3}
       propertyPath: m_SizeDelta.x
-      value: 0
+      value: -133.54
       objectReference: {fileID: 0}
     - target: {fileID: 3691344203255236939, guid: c1d2ba641e1a8574e9bd96101cb49745, type: 3}
       propertyPath: m_SizeDelta.y
-      value: 0
+      value: -160.4438
+      objectReference: {fileID: 0}
+    - target: {fileID: 3691344203255236939, guid: c1d2ba641e1a8574e9bd96101cb49745, type: 3}
+      propertyPath: m_AnchoredPosition.x
+      value: -28.229
+      objectReference: {fileID: 0}
+    - target: {fileID: 3691344203255236939, guid: c1d2ba641e1a8574e9bd96101cb49745, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: 2.715393
       objectReference: {fileID: 0}
     - target: {fileID: 4336044804180976178, guid: c1d2ba641e1a8574e9bd96101cb49745, type: 3}
       propertyPath: m_Name
       value: UI_CharacterParty
+      objectReference: {fileID: 0}
+    - target: {fileID: 6343051039333022936, guid: c1d2ba641e1a8574e9bd96101cb49745, type: 3}
+      propertyPath: m_VerticalFit
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6343051039333022936, guid: c1d2ba641e1a8574e9bd96101cb49745, type: 3}
+      propertyPath: m_HorizontalFit
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 6849898940419710052, guid: c1d2ba641e1a8574e9bd96101cb49745, type: 3}
       propertyPath: m_LocalPosition.x
