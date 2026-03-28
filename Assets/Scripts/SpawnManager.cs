@@ -55,12 +55,8 @@ public class SpawnManager : MonoBehaviour
             return null;
         }
 
-        Debug.Log($"<color=yellow>[SpawnManager-DEBUG]</color> SpawnItem called with pos={pos}, spawnGameObject={(spawnGameObject != null ? spawnGameObject.transform.position.ToString() : "NULL")}");
-
         if (pos == Vector3.zero && spawnGameObject != null)
             pos = spawnGameObject.transform.position;
-
-        Debug.Log($"<color=yellow>[SpawnManager-DEBUG]</color> SpawnItem final pos={pos}");
 
         // 1. On instancie TOUJOURS le prefab par défaut (la "coquille" WorldItem)
         if (_defaultItemPrefab == null)
@@ -70,7 +66,6 @@ public class SpawnManager : MonoBehaviour
         }
 
         GameObject worldItemGo = Instantiate(_defaultItemPrefab, pos, Quaternion.identity);
-        Debug.Log($"<color=yellow>[SpawnManager-DEBUG]</color> Item Instantiated at transform.position={worldItemGo.transform.position}, prefab localPos was={_defaultItemPrefab.transform.localPosition}");
 
         // 2. On renomme l'objet pour la hiérarchie
         worldItemGo.name = $"WorldItem_{data.ItemName}";
@@ -171,16 +166,10 @@ public class SpawnManager : MonoBehaviour
 
     public Character SpawnCharacter(Vector3 pos, RaceSO race, GameObject visualPrefab, bool isPlayer, CharacterPersonalitySO personality = null)
     {
-        Debug.Log($"<color=yellow>[SpawnManager-DEBUG]</color> SpawnCharacter called with pos={pos}, spawnGameObject={(spawnGameObject != null ? spawnGameObject.transform.position.ToString() : "NULL")}");
-
         Vector3 spawnPos = pos == Vector3.zero && spawnGameObject != null ? spawnGameObject.transform.position : pos;
-
-        Debug.Log($"<color=yellow>[SpawnManager-DEBUG]</color> SpawnCharacter final spawnPos={spawnPos}, visualPrefab={visualPrefab?.name}, prefab localPos={visualPrefab?.transform.localPosition}");
 
         GameObject characterPrefabObj = Instantiate(visualPrefab, spawnPos, Quaternion.identity);
         if (characterPrefabObj == null) return null;
-
-        Debug.Log($"<color=yellow>[SpawnManager-DEBUG]</color> Character Instantiated at transform.position={characterPrefabObj.transform.position}");
 
         if (!characterPrefabObj.TryGetComponent(out Character character))
         {
@@ -209,10 +198,8 @@ public class SpawnManager : MonoBehaviour
 
                     character.NetworkVisualSeed.Value = Random.Range(int.MinValue, int.MaxValue);
 
-                    Debug.Log($"<color=yellow>[SpawnManager-DEBUG]</color> PRE netObj.Spawn() position={characterPrefabObj.transform.position}");
                     // L'objet réseau va appeler InitializeSpawnedCharacter via OnNetworkSpawn.
                     netObj.Spawn(true);
-                    Debug.Log($"<color=yellow>[SpawnManager-DEBUG]</color> POST netObj.Spawn() position={characterPrefabObj.transform.position}");
 
                     return character;
                 }

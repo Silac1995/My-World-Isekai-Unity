@@ -1,21 +1,37 @@
 using UnityEngine;
 
+/// <summary>
+/// Inspector-exposed particle overrides, passed from BattleManager serialized fields.
+/// </summary>
+public struct ZoneParticleSettings
+{
+    public float Rate;
+    public Color Color;
+    public Vector2 Size;
+    public Vector2 Lifetime;
+    public Vector2 DriftY;
+}
+
 public class BattleZoneController
 {
     private BattleManager _manager;
     private Collider _battleZone;
     private Unity.AI.Navigation.NavMeshModifierVolume _battleZoneModifier;
     private LineRenderer _battleZoneLine;
-    
+    private ParticleSystem _particles;
+    private ZoneParticleSettings _particleSettings;
+
     private Vector3 _baseBattleZoneSize;
     private float _perParticipantGrowthRate;
     private int _participantsPerTier;
 
-    public BattleZoneController(BattleManager manager, Unity.AI.Navigation.NavMeshModifierVolume modifier, LineRenderer line, Vector3 baseSize, float growthRate, int participantsPerTier)
+    public BattleZoneController(BattleManager manager, Unity.AI.Navigation.NavMeshModifierVolume modifier, LineRenderer line, ParticleSystem particles, ZoneParticleSettings particleSettings, Vector3 baseSize, float growthRate, int participantsPerTier)
     {
         _manager = manager;
         _battleZoneModifier = modifier;
         _battleZoneLine = line;
+        _particles = particles;
+        _particleSettings = particleSettings;
         _baseBattleZoneSize = baseSize;
         _perParticipantGrowthRate = growthRate;
         _participantsPerTier = participantsPerTier;
@@ -46,6 +62,27 @@ public class BattleZoneController
             _battleZoneModifier.size = box.size;
             _battleZoneModifier.center = box.center;
         }
+
+        ApplyParticleSettings();
+        UpdateParticleShape();
+        if (_particles != null && !_particles.isPlaying)
+            _particles.Play();
+    }
+
+    private void ApplyParticleSettings()
+    {
+        if (_particles == null) return;
+
+        var main = _particles.main;
+        main.startLifetime = new ParticleSystem.MinMaxCurve(_particleSettings.Lifetime.x, _particleSettings.Lifetime.y);
+        main.startSize = new ParticleSystem.MinMaxCurve(_particleSettings.Size.x, _particleSettings.Size.y);
+        main.startColor = _particleSettings.Color;
+
+        var emission = _particles.emission;
+        emission.rateOverTime = _particleSettings.Rate;
+
+        var velocity = _particles.velocityOverLifetime;
+        velocity.y = new ParticleSystem.MinMaxCurve(_particleSettings.DriftY.x, _particleSettings.DriftY.y);
     }
 
     private void ResolveZoneOverlap()
@@ -175,5 +212,19 @@ public class BattleZoneController
         };
 
         _battleZoneLine.SetPositions(corners);
+
+        UpdateParticleShape();
+    }
+
+    private void UpdateParticleShape()
+    {
+        if (_particles == null || _battleZone == null) return;
+        BoxCollider box = _battleZone as BoxCollider;
+        if (box == null) return;
+
+        var shape = _particles.shape;
+        shape.shapeType = ParticleSystemShapeType.Box;
+        shape.boxThickness = new Vector3(1, 1, 1); // emit from edges only
+        shape.scale = new Vector3(box.size.x, 0.1f, box.size.z);
     }
 }

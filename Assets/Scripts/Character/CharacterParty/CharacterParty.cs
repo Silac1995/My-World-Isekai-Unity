@@ -4,6 +4,7 @@ using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
 using MWI.AI;
+using MWI.UI.Notifications;
 using MWI.WorldSystem;
 
 public class CharacterParty : CharacterSystem

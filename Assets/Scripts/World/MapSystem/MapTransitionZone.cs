@@ -1,3 +1,4 @@
+using Unity.Netcode;
 using UnityEngine;
 using MWI.WorldSystem;
 
@@ -21,7 +22,7 @@ public class MapTransitionZone : MonoBehaviour
         if (!character.IsAlive()) return;
 
         // Only server processes logic
-        if (character.NetworkObject != null && !character.NetworkObject.IsServer) return;
+        if (NetworkManager.Singleton != null && !NetworkManager.Singleton.IsServer) return;
 
         CharacterParty party = character.CharacterParty;
 
