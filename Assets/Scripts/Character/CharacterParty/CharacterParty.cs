@@ -52,11 +52,6 @@ public class CharacterParty : CharacterSystem
     public event Action OnGatheringComplete;
     public event Action<string> OnMemberKicked;
     public event Action OnPartyRosterChanged;
-    /// <summary>
-    /// Fired on player members when a party member within awareness range enters combat.
-    /// Passes the party member who is now fighting.
-    /// </summary>
-    public event Action<Character> OnPartyMemberEnteredCombat;
 
     // --- Leader event subscriptions ---
     private Character _subscribedLeader;
@@ -242,23 +237,29 @@ public class CharacterParty : CharacterSystem
     {
         if (!IsServer || !IsInParty || !inCombat) return;
 
-        // This character just entered combat. Notify all player party members
-        // who are within awareness range so they can choose to join.
+        // This character just entered combat. Send a CombatAssistInvitation
+        // to all player party members within awareness range, through the
+        // standard CharacterInvitation pipeline (UI prompt, accept/refuse).
+        var invitation = new CombatAssistInvitation(_character);
+
         foreach (string memberId in _partyData.MemberIds)
         {
             if (memberId == _character.CharacterId) continue;
 
             Character member = Character.FindByUUID(memberId);
-            if (member == null || !member.IsAlive() || !member.IsPlayer()) continue;
+            if (member == null || !member.IsAlive()) continue;
+            if (!member.IsPlayer()) continue; // NPCs auto-assist via BTCond_FriendInDanger
             if (member.CharacterCombat != null && member.CharacterCombat.IsInBattle) continue;
+            if (member.CharacterInvitation != null && member.CharacterInvitation.HasPendingInvitation) continue;
 
-            // Check if the fighting member is within the player's awareness range
+            // Check awareness range
             if (member.CharacterAwareness != null)
             {
-                float dist = Vector3.Distance(member.transform.position, _character.transform.position);
+                float dist = UnityEngine.Vector3.Distance(member.transform.position, _character.transform.position);
                 if (dist <= member.CharacterAwareness.AwarenessRadius)
                 {
-                    member.CharacterParty.NotifyMemberEnteredCombatClientRpc(_character.CharacterId);
+                    // Send through the invitation pipeline — shows the UI prompt
+                    invitation.Execute(_character, member);
                 }
             }
         }
@@ -415,17 +416,6 @@ public class CharacterParty : CharacterSystem
     private void NotifyKickedToastClientRpc(FixedString64Bytes partyName) { }
 
     [Rpc(SendTo.NotServer)]
-    private void NotifyMemberEnteredCombatClientRpc(FixedString64Bytes fightingMemberId)
-    {
-        Character fightingMember = Character.FindByUUID(fightingMemberId.ToString());
-        if (fightingMember != null)
-        {
-            Debug.Log($"<color=yellow>[CharacterParty]</color> Party member {fightingMember.CharacterName} is in combat!");
-            OnPartyMemberEnteredCombat?.Invoke(fightingMember);
-        }
-    }
-
-    [Rpc(SendTo.NotServer)]
     private void NotifyRosterChangedClientRpc(FixedString64Bytes leaderId, string memberIdsCsv)
     {
         if (_partyData != null)
@@ -438,19 +428,6 @@ public class CharacterParty : CharacterSystem
             }
         }
         OnPartyRosterChanged?.Invoke();
-    }
-
-    // COMBAT ASSIST (Player requests to join a party member's fight)
-    [Rpc(SendTo.Server)]
-    public void RequestJoinPartyMemberFightServerRpc(FixedString64Bytes fightingMemberIdBytes)
-    {
-        string fightingMemberId = fightingMemberIdBytes.ToString();
-        Character fightingMember = Character.FindByUUID(fightingMemberId);
-        if (fightingMember == null || !fightingMember.CharacterCombat.IsInBattle) return;
-        if (!IsInParty || !_partyData.IsMember(fightingMemberId)) return;
-
-        _character.CharacterCombat.JoinBattleAsAlly(fightingMember);
-        Debug.Log($"<color=green>[CharacterParty]</color> {_character.CharacterName} joined the fight to help {fightingMember.CharacterName}");
     }
 
     // NETWORK VARIABLE CHANGE CALLBACKS
