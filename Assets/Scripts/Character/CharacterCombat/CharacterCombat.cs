@@ -17,6 +17,7 @@ public class CharacterCombat : CharacterSystem
     public event Action<bool> OnCombatModeChanged;
     public event Action<float, DamageType> OnDamageTaken;
     public event Action OnBattleLeft;
+    public event Action<BattleManager> OnBattleJoined;
 
     [Header("Initiative Scaling")]
     [SerializeField] private float _baseInitiativePerTick = 1f;
@@ -443,6 +444,8 @@ public class CharacterCombat : CharacterSystem
 
         // Passive trigger: OnBattleStart
         _character.CharacterAbilities?.OnPassiveTriggerEvent(PassiveTriggerCondition.OnBattleStart, _character, null);
+
+        OnBattleJoined?.Invoke(manager);
     }
 
     public void JoinBattleAsAlly(Character friend)
