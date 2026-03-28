@@ -61,10 +61,18 @@ public class CharacterInteractable : InteractableObject
         if (interactor.CharacterParty != null)
         {
             CharacterParty interactorParty = interactor.CharacterParty;
+            bool isInParty = interactorParty.IsInParty;
             bool isLeader = interactorParty.IsPartyLeader;
-            bool canCreateAndInvite = !interactorParty.IsInParty
+            bool hasLeadership = interactorParty.LeadershipSkill != null
                 && interactor.CharacterSkills != null
                 && interactor.CharacterSkills.HasSkill(interactorParty.LeadershipSkill);
+            bool canCreateAndInvite = !isInParty && hasLeadership;
+
+            Debug.Log($"<color=yellow>[PartyInvite Check]</color> {interactor.CharacterName} → {_character.CharacterName}: " +
+                $"inParty={isInParty}, isLeader={isLeader}, hasLeadership={hasLeadership}, " +
+                $"partyData null={interactorParty.PartyData == null}, " +
+                $"leaderId={(interactorParty.PartyData?.LeaderId ?? "null")}, " +
+                $"charId={interactor.CharacterId}");
 
             if (isLeader || canCreateAndInvite)
             {
@@ -76,6 +84,10 @@ public class CharacterInteractable : InteractableObject
                         Name = "Invite to Party",
                         Action = () => invitation.Execute(interactor, _character)
                     });
+                }
+                else
+                {
+                    Debug.Log($"<color=red>[PartyInvite Check]</color> CanExecute returned false");
                 }
             }
         }
