@@ -79,10 +79,26 @@ public class CharacterInteractable : InteractableObject
                 var invitation = new PartyInvitation(interactorParty.LeadershipSkill);
                 if (invitation.CanExecute(interactor, _character))
                 {
+                    Character targetRef = _character;
                     options.Add(new InteractionOption
                     {
                         Name = "Invite to Party",
-                        Action = () => invitation.Execute(interactor, _character)
+                        Action = () =>
+                        {
+                            if (interactorParty.IsServer)
+                            {
+                                // Host: run invitation directly
+                                if (!interactorParty.IsInParty) interactorParty.CreateParty();
+                                invitation.Execute(interactor, targetRef);
+                            }
+                            else
+                            {
+                                // Client: send to server
+                                ulong targetNetId = targetRef.NetworkObject != null
+                                    ? targetRef.NetworkObject.NetworkObjectId : 0;
+                                interactorParty.RequestInviteToPartyServerRpc(targetNetId);
+                            }
+                        }
                     });
                 }
                 else

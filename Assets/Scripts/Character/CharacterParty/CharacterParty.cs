@@ -542,6 +542,34 @@ public class CharacterParty : CharacterSystem
         SetFollowMode((PartyFollowMode)mode);
     }
 
+    /// <summary>
+    /// Client requests to invite a target character to their party.
+    /// Runs the full invitation flow on the server where it has authority.
+    /// </summary>
+    [Rpc(SendTo.Server)]
+    public void RequestInviteToPartyServerRpc(ulong targetNetworkObjectId)
+    {
+        if (!NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(targetNetworkObjectId, out var targetObj))
+            return;
+
+        Character target = targetObj.GetComponent<Character>();
+        if (target == null) return;
+
+        // Auto-create party if not in one
+        if (!IsInParty)
+        {
+            if (!CreateParty()) return;
+        }
+
+        if (!IsPartyLeader) return;
+
+        var invitation = new PartyInvitation(_leadershipSkill);
+        if (invitation.CanExecute(_character, target))
+        {
+            invitation.Execute(_character, target);
+        }
+    }
+
     // NETWORK VARIABLE CHANGE CALLBACKS
     private void OnNetworkPartyIdChanged(FixedString64Bytes prev, FixedString64Bytes next)
     {
