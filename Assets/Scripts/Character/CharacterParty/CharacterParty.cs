@@ -86,7 +86,8 @@ public class CharacterParty : CharacterSystem
         SyncNetworkVariables();
         SubscribeToLeader(Character.FindByUUID(_partyData.LeaderId));
         OnJoinedParty?.Invoke(_partyData);
-        NotifyJoinedPartyClientRpc(_partyData.PartyId, _partyData.PartyName);
+        NotifyJoinedPartyClientRpc(_partyData.PartyId, _partyData.PartyName,
+            _partyData.LeaderId, string.Join(",", _partyData.MemberIds));
         Debug.Log($"<color=cyan>[CharacterParty]</color> {_character.CharacterName} created party '{_partyData.PartyName}'");
         return true;
     }
@@ -105,7 +106,8 @@ public class CharacterParty : CharacterSystem
         SyncNetworkVariables();
         SubscribeToLeader(Character.FindByUUID(_partyData.LeaderId));
         OnJoinedParty?.Invoke(_partyData);
-        NotifyJoinedPartyClientRpc(_partyData.PartyId, _partyData.PartyName);
+        NotifyJoinedPartyClientRpc(_partyData.PartyId, _partyData.PartyName,
+            _partyData.LeaderId, string.Join(",", _partyData.MemberIds));
         NotifyPartyMemberJoinedClientRpc(_character.CharacterName);
         Debug.Log($"<color=cyan>[CharacterParty]</color> {_character.CharacterName} joined party '{_partyData.PartyName}'");
         UpdateFollowState();
@@ -427,23 +429,33 @@ public class CharacterParty : CharacterSystem
 
     // CLIENT RPCs
     [Rpc(SendTo.NotServer)]
-    private void NotifyJoinedPartyClientRpc(FixedString64Bytes partyId, FixedString64Bytes partyName)
+    private void NotifyJoinedPartyClientRpc(FixedString64Bytes partyId, FixedString64Bytes partyName,
+        FixedString64Bytes leaderId, string memberIdsCsv)
     {
         string id = partyId.ToString();
         string name = partyName.ToString();
+        string leader = leaderId.ToString();
 
-        // Client-side: PartyRegistry is empty. Create a local PartyData shell.
+        // Client-side: create or update local PartyData with correct leader and members
         if (_partyData == null)
         {
-            _partyData = PartyRegistry.GetParty(id);
-        }
-        if (_partyData == null)
-        {
-            _partyData = new PartyData(_character.CharacterId, _character.CharacterName, name);
+            _partyData = new PartyData(leader, "", name);
             _partyData.PartyId = id;
         }
+        else
+        {
+            _partyData.PartyName = name;
+            _partyData.LeaderId = leader;
+        }
 
-        Debug.Log($"<color=cyan>[CharacterParty Client]</color> {_character.CharacterName} joined party '{name}'");
+        // Sync member list
+        if (!string.IsNullOrEmpty(memberIdsCsv))
+        {
+            _partyData.MemberIds.Clear();
+            _partyData.MemberIds.AddRange(memberIdsCsv.Split(','));
+        }
+
+        Debug.Log($"<color=cyan>[CharacterParty Client]</color> {_character.CharacterName} joined party '{name}' (leader={leader})");
         OnJoinedParty?.Invoke(_partyData);
     }
 
@@ -493,23 +505,63 @@ public class CharacterParty : CharacterSystem
         OnPartyRosterChanged?.Invoke();
     }
 
+    // SERVER RPCs (Client requests party operations)
+    [Rpc(SendTo.Server)]
+    public void RequestCreatePartyServerRpc(string partyName)
+    {
+        CreateParty(string.IsNullOrWhiteSpace(partyName) ? null : partyName);
+    }
+
+    [Rpc(SendTo.Server)]
+    public void RequestLeavePartyServerRpc()
+    {
+        LeaveParty();
+    }
+
+    [Rpc(SendTo.Server)]
+    public void RequestKickMemberServerRpc(FixedString64Bytes characterId)
+    {
+        KickMember(characterId.ToString());
+    }
+
+    [Rpc(SendTo.Server)]
+    public void RequestPromoteLeaderServerRpc(FixedString64Bytes characterId)
+    {
+        PromoteLeader(characterId.ToString());
+    }
+
+    [Rpc(SendTo.Server)]
+    public void RequestDisbandPartyServerRpc()
+    {
+        DisbandParty();
+    }
+
+    [Rpc(SendTo.Server)]
+    public void RequestSetFollowModeServerRpc(byte mode)
+    {
+        SetFollowMode((PartyFollowMode)mode);
+    }
+
     // NETWORK VARIABLE CHANGE CALLBACKS
     private void OnNetworkPartyIdChanged(FixedString64Bytes prev, FixedString64Bytes next)
     {
         string id = next.ToString();
         if (string.IsNullOrEmpty(id))
         {
-            // Left party
             _partyData = null;
             OnLeftParty?.Invoke();
         }
         else if (_partyData == null || _partyData.PartyId != id)
         {
-            // Joined a party (late-joiner fallback or RPC missed)
+            // Late-joiner fallback — create a minimal shell.
+            // The correct leader and member list will arrive via
+            // NotifyJoinedPartyClientRpc or NotifyRosterChangedClientRpc.
             _partyData = PartyRegistry.GetParty(id);
             if (_partyData == null)
             {
-                _partyData = new PartyData(_character.CharacterId, _character.CharacterName);
+                // Don't assume self is leader — leave LeaderId empty,
+                // it will be set by the next RPC.
+                _partyData = new PartyData("", _character.CharacterName);
                 _partyData.PartyId = id;
             }
             OnJoinedParty?.Invoke(_partyData);

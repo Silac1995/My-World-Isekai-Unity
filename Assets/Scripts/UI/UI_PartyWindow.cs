@@ -249,17 +249,30 @@ public class UI_PartyWindow : UI_WindowBase
     {
         if (_party == null) return;
         string name = _partyNameInput != null ? _partyNameInput.text : null;
-        _party.CreateParty(string.IsNullOrWhiteSpace(name) ? null : name);
+        string cleanName = string.IsNullOrWhiteSpace(name) ? null : name;
+
+        if (_party.IsServer)
+            _party.CreateParty(cleanName);
+        else
+            _party.RequestCreatePartyServerRpc(cleanName ?? "");
     }
 
     private void OnDisbandClicked()
     {
-        _party?.DisbandParty();
+        if (_party == null) return;
+        if (_party.IsServer)
+            _party.DisbandParty();
+        else
+            _party.RequestDisbandPartyServerRpc();
     }
 
     private void OnLeaveClicked()
     {
-        _party?.LeaveParty();
+        if (_party == null) return;
+        if (_party.IsServer)
+            _party.LeaveParty();
+        else
+            _party.RequestLeavePartyServerRpc();
     }
 
     private void OnToggleFollowModeClicked()
@@ -270,17 +283,28 @@ public class UI_PartyWindow : UI_WindowBase
             ? PartyFollowMode.Loose
             : PartyFollowMode.Strict;
 
-        _party.SetFollowMode(newMode);
+        if (_party.IsServer)
+            _party.SetFollowMode(newMode);
+        else
+            _party.RequestSetFollowModeServerRpc((byte)newMode);
     }
 
     private void OnKickMember(string characterId)
     {
-        _party?.KickMember(characterId);
+        if (_party == null) return;
+        if (_party.IsServer)
+            _party.KickMember(characterId);
+        else
+            _party.RequestKickMemberServerRpc(characterId);
     }
 
     private void OnPromoteMember(string characterId)
     {
-        _party?.PromoteLeader(characterId);
+        if (_party == null) return;
+        if (_party.IsServer)
+            _party.PromoteLeader(characterId);
+        else
+            _party.RequestPromoteLeaderServerRpc(characterId);
     }
 
     // =============================================
