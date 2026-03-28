@@ -563,6 +563,13 @@ public class CharacterMovement : CharacterSystem
     private Vector3 _lastPosition;
     private Vector3 _empiricalVelocity;
 
+    // --- LAST MOVE DIRECTION ---
+    // Persists the last non-zero travel direction on the XZ plane.
+    // Updated every frame from actual movement. Stays valid when the character stops.
+    // Single source of truth for "which way is this character facing/traveling".
+    private Vector3 _lastMoveDirection = Vector3.forward;
+    public Vector3 LastMoveDirection => _lastMoveDirection;
+
     private void Start()
     {
         _lastPosition = transform.position;
@@ -589,6 +596,13 @@ public class CharacterMovement : CharacterSystem
             else
             {
                 _smoothedEmpiricalVelocity = _empiricalVelocity;
+            }
+
+            // Update last move direction from actual movement (XZ only)
+            Vector3 flatVel = new Vector3(_empiricalVelocity.x, 0f, _empiricalVelocity.z);
+            if (flatVel.sqrMagnitude > 0.1f)
+            {
+                _lastMoveDirection = flatVel.normalized;
             }
         }
         _lastPosition = transform.position;
