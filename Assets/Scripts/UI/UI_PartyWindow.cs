@@ -68,6 +68,7 @@ public class UI_PartyWindow : UI_WindowBase
             _party.OnPartyStateChanged -= HandleStateChanged;
             _party.OnFollowModeChanged -= HandleFollowModeChanged;
             _party.OnMemberKicked -= HandleMemberKicked;
+            _party.OnPartyRosterChanged -= HandleRosterChanged;
         }
 
         _character = character;
@@ -81,6 +82,7 @@ public class UI_PartyWindow : UI_WindowBase
             _party.OnPartyStateChanged += HandleStateChanged;
             _party.OnFollowModeChanged += HandleFollowModeChanged;
             _party.OnMemberKicked += HandleMemberKicked;
+            _party.OnPartyRosterChanged += HandleRosterChanged;
             RefreshDisplay();
         }
         else
@@ -290,6 +292,7 @@ public class UI_PartyWindow : UI_WindowBase
     private void HandleStateChanged(PartyState state) => RefreshDisplay();
     private void HandleFollowModeChanged(PartyFollowMode mode) => RefreshDisplay();
     private void HandleMemberKicked(string characterId) => RefreshDisplay();
+    private void HandleRosterChanged() => RefreshDisplay();
 
     // =============================================
     //  CLEANUP
@@ -306,6 +309,7 @@ public class UI_PartyWindow : UI_WindowBase
             _party.OnPartyStateChanged -= HandleStateChanged;
             _party.OnFollowModeChanged -= HandleFollowModeChanged;
             _party.OnMemberKicked -= HandleMemberKicked;
+            _party.OnPartyRosterChanged -= HandleRosterChanged;
         }
     }
 }

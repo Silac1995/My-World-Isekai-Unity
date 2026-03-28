@@ -51,6 +51,7 @@ public class CharacterParty : CharacterSystem
     public event Action OnGatheringStarted;
     public event Action OnGatheringComplete;
     public event Action<string> OnMemberKicked;
+    public event Action OnPartyRosterChanged;
 
     // --- Leader event subscriptions ---
     private Character _subscribedLeader;
@@ -108,6 +109,7 @@ public class CharacterParty : CharacterSystem
         NotifyPartyMemberJoinedClientRpc(_character.CharacterName);
         Debug.Log($"<color=cyan>[CharacterParty]</color> {_character.CharacterName} joined party '{_partyData.PartyName}'");
         UpdateFollowState();
+        BroadcastRosterChanged();
         return true;
     }
 
@@ -133,6 +135,7 @@ public class CharacterParty : CharacterSystem
             GrantLeadershipSkillIfNeeded(_partyData.LeaderId);
             NotifyLeaderChangedClientRpc(_partyData.LeaderId);
         }
+        if (_partyData.MemberCount > 0) BroadcastRosterChanged();
         if (_partyData.MemberCount == 0) PartyRegistry.Unregister(partyId);
         ClearFollowState();
         _partyData = null;
@@ -152,6 +155,7 @@ public class CharacterParty : CharacterSystem
         if (kicked != null && kicked.CharacterParty != null) kicked.CharacterParty.HandleKicked();
         OnMemberKicked?.Invoke(characterId);
         NotifyMemberKickedClientRpc(characterId);
+        if (_partyData.MemberCount > 0) BroadcastRosterChanged();
         if (_partyData.MemberCount == 0)
         {
             PartyRegistry.Unregister(_partyData.PartyId);
@@ -365,6 +369,12 @@ public class CharacterParty : CharacterSystem
 
     [Rpc(SendTo.NotServer)]
     private void NotifyKickedToastClientRpc(FixedString64Bytes partyName) { }
+
+    [Rpc(SendTo.NotServer)]
+    private void NotifyRosterChangedClientRpc()
+    {
+        OnPartyRosterChanged?.Invoke();
+    }
 
     // NETWORK VARIABLE CHANGE CALLBACKS
     private void OnNetworkPartyIdChanged(FixedString64Bytes prev, FixedString64Bytes next) { }
@@ -612,6 +622,24 @@ public class CharacterParty : CharacterSystem
             Character member = Character.FindByUUID(memberId);
             if (member != null && member.CharacterParty != null)
                 member.CharacterParty.UpdateFollowState();
+        }
+    }
+
+    /// <summary>
+    /// Notifies all online party members that the roster changed.
+    /// Fires OnPartyRosterChanged on each member (server-side + ClientRpc).
+    /// </summary>
+    private void BroadcastRosterChanged()
+    {
+        if (_partyData == null) return;
+        foreach (string memberId in _partyData.MemberIds)
+        {
+            Character member = Character.FindByUUID(memberId);
+            if (member != null && member.CharacterParty != null)
+            {
+                member.CharacterParty.OnPartyRosterChanged?.Invoke();
+                member.CharacterParty.NotifyRosterChangedClientRpc();
+            }
         }
     }
 

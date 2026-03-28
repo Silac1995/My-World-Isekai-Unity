@@ -45,6 +45,7 @@ public class UI_PartyPanel : MonoBehaviour
         _localParty.OnLeftParty += HandlePartyLeft;
         _localParty.OnPartyStateChanged += HandleStateChanged;
         _localParty.OnMemberKicked += HandleMemberKicked;
+        _localParty.OnPartyRosterChanged += HandleRosterChanged;
 
         RefreshUI();
     }
@@ -57,6 +58,7 @@ public class UI_PartyPanel : MonoBehaviour
             _localParty.OnLeftParty -= HandlePartyLeft;
             _localParty.OnPartyStateChanged -= HandleStateChanged;
             _localParty.OnMemberKicked -= HandleMemberKicked;
+            _localParty.OnPartyRosterChanged -= HandleRosterChanged;
         }
 
         _localCharacter = null;
@@ -142,6 +144,7 @@ public class UI_PartyPanel : MonoBehaviour
     private void HandlePartyLeft() => RefreshUI();
     private void HandleStateChanged(PartyState state) => RefreshUI();
     private void HandleMemberKicked(string characterId) => RefreshUI();
+    private void HandleRosterChanged() => RefreshUI();
 
     private void OnDestroy()
     {
