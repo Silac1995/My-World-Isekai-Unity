@@ -19,8 +19,9 @@ This skill details the architecture of the combat system in the project and the 
 The `BattleManager` is the supreme entity of a battle, usually instantiated when a clash begins. It strictly delegates its responsibilities to adhere to SOLID principles:
 - **BattleTeams**: It always maintains two teams (Initiator vs Target). We do *not* support 3-team free-for-alls in a single instance.
 - **BattleZoneController**: A delegated pure C# class that handles the physical terrain. It dynamically generates the boundary (`BoxCollider` isTrigger), pathfinding deterrent (`NavMeshModifierVolume`), and visual `LineRenderer` to mark the combat zone.
-- **CombatEngagementCoordinator**: A delegated pure C# class that mathematically manages brawl "subgroups" (`_activeEngagements`). It computes spatial centers, merges nearby fights, and safely splits massive crowds to prevent actor overlapping.
+- **CombatEngagementCoordinator**: A delegated pure C# class that mathematically manages brawl "subgroups" (`_activeEngagements`). It computes spatial centers, merges nearby fights, and safely splits massive crowds to prevent actor overlapping. `RequestEngagement` allows allies to join existing engagements but only creates **new** engagements between opponents (`AreOpponents` guard is on the creation branch only).
 - **Victory Condition**: The manager continuously polls `.IsTeamEliminated()` in its `Update()` loop. This physical guarantee ensures the battle definitively ends if an entire team is wiped out or silently despawned, rather than relying exclusively on volatile event triggers.
+- **Incapacitation Handling**: When a character faints/dies, `HandleCharacterIncapacitated` calls `RedirectIncapacitated` which explicitly removes the victim from their engagement (`LeaveCurrentEngagement`) before running `CleanupEngagements`. All characters (including players) are auto-engaged via `RequestEngagement` when they join the battle — no `IsPlayer()` guard.
 - **Robust Teardown**: Upon ending, the manager wraps `LeaveBattle` calls in a `try-catch` block to quarantine aggressive UI exceptions (like `PlayerUI` crashing) from aborting the shutdown script. It also unsubscribes all character events explicitly in `OnDestroy()` to prevent zombie memory leaks.
 - **Tick System**: It is the `BattleManager` that sets the pace (`PerformBattleTick()`), and *not the Update method of each character*.
 
@@ -32,8 +33,10 @@ This is the component every NPC/Player has in order to fight.
   - The `.ConsumeInitiative()` method resets initiative to 0 after a successful attack.
   - The `.UpdateInitiativeTick(amount)` method is **called by the BattleManager** to fill the bar.
 - **Action Intent & Execution (`CombatAILogic.cs`)**: Actions are no longer executed blindly by UI buttons or Behaviour Trees.
-  - `SetActionIntent(Action, target)` logs what the character *intends* to do. It instantly synchronizes `CharacterVisual.SetLookAtTarget` and securely pushes the target change to the `CombatEngagementCoordinator` to keep group formations up-to-date even before the attack resolves.
-  - `CombatAILogic.Tick(target)` is the shared brain for both Players and NPCs. It handles all tactical pacing. It moves the character into valid strike range (evaluating `MeleeRange`, X-depth limits `< 1.5f`, and Z-alignment `<= 1.5f`) and ONLY calls `ExecuteAction` when perfectly positioned and `IsReadyToAct` is true.
+  - **`SetActionIntent(Action, target)`** logs what the character *intends* to do. It sets both `PlannedAction` and `PlannedTarget`, synchronizes `CharacterVisual.SetLookTarget`, and pushes the target change to the `CombatEngagementCoordinator` to keep group formations up-to-date.
+  - **`SetPlannedTarget(Character)`** sets only the target without touching `PlannedAction`. Used by the UI targeting system (click/TAB) to redirect the combat AI to a new enemy without cancelling a queued attack. Also updates the engagement coordinator.
+  - **`CombatAILogic.Tick(target)`** is the shared brain for both Players and NPCs. At the top of each tick, it checks `CharacterCombat.PlannedTarget` — if set and alive, it **overrides** the coordinator-assigned `currentTarget` so that player click/TAB selection is respected by all movement and execution logic. It moves the character into valid strike range (evaluating `MeleeRange`, X-depth limits, and Z-alignment `<= 1.6f`) and ONLY calls `ExecuteAction` when perfectly positioned and `IsReadyToAct` is true.
+  - The attack closure uses **dynamic PlannedTarget evaluation**: `() => Attack(_characterCombat.PlannedTarget)` rather than capturing a fixed target. This ensures retargeting after queuing is respected.
   - While waiting for Initiative, `CombatAILogic` pulls random safe fallback points using `CombatTacticalPacer.GetTacticalDestination()`.
   - For standard hits, NPCs automatically pull intents (and register them in Phase 1) when ready. Players strictly declare intents via `UI_CombatActionMenu`.
 
@@ -90,7 +93,10 @@ Combat directly drives character progression via the `CharacterCombatLevel` comp
   - **NPC Allocation**: Handled internally via `AutoAllocateStats()`. They randomly reinvest all unspent attribute points evenly across the 6 core Secondary Stats to scale dynamically with the player.
 
 ### 7. Targeting & Visual Feedback
-- **Click-to-Target**: Handled via the UI layer (`UI_PlayerTargeting`) which directly commands the logical `CharacterVisual.SetLookTarget(transform)`.
+- **Unified Click/TAB Targeting**: Both paths converge through `UI_PlayerTargeting.SelectInteractable()`. Click uses `ResolveInteractableFromHit(Collider)` to extract an `InteractableObject` from the raycast hit; TAB cycles through nearby targets. Both call `SelectInteractable` which sets `LookTarget` (always to the **root Character transform**, not the child `CharacterInteractable` transform) and, during battle, calls `CharacterCombat.SetPlannedTarget()`.
+- **Battle Target Lock**: During battle, `SelectInteractable` rejects non-battle participants (characters not in the battle and non-character interactables). `ClearSelection` redirects to the current `PlannedTarget` (or `GetBestTargetFor` fallback) instead of clearing the indicator.
+- **Dead Target Auto-Retarget**: `UI_CombatActionMenu.OnAttackClicked` validates that `PlannedTarget` is alive and in the battle. If dead or not a participant, falls back to `GetBestTargetFor`. When `PlayerCombatCommand` finishes (target dies), `PlayerController`'s auto-trigger block creates a new command with the next best target and syncs the indicator.
+- **CharacterInteractable Access**: Always use the `Character.CharacterInteractable` facade property (never `GetComponent<CharacterInteractable>()`) because CharacterInteractable lives on a child GameObject per the Facade + Child Hierarchy pattern.
 - **Shader-Driven Target Indicator**: Active target UI elements (like the crosshair ring) must dynamically lerp their colors (Green -> Yellow -> Red) based on the target's missing health (`Stats.Health.OnAmountChanged`). Obeying the strict **Shader-First** rule, this must be pushed exclusively through `Material.SetFloat("_HealthPercent")` on a custom unlit UI shader to avoid CPU color manipulation and prevent Canvas batching breaks.
 
 ### 8. IDamageable Interface & Destructible Objects
@@ -161,6 +167,12 @@ Abilities are learned via the mentorship system (`CharacterMentorship.ReceiveLes
 Physical damage types: **Blunt**, **Slashing**, **Piercing**.
 Magical damage types: **Fire**, **Ice**, **Lightning**, **Holy**, **Dark**.
 Weapons use physical types. Spells typically use magical types.
+
+### 11. Knockback & Combat Movement Interaction
+- **`ApplyKnockback`** (`CharacterMovement.cs`) disables the NavMeshAgent, sets the Rigidbody to non-kinematic, and applies an impulse force for a 0.4s window (`_knockbackTimer`).
+- All movement methods (`SetDestination`, `Stop`, `Resume`, `SetDesiredDirection`) guard against `_knockbackTimer > 0` and return early, so `CombatAILogic.Tick()` cannot override knockback through normal movement calls.
+- **Critical pitfall**: `PlayerController.Move()` has a safety check that re-enables the NavMeshAgent when it detects it was "externally disabled" during combat. This check **must** respect `IsKnockedBack` — otherwise it immediately calls `ConfigureNavMesh(true)` which zeros velocity and sets the Rigidbody to kinematic, completely nullifying the knockback. The guard is: `!_character.CharacterMovement.IsKnockedBack`.
+- After the knockback window ends, `FixedUpdate` re-enables the NavMeshAgent (if in combat) and sets the Rigidbody back to kinematic.
 
 ## Tips & Troubleshooting
 - **A character never attacks**:

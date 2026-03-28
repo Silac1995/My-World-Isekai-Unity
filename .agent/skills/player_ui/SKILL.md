@@ -131,8 +131,15 @@ Distinct from the passive `ToastNotificationSystem`, the `UI_InvitationPrompt` i
 ### Combat & Targeting UI
 In combat (or specialized click-to-move states), the HUD takes over input handling using specific manager components:
 
-- **`UI_PlayerTargeting`**: Manages the Point-and-Click system on screen space. Casts rays on `Input.GetMouseButtonDown(0)` to select `InteractableObject`s or `Character`s, isolating targeting visual logic from the `PlayerController`.
-- **`UI_CombatActionMenu`**: An initiative-driven HUD piece that pops up when a player's `CharacterInitiative.IsReady()` flag is met. It handles action selections (e.g., "Melee Attack", "Ranged Attack") based on the player's active Combat Mode and passes the intent back to `CharacterCombat.Attack()`.
+- **`UI_PlayerTargeting`**: Manages the unified Point-and-Click + TAB targeting system.
+  - **Unified Resolution**: Both click and TAB converge through `SelectInteractable(InteractableObject)`. Click uses `ResolveInteractableFromHit(Collider)` to extract the correct `InteractableObject` from a raycast hit (resolving characters via the `Character.CharacterInteractable` facade property, never `GetComponent`).
+  - **LookTarget Consistency**: When targeting a character, always sets `LookTarget` to the **root Character transform** (not the `CharacterInteractable` child transform). This ensures `GetComponentInChildren<Collider>()` in `UpdateIndicatorTracking` finds the same collider (root CapsuleCollider) regardless of how the target was selected, preventing indicator height mismatches.
+  - **Battle Target Lock**: During battle, `SelectInteractable` rejects non-battle participants (characters whose `GetTeamOf` returns null) and non-character interactables. Selecting a battle participant calls `CharacterCombat.SetPlannedTarget()` to redirect combat AI.
+  - **Battle ClearSelection**: Clicking the ground during battle redirects the indicator to the current `PlannedTarget` (or `GetBestTargetFor` fallback) instead of fully clearing. Outside battle, it clears normally.
+  - **Target Indicator Positioning**: Uses `col.bounds.max.y + _yOffset` for characters (anchored to top of collider bounds), falling back to `target.position + Vector3.up * _yOffset` for non-character targets.
+- **`UI_CombatActionMenu`**: An initiative-driven HUD piece visible when `IsInBattle` is true.
+  - **Attack Button**: Toggles the action intent. If queued, clicking cancels via `ClearActionIntent()`. If not queued, it validates `PlannedTarget` (must be alive AND in the battle via `GetTeamOf` check), falls back to `GetBestTargetFor`, and queues via `SetActionIntent` with a **dynamic closure** (`() => Attack(_characterCombat.PlannedTarget)`) so retargeting after queuing is respected.
+  - **Visual Feedback**: Button text shows `"[Queued]"` in blue when `HasPlannedAction` is true. Switches between "Melee Attack" and "Ranged Attack" based on `CurrentCombatStyleExpertise`.
 
 ---
 
