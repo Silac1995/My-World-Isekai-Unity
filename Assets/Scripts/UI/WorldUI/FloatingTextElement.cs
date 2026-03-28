@@ -19,6 +19,9 @@ public class FloatingTextElement : MonoBehaviour
     [SerializeField] private float _punchScale = 1.4f;
     [SerializeField] private float _punchDuration = 0.15f;
 
+    [Header("Outline")]
+    [SerializeField] private float _outlineWidth = 0.2f;
+
     private float _elapsed;
     private Color _baseColor;
     private Vector3 _baseScale;
@@ -26,22 +29,36 @@ public class FloatingTextElement : MonoBehaviour
 
     public void Initialize(string message, Color color)
     {
+        Initialize(message, color, Color.clear, 1f);
+    }
+
+    public void Initialize(string message, Color color, float scaleFactor)
+    {
+        Initialize(message, color, Color.clear, scaleFactor);
+    }
+
+    public void Initialize(string message, Color color, Color outlineColor, float scaleFactor = 1f)
+    {
         if (_text == null) _text = GetComponent<TextMeshPro>();
 
         _text.text = message;
         _baseColor = color;
         _text.color = color;
-        _baseScale = transform.localScale;
+        _baseScale = transform.localScale * scaleFactor;
+        transform.localScale = _baseScale * _punchScale;
+
+        if (outlineColor.a > 0f)
+        {
+            _text.fontMaterial.SetColor("_OutlineColor", outlineColor);
+            _text.fontMaterial.SetFloat("_OutlineWidth", _outlineWidth);
+        }
+        else
+        {
+            _text.fontMaterial.SetFloat("_OutlineWidth", 0f);
+        }
 
         Camera cam = Camera.main;
         if (cam != null) _cameraTransform = cam.transform;
-    }
-
-    public void Initialize(string message, Color color, float scaleFactor)
-    {
-        Initialize(message, color);
-        _baseScale *= scaleFactor;
-        transform.localScale = _baseScale * _punchScale;
     }
 
     private void Update()

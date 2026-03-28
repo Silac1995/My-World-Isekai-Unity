@@ -22,6 +22,13 @@ public class FloatingTextSpawner : CharacterSystem
     [SerializeField] private Color _holyColor = new Color(1f, 0.95f, 0.6f);      // Gold
     [SerializeField] private Color _darkColor = new Color(0.7f, 0.3f, 0.9f);     // Purple
 
+    [Header("Outline Colors")]
+    [SerializeField] private Color _damageOutlineColor = new Color(0.75f, 0f, 0f, 1f);   // Red
+    [SerializeField] private Color _healOutlineColor   = new Color(0f, 0.6f, 0.1f, 1f);  // Green
+
+    [Header("Heal Colors")]
+    [SerializeField] private Color _healTextColor = Color.white;
+
     private void Start()
     {
         if (_character != null && _character.CharacterCombat != null)
@@ -42,7 +49,7 @@ public class FloatingTextSpawner : CharacterSystem
     {
         Color color = GetColorForDamageType(type);
         string text = Mathf.RoundToInt(amount).ToString();
-        SpawnText(text, color);
+        SpawnText(text, color, _damageOutlineColor);
     }
 
     /// <summary>
@@ -51,14 +58,23 @@ public class FloatingTextSpawner : CharacterSystem
     /// </summary>
     public void SpawnText(string message, Color color)
     {
-        SpawnText(message, color, 1f);
+        SpawnText(message, color, Color.clear, 1f);
     }
 
     /// <summary>
-    /// Spawns a floating text with a custom scale factor.
+    /// Spawns a floating text with an outline color.
+    /// Pass Color.clear for no outline.
+    /// </summary>
+    public void SpawnText(string message, Color color, Color outlineColor)
+    {
+        SpawnText(message, color, outlineColor, 1f);
+    }
+
+    /// <summary>
+    /// Spawns a floating text with outline and scale factor.
     /// scaleFactor > 1 = bigger text (e.g., critical hits), less than 1 = smaller (e.g., subtle info).
     /// </summary>
-    public void SpawnText(string message, Color color, float scaleFactor)
+    public void SpawnText(string message, Color color, Color outlineColor, float scaleFactor)
     {
         if (_floatingTextPrefab == null)
         {
@@ -78,7 +94,16 @@ public class FloatingTextSpawner : CharacterSystem
             return;
         }
 
-        element.Initialize(message, color, scaleFactor);
+        element.Initialize(message, color, outlineColor, scaleFactor);
+    }
+
+    /// <summary>
+    /// Convenience method for heal numbers. Uses the inspector-configured heal outline color.
+    /// Call this from any healing system.
+    /// </summary>
+    public void SpawnHealText(float amount)
+    {
+        SpawnText($"+{Mathf.RoundToInt(amount)}", _healTextColor, _healOutlineColor);
     }
 
     private Vector3 GetSpawnPosition()

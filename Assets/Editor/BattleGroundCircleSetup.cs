@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEditor;
 using UnityEngine.Rendering.Universal;
+using UnityEngine.Rendering;
 using System.IO;
 using System.Linq;
 
@@ -141,22 +142,26 @@ public static class BattleGroundCircleSetup
             return;
         }
 
-        // Create a temporary GameObject
+        // Grab Unity's built-in Quad mesh from a temporary primitive
+        var tempQuad = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        var quadMesh = tempQuad.GetComponent<MeshFilter>().sharedMesh;
+        Object.DestroyImmediate(tempQuad);
+
+        // Create root GameObject — no baked rotation needed; BattleCircleManager sets world rotation at spawn
         var go = new GameObject("BattleGroundCircle");
+        go.transform.localScale = new Vector3(2f, 2f, 1f);
 
-        // Add DecalProjector — rotated to project downward
-        go.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
-        var projector = go.AddComponent<DecalProjector>();
-        projector.size = new Vector3(2f, 2f, 1f);
-        projector.fadeFactor = 1f;
+        var meshFilter   = go.AddComponent<MeshFilter>();
+        meshFilter.sharedMesh = quadMesh;
 
-        // Add BattleGroundCircle script
+        var meshRenderer = go.AddComponent<MeshRenderer>();
+        meshRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        meshRenderer.receiveShadows    = false;
+
+        // Add BattleGroundCircle script and wire MeshRenderer via SerializedObject
         var circleScript = go.AddComponent<BattleGroundCircle>();
-
-        // Wire the DecalProjector reference via SerializedObject
         var so = new SerializedObject(circleScript);
-        var projectorProp = so.FindProperty("_decalProjector");
-        projectorProp.objectReferenceValue = projector;
+        so.FindProperty("_meshRenderer").objectReferenceValue = meshRenderer;
         so.ApplyModifiedProperties();
 
         // Save as prefab

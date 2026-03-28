@@ -132,10 +132,22 @@ public class BattleCircleManager : CharacterSystem
         if (target == null || _battleCirclePrefab == null) return;
         if (_activeCircles.ContainsKey(target)) return;
 
-        // Parent to character's root transform (not visual transform — avoids sprite flip issues)
+        // If another BattleCircleManager already spawned a circle on this character
+        // (can happen in testing when two player-characters are in the same scene),
+        // skip — first spawner wins and owns the cleanup.
+        if (target.GetComponentInChildren<BattleGroundCircle>() != null) return;
+
+        // Parent to character's root transform (not visual transform — avoids sprite flip issues).
+        // World rotation Euler(-90,0,0) lays the quad flat in the XZ plane regardless of parent orientation.
+        // Small Y offset prevents z-fighting with the ground mesh.
         GameObject circleGO = Instantiate(_battleCirclePrefab, target.transform);
-        circleGO.transform.localPosition = Vector3.zero;
-        circleGO.transform.localRotation = Quaternion.identity;
+        circleGO.transform.localPosition = new Vector3(0f, 0.02f, 0f);
+        circleGO.transform.rotation = Quaternion.Euler(-90f, 0f, 0f);
+
+        // Scale the circle so it's 10 world units wider than the character's ground footprint.
+        float charRadius = GetCharacterGroundRadius(target);
+        float diameter   = charRadius * 2f + 10f;
+        circleGO.transform.localScale = new Vector3(diameter, diameter, 1f);
 
         BattleGroundCircle circle = circleGO.GetComponent<BattleGroundCircle>();
         Material material = isAlly ? _allyMaterial : _enemyMaterial;
@@ -152,6 +164,27 @@ public class BattleCircleManager : CharacterSystem
         {
             circle.Dim();
         }
+    }
+
+    /// <summary>
+    /// Returns the character's approximate ground radius (half their widest XZ extent).
+    /// Checks CapsuleCollider first, then any Collider, then Renderer bounds as fallback.
+    /// </summary>
+    private float GetCharacterGroundRadius(Character target)
+    {
+        CapsuleCollider capsule = target.GetComponentInChildren<CapsuleCollider>();
+        if (capsule != null)
+            return Mathf.Max(capsule.radius, capsule.bounds.extents.x, capsule.bounds.extents.z);
+
+        Collider col = target.GetComponentInChildren<Collider>();
+        if (col != null)
+            return Mathf.Max(col.bounds.extents.x, col.bounds.extents.z);
+
+        Renderer rend = target.GetComponentInChildren<Renderer>();
+        if (rend != null)
+            return Mathf.Max(rend.bounds.extents.x, rend.bounds.extents.z);
+
+        return 0.5f; // sensible default if no bounds found
     }
 
     private void CleanupAll()

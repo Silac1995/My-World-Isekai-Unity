@@ -8,6 +8,7 @@ Shader "Custom/BattleGroundCircle"
         _Softness ("Softness", Range(0, 1)) = 0.05
         _PulseSpeed ("Pulse Speed", Float) = 0.0
         _PulseIntensity ("Pulse Intensity", Range(0, 1)) = 0.2
+        [HideInInspector] _FadeFactor ("Fade Factor", Range(0, 1)) = 1.0
     }
 
     SubShader
@@ -27,7 +28,8 @@ Shader "Custom/BattleGroundCircle"
 
             Blend SrcAlpha OneMinusSrcAlpha
             ZWrite Off
-            Cull Back
+            ZTest LEqual
+            Cull Off
 
             HLSLPROGRAM
             #pragma vertex vert
@@ -56,6 +58,11 @@ Shader "Custom/BattleGroundCircle"
                 half _PulseIntensity;
             CBUFFER_END
 
+            // Declared outside CBuffer so MaterialPropertyBlock can override per-instance.
+            // Note: this disables SRP Batcher for this shader, which is acceptable for the
+            // small number of battle circles active at any time.
+            half _FadeFactor;
+
             Varyings vert(Attributes input)
             {
                 Varyings output;
@@ -79,9 +86,8 @@ Shader "Custom/BattleGroundCircle"
                 float pulse = 1.0 - (_PulseIntensity * (sin(_Time.y * _PulseSpeed) * 0.5 + 0.5));
 
                 half4 col = _Color;
-                col.a = ring * pulse;
+                col.a = ring * pulse * _Color.a * _FadeFactor;
 
-                // Discard near-zero alpha fragments
                 clip(col.a - 0.01);
                 return col;
             }
