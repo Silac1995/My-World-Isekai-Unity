@@ -333,8 +333,10 @@ public class CharacterSkills : CharacterSystem
             }
         }
 
-        // Resolve the SkillSO asset on the client
-        SkillSO[] allSkills = Resources.LoadAll<SkillSO>("Data/Skills");
+        // Resolve the SkillSO asset on the client.
+        // Skills are NOT in a Resources folder, so use FindObjectsOfTypeAll
+        // which finds all loaded ScriptableObjects (including prefab references).
+        SkillSO[] allSkills = Resources.FindObjectsOfTypeAll<SkillSO>();
         SkillSO skillSO = Array.Find(allSkills, s => s.SkillID == skillId);
 
         if (skillSO == null)
