@@ -25,6 +25,12 @@ public class BattleZoneController
     private float _perParticipantGrowthRate;
     private int _participantsPerTier;
 
+    // Smooth visual transition
+    private Vector3 _visualSize;
+    private Vector3 _targetVisualSize;
+    private bool _isAnimating;
+    private const float RESIZE_SPEED = 3f;
+
     public BattleZoneController(BattleManager manager, Unity.AI.Navigation.NavMeshModifierVolume modifier, LineRenderer line, ParticleSystem particles, ZoneParticleSettings particleSettings, Vector3 baseSize, float growthRate, int participantsPerTier)
     {
         _manager = manager;
@@ -63,8 +69,13 @@ public class BattleZoneController
             _battleZoneModifier.center = box.center;
         }
 
+        // Start tiny and lerp to full size
+        _visualSize = Vector3.one * 0.5f;
+        _targetVisualSize = box.size;
+        _isAnimating = true;
+
         ApplyParticleSettings();
-        UpdateParticleShape();
+        DrawVisuals();
         if (_particles != null && !_particles.isPlaying)
             _particles.Play();
     }
@@ -178,6 +189,7 @@ public class BattleZoneController
         int tiers = (participantCount - 1) / _participantsPerTier;
         float multiplier = 1f + (tiers * _perParticipantGrowthRate);
 
+        // Collider + NavMesh snap immediately (gameplay)
         box.size = new Vector3(_baseBattleZoneSize.x * multiplier, _baseBattleZoneSize.y, _baseBattleZoneSize.z * multiplier);
 
         if (_battleZoneModifier != null)
@@ -186,24 +198,47 @@ public class BattleZoneController
             _battleZoneModifier.center = box.center;
         }
 
-        DrawBattleZoneOutline();
+        // Visuals lerp smoothly
+        _targetVisualSize = box.size;
+        _isAnimating = true;
+    }
+
+    /// <summary>
+    /// Called every frame by BattleManager.Update(). Smoothly interpolates the visual outline
+    /// and particle shape toward the target size.
+    /// </summary>
+    public void Tick()
+    {
+        if (!_isAnimating) return;
+
+        _visualSize = Vector3.Lerp(_visualSize, _targetVisualSize, Time.deltaTime * RESIZE_SPEED);
+
+        // Stop animating once close enough
+        if (Vector3.Distance(_visualSize, _targetVisualSize) < 0.01f)
+        {
+            _visualSize = _targetVisualSize;
+            _isAnimating = false;
+        }
+
+        DrawVisuals();
     }
 
     public void DrawBattleZoneOutline()
     {
+        DrawVisuals();
+    }
+
+    private void DrawVisuals()
+    {
         if (_battleZoneLine == null || _battleZone == null) return;
-        BoxCollider box = _battleZone as BoxCollider;
-        if (box == null) return;
 
         _battleZoneLine.useWorldSpace = true;
         _battleZoneLine.loop = true;
         _battleZoneLine.positionCount = 4;
 
-        Vector3 center = box.transform.position;
-        Vector3 size = box.size;
-
-        float x = size.x / 2f;
-        float z = size.z / 2f;
+        Vector3 center = _battleZone.transform.position;
+        float x = _visualSize.x / 2f;
+        float z = _visualSize.z / 2f;
 
         Vector3[] corners = new Vector3[4]
         {
@@ -215,18 +250,13 @@ public class BattleZoneController
 
         _battleZoneLine.SetPositions(corners);
 
-        UpdateParticleShape();
-    }
-
-    private void UpdateParticleShape()
-    {
-        if (_particles == null || _battleZone == null) return;
-        BoxCollider box = _battleZone as BoxCollider;
-        if (box == null) return;
-
-        var shape = _particles.shape;
-        shape.shapeType = ParticleSystemShapeType.Box;
-        shape.boxThickness = new Vector3(1, 1, 1); // emit from edges only
-        shape.scale = new Vector3(box.size.x, 0.1f, box.size.z);
+        // Particle shape follows the visual size
+        if (_particles != null)
+        {
+            var shape = _particles.shape;
+            shape.shapeType = ParticleSystemShapeType.Box;
+            shape.boxThickness = new Vector3(1, 1, 1);
+            shape.scale = new Vector3(_visualSize.x, 0.1f, _visualSize.z);
+        }
     }
 }

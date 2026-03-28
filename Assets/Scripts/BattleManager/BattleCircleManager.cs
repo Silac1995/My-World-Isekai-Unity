@@ -25,21 +25,42 @@ public class BattleCircleManager : CharacterSystem
     protected override void OnEnable()
     {
         base.OnEnable();
-        if (_isSubscribed) return; // guard against double OnEnable
-        if (_character != null && _character.CharacterCombat != null)
+        if (_isSubscribed) return;
+        if (_character == null) return;
+
+        if (_character.CharacterCombat != null)
         {
             _character.CharacterCombat.OnBattleJoined += HandleBattleJoined;
             _character.CharacterCombat.OnBattleLeft += HandleBattleLeft;
-            _isSubscribed = true;
         }
+
+        if (_character.CharacterParty != null)
+        {
+            _character.CharacterParty.OnJoinedParty += HandlePartyJoined;
+            _character.CharacterParty.OnLeftParty += HandlePartyLeft;
+            _character.CharacterParty.OnPartyRosterChanged += HandlePartyRosterChanged;
+        }
+
+        _isSubscribed = true;
     }
 
     protected override void OnDisable()
     {
-        if (_isSubscribed && _character != null && _character.CharacterCombat != null)
+        if (_isSubscribed && _character != null)
         {
-            _character.CharacterCombat.OnBattleJoined -= HandleBattleJoined;
-            _character.CharacterCombat.OnBattleLeft -= HandleBattleLeft;
+            if (_character.CharacterCombat != null)
+            {
+                _character.CharacterCombat.OnBattleJoined -= HandleBattleJoined;
+                _character.CharacterCombat.OnBattleLeft -= HandleBattleLeft;
+            }
+
+            if (_character.CharacterParty != null)
+            {
+                _character.CharacterParty.OnJoinedParty -= HandlePartyJoined;
+                _character.CharacterParty.OnLeftParty -= HandlePartyLeft;
+                _character.CharacterParty.OnPartyRosterChanged -= HandlePartyRosterChanged;
+            }
+
             _isSubscribed = false;
         }
         CleanupAll();
@@ -84,14 +105,44 @@ public class BattleCircleManager : CharacterSystem
     {
         if (!ShouldManageCircles()) return;
 
-        // Unsubscribe from cached BattleManager (null-safe — BattleManager may be destroyed)
         if (_cachedBattleManager != null)
         {
             _cachedBattleManager.OnParticipantAdded -= HandleParticipantAdded;
         }
-
-        CleanupAll();
         _cachedBattleManager = null;
+
+        if (_character.IsInParty())
+        {
+            // Keep party member circles, remove everyone else (self + enemies + non-party allies).
+            // Then re-initialize kept circles with the party material (they had battle colors).
+            var partyId = _character.CharacterParty.PartyData.PartyId;
+            var toRemove = new List<Character>();
+
+            foreach (var kvp in _activeCircles)
+            {
+                Character c = kvp.Key;
+                bool isPartyMember = c != null && c != _character
+                    && c.IsInParty()
+                    && c.CharacterParty.PartyData.PartyId == partyId;
+
+                if (isPartyMember)
+                {
+                    // Swap material back to party green
+                    kvp.Value.Initialize(_partyMaterial);
+                }
+                else
+                {
+                    toRemove.Add(c);
+                }
+            }
+
+            foreach (var c in toRemove)
+                RemoveCircle(c);
+        }
+        else
+        {
+            CleanupAll();
+        }
     }
 
     private void HandleParticipantAdded(Character newParticipant)
@@ -103,6 +154,53 @@ public class BattleCircleManager : CharacterSystem
         if (localTeam == null) return;
 
         SpawnCircleFor(newParticipant, localTeam.IsAlly(newParticipant));
+    }
+
+    #endregion
+
+    #region Party Events
+
+    private void HandlePartyJoined(PartyData data)
+    {
+        if (!ShouldManageCircles()) return;
+        // Don't show party circles while in battle — battle circles take priority
+        if (_cachedBattleManager != null) return;
+        RefreshPartyCircles();
+    }
+
+    private void HandlePartyLeft()
+    {
+        if (!ShouldManageCircles()) return;
+        if (_cachedBattleManager != null) return;
+        // No longer in a party — remove all party circles
+        CleanupAll();
+    }
+
+    private void HandlePartyRosterChanged()
+    {
+        if (!ShouldManageCircles()) return;
+        if (_cachedBattleManager != null) return;
+        RefreshPartyCircles();
+    }
+
+    /// <summary>
+    /// Spawns green circles on all party members (including self). Called outside of combat.
+    /// Cleans up any stale circles first, then spawns fresh ones.
+    /// </summary>
+    private void RefreshPartyCircles()
+    {
+        CleanupAll();
+
+        if (!_character.IsInParty()) return;
+
+        PartyData party = _character.CharacterParty.PartyData;
+        foreach (string memberId in party.MemberIds)
+        {
+            if (memberId == _character.CharacterId) continue; // never on self
+            Character member = Character.FindByUUID(memberId);
+            if (member == null) continue;
+            SpawnCircleFor(member, true);
+        }
     }
 
     #endregion
@@ -216,6 +314,21 @@ public class BattleCircleManager : CharacterSystem
         }
 
         return _allyMaterial;
+    }
+
+    private void RemoveCircle(Character target)
+    {
+        if (!_activeCircles.TryGetValue(target, out BattleGroundCircle circle)) return;
+
+        if (target != null)
+        {
+            target.OnIncapacitated -= HandleCharacterIncapacitated;
+            target.OnWakeUp -= HandleCharacterWakeUp;
+        }
+        if (circle != null)
+            circle.Cleanup();
+
+        _activeCircles.Remove(target);
     }
 
     private void CleanupAll()

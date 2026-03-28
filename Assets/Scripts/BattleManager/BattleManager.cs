@@ -154,6 +154,8 @@ public class BattleManager : NetworkBehaviour
 
     private void Update()
     {
+        _zoneController?.Tick();
+
         if (_isBattleEnded) return;
 
         // --- NOUVEAU : VERIFICATION DE FIN DE COMBAT EN CONTINU ---

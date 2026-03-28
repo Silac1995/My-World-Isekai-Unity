@@ -273,7 +273,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &28227699
 RectTransform:
   m_ObjectHideFlags: 0
@@ -6598,6 +6598,10 @@ PrefabInstance:
       value: BaseSettlement_01
       objectReference: {fileID: 0}
     - target: {fileID: 6261211219208219361, guid: c0a908113b519814ebaecf932332542b, type: 3}
+      propertyPath: _mapType
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6261211219208219361, guid: c0a908113b519814ebaecf932332542b, type: 3}
       propertyPath: IsPredefinedMap
       value: 1
       objectReference: {fileID: 0}
@@ -7451,7 +7455,7 @@ MonoBehaviour:
   _partyNameText: {fileID: 79445666}
   _memberCountText: {fileID: 28227700}
   _memberListContainer: {fileID: 1915859074}
-  _memberEntryPrefab: {fileID: 3145444325951222799, guid: a97adbd23907973418f02bd4b74aa464, type: 3}
+  _memberEntryPrefab: {fileID: 256922284304832791, guid: 870ecb34fe39b4943a2a187d50147b62, type: 3}
 --- !u!1 &1438149693
 GameObject:
   m_ObjectHideFlags: 0
@@ -10671,6 +10675,10 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4499944594844157987, guid: c0843e8669e1d8244ba3507bf39bacda, type: 3}
       propertyPath: m_LocalPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4953626405558583246, guid: c0843e8669e1d8244ba3507bf39bacda, type: 3}
+      propertyPath: m_PresetInfoIsWorld
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 5115761992067834628, guid: c0843e8669e1d8244ba3507bf39bacda, type: 3}

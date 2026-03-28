@@ -2108,15 +2108,15 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2759972866297852151, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       propertyPath: _skills.Array.size
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 2759972866297852151, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       propertyPath: _skills.Array.data[0]._skillSO
       value: 
-      objectReference: {fileID: 11400000, guid: f24479b02a4edb54699cb1cb0c72cf7d, type: 2}
+      objectReference: {fileID: 11400000, guid: 075fe8f2d9566524198fbcebc1148887, type: 2}
     - target: {fileID: 2759972866297852151, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       propertyPath: _skills.Array.data[0]._currentLevel
-      value: 0
+      value: 244
       objectReference: {fileID: 0}
     - target: {fileID: 2917665317441388740, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       propertyPath: m_AnchorMax.y
