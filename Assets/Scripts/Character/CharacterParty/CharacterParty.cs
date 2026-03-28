@@ -340,7 +340,20 @@ public class CharacterParty : CharacterSystem
     private void NotifyJoinedPartyClientRpc(FixedString64Bytes partyId, FixedString64Bytes partyName)
     {
         string id = partyId.ToString();
-        if (_partyData == null) _partyData = PartyRegistry.GetParty(id);
+        string name = partyName.ToString();
+
+        // Client-side: PartyRegistry is empty. Create a local PartyData shell.
+        if (_partyData == null)
+        {
+            _partyData = PartyRegistry.GetParty(id);
+        }
+        if (_partyData == null)
+        {
+            _partyData = new PartyData(_character.CharacterId, _character.CharacterName, name);
+            _partyData.PartyId = id;
+        }
+
+        Debug.Log($"<color=cyan>[CharacterParty Client]</color> {_character.CharacterName} joined party '{name}'");
         OnJoinedParty?.Invoke(_partyData);
     }
 
@@ -371,13 +384,42 @@ public class CharacterParty : CharacterSystem
     private void NotifyKickedToastClientRpc(FixedString64Bytes partyName) { }
 
     [Rpc(SendTo.NotServer)]
-    private void NotifyRosterChangedClientRpc()
+    private void NotifyRosterChangedClientRpc(FixedString64Bytes leaderId, string memberIdsCsv)
     {
+        if (_partyData != null)
+        {
+            _partyData.LeaderId = leaderId.ToString();
+            _partyData.MemberIds.Clear();
+            if (!string.IsNullOrEmpty(memberIdsCsv))
+            {
+                _partyData.MemberIds.AddRange(memberIdsCsv.Split(','));
+            }
+        }
         OnPartyRosterChanged?.Invoke();
     }
 
     // NETWORK VARIABLE CHANGE CALLBACKS
-    private void OnNetworkPartyIdChanged(FixedString64Bytes prev, FixedString64Bytes next) { }
+    private void OnNetworkPartyIdChanged(FixedString64Bytes prev, FixedString64Bytes next)
+    {
+        string id = next.ToString();
+        if (string.IsNullOrEmpty(id))
+        {
+            // Left party
+            _partyData = null;
+            OnLeftParty?.Invoke();
+        }
+        else if (_partyData == null || _partyData.PartyId != id)
+        {
+            // Joined a party (late-joiner fallback or RPC missed)
+            _partyData = PartyRegistry.GetParty(id);
+            if (_partyData == null)
+            {
+                _partyData = new PartyData(_character.CharacterId, _character.CharacterName);
+                _partyData.PartyId = id;
+            }
+            OnJoinedParty?.Invoke(_partyData);
+        }
+    }
     private void OnNetworkPartyStateChanged(byte prev, byte next) { OnPartyStateChanged?.Invoke((PartyState)next); }
     private void OnNetworkFollowModeChanged(byte prev, byte next) { OnFollowModeChanged?.Invoke((PartyFollowMode)next); }
 
@@ -632,13 +674,17 @@ public class CharacterParty : CharacterSystem
     private void BroadcastRosterChanged()
     {
         if (_partyData == null) return;
+
+        string memberIdsCsv = string.Join(",", _partyData.MemberIds);
+        FixedString64Bytes leaderId = new FixedString64Bytes(_partyData.LeaderId);
+
         foreach (string memberId in _partyData.MemberIds)
         {
             Character member = Character.FindByUUID(memberId);
             if (member != null && member.CharacterParty != null)
             {
                 member.CharacterParty.OnPartyRosterChanged?.Invoke();
-                member.CharacterParty.NotifyRosterChangedClientRpc();
+                member.CharacterParty.NotifyRosterChangedClientRpc(leaderId, memberIdsCsv);
             }
         }
     }
