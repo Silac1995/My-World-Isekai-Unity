@@ -76,6 +76,10 @@ namespace MWI.AI
             }
         }
 
+        private const int MAX_PER_ROW = 4;
+        private const float ROW_SPACING = 3f;
+        private const float LATERAL_SPACING = 2f;
+
         private Vector3 GetFollowPosition(Character self, Character leader)
         {
             CharacterParty leaderParty = leader.CharacterParty;
@@ -85,15 +89,23 @@ namespace MWI.AI
             int memberIndex = leaderParty.PartyData.MemberIds.IndexOf(self.CharacterId);
             if (memberIndex <= 0) memberIndex = 1;
 
+            int slot = memberIndex - 1; // 0-based among followers
+
+            // Determine which row and column this follower belongs to
+            // Row 0 = closest to leader, row 1 = further back, etc.
+            int row = slot / MAX_PER_ROW;
+            int col = slot % MAX_PER_ROW;
+            int membersInThisRow = Mathf.Min(MAX_PER_ROW, (leaderParty.PartyData.MemberCount - 1) - row * MAX_PER_ROW);
+
             Vector3 behind = -_smoothedLeaderDir;
             Vector3 right = Vector3.Cross(Vector3.up, behind).normalized;
 
-            int followersCount = leaderParty.PartyData.MemberCount - 1;
-            int slot = memberIndex - 1;
-            float halfSpread = (followersCount - 1) * 0.5f;
-            float lateralOffset = (slot - halfSpread) * 2f;
+            // Center the row laterally
+            float halfRowWidth = (membersInThisRow - 1) * 0.5f;
+            float lateralOffset = (col - halfRowWidth) * LATERAL_SPACING;
+            float depthOffset = FOLLOW_DISTANCE + row * ROW_SPACING;
 
-            Vector3 offset = behind * FOLLOW_DISTANCE + right * lateralOffset;
+            Vector3 offset = behind * depthOffset + right * lateralOffset;
             return leader.transform.position + offset;
         }
 
