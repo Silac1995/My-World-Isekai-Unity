@@ -132,8 +132,24 @@ public class CharacterParty : CharacterSystem
         UnsubscribeFromLeader();
         if (wasLeader && _partyData.MemberCount > 0)
         {
-            GrantLeadershipSkillIfNeeded(_partyData.LeaderId);
-            NotifyLeaderChangedClientRpc(_partyData.LeaderId);
+            string newLeaderId = _partyData.LeaderId;
+            GrantLeadershipSkillIfNeeded(newLeaderId);
+
+            // Notify all remaining members about new leader
+            foreach (string memberId in _partyData.MemberIds)
+            {
+                Character member = Character.FindByUUID(memberId);
+                if (member != null && member.CharacterParty != null)
+                {
+                    member.CharacterParty.UnsubscribeFromLeader();
+                    if (memberId != newLeaderId)
+                    {
+                        member.CharacterParty.SubscribeToLeader(Character.FindByUUID(newLeaderId));
+                    }
+                    member.CharacterParty.NotifyLeaderChangedClientRpc(newLeaderId);
+                }
+            }
+            UpdateAllMembersFollowState();
         }
         if (_partyData.MemberCount > 0) BroadcastRosterChanged();
         if (_partyData.MemberCount == 0) PartyRegistry.Unregister(partyId);
@@ -170,11 +186,34 @@ public class CharacterParty : CharacterSystem
     {
         if (!IsServer || !IsInParty || !IsPartyLeader) return;
         if (!_partyData.IsMember(characterId)) return;
+        if (characterId == _character.CharacterId) return; // Already leader
+
         _partyData.LeaderId = characterId;
         GrantLeadershipSkillIfNeeded(characterId);
-        NotifyLeaderChangedClientRpc(characterId);
-        UnsubscribeFromLeader();
-        SubscribeToLeader(Character.FindByUUID(characterId));
+
+        // Notify ALL members about the leader change (not just self)
+        foreach (string memberId in _partyData.MemberIds)
+        {
+            Character member = Character.FindByUUID(memberId);
+            if (member != null && member.CharacterParty != null)
+            {
+                // Server-side: update subscriptions
+                member.CharacterParty.UnsubscribeFromLeader();
+                if (memberId != characterId)
+                {
+                    Character newLeader = Character.FindByUUID(characterId);
+                    member.CharacterParty.SubscribeToLeader(newLeader);
+                }
+
+                // Client-side: sync via RPC
+                member.CharacterParty.NotifyLeaderChangedClientRpc(characterId);
+            }
+        }
+
+        // Update follow states — old leader should follow, new leader should stop
+        UpdateAllMembersFollowState();
+        BroadcastRosterChanged();
+
         Debug.Log($"<color=cyan>[CharacterParty]</color> {_character.CharacterName} promoted {characterId} to party leader");
     }
 
@@ -269,18 +308,37 @@ public class CharacterParty : CharacterSystem
     {
         if (!IsServer || !IsInParty) return;
         if (!_partyData.IsMember(leader.CharacterId)) return; // Guard against duplicate processing
-        UnsubscribeFromLeader();
-        if (_partyData.MemberCount <= 1) { HandleDisbanded(); return; }
+
+        // Remove dead leader from party
         _partyData.RemoveMember(leader.CharacterId);
         PartyRegistry.UnmapCharacter(leader.CharacterId);
-        GrantLeadershipSkillIfNeeded(_partyData.LeaderId);
-        NotifyLeaderChangedClientRpc(_partyData.LeaderId);
-        if (!_partyData.IsLeader(_character.CharacterId))
+
+        if (_partyData.MemberCount == 0) { HandleDisbanded(); return; }
+
+        // Auto-promote (RemoveMember already set LeaderId to MemberIds[0])
+        string newLeaderId = _partyData.LeaderId;
+        GrantLeadershipSkillIfNeeded(newLeaderId);
+
+        // Notify ALL remaining members about the new leader
+        foreach (string memberId in _partyData.MemberIds)
         {
-            Character newLeader = Character.FindByUUID(_partyData.LeaderId);
-            SubscribeToLeader(newLeader);
+            Character member = Character.FindByUUID(memberId);
+            if (member != null && member.CharacterParty != null)
+            {
+                member.CharacterParty.UnsubscribeFromLeader();
+                if (memberId != newLeaderId)
+                {
+                    Character newLeader = Character.FindByUUID(newLeaderId);
+                    member.CharacterParty.SubscribeToLeader(newLeader);
+                }
+                member.CharacterParty.NotifyLeaderChangedClientRpc(newLeaderId);
+            }
         }
-        else Debug.Log($"<color=cyan>[CharacterParty]</color> {_character.CharacterName} became party leader after leader death");
+
+        UpdateAllMembersFollowState();
+        BroadcastRosterChanged();
+
+        Debug.Log($"<color=cyan>[CharacterParty]</color> Leader died. {newLeaderId} is the new leader.");
     }
 
     private void OnLeaderIncapacitated(Character leader)
@@ -408,8 +466,13 @@ public class CharacterParty : CharacterSystem
         string id = newLeaderId.ToString();
         if (_partyData != null) _partyData.LeaderId = id;
         UnsubscribeFromLeader();
-        Character newLeader = Character.FindByUUID(id);
-        SubscribeToLeader(newLeader);
+        if (_character.CharacterId != id)
+        {
+            Character newLeader = Character.FindByUUID(id);
+            SubscribeToLeader(newLeader);
+        }
+        // Fire roster changed so UI refreshes (leader controls visibility, etc.)
+        OnPartyRosterChanged?.Invoke();
     }
 
     [Rpc(SendTo.NotServer)]
