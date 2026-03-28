@@ -6,6 +6,12 @@ namespace MWI.AI
     {
         private const float FOLLOW_DISTANCE = 5f;
         private const float MIN_MEMBER_SPACING = 1.5f;
+        private const float DIRECTION_SMOOTH_SPEED = 2f;
+
+        // Smoothed direction used for positioning — prevents followers from
+        // criss-crossing the leader on quick direction reversals.
+        private Vector3 _smoothedLeaderDir = Vector3.forward;
+        private bool _initialized = false;
 
         protected override BTNodeStatus OnExecute(Blackboard bb)
         {
@@ -14,6 +20,8 @@ namespace MWI.AI
 
             Character leader = bb.Get<Character>(Blackboard.KEY_PARTY_FOLLOW);
             if (leader == null || !leader.IsAlive()) return BTNodeStatus.Failure;
+
+            UpdateSmoothedDirection(leader);
 
             Vector3 targetPos = GetFollowPosition(self, leader);
             float distance = Vector3.Distance(self.transform.position, targetPos);
@@ -28,10 +36,28 @@ namespace MWI.AI
             return BTNodeStatus.Running;
         }
 
-        /// <summary>
-        /// Returns an offset position behind the leader based on the leader's
-        /// LastMoveDirection and this member's index in the party.
-        /// </summary>
+        private void UpdateSmoothedDirection(Character leader)
+        {
+            Vector3 rawDir = leader.CharacterMovement != null
+                ? leader.CharacterMovement.LastMoveDirection
+                : Vector3.forward;
+
+            if (!_initialized)
+            {
+                _smoothedLeaderDir = rawDir;
+                _initialized = true;
+                return;
+            }
+
+            // Slowly lerp toward the leader's current direction.
+            // This means quick reversals take ~1s to fully propagate,
+            // so followers drift smoothly instead of snapping across.
+            _smoothedLeaderDir = Vector3.Slerp(
+                _smoothedLeaderDir, rawDir,
+                Time.deltaTime * DIRECTION_SMOOTH_SPEED
+            ).normalized;
+        }
+
         private Vector3 GetFollowPosition(Character self, Character leader)
         {
             CharacterParty leaderParty = leader.CharacterParty;
@@ -41,15 +67,9 @@ namespace MWI.AI
             int memberIndex = leaderParty.PartyData.MemberIds.IndexOf(self.CharacterId);
             if (memberIndex <= 0) memberIndex = 1;
 
-            // "Behind" = opposite of the leader's travel direction (from CharacterMovement)
-            Vector3 leaderDir = leader.CharacterMovement != null
-                ? leader.CharacterMovement.LastMoveDirection
-                : Vector3.forward;
-
-            Vector3 behind = -leaderDir;
+            Vector3 behind = -_smoothedLeaderDir;
             Vector3 right = Vector3.Cross(Vector3.up, behind).normalized;
 
-            // Spread followers laterally: first one directly behind, others offset to the sides
             int followersCount = leaderParty.PartyData.MemberCount - 1;
             int slot = memberIndex - 1;
             float halfSpread = (followersCount - 1) * 0.5f;
@@ -65,7 +85,7 @@ namespace MWI.AI
             if (self != null && self.CharacterMovement != null)
                 self.CharacterMovement.Stop();
 
-            // Do NOT remove KEY_PARTY_FOLLOW here — CharacterParty owns that key.
+            _initialized = false;
         }
     }
 }
