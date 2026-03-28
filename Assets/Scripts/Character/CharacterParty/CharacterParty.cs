@@ -647,10 +647,13 @@ public class CharacterParty : CharacterSystem
     private bool IsOnSameMap(Character other)
     {
         if (other == null) return false;
-        var myMap = _character.GetComponentInParent<MapController>();
-        var otherMap = other.GetComponentInParent<MapController>();
-        if (myMap == null || otherMap == null) return false;
-        return myMap.MapId == otherMap.MapId;
+        var myTracker = _character.GetComponent<CharacterMapTracker>();
+        var otherTracker = other.GetComponent<CharacterMapTracker>();
+        if (myTracker == null || otherTracker == null) return true; // No tracker = assume same map
+        string myMap = myTracker.CurrentMapID.Value.ToString();
+        string otherMap = otherTracker.CurrentMapID.Value.ToString();
+        if (string.IsNullOrEmpty(myMap) || string.IsNullOrEmpty(otherMap)) return true;
+        return myMap == otherMap;
     }
 
     /// <summary>
