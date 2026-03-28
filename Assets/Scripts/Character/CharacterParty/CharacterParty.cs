@@ -78,28 +78,9 @@ public class CharacterParty : CharacterSystem
     // PARTY LIFECYCLE (Server-Only)
     public bool CreateParty(string partyName = null)
     {
-        if (!IsServer)
-        {
-            Debug.Log($"<color=red>[CharacterParty]</color> CreateParty failed: not server");
-            return false;
-        }
-        if (IsInParty)
-        {
-            Debug.Log($"<color=red>[CharacterParty]</color> CreateParty failed: already in party");
-            return false;
-        }
-        if (_leadershipSkill != null && _character.CharacterSkills != null)
-        {
-            bool has = _character.CharacterSkills.HasSkill(_leadershipSkill);
-            Debug.Log($"<color=yellow>[CharacterParty]</color> CreateParty check: leadershipSkill={_leadershipSkill.SkillID}, " +
-                $"HasSkill={has}, skillCount={_character.CharacterSkills.Skills.Count}");
-            if (!has) return false;
-        }
-        else if (_leadershipSkill != null && _character.CharacterSkills == null)
-        {
-            Debug.Log($"<color=red>[CharacterParty]</color> CreateParty failed: CharacterSkills is null");
-            return false;
-        }
+        if (!IsServer) return false;
+        if (IsInParty) return false;
+        if (_leadershipSkill != null && !_character.CharacterSkills.HasSkill(_leadershipSkill)) return false;
         _partyData = new PartyData(_character.CharacterId, _character.CharacterName, partyName);
         PartyRegistry.Register(_partyData);
         SyncNetworkVariables();

@@ -61,18 +61,11 @@ public class CharacterInteractable : InteractableObject
         if (interactor.CharacterParty != null)
         {
             CharacterParty interactorParty = interactor.CharacterParty;
-            bool isInParty = interactorParty.IsInParty;
             bool isLeader = interactorParty.IsPartyLeader;
-            bool hasLeadership = interactorParty.LeadershipSkill != null
+            bool canCreateAndInvite = !interactorParty.IsInParty
+                && interactorParty.LeadershipSkill != null
                 && interactor.CharacterSkills != null
                 && interactor.CharacterSkills.HasSkill(interactorParty.LeadershipSkill);
-            bool canCreateAndInvite = !isInParty && hasLeadership;
-
-            Debug.Log($"<color=yellow>[PartyInvite Check]</color> {interactor.CharacterName} → {_character.CharacterName}: " +
-                $"inParty={isInParty}, isLeader={isLeader}, hasLeadership={hasLeadership}, " +
-                $"partyData null={interactorParty.PartyData == null}, " +
-                $"leaderId={(interactorParty.PartyData?.LeaderId ?? "null")}, " +
-                $"charId={interactor.CharacterId}");
 
             if (isLeader || canCreateAndInvite)
             {
@@ -85,18 +78,11 @@ public class CharacterInteractable : InteractableObject
                         Name = "Invite to Party",
                         Action = () =>
                         {
-                            // Always route through ServerRpc — the invitation flow
-                            // (ReceiveInvitation, ProcessInvitation, OnAccepted) needs
-                            // server authority. Works for both host and client.
                             ulong targetNetId = targetRef.NetworkObject != null
                                 ? targetRef.NetworkObject.NetworkObjectId : 0;
                             interactorParty.RequestInviteToPartyServerRpc(targetNetId);
                         }
                     });
-                }
-                else
-                {
-                    Debug.Log($"<color=red>[PartyInvite Check]</color> CanExecute returned false");
                 }
             }
         }
