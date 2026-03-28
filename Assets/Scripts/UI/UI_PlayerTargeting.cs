@@ -151,32 +151,70 @@ public class UI_PlayerTargeting : MonoBehaviour
             return;
         }
 
+        bool isInBattle = _character.CharacterCombat != null && _character.CharacterCombat.IsInBattle;
+        var targetCharacter = target.GetComponentInParent<Character>();
+
+        // During battle, reject targets that are not battle participants
+        if (isInBattle && targetCharacter != null)
+        {
+            var bm = _character.CharacterCombat.CurrentBattleManager;
+            if (bm != null && bm.GetTeamOf(targetCharacter) == null)
+            {
+                // Not a battle participant — ignore, keep current battle target
+                return;
+            }
+        }
+
         _selectedInteractable = target;
 
         // If the target is a character, always use the root Character transform for the LookTarget
         // so the indicator collider lookup finds the same collider regardless of selection method.
-        var targetCharacter = target.GetComponentInParent<Character>();
         if (targetCharacter != null)
         {
             _character.CharacterVisual.SetLookTarget(targetCharacter.transform);
 
-            // If in battle, propagate the target to CharacterCombat so the turn system knows who to act on
-            if (_character.CharacterCombat != null && _character.CharacterCombat.IsInBattle)
+            if (isInBattle)
             {
                 _character.CharacterCombat.SetPlannedTarget(targetCharacter);
             }
         }
         else
         {
+            // During battle, don't select non-character interactables (chests, etc.)
+            if (isInBattle)
+            {
+                _selectedInteractable = null;
+                return;
+            }
             _character.CharacterVisual.SetLookTarget(target.transform);
         }
     }
 
     /// <summary>
     /// Clears the current selection and LookTarget.
+    /// During battle, redirects to the current battle target instead of fully clearing.
     /// </summary>
     public void ClearSelection()
     {
+        if (_character.CharacterCombat != null && _character.CharacterCombat.IsInBattle)
+        {
+            // Redirect to the current battle target
+            Character battleTarget = _character.CharacterCombat.PlannedTarget;
+            if (battleTarget == null || !battleTarget.IsAlive())
+                battleTarget = _character.CharacterCombat.CurrentBattleManager?.GetBestTargetFor(_character);
+
+            if (battleTarget != null)
+            {
+                var charInteractable = battleTarget.CharacterInteractable;
+                if (charInteractable != null)
+                {
+                    _selectedInteractable = charInteractable;
+                    _character.CharacterVisual.SetLookTarget(battleTarget.transform);
+                    return;
+                }
+            }
+        }
+
         _selectedInteractable = null;
         _character.CharacterVisual.SetLookTarget((Transform)null);
     }
