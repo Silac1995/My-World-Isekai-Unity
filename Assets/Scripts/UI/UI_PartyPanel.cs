@@ -1,40 +1,28 @@
+using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.UI;
 using TMPro;
 
 /// <summary>
-/// Party HUD panel. Shows party members, leader controls, and gathering status.
-/// Bound to a Character via PlayerUI.Initialize().
+/// Passive HUD panel that displays party info and member list.
+/// No buttons, no actions — just a read-only display.
+/// Visible only when the player is in a party.
 /// </summary>
 public class UI_PartyPanel : MonoBehaviour
 {
-    [Header("Sections")]
-    [SerializeField] private GameObject _createPartySection;
-    [SerializeField] private GameObject _partyViewSection;
+    [Header("Panel Root")]
+    [SerializeField] private GameObject _panelRoot;
 
-    [Header("Create Party")]
-    [SerializeField] private TMP_InputField _partyNameInput;
-    [SerializeField] private Button _createPartyButton;
-
-    [Header("Party View")]
+    [Header("Party Info")]
     [SerializeField] private TMP_Text _partyNameText;
-    [SerializeField] private TMP_Text _followModeText;
+    [SerializeField] private TMP_Text _memberCountText;
+
+    [Header("Member List")]
     [SerializeField] private Transform _memberListContainer;
-    [SerializeField] private Button _disbandButton;
-    [SerializeField] private Button _leaveButton;
+    [SerializeField] private GameObject _memberEntryPrefab;
 
     private Character _localCharacter;
     private CharacterParty _localParty;
-
-    private void Start()
-    {
-        if (_createPartyButton != null)
-            _createPartyButton.onClick.AddListener(OnCreatePartyClicked);
-        if (_disbandButton != null)
-            _disbandButton.onClick.AddListener(OnDisbandClicked);
-        if (_leaveButton != null)
-            _leaveButton.onClick.AddListener(OnLeaveClicked);
-    }
+    private List<GameObject> _spawnedEntries = new List<GameObject>();
 
     // =============================================
     //  BIND / UNBIND (called by PlayerUI)
@@ -49,14 +37,13 @@ public class UI_PartyPanel : MonoBehaviour
 
         if (_localParty == null)
         {
-            HideAll();
+            Hide();
             return;
         }
 
-        _localParty.OnJoinedParty += HandleJoinedParty;
-        _localParty.OnLeftParty += HandleLeftParty;
+        _localParty.OnJoinedParty += HandlePartyChanged;
+        _localParty.OnLeftParty += HandlePartyLeft;
         _localParty.OnPartyStateChanged += HandleStateChanged;
-        _localParty.OnFollowModeChanged += HandleFollowModeChanged;
         _localParty.OnMemberKicked += HandleMemberKicked;
 
         RefreshUI();
@@ -66,60 +53,35 @@ public class UI_PartyPanel : MonoBehaviour
     {
         if (_localParty != null)
         {
-            _localParty.OnJoinedParty -= HandleJoinedParty;
-            _localParty.OnLeftParty -= HandleLeftParty;
+            _localParty.OnJoinedParty -= HandlePartyChanged;
+            _localParty.OnLeftParty -= HandlePartyLeft;
             _localParty.OnPartyStateChanged -= HandleStateChanged;
-            _localParty.OnFollowModeChanged -= HandleFollowModeChanged;
             _localParty.OnMemberKicked -= HandleMemberKicked;
         }
 
         _localCharacter = null;
         _localParty = null;
-        HideAll();
+        Hide();
     }
 
     // =============================================
-    //  UI STATE
+    //  DISPLAY
     // =============================================
 
     private void RefreshUI()
     {
-        if (_localParty == null)
+        if (_localParty == null || !_localParty.IsInParty)
         {
-            HideAll();
+            Hide();
             return;
         }
 
-        if (_localParty.IsInParty)
-        {
-            ShowPartyView();
-        }
-        else
-        {
-            ShowCreateSection();
-        }
+        Show();
     }
 
-    private void ShowCreateSection()
+    private void Show()
     {
-        if (_createPartySection != null) _createPartySection.SetActive(true);
-        if (_partyViewSection != null) _partyViewSection.SetActive(false);
-
-        // Disable create button if player doesn't have Leadership skill
-        if (_createPartyButton != null)
-        {
-            bool canCreate = _localCharacter != null
-                && _localCharacter.CharacterSkills != null
-                && _localParty != null
-                && !_localParty.IsInParty;
-            _createPartyButton.interactable = canCreate;
-        }
-    }
-
-    private void ShowPartyView()
-    {
-        if (_createPartySection != null) _createPartySection.SetActive(false);
-        if (_partyViewSection != null) _partyViewSection.SetActive(true);
+        if (_panelRoot != null) _panelRoot.SetActive(true);
 
         PartyData data = _localParty?.PartyData;
         if (data == null) return;
@@ -127,49 +89,58 @@ public class UI_PartyPanel : MonoBehaviour
         if (_partyNameText != null)
             _partyNameText.text = data.PartyName;
 
-        if (_followModeText != null)
-            _followModeText.text = _localParty.CurrentFollowMode.ToString();
+        if (_memberCountText != null)
+            _memberCountText.text = data.MemberCount.ToString();
 
-        bool isLeader = _localParty.IsPartyLeader;
-        if (_disbandButton != null) _disbandButton.gameObject.SetActive(isLeader);
-        if (_leaveButton != null) _leaveButton.gameObject.SetActive(!isLeader);
+        RebuildMemberList(data);
     }
 
-    private void HideAll()
+    private void Hide()
     {
-        if (_createPartySection != null) _createPartySection.SetActive(false);
-        if (_partyViewSection != null) _partyViewSection.SetActive(false);
+        if (_panelRoot != null) _panelRoot.SetActive(false);
+        ClearEntries();
     }
 
-    // =============================================
-    //  BUTTON HANDLERS
-    // =============================================
-
-    private void OnCreatePartyClicked()
+    private void RebuildMemberList(PartyData data)
     {
-        if (_localParty == null) return;
-        string name = _partyNameInput != null ? _partyNameInput.text : null;
-        _localParty.CreateParty(string.IsNullOrWhiteSpace(name) ? null : name);
+        ClearEntries();
+
+        if (_memberEntryPrefab == null || _memberListContainer == null) return;
+
+        foreach (string memberId in data.MemberIds)
+        {
+            Character member = Character.FindByUUID(memberId);
+            string memberName = member != null ? member.CharacterName : "...";
+            bool isLeader = data.IsLeader(memberId);
+
+            GameObject entry = Instantiate(_memberEntryPrefab, _memberListContainer);
+            TMP_Text nameText = entry.GetComponentInChildren<TMP_Text>();
+            if (nameText != null)
+            {
+                string prefix = isLeader ? "[L] " : "";
+                nameText.text = $"{prefix}{memberName}";
+            }
+
+            _spawnedEntries.Add(entry);
+        }
     }
 
-    private void OnDisbandClicked()
+    private void ClearEntries()
     {
-        _localParty?.DisbandParty();
-    }
-
-    private void OnLeaveClicked()
-    {
-        _localParty?.LeaveParty();
+        foreach (var entry in _spawnedEntries)
+        {
+            if (entry != null) Destroy(entry);
+        }
+        _spawnedEntries.Clear();
     }
 
     // =============================================
     //  EVENT HANDLERS
     // =============================================
 
-    private void HandleJoinedParty(PartyData data) => RefreshUI();
-    private void HandleLeftParty() => RefreshUI();
+    private void HandlePartyChanged(PartyData data) => RefreshUI();
+    private void HandlePartyLeft() => RefreshUI();
     private void HandleStateChanged(PartyState state) => RefreshUI();
-    private void HandleFollowModeChanged(PartyFollowMode mode) => RefreshUI();
     private void HandleMemberKicked(string characterId) => RefreshUI();
 
     private void OnDestroy()
