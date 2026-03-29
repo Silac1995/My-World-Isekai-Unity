@@ -276,7 +276,17 @@ public class CharacterParty : CharacterSystem
 
     protected override void HandleCombatStateChanged(bool inCombat)
     {
-        if (!IsServer || !IsInParty || !inCombat) return;
+        if (!IsServer || !IsInParty) return;
+
+        // Combat ended — resume following
+        if (!inCombat)
+        {
+            UpdateFollowState();
+            return;
+        }
+
+        // Combat started — clear follow key so NPC stops pathfinding to leader
+        ClearFollowState();
 
         // This character just entered combat. Send a CombatAssistInvitation
         // to all player party members within awareness range, through the
@@ -791,7 +801,8 @@ public class CharacterParty : CharacterSystem
                          && _partyData.FollowMode == PartyFollowMode.Strict
                          && leader != null
                          && leader.IsAlive()
-                         && IsOnSameMap(leader);
+                         && IsOnSameMap(leader)
+                         && !_character.CharacterCombat.IsInBattle;
 
         // Access the NPC's blackboard through the controller -> behaviour tree
         NPCController controller = _character.Controller as NPCController;
