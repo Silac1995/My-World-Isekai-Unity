@@ -52,34 +52,36 @@ The Character entity uses a **Facade + Child Hierarchy** pattern:
 ## Character System
 
 20. The Character system must be decoupled from the World/Server state. Characters must be serialized as independent local files (e.g., .json or .dat) that can be loaded into any session (Solo or Multiplayer). When in Multiplayer, all inventory and stat changes must be saved back to the player's local character file upon disconnection or at regular intervals. Use an Interface-based Save System (`ICharacterData`) to ensure the character can be injected into different world environments (Host vs. Client) without dependency conflicts.
+21. Every time a new character subsystem is created (e.g., `CharacterCombat`, `CharacterNeeds`, `CharacterMovement`), a corresponding SKILL.md must be written in `.agent/skills/` to document its purpose, public API, events, dependencies, and integration points. This is mandatory — no character system ships without its skill file.
+22. **Anything a player can do, an NPC can do, and vice versa.** All gameplay effects (placing, picking up, crafting, interacting) must go through `CharacterAction`. Player-facing systems (HUD, mouse input, ghost visuals) are UI layers that queue the same `CharacterAction` that NPC AI would queue. Never implement gameplay logic directly in a player-only manager — always route through a shared action.
 
 ## Language
 
-21. Speak in English, write everything in English. Comments, documents, code, SKILL.md.
+23. Speak in English, write everything in English. Comments, documents, code, SKILL.md.
 
 ## MCP / Unity Editor
 
-22. You are connected to the Unity Editor via MCP (Model Context Protocol). Use this connection to directly inspect, read, and modify the project hierarchy, components, and scripts. Always verify the actual state of the project through MCP before assuming existing logic or proposing changes.
+24. You are connected to the Unity Editor via MCP (Model Context Protocol). Use this connection to directly inspect, read, and modify the project hierarchy, components, and scripts. Always verify the actual state of the project through MCP before assuming existing logic or proposing changes.
 
 ## Rendering & Performance
 
-23. Prioritize Shader-based solutions over CPU-bound modifications (e.g., `Image.fillAmount`, `Graphic.color`, or Sprite Vertex manipulation) for any dynamic visual feedback. Use Material Property Blocks (MPB) to ensure these changes do not break Batching. For complex color customization, prefer Palette Swapping (LUT) over global Tints to maintain artistic integrity and minimize CPU-to-GPU data transfers, especially for networked entities.
+25. Prioritize Shader-based solutions over CPU-bound modifications (e.g., `Image.fillAmount`, `Graphic.color`, or Sprite Vertex manipulation) for any dynamic visual feedback. Use Material Property Blocks (MPB) to ensure these changes do not break Batching. For complex color customization, prefer Palette Swapping (LUT) over global Tints to maintain artistic integrity and minimize CPU-to-GPU data transfers, especially for networked entities.
 
 ## Time & GameSpeedController
 
-24. All time-dependent logic must explicitly account for the `GameSpeedController`. Distinguish between "Simulation Time" (gameplay mechanics) and "Real Time" (UI, menus, network heartbeats). Use `Time.deltaTime` for simulation and `Time.unscaledDeltaTime` for non-gameplay visuals. Rule: UI elements (menus, buttons, HUD animations, and "Real-Time" bars) should NOT be affected by the GameSpeedController and must use unscaled time to remain functional during pauses or high-speed intervals. For high-speed scales (Giga Speed), all tick-based simulation systems must use catch-up loops (`while` / `ticksToProcess`).
+26. All time-dependent logic must explicitly account for the `GameSpeedController`. Distinguish between "Simulation Time" (gameplay mechanics) and "Real Time" (UI, menus, network heartbeats). Use `Time.deltaTime` for simulation and `Time.unscaledDeltaTime` for non-gameplay visuals. Rule: UI elements (menus, buttons, HUD animations, and "Real-Time" bars) should NOT be affected by the GameSpeedController and must use unscaled time to remain functional during pauses or high-speed intervals. For high-speed scales (Giga Speed), all tick-based simulation systems must use catch-up loops (`while` / `ticksToProcess`).
 
 ## Bug Reporting & Debugging
 
-25. When the user reports a specific issue or bug, not only propose a fix but also identify potential "blind spots" in the logic. For every suspected cause, provide code that includes explicit `Debug.Log` or `Debug.LogError` statements at critical branching points (If/Else, Null Checks, Network Callbacks). These logs must output the internal state of variables at the exact moment of the failure.
+27. When the user reports a specific issue or bug, not only propose a fix but also identify potential "blind spots" in the logic. For every suspected cause, provide code that includes explicit `Debug.Log` or `Debug.LogError` statements at critical branching points (If/Else, Null Checks, Network Callbacks). These logs must output the internal state of variables at the exact moment of the failure.
 
 ## Skill Files
 
-26. When implementing or modifying any major system (e.g. movement, physics, AI, inventory, save/load), always update the associated SKILL.md file in `.agent/skills/` to reflect the changes. If no skill exists for that system yet, create one following the template and guidelines in `.agent/skills/skill-creator/SKILL.md`.
+28. **Every** time a system is created, modified, upgraded, or refactored — not just major systems — its corresponding SKILL.md in `.agent/skills/` must be updated to reflect the changes. This includes API changes, new events, changed dependencies, removed methods, or altered behavior. If no skill exists for that system yet, create one following the template and guidelines in `.agent/skills/skill-creator/SKILL.md`. No implementation change ships without its documentation being current.
 
 ## World System & Simulation
 
-27. The game uses a Living World architecture based on Map Hibernation and Macro/Micro Simulation. Before implementing any system that involves NPCs, resources, buildings, time, or map state, you must account for both simulation layers:
+29. The game uses a Living World architecture based on Map Hibernation and Macro/Micro Simulation. Before implementing any system that involves NPCs, resources, buildings, time, or map state, you must account for both simulation layers:
 
 - **Micro-Simulation** (Map is Active): Real-time GOAP, NavMesh pathfinding, live logistics orders, physical harvestables, and NetworkObject presence. All live logic runs only when at least one player is present on the map.
 - **Macro-Simulation** (Map is Hibernating): When player count reaches 0, the map freezes. All NPCs are serialized into `HibernatedNPCData` and despawned. On wake-up, `MacroSimulator` runs a catch-up loop in strict order: (1) Resource Pool Regeneration, (2) Inventory Yields via `JobYieldRegistry` + `BiomeDefinition`, (3) Needs Decay, (4) Position Snap. No live Unity systems (NavMesh, physics, NetworkObject) exist during hibernation — all offline progress is pure math.

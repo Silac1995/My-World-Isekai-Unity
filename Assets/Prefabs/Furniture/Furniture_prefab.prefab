@@ -10,7 +10,7 @@ GameObject:
   m_Component:
   - component: {fileID: 8021854465056481327}
   - component: {fileID: -29948673811202421}
-  m_Layer: 0
+  m_Layer: 13
   m_Name: Furniture_prefab
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -47,4 +47,5 @@ MonoBehaviour:
   interactionPrompt: Press E to interact
   _interactionZone: {fileID: 0}
   _rootgameObject: {fileID: 0}
+  _rigidbody: {fileID: 0}
   _furniture: {fileID: 0}

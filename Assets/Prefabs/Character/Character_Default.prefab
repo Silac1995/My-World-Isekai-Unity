@@ -2428,7 +2428,7 @@ MonoBehaviour:
     m_Bits: 1024
   _obstacleLayer:
     serializedVersion: 2
-    m_Bits: 0
+    m_Bits: 12544
   _ghostMaterialValid: {fileID: 2100000, guid: 2355107420148c14fa2d7aed19a6f0e2, type: 2}
   _ghostMaterialInvalid: {fileID: 2100000, guid: 0ebd97f12b174f94ab6e52b1876209e2, type: 2}
   _toastChannel: {fileID: 11400000, guid: ea961c82479cb974997317e89f3aa9b6, type: 2}

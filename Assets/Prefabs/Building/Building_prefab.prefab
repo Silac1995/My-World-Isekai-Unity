@@ -12,7 +12,7 @@ GameObject:
   - component: {fileID: 3721736975682952840}
   - component: {fileID: 2730802837024882701}
   - component: {fileID: 4429569170507662344}
-  m_Layer: 0
+  m_Layer: 12
   m_Name: DeliveryZone
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -88,6 +88,7 @@ MonoBehaviour:
   zoneType: 0
   zoneName: 
   _boundsTarget: {fileID: 0}
+  _boundsTargets: []
 --- !u!1 &3315547130765415992
 GameObject:
   m_ObjectHideFlags: 0
@@ -99,7 +100,7 @@ GameObject:
   - component: {fileID: 990144019250249914}
   - component: {fileID: -6888106381805364685}
   - component: {fileID: 7551676047501188179}
-  m_Layer: 0
+  m_Layer: 12
   m_Name: Building_prefab
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -155,7 +156,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 2789703335
+  GlobalObjectIdHash: 1118398994
   InScenePlacedSourceGlobalObjectIdHash: 0
   DeferredDespawnTick: 0
   Ownership: 1

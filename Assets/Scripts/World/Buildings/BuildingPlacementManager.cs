@@ -79,12 +79,17 @@ namespace MWI.WorldSystem
             _ghostInstance = Instantiate(entry.BuildingPrefab);
             _ghostBuildingComponent = _ghostInstance.GetComponent<Building>();
 
-            // Disable physics/logic on ghost — it's purely visual
+            // Disable physics on ghost — it's purely visual
+            // Disable colliders entirely instead of setting isTrigger (concave MeshColliders don't support triggers)
             if (_ghostInstance.TryGetComponent(out Rigidbody rb)) rb.isKinematic = true;
-            foreach (var col in _ghostInstance.GetComponentsInChildren<Collider>()) col.isTrigger = true;
+            foreach (var col in _ghostInstance.GetComponentsInChildren<Collider>()) col.enabled = false;
 
             // Disable any NetworkObject on the ghost to prevent network errors
             if (_ghostInstance.TryGetComponent(out NetworkObject netObj)) netObj.enabled = false;
+
+            // Move ghost to Ignore Raycast layer so its colliders don't interfere
+            // with the OverlapBox obstacle check (which includes the Building layer)
+            SetLayerRecursive(_ghostInstance, LayerMask.NameToLayer("Ignore Raycast"));
 
             _ghostInstance.name = "PlacementGhost_" + prefabId;
             _isPlacementActive = true;
@@ -239,6 +244,13 @@ namespace MWI.WorldSystem
         }
 
         // ────────────────────── Visual Helpers ──────────────────────
+
+        private static void SetLayerRecursive(GameObject obj, int layer)
+        {
+            obj.layer = layer;
+            foreach (Transform child in obj.transform)
+                SetLayerRecursive(child.gameObject, layer);
+        }
 
         private void ApplyGhostMaterials(Material mat)
         {
