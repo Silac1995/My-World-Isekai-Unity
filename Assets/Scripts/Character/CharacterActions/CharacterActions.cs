@@ -103,6 +103,81 @@ public class CharacterActions : CharacterSystem
         station.Craft(itemSO, _character, primaryColor, secondaryColor);
     }
 
+    // ────────────────────── Furniture Placement RPCs ──────────────────────
+
+    [Rpc(SendTo.Server)]
+    public void RequestFurniturePlaceServerRpc(string furnitureItemSOId, Vector3 visualPosition, Vector3 gridAnchor, Quaternion rotation)
+    {
+        // Resolve the FurnitureItemSO
+        ItemSO[] allItems = Resources.LoadAll<ItemSO>("Data/Item");
+        FurnitureItemSO furnitureItemSO = null;
+        foreach (var item in allItems)
+        {
+            if (item is FurnitureItemSO fso && fso.ItemId == furnitureItemSOId)
+            {
+                furnitureItemSO = fso;
+                break;
+            }
+        }
+
+        if (furnitureItemSO == null || furnitureItemSO.InstalledFurniturePrefab == null)
+        {
+            Debug.LogWarning($"[CharacterActions] Server: Could not find FurnitureItemSO '{furnitureItemSOId}'");
+            return;
+        }
+
+        Furniture placed = Instantiate(furnitureItemSO.InstalledFurniturePrefab, visualPosition, rotation);
+
+        var netObj = placed.GetComponent<NetworkObject>();
+        if (netObj != null)
+            netObj.Spawn();
+
+        // Register with room grid if inside a room
+        Room room = FindRoomAtPosition(gridAnchor);
+        if (room != null && room.FurnitureManager != null)
+        {
+            room.FurnitureManager.RegisterSpawnedFurniture(placed, gridAnchor);
+        }
+
+        Debug.Log($"<color=green>[CharacterActions]</color> Server placed {furnitureItemSO.name} at {visualPosition} (anchor: {gridAnchor}).");
+    }
+
+    [Rpc(SendTo.Server)]
+    public void RequestFurniturePickUpServerRpc(NetworkObjectReference furnitureRef)
+    {
+        if (!furnitureRef.TryGet(out NetworkObject netObj))
+        {
+            Debug.LogWarning("[CharacterActions] Server: Could not resolve furniture NetworkObject for pickup.");
+            return;
+        }
+
+        Furniture furniture = netObj.GetComponent<Furniture>();
+        if (furniture == null) return;
+
+        // Unregister from room grid
+        Room parentRoom = furniture.GetComponentInParent<Room>();
+        if (parentRoom != null && parentRoom.FurnitureManager != null)
+        {
+            parentRoom.FurnitureManager.UnregisterAndRemove(furniture);
+        }
+
+        // Despawn
+        if (netObj.IsSpawned)
+            netObj.Despawn(true);
+
+        Debug.Log($"<color=green>[CharacterActions]</color> Server despawned furniture '{furniture.FurnitureName}'.");
+    }
+
+    private static Room FindRoomAtPosition(Vector3 position)
+    {
+        Room[] allRooms = UnityEngine.Object.FindObjectsByType<Room>(FindObjectsSortMode.None);
+        foreach (var room in allRooms)
+        {
+            if (room.IsPointInsideRoom(position)) return room;
+        }
+        return null;
+    }
+
     private CraftingStation FindCraftingStationNear(Vector3 position, float maxDistance = 2f)
     {
         CraftingStation[] stations = UnityEngine.Object.FindObjectsOfType<CraftingStation>();

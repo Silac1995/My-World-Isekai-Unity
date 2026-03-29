@@ -5,26 +5,28 @@ public class CharacterPlaceFurnitureAction : CharacterAction
 {
     private Room _targetRoom;
     private Furniture _furniturePrefab;
-    private Vector3 _targetPosition;
+    private Vector3 _targetPosition;      // Where the furniture GameObject is instantiated (visual center)
+    private Vector3 _gridAnchorPosition;  // The bottom-left cell position for grid registration
     private Quaternion _targetRotation;
     private bool _hasTargetPosition;
     private FurnitureItemSO _furnitureItemSO;
     private bool _consumeFromHands;
 
     /// <summary>
-    /// Player path: position chosen by HUD, item consumed from hands.
+    /// Player path: visual position + grid anchor chosen by HUD, item consumed from hands.
     /// Works both inside and outside rooms.
     /// </summary>
-    public CharacterPlaceFurnitureAction(Character character, FurnitureItemSO furnitureItemSO, Vector3 targetPosition, Quaternion rotation, float duration = 1.0f)
+    public CharacterPlaceFurnitureAction(Character character, FurnitureItemSO furnitureItemSO, Vector3 visualPosition, Vector3 gridAnchor, Quaternion rotation, float duration = 1.0f)
         : base(character, duration)
     {
         _furnitureItemSO = furnitureItemSO;
         _furniturePrefab = furnitureItemSO.InstalledFurniturePrefab;
-        _targetPosition = targetPosition;
+        _targetPosition = visualPosition;
+        _gridAnchorPosition = gridAnchor;
         _targetRotation = rotation;
         _hasTargetPosition = true;
         _consumeFromHands = true;
-        _targetRoom = FindRoomAtPosition(targetPosition);
+        _targetRoom = FindRoomAtPosition(gridAnchor);
     }
 
     /// <summary>
@@ -41,7 +43,7 @@ public class CharacterPlaceFurnitureAction : CharacterAction
     }
 
     /// <summary>
-    /// NPC path: room + explicit target position.
+    /// NPC path: room + explicit target position (anchor = visual for NPC, single cell).
     /// </summary>
     public CharacterPlaceFurnitureAction(Character character, Room room, Furniture furniturePrefab, Vector3 targetPosition, float duration = 1.0f)
         : base(character, duration)
@@ -49,6 +51,7 @@ public class CharacterPlaceFurnitureAction : CharacterAction
         _targetRoom = room;
         _furniturePrefab = furniturePrefab;
         _targetPosition = targetPosition;
+        _gridAnchorPosition = targetPosition;
         _targetRotation = Quaternion.identity;
         _hasTargetPosition = true;
         _consumeFromHands = false;
@@ -79,6 +82,7 @@ public class CharacterPlaceFurnitureAction : CharacterAction
             if (grid.GetClosestFreePosition(character.transform.position, _furniturePrefab.SizeInCells, out Vector3 bestPos))
             {
                 _targetPosition = bestPos;
+                _gridAnchorPosition = bestPos;
                 _hasTargetPosition = true;
             }
             else
@@ -88,10 +92,10 @@ public class CharacterPlaceFurnitureAction : CharacterAction
             }
         }
 
-        // If inside a room, validate grid placement
+        // If inside a room, validate grid placement using the anchor position
         if (_targetRoom != null && _targetRoom.FurnitureManager != null)
         {
-            if (!_targetRoom.FurnitureManager.IsPlacementValid(_furniturePrefab, _targetPosition))
+            if (!_targetRoom.FurnitureManager.IsPlacementValid(_furniturePrefab, _gridAnchorPosition))
                 return false;
         }
 
@@ -108,34 +112,38 @@ public class CharacterPlaceFurnitureAction : CharacterAction
     {
         if (_furniturePrefab == null) return;
 
-        // Server-only: instantiate and spawn the networked furniture
-        // OnApplyEffect runs on both server and client, but only the server can Spawn NetworkObjects
-        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer)
+        // Request server to spawn the furniture (works from both host and client)
+        if (_furnitureItemSO != null && character.CharacterActions != null)
         {
+            character.CharacterActions.RequestFurniturePlaceServerRpc(
+                _furnitureItemSO.ItemId,
+                _targetPosition,
+                _gridAnchorPosition,
+                _targetRotation
+            );
+        }
+        else if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer)
+        {
+            // NPC path (no FurnitureItemSO): direct server spawn
             Furniture placed = Object.Instantiate(_furniturePrefab, _targetPosition, _targetRotation);
 
             var netObj = placed.GetComponent<NetworkObject>();
             if (netObj != null)
-            {
                 netObj.Spawn();
-            }
 
-            // Register with room grid if inside a room
             if (_targetRoom != null && _targetRoom.FurnitureManager != null)
-            {
-                _targetRoom.FurnitureManager.RegisterSpawnedFurniture(placed, _targetPosition);
-            }
+                _targetRoom.FurnitureManager.RegisterSpawnedFurniture(placed, _gridAnchorPosition);
 
             Debug.Log($"<color=green>[Action]</color> {_furniturePrefab.FurnitureName} placed at {_targetPosition}.");
         }
 
-        // Consume item from hands — runs on owner (client-authoritative hands via ClientNetworkTransform)
+        // Consume item from hands — runs on owner
         if (_consumeFromHands)
         {
             var hands = character.CharacterVisual?.BodyPartsController?.HandsController;
             if (hands != null && hands.IsCarrying)
             {
-                hands.DropCarriedItem(); // Removes from hands (item consumed, not dropped to world)
+                hands.DropCarriedItem();
             }
         }
     }

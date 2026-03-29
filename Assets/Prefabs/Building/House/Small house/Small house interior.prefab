@@ -383,11 +383,15 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8136535403467967721, guid: dec60b61b8f53ed49aa4e6269f8db526, type: 3}
       propertyPath: m_Size.y
-      value: 0
+      value: 30
       objectReference: {fileID: 0}
     - target: {fileID: 8136535403467967721, guid: dec60b61b8f53ed49aa4e6269f8db526, type: 3}
       propertyPath: m_Size.z
       value: 20
+      objectReference: {fileID: 0}
+    - target: {fileID: 8136535403467967721, guid: dec60b61b8f53ed49aa4e6269f8db526, type: 3}
+      propertyPath: m_Center.y
+      value: 15
       objectReference: {fileID: 0}
     - target: {fileID: 8677159405518243222, guid: dec60b61b8f53ed49aa4e6269f8db526, type: 3}
       propertyPath: _lockId

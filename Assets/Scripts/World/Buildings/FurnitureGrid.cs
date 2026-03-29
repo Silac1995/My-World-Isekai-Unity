@@ -193,37 +193,33 @@ public class FurnitureGrid : MonoBehaviour
     public bool CanPlaceFurniture(Vector3 targetPosition, Vector2Int sizeInCells)
     {
         if (!WorldToGrid(targetPosition, out int startX, out int startZ))
-        {
-            Debug.Log($"<color=red>[FurnitureGrid]</color> WorldToGrid FAILED for pos={targetPosition}, gridOrigin={_gridOrigin}, gridSize={_gridWidth}x{_gridDepth}");
             return false;
-        }
 
-        // On vérifie de -size/2 à +size/2 (approx) selon l'ancrage du meuble
         for (int x = startX; x < startX + sizeInCells.x; x++)
         {
             for (int z = startZ; z < startZ + sizeInCells.y; z++)
             {
                 if (x < 0 || x >= _gridWidth || z < 0 || z >= _gridDepth)
-                    return false; // Hors de la grille (hors du batiment)
+                    return false;
 
                 if (_grid[x, z].IsOccupied || _grid[x, z].IsWall)
                     return false;
 
-                // Pour s'assurer qu'aucun bord du meuble ne traverse le mur,
-                // on vérifie les 4 coins de cette cellule spécifique par rapport au BoxCollider
+                // Check that the cell corners fall within the room's BoxCollider on the X/Z plane.
+                // We use the bounds center Y so flat colliders (height=0) don't reject valid cells.
+                Bounds roomBounds = _buildingBounds.bounds;
                 Vector3 center = _grid[x, z].WorldPosition;
-                center.y += 0.5f; // Remonter un peu pour éviter les float issues au sol
+                center.y = roomBounds.center.y; // Match the bounds Y to avoid flat-bounds rejection
 
-                float halfCell = _cellSize / 2.01f; // Léger in-set pour la tolérance des murs
+                float halfCell = _cellSize / 2.01f;
                 Vector3 p1 = center + new Vector3(halfCell, 0, halfCell);
                 Vector3 p2 = center + new Vector3(-halfCell, 0, halfCell);
                 Vector3 p3 = center + new Vector3(halfCell, 0, -halfCell);
                 Vector3 p4 = center + new Vector3(-halfCell, 0, -halfCell);
 
-                Bounds roomBounds = _buildingBounds.bounds;
                 if (!roomBounds.Contains(p1) || !roomBounds.Contains(p2) || !roomBounds.Contains(p3) || !roomBounds.Contains(p4))
                 {
-                    return false; // La cellule déborde physiquement du BoxCollider !
+                    return false;
                 }
             }
         }
@@ -289,6 +285,56 @@ public class FurnitureGrid : MonoBehaviour
             return _grid[x, z].WorldPosition;
         }
         return Vector3.zero;
+    }
+
+    /// <summary>
+    /// Snaps a world position to the nearest grid cell center.
+    /// Returns false if the position is outside the grid.
+    /// </summary>
+    public bool SnapToGrid(Vector3 worldPos, out Vector3 snappedPos)
+    {
+        snappedPos = worldPos;
+        if (WorldToGrid(worldPos, out int gx, out int gz))
+        {
+            snappedPos = _grid[gx, gz].WorldPosition;
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Given a cursor world position and furniture size, returns the grid-snapped anchor position
+    /// (the first/bottom-left cell) such that the furniture is centered on the cursor cell.
+    /// Also returns the visual center position for ghost rendering.
+    /// Returns false if the cursor is outside the grid.
+    /// </summary>
+    public bool GetPlacementPositions(Vector3 cursorWorldPos, Vector2Int sizeInCells,
+        out Vector3 anchorPos, out Vector3 visualCenterPos)
+    {
+        anchorPos = cursorWorldPos;
+        visualCenterPos = cursorWorldPos;
+
+        if (!WorldToGrid(cursorWorldPos, out int cursorX, out int cursorZ))
+            return false;
+
+        // Center the furniture footprint on the cursor cell
+        int anchorX = cursorX - (sizeInCells.x - 1) / 2;
+        int anchorZ = cursorZ - (sizeInCells.y - 1) / 2;
+
+        // Clamp to grid bounds so the footprint doesn't extend outside
+        anchorX = Mathf.Clamp(anchorX, 0, _gridWidth - sizeInCells.x);
+        anchorZ = Mathf.Clamp(anchorZ, 0, _gridDepth - sizeInCells.y);
+
+        // Anchor = first cell position (what CanPlaceFurniture/RegisterFurniture expect)
+        anchorPos = _grid[anchorX, anchorZ].WorldPosition;
+
+        // Visual center = midpoint of the full footprint
+        int endX = Mathf.Min(anchorX + sizeInCells.x - 1, _gridWidth - 1);
+        int endZ = Mathf.Min(anchorZ + sizeInCells.y - 1, _gridDepth - 1);
+        Vector3 endPos = _grid[endX, endZ].WorldPosition;
+        visualCenterPos = (anchorPos + endPos) / 2f;
+
+        return true;
     }
 
     public bool GetClosestFreePosition(Vector3 searchOrigin, Vector2Int sizeInCells, out Vector3 bestPosition)

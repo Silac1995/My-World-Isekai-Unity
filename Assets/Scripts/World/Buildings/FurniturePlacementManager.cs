@@ -21,6 +21,8 @@ public class FurniturePlacementManager : CharacterSystem
     private bool _isPlacementActive;
     private bool _isDebugMode;
     private Quaternion _ghostRotation = Quaternion.identity;
+    private Vector3 _lastAnchorPosition; // Grid anchor (bottom-left cell) for validation/grid registration
+    private Vector3 _lastVisualPosition; // Visual center position for furniture instantiation
 
     public bool IsPlacementActive => _isPlacementActive;
 
@@ -135,15 +137,43 @@ public class FurniturePlacementManager : CharacterSystem
 
     private void UpdateGhostPosition()
     {
-        if (_ghostInstance == null || Camera.main == null) return;
+        if (_ghostInstance == null || Camera.main == null || _ghostFurnitureComponent == null) return;
 
         Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-        if (Physics.Raycast(ray, out RaycastHit hit, 100f, _groundLayer))
+        if (Physics.Raycast(ray, out RaycastHit hit, 100f, _groundLayer, QueryTriggerInteraction.Ignore))
         {
-            _ghostInstance.transform.position = hit.point;
+            Vector3 cursorPos = hit.point;
+            Vector2Int effectiveSize = GetRotatedSize(_ghostFurnitureComponent.SizeInCells, _ghostRotation);
+
+            Room room = FindRoomAtPosition(cursorPos);
+            if (room != null && room.Grid != null)
+            {
+                // Inside a room: use grid to compute snapped anchor + visual center
+                if (room.Grid.GetPlacementPositions(cursorPos, effectiveSize,
+                    out Vector3 anchor, out Vector3 visualCenter))
+                {
+                    _lastAnchorPosition = anchor;
+                    _lastVisualPosition = visualCenter;
+                    _ghostInstance.transform.position = visualCenter;
+                }
+                else
+                {
+                    _lastAnchorPosition = cursorPos;
+                    _lastVisualPosition = cursorPos;
+                    _ghostInstance.transform.position = cursorPos;
+                }
+            }
+            else
+            {
+                // Outside any room: free placement, no snapping
+                _lastAnchorPosition = cursorPos;
+                _lastVisualPosition = cursorPos;
+                _ghostInstance.transform.position = cursorPos;
+            }
+
             _ghostInstance.transform.rotation = _ghostRotation;
 
-            bool isValid = ValidatePlacement(hit.point);
+            bool isValid = ValidatePlacement(_lastAnchorPosition);
             ApplyGhostMaterials(isValid ? _ghostMaterialValid : _ghostMaterialInvalid);
         }
     }
@@ -158,12 +188,12 @@ public class FurniturePlacementManager : CharacterSystem
 
     private void HandlePlacementInput()
     {
-        // Left-click: confirm placement
+        // Left-click: confirm placement (use anchor position, not ghost visual position)
         if (Input.GetMouseButtonDown(0))
         {
-            if (_ghostInstance != null && ValidatePlacement(_ghostInstance.transform.position))
+            if (_ghostInstance != null && ValidatePlacement(_lastAnchorPosition))
             {
-                ConfirmPlacement(_ghostInstance.transform.position, _ghostRotation);
+                ConfirmPlacement(_lastVisualPosition, _lastAnchorPosition, _ghostRotation);
             }
         }
 
@@ -180,7 +210,7 @@ public class FurniturePlacementManager : CharacterSystem
         }
     }
 
-    private void ConfirmPlacement(Vector3 position, Quaternion rotation)
+    private void ConfirmPlacement(Vector3 visualPosition, Vector3 gridAnchor, Quaternion rotation)
     {
         if (_activeFurnitureItemSO == null) return;
 
@@ -188,7 +218,8 @@ public class FurniturePlacementManager : CharacterSystem
         var action = new CharacterPlaceFurnitureAction(
             _character,
             _activeFurnitureItemSO,
-            position,
+            visualPosition,
+            gridAnchor,
             rotation
         );
 
@@ -217,11 +248,7 @@ public class FurniturePlacementManager : CharacterSystem
 
         // Range check
         float dist = Vector3.Distance(_character.transform.position, position);
-        if (dist > _maxPlacementRange)
-        {
-            Debug.Log($"<color=red>[FurniturePlacement]</color> FAILED: Range ({dist:F1}m > {_maxPlacementRange}m)");
-            return false;
-        }
+        if (dist > _maxPlacementRange) return false;
 
         // Obstacle overlap (ghost colliders are disabled, so it won't detect itself)
         BoxCollider ghostBox = _ghostInstance.GetComponent<BoxCollider>();
@@ -230,21 +257,16 @@ public class FurniturePlacementManager : CharacterSystem
             Vector3 center = _ghostInstance.transform.TransformPoint(ghostBox.center);
             Vector3 halfExtents = Vector3.Scale(ghostBox.size, _ghostInstance.transform.lossyScale) * 0.45f;
             Collider[] overlaps = Physics.OverlapBox(center, halfExtents, _ghostInstance.transform.rotation, _obstacleLayer);
-            if (overlaps.Length > 0)
-            {
-                string names = string.Join(", ", System.Array.ConvertAll(overlaps, c => $"{c.gameObject.name}(layer:{c.gameObject.layer})"));
-                Debug.Log($"<color=red>[FurniturePlacement]</color> FAILED: Obstacle overlap with [{names}]");
-                return false;
-            }
+            if (overlaps.Length > 0) return false;
         }
 
         // Grid check if inside a room
         Room room = FindRoomAtPosition(position);
         if (room != null && room.Grid != null)
         {
-            if (!room.Grid.CanPlaceFurniture(position, _ghostFurnitureComponent.SizeInCells))
+            Vector2Int effectiveSize = GetRotatedSize(_ghostFurnitureComponent.SizeInCells, _ghostRotation);
+            if (!room.Grid.CanPlaceFurniture(position, effectiveSize))
             {
-                Debug.Log($"<color=red>[FurniturePlacement]</color> FAILED: Grid check in room {room.RoomName}");
                 return false;
             }
         }
@@ -271,6 +293,17 @@ public class FurniturePlacementManager : CharacterSystem
         {
             renderer.sharedMaterial = mat; // Use sharedMaterial to avoid material instance leaks
         }
+    }
+
+    /// <summary>
+    /// Swaps X/Z size when the furniture is rotated 90 or 270 degrees.
+    /// </summary>
+    private Vector2Int GetRotatedSize(Vector2Int originalSize, Quaternion rotation)
+    {
+        // Get the Y-axis rotation angle (0, 90, 180, 270)
+        float yAngle = Mathf.Round(rotation.eulerAngles.y) % 360f;
+        bool isSwapped = Mathf.Approximately(yAngle, 90f) || Mathf.Approximately(yAngle, 270f);
+        return isSwapped ? new Vector2Int(originalSize.y, originalSize.x) : originalSize;
     }
 
     private void SetLayerRecursive(GameObject obj, int layer)

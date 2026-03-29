@@ -102,24 +102,16 @@ public class CharacterPickUpFurnitureAction : CharacterAction
             hands.CarryItem(instance);
         }
 
-        // Server-only: unregister from grid and despawn the NetworkObject
-        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer)
+        // Request server to unregister and despawn (works from both host and client)
+        var netObj = _targetFurniture.GetComponent<NetworkObject>();
+        if (netObj != null && netObj.IsSpawned && character.CharacterActions != null)
         {
-            Room parentRoom = _targetFurniture.GetComponentInParent<Room>();
-            if (parentRoom != null && parentRoom.FurnitureManager != null)
-            {
-                parentRoom.FurnitureManager.UnregisterAndRemove(_targetFurniture);
-            }
-
-            var netObj = _targetFurniture.GetComponent<NetworkObject>();
-            if (netObj != null && netObj.IsSpawned)
-            {
-                netObj.Despawn(true);
-            }
-            else
-            {
-                Object.Destroy(_targetFurniture.gameObject);
-            }
+            character.CharacterActions.RequestFurniturePickUpServerRpc(netObj);
+        }
+        else
+        {
+            // Non-networked furniture (legacy NPC path): destroy directly
+            Object.Destroy(_targetFurniture.gameObject);
         }
 
         Debug.Log($"<color=green>[Action]</color> {character.CharacterName} picked up {itemSO.ItemName}.");
