@@ -359,12 +359,44 @@ public class CharacterParty : CharacterSystem
         SetPartyState(PartyState.LeaderlessHold);
     }
 
+    private void OnLeaderMapChanged(FixedString128Bytes prevMapId, FixedString128Bytes newMapId)
+    {
+        if (!IsServer || !IsInParty) return;
+        if (IsPartyLeader) return; // Leader doesn't follow themselves
+        if (_character.IsPlayer()) return; // Players handle doors themselves
+
+        string leaderNewMap = newMapId.ToString();
+        string myMap = "";
+        var myTracker = _character.GetComponent<CharacterMapTracker>();
+        if (myTracker != null) myMap = myTracker.CurrentMapID.Value.ToString();
+
+        // Leader changed to a different map — find the door and go through it
+        if (!string.IsNullOrEmpty(leaderNewMap) && leaderNewMap != myMap)
+        {
+            MapTransitionDoor door = FindDoorToMap(_character, leaderNewMap);
+            if (door != null)
+            {
+                ClearFollowState();
+                StartDoorFollow(door);
+            }
+        }
+
+        // Leader came back to our map — resume normal follow
+        if (!string.IsNullOrEmpty(leaderNewMap) && leaderNewMap == myMap)
+        {
+            StopDoorFollow();
+            UpdateFollowState();
+        }
+    }
+
     private void OnLeaderWokeUp(Character leader)
     {
         if (!IsServer || !IsInParty) return;
         if (_partyData.State == PartyState.LeaderlessHold) SetPartyState(PartyState.Active);
         UpdateAllMembersFollowState();
     }
+
+    private CharacterMapTracker _subscribedLeaderTracker;
 
     private void SubscribeToLeader(Character leader)
     {
@@ -374,6 +406,14 @@ public class CharacterParty : CharacterSystem
         _subscribedLeader.OnDeath += OnLeaderDied;
         _subscribedLeader.OnIncapacitated += OnLeaderIncapacitated;
         _subscribedLeader.OnWakeUp += OnLeaderWokeUp;
+
+        // Subscribe to leader's map changes (server-only) to detect interior transitions
+        if (IsServer)
+        {
+            _subscribedLeaderTracker = leader.GetComponent<CharacterMapTracker>();
+            if (_subscribedLeaderTracker != null)
+                _subscribedLeaderTracker.CurrentMapID.OnValueChanged += OnLeaderMapChanged;
+        }
     }
 
     private void UnsubscribeFromLeader()
@@ -382,6 +422,12 @@ public class CharacterParty : CharacterSystem
         _subscribedLeader.OnDeath -= OnLeaderDied;
         _subscribedLeader.OnIncapacitated -= OnLeaderIncapacitated;
         _subscribedLeader.OnWakeUp -= OnLeaderWokeUp;
+
+        if (_subscribedLeaderTracker != null)
+        {
+            _subscribedLeaderTracker.CurrentMapID.OnValueChanged -= OnLeaderMapChanged;
+            _subscribedLeaderTracker = null;
+        }
         _subscribedLeader = null;
     }
 
@@ -891,12 +937,14 @@ public class CharacterParty : CharacterSystem
     private Coroutine _doorFollowCoroutine;
 
     /// <summary>
-    /// Called when the party leader uses a door to enter an Interior.
-    /// NPC followers on the same map pathfind to the door and interact with it.
+    /// Called when the party leader transitions to a different map.
+    /// Finds the door that connects the follower's current map to the leader's new map,
+    /// then tells NPC followers to pathfind to that door and go through it.
+    /// Works for both entering and exiting interiors.
     /// </summary>
-    public void NotifyLeaderUsedDoor(MapTransitionDoor door)
+    public void OrderFollowersThroughDoor(string leaderTargetMapId)
     {
-        if (!IsServer || !IsInParty || door == null) return;
+        if (!IsServer || !IsInParty) return;
 
         foreach (string memberId in _partyData.MemberIds)
         {
@@ -904,18 +952,80 @@ public class CharacterParty : CharacterSystem
 
             Character member = Character.FindByUUID(memberId);
             if (member == null || !member.IsAlive()) continue;
-            if (member.IsPlayer()) continue; // Players go through doors on their own
+            if (member.IsPlayer()) continue;
             if (member.CharacterCombat != null && member.CharacterCombat.IsInBattle) continue;
-            if (!IsOnSameMapAs(member, _character)) continue;
 
-            // Clear follow state so BT doesn't fight the door-follow coroutine
+            // Find the door on the follower's current map that leads to the leader's map
+            MapTransitionDoor door = FindDoorToMap(member, leaderTargetMapId);
+            if (door == null) continue;
+
             if (member.CharacterParty != null)
+            {
                 member.CharacterParty.ClearFollowState();
-
-            // Start a coroutine on the member's CharacterParty to pathfind + interact
-            if (member.CharacterParty != null)
                 member.CharacterParty.StartDoorFollow(door);
+            }
         }
+    }
+
+    /// <summary>
+    /// Searches for a MapTransitionDoor or BuildingInteriorDoor near the follower
+    /// that leads to the target map ID.
+    /// </summary>
+    private MapTransitionDoor FindDoorToMap(Character follower, string targetMapId)
+    {
+        if (string.IsNullOrEmpty(targetMapId)) return null;
+
+        // Get the follower's current map
+        var tracker = follower.GetComponent<CharacterMapTracker>();
+        string followerMapId = tracker != null ? tracker.CurrentMapID.Value.ToString() : "";
+
+        // Search all doors in the scene
+        var allDoors = Object.FindObjectsByType<MapTransitionDoor>(FindObjectsSortMode.None);
+        MapTransitionDoor bestDoor = null;
+        float bestDist = float.MaxValue;
+
+        foreach (var door in allDoors)
+        {
+            string doorTargetMapId = null;
+
+            // BuildingInteriorDoor: check if its interior map ID matches
+            if (door is BuildingInteriorDoor buildingDoor)
+            {
+                string interiorId = buildingDoor.GetInteriorMapId();
+
+                if (interiorId == targetMapId)
+                {
+                    // Follower is outside, leader went inside this building
+                    doorTargetMapId = targetMapId;
+                }
+                else if (buildingDoor.ExteriorMapId == targetMapId)
+                {
+                    // Leader went to the exterior — but this is an entry door, not an exit.
+                    // Skip; the exit door inside the interior is a regular MapTransitionDoor.
+                    continue;
+                }
+            }
+            else
+            {
+                // Regular MapTransitionDoor: check TargetMapId
+                if (door.TargetMapId == targetMapId)
+                {
+                    doorTargetMapId = targetMapId;
+                }
+            }
+
+            if (doorTargetMapId == null) continue;
+
+            // Make sure this door is on the follower's current map (roughly)
+            float dist = Vector3.Distance(follower.transform.position, door.transform.position);
+            if (dist < bestDist)
+            {
+                bestDist = dist;
+                bestDoor = door;
+            }
+        }
+
+        return bestDoor;
     }
 
     private void StartDoorFollow(MapTransitionDoor door)

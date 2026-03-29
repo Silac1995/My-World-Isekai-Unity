@@ -108,9 +108,6 @@ public class BuildingInteriorDoor : MapTransitionDoor
         // Set the base class fields (TargetMapId for consistency; position is passed directly)
         TargetMapId = interiorMapId;
 
-        // Notify followers BEFORE the leader transitions
-        TryNotifyPartyFollowersDoor(interactor, interiorMapId);
-
         var transitionAction = new CharacterMapTransitionAction(
             interactor, this, interiorMapId, targetPosition, FadeDuration
         );

@@ -123,29 +123,8 @@ public class MapTransitionDoor : InteractableObject
             }
         }
 
-        // Notify followers BEFORE the leader transitions — so the BT follow key is
-        // cleared before the leader warps to the far-away interior offset.
-        TryNotifyPartyFollowersDoor(interactor, targetMapId);
-
         var transitionAction = new CharacterMapTransitionAction(interactor, this, targetMapId, dest, FadeDuration);
         interactor.CharacterActions.ExecuteAction(transitionAction);
-    }
-
-    /// <summary>
-    /// If the interactor is a party leader entering an Interior, tells NPC followers
-    /// to pathfind to this door and go through it. Called by both MapTransitionDoor
-    /// and BuildingInteriorDoor after executing the transition action.
-    /// </summary>
-    protected void TryNotifyPartyFollowersDoor(Character interactor, string targetMapId)
-    {
-        if (interactor.CharacterParty == null || !interactor.CharacterParty.IsInParty || !interactor.CharacterParty.IsPartyLeader)
-            return;
-
-        MapController targetMap = MapController.GetByMapId(targetMapId);
-        if (targetMap != null && targetMap.Type == MapType.Interior)
-        {
-            interactor.CharacterParty.NotifyLeaderUsedDoor(this);
-        }
     }
 
     public override System.Collections.Generic.List<InteractionOption> GetHoldInteractionOptions(Character interactor)
