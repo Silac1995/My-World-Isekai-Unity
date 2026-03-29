@@ -265,16 +265,34 @@ public class WorldItem : NetworkBehaviour
         Character interactor = interactorNetObj.GetComponent<Character>();
         if (interactor == null || _itemInstance == null) return;
 
+        NetworkItemData itemData = _networkItemData.Value;
+
+        // Wearables: execute on server via CharacterEquipAction.
+        // This writes to NetworkList<NetworkEquipmentSyncData> (server-write only)
+        // which auto-syncs the visual to all clients.
         if (_itemInstance is WearableInstance wearable)
         {
             var action = new CharacterEquipAction(interactor, wearable);
             interactor.CharacterActions.ExecuteAction(action);
             NetworkObject.Despawn(true);
+            return;
+        }
+
+        // Non-wearables (misc, furniture, etc.): the pickup must run on the owning client
+        // because inventory/hands operations are client-authoritative.
+        if (interactorNetObj.IsOwnedByServer)
+        {
+            // Host: execute directly
+            if (interactor.CharacterEquipment != null)
+                interactor.CharacterEquipment.PickUpItem(_itemInstance);
+            NetworkObject.Despawn(true);
         }
         else
         {
-            var action = new CharacterPickUpItem(interactor, _itemInstance, gameObject);
-            interactor.CharacterActions.ExecuteAction(action);
+            // Remote client: send item data to the owning client, then despawn
+            if (interactor.CharacterActions != null)
+                interactor.CharacterActions.ReceiveItemPickupClientRpc(itemData);
+            NetworkObject.Despawn(true);
         }
     }
 

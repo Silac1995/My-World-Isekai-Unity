@@ -106,6 +106,36 @@ public class CharacterActions : CharacterSystem
     // ────────────────────── Generic RPCs ──────────────────────
 
     /// <summary>
+    /// Sent by the server to the owning client when a non-wearable WorldItem is picked up.
+    /// The client reconstructs the ItemInstance from network data and adds it to
+    /// inventory/hands locally. Wearables go through CharacterEquipAction on the server
+    /// instead (they sync via NetworkList).
+    /// </summary>
+    [Rpc(SendTo.Owner)]
+    public void ReceiveItemPickupClientRpc(NetworkItemData itemData)
+    {
+        if (itemData.ItemId.IsEmpty) return;
+
+        string id = itemData.ItemId.ToString();
+        ItemSO[] allItems = Resources.LoadAll<ItemSO>("Data/Item");
+        ItemSO so = System.Array.Find(allItems, match => match.ItemId == id);
+        if (so == null)
+        {
+            Debug.LogError($"<color=red>[CharacterActions]</color> Client could not find ItemSO '{id}' for pickup.");
+            return;
+        }
+
+        ItemInstance instance = so.CreateInstance();
+        JsonUtility.FromJsonOverwrite(itemData.JsonData.ToString(), instance);
+        instance.ItemSO = so;
+
+        if (_character.CharacterEquipment != null)
+            _character.CharacterEquipment.PickUpItem(instance);
+
+        Debug.Log($"<color=green>[CharacterActions]</color> Client received item pickup: {so.ItemName}");
+    }
+
+    /// <summary>
     /// Generic server-side despawn for any NetworkObject.
     /// Used by CharacterPickUpItem and other actions that need to remove
     /// a networked object from a client context.
@@ -121,6 +151,35 @@ public class CharacterActions : CharacterSystem
 
         if (netObj.IsSpawned)
             netObj.Despawn(true);
+    }
+
+    /// <summary>
+    /// Client requests the server to spawn a dropped item in the world.
+    /// Clients cannot spawn NetworkObjects — they send the item data to the server.
+    /// </summary>
+    [Rpc(SendTo.Server)]
+    public void RequestItemDropServerRpc(string itemId, string jsonData, Vector3 ownerPosition, bool freeze)
+    {
+        ItemSO[] allItems = Resources.LoadAll<ItemSO>("Data/Item");
+        ItemSO so = System.Array.Find(allItems, match => match.ItemId == itemId);
+        if (so == null)
+        {
+            Debug.LogWarning($"[CharacterActions] Server: Could not find ItemSO '{itemId}' for drop.");
+            return;
+        }
+
+        ItemInstance instance = so.CreateInstance();
+        JsonUtility.FromJsonOverwrite(jsonData, instance);
+        instance.ItemSO = so;
+
+        Vector3 dropPos = ownerPosition + Vector3.up * 1.5f;
+        Vector3 offset = new Vector3(UnityEngine.Random.Range(-0.3f, 0.3f), 0, UnityEngine.Random.Range(-0.3f, 0.3f));
+        WorldItem spawnedItem = WorldItem.SpawnWorldItem(instance, dropPos + offset);
+
+        if (spawnedItem != null)
+            spawnedItem.FreezeOnGround = freeze;
+
+        Debug.Log($"<color=green>[CharacterActions]</color> Server spawned dropped item: {so.ItemName}");
     }
 
     // ────────────────────── Furniture Placement RPCs ──────────────────────

@@ -57,21 +57,29 @@ public class CharacterDropItem : CharacterAction
     {
         if (owner == null || item == null) return;
 
-        if (Unity.Netcode.NetworkManager.Singleton != null && !Unity.Netcode.NetworkManager.Singleton.IsServer)
+        if (Unity.Netcode.NetworkManager.Singleton != null && Unity.Netcode.NetworkManager.Singleton.IsServer)
         {
-            Debug.LogWarning($"<color=orange>[CharacterDropItem]</color> ExecutePhysicalDrop aborted on Client because it lacks Authority.");
-            return;
-        }
+            // Server: spawn directly
+            Vector3 dropPos = owner.transform.position + Vector3.up * 1.5f;
+            Vector3 offset = new Vector3(Random.Range(-0.3f, 0.3f), 0, Random.Range(-0.3f, 0.3f));
+            WorldItem spawnedItem = WorldItem.SpawnWorldItem(item, dropPos + offset);
 
-        Vector3 dropPos = owner.transform.position + Vector3.up * 1.5f;
-        Vector3 offset = new Vector3(Random.Range(-0.3f, 0.3f), 0, Random.Range(-0.3f, 0.3f));
-        WorldItem spawnedItem = WorldItem.SpawnWorldItem(item, dropPos + offset);
-        
-        if (spawnedItem != null)
+            if (spawnedItem != null)
+                spawnedItem.FreezeOnGround = freeze;
+
+            Debug.Log($"<color=cyan>[CharacterDropItem]</color> {item.ItemSO.ItemName} dropped in world (server).");
+        }
+        else if (owner.CharacterActions != null)
         {
-            spawnedItem.FreezeOnGround = freeze;
+            // Client: request server to spawn the dropped item
+            string jsonData = JsonUtility.ToJson(item);
+            owner.CharacterActions.RequestItemDropServerRpc(
+                item.ItemSO.ItemId,
+                jsonData,
+                owner.transform.position,
+                freeze
+            );
+            Debug.Log($"<color=cyan>[CharacterDropItem]</color> {item.ItemSO.ItemName} drop requested from client.");
         }
-
-        Debug.Log($"Item {item.ItemSO.ItemName} lache physiquement in-world.");
     }
 }
