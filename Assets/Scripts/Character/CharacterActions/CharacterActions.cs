@@ -103,6 +103,26 @@ public class CharacterActions : CharacterSystem
         station.Craft(itemSO, _character, primaryColor, secondaryColor);
     }
 
+    // ────────────────────── Generic RPCs ──────────────────────
+
+    /// <summary>
+    /// Generic server-side despawn for any NetworkObject.
+    /// Used by CharacterPickUpItem and other actions that need to remove
+    /// a networked object from a client context.
+    /// </summary>
+    [Rpc(SendTo.Server)]
+    public void RequestDespawnServerRpc(NetworkObjectReference targetRef)
+    {
+        if (!targetRef.TryGet(out NetworkObject netObj))
+        {
+            Debug.LogWarning("[CharacterActions] Server: Could not resolve NetworkObject for despawn.");
+            return;
+        }
+
+        if (netObj.IsSpawned)
+            netObj.Despawn(true);
+    }
+
     // ────────────────────── Furniture Placement RPCs ──────────────────────
 
     [Rpc(SendTo.Server)]

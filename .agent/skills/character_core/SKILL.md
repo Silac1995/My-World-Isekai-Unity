@@ -72,6 +72,18 @@ The `CharacterActions` component manages distinct, timed actions (Harvesting, Cr
 - **`OnActionFinished`**: Triggered when an action ends or is cancelled. This initiates a short **Action Cooldown** (default: 0.5s) before the character can resume navigation.
 - **`ShouldPlayGenericActionAnimation`**: Each `CharacterAction` can opt-out of the generic "busy" animation to prevent flickering or overriding specific animations (like Combat).
 
+### Server RPCs on CharacterActions
+
+`CharacterActions` hosts ServerRpcs for operations that require server authority but are triggered from client-owned actions:
+
+- **`RequestDespawnServerRpc(NetworkObjectReference)`**: Generic despawn for any NetworkObject. Used by `CharacterPickUpItem` and `CharacterPickUpFurnitureAction` to remove WorldItems/Furniture from the network. Clients cannot call `NetworkObject.Despawn()` directly — always route through this RPC.
+- **`RequestCraftServerRpc(...)`**: Server-side crafting via CraftingStation.
+- **`RequestFurniturePlaceServerRpc(itemSOId, visualPos, gridAnchor, rotation)`**: Server instantiates + spawns furniture + registers on grid.
+- **`RequestFurniturePickUpServerRpc(NetworkObjectReference)`**: Server unregisters furniture from grid + despawns.
+
+> [!IMPORTANT]
+> Any `CharacterAction.OnApplyEffect()` that needs to Spawn or Despawn a `NetworkObject` **must** use a ServerRpc on `CharacterActions`. `OnApplyEffect` runs on the owner (which may be a client), but only the server can Spawn/Despawn. Never call `NetworkObject.Spawn()` or `Despawn()` directly in an action — always route through `character.CharacterActions.RequestDespawnServerRpc()` or a specialized RPC.
+
 > [!IMPORTANT]
 > To stop a character during an action, always prefer using the `CharacterActions` system rather than manually calling `Stop()` in `Update()`. This ensures consistent behavior across Player and NPC controllers.
 

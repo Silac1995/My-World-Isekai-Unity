@@ -61,7 +61,11 @@ public class WorldItem : NetworkBehaviour
 
     private void ApplyNetworkData(NetworkItemData data)
     {
-        if (data.ItemId.IsEmpty) return;
+        if (data.ItemId.IsEmpty)
+        {
+            Debug.LogWarning($"<color=orange>[WorldItem]</color> ApplyNetworkData: ItemId is empty on {gameObject.name}. Data may not have replicated yet.");
+            return;
+        }
 
         string id = data.ItemId.ToString();
         ItemSO[] allItems = Resources.LoadAll<ItemSO>("Data/Item");
@@ -69,14 +73,17 @@ public class WorldItem : NetworkBehaviour
 
         if (so != null)
         {
+            Debug.Log($"<color=cyan>[WorldItem]</color> ApplyNetworkData: Found SO '{so.ItemName}' for ID '{id}'. Creating instance type: {so.InstanceType.Name}");
             ItemInstance instance = so.CreateInstance();
             JsonUtility.FromJsonOverwrite(data.JsonData.ToString(), instance);
-            instance.ItemSO = so; 
+            instance.ItemSO = so;
             Initialize(instance);
         }
         else
         {
-            Debug.LogError($"<color=red>[WorldItem]</color> Could not find ItemSO with ID: {id} in Resources/Data/Item");
+            Debug.LogError($"<color=red>[WorldItem]</color> Could not find ItemSO with ID: '{id}' in Resources/Data/Item. Total SOs loaded: {allItems.Length}");
+            foreach (var item in allItems)
+                Debug.Log($"  - Available SO: '{item.ItemId}' ({item.ItemName}) [{item.GetType().Name}]");
         }
     }
 

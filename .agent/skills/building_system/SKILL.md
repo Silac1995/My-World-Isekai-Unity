@@ -111,12 +111,12 @@ Bidirectional link: `FurnitureItemSO._installedFurniturePrefab` → Furniture pr
 #### Placement Flow
 - **Player:** Carries `FurnitureItemInstance` in hands → presses F → `FurniturePlacementManager` shows ghost → left-click confirms → queues `CharacterPlaceFurnitureAction`
 - **NPC:** AI decision → queues `CharacterPlaceFurnitureAction(character, room, prefab)` directly
-- **Action (shared):** `CharacterPlaceFurnitureAction.OnApplyEffect()` — server instantiates + `NetworkObject.Spawn()`, registers on grid via `FurnitureManager.RegisterSpawnedFurniture()` if inside a room, consumes item from hands (player path)
+- **Action (shared):** `CharacterPlaceFurnitureAction.OnApplyEffect()` — calls `CharacterActions.RequestFurniturePlaceServerRpc()` to have the server instantiate + spawn + register on grid. Client-side: consumes item from hands (player path). NPC path (no FurnitureItemSO): direct server spawn.
 
 #### Pickup Flow
 - **Player:** Hold E on furniture → "Pick Up" option via `FurnitureInteractable.GetHoldInteractionOptions()` → queues `CharacterPickUpFurnitureAction`
 - **NPC:** AI decision → queues `CharacterPickUpFurnitureAction(character, furniture)` directly
-- **Action (shared):** `CharacterPickUpFurnitureAction.OnApplyEffect()` — creates `FurnitureItemInstance`, puts in hands, server unregisters via `FurnitureManager.UnregisterAndRemove()` + `NetworkObject.Despawn()`
+- **Action (shared):** `CharacterPickUpFurnitureAction.OnApplyEffect()` — creates `FurnitureItemInstance`, puts in hands, calls `CharacterActions.RequestFurniturePickUpServerRpc()` to have the server unregister from grid + despawn. Non-networked furniture: direct `Destroy()`.
 
 #### Key Methods on FurnitureManager
 - `AddFurniture(prefab, position)` — instantiates + registers (non-networked, NPC legacy)

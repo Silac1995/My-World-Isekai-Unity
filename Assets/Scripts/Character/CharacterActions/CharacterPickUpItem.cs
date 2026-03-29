@@ -48,9 +48,15 @@ public class CharacterPickUpItem : CharacterAction
             {
                 var netObj = _worldObject.GetComponent<NetworkObject>();
                 if (netObj != null && netObj.IsSpawned)
-                    netObj.Despawn(true);
+                {
+                    // Use ServerRpc to despawn — only the server can despawn NetworkObjects
+                    if (character.CharacterActions != null)
+                        character.CharacterActions.RequestDespawnServerRpc(netObj);
+                }
                 else
+                {
                     Object.Destroy(_worldObject);
+                }
             }
         }
         else
