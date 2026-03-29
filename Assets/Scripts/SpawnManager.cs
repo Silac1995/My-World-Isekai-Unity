@@ -55,6 +55,9 @@ public class SpawnManager : MonoBehaviour
             return null;
         }
 
+        if (pos == Vector3.zero && spawnGameObject != null)
+            pos = spawnGameObject.transform.position;
+
         // 1. On instancie TOUJOURS le prefab par défaut (la "coquille" WorldItem)
         if (_defaultItemPrefab == null)
         {

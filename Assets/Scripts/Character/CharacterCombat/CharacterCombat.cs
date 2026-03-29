@@ -17,6 +17,7 @@ public class CharacterCombat : CharacterSystem
     public event Action<bool> OnCombatModeChanged;
     public event Action<float, DamageType> OnDamageTaken;
     public event Action OnBattleLeft;
+    public event Action<BattleManager> OnBattleJoined;
 
     [Header("Initiative Scaling")]
     [SerializeField] private float _baseInitiativePerTick = 1f;
@@ -250,7 +251,10 @@ public class CharacterCombat : CharacterSystem
         {
             float staminaCost = CalculateBasicAttackStaminaCost();
             if (_character.Stats.Stamina.CurrentAmount < staminaCost)
+            {
+                Debug.LogWarning($"<color=yellow>[Combat]</color> {_character.CharacterName} cannot attack — stamina {_character.Stats.Stamina.CurrentAmount:F1}/{staminaCost:F1} insufficient.");
                 return false;
+            }
 
             _character.Stats.Stamina.DecreaseCurrentAmount(staminaCost);
 
@@ -443,6 +447,8 @@ public class CharacterCombat : CharacterSystem
 
         // Passive trigger: OnBattleStart
         _character.CharacterAbilities?.OnPassiveTriggerEvent(PassiveTriggerCondition.OnBattleStart, _character, null);
+
+        OnBattleJoined?.Invoke(manager);
     }
 
     public void JoinBattleAsAlly(Character friend)
@@ -526,7 +532,9 @@ public class CharacterCombat : CharacterSystem
             foreach (var p in battle.BattleTeams.SelectMany(t => t.CharacterList))
             {
                 bool isFriend = _character.CharacterRelation != null && _character.CharacterRelation.IsFriend(p);
-                bool sameParty = _character.CurrentParty != null && _character.CurrentParty == p.CurrentParty;
+                bool sameParty = _character.CharacterParty != null && _character.CharacterParty.IsInParty
+                    && p.CharacterParty != null && p.CharacterParty.IsInParty
+                    && _character.CharacterParty.PartyData.PartyId == p.CharacterParty.PartyData.PartyId;
 
                 if (isFriend || sameParty)
                 {
@@ -542,7 +550,9 @@ public class CharacterCombat : CharacterSystem
             foreach (var p in battle.BattleTeams.SelectMany(t => t.CharacterList))
             {
                 bool isFriend = target.CharacterRelation != null && target.CharacterRelation.IsFriend(p);
-                bool sameParty = target.CurrentParty != null && target.CurrentParty == p.CurrentParty;
+                bool sameParty = target.CharacterParty != null && target.CharacterParty.IsInParty
+                    && p.CharacterParty != null && p.CharacterParty.IsInParty
+                    && target.CharacterParty.PartyData.PartyId == p.CharacterParty.PartyData.PartyId;
 
                 if (isFriend || sameParty)
                 {

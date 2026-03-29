@@ -95,7 +95,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MWI.WorldSystem.MapController
   ShowTopMostFoldoutHeaderGroup: 1
   MapId: 
-  IsInteriorOffset: 1
+  _mapType: 1
   ExteriorMapId:
     UpdateTraits:
       MinSecondsBetweenUpdates: 0
@@ -249,6 +249,7 @@ MonoBehaviour:
   ConnectedPlayersCount: 0
   IsHibernating: 0
   _activePlayerCount: 0
+  _hibernationEnabled: 0
   IsActive:
     UpdateTraits:
       MinSecondsBetweenUpdates: 0

@@ -174,6 +174,21 @@ Weapons use physical types. Spells typically use magical types.
 - **Critical pitfall**: `PlayerController.Move()` has a safety check that re-enables the NavMeshAgent when it detects it was "externally disabled" during combat. This check **must** respect `IsKnockedBack` — otherwise it immediately calls `ConfigureNavMesh(true)` which zeros velocity and sets the Rigidbody to kinematic, completely nullifying the knockback. The guard is: `!_character.CharacterMovement.IsKnockedBack`.
 - After the knockback window ends, `FixedUpdate` re-enables the NavMeshAgent (if in combat) and sets the Rigidbody back to kinematic.
 
+### 12. Battle Ground Circle Indicators
+Visual-only, local-player feature. When the local player joins a battle, colored circles appear on the ground beneath every participant: **Blue** for allies, **Red** for enemies. Colors are relative to the viewer's team.
+
+**Components:**
+- **`BattleGroundCircle.cs`** (`Assets/Scripts/BattleManager/`): MonoBehaviour on an instantiated prefab. Manages one `DecalProjector` — handles fade-in on spawn, `Dim()` for incapacitated characters, `Cleanup()` for fade-out + self-destruct. All fade coroutines use `Time.unscaledDeltaTime` (UI-class visual, Rule 24).
+- **`BattleCircleManager.cs`** (`Assets/Scripts/BattleManager/`): `CharacterSystem` on a child GameObject of the Character prefab. Only activates for `IsOwner`. Subscribes to `CharacterCombat.OnBattleJoined` / `OnBattleLeft` and `BattleManager.OnParticipantAdded`. Maintains `Dictionary<Character, BattleGroundCircle>`.
+
+**Key events used:**
+- `CharacterCombat.OnBattleJoined(BattleManager)` — fired at end of `JoinBattle()`, on all clients
+- `CharacterCombat.OnBattleLeft` — fired in `LeaveBattle()`, on all clients
+- `BattleManager.OnParticipantAdded(Character)` — fired at end of `RegisterCharacter()`, on all clients
+- `Character.OnIncapacitated` / `OnWakeUp` — per-character dim/restore
+
+**Rendering:** URP `DecalProjector` with shared materials (2 total: ally + enemy). No per-instance material clones. Per-instance opacity via `DecalProjector.fadeFactor`. Requires Decal Renderer Feature on URP Renderer assets.
+
 ## Tips & Troubleshooting
 - **A character never attacks**:
   - Verify that the `BattleManager` is properly calling `.UpdateInitiativeTick()`.

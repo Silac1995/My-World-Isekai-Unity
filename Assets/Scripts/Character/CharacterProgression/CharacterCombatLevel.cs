@@ -201,6 +201,11 @@ public class CharacterCombatLevel : CharacterSystem
         {
             stat.IncreaseBaseValue(1f);
             _unassignedStatPoints--;
+
+            if (_levelHistory.Count > 0)
+            {
+                _levelHistory[_levelHistory.Count - 1].AddBonus(statType, 1f);
+            }
             
             if (_unassignedStatPoints <= 0 && _statsBadgeChannel != null)
             {

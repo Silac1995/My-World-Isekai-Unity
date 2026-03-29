@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.AI;
 using MWI.WorldSystem;
 using System;
 using Unity.Collections;
@@ -138,6 +139,33 @@ public class Building : ComplexRoom
         {
             NetworkBuildingId.Value = Guid.NewGuid().ToString("N");
             Debug.Log($"<color=green>[Building]</color> Generated unique ID for {buildingName}: {BuildingId}");
+        }
+
+        ConfigureNavMeshObstacles();
+    }
+
+    /// <summary>
+    /// Adds NavMeshObstacle (Carve=true) to each Room in the building hierarchy.
+    /// This creates compound rectangular carves matching the building's actual shape,
+    /// so NPCs path around placed buildings instead of walking through them.
+    /// Runs on all clients — NavMesh carving is a local Unity engine feature.
+    /// </summary>
+    private void ConfigureNavMeshObstacles()
+    {
+        foreach (Room room in GetAllRooms())
+        {
+            BoxCollider boxCol = room.GetComponent<BoxCollider>();
+            if (boxCol == null) continue;
+
+            // Skip if already has one (e.g. prefab already configured)
+            if (room.GetComponent<NavMeshObstacle>() != null) continue;
+
+            NavMeshObstacle obstacle = room.gameObject.AddComponent<NavMeshObstacle>();
+            obstacle.shape = NavMeshObstacleShape.Box;
+            obstacle.center = boxCol.center;
+            obstacle.size = boxCol.size;
+            obstacle.carving = true;
+            obstacle.carvingMoveThreshold = 999f; // Buildings don't move
         }
     }
 

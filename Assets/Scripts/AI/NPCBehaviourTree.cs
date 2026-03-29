@@ -39,6 +39,7 @@ public class NPCBehaviourTree : CharacterSystem
     private BTSequence _agressionSequence;
     private BTSequence _entraideSequence;
     private BTCond_NeedsToPunchOut _punchOutNode;
+    private BTCond_IsInPartyFollow _partyFollowNode;
 
     [Header("Performance")]
     [SerializeField] [Tooltip("Temps en secondes entre chaque tick du Behaviour Tree.")]
@@ -105,6 +106,7 @@ public class NPCBehaviourTree : CharacterSystem
         _goapNode = new BTAction_ExecuteGoapPlan();
         _wanderNode = new BTAction_Wander();
         _punchOutNode = new BTCond_NeedsToPunchOut();
+        _partyFollowNode = new BTCond_IsInPartyFollow();
 
         _entraideSequence = new BTSequence(
             _friendNode,
@@ -122,7 +124,8 @@ public class NPCBehaviourTree : CharacterSystem
             _combatNode,        // 2. Combat actif
             _entraideSequence,  // 3. Entraide
             _agressionSequence, // 4. Agression
-            _punchOutNode,      // 4.5 Fin de shift forcé (Must punch out before going home)
+            _partyFollowNode,   // 4.5 Party follow (member follows party leader)
+            _punchOutNode,      // 5. Fin de shift forcé (Must punch out before going home)
             _scheduleNode,      // 5. Schedule (Work/Sleep > Personal Goals)
             _goapNode,          // 6. GOAP (Life Goals / Proactive)
             _socialNode,        // 8. Social
@@ -232,10 +235,11 @@ public class NPCBehaviourTree : CharacterSystem
     {
         if (_legacySequence != null && _legacySequence.IsRunning) _currentNodeName = "ImperativeStack";
         else if (_orderNode != null && _orderNode.IsRunning) _currentNodeName = "Order";
-        else if (_punchOutNode != null && _punchOutNode.IsRunning) _currentNodeName = "PunchOut";
         else if (_combatNode != null && _combatNode.IsRunning) _currentNodeName = "Combat";
         else if (_entraideSequence != null && _entraideSequence.IsRunning) _currentNodeName = "AssistFriend";
         else if (_agressionSequence != null && _agressionSequence.IsRunning) _currentNodeName = "Aggression";
+        else if (_partyFollowNode != null && _partyFollowNode.IsRunning) _currentNodeName = "PartyFollow";
+        else if (_punchOutNode != null && _punchOutNode.IsRunning) _currentNodeName = "PunchOut";
         else if (_scheduleNode != null && _scheduleNode.IsRunning) _currentNodeName = "Schedule";
         else if (_socialNode != null && _socialNode.IsRunning) _currentNodeName = "Social";
         else if (_goapNode != null && _goapNode.IsRunning) _currentNodeName = "GOAP";

@@ -35,7 +35,9 @@ namespace MWI.AI
                     continue;
 
                 bool isFriend = self.CharacterRelation.IsFriend(target);
-                bool sameParty = self.CurrentParty != null && self.CurrentParty == target.CurrentParty;
+                bool sameParty = self.CharacterParty != null && self.CharacterParty.IsInParty
+                    && target.CharacterParty != null && target.CharacterParty.IsInParty
+                    && self.CharacterParty.PartyData.PartyId == target.CharacterParty.PartyData.PartyId;
 
                 // Loyalty trait
                 bool isAcquaintance = self.CharacterRelation.GetRelationshipWith(target)?.RelationValue >= 0;

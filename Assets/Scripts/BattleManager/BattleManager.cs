@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -12,6 +13,21 @@ public class BattleManager : NetworkBehaviour
     [SerializeField] private Collider _battleZone;
     [SerializeField] private Unity.AI.Navigation.NavMeshModifierVolume _battleZoneModifier;
     [SerializeField] private LineRenderer _battleZoneLine;
+    [SerializeField] private ParticleSystem _battleZoneParticles;
+
+    [Header("Zone Particle Overrides")]
+    [Tooltip("Particles emitted per second along the zone border.")]
+    [SerializeField] private float _particleRate = 25f;
+    [Tooltip("Color tint applied to zone border particles.")]
+    [SerializeField] private Color _particleColor = new Color(1.2f, 0.9f, 0.4f, 0.5f);
+    [Tooltip("Min/max particle size.")]
+    [SerializeField] private Vector2 _particleSize = new Vector2(0.05f, 0.15f);
+    [Tooltip("Min/max particle lifetime in seconds.")]
+    [SerializeField] private Vector2 _particleLifetime = new Vector2(2f, 4f);
+    [Tooltip("Upward drift speed of particles.")]
+    [SerializeField] private Vector2 _particleDriftY = new Vector2(0.1f, 0.3f);
+
+    [Header("Zone Settings")]
     [SerializeField] private Vector3 _baseBattleZoneSize = new Vector3(25f, 35f, 10f);
     [SerializeField] private float _perParticipantGrowthRate = 0.3f;
     [SerializeField] private int _participantsPerTier = 6;
@@ -36,6 +52,8 @@ public class BattleManager : NetworkBehaviour
     public bool IsBattleEnded => _isBattleEnded;
     public CombatEngagementCoordinator Coordinator => _engagementCoordinator;
 
+    public event Action<Character> OnParticipantAdded;
+
     public void Initialize(Character initiator, Character target)
     {
         if (!IsServer) return;
@@ -53,7 +71,7 @@ public class BattleManager : NetworkBehaviour
         _teams.Add(_battleTeamInitiator);
         _teams.Add(_battleTeamTarget);
 
-        _zoneController = new BattleZoneController(this, _battleZoneModifier, _battleZoneLine, _baseBattleZoneSize, _perParticipantGrowthRate, _participantsPerTier);
+        _zoneController = new BattleZoneController(this, _battleZoneModifier, _battleZoneLine, _battleZoneParticles, BuildParticleSettings(), _baseBattleZoneSize, _perParticipantGrowthRate, _participantsPerTier);
         _engagementCoordinator = new CombatEngagementCoordinator(this);
 
         // 2. Création physique de la zone
@@ -124,7 +142,7 @@ public class BattleManager : NetworkBehaviour
         _teams.Add(_battleTeamInitiator);
         _teams.Add(_battleTeamTarget);
 
-        _zoneController = new BattleZoneController(this, _battleZoneModifier, _battleZoneLine, _baseBattleZoneSize, _perParticipantGrowthRate, _participantsPerTier);
+        _zoneController = new BattleZoneController(this, _battleZoneModifier, _battleZoneLine, _battleZoneParticles, BuildParticleSettings(), _baseBattleZoneSize, _perParticipantGrowthRate, _participantsPerTier);
         _engagementCoordinator = new CombatEngagementCoordinator(this);
 
         _zoneController.CreateBattleZone(initiator, target);
@@ -136,6 +154,8 @@ public class BattleManager : NetworkBehaviour
 
     private void Update()
     {
+        _zoneController?.Tick();
+
         if (_isBattleEnded) return;
 
         // --- NOUVEAU : VERIFICATION DE FIN DE COMBAT EN CONTINU ---
@@ -256,6 +276,8 @@ public class BattleManager : NetworkBehaviour
 
         UpdateBattleZoneWith(character);
         Debug.Log($"<color=white>[Battle]</color> {character.CharacterName} joined combat. IsInBattle={character.CharacterCombat?.IsInBattle}. IsServer={IsServer}");
+
+        OnParticipantAdded?.Invoke(character);
     }
 
     public void AddParticipant(Character newParticipant, Character target, bool asAlly = false)
@@ -340,7 +362,7 @@ public class BattleManager : NetworkBehaviour
         if (_engagementCoordinator == null)
             _engagementCoordinator = new CombatEngagementCoordinator(this);
         if (_zoneController == null)
-            _zoneController = new BattleZoneController(this, _battleZoneModifier, _battleZoneLine, _baseBattleZoneSize, _perParticipantGrowthRate, _participantsPerTier);
+            _zoneController = new BattleZoneController(this, _battleZoneModifier, _battleZoneLine, _battleZoneParticles, BuildParticleSettings(), _baseBattleZoneSize, _perParticipantGrowthRate, _participantsPerTier);
         if (_teams.Count == 0)
         {
             _battleTeamInitiator = new BattleTeam();
@@ -383,6 +405,18 @@ public class BattleManager : NetworkBehaviour
     }
 
     #region Helpers
+
+    private ZoneParticleSettings BuildParticleSettings()
+    {
+        return new ZoneParticleSettings
+        {
+            Rate     = _particleRate,
+            Color    = _particleColor,
+            Size     = _particleSize,
+            Lifetime = _particleLifetime,
+            DriftY   = _particleDriftY
+        };
+    }
     public BattleTeam GetTeamOf(Character character)
     {
         return _teams.FirstOrDefault(t => t.CharacterList.Contains(character));

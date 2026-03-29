@@ -1,9 +1,13 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
+using Unity.Collections;
+using Unity.Netcode;
+
 public class CharacterSkills : CharacterSystem
 {
-    
+
     [SerializeField]
     private List<SkillInstance> _skills = new List<SkillInstance>();
 
@@ -14,12 +18,23 @@ public class CharacterSkills : CharacterSystem
     /// </summary>
     private Dictionary<SkillSO, SkillInstance> _skillMap = new Dictionary<SkillSO, SkillInstance>();
 
-    private void Awake()
+    private NetworkList<NetworkSkillSyncData> _networkSkills;
+
+    protected override void Awake()
     {
+        base.Awake();
+
+        // Fallback: if CharacterSkills sits on the same GO as Character
         if (_character == null)
         {
             _character = GetComponent<Character>();
         }
+
+        _networkSkills = new NetworkList<NetworkSkillSyncData>(
+            default,
+            NetworkVariableReadPermission.Everyone,
+            NetworkVariableWritePermission.Server
+        );
 
         SyncSkillsFromInspector();
     }
@@ -57,6 +72,35 @@ public class CharacterSkills : CharacterSystem
         {
             RecalculateAllSkillBonuses();
         }
+
+        // Push inspector changes to clients
+        if (Application.isPlaying && IsServer && IsSpawned)
+        {
+            SyncAllSkillsToNetwork();
+        }
+    }
+
+    public override void OnNetworkSpawn()
+    {
+        base.OnNetworkSpawn();
+
+        _networkSkills.OnListChanged += OnNetworkSkillsChanged;
+
+        if (IsServer)
+        {
+            SyncAllSkillsToNetwork();
+        }
+        else
+        {
+            // Client: rebuild local skills from network state
+            FullSyncFromNetwork();
+        }
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        _networkSkills.OnListChanged -= OnNetworkSkillsChanged;
+        base.OnNetworkDespawn();
     }
 
     private void Start()
@@ -83,22 +127,43 @@ public class CharacterSkills : CharacterSystem
         SkillInstance instance = new SkillInstance(newSkill, startingLevel);
         _skills.Add(instance);
         _skillMap.Add(newSkill, instance);
-        
+
         instance.OnLevelUp += HandleSkillLevelUp;
-        
+
         RecalculateAllSkillBonuses();
+        UpdateNetworkSkill(instance);
     }
 
     public bool HasSkill(SkillSO skill)
     {
         if (skill == null) return false;
-        return _skillMap.ContainsKey(skill);
+        // First try direct reference match (fast, works on server)
+        if (_skillMap.ContainsKey(skill)) return true;
+        // Fallback: match by SkillID (handles client-side where the SkillSO
+        // instance resolved from network may differ from the serialized reference)
+        return HasSkillById(skill.SkillID);
+    }
+
+    public bool HasSkillById(string skillId)
+    {
+        if (string.IsNullOrEmpty(skillId)) return false;
+        foreach (var s in _skills)
+        {
+            if (s?.Skill != null && s.Skill.SkillID == skillId) return true;
+        }
+        return false;
     }
 
     public int GetSkillLevel(SkillSO skill)
     {
-        if (skill == null || !_skillMap.TryGetValue(skill, out var instance)) return 0;
-        return instance.Level;
+        if (skill == null) return 0;
+        if (_skillMap.TryGetValue(skill, out var instance)) return instance.Level;
+        // Fallback: match by SkillID for client-side reference mismatch
+        foreach (var s in _skills)
+        {
+            if (s?.Skill != null && s.Skill.SkillID == skill.SkillID) return s.Level;
+        }
+        return 0;
     }
 
     /// <summary>
@@ -125,12 +190,14 @@ public class CharacterSkills : CharacterSystem
         if (_skillMap.TryGetValue(skill, out var instance))
         {
             instance.AddXP(amount);
+            UpdateNetworkSkill(instance);
         }
         else
         {
             // Le personnage apprend la compétence lors du premier gain d'XP
             AddSkill(skill, 1);
             _skillMap[skill].AddXP(amount);
+            UpdateNetworkSkill(_skillMap[skill]);
         }
     }
 
@@ -142,6 +209,149 @@ public class CharacterSkills : CharacterSystem
         Debug.Log($"<color=cyan>[CharacterSkills]</color> {_character.CharacterName} est passé niveau {newLevel} en {skillInstance.Skill.SkillName}.");
         RecalculateAllSkillBonuses();
     }
+
+    // ─── Network Sync ───────────────────────────────────────────────────
+
+    /// <summary>
+    /// Pushes the full local skill list to the NetworkList (server only).
+    /// </summary>
+    private void SyncAllSkillsToNetwork()
+    {
+        if (!IsServer || !IsSpawned) return;
+
+        _networkSkills.Clear();
+        foreach (var skill in _skills)
+        {
+            if (skill?.Skill == null) continue;
+            _networkSkills.Add(new NetworkSkillSyncData
+            {
+                SkillID  = new FixedString64Bytes(skill.Skill.SkillID),
+                Level    = skill.Level,
+                CurrentXP = skill.XP,
+                TotalXP  = skill.TotalXP
+            });
+        }
+    }
+
+    /// <summary>
+    /// Updates or adds a single skill entry in the NetworkList (server only).
+    /// </summary>
+    private void UpdateNetworkSkill(SkillInstance skill)
+    {
+        if (!IsServer || !IsSpawned || skill?.Skill == null) return;
+
+        string skillId = skill.Skill.SkillID;
+
+        for (int i = 0; i < _networkSkills.Count; i++)
+        {
+            if (_networkSkills[i].SkillID.ToString() == skillId)
+            {
+                _networkSkills[i] = new NetworkSkillSyncData
+                {
+                    SkillID   = new FixedString64Bytes(skillId),
+                    Level     = skill.Level,
+                    CurrentXP = skill.XP,
+                    TotalXP   = skill.TotalXP
+                };
+                return;
+            }
+        }
+
+        _networkSkills.Add(new NetworkSkillSyncData
+        {
+            SkillID   = new FixedString64Bytes(skillId),
+            Level     = skill.Level,
+            CurrentXP = skill.XP,
+            TotalXP   = skill.TotalXP
+        });
+    }
+
+    /// <summary>
+    /// Called on clients when the server's NetworkList changes.
+    /// </summary>
+    private void OnNetworkSkillsChanged(NetworkListEvent<NetworkSkillSyncData> changeEvent)
+    {
+        if (IsServer) return;
+
+        switch (changeEvent.Type)
+        {
+            case NetworkListEvent<NetworkSkillSyncData>.EventType.Add:
+            case NetworkListEvent<NetworkSkillSyncData>.EventType.Value:
+            case NetworkListEvent<NetworkSkillSyncData>.EventType.Insert:
+                ApplyNetworkSkillData(changeEvent.Value);
+                break;
+
+            case NetworkListEvent<NetworkSkillSyncData>.EventType.Clear:
+                foreach (var stat in _appliedSkillBonuses.Keys)
+                {
+                    stat.RemoveAllModifiersFromSource(this);
+                }
+                _appliedSkillBonuses.Clear();
+                foreach (var skill in _skills)
+                {
+                    if (skill != null) skill.OnLevelUp -= HandleSkillLevelUp;
+                }
+                _skills.Clear();
+                _skillMap.Clear();
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Late-joining client: rebuild local skills from the current NetworkList snapshot.
+    /// </summary>
+    private void FullSyncFromNetwork()
+    {
+        foreach (var skill in _skills)
+        {
+            if (skill != null) skill.OnLevelUp -= HandleSkillLevelUp;
+        }
+        _skills.Clear();
+        _skillMap.Clear();
+
+        foreach (var data in _networkSkills)
+        {
+            ApplyNetworkSkillData(data);
+        }
+    }
+
+    /// <summary>
+    /// Resolves a SkillSO from Resources and creates/updates the local SkillInstance.
+    /// </summary>
+    private void ApplyNetworkSkillData(NetworkSkillSyncData data)
+    {
+        string skillId = data.SkillID.ToString();
+
+        // Check if we already have this skill locally
+        foreach (var skill in _skills)
+        {
+            if (skill?.Skill != null && skill.Skill.SkillID == skillId)
+            {
+                skill.UpdateFromNetwork(data.Level, data.CurrentXP, data.TotalXP);
+                RecalculateAllSkillBonuses();
+                return;
+            }
+        }
+
+        // Resolve the SkillSO asset on the client from Resources/Data/Skills
+        SkillSO[] allSkills = Resources.LoadAll<SkillSO>("Data/Skills");
+        SkillSO skillSO = Array.Find(allSkills, s => s.SkillID == skillId);
+
+        if (skillSO == null)
+        {
+            Debug.LogError($"<color=red>[CharacterSkills]</color> Client could not resolve SkillSO with ID '{skillId}'.");
+            return;
+        }
+
+        SkillInstance instance = new SkillInstance(skillSO, data.Level, data.CurrentXP, data.TotalXP);
+        _skills.Add(instance);
+        _skillMap[skillSO] = instance;
+        instance.OnLevelUp += HandleSkillLevelUp;
+
+        RecalculateAllSkillBonuses();
+    }
+
+    // ─── Stat Bonuses ───────────────────────────────────────────────────
 
     /// <summary>
     /// Calcule de zéro tous les bonus conférés par les Skills actuels et leurs niveaux.
@@ -188,6 +398,39 @@ public class CharacterSkills : CharacterSystem
         }
 
         // 4. Demander un recalcul global des stats tertiaires/dynamiques (HP Max, etc.)
-        _character.Stats.RecalculateTertiaryStats(); 
+        _character.Stats.RecalculateTertiaryStats();
+    }
+}
+
+/// <summary>
+/// Lightweight struct sent over the network to sync skill state.
+/// Clients resolve the SkillSO from Resources using the SkillID.
+/// </summary>
+public struct NetworkSkillSyncData : INetworkSerializable, IEquatable<NetworkSkillSyncData>
+{
+    public FixedString64Bytes SkillID;
+    public int Level;
+    public int CurrentXP;
+    public int TotalXP;
+
+    public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
+    {
+        serializer.SerializeValue(ref SkillID);
+        serializer.SerializeValue(ref Level);
+        serializer.SerializeValue(ref CurrentXP);
+        serializer.SerializeValue(ref TotalXP);
+    }
+
+    public bool Equals(NetworkSkillSyncData other)
+    {
+        return SkillID.Equals(other.SkillID)
+            && Level == other.Level
+            && CurrentXP == other.CurrentXP
+            && TotalXP == other.TotalXP;
+    }
+
+    public override int GetHashCode()
+    {
+        return HashCode.Combine(SkillID, Level, CurrentXP, TotalXP);
     }
 }

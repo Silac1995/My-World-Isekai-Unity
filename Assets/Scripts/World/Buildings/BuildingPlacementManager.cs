@@ -86,6 +86,10 @@ namespace MWI.WorldSystem
             // Disable any NetworkObject on the ghost to prevent network errors
             if (_ghostInstance.TryGetComponent(out NetworkObject netObj)) netObj.enabled = false;
 
+            // Disable NavMeshObstacles on ghost so it doesn't carve during preview
+            foreach (var obstacle in _ghostInstance.GetComponentsInChildren<UnityEngine.AI.NavMeshObstacle>())
+                obstacle.enabled = false;
+
             _ghostInstance.name = "PlacementGhost_" + prefabId;
             _isPlacementActive = true;
         
