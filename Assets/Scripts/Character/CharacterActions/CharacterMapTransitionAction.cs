@@ -23,8 +23,8 @@ public class CharacterMapTransitionAction : CharacterAction
     {
         _character.CharacterMovement?.Stop();
 
-        // Fade to black for the local player (hidden behind fade, NPCs/remote players skip)
-        if (_character.IsOwner || _character.IsLocalPlayer)
+        // Fade to black for the local player only (not NPCs, even on host where IsOwner is true)
+        if (IsLocalPlayerCharacter())
         {
             ScreenFadeManager.Instance?.FadeOut(_fadeDuration * 0.5f);
         }
@@ -35,7 +35,7 @@ public class CharacterMapTransitionAction : CharacterAction
         Debug.Log($"<color=cyan>[MapTransition]</color> OnApplyEffect: IsOwner={_character.IsOwner}, IsLocalPlayer={_character.IsLocalPlayer}, IsServer={_character.IsServer}, targetMapId='{_targetMapId}', targetPos={_targetPosition}");
 
         // Prediction: Client warps instantly for seamless feel
-        if (_character.IsOwner || _character.IsLocalPlayer)
+        if (IsLocalPlayerCharacter())
         {
             // Reset selected interactable when map changes (entering/leaving house)
             var targeting = Object.FindAnyObjectByType<UI_PlayerTargeting>(FindObjectsInactive.Include);
@@ -88,10 +88,18 @@ public class CharacterMapTransitionAction : CharacterAction
         _character.CharacterMovement?.Resume();
 
         // Cancel any active fade if the action was interrupted
-        if (_character.IsOwner || _character.IsLocalPlayer)
+        if (IsLocalPlayerCharacter())
         {
             ScreenFadeManager.Instance?.FadeIn(0.1f);
         }
+    }
+
+    /// <summary>
+    /// True only for the actual local player character — not NPCs on host (which have IsOwner=true).
+    /// </summary>
+    private bool IsLocalPlayerCharacter()
+    {
+        return _character.IsPlayer() && (_character.IsOwner || _character.IsLocalPlayer);
     }
 
     private void SnapCamera()

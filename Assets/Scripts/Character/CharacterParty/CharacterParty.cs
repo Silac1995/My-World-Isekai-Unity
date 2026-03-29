@@ -980,7 +980,7 @@ public class CharacterParty : CharacterSystem
         string followerMapId = tracker != null ? tracker.CurrentMapID.Value.ToString() : "";
 
         // Search all doors in the scene
-        var allDoors = Object.FindObjectsByType<MapTransitionDoor>(FindObjectsSortMode.None);
+        var allDoors = UnityEngine.Object.FindObjectsByType<MapTransitionDoor>(FindObjectsSortMode.None);
         MapTransitionDoor bestDoor = null;
         float bestDist = float.MaxValue;
 
