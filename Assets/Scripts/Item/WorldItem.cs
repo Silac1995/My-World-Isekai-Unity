@@ -282,14 +282,20 @@ public class WorldItem : NetworkBehaviour
         // because inventory/hands operations are client-authoritative.
         if (interactorNetObj.IsOwnedByServer)
         {
-            // Host: execute directly
-            if (interactor.CharacterEquipment != null)
-                interactor.CharacterEquipment.PickUpItem(_itemInstance);
-            NetworkObject.Despawn(true);
+            // Host: execute directly — only despawn if pickup succeeds
+            if (interactor.CharacterEquipment != null && interactor.CharacterEquipment.PickUpItem(_itemInstance))
+            {
+                NetworkObject.Despawn(true);
+            }
+            else
+            {
+                Debug.LogWarning($"<color=orange>[WorldItem]</color> Host failed to pick up {_itemInstance.ItemSO.ItemName} (inventory full / hands full).");
+            }
         }
         else
         {
-            // Remote client: send item data to the owning client, then despawn
+            // Remote client: send item data to the owning client, then despawn.
+            // We despawn optimistically — the client will handle the item.
             if (interactor.CharacterActions != null)
                 interactor.CharacterActions.ReceiveItemPickupClientRpc(itemData);
             NetworkObject.Despawn(true);

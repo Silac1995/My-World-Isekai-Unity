@@ -19,7 +19,7 @@ MonoBehaviour:
   description: 
   icon: {fileID: 0}
   item_prefab: {fileID: 7827050173259622472, guid: b4484bb9cf3b23f4ca51ec8121aa286e, type: 3}
-  worldItem_prefab: {fileID: 0}
+  worldItem_prefab: {fileID: 718778511601405242, guid: d05bd27244da29941a5703671cff1688, type: 3}
   _weight: 1
   _tier: 0
   _requiredCraftingSkill: {fileID: 0}

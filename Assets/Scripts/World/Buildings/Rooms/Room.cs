@@ -95,6 +95,18 @@ public class Room : Zone
         _furnitureManager.LoadExistingFurniture();
     }
 
+    public override void OnNetworkSpawn()
+    {
+        base.OnNetworkSpawn();
+
+        // On clients, Awake() fires before NGO sets the network position (e.g. interior at y=5000).
+        // The grid origin calculated in Awake is wrong. Recalculate now that the transform is correct.
+        if (IsClient && !IsServer && _furnitureManager != null && _furnitureManager.Grid != null && _furnitureManager.Grid.IsInitialized)
+        {
+            _furnitureManager.Grid.RestoreFromSerializedData();
+        }
+    }
+
     public bool IsPointInsideRoom(Vector3 point)
     {
         if (_boxCollider == null) return false;

@@ -18,7 +18,7 @@ MonoBehaviour:
   itemName: Crafting Station
   description: 
   icon: {fileID: 0}
-  item_prefab: {fileID: 718778511601405242, guid: d05bd27244da29941a5703671cff1688, type: 3}
+  item_prefab: {fileID: 5368253223231017792, guid: 3a4b4877e6aa64b40857f3c3704c8a91, type: 3}
   worldItem_prefab: {fileID: 718778511601405242, guid: d05bd27244da29941a5703671cff1688, type: 3}
   _weight: 2
   _tier: 0
