@@ -393,6 +393,7 @@ public class CharacterParty : CharacterSystem
     public void SetPartyState(PartyState state)
     {
         if (!IsServer || _partyData == null) return;
+        if (_partyData.State == state) return; // no-op if already in this state
         _partyData.State = state;
         _networkPartyState.Value = (byte)state;
         OnPartyStateChanged?.Invoke(state);
