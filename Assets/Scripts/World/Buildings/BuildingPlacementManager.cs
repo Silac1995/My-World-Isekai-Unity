@@ -86,10 +86,6 @@ namespace MWI.WorldSystem
             // Disable any NetworkObject on the ghost to prevent network errors
             if (_ghostInstance.TryGetComponent(out NetworkObject netObj)) netObj.enabled = false;
 
-            // Disable NavMeshObstacles on ghost so it doesn't carve during preview
-            foreach (var obstacle in _ghostInstance.GetComponentsInChildren<UnityEngine.AI.NavMeshObstacle>())
-                obstacle.enabled = false;
-
             _ghostInstance.name = "PlacementGhost_" + prefabId;
             _isPlacementActive = true;
         
@@ -354,18 +350,38 @@ namespace MWI.WorldSystem
                 building.PlacedByCharacterId.Value = _character.CharacterId;
             }
 
-            Debug.Log($"<color=yellow>[BuildingPlacementManager:Register]</color> Trying GetMapAtPosition({worldPosition}) for building '{building.BuildingName}' (ID={building.BuildingId}, PrefabId={building.PrefabId})");
+            Debug.Log($"<color=yellow>[BuildingPlacementManager:Register]</color> Trying to find MapController for building '{building.BuildingName}' at {worldPosition}.");
 
+            // Find the containing MapController — GetMapAtPosition skips Interiors,
+            // so also do a bounds check on all non-interior maps that contain the position.
             MapController map = MapController.GetMapAtPosition(worldPosition);
+
+            // Fallback: check ALL maps (including those GetMapAtPosition skips)
             if (map == null)
             {
-                Debug.LogWarning($"<color=yellow>[BuildingPlacementManager:Register]</color> GetMapAtPosition returned NULL for position {worldPosition}. Building '{building.BuildingName}' placed in open world. Building will NOT survive map hibernation unless a MapController is created later.");
+                var allMaps = UnityEngine.Object.FindObjectsByType<MapController>(FindObjectsSortMode.None);
+                foreach (var m in allMaps)
+                {
+                    if (m == null) continue;
+                    var col = m.GetComponent<BoxCollider>();
+                    if (col != null && col.bounds.Contains(worldPosition))
+                    {
+                        map = m;
+                        Debug.Log($"<color=yellow>[BuildingPlacementManager:Register]</color> Found map '{m.MapId}' via bounds fallback (Type={m.Type}).");
+                        break;
+                    }
+                }
+            }
+
+            if (map == null)
+            {
+                Debug.LogWarning($"<color=yellow>[BuildingPlacementManager:Register]</color> No MapController contains position {worldPosition}. Building '{building.BuildingName}' placed in open world.");
                 return;
             }
 
-            Debug.Log($"<color=yellow>[BuildingPlacementManager:Register]</color> Found map '{map.MapId}' for building at {worldPosition}.");
+            Debug.Log($"<color=green>[BuildingPlacementManager:Register]</color> Building '{building.BuildingName}' registered with map '{map.MapId}'.");
 
-            // Parent to MapController (server-side organizational hierarchy)
+            // Parent to the MapController (must be a NetworkObject for NGO parenting rules)
             buildingObj.transform.SetParent(map.transform);
 
             // Add to CommunityData.ConstructedBuildings

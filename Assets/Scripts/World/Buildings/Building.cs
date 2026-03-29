@@ -3,6 +3,7 @@ using System.Linq;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.AI;
+using Unity.AI.Navigation;
 using MWI.WorldSystem;
 using System;
 using Unity.Collections;
@@ -145,33 +146,67 @@ public class Building : ComplexRoom
     }
 
     /// <summary>
-    /// Adds NavMeshObstacle (Carve=true) to each Room in the building hierarchy
-    /// so NPCs path around the building instead of walking through it.
-    /// Skips the Building root when sub-rooms exist to avoid overlapping obstacles.
-    /// Runs on all clients — NavMesh carving is a local Unity engine feature.
+    /// Rebuilds the NavMesh for the MapController zone this building sits in.
+    /// The NavMeshSurface lives on the MapController itself, scoped to its
+    /// BoxCollider bounds. All buildings on the same map share one surface.
+    /// Falls back to a local volume around the building if no MapController is found.
+    /// Runs on all clients — each rebuilds its local NavMesh.
     /// </summary>
     private void ConfigureNavMeshObstacles()
     {
-        var allRooms = GetAllRooms().ToList();
-        bool hasSubRooms = allRooms.Count > 1;
+        RebuildMapNavMesh();
+    }
 
-        foreach (Room room in allRooms)
+    private void RebuildMapNavMesh()
+    {
+        // Primary: check parent hierarchy (works for pre-placed and parented buildings)
+        MapController map = GetComponentInParent<MapController>();
+
+        // Fallback: position-based lookup
+        if (map == null)
+            map = MapController.GetMapAtPosition(transform.position);
+
+        if (map != null)
         {
-            // Skip the Building root when sub-rooms exist — its BoxCollider
-            // covers the entire building and would overlap with sub-room obstacles.
-            if (room == this && hasSubRooms) continue;
+            // Reuse the map's existing NavMeshSurface (e.g. added on the prefab)
+            NavMeshSurface surface = map.GetComponent<NavMeshSurface>();
+            if (surface == null)
+            {
+                surface = map.gameObject.AddComponent<NavMeshSurface>();
+                surface.collectObjects = CollectObjects.Volume;
+                surface.useGeometry = NavMeshCollectGeometry.RenderMeshes;
 
-            BoxCollider boxCol = room.GetComponent<BoxCollider>();
-            if (boxCol == null) continue;
+                BoxCollider mapCollider = map.GetComponent<BoxCollider>();
+                if (mapCollider != null)
+                {
+                    surface.center = mapCollider.center;
+                    surface.size = mapCollider.size;
+                }
+            }
 
-            if (room.GetComponent<NavMeshObstacle>() != null) continue;
+            surface.BuildNavMesh();
+            Debug.Log($"<color=cyan>[Building]</color> NavMesh rebuilt for map '{map.MapId}' after placing {buildingName}.");
+        }
+        else
+        {
+            // Open world — bake a local volume around the building
+            NavMeshSurface surface = GetComponent<NavMeshSurface>();
+            if (surface == null)
+            {
+                surface = gameObject.AddComponent<NavMeshSurface>();
+                surface.collectObjects = CollectObjects.Volume;
+                surface.useGeometry = NavMeshCollectGeometry.RenderMeshes;
+            }
 
-            NavMeshObstacle obstacle = room.gameObject.AddComponent<NavMeshObstacle>();
-            obstacle.shape = NavMeshObstacleShape.Box;
-            obstacle.center = boxCol.center;
-            obstacle.size = boxCol.size;
-            obstacle.carving = true;
-            obstacle.carvingMoveThreshold = 999f; // Buildings don't move
+            Bounds buildingBounds = _buildingZone != null
+                ? _buildingZone.bounds
+                : new Bounds(transform.position, Vector3.one * 20f);
+
+            surface.center = transform.InverseTransformPoint(buildingBounds.center);
+            surface.size = buildingBounds.size + Vector3.one * 10f;
+
+            surface.BuildNavMesh();
+            Debug.Log($"<color=cyan>[Building]</color> Local NavMesh rebuilt for {buildingName} (open world).");
         }
     }
 
