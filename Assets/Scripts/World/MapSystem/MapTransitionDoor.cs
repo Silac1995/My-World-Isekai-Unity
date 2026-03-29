@@ -103,13 +103,25 @@ public class MapTransitionDoor : InteractableObject
         Debug.Log($"<color=cyan>[MapTransitionDoor]</color> {GetType().Name} '{name}' Interact: TargetMapId='{targetMapId}', doorPos={transform.position}, TargetSpawnPoint={(TargetSpawnPoint != null ? TargetSpawnPoint.name : "null")}, TargetPositionOffset={TargetPositionOffset}, dest={dest}");
 
         // --- Party Leader Gathering Check ---
+        // Skip gathering when leaving an Interior (party members are outside and can't reach the gather zone)
         if (interactor.CharacterParty != null && interactor.CharacterParty.IsInParty && interactor.CharacterParty.IsPartyLeader)
         {
-            MapController targetMap = MapController.GetByMapId(targetMapId);
-            if (targetMap != null && (targetMap.Type == MapType.Region || targetMap.Type == MapType.Dungeon))
+            bool isLeavingInterior = false;
+            if (interactor.TryGetComponent(out CharacterMapTracker mapTracker))
             {
-                interactor.CharacterParty.StartGathering(targetMapId, dest);
-                return;
+                string currentMapId = mapTracker.CurrentMapID.Value.ToString();
+                MapController currentMap = !string.IsNullOrEmpty(currentMapId) ? MapController.GetByMapId(currentMapId) : null;
+                isLeavingInterior = currentMap != null && currentMap.Type == MapType.Interior;
+            }
+
+            if (!isLeavingInterior)
+            {
+                MapController targetMap = MapController.GetByMapId(targetMapId);
+                if (targetMap != null && (targetMap.Type == MapType.Region || targetMap.Type == MapType.Dungeon))
+                {
+                    interactor.CharacterParty.StartGathering(targetMapId, dest);
+                    return;
+                }
             }
         }
 
