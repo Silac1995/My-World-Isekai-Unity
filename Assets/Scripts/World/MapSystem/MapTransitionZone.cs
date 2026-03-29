@@ -28,19 +28,26 @@ public class MapTransitionZone : MonoBehaviour
 
         if (party != null && party.IsInParty)
         {
-            if (party.IsPartyLeader)
+            // Skip all party logic when inside an Interior map
+            var zoneMap = GetComponentInParent<MapController>();
+            bool isInInterior = zoneMap != null && zoneMap.Type == MapType.Interior;
+
+            if (!isInInterior)
             {
-                MapController targetMap = MapController.GetByMapId(_targetMapId);
-                if (targetMap != null && (targetMap.Type == MapType.Region || targetMap.Type == MapType.Dungeon))
+                if (party.IsPartyLeader)
                 {
-                    party.StartGathering(_targetMapId, TargetPosition);
+                    MapController targetMap = MapController.GetByMapId(_targetMapId);
+                    if (targetMap != null && (targetMap.Type == MapType.Region || targetMap.Type == MapType.Dungeon))
+                    {
+                        party.StartGathering(_targetMapId, TargetPosition);
+                        return;
+                    }
+                }
+                else
+                {
+                    Debug.Log($"<color=yellow>[MapTransitionZone]</color> Party member {character.CharacterName} approaching border");
                     return;
                 }
-            }
-            else
-            {
-                Debug.Log($"<color=yellow>[MapTransitionZone]</color> Party member {character.CharacterName} approaching border");
-                return;
             }
         }
 
