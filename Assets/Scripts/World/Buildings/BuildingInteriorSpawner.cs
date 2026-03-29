@@ -1,4 +1,5 @@
 using Unity.Netcode;
+using Unity.AI.Navigation;
 using UnityEngine;
 using MWI.WorldSystem;
 
@@ -114,6 +115,16 @@ public static class BuildingInteriorSpawner
         mapController.ExteriorMapId.Value = record.ExteriorMapId;
         mapController.ExteriorReturnPosition.Value = record.ExteriorDoorPosition;
         mapController.InteriorEntryPosition.Value = entryPosition;
+
+        // Rebake the interior NavMeshSurface at its actual world position.
+        // The prefab's baked NavMesh is relative to (0,0,0) but the interior
+        // spawns at a dynamic offset (Y=5000+). Rebaking ensures correct NavMesh.
+        NavMeshSurface interiorSurface = instance.GetComponentInChildren<NavMeshSurface>();
+        if (interiorSurface != null)
+        {
+            interiorSurface.BuildNavMesh();
+            Debug.Log($"<color=cyan>[BuildingInteriorSpawner]</color> NavMesh rebaked for interior '{record.InteriorMapId}'.");
+        }
 
         // Restore persisted door lock/health state
         DoorLock[] doorLocks = instance.GetComponentsInChildren<DoorLock>(true);
