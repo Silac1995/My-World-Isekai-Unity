@@ -100,6 +100,40 @@ public class FurnitureManager : MonoBehaviour
     }
 
     /// <summary>
+    /// Registers an already-instantiated and network-spawned Furniture onto the grid and list.
+    /// Does NOT instantiate — the caller is responsible for spawning.
+    /// Used by CharacterPlaceFurnitureAction for networked furniture.
+    /// </summary>
+    public bool RegisterSpawnedFurniture(Furniture furniture, Vector3 targetPosition)
+    {
+        if (_grid == null || furniture == null) return false;
+        if (!_grid.CanPlaceFurniture(targetPosition, furniture.SizeInCells)) return false;
+
+        _grid.RegisterFurniture(furniture, targetPosition, furniture.SizeInCells);
+        _furnitures.Add(furniture);
+        furniture.transform.SetParent(transform);
+
+        string roomName = _room != null ? _room.RoomName : gameObject.name;
+        Debug.Log($"<color=green>[FurnitureManager]</color> Registered spawned {furniture.FurnitureName} at {targetPosition} in {roomName}.");
+        return true;
+    }
+
+    /// <summary>
+    /// Unregisters furniture from grid and list without destroying the GameObject.
+    /// Caller handles destruction/despawn (e.g. NetworkObject.Despawn).
+    /// Used by CharacterPickUpFurnitureAction for networked furniture.
+    /// </summary>
+    public void UnregisterAndRemove(Furniture furniture)
+    {
+        if (furniture == null) return;
+        if (_grid != null) _grid.UnregisterFurniture(furniture);
+        _furnitures.Remove(furniture);
+
+        string roomName = _room != null ? _room.RoomName : gameObject.name;
+        Debug.Log($"<color=cyan>[FurnitureManager]</color> Unregistered {furniture.FurnitureName} from {roomName}.");
+    }
+
+    /// <summary>
     /// Trouve un meuble disponible de type T.
     /// </summary>
     public T FindAvailableFurniture<T>() where T : Furniture

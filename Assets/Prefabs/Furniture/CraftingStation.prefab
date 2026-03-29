@@ -30,7 +30,7 @@ Transform:
   m_GameObject: {fileID: 1816767246673045903}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: 0, y: 2.5, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -163,54 +163,54 @@ MonoBehaviour:
   - m_Vertices: 0b0000000e00000012000000
   m_SharedTextures: []
   m_Positions:
-  - {x: -7.289077, y: -2.5480614, z: 2.480927}
-  - {x: 7.289077, y: -2.5480614, z: 2.480927}
-  - {x: -7.289077, y: 2.5480614, z: 2.480927}
-  - {x: 7.289077, y: 2.5480614, z: 2.480927}
-  - {x: 7.289077, y: -2.5480614, z: 2.480927}
-  - {x: 7.289077, y: -2.5480614, z: -2.480927}
-  - {x: 7.289077, y: 2.5480614, z: 2.480927}
-  - {x: 7.289077, y: 2.5480614, z: -2.480927}
-  - {x: 7.289077, y: -2.5480614, z: -2.480927}
-  - {x: -7.289077, y: -2.5480614, z: -2.480927}
-  - {x: 7.289077, y: 2.5480614, z: -2.480927}
-  - {x: -7.289077, y: 2.5480614, z: -2.480927}
-  - {x: -7.289077, y: -2.5480614, z: -2.480927}
-  - {x: -7.289077, y: -2.5480614, z: 2.480927}
-  - {x: -7.289077, y: 2.5480614, z: -2.480927}
-  - {x: -7.289077, y: 2.5480614, z: 2.480927}
-  - {x: -7.289077, y: 2.5480614, z: 2.480927}
-  - {x: 7.289077, y: 2.5480614, z: 2.480927}
-  - {x: -7.289077, y: 2.5480614, z: -2.480927}
-  - {x: 7.289077, y: 2.5480614, z: -2.480927}
-  - {x: -7.289077, y: -2.5480614, z: -2.480927}
-  - {x: 7.289077, y: -2.5480614, z: -2.480927}
-  - {x: -7.289077, y: -2.5480614, z: 2.480927}
-  - {x: 7.289077, y: -2.5480614, z: 2.480927}
+  - {x: -7, y: -2.5, z: 2.5}
+  - {x: 7, y: -2.5, z: 2.5}
+  - {x: -7, y: 2.5, z: 2.5}
+  - {x: 7, y: 2.5, z: 2.5}
+  - {x: 7, y: -2.5, z: 2.5}
+  - {x: 7, y: -2.5, z: -2.5}
+  - {x: 7, y: 2.5, z: 2.5}
+  - {x: 7, y: 2.5, z: -2.5}
+  - {x: 7, y: -2.5, z: -2.5}
+  - {x: -7, y: -2.5, z: -2.5}
+  - {x: 7, y: 2.5, z: -2.5}
+  - {x: -7, y: 2.5, z: -2.5}
+  - {x: -7, y: -2.5, z: -2.5}
+  - {x: -7, y: -2.5, z: 2.5}
+  - {x: -7, y: 2.5, z: -2.5}
+  - {x: -7, y: 2.5, z: 2.5}
+  - {x: -7, y: 2.5, z: 2.5}
+  - {x: 7, y: 2.5, z: 2.5}
+  - {x: -7, y: 2.5, z: -2.5}
+  - {x: 7, y: 2.5, z: -2.5}
+  - {x: -7, y: -2.5, z: -2.5}
+  - {x: 7, y: -2.5, z: -2.5}
+  - {x: -7, y: -2.5, z: 2.5}
+  - {x: 7, y: -2.5, z: 2.5}
   m_Textures0:
-  - {x: 14.578154, y: -4.0961227}
-  - {x: 0, y: -4.0961227}
-  - {x: 14.578154, y: 1}
+  - {x: 14, y: -4}
+  - {x: 0, y: -4}
+  - {x: 14, y: 1}
   - {x: 0, y: 1}
-  - {x: 4.961854, y: -4.0961227}
-  - {x: 0, y: -4.0961227}
-  - {x: 4.961854, y: 1}
+  - {x: 5, y: -4}
+  - {x: 0, y: -4}
+  - {x: 5, y: 1}
   - {x: 0, y: 1}
-  - {x: 14.578154, y: -4.0961227}
-  - {x: 0, y: -4.0961227}
-  - {x: 14.578154, y: 1}
+  - {x: 14, y: -4}
+  - {x: 0, y: -4}
+  - {x: 14, y: 1}
   - {x: 0, y: 1}
-  - {x: 4.961854, y: -4.0961227}
-  - {x: 0, y: -4.0961227}
-  - {x: 4.961854, y: 1}
+  - {x: 5, y: -4}
+  - {x: 0, y: -4}
+  - {x: 5, y: 1}
   - {x: 0, y: 1}
   - {x: 0, y: 1}
-  - {x: 14.578154, y: 1}
-  - {x: 0, y: -3.961854}
-  - {x: 14.578154, y: -3.961854}
-  - {x: 14.578154, y: -3.961854}
-  - {x: 0, y: -3.961854}
-  - {x: 14.578154, y: 1}
+  - {x: 14, y: 1}
+  - {x: 0, y: -4}
+  - {x: 14, y: -4}
+  - {x: 14, y: -4}
+  - {x: 0, y: -4}
+  - {x: 14, y: 1}
   - {x: 0, y: 1}
   m_Textures2: []
   m_Textures3: []
@@ -248,7 +248,7 @@ MonoBehaviour:
   m_PreserveMeshAssetOnDestroy: 0
   assetGuid: 
   m_Mesh: {fileID: 0}
-  m_VersionIndex: 4270
+  m_VersionIndex: 4328
   m_IsSelectable: 1
   m_SelectedFaces: 
   m_SelectedEdges: []
@@ -268,8 +268,8 @@ MonoBehaviour:
   m_Shape:
     rid: 8265768353029685628
   m_ShapeRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_UnmodifiedMeshVersion: 4270
-  m_Size: {x: 14.578154, y: 5.0961227, z: -4.961854}
+  m_UnmodifiedMeshVersion: 4328
+  m_Size: {x: 14, y: 5, z: 5}
   m_LocalCenter: {x: 0, y: 0, z: 0}
   references:
     version: 2
@@ -381,7 +381,7 @@ Transform:
   m_GameObject: {fileID: 5664602741741912026}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0, y: -2.45, z: -4.61}
+  m_LocalPosition: {x: 0, y: 0, z: -4.61}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -412,7 +412,7 @@ Transform:
   m_GameObject: {fileID: 7791917951441198453}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0, y: 3.54, z: -1.97}
+  m_LocalPosition: {x: 0, y: 7, z: -1}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -433,6 +433,14 @@ PrefabInstance:
     - target: {fileID: 3944396133495831649, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
       propertyPath: m_Name
       value: CraftingStation
+      objectReference: {fileID: 0}
+    - target: {fileID: 6445648937218201084, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
+      propertyPath: m_Enabled
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6445648937218201084, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
+      propertyPath: GlobalObjectIdHash
+      value: 973683674
       objectReference: {fileID: 0}
     - target: {fileID: 8021854465056481327, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
       propertyPath: m_LocalPosition.x
@@ -497,6 +505,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 3944396133495831649, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
       insertIndex: -1
       addedObject: {fileID: 7216829249605665523}
+    - targetCorrespondingSourceObject: {fileID: 3944396133495831649, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 3979861984165261908}
   m_SourcePrefab: {fileID: 100100000, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
 --- !u!1 &1329527029119559092 stripped
 GameObject:
@@ -520,6 +531,7 @@ MonoBehaviour:
   _rootgameObject: {fileID: 1329527029119559092}
   _rigidbody: {fileID: 0}
   _furniture: {fileID: 4748126588462873856}
+  _toastChannel: {fileID: 0}
   _craftingStation: {fileID: 4748126588462873856}
   _craftingWindowPrefab: {fileID: 3509334697153544943, guid: 4afa5dd3aa3a9924683f6bd8dbb07d4a, type: 3}
 --- !u!114 &4748126588462873856
@@ -537,7 +549,8 @@ MonoBehaviour:
   _furnitureName: Anvil
   _furnitureTag: 3
   _interactionPoint: {fileID: 6070397181164859014}
-  _sizeInCells: {x: 521, y: 5}
+  _sizeInCells: {x: 14, y: 5}
+  _furnitureItemSO: {fileID: 11400000, guid: 6e287635ebd516b468a2eb5e2c1b456a, type: 2}
   _stationType: 0
   _craftableItems:
   - {fileID: 11400000, guid: 6c5a51e107481e44e877e826e0853958, type: 2}
@@ -563,8 +576,26 @@ BoxCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Size: {x: 20, y: 11, z: 8}
-  m_Center: {x: 0, y: 3, z: -2.5}
+  m_Size: {x: 20, y: 5, z: 8}
+  m_Center: {x: 0, y: 2.5, z: -2.5}
+--- !u!114 &3979861984165261908
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1329527029119559092}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4b43482cfd5435e4da940cd87d30dcad, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FurnitureGrid
+  _cellSize: 1
+  _floorRenderers: []
+  _gridWidth: 0
+  _gridDepth: 0
+  _gridOrigin: {x: 0, y: 0, z: 0}
+  _cells: []
 --- !u!4 &5448643654028655098 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 8021854465056481327, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}

@@ -71,6 +71,7 @@ public class Character : NetworkBehaviour
     [SerializeField] private BattleCircleManager _battleCircleManager;
     [SerializeField] private FloatingTextSpawner _floatingTextSpawner;
     [SerializeField] private CharacterParty _characterParty;
+    [SerializeField] private FurniturePlacementManager _furniturePlacementManager;
     #endregion
 
     #region Network Variables
@@ -167,6 +168,7 @@ public class Character : NetworkBehaviour
     public BattleCircleManager BattleCircleManager => _battleCircleManager;
     public FloatingTextSpawner FloatingTextSpawner => _floatingTextSpawner;
     public BuildingPlacementManager PlacementManager => _characterBlueprints != null ? _characterBlueprints.PlacementManager : null;
+    public FurniturePlacementManager FurniturePlacementManager => _furniturePlacementManager;
     public bool IsBuilding => _isBuilding;
 
     public NavMeshAgent NavMesh => _cachedNavMeshAgent;
@@ -333,6 +335,7 @@ public class Character : NetworkBehaviour
         if (_battleCircleManager == null) _battleCircleManager = GetComponentInChildren<BattleCircleManager>();
         if (_floatingTextSpawner == null) _floatingTextSpawner = GetComponentInChildren<FloatingTextSpawner>();
         if (_characterParty == null) _characterParty = GetComponentInChildren<CharacterParty>();
+        if (_furniturePlacementManager == null) _furniturePlacementManager = GetComponentInChildren<FurniturePlacementManager>();
 
         _cachedNavMeshAgent = GetComponent<NavMeshAgent>();
         _isDead = false;

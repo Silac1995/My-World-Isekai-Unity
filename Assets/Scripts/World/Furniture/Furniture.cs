@@ -13,6 +13,12 @@ public class Furniture : MonoBehaviour
     [SerializeField] private Transform _interactionPoint;
     [SerializeField] private Vector2Int _sizeInCells = new Vector2Int(0, 0);
 
+    [Header("Item Data")]
+    [Tooltip("The FurnitureItemSO this furniture converts back to when picked up. Leave empty for non-pickable furniture.")]
+    [SerializeField] private FurnitureItemSO _furnitureItemSO;
+
+    public FurnitureItemSO FurnitureItemSO => _furnitureItemSO;
+
     private Character _occupant;
     private Character _reservedBy;
     private bool _sizeCalculated = false;
@@ -122,22 +128,36 @@ public class Furniture : MonoBehaviour
         // Debug.Log($"<color=cyan>[Furniture]</color> {_furnitureName} fait {_sizeInCells.x} x {_sizeInCells.y} cellules.");
     }
 
-#if UNITY_EDITOR    
+#if UNITY_EDITOR
     private void OnDrawGizmosSelected()
     {
-        // Dessine la zone occupée par le meuble selon _sizeInCells
-        // On suppose que la FurnitureGrid utilise des cellules de 1x1.
-        Gizmos.color = new Color(0f, 0.5f, 1f, 0.4f); // Bleu semi-transparent
-        
-        // On dessine depuis l'origine (le coin inférieur gauche presumé ou le centre)
-        // Pour être sûr, on dessine la taille exacte qu'il va réclamer à la grille.
+        if (_sizeInCells.x <= 0 || _sizeInCells.y <= 0) return;
+
+        // Compute the actual mesh bounds center to align the gizmo with the visual
+        Renderer[] renderers = GetComponentsInChildren<Renderer>(true);
+        Vector3 center;
+        if (renderers.Length > 0)
+        {
+            Bounds bounds = renderers[0].bounds;
+            for (int i = 1; i < renderers.Length; i++)
+            {
+                if (!(renderers[i] is ParticleSystemRenderer))
+                    bounds.Encapsulate(renderers[i].bounds);
+            }
+            // Use bounds center on X/Z, but place the gizmo at the bottom of the mesh on Y
+            center = new Vector3(bounds.center.x, bounds.min.y, bounds.center.z);
+        }
+        else
+        {
+            center = transform.position;
+        }
+
         Vector3 size = new Vector3(_sizeInCells.x, 0.1f, _sizeInCells.y);
-        Vector3 centerOffset = new Vector3(size.x / 2f, 0, size.z / 2f);
-        
-        // On trace le cube représentant la place prise sur le sol
-        Gizmos.DrawCube(transform.position + centerOffset, size);
+
+        Gizmos.color = new Color(0f, 0.5f, 1f, 0.4f);
+        Gizmos.DrawCube(center, size);
         Gizmos.color = Color.blue;
-        Gizmos.DrawWireCube(transform.position + centerOffset, size);
+        Gizmos.DrawWireCube(center, size);
     }
 #endif
 }

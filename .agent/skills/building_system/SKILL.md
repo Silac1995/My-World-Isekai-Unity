@@ -100,10 +100,45 @@ The base class for interactable or static objects inside rooms.
   - `_occupant`: A character is currently using it physically.
   - Both prevent other characters from using the furniture simultaneously.
 
+### Furniture Placement & Pickup (Player + NPC)
+
+Furniture has two forms:
+- **Portable:** `FurnitureItemSO` (ScriptableObject in `Resources/Data/Item/`) + `FurnitureItemInstance` (carried in hands as a crate)
+- **Installed:** `Furniture` MonoBehaviour (placed on grid or freestanding)
+
+Bidirectional link: `FurnitureItemSO._installedFurniturePrefab` → Furniture prefab; `Furniture._furnitureItemSO` → back to `FurnitureItemSO`.
+
+#### Placement Flow
+- **Player:** Carries `FurnitureItemInstance` in hands → presses F → `FurniturePlacementManager` shows ghost → left-click confirms → queues `CharacterPlaceFurnitureAction`
+- **NPC:** AI decision → queues `CharacterPlaceFurnitureAction(character, room, prefab)` directly
+- **Action (shared):** `CharacterPlaceFurnitureAction.OnApplyEffect()` — server instantiates + `NetworkObject.Spawn()`, registers on grid via `FurnitureManager.RegisterSpawnedFurniture()` if inside a room, consumes item from hands (player path)
+
+#### Pickup Flow
+- **Player:** Hold E on furniture → "Pick Up" option via `FurnitureInteractable.GetHoldInteractionOptions()` → queues `CharacterPickUpFurnitureAction`
+- **NPC:** AI decision → queues `CharacterPickUpFurnitureAction(character, furniture)` directly
+- **Action (shared):** `CharacterPickUpFurnitureAction.OnApplyEffect()` — creates `FurnitureItemInstance`, puts in hands, server unregisters via `FurnitureManager.UnregisterAndRemove()` + `NetworkObject.Despawn()`
+
+#### Key Methods on FurnitureManager
+- `AddFurniture(prefab, position)` — instantiates + registers (non-networked, NPC legacy)
+- `RegisterSpawnedFurniture(furniture, position)` — registers already-spawned networked furniture (no instantiation)
+- `UnregisterAndRemove(furniture)` — unregisters from grid + removes from list (no destroy, caller handles despawn)
+- `RemoveFurniture(furniture)` — unregisters + destroys (non-networked legacy)
+
+#### Debug Mode
+`DebugScript` button calls `FurniturePlacementManager.StartPlacementDebug(FurnitureItemSO)` — bypasses carry requirement, enters ghost placement mode directly.
+
+#### FurnitureGrid Editor Tools
+- `[ContextMenu("Initialize Furniture Grid")]` — bakes grid data into prefab from BoxCollider + floor renderers
+- `_floorRenderers` list — defines walkable floor planes for non-rectangular rooms (L-shapes, etc.)
+- Cells over void (no floor) are marked `IsWall = true` and rejected by `CanPlaceFurniture()`
+- Gizmo colors: green = free, red = occupied, gray = wall/no floor
+
 ## Best Practices
 - Always ensure `Zone` colliders have `isTrigger = true` and perfectly encapsulate their interior visual meshes, as their size dictates the generated `FurnitureGrid`.
 - Query `Furniture` availability starting from the `ComplexRoom` or `Building` level to let recursive logic find the nearest or first-available furniture in the entire property.
 - When an NPC needs to drop items off or use the shop, rely on the properties like `_deliveryZone` stored natively on the `Building` component.
+- Player-placed furniture prefabs must have `NetworkObject`, `Furniture` (with `_furnitureItemSO`), and `FurnitureInteractable` components.
+- All gameplay effects (place, pickup) go through `CharacterAction` — player HUD is UI-only, never spawns directly.
 
 ---
 

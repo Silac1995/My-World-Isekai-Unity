@@ -866,6 +866,7 @@ Transform:
   - {fileID: 3506365290380786962}
   - {fileID: 6920487202969292795}
   - {fileID: 2726253271910618329}
+  - {fileID: 2032391772194138208}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!54 &3937668831498777898
@@ -999,6 +1000,7 @@ MonoBehaviour:
   _battleCircleManager: {fileID: 3483208149316237170}
   _floatingTextSpawner: {fileID: 2207825800403359661}
   _characterParty: {fileID: 906099563299357296}
+  _furniturePlacementManager: {fileID: 6177199399255119807}
   NetworkRaceId:
     UpdateTraits:
       MinSecondsBetweenUpdates: 0
@@ -2008,6 +2010,63 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   _character: {fileID: 2536622428659117900}
   _awarenessCollider: {fileID: 5955514400556626450}
+--- !u!1 &5202796242689016201
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2032391772194138208}
+  - component: {fileID: 6177199399255119807}
+  m_Layer: 0
+  m_Name: FurniturePlacementManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2032391772194138208
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5202796242689016201}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 27.20301, y: 0.44124, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 6179432398992828966}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &6177199399255119807
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5202796242689016201}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: faf25719e3abb7e4ab1b52c602983508, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FurniturePlacementManager
+  ShowTopMostFoldoutHeaderGroup: 1
+  _character: {fileID: 2536622428659117900}
+  _groundLayer:
+    serializedVersion: 2
+    m_Bits: 1024
+  _obstacleLayer:
+    serializedVersion: 2
+    m_Bits: 12544
+  _placementKey: 102
+  _maxPlacementRange: 10
+  _ghostMaterialValid: {fileID: 2100000, guid: 2355107420148c14fa2d7aed19a6f0e2, type: 2}
+  _ghostMaterialInvalid: {fileID: 2100000, guid: 0ebd97f12b174f94ab6e52b1876209e2, type: 2}
+  _toastChannel: {fileID: 11400000, guid: ea961c82479cb974997317e89f3aa9b6, type: 2}
 --- !u!1 &5246753746272467509
 GameObject:
   m_ObjectHideFlags: 0

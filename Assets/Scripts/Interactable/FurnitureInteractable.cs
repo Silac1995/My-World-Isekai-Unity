@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -8,6 +9,7 @@ using UnityEngine;
 public class FurnitureInteractable : InteractableObject
 {
     [SerializeField] private Furniture _furniture;
+    [SerializeField] private MWI.UI.Notifications.ToastNotificationChannel _toastChannel;
 
     public Furniture Furniture => _furniture;
     public bool IsOccupied => _furniture != null && _furniture.IsOccupied;
@@ -53,5 +55,38 @@ public class FurnitureInteractable : InteractableObject
         {
             _furniture.Release();
         }
+    }
+
+    public override List<InteractionOption> GetHoldInteractionOptions(Character interactor)
+    {
+        var options = new List<InteractionOption>();
+
+        // "Pick Up" option — only for furniture that has a FurnitureItemSO assigned
+        if (_furniture != null && _furniture.FurnitureItemSO != null)
+        {
+            bool isDisabled = _furniture.IsOccupied;
+            var hands = interactor.CharacterVisual?.BodyPartsController?.HandsController;
+            if (hands != null && !hands.AreHandsFree()) isDisabled = true;
+
+            options.Add(new InteractionOption
+            {
+                Name = "Pick Up",
+                IsDisabled = isDisabled,
+                Action = () =>
+                {
+                    var action = new CharacterPickUpFurnitureAction(interactor, _furniture);
+                    if (!interactor.CharacterActions.ExecuteAction(action))
+                    {
+                        _toastChannel?.Raise(new MWI.UI.Notifications.ToastNotificationPayload(
+                            message: $"Cannot pick up {_furniture.FurnitureName}",
+                            type: MWI.UI.Notifications.ToastType.Warning,
+                            duration: 3f
+                        ));
+                    }
+                }
+            });
+        }
+
+        return options.Count > 0 ? options : null;
     }
 }

@@ -61,6 +61,8 @@ public class UI_InteractionMenu : MonoBehaviour
                     label.text = label.text == optionName ? toggleName : optionName;
                 if (_lockAfterClick)
                     SetOptionsInteractable(false);
+                else
+                    CloseMenu(); // Non-combat menus close after any action
             });
 
             // Per-button disabled state

@@ -13,7 +13,7 @@ GameObject:
   - component: {fileID: 1387380054978789668}
   - component: {fileID: 1660610704864412911}
   - component: {fileID: 329833458331581252}
-  m_Layer: 12
+  m_Layer: 10
   m_Name: Building interior
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -341,7 +341,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 5522907677479951076, guid: 4d18a28014664374b8486c53417887f0, type: 3}
       propertyPath: m_Layer
-      value: 12
+      value: 10
       objectReference: {fileID: 0}
     - target: {fileID: 6956108077309723652, guid: 4d18a28014664374b8486c53417887f0, type: 3}
       propertyPath: m_Name
@@ -349,11 +349,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6956108077309723652, guid: 4d18a28014664374b8486c53417887f0, type: 3}
       propertyPath: m_Layer
-      value: 12
+      value: 10
       objectReference: {fileID: 0}
     - target: {fileID: 8941970739820418707, guid: 4d18a28014664374b8486c53417887f0, type: 3}
       propertyPath: m_Layer
-      value: 12
+      value: 10
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

@@ -65,19 +65,41 @@ public class FurnitureGrid : MonoBehaviour
             return;
         }
 
+        _buildingBounds = GetComponent<BoxCollider>();
+
+        // Recalculate grid origin from current transform position (handles interiors at y=5000)
+        // The serialized _gridOrigin was baked at edit-time position which may differ at runtime
+        if (_buildingBounds != null)
+        {
+            Vector3 globalCenter = transform.TransformPoint(_buildingBounds.center);
+            Vector3 size = _buildingBounds.size;
+            _gridOrigin = globalCenter - new Vector3(size.x / 2f, 0f, size.z / 2f);
+        }
+
         _grid = new GridCell[_gridWidth, _gridDepth];
         for (int x = 0; x < _gridWidth; x++)
         {
             for (int z = 0; z < _gridDepth; z++)
             {
-                _grid[x, z] = _cells[x * _gridDepth + z];
-                // Clear runtime-only occupant references (they don't survive serialization correctly)
-                _grid[x, z].Occupant = null;
+                GridCell serializedCell = _cells[x * _gridDepth + z];
+
+                // Recalculate world position from grid coordinates instead of using baked position
+                float bottomY = _buildingBounds != null
+                    ? transform.TransformPoint(_buildingBounds.center - new Vector3(0, _buildingBounds.size.y / 2f, 0)).y
+                    : transform.position.y;
+                Vector3 cellPos = _gridOrigin + new Vector3(x * _cellSize + _cellSize / 2f, 0, z * _cellSize + _cellSize / 2f);
+                cellPos.y = bottomY;
+
+                _grid[x, z] = new GridCell
+                {
+                    WorldPosition = cellPos,
+                    Occupant = null,
+                    IsWall = serializedCell.IsWall // Preserve the baked wall data
+                };
             }
         }
 
-        _buildingBounds = GetComponent<BoxCollider>();
-        Debug.Log($"<color=cyan>[FurnitureGrid]</color> Grid restored from serialized data for {gameObject.name}: {_gridWidth}x{_gridDepth} cells.");
+        Debug.Log($"<color=cyan>[FurnitureGrid]</color> Grid restored for {gameObject.name}: {_gridWidth}x{_gridDepth} cells. Origin: {_gridOrigin}");
     }
 
 #if UNITY_EDITOR
@@ -171,7 +193,10 @@ public class FurnitureGrid : MonoBehaviour
     public bool CanPlaceFurniture(Vector3 targetPosition, Vector2Int sizeInCells)
     {
         if (!WorldToGrid(targetPosition, out int startX, out int startZ))
+        {
+            Debug.Log($"<color=red>[FurnitureGrid]</color> WorldToGrid FAILED for pos={targetPosition}, gridOrigin={_gridOrigin}, gridSize={_gridWidth}x{_gridDepth}");
             return false;
+        }
 
         // On vérifie de -size/2 à +size/2 (approx) selon l'ancrage du meuble
         for (int x = startX; x < startX + sizeInCells.x; x++)
