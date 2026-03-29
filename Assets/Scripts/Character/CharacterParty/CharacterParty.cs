@@ -937,13 +937,19 @@ public class CharacterParty : CharacterSystem
     {
         if (door == null || _character == null) yield break;
 
+        // Freeze the controller so the BT doesn't override our pathfinding
+        if (_character.Controller != null && !_character.IsPlayer())
+            _character.Controller.Freeze();
+
+        // Resume movement (Freeze stops it) but under our control, not the BT's
+        _character.CharacterMovement.Resume();
+
         float interactRange = 2.5f;
         if (door.TryGetComponent<InteractableObject>(out var interactable) && interactable.InteractionZone != null)
         {
             interactRange = interactable.InteractionZone.bounds.extents.magnitude;
         }
 
-        // Pathfind to the door
         _character.CharacterMovement.SetDestination(door.transform.position);
 
         float timeout = 15f;
@@ -951,21 +957,25 @@ public class CharacterParty : CharacterSystem
 
         while (elapsed < timeout)
         {
-            if (_character == null || !_character.IsAlive()) yield break;
-            if (door == null) yield break;
+            if (_character == null || !_character.IsAlive()) break;
+            if (door == null) break;
 
             float dist = Vector3.Distance(_character.transform.position, door.transform.position);
 
             if (dist <= interactRange)
             {
-                // Arrived — interact with the door
                 _character.CharacterMovement.Stop();
+
+                // Unfreeze before interacting so the door transition works normally
+                if (_character.Controller != null)
+                    _character.Controller.Unfreeze();
+
                 door.Interact(_character);
                 _doorFollowCoroutine = null;
                 yield break;
             }
 
-            // Re-path periodically in case the NPC got stuck
+            // Re-path every 2s in case the NPC got stuck
             if (elapsed > 0f && Mathf.Repeat(elapsed, 2f) < UnityEngine.Time.deltaTime)
             {
                 _character.CharacterMovement.SetDestination(door.transform.position);
@@ -975,8 +985,10 @@ public class CharacterParty : CharacterSystem
             yield return null;
         }
 
-        // Timeout — stop and resume normal follow
+        // Timeout or error — unfreeze and resume normal behavior
         _character.CharacterMovement.Stop();
+        if (_character.Controller != null)
+            _character.Controller.Unfreeze();
         UpdateFollowState();
         _doorFollowCoroutine = null;
     }
