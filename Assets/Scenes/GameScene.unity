@@ -10264,6 +10264,10 @@ PrefabInstance:
       value: 
       objectReference: {fileID: 1575275819}
     - target: {fileID: 1880132361173114815, guid: 2eac64ad7561d8c4f999a30cda5b79d3, type: 3}
+      propertyPath: _toastChannel
+      value: 
+      objectReference: {fileID: 11400000, guid: ea961c82479cb974997317e89f3aa9b6, type: 2}
+    - target: {fileID: 1880132361173114815, guid: 2eac64ad7561d8c4f999a30cda5b79d3, type: 3}
       propertyPath: _sessionButtonsPanel
       value: 
       objectReference: {fileID: 1109015153}
