@@ -73,7 +73,7 @@ public class BuildingInteriorDoor : MapTransitionDoor
             else
             {
                 doorLock.RequestJiggleServerRpc();
-                if (interactor.IsOwner)
+                if (interactor.IsOwner && interactor.IsPlayer())
                 {
                     UI_Toast.Show("the door is locked");
                 }

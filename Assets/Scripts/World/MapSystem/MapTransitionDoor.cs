@@ -46,7 +46,7 @@ public class MapTransitionDoor : InteractableObject
                     doorLock.RequestJiggleServerRpc();
 
                 // Toast notification for the local player who is attempting to interact
-                if (interactor.IsOwner)
+                if (interactor.IsOwner && interactor.IsPlayer())
                 {
                     UI_Toast.Show("the door is locked");
                 }
