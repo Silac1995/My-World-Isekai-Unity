@@ -123,10 +123,12 @@ public class MapTransitionDoor : InteractableObject
             }
         }
 
+        // Notify followers BEFORE the leader transitions — so the BT follow key is
+        // cleared before the leader warps to the far-away interior offset.
+        TryNotifyPartyFollowersDoor(interactor, targetMapId);
+
         var transitionAction = new CharacterMapTransitionAction(interactor, this, targetMapId, dest, FadeDuration);
         interactor.CharacterActions.ExecuteAction(transitionAction);
-
-        TryNotifyPartyFollowersDoor(interactor, targetMapId);
     }
 
     /// <summary>
