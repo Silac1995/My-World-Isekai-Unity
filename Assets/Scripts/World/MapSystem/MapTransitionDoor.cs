@@ -102,6 +102,17 @@ public class MapTransitionDoor : InteractableObject
 
         Debug.Log($"<color=cyan>[MapTransitionDoor]</color> {GetType().Name} '{name}' Interact: TargetMapId='{targetMapId}', doorPos={transform.position}, TargetSpawnPoint={(TargetSpawnPoint != null ? TargetSpawnPoint.name : "null")}, TargetPositionOffset={TargetPositionOffset}, dest={dest}");
 
+        // --- Party Leader Gathering Check ---
+        if (interactor.CharacterParty != null && interactor.CharacterParty.IsInParty && interactor.CharacterParty.IsPartyLeader)
+        {
+            MapController targetMap = MapController.GetByMapId(targetMapId);
+            if (targetMap != null && (targetMap.Type == MapType.Region || targetMap.Type == MapType.Dungeon))
+            {
+                interactor.CharacterParty.StartGathering(targetMapId, dest);
+                return;
+            }
+        }
+
         var transitionAction = new CharacterMapTransitionAction(interactor, this, targetMapId, dest, FadeDuration);
         interactor.CharacterActions.ExecuteAction(transitionAction);
     }

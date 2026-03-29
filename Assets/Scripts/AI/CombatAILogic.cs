@@ -46,14 +46,20 @@ namespace MWI.AI
             if (currentTarget == null)
             {
                 if (doLog) Debug.Log($"<color=red>[CombatAI]</color> {_self.CharacterName} target is NULL! Stopping movement.");
+                // Clear stale intent so Phase 1 can re-decide with a new target
+                if (_self.CharacterCombat != null && _self.CharacterCombat.HasPlannedAction)
+                    _self.CharacterCombat.ClearActionIntent();
                 movement.Stop();
-                return true; 
+                return true;
             }
             if (!currentTarget.IsAlive())
             {
                 if (doLog) Debug.Log($"<color=red>[CombatAI]</color> {_self.CharacterName} target {currentTarget.CharacterName} is DEAD! Stopping movement.");
+                // Clear stale intent so Phase 1 can re-decide with a new target
+                if (_self.CharacterCombat != null && _self.CharacterCombat.HasPlannedAction)
+                    _self.CharacterCombat.ClearActionIntent();
                 movement.Stop();
-                return true; 
+                return true;
             }
 
             movement.Resume();
@@ -118,11 +124,21 @@ namespace MWI.AI
                     movement.Stop();
                     _self.CharacterVisual?.FaceTarget(currentTarget.transform.position);
 
-                    if (isReadyToAct)
+                    // Don't attempt execution if a previous action (attack animation) is still playing.
+                    // Without this guard, initiative refills (~0.1s) far faster than animations finish (~0.8s),
+                    // causing a rapid attempt→fail→re-decide loop every tick for the entire animation duration.
+                    bool isActionBusy = _self.CharacterActions != null && _self.CharacterActions.CurrentAction != null;
+
+                    if (isReadyToAct && !isActionBusy)
                     {
                         if (doLog) Debug.Log($"<color=orange>[CombatAI]</color> {_self.CharacterName} [Phase 2] Executing Action! Distance: {distToTarget:F2}/{attackRange:F2}, Z-Dist: {zDist:F2}");
-                        _self.CharacterCombat.ExecuteAction(_self.CharacterCombat.PlannedAction);
-                        
+                        bool success = _self.CharacterCombat.ExecuteAction(_self.CharacterCombat.PlannedAction);
+
+                        if (!success)
+                        {
+                            Debug.LogWarning($"<color=yellow>[CombatAI]</color> {_self.CharacterName} [Phase 2] ExecuteAction FAILED — possible stamina depletion or action rejected.");
+                        }
+
                         // Only clear the intent automatically if this is an AI deciding its own actions.
                         // For the player, the intent remains queued until toggled off, creating an auto-attack loop!
                         if (_autoDecideIntent)
@@ -133,7 +149,13 @@ namespace MWI.AI
                     }
                     else
                     {
-                        if (doLog) Debug.Log($"<color=orange>[CombatAI]</color> {_self.CharacterName} [Phase 2] In position but waiting for full initiative (isReadyToAct).");
+                        if (doLog)
+                        {
+                            if (isActionBusy)
+                                Debug.Log($"<color=orange>[CombatAI]</color> {_self.CharacterName} [Phase 2] In position, waiting for current action to finish.");
+                            else
+                                Debug.Log($"<color=orange>[CombatAI]</color> {_self.CharacterName} [Phase 2] In position but waiting for full initiative (isReadyToAct).");
+                        }
                     }
                 }
             }

@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9854ab9cd25473f498cfec74f6c9c677, type: 3}
   m_Name: Tailoring
   m_EditorClassIdentifier: Assembly-CSharp::SkillSO
-  SkillID: S01
+  SkillID: skill03-tailoring
   SkillName: Tailoring
   Description: 
   Icon: {fileID: 0}

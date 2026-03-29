@@ -165,7 +165,9 @@ public class NPCController : CharacterGameController
         if (target.CharacterCombat.IsInBattle && target.IsAlive())
         {
             bool isFriend = _character.CharacterRelation != null && _character.CharacterRelation.IsFriend(target);
-            bool sameParty = _character.CurrentParty != null && _character.CurrentParty == target.CurrentParty;
+            bool sameParty = _character.CharacterParty != null && _character.CharacterParty.IsInParty
+                && target.CharacterParty != null && target.CharacterParty.IsInParty
+                && _character.CharacterParty.PartyData.PartyId == target.CharacterParty.PartyData.PartyId;
 
             // Loyalty trait makes characters more likely to help acquaintances (not just friends)
             bool isAcquaintance = _character.CharacterRelation != null && _character.CharacterRelation.GetRelationshipWith(target)?.RelationValue >= 0;

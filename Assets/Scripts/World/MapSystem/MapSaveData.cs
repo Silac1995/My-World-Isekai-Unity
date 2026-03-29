@@ -30,6 +30,9 @@ namespace MWI.WorldSystem
         public string PrefabName; // Quick way to know what to spawn
         public uint PrefabHash; // Proper NGO GUID matching
 
+        // Party
+        public string PartyId;
+
         // V1 Simple Data: Position and Basic State
         public Vector3 Position;
         public Quaternion Rotation;

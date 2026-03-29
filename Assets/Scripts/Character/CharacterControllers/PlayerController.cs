@@ -149,12 +149,7 @@ public class PlayerController : CharacterGameController
                 SetOrder(null);
             }
 
-            if (Input.GetKeyDown(KeyCode.J))
-            {
-                _character.CharacterCombat.ToggleCombatMode();
-            }
-
-            if (!_character.CharacterCombat.IsInBattle && Input.GetKeyDown(KeyCode.L))
+            if (!_character.CharacterCombat.IsInBattle && Input.GetKeyDown(KeyCode.Space))
             {
                 _character.CharacterCombat.Attack(null);
             }

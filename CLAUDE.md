@@ -43,6 +43,7 @@ The Character entity uses a **Facade + Child Hierarchy** pattern:
 ## Network Architecture
 
 18. All network-related implementation must follow the full network architecture document: `NETWORK_ARCHITECTURE.md`. This document defines all rules around Server authority, Client responsibilities, Host behavior, NPC networking, Client-Side Prediction, Interest Management, Delta Compression, and the correct use of NetworkTransform vs ClientNetworkTransform. For multiplayer implementation specifics, also refer to: `.agent/skills/multiplayer/SKILL.md`. Before writing any networked logic, read the architecture doc and run the checklist at the end of it.
+19. Every networked feature must be validated against **all player relationship scenarios**: Host↔Client, Client↔Client, and Host/Client↔NPC. Data that lives only on the server (static registries, runtime dictionaries) is invisible to clients — always ensure clients receive the data they need via `NetworkVariable`, ClientRpc, or `OnValueChanged` callbacks. Never assume a client has access to server-side state.
 
 ## Character System
 

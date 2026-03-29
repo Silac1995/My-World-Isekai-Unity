@@ -5,7 +5,16 @@
       "Read(//c/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity/$APPDATA/npm/**)",
       "Read(//c/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity/$LOCALAPPDATA/npm/**)",
       "Read(//c/Users/Kevin/AppData/Roaming/**)",
-      "Read(//c/Users/Kevin/AppData/Local/**)"
+      "Read(//c/Users/Kevin/AppData/Local/**)",
+      "Bash(npx unity-mcp-cli:*)",
+      "Bash(cmd.exe /c \"where unity-mcp-cli 2>nul\")",
+      "Bash(cmd.exe /c \"where npx 2>nul\")",
+      "Bash(cmd.exe /c \"where unity-mcp-cli\")",
+      "Bash(cmd.exe /c \"where npx\")",
+      "Bash(cmd.exe /c \"where node\")",
+      "Bash(where unity-mcp-cli:*)",
+      "Bash(npm list:*)",
+      "Bash(find /c/Users/Kevin/AppData -name unity-mcp-cli* -type f)"
     ]
   }
 }

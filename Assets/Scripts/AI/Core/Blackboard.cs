@@ -20,6 +20,7 @@ namespace MWI.AI
         public const string KEY_FLEE_BATTLE_MANAGER = "FleeBattleManager";
         public const string KEY_COMBAT_TARGET = "CombatTarget";
         public const string KEY_SOCIAL_TARGET = "SocialTarget";
+        public const string KEY_PARTY_FOLLOW = "PartyFollow";
 
         private Dictionary<string, object> _data = new Dictionary<string, object>();
 

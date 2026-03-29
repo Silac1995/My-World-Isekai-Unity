@@ -67,7 +67,7 @@ public class GameSessionManager : MonoBehaviour
     {
         if (clientId == NetworkManager.Singleton.LocalClientId && !IsHost)
         {
-            ShowToast("Connected to Server!", MWI.UI.Notifications.ToastType.Success);
+            Debug.Log("<color=cyan>[GameSession]</color> Connected to Server");
         }
 
         if (NetworkManager.Singleton.IsServer)
@@ -170,7 +170,6 @@ public class GameSessionManager : MonoBehaviour
         if (NetworkManager.Singleton.StartHost())
         {
             Debug.Log("<color=green>[GameSession]</color> Started Solo / Host Mode");
-            ShowToast("Server Started Successfully", MWI.UI.Notifications.ToastType.Success);
         }
     }
 
@@ -195,7 +194,6 @@ public class GameSessionManager : MonoBehaviour
         if (NetworkManager.Singleton.StartClient())
         {
             Debug.Log("<color=cyan>[GameSession]</color> Started Client Mode");
-            ShowToast($"Connecting to {TargetIP}:{TargetPort}...", MWI.UI.Notifications.ToastType.Info);
         }
         else
         {
