@@ -794,7 +794,12 @@ public class CharacterParty : CharacterSystem
     {
         if (!IsServer || !IsInParty) return;
         if (_character.IsPlayer()) return;
-        if (IsPartyLeader) return;
+        if (IsPartyLeader)
+        {
+            // Leader doesn't follow anyone — clear any leftover follow key
+            ClearFollowState();
+            return;
+        }
 
         Character leader = Character.FindByUUID(_partyData.LeaderId);
         bool shouldFollow = _partyData.State == PartyState.Active
