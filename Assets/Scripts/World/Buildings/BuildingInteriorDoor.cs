@@ -112,6 +112,8 @@ public class BuildingInteriorDoor : MapTransitionDoor
             interactor, this, interiorMapId, targetPosition, FadeDuration
         );
         interactor.CharacterActions.ExecuteAction(transitionAction);
+
+        TryNotifyPartyFollowersDoor(interactor, interiorMapId);
     }
 
     /// <summary>
