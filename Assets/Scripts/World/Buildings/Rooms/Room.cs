@@ -76,7 +76,16 @@ public class Room : Zone
 
         if (_boxCollider != null && _furnitureManager.Grid != null)
         {
-            _furnitureManager.Grid.Initialize(_boxCollider);
+            if (_furnitureManager.Grid.IsInitialized)
+            {
+                // Grid was pre-baked in the editor — restore runtime 2D array from serialized data
+                _furnitureManager.Grid.RestoreFromSerializedData();
+            }
+            else
+            {
+                // No pre-baked data — initialize at runtime (legacy path)
+                _furnitureManager.Grid.Initialize(_boxCollider);
+            }
         }
         else
         {

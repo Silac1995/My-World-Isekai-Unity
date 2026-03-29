@@ -422,7 +422,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7957207800943456863, guid: 2e1494b4d52f43344be89b09545dbadf, type: 3}
       propertyPath: buildingName
-      value: v
+      value: Small house
       objectReference: {fileID: 0}
     - target: {fileID: 7957207800943456863, guid: 2e1494b4d52f43344be89b09545dbadf, type: 3}
       propertyPath: _boundsTarget
@@ -432,9 +432,29 @@ PrefabInstance:
       propertyPath: _buildingZone
       value: 
       objectReference: {fileID: 9086763889318979445}
+    - target: {fileID: 8467930593367525379, guid: 2e1494b4d52f43344be89b09545dbadf, type: 3}
+      propertyPath: m_Size.x
+      value: 20
+      objectReference: {fileID: 0}
+    - target: {fileID: 8467930593367525379, guid: 2e1494b4d52f43344be89b09545dbadf, type: 3}
+      propertyPath: m_Size.y
+      value: 18
+      objectReference: {fileID: 0}
+    - target: {fileID: 8467930593367525379, guid: 2e1494b4d52f43344be89b09545dbadf, type: 3}
+      propertyPath: m_Size.z
+      value: 22.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 8467930593367525379, guid: 2e1494b4d52f43344be89b09545dbadf, type: 3}
+      propertyPath: m_Center.y
+      value: 9
+      objectReference: {fileID: 0}
+    - target: {fileID: 8467930593367525379, guid: 2e1494b4d52f43344be89b09545dbadf, type: 3}
+      propertyPath: m_Center.z
+      value: -1.25
+      objectReference: {fileID: 0}
     - target: {fileID: 8930520634193134600, guid: 2e1494b4d52f43344be89b09545dbadf, type: 3}
       propertyPath: m_Name
-      value: House prefab Variant
+      value: Small house
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -520,6 +540,10 @@ PrefabInstance:
     - target: {fileID: 5435737022225671978, guid: f9bfe32b4f4fbe5478baff6603414957, type: 3}
       propertyPath: _exteriorMapId
       value: 
+      objectReference: {fileID: 0}
+    - target: {fileID: 8585407310982743882, guid: f9bfe32b4f4fbe5478baff6603414957, type: 3}
+      propertyPath: m_VersionIndex
+      value: 3555
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

@@ -332,7 +332,7 @@ MonoBehaviour:
   m_OverrideVoxelSize: 0
   m_VoxelSize: 0.6666667
   m_MinRegionArea: 2
-  m_NavMeshData: {fileID: 23800000, guid: a4c041d23639d6840a579747702771fc, type: 2}
+  m_NavMeshData: {fileID: 23800000, guid: 19e75d2585832434eb57dfac9ce16c3b, type: 2}
   m_BuildHeightMesh: 0
 --- !u!1001 &5628843982878210475
 PrefabInstance:
@@ -469,6 +469,1211 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FurnitureGrid
   _cellSize: 1
+  _floorRenderers: []
+  _gridWidth: 20
+  _gridDepth: 20
+  _gridOrigin: {x: -10, y: 0, z: -10}
+  _cells:
+  - WorldPosition: {x: -9.5, y: 0, z: -9.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -9.5, y: 0, z: -8.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -9.5, y: 0, z: -7.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -9.5, y: 0, z: -6.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -9.5, y: 0, z: -5.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -9.5, y: 0, z: -4.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -9.5, y: 0, z: -3.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -9.5, y: 0, z: -2.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -9.5, y: 0, z: -1.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -9.5, y: 0, z: -0.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -9.5, y: 0, z: 0.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -9.5, y: 0, z: 1.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -9.5, y: 0, z: 2.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -9.5, y: 0, z: 3.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -9.5, y: 0, z: 4.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -9.5, y: 0, z: 5.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -9.5, y: 0, z: 6.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -9.5, y: 0, z: 7.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -9.5, y: 0, z: 8.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -9.5, y: 0, z: 9.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -8.5, y: 0, z: -9.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -8.5, y: 0, z: -8.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -8.5, y: 0, z: -7.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -8.5, y: 0, z: -6.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -8.5, y: 0, z: -5.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -8.5, y: 0, z: -4.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -8.5, y: 0, z: -3.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -8.5, y: 0, z: -2.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -8.5, y: 0, z: -1.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -8.5, y: 0, z: -0.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -8.5, y: 0, z: 0.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -8.5, y: 0, z: 1.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -8.5, y: 0, z: 2.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -8.5, y: 0, z: 3.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -8.5, y: 0, z: 4.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -8.5, y: 0, z: 5.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -8.5, y: 0, z: 6.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -8.5, y: 0, z: 7.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -8.5, y: 0, z: 8.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -8.5, y: 0, z: 9.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -7.5, y: 0, z: -9.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -7.5, y: 0, z: -8.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -7.5, y: 0, z: -7.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -7.5, y: 0, z: -6.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -7.5, y: 0, z: -5.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -7.5, y: 0, z: -4.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -7.5, y: 0, z: -3.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -7.5, y: 0, z: -2.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -7.5, y: 0, z: -1.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -7.5, y: 0, z: -0.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -7.5, y: 0, z: 0.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -7.5, y: 0, z: 1.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -7.5, y: 0, z: 2.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -7.5, y: 0, z: 3.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -7.5, y: 0, z: 4.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -7.5, y: 0, z: 5.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -7.5, y: 0, z: 6.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -7.5, y: 0, z: 7.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -7.5, y: 0, z: 8.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -7.5, y: 0, z: 9.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -6.5, y: 0, z: -9.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -6.5, y: 0, z: -8.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -6.5, y: 0, z: -7.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -6.5, y: 0, z: -6.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -6.5, y: 0, z: -5.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -6.5, y: 0, z: -4.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -6.5, y: 0, z: -3.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -6.5, y: 0, z: -2.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -6.5, y: 0, z: -1.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -6.5, y: 0, z: -0.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -6.5, y: 0, z: 0.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -6.5, y: 0, z: 1.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -6.5, y: 0, z: 2.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -6.5, y: 0, z: 3.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -6.5, y: 0, z: 4.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -6.5, y: 0, z: 5.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -6.5, y: 0, z: 6.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -6.5, y: 0, z: 7.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -6.5, y: 0, z: 8.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -6.5, y: 0, z: 9.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -5.5, y: 0, z: -9.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -5.5, y: 0, z: -8.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -5.5, y: 0, z: -7.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -5.5, y: 0, z: -6.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -5.5, y: 0, z: -5.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -5.5, y: 0, z: -4.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -5.5, y: 0, z: -3.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -5.5, y: 0, z: -2.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -5.5, y: 0, z: -1.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -5.5, y: 0, z: -0.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -5.5, y: 0, z: 0.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -5.5, y: 0, z: 1.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -5.5, y: 0, z: 2.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -5.5, y: 0, z: 3.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -5.5, y: 0, z: 4.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -5.5, y: 0, z: 5.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -5.5, y: 0, z: 6.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -5.5, y: 0, z: 7.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -5.5, y: 0, z: 8.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -5.5, y: 0, z: 9.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -4.5, y: 0, z: -9.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -4.5, y: 0, z: -8.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -4.5, y: 0, z: -7.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -4.5, y: 0, z: -6.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -4.5, y: 0, z: -5.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -4.5, y: 0, z: -4.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -4.5, y: 0, z: -3.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -4.5, y: 0, z: -2.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -4.5, y: 0, z: -1.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -4.5, y: 0, z: -0.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -4.5, y: 0, z: 0.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -4.5, y: 0, z: 1.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -4.5, y: 0, z: 2.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -4.5, y: 0, z: 3.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -4.5, y: 0, z: 4.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -4.5, y: 0, z: 5.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -4.5, y: 0, z: 6.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -4.5, y: 0, z: 7.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -4.5, y: 0, z: 8.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -4.5, y: 0, z: 9.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -3.5, y: 0, z: -9.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -3.5, y: 0, z: -8.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -3.5, y: 0, z: -7.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -3.5, y: 0, z: -6.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -3.5, y: 0, z: -5.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -3.5, y: 0, z: -4.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -3.5, y: 0, z: -3.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -3.5, y: 0, z: -2.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -3.5, y: 0, z: -1.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -3.5, y: 0, z: -0.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -3.5, y: 0, z: 0.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -3.5, y: 0, z: 1.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -3.5, y: 0, z: 2.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -3.5, y: 0, z: 3.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -3.5, y: 0, z: 4.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -3.5, y: 0, z: 5.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -3.5, y: 0, z: 6.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -3.5, y: 0, z: 7.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -3.5, y: 0, z: 8.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -3.5, y: 0, z: 9.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -2.5, y: 0, z: -9.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -2.5, y: 0, z: -8.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -2.5, y: 0, z: -7.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -2.5, y: 0, z: -6.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -2.5, y: 0, z: -5.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -2.5, y: 0, z: -4.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -2.5, y: 0, z: -3.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -2.5, y: 0, z: -2.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -2.5, y: 0, z: -1.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -2.5, y: 0, z: -0.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -2.5, y: 0, z: 0.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -2.5, y: 0, z: 1.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -2.5, y: 0, z: 2.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -2.5, y: 0, z: 3.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -2.5, y: 0, z: 4.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -2.5, y: 0, z: 5.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -2.5, y: 0, z: 6.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -2.5, y: 0, z: 7.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -2.5, y: 0, z: 8.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -2.5, y: 0, z: 9.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -1.5, y: 0, z: -9.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -1.5, y: 0, z: -8.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -1.5, y: 0, z: -7.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -1.5, y: 0, z: -6.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -1.5, y: 0, z: -5.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -1.5, y: 0, z: -4.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -1.5, y: 0, z: -3.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -1.5, y: 0, z: -2.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -1.5, y: 0, z: -1.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -1.5, y: 0, z: -0.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -1.5, y: 0, z: 0.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -1.5, y: 0, z: 1.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -1.5, y: 0, z: 2.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -1.5, y: 0, z: 3.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -1.5, y: 0, z: 4.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -1.5, y: 0, z: 5.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -1.5, y: 0, z: 6.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -1.5, y: 0, z: 7.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -1.5, y: 0, z: 8.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -1.5, y: 0, z: 9.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -0.5, y: 0, z: -9.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -0.5, y: 0, z: -8.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -0.5, y: 0, z: -7.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -0.5, y: 0, z: -6.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -0.5, y: 0, z: -5.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -0.5, y: 0, z: -4.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -0.5, y: 0, z: -3.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -0.5, y: 0, z: -2.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -0.5, y: 0, z: -1.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -0.5, y: 0, z: -0.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -0.5, y: 0, z: 0.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -0.5, y: 0, z: 1.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -0.5, y: 0, z: 2.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -0.5, y: 0, z: 3.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -0.5, y: 0, z: 4.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -0.5, y: 0, z: 5.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -0.5, y: 0, z: 6.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -0.5, y: 0, z: 7.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -0.5, y: 0, z: 8.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -0.5, y: 0, z: 9.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 0.5, y: 0, z: -9.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 0.5, y: 0, z: -8.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 0.5, y: 0, z: -7.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 0.5, y: 0, z: -6.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 0.5, y: 0, z: -5.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 0.5, y: 0, z: -4.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 0.5, y: 0, z: -3.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 0.5, y: 0, z: -2.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 0.5, y: 0, z: -1.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 0.5, y: 0, z: -0.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 0.5, y: 0, z: 0.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 0.5, y: 0, z: 1.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 0.5, y: 0, z: 2.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 0.5, y: 0, z: 3.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 0.5, y: 0, z: 4.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 0.5, y: 0, z: 5.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 0.5, y: 0, z: 6.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 0.5, y: 0, z: 7.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 0.5, y: 0, z: 8.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 0.5, y: 0, z: 9.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 1.5, y: 0, z: -9.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 1.5, y: 0, z: -8.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 1.5, y: 0, z: -7.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 1.5, y: 0, z: -6.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 1.5, y: 0, z: -5.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 1.5, y: 0, z: -4.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 1.5, y: 0, z: -3.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 1.5, y: 0, z: -2.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 1.5, y: 0, z: -1.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 1.5, y: 0, z: -0.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 1.5, y: 0, z: 0.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 1.5, y: 0, z: 1.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 1.5, y: 0, z: 2.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 1.5, y: 0, z: 3.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 1.5, y: 0, z: 4.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 1.5, y: 0, z: 5.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 1.5, y: 0, z: 6.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 1.5, y: 0, z: 7.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 1.5, y: 0, z: 8.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 1.5, y: 0, z: 9.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 2.5, y: 0, z: -9.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 2.5, y: 0, z: -8.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 2.5, y: 0, z: -7.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 2.5, y: 0, z: -6.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 2.5, y: 0, z: -5.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 2.5, y: 0, z: -4.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 2.5, y: 0, z: -3.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 2.5, y: 0, z: -2.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 2.5, y: 0, z: -1.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 2.5, y: 0, z: -0.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 2.5, y: 0, z: 0.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 2.5, y: 0, z: 1.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 2.5, y: 0, z: 2.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 2.5, y: 0, z: 3.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 2.5, y: 0, z: 4.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 2.5, y: 0, z: 5.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 2.5, y: 0, z: 6.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 2.5, y: 0, z: 7.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 2.5, y: 0, z: 8.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 2.5, y: 0, z: 9.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 3.5, y: 0, z: -9.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 3.5, y: 0, z: -8.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 3.5, y: 0, z: -7.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 3.5, y: 0, z: -6.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 3.5, y: 0, z: -5.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 3.5, y: 0, z: -4.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 3.5, y: 0, z: -3.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 3.5, y: 0, z: -2.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 3.5, y: 0, z: -1.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 3.5, y: 0, z: -0.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 3.5, y: 0, z: 0.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 3.5, y: 0, z: 1.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 3.5, y: 0, z: 2.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 3.5, y: 0, z: 3.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 3.5, y: 0, z: 4.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 3.5, y: 0, z: 5.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 3.5, y: 0, z: 6.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 3.5, y: 0, z: 7.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 3.5, y: 0, z: 8.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 3.5, y: 0, z: 9.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 4.5, y: 0, z: -9.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 4.5, y: 0, z: -8.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 4.5, y: 0, z: -7.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 4.5, y: 0, z: -6.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 4.5, y: 0, z: -5.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 4.5, y: 0, z: -4.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 4.5, y: 0, z: -3.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 4.5, y: 0, z: -2.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 4.5, y: 0, z: -1.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 4.5, y: 0, z: -0.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 4.5, y: 0, z: 0.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 4.5, y: 0, z: 1.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 4.5, y: 0, z: 2.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 4.5, y: 0, z: 3.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 4.5, y: 0, z: 4.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 4.5, y: 0, z: 5.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 4.5, y: 0, z: 6.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 4.5, y: 0, z: 7.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 4.5, y: 0, z: 8.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 4.5, y: 0, z: 9.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 5.5, y: 0, z: -9.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 5.5, y: 0, z: -8.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 5.5, y: 0, z: -7.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 5.5, y: 0, z: -6.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 5.5, y: 0, z: -5.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 5.5, y: 0, z: -4.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 5.5, y: 0, z: -3.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 5.5, y: 0, z: -2.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 5.5, y: 0, z: -1.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 5.5, y: 0, z: -0.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 5.5, y: 0, z: 0.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 5.5, y: 0, z: 1.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 5.5, y: 0, z: 2.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 5.5, y: 0, z: 3.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 5.5, y: 0, z: 4.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 5.5, y: 0, z: 5.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 5.5, y: 0, z: 6.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 5.5, y: 0, z: 7.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 5.5, y: 0, z: 8.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 5.5, y: 0, z: 9.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 6.5, y: 0, z: -9.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 6.5, y: 0, z: -8.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 6.5, y: 0, z: -7.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 6.5, y: 0, z: -6.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 6.5, y: 0, z: -5.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 6.5, y: 0, z: -4.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 6.5, y: 0, z: -3.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 6.5, y: 0, z: -2.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 6.5, y: 0, z: -1.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 6.5, y: 0, z: -0.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 6.5, y: 0, z: 0.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 6.5, y: 0, z: 1.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 6.5, y: 0, z: 2.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 6.5, y: 0, z: 3.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 6.5, y: 0, z: 4.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 6.5, y: 0, z: 5.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 6.5, y: 0, z: 6.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 6.5, y: 0, z: 7.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 6.5, y: 0, z: 8.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 6.5, y: 0, z: 9.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 7.5, y: 0, z: -9.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 7.5, y: 0, z: -8.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 7.5, y: 0, z: -7.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 7.5, y: 0, z: -6.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 7.5, y: 0, z: -5.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 7.5, y: 0, z: -4.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 7.5, y: 0, z: -3.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 7.5, y: 0, z: -2.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 7.5, y: 0, z: -1.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 7.5, y: 0, z: -0.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 7.5, y: 0, z: 0.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 7.5, y: 0, z: 1.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 7.5, y: 0, z: 2.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 7.5, y: 0, z: 3.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 7.5, y: 0, z: 4.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 7.5, y: 0, z: 5.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 7.5, y: 0, z: 6.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 7.5, y: 0, z: 7.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 7.5, y: 0, z: 8.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 7.5, y: 0, z: 9.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 8.5, y: 0, z: -9.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 8.5, y: 0, z: -8.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 8.5, y: 0, z: -7.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 8.5, y: 0, z: -6.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 8.5, y: 0, z: -5.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 8.5, y: 0, z: -4.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 8.5, y: 0, z: -3.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 8.5, y: 0, z: -2.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 8.5, y: 0, z: -1.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 8.5, y: 0, z: -0.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 8.5, y: 0, z: 0.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 8.5, y: 0, z: 1.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 8.5, y: 0, z: 2.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 8.5, y: 0, z: 3.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 8.5, y: 0, z: 4.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 8.5, y: 0, z: 5.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 8.5, y: 0, z: 6.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 8.5, y: 0, z: 7.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 8.5, y: 0, z: 8.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 8.5, y: 0, z: 9.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 9.5, y: 0, z: -9.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 9.5, y: 0, z: -8.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 9.5, y: 0, z: -7.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 9.5, y: 0, z: -6.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 9.5, y: 0, z: -5.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 9.5, y: 0, z: -4.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 9.5, y: 0, z: -3.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 9.5, y: 0, z: -2.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 9.5, y: 0, z: -1.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 9.5, y: 0, z: -0.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 9.5, y: 0, z: 0.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 9.5, y: 0, z: 1.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 9.5, y: 0, z: 2.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 9.5, y: 0, z: 3.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 9.5, y: 0, z: 4.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 9.5, y: 0, z: 5.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 9.5, y: 0, z: 6.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 9.5, y: 0, z: 7.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 9.5, y: 0, z: 8.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 9.5, y: 0, z: 9.5}
+    Occupant: {fileID: 0}
+    IsWall: 0
 --- !u!114 &-8921781794977322186
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -515,4 +1720,6 @@ MonoBehaviour:
   zoneType: 0
   zoneName: 
   _boundsTarget: {fileID: 998624738345206160}
+  _boundsTargets:
+  - {fileID: 998624738345206160}
   _roomName: 

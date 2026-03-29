@@ -518,6 +518,7 @@ MonoBehaviour:
   interactionPrompt: Press E to interact
   _interactionZone: {fileID: 7216829249605665523}
   _rootgameObject: {fileID: 1329527029119559092}
+  _rigidbody: {fileID: 0}
   _furniture: {fileID: 4748126588462873856}
   _craftingStation: {fileID: 4748126588462873856}
   _craftingWindowPrefab: {fileID: 3509334697153544943, guid: 4afa5dd3aa3a9924683f6bd8dbb07d4a, type: 3}
@@ -536,7 +537,7 @@ MonoBehaviour:
   _furnitureName: Anvil
   _furnitureTag: 3
   _interactionPoint: {fileID: 6070397181164859014}
-  _sizeInCells: {x: 15, y: 5}
+  _sizeInCells: {x: 521, y: 5}
   _stationType: 0
   _craftableItems:
   - {fileID: 11400000, guid: 6c5a51e107481e44e877e826e0853958, type: 2}

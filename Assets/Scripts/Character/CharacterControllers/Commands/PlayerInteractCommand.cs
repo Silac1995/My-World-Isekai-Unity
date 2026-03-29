@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.AI;
 using MWI.AI;
 
 namespace MWI.CharacterControllers.Commands
@@ -14,12 +15,14 @@ namespace MWI.CharacterControllers.Commands
         private readonly InteractableObject _target;
         private readonly PlayerInteractionDetector _detector;
         private bool _hasInteracted;
+        private bool _navigationStarted;
 
         public PlayerInteractCommand(InteractableObject target, PlayerInteractionDetector detector)
         {
             _target = target;
             _detector = detector;
             _hasInteracted = false;
+            _navigationStarted = false;
         }
 
         public bool Tick(PlayerController controller, CharacterMovement movement)
@@ -46,13 +49,34 @@ namespace MWI.CharacterControllers.Commands
             }
 
             // Navigate toward the target's position
-            Vector3 targetPos = _target.Rigidbody != null 
-                ? _target.Rigidbody.position 
+            Vector3 targetPos = _target.Rigidbody != null
+                ? _target.Rigidbody.position
                 : _target.transform.position;
+
+            // Find the closest walkable NavMesh point. Use a large radius to handle
+            // targets inside big carved areas (e.g. door in a 30m building).
+            if (NavMesh.SamplePosition(targetPos, out NavMeshHit hit, 30f, NavMesh.AllAreas))
+            {
+                targetPos = hit.position;
+            }
 
             if (Vector3.Distance(movement.Destination, targetPos) > 0.5f)
             {
                 movement.SetDestination(targetPos, controller.Character.MovementSpeed);
+                _navigationStarted = true;
+            }
+
+            // Proximity fallback: the player explicitly pressed E on this target.
+            // If the agent has walked as close as the NavMesh allows but the target
+            // is in a carved area (no trigger overlap possible), interact by distance.
+            if (_navigationStarted && NavMeshUtility.HasAgentReachedDestination(movement))
+            {
+                float dist = Vector3.Distance(controller.transform.position, _target.transform.position);
+                Debug.Log($"<color=green>[PlayerInteractCmd]</color> Proximity fallback: {dist:F1}m from {_target.name}. Triggering interaction.");
+                movement.Stop();
+                _detector.TriggerInteract(_target);
+                _hasInteracted = true;
+                return true;
             }
 
             return false;

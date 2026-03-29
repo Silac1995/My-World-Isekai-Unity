@@ -145,19 +145,25 @@ public class Building : ComplexRoom
     }
 
     /// <summary>
-    /// Adds NavMeshObstacle (Carve=true) to each Room in the building hierarchy.
-    /// This creates compound rectangular carves matching the building's actual shape,
-    /// so NPCs path around placed buildings instead of walking through them.
+    /// Adds NavMeshObstacle (Carve=true) to each Room in the building hierarchy
+    /// so NPCs path around the building instead of walking through it.
+    /// Skips the Building root when sub-rooms exist to avoid overlapping obstacles.
     /// Runs on all clients — NavMesh carving is a local Unity engine feature.
     /// </summary>
     private void ConfigureNavMeshObstacles()
     {
-        foreach (Room room in GetAllRooms())
+        var allRooms = GetAllRooms().ToList();
+        bool hasSubRooms = allRooms.Count > 1;
+
+        foreach (Room room in allRooms)
         {
+            // Skip the Building root when sub-rooms exist — its BoxCollider
+            // covers the entire building and would overlap with sub-room obstacles.
+            if (room == this && hasSubRooms) continue;
+
             BoxCollider boxCol = room.GetComponent<BoxCollider>();
             if (boxCol == null) continue;
 
-            // Skip if already has one (e.g. prefab already configured)
             if (room.GetComponent<NavMeshObstacle>() != null) continue;
 
             NavMeshObstacle obstacle = room.gameObject.AddComponent<NavMeshObstacle>();

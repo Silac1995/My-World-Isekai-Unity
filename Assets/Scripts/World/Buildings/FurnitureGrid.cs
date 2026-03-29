@@ -16,60 +16,156 @@ public class FurnitureGrid : MonoBehaviour
     [Header("Grid Settings")]
     [SerializeField] private float _cellSize = 1f;
 
+    [Tooltip("Floor planes/meshes that define the walkable area. Cells not above any of these are marked as walls.")]
+    [SerializeField] private List<Renderer> _floorRenderers = new List<Renderer>();
+
+    [Header("Serialized Grid Data (Editor-Initialized)")]
+    [SerializeField] private int _gridWidth;
+    [SerializeField] private int _gridDepth;
+    [SerializeField] private Vector3 _gridOrigin;
+    [SerializeField] private List<GridCell> _cells = new List<GridCell>();
+
     private GridCell[,] _grid;
-    private int _gridWidth;
-    private int _gridDepth;
-    private Vector3 _gridOrigin;
     private BoxCollider _buildingBounds;
 
     public float CellSize => _cellSize;
+    public bool IsInitialized => _gridWidth > 0 && _gridDepth > 0 && _cells.Count == _gridWidth * _gridDepth;
 
     public void Initialize(BoxCollider buildingBounds)
     {
         _buildingBounds = buildingBounds;
-        
+
         if (_buildingBounds == null)
         {
-            Debug.LogError($"<color=red>[FurnitureGrid]</color> Aucun BoxCollider fourni pour générer la grille sur {gameObject.name}");
+            Debug.LogError($"<color=red>[FurnitureGrid]</color> No BoxCollider provided for grid generation on {gameObject.name}");
             return;
         }
 
         Vector3 size = _buildingBounds.size;
-        
-        // Calcul du nombre de cellules basé sur la taille du collider du building
+
         _gridWidth = Mathf.CeilToInt(size.x / _cellSize);
         _gridDepth = Mathf.CeilToInt(size.z / _cellSize);
 
-        _grid = new GridCell[_gridWidth, _gridDepth];
-
-        // Calculer l'origine (coin inférieur gauche en X/Z) local ou global
-        // Le BoxCollider a un 'center' qui est l'offset local par rapport au transform
         Vector3 globalCenter = transform.TransformPoint(_buildingBounds.center);
         _gridOrigin = globalCenter - new Vector3(size.x / 2f, 0f, size.z / 2f);
 
         GenerateGrid();
-        Debug.Log($"<color=cyan>[FurnitureGrid]</color> Grille initialisée pour {gameObject.name} : {_gridWidth}x{_gridDepth} cellules.");
+        Debug.Log($"<color=cyan>[FurnitureGrid]</color> Grid initialized for {gameObject.name}: {_gridWidth}x{_gridDepth} cells.");
     }
 
-    private void GenerateGrid()
+    /// <summary>
+    /// Rebuilds the runtime 2D array from serialized flat _cells list.
+    /// Call this in Awake when the grid was pre-baked in the editor.
+    /// </summary>
+    public void RestoreFromSerializedData()
     {
+        if (!IsInitialized)
+        {
+            Debug.LogWarning($"<color=orange>[FurnitureGrid]</color> Cannot restore grid for {gameObject.name}: no serialized data.");
+            return;
+        }
+
+        _grid = new GridCell[_gridWidth, _gridDepth];
         for (int x = 0; x < _gridWidth; x++)
         {
             for (int z = 0; z < _gridDepth; z++)
             {
-                // Position centrale de la cellule (en X/Z). Sur Y, on se place à la base du BoxCollider (le sol).
+                _grid[x, z] = _cells[x * _gridDepth + z];
+                // Clear runtime-only occupant references (they don't survive serialization correctly)
+                _grid[x, z].Occupant = null;
+            }
+        }
+
+        _buildingBounds = GetComponent<BoxCollider>();
+        Debug.Log($"<color=cyan>[FurnitureGrid]</color> Grid restored from serialized data for {gameObject.name}: {_gridWidth}x{_gridDepth} cells.");
+    }
+
+#if UNITY_EDITOR
+    [ContextMenu("Initialize Furniture Grid")]
+    public void InitializeFurnitureGridEditor()
+    {
+        BoxCollider boxCol = GetComponent<BoxCollider>();
+        if (boxCol == null)
+        {
+            Debug.LogError($"<color=red>[FurnitureGrid]</color> No BoxCollider found on {gameObject.name}. Add one first.");
+            return;
+        }
+
+        UnityEditor.Undo.RecordObject(this, "Initialize Furniture Grid");
+
+        Initialize(boxCol);
+
+        UnityEditor.EditorUtility.SetDirty(this);
+        Debug.Log($"<color=green>[FurnitureGrid]</color> Furniture grid initialized in editor for {gameObject.name}: {_gridWidth}x{_gridDepth} cells.");
+    }
+#endif
+
+    private void GenerateGrid()
+    {
+        _grid = new GridCell[_gridWidth, _gridDepth];
+        _cells.Clear();
+
+        // Collect floor colliders for raycasting (temporarily enable if needed)
+        var floorColliders = new List<Collider>();
+        var wasDisabled = new List<Collider>();
+        foreach (var r in _floorRenderers)
+        {
+            if (r == null) continue;
+            Collider col = r.GetComponent<Collider>();
+            if (col == null) continue;
+            if (!col.enabled)
+            {
+                col.enabled = true;
+                wasDisabled.Add(col);
+            }
+            floorColliders.Add(col);
+        }
+        bool useFloorCheck = floorColliders.Count > 0;
+
+        for (int x = 0; x < _gridWidth; x++)
+        {
+            for (int z = 0; z < _gridDepth; z++)
+            {
                 float bottomY = transform.TransformPoint(_buildingBounds.center - new Vector3(0, _buildingBounds.size.y / 2f, 0)).y;
                 Vector3 cellPos = _gridOrigin + new Vector3(x * _cellSize + _cellSize / 2f, 0, z * _cellSize + _cellSize / 2f);
                 cellPos.y = bottomY;
-                
-                _grid[x, z] = new GridCell
+
+                bool isWall = false;
+                if (useFloorCheck)
+                {
+                    // Raycast downward from above the cell to check if it hits any floor renderer
+                    Vector3 rayOrigin = cellPos + Vector3.up * 5f;
+                    isWall = !RayHitsAnyFloor(rayOrigin, Vector3.down, 10f, floorColliders);
+                }
+
+                var cell = new GridCell
                 {
                     WorldPosition = cellPos,
                     Occupant = null,
-                    IsWall = false // TODO: Raycast ou check logique pour définir si c'est près d'un mur
+                    IsWall = isWall
                 };
+
+                _grid[x, z] = cell;
+                _cells.Add(cell);
             }
         }
+
+        // Restore colliders that were disabled
+        foreach (var col in wasDisabled)
+        {
+            col.enabled = false;
+        }
+    }
+
+    private bool RayHitsAnyFloor(Vector3 origin, Vector3 direction, float maxDistance, List<Collider> floorColliders)
+    {
+        Ray ray = new Ray(origin, direction);
+        foreach (var col in floorColliders)
+        {
+            if (col.Raycast(ray, out _, maxDistance))
+                return true;
+        }
+        return false;
     }
 
     public bool CanPlaceFurniture(Vector3 targetPosition, Vector2Int sizeInCells)
@@ -85,8 +181,8 @@ public class FurnitureGrid : MonoBehaviour
                 if (x < 0 || x >= _gridWidth || z < 0 || z >= _gridDepth)
                     return false; // Hors de la grille (hors du batiment)
 
-                if (_grid[x, z].IsOccupied)
-                    return false; // Déjà occupé
+                if (_grid[x, z].IsOccupied || _grid[x, z].IsWall)
+                    return false;
 
                 // Pour s'assurer qu'aucun bord du meuble ne traverse le mur,
                 // on vérifie les 4 coins de cette cellule spécifique par rapport au BoxCollider
@@ -231,21 +327,35 @@ public class FurnitureGrid : MonoBehaviour
 
     private void OnDrawGizmosSelected()
     {
-        if (_grid == null) return;
-
-        Gizmos.color = new Color(0, 1, 0, 0.2f);
-        for (int x = 0; x < _gridWidth; x++)
+        // Use runtime 2D array if available, otherwise fall back to serialized flat list
+        if (_grid != null)
         {
-            for (int z = 0; z < _gridDepth; z++)
+            for (int x = 0; x < _gridWidth; x++)
             {
-                Vector3 pos = _grid[x, z].WorldPosition;
-                if (_grid[x, z].IsOccupied)
-                    Gizmos.color = new Color(1, 0, 0, 0.4f);
-                else
-                    Gizmos.color = new Color(0, 1, 0, 0.2f);
-
-                Gizmos.DrawCube(pos, new Vector3(_cellSize * 0.9f, 0.1f, _cellSize * 0.9f));
+                for (int z = 0; z < _gridDepth; z++)
+                {
+                    DrawCellGizmo(_grid[x, z]);
+                }
             }
         }
+        else if (IsInitialized)
+        {
+            for (int i = 0; i < _cells.Count; i++)
+            {
+                DrawCellGizmo(_cells[i]);
+            }
+        }
+    }
+
+    private void DrawCellGizmo(GridCell cell)
+    {
+        if (cell.IsWall)
+            Gizmos.color = new Color(0.3f, 0.3f, 0.3f, 0.15f); // Gray = wall / no floor
+        else if (cell.IsOccupied)
+            Gizmos.color = new Color(1, 0, 0, 0.4f); // Red = occupied
+        else
+            Gizmos.color = new Color(0, 1, 0, 0.2f); // Green = free
+
+        Gizmos.DrawCube(cell.WorldPosition, new Vector3(_cellSize * 0.9f, 0.1f, _cellSize * 0.9f));
     }
 }

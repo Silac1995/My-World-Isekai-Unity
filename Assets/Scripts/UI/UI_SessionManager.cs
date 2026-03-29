@@ -15,22 +15,9 @@ public class UI_SessionManager : MonoBehaviour
     [Header("Notifications")]
     [SerializeField] private MWI.UI.Notifications.ToastNotificationChannel _toastChannel;
 
-    private void OnEnable()
+    private void OnDestroy()
     {
-        if (NetworkManager.Singleton != null)
-        {
-            NetworkManager.Singleton.OnClientConnectedCallback += OnClientConnected;
-            NetworkManager.Singleton.OnClientDisconnectCallback += OnClientDisconnected;
-        }
-    }
-
-    private void OnDisable()
-    {
-        if (NetworkManager.Singleton != null)
-        {
-            NetworkManager.Singleton.OnClientConnectedCallback -= OnClientConnected;
-            NetworkManager.Singleton.OnClientDisconnectCallback -= OnClientDisconnected;
-        }
+        UnsubscribeFromNetwork();
     }
 
     private bool _isSolo;
@@ -39,6 +26,7 @@ public class UI_SessionManager : MonoBehaviour
     {
         UpdateConnectionParameters();
         _isSolo = true;
+        SubscribeToNetwork();
         ShowToast("Starting Solo Session...", MWI.UI.Notifications.ToastType.Info);
         GameSessionManager.Instance?.StartSolo();
     }
@@ -47,18 +35,35 @@ public class UI_SessionManager : MonoBehaviour
     {
         UpdateConnectionParameters();
         _isSolo = false;
+        SubscribeToNetwork();
         ShowToast($"Connecting to {GameSessionManager.TargetIP}:{GameSessionManager.TargetPort}...", MWI.UI.Notifications.ToastType.Info);
         GameSessionManager.Instance?.JoinMultiplayer();
     }
 
+    private void SubscribeToNetwork()
+    {
+        UnsubscribeFromNetwork();
+        if (NetworkManager.Singleton == null) return;
+        NetworkManager.Singleton.OnClientConnectedCallback += OnClientConnected;
+        NetworkManager.Singleton.OnClientDisconnectCallback += OnClientDisconnected;
+    }
+
+    private void UnsubscribeFromNetwork()
+    {
+        if (NetworkManager.Singleton == null) return;
+        NetworkManager.Singleton.OnClientConnectedCallback -= OnClientConnected;
+        NetworkManager.Singleton.OnClientDisconnectCallback -= OnClientDisconnected;
+    }
+
     private void OnClientConnected(ulong clientId)
     {
-        if (clientId == NetworkManager.Singleton.LocalClientId)
-        {
-            ShowToast("Connected!", MWI.UI.Notifications.ToastType.Success);
-            HideSessionButtons();
-            if (_isSolo && _debugPanel != null) _debugPanel.SetActive(true);
-        }
+        // Host: only react to our own connection (clientId 0), ignore remote clients joining.
+        // Client: every callback is for us since we only receive our own connection event.
+        if (NetworkManager.Singleton.IsHost && clientId != 0) return;
+
+        ShowToast("Connected!", MWI.UI.Notifications.ToastType.Success);
+        HideSessionButtons();
+        if (_isSolo && _debugPanel != null) _debugPanel.SetActive(true);
     }
 
     private void OnClientDisconnected(ulong clientId)

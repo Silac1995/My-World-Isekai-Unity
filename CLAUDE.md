@@ -13,6 +13,10 @@ These rules are **mandatory** and apply to every conversation, every task, and e
 7. Always check: does this code still work correctly with 2+ Player Objects in the scene?
 8. Never underestimate a task that feels simple — look for the non-obvious edge case first.
 
+## Proactive Recommendations
+
+9. Proactively recommend improvements to code structure, architecture, naming, or project organization whenever you spot an issue — do not wait to be asked. Flag anything that violates SOLID, creates tight coupling, or will cause maintenance problems later.
+
 ## Architecture (SOLID)
 
 9. Each class must have one purpose — separate Health, Movement, and Data into distinct components.

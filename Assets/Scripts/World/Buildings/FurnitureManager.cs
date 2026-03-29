@@ -118,11 +118,38 @@ public class FurnitureManager : MonoBehaviour
     public void LoadExistingFurniture()
     {
         if (_grid == null) return;
-        
+
         _furnitures = new List<Furniture>(GetComponentsInChildren<Furniture>());
         foreach (var f in _furnitures)
         {
             _grid.RegisterFurniture(f, f.transform.position, f.SizeInCells);
         }
     }
+
+#if UNITY_EDITOR
+    [ContextMenu("Register Existing Furniture")]
+    private void RegisterExistingFurnitureEditor()
+    {
+        var grid = GetComponent<FurnitureGrid>();
+        if (grid == null || !grid.IsInitialized)
+        {
+            Debug.LogError($"<color=red>[FurnitureManager]</color> Initialize the FurnitureGrid first (right-click FurnitureGrid → Initialize Furniture Grid).");
+            return;
+        }
+
+        UnityEditor.Undo.RecordObject(this, "Register Existing Furniture");
+
+        _furnitures = new List<Furniture>(GetComponentsInChildren<Furniture>());
+
+        // Restore grid runtime state to register positions
+        grid.RestoreFromSerializedData();
+        foreach (var f in _furnitures)
+        {
+            grid.RegisterFurniture(f, f.transform.position, f.SizeInCells);
+        }
+
+        UnityEditor.EditorUtility.SetDirty(this);
+        Debug.Log($"<color=green>[FurnitureManager]</color> Registered {_furnitures.Count} existing furniture in editor for {gameObject.name}.");
+    }
+#endif
 }
