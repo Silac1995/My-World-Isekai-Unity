@@ -103,18 +103,16 @@ public class MapTransitionDoor : InteractableObject
         Debug.Log($"<color=cyan>[MapTransitionDoor]</color> {GetType().Name} '{name}' Interact: TargetMapId='{targetMapId}', doorPos={transform.position}, TargetSpawnPoint={(TargetSpawnPoint != null ? TargetSpawnPoint.name : "null")}, TargetPositionOffset={TargetPositionOffset}, dest={dest}");
 
         // --- Party Leader Gathering Check ---
-        // Skip gathering when leaving an Interior (party members are outside and can't reach the gather zone)
+        // Skip gathering when inside an Interior — party members are outside and can't reach the gather zone.
+        // We check the door's own parent MapController (hierarchy-based, always correct on host & client)
+        // rather than CharacterMapTracker.CurrentMapID which depends on NetworkVariable replication.
         if (interactor.CharacterParty != null && interactor.CharacterParty.IsInParty && interactor.CharacterParty.IsPartyLeader)
         {
-            bool isLeavingInterior = false;
-            if (interactor.TryGetComponent(out CharacterMapTracker mapTracker))
-            {
-                string currentMapId = mapTracker.CurrentMapID.Value.ToString();
-                MapController currentMap = !string.IsNullOrEmpty(currentMapId) ? MapController.GetByMapId(currentMapId) : null;
-                isLeavingInterior = currentMap != null && currentMap.Type == MapType.Interior;
-            }
+            var doorMap = GetComponentInParent<MapController>();
+            if (doorMap == null) doorMap = transform.root.GetComponentInChildren<MapController>();
+            bool isInInterior = doorMap != null && doorMap.Type == MapType.Interior;
 
-            if (!isLeavingInterior)
+            if (!isInInterior)
             {
                 MapController targetMap = MapController.GetByMapId(targetMapId);
                 if (targetMap != null && (targetMap.Type == MapType.Region || targetMap.Type == MapType.Dungeon))
@@ -127,6 +125,16 @@ public class MapTransitionDoor : InteractableObject
 
         var transitionAction = new CharacterMapTransitionAction(interactor, this, targetMapId, dest, FadeDuration);
         interactor.CharacterActions.ExecuteAction(transitionAction);
+
+        // If the leader enters an Interior, tell NPC followers to pathfind to this door and go through it
+        if (interactor.CharacterParty != null && interactor.CharacterParty.IsInParty && interactor.CharacterParty.IsPartyLeader)
+        {
+            MapController targetMap = MapController.GetByMapId(targetMapId);
+            if (targetMap != null && targetMap.Type == MapType.Interior)
+            {
+                interactor.CharacterParty.NotifyLeaderUsedDoor(this);
+            }
+        }
     }
 
     public override System.Collections.Generic.List<InteractionOption> GetHoldInteractionOptions(Character interactor)

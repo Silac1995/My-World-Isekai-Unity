@@ -884,9 +884,119 @@ public class CharacterParty : CharacterSystem
         }
     }
 
+    // =============================================
+    //  INTERIOR FOLLOW — NPCs follow leader through doors
+    // =============================================
+
+    private Coroutine _doorFollowCoroutine;
+
+    /// <summary>
+    /// Called when the party leader uses a door to enter an Interior.
+    /// NPC followers on the same map pathfind to the door and interact with it.
+    /// </summary>
+    public void NotifyLeaderUsedDoor(MapTransitionDoor door)
+    {
+        if (!IsServer || !IsInParty || door == null) return;
+
+        foreach (string memberId in _partyData.MemberIds)
+        {
+            if (memberId == _partyData.LeaderId) continue;
+
+            Character member = Character.FindByUUID(memberId);
+            if (member == null || !member.IsAlive()) continue;
+            if (member.IsPlayer()) continue; // Players go through doors on their own
+            if (member.CharacterCombat != null && member.CharacterCombat.IsInBattle) continue;
+            if (!IsOnSameMapAs(member, _character)) continue;
+
+            // Clear follow state so BT doesn't fight the door-follow coroutine
+            if (member.CharacterParty != null)
+                member.CharacterParty.ClearFollowState();
+
+            // Start a coroutine on the member's CharacterParty to pathfind + interact
+            if (member.CharacterParty != null)
+                member.CharacterParty.StartDoorFollow(door);
+        }
+    }
+
+    private void StartDoorFollow(MapTransitionDoor door)
+    {
+        StopDoorFollow();
+        _doorFollowCoroutine = StartCoroutine(DoorFollowRoutine(door));
+    }
+
+    private void StopDoorFollow()
+    {
+        if (_doorFollowCoroutine != null)
+        {
+            StopCoroutine(_doorFollowCoroutine);
+            _doorFollowCoroutine = null;
+        }
+    }
+
+    private System.Collections.IEnumerator DoorFollowRoutine(MapTransitionDoor door)
+    {
+        if (door == null || _character == null) yield break;
+
+        float interactRange = 2.5f;
+        if (door.TryGetComponent<InteractableObject>(out var interactable) && interactable.InteractionZone != null)
+        {
+            interactRange = interactable.InteractionZone.bounds.extents.magnitude;
+        }
+
+        // Pathfind to the door
+        _character.CharacterMovement.SetDestination(door.transform.position);
+
+        float timeout = 15f;
+        float elapsed = 0f;
+
+        while (elapsed < timeout)
+        {
+            if (_character == null || !_character.IsAlive()) yield break;
+            if (door == null) yield break;
+
+            float dist = Vector3.Distance(_character.transform.position, door.transform.position);
+
+            if (dist <= interactRange)
+            {
+                // Arrived — interact with the door
+                _character.CharacterMovement.Stop();
+                door.Interact(_character);
+                _doorFollowCoroutine = null;
+                yield break;
+            }
+
+            // Re-path periodically in case the NPC got stuck
+            if (elapsed > 0f && Mathf.Repeat(elapsed, 2f) < UnityEngine.Time.deltaTime)
+            {
+                _character.CharacterMovement.SetDestination(door.transform.position);
+            }
+
+            elapsed += UnityEngine.Time.deltaTime;
+            yield return null;
+        }
+
+        // Timeout — stop and resume normal follow
+        _character.CharacterMovement.Stop();
+        UpdateFollowState();
+        _doorFollowCoroutine = null;
+    }
+
+    private bool IsOnSameMapAs(Character a, Character b)
+    {
+        if (a == null || b == null) return false;
+        var trackerA = a.GetComponent<CharacterMapTracker>();
+        var trackerB = b.GetComponent<CharacterMapTracker>();
+        if (trackerA == null || trackerB == null) return true;
+        string mapA = trackerA.CurrentMapID.Value.ToString();
+        string mapB = trackerB.CurrentMapID.Value.ToString();
+        if (string.IsNullOrEmpty(mapA) || string.IsNullOrEmpty(mapB)) return true;
+        return mapA == mapB;
+    }
+
     // CLEANUP
     protected override void OnDisable()
     {
+        StopDoorFollow();
         if (_gatherCoroutine != null)
         {
             StopCoroutine(_gatherCoroutine);
