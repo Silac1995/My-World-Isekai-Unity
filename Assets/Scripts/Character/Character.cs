@@ -183,6 +183,13 @@ public class Character : NetworkBehaviour
     #endregion
 
     #region Events
+    /// <summary>
+    /// Fires on the server after any Character completes OnNetworkSpawn.
+    /// Subscribers can use this to resolve references to newly-available characters
+    /// (e.g., dormant relationships, pending party invitations).
+    /// </summary>
+    public static event Action<Character> OnCharacterSpawned;
+
     public event Action<Character> OnDeath;
     public event Action<Character> OnIncapacitated;
     public event Action<Character> OnWakeUp;
@@ -381,6 +388,8 @@ public class Character : NetworkBehaviour
             if (isPlayerObject) SwitchToPlayer();
             else SwitchToNPC();
         }
+
+        OnCharacterSpawned?.Invoke(this);
     }
 
     private System.Collections.IEnumerator DelayedHostTeleport()

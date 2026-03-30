@@ -221,6 +221,32 @@ public class CharacterDataCoordinator : NetworkBehaviour
             return;
         }
 
+        // Update WorldAssociation for current world
+        string currentWorldGuid = SaveManager.Instance?.CurrentWorldGuid;
+        if (!string.IsNullOrEmpty(currentWorldGuid))
+        {
+            var association = profile.worldAssociations.Find(w => w.worldGuid == currentWorldGuid);
+            if (association == null)
+            {
+                association = new WorldAssociation();
+                profile.worldAssociations.Add(association);
+            }
+
+            association.worldGuid = currentWorldGuid;
+            association.worldName = SaveManager.Instance?.CurrentWorldName ?? "";
+            association.lastPlayed = System.DateTime.Now.ToString("o");
+
+            // Get current map and position
+            var tracker = _character.GetComponentInChildren<CharacterMapTracker>();
+            if (tracker != null)
+            {
+                association.lastMapId = tracker.CurrentMapID.Value.ToString();
+                association.positionX = _character.transform.position.x;
+                association.positionY = _character.transform.position.y;
+                association.positionZ = _character.transform.position.z;
+            }
+        }
+
         await SaveFileHandler.WriteProfileAsync(profile.characterGuid, profile);
         Debug.Log($"{LOG_TAG} Profile '{profile.characterName}' ({profile.characterGuid}) saved to disk.");
     }

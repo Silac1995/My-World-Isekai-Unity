@@ -10,14 +10,14 @@ public static class SaveFileHandler
     private static string WorldSaveDir => Path.Combine(Application.persistentDataPath, "Worlds");
     private static string ProfileSaveDir => Path.Combine(Application.persistentDataPath, "Profiles");
 
-    public static string WorldSlotPath(int slot) => Path.Combine(WorldSaveDir, $"world_{slot}.json");
+    public static string WorldPath(string worldGuid) => Path.Combine(WorldSaveDir, $"{worldGuid}.json");
     public static string ProfilePath(string characterGuid) => Path.Combine(ProfileSaveDir, $"{characterGuid}.json");
 
     // --- WORLD SAVING ---
-    public static async Task WriteWorldAsync(int slot, GameSaveData data)
+    public static async Task WriteWorldAsync(string worldGuid, GameSaveData data)
     {
         Directory.CreateDirectory(WorldSaveDir);
-        string path = WorldSlotPath(slot);
+        string path = WorldPath(worldGuid);
         string tmpPath = path + ".tmp";
         string json = JsonConvert.SerializeObject(data, Formatting.Indented);
 
@@ -26,9 +26,9 @@ public static class SaveFileHandler
         File.Move(tmpPath, path);
     }
 
-    public static async Task<GameSaveData> ReadWorldAsync(int slot)
+    public static async Task<GameSaveData> ReadWorldAsync(string worldGuid)
     {
-        string path = WorldSlotPath(slot);
+        string path = WorldPath(worldGuid);
         if (!File.Exists(path)) return null;
 
         try
@@ -38,7 +38,7 @@ public static class SaveFileHandler
         }
         catch (Exception e)
         {
-            Debug.LogError($"[SaveFileHandler] Failed to read world slot {slot}: {e.Message}");
+            Debug.LogError($"[SaveFileHandler] Failed to read world {worldGuid}: {e.Message}");
             return null;
         }
     }
@@ -96,10 +96,33 @@ public static class SaveFileHandler
         return profiles;
     }
 
-    // --- UTILITIES ---
-    public static Task DeleteWorldAsync(int slot)
+    // --- WORLD SCANNING ---
+    public static List<GameSaveData> GetAllWorlds()
     {
-        string path = WorldSlotPath(slot);
+        var worlds = new List<GameSaveData>();
+        if (!Directory.Exists(WorldSaveDir)) return worlds;
+
+        foreach (string file in Directory.GetFiles(WorldSaveDir, "*.json"))
+        {
+            try
+            {
+                string json = File.ReadAllText(file);
+                var world = JsonConvert.DeserializeObject<GameSaveData>(json);
+                if (world != null) worlds.Add(world);
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[SaveFileHandler] Failed to read world {file}: {e.Message}");
+            }
+        }
+
+        return worlds;
+    }
+
+    // --- UTILITIES ---
+    public static Task DeleteWorldAsync(string worldGuid)
+    {
+        string path = WorldPath(worldGuid);
         if (File.Exists(path)) File.Delete(path);
         return Task.CompletedTask;
     }
@@ -111,6 +134,6 @@ public static class SaveFileHandler
         return Task.CompletedTask;
     }
 
-    public static bool WorldSlotExists(int slot) => File.Exists(WorldSlotPath(slot));
+    public static bool WorldExists(string worldGuid) => File.Exists(WorldPath(worldGuid));
     public static bool ProfileExists(string characterGuid) => File.Exists(ProfilePath(characterGuid));
 }

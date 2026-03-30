@@ -20,6 +20,8 @@ public class SaveSlotMetadata
     public string displayName;
     public string worldName;
     public string worldGuid;  // Unique GUID for this world instance, generated once at world creation
+    public string worldSeed;
+    public int worldVersion = 1;
     public float totalPlaytimeSeconds;
     public string timestamp;
     public bool isEmpty = true;

@@ -49,6 +49,18 @@ public class CharacterRelation : CharacterSystem, ICharacterSaveData<RelationSav
 
     public event Action OnRelationsUpdated;
 
+    protected override void OnEnable()
+    {
+        base.OnEnable();
+        Character.OnCharacterSpawned += HandleCharacterSpawned;
+    }
+
+    protected override void OnDisable()
+    {
+        Character.OnCharacterSpawned -= HandleCharacterSpawned;
+        base.OnDisable();
+    }
+
     protected override void Awake()
     {
         base.Awake();
@@ -75,6 +87,50 @@ public class CharacterRelation : CharacterSystem, ICharacterSaveData<RelationSav
         if (_networkRelations != null)
         {
             _networkRelations.OnListChanged -= HandleNetworkRelationsChanged;
+        }
+    }
+
+    /// <summary>
+    /// When a character spawns, check if any dormant relationships reference it.
+    /// If so, resolve them into live Relationship instances.
+    /// </summary>
+    private void HandleCharacterSpawned(Character spawnedCharacter)
+    {
+        if (_dormantRelationships.Count == 0) return;
+        if (spawnedCharacter == null || spawnedCharacter == _character) return;
+
+        bool resolved = false;
+
+        for (int i = _dormantRelationships.Count - 1; i >= 0; i--)
+        {
+            var dormant = _dormantRelationships[i];
+
+            if (dormant.targetCharacterId == spawnedCharacter.CharacterId)
+            {
+                // Avoid duplicating an already-live relationship
+                Relationship existing = _relationships.Find(r => r.RelatedCharacter == spawnedCharacter);
+                if (existing == null)
+                {
+                    var rel = new Relationship(_character, spawnedCharacter, dormant.relationValue, (RelationshipType)dormant.relationshipType);
+                    if (dormant.hasMet) rel.SetAsMet();
+                    _relationships.Add(rel);
+
+                    if (IsServer)
+                    {
+                        UpdateNetworkList(rel);
+                    }
+
+                    Debug.Log($"<color=cyan>[Relation]</color> Dormant relationship resolved: {_character.CharacterName} -> {spawnedCharacter.CharacterName} (value: {dormant.relationValue})");
+                }
+
+                _dormantRelationships.RemoveAt(i);
+                resolved = true;
+            }
+        }
+
+        if (resolved)
+        {
+            OnRelationsUpdated?.Invoke();
         }
     }
 

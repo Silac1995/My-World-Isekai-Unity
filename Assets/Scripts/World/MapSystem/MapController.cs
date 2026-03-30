@@ -78,6 +78,19 @@ namespace MWI.WorldSystem
         private static readonly Dictionary<string, MapController> _mapRegistry = new Dictionary<string, MapController>();
 
         /// <summary>
+        /// All MapControllers that currently have at least one active player (i.e., are NOT hibernating).
+        /// Used by SaveManager to snapshot live NPC state on world save without despawning.
+        /// </summary>
+        public static HashSet<MapController> ActiveControllers = new HashSet<MapController>();
+
+        /// <summary>
+        /// Pending NPC snapshots loaded from a save file, keyed by MapId.
+        /// When a MapController initializes and finds a matching entry, it spawns those NPCs
+        /// and removes the entry.
+        /// </summary>
+        public static Dictionary<string, MapSaveData> PendingSnapshots = new Dictionary<string, MapSaveData>();
+
+        /// <summary>
         /// Looks up a MapController by its MapId. Returns null if not found.
         /// </summary>
         public static MapController GetByMapId(string mapId)
@@ -156,6 +169,14 @@ namespace MWI.WorldSystem
             // Delay the initial hibernation check to give OnTriggerEnter time to fire
             Debug.Log($"<color=cyan>[MapController:OnNetworkSpawn]</color> Scheduling CheckHibernationState in 3s for '{MapId}'. ActivePlayers={_activePlayers.Count}");
             Invoke(nameof(CheckHibernationState), 3f);
+
+            // Consume any pending NPC snapshot from a previous save/load cycle
+            if (PendingSnapshots.TryGetValue(MapId, out var pendingSnapshot))
+            {
+                Debug.Log($"<color=green>[MapController:OnNetworkSpawn]</color> Found pending NPC snapshot for '{MapId}' with {pendingSnapshot.HibernatedNPCs.Count} NPCs. Spawning...");
+                SpawnNPCsFromSnapshot(pendingSnapshot);
+                PendingSnapshots.Remove(MapId);
+            }
         }
 
         private void Start()
@@ -220,6 +241,7 @@ namespace MWI.WorldSystem
             {
                 _mapRegistry.Remove(MapId);
             }
+            ActiveControllers.Remove(this);
 
             if (!IsServer) return;
 
@@ -278,6 +300,7 @@ namespace MWI.WorldSystem
             {
                 _activePlayerCount = _activePlayers.Count;
                 Debug.Log($"<color=cyan>[MapController]</color> Player {clientId} entered '{MapId}'. Total: {_activePlayerCount}");
+                ActiveControllers.Add(this);
                 CheckWakeUp();
             }
         }
@@ -288,6 +311,10 @@ namespace MWI.WorldSystem
             {
                 _activePlayerCount = _activePlayers.Count;
                 Debug.Log($"<color=cyan>[MapController]</color> Player {clientId} left '{MapId}'. Total: {_activePlayerCount}");
+                if (_activePlayers.Count == 0)
+                {
+                    ActiveControllers.Remove(this);
+                }
                 CheckHibernationState();
             }
         }
@@ -437,11 +464,198 @@ namespace MWI.WorldSystem
             return _timeManager.CurrentDay + _timeManager.CurrentTime01;
         }
 
+        /// <summary>
+        /// Serializes all live NPCs on this map into a MapSaveData snapshot WITHOUT despawning them.
+        /// Used by SaveManager during world save to capture NPC state on active (non-hibernating) maps
+        /// so NPCs are not lost if the player quits and reloads.
+        /// </summary>
+        public MapSaveData SnapshotActiveNPCs()
+        {
+            var snapshot = new MapSaveData()
+            {
+                MapId = this.MapId,
+                LastHibernationTime = GetAbsoluteTimeInDays()
+            };
+
+            if (_mapTrigger == null)
+            {
+                Debug.LogError($"<color=red>[MapController:SnapshotActiveNPCs]</color> _mapTrigger is NULL for '{MapId}'! Cannot snapshot.");
+                return snapshot;
+            }
+
+            Collider[] colliders = Physics.OverlapBox(_mapTrigger.bounds.center, _mapTrigger.bounds.extents, Quaternion.identity);
+            Debug.Log($"<color=cyan>[MapController:SnapshotActiveNPCs]</color> OverlapBox found {colliders.Length} colliders in '{MapId}'.");
+
+            foreach (var col in colliders)
+            {
+                if (col.CompareTag("Character") && col.TryGetComponent(out Character npc))
+                {
+                    // Ignore Players — only snapshot NPCs
+                    if (npc.NetworkObject != null && npc.NetworkObject.IsPlayerObject) continue;
+
+                    HibernatedNPCData npcData = new HibernatedNPCData()
+                    {
+                        CharacterId = npc.CharacterId,
+                        PrefabName = npc.gameObject.name.Replace("(Clone)", "").Trim(),
+                        PrefabHash = npc.NetworkObject != null ? npc.NetworkObject.PrefabIdHash : 0,
+                        Position = npc.transform.position,
+                        Rotation = npc.transform.rotation,
+                        // Identity & Visuals
+                        RaceId = npc.NetworkRaceId.Value.ToString(),
+                        CharacterName = npc.NetworkCharacterName.Value.ToString(),
+                        VisualSeed = npc.NetworkVisualSeed.Value,
+                        // Abandoned NPC tracking
+                        IsAbandoned = npc.IsAbandoned,
+                        FormerPartyLeaderId = npc.FormerPartyLeaderId,
+                        FormerPartyLeaderWorldGuid = npc.FormerPartyLeaderWorldGuid
+                    };
+
+                    // Extract Tier 1 V2 GOAP Anchors
+                    if (npc.TryGetComponent(out CharacterMapTracker tracker))
+                    {
+                        npcData.HomeMapId = tracker.HomeMapId.Value.ToString();
+                        npcData.HomePosition = tracker.HomePosition.Value;
+                    }
+
+                    // Extract Build/Harvest Flags and JobType
+                    if (npc.TryGetComponent(out CharacterJob charJob))
+                    {
+                        npcData.HasHarvesterJob = charJob.HasJobOfType<JobHarvester>();
+
+                        var currentJob = charJob.CurrentJob;
+                        npcData.SavedJobType = currentJob != null ? currentJob.Type : JobType.None;
+                    }
+
+                    // Extract Blueprint Knowledge
+                    if (npc.TryGetComponent(out CharacterBlueprints blueprints))
+                    {
+                        npcData.UnlockedBuildingIds.AddRange(blueprints.UnlockedBuildingIds);
+                    }
+
+                    // Extract Needs
+                    if (npc.CharacterNeeds != null)
+                    {
+                        foreach (var need in npc.CharacterNeeds.AllNeeds)
+                        {
+                            npcData.SavedNeeds.Add(new HibernatedNeedData
+                            {
+                                NeedType = need.GetType().Name,
+                                Value = need.CurrentValue
+                            });
+                        }
+                    }
+
+                    // Extract Party membership
+                    if (npc.CharacterParty != null && npc.CharacterParty.IsInParty)
+                        npcData.PartyId = npc.CharacterParty.PartyData.PartyId;
+
+                    snapshot.HibernatedNPCs.Add(npcData);
+                }
+            }
+
+            Debug.Log($"<color=cyan>[MapController:SnapshotActiveNPCs]</color> Map '{MapId}' snapshot complete. {snapshot.HibernatedNPCs.Count} NPCs serialized (NOT despawned).");
+            return snapshot;
+        }
+
+        /// <summary>
+        /// Spawns NPCs from a MapSaveData snapshot. Used both by WakeUp (from hibernation) and
+        /// by OnNetworkSpawn (from a PendingSnapshot loaded from save file).
+        /// Does NOT run MacroSimulator catch-up — call that separately if needed.
+        /// </summary>
+        private void SpawnNPCsFromSnapshot(MapSaveData snapshotData)
+        {
+            if (snapshotData == null || snapshotData.HibernatedNPCs.Count == 0) return;
+
+            foreach (var npcData in snapshotData.HibernatedNPCs)
+            {
+                GameObject prefab = null;
+
+                // Use NGO's pre-loaded prefab registry instead of disk I/O
+                if (NetworkManager.Singleton != null && NetworkManager.Singleton.NetworkConfig != null)
+                {
+                    foreach (var networkPrefab in NetworkManager.Singleton.NetworkConfig.Prefabs.Prefabs)
+                    {
+                        if (networkPrefab.Prefab != null)
+                        {
+                            // Priority 1: Match by NGO hash
+                            if (npcData.PrefabHash != 0 && networkPrefab.Prefab.TryGetComponent(out NetworkObject prefabNetObj) && prefabNetObj.PrefabIdHash == npcData.PrefabHash)
+                            {
+                                prefab = networkPrefab.Prefab;
+                                break;
+                            }
+
+                            // Priority 2: Fallback to exact name match
+                            if (prefab == null && networkPrefab.Prefab.name == npcData.PrefabName)
+                            {
+                                prefab = networkPrefab.Prefab;
+                            }
+                        }
+                    }
+                }
+
+                if (prefab == null)
+                {
+                    Debug.LogError($"<color=red>[MapController:SpawnNPCsFromSnapshot]</color> Could not find prefab '{npcData.PrefabName}' (hash={npcData.PrefabHash}) for NPC '{npcData.CharacterId}' on map '{MapId}'!");
+                    continue;
+                }
+
+                GameObject inst = Instantiate(prefab, npcData.Position, npcData.Rotation);
+
+                // Inject blueprint knowledge back
+                if (inst.TryGetComponent(out CharacterBlueprints blueprints))
+                {
+                    blueprints.SetUnlockedBuildings(npcData.UnlockedBuildingIds);
+                }
+
+                // Restore identity & visual data BEFORE spawn so OnNetworkSpawn reads correct values
+                if (inst.TryGetComponent(out Character spawnedChar))
+                {
+                    if (!string.IsNullOrEmpty(npcData.CharacterId))
+                        spawnedChar.NetworkCharacterId.Value = new Unity.Collections.FixedString64Bytes(npcData.CharacterId);
+                    if (!string.IsNullOrEmpty(npcData.RaceId))
+                        spawnedChar.NetworkRaceId.Value = new Unity.Collections.FixedString64Bytes(npcData.RaceId);
+                    if (!string.IsNullOrEmpty(npcData.CharacterName))
+                        spawnedChar.NetworkCharacterName.Value = new Unity.Collections.FixedString64Bytes(npcData.CharacterName);
+                    if (npcData.VisualSeed != 0)
+                        spawnedChar.NetworkVisualSeed.Value = npcData.VisualSeed;
+
+                    // Restore abandoned NPC state
+                    if (npcData.IsAbandoned)
+                    {
+                        spawnedChar.IsAbandoned = true;
+                        spawnedChar.FormerPartyLeaderId = npcData.FormerPartyLeaderId;
+                        spawnedChar.FormerPartyLeaderWorldGuid = npcData.FormerPartyLeaderWorldGuid;
+                    }
+
+                    // Inject saved needs back
+                    if (spawnedChar.CharacterNeeds != null)
+                    {
+                        foreach (var savedNeed in npcData.SavedNeeds)
+                        {
+                            var liveNeed = spawnedChar.CharacterNeeds.AllNeeds.FirstOrDefault(n => n.GetType().Name == savedNeed.NeedType);
+                            if (liveNeed != null)
+                            {
+                                liveNeed.CurrentValue = savedNeed.Value;
+                            }
+                        }
+                    }
+                }
+
+                if (inst.TryGetComponent(out NetworkObject netObj))
+                {
+                    netObj.Spawn(true);
+                }
+            }
+
+            Debug.Log($"<color=green>[MapController:SpawnNPCsFromSnapshot]</color> Spawned {snapshotData.HibernatedNPCs.Count} NPCs from snapshot on map '{MapId}'.");
+        }
+
         private void Hibernate()
         {
             if (IsHibernating) return;
 
             IsHibernating = true;
+            ActiveControllers.Remove(this);
             Debug.Log($"<color=orange>[MapController:Hibernate]</color> Map '{MapId}' entering Hibernation.");
 
             // Ensure CommunityData exists before saving buildings
@@ -716,91 +930,13 @@ namespace MWI.WorldSystem
                 // 4. Run MacroSimulator catch-up on NPCs
                 MacroSimulator.SimulateCatchUp(_hibernationData, _timeManager.CurrentDay, _timeManager.CurrentTime01, JobYields);
 
-                // 5. Spawn NPCs at their simulated positions
-                foreach (var npcData in _hibernationData.HibernatedNPCs)
-                {
-                    GameObject prefab = null;
-                    
-                    // Optimization: Use NGO's pre-loaded prefab registry instead of disk I/O (Resources.Load)
-                    if (NetworkManager.Singleton != null && NetworkManager.Singleton.NetworkConfig != null)
-                    {
-                        foreach (var networkPrefab in NetworkManager.Singleton.NetworkConfig.Prefabs.Prefabs)
-                        {
-                            if (networkPrefab.Prefab != null)
-                            {
-                                // Priority 1: Match by NGO hash (Guarantees exact prefab even if GameObject was renamed in scene)
-                                if (npcData.PrefabHash != 0 && networkPrefab.Prefab.TryGetComponent(out NetworkObject prefabNetObj) && prefabNetObj.PrefabIdHash == npcData.PrefabHash)
-                                {
-                                    prefab = networkPrefab.Prefab;
-                                    break;
-                                }
-
-                                // Priority 2: Fallback to exact name match
-                                if (prefab == null && networkPrefab.Prefab.name == npcData.PrefabName)
-                                {
-                                    prefab = networkPrefab.Prefab;
-                                    // Don't break; keep looking in case strict Hash match is found later in the list
-                                }
-                            }
-                        }
-                    }
-
-                    if (prefab == null)
-                    {
-                        Debug.LogError($"[MapController] Could not find prefab {npcData.PrefabName} in NetworkManager to wake up {npcData.CharacterId}!");
-                        continue;
-                    }
-
-                    GameObject inst = Instantiate(prefab, npcData.Position, npcData.Rotation);
-                    
-                    // Inject blueprint knowledge back
-                    if (inst.TryGetComponent(out CharacterBlueprints blueprints))
-                    {
-                        blueprints.SetUnlockedBuildings(npcData.UnlockedBuildingIds);
-                    }
-
-                    // Restore identity & visual data BEFORE spawn so OnNetworkSpawn reads correct values
-                    if (inst.TryGetComponent(out Character spawnedChar))
-                    {
-                        if (!string.IsNullOrEmpty(npcData.RaceId))
-                            spawnedChar.NetworkRaceId.Value = new Unity.Collections.FixedString64Bytes(npcData.RaceId);
-                        if (!string.IsNullOrEmpty(npcData.CharacterName))
-                            spawnedChar.NetworkCharacterName.Value = new Unity.Collections.FixedString64Bytes(npcData.CharacterName);
-                        if (npcData.VisualSeed != 0)
-                            spawnedChar.NetworkVisualSeed.Value = npcData.VisualSeed;
-
-                        // Restore abandoned NPC state
-                        if (npcData.IsAbandoned)
-                        {
-                            spawnedChar.IsAbandoned = true;
-                            spawnedChar.FormerPartyLeaderId = npcData.FormerPartyLeaderId;
-                            spawnedChar.FormerPartyLeaderWorldGuid = npcData.FormerPartyLeaderWorldGuid;
-                        }
-
-                        // Inject caught-up needs back
-                        if (spawnedChar.CharacterNeeds != null)
-                        {
-                            foreach (var savedNeed in npcData.SavedNeeds)
-                            {
-                                var liveNeed = spawnedChar.CharacterNeeds.AllNeeds.FirstOrDefault(n => n.GetType().Name == savedNeed.NeedType);
-                                if (liveNeed != null)
-                                {
-                                    liveNeed.CurrentValue = savedNeed.Value;
-                                }
-                            }
-                        }
-                    }
-
-                    if (inst.TryGetComponent(out NetworkObject netObj))
-                    {
-                        netObj.Spawn(true);
-                    }
-                }
+                // 5. Spawn NPCs at their simulated positions (shared with snapshot restore)
+                SpawnNPCsFromSnapshot(_hibernationData);
             }
 
             // Safety: Only clear hibernation data AFTER a successful full spawn loop.
             // If the server crashes mid-wake, data isn't lost.
-            _hibernationData = null; 
+            _hibernationData = null;
         }
 
         // (RunMacroSimulation_V1 removed, see MacroSimulator.cs)

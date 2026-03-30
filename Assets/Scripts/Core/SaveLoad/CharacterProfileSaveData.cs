@@ -24,4 +24,7 @@ public class CharacterProfileSaveData
 
     // Party NPC members (fully serialized, players excluded)
     public List<CharacterProfileSaveData> partyMembers = new List<CharacterProfileSaveData>();
+
+    // Worlds this character has visited, with last position per world
+    public List<WorldAssociation> worldAssociations = new List<WorldAssociation>();
 }
