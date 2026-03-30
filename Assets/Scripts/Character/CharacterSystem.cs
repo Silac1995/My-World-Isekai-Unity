@@ -29,6 +29,7 @@ public abstract class CharacterSystem : NetworkBehaviour
             _character.OnWakeUp += HandleWakeUp;
             _character.OnDeath += HandleDeath;
             _character.OnCombatStateChanged += HandleCombatStateChanged;
+            _character.Register(this);
         }
     }
 
@@ -36,6 +37,7 @@ public abstract class CharacterSystem : NetworkBehaviour
     {
         if (_character != null)
         {
+            _character.Unregister(this);
             _character.OnIncapacitated -= HandleIncapacitated;
             _character.OnWakeUp -= HandleWakeUp;
             _character.OnDeath -= HandleDeath;
@@ -44,23 +46,23 @@ public abstract class CharacterSystem : NetworkBehaviour
     }
 
     /// <summary>
-    /// Appelé quand le personnage tombe inconscient OU meurt.
+    /// Called when the character falls unconscious OR dies.
     /// </summary>
     protected virtual void HandleIncapacitated(Character character) { }
 
     /// <summary>
-    /// Appelé quand le personnage se réveille d'une perte de connaissance.
+    /// Called when the character wakes up from unconsciousness.
     /// </summary>
     protected virtual void HandleWakeUp(Character character) { }
 
     /// <summary>
-    /// Appelé uniquement quand le personnage meurt définitivement.
+    /// Called only when the character permanently dies.
     /// </summary>
     protected virtual void HandleDeath(Character character) { }
 
     /// <summary>
-    /// Appelé quand le personnage entre ou sort de la posture de combat.
-    /// Idéal pour stopper une ligne de déplacement ou annuler une interaction.
+    /// Called when the character enters or exits combat stance.
+    /// Ideal for stopping movement or cancelling an interaction.
     /// </summary>
     protected virtual void HandleCombatStateChanged(bool inCombat) { }
 }
