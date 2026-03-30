@@ -16,5 +16,9 @@
       "Bash(npm list:*)",
       "Bash(find /c/Users/Kevin/AppData -name unity-mcp-cli* -type f)"
     ]
-  }
+  },
+  "enabledMcpjsonServers": [
+    "ai-game-developer"
+  ],
+  "enableAllProjectMcpServers": true
 }

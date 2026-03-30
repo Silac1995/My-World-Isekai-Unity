@@ -1,4 +1,3 @@
-# Combat Abilities System — Design Spec
 
 **Date:** 2026-03-27
 **Status:** Draft
