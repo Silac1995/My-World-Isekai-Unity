@@ -87,6 +87,25 @@ public class CharacterInteractable : InteractableObject
             }
         }
 
+        // Collect from capability providers (new extensible pattern)
+        options.AddRange(GetCapabilityInteractionOptions(interactor));
+
+        return options;
+    }
+
+    /// <summary>
+    /// Collects interaction options from all capability providers on this character.
+    /// This is the new extensible approach — capabilities advertise their own options.
+    /// </summary>
+    public List<InteractionOption> GetCapabilityInteractionOptions(Character interactor)
+    {
+        var options = new List<InteractionOption>();
+        foreach (var provider in _character.GetAll<IInteractionProvider>())
+        {
+            var providerOptions = provider.GetInteractionOptions(interactor);
+            if (providerOptions != null)
+                options.AddRange(providerOptions);
+        }
         return options;
     }
 
