@@ -278,7 +278,7 @@ public class PlayerUI : MonoBehaviour
         }
     }
 
-    public void OpenInteractionMenu(List<InteractableObject.InteractionOption> options)
+    public void OpenInteractionMenu(List<InteractionOption> options)
     {
         if (_interactionMenu == null)
         {

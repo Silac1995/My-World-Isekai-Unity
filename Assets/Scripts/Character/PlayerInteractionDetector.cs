@@ -285,7 +285,7 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
         }
     }
 
-    private void OpenInteractionMenu(List<InteractableObject.InteractionOption> options)
+    private void OpenInteractionMenu(List<InteractionOption> options)
     {
         if (_playerUI != null)
         {

@@ -17,7 +17,7 @@ public class UI_InteractionMenu : MonoBehaviour
     /// — used by combat turn system where only one action per turn is allowed.
     /// When false, buttons respect InteractionOption.IsDisabled and stay clickable after use.
     /// </param>
-    public void Initialize(List<InteractableObject.InteractionOption> options, bool lockByDefault = true)
+    public void Initialize(List<InteractionOption> options, bool lockByDefault = true)
     {
         _lockAfterClick = lockByDefault;
 

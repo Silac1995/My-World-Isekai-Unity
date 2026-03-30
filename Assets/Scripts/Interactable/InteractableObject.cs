@@ -29,20 +29,6 @@ public abstract class InteractableObject : MonoBehaviour
     public virtual void OnCharacterEnter(Character interactor) { }
     public virtual void OnCharacterExit(Character interactor) { }
 
-    public struct InteractionOption
-    {
-        public string Name;
-        public System.Action Action;
-        /// <summary>
-        /// When true, the button is shown but grayed out / not clickable.
-        /// </summary>
-        public bool IsDisabled;
-        /// <summary>
-        /// If set, clicking the button swaps its label between Name and ToggleName.
-        /// </summary>
-        public string ToggleName;
-    }
-
     public virtual System.Collections.Generic.List<InteractionOption> GetHoldInteractionOptions(Character interactor)
     {
         return null;
