@@ -16,6 +16,10 @@ The root (most parent) GameObject of a Character prefab contains the essential c
 The `Character.cs` script is the most important class of the entity. It is the Central Architecture (Facade Pattern) through which **everything** passes.
 
 ## 1. Facade Pattern (Obligations)
+
+> [!IMPORTANT]
+> **Capability Registry is the primary lookup mechanism.** With the Character Archetype System (`character-archetype` skill), `Character.cs` now hosts a Capability Registry. Use `character.Get<T>()`, `character.TryGet<T>()`, `character.Has<T>()`, and `character.GetAll<T>()` to discover capabilities at runtime. The legacy facade properties (e.g., `character.CharacterCombat`) delegate to the registry for backward compatibility but are gradually being deprecated. For full details, see `.agent/skills/character-archetype/SKILL.md`.
+
 The Agent **must NEVER search for components linked to a character via isolated `GetComponent` calls**.
 If it has a reference to `Character`, then it already has safe and performant access to the majority of the system.
 Examples:
