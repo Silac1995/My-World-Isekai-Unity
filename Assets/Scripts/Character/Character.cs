@@ -74,6 +74,67 @@ public class Character : NetworkBehaviour
     [SerializeField] private FurniturePlacementManager _furniturePlacementManager;
     #endregion
 
+    #region Capability Registry
+    // ── Capability Registry ──────────────────────────────────────────
+    private readonly Dictionary<System.Type, CharacterSystem> _capabilitiesByType = new();
+    private readonly List<CharacterSystem> _allCapabilities = new();
+
+    /// <summary>Register a subsystem in the capability registry. Called by CharacterSystem.OnEnable.</summary>
+    public void Register(CharacterSystem system)
+    {
+        if (system == null) return;
+        var type = system.GetType();
+        _capabilitiesByType[type] = system;
+        if (!_allCapabilities.Contains(system))
+            _allCapabilities.Add(system);
+    }
+
+    /// <summary>Unregister a subsystem from the capability registry. Called by CharacterSystem.OnDisable.</summary>
+    public void Unregister(CharacterSystem system)
+    {
+        if (system == null) return;
+        _capabilitiesByType.Remove(system.GetType());
+        _allCapabilities.Remove(system);
+    }
+
+    /// <summary>Get a capability by exact type. Throws KeyNotFoundException if missing.</summary>
+    public T Get<T>() where T : CharacterSystem
+    {
+        if (_capabilitiesByType.TryGetValue(typeof(T), out var system))
+            return (T)system;
+        throw new System.Collections.Generic.KeyNotFoundException(
+            $"Capability {typeof(T).Name} not found on character '{CharacterName}'.");
+    }
+
+    /// <summary>Try to get a capability by exact type. Returns false if missing.</summary>
+    public bool TryGet<T>(out T system) where T : CharacterSystem
+    {
+        if (_capabilitiesByType.TryGetValue(typeof(T), out var s))
+        {
+            system = (T)s;
+            return true;
+        }
+        system = null;
+        return false;
+    }
+
+    /// <summary>Check if a capability exists by exact type.</summary>
+    public bool Has<T>() where T : CharacterSystem
+    {
+        return _capabilitiesByType.ContainsKey(typeof(T));
+    }
+
+    /// <summary>Get all capabilities implementing a given interface or base type. Linear scan.</summary>
+    public System.Collections.Generic.IEnumerable<T> GetAll<T>()
+    {
+        for (int i = 0; i < _allCapabilities.Count; i++)
+        {
+            if (_allCapabilities[i] is T match)
+                yield return match;
+        }
+    }
+    #endregion
+
     #region Network Variables
     public NetworkVariable<Unity.Collections.FixedString64Bytes> NetworkRaceId = new NetworkVariable<Unity.Collections.FixedString64Bytes>(
         "",
