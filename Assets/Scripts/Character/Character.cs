@@ -191,45 +191,45 @@ public class Character : NetworkBehaviour
     #region Properties
     public string CharacterName { get => _characterName; set => _characterName = value; }
     public CharacterBio CharacterBio => _characterBio;
-    public CharacterStats Stats => _stats ?? throw new NullReferenceException($"Stats manquantes sur {gameObject.name}");
+    public CharacterStats Stats { get { var s = TryGet<CharacterStats>(out var reg) ? reg : _stats; return s ?? throw new NullReferenceException($"Stats manquantes sur {gameObject.name}"); } }
     public RaceSO Race => _race;
 
     public float MovementSpeed => _stats?.MoveSpeed.CurrentValue ?? 0f;
     public Rigidbody Rigidbody => _rb;
     public CapsuleCollider Collider => _col;
 
-    public CharacterGameController Controller => _controller;
-    public CharacterMovement CharacterMovement => _characterMovement;
-    public CharacterVisual CharacterVisual => _characterVisual;
-    public CharacterActions CharacterActions => _characterActions;
-    public CharacterInteraction CharacterInteraction => _characterInteraction ?? throw new NullReferenceException($"CharacterInteraction non initialisé sur {gameObject.name}");
-    public CharacterEquipment CharacterEquipment => _equipment;
-    public CharacterRelation CharacterRelation => _characterRelation;
-    public CharacterParty CharacterParty => _characterParty;
-    public CharacterCommunity CharacterCommunity => _characterCommunity;
+    public CharacterGameController Controller => TryGet<CharacterGameController>(out var s0) ? s0 : _controller;
+    public CharacterMovement CharacterMovement => TryGet<CharacterMovement>(out var s1) ? s1 : _characterMovement;
+    public CharacterVisual CharacterVisual => TryGet<CharacterVisual>(out var s2) ? s2 : _characterVisual;
+    public CharacterActions CharacterActions => TryGet<CharacterActions>(out var s3) ? s3 : _characterActions;
+    public CharacterInteraction CharacterInteraction { get { var s = TryGet<CharacterInteraction>(out var reg) ? reg : _characterInteraction; return s ?? throw new NullReferenceException($"CharacterInteraction non initialisé sur {gameObject.name}"); } }
+    public CharacterEquipment CharacterEquipment => TryGet<CharacterEquipment>(out var s5) ? s5 : _equipment;
+    public CharacterRelation CharacterRelation => TryGet<CharacterRelation>(out var s6) ? s6 : _characterRelation;
+    public CharacterParty CharacterParty => TryGet<CharacterParty>(out var s7) ? s7 : _characterParty;
+    public CharacterCommunity CharacterCommunity => TryGet<CharacterCommunity>(out var s8) ? s8 : _characterCommunity;
     public CharacterInteractable CharacterInteractable => _characterInteractable;
-    public CharacterCombat CharacterCombat => _characterCombat;
-    public CharacterNeeds CharacterNeeds => _characterNeeds;
-    public CharacterAwareness CharacterAwareness => _characterAwareness;
-    public CharacterSpeech CharacterSpeech => _characterSpeech;
-    public CharacterStatusManager StatusManager => _statusManager;
-    public CharacterProfile CharacterProfile => _characterProfile;
-    public CharacterTraits CharacterTraits => _characterTraits;
-    public CharacterInvitation CharacterInvitation => _characterInvitation;
-    public CharacterJob CharacterJob => _characterJob;
-    public CharacterSchedule CharacterSchedule => _characterSchedule;
-    public CharacterSkills CharacterSkills => _characterSkills;
-    public CharacterMentorship CharacterMentorship => _characterMentorship;
-    public CharacterLocations CharacterLocations => _characterLocations;
-    public CharacterGoapController CharacterGoap => _characterGoap;
-    public CharacterCombatLevel CharacterCombatLevel => _characterCombatLevel;
-    public CharacterBlueprints CharacterBlueprints => _characterBlueprints;
-    public CharacterAbilities CharacterAbilities => _characterAbilities;
-    public CharacterBookKnowledge CharacterBookKnowledge => _characterBookKnowledge;
-    public BattleCircleManager BattleCircleManager => _battleCircleManager;
-    public FloatingTextSpawner FloatingTextSpawner => _floatingTextSpawner;
-    public BuildingPlacementManager PlacementManager => _characterBlueprints != null ? _characterBlueprints.PlacementManager : null;
-    public FurniturePlacementManager FurniturePlacementManager => _furniturePlacementManager;
+    public CharacterCombat CharacterCombat => TryGet<CharacterCombat>(out var s10) ? s10 : _characterCombat;
+    public CharacterNeeds CharacterNeeds => TryGet<CharacterNeeds>(out var s11) ? s11 : _characterNeeds;
+    public CharacterAwareness CharacterAwareness => TryGet<CharacterAwareness>(out var s12) ? s12 : _characterAwareness;
+    public CharacterSpeech CharacterSpeech => TryGet<CharacterSpeech>(out var s13) ? s13 : _characterSpeech;
+    public CharacterStatusManager StatusManager => TryGet<CharacterStatusManager>(out var s14) ? s14 : _statusManager;
+    public CharacterProfile CharacterProfile => TryGet<CharacterProfile>(out var s15) ? s15 : _characterProfile;
+    public CharacterTraits CharacterTraits => TryGet<CharacterTraits>(out var s16) ? s16 : _characterTraits;
+    public CharacterInvitation CharacterInvitation => TryGet<CharacterInvitation>(out var s17) ? s17 : _characterInvitation;
+    public CharacterJob CharacterJob => TryGet<CharacterJob>(out var s18) ? s18 : _characterJob;
+    public CharacterSchedule CharacterSchedule => TryGet<CharacterSchedule>(out var s19) ? s19 : _characterSchedule;
+    public CharacterSkills CharacterSkills => TryGet<CharacterSkills>(out var s20) ? s20 : _characterSkills;
+    public CharacterMentorship CharacterMentorship => TryGet<CharacterMentorship>(out var s21) ? s21 : _characterMentorship;
+    public CharacterLocations CharacterLocations => TryGet<CharacterLocations>(out var s22) ? s22 : _characterLocations;
+    public CharacterGoapController CharacterGoap => TryGet<CharacterGoapController>(out var s23) ? s23 : _characterGoap;
+    public CharacterCombatLevel CharacterCombatLevel => TryGet<CharacterCombatLevel>(out var s24) ? s24 : _characterCombatLevel;
+    public CharacterBlueprints CharacterBlueprints => TryGet<CharacterBlueprints>(out var s25) ? s25 : _characterBlueprints;
+    public CharacterAbilities CharacterAbilities => TryGet<CharacterAbilities>(out var s26) ? s26 : _characterAbilities;
+    public CharacterBookKnowledge CharacterBookKnowledge => TryGet<CharacterBookKnowledge>(out var s27) ? s27 : _characterBookKnowledge;
+    public BattleCircleManager BattleCircleManager => TryGet<BattleCircleManager>(out var s28) ? s28 : _battleCircleManager;
+    public FloatingTextSpawner FloatingTextSpawner => TryGet<FloatingTextSpawner>(out var s29) ? s29 : _floatingTextSpawner;
+    public BuildingPlacementManager PlacementManager { get { var blueprints = TryGet<CharacterBlueprints>(out var reg) ? reg : _characterBlueprints; return blueprints != null ? blueprints.PlacementManager : null; } }
+    public FurniturePlacementManager FurniturePlacementManager => TryGet<FurniturePlacementManager>(out var s31) ? s31 : _furniturePlacementManager;
     public bool IsBuilding => _isBuilding;
 
     public NavMeshAgent NavMesh => _cachedNavMeshAgent;
