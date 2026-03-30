@@ -191,7 +191,44 @@ After the player selects a world + character:
 
 ---
 
-## 6. Map Structure
+## 6. Critical Bug Fixes (Required for Save/Load Correctness)
+
+### 6a. NPC CharacterId Not Restored on Wake-Up
+
+**Bug:** `MapController.WakeUp()` restores `NetworkRaceId`, `NetworkCharacterName`, `NetworkVisualSeed`, and needs — but **never restores `NetworkCharacterId`** before calling `netObj.Spawn()`. Since `Character.OnNetworkSpawn()` auto-generates a new GUID when `NetworkCharacterId.Value.IsEmpty`, every NPC gets a new identity on wake-up. This silently breaks all relationships, party references, and building ownership.
+
+**Fix:** In `MapController.cs`, set `NetworkCharacterId` before `Spawn()`:
+```csharp
+spawnedChar.NetworkCharacterId.Value = new FixedString64Bytes(npcData.CharacterId);
+```
+
+This must be added **before** `netObj.Spawn(true)` is called, alongside the other NetworkVariable restorations.
+
+### 6b. Active Map NPCs Not Serialized on Save
+
+**Bug:** When the player saves (bed/sleep), their current map is **active** — NPCs are live GameObjects, not hibernated into `MapSaveData.HibernatedNPCs`. If the player quits and reloads, those NPCs are lost because they were never serialized.
+
+**Fix:** On world save, each active `MapController` must **snapshot** its live NPCs into `MapSaveData` without despawning them. This is a "serialize without hibernate" step:
+- Iterate all live NPCs on the map
+- Serialize each into `HibernatedNPCData` (same format as hibernation)
+- Store in `MapSaveData.HibernatedNPCs`
+- Do NOT despawn the NPCs — they remain live
+- On world load, these NPCs are respawned from the save data just like hibernated ones
+
+This requires `MapController` to implement `ISaveable` (or extend the existing `CommunityTracker` save) to capture per-map NPC snapshots during save.
+
+### 6c. Dormant Relationship Activation on NPC Spawn
+
+**Bug:** `CharacterRelation.Deserialize()` stores relationships as dormant when the target NPC isn't found via `FindByUUID()`. But there is **no lazy resolution mechanism** — if the NPC spawns after the player's relationships are loaded, those dormant entries never activate until the next save/load cycle.
+
+**Fix:** Add a relationship resolution hook:
+- When a Character spawns (`OnNetworkSpawn`), broadcast an event (e.g., `Character.OnCharacterSpawned`)
+- `CharacterRelation` subscribes to this event
+- On each spawn, check dormant entries: if `targetCharacterId` matches the newly spawned character, resolve the dormant entry into a live `Relationship` with the Character reference
+
+---
+
+## 7. Map Structure (Unchanged)
 
 - **Premade MapControllers** exist in the game scene as scene objects. They are always loaded. Their state (NPCs, buildings, resources) is captured/restored by the world save via `CommunityTracker`, `HibernatedNPCData`, etc.
 - **Dynamic MapControllers** (from community promotion, building interiors) are reconstructed from save data. `CommunityTracker.RestoreState()` + `WorldOffsetAllocator.RestoreState()` + `BuildingInteriorRegistry` handle spawning these.
@@ -199,7 +236,7 @@ After the player selects a world + character:
 
 ---
 
-## 7. Files to Create / Modify
+## 8. Files to Create / Modify
 
 ### Create
 - `Assets/Scripts/UI/WorldSelect/WorldSelectPanel.cs` — world list UI panel
@@ -220,10 +257,13 @@ After the player selects a world + character:
 - `Assets/Scripts/Core/SaveLoad/SaveManager.cs` — use `worldGuid` instead of slot index, store current worldGuid at runtime
 - `Assets/Scripts/Character/SaveLoad/CharacterDataCoordinator.cs` — update `ExportProfile()` to set `WorldAssociation` on save
 - `Assets/Scripts/UI/MainMenu.cs` — wire "Start Game" button to open WorldSelectPanel. Also translate existing French comments to English per CLAUDE.md rule 23.
+- `Assets/Scripts/World/MapSystem/MapController.cs` — restore NetworkCharacterId before Spawn() in WakeUp(); add active-map NPC snapshot on save
+- `Assets/Scripts/Character/Character.cs` — add static `OnCharacterSpawned` event for dormant relationship resolution
+- `Assets/Scripts/Character/CharacterRelation/CharacterRelation.cs` — subscribe to `OnCharacterSpawned`, resolve dormant entries on NPC spawn
 
 ---
 
-## 8. Out of Scope
+## 9. Out of Scope
 
 - Character creation/customization screen (future spec — "Create Random Character" is the placeholder)
 - Multiplayer lobby / server browser
