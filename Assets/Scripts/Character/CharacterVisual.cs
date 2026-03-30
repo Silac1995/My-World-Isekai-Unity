@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -7,7 +8,7 @@ using UnityEngine.U2D.Animation;
 
 
 
-public class CharacterVisual : CharacterSystem
+public class CharacterVisual : CharacterSystem, ICharacterVisual, IAnimationLayering
 {
     [Header("Components")]
 
@@ -31,17 +32,17 @@ public class CharacterVisual : CharacterSystem
         NetworkVariableReadPermission.Everyone, 
         NetworkVariableWritePermission.Owner);
 
-    // --- Look Target : cible persistante pour orienter le regard ---
+    // --- Look Target: persistent target for orientation ---
     private Transform _lookTarget;
     public Transform LookTarget => _lookTarget;
     public bool HasLookTarget => _lookTarget != null;
 
-    // --- Anti-flicker : cooldown entre les flips ---
+    // --- Anti-flicker: cooldown between flips ---
     private float _lastFlipTime = -999f;
     private const float FLIP_COOLDOWN = 0.15f;
 
 
-    // --- Dictionnaires ---
+    // --- Dictionaries ---
 
     private Dictionary<VisualPart, List<SpriteRenderer>> partRenderers;
 
@@ -49,7 +50,7 @@ public class CharacterVisual : CharacterSystem
 
 
 
-    // --- Enums & Constantes ---
+    // --- Enums & Constants ---
 
     public enum VisualPart { Skin, Hair, RightEye, LeftEye, RightSclera, LeftSclera }
 
@@ -79,22 +80,20 @@ public class CharacterVisual : CharacterSystem
 
     public SpriteRenderer[] AllRenderers => allRenderers;
 
-    // Dans CharacterVisual.cs
-
     public void ApplyPresetFromRace(RaceSO race)
     {
-        Debug.Log($"<color=white>---> [CharacterVisual]</color> Entrée dans ApplyPresetFromRace pour {race?.raceName ?? "NULL"}");
+        Debug.Log($"<color=white>---> [CharacterVisual]</color> Entering ApplyPresetFromRace for {race?.raceName ?? "NULL"}");
 
         if (race == null)
         {
-            Debug.LogError("[CharacterVisual] RaceSO passé est null !");
+            Debug.LogError("[CharacterVisual] RaceSO passed is null!");
             return;
         }
 
-        // VERIFICATION CRITIQUE : Vérifie le nom exact dans ton script RaceSO
+        // CRITICAL CHECK: Verify the exact name in the RaceSO script
         if (race.characterVisualPreset == null)
         {
-            Debug.LogWarning($"[CharacterVisual] Aucun preset trouvé dans le SO de la race {race.raceName}. Vérifiez l'inspecteur.");
+            Debug.LogWarning($"[CharacterVisual] No preset found in the race SO for {race.raceName}. Check the inspector.");
             return;
         }
 
@@ -103,7 +102,7 @@ public class CharacterVisual : CharacterSystem
 
     public void ApplyVisualPreset(CharacterVisualPresetSO preset)
     {
-        Debug.Log($"<color=cyan>[CharacterVisual]</color> Tentative d'application du preset: {preset.name}");
+        Debug.Log($"<color=cyan>[CharacterVisual]</color> Attempting to apply preset: {preset.name}");
 
         if (preset is HumanoidVisualPresetSO humanoid)
         {
@@ -111,7 +110,7 @@ public class CharacterVisual : CharacterSystem
         }
         else
         {
-            Debug.LogWarning($"[CharacterVisual] Le preset {preset.name} n'est pas de type Humanoid.");
+            Debug.LogWarning($"[CharacterVisual] Preset {preset.name} is not of type Humanoid.");
         }
     }
 
@@ -119,28 +118,28 @@ public class CharacterVisual : CharacterSystem
     {
         if (bodyPartsController == null) return;
 
-        // 1. SÉCURITÉ : On s'assure que les dictionnaires de renderers sont prêts
+        // 1. SAFETY: Ensure renderer dictionaries are ready
         if (partRenderers == null || partRenderers[VisualPart.Skin].Count == 0)
         {
             InitializeSpriteRenderers();
         }
 
-        // 2. Initialisation des membres (Ears, etc.)
+        // 2. Initialize body parts (Ears, etc.)
         bodyPartsController.InitializeAllBodyParts();
 
-        // 3. Application de la couleur de peau
+        // 3. Apply skin color
         Debug.Log($"<color=orange>[Visual]</color> Application SkinColor: {preset.DefaultSkinColor}");
         this.SkinColor = preset.DefaultSkinColor;
 
-        // 4. Application des oreilles (qui marchent déjà)
+        // 4. Apply ears (already working)
         if (bodyPartsController.EarsController != null)
         {
             bodyPartsController.EarsController.SetEarsCategory(preset.EarCategory);
-            // On force aussi la couleur sur les oreilles spécifiquement
+            // Also force color on ears specifically
             bodyPartsController.EarsController.SetEarsColor(preset.DefaultSkinColor);
         }
 
-        // 5. Application des mains
+        // 5. Apply hands
         if (bodyPartsController.HandsController != null)
         {
             bodyPartsController.HandsController.SetHandsCategory(preset.HandCategory);
@@ -156,15 +155,15 @@ public class CharacterVisual : CharacterSystem
         {
             if (_netIsFacingRight.Value == value) return;
 
-            // Bloquer le flip pendant un knockback
+            // Block flip during knockback
             if (_character != null && _character.CharacterMovement != null && _character.CharacterMovement.IsKnockedBack)
                 return;
 
-            // Bloquer le flip si le personnage est incapacité
+            // Block flip if the character is incapacitated
             if (_character != null && _character.IsIncapacitated)
                 return;
 
-            // Anti-flicker : cooldown entre les flips
+            // Anti-flicker: cooldown between flips
             if (Time.time - _lastFlipTime < FLIP_COOLDOWN) return;
 
             // Only the owner can change the NetworkVariable
@@ -209,7 +208,7 @@ public class CharacterVisual : CharacterSystem
 
         base.Awake();
 
-        if (_character == null) Debug.LogError("[CharacterVisual] Aucun Character trouvé !");
+        if (_character == null) Debug.LogError("[CharacterVisual] No Character found!");
 
 
 
@@ -219,7 +218,7 @@ public class CharacterVisual : CharacterSystem
 
     private void LateUpdate()
     {
-        // Si un look target est défini, on oriente le sprite vers lui chaque frame
+        // If a look target is set, orient the sprite toward it each frame
         if (_lookTarget != null)
         {
             FaceTarget(_lookTarget.position);
@@ -234,13 +233,13 @@ public class CharacterVisual : CharacterSystem
 
     /// <summary>
 
-    /// Oriente le personnage vers une position cible (utile pour les interactions)
+    /// Orients the character toward a target position (useful for interactions)
 
     /// </summary>
 
     public void FaceTarget(Vector3 targetPosition)
     {
-        // Zone morte plus large pour éviter le flip-flop quand la cible est quasi alignée en X
+        // Larger dead zone to avoid flip-flop when the target is nearly aligned on X
         float direction = targetPosition.x - transform.position.x;
 
         if (Mathf.Abs(direction) > 0.3f)
@@ -250,7 +249,7 @@ public class CharacterVisual : CharacterSystem
     }
 
     /// <summary>
-    /// Oriente le personnage vers un autre personnage.
+    /// Orients the character toward another character.
     /// </summary>
     public void FaceCharacter(Character target)
     {
@@ -259,8 +258,8 @@ public class CharacterVisual : CharacterSystem
     }
 
     /// <summary>
-    /// Définit une cible persistante pour orienter le regard.
-    /// Le sprite s'orientera automatiquement vers cette cible chaque frame.
+    /// Sets a persistent look target for orientation.
+    /// The sprite will automatically orient toward this target each frame.
     /// </summary>
     public void SetLookTarget(Transform target)
     {
@@ -268,7 +267,7 @@ public class CharacterVisual : CharacterSystem
     }
 
     /// <summary>
-    /// Définit un Character comme cible de regard persistante.
+    /// Sets a Character as a persistent look target.
     /// </summary>
     public void SetLookTarget(Character target)
     {
@@ -276,7 +275,7 @@ public class CharacterVisual : CharacterSystem
     }
 
     /// <summary>
-    /// Retire la cible de regard. Le flip redevient contrôlé par le mouvement.
+    /// Clears the look target. Flip returns to being controlled by movement.
     /// </summary>
     public void ClearLookTarget()
     {
@@ -290,7 +289,7 @@ public class CharacterVisual : CharacterSystem
 
     public void UpdateFlip(Vector3 moveDir)
     {
-        // Si un look target est actif, le mouvement ne contrôle pas l'orientation
+        // If a look target is active, movement does not control orientation
         if (_lookTarget != null) return;
 
         if (Mathf.Abs(moveDir.x) > 0.01f)
@@ -300,8 +299,8 @@ public class CharacterVisual : CharacterSystem
     }
 
     /// <summary>
-    /// Détermine si le personnage marche vers l'avant ou l'arrière par rapport à son orientation.
-    /// Utilisé principalement quand un LookTarget est actif.
+    /// Determines if the character is walking forward or backward relative to their orientation.
+    /// Primarily used when a LookTarget is active.
     /// </summary>
     public void UpdateWalkingParameters(Vector3 velocity)
     {
@@ -320,8 +319,8 @@ public class CharacterVisual : CharacterSystem
 
                 if (Mathf.Abs(moveX) > 0.1f)
                 {
-                    // Si le mouvement X est dans le même sens que l'orientation -> Forward
-                    // Sinon -> Backward
+                    // If X movement is in the same direction as orientation -> Forward
+                    // Otherwise -> Backward
                     if (Mathf.Sign(moveX) == Mathf.Sign(facingDir))
                         isWalkingForward = true;
                     else
@@ -329,14 +328,14 @@ public class CharacterVisual : CharacterSystem
                 }
                 else
                 {
-                    // Mouvement purement vertical (Z) alors qu'on regarde une cible sur le côté
-                    // On considère ça comme une marche avant par défaut
+                    // Purely vertical (Z) movement while looking at a target to the side
+                    // Consider this as walking forward by default
                     isWalkingForward = true;
                 }
             }
             else
             {
-                // Pas de cible : marche normale vers l'avant
+                // No target: normal forward walk
                 isWalkingForward = true;
             }
         }
@@ -349,7 +348,7 @@ public class CharacterVisual : CharacterSystem
 
     private void ApplyFlip()
     {
-        // On applique le scale sur le visualRoot pour éviter les conflits avec le NetworkTransform !
+        // Apply scale on visualRoot to avoid conflicts with NetworkTransform
         Transform target = visualRoot != null ? visualRoot : transform;
         Vector3 scale = target.localScale;
         scale.x = Mathf.Abs(scale.x) * (IsFacingRight ? 1 : -1);
@@ -497,7 +496,7 @@ public class CharacterVisual : CharacterSystem
 
 
 
-        // On préserve le signe du scale X pour ne pas casser le Flip en cours
+        // Preserve the sign of scale X to avoid breaking the current Flip
 
         float currentFlip = Mathf.Sign(target.localScale.x);
 
@@ -507,13 +506,13 @@ public class CharacterVisual : CharacterSystem
 
 
 
-    // Encapsulation des couleurs pour les propriétés
+    // Color encapsulation for properties
 
     public Color SkinColor { get => skinColor; set { skinColor = value; ApplyColor(VisualPart.Skin, value); } }
 
     private Color skinColor;
 
-    // ... (Répéter le pattern pour les autres couleurs si nécessaire)
+    // ... (Repeat the pattern for other colors if needed)
 
 
 
@@ -531,7 +530,7 @@ public class CharacterVisual : CharacterSystem
 
 
 
-    // Appelle ça à la fin de ton SpawnCharacter
+    // Call this at the end of SpawnCharacter
     public void RequestAutoResize()
     {
         if (_resizeCoroutine != null)
@@ -542,7 +541,7 @@ public class CharacterVisual : CharacterSystem
 
     private IEnumerator ResizeRoutine()
     {
-        // On attend que Unity ait fini de calculer les sprites et le rendu
+        // Wait for Unity to finish calculating sprites and rendering
         yield return new WaitForEndOfFrame();
 
         ResizeColliderToSprite();
@@ -557,32 +556,32 @@ public class CharacterVisual : CharacterSystem
         SpriteRenderer[] srs = GetComponentsInChildren<SpriteRenderer>(false);
         if (srs.Length == 0 || col == null) return;
 
-        // 1. Calcul des limites visuelles (Bounds)
+        // 1. Calculate visual bounds
         Bounds b = srs[0].bounds;
         foreach (var sr in srs) b.Encapsulate(sr.bounds);
 
-        // 2. Réinitialisation de la position locale
-        // On force le visuel à être pile sur le pivot du parent (0,0,0)
+        // 2. Reset local position
+        // Force the visual to be exactly on the parent pivot (0,0,0)
         transform.localPosition = Vector3.zero;
 
-        // 3. Calcul de la hauteur
-        // On mesure la distance entre le bas réel du sprite et le haut réel du sprite
+        // 3. Calculate height
+        // Measure the distance from the bottom to the top of the sprite
         float height = b.size.y;
         col.height = height;
         col.radius = 0.75f;
 
-        // 4. Positionnement du Collider
-        // On le place pour qu'il commence à 0 et monte vers le haut
-        // On ne se base plus sur les bounds pour le centre, mais sur la hauteur pure
+        // 4. Position the Collider
+        // Place it so it starts at 0 and extends upward
+        // No longer based on bounds for center, use pure height instead
         col.center = new Vector3(0, height / 2f, 0);
 
-        Debug.Log("<color=white>[Visual]</color> Offset supprimé. Pivot forcé à (0,0,0).");
+        Debug.Log("<color=white>[Visual]</color> Offset removed. Pivot forced to (0,0,0).");
     }
 
     public Vector3 GetVisualExtremity(Vector3 direction)
     {
         SpriteRenderer[] srs = GetComponentsInChildren<SpriteRenderer>(false);
-        // On filtre pour exclure les ombres ou autres éléments utilitaires qui fausseraient les bounds réels du corps
+        // Filter to exclude shadows and utility elements that would skew the actual body bounds
         var filtered = srs.Where(s => !s.name.ToLower().Contains("shadow")).ToList();
         
         if (filtered.Count == 0) return transform.position;
@@ -621,6 +620,135 @@ public class CharacterVisual : CharacterSystem
     public Vector3 GetVisualCenter()
     {
         return GetVisualBounds().center;
+    }
+
+    #endregion
+
+
+    #region ICharacterVisual Implementation
+
+    /// <inheritdoc/>
+    public event Action<string> OnAnimationEvent;
+
+    /// <summary>
+    /// Raises an animation event to all subscribers. Call from animation clips or event hooks.
+    /// </summary>
+    public void RaiseAnimationEvent(string eventName)
+    {
+        OnAnimationEvent?.Invoke(eventName);
+    }
+
+    void ICharacterVisual.Initialize(Character character, CharacterArchetype archetype)
+    {
+        // No-op for sprite visual: initialization is handled by existing Awake/OnNetworkSpawn lifecycle.
+    }
+
+    void ICharacterVisual.Cleanup()
+    {
+        // No-op for sprite visual: cleanup is handled by existing OnDestroy/OnNetworkDespawn lifecycle.
+    }
+
+    void ICharacterVisual.SetFacingDirection(float direction)
+    {
+        IsFacingRight = direction >= 0f;
+    }
+
+    void ICharacterVisual.PlayAnimation(AnimationKey key, bool loop)
+    {
+        if (_characterAnimator == null) return;
+
+        switch (key)
+        {
+            case AnimationKey.Idle:
+                _characterAnimator.StopLocomotion();
+                break;
+            case AnimationKey.Attack:
+                _characterAnimator.PlayMeleeAttack();
+                break;
+            case AnimationKey.PickUp:
+                _characterAnimator.PlayPickUpItem();
+                break;
+            case AnimationKey.Die:
+                _characterAnimator.SetDead(true);
+                break;
+            // Walk, Run, GetHit, Action are handled via animator parameters in the existing system
+            default:
+                break;
+        }
+    }
+
+    void ICharacterVisual.PlayAnimation(string customKey, bool loop)
+    {
+        Debug.LogWarning($"[CharacterVisual] Custom animation keys are not supported by sprite visual. Key: {customKey}");
+    }
+
+    bool ICharacterVisual.IsAnimationPlaying(AnimationKey key)
+    {
+        if (_characterAnimator == null) return false;
+
+        if (key == AnimationKey.Die)
+        {
+            // Check if the animator is in the Dead state
+            var animator = _characterAnimator.GetComponent<Animator>();
+            if (animator != null)
+            {
+                var stateInfo = animator.GetCurrentAnimatorStateInfo(0);
+                return stateInfo.IsName("Dead") || stateInfo.IsName("Die");
+            }
+        }
+
+        // For other keys, the sprite animator system uses parameters rather than discrete states
+        return false;
+    }
+
+    void ICharacterVisual.ConfigureCollider(Collider collider)
+    {
+        ResizeColliderToSprite();
+    }
+
+    void ICharacterVisual.SetHighlight(bool active)
+    {
+        // No-op for sprite visual. Will be implemented during Spine migration.
+    }
+
+    void ICharacterVisual.SetTint(Color color)
+    {
+        // Tech debt: direct sr.color modification. Will move to MPB in Spine migration.
+        if (allRenderers == null) return;
+        foreach (var sr in allRenderers)
+        {
+            if (sr != null) sr.color = color;
+        }
+    }
+
+    void ICharacterVisual.SetVisible(bool visible)
+    {
+        if (allRenderers == null) return;
+        foreach (var sr in allRenderers)
+        {
+            if (sr != null) sr.enabled = visible;
+        }
+    }
+
+    #endregion
+
+
+    #region IAnimationLayering Implementation
+
+    void IAnimationLayering.PlayOverlayAnimation(AnimationKey key, int layer, bool loop)
+    {
+        // Sprite visual is single-layer; delegate to base PlayAnimation
+        ((ICharacterVisual)this).PlayAnimation(key, loop);
+    }
+
+    void IAnimationLayering.PlayOverlayAnimation(string customKey, int layer, bool loop)
+    {
+        Debug.LogWarning($"[CharacterVisual] Overlay animations are not supported by sprite visual. Key: {customKey}, Layer: {layer}");
+    }
+
+    void IAnimationLayering.ClearOverlayAnimation(int layer)
+    {
+        // No-op: sprite visual does not have animation layers.
     }
 
     #endregion
