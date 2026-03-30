@@ -108,7 +108,7 @@ public class CharacterSelectPanel : MonoBehaviour
         {
             GameLauncher.Instance.SelectedWorldGuid = _selectedWorldGuid;
             GameLauncher.Instance.SelectedCharacterGuid = characterGuid;
-            GameLauncher.Instance.Launch();
+            GameLauncher.Instance.LaunchSolo();
         }
         else
         {
