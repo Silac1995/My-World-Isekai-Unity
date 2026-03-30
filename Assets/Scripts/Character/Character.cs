@@ -25,6 +25,9 @@ public enum CharacterBusyReason
 public class Character : NetworkBehaviour
 {
     #region Serialized Fields
+    [Header("Archetype")]
+    [SerializeField] private CharacterArchetype _archetype;
+
     [Header("Basic Info")]
     [SerializeField] private string _characterName;
     [SerializeField] private GenderType _startingGender;
@@ -189,6 +192,7 @@ public class Character : NetworkBehaviour
     #endregion
 
     #region Properties
+    public CharacterArchetype Archetype => _archetype;
     public string CharacterName { get => _characterName; set => _characterName = value; }
     public CharacterBio CharacterBio => _characterBio;
     public CharacterStats Stats { get { var s = TryGet<CharacterStats>(out var reg) ? reg : _stats; return s ?? throw new NullReferenceException($"Stats manquantes sur {gameObject.name}"); } }
