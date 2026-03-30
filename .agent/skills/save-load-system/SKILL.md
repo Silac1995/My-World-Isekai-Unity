@@ -29,11 +29,40 @@ Portable character profiles that travel across worlds. Characters are independen
 | 60 | CharacterParty, CharacterCommunity, CharacterJob, CharacterSchedule |
 | 70 | CharacterMapTracker, CharacterCombat |
 
+## GUID-Based World Saves
+- World files stored as `Worlds/{worldGuid}.json` (replaces slot-based `world_0.json`)
+- `SaveFileHandler.GetAllWorlds()` scans the `Worlds/` directory and returns all available world saves
+- `SaveManager.CurrentWorldGuid` and `CurrentWorldName` track the active world at runtime
+
+## WorldAssociation
+- `CharacterProfileSaveData.worldAssociations` tracks the character's position per world (keyed by world GUID)
+- Updated in `CharacterDataCoordinator.SaveLocalProfileAsync()` whenever the character saves
+- Used by character selection UI to show whether a character has a save from the selected world
+
+## Active Map NPC Snapshots
+- `MapController.SnapshotActiveNPCs()` serializes live NPCs on active maps without despawning them
+- `MapController.ActiveControllers` — static `HashSet` that tracks currently active map controllers
+- `MapController.PendingSnapshots` — stores NPC snapshots for init-time consumption during save/load
+- Ensures NPCs on active (non-hibernated) maps persist through save/load cycles
+
+## GameLauncher
+- Singleton orchestrator for the full game load sequence
+- Sets `GameSessionManager` flags, loads the target scene, waits for player spawn
+- Imports the character profile, positions the player via `WorldAssociation`, spawns party NPCs
+- Entry point: `GameLauncher.Launch()`
+
 ## Save Triggers
-- Solo: bed/sleep only
-- Multiplayer: portal gate (outbound saves before, return overwrites)
-- Host shutdown: host profile saved
+- Bed/sleep: saves both world + character
+- Map transition: saves both world + character
+- Host shutdown: saves both world + character
+- All triggers go through `SaveManager.SaveWorldAsync()` + `CharacterDataCoordinator.SaveLocalProfileAsync()`
 - Crash/disconnect: no save — revert to last checkpoint
+
+## World Save Menu Flow
+- Main Menu → World Select → Character Select → `GameLauncher.Launch()`
+- **World creation:** name + optional seed
+- **Character creation:** random race/gender/visual (placeholder for future customization)
+- **Deletion:** confirmation popup for both worlds and characters via `DeleteConfirmPopup`
 
 ## Adding a New Saveable Subsystem
 1. Create a DTO class in `Assets/Scripts/Character/SaveLoad/ProfileSaveData/`
@@ -58,6 +87,11 @@ Portable character profiles that travel across worlds. Characters are independen
 - `Assets/Scripts/Core/SaveLoad/SaveFileHandler.cs`
 - `Assets/Scripts/Core/SaveLoad/GameSaveData.cs`
 - `Assets/Scripts/Character/Abandoned/ReclaimNPCInteraction.cs`
+- `Assets/Scripts/Core/GameLauncher.cs`
+- `Assets/Scripts/Core/SaveLoad/WorldAssociation.cs`
+- `Assets/Scripts/UI/WorldSelect/` — world select UI panel, world entry, world creation
+- `Assets/Scripts/UI/CharacterSelect/` — character select UI panel, character entry, character creation
+- `Assets/Scripts/UI/Common/DeleteConfirmPopup.cs`
 
 ## Dependencies
 - Newtonsoft.Json

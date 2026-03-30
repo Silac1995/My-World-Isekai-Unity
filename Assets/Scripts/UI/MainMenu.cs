@@ -4,7 +4,7 @@ using UnityEngine.UI;
 
 public class MainMenu : MonoBehaviour
 {
-    [Header("Boutons du Menu")]
+    [Header("Menu Buttons")]
     public Button playButton;
     public Button btnStartSolo;
     public Button btnMultiplayer;
@@ -12,19 +12,22 @@ public class MainMenu : MonoBehaviour
     public Button creditsButton;
     public Button quitButton;
 
-    [Header("Noms des Scènes")]
+    [Header("Scene Names")]
     public string gameSceneName = "GameScene";
     public string settingsSceneName = "SettingsScene";
     public string creditsSceneName = "CreditsScene";
 
+    [Header("Panels")]
+    [SerializeField] private WorldSelectPanel _worldSelectPanel;
+
     void Start()
     {
-        // Assigner les méthodes aux boutons si ils sont définis
+        // Assign methods to buttons if they are defined
         if (playButton != null)
             playButton.onClick.AddListener(() => LoadScene(gameSceneName));
 
         if (btnStartSolo != null)
-            btnStartSolo.onClick.AddListener(StartSolo);
+            btnStartSolo.onClick.AddListener(StartGame);
 
         if (btnMultiplayer != null)
             btnMultiplayer.onClick.AddListener(JoinMultiplayer);
@@ -37,10 +40,40 @@ public class MainMenu : MonoBehaviour
 
         if (quitButton != null)
             quitButton.onClick.AddListener(QuitGame);
+
+        // Listen for WorldSelectPanel's back event to re-show main menu
+        if (_worldSelectPanel != null)
+            _worldSelectPanel.OnBackRequested += OnWorldSelectBack;
     }
 
     /// <summary>
-    /// Starts the game as a Solo/Host
+    /// Opens the World Select panel so the player can pick or create a world before launching.
+    /// Wired to the "Start Solo" button.
+    /// </summary>
+    public void StartGame()
+    {
+        if (_worldSelectPanel != null)
+        {
+            _worldSelectPanel.gameObject.SetActive(true);
+        }
+        else
+        {
+            Debug.LogWarning("[MainMenu] WorldSelectPanel reference is not assigned — falling back to direct StartSolo().");
+            StartSolo();
+        }
+    }
+
+    /// <summary>
+    /// Called when the WorldSelectPanel fires its back event. Re-enables the main menu visuals.
+    /// </summary>
+    private void OnWorldSelectBack()
+    {
+        // WorldSelectPanel already hides itself on back — nothing else needed for now.
+    }
+
+    /// <summary>
+    /// Starts the game as a Solo/Host.
+    /// Kept public so other systems (e.g., WorldSelectPanel flow) can still call it directly.
     /// </summary>
     public void StartSolo()
     {
@@ -83,53 +116,53 @@ public class MainMenu : MonoBehaviour
     }
 
     /// <summary>
-    /// Charge une scène par son nom
+    /// Loads a scene by name.
     /// </summary>
-    /// <param name="sceneName">Le nom de la scène à charger</param>
+    /// <param name="sceneName">The name of the scene to load.</param>
     public void LoadScene(string sceneName)
     {
         if (!string.IsNullOrEmpty(sceneName))
         {
-            Debug.Log($"Chargement de la scène: {sceneName}");
+            Debug.Log($"Loading scene: {sceneName}");
             SceneManager.LoadScene(sceneName);
         }
         else
         {
-            Debug.LogError("Nom de scène invalide!");
+            Debug.LogError("Invalid scene name!");
         }
     }
 
     /// <summary>
-    /// Charge une scène par son index
+    /// Loads a scene by its build index.
     /// </summary>
-    /// <param name="sceneIndex">L'index de la scène à charger</param>
+    /// <param name="sceneIndex">The build index of the scene to load.</param>
     public void LoadSceneByIndex(int sceneIndex)
     {
         if (sceneIndex >= 0 && sceneIndex < SceneManager.sceneCountInBuildSettings)
         {
-            Debug.Log($"Chargement de la scène index: {sceneIndex}");
+            Debug.Log($"Loading scene index: {sceneIndex}");
             SceneManager.LoadScene(sceneIndex);
         }
         else
         {
-            Debug.LogError("Index de scène invalide!");
+            Debug.LogError("Invalid scene index!");
         }
     }
 
     /// <summary>
-    /// Charge une scène de manière asynchrone
+    /// Loads a scene asynchronously.
     /// </summary>
-    /// <param name="sceneName">Le nom de la scène à charger</param>
+    /// <param name="sceneName">The name of the scene to load.</param>
     public void LoadSceneAsync(string sceneName)
     {
         if (!string.IsNullOrEmpty(sceneName))
         {
-            Debug.Log($"Chargement asynchrone de la scène: {sceneName}");
+            Debug.Log($"Loading scene asynchronously: {sceneName}");
             StartCoroutine(LoadSceneAsyncCoroutine(sceneName));
         }
         else
         {
-            Debug.LogError("Nom de scène invalide!");
+            Debug.LogError("Invalid scene name!");
         }
     }
 
@@ -137,25 +170,25 @@ public class MainMenu : MonoBehaviour
     {
         AsyncOperation asyncLoad = SceneManager.LoadSceneAsync(sceneName);
 
-        // Optionnel: empêcher l'activation automatique de la scène
+        // Optional: prevent automatic scene activation
         // asyncLoad.allowSceneActivation = false;
 
         while (!asyncLoad.isDone)
         {
-            // Ici tu peux afficher une barre de progression
+            // Progress bar can be displayed here
             float progress = Mathf.Clamp01(asyncLoad.progress / 0.9f);
-            Debug.Log($"Progression du chargement: {progress * 100}%");
+            Debug.Log($"Loading progress: {progress * 100}%");
 
             yield return null;
         }
     }
 
     /// <summary>
-    /// Quitte l'application
+    /// Quits the application.
     /// </summary>
     public void QuitGame()
     {
-        Debug.Log("Fermeture du jeu");
+        Debug.Log("Closing the game");
 
 #if UNITY_EDITOR
         UnityEditor.EditorApplication.isPlaying = false;
@@ -165,7 +198,7 @@ public class MainMenu : MonoBehaviour
     }
 
     /// <summary>
-    /// Retourne au menu principal depuis une autre scène
+    /// Returns to the main menu from another scene.
     /// </summary>
     public void ReturnToMainMenu()
     {
@@ -173,11 +206,17 @@ public class MainMenu : MonoBehaviour
     }
 
     /// <summary>
-    /// Redémarre la scène actuelle
+    /// Restarts the current scene.
     /// </summary>
     public void RestartCurrentScene()
     {
         string currentScene = SceneManager.GetActiveScene().name;
         LoadScene(currentScene);
+    }
+
+    private void OnDestroy()
+    {
+        if (_worldSelectPanel != null)
+            _worldSelectPanel.OnBackRequested -= OnWorldSelectBack;
     }
 }
