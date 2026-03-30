@@ -1,53 +1,65 @@
----
-name: unity-save-load-system
-description: >
-  Implement a robust, modular save and load system using DTOs and atomic file operations. 
-  Triggers specifically on "Sleep" actions and is restricted to the Host in multiplayer.
----
+# Save/Load System
 
-# Unity Save / Load System
+## Purpose
+Portable character profiles that travel across worlds. Characters are independent local JSON files loaded into any session.
 
-A modular, production-ready save and load system for "My World Isekai". Covers architecture, data separation, async file I/O, atomic writes, versioning, and project-specific triggers (Sleep/Host-only).
+## Architecture
 
-## When to use this skill
-- When implementating or refactoring game state persistence.
-- When adding new saveable systems (Inventory, Stats, World State).
-- When ensuring save logic respects multiplayer host authority.
-- When integrating the "Sleep" action as a save trigger.
+### Interfaces
+- `ICharacterSaveData` (non-generic) — base for coordinator discovery: `SaveKey`, `LoadPriority`, `SerializeToJson()`, `DeserializeFromJson()`
+- `ICharacterSaveData<T>` (generic) — typed contract subsystems implement: `Serialize()`, `Deserialize(T)`
+- `IOfflineCatchUp` — macro-simulation catch-up (orthogonal to save/load)
+- `ISaveable` — world-scoped saves only (TimeManager, CommunityTracker, etc.)
 
-## How to use it
+### Key Classes
+- `CharacterDataCoordinator` — orchestrates export/import, lives on root Character GO
+- `CharacterProfileSaveData` — the portable profile DTO (characterGuid, originWorldGuid, componentStates, partyMembers)
+- `SaveFileHandler` — atomic async file I/O to `Profiles/{characterGuid}.json`
+- `CharacterSaveDataHelper` — static JSON bridge for ICharacterSaveData<T>
 
-### 1. Identify Saveable Systems
-Any system that needs to persist state must implement `ISaveable`.
-- See example: [ISaveable.cs](examples/ISaveable.cs)
+### Load Priority Order
+| Priority | Systems |
+|----------|---------|
+| 0 | CharacterProfile |
+| 10 | CharacterStats |
+| 20 | CharacterSkills, CharacterAbilities |
+| 30 | CharacterEquipment |
+| 40 | CharacterNeeds, CharacterTraits |
+| 50 | CharacterRelation, CharacterBookKnowledge |
+| 60 | CharacterParty, CharacterCommunity, CharacterJob, CharacterSchedule |
+| 70 | CharacterMapTracker, CharacterCombat |
 
-### 2. Design Data Transfer Objects (DTOs)
-Never serialize `MonoBehaviour` directly. Use plain C# classes for state.
-- See example: [GameSaveData.cs](examples/GameSaveData.cs)
+## Save Triggers
+- Solo: bed/sleep only
+- Multiplayer: portal gate (outbound saves before, return overwrites)
+- Host shutdown: host profile saved
+- Crash/disconnect: no save — revert to last checkpoint
 
-### 3. Implement Centralized I/O
-All file operations (Atomic Writes, Async) are handled by `SaveFileHandler`.
-- See example: [SaveFileHandler.cs](examples/SaveFileHandler.cs)
+## Adding a New Saveable Subsystem
+1. Create a DTO class in `Assets/Scripts/Character/SaveLoad/ProfileSaveData/`
+2. Implement `ICharacterSaveData<YourDTO>` on the subsystem
+3. Set `SaveKey` (unique string) and `LoadPriority` (see table above)
+4. Implement `Serialize()` and `Deserialize()`
+5. Add bridge methods: `string ICharacterSaveData.SerializeToJson() => CharacterSaveDataHelper.SerializeToJson(this);`
+6. Test via ContextMenu on CharacterDataCoordinator: Debug Save/Load
 
-### 4. Coordinate via SaveManager
-The `SaveManager` handles registration, trigger checks (Host/Player), and migration.
-- See example: [SaveManager.cs](examples/SaveManager.cs)
+## Abandoned NPC System
+- When party leader disconnects: NPCs flagged `IsAbandoned` with `FormerPartyLeaderId`
+- Duplicate NPCs can coexist (portal copy + abandoned copy)
+- Reclaim interaction: abandoned NPC destroyed, portal copy stays
+- `FindByUUID()` prefers non-abandoned; `FindAbandonedByFormerLeader()` for reclaim
 
-### 5. Project-Specific Constraints
-- **Sleep Trigger**: Saves are triggered ONLY when a Player character sleeps.
-- **Host Only**: In multiplayer, ONLY the host can write save data to disk.
-- **IsPlayer Check**: Always verify `character.IsPlayer()` before triggering `SaveOnSleep`.
+## File Locations
+- `Assets/Scripts/Character/SaveLoad/ICharacterSaveData.cs`
+- `Assets/Scripts/Character/SaveLoad/CharacterSaveDataBase.cs`
+- `Assets/Scripts/Character/SaveLoad/CharacterDataCoordinator.cs`
+- `Assets/Scripts/Character/SaveLoad/ProfileSaveData/` — all DTOs
+- `Assets/Scripts/Core/SaveLoad/CharacterProfileSaveData.cs`
+- `Assets/Scripts/Core/SaveLoad/SaveFileHandler.cs`
+- `Assets/Scripts/Core/SaveLoad/GameSaveData.cs`
+- `Assets/Scripts/Character/Abandoned/ReclaimNPCInteraction.cs`
 
-## Examples
-- [ISaveable Implementation Pattern](examples/ISaveable.cs)
-- [Atomic Async File I/O](examples/SaveFileHandler.cs)
-- [Root Save Container (DTO)](examples/GameSaveData.cs)
-- [SaveManager Coordination & Triggers](examples/SaveManager.cs)
-
-## Verification Checklist
-- [ ] System implements `ISaveable` and registers in `Awake`.
-- [ ] `CaptureState` returns a serializable DTO.
-- [ ] Save triggers only via `PlayerSleep` (check `IsPlayer`).
-- [ ] Save logic check for `IsHost` in multiplayer contexts.
-- [ ] File writes are atomic (.tmp swap).
-- [ ] Operations are asynchronous to avoid frame drops.
+## Dependencies
+- Newtonsoft.Json
+- NGO 2.10+
+- CharacterArchetype system (for archetypeId-based spawning)

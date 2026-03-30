@@ -68,6 +68,12 @@ public class CharacterParty : CharacterSystem, ICharacterSaveData<PartySaveData>
 
     public override void OnNetworkDespawn()
     {
+        // If a player party leader is despawning, flag NPC members as abandoned
+        if (IsServer && _character.IsPlayer() && IsInParty && IsPartyLeader)
+        {
+            HandleLeaderDisconnected();
+        }
+
         _networkPartyId.OnValueChanged -= OnNetworkPartyIdChanged;
         _networkPartyState.OnValueChanged -= OnNetworkPartyStateChanged;
         _networkFollowMode.OnValueChanged -= OnNetworkFollowModeChanged;
@@ -226,6 +232,29 @@ public class CharacterParty : CharacterSystem, ICharacterSaveData<PartySaveData>
         _networkFollowMode.Value = (byte)mode;
         OnFollowModeChanged?.Invoke(mode);
         UpdateAllMembersFollowState();
+    }
+
+    /// <summary>
+    /// Called when the party leader's Character despawns (player disconnect).
+    /// Marks all NPC members as abandoned before disbanding the party,
+    /// so they can be reclaimed later by the same player.
+    /// </summary>
+    public void HandleLeaderDisconnected()
+    {
+        if (!IsServer || !IsInParty || !IsPartyLeader) return;
+
+        foreach (string memberId in new List<string>(_partyData.MemberIds))
+        {
+            if (memberId == _character.CharacterId) continue;
+            Character member = Character.FindByUUID(memberId);
+            if (member == null || member.IsPlayer()) continue;
+
+            member.IsAbandoned = true;
+            member.FormerPartyLeaderId = _character.CharacterId;
+            member.FormerPartyLeaderWorldGuid = _character.OriginWorldGuid;
+        }
+
+        DisbandParty();
     }
 
     public void DisbandParty()

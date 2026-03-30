@@ -475,7 +475,11 @@ namespace MWI.WorldSystem
                         // Identity & Visuals — critical for proper respawn
                         RaceId = npc.NetworkRaceId.Value.ToString(),
                         CharacterName = npc.NetworkCharacterName.Value.ToString(),
-                        VisualSeed = npc.NetworkVisualSeed.Value
+                        VisualSeed = npc.NetworkVisualSeed.Value,
+                        // Abandoned NPC tracking
+                        IsAbandoned = npc.IsAbandoned,
+                        FormerPartyLeaderId = npc.FormerPartyLeaderId,
+                        FormerPartyLeaderWorldGuid = npc.FormerPartyLeaderWorldGuid
                     };
 
                     // Extract Tier 1 V2 GOAP Anchors
@@ -764,6 +768,14 @@ namespace MWI.WorldSystem
                             spawnedChar.NetworkCharacterName.Value = new Unity.Collections.FixedString64Bytes(npcData.CharacterName);
                         if (npcData.VisualSeed != 0)
                             spawnedChar.NetworkVisualSeed.Value = npcData.VisualSeed;
+
+                        // Restore abandoned NPC state
+                        if (npcData.IsAbandoned)
+                        {
+                            spawnedChar.IsAbandoned = true;
+                            spawnedChar.FormerPartyLeaderId = npcData.FormerPartyLeaderId;
+                            spawnedChar.FormerPartyLeaderWorldGuid = npcData.FormerPartyLeaderWorldGuid;
+                        }
 
                         // Inject caught-up needs back
                         if (spawnedChar.CharacterNeeds != null)

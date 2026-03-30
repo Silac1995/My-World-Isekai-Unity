@@ -69,5 +69,10 @@ namespace MWI.WorldSystem
         public string RaceId;           // NetworkRaceId — needed for visual preset + name generation
         public string CharacterName;    // NetworkCharacterName — display name
         public int VisualSeed;          // NetworkVisualSeed — deterministic visual variation
+
+        // Abandoned NPC tracking — set when a party leader disconnects
+        public bool IsAbandoned;
+        public string FormerPartyLeaderId;
+        public string FormerPartyLeaderWorldGuid;
     }
 }

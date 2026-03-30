@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
@@ -70,6 +71,29 @@ public static class SaveFileHandler
             Debug.LogError($"[SaveFileHandler] Failed to read character profile {characterGuid}: {e.Message}");
             return null;
         }
+    }
+
+    // --- PROFILE SCANNING ---
+    public static List<CharacterProfileSaveData> GetAllProfiles()
+    {
+        var profiles = new List<CharacterProfileSaveData>();
+        if (!Directory.Exists(ProfileSaveDir)) return profiles;
+
+        foreach (string file in Directory.GetFiles(ProfileSaveDir, "*.json"))
+        {
+            try
+            {
+                string json = File.ReadAllText(file);
+                var profile = JsonConvert.DeserializeObject<CharacterProfileSaveData>(json);
+                if (profile != null) profiles.Add(profile);
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[SaveFileHandler] Failed to read profile {file}: {e.Message}");
+            }
+        }
+
+        return profiles;
     }
 
     // --- UTILITIES ---

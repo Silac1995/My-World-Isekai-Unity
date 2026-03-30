@@ -35,6 +35,44 @@ public class SaveManager : MonoBehaviour
         DontDestroyOnLoad(gameObject);
     }
 
+    private void OnApplicationQuit()
+    {
+        SaveHostPlayerProfileOnShutdown();
+    }
+
+    private void OnDestroy()
+    {
+        SaveHostPlayerProfileOnShutdown();
+    }
+
+    private bool _hostProfileSaved;
+
+    /// <summary>
+    /// On host shutdown, save the host's player character profile to disk.
+    /// Uses a guard flag to prevent double-saving from both OnApplicationQuit and OnDestroy.
+    /// </summary>
+    private void SaveHostPlayerProfileOnShutdown()
+    {
+        if (_hostProfileSaved) return;
+
+        var networkManager = Unity.Netcode.NetworkManager.Singleton;
+        if (networkManager == null || !networkManager.IsServer) return;
+
+        var localClient = networkManager.LocalClient;
+        if (localClient == null || localClient.PlayerObject == null) return;
+
+        var character = localClient.PlayerObject.GetComponent<Character>();
+        if (character == null || !character.IsPlayer()) return;
+
+        var coordinator = character.GetComponent<CharacterDataCoordinator>();
+        if (coordinator != null)
+        {
+            _ = coordinator.SaveLocalProfileAsync();
+            _hostProfileSaved = true;
+            Debug.Log("<color=green>[SaveManager]</color> Host player profile saved on shutdown.");
+        }
+    }
+
     public void RegisterWorldSaveable(ISaveable s) { if (!worldSaveables.Contains(s)) worldSaveables.Add(s); }
     public void UnregisterWorldSaveable(ISaveable s) => worldSaveables.Remove(s);
 
