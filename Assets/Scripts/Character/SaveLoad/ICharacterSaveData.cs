@@ -1,13 +1,22 @@
 /// <summary>
-/// Interface for character capabilities that have persistent state to save/load.
-/// Each CharacterSystem with state implements this with its own save data type.
+/// Non-generic base interface for discovery by CharacterDataCoordinator.
+/// CharacterSystems implement ICharacterSaveData<T> (generic) instead of this directly.
 /// </summary>
-/// <typeparam name="T">The save data struct/class for this capability.</typeparam>
-public interface ICharacterSaveData<T>
+public interface ICharacterSaveData
 {
-    /// <summary>Serialize this capability's state into a save data object.</summary>
-    T Serialize();
+    string SaveKey { get; }
+    int LoadPriority { get; }
+    string SerializeToJson();
+    void DeserializeFromJson(string json);
+}
 
-    /// <summary>Restore this capability's state from a save data object.</summary>
+/// <summary>
+/// Typed save data contract for character subsystems.
+/// Each subsystem defines its own DTO type T and implements Serialize/Deserialize.
+/// The non-generic methods are bridged via CharacterSaveDataHelper.
+/// </summary>
+public interface ICharacterSaveData<T> : ICharacterSaveData
+{
+    T Serialize();
     void Deserialize(T data);
 }

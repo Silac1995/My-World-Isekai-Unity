@@ -252,6 +252,36 @@ public class Character : NetworkBehaviour
     /// Persistent unique identifier for this character. Generated on first spawn, survives reconnects.
     /// </summary>
     public string CharacterId => NetworkCharacterId.Value.ToString();
+
+    // ── Origin World ──────────────────────────────────────────────────
+    private string _originWorldGuid;
+    public string OriginWorldGuid
+    {
+        get => _originWorldGuid;
+        set => _originWorldGuid = value;
+    }
+
+    // ── Abandoned NPC tracking — set when a party leader disconnects ──
+    private bool _isAbandoned;
+    public bool IsAbandoned
+    {
+        get => _isAbandoned;
+        set => _isAbandoned = value;
+    }
+
+    private string _formerPartyLeaderId;
+    public string FormerPartyLeaderId
+    {
+        get => _formerPartyLeaderId;
+        set => _formerPartyLeaderId = value;
+    }
+
+    private string _formerPartyLeaderWorldGuid;
+    public string FormerPartyLeaderWorldGuid
+    {
+        get => _formerPartyLeaderWorldGuid;
+        set => _formerPartyLeaderWorldGuid = value;
+    }
     #endregion
 
 
@@ -262,11 +292,30 @@ public class Character : NetworkBehaviour
     {
         if (string.IsNullOrEmpty(uuid)) return null;
 
-        foreach (var c in FindObjectsByType<Character>(FindObjectsSortMode.None))
+        Character fallback = null;
+        foreach (Character c in FindObjectsByType<Character>(FindObjectsSortMode.None))
         {
-            if (c.CharacterId == uuid) return c;
+            if (c.CharacterId == uuid)
+            {
+                if (!c.IsAbandoned) return c;
+                fallback = c;
+            }
         }
-        return null;
+        return fallback;
+    }
+
+    /// <summary>
+    /// Returns all abandoned characters whose former party leader matches the given ID.
+    /// </summary>
+    public static List<Character> FindAbandonedByFormerLeader(string formerLeaderId)
+    {
+        var results = new List<Character>();
+        foreach (Character c in FindObjectsByType<Character>(FindObjectsSortMode.None))
+        {
+            if (c.IsAbandoned && c.FormerPartyLeaderId == formerLeaderId)
+                results.Add(c);
+        }
+        return results;
     }
 
     void Update()

@@ -1,107 +1,254 @@
 // Assets/Scripts/Character/SaveLoad/CharacterDataCoordinator.cs
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using UnityEngine;
 using Newtonsoft.Json;
-
 using Unity.Netcode;
 
+/// <summary>
+/// Facade-level orchestrator for character profile save/load.
+/// Lives on the root Character GameObject — discovers all ICharacterSaveData
+/// subsystems via GetComponentsInChildren and serializes them by priority order.
+/// </summary>
 [RequireComponent(typeof(Character))]
 public class CharacterDataCoordinator : NetworkBehaviour
 {
     private Character _character;
-    
-    // Grabs all ISaveables purely on this character (Stats, Equipment, Bio)
-    private ISaveable[] _characterSaveables;
+    private const string LOG_TAG = "<color=cyan>[CharacterDataCoordinator]</color>";
 
     private void Awake()
     {
         _character = GetComponent<Character>();
-        _characterSaveables = GetComponentsInChildren<ISaveable>(true);
     }
 
+    // ── Discovery ───────────────────────────────────────────────────
+
     /// <summary>
-    /// Bundles all local ISaveable states into a CharacterProfileSaveData.
-    /// This is called when saving to local disk, or to send to a Multiplayer Host.
+    /// Discovers all ICharacterSaveData implementors on this character hierarchy.
+    /// Always re-scans to capture dynamically added components.
+    /// </summary>
+    private ICharacterSaveData[] DiscoverSaveDataSystems()
+    {
+        return GetComponentsInChildren<ICharacterSaveData>(true);
+    }
+
+    // ── Export ───────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Collects all ICharacterSaveData subsystems, serializes each into JSON,
+    /// and bundles into a CharacterProfileSaveData. Party NPC members are
+    /// recursively exported; player members are skipped.
     /// </summary>
     public CharacterProfileSaveData ExportProfile()
     {
-        // Re-evaluate saveables in case dynamic components were added (e.g., equipment)
-        _characterSaveables = GetComponentsInChildren<ISaveable>(true);
+        var systems = DiscoverSaveDataSystems();
 
         var profile = new CharacterProfileSaveData
         {
+            characterGuid = _character.CharacterId,
+            originWorldGuid = _character.OriginWorldGuid,
             characterName = _character.CharacterName,
-            timestamp = DateTime.Now.ToString("o"),
-            // Defaulting profileId; in a real deployment this would be uniquely generated at character creation
-            profileId = _character.CharacterName.Trim().ToLower().Replace(" ", "_")
+            archetypeId = _character.Archetype != null ? _character.Archetype.ArchetypeName : "",
+            timestamp = DateTime.UtcNow.ToString("o")
         };
 
-        foreach (var s in _characterSaveables)
+        // Serialize each subsystem
+        foreach (var system in systems)
         {
-            // Serialize each specific DTO into JSON and store in the dictionary
-            profile.componentStates[s.SaveKey] = JsonConvert.SerializeObject(s.CaptureState());
+            string key = system.SaveKey;
+            if (string.IsNullOrEmpty(key))
+            {
+                Debug.LogWarning($"{LOG_TAG} Skipping ICharacterSaveData with null/empty SaveKey on {gameObject.name}.");
+                continue;
+            }
+
+            try
+            {
+                string json = system.SerializeToJson();
+                profile.componentStates[key] = json;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"{LOG_TAG} Failed to serialize SaveKey '{key}' on {gameObject.name}: {ex.Message}");
+            }
         }
 
-        // Example logic for party integration (expand based on CharacterParty setup):
-        // if (_character.IsPartyLeader()) {
-        //     foreach (var member in _character.CurrentParty.Members) {
-        //          if (member != _character) profile.partyMembers.Add(member.GetComponent<CharacterDataCoordinator>().ExportProfile());
-        //     }
-        // }
+        // Recursively export party NPC members (skip players)
+        ExportPartyMembers(profile);
+
+        Debug.Log($"{LOG_TAG} Exported profile '{profile.characterName}' ({profile.characterGuid}) " +
+                  $"with {profile.componentStates.Count} component(s) and {profile.partyMembers.Count} party NPC(s).");
 
         return profile;
     }
 
     /// <summary>
-    /// Injects a loaded CharacterProfileSaveData into this character's systems.
+    /// If this character is a party leader, recursively exports all NPC party members.
+    /// Player members are excluded — they save their own profiles independently.
+    /// </summary>
+    private void ExportPartyMembers(CharacterProfileSaveData profile)
+    {
+        if (!_character.TryGet<CharacterParty>(out var party)) return;
+        if (!party.IsInParty || !party.IsPartyLeader) return;
+
+        var partyData = party.PartyData;
+        if (partyData == null) return;
+
+        foreach (string memberId in partyData.MemberIds)
+        {
+            // Skip self
+            if (memberId == _character.CharacterId) continue;
+
+            Character memberCharacter = Character.FindByUUID(memberId);
+            if (memberCharacter == null)
+            {
+                Debug.LogWarning($"{LOG_TAG} Party member '{memberId}' not found in scene — skipping export.");
+                continue;
+            }
+
+            // Skip player-controlled characters — they manage their own profiles
+            if (memberCharacter.IsPlayer())
+            {
+                Debug.Log($"{LOG_TAG} Skipping player member '{memberCharacter.CharacterName}' in party export.");
+                continue;
+            }
+
+            var memberCoordinator = memberCharacter.GetComponent<CharacterDataCoordinator>();
+            if (memberCoordinator == null)
+            {
+                Debug.LogWarning($"{LOG_TAG} Party NPC '{memberCharacter.CharacterName}' has no CharacterDataCoordinator — skipping.");
+                continue;
+            }
+
+            profile.partyMembers.Add(memberCoordinator.ExportProfile());
+        }
+    }
+
+    // ── Import ───────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Restores a character from a CharacterProfileSaveData.
+    /// Subsystems are deserialized in LoadPriority order (lower = first).
+    /// Overrides the character's network ID to match the saved GUID.
     /// </summary>
     public void ImportProfile(CharacterProfileSaveData data)
     {
-        // Must find all saveables first to inject data efficiently
-        _characterSaveables = GetComponentsInChildren<ISaveable>(true);
-        _character.CharacterName = data.characterName;
-
-        foreach (var s in _characterSaveables)
+        if (data == null)
         {
-            if (data.componentStates.TryGetValue(s.SaveKey, out string json))
+            Debug.LogError($"{LOG_TAG} Cannot import null profile on {gameObject.name}.");
+            return;
+        }
+
+        // Restore identity
+        _character.CharacterName = data.characterName;
+        _character.OriginWorldGuid = data.originWorldGuid;
+
+        // Override the NetworkCharacterId so the character keeps its persistent GUID
+        if (IsServer && !string.IsNullOrEmpty(data.characterGuid))
+        {
+            _character.NetworkCharacterId.Value = data.characterGuid;
+        }
+
+        // Discover and sort subsystems by LoadPriority (ascending — lower loads first)
+        var systems = DiscoverSaveDataSystems()
+            .OrderBy(s => s.LoadPriority)
+            .ToArray();
+
+        // Build a set of consumed keys for orphan detection
+        var consumedKeys = new HashSet<string>();
+
+        foreach (var system in systems)
+        {
+            string key = system.SaveKey;
+            if (string.IsNullOrEmpty(key))
             {
-                var stateType = s.CaptureState().GetType();
-                var state = JsonConvert.DeserializeObject(json, stateType);
-                s.RestoreState(state);
+                Debug.LogWarning($"{LOG_TAG} ICharacterSaveData with null/empty SaveKey on {gameObject.name} — skipping.");
+                continue;
+            }
+
+            if (data.componentStates.TryGetValue(key, out string json))
+            {
+                try
+                {
+                    system.DeserializeFromJson(json);
+                    consumedKeys.Add(key);
+                    Debug.Log($"{LOG_TAG} Loaded '{key}' (priority {system.LoadPriority}) on {gameObject.name}.");
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogError($"{LOG_TAG} Failed to deserialize SaveKey '{key}' on {gameObject.name}: {ex.Message}");
+                }
+            }
+            else
+            {
+                Debug.LogWarning($"{LOG_TAG} No saved data found for SaveKey '{key}' on {gameObject.name} — subsystem will use defaults.");
             }
         }
-        
-        Debug.Log($"<color=cyan>[Profile Injection]</color> Successfully injected profile data for {data.characterName}.");
-    }
-    
-    // --- Local Disk Helpers (For Solo Play) ---
 
+        // Log orphaned keys — saved data with no matching subsystem
+        foreach (var savedKey in data.componentStates.Keys)
+        {
+            if (!consumedKeys.Contains(savedKey))
+            {
+                Debug.LogWarning($"{LOG_TAG} Orphaned save key '{savedKey}' in profile '{data.characterName}' — " +
+                                 "no matching ICharacterSaveData found. Data may be from a removed or renamed subsystem.");
+            }
+        }
+
+        Debug.Log($"{LOG_TAG} Imported profile '{data.characterName}' ({data.characterGuid}) — " +
+                  $"{consumedKeys.Count}/{data.componentStates.Count} keys restored, " +
+                  $"{data.partyMembers.Count} party NPC(s) pending.");
+
+        // NOTE: Party NPC member import is the responsibility of the spawning system
+        // (e.g., CharacterSpawner or MapController) which must instantiate NPC prefabs
+        // and call ImportProfile on each. The coordinator only serializes them.
+    }
+
+    // ── Local Disk Helpers ───────────────────────────────────────────
+
+    /// <summary>
+    /// Exports the current profile and writes it to disk as a local JSON file.
+    /// </summary>
     public async Task SaveLocalProfileAsync()
     {
         var profile = ExportProfile();
-        // Prevent writing empty or invalid profile IDs
-        if (string.IsNullOrEmpty(profile.profileId)) return;
-        
-        await SaveFileHandler.WriteProfileAsync(profile.profileId, profile);
-        Debug.Log($"<color=cyan>[SaveProfile]</color> Profile {profile.profileId} saved locally.");
+
+        if (string.IsNullOrEmpty(profile.characterGuid))
+        {
+            Debug.LogError($"{LOG_TAG} Cannot save profile — characterGuid is null/empty on {gameObject.name}.");
+            return;
+        }
+
+        await SaveFileHandler.WriteProfileAsync(profile.characterGuid, profile);
+        Debug.Log($"{LOG_TAG} Profile '{profile.characterName}' ({profile.characterGuid}) saved to disk.");
     }
 
-    public async Task LoadLocalProfileAsync(string profileId)
+    /// <summary>
+    /// Reads a profile from disk and imports it into this character.
+    /// </summary>
+    public async Task LoadLocalProfileAsync(string characterGuid)
     {
-        var data = await SaveFileHandler.ReadProfileAsync(profileId);
+        if (string.IsNullOrEmpty(characterGuid))
+        {
+            Debug.LogError($"{LOG_TAG} Cannot load profile — characterGuid is null/empty.");
+            return;
+        }
+
+        var data = await SaveFileHandler.ReadProfileAsync(characterGuid);
         if (data != null)
         {
             ImportProfile(data);
         }
         else
         {
-            Debug.LogWarning($"<color=orange>[SaveProfile]</color> Profile {profileId} not found on local disk.");
+            Debug.LogWarning($"{LOG_TAG} Profile '{characterGuid}' not found on local disk.");
         }
     }
 
-    // --- DEBUG CONTEXT MENUS ---
+    // ── Debug Context Menus ──────────────────────────────────────────
+
     [ContextMenu("Debug: Save Local Profile")]
     private void DebugSaveProfile()
     {
@@ -111,8 +258,23 @@ public class CharacterDataCoordinator : NetworkBehaviour
     [ContextMenu("Debug: Load Local Profile")]
     private void DebugLoadProfile()
     {
-        // Infer the profile ID using the same logic as ExportProfile
-        string profileId = _character.CharacterName.Trim().ToLower().Replace(" ", "_");
-        _ = LoadLocalProfileAsync(profileId);
+        string characterGuid = _character.CharacterId;
+        if (string.IsNullOrEmpty(characterGuid))
+        {
+            Debug.LogWarning($"{LOG_TAG} Cannot debug-load — CharacterId is empty on {gameObject.name}.");
+            return;
+        }
+        _ = LoadLocalProfileAsync(characterGuid);
+    }
+
+    [ContextMenu("Debug: Log All SaveKeys")]
+    private void DebugLogAllSaveKeys()
+    {
+        var systems = DiscoverSaveDataSystems();
+        Debug.Log($"{LOG_TAG} Found {systems.Length} ICharacterSaveData system(s) on {gameObject.name}:");
+        foreach (var system in systems.OrderBy(s => s.LoadPriority))
+        {
+            Debug.Log($"  - SaveKey: '{system.SaveKey}' | Priority: {system.LoadPriority} | Type: {system.GetType().Name}");
+        }
     }
 }

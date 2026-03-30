@@ -10,7 +10,7 @@ public static class SaveFileHandler
     private static string ProfileSaveDir => Path.Combine(Application.persistentDataPath, "Profiles");
 
     public static string WorldSlotPath(int slot) => Path.Combine(WorldSaveDir, $"world_{slot}.json");
-    public static string ProfilePath(string profileId) => Path.Combine(ProfileSaveDir, $"profile_{profileId}.json");
+    public static string ProfilePath(string characterGuid) => Path.Combine(ProfileSaveDir, $"{characterGuid}.json");
 
     // --- WORLD SAVING ---
     public static async Task WriteWorldAsync(int slot, GameSaveData data)
@@ -43,10 +43,10 @@ public static class SaveFileHandler
     }
 
     // --- PROFILE SAVING ---
-    public static async Task WriteProfileAsync(string profileId, CharacterProfileSaveData data)
+    public static async Task WriteProfileAsync(string characterGuid, CharacterProfileSaveData data)
     {
         Directory.CreateDirectory(ProfileSaveDir);
-        string path = ProfilePath(profileId);
+        string path = ProfilePath(characterGuid);
         string tmpPath = path + ".tmp";
         string json = JsonConvert.SerializeObject(data, Formatting.Indented);
 
@@ -55,9 +55,9 @@ public static class SaveFileHandler
         File.Move(tmpPath, path);
     }
 
-    public static async Task<CharacterProfileSaveData> ReadProfileAsync(string profileId)
+    public static async Task<CharacterProfileSaveData> ReadProfileAsync(string characterGuid)
     {
-        string path = ProfilePath(profileId);
+        string path = ProfilePath(characterGuid);
         if (!File.Exists(path)) return null;
 
         try
@@ -67,7 +67,7 @@ public static class SaveFileHandler
         }
         catch (Exception e)
         {
-            Debug.LogError($"[SaveFileHandler] Failed to read character profile {profileId}: {e.Message}");
+            Debug.LogError($"[SaveFileHandler] Failed to read character profile {characterGuid}: {e.Message}");
             return null;
         }
     }
@@ -79,14 +79,14 @@ public static class SaveFileHandler
         if (File.Exists(path)) File.Delete(path);
         return Task.CompletedTask;
     }
-    
-    public static Task DeleteProfileAsync(string profileId)
+
+    public static Task DeleteProfileAsync(string characterGuid)
     {
-        string path = ProfilePath(profileId);
+        string path = ProfilePath(characterGuid);
         if (File.Exists(path)) File.Delete(path);
         return Task.CompletedTask;
     }
 
     public static bool WorldSlotExists(int slot) => File.Exists(WorldSlotPath(slot));
-    public static bool ProfileExists(string profileId) => File.Exists(ProfilePath(profileId));
+    public static bool ProfileExists(string characterGuid) => File.Exists(ProfilePath(characterGuid));
 }
