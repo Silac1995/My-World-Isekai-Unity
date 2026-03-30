@@ -4,7 +4,7 @@ using UnityEngine;
 using MWI.WorldSystem;
 
 [RequireComponent(typeof(Character))]
-public class CharacterMapTracker : NetworkBehaviour
+public class CharacterMapTracker : NetworkBehaviour, ICharacterSaveData<MapTrackerSaveData>
 {
     private Character _character;
 
@@ -265,4 +265,41 @@ public class CharacterMapTracker : NetworkBehaviour
         }
         return null;
     }
+
+    #region ICharacterSaveData Implementation
+
+    public string SaveKey => "CharacterMapTracker";
+    public int LoadPriority => 70;
+
+    public MapTrackerSaveData Serialize()
+    {
+        Vector3 pos = transform.position;
+        return new MapTrackerSaveData
+        {
+            currentMapId = CurrentMapID.Value.ToString(),
+            positionX = pos.x,
+            positionY = pos.y,
+            positionZ = pos.z
+        };
+    }
+
+    public void Deserialize(MapTrackerSaveData data)
+    {
+        if (data == null) return;
+
+        // Position restore -- primarily used for NPC hibernation wake-up.
+        // Live players get their position from their actual transform after spawn.
+        transform.position = new Vector3(data.positionX, data.positionY, data.positionZ);
+
+        // Map ID -- only set on server since it's a server-write NetworkVariable.
+        if (IsServer && !string.IsNullOrEmpty(data.currentMapId))
+        {
+            CurrentMapID.Value = data.currentMapId;
+        }
+    }
+
+    string ICharacterSaveData.SerializeToJson() => CharacterSaveDataHelper.SerializeToJson(this);
+    void ICharacterSaveData.DeserializeFromJson(string json) => CharacterSaveDataHelper.DeserializeFromJson(this, json);
+
+    #endregion
 }

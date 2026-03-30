@@ -8,7 +8,7 @@ using MWI.Time;
 /// Écoute le TimeManager et applique le bon behaviour à chaque changement d'heure.
 /// Les jobs injectent automatiquement leurs créneaux de travail.
 /// </summary>
-public class CharacterSchedule : CharacterSystem
+public class CharacterSchedule : CharacterSystem, ICharacterSaveData<ScheduleSaveData>
 {
     [SerializeField] private TimeManager _timeManager;
 
@@ -230,6 +230,51 @@ public class CharacterSchedule : CharacterSystem
 
         npc.ResetStackTo(newBehaviour);
     }
+
+    // --- ICharacterSaveData<ScheduleSaveData> IMPLEMENTATION ---
+
+    public string SaveKey => "CharacterSchedule";
+    public int LoadPriority => 60;
+
+    public ScheduleSaveData Serialize()
+    {
+        var data = new ScheduleSaveData();
+
+        foreach (var entry in _entries)
+        {
+            var saveEntry = new ScheduleEntrySaveData
+            {
+                activity = (int)entry.activity,
+                startHour = entry.startHour,
+                endHour = entry.endHour,
+                priority = entry.priority
+            };
+            data.entries.Add(saveEntry);
+        }
+
+        return data;
+    }
+
+    public void Deserialize(ScheduleSaveData data)
+    {
+        if (data == null || data.entries == null) return;
+
+        _entries.Clear();
+
+        foreach (var saveEntry in data.entries)
+        {
+            var entry = new ScheduleEntry(
+                saveEntry.startHour,
+                saveEntry.endHour,
+                (ScheduleActivity)saveEntry.activity,
+                saveEntry.priority
+            );
+            _entries.Add(entry);
+        }
+    }
+
+    string ICharacterSaveData.SerializeToJson() => CharacterSaveDataHelper.SerializeToJson(this);
+    void ICharacterSaveData.DeserializeFromJson(string json) => CharacterSaveDataHelper.DeserializeFromJson(this, json);
 
     // ──────────────────────────────────────────────
     //  GESTION DES ENTRÉES

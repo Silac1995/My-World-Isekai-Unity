@@ -11,8 +11,15 @@ public class SaveManager : MonoBehaviour
     public static SaveManager Instance { get; private set; }
 
     [SerializeField] private int currentWorldSlot = 0;
-    
-    // World Saveables registers here (e.g. TimeManager, BuildingManager). 
+
+    /// <summary>
+    /// The unique GUID of the currently loaded world instance.
+    /// Generated once at world creation, persisted across save/load cycles.
+    /// Used by subsystems (e.g., CharacterRelation) to scope data to a specific world.
+    /// </summary>
+    public string CurrentWorldGuid { get; private set; }
+
+    // World Saveables registers here (e.g. TimeManager, BuildingManager).
     // Character components do NOT register here.
     private readonly List<ISaveable> worldSaveables = new List<ISaveable>();
 
@@ -42,6 +49,13 @@ public class SaveManager : MonoBehaviour
         data.metadata.timestamp = DateTime.Now.ToString("o");
         data.metadata.isEmpty = false;
 
+        // Ensure the world has a persistent GUID
+        if (string.IsNullOrEmpty(CurrentWorldGuid))
+        {
+            CurrentWorldGuid = Guid.NewGuid().ToString("N");
+        }
+        data.metadata.worldGuid = CurrentWorldGuid;
+
         foreach (var s in worldSaveables)
         {
             data.worldStates[s.SaveKey] = JsonConvert.SerializeObject(s.CaptureState());
@@ -65,6 +79,9 @@ public class SaveManager : MonoBehaviour
             Debug.LogWarning($"[SaveManager] World Slot {slot} empty or corrupt -- starting fresh.");
             return;
         }
+
+        // Restore the world's persistent GUID
+        CurrentWorldGuid = data.metadata.worldGuid;
 
         foreach (var s in worldSaveables)
         {

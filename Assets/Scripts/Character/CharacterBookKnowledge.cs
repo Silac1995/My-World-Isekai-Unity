@@ -12,7 +12,7 @@ public class BookReadingEntry
     public bool completed;
 }
 
-public class CharacterBookKnowledge : CharacterSystem, ISaveable
+public class CharacterBookKnowledge : CharacterSystem, ICharacterSaveData<CharacterBookKnowledge.BookKnowledgeSaveData>
 {
     [SerializeField] private List<BookReadingEntry> _readingLog = new List<BookReadingEntry>();
 
@@ -106,17 +106,27 @@ public class CharacterBookKnowledge : CharacterSystem, ISaveable
         }
     }
 
-    // === ISaveable ===
-    public string SaveKey => "BookKnowledge";
+    // === ICharacterSaveData IMPLEMENTATION ===
+    public string SaveKey => "CharacterBookKnowledge";
+    public int LoadPriority => 50;
 
-    public object CaptureState()
+    [System.Serializable]
+    public class BookKnowledgeSaveData
     {
-        return _readingLog;
+        public List<BookReadingEntry> readingLog = new List<BookReadingEntry>();
     }
 
-    public void RestoreState(object state)
+    public BookKnowledgeSaveData Serialize()
     {
-        if (state is List<BookReadingEntry> savedLog)
-            _readingLog = savedLog;
+        return new BookKnowledgeSaveData { readingLog = _readingLog };
     }
+
+    public void Deserialize(BookKnowledgeSaveData data)
+    {
+        _readingLog = data.readingLog ?? new List<BookReadingEntry>();
+    }
+
+    // Non-generic bridge (explicit interface impl)
+    string ICharacterSaveData.SerializeToJson() => CharacterSaveDataHelper.SerializeToJson(this);
+    void ICharacterSaveData.DeserializeFromJson(string json) => CharacterSaveDataHelper.DeserializeFromJson(this, json);
 }

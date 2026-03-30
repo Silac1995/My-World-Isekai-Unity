@@ -28,10 +28,16 @@ public struct RelationSyncData : INetworkSerializable, IEquatable<RelationSyncDa
     }
 }
 
-public class CharacterRelation : CharacterSystem
+public class CharacterRelation : CharacterSystem, ICharacterSaveData<RelationSaveData>
 {
     [SerializeField] private List<Relationship> _relationships = new List<Relationship>();
-    
+
+    /// <summary>
+    /// Dormant relationship entries loaded from save data whose target characters
+    /// are not present in the current world. Re-serialized on next save.
+    /// </summary>
+    private List<RelationshipSaveEntry> _dormantRelationships = new List<RelationshipSaveEntry>();
+
     private NetworkList<RelationSyncData> _networkRelations;
 
     [Header("Notifications")]
@@ -283,6 +289,89 @@ public class CharacterRelation : CharacterSystem
 
         return newRel;
     }
+
+    // --- ICharacterSaveData<RelationSaveData> IMPLEMENTATION ---
+
+    public string SaveKey => "CharacterRelation";
+    public int LoadPriority => 50;
+
+    public RelationSaveData Serialize()
+    {
+        var data = new RelationSaveData();
+
+        // Serialize live relationships
+        foreach (var rel in _relationships)
+        {
+            if (rel.RelatedCharacter == null) continue;
+
+            var entry = new RelationshipSaveEntry
+            {
+                targetCharacterId = rel.RelatedCharacter.CharacterId,
+                targetWorldGuid = rel.RelatedCharacter.OriginWorldGuid ?? "",
+                relationshipType = (int)rel.RelationType,
+                relationValue = rel.RelationValue,
+                hasMet = rel.HasMet
+            };
+            data.relationships.Add(entry);
+        }
+
+        // Re-serialize dormant relationships that were not resolved this session
+        foreach (var dormant in _dormantRelationships)
+        {
+            // Avoid duplicates — skip if already serialized from a live relationship
+            bool alreadySerialized = data.relationships.Exists(e => e.targetCharacterId == dormant.targetCharacterId);
+            if (!alreadySerialized)
+            {
+                data.relationships.Add(dormant);
+            }
+        }
+
+        return data;
+    }
+
+    public void Deserialize(RelationSaveData data)
+    {
+        if (data == null || data.relationships == null) return;
+
+        _dormantRelationships.Clear();
+
+        foreach (var entry in data.relationships)
+        {
+            // Attempt to find the target character in the current world
+            Character target = Character.FindByUUID(entry.targetCharacterId);
+
+            if (target != null)
+            {
+                // Resolve immediately — create a live relationship
+                Relationship existing = _relationships.Find(r => r.RelatedCharacter == target);
+                if (existing == null)
+                {
+                    var rel = new Relationship(_character, target, entry.relationValue, (RelationshipType)entry.relationshipType);
+                    if (entry.hasMet) rel.SetAsMet();
+                    _relationships.Add(rel);
+                }
+                else
+                {
+                    existing.RelationValue = entry.relationValue;
+                    existing.SetRelationshipType((RelationshipType)entry.relationshipType);
+                    if (entry.hasMet) existing.SetAsMet();
+                    else existing.SetAsNotMet();
+                }
+            }
+            else
+            {
+                // Store as dormant — target not present in current world
+                _dormantRelationships.Add(entry);
+            }
+        }
+
+        OnRelationsUpdated?.Invoke();
+    }
+
+    string ICharacterSaveData.SerializeToJson() => CharacterSaveDataHelper.SerializeToJson(this);
+    void ICharacterSaveData.DeserializeFromJson(string json) => CharacterSaveDataHelper.DeserializeFromJson(this, json);
+
+    // --- RELATION LOGIC ---
 
     public void UpdateRelation(Character target, int amount)
     {

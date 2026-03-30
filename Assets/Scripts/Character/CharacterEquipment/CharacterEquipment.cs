@@ -5,7 +5,7 @@ using UnityEngine.U2D.Animation;
 using Unity.Netcode;
 using Unity.Collections;
 
-public class CharacterEquipment : CharacterSystem
+public class CharacterEquipment : CharacterSystem, ICharacterSaveData<EquipmentSaveData>
 {
     private NetworkList<NetworkEquipmentSyncData> _networkEquipment;
 
@@ -900,6 +900,166 @@ public class CharacterEquipment : CharacterSystem
     {
         if (inCombat) DropItemFromHand();
     }
+
+    // --- ICharacterSaveData IMPLEMENTATION ---
+    public string SaveKey => "CharacterEquipment";
+    public int LoadPriority => 30;
+
+    public EquipmentSaveData Serialize()
+    {
+        var data = new EquipmentSaveData();
+
+        // Weapon (slot 0)
+        if (_weapon != null && _weapon.ItemSO != null)
+        {
+            data.equippedItems.Add(new EquipmentSlotSaveEntry
+            {
+                slotId = 0,
+                itemId = _weapon.ItemSO.ItemId,
+                jsonData = JsonUtility.ToJson(_weapon)
+            });
+        }
+
+        // Bag (slot 1) — serialize the bag itself, inventory items are handled separately
+        if (_bag != null && _bag.ItemSO != null)
+        {
+            data.equippedItems.Add(new EquipmentSlotSaveEntry
+            {
+                slotId = 1,
+                itemId = _bag.ItemSO.ItemId,
+                jsonData = JsonUtility.ToJson(_bag)
+            });
+
+            // Bag inventory items — each item stored individually to handle polymorphism
+            if (_bag.Inventory != null)
+            {
+                var slots = _bag.Inventory.ItemSlots;
+                for (int i = 0; i < slots.Count; i++)
+                {
+                    if (!slots[i].IsEmpty() && slots[i].ItemInstance.ItemSO != null)
+                    {
+                        data.bagInventoryItems.Add(new InventorySlotSaveEntry
+                        {
+                            slotIndex = i,
+                            itemId = slots[i].ItemInstance.ItemSO.ItemId,
+                            jsonData = JsonUtility.ToJson(slots[i].ItemInstance)
+                        });
+                    }
+                }
+            }
+        }
+
+        // Wearable layers (underwear=100+, clothing=200+, armor=300+)
+        SerializeLayer(underwearLayer, WearableLayerEnum.Underwear, data.equippedItems);
+        SerializeLayer(clothingLayer, WearableLayerEnum.Clothing, data.equippedItems);
+        SerializeLayer(armorLayer, WearableLayerEnum.Armor, data.equippedItems);
+
+        return data;
+    }
+
+    private void SerializeLayer(EquipmentLayer layer, WearableLayerEnum layerEnum, List<EquipmentSlotSaveEntry> entries)
+    {
+        if (layer == null) return;
+
+        foreach (WearableType type in System.Enum.GetValues(typeof(WearableType)))
+        {
+            if (type == WearableType.Bag) continue; // Bags are handled separately
+
+            EquipmentInstance instance = layer.GetInstance(type);
+            if (instance != null && instance.ItemSO != null)
+            {
+                entries.Add(new EquipmentSlotSaveEntry
+                {
+                    slotId = (int)GetSlotId(layerEnum, type),
+                    itemId = instance.ItemSO.ItemId,
+                    jsonData = JsonUtility.ToJson(instance)
+                });
+            }
+        }
+    }
+
+    public void Deserialize(EquipmentSaveData data)
+    {
+        if (data == null) return;
+
+        // Cache all ItemSOs once for lookup
+        ItemSO[] allItems = Resources.LoadAll<ItemSO>("Data/Item");
+
+        // Restore equipped items (weapon, bag shell, wearable layers)
+        foreach (var entry in data.equippedItems)
+        {
+            ItemSO so = System.Array.Find(allItems, match => match.ItemId == entry.itemId);
+            if (so == null)
+            {
+                Debug.LogWarning($"[CharacterEquipment.Deserialize] ItemSO not found for id '{entry.itemId}' (slot {entry.slotId}). Skipping.");
+                continue;
+            }
+
+            ItemInstance instance = so.CreateInstance();
+            JsonUtility.FromJsonOverwrite(entry.jsonData, instance);
+            instance.ItemSO = so;
+
+            ushort slotId = (ushort)entry.slotId;
+
+            if (slotId == 0 && instance is WeaponInstance weapon)
+            {
+                _weapon = weapon;
+                UpdateWeaponVisual();
+                UpdateNetworkSlot(0, weapon);
+            }
+            else if (slotId == 1 && instance is BagInstance bag)
+            {
+                _bag = bag;
+                // Re-initialize bag capacity so the inventory has proper slots
+                bag.InitializeBagCapacity();
+                UpdateBagVisual(true);
+                UpdateNetworkSlot(1, bag);
+            }
+            else if (instance is WearableInstance wearable && wearable.ItemSO is WearableSO wearableSO)
+            {
+                EquipmentLayer targetLayer = GetTargetLayer(wearableSO.EquipmentLayer);
+                if (targetLayer != null)
+                {
+                    targetLayer.Equip(wearable);
+                    UpdateNetworkSlot(slotId, wearable);
+                }
+            }
+        }
+
+        // Restore bag inventory items after the bag itself is equipped
+        if (_bag != null && _bag.Inventory != null && data.bagInventoryItems.Count > 0)
+        {
+            var inventorySlots = _bag.Inventory.ItemSlots;
+
+            foreach (var invEntry in data.bagInventoryItems)
+            {
+                if (invEntry.slotIndex < 0 || invEntry.slotIndex >= inventorySlots.Count)
+                {
+                    Debug.LogWarning($"[CharacterEquipment.Deserialize] Bag inventory slot index {invEntry.slotIndex} out of range (capacity: {inventorySlots.Count}). Skipping item '{invEntry.itemId}'.");
+                    continue;
+                }
+
+                ItemSO itemSO = System.Array.Find(allItems, match => match.ItemId == invEntry.itemId);
+                if (itemSO == null)
+                {
+                    Debug.LogWarning($"[CharacterEquipment.Deserialize] ItemSO not found for bag inventory item '{invEntry.itemId}'. Skipping.");
+                    continue;
+                }
+
+                ItemInstance itemInstance = itemSO.CreateInstance();
+                JsonUtility.FromJsonOverwrite(invEntry.jsonData, itemInstance);
+                itemInstance.ItemSO = itemSO;
+
+                inventorySlots[invEntry.slotIndex].ItemInstance = itemInstance;
+            }
+        }
+
+        OnEquipmentChanged?.Invoke();
+    }
+
+    // Non-generic bridge (explicit interface impl)
+    string ICharacterSaveData.SerializeToJson() => CharacterSaveDataHelper.SerializeToJson(this);
+    void ICharacterSaveData.DeserializeFromJson(string json) => CharacterSaveDataHelper.DeserializeFromJson(this, json);
 }
 
 public struct NetworkEquipmentSyncData : INetworkSerializable, IEquatable<NetworkEquipmentSyncData>

@@ -14,11 +14,17 @@ public class JobAssignment
 /// Composant attaché au personnage pour gérer ses différents jobs actuels.
 /// Permet d'assigner, quitter, et exécuter plusieurs jobs dans des CommercialBuilding.
 /// </summary>
-public class CharacterJob : CharacterSystem
+public class CharacterJob : CharacterSystem, ICharacterSaveData<JobSaveData>
 {
 
     [SerializeField] private List<JobAssignment> _activeJobs = new List<JobAssignment>();
     private CommercialBuilding _ownedBuilding; // Lieu dont il est prioritaire
+
+    /// <summary>
+    /// Saved job data from deserialization. Workplace references are resolved at runtime
+    /// when buildings become available.
+    /// </summary>
+    private List<JobAssignmentSaveEntry> _pendingJobData = new List<JobAssignmentSaveEntry>();
 
     public Character Character => _character;
     public IReadOnlyList<JobAssignment> ActiveJobs => _activeJobs;
@@ -257,6 +263,60 @@ public class CharacterJob : CharacterSystem
         // Now take the job normally, it will pass DoesScheduleOverlap
         return TakeJob(job, building);
     }
+
+    // --- ICharacterSaveData<JobSaveData> IMPLEMENTATION ---
+
+    public string SaveKey => "CharacterJob";
+    public int LoadPriority => 60;
+
+    public JobSaveData Serialize()
+    {
+        var data = new JobSaveData();
+
+        foreach (var assignment in _activeJobs)
+        {
+            if (assignment.AssignedJob == null) continue;
+
+            var entry = new JobAssignmentSaveEntry
+            {
+                jobType = assignment.AssignedJob.GetType().Name,
+                workplaceBuildingId = assignment.Workplace != null ? assignment.Workplace.BuildingId : ""
+            };
+            data.jobs.Add(entry);
+        }
+
+        // Re-serialize any pending data that was not resolved this session
+        foreach (var pending in _pendingJobData)
+        {
+            bool alreadySerialized = data.jobs.Exists(e =>
+                e.jobType == pending.jobType && e.workplaceBuildingId == pending.workplaceBuildingId);
+            if (!alreadySerialized)
+            {
+                data.jobs.Add(pending);
+            }
+        }
+
+        return data;
+    }
+
+    public void Deserialize(JobSaveData data)
+    {
+        if (data == null || data.jobs == null) return;
+
+        _pendingJobData.Clear();
+
+        // Job assignments require workplace references that may not exist yet.
+        // Store as pending — resolved when the map loads and buildings spawn.
+        foreach (var entry in data.jobs)
+        {
+            _pendingJobData.Add(entry);
+        }
+    }
+
+    string ICharacterSaveData.SerializeToJson() => CharacterSaveDataHelper.SerializeToJson(this);
+    void ICharacterSaveData.DeserializeFromJson(string json) => CharacterSaveDataHelper.DeserializeFromJson(this, json);
+
+    // --- OWNERSHIP ---
 
     /// <summary>
     /// Devient propriétaire. Optionnellement, prend le 1er job dans la foulée.

@@ -24,6 +24,16 @@ public class CombatStyleExpertise
         _experience = 0f;
     }
 
+    /// <summary>
+    /// Restore constructor used by the save/load system to rebuild expertise state.
+    /// </summary>
+    public CombatStyleExpertise(CombatStyleSO style, int level, float experience)
+    {
+        _style = style;
+        _level = Mathf.Clamp(level, 1, MAX_LEVEL);
+        _experience = _level >= MAX_LEVEL ? 0f : Mathf.Max(0f, experience);
+    }
+
     // La méthode demandée
     public WeaponType GetWeaponType()
     {

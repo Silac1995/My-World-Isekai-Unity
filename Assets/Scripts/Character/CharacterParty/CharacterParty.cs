@@ -7,7 +7,7 @@ using MWI.AI;
 using MWI.UI.Notifications;
 using MWI.WorldSystem;
 
-public class CharacterParty : CharacterSystem
+public class CharacterParty : CharacterSystem, ICharacterSaveData<PartySaveData>
 {
     // --- Serialized References ---
     [SerializeField] private SkillSO _leadershipSkill;
@@ -1128,4 +1128,41 @@ public class CharacterParty : CharacterSystem
         UnsubscribeFromLeader();
         base.OnDisable();
     }
+
+    // === ICharacterSaveData IMPLEMENTATION ===
+    public string SaveKey => "CharacterParty";
+    public int LoadPriority => 60;
+
+    public PartySaveData Serialize()
+    {
+        if (_partyData == null)
+            return new PartySaveData();
+
+        return new PartySaveData
+        {
+            partyId = _partyData.PartyId,
+            isLeader = _partyData.IsLeader(_character.CharacterId),
+            followMode = (int)_partyData.FollowMode
+        };
+    }
+
+    public void Deserialize(PartySaveData data)
+    {
+        // Store the data for later party reformation by CharacterDataCoordinator.
+        // Actual party creation/joining happens after all profiles are imported.
+        if (data == null || string.IsNullOrEmpty(data.partyId)) return;
+
+        _deserializedPartySaveData = data;
+    }
+
+    /// <summary>
+    /// Cached deserialized party data for deferred party reformation.
+    /// CharacterDataCoordinator reads this after all profiles are loaded.
+    /// </summary>
+    private PartySaveData _deserializedPartySaveData;
+    public PartySaveData DeserializedPartySaveData => _deserializedPartySaveData;
+
+    // Non-generic bridge (explicit interface impl)
+    string ICharacterSaveData.SerializeToJson() => CharacterSaveDataHelper.SerializeToJson(this);
+    void ICharacterSaveData.DeserializeFromJson(string json) => CharacterSaveDataHelper.DeserializeFromJson(this, json);
 }

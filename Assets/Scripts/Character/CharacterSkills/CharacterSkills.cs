@@ -5,7 +5,7 @@ using UnityEngine;
 using Unity.Collections;
 using Unity.Netcode;
 
-public class CharacterSkills : CharacterSystem
+public class CharacterSkills : CharacterSystem, ICharacterSaveData<SkillsSaveData>
 {
 
     [SerializeField]
@@ -400,6 +400,84 @@ public class CharacterSkills : CharacterSystem
         // 4. Demander un recalcul global des stats tertiaires/dynamiques (HP Max, etc.)
         _character.Stats.RecalculateTertiaryStats();
     }
+
+    // ─── ICharacterSaveData Implementation ──────────────────────────
+
+    public string SaveKey => "CharacterSkills";
+    public int LoadPriority => 20;
+
+    public SkillsSaveData Serialize()
+    {
+        var data = new SkillsSaveData();
+
+        foreach (var skill in _skills)
+        {
+            if (skill?.Skill == null) continue;
+
+            data.skills.Add(new SkillSaveEntry
+            {
+                skillId = skill.Skill.SkillID,
+                level = skill.Level,
+                currentXP = skill.XP,
+                totalXP = skill.TotalXP
+            });
+        }
+
+        return data;
+    }
+
+    public void Deserialize(SkillsSaveData data)
+    {
+        if (data == null || data.skills == null) return;
+
+        // Clear existing skills and unsubscribe events
+        foreach (var skill in _skills)
+        {
+            if (skill != null) skill.OnLevelUp -= HandleSkillLevelUp;
+        }
+        _skills.Clear();
+        _skillMap.Clear();
+
+        // Remove old skill stat bonuses
+        foreach (var stat in _appliedSkillBonuses.Keys)
+        {
+            stat.RemoveAllModifiersFromSource(this);
+        }
+        _appliedSkillBonuses.Clear();
+
+        // Resolve each saved skill from Resources and reconstruct instances
+        SkillSO[] allSkills = Resources.LoadAll<SkillSO>("Data/Skills");
+
+        foreach (var entry in data.skills)
+        {
+            if (string.IsNullOrEmpty(entry.skillId)) continue;
+
+            SkillSO skillSO = System.Array.Find(allSkills, s => s.SkillID == entry.skillId);
+            if (skillSO == null)
+            {
+                Debug.LogWarning($"<color=yellow>[CharacterSkills]</color> Could not resolve SkillSO with ID '{entry.skillId}' during deserialization — skipping.");
+                continue;
+            }
+
+            var instance = new SkillInstance(skillSO, entry.level, entry.currentXP, entry.totalXP);
+            _skills.Add(instance);
+            _skillMap[skillSO] = instance;
+            instance.OnLevelUp += HandleSkillLevelUp;
+        }
+
+        // Recalculate stat bonuses from restored skills
+        RecalculateAllSkillBonuses();
+
+        // Push restored state to network if server
+        if (IsServer && IsSpawned)
+        {
+            SyncAllSkillsToNetwork();
+        }
+    }
+
+    // Non-generic bridge (explicit interface impl)
+    string ICharacterSaveData.SerializeToJson() => CharacterSaveDataHelper.SerializeToJson(this);
+    void ICharacterSaveData.DeserializeFromJson(string json) => CharacterSaveDataHelper.DeserializeFromJson(this, json);
 }
 
 /// <summary>

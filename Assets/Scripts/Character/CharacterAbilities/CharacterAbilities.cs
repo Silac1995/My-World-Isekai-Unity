@@ -5,7 +5,7 @@ using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
 
-public class CharacterAbilities : CharacterSystem
+public class CharacterAbilities : CharacterSystem, ICharacterSaveData<AbilitiesSaveData>
 {
     public const int ACTIVE_SLOT_COUNT = 6;
     public const int PASSIVE_SLOT_COUNT = 4;
@@ -431,6 +431,151 @@ public class CharacterAbilities : CharacterSystem
     }
 
     #endregion
+
+    // ─── ICharacterSaveData Implementation ──────────────────────────
+
+    public string SaveKey => "CharacterAbilities";
+    public int LoadPriority => 20;
+
+    public AbilitiesSaveData Serialize()
+    {
+        var data = new AbilitiesSaveData();
+
+        // Known abilities — save their AbilityId from the SO
+        foreach (var ability in _knownPhysicalAbilities)
+        {
+            if (ability?.Data != null)
+                data.knownPhysicalAbilityIds.Add(ability.Data.AbilityId);
+        }
+
+        foreach (var spell in _knownSpells)
+        {
+            if (spell?.Data != null)
+                data.knownSpellIds.Add(spell.Data.AbilityId);
+        }
+
+        foreach (var passive in _knownPassives)
+        {
+            if (passive?.Data != null)
+                data.knownPassiveIds.Add(passive.Data.AbilityId);
+        }
+
+        // Active slots
+        for (int i = 0; i < ACTIVE_SLOT_COUNT; i++)
+        {
+            if (_activeSlots[i]?.Data != null)
+            {
+                data.activeSlots.Add(new AbilitySlotEntry
+                {
+                    slotIndex = i,
+                    abilityId = _activeSlots[i].Data.AbilityId
+                });
+            }
+        }
+
+        // Passive slots
+        for (int i = 0; i < PASSIVE_SLOT_COUNT; i++)
+        {
+            if (_passiveSlots[i]?.Data != null)
+            {
+                data.passiveSlots.Add(new AbilitySlotEntry
+                {
+                    slotIndex = i,
+                    abilityId = _passiveSlots[i].Data.AbilityId
+                });
+            }
+        }
+
+        return data;
+    }
+
+    public void Deserialize(AbilitiesSaveData data)
+    {
+        if (data == null) return;
+
+        // Clear existing state
+        _knownPhysicalAbilities.Clear();
+        _knownSpells.Clear();
+        _knownPassives.Clear();
+        _activeSlots = new AbilityInstance[ACTIVE_SLOT_COUNT];
+        _passiveSlots = new PassiveAbilityInstance[PASSIVE_SLOT_COUNT];
+
+        // Load all ability SOs from Resources
+        AbilitySO[] allAbilities = Resources.LoadAll<AbilitySO>("Data/Abilities");
+
+        // Reconstruct known physical abilities
+        foreach (var id in data.knownPhysicalAbilityIds)
+        {
+            if (string.IsNullOrEmpty(id)) continue;
+            var so = System.Array.Find(allAbilities, a => a.AbilityId == id) as PhysicalAbilitySO;
+            if (so != null)
+                _knownPhysicalAbilities.Add(new PhysicalAbilityInstance(so, _character));
+            else
+                Debug.LogWarning($"[CharacterAbilities] Could not resolve PhysicalAbilitySO with ID '{id}' during deserialization.");
+        }
+
+        // Reconstruct known spells
+        foreach (var id in data.knownSpellIds)
+        {
+            if (string.IsNullOrEmpty(id)) continue;
+            var so = System.Array.Find(allAbilities, a => a.AbilityId == id) as SpellSO;
+            if (so != null)
+                _knownSpells.Add(new SpellInstance(so, _character));
+            else
+                Debug.LogWarning($"[CharacterAbilities] Could not resolve SpellSO with ID '{id}' during deserialization.");
+        }
+
+        // Reconstruct known passives
+        foreach (var id in data.knownPassiveIds)
+        {
+            if (string.IsNullOrEmpty(id)) continue;
+            var so = System.Array.Find(allAbilities, a => a.AbilityId == id) as PassiveAbilitySO;
+            if (so != null)
+                _knownPassives.Add(new PassiveAbilityInstance(so, _character));
+            else
+                Debug.LogWarning($"[CharacterAbilities] Could not resolve PassiveAbilitySO with ID '{id}' during deserialization.");
+        }
+
+        // Restore active slot assignments
+        foreach (var slotEntry in data.activeSlots)
+        {
+            if (string.IsNullOrEmpty(slotEntry.abilityId)) continue;
+            if (slotEntry.slotIndex < 0 || slotEntry.slotIndex >= ACTIVE_SLOT_COUNT) continue;
+
+            // Find the matching instance in known abilities (physical or spell)
+            AbilityInstance instance = _knownPhysicalAbilities.Find(a => a.Data.AbilityId == slotEntry.abilityId);
+            if (instance == null)
+                instance = _knownSpells.Find(a => a.Data.AbilityId == slotEntry.abilityId);
+
+            if (instance != null)
+                _activeSlots[slotEntry.slotIndex] = instance;
+            else
+                Debug.LogWarning($"[CharacterAbilities] Active slot {slotEntry.slotIndex}: could not find known ability '{slotEntry.abilityId}'.");
+        }
+
+        // Restore passive slot assignments
+        foreach (var slotEntry in data.passiveSlots)
+        {
+            if (string.IsNullOrEmpty(slotEntry.abilityId)) continue;
+            if (slotEntry.slotIndex < 0 || slotEntry.slotIndex >= PASSIVE_SLOT_COUNT) continue;
+
+            var passive = _knownPassives.Find(p => p.Data.AbilityId == slotEntry.abilityId);
+            if (passive != null)
+                _passiveSlots[slotEntry.slotIndex] = passive;
+            else
+                Debug.LogWarning($"[CharacterAbilities] Passive slot {slotEntry.slotIndex}: could not find known passive '{slotEntry.abilityId}'.");
+        }
+
+        // Push restored state to network if server
+        if (IsServer && IsSpawned)
+        {
+            SyncAllSlotsToNetwork();
+        }
+    }
+
+    // Non-generic bridge (explicit interface impl)
+    string ICharacterSaveData.SerializeToJson() => CharacterSaveDataHelper.SerializeToJson(this);
+    void ICharacterSaveData.DeserializeFromJson(string json) => CharacterSaveDataHelper.DeserializeFromJson(this, json);
 }
 
 /// <summary>

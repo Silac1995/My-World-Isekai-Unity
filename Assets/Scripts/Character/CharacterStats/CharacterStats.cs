@@ -4,7 +4,7 @@ using Unity.VisualScripting.Antlr3.Runtime.Misc;
 using UnityEngine;
 
 [System.Serializable]
-public class CharacterStats : CharacterSystem, ISaveable
+public class CharacterStats : CharacterSystem, ICharacterSaveData<CharacterStats.StatsSaveData>
 {
     public event Action OnStatsUpdated;
 
@@ -257,8 +257,9 @@ public class CharacterStats : CharacterSystem, ISaveable
         }
     }
 
-    // --- ISAVEABLE IMPLEMENTATION ---
+    // --- ICharacterSaveData IMPLEMENTATION ---
     public string SaveKey => "CharacterStats";
+    public int LoadPriority => 10;
 
     [System.Serializable]
     public struct StatsSaveData
@@ -275,7 +276,7 @@ public class CharacterStats : CharacterSystem, ISaveable
         public float currentStamina;
     }
 
-    public object CaptureState()
+    public StatsSaveData Serialize()
     {
         return new StatsSaveData
         {
@@ -292,24 +293,24 @@ public class CharacterStats : CharacterSystem, ISaveable
         };
     }
 
-    public void RestoreState(object state)
+    public void Deserialize(StatsSaveData data)
     {
-        // state will be passed dynamically with the exactly captured type
-        if (state is StatsSaveData data)
-        {
-            strength.SetBaseValue(data.strength);
-            agility.SetBaseValue(data.agility);
-            dexterity.SetBaseValue(data.dexterity);
-            intelligence.SetBaseValue(data.intelligence);
-            endurance.SetBaseValue(data.endurance);
-            charisma.SetBaseValue(data.charisma);
+        strength.SetBaseValue(data.strength);
+        agility.SetBaseValue(data.agility);
+        dexterity.SetBaseValue(data.dexterity);
+        intelligence.SetBaseValue(data.intelligence);
+        endurance.SetBaseValue(data.endurance);
+        charisma.SetBaseValue(data.charisma);
 
-            // Recalculate max values BEFORE setting current amount limits
-            RecalculateTertiaryStats();
+        // Recalculate max values BEFORE setting current amount limits
+        RecalculateTertiaryStats();
 
-            health.CurrentAmount = data.currentHealth;
-            mana.CurrentAmount = data.currentMana;
-            stamina.CurrentAmount = data.currentStamina;
-        }
+        health.CurrentAmount = data.currentHealth;
+        mana.CurrentAmount = data.currentMana;
+        stamina.CurrentAmount = data.currentStamina;
     }
+
+    // Non-generic bridge (explicit interface impl)
+    string ICharacterSaveData.SerializeToJson() => CharacterSaveDataHelper.SerializeToJson(this);
+    void ICharacterSaveData.DeserializeFromJson(string json) => CharacterSaveDataHelper.DeserializeFromJson(this, json);
 }

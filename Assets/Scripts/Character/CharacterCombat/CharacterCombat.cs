@@ -4,7 +4,7 @@ using System.Linq;
 using Unity.Netcode;
 using UnityEngine;
 
-public class CharacterCombat : CharacterSystem
+public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveData>
 {
     [Header("Expertise & Memory")]
     [SerializeField] private List<CombatStyleExpertise> _knownStyles = new List<CombatStyleExpertise>();
@@ -852,4 +852,69 @@ public class CharacterCombat : CharacterSystem
             Debug.Log($"<color=yellow>[Combat]</color> Nouveau style débloqué : {style.StyleName}");
         }
     }
+
+    #region ICharacterSaveData Implementation
+
+    public string SaveKey => "CharacterCombat";
+    public int LoadPriority => 70;
+
+    public CombatSaveData Serialize()
+    {
+        var data = new CombatSaveData();
+
+        foreach (var expertise in _knownStyles)
+        {
+            if (expertise.Style == null) continue;
+
+            data.knownStyles.Add(new CombatStyleSaveEntry
+            {
+                styleId = expertise.Style.name,
+                level = expertise.Level,
+                experience = expertise.Experience
+            });
+        }
+
+        if (_currentCombatStyleExpertise?.Style != null)
+        {
+            data.preferredStyleId = _currentCombatStyleExpertise.Style.name;
+        }
+
+        return data;
+    }
+
+    public void Deserialize(CombatSaveData data)
+    {
+        if (data == null) return;
+
+        _knownStyles.Clear();
+
+        foreach (var entry in data.knownStyles)
+        {
+            CombatStyleSO styleSO = Resources.Load<CombatStyleSO>($"Data/CombatStyle/{entry.styleId}");
+            if (styleSO == null)
+            {
+                Debug.LogWarning($"[CharacterCombat] Could not find CombatStyleSO '{entry.styleId}' during deserialization. Skipping.");
+                continue;
+            }
+
+            _knownStyles.Add(new CombatStyleExpertise(styleSO, entry.level, entry.experience));
+        }
+
+        // Restore preferred style
+        if (!string.IsNullOrEmpty(data.preferredStyleId))
+        {
+            _currentCombatStyleExpertise = _knownStyles.Find(s => s.Style != null && s.Style.name == data.preferredStyleId);
+        }
+
+        // Fallback to barehands if preferred style was not found
+        if (_currentCombatStyleExpertise == null)
+        {
+            _currentCombatStyleExpertise = _knownStyles.Find(s => s.WeaponType == WeaponType.Barehands);
+        }
+    }
+
+    string ICharacterSaveData.SerializeToJson() => CharacterSaveDataHelper.SerializeToJson(this);
+    void ICharacterSaveData.DeserializeFromJson(string json) => CharacterSaveDataHelper.DeserializeFromJson(this, json);
+
+    #endregion
 }
