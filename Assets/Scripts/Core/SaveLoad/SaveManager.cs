@@ -103,17 +103,25 @@ public class SaveManager : MonoBehaviour
         data.metadata.timestamp = DateTime.Now.ToString("o");
         data.metadata.isEmpty = false;
 
+        // Sync live buildings on active maps into CommunityData BEFORE capturing ISaveable states.
+        // This ensures CommunityTracker.CaptureState() includes buildings placed since last hibernation.
+        foreach (var mc in MapController.ActiveControllers.ToArray())
+        {
+            if (mc != null && !string.IsNullOrEmpty(mc.MapId))
+                mc.SnapshotActiveBuildings();
+        }
+
         foreach (var s in worldSaveables)
         {
             data.worldStates[s.SaveKey] = JsonConvert.SerializeObject(s.CaptureState());
         }
 
-        // Snapshot live NPCs on active maps so they are not lost on quit+reload.
-        // This serializes NPC state WITHOUT despawning — the map stays active.
-        // ToArray to avoid collection-modified-during-enumeration if a map hibernates mid-save
+        // Snapshot live NPCs on active maps so they persist through save/load.
+        // NPCs are serialized into MapSaveData snapshots WITHOUT despawning.
         foreach (var mc in MapController.ActiveControllers.ToArray())
         {
             if (mc == null || string.IsNullOrEmpty(mc.MapId)) continue;
+
             var snapshot = mc.SnapshotActiveNPCs();
             if (snapshot.HibernatedNPCs.Count > 0)
             {

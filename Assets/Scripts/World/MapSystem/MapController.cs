@@ -558,6 +558,60 @@ namespace MWI.WorldSystem
         }
 
         /// <summary>
+        /// Syncs all live buildings on this active map into CommunityData.ConstructedBuildings
+        /// WITHOUT despawning them. Called during world save so buildings persist through save/load.
+        /// Mirrors the building serialization in Hibernate() but skips the despawn step.
+        /// </summary>
+        public void SnapshotActiveBuildings()
+        {
+            if (CommunityTracker.Instance == null)
+            {
+                Debug.LogWarning($"<color=orange>[MapController:SnapshotActiveBuildings]</color> CommunityTracker.Instance is null for '{MapId}' — cannot snapshot buildings.");
+                return;
+            }
+
+            var community = CommunityTracker.Instance.GetCommunity(MapId);
+            if (community == null)
+            {
+                Debug.LogWarning($"<color=orange>[MapController:SnapshotActiveBuildings]</color> No CommunityData for MapId='{MapId}' — cannot snapshot buildings.");
+                return;
+            }
+
+            if (_mapTrigger == null)
+            {
+                Debug.LogWarning($"<color=orange>[MapController:SnapshotActiveBuildings]</color> _mapTrigger is NULL for '{MapId}'!");
+                return;
+            }
+
+            Collider[] colliders = Physics.OverlapBox(_mapTrigger.bounds.center, _mapTrigger.bounds.extents, Quaternion.identity);
+            HashSet<Building> processedBuildings = new HashSet<Building>();
+            int syncedCount = 0;
+
+            foreach (var col in colliders)
+            {
+                Building building = col.GetComponent<Building>() ?? col.GetComponentInParent<Building>();
+                if (building == null || !processedBuildings.Add(building)) continue;
+
+                var saveEntry = community.ConstructedBuildings.Find(b => b.BuildingId == building.BuildingId);
+                if (saveEntry != null)
+                {
+                    // Update existing entry with current state
+                    saveEntry.State = building.CurrentState;
+                    saveEntry.Position = building.transform.position - transform.position;
+                    saveEntry.Rotation = building.transform.rotation;
+                }
+                else
+                {
+                    // Auto-register untracked building
+                    community.ConstructedBuildings.Add(BuildingSaveData.FromBuilding(building, transform.position));
+                }
+                syncedCount++;
+            }
+
+            Debug.Log($"<color=cyan>[MapController:SnapshotActiveBuildings]</color> Map '{MapId}': synced {syncedCount} building(s) into CommunityData (NOT despawned).");
+        }
+
+        /// <summary>
         /// Spawns NPCs from a MapSaveData snapshot. Used both by WakeUp (from hibernation) and
         /// by OnNetworkSpawn (from a PendingSnapshot loaded from save file).
         /// Does NOT run MacroSimulator catch-up — call that separately if needed.
