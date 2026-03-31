@@ -222,8 +222,8 @@ public class CharacterVisual : CharacterSystem, ICharacterVisual, IAnimationLaye
         // Null-safety: the target Transform could be destroyed mid-combat (death, despawn).
         if (_lookTarget == null) return;
 
-        // Unity fake-null check: a destroyed MonoBehaviour/Transform passes C# null check
-        // but fails Unity's equality operator. Use ReferenceEquals as fallback.
+        // Unity fake-null: a destroyed Transform passes `== null` on the same frame
+        // but throws MissingReferenceException when accessed. Catch and clear.
         try
         {
             // Accessing .position on a destroyed Transform throws MissingReferenceException
