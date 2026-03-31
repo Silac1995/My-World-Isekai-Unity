@@ -235,12 +235,14 @@ public class SpeechBubbleInstance : MonoBehaviour
 
     /// <summary>
     /// Returns the current height of this bubble in world-space units.
-    /// Canvas rect height is in canvas-local units — multiply by lossyScale to get world height.
+    /// Uses the text element's canvas lossyScale to convert from canvas-local to world units.
+    /// The root RectTransform has lossyScale=1 (not under a Canvas), so we need the Canvas child's scale.
     /// </summary>
     public float GetHeight()
     {
-        if (_rectTransform == null) _rectTransform = GetComponent<RectTransform>();
-        return _rectTransform.rect.height * _rectTransform.lossyScale.y;
+        if (_textElement == null) return 0f;
+        var textRect = _textElement.rectTransform;
+        return textRect.rect.height * textRect.lossyScale.y;
     }
 
     /// <summary>
