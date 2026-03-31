@@ -108,10 +108,19 @@ namespace MWI.UI
                 yield return new WaitForSecondsRealtime(_fadeDuration + 0.05f);
             }
 
-            // Step 3: Shutdown network
-            if (NetworkManager.Singleton != null)
+            // Step 3: Shutdown network and wait for completion
+            if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
             {
+                Debug.Log("<color=yellow>[PauseMenu]</color> Shutting down network...");
                 NetworkManager.Singleton.Shutdown();
+
+                // Wait for shutdown to complete
+                while (NetworkManager.Singleton != null && NetworkManager.Singleton.ShutdownInProgress)
+                {
+                    yield return null;
+                }
+                yield return new WaitForSecondsRealtime(0.5f);
+                Debug.Log("<color=green>[PauseMenu]</color> Network shutdown complete.");
             }
 
             // Step 3b: Reset callbacks (shutdown clears them)

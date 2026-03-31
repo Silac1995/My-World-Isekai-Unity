@@ -70,8 +70,17 @@ public class GameSessionManager : MonoBehaviour
         if (_callbacksRegistered || NetworkManager.Singleton == null) return;
         _callbacksRegistered = true;
 
+        // Ensure NetworkManager persists across scene loads
+        if (NetworkManager.Singleton.gameObject.scene.name != "DontDestroyOnLoad")
+            DontDestroyOnLoad(NetworkManager.Singleton.gameObject);
+
         NetworkManager.Singleton.NetworkConfig.ConnectionApproval = true;
-        NetworkManager.Singleton.ConnectionApprovalCallback += ApprovalCheck;
+
+        // ConnectionApprovalCallback is a single-delegate (not multicast) — set, don't +=
+        NetworkManager.Singleton.ConnectionApprovalCallback = ApprovalCheck;
+
+        NetworkManager.Singleton.OnClientConnectedCallback -= HandleClientConnected;
+        NetworkManager.Singleton.OnClientDisconnectCallback -= HandleClientDisconnect;
         NetworkManager.Singleton.OnClientConnectedCallback += HandleClientConnected;
         NetworkManager.Singleton.OnClientDisconnectCallback += HandleClientDisconnect;
     }
