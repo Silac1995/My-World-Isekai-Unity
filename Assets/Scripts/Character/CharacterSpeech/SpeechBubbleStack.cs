@@ -104,6 +104,10 @@ public class SpeechBubbleStack : MonoBehaviour
     {
         try
         {
+            // 0. Reset cross-character offset if stack was empty — start fresh at base
+            if (_bubbles.Count == 0)
+                _crossCharacterOffset = 0f;
+
             // 1. Enforce bubble cap — dismiss oldest if at max
             if (_bubbles.Count >= _maxBubbles)
             {
@@ -156,6 +160,10 @@ public class SpeechBubbleStack : MonoBehaviour
     {
         try
         {
+            // 0. Reset cross-character offset if stack was empty — start fresh at base
+            if (_bubbles.Count == 0)
+                _crossCharacterOffset = 0f;
+
             // 1. Enforce bubble cap
             if (_bubbles.Count >= _maxBubbles)
             {
