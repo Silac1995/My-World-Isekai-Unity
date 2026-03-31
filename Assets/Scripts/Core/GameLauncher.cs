@@ -192,6 +192,22 @@ public class GameLauncher : MonoBehaviour
             }
         }
 
+        // ── Step 5c: Spawn NPCs from pending snapshots ─────────────
+        // MapController.OnNetworkSpawn fires before LoadWorldAsync populates PendingSnapshots,
+        // so the snapshot consumption in OnNetworkSpawn finds nothing. We must spawn them here.
+        if (!IsNewWorld && MapController.PendingSnapshots.Count > 0)
+        {
+            ScreenFadeManager.Instance?.UpdateStatus("Spawning NPCs...");
+            foreach (var mc in Object.FindObjectsByType<MapController>(FindObjectsSortMode.None))
+            {
+                if (MapController.PendingSnapshots.TryGetValue(mc.MapId, out var snapshot))
+                {
+                    Debug.Log($"{LOG_TAG} Spawning {snapshot.HibernatedNPCs.Count} NPC(s) from snapshot for map '{mc.MapId}'.");
+                    mc.SpawnNPCsFromPendingSnapshot();
+                }
+            }
+        }
+
         // ── Step 6: Import character profile ────────────────────────
         ScreenFadeManager.Instance?.UpdateStatus("Loading character profile...");
         CharacterProfileSaveData profileData = null;

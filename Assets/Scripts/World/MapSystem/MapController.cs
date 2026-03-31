@@ -469,6 +469,21 @@ namespace MWI.WorldSystem
         /// Used by SaveManager during world save to capture NPC state on active (non-hibernating) maps
         /// so NPCs are not lost if the player quits and reloads.
         /// </summary>
+        /// <summary>
+        /// Spawns NPCs from PendingSnapshots for this map, if any exist.
+        /// Called by GameLauncher after LoadWorldAsync populates PendingSnapshots.
+        /// </summary>
+        public void SpawnNPCsFromPendingSnapshot()
+        {
+            if (!IsServer) return;
+            if (PendingSnapshots.TryGetValue(MapId, out var snapshot))
+            {
+                Debug.Log($"<color=green>[MapController]</color> Spawning {snapshot.HibernatedNPCs.Count} NPC(s) from pending snapshot for '{MapId}'.");
+                SpawnNPCsFromSnapshot(snapshot);
+                PendingSnapshots.Remove(MapId);
+            }
+        }
+
         public MapSaveData SnapshotActiveNPCs()
         {
             var snapshot = new MapSaveData()
@@ -606,6 +621,10 @@ namespace MWI.WorldSystem
                 Building building = col.GetComponent<Building>() ?? col.GetComponentInParent<Building>();
                 if (building == null || !processedBuildings.Add(building)) continue;
 
+                // Skip preplaced buildings — they exist in the scene and don't need saving.
+                // Only player-placed buildings (via BuildingPlacementManager) have PlacedByCharacterId set.
+                if (building.PlacedByCharacterId.Value.IsEmpty) continue;
+
                 var saveEntry = community.ConstructedBuildings.Find(b => b.BuildingId == building.BuildingId);
                 if (saveEntry != null)
                 {
@@ -648,9 +667,12 @@ namespace MWI.WorldSystem
                 return;
             }
 
-            // Collect existing building IDs in the scene to avoid duplicates
+            // Collect ALL existing building PrefabIds in the scene to avoid duplicating preplaced buildings.
+            // Preplaced buildings generate new BuildingIds each session, so we can't match by ID.
+            // Instead, match by PrefabId + approximate position to detect preplaced buildings.
+            var existingBuildings = UnityEngine.Object.FindObjectsByType<Building>(FindObjectsSortMode.None);
             var existingBuildingIds = new HashSet<string>();
-            foreach (var building in GetComponentsInChildren<Building>())
+            foreach (var building in existingBuildings)
             {
                 if (!string.IsNullOrEmpty(building.BuildingId))
                     existingBuildingIds.Add(building.BuildingId);
