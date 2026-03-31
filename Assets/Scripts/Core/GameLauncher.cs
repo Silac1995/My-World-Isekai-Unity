@@ -134,10 +134,7 @@ public class GameLauncher : MonoBehaviour
 
         Debug.Log($"{LOG_TAG} Scene '{_gameSceneName}' loaded.");
 
-        // ── Step 4: Load world save data (if not a new world) ───────
-        yield return LoadWorldData();
-
-        // ── Step 5: Wait for network to start and player to spawn ───
+        // ── Step 4: Wait for network to start and player to spawn ───
         // GameSessionManager.Start() will auto-start the network because
         // we set AutoStartNetwork = true above. It calls WaitAndStartNetwork()
         // which calls StartSolo() after a brief delay.
@@ -156,6 +153,12 @@ public class GameLauncher : MonoBehaviour
         }
 
         Debug.Log($"{LOG_TAG} Player character found: {playerCharacter.gameObject.name}");
+
+        // ── Step 5: Load world save data ────────────────────────────
+        // Done AFTER player spawn so the network is running and all
+        // ISaveable systems (CommunityTracker, TimeManager, etc.) have
+        // registered with SaveManager (they defer registration by 0.5s).
+        yield return LoadWorldData();
 
         // ── Step 5b: Spawn saved buildings on predefined maps ──────
         // Predefined maps never WakeUp(), so buildings from CommunityData
