@@ -197,9 +197,8 @@ Uses the standard CharacterSystem RPC relay:
 ### Supporting Classes
 | Class | Purpose |
 |-------|---------|
-| `SpeechBubbleStack` | MonoBehaviour managing bubble instances, cap enforcement, mouth controller position, cross-character vertical offsets |
+| `SpeechBubbleStack` | MonoBehaviour managing bubble instances, cap enforcement, mouth controller, cross-character push via SphereCollider trigger (Habbo Hotel style) |
 | `SpeechBubbleInstance` | Single bubble lifecycle: typing animation, voice, entrance/exit animation, expiration timer |
-| `SpeechZoneManager` | Lazy singleton for cross-character bubble collision avoidance |
 
 ---
 
@@ -319,9 +318,8 @@ Every subsystem exposed on `Character.cs` (lines 202-244). Properties delegate t
 | `Assets/Scripts/Character/SaveLoad/IOfflineCatchUp.cs` | Macro-simulation catch-up |
 | `Assets/Scripts/Character/SaveLoad/CharacterDataCoordinator.cs` | Export/import orchestrator (owned by save-persistence-specialist) |
 | `Assets/Scripts/Character/CharacterSpeech/CharacterSpeech.cs` | Speech bubble CharacterSystem |
-| `Assets/Scripts/Character/CharacterSpeech/SpeechBubbleStack.cs` | Bubble stacking + cap enforcement |
+| `Assets/Scripts/Character/CharacterSpeech/SpeechBubbleStack.cs` | Bubble stacking, cap, cross-character push (SphereCollider trigger) |
 | `Assets/Scripts/Character/CharacterSpeech/SpeechBubbleInstance.cs` | Single bubble lifecycle |
-| `Assets/Scripts/Character/CharacterSpeech/SpeechZoneManager.cs` | Cross-character collision avoidance |
 | `.agent/skills/character_core/SKILL.md` | Core facade docs |
 | `.agent/skills/character-archetype/SKILL.md` | Archetype system docs |
 | `.agent/skills/character-netcode/SKILL.md` | Network sync patterns |
