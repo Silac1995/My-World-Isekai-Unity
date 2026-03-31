@@ -484,14 +484,27 @@ namespace MWI.WorldSystem
             }
 
             Collider[] colliders = Physics.OverlapBox(_mapTrigger.bounds.center, _mapTrigger.bounds.extents, Quaternion.identity);
-            Debug.Log($"<color=cyan>[MapController:SnapshotActiveNPCs]</color> OverlapBox found {colliders.Length} colliders in '{MapId}'.");
+            Debug.Log($"<color=cyan>[MapController:SnapshotActiveNPCs]</color> OverlapBox found {colliders.Length} colliders in '{MapId}'. Bounds center={_mapTrigger.bounds.center}, extents={_mapTrigger.bounds.extents}");
 
+            int characterTagCount = 0;
+            int playerSkipCount = 0;
             foreach (var col in colliders)
             {
-                if (col.CompareTag("Character") && col.TryGetComponent(out Character npc))
+                if (col.CompareTag("Character"))
                 {
+                    characterTagCount++;
+                    if (!col.TryGetComponent(out Character npc))
+                    {
+                        Debug.LogWarning($"<color=orange>[MapController:SnapshotActiveNPCs]</color> Collider '{col.gameObject.name}' has Character tag but no Character component!");
+                        continue;
+                    }
+
                     // Ignore Players — only snapshot NPCs
-                    if (npc.NetworkObject != null && npc.NetworkObject.IsPlayerObject) continue;
+                    if (npc.NetworkObject != null && npc.NetworkObject.IsPlayerObject)
+                    {
+                        playerSkipCount++;
+                        continue;
+                    }
 
                     HibernatedNPCData npcData = new HibernatedNPCData()
                     {
@@ -553,7 +566,8 @@ namespace MWI.WorldSystem
                 }
             }
 
-            Debug.Log($"<color=cyan>[MapController:SnapshotActiveNPCs]</color> Map '{MapId}' snapshot complete. {snapshot.HibernatedNPCs.Count} NPCs serialized (NOT despawned).");
+            Debug.Log($"<color=cyan>[MapController:SnapshotActiveNPCs]</color> Map '{MapId}' snapshot complete. " +
+                      $"{snapshot.HibernatedNPCs.Count} NPCs serialized, {characterTagCount} Character-tagged colliders found, {playerSkipCount} players skipped.");
             return snapshot;
         }
 
