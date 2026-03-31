@@ -1,155 +1,217 @@
 using UnityEngine;
 
+/// <summary>
+/// Determines combat movement based on character state:
+/// - Idle sway (waiting for initiative)
+/// - Tactical circling (outnumbering 2:1+)
+/// - Dynamic spacing (post-attack step-back for melee)
+/// - Unengaged follow (trailing target without engagement)
+/// - Ranged hold (no reactive kiting)
+/// </summary>
 public class CombatTacticalPacer
 {
+    private const float IDLE_SWAY_RADIUS = 0.7f;
+    private const float IDLE_SWAY_SPEED = 0.5f;
+    private const float CIRCLE_SPEED = 1.5f;
+    private const float CIRCLE_RADIUS_OFFSET = 2.0f;
+    private const float MELEE_STEPBACK_DISTANCE = 2.0f;
+    private const float UNENGAGED_FOLLOW_MELEE_DISTANCE = 5.0f;
+    private const float LEASH_PULL_STRENGTH = 0.3f;
+    private const float PATH_UPDATE_INTERVAL = 0.8f;
+
+    /// <summary>
+    /// Mirrors CombatFormation.MELEE_PREFERRED_DISTANCE (private in CombatFormation).
+    /// Keep in sync if that value ever changes.
+    /// </summary>
+    private const float MELEE_PREFERRED_DISTANCE = 4.0f;
+
     private Character _self;
-    private Character _lastBattleTarget;
-    private Vector3 _currentDestination;
-    private Vector3 _currentWanderJitter;
-    private float _lastMoveTime;
-    private float _moveInterval;
-    
-    private const float PREFERRED_X_GAP = 5.0f;
-    private const float X_FLIP_SAFETY = 1.5f;
-    private const float MAX_DISTANCE = 10.0f;
-    
-    // Soft zone constraint
-    private const float SOFT_ZONE_MARGIN = 5f; 
-    private float _timeOutsideZone = 0f;
-    private const float OUTSIDE_ZONE_PATIENCE = 4f;
+    private Vector3 _swayCenter;
+    private float _perlinSeedX;
+    private float _perlinSeedZ;
+    private float _circleAngle;
+    private float _lastPathUpdateTime;
+    private bool _needsStepBack;
 
     public CombatTacticalPacer(Character self)
     {
         _self = self;
-        _lastMoveTime = Time.time;
-        _moveInterval = Random.Range(5f, 8f);
+        _perlinSeedX = Random.Range(0f, 100f);
+        _perlinSeedZ = Random.Range(0f, 100f);
+        _circleAngle = Random.Range(0f, Mathf.PI * 2f);
+        _swayCenter = self.transform.position;
     }
 
-    public Vector3 GetTacticalDestination(Character target, float attackRange, bool isChargingTarget)
+    /// <summary>
+    /// Called after a melee attack executes to trigger a post-attack step-back.
+    /// </summary>
+    public void NotifyAttackCompleted()
     {
-        if (target != _lastBattleTarget)
-        {
-            _lastBattleTarget = target;
-            _lastMoveTime = Time.time;
-            _moveInterval = Random.Range(5f, 8f);
-            
-            var bm = _self.CharacterCombat.CurrentBattleManager;
-            if (target != null) 
-            {
-                _currentDestination = CalculateSafeDestination(target, bm);
-            }
-        }
-
-        if (target == null) return _self.transform.position;
-
-        var battleManager = _self.CharacterCombat.CurrentBattleManager;
-        Collider battleZone = battleManager != null ? battleManager.GetComponent<BoxCollider>() : null;
-        
-        // --- SOFT ZONE: Track time outside zone ---
-        bool isOutsideZone = battleZone != null && !battleZone.bounds.Contains(_self.transform.position);
-        if (isOutsideZone)
-        {
-            _timeOutsideZone += Time.deltaTime;
-            if (_timeOutsideZone > OUTSIDE_ZONE_PATIENCE)
-            {
-                float distOutside = Vector3.Distance(_self.transform.position, battleZone.ClosestPoint(_self.transform.position));
-                if (distOutside > SOFT_ZONE_MARGIN)
-                {
-                    // Return heavily toward center if stranding outside
-                    return battleZone.bounds.center;
-                }
-            }
-        }
-        else
-        {
-            _timeOutsideZone = 0f;
-        }
-
-        float distToTarget = Vector3.Distance(_self.transform.position, target.transform.position);
-
-        // Melee vs Ranged behaviors
-        float escapeRadius;
-        if (attackRange <= 4.0f) 
-        {
-            // Melee fighters only step back to prevent model clipping, standing their ground
-            escapeRadius = 2.5f;
-        }
-        else 
-        {
-            // Ranged fighters actively kite to maintain distance
-            escapeRadius = attackRange * 0.6f;
-        }
-        
-        bool tooClose = distToTarget < escapeRadius;
-        bool tooFar = distToTarget > MAX_DISTANCE;
-        bool timerExpired = Time.time - _lastMoveTime > _moveInterval;
-        bool canUpdate = Time.time - _lastMoveTime > 1.5f;
-
-        if (canUpdate && (tooClose || tooFar || timerExpired) && !isChargingTarget)
-        {
-            if (tooClose)
-            {
-                _currentDestination = CalculateEscapeDestination(_self.transform.position, target.transform.position, attackRange);
-            }
-            else
-            {
-                Vector3 basePos = CalculateSafeDestination(target, battleManager);
-                // Inject random wander jitter to ensure they don't freeze indefinitely when timer expires
-                _currentWanderJitter = new Vector3(Random.Range(-1.5f, 1.5f), 0, Random.Range(-1.5f, 1.5f));
-                _currentDestination = basePos + _currentWanderJitter;
-            }
-
-            _moveInterval = Random.Range(5f, 8f);
-            _lastMoveTime = Time.time;
-        }
-        else if (isChargingTarget)
-        {
-            _currentDestination = target.transform.position;
-        }
-
-        Vector3 finalPos = _currentDestination;
-
-        // Apply soft bounds clamp if we are not actively charging to attack
-        if (battleZone != null && !battleZone.bounds.Contains(finalPos) && !isChargingTarget)
-        {
-            Vector3 closestInZone = battleZone.ClosestPoint(finalPos);
-            float distOutsideZone = Vector3.Distance(finalPos, closestInZone);
-            float biasFactor = Mathf.Clamp01(distOutsideZone / SOFT_ZONE_MARGIN);
-            finalPos = Vector3.Lerp(finalPos, closestInZone, biasFactor);
-        }
-
-        return finalPos;
+        _needsStepBack = true;
     }
 
-    private Vector3 CalculateSafeDestination(Character target, BattleManager battleManager)
+    /// <summary>
+    /// Resets the idle sway center to the character's current position.
+    /// Call after repositioning events (attack execution, engagement change).
+    /// </summary>
+    public void ResetSwayCenter()
     {
-        if (battleManager == null || target == null) return target != null ? target.transform.position : _self.transform.position;
-
-        var engagement = battleManager.GetEngagementOf(_self);
-        if (engagement != null)
-        {
-            return engagement.GetAssignedPosition(_self);
-        }
-
-        return target.transform.position;
+        _swayCenter = _self.transform.position;
     }
 
-    private Vector3 CalculateEscapeDestination(Vector3 selfPos, Vector3 targetPos, float attackRange)
+    /// <summary>
+    /// Main entry point: returns the desired movement destination.
+    /// Called by CombatAILogic Phase 3 when no action intent is queued.
+    /// </summary>
+    /// <param name="target">Current combat target.</param>
+    /// <param name="attackRange">Effective attack range of current weapon style.</param>
+    /// <param name="engagement">The character's CombatEngagement, or null if unengaged.</param>
+    /// <param name="isCharging">True if the character is actively charging toward the target to execute an action.</param>
+    public Vector3 GetTacticalDestination(Character target, float attackRange,
+        CombatEngagement engagement, bool isCharging)
     {
-        float xDir;
-        if (Mathf.Abs(selfPos.x - targetPos.x) < 0.1f && _lastBattleTarget != null) 
+        if (isCharging || target == null)
+            return _self.transform.position;
+
+        float now = Time.time;
+        if (now - _lastPathUpdateTime < PATH_UPDATE_INTERVAL)
+            return _self.transform.position;
+        _lastPathUpdateTime = now;
+
+        Vector3 destination;
+        bool isRanged = IsRangedCharacter(_self);
+
+        // Priority 1: Post-attack step-back (melee only)
+        if (_needsStepBack && !isRanged)
         {
-            // S'ils sont parfaitement juxtaposés, on force une direction basée sur l'ID pour être déterministe
-            xDir = (_self.GetInstanceID() > _lastBattleTarget.GetInstanceID()) ? 1f : -1f;
+            _needsStepBack = false;
+            destination = CalculateStepBack(target);
+            _swayCenter = destination;
+            return ApplyLeash(destination, engagement);
         }
-        else 
+
+        // Priority 2: Unengaged — follow target at distance
+        if (engagement == null)
         {
-            xDir = (selfPos.x > targetPos.x) ? 1f : -1f;
+            return CalculateUnengagedFollow(target, attackRange, isRanged);
         }
-        
-        float radius = Mathf.Max(PREFERRED_X_GAP, attackRange * 0.9f);
-        Vector3 offset = new Vector3(xDir * radius, 0, Random.Range(-1.5f, 1.5f));
-        
-        return targetPos + offset;
+
+        // Priority 3: Tactical circling (outnumbering 2:1+, melee only)
+        float outnumberRatio = engagement.GetOutnumberRatio(_self);
+        if (!isRanged && outnumberRatio >= 2.0f)
+        {
+            destination = CalculateCirclingPosition(engagement, target);
+            return ApplyLeash(destination, engagement);
+        }
+
+        // Priority 4: Idle sway
+        destination = CalculateIdleSway();
+        return ApplyLeash(destination, engagement);
+    }
+
+    /// <summary>
+    /// After attacking, melee fighters step back away from the target
+    /// to create visual breathing room and prevent model clipping.
+    /// </summary>
+    private Vector3 CalculateStepBack(Character target)
+    {
+        Vector3 selfPos = _self.transform.position;
+        Vector3 awayFromTarget = (selfPos - target.transform.position).normalized;
+
+        // Fallback direction if perfectly overlapping
+        if (awayFromTarget.sqrMagnitude < 0.01f)
+            awayFromTarget = new Vector3((_self.GetInstanceID() % 2 == 0) ? 1f : -1f, 0f, 0f);
+
+        return selfPos + awayFromTarget * MELEE_STEPBACK_DISTANCE;
+    }
+
+    /// <summary>
+    /// Characters not yet in an engagement trail their target at a safe follow distance.
+    /// Ranged characters maintain their attack range; melee characters stay at a moderate gap.
+    /// </summary>
+    private Vector3 CalculateUnengagedFollow(Character target, float attackRange, bool isRanged)
+    {
+        Vector3 selfPos = _self.transform.position;
+        Vector3 targetPos = target.transform.position;
+        float followDistance = isRanged ? attackRange : UNENGAGED_FOLLOW_MELEE_DISTANCE;
+        float currentDist = Vector3.Distance(selfPos, targetPos);
+
+        if (currentDist > followDistance * 1.2f)
+        {
+            Vector3 dirToTarget = (targetPos - selfPos).normalized;
+            return targetPos - dirToTarget * followDistance;
+        }
+
+        return CalculateIdleSway();
+    }
+
+    /// <summary>
+    /// When outnumbering opponents 2:1 or more, melee fighters orbit the opponent center
+    /// to create flanking pressure and avoid stacking on the same position.
+    /// Each character starts at a random angle and advances at a fixed angular speed.
+    /// </summary>
+    private Vector3 CalculateCirclingPosition(CombatEngagement engagement, Character target)
+    {
+        Vector3 opponentCenter = engagement.GetOpponentCenter(_self);
+        float circleRadius = MELEE_PREFERRED_DISTANCE + CIRCLE_RADIUS_OFFSET;
+
+        _circleAngle += CIRCLE_SPEED * PATH_UPDATE_INTERVAL;
+        if (_circleAngle > Mathf.PI * 2f) _circleAngle -= Mathf.PI * 2f;
+
+        Vector3 circlePos = opponentCenter + new Vector3(
+            Mathf.Cos(_circleAngle) * circleRadius,
+            0,
+            Mathf.Sin(_circleAngle) * circleRadius
+        );
+
+        _swayCenter = circlePos;
+        return circlePos;
+    }
+
+    /// <summary>
+    /// Perlin noise-based micro-movement around the sway center.
+    /// Prevents characters from standing perfectly still while waiting for initiative.
+    /// </summary>
+    private Vector3 CalculateIdleSway()
+    {
+        float time = Time.time;
+        float noiseX = Mathf.PerlinNoise(_perlinSeedX + time * IDLE_SWAY_SPEED, 0) * 2f - 1f;
+        float noiseZ = Mathf.PerlinNoise(0, _perlinSeedZ + time * IDLE_SWAY_SPEED) * 2f - 1f;
+
+        return _swayCenter + new Vector3(
+            noiseX * IDLE_SWAY_RADIUS,
+            0,
+            noiseZ * IDLE_SWAY_RADIUS
+        );
+    }
+
+    /// <summary>
+    /// Soft-constrains the destination within the engagement's leash radius.
+    /// Characters that drift beyond the leash are gently pulled back toward the anchor,
+    /// rather than hard-clamped, for smoother movement.
+    /// </summary>
+    private Vector3 ApplyLeash(Vector3 destination, CombatEngagement engagement)
+    {
+        if (engagement == null) return destination;
+
+        Vector3 anchor = engagement.AnchorPoint;
+        float leashRadius = engagement.LeashRadius;
+        float distFromAnchor = Vector3.Distance(destination, anchor);
+
+        if (distFromAnchor > leashRadius)
+        {
+            Vector3 toAnchor = (anchor - destination).normalized;
+            float overshoot = distFromAnchor - leashRadius;
+            destination += toAnchor * (overshoot * LEASH_PULL_STRENGTH);
+        }
+
+        return destination;
+    }
+
+    private bool IsRangedCharacter(Character character)
+    {
+        if (character?.CharacterCombat?.CurrentCombatStyleExpertise?.Style == null)
+            return false;
+        return character.CharacterCombat.CurrentCombatStyleExpertise.Style is RangedCombatStyleSO;
     }
 }

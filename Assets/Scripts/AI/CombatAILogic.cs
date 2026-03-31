@@ -133,7 +133,14 @@ namespace MWI.AI
                         if (doLog) Debug.Log($"<color=orange>[CombatAI]</color> {_self.CharacterName} [Phase 2] Executing Action! Distance: {distToTarget:F2}/{attackRange:F2}, Z-Dist: {zDist:F2}");
                         bool success = _self.CharacterCombat.ExecuteAction(_self.CharacterCombat.PlannedAction);
 
-                        if (!success)
+                        if (success)
+                        {
+                            // Notify the tactical pacer so melee characters perform a post-attack step-back
+                            // and the sway center resets to the new position after execution.
+                            _combatPacer.NotifyAttackCompleted();
+                            _combatPacer.ResetSwayCenter();
+                        }
+                        else
                         {
                             Debug.LogWarning($"<color=yellow>[CombatAI]</color> {_self.CharacterName} [Phase 2] ExecuteAction FAILED — possible stamina depletion or action rejected.");
                         }
@@ -161,8 +168,14 @@ namespace MWI.AI
             else
             {
                 // 3. CLEANUP & PACING FALLBACK (Only tactical movement when NO ACTION is planned)
-                // Apply Tactics safely. Use _isChargingTarget to let the pacer know if we are aggressive or retreating.
-                Vector3 finalPos = _combatPacer.GetTacticalDestination(currentTarget, attackRange, _isChargingTarget);
+                // Resolve the character's current engagement so the pacer can apply leash, circling, etc.
+                CombatEngagement engagement = null;
+                if (_self.CharacterCombat.IsInBattle)
+                {
+                    engagement = _self.CharacterCombat.CurrentBattleManager?.Coordinator?.GetEngagementOf(_self);
+                }
+
+                Vector3 finalPos = _combatPacer.GetTacticalDestination(currentTarget, attackRange, engagement, _isChargingTarget);
                 
                 if (UnityEngine.Time.time - _lastPathUpdateTime > 0.5f && Vector3.Distance(movement.Destination, finalPos) > 0.5f)
                 {

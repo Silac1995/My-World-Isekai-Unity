@@ -20,6 +20,7 @@ The `BattleManager` is the supreme entity of a battle, usually instantiated when
 - **BattleTeams**: It always maintains two teams (Initiator vs Target). We do *not* support 3-team free-for-alls in a single instance.
 - **BattleZoneController**: A delegated pure C# class that handles the physical terrain. It dynamically generates the boundary (`BoxCollider` isTrigger), pathfinding deterrent (`NavMeshModifierVolume`), and visual `LineRenderer` to mark the combat zone.
 - **CombatEngagementCoordinator**: A delegated pure C# class that manages brawl "subgroups" (`_activeEngagements`) using a **targeting-graph algorithm**. It maintains a `_targetingGraph` (`Dictionary<Character, Character>`) tracking who targets whom. Each battle tick, `EvaluateEngagements()` finds mutual targeting pairs, builds connected components via Union-Find, and reconciles them against existing engagements (create new, sync members, or merge overlapping). Key API: `SetTargeting(attacker, target)` updates the graph, `RemoveFromGraph(character)` cleans up on death/leave, `GetEngagementOf(character)` queries current engagement.
+- **CombatFormation (Organic Positioning)**: Each `EngagementGroup` owns a `CombatFormation` that calculates dynamic positions based on character role. Melee fighters position at `MELEE_PREFERRED_DISTANCE = 4m` from the opponent center, ranged at `RANGED_MIN_DISTANCE = 8m`. Same-role allies spread along the Z axis with configurable spacing (`MELEE_SPACING = 2.5`, `RANGED_SPACING = 2.0`). There are no fixed ring slots — positions are recomputed each call to `GetOrganicPosition()`. Role detection uses `CombatStyleExpertise.Style is RangedCombatStyleSO`. Deterministic per-character jitter (based on `GetInstanceID()`) prevents stacking. `CombatEngagement.GetAssignedPosition()` delegates to the group's formation with team side sign (-1 for GroupA, +1 for GroupB).
 - **Victory Condition**: The manager continuously polls `.IsTeamEliminated()` in its `Update()` loop. This physical guarantee ensures the battle definitively ends if an entire team is wiped out or silently despawned, rather than relying exclusively on volatile event triggers.
 - **Incapacitation Handling**: When a character faints/dies, `HandleCharacterIncapacitated` calls `RedirectIncapacitated` which removes the victim from the targeting graph via `RemoveFromGraph` (clears both outgoing and incoming edges, plus leaves engagement) before running `CleanupEngagements`. All characters (including players) are auto-targeted via `SetTargeting` when they join the battle — no `IsPlayer()` guard.
 - **Robust Teardown**: Upon ending, the manager wraps `LeaveBattle` calls in a `try-catch` block to quarantine aggressive UI exceptions (like `PlayerUI` crashing) from aborting the shutdown script. It also unsubscribes all character events explicitly in `OnDestroy()` to prevent zombie memory leaks.
@@ -37,7 +38,7 @@ This is the component every NPC/Player has in order to fight.
   - **`SetPlannedTarget(Character)`** sets only the target without touching `PlannedAction`. Used by the UI targeting system (click/TAB) to redirect the combat AI to a new enemy without cancelling a queued attack. Also calls `BattleManager.SetTargeting()` to update the targeting graph.
   - **`CombatAILogic.Tick(target)`** is the shared brain for both Players and NPCs. At the top of each tick, it checks `CharacterCombat.PlannedTarget` — if set and alive, it **overrides** the coordinator-assigned `currentTarget` so that player click/TAB selection is respected by all movement and execution logic. It moves the character into valid strike range (evaluating `MeleeRange`, X-depth limits, and Z-alignment `<= 1.6f`) and ONLY calls `ExecuteAction` when perfectly positioned and `IsReadyToAct` is true.
   - The attack closure uses **dynamic PlannedTarget evaluation**: `() => Attack(_characterCombat.PlannedTarget)` rather than capturing a fixed target. This ensures retargeting after queuing is respected.
-  - While waiting for Initiative, `CombatAILogic` pulls random safe fallback points using `CombatTacticalPacer.GetTacticalDestination()`.
+  - While waiting for Initiative, `CombatAILogic` Phase 3 queries `CombatTacticalPacer.GetTacticalDestination(target, attackRange, engagement, isCharging)` for dynamic movement. After a successful action execution in Phase 2, it calls `NotifyAttackCompleted()` and `ResetSwayCenter()` on the pacer to trigger melee step-back.
   - For standard hits, NPCs automatically pull intents (and register them in Phase 1) when ready. Players strictly declare intents via `UI_CombatActionMenu`.
 
 ### 3. Weapons & Styles (3-Layer Architecture)
@@ -174,7 +175,25 @@ Weapons use physical types. Spells typically use magical types.
 - **Critical pitfall**: `PlayerController.Move()` has a safety check that re-enables the NavMeshAgent when it detects it was "externally disabled" during combat. This check **must** respect `IsKnockedBack` — otherwise it immediately calls `ConfigureNavMesh(true)` which zeros velocity and sets the Rigidbody to kinematic, completely nullifying the knockback. The guard is: `!_character.CharacterMovement.IsKnockedBack`.
 - After the knockback window ends, `FixedUpdate` re-enables the NavMeshAgent (if in combat) and sets the Rigidbody back to kinematic.
 
-### 12. Battle Ground Circle Indicators
+### 12. CombatTacticalPacer (Dynamic Movement)
+
+`CombatTacticalPacer` (`Assets/Scripts/Character/CharacterCombat/CombatTacticalPacer.cs`) determines where a character should move between action executions. It is a pure C# class instantiated by `CombatAILogic` and called in Phase 3 (no action queued).
+
+**Signature**: `GetTacticalDestination(Character target, float attackRange, CombatEngagement engagement, bool isCharging)`
+
+**Movement states (priority order):**
+1. **Post-attack step-back** (melee only): After `NotifyAttackCompleted()` is called, the character steps `MELEE_STEPBACK_DISTANCE = 2m` away from the target. Fires once per attack, then resets.
+2. **Unengaged follow**: If no `CombatEngagement` exists, trails the target at `attackRange` (ranged) or `UNENGAGED_FOLLOW_MELEE_DISTANCE = 5m` (melee). Falls back to idle sway if within range.
+3. **Tactical circling**: When outnumbering opponents 2:1+ (via `engagement.GetOutnumberRatio()`), melee fighters orbit the opponent center at `MELEE_PREFERRED_DISTANCE + CIRCLE_RADIUS_OFFSET = 6m`. Each character starts at a random angle to avoid stacking.
+4. **Idle sway**: Perlin noise micro-movement around the sway center (`IDLE_SWAY_RADIUS = 0.7m`, `IDLE_SWAY_SPEED = 0.5`). Prevents characters from standing perfectly still.
+
+**Leash system**: All engaged destinations are soft-constrained to the engagement's `LeashRadius` (15m from `AnchorPoint`). Overshoot is pulled back at `LEASH_PULL_STRENGTH = 0.3` — a gentle pull, not a hard clamp.
+
+**Path update throttle**: `PATH_UPDATE_INTERVAL = 0.8s` prevents excessive re-pathing.
+
+**Ranged behavior**: Ranged characters (detected via `CombatStyleExpertise.Style is RangedCombatStyleSO`) skip step-back and circling — they hold position and idle sway.
+
+### 13. Battle Ground Circle Indicators
 Visual-only, local-player feature. When the local player joins a battle, colored circles appear on the ground beneath every participant: **Blue** for allies, **Red** for enemies. Colors are relative to the viewer's team.
 
 **Components:**
