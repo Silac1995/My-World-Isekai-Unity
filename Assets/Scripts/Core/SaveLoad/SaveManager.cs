@@ -298,7 +298,7 @@ public class SaveManager : MonoBehaviour
                 var snapshot = mc.SnapshotActiveNPCs();
                 if (snapshot.HibernatedNPCs.Count > 0)
                 {
-                    data.worldStates[$"MapSnapshot_{mc.MapId}"] = JsonConvert.SerializeObject(snapshot);
+                    data.worldStates[$"MapSnapshot_{mc.MapId}"] = JsonConvert.SerializeObject(snapshot, jsonSettings);
                     Debug.Log($"<color=green>[SaveManager]</color> Captured NPC snapshot for active map '{mc.MapId}': {snapshot.HibernatedNPCs.Count} NPCs.");
                 }
             }
@@ -400,7 +400,7 @@ public class SaveManager : MonoBehaviour
             var snapshot = mc.SnapshotActiveNPCs();
             if (snapshot.HibernatedNPCs.Count > 0)
             {
-                data.worldStates[$"MapSnapshot_{mc.MapId}"] = JsonConvert.SerializeObject(snapshot);
+                data.worldStates[$"MapSnapshot_{mc.MapId}"] = JsonConvert.SerializeObject(snapshot, jsonSettings);
                 Debug.Log($"<color=green>[SaveManager]</color> Captured NPC snapshot for active map '{mc.MapId}': {snapshot.HibernatedNPCs.Count} NPCs.");
             }
         }
