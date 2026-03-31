@@ -128,6 +128,19 @@ Distinct from the passive `ToastNotificationSystem`, the `UI_InvitationPrompt` i
 
 ---
 
+### Pause Menu
+
+`PlayerUI` holds a serialized reference to `MWI.UI.PauseMenuController` (`_pauseMenu`), auto-assigned in `Awake()` via `GetComponentInChildren<PauseMenuController>(true)`.
+
+**Key Properties:**
+- `Character CharacterComponent` — read-only accessor for the bound character (used by `PauseMenuController` to check placement state)
+- `bool IsInitialized` — whether a character is currently bound
+- `void TogglePauseMenu()` — toggles the pause menu open/close
+
+See `.agent/skills/pause-menu/SKILL.md` for full system documentation.
+
+---
+
 ### Combat & Targeting UI
 In combat (or specialized click-to-move states), the HUD takes over input handling using specific manager components:
 

@@ -41,8 +41,11 @@ public class PlayerUI : MonoBehaviour
     [SerializeField] private UI_PartyPanel _partyPanel;
     [SerializeField] private UI_PartyWindow _partyWindow;
     [SerializeField] private Button _buttonPartyUI;
+    [SerializeField] private MWI.UI.PauseMenuController _pauseMenu;
 
     private Character characterComponent;
+    public Character CharacterComponent => characterComponent;
+    public bool IsInitialized => characterComponent != null;
 
     private void Awake()
     {
@@ -55,6 +58,9 @@ public class PlayerUI : MonoBehaviour
             Debug.LogWarning("[PlayerUI] Multiple instances detected! Destroying the new one.");
             Destroy(gameObject);
         }
+
+        if (_pauseMenu == null)
+            _pauseMenu = GetComponentInChildren<MWI.UI.PauseMenuController>(true);
     }
 
     public void Initialize(GameObject newCharacter)
@@ -258,6 +264,12 @@ public class PlayerUI : MonoBehaviour
         {
             _partyWindow.Initialize(characterComponent);
         }
+    }
+
+    public void TogglePauseMenu()
+    {
+        if (_pauseMenu == null) return;
+        _pauseMenu.Toggle();
     }
 
     public void ToggleBuildingUI()
