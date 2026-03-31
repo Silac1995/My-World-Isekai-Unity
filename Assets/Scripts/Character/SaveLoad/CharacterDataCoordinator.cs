@@ -296,11 +296,10 @@ public class CharacterDataCoordinator : NetworkBehaviour
     [ContextMenu("Debug: Save Profile + World")]
     private void DebugSaveProfileAndWorld()
     {
-        _ = SaveLocalProfileAsync();
         if (SaveManager.Instance != null)
-            _ = SaveManager.Instance.SaveWorldAsync();
+            SaveManager.Instance.RequestSave(_character);
         else
-            Debug.LogWarning($"{LOG_TAG} SaveManager.Instance is null — world not saved.");
+            Debug.LogWarning($"{LOG_TAG} SaveManager.Instance is null — cannot save.");
     }
 
     [ContextMenu("Debug: Log All SaveKeys")]

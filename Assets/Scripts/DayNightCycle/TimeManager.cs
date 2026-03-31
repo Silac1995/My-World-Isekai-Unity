@@ -96,9 +96,15 @@ namespace MWI.Time
                 OnHourChanged?.Invoke(currentHour);
 
                 // Periodic atomic save (only if server/host)
-                if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer && SaveManager.Instance != null)
+                if (SaveManager.Instance != null && NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer)
                 {
-                    _ = SaveManager.Instance.SaveWorldAsync();
+                    var localClient = NetworkManager.Singleton.LocalClient;
+                    if (localClient?.PlayerObject != null)
+                    {
+                        var playerChar = localClient.PlayerObject.GetComponent<Character>();
+                        if (playerChar != null)
+                            SaveManager.Instance.RequestSave(playerChar);
+                    }
                 }
             }
 

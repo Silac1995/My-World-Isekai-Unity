@@ -1,5 +1,6 @@
 // Assets/Scripts/Core/SaveLoad/SaveManager.cs
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -10,6 +11,19 @@ using MWI.WorldSystem;
 public class SaveManager : MonoBehaviour
 {
     public static SaveManager Instance { get; private set; }
+
+    // ── Save/Load state machine ──────────────────────────────────────
+    public enum SaveLoadState { Idle, Saving, Loading }
+    public SaveLoadState CurrentState { get; set; } = SaveLoadState.Idle;
+
+    // ── Settling-based readiness ─────────────────────────────────────
+    /// <summary>
+    /// True once all ISaveables have finished registering (no new registration
+    /// within 0.5 s). Systems that need to trigger a save should wait for this.
+    /// </summary>
+    public bool IsReady { get; private set; }
+    public event Action OnReady;
+    private Coroutine _settlingCoroutine;
 
     /// <summary>
     /// The unique GUID of the currently loaded world instance.
@@ -77,7 +91,7 @@ public class SaveManager : MonoBehaviour
 
         if (!string.IsNullOrEmpty(CurrentWorldGuid))
         {
-            _ = SaveWorldAsync();
+            _ = SaveWorldDirectAsync();
             Debug.Log("<color=green>[SaveManager]</color> World save triggered on shutdown.");
         }
 
@@ -85,10 +99,197 @@ public class SaveManager : MonoBehaviour
     }
 
     public int WorldSaveableCount => worldSaveables.Count;
-    public void RegisterWorldSaveable(ISaveable s) { if (!worldSaveables.Contains(s)) worldSaveables.Add(s); }
+
+    public void RegisterWorldSaveable(ISaveable s)
+    {
+        if (!worldSaveables.Contains(s)) worldSaveables.Add(s);
+        ResetSettlingTimer();
+        Debug.Log($"<color=green>[SaveManager]</color> Registered ISaveable '{s.SaveKey}'. Count: {worldSaveables.Count}");
+    }
+
     public void UnregisterWorldSaveable(ISaveable s) => worldSaveables.Remove(s);
 
-    public async Task SaveWorldAsync()
+    private void ResetSettlingTimer()
+    {
+        IsReady = false;
+        if (_settlingCoroutine != null) StopCoroutine(_settlingCoroutine);
+        _settlingCoroutine = StartCoroutine(SettlingRoutine());
+    }
+
+    private IEnumerator SettlingRoutine()
+    {
+        yield return new WaitForSecondsRealtime(0.5f);
+        IsReady = true;
+        OnReady?.Invoke();
+        _settlingCoroutine = null;
+        Debug.Log($"<color=green>[SaveManager]</color> All ISaveables settled. IsReady=true. Count: {worldSaveables.Count}");
+    }
+
+    // ── Orchestrated save flow ────────────────────────────────────────
+    /// <summary>
+    /// Single entry point for all save triggers (bed checkpoints, portal gates, etc.).
+    /// Freezes the game, shows an overlay, saves character profile first then world,
+    /// and unfreezes when done.  Must be started with StartCoroutine.
+    /// </summary>
+    public IEnumerator RequestSave(Character playerCharacter)
+    {
+        // ── Guard ────────────────────────────────────────────────────
+        if (CurrentState != SaveLoadState.Idle)
+        {
+            Debug.LogWarning("<color=yellow>[SaveManager]</color> RequestSave ignored — already in state: " + CurrentState);
+            yield break;
+        }
+
+        CurrentState = SaveLoadState.Saving;
+        Time.timeScale = 0f;
+
+        ScreenFadeManager.Instance?.ShowOverlay(0.7f, "Saving...");
+        ScreenFadeManager.Instance?.ClearWarnings();
+
+        // ── 1. Save character profile FIRST (most important) ─────────
+        var coordinator = playerCharacter != null
+            ? playerCharacter.GetComponent<CharacterDataCoordinator>()
+            : null;
+
+        if (coordinator != null)
+        {
+            ScreenFadeManager.Instance?.UpdateStatus("Saving character profile...");
+            Task profileTask = null;
+            try
+            {
+                profileTask = coordinator.SaveLocalProfileAsync();
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"<color=red>[SaveManager]</color> Character profile save threw immediately: {ex.Message}\n{ex.StackTrace}");
+                ScreenFadeManager.Instance?.ShowWarning("Failed to save character profile!");
+            }
+
+            if (profileTask != null)
+            {
+                while (!profileTask.IsCompleted) yield return null;
+
+                if (profileTask.IsFaulted)
+                {
+                    Debug.LogError($"<color=red>[SaveManager]</color> Character profile save faulted: {profileTask.Exception}");
+                    ScreenFadeManager.Instance?.ShowWarning("Failed to save character profile!");
+                }
+                else
+                {
+                    Debug.Log("<color=green>[SaveManager]</color> Character profile saved successfully.");
+                }
+            }
+        }
+
+        // ── 2. Ensure world GUID exists ──────────────────────────────
+        if (string.IsNullOrEmpty(CurrentWorldGuid))
+        {
+            CurrentWorldGuid = Guid.NewGuid().ToString("N");
+        }
+
+        OnSaveStarted?.Invoke();
+
+        // ── 3. Snapshot buildings on active maps ─────────────────────
+        foreach (var mc in MapController.ActiveControllers.ToArray())
+        {
+            if (mc == null || string.IsNullOrEmpty(mc.MapId)) continue;
+            try
+            {
+                mc.SnapshotActiveBuildings();
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"<color=red>[SaveManager]</color> Building snapshot failed for map '{mc.MapId}': {ex.Message}\n{ex.StackTrace}");
+                ScreenFadeManager.Instance?.ShowWarning($"Buildings snapshot failed: {mc.MapId}");
+            }
+        }
+
+        // ── 4. Serialize ISaveables ──────────────────────────────────
+        var data = new GameSaveData();
+        data.metadata.worldGuid = CurrentWorldGuid;
+        data.metadata.worldName = !string.IsNullOrEmpty(CurrentWorldName) ? CurrentWorldName : "My World";
+        data.metadata.timestamp = DateTime.Now.ToString("o");
+        data.metadata.isEmpty = false;
+
+        var jsonSettings = new JsonSerializerSettings
+        {
+            ReferenceLoopHandling = ReferenceLoopHandling.Ignore
+        };
+
+        Debug.Log($"<color=green>[SaveManager]</color> Serializing {worldSaveables.Count} registered ISaveable system(s)...");
+        foreach (var s in worldSaveables)
+        {
+            ScreenFadeManager.Instance?.UpdateStatus($"Saving {s.SaveKey}...");
+            try
+            {
+                data.worldStates[s.SaveKey] = JsonConvert.SerializeObject(s.CaptureState(), jsonSettings);
+                Debug.Log($"<color=green>[SaveManager]</color>   Captured '{s.SaveKey}'.");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"<color=red>[SaveManager]</color> FAILED to capture '{s.SaveKey}': {ex.Message}\n{ex.StackTrace}");
+                ScreenFadeManager.Instance?.ShowWarning($"Failed: {s.SaveKey}");
+            }
+        }
+
+        // ── 5. Snapshot NPCs on active maps ──────────────────────────
+        foreach (var mc in MapController.ActiveControllers.ToArray())
+        {
+            if (mc == null || string.IsNullOrEmpty(mc.MapId)) continue;
+            try
+            {
+                var snapshot = mc.SnapshotActiveNPCs();
+                if (snapshot.HibernatedNPCs.Count > 0)
+                {
+                    data.worldStates[$"MapSnapshot_{mc.MapId}"] = JsonConvert.SerializeObject(snapshot);
+                    Debug.Log($"<color=green>[SaveManager]</color> Captured NPC snapshot for active map '{mc.MapId}': {snapshot.HibernatedNPCs.Count} NPCs.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"<color=red>[SaveManager]</color> NPC snapshot failed for map '{mc.MapId}': {ex.Message}\n{ex.StackTrace}");
+                ScreenFadeManager.Instance?.ShowWarning($"NPC snapshot failed: {mc.MapId}");
+            }
+        }
+
+        // ── 6. Write world file to disk ──────────────────────────────
+        ScreenFadeManager.Instance?.UpdateStatus("Writing world file...");
+        Task writeTask = null;
+        try
+        {
+            writeTask = SaveFileHandler.WriteWorldAsync(CurrentWorldGuid, data);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"<color=red>[SaveManager]</color> WriteWorldAsync threw immediately: {ex.Message}\n{ex.StackTrace}");
+            ScreenFadeManager.Instance?.ShowWarning("Failed to write world file!");
+        }
+
+        if (writeTask != null)
+        {
+            while (!writeTask.IsCompleted) yield return null;
+
+            if (writeTask.IsFaulted)
+            {
+                Debug.LogError($"<color=red>[SaveManager]</color> WriteWorldAsync faulted: {writeTask.Exception}");
+                ScreenFadeManager.Instance?.ShowWarning("Failed to write world file!");
+            }
+        }
+
+        OnSaveCompleted?.Invoke(CurrentWorldGuid);
+        Debug.Log($"<color=green>[SaveManager]</color> World '{CurrentWorldName}' ({CurrentWorldGuid}) saved successfully.");
+
+        // ── 7. Brief "Save complete!" hold, then unfreeze ────────────
+        ScreenFadeManager.Instance?.UpdateStatus("Save complete!");
+        yield return new WaitForSecondsRealtime(0.5f);
+
+        Time.timeScale = 1f;
+        ScreenFadeManager.Instance?.HideOverlay(0.3f);
+        CurrentState = SaveLoadState.Idle;
+    }
+
+    // ── Direct save (no overlay / no freeze) — shutdown only ─────────
+    private async Task SaveWorldDirectAsync()
     {
         // Ensure the world has a persistent GUID
         if (string.IsNullOrEmpty(CurrentWorldGuid))

@@ -141,12 +141,8 @@ public class SleepBehaviour : IAIBehaviour
         // Save player profile and world state to disk after sleeping
         if (character.IsServer && character.IsPlayer())
         {
-            var coordinator = character.GetComponent<CharacterDataCoordinator>();
-            if (coordinator != null)
-                _ = coordinator.SaveLocalProfileAsync();
-
             if (SaveManager.Instance != null)
-                _ = SaveManager.Instance.SaveWorldAsync();
+                SaveManager.Instance.RequestSave(character);
         }
     }
 

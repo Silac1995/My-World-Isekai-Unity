@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
+using TMPro;
 
 /// <summary>
 /// Client-only singleton that manages a full-screen fade overlay for map transitions.
@@ -13,6 +14,11 @@ public class ScreenFadeManager : MonoBehaviour
     [SerializeField] private int _sortOrder = 999;
 
     private Coroutine _fadeCoroutine;
+
+    private TextMeshProUGUI _statusText;
+    private TextMeshProUGUI _warningText;
+    private int _warningCount;
+    private const int MAX_VISIBLE_WARNINGS = 5;
 
     public bool IsFading => _fadeCoroutine != null;
 
@@ -50,6 +56,7 @@ public class ScreenFadeManager : MonoBehaviour
         {
             SetAlpha(0f);
             _fadeImage.raycastTarget = false;
+            CreateOverlayTexts();
             return;
         }
 
@@ -82,6 +89,47 @@ public class ScreenFadeManager : MonoBehaviour
         rt.anchorMax = Vector2.one;
         rt.offsetMin = Vector2.zero;
         rt.offsetMax = Vector2.zero;
+
+        CreateOverlayTexts();
+    }
+
+    private void CreateOverlayTexts()
+    {
+        // Status text — centered, white, fontSize 28
+        GameObject statusGO = new GameObject("StatusText");
+        statusGO.transform.SetParent(_fadeImage.transform, false);
+
+        _statusText = statusGO.AddComponent<TextMeshProUGUI>();
+        _statusText.fontSize = 28;
+        _statusText.color = Color.white;
+        _statusText.alignment = TextAlignmentOptions.Center;
+        _statusText.raycastTarget = false;
+
+        RectTransform statusRT = _statusText.rectTransform;
+        statusRT.anchorMin = new Vector2(0.1f, 0.45f);
+        statusRT.anchorMax = new Vector2(0.9f, 0.55f);
+        statusRT.offsetMin = Vector2.zero;
+        statusRT.offsetMax = Vector2.zero;
+
+        statusGO.SetActive(false);
+
+        // Warning text — below status, orange, fontSize 18
+        GameObject warningGO = new GameObject("WarningText");
+        warningGO.transform.SetParent(_fadeImage.transform, false);
+
+        _warningText = warningGO.AddComponent<TextMeshProUGUI>();
+        _warningText.fontSize = 18;
+        _warningText.color = new Color(1f, 0.6f, 0f);
+        _warningText.alignment = TextAlignmentOptions.Center;
+        _warningText.raycastTarget = false;
+
+        RectTransform warningRT = _warningText.rectTransform;
+        warningRT.anchorMin = new Vector2(0.1f, 0.3f);
+        warningRT.anchorMax = new Vector2(0.9f, 0.44f);
+        warningRT.offsetMin = Vector2.zero;
+        warningRT.offsetMax = Vector2.zero;
+
+        warningGO.SetActive(false);
     }
 
     /// <summary>
@@ -106,6 +154,9 @@ public class ScreenFadeManager : MonoBehaviour
         {
             StopCoroutine(_fadeCoroutine);
         }
+
+        if (_statusText != null) _statusText.gameObject.SetActive(false);
+        if (_warningText != null) _warningText.gameObject.SetActive(false);
 
         _fadeCoroutine = StartCoroutine(FadeRoutine(from, to, duration));
     }
@@ -133,6 +184,121 @@ public class ScreenFadeManager : MonoBehaviour
 
         SetAlpha(to);
         _fadeCoroutine = null;
+    }
+
+    /// <summary>
+    /// Shows a blocking overlay at the given alpha with an optional status message.
+    /// Blocks input via raycastTarget. Use UpdateStatus/ShowWarning to update content.
+    /// </summary>
+    public void ShowOverlay(float alpha, string status = null)
+    {
+        if (_fadeCoroutine != null)
+        {
+            StopCoroutine(_fadeCoroutine);
+            _fadeCoroutine = null;
+        }
+
+        SetAlpha(alpha);
+        _fadeImage.raycastTarget = true;
+
+        if (_statusText != null)
+        {
+            _statusText.gameObject.SetActive(true);
+            _statusText.text = status ?? "";
+        }
+
+        if (_warningText != null)
+        {
+            _warningText.gameObject.SetActive(true);
+        }
+    }
+
+    /// <summary>
+    /// Hides the overlay, optionally fading out over the given duration.
+    /// </summary>
+    public void HideOverlay(float fadeDuration = 0.5f)
+    {
+        if (_fadeCoroutine != null)
+        {
+            StopCoroutine(_fadeCoroutine);
+            _fadeCoroutine = null;
+        }
+
+        if (_statusText != null) _statusText.gameObject.SetActive(false);
+        if (_warningText != null) _warningText.gameObject.SetActive(false);
+
+        if (fadeDuration <= 0f)
+        {
+            SetAlpha(0f);
+            _fadeImage.raycastTarget = false;
+        }
+        else
+        {
+            _fadeCoroutine = StartCoroutine(HideOverlayRoutine(fadeDuration));
+        }
+    }
+
+    private System.Collections.IEnumerator HideOverlayRoutine(float duration)
+    {
+        float startAlpha = _fadeImage.color.a;
+        float elapsed = 0f;
+
+        while (elapsed < duration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            float t = Mathf.Clamp01(elapsed / duration);
+            SetAlpha(Mathf.Lerp(startAlpha, 0f, t));
+            yield return null;
+        }
+
+        SetAlpha(0f);
+        _fadeImage.raycastTarget = false;
+        _fadeCoroutine = null;
+    }
+
+    /// <summary>
+    /// Updates the status text shown on the overlay.
+    /// </summary>
+    public void UpdateStatus(string status)
+    {
+        if (_statusText != null)
+        {
+            _statusText.text = status;
+        }
+    }
+
+    /// <summary>
+    /// Appends a warning message to the warning text area.
+    /// Only the first MAX_VISIBLE_WARNINGS are shown; after that a "+more" indicator appears.
+    /// </summary>
+    public void ShowWarning(string warning)
+    {
+        _warningCount++;
+
+        if (_warningText == null) return;
+
+        if (_warningCount <= MAX_VISIBLE_WARNINGS)
+        {
+            if (_warningText.text.Length > 0)
+                _warningText.text += "\n";
+            _warningText.text += $"<color=orange>{warning}</color>";
+        }
+        else if (_warningCount == MAX_VISIBLE_WARNINGS + 1)
+        {
+            _warningText.text += "\n<color=orange>+more warnings...</color>";
+        }
+    }
+
+    /// <summary>
+    /// Clears all accumulated warnings.
+    /// </summary>
+    public void ClearWarnings()
+    {
+        _warningCount = 0;
+        if (_warningText != null)
+        {
+            _warningText.text = "";
+        }
     }
 
     private void SetAlpha(float alpha)

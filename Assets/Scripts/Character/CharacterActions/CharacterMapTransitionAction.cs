@@ -37,12 +37,8 @@ public class CharacterMapTransitionAction : CharacterAction
         // Save character profile and world state before transitioning
         if (_character.IsServer && _character.IsPlayer())
         {
-            var coordinator = _character.GetComponent<CharacterDataCoordinator>();
-            if (coordinator != null)
-                _ = coordinator.SaveLocalProfileAsync();
-
             if (SaveManager.Instance != null)
-                _ = SaveManager.Instance.SaveWorldAsync();
+                SaveManager.Instance.RequestSave(_character);
         }
 
         // Prediction: Client warps instantly for seamless feel

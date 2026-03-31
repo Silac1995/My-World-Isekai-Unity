@@ -106,11 +106,12 @@ public class GameLauncher : MonoBehaviour
     {
         IsLaunching = true;
 
-        // ── Step 1: Fade to black ───────────────────────────────────
+        if (SaveManager.Instance != null) SaveManager.Instance.CurrentState = SaveManager.SaveLoadState.Loading;
+
+        // ── Step 1: Fade to black with status overlay ───────────────
         if (ScreenFadeManager.Instance != null)
         {
-            ScreenFadeManager.Instance.FadeOut(_fadeDuration);
-            yield return new WaitForSecondsRealtime(_fadeDuration + 0.05f);
+            ScreenFadeManager.Instance.ShowOverlay(1.0f, "Loading...");
         }
 
         // ── Step 2: Configure GameSessionManager for host/solo ──────
@@ -118,11 +119,13 @@ public class GameLauncher : MonoBehaviour
         GameSessionManager.IsHost = true;
 
         // ── Step 3: Load the game scene ─────────────────────────────
+        ScreenFadeManager.Instance?.UpdateStatus("Loading scene...");
         Debug.Log($"{LOG_TAG} Loading scene '{_gameSceneName}'...");
         AsyncOperation sceneLoad = SceneManager.LoadSceneAsync(_gameSceneName);
         if (sceneLoad == null)
         {
             Debug.LogError($"{LOG_TAG} Failed to start loading scene '{_gameSceneName}'.");
+            if (SaveManager.Instance != null) SaveManager.Instance.CurrentState = SaveManager.SaveLoadState.Idle;
             IsLaunching = false;
             yield break;
         }
@@ -141,12 +144,14 @@ public class GameLauncher : MonoBehaviour
         // HandleClientConnected() then spawns the player object.
         // We wait here until the local player object exists.
 
+        ScreenFadeManager.Instance?.UpdateStatus("Spawning player...");
         Character playerCharacter = null;
         yield return WaitForPlayerSpawn(result => playerCharacter = result);
 
         if (playerCharacter == null)
         {
             Debug.LogError($"{LOG_TAG} Player character never spawned — aborting launch sequence.");
+            if (SaveManager.Instance != null) SaveManager.Instance.CurrentState = SaveManager.SaveLoadState.Idle;
             IsLaunching = false;
             FadeInSafely();
             yield break;
@@ -154,13 +159,24 @@ public class GameLauncher : MonoBehaviour
 
         Debug.Log($"{LOG_TAG} Player character found: {playerCharacter.gameObject.name}");
 
-        // ── Step 5: Wait for ISaveable registration, then load world ─
-        // ISaveable systems (CommunityTracker, TimeManager, etc.) defer
-        // registration by 0.5s after Start(). Wait to ensure they're all
-        // registered before calling LoadWorldAsync.
-        yield return new WaitForSecondsRealtime(1.0f);
+        // ── Step 5: Wait for ISaveable settling, then load world ─────
+        // SaveManager.IsReady uses settling-based detection to know when
+        // all ISaveable systems have finished registering.
+        ScreenFadeManager.Instance?.UpdateStatus("Waiting for world systems...");
+        float timeout = 10f;
+        float elapsed = 0f;
+        while (SaveManager.Instance != null && !SaveManager.Instance.IsReady && elapsed < timeout)
+        {
+            yield return null;
+            elapsed += Time.unscaledDeltaTime;
+        }
+        if (SaveManager.Instance != null && !SaveManager.Instance.IsReady)
+        {
+            Debug.LogWarning($"{LOG_TAG} Timeout waiting for ISaveable registration — proceeding anyway.");
+            ScreenFadeManager.Instance?.ShowWarning("Some world systems may not have loaded.");
+        }
 
-        Debug.Log($"{LOG_TAG} SaveManager has {SaveManager.Instance?.WorldSaveableCount ?? 0} registered ISaveable(s) before world load.");
+        ScreenFadeManager.Instance?.UpdateStatus("Restoring world data...");
         yield return LoadWorldData();
 
         // ── Step 5b: Spawn saved buildings on predefined maps ──────
@@ -168,6 +184,7 @@ public class GameLauncher : MonoBehaviour
         // must be spawned explicitly after the world is loaded.
         if (!IsNewWorld)
         {
+            ScreenFadeManager.Instance?.UpdateStatus("Spawning buildings...");
             foreach (var mc in Object.FindObjectsByType<MapController>(FindObjectsSortMode.None))
             {
                 if (mc.IsPredefinedMap)
@@ -176,15 +193,18 @@ public class GameLauncher : MonoBehaviour
         }
 
         // ── Step 6: Import character profile ────────────────────────
+        ScreenFadeManager.Instance?.UpdateStatus("Loading character profile...");
         CharacterProfileSaveData profileData = null;
         yield return LoadAndImportProfile(playerCharacter, result => profileData = result);
 
         // ── Step 7: Position the character ──────────────────────────
+        ScreenFadeManager.Instance?.UpdateStatus("Positioning character...");
         PositionCharacter(playerCharacter, profileData);
 
         // ── Step 8: Spawn party NPC members ─────────────────────────
         if (profileData != null && profileData.partyMembers.Count > 0)
         {
+            ScreenFadeManager.Instance?.UpdateStatus("Spawning party members...");
             yield return SpawnPartyMembers(playerCharacter, profileData);
         }
 
@@ -203,6 +223,7 @@ public class GameLauncher : MonoBehaviour
 
         FadeInSafely();
 
+        if (SaveManager.Instance != null) SaveManager.Instance.CurrentState = SaveManager.SaveLoadState.Idle;
         IsLaunching = false;
         _launchCoroutine = null;
 
