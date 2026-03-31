@@ -286,7 +286,7 @@ public class SpeechBubbleStack : MonoBehaviour
     public void SetCrossCharacterOffset(float height)
     {
         float clamped = Mathf.Min(height, _maxCrossCharacterOffset);
-        if (clamped <= _crossCharacterOffset) return; // already high enough
+        if (Mathf.Approximately(clamped, _crossCharacterOffset)) return; // no change
 
         _crossCharacterOffset = clamped;
         RecalculatePositions();
