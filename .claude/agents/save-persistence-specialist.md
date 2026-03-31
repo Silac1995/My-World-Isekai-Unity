@@ -104,11 +104,36 @@ Lives on the **root GameObject** alongside `Character.cs` (facade-level orchestr
 
 ---
 
-## 5. Save Triggers
+## 5. SaveManager State Machine & RequestSave
+
+SaveManager uses a `SaveLoadState` enum (`Idle`, `Saving`, `Loading`) with mutual exclusion — only one operation at a time.
+
+### RequestSave(Character)
+Single entry point for all save operations. Coroutine-based flow:
+1. Checks `CurrentState == Idle` (rejects if already saving/loading)
+2. Sets state to `Saving`
+3. Freezes game via `GameSpeedController`
+4. Shows overlay via `ScreenFadeManager.ShowOverlay()`
+5. Snapshots active NPCs (`MapController.SnapshotActiveNPCs()`) and buildings (`MapController.SnapshotActiveBuildings()`)
+6. Serializes all `ISaveable` systems with `ReferenceLoopHandling.Ignore` (required for Vector3)
+7. Writes world file + character profile
+8. Unfreezes game, hides overlay
+9. Sets state back to `Idle`
+
+### Settling-Based ISaveable Readiness
+SaveManager tracks readiness via `IsReady` + `OnReady` event. After all ISaveables register and a settling period passes with no new registrations, `IsReady` becomes true. This replaces hardcoded delays for determining when the world is ready to save/load.
+
+### Session Reset
+`SaveManager.ResetForNewSession()` clears ISaveable registrations, readiness state, current world info, and save/load state. Called during session teardown alongside destruction of `CommunityTracker`, `WorldOffsetAllocator`, `BuildingInteriorRegistry`, and `NetworkManager` singletons.
+
+**Important:** `NetworkManager` must be explicitly destroyed because NGO auto-applies `DontDestroyOnLoad` to it.
+
+### Save Triggers
 
 | Context | Trigger | What Happens |
 |---------|---------|-------------|
-| Solo (bed/sleep) | SleepBehaviour.Exit() | `SaveLocalProfileAsync()` |
+| Solo (bed/sleep) | SleepBehaviour.Exit() | `RequestSave(playerCharacter)` |
+| Map transition | CharacterMapTransitionAction | `RequestSave(playerCharacter)` |
 | Host shutdown | SaveManager.OnApplicationQuit | Host profile saved |
 | Multiplayer outbound | Portal gate | Save before connecting |
 | Multiplayer return | Portal gate | Host sends updated profile via ClientRpc |
@@ -132,13 +157,64 @@ When a party leader disconnects/crashes:
 
 ---
 
-## 7. Relationship Scoping
+## 7. ScreenFadeManager (Overlay System)
+
+Modular overlay system used during save/load operations:
+- `ShowOverlay(float alpha, string status)` — fades in overlay, blocks input via raycastTarget
+- `UpdateStatus(string status)` — updates status text on existing overlay
+- `ShowWarning(string warning)` — shows warning text (different styling)
+- `HideOverlay(float fadeDuration)` — fades out overlay
+
+Used by SaveManager during `RequestSave()` and by GameLauncher during load sequence to show progress status.
+
+---
+
+## 8. Active Map Building Snapshots
+
+- `MapController.SnapshotActiveBuildings()` syncs live buildings on active maps into CommunityData without despawning
+- Skips preplaced buildings (those with empty `PlacedByCharacterId`)
+- `MapController.SpawnSavedBuildings()` respawns player-placed buildings on predefined maps during load
+- Both called by SaveManager/GameLauncher during save/load cycles
+
+---
+
+## 9. GameLauncher
+
+Singleton coroutine orchestrator for the full game load sequence:
+1. Sets `GameSessionManager` static flags (does NOT use DontDestroyOnLoad — recreated per scene)
+2. Loads target scene, waits for player spawn
+3. Imports character profile, positions player via `WorldAssociation`
+4. Spawns party NPCs, spawns saved buildings on predefined maps
+5. Shows status updates via `ScreenFadeManager.UpdateStatus()`
+6. `ReturnToMainMenuWithError(string)` handles critical failures — returns to main menu with error overlay
+
+**GameSessionManager note:** Does NOT use DontDestroyOnLoad. It is recreated fresh each scene load. Static flags survive across scenes.
+
+---
+
+## 10. WorldAssociation & GUID-Based Worlds
+
+- `CharacterProfileSaveData.worldAssociations` tracks per-world position (keyed by world GUID)
+- World files stored as `Worlds/{worldGuid}.json` (not slot-based)
+- `SaveFileHandler.GetAllWorlds()` scans `Worlds/` directory
+- Main Menu flow: World Select -> Character Select -> `GameLauncher.Launch()`
+
+---
+
+## 11. Serialization Notes
+
+- Vector3 serialization requires `ReferenceLoopHandling.Ignore` in JsonSerializerSettings
+- `NetworkManager` is auto-DontDestroyOnLoad by NGO — must be explicitly destroyed during session reset
+
+---
+
+## 12. Relationship Scoping
 
 Relationships keyed by `targetCharacterId + targetWorldGuid`. Same template NPC in different worlds = different relationship targets. Dormant relationships (target not in current world) are carried but inactive.
 
 ---
 
-## 8. Adding a New Saveable Subsystem (Step-by-Step)
+## 13. Adding a New Saveable Subsystem (Step-by-Step)
 
 1. Create DTO in `Assets/Scripts/Character/SaveLoad/ProfileSaveData/YourSaveData.cs`
 2. Implement `ICharacterSaveData<YourSaveData>` on the subsystem
@@ -150,7 +226,7 @@ Relationships keyed by `targetCharacterId + targetWorldGuid`. Same template NPC 
 
 ---
 
-## 9. Multiplayer Profile Transport
+## 14. Multiplayer Profile Transport
 
 - **Client → Host:** Profile sent via NGO connection approval payload + fragmented RPC
 - **Host → Client (return):** Profile sent via ClientRpc
@@ -158,7 +234,7 @@ Relationships keyed by `targetCharacterId + targetWorldGuid`. Same template NPC 
 
 ---
 
-## 10. Key File Locations
+## 15. Key File Locations
 
 | File | Purpose |
 |------|---------|
@@ -174,10 +250,17 @@ Relationships keyed by `targetCharacterId + targetWorldGuid`. Same template NPC 
 | `Assets/Scripts/Character/SaveLoad/IOfflineCatchUp.cs` | Macro-simulation catch-up |
 | `Assets/Scripts/Character/Abandoned/ReclaimNPCInteraction.cs` | Reclaim interaction provider |
 | `Assets/Scripts/World/MapSystem/MapSaveData.cs` | HibernatedNPCData with abandoned fields |
+| `Assets/Scripts/Core/GameLauncher.cs` | Full game load orchestrator |
+| `Assets/Scripts/Core/SaveLoad/WorldAssociation.cs` | Per-world position tracking DTO |
+| `Assets/Scripts/UI/ScreenFadeManager.cs` | Modular overlay system (save/load/error) |
+| `Assets/Scripts/Core/Network/GameSessionManager.cs` | Session flags (no DontDestroyOnLoad) |
+| `Assets/Scripts/UI/WorldSelect/` | World select UI (panel, entry, creation) |
+| `Assets/Scripts/UI/CharacterSelect/` | Character select UI (panel, entry, creation) |
+| `Assets/Scripts/UI/Common/DeleteConfirmPopup.cs` | Confirmation popup for world/character deletion |
 
 ---
 
-## 11. Golden Rules
+## 16. Golden Rules
 
 1. **ICharacterSaveData<T> for characters, ISaveable for world systems** — never mix
 2. **LoadPriority ordering is critical** — equipment can't load before stats

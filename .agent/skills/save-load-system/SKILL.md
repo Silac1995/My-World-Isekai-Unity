@@ -13,9 +13,13 @@ Portable character profiles that travel across worlds. Characters are independen
 
 ### Key Classes
 - `CharacterDataCoordinator` — orchestrates export/import, lives on root Character GO
-- `CharacterProfileSaveData` — the portable profile DTO (characterGuid, originWorldGuid, componentStates, partyMembers)
-- `SaveFileHandler` — atomic async file I/O to `Profiles/{characterGuid}.json`
+- `CharacterProfileSaveData` — the portable profile DTO (characterGuid, originWorldGuid, componentStates, partyMembers, worldAssociations)
+- `SaveFileHandler` — atomic async file I/O to `Profiles/{characterGuid}.json` and `Worlds/{worldGuid}.json`
 - `CharacterSaveDataHelper` — static JSON bridge for ICharacterSaveData<T>
+- `SaveManager` — world save orchestration with `SaveLoadState` enum (Idle/Saving/Loading) and mutual exclusion
+- `GameLauncher` — singleton coroutine orchestrator for the full game load sequence
+- `ScreenFadeManager` — modular overlay system (ShowOverlay, UpdateStatus, ShowWarning, HideOverlay)
+- `GameSessionManager` — session flags, recreated per scene (no DontDestroyOnLoad), static flags survive
 
 ### Load Priority Order
 | Priority | Systems |
@@ -43,19 +47,46 @@ Portable character profiles that travel across worlds. Characters are independen
 - `MapController.SnapshotActiveNPCs()` serializes live NPCs on active maps without despawning them
 - `MapController.ActiveControllers` — static `HashSet` that tracks currently active map controllers
 - `MapController.PendingSnapshots` — stores NPC snapshots for init-time consumption during save/load
+- `MapController.SpawnNPCsFromPendingSnapshot()` — respawns NPCs from pending snapshots after load
 - Ensures NPCs on active (non-hibernated) maps persist through save/load cycles
 
+## Active Map Building Snapshots
+- `MapController.SnapshotActiveBuildings()` syncs live buildings into CommunityData without despawning
+- Skips preplaced buildings (those with empty `PlacedByCharacterId`)
+- `MapController.SpawnSavedBuildings()` respawns player-placed buildings on predefined maps during load
+- Both called by SaveManager/GameLauncher during save/load cycles
+
 ## GameLauncher
-- Singleton orchestrator for the full game load sequence
-- Sets `GameSessionManager` flags, loads the target scene, waits for player spawn
+- Singleton coroutine orchestrator for the full game load sequence
+- Sets `GameSessionManager` static flags (GameSessionManager does NOT use DontDestroyOnLoad — recreated per scene)
+- Loads target scene, waits for player spawn
 - Imports the character profile, positions the player via `WorldAssociation`, spawns party NPCs
+- Spawns saved buildings on predefined maps via `SpawnSavedBuildings()`
+- Shows progress via `ScreenFadeManager.UpdateStatus()` throughout the load sequence
+- `ReturnToMainMenuWithError(string)` — handles critical failures, returns to main menu with error overlay
 - Entry point: `GameLauncher.Launch()`
 
+## ScreenFadeManager (Overlay System)
+- `ShowOverlay(float alpha, string status)` — fades in overlay, blocks input via raycastTarget
+- `UpdateStatus(string status)` — updates status text on existing overlay
+- `ShowWarning(string warning)` — shows warning text
+- `HideOverlay(float fadeDuration)` — fades out overlay
+- Used by SaveManager during `RequestSave()` and GameLauncher during load sequence
+
+## SaveManager State Machine
+- `SaveLoadState` enum: `Idle`, `Saving`, `Loading` — mutual exclusion prevents concurrent operations
+- `RequestSave(Character)` is the single entry point for all save operations
+- Coroutine-based: freeze game -> show overlay -> snapshot NPCs + buildings -> serialize ISaveables -> write files -> unfreeze -> hide overlay
+- `IsReady` / `OnReady` — settling-based readiness (waits for all ISaveables to register with no new registrations)
+- `ResetForNewSession()` — clears registrations, readiness, world info, and state. Also destroys CommunityTracker, WorldOffsetAllocator, BuildingInteriorRegistry, and NetworkManager singletons
+- NetworkManager must be explicitly destroyed (NGO auto-applies DontDestroyOnLoad)
+- Vector3 serialization requires `ReferenceLoopHandling.Ignore` in JsonSerializerSettings
+
 ## Save Triggers
-- Bed/sleep: saves both world + character
-- Map transition: saves both world + character
+- Bed/sleep: `RequestSave(playerCharacter)`
+- Map transition: `RequestSave(playerCharacter)`
 - Host shutdown: saves both world + character
-- All triggers go through `SaveManager.SaveWorldAsync()` + `CharacterDataCoordinator.SaveLocalProfileAsync()`
+- All triggers go through `SaveManager.RequestSave()` which handles world save + character profile save
 - Crash/disconnect: no save — revert to last checkpoint
 
 ## World Save Menu Flow
@@ -92,6 +123,8 @@ Portable character profiles that travel across worlds. Characters are independen
 - `Assets/Scripts/UI/WorldSelect/` — world select UI panel, world entry, world creation
 - `Assets/Scripts/UI/CharacterSelect/` — character select UI panel, character entry, character creation
 - `Assets/Scripts/UI/Common/DeleteConfirmPopup.cs`
+- `Assets/Scripts/UI/ScreenFadeManager.cs`
+- `Assets/Scripts/Core/Network/GameSessionManager.cs`
 
 ## Dependencies
 - Newtonsoft.Json
