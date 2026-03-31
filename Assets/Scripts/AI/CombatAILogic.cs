@@ -64,7 +64,8 @@ namespace MWI.AI
 
             movement.Resume();
             float distToTarget = Vector3.Distance(_self.transform.position, currentTarget.transform.position);
-            float attackRange = _self.CharacterCombat?.CurrentCombatStyleExpertise?.Style?.MeleeRange ?? 3.5f;
+            float attackRange = GetEffectiveAttackRange(_self);
+            bool isRanged = IsRangedCharacter(_self);
 
             bool isReadyToAct = _self.CharacterCombat != null && _self.CharacterCombat.IsReadyToAct;
             bool isReadyToDecide = _self.Stats != null && _self.Stats.Initiative != null && _self.Stats.Initiative.IsReadyToDecide();
@@ -84,28 +85,41 @@ namespace MWI.AI
             if (_self.CharacterCombat != null && _self.CharacterCombat.HasPlannedAction)
             {
                 _isChargingTarget = true;
-                
+
                 float dx = Mathf.Abs(_self.transform.position.x - currentTarget.transform.position.x);
                 float zDist = Mathf.Abs(_self.transform.position.z - currentTarget.transform.position.z);
-                
-                bool isWithinRange = distToTarget <= attackRange; 
+
+                bool isWithinRange = distToTarget <= attackRange;
                 bool isZAligned = zDist <= 1.6f; // Increased from 1.2f to encompass full staggeredZ range (-1.5 to 1.5)
 
-                // Attack is allowed if within range AND Z-aligned. 
-                // isXTooClose is only used for repositioning, NOT for blocking attacks.
-                if (!isWithinRange || !isZAligned)
+                // Ranged characters: if already within weapon range, skip approach entirely.
+                // They hold ground and fire from current position — no need to close further distance.
+                if (isRanged && isWithinRange)
                 {
-                    // Force movement into optimal valid strike position instead of target origin
+                    _isChargingTarget = false;
+                    if (doLog) Debug.Log($"<color=orange>[CombatAI]</color> {_self.CharacterName} [Phase 2] Ranged — already in weapon range ({distToTarget:F2}/{attackRange:F2}), skipping approach.");
+                    // Fall through to execution block below
+                }
+
+                // Attack is allowed if within range AND Z-aligned.
+                // isXTooClose is only used for repositioning, NOT for blocking attacks.
+                // Ranged characters that passed the check above also enter the execution block (isWithinRange is true).
+                if (!isWithinRange || (!isZAligned && !isRanged))
+                {
+                    // Melee: approach the target's optimal strike position with Z stagger.
+                    // Ranged: approach only to weapon range distance, then stop.
                     float side = (_self.transform.position.x < currentTarget.transform.position.x) ? -1f : 1f;
-                    
+
                     // Expanded stagger: 7 unique Z positions instead of 3 to prevent overlap
                     int staggerIndex = Mathf.Abs(_self.GetInstanceID()) % 7;
                     float staggeredZ = (staggerIndex - 3) * 0.5f; // -1.5 to 1.5
-                    
+
                     // CRITICAL FIX: To prevent the hypotenuse from pushing the attacker outside the attack range,
                     // calculate the exact required X distance using Pythagorean theorem (X^2 = D^2 - Z^2)
                     // We target a hypotenuse slightly less than attackRange to guarantee Phase 3 is triggered.
-                    float targetHypotenuse = Mathf.Max(1.0f, attackRange - 0.2f);
+                    // For ranged characters, use a capped approach distance so they stop at weapon range, not melee range.
+                    float approachRange = isRanged ? Mathf.Min(attackRange, distToTarget) : attackRange;
+                    float targetHypotenuse = Mathf.Max(1.0f, approachRange - 0.2f);
                     float xSqr = Mathf.Max(0.1f, (targetHypotenuse * targetHypotenuse) - (staggeredZ * staggeredZ));
                     float calculatedX = Mathf.Sqrt(xSqr);
 
@@ -113,7 +127,7 @@ namespace MWI.AI
 
                     if (UnityEngine.Time.time - _lastPathUpdateTime > 0.3f && Vector3.Distance(movement.Destination, optimalStrikePos) > 0.5f)
                     {
-                        if (doLog) Debug.Log($"<color=orange>[CombatAI]</color> {_self.CharacterName} [Phase 2] Moving into optimal strike pos: {optimalStrikePos}");
+                        if (doLog) Debug.Log($"<color=orange>[CombatAI]</color> {_self.CharacterName} [Phase 2] Moving into optimal strike pos: {optimalStrikePos} (ranged={isRanged})");
                         movement.SetDestination(optimalStrikePos);
                         _lastPathUpdateTime = UnityEngine.Time.time;
                     }
@@ -293,6 +307,28 @@ namespace MWI.AI
                 }
             }
             return -1;
+        }
+
+        private bool IsRangedCharacter(Character character)
+        {
+            if (character?.CharacterCombat?.CurrentCombatStyleExpertise?.Style == null)
+                return false;
+            return character.CharacterCombat.CurrentCombatStyleExpertise.Style is RangedCombatStyleSO;
+        }
+
+        /// <summary>
+        /// Returns the effective attack range for the character's current combat style.
+        /// Ranged characters use RangedRange; melee characters use MeleeRange.
+        /// </summary>
+        private float GetEffectiveAttackRange(Character character)
+        {
+            var style = character?.CharacterCombat?.CurrentCombatStyleExpertise?.Style;
+            if (style == null) return 3.5f;
+
+            if (style is RangedCombatStyleSO rangedStyle)
+                return rangedStyle.RangedRange;
+
+            return style.MeleeRange;
         }
     }
 }
