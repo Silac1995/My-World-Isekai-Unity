@@ -117,7 +117,22 @@ public class SaveManager : MonoBehaviour
         }
         MapController.PendingSnapshots.Clear();
         MapController.ActiveControllers.Clear();
-        Debug.Log("<color=green>[SaveManager]</color> Reset for new session.");
+
+        // Destroy DontDestroyOnLoad singletons so fresh ones are created from the next GameScene.
+        // Without this, stale world data from the previous session bleeds into the next.
+        DestroySingleton(CommunityTracker.Instance);
+        DestroySingleton(WorldOffsetAllocator.Instance);
+        DestroySingleton(BuildingInteriorRegistry.Instance);
+
+        Debug.Log("<color=green>[SaveManager]</color> Reset for new session — world singletons destroyed.");
+    }
+
+    private void DestroySingleton(MonoBehaviour singleton)
+    {
+        if (singleton != null && singleton.gameObject != null)
+        {
+            Destroy(singleton.gameObject);
+        }
     }
 
     public int WorldSaveableCount => worldSaveables.Count;

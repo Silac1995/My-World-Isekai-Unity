@@ -30,15 +30,16 @@ public class GameSessionManager : MonoBehaviour
     private Dictionary<ulong, string> _pendingClientRaces = new Dictionary<ulong, string>();
     private void Awake()
     {
-        if (Instance == null)
-        {
-            Instance = this;
-            DontDestroyOnLoad(gameObject);
-        }
-        else
+        // No DontDestroyOnLoad — GameSessionManager is recreated fresh each scene.
+        // Static flags (AutoStartNetwork, IsHost, etc.) survive across scenes.
+        // This ensures we always reference the current scene's NetworkManager.
+        if (Instance != null && Instance != this)
         {
             Destroy(gameObject);
+            return;
         }
+        Instance = this;
+        _callbacksRegistered = false; // Always re-register with this scene's NetworkManager
     }
 
     private bool _callbacksRegistered;
@@ -69,10 +70,6 @@ public class GameSessionManager : MonoBehaviour
     {
         if (_callbacksRegistered || NetworkManager.Singleton == null) return;
         _callbacksRegistered = true;
-
-        // Ensure NetworkManager persists across scene loads
-        if (NetworkManager.Singleton.gameObject.scene.name != "DontDestroyOnLoad")
-            DontDestroyOnLoad(NetworkManager.Singleton.gameObject);
 
         NetworkManager.Singleton.NetworkConfig.ConnectionApproval = true;
 
