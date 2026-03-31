@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using MWI.WorldSystem;
 
 /// <summary>
 /// Orchestrates the full game load sequence: fade out -> scene load -> world restore ->
