@@ -234,12 +234,13 @@ public class SpeechBubbleInstance : MonoBehaviour
     }
 
     /// <summary>
-    /// Returns the current height of this bubble's RectTransform.
+    /// Returns the current height of this bubble in world-space units.
+    /// Canvas rect height is in canvas-local units — multiply by lossyScale to get world height.
     /// </summary>
     public float GetHeight()
     {
         if (_rectTransform == null) _rectTransform = GetComponent<RectTransform>();
-        return _rectTransform.rect.height;
+        return _rectTransform.rect.height * _rectTransform.lossyScale.y;
     }
 
     /// <summary>
