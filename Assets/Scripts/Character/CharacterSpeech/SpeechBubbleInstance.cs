@@ -257,6 +257,14 @@ public class SpeechBubbleInstance : MonoBehaviour
     }
 
     /// <summary>
+    /// Returns the current target position this bubble is lerping toward.
+    /// </summary>
+    public Vector3 GetTargetPosition()
+    {
+        return _targetPosition;
+    }
+
+    /// <summary>
     /// Shows or hides the separator line between stacked bubbles.
     /// </summary>
     public void SetSeparatorVisible(bool visible)
