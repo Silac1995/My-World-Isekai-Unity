@@ -11,7 +11,8 @@ GameObject:
   - component: {fileID: 5530628023544306227}
   - component: {fileID: 7672194850526438574}
   - component: {fileID: 61685653468973228}
-  m_Layer: 0
+  - component: {fileID: 3890644606930742312}
+  m_Layer: 6
   m_Name: SpeechBubbleInstance_Prefab
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -27,8 +28,8 @@ RectTransform:
   m_GameObject: {fileID: 2321695522902674090}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
+  m_LocalScale: {x: 0.02, y: 0.02, z: 0.02}
+  m_ConstrainProportionsScale: 1
   m_Children:
   - {fileID: 5737935180987165641}
   m_Father: {fileID: 0}
@@ -36,7 +37,7 @@ RectTransform:
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 13, y: 2}
+  m_SizeDelta: {x: 300, y: 70}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!225 &7672194850526438574
 CanvasGroup:
@@ -64,10 +65,23 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SpeechBubbleInstance
   _textElement: {fileID: 730870513264278604}
   _separatorLine: {fileID: 4971566555671974292}
-  _entranceDuration: 0.3
-  _entranceSlideDistance: 1
-  _exitDuration: 0.3
-  _exitSlideDistance: 1
+  _entranceDuration: 0.5
+  _entranceSlideDistance: 0.3
+  _exitDuration: 0.5
+  _exitSlideDistance: 0.3
+--- !u!210 &3890644606930742312
+SortingGroup:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2321695522902674090}
+  m_Enabled: 1
+  m_SortingLayerID: -974200329
+  m_SortingLayer: 1
+  m_SortingOrder: 3
+  m_SortAtRoot: 0
+  m_Sort3DAs2D: 0
 --- !u!1 &2619283948573572934
 GameObject:
   m_ObjectHideFlags: 0
@@ -80,7 +94,7 @@ GameObject:
   - component: {fileID: 4982028107827173830}
   - component: {fileID: 730870513264278604}
   - component: {fileID: 6869887713701437119}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: Text_Speech
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -103,9 +117,9 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: -0.96}
-  m_SizeDelta: {x: 12.7, y: 0}
-  m_Pivot: {x: 0.5, y: 0}
+  m_AnchoredPosition: {x: 0, y: 32.35}
+  m_SizeDelta: {x: 300, y: 0}
+  m_Pivot: {x: 0.5, y: 1}
 --- !u!222 &4982028107827173830
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -161,8 +175,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 1
-  m_fontSizeBase: 1
+  m_fontSize: 20
+  m_fontSizeBase: 20
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
@@ -235,7 +249,7 @@ GameObject:
   - component: {fileID: 8109693664265241415}
   - component: {fileID: 5948742577565207732}
   - component: {fileID: 5057578357165375384}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: Canvas
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -261,7 +275,7 @@ RectTransform:
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 13.67, y: 2}
+  m_SizeDelta: {x: 300, y: 70}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!223 &7950023153696586475
 Canvas:
@@ -389,7 +403,7 @@ GameObject:
   - component: {fileID: 8772640735864343862}
   - component: {fileID: 2591081787383950387}
   - component: {fileID: 6719771760845992755}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: SeparatorLine
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -412,7 +426,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 1}
   m_AnchorMax: {x: 0.5, y: 1}
-  m_AnchoredPosition: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 0, y: -63}
   m_SizeDelta: {x: 180, y: 1}
   m_Pivot: {x: 0.5, y: 0}
 --- !u!222 &2591081787383950387
