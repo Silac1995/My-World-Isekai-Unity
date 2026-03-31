@@ -129,16 +129,20 @@ public class SaveManager : MonoBehaviour
     /// <summary>
     /// Single entry point for all save triggers (bed checkpoints, portal gates, etc.).
     /// Freezes the game, shows an overlay, saves character profile first then world,
-    /// and unfreezes when done.  Must be started with StartCoroutine.
+    /// and unfreezes when done. Starts its own coroutine — callers just call RequestSave().
     /// </summary>
-    public IEnumerator RequestSave(Character playerCharacter)
+    public void RequestSave(Character playerCharacter)
     {
-        // ── Guard ────────────────────────────────────────────────────
         if (CurrentState != SaveLoadState.Idle)
         {
             Debug.LogWarning("<color=yellow>[SaveManager]</color> RequestSave ignored — already in state: " + CurrentState);
-            yield break;
+            return;
         }
+        StartCoroutine(OrchestratedSaveRoutine(playerCharacter));
+    }
+
+    private IEnumerator OrchestratedSaveRoutine(Character playerCharacter)
+    {
 
         CurrentState = SaveLoadState.Saving;
         Time.timeScale = 0f;
