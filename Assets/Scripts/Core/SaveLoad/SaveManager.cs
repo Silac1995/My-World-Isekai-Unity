@@ -124,6 +124,12 @@ public class SaveManager : MonoBehaviour
         DestroySingleton(WorldOffsetAllocator.Instance);
         DestroySingleton(BuildingInteriorRegistry.Instance);
 
+        // Destroy NetworkManager — NGO auto-applies DontDestroyOnLoad, causing duplicates on scene reload
+        if (Unity.Netcode.NetworkManager.Singleton != null)
+        {
+            Destroy(Unity.Netcode.NetworkManager.Singleton.gameObject);
+        }
+
         Debug.Log("<color=green>[SaveManager]</color> Reset for new session — world singletons destroyed.");
     }
 

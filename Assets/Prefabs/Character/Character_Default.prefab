@@ -809,6 +809,8 @@ GameObject:
   - component: {fileID: 2759773711538085477}
   - component: {fileID: 7595531508830883030}
   - component: {fileID: 6928231690367793910}
+  - component: {fileID: 8963384300060753027}
+  - component: {fileID: 8001308221794401269}
   m_Layer: 8
   m_Name: Character_Default
   m_TagString: Character
@@ -957,6 +959,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   ShowTopMostFoldoutHeaderGroup: 1
+  _archetype: {fileID: 0}
   _characterName: Unnamed
   _startingGender: 0
   _characterBio:
@@ -1708,6 +1711,33 @@ MonoBehaviour:
       MinSecondsBetweenUpdates: 0
       MaxSecondsBetweenUpdates: 0
     m_InternalValue: {x: 0, y: 0, z: 0}
+--- !u!114 &8963384300060753027
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4281310202761960642}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f5e4787e5c1b1ac4c9d8b248dd9647d4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ReclaimNPCInteraction
+  ShowTopMostFoldoutHeaderGroup: 1
+  _character: {fileID: 2536622428659117900}
+--- !u!114 &8001308221794401269
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4281310202761960642}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bba0a200a19c4c641b7653b6063236fa, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CharacterDataCoordinator
+  ShowTopMostFoldoutHeaderGroup: 1
 --- !u!1 &4418266412928403763
 GameObject:
   m_ObjectHideFlags: 0

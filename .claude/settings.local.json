@@ -14,11 +14,13 @@
       "Bash(cmd.exe /c \"where node\")",
       "Bash(where unity-mcp-cli:*)",
       "Bash(npm list:*)",
-      "Bash(find /c/Users/Kevin/AppData -name unity-mcp-cli* -type f)"
+      "Bash(find /c/Users/Kevin/AppData -name unity-mcp-cli* -type f)",
+      "mcp__ai-game-developer__scene-list-opened",
+      "mcp__ai-game-developer__scene-get-data"
     ]
   },
+  "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
     "ai-game-developer"
-  ],
-  "enableAllProjectMcpServers": true
+  ]
 }

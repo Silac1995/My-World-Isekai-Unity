@@ -93,3 +93,7 @@ The Character entity uses a **Facade + Child Hierarchy** pattern:
 - `TimeManager` global time is the single source of truth for all simulation math. Never use `Time.time` or `Time.deltaTime` for offline delta calculations — always use `TimeManager.CurrentDay` + `CurrentTime01`.
 - Maps are dynamic. New maps are born via `CommunityTracker` → `WorldOffsetAllocator` → `MapController` bootstrapping. Abandoned cities never release their spatial slot. Predefined maps register via `SaveManager.RegisterPredefinedMaps()` on boot.
 - Always refer to `world-system/SKILL.md` before touching any map, NPC lifecycle, or simulation logic.
+
+## Defensive Coding & Exception Handling
+
+30. Wrap operations that can fail at runtime (file I/O, deserialization, network callbacks, external data parsing, `GetComponent` on uncertain targets) in `try/catch` blocks. Log the exception with `Debug.LogException(e)` or `Debug.LogError` including context (what was being attempted, which object, which data). The goal is to prevent one failing subsystem from crashing the entire game — gracefully degrade instead. Do **not** swallow exceptions silently; always log them. For performance-critical paths (Update loops, tight loops), prefer null-checks and validation over try/catch.
