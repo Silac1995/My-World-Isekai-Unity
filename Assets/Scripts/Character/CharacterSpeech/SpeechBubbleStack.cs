@@ -285,10 +285,7 @@ public class SpeechBubbleStack : MonoBehaviour
     /// </summary>
     public void SetCrossCharacterOffset(float height)
     {
-        float clamped = Mathf.Min(height, _maxCrossCharacterOffset);
-        if (Mathf.Approximately(clamped, _crossCharacterOffset)) return; // no change
-
-        _crossCharacterOffset = clamped;
+        _crossCharacterOffset = Mathf.Min(height, _maxCrossCharacterOffset);
         RecalculatePositions();
 
         // Reset expiration timers on all pushed bubbles so they stay visible during conversation
