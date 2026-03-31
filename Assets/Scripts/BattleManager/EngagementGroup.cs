@@ -22,14 +22,14 @@ public class EngagementGroup
     }
 
     /// <summary>
-    /// Ajoute un personnage à ce groupe d'engagement et lui réserve un slot de formation.
+    /// Adds a character to this engagement group. Formation positions are calculated
+    /// dynamically by GetOrganicPosition — no slot reservation needed.
     /// </summary>
     public void AddMember(Character character)
     {
         if (character != null && !_members.Contains(character))
         {
             _members.Add(character);
-            Formation.AddCharacter(character);
         }
     }
 

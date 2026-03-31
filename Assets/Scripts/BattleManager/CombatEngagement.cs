@@ -127,24 +127,18 @@ public class CombatEngagement
     {
         if (participant == null) return Vector3.zero;
 
-        // Si je suis dans l'Equipe A, je me place par rapport au centre du Groupe B
-        if (_teamA.ContainsCharacter(participant))
-        {
-            if (GroupB.TryGetCenter(out Vector3 targetCenter))
-            {
-                return GroupA.Formation.GetWorldPosition(participant, targetCenter);
-            }
-        }
-        else if (_teamB.ContainsCharacter(participant))
-        {
-            if (GroupA.TryGetCenter(out Vector3 targetCenter))
-            {
-                return GroupB.Formation.GetWorldPosition(participant, targetCenter);
-            }
-        }
+        bool inGroupA = GroupA.Members.Contains(participant);
+        EngagementGroup myGroup = inGroupA ? GroupA : GroupB;
+        EngagementGroup opponentGroup = inGroupA ? GroupB : GroupA;
 
-        // Fallback: Si je n'arrive pas à calculer (l'autre équipe n'a pas de centre), je reste sur place
-        return participant.transform.position;
+        if (!opponentGroup.TryGetCenter(out Vector3 opponentCenter))
+            opponentCenter = AnchorPoint;
+
+        // GroupA on left (-1), GroupB on right (+1)
+        float teamSideSign = inGroupA ? -1f : 1f;
+
+        return myGroup.Formation.GetOrganicPosition(
+            participant, myGroup.Members, opponentCenter, AnchorPoint, teamSideSign);
     }
 
     /// <summary>

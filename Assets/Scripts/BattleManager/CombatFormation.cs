@@ -1,129 +1,96 @@
-using System.Collections.Generic;
 using UnityEngine;
+using System.Collections.Generic;
 
 /// <summary>
-/// Gère les positions (slots) d'une équipe autour d'un point focal (généralement la cible ennemie).
-/// Assure que les attaquants s'espacent correctement sur plusieurs rangées (mêlée, distance).
+/// Calculates organic combat positions based on character role (melee/ranged)
+/// relative to the engagement's opponent center and anchor point.
+/// No fixed slots — positions evolve dynamically.
 /// </summary>
 public class CombatFormation
 {
-    private class SlotPosition
-    {
-        public Vector3 LocalOffset;
-        public Vector3 Jitter; // Bruit fixe par slot, calculé une seule fois
-        public Character Occupant;
-    }
+    private const float MELEE_PREFERRED_DISTANCE = 4.0f;
+    private const float MELEE_SPACING = 2.5f;
+    private const float RANGED_MIN_DISTANCE = 8.0f;
+    private const float RANGED_SPACING = 2.0f;
+    private const float Z_SPREAD = 1.2f;
 
-    private Dictionary<Character, SlotPosition> _assignedSlots = new Dictionary<Character, SlotPosition>();
-    
-    // Configuration des rangées (Rows)
-    private const float ROW_0_RADIUS = 6.0f; // Melee
-    private const float ROW_1_RADIUS = 6.5f; // Mid-range
-    private const float ROW_2_RADIUS = 7.0f; // Ranged / Caster
-    
-    // Nombre de slots par rangée
-    private const int SLOTS_ROW_0 = 4; // 4 places max en mêlée pure (N, S, E, O)
-    private const int SLOTS_ROW_1 = 8;
-    private const int SLOTS_ROW_2 = 12;
-
-    private List<SlotPosition> _allAvailableSlots;
+    private Dictionary<Character, Vector3> _lastAssignedPositions;
 
     public CombatFormation()
     {
-        InitializeSlots();
-    }
-
-    private void InitializeSlots()
-    {
-        _allAvailableSlots = new List<SlotPosition>();
-
-        // Création de la Row 0 (Mêlée)
-        CreateRing(ROW_0_RADIUS, SLOTS_ROW_0, 0f);
-        // Création de la Row 1 (Mid-range)
-        CreateRing(ROW_1_RADIUS, SLOTS_ROW_1, 45f); // Décalé de 45° pour voir entre les persos de mêlée
-        // Création de la Row 2 (Distance)
-        CreateRing(ROW_2_RADIUS, SLOTS_ROW_2, 0f);
-    }
-
-    private void CreateRing(float radius, int count, float angleOffsetDeg)
-    {
-        float angleStep = 360f / count;
-        for (int i = 0; i < count; i++)
-        {
-            float angleRad = (i * angleStep + angleOffsetDeg) * Mathf.Deg2Rad;
-            Vector3 offset = new Vector3(Mathf.Cos(angleRad) * radius, 0, Mathf.Sin(angleRad) * radius);
-            // Jitter fixe par slot, calculé une seule fois
-            Vector3 jitter = new Vector3(Random.Range(-0.5f, 0.5f), 0, Random.Range(-0.5f, 0.5f));
-            _allAvailableSlots.Add(new SlotPosition { LocalOffset = offset, Jitter = jitter, Occupant = null });
-        }
+        _lastAssignedPositions = new Dictionary<Character, Vector3>();
     }
 
     /// <summary>
-    /// Assigne une place au personnage de manière déterministe ou cherche la plus proche disponible.
+    /// Calculates the ideal position for a character within their engagement.
     /// </summary>
-    public void AddCharacter(Character character)
+    public Vector3 GetOrganicPosition(Character character, IReadOnlyList<Character> allies,
+        Vector3 opponentCenter, Vector3 anchorPoint, float teamSideSign)
     {
-        if (_assignedSlots.ContainsKey(character)) return; // Déjà placé
+        bool isRanged = IsRangedCharacter(character);
 
-        // TODO: Prendre en compte la stat preferredRange du personnage pour choisir la Ring (Mêlée vs Distance)
-        // Pour l'instant, on remplit du centre vers l'extérieur
-        
-        // On essaie d'utiliser l'ID pour un placement "préféré" pour que le perso vise toujours le même côté
-        int preferredIndex = Mathf.Abs(character.GetInstanceID()) % _allAvailableSlots.Count;
-        
-        SlotPosition bestSlot = null;
-        
-        // 1. Cherche en partant du slot préféré
-        for (int i = 0; i < _allAvailableSlots.Count; i++)
+        // Find this character's index among same-role allies for spacing
+        int roleIndex = 0;
+        int roleCount = 0;
+        for (int i = 0; i < allies.Count; i++)
         {
-            int checkIndex = (preferredIndex + i) % _allAvailableSlots.Count;
-            if (_allAvailableSlots[checkIndex].Occupant == null)
+            if (allies[i] == null || !allies[i].IsAlive()) continue;
+            bool allyIsRanged = IsRangedCharacter(allies[i]);
+            if (allyIsRanged == isRanged)
             {
-                bestSlot = _allAvailableSlots[checkIndex];
-                break;
+                if (allies[i] == character) roleIndex = roleCount;
+                roleCount++;
             }
         }
 
-        // Si tout est plein (combat épique), on ne le rajoute pas stricto sensu à un slot précis (il devra s'entasser)
-        if (bestSlot != null)
+        float distance = isRanged ? RANGED_MIN_DISTANCE : MELEE_PREFERRED_DISTANCE;
+        float spacing = isRanged ? RANGED_SPACING : MELEE_SPACING;
+
+        // Position on our team's side of the engagement
+        Vector3 dirFromOpponent = (anchorPoint - opponentCenter).normalized;
+        if (dirFromOpponent.sqrMagnitude < 0.01f)
+            dirFromOpponent = new Vector3(teamSideSign, 0, 0);
+
+        Vector3 basePosition = opponentCenter + dirFromOpponent * distance;
+
+        // Spread allies along Z axis
+        float zOffset = 0f;
+        if (roleCount > 1)
         {
-            bestSlot.Occupant = character;
-            _assignedSlots.Add(character, bestSlot);
+            float totalSpread = (roleCount - 1) * spacing;
+            zOffset = -totalSpread / 2f + roleIndex * spacing;
         }
-        else
-        {
-            Debug.LogWarning($"<color=yellow>[Formation]</color> Plus de slots disponibles pour {character.CharacterName} !");
-        }
+
+        basePosition.z += zOffset;
+
+        // Deterministic jitter based on instance ID — stable across frames
+        float jitterSeed = character.GetInstanceID() * 0.1f;
+        basePosition.x += Mathf.Sin(jitterSeed) * 0.4f;
+        basePosition.z += Mathf.Cos(jitterSeed) * 0.3f;
+
+        _lastAssignedPositions[character] = basePosition;
+        return basePosition;
+    }
+
+    public bool TryGetLastPosition(Character character, out Vector3 position)
+    {
+        return _lastAssignedPositions.TryGetValue(character, out position);
     }
 
     public void RemoveCharacter(Character character)
     {
-        if (_assignedSlots.TryGetValue(character, out SlotPosition slot))
-        {
-            slot.Occupant = null;
-            _assignedSlots.Remove(character);
-        }
+        _lastAssignedPositions.Remove(character);
     }
 
-    /// <summary>
-    /// Calcule la coordonnée monde cible pour le personnage autour du point focal donné.
-    /// </summary>
-    public Vector3 GetWorldPosition(Character character, Vector3 focalPoint)
+    public void Clear()
     {
-        if (_assignedSlots.TryGetValue(character, out SlotPosition slot))
-        {
-            return focalPoint + slot.LocalOffset + slot.Jitter;
-        }
-
-        // Fallback si pas de slot : position stable autour de ROW_2 basée sur l'ID
-        // Évite que les NPCs marchent directement sur la cible
-        float angle = (Mathf.Abs(character.GetInstanceID()) % 360) * Mathf.Deg2Rad;
-        Vector3 overflowOffset = new Vector3(Mathf.Cos(angle) * ROW_2_RADIUS, 0, Mathf.Sin(angle) * ROW_2_RADIUS);
-        return focalPoint + overflowOffset;
+        _lastAssignedPositions.Clear();
     }
 
-    public bool HasCharacter(Character character)
+    private bool IsRangedCharacter(Character character)
     {
-        return _assignedSlots.ContainsKey(character);
+        if (character?.CharacterCombat?.CurrentCombatStyleExpertise?.Style == null)
+            return false;
+        return character.CharacterCombat.CurrentCombatStyleExpertise.Style is RangedCombatStyleSO;
     }
 }
