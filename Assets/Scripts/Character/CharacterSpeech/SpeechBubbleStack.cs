@@ -6,9 +6,15 @@ using UnityEngine;
 /// <summary>
 /// Manages all active speech bubble instances for a single character.
 /// Handles spawning, positioning, bubble cap enforcement, mouth controller
-/// integration, separator visibility, and cross-character offset.
+/// integration, separator visibility, and cross-character collision avoidance.
+///
+/// Cross-character collision uses a SphereCollider trigger on the SpeechZone layer.
+/// When another SpeechBubbleStack enters the zone, it is tracked locally.
+/// On bubble push, only nearby stacks (inside the trigger) are offset.
 /// This is a plain MonoBehaviour — purely local visual management.
 /// </summary>
+[RequireComponent(typeof(SphereCollider))]
+[RequireComponent(typeof(Rigidbody))]
 public class SpeechBubbleStack : MonoBehaviour
 {
     // ── Serialized Fields ──────────────────────────────────────────────
@@ -16,12 +22,15 @@ public class SpeechBubbleStack : MonoBehaviour
     [SerializeField] private int _maxBubbles = 5;
     [SerializeField] private float _separatorSpacing = 0.5f;
     [SerializeField] private float _maxCrossCharacterOffset = 350f;
+    [SerializeField] private float _speechZoneRadius = 15f;
 
     // ── Private Fields ─────────────────────────────────────────────────
     private readonly List<SpeechBubbleInstance> _bubbles = new List<SpeechBubbleInstance>();
+    private readonly HashSet<SpeechBubbleStack> _nearbyStacks = new();
     private float _crossCharacterOffset;
     private MouthController _mouthController;
     private int _typingCount;
+    private SphereCollider _zoneCollider;
 
     // ── Public Properties ──────────────────────────────────────────────
     public Transform OwnerRoot { get; private set; }
@@ -41,16 +50,17 @@ public class SpeechBubbleStack : MonoBehaviour
 
     // ── Unity Lifecycle ────────────────────────────────────────────────
 
-    private void OnEnable()
+    private void Awake()
     {
-        try
-        {
-            SpeechZoneManager.Instance?.RegisterStack(this);
-        }
-        catch (Exception e)
-        {
-            Debug.LogError($"[SpeechBubbleStack] Exception in OnEnable: {e.Message}\n{e.StackTrace}");
-        }
+        // Configure the sphere collider as a trigger zone for speech collision
+        _zoneCollider = GetComponent<SphereCollider>();
+        _zoneCollider.isTrigger = true;
+        _zoneCollider.radius = _speechZoneRadius;
+
+        // Rigidbody must be kinematic — we don't want physics forces, just trigger events
+        var rb = GetComponent<Rigidbody>();
+        rb.isKinematic = true;
+        rb.useGravity = false;
     }
 
     private void OnDisable()
@@ -58,11 +68,29 @@ public class SpeechBubbleStack : MonoBehaviour
         try
         {
             ClearAll();
-            SpeechZoneManager.Instance?.UnregisterStack(this);
+            _nearbyStacks.Clear();
         }
         catch (Exception e)
         {
             Debug.LogError($"[SpeechBubbleStack] Exception in OnDisable: {e.Message}\n{e.StackTrace}");
+        }
+    }
+
+    // ── Trigger-Based Speech Zone Detection ────────────────────────────
+
+    private void OnTriggerEnter(Collider other)
+    {
+        if (other.TryGetComponent<SpeechBubbleStack>(out var otherStack) && otherStack != this)
+        {
+            _nearbyStacks.Add(otherStack);
+        }
+    }
+
+    private void OnTriggerExit(Collider other)
+    {
+        if (other.TryGetComponent<SpeechBubbleStack>(out var otherStack))
+        {
+            _nearbyStacks.Remove(otherStack);
         }
     }
 
@@ -111,8 +139,8 @@ public class SpeechBubbleStack : MonoBehaviour
             // 8. Recalculate positions
             RecalculatePositions();
 
-            // 9. Notify SpeechZoneManager
-            SpeechZoneManager.Instance?.NotifyBubblePushed(this, instance.GetHeight());
+            // 9. Push nearby stacks (cross-character collision avoidance)
+            PushNearbyStacks(instance.GetHeight());
         }
         catch (Exception e)
         {
@@ -162,8 +190,8 @@ public class SpeechBubbleStack : MonoBehaviour
             // 8. Recalculate positions
             RecalculatePositions();
 
-            // 9. Notify SpeechZoneManager
-            SpeechZoneManager.Instance?.NotifyBubblePushed(this, instance.GetHeight());
+            // 9. Push nearby stacks (cross-character collision avoidance)
+            PushNearbyStacks(instance.GetHeight());
         }
         catch (Exception e)
         {
@@ -274,6 +302,24 @@ public class SpeechBubbleStack : MonoBehaviour
     }
 
     // ── Private Methods ────────────────────────────────────────────────
+
+    /// <summary>
+    /// Pushes all nearby stacks upward by the given bubble height.
+    /// Only iterates stacks currently inside this character's speech zone trigger.
+    /// </summary>
+    private void PushNearbyStacks(float bubbleHeight)
+    {
+        // Remove any null/destroyed stacks that may have been despawned
+        _nearbyStacks.RemoveWhere(s => s == null);
+
+        foreach (var stack in _nearbyStacks)
+        {
+            if (stack.HasActiveBubbles)
+            {
+                stack.AddCrossCharacterOffset(bubbleHeight);
+            }
+        }
+    }
 
     /// <summary>
     /// Recalculates vertical positions for all bubbles in the stack.
