@@ -175,7 +175,7 @@ public class SpeechBubbleInstance : MonoBehaviour
         _typeRoutine = null;
 
         if (_textElement != null)
-            _textElement.text = _fullMessage;
+            _textElement.maxVisibleCharacters = _fullMessage.Length;
 
         OnTypingStateChanged?.Invoke(false);
         CheckHeightChanged();
@@ -255,21 +255,27 @@ public class SpeechBubbleInstance : MonoBehaviour
     {
         OnTypingStateChanged?.Invoke(true);
 
-        _textElement.text = "";
-        int charCount = 0;
+        // Set full text upfront so layout calculates final frame size immediately.
+        // Use maxVisibleCharacters to reveal text letter-by-letter.
+        _textElement.text = _fullMessage;
+        _textElement.maxVisibleCharacters = 0;
+
+        // Force layout rebuild so ContentSizeFitter computes final height now
+        _textElement.ForceMeshUpdate();
+        CheckHeightChanged();
 
         float currentSpeed = _typingSpeed > 0f ? _typingSpeed : 0.04f;
 
         if (currentSpeed <= 0f)
         {
-            _textElement.text = _fullMessage;
+            _textElement.maxVisibleCharacters = _fullMessage.Length;
             _typeRoutine = null;
             OnTypingStateChanged?.Invoke(false);
-            CheckHeightChanged();
             onComplete?.Invoke();
             yield break;
         }
 
+        int charCount = 0;
         float timeAccumulator = 0f;
         char[] characters = _fullMessage.ToCharArray();
 
@@ -285,7 +291,6 @@ public class SpeechBubbleInstance : MonoBehaviour
                 while (lettersAdded < lettersToAdd && charCount < characters.Length)
                 {
                     char letter = characters[charCount];
-                    _textElement.text += letter;
                     charCount++;
                     lettersAdded++;
 
@@ -301,12 +306,11 @@ public class SpeechBubbleInstance : MonoBehaviour
                     }
                 }
 
+                _textElement.maxVisibleCharacters = charCount;
+
                 // Subtract consumed time
                 timeAccumulator -= lettersToAdd * currentSpeed;
             }
-
-            // Check if height changed after adding characters this frame
-            CheckHeightChanged();
 
             yield return null;
         }
