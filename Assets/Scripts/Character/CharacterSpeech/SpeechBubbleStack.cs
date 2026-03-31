@@ -108,6 +108,9 @@ public class SpeechBubbleStack : MonoBehaviour
             if (_bubbles.Count == 0)
                 _crossCharacterOffset = 0f;
 
+            // 0b. Adjust our offset to avoid overlapping nearby stacks' existing bubbles
+            AdjustOwnOffsetFromNearbyStacks();
+
             // 1. Enforce bubble cap — dismiss oldest if at max
             if (_bubbles.Count >= _maxBubbles)
             {
@@ -163,6 +166,9 @@ public class SpeechBubbleStack : MonoBehaviour
             // 0. Reset cross-character offset if stack was empty — start fresh at base
             if (_bubbles.Count == 0)
                 _crossCharacterOffset = 0f;
+
+            // 0b. Adjust our offset to avoid overlapping nearby stacks' existing bubbles
+            AdjustOwnOffsetFromNearbyStacks();
 
             // 1. Enforce bubble cap
             if (_bubbles.Count >= _maxBubbles)
@@ -315,9 +321,38 @@ public class SpeechBubbleStack : MonoBehaviour
     /// Pushes all nearby stacks upward by the given bubble height.
     /// Only iterates stacks currently inside this character's speech zone trigger.
     /// </summary>
+    /// <summary>
+    /// Calculates how much vertical space nearby stacks occupy and sets our own
+    /// cross-character offset so our bubbles don't overlap theirs.
+    /// Called before spawning our bubble so we start above any nearby speech.
+    /// </summary>
+    private void AdjustOwnOffsetFromNearbyStacks()
+    {
+        _nearbyStacks.RemoveWhere(s => s == null);
+
+        float maxNearbyHeight = 0f;
+        foreach (var stack in _nearbyStacks)
+        {
+            if (stack.HasActiveBubbles)
+            {
+                float stackHeight = stack.GetTotalStackHeight();
+                if (stackHeight > maxNearbyHeight)
+                    maxNearbyHeight = stackHeight;
+            }
+        }
+
+        if (maxNearbyHeight > _crossCharacterOffset)
+        {
+            _crossCharacterOffset = Mathf.Min(maxNearbyHeight, _maxCrossCharacterOffset);
+        }
+    }
+
+    /// <summary>
+    /// Pushes all nearby stacks upward by the given bubble height.
+    /// Only iterates stacks currently inside this character's speech zone trigger.
+    /// </summary>
     private void PushNearbyStacks(float bubbleHeight)
     {
-        // Remove any null/destroyed stacks that may have been despawned
         _nearbyStacks.RemoveWhere(s => s == null);
 
         foreach (var stack in _nearbyStacks)
