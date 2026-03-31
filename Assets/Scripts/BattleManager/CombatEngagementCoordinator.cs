@@ -46,9 +46,11 @@ public class CombatEngagementCoordinator
     {
         if (character == null) return;
 
+        // 1. Remove the dead character's own outgoing edge
         _targetingGraph.Remove(character);
 
-        // Remove all edges pointing TO this character
+        // 2. Clear targeting entries for characters that were targeting the dead one
+        //    They lose their stale target but remain in the graph for re-targeting next tick
         var attackersToUpdate = _targetingGraph
             .Where(kvp => kvp.Value == character)
             .Select(kvp => kvp.Key)
@@ -59,6 +61,8 @@ public class CombatEngagementCoordinator
             _targetingGraph.Remove(attacker);
         }
 
+        // 3. Remove only the dead character from their engagement
+        //    Attackers' engagement status will be reconciled by the next EvaluateEngagements tick
         LeaveCurrentEngagement(character);
     }
 
@@ -168,6 +172,14 @@ public class CombatEngagementCoordinator
     /// </summary>
     private void ReconcileEngagements(Dictionary<Character, List<Character>> components)
     {
+        // Collect all characters that appear in any computed component
+        var handledCharacters = new HashSet<Character>();
+        foreach (var kvp in components)
+        {
+            foreach (var c in kvp.Value)
+                handledCharacters.Add(c);
+        }
+
         foreach (var kvp in components)
         {
             List<Character> component = kvp.Value;
@@ -221,6 +233,18 @@ public class CombatEngagementCoordinator
                 SyncEngagementMembers(largest, component);
             }
         }
+
+        // Remove characters no longer in any component from their engagements
+        // This prevents stale engagements when both members stop targeting each other
+        foreach (var engagement in _activeEngagements)
+        {
+            var allMembers = engagement.GroupA.Members.Concat(engagement.GroupB.Members).ToList();
+            foreach (Character member in allMembers)
+            {
+                if (!handledCharacters.Contains(member))
+                    engagement.LeaveEngagement(member);
+            }
+        }
     }
 
     /// <summary>
@@ -258,8 +282,8 @@ public class CombatEngagementCoordinator
             engagement.JoinEngagement(character);
         }
 
-        // Set anchor point at the midpoint of all characters in the component
-        Vector3 midpoint = CalculateMidpoint(component);
+        // Set anchor point at the midpoint between each team's center
+        Vector3 midpoint = CalculateMidpoint(component, teamA, teamB);
         engagement.SetAnchorPoint(midpoint);
 
         _activeEngagements.Add(engagement);
@@ -407,22 +431,28 @@ public class CombatEngagementCoordinator
     //  Helpers
     // ───────────────────────────────────────────────
 
-    private Vector3 CalculateMidpoint(List<Character> characters)
+    /// <summary>
+    /// Calculates the midpoint between two teams' centers of mass.
+    /// Uses per-team averaging to avoid bias toward the larger team in asymmetric fights.
+    /// </summary>
+    private Vector3 CalculateMidpoint(List<Character> members, BattleTeam teamA, BattleTeam teamB)
     {
-        if (characters == null || characters.Count == 0) return Vector3.zero;
+        if (members == null || members.Count == 0) return Vector3.zero;
 
-        Vector3 sum = Vector3.zero;
-        int count = 0;
+        Vector3 sumA = Vector3.zero, sumB = Vector3.zero;
+        int countA = 0, countB = 0;
 
-        foreach (var character in characters)
+        foreach (Character member in members)
         {
-            if (character != null)
-            {
-                sum += character.transform.position;
-                count++;
-            }
+            if (member == null) continue;
+
+            BattleTeam team = _manager.GetTeamOf(member);
+            if (team == teamA) { sumA += member.transform.position; countA++; }
+            else { sumB += member.transform.position; countB++; }
         }
 
-        return count > 0 ? sum / count : Vector3.zero;
+        Vector3 centerA = countA > 0 ? sumA / countA : Vector3.zero;
+        Vector3 centerB = countB > 0 ? sumB / countB : Vector3.zero;
+        return (centerA + centerB) / 2f;
     }
 }
