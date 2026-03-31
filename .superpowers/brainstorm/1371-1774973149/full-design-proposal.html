@@ -1,0 +1,299 @@
+<h2>Combat Positioning & Movement — Full Design Proposal</h2>
+<p class="subtitle">Relationship-based engagements, organic movement, and the facing fix</p>
+
+<!-- ===== SECTION 1: FACING FIX ===== -->
+<div class="section">
+  <h3>Part 1: Facing Fix</h3>
+  <div style="background:rgba(69,230,138,0.08);border:1px solid rgba(69,230,138,0.25);border-radius:10px;padding:16px;">
+    <div style="display:flex;gap:16px;flex-wrap:wrap;">
+      <div style="flex:1;min-width:200px;">
+        <div style="color:#ff6b6b;font-weight:bold;font-size:13px;margin-bottom:6px;">Current (Bug)</div>
+        <div style="color:#ccc;font-size:12px;line-height:1.5;">
+          &bull; SetPlannedTarget() called by attackers overwrites defender's look target<br>
+          &bull; CombatAILogic.UpdateFlip() fights with CharacterVisual.LateUpdate()<br>
+          &bull; Result: flip-flop every frame
+        </div>
+      </div>
+      <div style="flex:1;min-width:200px;">
+        <div style="color:#45e68a;font-weight:bold;font-size:13px;margin-bottom:6px;">Proposed Fix</div>
+        <div style="color:#ccc;font-size:12px;line-height:1.5;">
+          &bull; <strong>Only a character's own AI</strong> can set its look target<br>
+          &bull; SetLookTarget called in SetActionIntent only applies to the <em>acting</em> character<br>
+          &bull; Remove redundant UpdateFlip from CombatAILogic (let CharacterVisual.LateUpdate handle it)<br>
+          &bull; Single authority: CharacterVisual._lookTarget, set only by own combat AI
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SECTION 2: ENGAGEMENT SYSTEM ===== -->
+<div class="section">
+  <h3>Part 2: Relationship-Based Engagement System</h3>
+  <p style="color:#aaa;font-size:13px;margin-bottom:16px;">Replaces the current proximity-based CombatEngagementCoordinator</p>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+    <div style="background:rgba(69,230,138,0.1);border:1px solid rgba(69,230,138,0.2);border-radius:8px;padding:12px;">
+      <div style="color:#45e68a;font-weight:bold;font-size:13px;">Form</div>
+      <div style="color:#ccc;font-size:12px;margin-top:4px;">A&harr;B mutual targeting creates an engagement</div>
+    </div>
+    <div style="background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.2);border-radius:8px;padding:12px;">
+      <div style="color:#f0c040;font-weight:bold;font-size:13px;">Join</div>
+      <div style="color:#ccc;font-size:12px;margin-top:4px;">Targeting anyone inside an engagement &rarr; you join it</div>
+    </div>
+    <div style="background:rgba(200,140,255,0.1);border:1px solid rgba(200,140,255,0.2);border-radius:8px;padding:12px;">
+      <div style="color:#c88cff;font-weight:bold;font-size:13px;">Split</div>
+      <div style="color:#ccc;font-size:12px;margin-top:4px;">A subgroup whose targets are all within each other &rarr; splits off</div>
+    </div>
+    <div style="background:rgba(74,144,217,0.1);border:1px solid rgba(74,144,217,0.2);border-radius:8px;padding:12px;">
+      <div style="color:#4a90d9;font-weight:bold;font-size:13px;">Follow</div>
+      <div style="color:#ccc;font-size:12px;margin-top:4px;">During splits, you go where your target goes</div>
+    </div>
+  </div>
+
+  <!-- Graph visualization of a 4v4 -->
+  <div class="mockup">
+    <div class="mockup-header">Example: 4v4 battle with 2 engagements</div>
+    <div class="mockup-body" style="position:relative;height:280px;background:#1a1a2e;">
+      <!-- Engagement 1 bubble -->
+      <div style="position:absolute;top:20px;left:5%;width:45%;height:240px;border:2px solid rgba(69,230,138,0.3);border-radius:20px;background:rgba(69,230,138,0.04);"></div>
+      <div style="position:absolute;top:8px;left:18%;color:#45e68a;font-size:11px;font-weight:bold;">ENGAGEMENT 1 (3v2)</div>
+
+      <!-- Engagement 2 bubble -->
+      <div style="position:absolute;top:60px;left:55%;width:40%;height:160px;border:2px solid rgba(200,140,255,0.3);border-radius:20px;background:rgba(200,140,255,0.04);"></div>
+      <div style="position:absolute;top:48px;left:67%;color:#c88cff;font-size:11px;font-weight:bold;">ENGAGEMENT 2 (1v2)</div>
+
+      <!-- Eng 1: Team 1 characters -->
+      <div style="position:absolute;top:55px;left:10%;text-align:center;">
+        <div style="width:40px;height:40px;border-radius:50%;background:#4a90d9;display:flex;align-items:center;justify-content:center;font-weight:bold;color:white;margin:0 auto;">A</div>
+      </div>
+      <div style="position:absolute;top:130px;left:10%;text-align:center;">
+        <div style="width:40px;height:40px;border-radius:50%;background:#4a90d9;display:flex;align-items:center;justify-content:center;font-weight:bold;color:white;margin:0 auto;">B</div>
+      </div>
+      <div style="position:absolute;top:200px;left:10%;text-align:center;">
+        <div style="width:40px;height:40px;border-radius:50%;background:#4a90d9;display:flex;align-items:center;justify-content:center;font-weight:bold;color:white;margin:0 auto;">C</div>
+      </div>
+
+      <!-- Eng 1: Team 2 characters -->
+      <div style="position:absolute;top:80px;left:37%;text-align:center;">
+        <div style="width:40px;height:40px;border-radius:50%;background:#d94a4a;display:flex;align-items:center;justify-content:center;font-weight:bold;color:white;margin:0 auto;">E</div>
+      </div>
+      <div style="position:absolute;top:175px;left:37%;text-align:center;">
+        <div style="width:40px;height:40px;border-radius:50%;background:#d94a4a;display:flex;align-items:center;justify-content:center;font-weight:bold;color:white;margin:0 auto;">F</div>
+      </div>
+
+      <!-- Eng 2: characters -->
+      <div style="position:absolute;top:110px;left:62%;text-align:center;">
+        <div style="width:40px;height:40px;border-radius:50%;background:#4a90d9;display:flex;align-items:center;justify-content:center;font-weight:bold;color:white;margin:0 auto;">D</div>
+      </div>
+      <div style="position:absolute;top:90px;left:82%;text-align:center;">
+        <div style="width:40px;height:40px;border-radius:50%;background:#d94a4a;display:flex;align-items:center;justify-content:center;font-weight:bold;color:white;margin:0 auto;">G</div>
+      </div>
+      <div style="position:absolute;top:165px;left:78%;text-align:center;">
+        <div style="width:40px;height:40px;border-radius:50%;background:#d94a4a;display:flex;align-items:center;justify-content:center;font-weight:bold;color:white;margin:0 auto;">H</div>
+      </div>
+
+      <!-- Targeting arrows (SVG) -->
+      <svg style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;">
+        <defs>
+          <marker id="g" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="#45e68a"/></marker>
+          <marker id="p" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="#c88cff"/></marker>
+        </defs>
+        <!-- A <-> E -->
+        <line x1="16%" y1="72px" x2="38%" y2="95px" stroke="#45e68a" stroke-width="1.5" marker-end="url(#g)"/>
+        <line x1="39%" y1="105px" x2="17%" y2="82px" stroke="#45e68a" stroke-width="1.5" marker-end="url(#g)"/>
+        <!-- B -> E -->
+        <line x1="16%" y1="147px" x2="38%" y2="108px" stroke="#45e68a" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#g)"/>
+        <!-- C -> F -->
+        <line x1="16%" y1="217px" x2="38%" y2="200px" stroke="#45e68a" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#g)"/>
+        <!-- F -> A -->
+        <line x1="39%" y1="190px" x2="17%" y2="80px" stroke="#45e68a" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#g)"/>
+        <!-- D <-> G -->
+        <line x1="68%" y1="127px" x2="83%" y2="110px" stroke="#c88cff" stroke-width="1.5" marker-end="url(#p)"/>
+        <line x1="84%" y1="115px" x2="69%" y2="132px" stroke="#c88cff" stroke-width="1.5" marker-end="url(#p)"/>
+        <!-- H -> D -->
+        <line x1="80%" y1="182px" x2="69%" y2="140px" stroke="#c88cff" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#p)"/>
+      </svg>
+
+      <!-- Legend -->
+      <div style="position:absolute;bottom:8px;right:12px;display:flex;gap:16px;">
+        <div style="display:flex;align-items:center;gap:4px;">
+          <div style="width:20px;height:0;border-top:2px solid #45e68a;"></div>
+          <span style="color:#aaa;font-size:10px;">mutual</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:4px;">
+          <div style="width:20px;height:0;border-top:2px dashed #aaa;"></div>
+          <span style="color:#aaa;font-size:10px;">one-way (join)</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SECTION 3: MOVEMENT BEHAVIORS ===== -->
+<div class="section">
+  <h3>Part 3: Movement Behaviors</h3>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+    <!-- Engagement forms -->
+    <div style="background:rgba(69,230,138,0.08);border:1px solid rgba(69,230,138,0.2);border-radius:10px;padding:14px;">
+      <div style="color:#45e68a;font-weight:bold;font-size:14px;margin-bottom:8px;">&#x2694;&#xFE0F; Engagement Forms</div>
+      <div style="color:#ccc;font-size:12px;line-height:1.7;">
+        &bull; Both characters walk toward each other (meet in middle)<br>
+        &bull; <strong>Melee</strong> closes most of the gap<br>
+        &bull; <strong>Ranged</strong> takes a few steps then stops at preferred distance
+      </div>
+    </div>
+
+    <!-- Idle behavior -->
+    <div style="background:rgba(240,192,64,0.08);border:1px solid rgba(240,192,64,0.2);border-radius:10px;padding:14px;">
+      <div style="color:#f0c040;font-weight:bold;font-size:14px;margin-bottom:8px;">&#x1F6B6; Idle (Waiting for Turn)</div>
+      <div style="color:#ccc;font-size:12px;line-height:1.7;">
+        &bull; Subtle random sway around position (~0.5-1m drift)<br>
+        &bull; If 2:1+ numbers advantage: melee <strong>circles</strong> to surround<br>
+        &bull; <strong>Ranged</strong> stays more planted
+      </div>
+    </div>
+
+    <!-- Attack behavior -->
+    <div style="background:rgba(255,107,107,0.08);border:1px solid rgba(255,107,107,0.2);border-radius:10px;padding:14px;">
+      <div style="color:#ff6b6b;font-weight:bold;font-size:14px;margin-bottom:8px;">&#x1F4A5; Attacking (Turn Active)</div>
+      <div style="color:#ccc;font-size:12px;line-height:1.7;">
+        &bull; <strong>Melee:</strong> moves into range, strikes, backs off to create small gap (dynamic spacing, no fixed "home")<br>
+        &bull; <strong>Ranged:</strong> shoots from current position, does NOT flee when approached
+      </div>
+    </div>
+
+    <!-- Unengaged behavior -->
+    <div style="background:rgba(128,128,128,0.15);border:1px solid rgba(128,128,128,0.3);border-radius:10px;padding:14px;">
+      <div style="color:#999;font-weight:bold;font-size:14px;margin-bottom:8px;">&#x23F8;&#xFE0F; Unengaged</div>
+      <div style="color:#ccc;font-size:12px;line-height:1.7;">
+        &bull; Barely moves — no target, no engagement<br>
+        &bull; Waiting for mutual targeting to form an engagement<br>
+        &bull; If has a one-way target: walks toward them to pressure a response
+      </div>
+    </div>
+
+    <!-- Target dies -->
+    <div style="background:rgba(74,144,217,0.08);border:1px solid rgba(74,144,217,0.2);border-radius:10px;padding:14px;">
+      <div style="color:#4a90d9;font-weight:bold;font-size:14px;margin-bottom:8px;">&#x1F480; Target Dies</div>
+      <div style="color:#ccc;font-size:12px;line-height:1.7;">
+        &bull; Immediately auto-acquire new target<br>
+        &bull; Join existing engagement if new target is in one<br>
+        &bull; Form new engagement if mutual targeting established
+      </div>
+    </div>
+
+    <!-- Battle zone -->
+    <div style="background:rgba(200,140,255,0.08);border:1px solid rgba(200,140,255,0.2);border-radius:10px;padding:14px;">
+      <div style="color:#c88cff;font-weight:bold;font-size:14px;margin-bottom:8px;">&#x1F3DF;&#xFE0F; Battle Zone</div>
+      <div style="color:#ccc;font-size:12px;line-height:1.7;">
+        &bull; <strong>Soft anchor</strong> at fight origin point<br>
+        &bull; Characters can drift but are gently pulled back if too far<br>
+        &bull; Fight stays roughly where it started
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SECTION 4: SPATIAL POSITIONING ===== -->
+<div class="section">
+  <h3>Part 4: Spatial Positioning Within Engagements</h3>
+
+  <div class="mockup">
+    <div class="mockup-header">Organic positioning — no fixed slots, natural spacing</div>
+    <div class="mockup-body" style="position:relative;height:340px;background:#1a1a2e;">
+      <!-- Soft anchor zone -->
+      <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:280px;height:280px;border:2px dashed rgba(255,255,255,0.08);border-radius:50%;"></div>
+      <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:180px;height:180px;border:1px dashed rgba(255,255,255,0.05);border-radius:50%;"></div>
+
+      <!-- Team 1 (Blue - left side) -->
+      <!-- A: Melee, close to center -->
+      <div style="position:absolute;top:38%;left:32%;text-align:center;">
+        <div style="width:38px;height:38px;border-radius:50%;background:#4a90d9;display:flex;align-items:center;justify-content:center;font-weight:bold;color:white;font-size:13px;margin:0 auto;">A</div>
+        <div style="color:#4a90d9;font-size:9px;margin-top:2px;">melee</div>
+      </div>
+      <!-- B: Melee, slightly below -->
+      <div style="position:absolute;top:56%;left:28%;text-align:center;">
+        <div style="width:38px;height:38px;border-radius:50%;background:#4a90d9;display:flex;align-items:center;justify-content:center;font-weight:bold;color:white;font-size:13px;margin:0 auto;">B</div>
+        <div style="color:#4a90d9;font-size:9px;margin-top:2px;">melee</div>
+      </div>
+      <!-- C: Ranged, further back -->
+      <div style="position:absolute;top:45%;left:12%;text-align:center;">
+        <div style="width:38px;height:38px;border-radius:50%;background:#4a90d9;border:2px solid #7ab8f5;display:flex;align-items:center;justify-content:center;font-weight:bold;color:white;font-size:13px;margin:0 auto;">C</div>
+        <div style="color:#7ab8f5;font-size:9px;margin-top:2px;">ranged</div>
+      </div>
+
+      <!-- Team 2 (Red - right side) -->
+      <!-- D: Melee -->
+      <div style="position:absolute;top:35%;left:60%;text-align:center;">
+        <div style="width:38px;height:38px;border-radius:50%;background:#d94a4a;display:flex;align-items:center;justify-content:center;font-weight:bold;color:white;font-size:13px;margin:0 auto;">D</div>
+        <div style="color:#d94a4a;font-size:9px;margin-top:2px;">melee</div>
+      </div>
+      <!-- E: Melee -->
+      <div style="position:absolute;top:55%;left:63%;text-align:center;">
+        <div style="width:38px;height:38px;border-radius:50%;background:#d94a4a;display:flex;align-items:center;justify-content:center;font-weight:bold;color:white;font-size:13px;margin:0 auto;">E</div>
+        <div style="color:#d94a4a;font-size:9px;margin-top:2px;">melee</div>
+      </div>
+      <!-- F: Ranged, further back -->
+      <div style="position:absolute;top:48%;left:82%;text-align:center;">
+        <div style="width:38px;height:38px;border-radius:50%;background:#d94a4a;border:2px solid #f58080;display:flex;align-items:center;justify-content:center;font-weight:bold;color:white;font-size:13px;margin:0 auto;">F</div>
+        <div style="color:#f58080;font-size:9px;margin-top:2px;">ranged</div>
+      </div>
+
+      <!-- Circling arrows for melee (2:1 advantage) -->
+      <svg style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;">
+        <defs>
+          <marker id="circ" markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto"><polygon points="0 0,6 2,0 4" fill="rgba(240,192,64,0.5)"/></marker>
+        </defs>
+        <!-- Subtle circling indicators around D -->
+        <path d="M 230,110 Q 260,95 275,115" stroke="rgba(240,192,64,0.3)" stroke-width="1.5" fill="none" stroke-dasharray="4,4" marker-end="url(#circ)"/>
+      </svg>
+
+      <!-- Labels -->
+      <div style="position:absolute;bottom:12px;left:12px;right:12px;display:flex;gap:12px;flex-wrap:wrap;">
+        <div style="background:rgba(255,255,255,0.05);border-radius:6px;padding:6px 10px;font-size:11px;color:#aaa;">
+          <span style="color:#4a90d9;">&#x25CF;</span> Melee fighters close to center
+        </div>
+        <div style="background:rgba(255,255,255,0.05);border-radius:6px;padding:6px 10px;font-size:11px;color:#aaa;">
+          <span style="color:#7ab8f5;">&#x25CB;</span> Ranged fighters stay back
+        </div>
+        <div style="background:rgba(255,255,255,0.05);border-radius:6px;padding:6px 10px;font-size:11px;color:#aaa;">
+          <span style="color:rgba(240,192,64,0.5);">&#x27F3;</span> Circling when numbers advantage
+        </div>
+        <div style="background:rgba(255,255,255,0.05);border-radius:6px;padding:6px 10px;font-size:11px;color:#aaa;">
+          &#x25EF; Soft anchor leash boundary
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SECTION 5: WHAT CHANGES ===== -->
+<div class="section">
+  <h3>Part 5: What Gets Reworked</h3>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+    <div>
+      <div style="color:#ff6b6b;font-weight:bold;font-size:13px;margin-bottom:8px;">&#x274C; Removed / Replaced</div>
+      <div style="color:#ccc;font-size:12px;line-height:1.8;">
+        &bull; <code style="background:rgba(255,255,255,0.1);padding:2px 6px;border-radius:3px;">CombatFormation.cs</code> — fixed ring slots<br>
+        &bull; <code style="background:rgba(255,255,255,0.1);padding:2px 6px;border-radius:3px;">EngagementGroup.cs</code> — replaced by targeting graph<br>
+        &bull; Proximity-based engagement creation in Coordinator<br>
+        &bull; Deterministic slot assignment by GetInstanceID()<br>
+        &bull; UpdateFlip() in CombatAILogic (redundant)
+      </div>
+    </div>
+    <div>
+      <div style="color:#45e68a;font-weight:bold;font-size:13px;margin-bottom:8px;">&#x2705; New / Reworked</div>
+      <div style="color:#ccc;font-size:12px;line-height:1.8;">
+        &bull; <strong>Targeting graph</strong> — tracks who targets whom, detects mutuals<br>
+        &bull; <strong>Engagement builder</strong> — forms/splits/merges from targeting graph<br>
+        &bull; <strong>Organic positioner</strong> — dynamic spacing, no fixed slots<br>
+        &bull; <strong>Idle behaviors</strong> — sway + circling based on numbers<br>
+        &bull; <strong>Facing authority</strong> — single-owner look target control<br>
+        &bull; <strong>Approach system</strong> — meet-in-middle with range awareness
+      </div>
+    </div>
+  </div>
+</div>

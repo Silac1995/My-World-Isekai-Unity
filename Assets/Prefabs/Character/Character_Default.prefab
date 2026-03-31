@@ -1798,9 +1798,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SpeechBubbleStack
   _bubbleInstancePrefab: {fileID: 61685653468973228, guid: a01de0a411e64da4e981decfe69f90ef, type: 3}
   _maxBubbles: 5
-  _separatorSpacing: 0.5
-  _maxCrossCharacterOffset: 350
-  _speechZoneRadius: 15
+  _separatorSpacing: 0.06
+  _speechZoneRadius: 5
 --- !u!135 &358579176842047037
 SphereCollider:
   m_ObjectHideFlags: 0
@@ -1816,7 +1815,7 @@ SphereCollider:
     serializedVersion: 2
     m_Bits: 0
   m_LayerOverridePriority: 0
-  m_IsTrigger: 0
+  m_IsTrigger: 1
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3

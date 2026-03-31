@@ -1,0 +1,122 @@
+<h2>Speech Bubble Stacking Behavior</h2>
+<p class="subtitle">Interactive mockup — click "Say something" to see the stacking in action</p>
+
+<div style="display:flex; justify-content:center; margin:32px 0;">
+  <div style="position:relative; width:320px; height:420px; background:linear-gradient(180deg, #1a2a1a 0%, #2a3a2a 100%); border-radius:12px; overflow:hidden; border:1px solid #333;">
+
+    <!-- Character placeholder -->
+    <div style="position:absolute; bottom:20px; left:50%; transform:translateX(-50%); text-align:center;">
+      <div style="width:40px; height:60px; background:#666; border-radius:8px 8px 4px 4px; margin:0 auto;"></div>
+      <div style="color:#888; font-size:11px; margin-top:4px;">NPC</div>
+    </div>
+
+    <!-- Bubble container -->
+    <div id="bubble-container" style="position:absolute; bottom:110px; left:50%; transform:translateX(-50%); display:flex; flex-direction:column-reverse; align-items:center; gap:0; transition:all 0.3s ease;"></div>
+  </div>
+</div>
+
+<div style="text-align:center; margin:16px 0;">
+  <button onclick="addBubble()" style="padding:10px 24px; background:#4a9eff; color:white; border:none; border-radius:6px; cursor:pointer; font-size:14px; margin:0 8px;">Say something</button>
+  <button onclick="clearAll()" style="padding:10px 24px; background:#555; color:white; border:none; border-radius:6px; cursor:pointer; font-size:14px; margin:0 8px;">Clear all</button>
+</div>
+
+<div class="section" style="margin-top:24px;">
+  <h3>Behavior Summary</h3>
+  <ul style="color:#ccc; line-height:1.8;">
+    <li><strong>New bubble</strong> appears at base (closest to character) with fade + slide-up animation</li>
+    <li><strong>Previous bubbles</strong> smoothly slide upward to make room</li>
+    <li>Auto-completes typing on previous bubble when a new one arrives</li>
+    <li><strong>Separator line</strong> (centered, 60% width) appears between bubbles</li>
+    <li>Each bubble expires independently after its own duration</li>
+    <li>When a bubble expires, it fades out and others <strong>slide down to close the gap</strong></li>
+  </ul>
+</div>
+
+<script>
+const messages = [
+  "Hello there, traveler!",
+  "Welcome to our village.",
+  "The forest is dangerous at night...",
+  "Would you like to buy something?",
+  "Be careful out there!",
+  "I heard strange noises last night.",
+  "The blacksmith has new swords.",
+];
+let msgIndex = 0;
+let bubbleId = 0;
+
+function addBubble() {
+  const container = document.getElementById('bubble-container');
+  const msg = messages[msgIndex % messages.length];
+  msgIndex++;
+  bubbleId++;
+
+  // Auto-complete any typing bubbles
+  document.querySelectorAll('.typing').forEach(el => {
+    el.textContent = el.dataset.fullText;
+    el.classList.remove('typing');
+  });
+
+  const wrapper = document.createElement('div');
+  wrapper.id = 'bubble-' + bubbleId;
+  wrapper.style.cssText = 'opacity:0; transform:translateY(10px); transition:all 0.35s ease; margin-top:0;';
+
+  // Separator (not on first bubble)
+  if (container.children.length > 0) {
+    const sep = document.createElement('div');
+    sep.style.cssText = 'width:60%; height:1px; background:rgba(255,255,255,0.5); margin:6px auto;';
+    wrapper.appendChild(sep);
+  }
+
+  const bubble = document.createElement('div');
+  bubble.style.cssText = 'background:rgba(30,30,30,0.9); border:1px solid rgba(255,255,255,0.15); border-radius:10px; padding:8px 14px; max-width:240px; text-align:center;';
+
+  const text = document.createElement('span');
+  text.style.cssText = 'color:white; font-size:13px; line-height:1.4;';
+  text.classList.add('typing');
+  text.dataset.fullText = msg;
+  text.textContent = '';
+  bubble.appendChild(text);
+  wrapper.appendChild(bubble);
+
+  // Insert at the beginning (bottom of visual stack)
+  container.insertBefore(wrapper, container.firstChild);
+
+  // Animate in
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      wrapper.style.opacity = '1';
+      wrapper.style.transform = 'translateY(0)';
+    });
+  });
+
+  // Type out text
+  let charIdx = 0;
+  const typeInterval = setInterval(() => {
+    if (charIdx < msg.length && text.classList.contains('typing')) {
+      charIdx++;
+      text.textContent = msg.substring(0, charIdx);
+    } else {
+      clearInterval(typeInterval);
+      text.classList.remove('typing');
+    }
+  }, 50);
+
+  // Auto-expire after 5s
+  const currentId = wrapper.id;
+  setTimeout(() => {
+    const el = document.getElementById(currentId);
+    if (el) {
+      el.style.opacity = '0';
+      el.style.transform = 'translateY(-10px)';
+      setTimeout(() => el.remove(), 350);
+    }
+  }, 5000);
+}
+
+function clearAll() {
+  const container = document.getElementById('bubble-container');
+  container.innerHTML = '';
+  msgIndex = 0;
+}
+</script>

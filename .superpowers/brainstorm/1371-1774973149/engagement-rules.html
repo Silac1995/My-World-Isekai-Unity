@@ -1,0 +1,142 @@
+<h2>Engagement Grouping Rules: Do I Have This Right?</h2>
+<p class="subtitle">Engagements form from targeting relationships, not proximity</p>
+
+<!-- Rule 1 -->
+<div class="section">
+  <h3>Rule 1: Mutual targeting creates an engagement</h3>
+  <div class="mockup">
+    <div class="mockup-header">A targets D, D targets A &rarr; Engagement forms</div>
+    <div class="mockup-body" style="position:relative;height:120px;background:#1a1a2e;">
+      <div style="position:absolute;top:40px;left:20%;text-align:center;">
+        <div style="width:44px;height:44px;border-radius:50%;background:#4a90d9;display:flex;align-items:center;justify-content:center;font-weight:bold;color:white;margin:0 auto;">A</div>
+        <div style="color:#4a90d9;font-size:11px;margin-top:2px;">Team 1</div>
+      </div>
+      <div style="position:absolute;top:40px;left:70%;text-align:center;">
+        <div style="width:44px;height:44px;border-radius:50%;background:#d94a4a;display:flex;align-items:center;justify-content:center;font-weight:bold;color:white;margin:0 auto;">D</div>
+        <div style="color:#d94a4a;font-size:11px;margin-top:2px;">Team 2</div>
+      </div>
+      <!-- Arrows -->
+      <div style="position:absolute;top:50px;left:calc(20% + 44px);width:calc(50% - 44px);display:flex;align-items:center;justify-content:center;">
+        <div style="color:#45e68a;font-size:14px;letter-spacing:2px;">&larr; &rarr;</div>
+      </div>
+      <!-- Engagement bubble -->
+      <div style="position:absolute;top:25px;left:15%;width:70%;height:75px;border:2px solid rgba(69,230,138,0.4);border-radius:40px;background:rgba(69,230,138,0.05);"></div>
+      <div style="position:absolute;top:8px;left:50%;transform:translateX(-50%);color:#45e68a;font-size:11px;font-weight:bold;">ENGAGEMENT 1</div>
+    </div>
+  </div>
+</div>
+
+<!-- Rule 2 -->
+<div class="section">
+  <h3>Rule 2: Targeting someone in an engagement &rarr; you join it</h3>
+  <div class="mockup">
+    <div class="mockup-header">E targets A (who is in Eng 1) &rarr; E joins Engagement 1</div>
+    <div class="mockup-body" style="position:relative;height:160px;background:#1a1a2e;">
+      <!-- Engagement bubble -->
+      <div style="position:absolute;top:15px;left:10%;width:80%;height:130px;border:2px solid rgba(69,230,138,0.4);border-radius:40px;background:rgba(69,230,138,0.05);"></div>
+      <div style="position:absolute;top:2px;left:50%;transform:translateX(-50%);color:#45e68a;font-size:11px;font-weight:bold;">ENGAGEMENT 1</div>
+
+      <div style="position:absolute;top:40px;left:15%;text-align:center;">
+        <div style="width:44px;height:44px;border-radius:50%;background:#4a90d9;display:flex;align-items:center;justify-content:center;font-weight:bold;color:white;margin:0 auto;">A</div>
+      </div>
+      <div style="position:absolute;top:40px;left:70%;text-align:center;">
+        <div style="width:44px;height:44px;border-radius:50%;background:#d94a4a;display:flex;align-items:center;justify-content:center;font-weight:bold;color:white;margin:0 auto;">D</div>
+      </div>
+      <div style="position:absolute;top:95px;left:55%;text-align:center;">
+        <div style="width:44px;height:44px;border-radius:50%;background:#d94a4a;display:flex;align-items:center;justify-content:center;font-weight:bold;color:white;margin:0 auto;border:2px solid #f0c040;">E</div>
+        <div style="color:#f0c040;font-size:11px;margin-top:2px;">joins!</div>
+      </div>
+      <!-- E arrow to A -->
+      <svg style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;">
+        <defs><marker id="arr2" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#f0c040"/></marker></defs>
+        <line x1="56%" y1="105px" x2="22%" y2="75px" stroke="#f0c040" stroke-width="2" stroke-dasharray="6,3" marker-end="url(#arr2)"/>
+      </svg>
+      <!-- A-D mutual -->
+      <div style="position:absolute;top:50px;left:calc(15% + 44px);width:calc(55% - 44px);display:flex;align-items:center;justify-content:center;">
+        <div style="color:#45e68a;font-size:13px;">&larr; &rarr;</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Rule 3: Subgroup split -->
+<div class="section">
+  <h3>Rule 3: Subgroup retargeting causes a split</h3>
+  <div class="mockup">
+    <div class="mockup-header">3v3 &mdash; B and C both retarget E &rarr; {B, C, E} splits off from {A, D}</div>
+    <div class="mockup-body" style="position:relative;height:220px;background:#1a1a2e;">
+      <!-- Before label -->
+      <div style="position:absolute;top:5px;left:5%;color:#aaa;font-size:12px;font-weight:bold;">BEFORE (all in one engagement):</div>
+
+      <!-- Big engagement -->
+      <div style="position:absolute;top:25px;left:5%;width:90%;height:70px;border:2px solid rgba(69,230,138,0.3);border-radius:30px;background:rgba(69,230,138,0.03);display:flex;align-items:center;justify-content:space-around;padding:0 30px;">
+        <div style="width:36px;height:36px;border-radius:50%;background:#4a90d9;display:flex;align-items:center;justify-content:center;font-weight:bold;color:white;font-size:14px;">A</div>
+        <div style="width:36px;height:36px;border-radius:50%;background:#4a90d9;display:flex;align-items:center;justify-content:center;font-weight:bold;color:white;font-size:14px;">B</div>
+        <div style="width:36px;height:36px;border-radius:50%;background:#4a90d9;display:flex;align-items:center;justify-content:center;font-weight:bold;color:white;font-size:14px;">C</div>
+        <div style="width:36px;height:36px;border-radius:50%;background:#d94a4a;display:flex;align-items:center;justify-content:center;font-weight:bold;color:white;font-size:14px;">D</div>
+        <div style="width:36px;height:36px;border-radius:50%;background:#d94a4a;display:flex;align-items:center;justify-content:center;font-weight:bold;color:white;font-size:14px;">E</div>
+        <div style="width:36px;height:36px;border-radius:50%;background:#d94a4a;display:flex;align-items:center;justify-content:center;font-weight:bold;color:white;font-size:14px;">F</div>
+      </div>
+
+      <!-- Arrow -->
+      <div style="position:absolute;top:100px;left:50%;transform:translateX(-50%);color:#f0c040;font-size:20px;">&#x2B07; B &amp; C retarget E</div>
+
+      <!-- After label -->
+      <div style="position:absolute;top:130px;left:5%;color:#aaa;font-size:12px;font-weight:bold;">AFTER (split into two engagements):</div>
+
+      <!-- Engagement 1: A, D -->
+      <div style="position:absolute;top:150px;left:5%;width:35%;height:60px;border:2px solid rgba(69,230,138,0.4);border-radius:30px;background:rgba(69,230,138,0.05);display:flex;align-items:center;justify-content:space-around;padding:0 20px;">
+        <div style="width:36px;height:36px;border-radius:50%;background:#4a90d9;display:flex;align-items:center;justify-content:center;font-weight:bold;color:white;font-size:14px;">A</div>
+        <div style="width:36px;height:36px;border-radius:50%;background:#d94a4a;display:flex;align-items:center;justify-content:center;font-weight:bold;color:white;font-size:14px;">D</div>
+      </div>
+      <div style="position:absolute;top:142px;left:15%;color:#45e68a;font-size:10px;font-weight:bold;">ENG 1</div>
+
+      <!-- Engagement 2: B, C, E, F -->
+      <div style="position:absolute;top:150px;left:48%;width:48%;height:60px;border:2px solid rgba(200,140,255,0.4);border-radius:30px;background:rgba(200,140,255,0.05);display:flex;align-items:center;justify-content:space-around;padding:0 20px;">
+        <div style="width:36px;height:36px;border-radius:50%;background:#4a90d9;display:flex;align-items:center;justify-content:center;font-weight:bold;color:white;font-size:14px;">B</div>
+        <div style="width:36px;height:36px;border-radius:50%;background:#4a90d9;display:flex;align-items:center;justify-content:center;font-weight:bold;color:white;font-size:14px;">C</div>
+        <div style="width:36px;height:36px;border-radius:50%;background:#d94a4a;display:flex;align-items:center;justify-content:center;font-weight:bold;color:white;font-size:14px;">E</div>
+        <div style="width:36px;height:36px;border-radius:50%;background:#d94a4a;display:flex;align-items:center;justify-content:center;font-weight:bold;color:white;font-size:14px;">F</div>
+      </div>
+      <div style="position:absolute;top:142px;left:65%;color:#c88cff;font-size:10px;font-weight:bold;">ENG 2</div>
+    </div>
+  </div>
+</div>
+
+<!-- Rule 4 -->
+<div class="section">
+  <h3>Rule 4: Characters follow their target during splits</h3>
+  <div style="background:rgba(200,140,255,0.1);border:1px solid rgba(200,140,255,0.3);border-radius:8px;padding:12px 16px;">
+    <div style="color:#c88cff;font-size:13px;">If F was in Engagement 1 targeting B, and B splits off into Engagement 2 &rarr; <strong>F follows B</strong> into Engagement 2. Your engagement is wherever your target is.</div>
+  </div>
+</div>
+
+<!-- Summary -->
+<div class="section" style="margin-top:20px;">
+  <h3>Summary: Engagement Rules</h3>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+    <div style="background:rgba(69,230,138,0.1);border:1px solid rgba(69,230,138,0.2);border-radius:8px;padding:12px;">
+      <div style="color:#45e68a;font-weight:bold;font-size:13px;">1. Form</div>
+      <div style="color:#ccc;font-size:12px;margin-top:4px;">Two characters targeting each other create an engagement</div>
+    </div>
+    <div style="background:rgba(240,192,64,0.1);border:1px solid rgba(240,192,64,0.2);border-radius:8px;padding:12px;">
+      <div style="color:#f0c040;font-weight:bold;font-size:13px;">2. Join</div>
+      <div style="color:#ccc;font-size:12px;margin-top:4px;">Targeting someone in an engagement &rarr; you join it</div>
+    </div>
+    <div style="background:rgba(200,140,255,0.1);border:1px solid rgba(200,140,255,0.2);border-radius:8px;padding:12px;">
+      <div style="color:#c88cff;font-weight:bold;font-size:13px;">3. Split</div>
+      <div style="color:#ccc;font-size:12px;margin-top:4px;">When a subgroup's targets are all within each other, they form their own engagement</div>
+    </div>
+    <div style="background:rgba(74,144,217,0.1);border:1px solid rgba(74,144,217,0.2);border-radius:8px;padding:12px;">
+      <div style="color:#4a90d9;font-weight:bold;font-size:13px;">4. Follow</div>
+      <div style="color:#ccc;font-size:12px;margin-top:4px;">When engagements split, you go where your target goes</div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:16px;">
+  <h3 style="color:#ff6b6b;">Open Question</h3>
+  <div style="background:rgba(255,107,107,0.1);border:1px solid rgba(255,107,107,0.2);border-radius:8px;padding:12px 16px;">
+    <div style="color:#ff6b6b;font-size:13px;">What if a character targets someone <strong>not</strong> in any engagement? Example: In a 3v3, A&harr;D are engaged, but B targets F who isn't targeting anyone yet. Does this create a new engagement {B, F}? Or does B stay "unengaged" until F targets back?</div>
+  </div>
+</div>

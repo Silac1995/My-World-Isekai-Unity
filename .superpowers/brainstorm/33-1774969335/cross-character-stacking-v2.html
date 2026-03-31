@@ -1,0 +1,189 @@
+<h2>Cross-Character Speech Zone (Habbo Style)</h2>
+<p class="subtitle">Two NPCs within 15 units — their bubbles push each other up to avoid overlap</p>
+
+<div style="display:flex; justify-content:center; margin:32px 0;">
+  <div style="position:relative; width:520px; height:500px; background:linear-gradient(180deg, #1a2a1a 0%, #2a3a2a 100%); border-radius:12px; overflow:hidden; border:1px solid #333;">
+
+    <!-- Speech zone radius indicator -->
+    <div style="position:absolute; bottom:55px; left:50%; transform:translateX(-50%); width:300px; height:140px; border:1px dashed rgba(255,255,100,0.2); border-radius:50%; display:flex; align-items:flex-end; justify-content:center; padding-bottom:4px;">
+      <span style="color:rgba(255,255,100,0.3); font-size:10px;">speech zone (15 units)</span>
+    </div>
+
+    <!-- Character A -->
+    <div style="position:absolute; bottom:20px; left:155px; text-align:center;">
+      <div id="stack-a" style="position:absolute; bottom:68px; left:50%; transform:translateX(-50%); min-width:180px;"></div>
+      <div style="width:36px; height:54px; background:#5a8a5a; border-radius:8px 8px 4px 4px; margin:0 auto;"></div>
+      <div style="color:#7cb87c; font-size:11px; margin-top:4px; font-weight:bold;">Villager A</div>
+    </div>
+
+    <!-- Character B -->
+    <div style="position:absolute; bottom:20px; left:325px; text-align:center;">
+      <div id="stack-b" style="position:absolute; bottom:68px; left:50%; transform:translateX(-50%); min-width:180px;"></div>
+      <div style="width:36px; height:54px; background:#5a5a8a; border-radius:8px 8px 4px 4px; margin:0 auto;"></div>
+      <div style="color:#7c7cb8; font-size:11px; margin-top:4px; font-weight:bold;">Villager B</div>
+    </div>
+
+    <!-- Legend -->
+    <div style="position:absolute; top:12px; left:12px; color:#888; font-size:11px; line-height:1.6;">
+      <div><span style="color:#7cb87c;">&#9632;</span> = Villager A's bubbles</div>
+      <div><span style="color:#7c7cb8;">&#9632;</span> = Villager B's bubbles</div>
+      <div style="margin-top:4px; color:#666;">White line = same-character separator</div>
+      <div style="color:#666;">Empty gap = cross-character push</div>
+    </div>
+  </div>
+</div>
+
+<div style="text-align:center; margin:16px 0; display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
+  <button onclick="sayA()" style="padding:10px 20px; background:#5a8a5a; color:white; border:none; border-radius:6px; cursor:pointer; font-size:13px;">Villager A speaks</button>
+  <button onclick="sayB()" style="padding:10px 20px; background:#5a5a8a; color:white; border:none; border-radius:6px; cursor:pointer; font-size:13px;">Villager B speaks</button>
+  <button onclick="sayBoth()" style="padding:10px 20px; background:#8a6a5a; color:white; border:none; border-radius:6px; cursor:pointer; font-size:13px;">Both speak (rapid)</button>
+  <button onclick="clearAll()" style="padding:10px 20px; background:#555; color:white; border:none; border-radius:6px; cursor:pointer; font-size:13px;">Clear all</button>
+</div>
+
+<div class="section" style="margin-top:20px;">
+  <h3>How it works</h3>
+  <ul style="color:#ccc; line-height:1.8;">
+    <li>Each character has their own bubble stack (newest at bottom, closest to character)</li>
+    <li>When two characters are within <strong>15 world units</strong>, their stacks share vertical space</li>
+    <li>A new bubble from Character B <strong>pushes Character A's entire stack up</strong> with an empty gap (no separator)</li>
+    <li>Same-character stacking uses <strong>white separator lines</strong></li>
+    <li>Pushed bubbles <strong>stay where they were pushed</strong> — they don't slide back when the pushing bubble expires</li>
+  </ul>
+</div>
+
+<script>
+const messagesA = ["Hello there!", "Nice weather today.", "Have you seen the blacksmith?", "I need a new sword."];
+const messagesB = ["Good morning!", "The forest is scary.", "I heard wolves last night.", "Want to trade?"];
+let idxA = 0, idxB = 0, bubbleId = 0;
+
+// Each stack is an array of items, bottom-to-top. Each item is either a bubble or a spacer.
+// We use absolute positioning with calculated bottom offsets.
+let stackA = []; // [{type:'bubble'|'spacer', el, height}]
+let stackB = [];
+
+const BUBBLE_HEIGHT = 36;
+const SEPARATOR_HEIGHT = 11; // 1px line + 5px margin each side
+const SPACER_HEIGHT = BUBBLE_HEIGHT + 8; // cross-character gap (empty space = bubble height + padding)
+
+function recalcPositions(stack) {
+  let y = 0;
+  for (let i = 0; i < stack.length; i++) {
+    const item = stack[i];
+    item.el.style.bottom = y + 'px';
+    y += item.height;
+  }
+}
+
+function addBubble(owner) {
+  const isA = owner === 'a';
+  const container = document.getElementById(isA ? 'stack-a' : 'stack-b');
+  const myStack = isA ? stackA : stackB;
+  const otherStack = isA ? stackB : stackA;
+  const otherContainer = document.getElementById(isA ? 'stack-b' : 'stack-a');
+  const messages = isA ? messagesA : messagesB;
+  const idx = isA ? idxA : idxB;
+  const borderColor = isA ? 'rgba(122,184,122,0.3)' : 'rgba(122,122,184,0.3)';
+
+  const msg = messages[idx % messages.length];
+  if (isA) idxA++; else idxB++;
+  bubbleId++;
+
+  // Auto-complete typing on same owner's previous bubbles
+  container.querySelectorAll('.typing').forEach(el => {
+    el.textContent = el.dataset.fullText;
+    el.classList.remove('typing');
+  });
+
+  // === Create the bubble element ===
+  const wrapper = document.createElement('div');
+  wrapper.id = 'bubble-' + bubbleId;
+  wrapper.style.cssText = 'position:absolute; left:50%; transform:translateX(-50%); opacity:0; transition:all 0.35s ease; width:180px;';
+
+  // Same-owner separator (if has previous bubbles from same owner)
+  const hasPrevBubble = myStack.some(item => item.type === 'bubble');
+  if (hasPrevBubble) {
+    const sep = document.createElement('div');
+    sep.style.cssText = 'width:60%; height:1px; background:rgba(255,255,255,0.5); margin:0 auto; position:absolute; top:-6px; left:20%; ';
+    wrapper.appendChild(sep);
+  }
+
+  const bubble = document.createElement('div');
+  bubble.style.cssText = `background:rgba(20,20,20,0.92); border:1px solid ${borderColor}; border-radius:10px; padding:7px 13px; text-align:center;`;
+
+  const text = document.createElement('span');
+  text.style.cssText = 'color:white; font-size:12px; line-height:1.4;';
+  text.classList.add('typing');
+  text.dataset.fullText = msg;
+  text.textContent = '';
+  bubble.appendChild(text);
+  wrapper.appendChild(bubble);
+  container.appendChild(wrapper);
+
+  // Add to my stack at position 0 (bottom)
+  const bubbleEntry = { type: 'bubble', el: wrapper, height: BUBBLE_HEIGHT + (hasPrevBubble ? SEPARATOR_HEIGHT : 0), id: bubbleId, owner };
+  myStack.unshift(bubbleEntry);
+
+  // === Cross-character push: add spacer to OTHER stack ===
+  if (otherStack.length > 0) {
+    const spacer = document.createElement('div');
+    spacer.style.cssText = 'position:absolute; left:0; width:100%; pointer-events:none; transition:bottom 0.35s ease;';
+    otherContainer.appendChild(spacer);
+    const spacerEntry = { type: 'spacer', el: spacer, height: SPACER_HEIGHT, linkedBubbleId: bubbleId };
+    otherStack.unshift(spacerEntry);
+    recalcPositions(otherStack);
+  }
+
+  // Recalc my positions
+  recalcPositions(myStack);
+
+  // Animate in
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      wrapper.style.opacity = '1';
+    });
+  });
+
+  // Type out text
+  let charIdx = 0;
+  const typeInterval = setInterval(() => {
+    if (charIdx < msg.length && text.classList.contains('typing')) {
+      charIdx++;
+      text.textContent = msg.substring(0, charIdx);
+    } else {
+      clearInterval(typeInterval);
+      text.classList.remove('typing');
+    }
+  }, 45);
+
+  // Auto-expire after 6s — fade out but DON'T collapse space (stays pushed)
+  const currentId = 'bubble-' + bubbleId;
+  const currentBubbleId = bubbleId;
+  setTimeout(() => {
+    const el = document.getElementById(currentId);
+    if (el) {
+      el.style.opacity = '0';
+      el.style.pointerEvents = 'none';
+      // Don't remove from stack or recalc — space stays occupied
+      setTimeout(() => {
+        el.style.display = 'none';
+      }, 400);
+    }
+  }, 6000);
+}
+
+function sayA() { addBubble('a'); }
+function sayB() { addBubble('b'); }
+function sayBoth() {
+  sayA();
+  setTimeout(() => sayB(), 500);
+}
+
+function clearAll() {
+  document.getElementById('stack-a').innerHTML = '';
+  document.getElementById('stack-b').innerHTML = '';
+  stackA = [];
+  stackB = [];
+  idxA = 0;
+  idxB = 0;
+}
+</script>

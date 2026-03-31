@@ -52,6 +52,48 @@ You own deep expertise in the **Living World** architecture, which spans these s
 - `CharacterMapTransitionAction` and `CharacterMapTracker` coordinate transitions.
 - Server updates `CurrentMapID` and notifies MapControllers for player counting.
 
+### 7. Session Lifecycle (Teardown & Boot)
+
+**Teardown — `SaveManager.ResetForNewSession()`** (called when returning to main menu):
+1. Clears `_worldSaveables`, `IsReady`, `CurrentWorldGuid`, `CurrentWorldName`
+2. Clears `MapController.PendingSnapshots` and `MapController.ActiveControllers` (static collections)
+3. Destroys singletons: `CommunityTracker.Instance`, `WorldOffsetAllocator.Instance`, `BuildingInteriorRegistry.Instance`
+4. Destroys `NetworkManager.Singleton.gameObject` (NGO auto-applies DontDestroyOnLoad)
+5. Resets save/load state to `Idle`
+
+**Boot — `GameLauncher.LaunchSequence()`** (DontDestroyOnLoad singleton):
+1. Shows fade overlay, sets `GameSessionManager` static flags (`AutoStartNetwork`, `IsHost`, `TargetIP`, `TargetPort`)
+2. Loads game scene async
+3. Ensures network callbacks registered, triggers auto-start
+4. Waits for player spawn + `SaveManager.IsReady` (settling-based)
+5. Calls `SaveManager.LoadWorldAsync()`
+6. Calls `MapController.SpawnSavedBuildings()` on all predefined maps
+7. Calls `MapController.SpawnNPCsFromPendingSnapshot()` for maps with pending snapshots
+8. Imports character profile, positions character via `WorldAssociation`
+9. Spawns party NPCs, fades in
+
+**GameSessionManager** (`Assets/Scripts/Core/Network/GameSessionManager.cs`):
+- Plain `MonoBehaviour` — **NOT** DontDestroyOnLoad. Recreated fresh each scene load.
+- Static flags (`AutoStartNetwork`, `IsHost`, `TargetIP`, `TargetPort`, `SelectedPlayerRace`) survive across scenes.
+- Key methods: `EnsureCallbacksRegistered()`, `CheckAutoStart()`, `ResetCallbacks()`.
+
+### 8. MapController Snapshot & Spawn Methods
+
+These public methods are called by `SaveManager` and `GameLauncher` during save/load cycles:
+
+| Method | Purpose | Called By |
+|--------|---------|----------|
+| `SnapshotActiveNPCs()` | Serializes live NPCs into `HibernatedNPCData` without despawning | SaveManager (before world save) |
+| `SnapshotActiveBuildings()` | Syncs live player-placed buildings into CommunityData (skips preplaced) | SaveManager (before world save) |
+| `SpawnSavedBuildings()` | Respawns player-placed buildings on predefined maps | GameLauncher (after world load) |
+| `SpawnNPCsFromPendingSnapshot()` | Spawns NPCs from `PendingSnapshots` for maps that were active at save time | GameLauncher (after world load) |
+
+**Static collections:**
+- `ActiveControllers` — all currently active MapController instances
+- `PendingSnapshots` — `Dictionary<string, List<HibernatedNPCData>>` for maps that need NPC restoration
+
+**Note:** `SpawnSavedBuildings()` is a separate path from `WakeUp()` — it handles predefined maps that were never hibernated but had player-placed buildings saved.
+
 ## Key Scripts (know these by heart)
 
 | Script | Namespace | Location |
@@ -66,6 +108,9 @@ You own deep expertise in the **Living World** architecture, which spans these s
 | `MapSaveData` | MWI.WorldSystem | `Assets/Scripts/World/MapSystem/` |
 | `HibernatedNPCData` | MWI.WorldSystem | `Assets/Scripts/World/MapSystem/` |
 | `MapControllerDebugUI` | MWI.WorldSystem | `Assets/Scripts/World/MapSystem/` |
+| `GameLauncher` | MWI.Core | `Assets/Scripts/Core/` |
+| `GameSessionManager` | MWI.Core | `Assets/Scripts/Core/Network/` |
+| `SaveManager` | MWI.Core | `Assets/Scripts/Core/SaveLoad/` |
 
 ## Mandatory Rules
 
@@ -79,6 +124,7 @@ You own deep expertise in the **Living World** architecture, which spans these s
 8. **Abandoned cities never release their spatial slot** — 0 CPU cost but permanent world presence.
 9. **Server-authoritative** — all map state changes (hibernation, wake-up, transitions) are server-side. Clients receive updates via NetworkVariable or ClientRpc.
 10. **Always validate across Host/Client/NPC scenarios** — data on the server is invisible to clients unless explicitly synced.
+11. **Session transitions must call `SaveManager.ResetForNewSession()`** — this destroys world singletons (`CommunityTracker`, `WorldOffsetAllocator`, `BuildingInteriorRegistry`) and `NetworkManager`. Skipping this causes duplicate singletons and stale state.
 
 ## Working Style
 

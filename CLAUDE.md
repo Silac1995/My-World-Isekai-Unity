@@ -75,13 +75,15 @@ The Character entity uses a **Facade + Child Hierarchy** pattern:
 
 27. When the user reports a specific issue or bug, not only propose a fix but also identify potential "blind spots" in the logic. For every suspected cause, provide code that includes explicit `Debug.Log` or `Debug.LogError` statements at critical branching points (If/Else, Null Checks, Network Callbacks). These logs must output the internal state of variables at the exact moment of the failure.
 
-## Skill Files
+## Skill Files & Agent Maintenance
 
 28. **Every** time a system is created, modified, upgraded, or refactored — not just major systems — its corresponding SKILL.md in `.agent/skills/` must be updated to reflect the changes. This includes API changes, new events, changed dependencies, removed methods, or altered behavior. If no skill exists for that system yet, create one following the template and guidelines in `.agent/skills/skill-creator/SKILL.md`. No implementation change ships without its documentation being current.
 
+29. After completing any significant implementation (adding a system, reworking existing code, modifying cross-system behavior), **evaluate whether a specialized agent in `.claude/agents/` needs updating or creating**. Ask: (a) Does this change extend or alter the domain of an existing agent? If yes, update that agent's `.md` file to reflect the new knowledge. (b) Is this a new system complex enough (5+ interconnected scripts, cross-system dependencies, non-obvious rules) to warrant its own agent? If yes, create one. (c) If neither applies, no action is needed — do not create agents for trivial changes. Agents must always use `model: opus`.
+
 ## World System & Simulation
 
-29. The game uses a Living World architecture based on Map Hibernation and Macro/Micro Simulation. Before implementing any system that involves NPCs, resources, buildings, time, or map state, you must account for both simulation layers:
+30. The game uses a Living World architecture based on Map Hibernation and Macro/Micro Simulation. Before implementing any system that involves NPCs, resources, buildings, time, or map state, you must account for both simulation layers:
 
 - **Micro-Simulation** (Map is Active): Real-time GOAP, NavMesh pathfinding, live logistics orders, physical harvestables, and NetworkObject presence. All live logic runs only when at least one player is present on the map.
 - **Macro-Simulation** (Map is Hibernating): When player count reaches 0, the map freezes. All NPCs are serialized into `HibernatedNPCData` and despawned. On wake-up, `MacroSimulator` runs a catch-up loop in strict order: (1) Resource Pool Regeneration, (2) Inventory Yields via `JobYieldRegistry` + `BiomeDefinition`, (3) Needs Decay, (4) Position Snap. No live Unity systems (NavMesh, physics, NetworkObject) exist during hibernation — all offline progress is pure math.
@@ -96,4 +98,4 @@ The Character entity uses a **Facade + Child Hierarchy** pattern:
 
 ## Defensive Coding & Exception Handling
 
-30. Wrap operations that can fail at runtime (file I/O, deserialization, network callbacks, external data parsing, `GetComponent` on uncertain targets) in `try/catch` blocks. Log the exception with `Debug.LogException(e)` or `Debug.LogError` including context (what was being attempted, which object, which data). The goal is to prevent one failing subsystem from crashing the entire game — gracefully degrade instead. Do **not** swallow exceptions silently; always log them. For performance-critical paths (Update loops, tight loops), prefer null-checks and validation over try/catch.
+31. Wrap operations that can fail at runtime (file I/O, deserialization, network callbacks, external data parsing, `GetComponent` on uncertain targets) in `try/catch` blocks. Log the exception with `Debug.LogException(e)` or `Debug.LogError` including context (what was being attempted, which object, which data). The goal is to prevent one failing subsystem from crashing the entire game — gracefully degrade instead. Do **not** swallow exceptions silently; always log them. For performance-critical paths (Update loops, tight loops), prefer null-checks and validation over try/catch.

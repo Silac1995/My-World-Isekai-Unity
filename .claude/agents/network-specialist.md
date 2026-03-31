@@ -76,7 +76,29 @@ Owner detects intent → [Rpc(SendTo.Server)] request
 - **NEVER** use `DestroyImmediate()` or `Destroy()` on NetworkBehaviour components on network instances.
 - **ALWAYS** disable unused components: `component.enabled = false`.
 
-### 7. Known Pitfalls & Troubleshooting
+### 7. Network Session Lifecycle
+
+**GameSessionManager** (`Assets/Scripts/Core/Network/GameSessionManager.cs`):
+- Plain `MonoBehaviour` — does **NOT** use `DontDestroyOnLoad`. It is recreated fresh each scene load.
+- **Static flags persist across scenes**: `AutoStartNetwork`, `IsHost`, `TargetIP`, `TargetPort`, `SelectedPlayerRace`. These are the handshake between `GameLauncher` and `GameSessionManager`.
+- Instance fields (`_availableRaces`, `_pendingClientRaces`) are reset on recreation.
+- Key methods: `EnsureCallbacksRegistered()`, `CheckAutoStart()`, `ResetCallbacks()`.
+
+**NetworkManager DontDestroyOnLoad Duplication (CRITICAL):**
+- NGO **automatically** applies `DontDestroyOnLoad` to `NetworkManager`. This means reloading a game scene creates a **duplicate** `NetworkManager`, causing silent failures.
+- **Fix:** `SaveManager.ResetForNewSession()` explicitly calls `Destroy(NetworkManager.Singleton.gameObject)` before any session transition.
+- **Rule:** Always call `ResetForNewSession()` when returning to main menu or starting a new session. Never reload a game scene without destroying the existing NetworkManager first.
+
+**SaveManager Session Teardown** (`Assets/Scripts/Core/SaveLoad/SaveManager.cs`):
+- `SaveManager` itself uses `DontDestroyOnLoad` (persists across scenes).
+- `ResetForNewSession()` is the **required teardown path** before starting a new session. It:
+  1. Clears `_worldSaveables`, `IsReady`, `CurrentWorldGuid`, `CurrentWorldName`
+  2. Clears `MapController.PendingSnapshots` and `MapController.ActiveControllers`
+  3. Destroys singletons: `CommunityTracker.Instance`, `WorldOffsetAllocator.Instance`, `BuildingInteriorRegistry.Instance`
+  4. Destroys `NetworkManager.Singleton.gameObject`
+  5. Resets save/load state to `Idle`
+
+### 8. Known Pitfalls & Troubleshooting
 
 **Client-Side Physics Wobble:**
 - Non-authoritative clients fighting their own physics + NetworkTransform = severe jitter
@@ -95,7 +117,7 @@ Owner detects intent → [Rpc(SendTo.Server)] request
 - `OnValueChanged` handlers ensure continuous UI/visual updates
 - Data that lives only on the server is invisible to clients — always sync via NetworkVariable, ClientRpc, or OnValueChanged
 
-### 8. Character Netcode Pattern
+### 9. Character Netcode Pattern
 
 All `CharacterSystem` subclasses follow this universal pattern:
 1. **Decouple Intent from Execution** — clients send Rpc requests; server validates and executes
@@ -105,7 +127,7 @@ All `CharacterSystem` subclasses follow this universal pattern:
 5. **Visual Broadcast** — server sends Rpc(SendTo.Everyone) for animations/VFX
 6. **Hitbox Protection** — overlap triggers gated by `if (!IsServer) return;`
 
-### 9. Persistent Character Identity
+### 10. Persistent Character Identity
 
 - Each character generates `NetworkCharacterId` (GUID) on first `OnNetworkSpawn` (server-side)
 - Use `Character.FindByUUID(uuid)` for network-safe lookup
@@ -140,6 +162,7 @@ All `CharacterSystem` subclasses follow this universal pattern:
 8. **Use `OnNetworkPreSpawn()`** to set initial NetworkVariable values before clients receive them.
 9. **Unsubscribe from events in `OnNetworkDespawn()`** — prevent memory leaks and ghost callbacks.
 10. **Player characters use `ClientNetworkTransform`; NPCs use `NetworkTransform`** — never mix these up.
+11. **Always call `SaveManager.ResetForNewSession()`** before returning to main menu or starting a new session — failure to do so causes NetworkManager duplication and stale singleton state.
 
 ## Working Style
 

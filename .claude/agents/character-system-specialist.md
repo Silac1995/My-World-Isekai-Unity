@@ -27,6 +27,7 @@ You own deep expertise in the **entire Character system** — from the slim core
 | **combat-gameplay-architect** | BattleManager, initiative, damage, abilities | CharacterCombat subsystem hooks |
 | **network-specialist** | RPC patterns, NetworkVariables, authority | CharacterSystem networking base |
 | **world-system-specialist** | Map hibernation, macro-simulation | IOfflineCatchUp integration |
+| **save-persistence-specialist** | Save/load pipeline, CharacterDataCoordinator | ICharacterSaveData<T> contract, capability serialization |
 
 ---
 
@@ -47,7 +48,20 @@ You own deep expertise in the **entire Character system** — from the slim core
 | **Events** | `OnDeath`, `OnIncapacitated`, `OnWakeUp`, `OnCombatStateChanged` |
 
 ### IsFree() — The Availability Gate
-The ultimate safety method. Returns false with a reason if the character is Dead, Unconscious, InCombat, Interacting, Crafting, or Teaching. All systems (GOAP, Player commands, Interactions) check this before acting.
+The ultimate safety method. Returns false with a `CharacterBusyReason` if the character is unavailable. Check order:
+
+| Reason | Condition |
+|--------|-----------|
+| `Dead` | Character is dead |
+| `Unconscious` | Character is unconscious |
+| `InCombat` | Character is in combat |
+| `Interacting` | In an interaction (exemption: `CharacterStartInteraction` is allowed) |
+| `Building` | Placing furniture/building |
+| `Teaching` | Teaching another character |
+| `Crafting` | Crafting an item |
+| `DoingAction` | Performing a generic CharacterAction |
+
+All 8 values exist in `CharacterBusyReason` enum. All systems (GOAP, Player commands, Interactions) check this before acting.
 
 ### Context Switching — The Brain
 **A Player is exactly like an NPC.** Same `Character`, same components, same stats. Switching between PlayerController and NPCController swaps the "brain" without touching the body:
@@ -161,7 +175,35 @@ public interface IInteractionProvider {
 
 ---
 
-## 8. Save/Load Contracts
+## 8. CharacterSpeech Subsystem
+
+`CharacterSpeech` is a `CharacterSystem` managing speech bubbles with full network replication.
+
+### Public API
+| Method/Property | Purpose |
+|----------------|---------|
+| `Say(string message)` | Speak a message (triggers typing animation + bubble) |
+| `SayScripted(ScriptedSpeech speech)` | Speak from a scripted speech asset |
+| `CloseSpeech()` | Close all active speech bubbles |
+| `ResetSpeech()` | Reset speech state entirely |
+| `IsTyping` | Whether currently typing out a message |
+| `IsSpeaking` | Whether any speech bubble is active |
+
+### Network Pattern
+Uses the standard CharacterSystem RPC relay:
+- `SayServerRpc` / `SayClientRpc` — client requests → server validates → broadcasts to all
+- `SayScriptedServerRpc` / `SayScriptedClientRpc` — same flow for scripted speech
+
+### Supporting Classes
+| Class | Purpose |
+|-------|---------|
+| `SpeechBubbleStack` | MonoBehaviour managing bubble instances, cap enforcement, mouth controller position, cross-character vertical offsets |
+| `SpeechBubbleInstance` | Single bubble lifecycle: typing animation, voice, entrance/exit animation, expiration timer |
+| `SpeechZoneManager` | Lazy singleton for cross-character bubble collision avoidance |
+
+---
+
+## 9. Save/Load Contracts
 
 - `ICharacterSaveData<T>` — per-capability serialization (`Serialize()` / `Deserialize()`)
 - `IOfflineCatchUp` — macro-simulation catch-up (`CalculateOfflineDelta(float elapsedDays)`)
@@ -170,7 +212,43 @@ public interface IInteractionProvider {
 
 ---
 
-## 9. Adding New Archetypes (Step-by-Step)
+## 10. All Facade Properties
+
+Every subsystem exposed on `Character.cs` (lines 202-244). Properties delegate to `TryGet<T>()` with serialized field fallback.
+
+| Property | Type | Agent Owner |
+|----------|------|------------|
+| `CharacterMovement` | CharacterMovement | character-system-specialist |
+| `CharacterCombat` | CharacterCombat | combat-gameplay-architect |
+| `CharacterRelation` | CharacterRelation | character-social-architect |
+| `CharacterNeeds` | CharacterNeeds | npc-ai-specialist |
+| `CharacterSpeech` | CharacterSpeech | character-system-specialist |
+| `CharacterEquipment` | CharacterEquipment | item-inventory-specialist |
+| `CharacterInteraction` | CharacterInteraction | character-social-architect |
+| `CharacterParty` | CharacterParty | character-social-architect |
+| `CharacterJob` | CharacterJob | npc-ai-specialist |
+| `CharacterActions` | CharacterActions | character-system-specialist |
+| `CharacterMapTracker` | CharacterMapTracker | world-system-specialist |
+| `CharacterStatusManager` | CharacterStatusManager | character-system-specialist |
+| `CharacterProfile` | CharacterProfile | character-system-specialist |
+| `CharacterTraits` | CharacterTraits | character-system-specialist |
+| `CharacterBookKnowledge` | CharacterBookKnowledge | item-inventory-specialist |
+| `CharacterAbilities` | CharacterAbilities | combat-gameplay-architect |
+| `CharacterCombatLevel` | CharacterCombatLevel | combat-gameplay-architect |
+| `CharacterBlueprints` | CharacterBlueprints | building-furniture-specialist |
+| `CharacterSkills` | CharacterSkills | character-system-specialist |
+| `CharacterLocations` | CharacterLocations | world-system-specialist |
+| `CharacterMentorship` | CharacterMentorship | character-social-architect |
+| `CharacterSchedule` | CharacterSchedule | npc-ai-specialist |
+| `CharacterGoap` | CharacterGoapController | npc-ai-specialist |
+| `CharacterBodyPartsController` | CharacterBodyPartsController | character-system-specialist (internal) |
+| `BattleCircleManager` | BattleCircleManager | combat-gameplay-architect |
+| `FloatingTextSpawner` | FloatingTextSpawner | character-system-specialist |
+| `FurniturePlacementManager` | FurniturePlacementManager | building-furniture-specialist |
+
+---
+
+## 11. Adding New Archetypes (Step-by-Step)
 
 1. Create `CharacterArchetype` SO
 2. Create prefab (Character.cs on root + subsystem child GOs)
@@ -183,7 +261,7 @@ public interface IInteractionProvider {
 9. Add `JobYieldRecipe` entries if applicable
 10. Test all multiplayer scenarios + write SKILL.md
 
-## 10. Adding New Capabilities (Step-by-Step)
+## 12. Adding New Capabilities (Step-by-Step)
 
 1. Create `CharacterSystem` subclass on its own child GO
 2. Registration is automatic via OnEnable/OnDisable
@@ -197,7 +275,7 @@ public interface IInteractionProvider {
 
 ---
 
-## 11. Golden Rules
+## 13. Golden Rules
 
 1. **Registry is runtime truth** — never check archetype flags at runtime
 2. **No direct cross-system calls** — go through Character facade or [SerializeField] links
@@ -212,7 +290,7 @@ public interface IInteractionProvider {
 11. **Always test with 2+ players** — Host↔Client, Client↔Client, Host/Client↔NPC
 12. **IsFree() is the availability gate** — always check before acting
 
-## 12. Key File Locations
+## 14. Key File Locations
 
 | File | Purpose |
 |------|---------|
@@ -239,6 +317,11 @@ public interface IInteractionProvider {
 | `Assets/Scripts/Interactable/CharacterInteractable.cs` | Interaction collector |
 | `Assets/Scripts/Character/SaveLoad/ICharacterSaveData.cs` | Per-capability serialization |
 | `Assets/Scripts/Character/SaveLoad/IOfflineCatchUp.cs` | Macro-simulation catch-up |
+| `Assets/Scripts/Character/SaveLoad/CharacterDataCoordinator.cs` | Export/import orchestrator (owned by save-persistence-specialist) |
+| `Assets/Scripts/Character/CharacterSpeech/CharacterSpeech.cs` | Speech bubble CharacterSystem |
+| `Assets/Scripts/Character/CharacterSpeech/SpeechBubbleStack.cs` | Bubble stacking + cap enforcement |
+| `Assets/Scripts/Character/CharacterSpeech/SpeechBubbleInstance.cs` | Single bubble lifecycle |
+| `Assets/Scripts/Character/CharacterSpeech/SpeechZoneManager.cs` | Cross-character collision avoidance |
 | `.agent/skills/character_core/SKILL.md` | Core facade docs |
 | `.agent/skills/character-archetype/SKILL.md` | Archetype system docs |
 | `.agent/skills/character-netcode/SKILL.md` | Network sync patterns |
