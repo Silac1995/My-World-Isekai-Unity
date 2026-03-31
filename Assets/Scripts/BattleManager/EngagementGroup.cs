@@ -47,6 +47,23 @@ public class EngagementGroup
     }
 
     /// <summary>
+    /// Returns the number of alive members in this group.
+    /// </summary>
+    public int AliveCount
+    {
+        get
+        {
+            int count = 0;
+            foreach (Character member in _members)
+            {
+                if (member != null && member.IsAlive())
+                    count++;
+            }
+            return count;
+        }
+    }
+
+    /// <summary>
     /// Vérifie si ce groupe est entièrement vide ou si tous ses membres sont hors-combat.
     /// </summary>
     public bool IsWipedOut()

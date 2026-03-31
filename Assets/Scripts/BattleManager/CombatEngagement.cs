@@ -9,6 +9,13 @@ public class CombatEngagement
 {
     public const int MAX_PARTICIPANTS_PER_SIDE = 6;
 
+    /// <summary>
+    /// Maximum distance a participant should stray from the engagement anchor point.
+    /// Used by tactical pacing and formation systems to keep fighters within the engagement area.
+    /// </summary>
+    private const float LEASH_RADIUS = 15f;
+    public float LeashRadius => LEASH_RADIUS;
+
     // Les deux camps qui composent cette escarmouche
     public EngagementGroup GroupA { get; private set; }
     public EngagementGroup GroupB { get; private set; }
@@ -138,6 +145,32 @@ public class CombatEngagement
 
         // Fallback: Si je n'arrive pas à calculer (l'autre équipe n'a pas de centre), je reste sur place
         return participant.transform.position;
+    }
+
+    /// <summary>
+    /// Returns the ratio of alive members on the character's side vs the opposing side.
+    /// A ratio > 1 means the character's side outnumbers the opponents.
+    /// Returns float.MaxValue if no opponents are alive.
+    /// </summary>
+    public float GetOutnumberRatio(Character character)
+    {
+        bool inGroupA = GroupA.Members.Contains(character);
+        int myCount = inGroupA ? GroupA.AliveCount : GroupB.AliveCount;
+        int theirCount = inGroupA ? GroupB.AliveCount : GroupA.AliveCount;
+
+        if (theirCount == 0) return float.MaxValue;
+        return (float)myCount / theirCount;
+    }
+
+    /// <summary>
+    /// Returns the center position of the opposing group for the given character.
+    /// Falls back to the engagement anchor point if the opponent group has no alive members.
+    /// </summary>
+    public Vector3 GetOpponentCenter(Character character)
+    {
+        bool inGroupA = GroupA.Members.Contains(character);
+        EngagementGroup opponents = inGroupA ? GroupB : GroupA;
+        return opponents.TryGetCenter(out Vector3 center) ? center : AnchorPoint;
     }
 
     /// <summary>
