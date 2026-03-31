@@ -154,10 +154,13 @@ public class GameLauncher : MonoBehaviour
 
         Debug.Log($"{LOG_TAG} Player character found: {playerCharacter.gameObject.name}");
 
-        // ── Step 5: Load world save data ────────────────────────────
-        // Done AFTER player spawn so the network is running and all
-        // ISaveable systems (CommunityTracker, TimeManager, etc.) have
-        // registered with SaveManager (they defer registration by 0.5s).
+        // ── Step 5: Wait for ISaveable registration, then load world ─
+        // ISaveable systems (CommunityTracker, TimeManager, etc.) defer
+        // registration by 0.5s after Start(). Wait to ensure they're all
+        // registered before calling LoadWorldAsync.
+        yield return new WaitForSecondsRealtime(1.0f);
+
+        Debug.Log($"{LOG_TAG} SaveManager has {SaveManager.Instance?.WorldSaveableCount ?? 0} registered ISaveable(s) before world load.");
         yield return LoadWorldData();
 
         // ── Step 5b: Spawn saved buildings on predefined maps ──────

@@ -84,6 +84,7 @@ public class SaveManager : MonoBehaviour
         _hostProfileSaved = true;
     }
 
+    public int WorldSaveableCount => worldSaveables.Count;
     public void RegisterWorldSaveable(ISaveable s) { if (!worldSaveables.Contains(s)) worldSaveables.Add(s); }
     public void UnregisterWorldSaveable(ISaveable s) => worldSaveables.Remove(s);
 
