@@ -173,6 +173,11 @@ public class GameLauncher : MonoBehaviour
         // Small delay to let NavMesh, physics settle after positioning
         yield return new WaitForSecondsRealtime(0.2f);
 
+        // ── Step 10: Enable debug tools if present ────────────────
+        var debugScript = Object.FindFirstObjectByType<DebugScript>(FindObjectsInactive.Include);
+        if (debugScript != null)
+            debugScript.gameObject.SetActive(true);
+
         FadeInSafely();
 
         IsLaunching = false;
