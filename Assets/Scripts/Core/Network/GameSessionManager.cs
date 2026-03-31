@@ -41,18 +41,43 @@ public class GameSessionManager : MonoBehaviour
         }
     }
 
+    private bool _callbacksRegistered;
+
     private void Start()
     {
-        if (NetworkManager.Singleton != null)
-        {
-            NetworkManager.Singleton.NetworkConfig.ConnectionApproval = true;
-            NetworkManager.Singleton.ConnectionApprovalCallback += ApprovalCheck;
+        EnsureCallbacksRegistered();
+        CheckAutoStart();
+    }
 
-            // Connection state callbacks
-            NetworkManager.Singleton.OnClientConnectedCallback += HandleClientConnected;
-            NetworkManager.Singleton.OnClientDisconnectCallback += HandleClientDisconnect;
-        }
+    private void OnEnable()
+    {
+        // Re-check on enable — handles DontDestroyOnLoad surviving scene reloads
+        EnsureCallbacksRegistered();
+        CheckAutoStart();
+    }
 
+    /// <summary>
+    /// Resets callback state so they re-register on next call to EnsureCallbacksRegistered.
+    /// Call after NetworkManager.Shutdown() since shutdown clears all callbacks.
+    /// </summary>
+    public void ResetCallbacks()
+    {
+        _callbacksRegistered = false;
+    }
+
+    public void EnsureCallbacksRegistered()
+    {
+        if (_callbacksRegistered || NetworkManager.Singleton == null) return;
+        _callbacksRegistered = true;
+
+        NetworkManager.Singleton.NetworkConfig.ConnectionApproval = true;
+        NetworkManager.Singleton.ConnectionApprovalCallback += ApprovalCheck;
+        NetworkManager.Singleton.OnClientConnectedCallback += HandleClientConnected;
+        NetworkManager.Singleton.OnClientDisconnectCallback += HandleClientDisconnect;
+    }
+
+    public void CheckAutoStart()
+    {
         if (AutoStartNetwork)
         {
             AutoStartNetwork = false;

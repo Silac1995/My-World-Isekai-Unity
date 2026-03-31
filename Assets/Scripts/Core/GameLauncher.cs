@@ -137,11 +137,14 @@ public class GameLauncher : MonoBehaviour
         Debug.Log($"{LOG_TAG} Scene '{_gameSceneName}' loaded.");
 
         // ── Step 4: Wait for network to start and player to spawn ───
-        // GameSessionManager.Start() will auto-start the network because
-        // we set AutoStartNetwork = true above. It calls WaitAndStartNetwork()
-        // which calls StartSolo() after a brief delay.
-        // HandleClientConnected() then spawns the player object.
-        // We wait here until the local player object exists.
+        // On first load, GameSessionManager.Start() auto-starts the network.
+        // On subsequent loads (DontDestroyOnLoad), Start() doesn't fire again,
+        // so we explicitly trigger CheckAutoStart().
+        if (GameSessionManager.Instance != null)
+        {
+            GameSessionManager.Instance.EnsureCallbacksRegistered();
+            GameSessionManager.Instance.CheckAutoStart();
+        }
 
         ScreenFadeManager.Instance?.UpdateStatus("Spawning player...");
         Character playerCharacter = null;
@@ -574,12 +577,25 @@ public class GameLauncher : MonoBehaviour
         ScreenFadeManager.Instance?.ShowWarning(errorMessage);
         yield return new WaitForSecondsRealtime(3f); // Let player read the error
 
-        // Shutdown network
+        // Shutdown network and wait for it to complete
         if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+        {
             NetworkManager.Singleton.Shutdown();
+            // Wait for shutdown to complete
+            while (NetworkManager.Singleton != null && NetworkManager.Singleton.ShutdownInProgress)
+                yield return null;
+            yield return new WaitForSecondsRealtime(0.5f);
+        }
+
+        // Reset GameSessionManager callbacks (shutdown clears them)
+        if (GameSessionManager.Instance != null)
+            GameSessionManager.Instance.ResetCallbacks();
 
         // Reset all state
         ClearLaunchParameters();
+
+        // Clear overlay before scene load
+        ScreenFadeManager.Instance?.HideOverlay(0f);
 
         // Return to main menu
         SceneManager.LoadScene("MainMenuScene");

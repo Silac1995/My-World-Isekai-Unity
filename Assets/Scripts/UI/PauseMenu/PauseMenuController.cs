@@ -114,6 +114,10 @@ namespace MWI.UI
                 NetworkManager.Singleton.Shutdown();
             }
 
+            // Step 3b: Reset callbacks (shutdown clears them)
+            if (GameSessionManager.Instance != null)
+                GameSessionManager.Instance.ResetCallbacks();
+
             // Step 4: Clear launch parameters
             if (GameLauncher.Instance != null)
             {
