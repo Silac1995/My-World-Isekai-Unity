@@ -120,7 +120,14 @@ namespace MWI.UI
                 GameLauncher.Instance.ClearLaunchParameters();
             }
 
-            // Step 5: Load main menu scene
+            // Step 5: Start fade-in before loading (ScreenFadeManager is DontDestroyOnLoad,
+            // so its coroutine survives the scene transition)
+            if (ScreenFadeManager.Instance != null)
+            {
+                ScreenFadeManager.Instance.FadeIn(_fadeDuration);
+            }
+
+            // Step 6: Load main menu scene
             SceneManager.LoadScene(_mainMenuSceneName);
         }
 
