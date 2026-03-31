@@ -146,12 +146,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: '::'
   ShowTopMostFoldoutHeaderGroup: 1
   _character: {fileID: 2536622428659117900}
-  _speechBubblePrefab: {fileID: 4254001979599385014}
   _bodyPartsController: {fileID: 1007890653781899237}
+  _speechBubbleStack: {fileID: 0}
   _audioSource: {fileID: 6443598352899297707}
   _voiceSO: {fileID: 0}
   _voicePitch: 1
-  _scriptedSpeech: {fileID: 0}
 --- !u!82 &6443598352899297707
 AudioSource:
   m_ObjectHideFlags: 0
@@ -3380,7 +3379,10 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 8278929031661668441, guid: 95f9f3f9c9be2374f95a765d5ec2328b, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 5421689177905462033}
   m_SourcePrefab: {fileID: 100100000, guid: 95f9f3f9c9be2374f95a765d5ec2328b, type: 3}
 --- !u!4 &1568726918119539838 stripped
 Transform:
@@ -3392,6 +3394,22 @@ GameObject:
   m_CorrespondingSourceObject: {fileID: 8278929031661668441, guid: 95f9f3f9c9be2374f95a765d5ec2328b, type: 3}
   m_PrefabInstance: {fileID: 5327171581670636015}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &5421689177905462033
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4254001979599385014}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ab5697e560f62c34391ff6f452024182, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SpeechBubbleStack
+  _bubbleInstancePrefab: {fileID: 0}
+  _maxBubbles: 5
+  _separatorSpacing: 0.5
+  _maxCrossCharacterOffset: 350
 --- !u!1001 &6639192564966492822
 PrefabInstance:
   m_ObjectHideFlags: 0
