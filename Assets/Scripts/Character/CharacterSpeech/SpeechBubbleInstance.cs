@@ -15,8 +15,11 @@ public class SpeechBubbleInstance : MonoBehaviour
     // ── Serialized Fields ──────────────────────────────────────────────
     [SerializeField] private TextMeshProUGUI _textElement;
     [SerializeField] private GameObject _separatorLine;
+    [Header("Animation")]
     [SerializeField] private float _entranceDuration = 0.3f;
+    [SerializeField] private float _entranceSlideDistance = 15f;
     [SerializeField] private float _exitDuration = 0.3f;
+    [SerializeField] private float _exitSlideDistance = 10f;
 
     // ── Events ─────────────────────────────────────────────────────────
     public Action OnExpired;
@@ -320,7 +323,7 @@ public class SpeechBubbleInstance : MonoBehaviour
     {
         _canvasGroup.alpha = 0f;
         Vector3 startPos = transform.localPosition;
-        startPos.y -= 15f;
+        startPos.y -= _entranceSlideDistance;
         transform.localPosition = startPos;
 
         Vector3 endPos = _targetPosition;
@@ -353,7 +356,7 @@ public class SpeechBubbleInstance : MonoBehaviour
     {
         Vector3 startPos = transform.localPosition;
         Vector3 endPos = startPos;
-        endPos.y += 10f;
+        endPos.y += _exitSlideDistance;
 
         float startAlpha = _canvasGroup.alpha;
         float elapsed = 0f;
