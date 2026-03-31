@@ -125,7 +125,7 @@ public class CombatTacticalPacer
     {
         if (battleManager == null || target == null) return target != null ? target.transform.position : _self.transform.position;
 
-        var engagement = battleManager.RequestEngagement(_self, target);
+        var engagement = battleManager.GetEngagementOf(_self);
         if (engagement != null)
         {
             return engagement.GetAssignedPosition(_self);

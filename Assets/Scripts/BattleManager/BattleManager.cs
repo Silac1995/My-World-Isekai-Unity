@@ -80,8 +80,10 @@ public class BattleManager : NetworkBehaviour
         // 3. Inscription des participants
         RegisterParticipants();
 
-        // 4. Créer l'engagement initial entre l'initiateur et la cible
-        _engagementCoordinator.RequestEngagement(initiator, target);
+        // 4. Seed the targeting graph with the initial combatants
+        _engagementCoordinator.SetTargeting(initiator, target);
+        _engagementCoordinator.SetTargeting(target, initiator);
+        _engagementCoordinator.EvaluateEngagements();
 
         // 5. Rendu visuel UNIQUE (pas dans Update)
         _zoneController.DrawBattleZoneOutline();
@@ -125,7 +127,9 @@ public class BattleManager : NetworkBehaviour
                 _battleTeamTarget.AddCharacter(target);
                 RegisterCharacter(target);
             }
-            _engagementCoordinator.RequestEngagement(initiator, target);
+            _engagementCoordinator.SetTargeting(initiator, target);
+            _engagementCoordinator.SetTargeting(target, initiator);
+            _engagementCoordinator.EvaluateEngagements();
             _zoneController?.CreateBattleZone(initiator, target);
             _zoneController?.DrawBattleZoneOutline();
             return;
@@ -147,7 +151,9 @@ public class BattleManager : NetworkBehaviour
 
         _zoneController.CreateBattleZone(initiator, target);
         RegisterParticipants();
-        _engagementCoordinator.RequestEngagement(initiator, target);
+        _engagementCoordinator.SetTargeting(initiator, target);
+        _engagementCoordinator.SetTargeting(target, initiator);
+        _engagementCoordinator.EvaluateEngagements();
         _zoneController.DrawBattleZoneOutline();
         Debug.Log($"<color=cyan>[Battle Client]</color> InitializeClientRpc completed: {initiator?.CharacterName} vs {target?.CharacterName}");
     }
@@ -220,7 +226,7 @@ public class BattleManager : NetworkBehaviour
 
     private void PerformBattleTick()
     {
-        _engagementCoordinator?.CleanupEngagements();
+        _engagementCoordinator?.EvaluateEngagements();
 
         foreach (var character in _allParticipants)
         {
@@ -260,12 +266,12 @@ public class BattleManager : NetworkBehaviour
             character.CharacterCombat.JoinBattle(this);
             character.CharacterCombat.ConsumeInitiative();
 
-            // Auto-engage ALL characters (including players) with their best enemy.
+            // Auto-target ALL characters (including players) with their best enemy.
             // For players, the PlayerController can override this later via SetPlannedTarget.
             Character bestEnemy = _engagementCoordinator?.GetBestTargetFor(character);
             if (bestEnemy != null)
             {
-                _engagementCoordinator?.RequestEngagement(character, bestEnemy);
+                _engagementCoordinator?.SetTargeting(character, bestEnemy);
             }
         }
 
@@ -346,8 +352,8 @@ public class BattleManager : NetworkBehaviour
 
         RegisterCharacter(newParticipant);
 
-        // Register engagement so GetBestTargetFor works for this participant.
-        _engagementCoordinator?.RequestEngagement(newParticipant, target);
+        // Register targeting so EvaluateEngagements will create/update engagements.
+        _engagementCoordinator?.SetTargeting(newParticipant, target);
 
         Debug.Log($"<color=cyan>[Battle Client]</color> {newParticipant.CharacterName} joined team {teamIndex} vs {target.CharacterName}. IsInBattle={newParticipant.CharacterCombat?.IsInBattle}");
     }
@@ -441,9 +447,14 @@ public class BattleManager : NetworkBehaviour
         return _engagementCoordinator?.GetBestTargetFor(attacker);
     }
 
-    public CombatEngagement RequestEngagement(Character attacker, Character target)
+    public void SetTargeting(Character attacker, Character target)
     {
-        return _engagementCoordinator?.RequestEngagement(attacker, target);
+        _engagementCoordinator?.SetTargeting(attacker, target);
+    }
+
+    public CombatEngagement GetEngagementOf(Character character)
+    {
+        return _engagementCoordinator?.GetEngagementOf(character);
     }
     #endregion
 
@@ -470,7 +481,7 @@ public class BattleManager : NetworkBehaviour
 
     private void RedirectIncapacitated(Character victim)
     {
-        _engagementCoordinator?.LeaveCurrentEngagement(victim);
+        _engagementCoordinator?.RemoveFromGraph(victim);
         _engagementCoordinator?.CleanupEngagements();
     }
 

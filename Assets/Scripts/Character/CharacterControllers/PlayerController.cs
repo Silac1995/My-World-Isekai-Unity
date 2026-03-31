@@ -114,8 +114,8 @@ public class PlayerController : CharacterGameController
                         battleTarget = opponentTeam.CharacterList.Find(c => c != null && c.IsAlive());
                         if (battleTarget != null)
                         {
-                            bm.Coordinator?.RequestEngagement(_character, battleTarget);
-                            Debug.Log($"<color=yellow>[PlayerCtrl]</color> {_character.CharacterName} fallback engagement requested against {battleTarget.CharacterName}");
+                            bm.SetTargeting(_character, battleTarget);
+                            Debug.Log($"<color=yellow>[PlayerCtrl]</color> {_character.CharacterName} fallback targeting set against {battleTarget.CharacterName}");
                         }
                         else
                         {

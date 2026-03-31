@@ -22,6 +22,17 @@ public class CombatEngagement
 
     public BattleManager Manager { get; private set; }
 
+    /// <summary>
+    /// The spatial anchor point for this engagement. Used by formations and tactical positioning.
+    /// Set when the engagement is created or when characters reorganize.
+    /// </summary>
+    public Vector3 AnchorPoint { get; private set; }
+
+    public void SetAnchorPoint(Vector3 point)
+    {
+        AnchorPoint = point;
+    }
+
     public CombatEngagement(BattleManager manager, BattleTeam teamA, BattleTeam teamB)
     {
         Manager = manager;

@@ -52,9 +52,9 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
             _character.CharacterVisual.SetLookTarget(target);
         }
 
-        if (target != null && IsInBattle && CurrentBattleManager != null && CurrentBattleManager.Coordinator != null)
+        if (target != null && IsInBattle && CurrentBattleManager != null)
         {
-            CurrentBattleManager.Coordinator.RequestEngagement(_character, target);
+            CurrentBattleManager.SetTargeting(_character, target);
         }
 
         OnActionIntentDecided?.Invoke(target, action);
@@ -90,9 +90,9 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
                 _character.CharacterVisual.ClearLookTarget();
         }
 
-        if (target != null && IsInBattle && CurrentBattleManager != null && CurrentBattleManager.Coordinator != null)
+        if (target != null && IsInBattle && CurrentBattleManager != null)
         {
-            CurrentBattleManager.Coordinator.RequestEngagement(_character, target);
+            CurrentBattleManager.SetTargeting(_character, target);
         }
     }
 
