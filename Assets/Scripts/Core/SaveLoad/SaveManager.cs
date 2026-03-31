@@ -111,9 +111,24 @@ public class SaveManager : MonoBehaviour
                 mc.SnapshotActiveBuildings();
         }
 
+        // Settings to handle Unity types (Vector3.normalized creates self-referencing loops)
+        var jsonSettings = new JsonSerializerSettings
+        {
+            ReferenceLoopHandling = ReferenceLoopHandling.Ignore
+        };
+
+        Debug.Log($"<color=green>[SaveManager]</color> Serializing {worldSaveables.Count} registered ISaveable system(s)...");
         foreach (var s in worldSaveables)
         {
-            data.worldStates[s.SaveKey] = JsonConvert.SerializeObject(s.CaptureState());
+            try
+            {
+                data.worldStates[s.SaveKey] = JsonConvert.SerializeObject(s.CaptureState(), jsonSettings);
+                Debug.Log($"<color=green>[SaveManager]</color>   Captured '{s.SaveKey}'.");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"<color=red>[SaveManager]</color> FAILED to capture '{s.SaveKey}': {ex.Message}\n{ex.StackTrace}");
+            }
         }
 
         // Snapshot live NPCs on active maps so they persist through save/load.
