@@ -6,60 +6,48 @@ using Random = UnityEngine.Random;
 
 public class CharacterSpeech : CharacterSystem
 {
-    [SerializeField] private GameObject _speechBubblePrefab;
     [SerializeField] private CharacterBodyPartsController _bodyPartsController;
+    [SerializeField] private SpeechBubbleStack _speechBubbleStack;
 
     [Header("Voice Settings")]
     [SerializeField] private AudioSource _audioSource;
     [SerializeField] private VoiceSO _voiceSO;
     [Range(0.85f, 1.25f)][SerializeField] private float _voicePitch = 1.0f;
 
-    [SerializeField] private ScriptedSpeech _scriptedSpeech;
-    
-    private Coroutine _hideCoroutine;
-    
+    private bool _isResetting;
+
     public bool IsTyping
     {
         get
         {
-            if (_speechBubblePrefab != null && _speechBubblePrefab.activeSelf)
-            {
-                var speech = _speechBubblePrefab.GetComponent<Speech>();
-                if (speech != null && speech.IsTyping) return true;
-            }
-            return false;
+            return _speechBubbleStack != null && _speechBubbleStack.IsAnyTyping;
         }
     }
 
-    public bool IsSpeaking 
+    public bool IsSpeaking
     {
-        get 
+        get
         {
-            // Vrai si on est dans le délai de disparition (Speech usuel)
-            if (_hideCoroutine != null) return true;
-            
-            // Vrai si le texte est actuellement en train de s'écrire (Speech ou ScriptedSpeech)
-            return IsTyping;
+            return _speechBubbleStack != null && _speechBubbleStack.HasActiveBubbles;
         }
     }
 
     private void Start()
     {
-        if (_speechBubblePrefab != null) _speechBubblePrefab.SetActive(false);
         _voicePitch = Random.Range(0.85f, 1.25f);
         Debug.Log($"<color=cyan>[Speech]</color> {gameObject.name} initialized with pitch: {_voicePitch:F2}");
+        _speechBubbleStack?.Init(_character.transform, _bodyPartsController?.MouthController);
     }
 
-    private void OnDisable()
+    protected override void OnDisable()
     {
-        if (_hideCoroutine != null) StopCoroutine(_hideCoroutine);
-        _hideCoroutine = null;
+        base.OnDisable();
     }
 
     public void Say(string message, float duration = 3f, float typingSpeed = 0f)
     {
         Debug.Log($"<color=cyan>[Speech]</color> {gameObject.name} Say() called. IsServer: {IsServer}, IsClient: {IsClient}, IsOwner: {IsOwner}. Message: {message}");
-        if (IsServer) 
+        if (IsServer)
         {
             Debug.Log($"<color=cyan>[Speech]</color> {gameObject.name} sending SayClientRpc to NotServer...");
             SayClientRpc(message, duration, typingSpeed);
@@ -70,7 +58,7 @@ public class CharacterSpeech : CharacterSystem
             Debug.Log($"<color=cyan>[Speech]</color> {gameObject.name} sending SayServerRpc as Owner...");
             SayServerRpc(message, duration, typingSpeed);
         }
-        else 
+        else
         {
             Debug.LogWarning($"<color=orange>[Speech]</color> {gameObject.name} Say() called by non-Owner Client. Forcing ExecuteSayLocally (not synced).");
             ExecuteSayLocally(message, duration, typingSpeed);
@@ -93,41 +81,24 @@ public class CharacterSpeech : CharacterSystem
 
     private void ExecuteSayLocally(string message, float duration, float typingSpeed)
     {
-        try 
+        try
         {
-            if (_speechBubblePrefab == null)
+            if (_speechBubbleStack == null)
             {
-                Debug.LogError($"<color=red>[Speech]</color> {gameObject.name} ExecuteSayLocally FAILED: _speechBubblePrefab is NULL!");
+                Debug.LogError($"[Speech] {gameObject.name} ExecuteSayLocally FAILED: _speechBubbleStack is NULL!");
                 return;
             }
-
-            Debug.Log($"<color=cyan>[Speech]</color> {gameObject.name} Executing locally: '{message}'");
-            if (_hideCoroutine != null) StopCoroutine(_hideCoroutine);
-            _bodyPartsController?.MouthController?.StartTalking();
-            
-            if (_speechBubblePrefab.TryGetComponent<Speech>(out var speechScript))
-            {
-                _speechBubblePrefab.SetActive(true);
-                speechScript.Setup(_character, message, _audioSource, _voiceSO, _voicePitch, typingSpeed, () => {
-                    _bodyPartsController?.MouthController?.StopTalking();
-                    _hideCoroutine = StartCoroutine(HideSpeechAfterDelay(duration));
-                });
-                Debug.Log($"<color=cyan>[Speech]</color> {gameObject.name} Local Speech bubble activated and Setup called!");
-            }
-            else
-            {
-                Debug.LogError($"<color=red>[Speech]</color> {gameObject.name} FAILED: _speechBubblePrefab does not have a Speech component!");
-            }
+            _speechBubbleStack.PushBubble(message, duration, typingSpeed, _audioSource, _voiceSO, _voicePitch);
         }
-        catch (System.Exception e)
+        catch (Exception e)
         {
-            Debug.LogError($"<color=red>[Speech CRASH]</color> Exception in ExecuteSayLocally: {e.Message}\n{e.StackTrace}");
+            Debug.LogError($"[Speech CRASH] Exception in ExecuteSayLocally: {e.Message}\n{e.StackTrace}");
         }
     }
 
     public void SayScripted(string message, float typingSpeed = 0f, Action onTypingFinished = null)
     {
-        if (IsServer) 
+        if (IsServer)
         {
             SayScriptedClientRpc(message, typingSpeed);
             ExecuteSayScriptedLocally(message, typingSpeed, onTypingFinished);
@@ -159,33 +130,13 @@ public class CharacterSpeech : CharacterSystem
 
     private void ExecuteSayScriptedLocally(string message, float typingSpeed, Action onTypingFinished)
     {
-        if (_speechBubblePrefab == null) return;
-        if (_hideCoroutine != null) StopCoroutine(_hideCoroutine);
-        
-        _bodyPartsController?.MouthController?.StartTalking();
-        
-        // Use ScriptedSpeech if available, otherwise fallback to standard Setup but without HideAfterDelay
-        if (_scriptedSpeech != null)
-        {
-            _speechBubblePrefab.SetActive(true);
-            _scriptedSpeech.SetupScripted(_character, message, _audioSource, _voiceSO, _voicePitch, typingSpeed, () => {
-                _bodyPartsController?.MouthController?.StopTalking();
-                onTypingFinished?.Invoke();
-            });
-        }
-        else if (_speechBubblePrefab.TryGetComponent<Speech>(out var speechScript))
-        {
-            _speechBubblePrefab.SetActive(true);
-            speechScript.Setup(_character, message, _audioSource, _voiceSO, _voicePitch, typingSpeed, () => {
-                _bodyPartsController?.MouthController?.StopTalking();
-                onTypingFinished?.Invoke();
-            });
-        }
+        if (_speechBubbleStack == null) return;
+        _speechBubbleStack.PushScriptedBubble(message, typingSpeed, _audioSource, _voiceSO, _voicePitch, onTypingFinished);
     }
 
     public void CloseSpeech()
     {
-        if (IsServer) 
+        if (IsServer)
         {
             CloseSpeechClientRpc();
             ExecuteCloseSpeechLocally();
@@ -195,7 +146,7 @@ public class CharacterSpeech : CharacterSystem
             CloseSpeechServerRpc();
             ExecuteCloseSpeechLocally();
         }
-        else 
+        else
         {
             ExecuteCloseSpeechLocally();
         }
@@ -211,19 +162,14 @@ public class CharacterSpeech : CharacterSystem
     [Rpc(SendTo.NotServer)]
     private void CloseSpeechClientRpc()
     {
-        if (IsOwner && !IsServer) return; // Client Owner already executed locally 
+        if (IsOwner && !IsServer) return; // Client Owner already executed locally
         ExecuteCloseSpeechLocally();
     }
 
     private void ExecuteCloseSpeechLocally()
     {
-        if (_hideCoroutine != null) StopCoroutine(_hideCoroutine);
-        _hideCoroutine = null;
-        
-        if (_scriptedSpeech != null) _scriptedSpeech.Clear();
-        else if (_speechBubblePrefab != null) _speechBubblePrefab.SetActive(false);
-        
-        _bodyPartsController?.MouthController?.StopTalking();
+        if (_isResetting) _speechBubbleStack?.ClearAll();
+        else _speechBubbleStack?.DismissBottom();
     }
 
     /// <summary>
@@ -231,13 +177,11 @@ public class CharacterSpeech : CharacterSystem
     /// </summary>
     public void ResetSpeech()
     {
+        _isResetting = true;
         CloseSpeech();
+        _isResetting = false;
     }
 
-    private IEnumerator HideSpeechAfterDelay(float delay)
-    {
-        yield return new WaitForSecondsRealtime(delay);
-        if (_speechBubblePrefab != null) _speechBubblePrefab.SetActive(false);
-        _hideCoroutine = null;
-    }
+    protected override void HandleDeath(Character character) => _speechBubbleStack?.ClearAll();
+    protected override void HandleIncapacitated(Character character) => _speechBubbleStack?.ClearAll();
 }
