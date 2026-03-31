@@ -568,7 +568,7 @@ public class GameLauncher : MonoBehaviour
     {
         if (ScreenFadeManager.Instance != null)
         {
-            ScreenFadeManager.Instance.FadeIn(_fadeDuration);
+            ScreenFadeManager.Instance.HideOverlay(_fadeDuration);
         }
     }
 
