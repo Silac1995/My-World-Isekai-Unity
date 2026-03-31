@@ -125,8 +125,7 @@ public class GameLauncher : MonoBehaviour
         if (sceneLoad == null)
         {
             Debug.LogError($"{LOG_TAG} Failed to start loading scene '{_gameSceneName}'.");
-            if (SaveManager.Instance != null) SaveManager.Instance.CurrentState = SaveManager.SaveLoadState.Idle;
-            IsLaunching = false;
+            yield return ReturnToMainMenuWithError($"Failed to load scene '{_gameSceneName}'.");
             yield break;
         }
 
@@ -150,10 +149,8 @@ public class GameLauncher : MonoBehaviour
 
         if (playerCharacter == null)
         {
-            Debug.LogError($"{LOG_TAG} Player character never spawned — aborting launch sequence.");
-            if (SaveManager.Instance != null) SaveManager.Instance.CurrentState = SaveManager.SaveLoadState.Idle;
-            IsLaunching = false;
-            FadeInSafely();
+            Debug.LogError($"{LOG_TAG} Player character never spawned — returning to main menu.");
+            yield return ReturnToMainMenuWithError("Failed to spawn player character. The game could not start.");
             yield break;
         }
 
@@ -564,6 +561,30 @@ public class GameLauncher : MonoBehaviour
     /// <summary>
     /// Safely triggers fade-in even if ScreenFadeManager is missing.
     /// </summary>
+    /// <summary>
+    /// Shows error on overlay, shuts down network, resets state, and returns to main menu.
+    /// Called when a critical failure occurs during the launch sequence.
+    /// </summary>
+    private IEnumerator ReturnToMainMenuWithError(string errorMessage)
+    {
+        Debug.LogError($"{LOG_TAG} Critical launch error: {errorMessage}");
+
+        // Show error on overlay
+        ScreenFadeManager.Instance?.ShowOverlay(1.0f, "Error");
+        ScreenFadeManager.Instance?.ShowWarning(errorMessage);
+        yield return new WaitForSecondsRealtime(3f); // Let player read the error
+
+        // Shutdown network
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+            NetworkManager.Singleton.Shutdown();
+
+        // Reset all state
+        ClearLaunchParameters();
+
+        // Return to main menu
+        SceneManager.LoadScene("MainMenuScene");
+    }
+
     private void FadeInSafely()
     {
         if (ScreenFadeManager.Instance != null)
@@ -581,5 +602,10 @@ public class GameLauncher : MonoBehaviour
         SelectedWorldGuid = null;
         SelectedCharacterGuid = null;
         IsNewWorld = false;
+        IsLaunching = false;
+
+        // Reset SaveManager state for fresh session
+        if (SaveManager.Instance != null)
+            SaveManager.Instance.ResetForNewSession();
     }
 }

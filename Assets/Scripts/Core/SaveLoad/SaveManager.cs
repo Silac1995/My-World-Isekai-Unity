@@ -98,6 +98,28 @@ public class SaveManager : MonoBehaviour
         _hostProfileSaved = true;
     }
 
+    /// <summary>
+    /// Resets all runtime state for a fresh session. Called when returning to main menu.
+    /// Clears ISaveable registrations, readiness state, current world, and save/load state.
+    /// </summary>
+    public void ResetForNewSession()
+    {
+        worldSaveables.Clear();
+        IsReady = false;
+        CurrentState = SaveLoadState.Idle;
+        CurrentWorldGuid = null;
+        CurrentWorldName = null;
+        _hostProfileSaved = false;
+        if (_settlingCoroutine != null)
+        {
+            StopCoroutine(_settlingCoroutine);
+            _settlingCoroutine = null;
+        }
+        MapController.PendingSnapshots.Clear();
+        MapController.ActiveControllers.Clear();
+        Debug.Log("<color=green>[SaveManager]</color> Reset for new session.");
+    }
+
     public int WorldSaveableCount => worldSaveables.Count;
 
     public void RegisterWorldSaveable(ISaveable s)
