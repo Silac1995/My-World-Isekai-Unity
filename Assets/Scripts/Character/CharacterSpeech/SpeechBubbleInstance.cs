@@ -258,7 +258,7 @@ public class SpeechBubbleInstance : MonoBehaviour
         _textElement.text = "";
         int charCount = 0;
 
-        float currentSpeed = _typingSpeed > 0f ? _typingSpeed : 0.06f;
+        float currentSpeed = _typingSpeed > 0f ? _typingSpeed : 0.04f;
 
         if (currentSpeed <= 0f)
         {
