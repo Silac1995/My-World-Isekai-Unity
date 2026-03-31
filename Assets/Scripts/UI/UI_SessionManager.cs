@@ -75,7 +75,7 @@ public class UI_SessionManager : MonoBehaviour
         }
     }
 
-    private void HideSessionButtons()
+    public void HideSessionButtons()
     {
         if (_sessionButtonsPanel != null) _sessionButtonsPanel.SetActive(false);
     }

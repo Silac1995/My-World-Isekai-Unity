@@ -173,10 +173,14 @@ public class GameLauncher : MonoBehaviour
         // Small delay to let NavMesh, physics settle after positioning
         yield return new WaitForSecondsRealtime(0.2f);
 
-        // ── Step 10: Enable debug tools if present ────────────────
+        // ── Step 10: Enable debug tools, hide session buttons ─────
         var debugScript = Object.FindFirstObjectByType<DebugScript>(FindObjectsInactive.Include);
         if (debugScript != null)
             debugScript.gameObject.SetActive(true);
+
+        var sessionManager = Object.FindFirstObjectByType<UI_SessionManager>(FindObjectsInactive.Include);
+        if (sessionManager != null)
+            sessionManager.HideSessionButtons();
 
         FadeInSafely();
 
