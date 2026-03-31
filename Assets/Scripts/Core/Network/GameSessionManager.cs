@@ -30,8 +30,15 @@ public class GameSessionManager : MonoBehaviour
     private Dictionary<ulong, string> _pendingClientRaces = new Dictionary<ulong, string>();
     private void Awake()
     {
-        if (Instance == null) Instance = this;
-        else Destroy(gameObject);
+        if (Instance == null)
+        {
+            Instance = this;
+            DontDestroyOnLoad(gameObject);
+        }
+        else
+        {
+            Destroy(gameObject);
+        }
     }
 
     private void Start()

@@ -125,6 +125,9 @@ public class SaveManager : MonoBehaviour
         Debug.Log($"<color=green>[SaveManager]</color> All ISaveables settled. IsReady=true. Count: {worldSaveables.Count}");
     }
 
+    // Delay between status updates so the player can read each step
+    private static readonly WaitForSecondsRealtime _statusDelay = new WaitForSecondsRealtime(0.2f);
+
     // ── Orchestrated save flow ────────────────────────────────────────
     /// <summary>
     /// Single entry point for all save triggers (bed checkpoints, portal gates, etc.).
@@ -149,6 +152,7 @@ public class SaveManager : MonoBehaviour
 
         ScreenFadeManager.Instance?.ShowOverlay(0.7f, "Saving...");
         ScreenFadeManager.Instance?.ClearWarnings();
+        yield return _statusDelay;
 
         // ── 1. Save character profile FIRST (most important) ─────────
         var coordinator = playerCharacter != null
@@ -158,6 +162,7 @@ public class SaveManager : MonoBehaviour
         if (coordinator != null)
         {
             ScreenFadeManager.Instance?.UpdateStatus("Saving character profile...");
+            yield return _statusDelay;
             Task profileTask = null;
             try
             {
@@ -194,6 +199,8 @@ public class SaveManager : MonoBehaviour
         OnSaveStarted?.Invoke();
 
         // ── 3. Snapshot buildings on active maps ─────────────────────
+        ScreenFadeManager.Instance?.UpdateStatus("Syncing buildings...");
+        yield return _statusDelay;
         foreach (var mc in MapController.ActiveControllers.ToArray())
         {
             if (mc == null || string.IsNullOrEmpty(mc.MapId)) continue;
@@ -224,6 +231,7 @@ public class SaveManager : MonoBehaviour
         foreach (var s in worldSaveables)
         {
             ScreenFadeManager.Instance?.UpdateStatus($"Saving {s.SaveKey}...");
+            yield return _statusDelay;
             try
             {
                 data.worldStates[s.SaveKey] = JsonConvert.SerializeObject(s.CaptureState(), jsonSettings);
@@ -237,6 +245,8 @@ public class SaveManager : MonoBehaviour
         }
 
         // ── 5. Snapshot NPCs on active maps ──────────────────────────
+        ScreenFadeManager.Instance?.UpdateStatus("Saving NPCs...");
+        yield return _statusDelay;
         foreach (var mc in MapController.ActiveControllers.ToArray())
         {
             if (mc == null || string.IsNullOrEmpty(mc.MapId)) continue;
@@ -258,6 +268,7 @@ public class SaveManager : MonoBehaviour
 
         // ── 6. Write world file to disk ──────────────────────────────
         ScreenFadeManager.Instance?.UpdateStatus("Writing world file...");
+        yield return _statusDelay;
         Task writeTask = null;
         try
         {

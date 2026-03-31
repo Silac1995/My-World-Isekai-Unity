@@ -54,7 +54,7 @@ public class Building : ComplexRoom
     public bool IsPublicLocation => _isPublicLocation;
     public Collider BuildingZone => _buildingZone;
     public Zone DeliveryZone => _deliveryZone;
-    public string PrefabId => _prefabId;
+    public string PrefabId { get => _prefabId; set => _prefabId = value; }
     public string BuildingId => NetworkBuildingId.Value.ToString();
 
     /// <summary>

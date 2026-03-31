@@ -333,13 +333,19 @@ namespace MWI.WorldSystem
                 return;
             }
 
+            // Set PrefabId so the building can be saved and restored from WorldSettingsData
+            var placedBuilding = buildingObj.GetComponent<Building>();
+            if (placedBuilding != null)
+            {
+                placedBuilding.PrefabId = prefabId;
+            }
+
             // If instant mode, skip construction requirements
             if (instant)
             {
-                var building = buildingObj.GetComponent<Building>();
-                if (building != null)
+                if (placedBuilding != null)
                 {
-                    building.BuildInstantly();
+                    placedBuilding.BuildInstantly();
                 }
             }
 
