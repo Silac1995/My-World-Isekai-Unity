@@ -12,9 +12,12 @@ public class CreateWorldPopup : MonoBehaviour
 
     private Action<string, string> _onCreated;
 
-    private void Awake()
+    private bool _listenersAdded;
+
+    private void EnsureListeners()
     {
-        gameObject.SetActive(false);
+        if (_listenersAdded) return;
+        _listenersAdded = true;
 
         if (_createButton != null)
             _createButton.onClick.AddListener(OnCreateClicked);
@@ -23,8 +26,14 @@ public class CreateWorldPopup : MonoBehaviour
             _cancelButton.onClick.AddListener(OnCancelClicked);
     }
 
+    private void Awake()
+    {
+        EnsureListeners();
+    }
+
     public void Show(Action<string, string> onCreated)
     {
+        EnsureListeners();
         _onCreated = onCreated;
 
         if (_nameInput != null)

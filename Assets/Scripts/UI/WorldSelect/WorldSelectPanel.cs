@@ -25,18 +25,25 @@ public class WorldSelectPanel : MonoBehaviour
     [SerializeField] private CharacterSelectPanel _characterSelectPanel;
 
     private readonly List<WorldSelectEntry> _spawnedEntries = new List<WorldSelectEntry>();
+    private bool _listenersAdded;
 
     public event Action OnBackRequested;
 
-    private void Awake()
+    private void EnsureListeners()
     {
-        gameObject.SetActive(false);
+        if (_listenersAdded) return;
+        _listenersAdded = true;
 
         if (_createNewWorldButton != null)
             _createNewWorldButton.onClick.AddListener(OnCreateNewWorldClicked);
 
         if (_backButton != null)
             _backButton.onClick.AddListener(OnBackClicked);
+    }
+
+    private void Awake()
+    {
+        EnsureListeners();
     }
 
     private void OnEnable()

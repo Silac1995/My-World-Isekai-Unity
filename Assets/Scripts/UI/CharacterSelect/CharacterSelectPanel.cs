@@ -30,10 +30,12 @@ public class CharacterSelectPanel : MonoBehaviour
     private string _selectedWorldGuid;
     private string _selectedWorldName;
     private readonly List<CharacterSelectEntry> _spawnedEntries = new List<CharacterSelectEntry>();
+    private bool _listenersAdded;
 
-    private void Awake()
+    private void EnsureListeners()
     {
-        gameObject.SetActive(false);
+        if (_listenersAdded) return;
+        _listenersAdded = true;
 
         if (_createCharacterButton != null)
             _createCharacterButton.onClick.AddListener(OnCreateCharacterClicked);
@@ -42,8 +44,14 @@ public class CharacterSelectPanel : MonoBehaviour
             _backButton.onClick.AddListener(OnBackClicked);
     }
 
+    private void Awake()
+    {
+        EnsureListeners();
+    }
+
     public void Open(string worldGuid, string worldName)
     {
+        EnsureListeners();
         _selectedWorldGuid = worldGuid;
         _selectedWorldName = worldName;
 

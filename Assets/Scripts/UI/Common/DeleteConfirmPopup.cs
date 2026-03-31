@@ -10,10 +10,12 @@ public class DeleteConfirmPopup : MonoBehaviour
     [SerializeField] private Button _noButton;
 
     private Action _onConfirm;
+    private bool _listenersAdded;
 
-    private void Awake()
+    private void EnsureListeners()
     {
-        gameObject.SetActive(false);
+        if (_listenersAdded) return;
+        _listenersAdded = true;
 
         if (_yesButton != null)
             _yesButton.onClick.AddListener(OnYesClicked);
@@ -22,8 +24,14 @@ public class DeleteConfirmPopup : MonoBehaviour
             _noButton.onClick.AddListener(OnNoClicked);
     }
 
+    private void Awake()
+    {
+        EnsureListeners();
+    }
+
     public void Show(string name, Action onConfirm)
     {
+        EnsureListeners();
         _onConfirm = onConfirm;
 
         if (_messageText != null)

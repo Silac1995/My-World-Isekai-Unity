@@ -12,10 +12,12 @@ public class CreateCharacterPopup : MonoBehaviour
     [SerializeField] private Button _cancelButton;
 
     private Action<string> _onCreated;
+    private bool _listenersAdded;
 
-    private void Awake()
+    private void EnsureListeners()
     {
-        gameObject.SetActive(false);
+        if (_listenersAdded) return;
+        _listenersAdded = true;
 
         if (_createButton != null)
             _createButton.onClick.AddListener(OnCreateClicked);
@@ -24,8 +26,14 @@ public class CreateCharacterPopup : MonoBehaviour
             _cancelButton.onClick.AddListener(OnCancelClicked);
     }
 
+    private void Awake()
+    {
+        EnsureListeners();
+    }
+
     public void Show(Action<string> onCreated)
     {
+        EnsureListeners();
         _onCreated = onCreated;
 
         if (_nameInput != null)
