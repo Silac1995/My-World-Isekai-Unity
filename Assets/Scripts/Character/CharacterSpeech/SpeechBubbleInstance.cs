@@ -194,6 +194,20 @@ public class SpeechBubbleInstance : MonoBehaviour
     }
 
     /// <summary>
+    /// Restarts the expiration timer from scratch. Called when this bubble is pushed
+    /// by a nearby character's speech, so it stays visible during the conversation.
+    /// Has no effect on scripted bubbles (they don't auto-expire).
+    /// </summary>
+    public void ResetExpirationTimer()
+    {
+        if (_isScripted || _duration <= 0f) return;
+        if (_expirationRoutine == null) return; // not yet expiring (still typing) or already dismissed
+
+        StopCoroutine(_expirationRoutine);
+        _expirationRoutine = StartCoroutine(ExpirationTimer());
+    }
+
+    /// <summary>
     /// Plays exit animation, then destroys this bubble.
     /// </summary>
     public void Dismiss(Action onComplete = null)
