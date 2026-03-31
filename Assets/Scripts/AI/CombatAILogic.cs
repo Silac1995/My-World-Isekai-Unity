@@ -122,7 +122,6 @@ namespace MWI.AI
                 {
                     // Perfectly positioned, stop and charge the action
                     movement.Stop();
-                    _self.CharacterVisual?.FaceTarget(currentTarget.transform.position);
 
                     // Don't attempt execution if a previous action (attack animation) is still playing.
                     // Without this guard, initiative refills (~0.1s) far faster than animations finish (~0.8s),
@@ -177,8 +176,8 @@ namespace MWI.AI
                 }
             }
 
-            Vector3 dirToTarget = currentTarget.transform.position - _self.transform.position;
-            _self.CharacterVisual?.UpdateFlip(dirToTarget);
+            // Facing is handled by CharacterVisual.LateUpdate via the look target set by SetActionIntent.
+            // CombatAILogic must NOT directly control facing to avoid competing flip sources.
 
             return true;
         }

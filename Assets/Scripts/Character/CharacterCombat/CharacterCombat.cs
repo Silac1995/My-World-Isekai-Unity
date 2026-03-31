@@ -81,6 +81,15 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
         Debug.Log($"<color=cyan>[Combat]</color> {_character.CharacterName} SetPlannedTarget → PlannedTarget: {PlannedTarget?.CharacterName ?? "null"} → {target?.CharacterName ?? "null"}");
         PlannedTarget = target;
 
+        // Update look target so this character faces their chosen target
+        if (_character != null && _character.CharacterVisual != null)
+        {
+            if (target != null)
+                _character.CharacterVisual.SetLookTarget(target);
+            else
+                _character.CharacterVisual.ClearLookTarget();
+        }
+
         if (target != null && IsInBattle && CurrentBattleManager != null && CurrentBattleManager.Coordinator != null)
         {
             CurrentBattleManager.Coordinator.RequestEngagement(_character, target);

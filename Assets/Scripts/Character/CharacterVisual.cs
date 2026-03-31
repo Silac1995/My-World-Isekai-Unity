@@ -218,10 +218,21 @@ public class CharacterVisual : CharacterSystem, ICharacterVisual, IAnimationLaye
 
     private void LateUpdate()
     {
-        // If a look target is set, orient the sprite toward it each frame
-        if (_lookTarget != null)
+        // If a look target is set, orient the sprite toward it each frame.
+        // Null-safety: the target Transform could be destroyed mid-combat (death, despawn).
+        if (_lookTarget == null) return;
+
+        // Unity fake-null check: a destroyed MonoBehaviour/Transform passes C# null check
+        // but fails Unity's equality operator. Use ReferenceEquals as fallback.
+        try
         {
+            // Accessing .position on a destroyed Transform throws MissingReferenceException
             FaceTarget(_lookTarget.position);
+        }
+        catch (MissingReferenceException)
+        {
+            Debug.LogWarning($"[CharacterVisual] Look target was destroyed mid-combat on {_character?.CharacterName ?? "unknown"}. Clearing.");
+            _lookTarget = null;
         }
     }
 
