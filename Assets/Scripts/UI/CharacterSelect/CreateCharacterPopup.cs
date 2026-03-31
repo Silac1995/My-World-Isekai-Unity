@@ -51,7 +51,7 @@ public class CreateCharacterPopup : MonoBehaviour
             return;
         }
 
-        string characterGuid = Guid.NewGuid().ToString();
+        string characterGuid = Guid.NewGuid().ToString("N");
 
         var races = Resources.LoadAll<RaceSO>("Data/Race");
         var race = races.Length > 0 ? races[UnityEngine.Random.Range(0, races.Length)] : null;
@@ -61,7 +61,8 @@ public class CreateCharacterPopup : MonoBehaviour
             raceId = race != null ? race.name : "",
             gender = UnityEngine.Random.value > 0.5f ? 0 : 1,
             visualSeed = UnityEngine.Random.Range(0, int.MaxValue),
-            archetypeId = "Human"
+            archetypeId = "Human",
+            characterName = characterName
         };
 
         var profile = new CharacterProfileSaveData

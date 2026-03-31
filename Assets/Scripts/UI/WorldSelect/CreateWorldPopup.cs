@@ -54,7 +54,7 @@ public class CreateWorldPopup : MonoBehaviour
             return;
         }
 
-        string worldGuid = Guid.NewGuid().ToString();
+        string worldGuid = Guid.NewGuid().ToString("N");
         string seedText = _seedInput != null ? _seedInput.text.Trim() : "";
         string worldSeed = string.IsNullOrEmpty(seedText)
             ? UnityEngine.Random.Range(0, int.MaxValue).ToString()
