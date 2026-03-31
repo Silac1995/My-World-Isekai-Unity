@@ -18,26 +18,34 @@ You own deep expertise in the **combat architecture**, covering battle orchestra
 ```
 BattleManager (NetworkBehaviour — global orchestrator)
 ├── BattleTeam[] (opposing sides)
-├── CombatEngagementCoordinator (spatial sub-grouping)
-│   └── CombatEngagement[] (local sub-fights, max 6 per side)
+├── CombatEngagementCoordinator (targeting-graph engagement grouping)
+│   ├── _targetingGraph (Dictionary<Character, Character>)
+│   └── CombatEngagement[] (local sub-fights via Union-Find components)
+│       └── EngagementGroup[] (per-team, owns CombatFormation)
+│           └── CombatFormation (organic role-based positioning)
 └── BattleZoneController (physical zone)
 
 CharacterCombat (CharacterSystem — per-character)
 ├── Initiative system (fills via BattleManager ticks)
 ├── PlannedAction / PlannedTarget (queued intent)
 ├── CombatStyleExpertise[] (weapon mastery + XP)
+├── Facing: SetLookTarget(PlannedTarget) — single source of truth
 └── Attack() / UseAbility() (action execution)
 
 CombatAILogic (pure C# — shared Player/NPC)
 ├── Phase 1: Decide intent (NPC auto-decide)
 ├── Phase 2: Move into range + execute action
 └── Phase 3: Tactical pacing (CombatTacticalPacer)
+    ├── Priority 1: Post-attack step-back (melee, 2m)
+    ├── Priority 2: Unengaged follow (trail target at range)
+    ├── Priority 3: Tactical circling (melee, 2:1+ outnumber)
+    └── Priority 4: Idle sway (Perlin noise, 0.7m)
 ```
 
 ### 2. Battle Flow
 
 1. **Initiation**: `CharacterCombat.StartFight(target)` → creates `BattleManager` → `Initialize(initiator, target)`
-2. **Team Assignment**: Participants sorted into `BattleTeam`s, engagement coordinator groups them spatially
+2. **Team Assignment**: Participants sorted into `BattleTeam`s, auto-targeted via `SetTargeting`, engagement coordinator groups them via targeting graph
 3. **Tick Loop**: `BattleManager.PerformBattleTick()` at 10 Hz → `UpdateInitiativeTick(amount)` per character
 4. **Initiative**: `baseInitiativePerTick + Speed * speedMultiplier`, capped at 2.0. When full → `IsReadyToAct = true`
 5. **Intent**: UI or AI calls `SetActionIntent(Func<bool> action, Character target)`
@@ -87,15 +95,36 @@ All combat effects route through `CharacterAction`:
 ### 6. Combat AI (`CombatAILogic`)
 
 - **Phase 1 (NPC only)**: `DecideAbilityOrAttack(target)` — scans HP/Stamina/Mana pools, 80% chance critical support (<20% pool), 30% for low (<40%), falls back to 30% offensive ability or basic attack
-- **Phase 2 (Both)**: Move into optimal strike range (Pythagoras), Z-alignment check (±1.6m), execute when ready
-- **Phase 3 (Fallback)**: `CombatTacticalPacer` maintains `PREFERRED_X_GAP = 5.0f`, soft zone tracking, wander jitter
+- **Phase 2 (Both)**: Move into optimal strike range using `GetEffectiveAttackRange()` (melee vs ranged), Z-alignment check (±1.6m for melee, skipped for ranged), execute when ready. Ranged characters skip approach if already within weapon range.
+- **Phase 3 (Fallback)**: `CombatTacticalPacer` priority-based state machine:
+  1. Post-attack step-back (melee only, 2m away from target)
+  2. Unengaged follow (trail target at attackRange/5m)
+  3. Tactical circling (melee, outnumbering 2:1+, orbit at 6m)
+  4. Idle sway (Perlin noise, 0.7m radius around sway center)
+  - Leash system: 15m soft anchor, `LEASH_PULL_STRENGTH = 0.3`
+  - Ranged characters hold ground — no kiting, no step-back, no circling
 
-### 7. Engagement Coordinator
+### 6a. Facing System
 
-- `RequestEngagement(attacker, target)` → creates/joins `CombatEngagement`
-- Merges nearby fights, splits overcrowded ones (max 6 per side)
-- `GetBestTargetFor(attacker)` → finds optimal target
-- `LeaveCurrentEngagement(victim)` → cleanup on death/flee
+Single source of truth: characters face only their `PlannedTarget` during combat. `SetActionIntent()` and `SetPlannedTarget()` both call `CharacterVisual.SetLookTarget(target)`. No other system overrides facing during battle.
+
+### 7. Engagement Coordinator (Targeting-Graph Algorithm)
+
+**API**: `SetTargeting(attacker, target)` updates `_targetingGraph`, `EvaluateEngagements()` runs per battle tick
+
+**Algorithm (per tick)**:
+1. **FORM**: Find mutual targeting pairs (A→B and B→A) — these seed Union-Find components
+2. **JOIN**: One-way targeters join the component of their target (if target is in one)
+3. **BUILD**: Collect connected components by Union-Find root
+4. **RECONCILE**: Compare components against existing engagements — create new, sync members, or merge overlapping
+5. **CLEAN**: Remove characters no longer in any component from their engagements; prune empty engagements
+
+**Formation**: Each `EngagementGroup` owns a `CombatFormation`. Melee at ~4m, ranged at ~8m from opponent center. Z-axis spreading with configurable spacing. Deterministic jitter per character. No fixed ring slots.
+
+**Other API**:
+- `GetBestTargetFor(attacker)` → finds optimal target (closest in non-full engagement)
+- `GetEngagementOf(character)` → current engagement or null
+- `RemoveFromGraph(character)` → cleanup on death/leave (removes both outgoing and incoming edges)
 
 ### 8. Network RPCs
 
@@ -136,6 +165,8 @@ OnParticipantAdded(Character)
 | `BattleManager` | `Assets/Scripts/BattleManager/` | NetworkBehaviour |
 | `CombatEngagementCoordinator` | `Assets/Scripts/BattleManager/` | Pure C# |
 | `CombatEngagement` | `Assets/Scripts/BattleManager/` | Pure C# |
+| `EngagementGroup` | `Assets/Scripts/BattleManager/` | Pure C# |
+| `CombatFormation` | `Assets/Scripts/BattleManager/` | Pure C# |
 | `CombatStyleAttack` | `Assets/Scripts/Character/CharacterCombat/` | MonoBehaviour (hitbox) |
 | `CombatAILogic` | `Assets/Scripts/` (MWI.AI namespace) | Pure C# |
 | `CombatTacticalPacer` | `Assets/Scripts/` (MWI.AI namespace) | Pure C# |

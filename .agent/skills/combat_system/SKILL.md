@@ -176,7 +176,10 @@ Weapons use physical types. Spells typically use magical types.
 - **Critical pitfall**: `PlayerController.Move()` has a safety check that re-enables the NavMeshAgent when it detects it was "externally disabled" during combat. This check **must** respect `IsKnockedBack` — otherwise it immediately calls `ConfigureNavMesh(true)` which zeros velocity and sets the Rigidbody to kinematic, completely nullifying the knockback. The guard is: `!_character.CharacterMovement.IsKnockedBack`.
 - After the knockback window ends, `FixedUpdate` re-enables the NavMeshAgent (if in combat) and sets the Rigidbody back to kinematic.
 
-### 12. CombatTacticalPacer (Dynamic Movement)
+### 12. Facing System (Single Source of Truth)
+During combat, a character's facing direction is driven exclusively by their `PlannedTarget`. When `SetActionIntent()` or `SetPlannedTarget()` is called, `CharacterVisual.SetLookTarget(target)` is invoked to point the character at their current combat target. No other system (movement, animation, AI) overrides facing during battle. This eliminates sprite-flip jitter from competing flip sources. When leaving combat, `ClearLookTarget()` returns control to the normal movement-based facing.
+
+### 13. CombatTacticalPacer (Dynamic Movement)
 
 `CombatTacticalPacer` (`Assets/Scripts/Character/CharacterCombat/CombatTacticalPacer.cs`) determines where a character should move between action executions. It is a pure C# class instantiated by `CombatAILogic` and called in Phase 3 (no action queued).
 
@@ -194,7 +197,7 @@ Weapons use physical types. Spells typically use magical types.
 
 **Ranged behavior**: Ranged characters (detected via `CombatStyleExpertise.Style is RangedCombatStyleSO`) skip step-back and circling — they hold position and idle sway.
 
-### 13. Battle Ground Circle Indicators
+### 14. Battle Ground Circle Indicators
 Visual-only, local-player feature. When the local player joins a battle, colored circles appear on the ground beneath every participant: **Blue** for allies, **Red** for enemies. Colors are relative to the viewer's team.
 
 **Components:**
