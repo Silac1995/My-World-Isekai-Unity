@@ -198,3 +198,39 @@ SpeechBubbleInstance (Root)
 - Old `SpeechBubble_Prefab` is replaced by `SpeechBubbleInstance_Prefab` (created via MCP).
 - Character prefabs (biped + quadruped) updated to reference new stack component and instance prefab.
 - `Speech.cs` and `ScriptedSpeech.cs` removed after migration.
+
+---
+
+## Post-Implementation Changes
+
+The following deviations from this spec were made during implementation. The canonical source of truth is now `.agent/skills/speech-system/SKILL.md`.
+
+### SpeechZoneManager deleted — replaced by per-stack SphereCollider trigger
+
+The spec called for a lazy scene singleton (`SpeechZoneManager`) to track all active stacks and coordinate pushes. This was removed entirely. Instead, each `SpeechBubbleStack` carries its own `SphereCollider` (trigger, radius = `_speechZoneRadius`) and `Rigidbody` (kinematic). Unity's physics engine handles range detection automatically via `OnTriggerEnter` / `OnTriggerExit`, populating a per-stack `_nearbyStacks` HashSet. This eliminates the singleton, removes the O(n) scene scan on every push, and makes each character fully self-contained.
+
+The SphereCollider is placed on **Physics Layer 14 (SpeechZone)**, configured to only collide with itself, so it never interferes with gameplay physics.
+
+### Habbo Hotel push model — all bubbles stay, no gap closing
+
+The spec described gap closing after bubble removal ("remaining bubbles lerp to new positions"). In the final implementation, **bubbles never reposition after removal**. When a bubble expires or is dismissed, it fades out and leaves empty vertical space. There is no `RecalculatePositions()` call. This applies both within a character's own stack and across characters. The spatial history of the conversation is preserved vertically.
+
+### No _crossCharacterOffset field — absolute Y per bubble
+
+The spec proposed a `_crossCharacterOffset` float on the stack to represent accumulated cross-character push as a single offset applied during position recalculation. The final implementation discards this. Each bubble tracks its own absolute `_targetPosition`. When a push happens, `GetTargetPosition()` is read and `SetTargetPosition()` is called with the incremented Y. There is no shared offset variable and no recalculation pass.
+
+### Expiration timer reset on cross-character push
+
+Not in the original spec: when a nearby character's push causes `PushAllBubblesUpBy()` to be called on this stack, each affected bubble also calls `ResetExpirationTimer()`. This prevents a bubble that was moments from expiring from disappearing while still visually relevant during an active conversation.
+
+### GetHeight() uses canvas rect * root localScale
+
+The spec described `GetHeight()` as returning `RectTransform.rect.height`. The actual implementation returns `canvas.GetComponent<RectTransform>().rect.height * transform.localScale.y`. This is necessary because the canvas is in canvas-local units (e.g., 70 units at scale 0.03 = 2.1 world units). The root `localScale.y` converts canvas-local height into the stack's coordinate space.
+
+### Typing uses maxVisibleCharacters instead of string concatenation
+
+The spec described letter-by-letter typing as building the string incrementally. The final implementation assigns the full message to `_textElement.text` at the start of typing and calls `ForceMeshUpdate()` so `ContentSizeFitter` computes the final bubble height immediately. Characters are then revealed progressively via `maxVisibleCharacters`. This ensures the bubble occupies its full final height from frame 0, making the push height calculation accurate.
+
+### Entrance animation slides UP from below
+
+The spec stated "fade in + slide up (offset → 0)". The implementation slides the bubble upward from below (starts at `targetY - _entranceSlideDistance`, animates to `targetY`). The exit also slides upward. Both slide distances are serializable fields (`_entranceSlideDistance = 15f`, `_exitSlideDistance = 10f`).
