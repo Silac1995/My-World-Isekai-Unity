@@ -1,0 +1,364 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+
+/// <summary>
+/// Manages all active speech bubble instances for a single character.
+/// Handles spawning, positioning, bubble cap enforcement, mouth controller
+/// integration, separator visibility, and cross-character offset.
+/// This is a plain MonoBehaviour — purely local visual management.
+/// </summary>
+public class SpeechBubbleStack : MonoBehaviour
+{
+    // ── Serialized Fields ──────────────────────────────────────────────
+    [SerializeField] private SpeechBubbleInstance _bubbleInstancePrefab;
+    [SerializeField] private int _maxBubbles = 5;
+    [SerializeField] private float _separatorSpacing = 0.5f;
+    [SerializeField] private float _maxCrossCharacterOffset = 350f;
+
+    // ── Private Fields ─────────────────────────────────────────────────
+    private readonly List<SpeechBubbleInstance> _bubbles = new List<SpeechBubbleInstance>();
+    private float _crossCharacterOffset;
+    private MouthController _mouthController;
+    private int _typingCount;
+
+    // ── Public Properties ──────────────────────────────────────────────
+    public Transform OwnerRoot { get; private set; }
+    public bool IsAnyTyping => _typingCount > 0;
+    public bool HasActiveBubbles => _bubbles.Count > 0;
+
+    // ── Initialization ─────────────────────────────────────────────────
+
+    /// <summary>
+    /// Called by CharacterSpeech during setup. Stores owner root and mouth controller references.
+    /// </summary>
+    public void Init(Transform ownerRoot, MouthController mouthController)
+    {
+        OwnerRoot = ownerRoot;
+        _mouthController = mouthController;
+    }
+
+    // ── Unity Lifecycle ────────────────────────────────────────────────
+
+    private void OnEnable()
+    {
+        try
+        {
+            SpeechZoneManager.Instance?.RegisterStack(this);
+        }
+        catch (Exception e)
+        {
+            Debug.LogError($"[SpeechBubbleStack] Exception in OnEnable: {e.Message}\n{e.StackTrace}");
+        }
+    }
+
+    private void OnDisable()
+    {
+        try
+        {
+            ClearAll();
+            SpeechZoneManager.Instance?.UnregisterStack(this);
+        }
+        catch (Exception e)
+        {
+            Debug.LogError($"[SpeechBubbleStack] Exception in OnDisable: {e.Message}\n{e.StackTrace}");
+        }
+    }
+
+    // ── Public API ─────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Pushes a standard timed bubble onto the stack.
+    /// </summary>
+    public void PushBubble(string message, float duration, float typingSpeed,
+        AudioSource audioSource, VoiceSO voiceSO, float pitch)
+    {
+        try
+        {
+            // 1. Enforce bubble cap — dismiss oldest if at max
+            if (_bubbles.Count >= _maxBubbles)
+            {
+                var oldest = _bubbles[_bubbles.Count - 1];
+                _bubbles.RemoveAt(_bubbles.Count - 1);
+                UnsubscribeEvents(oldest);
+                oldest.Dismiss();
+            }
+
+            // 2. If the newest bubble is still typing, complete it immediately
+            if (_bubbles.Count > 0 && _bubbles[0].IsTyping)
+            {
+                _bubbles[0].CompleteTypingImmediately();
+            }
+
+            // 3. Instantiate new bubble as child of this transform
+            var instance = Instantiate(_bubbleInstancePrefab, transform);
+
+            // 4. Setup the bubble
+            instance.Setup(message, audioSource, voiceSO, pitch, typingSpeed, duration,
+                onExpired: () => OnBubbleExpired(instance));
+
+            // 5. Subscribe to events
+            instance.OnHeightChanged += RecalculatePositions;
+            instance.OnTypingStateChanged += OnTypingStateChanged;
+
+            // 6. Insert at front (newest = index 0)
+            _bubbles.Insert(0, instance);
+
+            // 7. Update separator visibility: index 0 hidden, all others visible
+            UpdateSeparatorVisibility();
+
+            // 8. Recalculate positions
+            RecalculatePositions();
+
+            // 9. Notify SpeechZoneManager
+            SpeechZoneManager.Instance?.NotifyBubblePushed(this, instance.GetHeight());
+        }
+        catch (Exception e)
+        {
+            Debug.LogError($"[SpeechBubbleStack] Exception in PushBubble: {e.Message}\n{e.StackTrace}");
+        }
+    }
+
+    /// <summary>
+    /// Pushes a scripted bubble (no auto-expiration) onto the stack.
+    /// </summary>
+    public void PushScriptedBubble(string message, float typingSpeed,
+        AudioSource audioSource, VoiceSO voiceSO, float pitch, Action onTypingFinished)
+    {
+        try
+        {
+            // 1. Enforce bubble cap
+            if (_bubbles.Count >= _maxBubbles)
+            {
+                var oldest = _bubbles[_bubbles.Count - 1];
+                _bubbles.RemoveAt(_bubbles.Count - 1);
+                UnsubscribeEvents(oldest);
+                oldest.Dismiss();
+            }
+
+            // 2. Complete typing on newest if still typing
+            if (_bubbles.Count > 0 && _bubbles[0].IsTyping)
+            {
+                _bubbles[0].CompleteTypingImmediately();
+            }
+
+            // 3. Instantiate
+            var instance = Instantiate(_bubbleInstancePrefab, transform);
+
+            // 4. Setup scripted
+            instance.SetupScripted(message, audioSource, voiceSO, pitch, typingSpeed, onTypingFinished);
+
+            // 5. Subscribe to events
+            instance.OnHeightChanged += RecalculatePositions;
+            instance.OnTypingStateChanged += OnTypingStateChanged;
+
+            // 6. Insert at front
+            _bubbles.Insert(0, instance);
+
+            // 7. Update separators
+            UpdateSeparatorVisibility();
+
+            // 8. Recalculate positions
+            RecalculatePositions();
+
+            // 9. Notify SpeechZoneManager
+            SpeechZoneManager.Instance?.NotifyBubblePushed(this, instance.GetHeight());
+        }
+        catch (Exception e)
+        {
+            Debug.LogError($"[SpeechBubbleStack] Exception in PushScriptedBubble: {e.Message}\n{e.StackTrace}");
+        }
+    }
+
+    /// <summary>
+    /// Dismisses the bottom-most (newest) bubble in the stack (index 0).
+    /// Used for scripted dialogue advance — dismiss current line before showing next.
+    /// </summary>
+    public void DismissBottom()
+    {
+        if (_bubbles.Count <= 0) return;
+
+        var bottom = _bubbles[0];
+        bottom.Dismiss(() => { RemoveBubble(bottom); });
+    }
+
+    /// <summary>
+    /// Dismisses all active bubbles with exit animations.
+    /// Clears the internal list immediately to prevent stale callbacks.
+    /// </summary>
+    public void DismissAll()
+    {
+        var toRemove = new List<SpeechBubbleInstance>(_bubbles);
+        _bubbles.Clear();
+
+        foreach (var bubble in toRemove)
+        {
+            UnsubscribeEvents(bubble);
+            bubble.Dismiss();
+        }
+
+        _typingCount = 0;
+        _mouthController?.StopTalking();
+    }
+
+    /// <summary>
+    /// Dismisses only scripted bubbles.
+    /// </summary>
+    public void DismissAllScripted()
+    {
+        var scripted = _bubbles.Where(b => b.IsScripted).ToList();
+        foreach (var bubble in scripted)
+        {
+            if (bubble.IsTyping) _typingCount--;
+            _bubbles.Remove(bubble);
+            UnsubscribeEvents(bubble);
+            bubble.Dismiss();
+        }
+
+        _typingCount = Mathf.Max(_typingCount, 0);
+        if (_typingCount == 0) _mouthController?.StopTalking();
+
+        UpdateSeparatorVisibility();
+        RecalculatePositions();
+    }
+
+    /// <summary>
+    /// Immediately destroys all bubbles without exit animations.
+    /// </summary>
+    public void ClearAll()
+    {
+        foreach (var bubble in _bubbles)
+        {
+            if (bubble != null)
+            {
+                UnsubscribeEvents(bubble);
+                Destroy(bubble.gameObject);
+            }
+        }
+
+        _bubbles.Clear();
+        _crossCharacterOffset = 0f;
+        _typingCount = 0;
+        _mouthController?.StopTalking();
+    }
+
+    /// <summary>
+    /// Adds vertical offset to push this stack upward when nearby characters speak.
+    /// Clamped to _maxCrossCharacterOffset.
+    /// </summary>
+    public void AddCrossCharacterOffset(float height)
+    {
+        _crossCharacterOffset = Mathf.Min(_crossCharacterOffset + height, _maxCrossCharacterOffset);
+        RecalculatePositions();
+    }
+
+    /// <summary>
+    /// Returns the total height of the entire stack including separators and cross-character offset.
+    /// </summary>
+    public float GetTotalStackHeight()
+    {
+        float total = _crossCharacterOffset;
+
+        for (int i = 0; i < _bubbles.Count; i++)
+        {
+            if (_bubbles[i] != null)
+            {
+                total += _bubbles[i].GetHeight();
+                if (i < _bubbles.Count - 1)
+                    total += _separatorSpacing;
+            }
+        }
+
+        return total;
+    }
+
+    // ── Private Methods ────────────────────────────────────────────────
+
+    /// <summary>
+    /// Recalculates vertical positions for all bubbles in the stack.
+    /// Index 0 is the newest (bottom), stacking upward.
+    /// </summary>
+    private void RecalculatePositions()
+    {
+        float targetY = _crossCharacterOffset;
+
+        for (int i = 0; i < _bubbles.Count; i++)
+        {
+            if (_bubbles[i] == null) continue;
+
+            _bubbles[i].SetTargetPosition(new Vector3(0f, targetY, 0f));
+            targetY += _bubbles[i].GetHeight() + _separatorSpacing;
+        }
+    }
+
+    /// <summary>
+    /// Callback when a bubble's expiration timer fires — removes it from the stack.
+    /// </summary>
+    private void OnBubbleExpired(SpeechBubbleInstance instance)
+    {
+        RemoveBubble(instance);
+    }
+
+    /// <summary>
+    /// Shared removal logic: unsubscribe events, remove from list, update visuals.
+    /// </summary>
+    private void RemoveBubble(SpeechBubbleInstance instance)
+    {
+        if (instance == null) return;
+        if (!_bubbles.Contains(instance)) return;
+
+        UnsubscribeEvents(instance);
+        _bubbles.Remove(instance);
+        UpdateSeparatorVisibility();
+        RecalculatePositions();
+    }
+
+    /// <summary>
+    /// Tracks how many bubbles are currently typing to control mouth animation.
+    /// </summary>
+    private void OnTypingStateChanged(bool isTyping)
+    {
+        if (isTyping)
+        {
+            _typingCount++;
+            if (_typingCount == 1)
+            {
+                _mouthController?.StartTalking();
+            }
+        }
+        else
+        {
+            _typingCount--;
+            if (_typingCount <= 0)
+            {
+                _typingCount = 0;
+                _mouthController?.StopTalking();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Updates separator line visibility: hidden for index 0 (newest), visible for all others.
+    /// </summary>
+    private void UpdateSeparatorVisibility()
+    {
+        for (int i = 0; i < _bubbles.Count; i++)
+        {
+            if (_bubbles[i] != null)
+            {
+                _bubbles[i].SetSeparatorVisible(i > 0);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Unsubscribes from a bubble instance's events to prevent stale callbacks.
+    /// </summary>
+    private void UnsubscribeEvents(SpeechBubbleInstance instance)
+    {
+        if (instance == null) return;
+        instance.OnHeightChanged -= RecalculatePositions;
+        instance.OnTypingStateChanged -= OnTypingStateChanged;
+    }
+}
