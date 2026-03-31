@@ -314,13 +314,13 @@ public class SpeechBubbleInstance : MonoBehaviour
     }
 
     /// <summary>
-    /// Entrance: fade in from alpha 0 and slide down from +15 offset. EaseOut curve.
+    /// Entrance: fade in from alpha 0 and slide up from -15 offset. EaseOut curve.
     /// </summary>
     private IEnumerator EntranceAnimation(Action onComplete)
     {
         _canvasGroup.alpha = 0f;
         Vector3 startPos = transform.localPosition;
-        startPos.y += 15f;
+        startPos.y -= 15f;
         transform.localPosition = startPos;
 
         Vector3 endPos = _targetPosition;
