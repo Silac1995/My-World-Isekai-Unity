@@ -612,6 +612,77 @@ namespace MWI.WorldSystem
         }
 
         /// <summary>
+        /// Spawns buildings from CommunityData.ConstructedBuildings for this map.
+        /// Used by predefined maps on world load (they never WakeUp) and by WakeUp itself.
+        /// Skips buildings that already exist in the scene (checks by BuildingId).
+        /// </summary>
+        public void SpawnSavedBuildings()
+        {
+            if (CommunityTracker.Instance == null) return;
+
+            var community = CommunityTracker.Instance.GetCommunity(MapId);
+            if (community == null || community.ConstructedBuildings == null || community.ConstructedBuildings.Count == 0)
+            {
+                Debug.Log($"<color=cyan>[MapController:SpawnSavedBuildings]</color> No buildings to spawn for '{MapId}'.");
+                return;
+            }
+
+            WorldSettingsData settings = Resources.Load<WorldSettingsData>("Data/World/WorldSettingsData");
+            if (settings == null)
+            {
+                Debug.LogError($"<color=red>[MapController:SpawnSavedBuildings]</color> WorldSettingsData not found!");
+                return;
+            }
+
+            // Collect existing building IDs in the scene to avoid duplicates
+            var existingBuildingIds = new HashSet<string>();
+            foreach (var building in GetComponentsInChildren<Building>())
+            {
+                if (!string.IsNullOrEmpty(building.BuildingId))
+                    existingBuildingIds.Add(building.BuildingId);
+            }
+
+            int spawnedCount = 0;
+            foreach (var bSave in community.ConstructedBuildings)
+            {
+                // Skip if this building already exists in the scene (e.g., preplaced building)
+                if (existingBuildingIds.Contains(bSave.BuildingId))
+                {
+                    Debug.Log($"<color=cyan>[MapController:SpawnSavedBuildings]</color> Skipping '{bSave.PrefabId}' (ID={bSave.BuildingId}) — already in scene.");
+                    continue;
+                }
+
+                GameObject bPrefab = settings.GetBuildingPrefab(bSave.PrefabId);
+                if (bSave.State == BuildingState.UnderConstruction && settings.GenericScaffoldPrefab != null)
+                    bPrefab = settings.GenericScaffoldPrefab;
+
+                if (bPrefab != null)
+                {
+                    Vector3 worldPos = transform.position + bSave.Position;
+                    GameObject bObj = Instantiate(bPrefab, worldPos, bSave.Rotation);
+                    if (bObj.TryGetComponent(out NetworkObject bNet))
+                    {
+                        bNet.Spawn();
+                        bObj.transform.SetParent(this.transform);
+
+                        Building restoredBuilding = bObj.GetComponent<Building>();
+                        if (restoredBuilding != null)
+                        {
+                            restoredBuilding.NetworkBuildingId.Value = bSave.BuildingId;
+                        }
+                    }
+                    spawnedCount++;
+                }
+                else
+                {
+                    Debug.LogError($"<color=red>[MapController:SpawnSavedBuildings]</color> Could not find prefab for PrefabId='{bSave.PrefabId}'!");
+                }
+            }
+
+            Debug.Log($"<color=cyan>[MapController:SpawnSavedBuildings]</color> Map '{MapId}': spawned {spawnedCount} building(s) from save data.");
+        }
+
+        /// <summary>
         /// Spawns NPCs from a MapSaveData snapshot. Used both by WakeUp (from hibernation) and
         /// by OnNetworkSpawn (from a PendingSnapshot loaded from save file).
         /// Does NOT run MacroSimulator catch-up — call that separately if needed.

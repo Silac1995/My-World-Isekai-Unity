@@ -156,6 +156,18 @@ public class GameLauncher : MonoBehaviour
 
         Debug.Log($"{LOG_TAG} Player character found: {playerCharacter.gameObject.name}");
 
+        // ── Step 5b: Spawn saved buildings on predefined maps ──────
+        // Predefined maps never WakeUp(), so buildings from CommunityData
+        // must be spawned explicitly after the world is loaded.
+        if (!IsNewWorld)
+        {
+            foreach (var mc in Object.FindObjectsByType<MapController>(FindObjectsSortMode.None))
+            {
+                if (mc.IsPredefinedMap)
+                    mc.SpawnSavedBuildings();
+            }
+        }
+
         // ── Step 6: Import character profile ────────────────────────
         CharacterProfileSaveData profileData = null;
         yield return LoadAndImportProfile(playerCharacter, result => profileData = result);
