@@ -484,10 +484,15 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
 
     public void LeaveBattle()
     {
+        // Clear combat intent and look target BEFORE nulling the battle manager,
+        // so ClearActionIntent sees IsInBattle as false and properly clears everything.
         _currentBattleManager = null;
+        PlannedAction = null;
+        PlannedTarget = null;
+        _character.CharacterVisual?.ClearLookTarget();
+
         _lastCombatActionTime = Time.time;
 
-        // On ne force plus la sortie du mode combat ici. 
         // Le timeout de 7 secondes dans Update() s'en chargera naturellement.
 
         OnBattleLeft?.Invoke();
@@ -627,6 +632,9 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
     public void ForceExitCombatMode()
     {
         _currentBattleManager = null;
+        PlannedAction = null;
+        PlannedTarget = null;
+        _character.CharacterVisual?.ClearLookTarget();
         ChangeCombatMode(false);
     }
 
