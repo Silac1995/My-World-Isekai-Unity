@@ -95,7 +95,8 @@ namespace MWI.AI
                 float zDist = Mathf.Abs(_self.transform.position.z - currentTarget.transform.position.z);
 
                 bool isWithinRange = distToTarget <= attackRange;
-                bool isZAligned = zDist <= 2.5f; // Must encompass stagger range (±1.5) + idle sway radius (±0.7)
+                // Side-view: hitbox fires on X axis. Melee needs tight Z alignment; ranged doesn't care.
+                bool isZAligned = isRanged || zDist <= 1.5f;
 
                 // Ranged characters: if already within weapon range, skip approach entirely.
                 // They hold ground and fire from current position — no need to close further distance.
@@ -123,10 +124,10 @@ namespace MWI.AI
                     }
                     else
                     {
-                        // Melee: approach near target's Z with small margin for natural feel
-                        // Hitbox is narrow so keep within ±1.5 units
-                        int staggerIndex = Mathf.Abs(_self.GetInstanceID()) % 5;
-                        staggeredZ = (staggerIndex - 2) * 0.6f; // -1.2 to 1.2
+                        // Melee: approach at target's Z depth lane.
+                        // Side-view game — hitbox fires left/right on X axis only.
+                        // Any Z offset means the hitbox misses.
+                        staggeredZ = 0f;
                     }
 
                     float approachRange = isRanged ? Mathf.Min(attackRange, distToTarget) : attackRange;
