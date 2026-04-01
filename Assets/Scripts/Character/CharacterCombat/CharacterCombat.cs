@@ -301,8 +301,27 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
 
     public bool MeleeAttack()
     {
-        if (_character.CharacterActions == null) return false;
-        return _character.CharacterActions.ExecuteAction(new CharacterMeleeAttackAction(_character));
+        if (_character.CharacterActions == null)
+        {
+            Debug.LogWarning($"<color=orange>[CharacterCombat:MeleeAttack]</color> {_character.CharacterName}: CharacterActions is null!");
+            return false;
+        }
+
+        var action = new CharacterMeleeAttackAction(_character);
+        bool result = _character.CharacterActions.ExecuteAction(action);
+
+        if (!result)
+        {
+            string currentActionName = _character.CharacterActions.CurrentAction != null
+                ? _character.CharacterActions.CurrentAction.GetType().Name
+                : "null";
+            _character.IsFree(out CharacterBusyReason busyReason);
+            Debug.LogWarning($"<color=orange>[CharacterCombat:MeleeAttack]</color> {_character.CharacterName}: ExecuteAction returned FALSE. " +
+                           $"CurrentAction={currentActionName}, IsFree={_character.IsFree()}, BusyReason={busyReason}, " +
+                           $"IsCombatMode={_isCombatMode}, IsInBattle={IsInBattle}, IsAlive={_character.IsAlive()}");
+        }
+
+        return result;
     }
 
     public bool RangedAttack(Character target, RangedCombatStyleSO rangedStyle)
