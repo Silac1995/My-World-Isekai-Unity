@@ -576,7 +576,31 @@ public class GameLauncher : MonoBehaviour
                 }
 
                 npcCharacter.gameObject.name = memberProfile.characterName;
-                Debug.Log($"{LOG_TAG} Party NPC '{memberProfile.characterName}' (race={npcRaceId}) spawned at {spawnPos} and profile imported.");
+
+                // If this NPC is NOT in their origin world, override position to stay near leader.
+                // ImportProfile restores CharacterMapTracker which warps to saved position —
+                // but that position is from a different world. Only use saved position in origin world.
+                bool isOriginWorld = false;
+                if (memberProfile.worldAssociations != null && !string.IsNullOrEmpty(currentWorldGuid))
+                {
+                    isOriginWorld = memberProfile.worldAssociations.Exists(w => w.worldGuid == currentWorldGuid);
+                }
+
+                if (!isOriginWorld)
+                {
+                    // Foreign world — warp NPC to spawn position near leader
+                    var npcMovement = npcCharacter.GetComponentInChildren<CharacterMovement>();
+                    if (npcMovement != null)
+                        npcMovement.Warp(spawnPos);
+                    else
+                        npcCharacter.transform.position = spawnPos;
+
+                    Debug.Log($"{LOG_TAG} Party NPC '{memberProfile.characterName}' in foreign world — positioned near leader at {spawnPos}.");
+                }
+                else
+                {
+                    Debug.Log($"{LOG_TAG} Party NPC '{memberProfile.characterName}' in origin world — using saved position.");
+                }
             }
 
             // Re-form party — join the leader's party
