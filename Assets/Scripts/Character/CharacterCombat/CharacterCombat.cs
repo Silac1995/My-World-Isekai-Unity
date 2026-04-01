@@ -256,16 +256,7 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
         _hitboxSpawnedForAction = false;
         ChangeCombatMode(true);
 
-        if (_character.CharacterActions == null)
-        {
-            Debug.LogWarning($"<color=orange>[Combat:ExecuteAttackLocally]</color> {_character.CharacterName}: CharacterActions is null!");
-            return false;
-        }
-
-        Debug.Log($"<color=cyan>[Combat:ExecuteAttackLocally]</color> {_character.CharacterName}: Attempting attack. " +
-                  $"IsServer={IsServer}, Stamina={_character.Stats?.Stamina?.CurrentAmount:F1}, " +
-                  $"CurrentAction={_character.CharacterActions.CurrentAction?.GetType().Name ?? "null"}, " +
-                  $"CombatStyle={_currentCombatStyleExpertise?.Style?.name ?? "null"}");
+        if (_character.CharacterActions == null) return false;
 
         // Server-only: consume stamina for basic attacks
         if (IsServer && _character.Stats?.Stamina != null)
@@ -310,27 +301,8 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
 
     public bool MeleeAttack()
     {
-        if (_character.CharacterActions == null)
-        {
-            Debug.LogWarning($"<color=orange>[CharacterCombat:MeleeAttack]</color> {_character.CharacterName}: CharacterActions is null!");
-            return false;
-        }
-
-        var action = new CharacterMeleeAttackAction(_character);
-        bool result = _character.CharacterActions.ExecuteAction(action);
-
-        if (!result)
-        {
-            string currentActionName = _character.CharacterActions.CurrentAction != null
-                ? _character.CharacterActions.CurrentAction.GetType().Name
-                : "null";
-            _character.IsFree(out CharacterBusyReason busyReason);
-            Debug.LogWarning($"<color=orange>[CharacterCombat:MeleeAttack]</color> {_character.CharacterName}: ExecuteAction returned FALSE. " +
-                           $"CurrentAction={currentActionName}, IsFree={_character.IsFree()}, BusyReason={busyReason}, " +
-                           $"IsCombatMode={_isCombatMode}, IsInBattle={IsInBattle}, IsAlive={_character.IsAlive()}");
-        }
-
-        return result;
+        if (_character.CharacterActions == null) return false;
+        return _character.CharacterActions.ExecuteAction(new CharacterMeleeAttackAction(_character));
     }
 
     public bool RangedAttack(Character target, RangedCombatStyleSO rangedStyle)
