@@ -15,6 +15,7 @@ public class CombatTacticalPacer
     private const float CIRCLE_SPEED = 1.5f;
     private const float CIRCLE_RADIUS_OFFSET = 2.0f;
     private const float MELEE_STEPBACK_DISTANCE = 2.0f;
+    private const float MELEE_STANDOFF_BUFFER = 3.0f; // Melee idles at meleeRange + this buffer
     private const float UNENGAGED_FOLLOW_MELEE_DISTANCE = 5.0f;
     private const float LEASH_PULL_STRENGTH = 0.3f;
     private const float PATH_UPDATE_INTERVAL = 0.8f;
@@ -104,8 +105,8 @@ public class CombatTacticalPacer
             return ApplyLeash(destination, engagement);
         }
 
-        // Priority 4: Idle sway
-        destination = CalculateIdleSway();
+        // Priority 4: Idle standoff — maintain proper distance from target + sway
+        destination = CalculateIdleStandoff(target, attackRange, isRanged);
         return ApplyLeash(destination, engagement);
     }
 
@@ -169,16 +170,39 @@ public class CombatTacticalPacer
     }
 
     /// <summary>
-    /// Perlin noise-based micro-movement around the sway center.
-    /// Prevents characters from standing perfectly still while waiting for initiative.
+    /// Maintains standoff distance from target while adding subtle sway.
+    /// Melee: stays at meleeRange + MELEE_STANDOFF_BUFFER from target.
+    /// Ranged: stays at weapon range from target.
     /// </summary>
-    private Vector3 CalculateIdleSway()
+    private Vector3 CalculateIdleStandoff(Character target, float attackRange, bool isRanged)
     {
+        Vector3 selfPos = _self.transform.position;
+        Vector3 targetPos = target.transform.position;
+        float standoffDist = isRanged ? attackRange : (attackRange + MELEE_STANDOFF_BUFFER);
+        float currentDist = Vector3.Distance(selfPos, targetPos);
+
+        // Calculate the ideal standoff point: stay at standoff distance in current direction from target
+        Vector3 dirFromTarget = (selfPos - targetPos).normalized;
+        if (dirFromTarget.sqrMagnitude < 0.01f)
+            dirFromTarget = new Vector3((_self.GetInstanceID() % 2 == 0) ? 1f : -1f, 0f, 0f);
+
+        Vector3 standoffPoint = targetPos + dirFromTarget * standoffDist;
+
+        // If significantly out of position, move toward standoff point
+        float drift = Mathf.Abs(currentDist - standoffDist);
+        if (drift > 1.5f)
+        {
+            _swayCenter = standoffPoint;
+            return standoffPoint;
+        }
+
+        // At correct distance — apply subtle Perlin sway around standoff point
+        _swayCenter = standoffPoint;
         float time = Time.time;
         float noiseX = Mathf.PerlinNoise(_perlinSeedX + time * IDLE_SWAY_SPEED, 0) * 2f - 1f;
         float noiseZ = Mathf.PerlinNoise(0, _perlinSeedZ + time * IDLE_SWAY_SPEED) * 2f - 1f;
 
-        return _swayCenter + new Vector3(
+        return standoffPoint + new Vector3(
             noiseX * IDLE_SWAY_RADIUS,
             0,
             noiseZ * IDLE_SWAY_RADIUS
