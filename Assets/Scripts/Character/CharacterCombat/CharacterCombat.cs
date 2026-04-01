@@ -66,7 +66,10 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
         PlannedAction = null;
         PlannedTarget = null;
 
-        if (_character != null && _character.CharacterVisual != null)
+        // Only clear look target outside of battle.
+        // During combat, the character should keep facing their target between actions
+        // (prevents turning away during step-back after melee attacks).
+        if (_character != null && _character.CharacterVisual != null && !IsInBattle)
         {
             _character.CharacterVisual.ClearLookTarget();
         }
