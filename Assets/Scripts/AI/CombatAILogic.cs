@@ -12,8 +12,9 @@ namespace MWI.AI
         private bool _isChargingTarget;
         private bool _autoDecideIntent;
         private float _lastPathUpdateTime;
-        private float _stuckSinceTime; // Tracks when character started waiting in position without attacking
-        private const float STUCK_REPOSITION_TIMEOUT = 2.0f; // Force reposition after this many seconds stuck
+        private float _stuckSinceTime;
+        private Character _lastTarget; // Track target changes to force reposition
+        private const float STUCK_REPOSITION_TIMEOUT = 2.0f;
 
         public CombatAILogic(Character self, bool autoDecideIntent)
         {
@@ -64,6 +65,13 @@ namespace MWI.AI
                     _self.CharacterCombat.ClearActionIntent();
                 movement.Stop();
                 return true;
+            }
+
+            // Target changed — force immediate reposition toward new target
+            if (currentTarget != _lastTarget)
+            {
+                _lastTarget = currentTarget;
+                _combatPacer.ForceImmediateReposition();
             }
 
             movement.Resume();
