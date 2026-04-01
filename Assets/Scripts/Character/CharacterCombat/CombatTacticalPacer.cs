@@ -15,7 +15,7 @@ public class CombatTacticalPacer
     private const float CIRCLE_SPEED = 1.5f;
     private const float CIRCLE_RADIUS_OFFSET = 2.0f;
     private const float MELEE_STEPBACK_DISTANCE = 2.0f;
-    private const float MELEE_STANDOFF_BUFFER = 3.0f; // Melee idles at meleeRange + this buffer
+    private const float STANDOFF_MIN_DISTANCE = 1.0f;  // Closest a character can idle to opponent center
     private const float UNENGAGED_FOLLOW_MELEE_DISTANCE = 5.0f;
     private const float LEASH_PULL_STRENGTH = 0.3f;
     private const float PATH_UPDATE_INTERVAL = 0.8f;
@@ -174,40 +174,65 @@ public class CombatTacticalPacer
     }
 
     /// <summary>
-    /// Lively idle movement around the engagement anchor.
-    /// Uses the anchor as a fixed reference so both sides orbit the same center
-    /// without pushing each other apart.
-    /// Melee: standoff at meleeRange + buffer from opponent center.
-    /// Ranged: standoff at weapon range from opponent center.
+    /// Lively idle movement within a distance band from the opponent center.
+    /// Characters drift freely between min and max distance using Perlin noise.
+    /// Min: STANDOFF_MIN_DISTANCE (close enough to feel engaged).
+    /// Max: attackRange * 1.5 + 6 (far enough for breathing room).
+    /// Only corrects position when outside the band — no oscillation.
     /// </summary>
     private Vector3 CalculateIdleStandoff(Character target, float attackRange, bool isRanged, CombatEngagement engagement)
     {
         Vector3 selfPos = _self.transform.position;
-        float standoffDist = isRanged ? attackRange : (attackRange + MELEE_STANDOFF_BUFFER);
+        float maxDist = isRanged ? attackRange : (attackRange * 1.5f + 6f);
+        float minDist = STANDOFF_MIN_DISTANCE;
 
-        // Use the opponent group center as reference (stable), not the target directly (causes chase loops)
+        // Use the opponent group center as reference (stable)
         Vector3 focalPoint = engagement != null
             ? engagement.GetOpponentCenter(_self)
             : target.transform.position;
+
+        float currentDist = Vector3.Distance(selfPos, focalPoint);
 
         // Direction from focal point to self (our "side" of the fight)
         Vector3 dirFromFocal = (selfPos - focalPoint).normalized;
         if (dirFromFocal.sqrMagnitude < 0.01f)
             dirFromFocal = new Vector3((_self.GetInstanceID() % 2 == 0) ? 1f : -1f, 0f, 0f);
 
-        // The base standoff position — at proper distance on our side
-        Vector3 standoffPoint = focalPoint + dirFromFocal * standoffDist;
+        // Only correct position if outside the allowed band
+        if (currentDist > maxDist)
+        {
+            // Too far — move to max distance edge
+            Vector3 corrected = focalPoint + dirFromFocal * maxDist;
+            _swayCenter = corrected;
+            return corrected;
+        }
+        if (currentDist < minDist)
+        {
+            // Too close — move to min distance edge
+            Vector3 corrected = focalPoint + dirFromFocal * minDist;
+            _swayCenter = corrected;
+            return corrected;
+        }
 
-        // Apply Perlin noise drift for lively movement
+        // Within band — drift freely with Perlin noise
         float time = Time.time;
         float noiseX = Mathf.PerlinNoise(_perlinSeedX + time * IDLE_SWAY_SPEED, 0) * 2f - 1f;
         float noiseZ = Mathf.PerlinNoise(0, _perlinSeedZ + time * IDLE_SWAY_SPEED) * 2f - 1f;
 
-        Vector3 destination = standoffPoint + new Vector3(
+        Vector3 destination = selfPos + new Vector3(
             noiseX * IDLE_SWAY_RADIUS,
             0,
             noiseZ * IDLE_SWAY_RADIUS
         );
+
+        // Clamp the drifted position to stay within the band
+        float destDist = Vector3.Distance(destination, focalPoint);
+        if (destDist > maxDist || destDist < minDist)
+        {
+            float clampedDist = Mathf.Clamp(destDist, minDist, maxDist);
+            Vector3 destDir = (destination - focalPoint).normalized;
+            destination = focalPoint + destDir * clampedDist;
+        }
 
         _swayCenter = destination;
         return destination;
