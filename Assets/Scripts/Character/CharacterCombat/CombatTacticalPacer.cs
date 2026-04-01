@@ -219,20 +219,17 @@ public class CombatTacticalPacer
         }
 
         // Within band — pick a new random drift destination every 4.5-7 seconds
+        // Use random angle + distance from focal point so characters move AROUND it, not just toward/away
         if (Time.time >= _nextDriftTime)
         {
-            // Pick a random point within IDLE_DRIFT_RADIUS of current position
-            Vector2 randomCircle = Random.insideUnitCircle * IDLE_DRIFT_RADIUS;
-            Vector3 candidate = selfPos + new Vector3(randomCircle.x, 0, randomCircle.y);
+            float randomAngle = Random.Range(0f, Mathf.PI * 2f);
+            float randomDist = Random.Range(minDist, maxDist);
 
-            // Clamp to stay within the distance band from focal point
-            float candDist = Vector3.Distance(candidate, focalPoint);
-            if (candDist > maxDist || candDist < minDist)
-            {
-                float clampedDist = Mathf.Clamp(candDist, minDist, maxDist);
-                Vector3 candDir = (candidate - focalPoint).normalized;
-                candidate = focalPoint + candDir * clampedDist;
-            }
+            Vector3 candidate = focalPoint + new Vector3(
+                Mathf.Cos(randomAngle) * randomDist,
+                0,
+                Mathf.Sin(randomAngle) * randomDist
+            );
 
             _currentDriftTarget = candidate;
             _nextDriftTime = Time.time + Random.Range(IDLE_DRIFT_MIN_INTERVAL, IDLE_DRIFT_MAX_INTERVAL);
