@@ -11,7 +11,7 @@ using UnityEngine;
 public class CombatTacticalPacer
 {
     private const float IDLE_DRIFT_RADIUS = 5.0f;
-    private const float IDLE_DRIFT_MIN_INTERVAL = 4.5f;
+    private const float IDLE_DRIFT_MIN_INTERVAL = 5.0f;
     private const float IDLE_DRIFT_MAX_INTERVAL = 7.0f;
     private const float CIRCLE_SPEED = 1.5f;
     private const float CIRCLE_RADIUS_OFFSET = 2.0f;
@@ -19,7 +19,7 @@ public class CombatTacticalPacer
     private const float STANDOFF_MIN_DISTANCE = 1.0f;  // Closest a character can idle to opponent center
     private const float UNENGAGED_FOLLOW_MELEE_DISTANCE = 5.0f;
     private const float LEASH_PULL_STRENGTH = 0.3f;
-    private const float PATH_UPDATE_INTERVAL = 2.0f; // Don't re-evaluate position too frequently
+    private const float PATH_UPDATE_INTERVAL = 5.0f; // Match drift interval — only re-evaluate every 5s
 
     /// <summary>
     /// Mirrors CombatFormation.MELEE_PREFERRED_DISTANCE (private in CombatFormation).
