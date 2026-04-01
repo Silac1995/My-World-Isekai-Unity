@@ -9,6 +9,11 @@ Shader "Custom/BattleGroundCircle"
         _PulseSpeed ("Pulse Speed", Float) = 0.0
         _PulseIntensity ("Pulse Intensity", Range(0, 1)) = 0.2
         [HideInInspector] _FadeFactor ("Fade Factor", Range(0, 1)) = 1.0
+        [HideInInspector] _InitProgress ("Initiative Progress", Range(0, 1)) = 0.0
+        [HideInInspector] _InitFlash ("Initiative Flash", Range(0, 1)) = 0.0
+        _InitInner ("Init Ring Inner", Range(0, 1)) = 0.52
+        _InitOuter ("Init Ring Outer", Range(0, 1)) = 0.58
+        [HDR] _InitColor ("Init Ring Color", Color) = (1, 1, 1, 0.5)
     }
 
     SubShader
@@ -56,12 +61,15 @@ Shader "Custom/BattleGroundCircle"
                 half _Softness;
                 half _PulseSpeed;
                 half _PulseIntensity;
+                half _InitInner;
+                half _InitOuter;
+                half4 _InitColor;
             CBUFFER_END
 
-            // Declared outside CBuffer so MaterialPropertyBlock can override per-instance.
-            // Note: this disables SRP Batcher for this shader, which is acceptable for the
-            // small number of battle circles active at any time.
+            // Per-instance via MaterialPropertyBlock — outside CBuffer.
             half _FadeFactor;
+            half _InitProgress;
+            half _InitFlash;
 
             Varyings vert(Attributes input)
             {
@@ -73,23 +81,44 @@ Shader "Custom/BattleGroundCircle"
 
             half4 frag(Varyings input) : SV_Target
             {
-                // Distance from UV center, normalized to [0, 1]
-                float2 center = float2(0.5, 0.5);
-                float dist = distance(input.uv, center) * 2.0;
+                float2 centered = input.uv - 0.5;
+                float dist = length(centered) * 2.0;
 
-                // Ring mask: inner and outer edges with softness
+                // === Color ring ===
                 float inner = smoothstep(_InnerRadius - _Softness, _InnerRadius + _Softness, dist);
                 float outer = 1.0 - smoothstep(_OuterRadius - _Softness, _OuterRadius + _Softness, dist);
                 float ring = inner * outer;
 
-                // Pulse animation (uses _Time.y which pauses with game — intentional for battle visuals)
                 float pulse = 1.0 - (_PulseIntensity * (sin(_Time.y * _PulseSpeed) * 0.5 + 0.5));
 
                 half4 col = _Color;
                 col.a = ring * pulse * _Color.a * _FadeFactor;
 
-                clip(col.a - 0.01);
-                return col;
+                // === Initiative arc ring ===
+                // Angle: atan2 mapped to 0-1 clockwise from top (12 o'clock)
+                float angle = atan2(centered.x, centered.y); // top = 0, CW positive
+                float angleFrac = angle / 6.28318530718 + 0.5; // remap [-pi,pi] -> [0,1]
+
+                float iInner = smoothstep(_InitInner - _Softness, _InitInner + _Softness, dist);
+                float iOuter = 1.0 - smoothstep(_InitOuter - _Softness, _InitOuter + _Softness, dist);
+                float initRing = iInner * iOuter;
+
+                // Arc mask: visible where angleFrac < _InitProgress
+                float arcEdge = smoothstep(_InitProgress, _InitProgress - 0.02, angleFrac);
+                float initArc = initRing * arcEdge;
+
+                // Flash glow: brief additive burst when initiative fills
+                half3 flashGlow = _InitColor.rgb * _InitFlash * 2.0 * initRing;
+
+                half3 initArcColor = _InitColor.rgb * initArc * _InitColor.a;
+                half initArcAlpha = initArc * _InitColor.a * _FadeFactor;
+
+                // Composite: color ring + initiative arc (premultiplied add)
+                half3 finalRgb = col.rgb * col.a + initArcColor * _FadeFactor + flashGlow * _FadeFactor;
+                half finalAlpha = saturate(col.a + initArcAlpha);
+
+                clip(finalAlpha - 0.01);
+                return half4(finalRgb / max(finalAlpha, 0.001), finalAlpha);
             }
             ENDHLSL
         }

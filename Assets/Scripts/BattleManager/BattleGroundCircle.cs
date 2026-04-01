@@ -17,9 +17,15 @@ public class BattleGroundCircle : MonoBehaviour
     private bool _isCleaningUp;
 
     private static readonly int _fadePropId = Shader.PropertyToID("_FadeFactor");
+    private static readonly int _initProgressId = Shader.PropertyToID("_InitProgress");
+    private static readonly int _initFlashId = Shader.PropertyToID("_InitFlash");
+
+    private float _flashTimer;
+    private bool _wasReady;
 
     private const float FADE_DURATION   = 0.3f;
     private const float DIM_FADE_FACTOR = 0.25f;
+    private const float FLASH_DURATION  = 0.4f;
 
     /// <summary>
     /// Assigns the shared material and starts fade-in.
@@ -60,6 +66,38 @@ public class BattleGroundCircle : MonoBehaviour
         _isCleaningUp = true;
         StopActiveFade();
         _fadeCoroutine = StartCoroutine(FadeOutAndDestroy());
+    }
+
+    /// <summary>
+    /// Sets the initiative fill (0 = empty, 1 = full). When it first reaches 1, triggers a short flash.
+    /// </summary>
+    public void SetInitiativeProgress(float progress01)
+    {
+        if (_mpb == null) return;
+
+        bool isReady = progress01 >= 1f;
+        if (isReady && !_wasReady)
+            _flashTimer = FLASH_DURATION; // trigger flash on the frame it fills
+
+        _wasReady = isReady;
+
+        _mpb.SetFloat(_initProgressId, progress01);
+        // Flash is updated in the same call to avoid extra SetPropertyBlock
+        _mpb.SetFloat(_initFlashId, Mathf.Clamp01(_flashTimer / FLASH_DURATION));
+        _meshRenderer.SetPropertyBlock(_mpb);
+    }
+
+    private void Update()
+    {
+        if (_flashTimer > 0f)
+        {
+            _flashTimer -= Time.deltaTime;
+            if (_mpb != null && _meshRenderer != null)
+            {
+                _mpb.SetFloat(_initFlashId, Mathf.Clamp01(_flashTimer / FLASH_DURATION));
+                _meshRenderer.SetPropertyBlock(_mpb);
+            }
+        }
     }
 
     private void SetFade(float value)

@@ -26,6 +26,10 @@ Material:
     m_Ints: []
     m_Floats:
     - _FadeFactor: 1
+    - _InitFlash: 0
+    - _InitInner: 0.312
+    - _InitOuter: 0.311
+    - _InitProgress: 0
     - _InnerRadius: 0.325
     - _OuterRadius: 0.425
     - _PulseIntensity: 0.5
@@ -33,5 +37,6 @@ Material:
     - _Softness: 0.05
     m_Colors:
     - _Color: {r: 0.2, g: 1, b: 0.3, a: 0.27450982}
+    - _InitColor: {r: 1, g: 1, b: 1, a: 0.5}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

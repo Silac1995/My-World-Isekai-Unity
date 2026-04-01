@@ -2,6 +2,8 @@ using UnityEngine;
 
 public class CharacterMeleeAttackAction : CharacterCombatAction
 {
+    protected override bool ConsumesBaseStamina => true;
+
     public CharacterMeleeAttackAction(Character character) : base(character, 0.8f)
     {
         var animHandler = character.CharacterVisual?.CharacterAnimator;

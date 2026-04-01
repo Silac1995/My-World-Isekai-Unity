@@ -6,6 +6,8 @@ using UnityEngine;
 /// </summary>
 public class CharacterRangedAttackAction : CharacterCombatAction
 {
+    protected override bool ConsumesBaseStamina => true;
+
     private readonly RangedCombatStyleSO _rangedStyle;
     private readonly Character _target;
 

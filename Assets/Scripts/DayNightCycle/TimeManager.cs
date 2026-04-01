@@ -31,7 +31,7 @@ namespace MWI.Time
         public DayPhase CurrentPhase => _currentPhase;
         
         /// <summary>
-        /// Le jour actuel du jeu (commence à 1).
+        /// Current in-game day (starts at 1).
         /// </summary>
         public int CurrentDay { get; private set; } = 1;
 
@@ -88,7 +88,7 @@ namespace MWI.Time
                 OnNewDay?.Invoke();
             }
 
-            // Détection du changement d'heure
+            // Detect hour change
             int currentHour = CurrentHour;
             if (currentHour != _lastHour)
             {
@@ -141,12 +141,29 @@ namespace MWI.Time
             }
         }
 
+        /// <summary>
+        /// Called by GameSpeedController on clients to sync time from the server.
+        /// Silently corrects day and time without firing events — events will fire
+        /// naturally from ProgressTime() as the clock continues to tick.
+        /// This prevents server-only subscribers (saves, community tracker, etc.)
+        /// from being triggered on clients during a network correction.
+        /// </summary>
+        public void SyncFromNetwork(int day, float time01)
+        {
+            CurrentDay = day;
+            _currentTime = time01;
+            _lastHour = CurrentHour;
+
+            // Force-update the phase visually (lighting, skybox) without firing events
+            UpdatePhase(true);
+        }
+
         // Helper to skip time (for debugging or sleeping)
         public void SkipToHour(int hour)
         {
             int clampedHour = Mathf.Clamp(hour, 0, 23);
 
-            // Si on saute à une heure inférieure à l'heure actuelle, on a passé minuit (passage au lendemain).
+            // If we skip to an earlier hour, we crossed midnight (advance to next day).
             if (clampedHour < CurrentHour)
             {
                 CurrentDay++;

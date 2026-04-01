@@ -67,6 +67,30 @@ public class BattleCircleManager : CharacterSystem
         base.OnDisable();
     }
 
+    /// <summary>
+    /// Drives initiative progress on each circle during battle.
+    /// Only runs when we have an active battle and circles to update.
+    /// </summary>
+    private void Update()
+    {
+        if (_cachedBattleManager == null || _activeCircles.Count == 0) return;
+        if (!ShouldManageCircles()) return;
+
+        foreach (var kvp in _activeCircles)
+        {
+            Character c = kvp.Key;
+            BattleGroundCircle circle = kvp.Value;
+            if (c == null || circle == null) continue;
+            if (c.Stats == null || c.Stats.Initiative == null) continue;
+
+            float progress = c.Stats.Initiative.MaxValue > 0f
+                ? c.Stats.Initiative.CurrentAmount / c.Stats.Initiative.MaxValue
+                : 0f;
+
+            circle.SetInitiativeProgress(progress);
+        }
+    }
+
     #endregion
 
     #region Battle Events

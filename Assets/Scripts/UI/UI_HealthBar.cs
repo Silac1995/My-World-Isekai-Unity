@@ -1,4 +1,5 @@
 using System.Collections;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -14,12 +15,18 @@ public class UI_HealthBar : MonoBehaviour
 {
     [Header("References")]
     [SerializeField] private Image _barImage;
+    [SerializeField] private TextMeshProUGUI _valueText;
 
     [Header("Heal Flash")]
     [SerializeField] private float _healFlashDuration = 0.5f;
 
     [Header("Animation")]
     [SerializeField] private float _fillAnimationDuration = 0.25f;
+
+    [Header("Value Text")]
+    [SerializeField] private Color _normalTextColor = Color.white;
+    [SerializeField] private Color _lowTextColor = Color.red;
+    [SerializeField] private float _lowTextThreshold = 0.2f;
 
     // ── Runtime state ────────────────────────────────────────────
 
@@ -61,6 +68,7 @@ public class UI_HealthBar : MonoBehaviour
         _currentFill = GetFillRatio();
         _ghostFill = _currentFill;
         SnapToShader();
+        UpdateValueText();
     }
 
     // ── Unity lifecycle ──────────────────────────────────────────
@@ -75,7 +83,11 @@ public class UI_HealthBar : MonoBehaviour
 
     // ── Event handlers ───────────────────────────────────────────
 
-    private void HandleMaxValueChanged(float oldVal, float newVal) => AnimateToShader();
+    private void HandleMaxValueChanged(float oldVal, float newVal)
+    {
+        AnimateToShader();
+        UpdateValueText();
+    }
 
     private void HandleAmountChanged(float oldVal, float newVal)
     {
@@ -83,6 +95,7 @@ public class UI_HealthBar : MonoBehaviour
         else if (newVal > oldVal) OnHealReceived();
 
         AnimateToShader();
+        UpdateValueText();
     }
 
     // ── Damage / Heal effects ────────────────────────────────────
@@ -206,6 +219,16 @@ public class UI_HealthBar : MonoBehaviour
 
         if (_fillCoroutine != null) StopCoroutine(_fillCoroutine);
         _fillCoroutine = StartCoroutine(FillAnimationRoutine());
+    }
+
+    private void UpdateValueText()
+    {
+        if (_valueText == null || _targetStat == null) return;
+
+        int current = Mathf.RoundToInt(_targetStat.CurrentAmount);
+        int max = Mathf.RoundToInt(_targetStat.MaxValue);
+        _valueText.text = $"{current} / {max}";
+        _valueText.color = GetFillRatio() <= _lowTextThreshold ? _lowTextColor : _normalTextColor;
     }
 
     private void CleanupEvents()

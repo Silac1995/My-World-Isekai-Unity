@@ -367,6 +367,18 @@ public class Character : NetworkBehaviour
             StartCoroutine(DelayedHostTeleport());
         }
 
+        // Subscribe to name changes so late-joining clients always get the correct name.
+        // On clients, the NetworkVariable value may not yet be populated at the exact
+        // moment OnNetworkSpawn fires, so this callback ensures the name is applied
+        // as soon as the server's value arrives (or on any subsequent rename).
+        NetworkCharacterName.OnValueChanged += OnNetworkNameChanged;
+
+        // Apply the current value immediately if already available (normal case)
+        if (!NetworkCharacterName.Value.IsEmpty)
+        {
+            _characterName = NetworkCharacterName.Value.ToString();
+        }
+
         // LOAD CUSTOMIZATION FROM NETWORK VARIABLES
         RaceSO networkRace = null;
         if (!NetworkRaceId.Value.IsEmpty)
@@ -390,6 +402,22 @@ public class Character : NetworkBehaviour
         }
 
         OnCharacterSpawned?.Invoke(this);
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        base.OnNetworkDespawn();
+        NetworkCharacterName.OnValueChanged -= OnNetworkNameChanged;
+    }
+
+    private void OnNetworkNameChanged(Unity.Collections.FixedString64Bytes previous, Unity.Collections.FixedString64Bytes current)
+    {
+        if (!current.IsEmpty)
+        {
+            _characterName = current.ToString();
+            gameObject.name = _characterName;
+            Debug.Log($"[Character] Name synced from network: {_characterName}");
+        }
     }
 
     private System.Collections.IEnumerator DelayedHostTeleport()

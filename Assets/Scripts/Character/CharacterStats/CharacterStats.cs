@@ -82,6 +82,19 @@ public class CharacterStats : CharacterSystem, ICharacterSaveData<CharacterStats
         RecalculateTertiaryStats();
     }
 
+    private void Update()
+    {
+        if (stamina == null || staminaRegenRate == null) return;
+        if (stamina.IsFull()) return;
+        if (character != null && !character.IsAlive()) return;
+
+        float regenAmount = staminaRegenRate.Value * Time.deltaTime;
+        if (regenAmount > 0f)
+        {
+            stamina.IncreaseCurrentAmount(regenAmount);
+        }
+    }
+
     private void SubscribeToSecondaryStats()
     {
         _onSecondaryStatChanged = (oldValue, newValue) => RecalculateTertiaryStats();

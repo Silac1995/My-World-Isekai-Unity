@@ -127,10 +127,19 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
 
     public void ConsumeInitiative()
     {
+        if (_character.Stats == null || _character.Stats.Initiative == null) return;
+        _character.Stats.Initiative.ResetInitiative();
+
+        // Sync reset to all clients so initiative ring visuals update for remote characters.
+        if (IsServer && IsSpawned)
+            SyncInitiativeResetClientRpc();
+    }
+
+    [Rpc(SendTo.NotServer)]
+    private void SyncInitiativeResetClientRpc()
+    {
         if (_character.Stats != null && _character.Stats.Initiative != null)
-        {
             _character.Stats.Initiative.ResetInitiative();
-        }
     }
 
     public void UpdateInitiativeTick(float tickAmount)
@@ -245,11 +254,6 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
         ExecuteAttackLocally(target);
     }
 
-    // Stamina cost constants for basic attacks
-    private const float BASE_MELEE_STAMINA_COST = 3f;
-    private const float STAMINA_POWER_SCALING_RATIO = 0.1f;
-    private const float FLAT_RANGED_STAMINA_COST = 5f;
-
     private bool ExecuteAttackLocally(Character target)
     {
         _lastCombatActionTime = Time.time;
@@ -258,26 +262,10 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
 
         if (_character.CharacterActions == null) return false;
 
-        // Server-only: consume stamina for basic attacks
-        if (IsServer && _character.Stats?.Stamina != null)
-        {
-            float staminaCost = CalculateBasicAttackStaminaCost();
-            if (_character.Stats.Stamina.CurrentAmount < staminaCost)
-            {
-                Debug.LogWarning($"<color=yellow>[Combat]</color> {_character.CharacterName} cannot attack — stamina {_character.Stats.Stamina.CurrentAmount:F1}/{staminaCost:F1} insufficient.");
-                return false;
-            }
+        // Consume initiative on the executor (Owner predicts, Server validates+broadcasts)
+        ConsumeInitiative();
 
-            _character.Stats.Stamina.DecreaseCurrentAmount(staminaCost);
-
-            // Trigger Out of Breath when stamina fully depletes
-            if (_character.Stats.Stamina.CurrentAmount <= 0f)
-            {
-                _character.StatusManager?.ApplyOutOfBreathEffect();
-            }
-        }
-
-        if (target != null 
+        if (target != null
             && _currentCombatStyleExpertise?.Style is RangedCombatStyleSO rangedStyle)
         {
             float distToTarget = Vector3.Distance(_character.transform.position, target.transform.position);
@@ -288,15 +276,6 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
         }
 
         return MeleeAttack();
-    }
-
-    private float CalculateBasicAttackStaminaCost()
-    {
-        bool isRanged = _currentCombatStyleExpertise?.Style is RangedCombatStyleSO;
-        if (isRanged) return FLAT_RANGED_STAMINA_COST;
-
-        float physicalPower = _character.Stats?.PhysicalPower?.CurrentValue ?? 0f;
-        return BASE_MELEE_STAMINA_COST + physicalPower * STAMINA_POWER_SCALING_RATIO;
     }
 
     public bool MeleeAttack()
