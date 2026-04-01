@@ -532,24 +532,43 @@ public class GameLauncher : MonoBehaviour
                 }
 
                 GameObject npcGO = Instantiate(npcPrefab, spawnPos, Quaternion.identity);
+
+                // Set identity NetworkVariables BEFORE spawn (same pattern as MapController.WakeUp)
+                npcCharacter = npcGO.GetComponent<Character>();
+                if (npcCharacter == null)
+                {
+                    Debug.LogError($"{LOG_TAG} Spawned NPC has no Character component — skipping.");
+                    Destroy(npcGO);
+                    memberIndex++;
+                    continue;
+                }
+
+                // Pre-set identity from saved profile so OnNetworkSpawn reads correct values
+                if (!string.IsNullOrEmpty(memberProfile.characterGuid))
+                    npcCharacter.NetworkCharacterId.Value = new Unity.Collections.FixedString64Bytes(memberProfile.characterGuid);
+                if (!string.IsNullOrEmpty(memberProfile.characterName))
+                    npcCharacter.NetworkCharacterName.Value = new Unity.Collections.FixedString64Bytes(memberProfile.characterName);
+
+                // Set race from saved data
+                string npcRaceId = ExtractRaceIdFromProfile(memberProfile);
+                if (!string.IsNullOrEmpty(npcRaceId))
+                    npcCharacter.NetworkRaceId.Value = new Unity.Collections.FixedString64Bytes(npcRaceId);
+
+                // Extract and set visual seed
+                int npcVisualSeed = ExtractVisualSeedFromProfile(memberProfile);
+                if (npcVisualSeed != 0)
+                    npcCharacter.NetworkVisualSeed.Value = npcVisualSeed;
+
                 var netObj = npcGO.GetComponent<NetworkObject>();
                 if (netObj != null)
                 {
                     netObj.Spawn(true);
                 }
 
-                npcCharacter = npcGO.GetComponent<Character>();
-                if (npcCharacter == null)
-                {
-                    Debug.LogError($"{LOG_TAG} Spawned NPC has no Character component — skipping.");
-                    memberIndex++;
-                    continue;
-                }
-
                 // Wait a frame for NetworkObject to initialize
                 yield return null;
 
-                // Import profile
+                // Import full profile (stats, equipment, relations, etc.)
                 var npcCoordinator = npcCharacter.GetComponent<CharacterDataCoordinator>();
                 if (npcCoordinator != null)
                 {
@@ -557,7 +576,7 @@ public class GameLauncher : MonoBehaviour
                 }
 
                 npcCharacter.gameObject.name = memberProfile.characterName;
-                Debug.Log($"{LOG_TAG} Party NPC '{memberProfile.characterName}' spawned and profile imported.");
+                Debug.Log($"{LOG_TAG} Party NPC '{memberProfile.characterName}' (race={npcRaceId}) spawned at {spawnPos} and profile imported.");
             }
 
             // Re-form party — join the leader's party
@@ -641,6 +660,40 @@ public class GameLauncher : MonoBehaviour
         // Reset SaveManager state for fresh session
         if (SaveManager.Instance != null)
             SaveManager.Instance.ResetForNewSession();
+    }
+
+    /// <summary>
+    /// Extracts raceId from a saved CharacterProfile component state.
+    /// </summary>
+    private string ExtractRaceIdFromProfile(CharacterProfileSaveData profile)
+    {
+        if (profile.componentStates.TryGetValue("CharacterProfile", out string json))
+        {
+            try
+            {
+                var data = Newtonsoft.Json.JsonConvert.DeserializeObject<ProfileSaveData>(json);
+                return data?.raceId;
+            }
+            catch { }
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Extracts visualSeed from a saved CharacterProfile component state.
+    /// </summary>
+    private int ExtractVisualSeedFromProfile(CharacterProfileSaveData profile)
+    {
+        if (profile.componentStates.TryGetValue("CharacterProfile", out string json))
+        {
+            try
+            {
+                var data = Newtonsoft.Json.JsonConvert.DeserializeObject<ProfileSaveData>(json);
+                return data?.visualSeed ?? 0;
+            }
+            catch { }
+        }
+        return 0;
     }
 
     /// <summary>
