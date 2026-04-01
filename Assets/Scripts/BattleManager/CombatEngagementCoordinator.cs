@@ -77,13 +77,17 @@ public class CombatEngagementCoordinator
     /// </summary>
     public void EvaluateEngagements()
     {
+        // Snapshot the graph to avoid "collection modified during enumeration"
+        // (SetTargeting can be called indirectly during reconciliation)
+        var graphSnapshot = new Dictionary<Character, Character>(_targetingGraph);
+
         // Step 1: Find all mutual pairs (A targets B AND B targets A)
         var mutualPairs = new HashSet<(Character, Character)>();
-        foreach (var kvp in _targetingGraph)
+        foreach (var kvp in graphSnapshot)
         {
             Character a = kvp.Key;
             Character b = kvp.Value;
-            if (b != null && _targetingGraph.TryGetValue(b, out Character bTarget) && bTarget == a)
+            if (b != null && graphSnapshot.TryGetValue(b, out Character bTarget) && bTarget == a)
             {
                 // Canonical ordering to avoid duplicate pairs
                 var pair = a.GetInstanceID() < b.GetInstanceID() ? (a, b) : (b, a);
@@ -103,7 +107,7 @@ public class CombatEngagementCoordinator
         }
 
         // Join edges: if X targets someone already in union-find, X joins that component
-        foreach (var kvp in _targetingGraph)
+        foreach (var kvp in graphSnapshot)
         {
             Character attacker = kvp.Key;
             Character target = kvp.Value;
