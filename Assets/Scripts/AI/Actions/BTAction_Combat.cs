@@ -26,12 +26,19 @@ namespace MWI.AI
             if (_battleManager == null) return BTNodeStatus.Failure;
 
             Character newTarget = bb.Get<Character>(Blackboard.KEY_COMBAT_TARGET);
-            
-            // Si la cible a change via le BT (BTCond_IsInCombat)
+
+            // If blackboard has no target yet, ask the coordinator for one
+            if (newTarget == null && _battleManager.Coordinator != null)
+            {
+                newTarget = _battleManager.GetBestTargetFor(self);
+                if (newTarget != null)
+                    bb.Set(Blackboard.KEY_COMBAT_TARGET, newTarget);
+            }
+
             if (newTarget != _currentTarget && newTarget != null)
             {
                 _currentTarget = newTarget;
-                
+
                 if (self.CharacterVisual != null)
                 {
                     self.CharacterVisual.SetLookTarget(_currentTarget);
