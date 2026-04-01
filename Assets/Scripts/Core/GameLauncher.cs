@@ -522,8 +522,8 @@ public class GameLauncher : MonoBehaviour
                 );
                 Vector3 spawnPos = leaderPos + offset;
 
-                // Get the NPC prefab — use the default character prefab
-                GameObject npcPrefab = NetworkManager.Singleton?.NetworkConfig?.PlayerPrefab;
+                // Determine NPC prefab from saved race data (same approach as GameSessionManager)
+                GameObject npcPrefab = ResolveCharacterPrefab(memberProfile);
                 if (npcPrefab == null)
                 {
                     Debug.LogError($"{LOG_TAG} No NPC prefab available for '{memberProfile.characterName}' — skipping.");
@@ -641,5 +641,47 @@ public class GameLauncher : MonoBehaviour
         // Reset SaveManager state for fresh session
         if (SaveManager.Instance != null)
             SaveManager.Instance.ResetForNewSession();
+    }
+
+    /// <summary>
+    /// Resolves the character prefab from saved profile data.
+    /// Reads raceId from CharacterProfile component state, loads the RaceSO,
+    /// and returns the first character_prefab. Falls back to NetworkManager.PlayerPrefab.
+    /// </summary>
+    private GameObject ResolveCharacterPrefab(CharacterProfileSaveData profile)
+    {
+        // Try to extract raceId from CharacterProfile component state
+        if (profile.componentStates.TryGetValue("CharacterProfile", out string profileJson))
+        {
+            try
+            {
+                var profileData = Newtonsoft.Json.JsonConvert.DeserializeObject<ProfileSaveData>(profileJson);
+                if (profileData != null && !string.IsNullOrEmpty(profileData.raceId))
+                {
+                    // Load RaceSO by name — try multiple resource paths
+                    var allRaces = Resources.LoadAll<RaceSO>("");
+                    foreach (var race in allRaces)
+                    {
+                        if (race.RaceName == profileData.raceId || race.name == profileData.raceId)
+                        {
+                            if (race.character_prefabs != null && race.character_prefabs.Count > 0)
+                                return race.character_prefabs[0];
+                        }
+                    }
+                }
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogWarning($"{LOG_TAG} Failed to parse CharacterProfile for prefab resolution: {ex.Message}");
+            }
+        }
+
+        // Fallback: default Human race
+        var humanRace = Resources.Load<RaceSO>("Data/Races/Human");
+        if (humanRace != null && humanRace.character_prefabs != null && humanRace.character_prefabs.Count > 0)
+            return humanRace.character_prefabs[0];
+
+        // Last resort: NetworkManager player prefab
+        return NetworkManager.Singleton?.NetworkConfig?.PlayerPrefab;
     }
 }
