@@ -202,41 +202,39 @@ public class CombatTacticalPacer
         if (dirFromFocal.sqrMagnitude < 0.01f)
             dirFromFocal = new Vector3((_self.GetInstanceID() % 2 == 0) ? 1f : -1f, 0f, 0f);
 
-        // Only correct position if outside the allowed band
+        // If outside the band, correct once and set as drift target (won't re-fire until reached)
         if (currentDist > maxDist)
         {
-            // Too far — move to max distance edge
-            Vector3 corrected = focalPoint + dirFromFocal * maxDist;
-            _swayCenter = corrected;
-            return corrected;
+            _currentDriftTarget = focalPoint + dirFromFocal * maxDist;
+            _swayCenter = _currentDriftTarget;
+            return _currentDriftTarget;
         }
         if (currentDist < minDist)
         {
-            // Too close — move to min distance edge
-            Vector3 corrected = focalPoint + dirFromFocal * minDist;
-            _swayCenter = corrected;
-            return corrected;
+            _currentDriftTarget = focalPoint + dirFromFocal * minDist;
+            _swayCenter = _currentDriftTarget;
+            return _currentDriftTarget;
         }
 
         // Within band — pick a new random drift destination every 4.5-7 seconds
-        // Use random angle + distance from focal point so characters move AROUND it, not just toward/away
         if (Time.time >= _nextDriftTime)
         {
             float randomAngle = Random.Range(0f, Mathf.PI * 2f);
             float randomDist = Random.Range(minDist, maxDist);
 
-            Vector3 candidate = focalPoint + new Vector3(
+            _currentDriftTarget = focalPoint + new Vector3(
                 Mathf.Cos(randomAngle) * randomDist,
                 0,
                 Mathf.Sin(randomAngle) * randomDist
             );
 
-            _currentDriftTarget = candidate;
+            _swayCenter = _currentDriftTarget;
             _nextDriftTime = Time.time + Random.Range(IDLE_DRIFT_MIN_INTERVAL, IDLE_DRIFT_MAX_INTERVAL);
+            return _currentDriftTarget;
         }
 
-        _swayCenter = _currentDriftTarget;
-        return _currentDriftTarget;
+        // Timer not expired — hold position (don't re-send movement commands)
+        return _self.transform.position;
     }
 
     /// <summary>
