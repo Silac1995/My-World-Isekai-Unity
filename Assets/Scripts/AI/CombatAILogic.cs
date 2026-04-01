@@ -12,6 +12,8 @@ namespace MWI.AI
         private bool _isChargingTarget;
         private bool _autoDecideIntent;
         private float _lastPathUpdateTime;
+        private float _stuckSinceTime; // Tracks when character started waiting in position without attacking
+        private const float STUCK_REPOSITION_TIMEOUT = 2.0f; // Force reposition after this many seconds stuck
 
         public CombatAILogic(Character self, bool autoDecideIntent)
         {
@@ -96,7 +98,10 @@ namespace MWI.AI
 
                 // Side-view game: melee range check uses X distance only (hitbox fires left/right).
                 // Ranged uses full 3D distance (projectiles travel in 3D).
-                bool isWithinRange = isRanged ? distToTarget <= attackRange : dx <= attackRange;
+                // Melee also needs a minimum X distance — too close and the hitbox fires behind the target.
+                bool isWithinRange = isRanged
+                    ? distToTarget <= attackRange
+                    : dx <= attackRange && dx >= 1.0f;
                 // Melee needs tight Z alignment to connect; ranged doesn't care.
                 bool isZAligned = isRanged || zDist <= 1.5f;
 
@@ -151,36 +156,26 @@ namespace MWI.AI
                     // Perfectly positioned, stop and charge the action
                     movement.Stop();
 
-                    // Don't attempt execution if a previous action (attack animation) is still playing.
-                    // Without this guard, initiative refills (~0.1s) far faster than animations finish (~0.8s),
-                    // causing a rapid attempt→fail→re-decide loop every tick for the entire animation duration.
                     bool isActionBusy = _self.CharacterActions != null && _self.CharacterActions.CurrentAction != null;
-
-                    // DEBUG: Player per-frame log to diagnose blocked execution
-                    if (!_autoDecideIntent)
-                    {
-                        Debug.Log($"<color=lime>[PlayerCombat]</color> {_self.CharacterName} IN POSITION — readyToAct={isReadyToAct} isActionBusy={isActionBusy} currentAction={_self.CharacterActions?.CurrentAction?.GetType().Name ?? "null"} PlannedAction={(_self.CharacterCombat.PlannedAction != null ? "SET" : "NULL")}");
-                    }
 
                     if (isReadyToAct && !isActionBusy)
                     {
-                        if (doLog) Debug.Log($"<color=orange>[CombatAI]</color> {_self.CharacterName} [Phase 2] Executing Action! Distance: {distToTarget:F2}/{attackRange:F2}, Z-Dist: {zDist:F2}");
+                        _stuckSinceTime = 0f; // Reset stuck timer on successful execution attempt
+                        if (doLog) Debug.Log($"<color=orange>[CombatAI]</color> {_self.CharacterName} [Phase 2] Executing Action! dx: {dx:F2}/{attackRange:F2}, Z-Dist: {zDist:F2}");
                         bool success = _self.CharacterCombat.ExecuteAction(_self.CharacterCombat.PlannedAction);
 
                         if (success)
                         {
-                            // Notify the tactical pacer so melee characters perform a post-attack step-back
-                            // and the sway center resets to the new position after execution.
                             _combatPacer.NotifyAttackCompleted();
                             _combatPacer.ResetSwayCenter();
                         }
                         else
                         {
-                            Debug.LogWarning($"<color=yellow>[CombatAI]</color> {_self.CharacterName} [Phase 2] ExecuteAction FAILED — possible stamina depletion or action rejected.");
+                            Debug.LogWarning($"<color=yellow>[CombatAI]</color> {_self.CharacterName} [Phase 2] ExecuteAction FAILED — forcing reposition.");
+                            // Attack failed (stamina, etc.) — force approach from scratch
+                            _stuckSinceTime = 0f;
                         }
 
-                        // Only clear the intent automatically if this is an AI deciding its own actions.
-                        // For the player, the intent remains queued until toggled off, creating an auto-attack loop!
                         if (_autoDecideIntent)
                         {
                             _self.CharacterCombat.ClearActionIntent();
@@ -189,12 +184,26 @@ namespace MWI.AI
                     }
                     else
                     {
-                        if (doLog)
+                        // Track how long we've been stuck "in position" without being able to attack
+                        if (_stuckSinceTime <= 0f)
+                            _stuckSinceTime = UnityEngine.Time.time;
+
+                        float stuckDuration = UnityEngine.Time.time - _stuckSinceTime;
+                        if (stuckDuration >= STUCK_REPOSITION_TIMEOUT)
+                        {
+                            // Been stuck too long — force reposition by moving to strike position
+                            if (doLog) Debug.Log($"<color=red>[CombatAI]</color> {_self.CharacterName} [Phase 2] Stuck for {stuckDuration:F1}s, forcing reposition!");
+                            _stuckSinceTime = 0f;
+                            float rSide = (_self.transform.position.x < currentTarget.transform.position.x) ? -1f : 1f;
+                            Vector3 repositionTarget = currentTarget.transform.position + new Vector3(rSide * (attackRange - 0.3f), 0, 0);
+                            movement.SetDestination(repositionTarget);
+                        }
+                        else if (doLog)
                         {
                             if (isActionBusy)
-                                Debug.Log($"<color=orange>[CombatAI]</color> {_self.CharacterName} [Phase 2] In position, waiting for current action to finish.");
+                                Debug.Log($"<color=orange>[CombatAI]</color> {_self.CharacterName} [Phase 2] In position, waiting for action to finish ({stuckDuration:F1}s).");
                             else
-                                Debug.Log($"<color=orange>[CombatAI]</color> {_self.CharacterName} [Phase 2] In position but waiting for full initiative (isReadyToAct).");
+                                Debug.Log($"<color=orange>[CombatAI]</color> {_self.CharacterName} [Phase 2] In position, waiting for initiative ({stuckDuration:F1}s).");
                         }
                     }
                 }
