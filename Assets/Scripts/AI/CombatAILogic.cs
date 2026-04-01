@@ -90,7 +90,7 @@ namespace MWI.AI
                 float zDist = Mathf.Abs(_self.transform.position.z - currentTarget.transform.position.z);
 
                 bool isWithinRange = distToTarget <= attackRange;
-                bool isZAligned = zDist <= 1.6f; // Increased from 1.2f to encompass full staggeredZ range (-1.5 to 1.5)
+                bool isZAligned = zDist <= 2.5f; // Must encompass stagger range (±1.5) + idle sway radius (±0.7)
 
                 // Ranged characters: if already within weapon range, skip approach entirely.
                 // They hold ground and fire from current position — no need to close further distance.
