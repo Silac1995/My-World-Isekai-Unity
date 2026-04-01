@@ -26,6 +26,8 @@ namespace MWI.AI
         {
             _readyStartTime = 0f;
             _isChargingTarget = false;
+            _stuckSinceTime = 0f;
+            _combatPacer.ForceImmediateReposition();
         }
 
         public bool Tick(Character currentTarget)

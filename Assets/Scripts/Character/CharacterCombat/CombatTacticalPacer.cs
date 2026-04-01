@@ -45,6 +45,16 @@ public class CombatTacticalPacer
     }
 
     /// <summary>
+    /// Forces an immediate position evaluation on the next Tick.
+    /// Call when entering battle or joining an engagement so characters move right away.
+    /// </summary>
+    public void ForceImmediateReposition()
+    {
+        _lastPathUpdateTime = 0f;
+        _nextDriftTime = 0f;
+    }
+
+    /// <summary>
     /// Called after a melee attack executes to trigger a post-attack step-back.
     /// </summary>
     public void NotifyAttackCompleted()
