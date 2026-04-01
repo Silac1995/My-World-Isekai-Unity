@@ -10,8 +10,8 @@ using UnityEngine;
 /// </summary>
 public class CombatTacticalPacer
 {
-    private const float IDLE_SWAY_RADIUS = 0.7f;
-    private const float IDLE_SWAY_SPEED = 0.5f;
+    private const float IDLE_SWAY_RADIUS = 1.5f;
+    private const float IDLE_SWAY_SPEED = 0.3f;
     private const float CIRCLE_SPEED = 1.5f;
     private const float CIRCLE_RADIUS_OFFSET = 2.0f;
     private const float MELEE_STEPBACK_DISTANCE = 2.0f;
@@ -174,9 +174,10 @@ public class CombatTacticalPacer
     }
 
     /// <summary>
-    /// Maintains standoff distance from target while adding subtle sway.
-    /// Melee: stays at meleeRange + MELEE_STANDOFF_BUFFER from target.
-    /// Ranged: stays at weapon range from target.
+    /// Maintains standoff distance from target while drifting around organically.
+    /// Melee: idles at meleeRange + MELEE_STANDOFF_BUFFER from target.
+    /// Ranged: idles at weapon range from target.
+    /// Never retreats — only moves toward standoff if too far.
     /// </summary>
     private Vector3 CalculateIdleStandoff(Character target, float attackRange, bool isRanged)
     {
@@ -185,28 +186,28 @@ public class CombatTacticalPacer
         float standoffDist = isRanged ? attackRange : (attackRange + MELEE_STANDOFF_BUFFER);
         float currentDist = Vector3.Distance(selfPos, targetPos);
 
-        // Calculate the ideal standoff point: stay at standoff distance in current direction from target
+        // Direction from target to self (our "side" of the fight)
         Vector3 dirFromTarget = (selfPos - targetPos).normalized;
         if (dirFromTarget.sqrMagnitude < 0.01f)
             dirFromTarget = new Vector3((_self.GetInstanceID() % 2 == 0) ? 1f : -1f, 0f, 0f);
 
+        // The ideal standoff point — where we want to drift around
         Vector3 standoffPoint = targetPos + dirFromTarget * standoffDist;
 
-        // Only reposition if TOO FAR from target. If closer than standoff
-        // (because an attacker is charging us), hold ground — don't retreat.
+        // If too far, move toward standoff. If closer (being approached), don't retreat.
         if (currentDist > standoffDist + 1.5f)
         {
             _swayCenter = standoffPoint;
             return standoffPoint;
         }
 
-        // At or closer than standoff distance — sway around current position, don't retreat
-        _swayCenter = selfPos;
+        // Drift around the standoff point organically (not around selfPos — that causes freeze)
+        _swayCenter = standoffPoint;
         float time = Time.time;
         float noiseX = Mathf.PerlinNoise(_perlinSeedX + time * IDLE_SWAY_SPEED, 0) * 2f - 1f;
         float noiseZ = Mathf.PerlinNoise(0, _perlinSeedZ + time * IDLE_SWAY_SPEED) * 2f - 1f;
 
-        return selfPos + new Vector3(
+        return standoffPoint + new Vector3(
             noiseX * IDLE_SWAY_RADIUS,
             0,
             noiseZ * IDLE_SWAY_RADIUS

@@ -84,6 +84,11 @@ namespace MWI.AI
             // 2. EXECUTION PHASE (Player/NPC when an Intent is queued)
             if (_self.CharacterCombat != null && _self.CharacterCombat.HasPlannedAction)
             {
+                // DEBUG: Log every frame for player to diagnose why attack never executes
+                if (!_autoDecideIntent)
+                {
+                    Debug.Log($"<color=lime>[PlayerCombat]</color> {_self.CharacterName} Phase 2 ACTIVE — dist={distToTarget:F2} range={attackRange:F2} zDist={Mathf.Abs(_self.transform.position.z - currentTarget.transform.position.z):F2} readyToAct={isReadyToAct} target={currentTarget?.CharacterName}");
+                }
                 _isChargingTarget = true;
 
                 float dx = Mathf.Abs(_self.transform.position.x - currentTarget.transform.position.x);
