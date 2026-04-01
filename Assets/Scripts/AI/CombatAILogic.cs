@@ -123,8 +123,10 @@ namespace MWI.AI
                     }
                     else
                     {
-                        // Melee: match target's Z so the hitbox connects
-                        staggeredZ = 0f;
+                        // Melee: approach near target's Z with small margin for natural feel
+                        // Hitbox is narrow so keep within ±1.5 units
+                        int staggerIndex = Mathf.Abs(_self.GetInstanceID()) % 5;
+                        staggeredZ = (staggerIndex - 2) * 0.6f; // -1.2 to 1.2
                     }
 
                     float approachRange = isRanged ? Mathf.Min(attackRange, distToTarget) : attackRange;
