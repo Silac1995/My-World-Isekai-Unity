@@ -474,118 +474,107 @@ public class GameLauncher : MonoBehaviour
 
         Debug.Log($"{LOG_TAG} Spawning {leaderProfile.partyMembers.Count} party NPC member(s)...");
 
+        // Determine if we're loading into the same world these NPCs came from.
+        // If so, they may already exist from the NPC snapshot — don't duplicate.
+        string currentWorldGuid = SaveManager.Instance?.CurrentWorldGuid;
+        bool isSoloSession = true; // Solo/host mode — duplicates not allowed in same world
+
+        // Step 1: Create party for the leader
+        CharacterParty leaderParty = null;
+        leader.TryGet(out leaderParty);
+        if (leaderParty != null && !leaderParty.IsInParty)
+        {
+            leaderParty.CreateParty();
+            Debug.Log($"{LOG_TAG} Created party for leader '{leader.CharacterName}'.");
+        }
+
         Vector3 leaderPos = leader.transform.position;
         int memberIndex = 0;
 
         foreach (var memberProfile in leaderProfile.partyMembers)
         {
-            // Offset each NPC slightly from the leader so they don't stack
-            float angle = (360f / leaderProfile.partyMembers.Count) * memberIndex;
-            float radius = 1.5f;
-            Vector3 offset = new Vector3(
-                Mathf.Cos(angle * Mathf.Deg2Rad) * radius,
-                0f,
-                Mathf.Sin(angle * Mathf.Deg2Rad) * radius
-            );
-            Vector3 spawnPos = leaderPos + offset;
-
-            // Determine the NPC's race from saved data
-            // The archetype or race info is stored in componentStates
-            // We use the default fallback race from GameSessionManager
-            RaceSO npcRace = null;
-            if (!string.IsNullOrEmpty(memberProfile.archetypeId))
+            // Check if this NPC already exists in the world (from NPC snapshot).
+            // In solo/host mode loading the SAME world, the NPC was already spawned
+            // by SpawnNPCsFromPendingSnapshot — don't spawn a duplicate.
+            Character existingNPC = null;
+            if (isSoloSession && !string.IsNullOrEmpty(memberProfile.characterGuid))
             {
-                // Try to load the race from Resources based on archetype or saved data
-                npcRace = Resources.Load<RaceSO>($"Data/Races/{memberProfile.archetypeId}");
+                existingNPC = Character.FindByUUID(memberProfile.characterGuid);
             }
 
-            if (npcRace == null && GameSessionManager.Instance != null)
-            {
-                // Try to extract race from component states if available
-                if (memberProfile.componentStates.TryGetValue("Race", out string raceJson))
-                {
-                    // Attempt to parse race name from saved state
-                    try
-                    {
-                        var raceData = Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, string>>(raceJson);
-                        if (raceData != null && raceData.TryGetValue("raceName", out string raceName))
-                        {
-                            npcRace = GameSessionManager.Instance.GetRace(raceName);
-                        }
-                    }
-                    catch (System.Exception)
-                    {
-                        // Fall through to default
-                    }
-                }
-            }
+            Character npcCharacter;
 
-            if (npcRace == null)
+            if (existingNPC != null)
             {
-                npcRace = GameSessionManager.Instance?.GetRace("Human");
-            }
-
-            // Determine visual prefab from race
-            GameObject visualPrefab = null;
-            if (npcRace != null && npcRace.character_prefabs != null && npcRace.character_prefabs.Count > 0)
-            {
-                visualPrefab = npcRace.character_prefabs[0];
-            }
-            else if (NetworkManager.Singleton != null)
-            {
-                visualPrefab = NetworkManager.Singleton.NetworkConfig.PlayerPrefab;
-            }
-
-            if (visualPrefab == null)
-            {
-                Debug.LogError($"{LOG_TAG} Cannot determine visual prefab for party NPC '{memberProfile.characterName}' — skipping.");
-                memberIndex++;
-                continue;
-            }
-
-            // Spawn the NPC character
-            Character npcCharacter = SpawnManager.Instance.SpawnCharacter(
-                spawnPos, npcRace, visualPrefab, isPlayer: false
-            );
-
-            if (npcCharacter == null)
-            {
-                Debug.LogError($"{LOG_TAG} Failed to spawn party NPC '{memberProfile.characterName}'.");
-                memberIndex++;
-                continue;
-            }
-
-            // Wait a frame for NetworkObject to initialize
-            yield return null;
-
-            // Import the NPC's profile
-            var npcCoordinator = npcCharacter.GetComponent<CharacterDataCoordinator>();
-            if (npcCoordinator != null)
-            {
-                npcCoordinator.ImportProfile(memberProfile);
-                Debug.Log($"{LOG_TAG} Party NPC '{memberProfile.characterName}' spawned and profile imported.");
+                // NPC already exists in this world — reconnect, don't spawn
+                npcCharacter = existingNPC;
+                Debug.Log($"{LOG_TAG} Party NPC '{memberProfile.characterName}' already in world — reconnecting.");
             }
             else
             {
-                Debug.LogWarning($"{LOG_TAG} Party NPC '{memberProfile.characterName}' has no CharacterDataCoordinator.");
+                // NPC doesn't exist — spawn fresh from profile
+                float angle = (360f / leaderProfile.partyMembers.Count) * memberIndex;
+                float radius = 1.5f;
+                Vector3 offset = new Vector3(
+                    Mathf.Cos(angle * Mathf.Deg2Rad) * radius,
+                    0f,
+                    Mathf.Sin(angle * Mathf.Deg2Rad) * radius
+                );
+                Vector3 spawnPos = leaderPos + offset;
+
+                // Get the NPC prefab — use the default character prefab
+                GameObject npcPrefab = NetworkManager.Singleton?.NetworkConfig?.PlayerPrefab;
+                if (npcPrefab == null)
+                {
+                    Debug.LogError($"{LOG_TAG} No NPC prefab available for '{memberProfile.characterName}' — skipping.");
+                    memberIndex++;
+                    continue;
+                }
+
+                GameObject npcGO = Instantiate(npcPrefab, spawnPos, Quaternion.identity);
+                var netObj = npcGO.GetComponent<NetworkObject>();
+                if (netObj != null)
+                {
+                    netObj.Spawn(true);
+                }
+
+                npcCharacter = npcGO.GetComponent<Character>();
+                if (npcCharacter == null)
+                {
+                    Debug.LogError($"{LOG_TAG} Spawned NPC has no Character component — skipping.");
+                    memberIndex++;
+                    continue;
+                }
+
+                // Wait a frame for NetworkObject to initialize
+                yield return null;
+
+                // Import profile
+                var npcCoordinator = npcCharacter.GetComponent<CharacterDataCoordinator>();
+                if (npcCoordinator != null)
+                {
+                    npcCoordinator.ImportProfile(memberProfile);
+                }
+
+                npcCharacter.gameObject.name = memberProfile.characterName;
+                Debug.Log($"{LOG_TAG} Party NPC '{memberProfile.characterName}' spawned and profile imported.");
             }
 
-            // Add NPC to party (if CharacterParty system is available on leader)
-            if (leader.TryGet<CharacterParty>(out var leaderParty))
+            // Re-form party — join the leader's party
+            if (leaderParty != null && leaderParty.IsInParty)
             {
-                if (npcCharacter.TryGet<CharacterParty>(out var npcParty))
+                npcCharacter.TryGet(out CharacterParty npcParty);
+                if (npcParty != null && !npcParty.IsInParty)
                 {
-                    // The party system should handle the actual join logic
-                    // This is a simplified version — the full implementation
-                    // depends on CharacterParty's join/invite API
-                    Debug.Log($"{LOG_TAG} Party NPC '{memberProfile.characterName}' ready for party re-join.");
+                    npcParty.JoinParty(leaderParty.PartyData.PartyId);
+                    Debug.Log($"{LOG_TAG} Party NPC '{npcCharacter.CharacterName}' joined leader's party.");
                 }
             }
 
             memberIndex++;
         }
 
-        Debug.Log($"{LOG_TAG} Finished spawning party members.");
+        Debug.Log($"{LOG_TAG} Finished spawning {memberIndex} party member(s).");
     }
 
     // ── Utilities ───────────────────────────────────────────────────
