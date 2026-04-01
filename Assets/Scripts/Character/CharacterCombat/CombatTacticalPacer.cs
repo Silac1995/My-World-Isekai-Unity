@@ -143,7 +143,11 @@ public class CombatTacticalPacer
             return targetPos - dirToTarget * followDistance;
         }
 
-        return CalculateIdleSway();
+        // Within follow distance — apply subtle Perlin sway around current position
+        float time = Time.time;
+        float noiseX = Mathf.PerlinNoise(_perlinSeedX + time * IDLE_SWAY_SPEED, 0) * 2f - 1f;
+        float noiseZ = Mathf.PerlinNoise(0, _perlinSeedZ + time * IDLE_SWAY_SPEED) * 2f - 1f;
+        return _swayCenter + new Vector3(noiseX * IDLE_SWAY_RADIUS, 0, noiseZ * IDLE_SWAY_RADIUS);
     }
 
     /// <summary>
