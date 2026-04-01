@@ -283,13 +283,22 @@ public class CharacterMapTracker : NetworkBehaviour, ICharacterSaveData<MapTrack
         };
     }
 
+    /// <summary>
+    /// When true, Deserialize will skip setting the transform position.
+    /// Set by GameLauncher for party NPCs in foreign worlds — their position
+    /// is managed by the launcher, not by saved map tracker data.
+    /// </summary>
+    [System.NonSerialized] public bool SkipPositionRestore;
+
     public void Deserialize(MapTrackerSaveData data)
     {
         if (data == null) return;
 
-        // Position restore -- primarily used for NPC hibernation wake-up.
-        // Live players get their position from their actual transform after spawn.
-        transform.position = new Vector3(data.positionX, data.positionY, data.positionZ);
+        // Position restore -- skip if flagged (e.g., party NPC in foreign world)
+        if (!SkipPositionRestore)
+        {
+            transform.position = new Vector3(data.positionX, data.positionY, data.positionZ);
+        }
 
         // Map ID -- only set on server since it's a server-write NetworkVariable.
         if (IsServer && !string.IsNullOrEmpty(data.currentMapId))

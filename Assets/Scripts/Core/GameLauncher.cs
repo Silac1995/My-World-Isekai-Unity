@@ -568,6 +568,21 @@ public class GameLauncher : MonoBehaviour
                 // Wait a frame for NetworkObject to initialize
                 yield return null;
 
+                // Check if NPC is in their origin world BEFORE importing profile
+                bool isOriginWorld = false;
+                if (memberProfile.worldAssociations != null && !string.IsNullOrEmpty(currentWorldGuid))
+                {
+                    isOriginWorld = memberProfile.worldAssociations.Exists(w => w.worldGuid == currentWorldGuid);
+                }
+
+                // If foreign world, tell CharacterMapTracker to skip position restore
+                if (!isOriginWorld)
+                {
+                    var mapTracker = npcCharacter.GetComponent<CharacterMapTracker>();
+                    if (mapTracker != null)
+                        mapTracker.SkipPositionRestore = true;
+                }
+
                 // Import full profile (stats, equipment, relations, etc.)
                 var npcCoordinator = npcCharacter.GetComponent<CharacterDataCoordinator>();
                 if (npcCoordinator != null)
@@ -577,22 +592,9 @@ public class GameLauncher : MonoBehaviour
 
                 npcCharacter.gameObject.name = memberProfile.characterName;
 
-                // If this NPC is NOT in their origin world, override position to stay near leader.
-                // ImportProfile restores CharacterMapTracker which warps to saved position —
-                // but that position is from a different world. Only use saved position in origin world.
-                bool isOriginWorld = false;
-                if (memberProfile.worldAssociations != null && !string.IsNullOrEmpty(currentWorldGuid))
-                {
-                    isOriginWorld = memberProfile.worldAssociations.Exists(w => w.worldGuid == currentWorldGuid);
-                }
-
                 if (!isOriginWorld)
                 {
-                    // Foreign world — force NPC position near leader after a short delay.
-                    // ImportProfile's CharacterMapTracker.Deserialize sets the saved position,
-                    // and NetworkTransform may sync it on next tick. We override after settling.
-                    StartCoroutine(ForcePositionAfterDelay(npcCharacter, spawnPos, 0.3f));
-                    Debug.Log($"{LOG_TAG} Party NPC '{memberProfile.characterName}' in foreign world — will position near leader at {spawnPos}.");
+                    Debug.Log($"{LOG_TAG} Party NPC '{memberProfile.characterName}' in foreign world — positioned near leader at {spawnPos}.");
                 }
                 else
                 {
