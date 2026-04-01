@@ -111,18 +111,22 @@ namespace MWI.AI
                 // Ranged characters that passed the check above also enter the execution block (isWithinRange is true).
                 if (!isWithinRange || (!isZAligned && !isRanged))
                 {
-                    // Melee: approach the target's optimal strike position with Z stagger.
-                    // Ranged: approach only to weapon range distance, then stop.
+                    // Melee: approach at target's Z (hitbox is narrow on Z axis).
+                    // Ranged: approach to weapon range with Z stagger (projectiles don't need Z alignment).
                     float side = (_self.transform.position.x < currentTarget.transform.position.x) ? -1f : 1f;
 
-                    // Expanded stagger: 7 unique Z positions instead of 3 to prevent overlap
-                    int staggerIndex = Mathf.Abs(_self.GetInstanceID()) % 7;
-                    float staggeredZ = (staggerIndex - 3) * 0.5f; // -1.5 to 1.5
+                    float staggeredZ;
+                    if (isRanged)
+                    {
+                        int staggerIndex = Mathf.Abs(_self.GetInstanceID()) % 7;
+                        staggeredZ = (staggerIndex - 3) * 0.5f; // -1.5 to 1.5
+                    }
+                    else
+                    {
+                        // Melee: match target's Z so the hitbox connects
+                        staggeredZ = 0f;
+                    }
 
-                    // CRITICAL FIX: To prevent the hypotenuse from pushing the attacker outside the attack range,
-                    // calculate the exact required X distance using Pythagorean theorem (X^2 = D^2 - Z^2)
-                    // We target a hypotenuse slightly less than attackRange to guarantee Phase 3 is triggered.
-                    // For ranged characters, use a capped approach distance so they stop at weapon range, not melee range.
                     float approachRange = isRanged ? Mathf.Min(attackRange, distToTarget) : attackRange;
                     float targetHypotenuse = Mathf.Max(1.0f, approachRange - 0.2f);
                     float xSqr = Mathf.Max(0.1f, (targetHypotenuse * targetHypotenuse) - (staggeredZ * staggeredZ));
