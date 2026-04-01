@@ -210,16 +210,13 @@ namespace MWI.AI
                 }
 
                 Vector3 finalPos = _combatPacer.GetTacticalDestination(currentTarget, attackRange, engagement, _isChargingTarget);
-                
-                if (UnityEngine.Time.time - _lastPathUpdateTime > 0.5f && Vector3.Distance(movement.Destination, finalPos) > 0.5f)
+
+                // If pacer returns current position, it means "hold" — don't issue a movement command
+                float distToFinal = Vector3.Distance(_self.transform.position, finalPos);
+                if (distToFinal > 0.3f)
                 {
-                    if (doLog) Debug.Log($"<color=orange>[CombatAI]</color> {_self.CharacterName} [Phase 3] Dispatching to Tactical Dest: {finalPos}");
                     movement.SetDestination(finalPos);
-                    _lastPathUpdateTime = UnityEngine.Time.time;
-                }
-                else
-                {
-                    if (doLog) Debug.Log($"<color=orange>[CombatAI]</color> {_self.CharacterName} [Phase 3] Not enough time passed to re-path, or already near destination. Distance: {Vector3.Distance(movement.Destination, finalPos)}");
+                    if (doLog) Debug.Log($"<color=orange>[CombatAI]</color> {_self.CharacterName} [Phase 3] Dispatching to Tactical Dest: {finalPos}");
                 }
             }
 

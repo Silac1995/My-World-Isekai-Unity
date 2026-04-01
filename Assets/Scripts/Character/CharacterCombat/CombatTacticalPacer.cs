@@ -19,7 +19,7 @@ public class CombatTacticalPacer
     private const float STANDOFF_MIN_DISTANCE = 1.0f;  // Closest a character can idle to opponent center
     private const float UNENGAGED_FOLLOW_MELEE_DISTANCE = 5.0f;
     private const float LEASH_PULL_STRENGTH = 0.3f;
-    private const float PATH_UPDATE_INTERVAL = 0.8f;
+    private const float PATH_UPDATE_INTERVAL = 2.0f; // Don't re-evaluate position too frequently
 
     /// <summary>
     /// Mirrors CombatFormation.MELEE_PREFERRED_DISTANCE (private in CombatFormation).
