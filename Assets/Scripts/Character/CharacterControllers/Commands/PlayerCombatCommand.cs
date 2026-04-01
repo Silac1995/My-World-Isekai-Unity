@@ -22,14 +22,16 @@ namespace MWI.CharacterControllers.Commands
         {
             if (_target == null || !_target.IsAlive())
             {
-                movement.Stop();
+                movement.ResetPath();
+                movement.Resume();
                 return true;
             }
 
             // Exit when battle has ended (player is no longer in a battle)
             if (_player != null && !_player.CharacterCombat.IsInBattle)
             {
-                movement.Stop();
+                movement.ResetPath();
+                movement.Resume();
                 return true;
             }
 
@@ -42,7 +44,8 @@ namespace MWI.CharacterControllers.Commands
 
         public void OnCancelled(PlayerController controller)
         {
-            controller.CharacterMovement.Stop();
+            controller.CharacterMovement.ResetPath();
+            controller.CharacterMovement.Resume();
         }
     }
 }
