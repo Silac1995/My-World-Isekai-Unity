@@ -87,15 +87,17 @@ namespace MWI.AI
                 // DEBUG: Log every frame for player to diagnose why attack never executes
                 if (!_autoDecideIntent)
                 {
-                    Debug.Log($"<color=lime>[PlayerCombat]</color> {_self.CharacterName} Phase 2 ACTIVE — dist={distToTarget:F2} range={attackRange:F2} zDist={Mathf.Abs(_self.transform.position.z - currentTarget.transform.position.z):F2} readyToAct={isReadyToAct} target={currentTarget?.CharacterName}");
+                    Debug.Log($"<color=lime>[PlayerCombat]</color> {_self.CharacterName} Phase 2 ACTIVE — dx={Mathf.Abs(_self.transform.position.x - currentTarget.transform.position.x):F2} dist3D={distToTarget:F2} range={attackRange:F2} zDist={Mathf.Abs(_self.transform.position.z - currentTarget.transform.position.z):F2} readyToAct={isReadyToAct} target={currentTarget?.CharacterName}");
                 }
                 _isChargingTarget = true;
 
                 float dx = Mathf.Abs(_self.transform.position.x - currentTarget.transform.position.x);
                 float zDist = Mathf.Abs(_self.transform.position.z - currentTarget.transform.position.z);
 
-                bool isWithinRange = distToTarget <= attackRange;
-                // Side-view: hitbox fires on X axis. Melee needs tight Z alignment; ranged doesn't care.
+                // Side-view game: melee range check uses X distance only (hitbox fires left/right).
+                // Ranged uses full 3D distance (projectiles travel in 3D).
+                bool isWithinRange = isRanged ? distToTarget <= attackRange : dx <= attackRange;
+                // Melee needs tight Z alignment to connect; ranged doesn't care.
                 bool isZAligned = isRanged || zDist <= 1.5f;
 
                 // Ranged characters: if already within weapon range, skip approach entirely.
