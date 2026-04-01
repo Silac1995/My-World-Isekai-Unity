@@ -10,8 +10,9 @@ using UnityEngine;
 /// </summary>
 public class CombatTacticalPacer
 {
-    private const float IDLE_SWAY_RADIUS = 1.5f;
-    private const float IDLE_SWAY_SPEED = 0.3f;
+    private const float IDLE_DRIFT_RADIUS = 6.0f;
+    private const float IDLE_DRIFT_MIN_INTERVAL = 4.5f;
+    private const float IDLE_DRIFT_MAX_INTERVAL = 7.0f;
     private const float CIRCLE_SPEED = 1.5f;
     private const float CIRCLE_RADIUS_OFFSET = 2.0f;
     private const float MELEE_STEPBACK_DISTANCE = 2.0f;
@@ -28,8 +29,8 @@ public class CombatTacticalPacer
 
     private Character _self;
     private Vector3 _swayCenter;
-    private float _perlinSeedX;
-    private float _perlinSeedZ;
+    private Vector3 _currentDriftTarget;
+    private float _nextDriftTime;
     private float _circleAngle;
     private float _lastPathUpdateTime;
     private bool _needsStepBack;
@@ -37,10 +38,10 @@ public class CombatTacticalPacer
     public CombatTacticalPacer(Character self)
     {
         _self = self;
-        _perlinSeedX = Random.Range(0f, 100f);
-        _perlinSeedZ = Random.Range(0f, 100f);
         _circleAngle = Random.Range(0f, Mathf.PI * 2f);
         _swayCenter = self.transform.position;
+        _currentDriftTarget = self.transform.position;
+        _nextDriftTime = Time.time + Random.Range(0f, IDLE_DRIFT_MIN_INTERVAL);
     }
 
     /// <summary>
@@ -143,11 +144,14 @@ public class CombatTacticalPacer
             return targetPos - dirToTarget * followDistance;
         }
 
-        // Within follow distance — apply subtle Perlin sway around current position
-        float time = Time.time;
-        float noiseX = Mathf.PerlinNoise(_perlinSeedX + time * IDLE_SWAY_SPEED, 0) * 2f - 1f;
-        float noiseZ = Mathf.PerlinNoise(0, _perlinSeedZ + time * IDLE_SWAY_SPEED) * 2f - 1f;
-        return _swayCenter + new Vector3(noiseX * IDLE_SWAY_RADIUS, 0, noiseZ * IDLE_SWAY_RADIUS);
+        // Within follow distance — occasional drift
+        if (Time.time >= _nextDriftTime)
+        {
+            Vector2 randomCircle = Random.insideUnitCircle * IDLE_DRIFT_RADIUS;
+            _currentDriftTarget = selfPos + new Vector3(randomCircle.x, 0, randomCircle.y);
+            _nextDriftTime = Time.time + Random.Range(IDLE_DRIFT_MIN_INTERVAL, IDLE_DRIFT_MAX_INTERVAL);
+        }
+        return _currentDriftTarget;
     }
 
     /// <summary>
@@ -214,28 +218,28 @@ public class CombatTacticalPacer
             return corrected;
         }
 
-        // Within band — drift freely with Perlin noise
-        float time = Time.time;
-        float noiseX = Mathf.PerlinNoise(_perlinSeedX + time * IDLE_SWAY_SPEED, 0) * 2f - 1f;
-        float noiseZ = Mathf.PerlinNoise(0, _perlinSeedZ + time * IDLE_SWAY_SPEED) * 2f - 1f;
-
-        Vector3 destination = selfPos + new Vector3(
-            noiseX * IDLE_SWAY_RADIUS,
-            0,
-            noiseZ * IDLE_SWAY_RADIUS
-        );
-
-        // Clamp the drifted position to stay within the band
-        float destDist = Vector3.Distance(destination, focalPoint);
-        if (destDist > maxDist || destDist < minDist)
+        // Within band — pick a new random drift destination every 4.5-7 seconds
+        if (Time.time >= _nextDriftTime)
         {
-            float clampedDist = Mathf.Clamp(destDist, minDist, maxDist);
-            Vector3 destDir = (destination - focalPoint).normalized;
-            destination = focalPoint + destDir * clampedDist;
+            // Pick a random point within IDLE_DRIFT_RADIUS of current position
+            Vector2 randomCircle = Random.insideUnitCircle * IDLE_DRIFT_RADIUS;
+            Vector3 candidate = selfPos + new Vector3(randomCircle.x, 0, randomCircle.y);
+
+            // Clamp to stay within the distance band from focal point
+            float candDist = Vector3.Distance(candidate, focalPoint);
+            if (candDist > maxDist || candDist < minDist)
+            {
+                float clampedDist = Mathf.Clamp(candDist, minDist, maxDist);
+                Vector3 candDir = (candidate - focalPoint).normalized;
+                candidate = focalPoint + candDir * clampedDist;
+            }
+
+            _currentDriftTarget = candidate;
+            _nextDriftTime = Time.time + Random.Range(IDLE_DRIFT_MIN_INTERVAL, IDLE_DRIFT_MAX_INTERVAL);
         }
 
-        _swayCenter = destination;
-        return destination;
+        _swayCenter = _currentDriftTarget;
+        return _currentDriftTarget;
     }
 
     /// <summary>
