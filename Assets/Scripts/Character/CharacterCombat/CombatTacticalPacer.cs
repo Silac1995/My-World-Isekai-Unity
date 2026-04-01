@@ -192,21 +192,21 @@ public class CombatTacticalPacer
 
         Vector3 standoffPoint = targetPos + dirFromTarget * standoffDist;
 
-        // If significantly out of position, move toward standoff point
-        float drift = Mathf.Abs(currentDist - standoffDist);
-        if (drift > 1.5f)
+        // Only reposition if TOO FAR from target. If closer than standoff
+        // (because an attacker is charging us), hold ground — don't retreat.
+        if (currentDist > standoffDist + 1.5f)
         {
             _swayCenter = standoffPoint;
             return standoffPoint;
         }
 
-        // At correct distance — apply subtle Perlin sway around standoff point
-        _swayCenter = standoffPoint;
+        // At or closer than standoff distance — sway around current position, don't retreat
+        _swayCenter = selfPos;
         float time = Time.time;
         float noiseX = Mathf.PerlinNoise(_perlinSeedX + time * IDLE_SWAY_SPEED, 0) * 2f - 1f;
         float noiseZ = Mathf.PerlinNoise(0, _perlinSeedZ + time * IDLE_SWAY_SPEED) * 2f - 1f;
 
-        return standoffPoint + new Vector3(
+        return selfPos + new Vector3(
             noiseX * IDLE_SWAY_RADIUS,
             0,
             noiseZ * IDLE_SWAY_RADIUS
