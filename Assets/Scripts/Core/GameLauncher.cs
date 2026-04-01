@@ -213,6 +213,19 @@ public class GameLauncher : MonoBehaviour
         CharacterProfileSaveData profileData = null;
         yield return LoadAndImportProfile(playerCharacter, result => profileData = result);
 
+        // ── Step 6b: Set GameObject name and initialize PlayerUI ────
+        if (profileData != null)
+        {
+            playerCharacter.gameObject.name = profileData.characterName;
+        }
+
+        var playerUI = Object.FindFirstObjectByType<PlayerUI>(FindObjectsInactive.Include);
+        if (playerUI != null)
+        {
+            playerUI.Initialize(playerCharacter.gameObject);
+            Debug.Log($"{LOG_TAG} PlayerUI initialized with '{playerCharacter.CharacterName}'.");
+        }
+
         // ── Step 7: Position the character ──────────────────────────
         ScreenFadeManager.Instance?.UpdateStatus("Positioning character...");
         PositionCharacter(playerCharacter, profileData);
