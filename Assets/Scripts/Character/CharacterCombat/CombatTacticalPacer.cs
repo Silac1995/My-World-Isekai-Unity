@@ -10,7 +10,7 @@ using UnityEngine;
 /// </summary>
 public class CombatTacticalPacer
 {
-    private const float IDLE_DRIFT_RADIUS = 6.0f;
+    private const float IDLE_DRIFT_RADIUS = 5.0f;
     private const float IDLE_DRIFT_MIN_INTERVAL = 4.5f;
     private const float IDLE_DRIFT_MAX_INTERVAL = 7.0f;
     private const float CIRCLE_SPEED = 1.5f;
@@ -202,17 +202,19 @@ public class CombatTacticalPacer
         if (dirFromFocal.sqrMagnitude < 0.01f)
             dirFromFocal = new Vector3((_self.GetInstanceID() % 2 == 0) ? 1f : -1f, 0f, 0f);
 
-        // If outside the band, correct once and set as drift target (won't re-fire until reached)
+        // If outside the band, correct once then wait for next drift interval
         if (currentDist > maxDist)
         {
             _currentDriftTarget = focalPoint + dirFromFocal * maxDist;
             _swayCenter = _currentDriftTarget;
+            _nextDriftTime = Time.time + Random.Range(IDLE_DRIFT_MIN_INTERVAL, IDLE_DRIFT_MAX_INTERVAL);
             return _currentDriftTarget;
         }
         if (currentDist < minDist)
         {
             _currentDriftTarget = focalPoint + dirFromFocal * minDist;
             _swayCenter = _currentDriftTarget;
+            _nextDriftTime = Time.time + Random.Range(IDLE_DRIFT_MIN_INTERVAL, IDLE_DRIFT_MAX_INTERVAL);
             return _currentDriftTarget;
         }
 
