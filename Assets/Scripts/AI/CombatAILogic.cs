@@ -147,6 +147,12 @@ namespace MWI.AI
                     // causing a rapid attempt→fail→re-decide loop every tick for the entire animation duration.
                     bool isActionBusy = _self.CharacterActions != null && _self.CharacterActions.CurrentAction != null;
 
+                    // DEBUG: Player per-frame log to diagnose blocked execution
+                    if (!_autoDecideIntent)
+                    {
+                        Debug.Log($"<color=lime>[PlayerCombat]</color> {_self.CharacterName} IN POSITION — readyToAct={isReadyToAct} isActionBusy={isActionBusy} currentAction={_self.CharacterActions?.CurrentAction?.GetType().Name ?? "null"} PlannedAction={(_self.CharacterCombat.PlannedAction != null ? "SET" : "NULL")}");
+                    }
+
                     if (isReadyToAct && !isActionBusy)
                     {
                         if (doLog) Debug.Log($"<color=orange>[CombatAI]</color> {_self.CharacterName} [Phase 2] Executing Action! Distance: {distToTarget:F2}/{attackRange:F2}, Z-Dist: {zDist:F2}");
