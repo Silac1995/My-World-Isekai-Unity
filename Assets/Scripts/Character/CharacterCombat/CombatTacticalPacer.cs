@@ -105,8 +105,8 @@ public class CombatTacticalPacer
             return ApplyLeash(destination, engagement);
         }
 
-        // Priority 4: Idle standoff — maintain proper distance from target + sway
-        destination = CalculateIdleStandoff(target, attackRange, isRanged);
+        // Priority 4: Idle standoff — maintain proper distance from target + lively movement
+        destination = CalculateIdleStandoff(target, attackRange, isRanged, engagement);
         return ApplyLeash(destination, engagement);
     }
 
@@ -174,44 +174,43 @@ public class CombatTacticalPacer
     }
 
     /// <summary>
-    /// Maintains standoff distance from target while drifting around organically.
-    /// Melee: idles at meleeRange + MELEE_STANDOFF_BUFFER from target.
-    /// Ranged: idles at weapon range from target.
-    /// Never retreats — only moves toward standoff if too far.
+    /// Lively idle movement around the engagement anchor.
+    /// Uses the anchor as a fixed reference so both sides orbit the same center
+    /// without pushing each other apart.
+    /// Melee: standoff at meleeRange + buffer from opponent center.
+    /// Ranged: standoff at weapon range from opponent center.
     /// </summary>
-    private Vector3 CalculateIdleStandoff(Character target, float attackRange, bool isRanged)
+    private Vector3 CalculateIdleStandoff(Character target, float attackRange, bool isRanged, CombatEngagement engagement)
     {
         Vector3 selfPos = _self.transform.position;
-        Vector3 targetPos = target.transform.position;
         float standoffDist = isRanged ? attackRange : (attackRange + MELEE_STANDOFF_BUFFER);
-        float currentDist = Vector3.Distance(selfPos, targetPos);
 
-        // Direction from target to self (our "side" of the fight)
-        Vector3 dirFromTarget = (selfPos - targetPos).normalized;
-        if (dirFromTarget.sqrMagnitude < 0.01f)
-            dirFromTarget = new Vector3((_self.GetInstanceID() % 2 == 0) ? 1f : -1f, 0f, 0f);
+        // Use the opponent group center as reference (stable), not the target directly (causes chase loops)
+        Vector3 focalPoint = engagement != null
+            ? engagement.GetOpponentCenter(_self)
+            : target.transform.position;
 
-        // The ideal standoff point — where we want to drift around
-        Vector3 standoffPoint = targetPos + dirFromTarget * standoffDist;
+        // Direction from focal point to self (our "side" of the fight)
+        Vector3 dirFromFocal = (selfPos - focalPoint).normalized;
+        if (dirFromFocal.sqrMagnitude < 0.01f)
+            dirFromFocal = new Vector3((_self.GetInstanceID() % 2 == 0) ? 1f : -1f, 0f, 0f);
 
-        // If too far, move toward standoff. If closer (being approached), don't retreat.
-        if (currentDist > standoffDist + 1.5f)
-        {
-            _swayCenter = standoffPoint;
-            return standoffPoint;
-        }
+        // The base standoff position — at proper distance on our side
+        Vector3 standoffPoint = focalPoint + dirFromFocal * standoffDist;
 
-        // Drift around the standoff point organically (not around selfPos — that causes freeze)
-        _swayCenter = standoffPoint;
+        // Apply Perlin noise drift for lively movement
         float time = Time.time;
         float noiseX = Mathf.PerlinNoise(_perlinSeedX + time * IDLE_SWAY_SPEED, 0) * 2f - 1f;
         float noiseZ = Mathf.PerlinNoise(0, _perlinSeedZ + time * IDLE_SWAY_SPEED) * 2f - 1f;
 
-        return standoffPoint + new Vector3(
+        Vector3 destination = standoffPoint + new Vector3(
             noiseX * IDLE_SWAY_RADIUS,
             0,
             noiseZ * IDLE_SWAY_RADIUS
         );
+
+        _swayCenter = destination;
+        return destination;
     }
 
     /// <summary>
