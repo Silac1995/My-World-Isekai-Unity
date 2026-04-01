@@ -81,6 +81,13 @@ public class CombatEngagementCoordinator
         // (SetTargeting can be called indirectly during reconciliation)
         var graphSnapshot = new Dictionary<Character, Character>(_targetingGraph);
 
+        // DEBUG: Log targeting graph state
+        if (graphSnapshot.Count > 0)
+        {
+            string graphStr = string.Join(" | ", graphSnapshot.Select(kvp => $"{kvp.Key?.CharacterName ?? "?"} -> {kvp.Value?.CharacterName ?? "?"}"));
+            Debug.Log($"<color=cyan>[Engagement]</color> Graph ({graphSnapshot.Count}): {graphStr}");
+        }
+
         // Step 1: Find all mutual pairs (A targets B AND B targets A)
         var mutualPairs = new HashSet<(Character, Character)>();
         foreach (var kvp in graphSnapshot)
@@ -135,6 +142,12 @@ public class CombatEngagementCoordinator
 
         // Step 5: Clean up empty or finished engagements
         _activeEngagements.RemoveAll(e => e.IsFinished());
+
+        // DEBUG: Log engagement state
+        if (mutualPairs.Count > 0 || _activeEngagements.Count > 0)
+        {
+            Debug.Log($"<color=cyan>[Engagement]</color> Mutuals: {mutualPairs.Count}, Components: {components.Count}, Active engagements: {_activeEngagements.Count}");
+        }
     }
 
     // ───────────────────────────────────────────────
