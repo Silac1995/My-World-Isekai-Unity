@@ -588,14 +588,11 @@ public class GameLauncher : MonoBehaviour
 
                 if (!isOriginWorld)
                 {
-                    // Foreign world — warp NPC to spawn position near leader
-                    var npcMovement = npcCharacter.GetComponentInChildren<CharacterMovement>();
-                    if (npcMovement != null)
-                        npcMovement.Warp(spawnPos);
-                    else
-                        npcCharacter.transform.position = spawnPos;
-
-                    Debug.Log($"{LOG_TAG} Party NPC '{memberProfile.characterName}' in foreign world — positioned near leader at {spawnPos}.");
+                    // Foreign world — force NPC position near leader after a short delay.
+                    // ImportProfile's CharacterMapTracker.Deserialize sets the saved position,
+                    // and NetworkTransform may sync it on next tick. We override after settling.
+                    StartCoroutine(ForcePositionAfterDelay(npcCharacter, spawnPos, 0.3f));
+                    Debug.Log($"{LOG_TAG} Party NPC '{memberProfile.characterName}' in foreign world — will position near leader at {spawnPos}.");
                 }
                 else
                 {
@@ -674,6 +671,24 @@ public class GameLauncher : MonoBehaviour
     /// Resets the launch parameters. Call this when returning to main menu
     /// or when the launch is no longer relevant.
     /// </summary>
+    /// <summary>
+    /// Forces a character's position after a short delay to override
+    /// NetworkTransform sync and CharacterMapTracker restore.
+    /// </summary>
+    private IEnumerator ForcePositionAfterDelay(Character character, Vector3 targetPos, float delay)
+    {
+        yield return new WaitForSecondsRealtime(delay);
+        if (character == null) yield break;
+
+        character.transform.position = targetPos;
+
+        var movement = character.GetComponentInChildren<CharacterMovement>();
+        if (movement != null)
+            movement.Warp(targetPos);
+
+        Debug.Log($"{LOG_TAG} Forced '{character.CharacterName}' position to {targetPos}.");
+    }
+
     public void ClearLaunchParameters()
     {
         SelectedWorldGuid = null;
