@@ -256,7 +256,16 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
         _hitboxSpawnedForAction = false;
         ChangeCombatMode(true);
 
-        if (_character.CharacterActions == null) return false;
+        if (_character.CharacterActions == null)
+        {
+            Debug.LogWarning($"<color=orange>[Combat:ExecuteAttackLocally]</color> {_character.CharacterName}: CharacterActions is null!");
+            return false;
+        }
+
+        Debug.Log($"<color=cyan>[Combat:ExecuteAttackLocally]</color> {_character.CharacterName}: Attempting attack. " +
+                  $"IsServer={IsServer}, Stamina={_character.Stats?.Stamina?.CurrentAmount:F1}, " +
+                  $"CurrentAction={_character.CharacterActions.CurrentAction?.GetType().Name ?? "null"}, " +
+                  $"CombatStyle={_currentCombatStyleExpertise?.Style?.name ?? "null"}");
 
         // Server-only: consume stamina for basic attacks
         if (IsServer && _character.Stats?.Stamina != null)
