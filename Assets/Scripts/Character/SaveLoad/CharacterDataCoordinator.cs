@@ -145,6 +145,13 @@ public class CharacterDataCoordinator : NetworkBehaviour
         _character.CharacterName = data.characterName;
         _character.OriginWorldGuid = data.originWorldGuid;
 
+        // Sync the restored name to the NetworkVariable so late-joining clients see it
+        if (IsServer && !string.IsNullOrEmpty(data.characterName))
+        {
+            _character.NetworkCharacterName.Value =
+                new Unity.Collections.FixedString64Bytes(data.characterName);
+        }
+
         // Override the NetworkCharacterId so the character keeps its persistent GUID
         if (IsServer && !string.IsNullOrEmpty(data.characterGuid))
         {

@@ -33,8 +33,13 @@ public class CharacterProfile : CharacterSystem, ICharacterSaveData<ProfileSaveD
     {
         if (data == null) return;
 
-        // Restore character name
+        // Restore character name (local + NetworkVariable so clients see it)
         _character.CharacterName = data.characterName;
+        if (IsServer && !string.IsNullOrEmpty(data.characterName))
+        {
+            _character.NetworkCharacterName.Value =
+                new Unity.Collections.FixedString64Bytes(data.characterName);
+        }
 
         // Restore race via Resources lookup
         if (!string.IsNullOrEmpty(data.raceId))
