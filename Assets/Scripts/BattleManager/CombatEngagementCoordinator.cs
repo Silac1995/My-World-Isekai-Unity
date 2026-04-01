@@ -119,13 +119,15 @@ public class CombatEngagementCoordinator
         }
 
         // Step 3: Collect components by root
+        // Snapshot keys first — Find() uses path compression which modifies the dictionary
+        var allMembers = new List<Character>(unionFind.Keys);
         var components = new Dictionary<Character, List<Character>>();
-        foreach (var kvp in unionFind)
+        foreach (Character member in allMembers)
         {
-            Character root = Find(unionFind, kvp.Key);
+            Character root = Find(unionFind, member);
             if (!components.ContainsKey(root))
                 components[root] = new List<Character>();
-            components[root].Add(kvp.Key);
+            components[root].Add(member);
         }
 
         // Step 4: Reconcile computed components against existing engagements
