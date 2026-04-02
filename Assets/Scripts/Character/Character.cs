@@ -50,6 +50,7 @@ public class Character : NetworkBehaviour
     [SerializeField] private CharacterVisual _characterVisual;
     [SerializeField] private CharacterGameController _controller;
     [SerializeField] private CharacterEquipment _equipment;
+    [SerializeField] private CharacterTerrainEffects _terrainEffects;
     [SerializeField] private CharacterInteraction _characterInteraction;
     [SerializeField] private CharacterRelation _characterRelation;
     [SerializeField] private CharacterCombat _characterCombat;
@@ -215,6 +216,7 @@ public class Character : NetworkBehaviour
     public CharacterActions CharacterActions => TryGet<CharacterActions>(out var s3) ? s3 : _characterActions;
     public CharacterInteraction CharacterInteraction { get { var s = TryGet<CharacterInteraction>(out var reg) ? reg : _characterInteraction; return s ?? throw new NullReferenceException($"CharacterInteraction non initialisé sur {gameObject.name}"); } }
     public CharacterEquipment CharacterEquipment => TryGet<CharacterEquipment>(out var s5) ? s5 : _equipment;
+    public CharacterTerrainEffects TerrainEffects => TryGet<CharacterTerrainEffects>(out var ste) ? ste : _terrainEffects;
     public CharacterRelation CharacterRelation => TryGet<CharacterRelation>(out var s6) ? s6 : _characterRelation;
     public CharacterParty CharacterParty => TryGet<CharacterParty>(out var s7) ? s7 : _characterParty;
     public CharacterCommunity CharacterCommunity => TryGet<CharacterCommunity>(out var s8) ? s8 : _characterCommunity;
@@ -487,6 +489,7 @@ public class Character : NetworkBehaviour
         if (_floatingTextSpawner == null) _floatingTextSpawner = GetComponentInChildren<FloatingTextSpawner>();
         if (_characterParty == null) _characterParty = GetComponentInChildren<CharacterParty>();
         if (_furniturePlacementManager == null) _furniturePlacementManager = GetComponentInChildren<FurniturePlacementManager>();
+        if (_terrainEffects == null) _terrainEffects = GetComponentInChildren<CharacterTerrainEffects>();
 
         _cachedNavMeshAgent = GetComponent<NavMeshAgent>();
         _isDead = false;

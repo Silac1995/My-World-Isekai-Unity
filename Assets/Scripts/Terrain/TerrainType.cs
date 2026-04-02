@@ -20,9 +20,8 @@ namespace MWI.Terrain
         [Header("Growth")]
         public bool CanGrowVegetation;
 
-        // TODO: Uncomment after Task 9 - FootstepAudioProfile
-        // [Header("Audio")]
-        // public FootstepAudioProfile FootstepProfile;
+        [Header("Audio")]
+        public FootstepAudioProfile FootstepProfile;
 
         [Header("Visuals")]
         public Material GroundOverlayMaterial;
