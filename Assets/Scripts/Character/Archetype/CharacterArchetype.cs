@@ -12,9 +12,11 @@ public class CharacterArchetype : ScriptableObject
     [Header("Identity")]
     [SerializeField] private string _archetypeName;
     [SerializeField] private BodyType _bodyType;
+    [SerializeField] private FootSurfaceType _defaultFootSurface = FootSurfaceType.BareSkin;
 
     public string ArchetypeName => _archetypeName;
     public BodyType BodyType => _bodyType;
+    public FootSurfaceType DefaultFootSurface => _defaultFootSurface;
 
     // ── Capability Flags (editor validation only) ─────────────────
     [Header("Capabilities (Validation Only — Registry is Runtime Truth)")]

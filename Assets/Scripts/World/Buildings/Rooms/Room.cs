@@ -4,6 +4,7 @@ using System.Linq;
 using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
+using MWI.Terrain;
 
 [RequireComponent(typeof(FurnitureGrid))]
 [RequireComponent(typeof(FurnitureManager))]
@@ -11,6 +12,13 @@ public class Room : Zone
 {
     [Header("Room Info")]
     [SerializeField] protected string _roomName;
+
+    [Header("Terrain")]
+    [SerializeField] private TerrainType _floorTerrainType;
+    [SerializeField] private bool _isExposed;
+
+    public TerrainType FloorTerrainType => _floorTerrainType;
+    public bool IsExposed => _isExposed;
 
     protected FurnitureManager _furnitureManager;
 

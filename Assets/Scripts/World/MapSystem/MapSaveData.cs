@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using MWI.Terrain;
 
 namespace MWI.WorldSystem
 {
@@ -14,6 +15,8 @@ namespace MWI.WorldSystem
         public string MapId;
         public double LastHibernationTime; // Absolute time in Days (CurrentDay + CurrentTime01)
         public List<HibernatedNPCData> HibernatedNPCs = new List<HibernatedNPCData>();
+        public TerrainCellSaveData[] TerrainCells;
+        public double TerrainLastUpdateTime;
     }
 
     [Serializable]

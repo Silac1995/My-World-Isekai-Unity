@@ -726,6 +726,22 @@ public class CharacterEquipment : CharacterSystem, ICharacterSaveData<EquipmentS
     }
 
     /// <summary>
+    /// Returns the material of the equipped boots, checking armor > clothing > underwear layers in priority order.
+    /// Returns ItemMaterial.None if no boots are equipped in any layer.
+    /// </summary>
+    public ItemMaterial GetFootMaterial()
+    {
+        var boots = armorLayer?.GetInstance(WearableType.Boots)
+                 ?? clothingLayer?.GetInstance(WearableType.Boots)
+                 ?? underwearLayer?.GetInstance(WearableType.Boots);
+
+        if (boots != null)
+            return boots.ItemSO.Material;
+
+        return ItemMaterial.None;
+    }
+
+    /// <summary>
     /// Checks if the character possesses at least one item of the specified ItemSO (in inventory or hands).
     /// </summary>
     public bool HasItemSO(ItemSO itemSO)
