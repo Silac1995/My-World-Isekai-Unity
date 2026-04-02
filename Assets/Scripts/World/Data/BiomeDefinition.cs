@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using MWI.Weather;
 
 namespace MWI.WorldSystem
 {
@@ -33,5 +34,9 @@ namespace MWI.WorldSystem
         public float HarvestableDensity = 0.5f;    // Hard capped at 80% as requested
 
         public List<HarvestableEntry> Harvestables = new List<HarvestableEntry>();
+
+        [Header("Climate")]
+        [SerializeField] private BiomeClimateProfile _climateProfile;
+        public BiomeClimateProfile ClimateProfile => _climateProfile;
     }
 }
