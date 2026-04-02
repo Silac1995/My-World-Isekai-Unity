@@ -450,9 +450,8 @@ public class CombatEngagementCoordinator
     //  Engagement Spatial Separation
     // ───────────────────────────────────────────────
 
-    // Scale: 11 units = 1.67m
-    private const float MIN_ENGAGEMENT_SEPARATION = 60f;  // ~9m between engagement anchors
-    private const float SEPARATION_PUSH_SPEED = 10f;      // ~1.5m push per tick
+    private const float MIN_ENGAGEMENT_SEPARATION = 12f; // Minimum distance between engagement anchors
+    private const float SEPARATION_PUSH_SPEED = 2f;      // How fast anchors push apart per tick
 
     /// <summary>
     /// Pushes engagement anchors apart so engagements don't visually overlap.

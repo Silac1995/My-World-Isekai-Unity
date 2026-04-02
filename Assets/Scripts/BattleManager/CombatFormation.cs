@@ -8,12 +8,11 @@ using System.Collections.Generic;
 /// </summary>
 public class CombatFormation
 {
-    // Scale: 11 units = 1.67m. 1 unit ≈ 15cm.
-    private const float MELEE_PREFERRED_DISTANCE = 20f;   // ~3m
-    private const float MELEE_SPACING = 14f;              // ~2.1m between melee allies
-    private const float RANGED_MIN_DISTANCE = 45f;        // ~6.8m
-    private const float RANGED_SPACING = 12f;             // ~1.8m between ranged allies
-    private const float Z_SPREAD = 7f;                    // ~1m depth stagger
+    private const float MELEE_PREFERRED_DISTANCE = 4.0f;
+    private const float MELEE_SPACING = 2.5f;
+    private const float RANGED_MIN_DISTANCE = 8.0f;
+    private const float RANGED_SPACING = 2.0f;
+    private const float Z_SPREAD = 1.2f;
 
     private Dictionary<Character, Vector3> _lastAssignedPositions;
 
@@ -66,8 +65,8 @@ public class CombatFormation
 
         // Deterministic jitter based on instance ID — stable across frames
         float jitterSeed = character.GetInstanceID() * 0.1f;
-        basePosition.x += Mathf.Sin(jitterSeed) * 3f;  // ~45cm jitter
-        basePosition.z += Mathf.Cos(jitterSeed) * 2f;  // ~30cm jitter
+        basePosition.x += Mathf.Sin(jitterSeed) * 0.4f;
+        basePosition.z += Mathf.Cos(jitterSeed) * 0.3f;
 
         _lastAssignedPositions[character] = basePosition;
         return basePosition;
