@@ -311,12 +311,12 @@ public class BattleManager : NetworkBehaviour
             character.CharacterCombat.JoinBattle(this);
             character.CharacterCombat.ConsumeInitiative();
 
-            // Auto-target ALL characters (including players) with their best enemy.
-            // For players, the PlayerController can override this later via SetPlannedTarget.
+            // Auto-target via SetPlannedTarget so the character gets a look target,
+            // graph entry, and can move immediately (not wait for initiative).
             Character bestEnemy = _engagementCoordinator?.GetBestTargetFor(character);
             if (bestEnemy != null)
             {
-                _engagementCoordinator?.SetTargeting(character, bestEnemy);
+                character.CharacterCombat.SetPlannedTarget(bestEnemy);
             }
         }
 
