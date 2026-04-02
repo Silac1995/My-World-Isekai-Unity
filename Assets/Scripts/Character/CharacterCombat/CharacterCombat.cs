@@ -43,19 +43,10 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
 
     public void SetActionIntent(Func<bool> action, Character target)
     {
-        Debug.Log($"<color=cyan>[Combat]</color> {_character.CharacterName} SetActionIntent → PlannedTarget: {PlannedTarget?.CharacterName ?? "null"} → {target?.CharacterName ?? "null"}");
         PlannedAction = action;
-        PlannedTarget = target;
-
-        if (_character != null && _character.CharacterVisual != null)
-        {
-            _character.CharacterVisual.SetLookTarget(target);
-        }
-
-        if (target != null && IsInBattle && CurrentBattleManager != null)
-        {
-            CurrentBattleManager.SetTargeting(_character, target);
-        }
+        // Route through SetPlannedTarget for the full targeting chain
+        // (look target, graph update, engagement evaluation)
+        SetPlannedTarget(target);
 
         OnActionIntentDecided?.Invoke(target, action);
     }
@@ -76,12 +67,12 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
     }
 
     /// <summary>
-    /// Sets only the planned target without changing the planned action.
-    /// Called by UI targeting when the player clicks a character during battle.
+    /// <summary>
+    /// Single entry point for ALL target changes (player click, NPC AI, BT, battle join).
+    /// Updates look target, targeting graph, evaluates engagements, and triggers reposition.
     /// </summary>
     public void SetPlannedTarget(Character target)
     {
-        Debug.Log($"<color=cyan>[Combat]</color> {_character.CharacterName} SetPlannedTarget → PlannedTarget: {PlannedTarget?.CharacterName ?? "null"} → {target?.CharacterName ?? "null"}");
         PlannedTarget = target;
 
         // Update look target so this character faces their chosen target
@@ -93,9 +84,11 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
                 _character.CharacterVisual.ClearLookTarget();
         }
 
+        // Update targeting graph + re-evaluate engagements immediately
         if (target != null && IsInBattle && CurrentBattleManager != null)
         {
             CurrentBattleManager.SetTargeting(_character, target);
+            CurrentBattleManager.Coordinator?.EvaluateEngagements();
         }
     }
 

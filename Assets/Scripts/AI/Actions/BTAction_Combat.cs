@@ -39,9 +39,11 @@ namespace MWI.AI
             {
                 _currentTarget = newTarget;
 
-                if (self.CharacterVisual != null)
+                // Route through SetPlannedTarget for the full targeting chain
+                // (look target, graph update, engagement evaluation, reposition)
+                if (self.CharacterCombat != null)
                 {
-                    self.CharacterVisual.SetLookTarget(_currentTarget);
+                    self.CharacterCombat.SetPlannedTarget(_currentTarget);
                 }
             }
 

@@ -266,30 +266,36 @@ public class BattleManager : NetworkBehaviour
     /// </summary>
     private void SeedMutualTargeting()
     {
-        // First: ensure every character has a target
+        // First: ensure every character has a target via the full SetPlannedTarget path
+        // (sets look target + updates graph). EvaluateEngagements is called per-target
+        // inside SetPlannedTarget but that's fine — it's a one-time init cost.
         foreach (var character in _allParticipants)
         {
             if (character == null || !character.IsAlive()) continue;
+            if (character.CharacterCombat == null) continue;
+
             Character bestTarget = _engagementCoordinator.GetBestTargetFor(character);
             if (bestTarget != null)
             {
-                _engagementCoordinator.SetTargeting(character, bestTarget);
+                character.CharacterCombat.SetPlannedTarget(bestTarget);
             }
         }
 
-        // Second pass: for each character, check if their target's best target is them.
-        // If so, make it mutual by ensuring the reverse edge exists.
+        // Second pass: for characters whose target doesn't target them back yet,
+        // make the target reciprocate for instant mutual engagement.
         foreach (var character in _allParticipants)
         {
             if (character == null || !character.IsAlive()) continue;
-            Character myTarget = _engagementCoordinator.GetTargetOf(character);
-            if (myTarget == null) continue;
+            if (character.CharacterCombat == null) continue;
 
-            Character theirTarget = _engagementCoordinator.GetTargetOf(myTarget);
+            Character myTarget = character.CharacterCombat.PlannedTarget;
+            if (myTarget == null || myTarget.CharacterCombat == null) continue;
+
+            Character theirTarget = myTarget.CharacterCombat.PlannedTarget;
             if (theirTarget == null)
             {
                 // Target has no target yet — make them target us back for mutual
-                _engagementCoordinator.SetTargeting(myTarget, character);
+                myTarget.CharacterCombat.SetPlannedTarget(character);
             }
         }
     }
@@ -439,19 +445,21 @@ public class BattleManager : NetworkBehaviour
 
         RegisterCharacter(newParticipant);
 
-        // Seed mutual targeting for the new joiner so engagements form immediately
-        Character bestTarget = _engagementCoordinator?.GetBestTargetFor(newParticipant);
-        if (bestTarget != null)
+        // Seed targeting via SetPlannedTarget (full chain: look target + graph + evaluate)
+        if (newParticipant.CharacterCombat != null)
         {
-            _engagementCoordinator.SetTargeting(newParticipant, bestTarget);
-            // If the target has no target yet, make them target back for instant mutual
-            Character theirTarget = _engagementCoordinator.GetTargetOf(bestTarget);
-            if (theirTarget == null)
+            Character bestTarget = _engagementCoordinator?.GetBestTargetFor(newParticipant);
+            if (bestTarget != null)
             {
-                _engagementCoordinator.SetTargeting(bestTarget, newParticipant);
+                newParticipant.CharacterCombat.SetPlannedTarget(bestTarget);
+
+                // If target has no target yet, make them target back for instant mutual
+                if (bestTarget.CharacterCombat != null && bestTarget.CharacterCombat.PlannedTarget == null)
+                {
+                    bestTarget.CharacterCombat.SetPlannedTarget(newParticipant);
+                }
             }
         }
-        _engagementCoordinator?.EvaluateEngagements();
     }
 
     private void UpdateBattleZoneWith(Character character)
