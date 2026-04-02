@@ -397,7 +397,7 @@ public class CombatEngagementCoordinator
         BattleTeam opponentTeam = _manager.GetOpponentTeamOf(attacker);
         if (opponentTeam == null) return null;
 
-        List<Character> aliveEnemies = opponentTeam.CharacterList.Where(e => e != null && e.IsAlive()).ToList();
+        List<Character> aliveEnemies = opponentTeam.CharacterList.Where(e => e != null && e != attacker && e.IsAlive()).ToList();
         if (aliveEnemies.Count == 0) return null;
 
         List<Character> availableTargets = new List<Character>();

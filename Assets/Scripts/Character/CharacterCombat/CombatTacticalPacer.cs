@@ -85,28 +85,33 @@ public class CombatTacticalPacer
         if (isCharging || target == null)
             return _self.transform.position;
 
-        float now = Time.time;
-        if (now - _lastPathUpdateTime < PATH_UPDATE_INTERVAL)
-            return _self.transform.position;
-        _lastPathUpdateTime = now;
-
         Vector3 destination;
         bool isRanged = IsRangedCharacter(_self);
+        float now = Time.time;
 
-        // Priority 1: Post-attack step-back (melee only)
+        // Priority 1: Post-attack step-back (melee only) — fires immediately, no throttle
         if (_needsStepBack && !isRanged)
         {
             _needsStepBack = false;
             destination = CalculateStepBack(target);
             _swayCenter = destination;
+            _lastPathUpdateTime = now;
             return ApplyLeash(destination, engagement);
         }
 
-        // Priority 2: Unengaged — follow target at distance
+        // Priority 2: Unengaged — follow target at distance (1s throttle, not 5s)
         if (engagement == null)
         {
+            if (now - _lastPathUpdateTime < 1.0f)
+                return _self.transform.position;
+            _lastPathUpdateTime = now;
             return CalculateUnengagedFollow(target, attackRange, isRanged);
         }
+
+        // Engaged idle movement uses the longer PATH_UPDATE_INTERVAL throttle
+        if (now - _lastPathUpdateTime < PATH_UPDATE_INTERVAL)
+            return _self.transform.position;
+        _lastPathUpdateTime = now;
 
         // Priority 3: Tactical circling (outnumbering 2:1+, melee only)
         float outnumberRatio = engagement.GetOutnumberRatio(_self);

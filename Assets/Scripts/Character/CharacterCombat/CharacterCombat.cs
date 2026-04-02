@@ -73,6 +73,9 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
     /// </summary>
     public void SetPlannedTarget(Character target)
     {
+        // Never self-target
+        if (target == _character) return;
+
         PlannedTarget = target;
 
         // Update look target so this character faces their chosen target
