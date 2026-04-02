@@ -19,11 +19,20 @@ This skill details the architecture of the combat system in the project and the 
 The `BattleManager` is the supreme entity of a battle, usually instantiated when a clash begins. It strictly delegates its responsibilities to adhere to SOLID principles:
 - **BattleTeams**: It always maintains two teams (Initiator vs Target). We do *not* support 3-team free-for-alls in a single instance.
 - **BattleZoneController**: A delegated pure C# class that handles the physical terrain. It dynamically generates the boundary (`BoxCollider` isTrigger), pathfinding deterrent (`NavMeshModifierVolume`), and visual `LineRenderer` to mark the combat zone.
-- **CombatEngagementCoordinator**: A delegated pure C# class that manages brawl "subgroups" (`_activeEngagements`) using a **targeting-graph algorithm**. It maintains a `_targetingGraph` (`Dictionary<Character, Character>`) tracking who targets whom. Each battle tick, `EvaluateEngagements()` finds mutual targeting pairs, builds connected components via Union-Find, and reconciles them against existing engagements (create new, sync members, or merge overlapping). Key API: `SetTargeting(attacker, target)` updates the graph, `RemoveFromGraph(character)` cleans up on death/leave, `GetEngagementOf(character)` queries current engagement.
+- **CombatEngagementCoordinator**: A delegated pure C# class that manages brawl "subgroups" (`_activeEngagements`) using a **targeting-graph algorithm**. It maintains a `_targetingGraph` (`Dictionary<Character, Character>`) tracking who targets whom. Each battle tick, `EvaluateEngagements()` runs the full algorithm. Key rules:
+  - **FORM**: Mutual targeting pairs (A→B and B→A) seed Union-Find components.
+  - **JOIN**: One-way targeters join the component of their target (only if the target is already in a component). One-way edges **do not bridge** separate mutual-pair groups — this prevents mega-blob engagements.
+  - **SPLIT**: If a mutual subgroup within an engagement re-targets elsewhere, it separates into its own engagement.
+  - **FOLLOW**: During splits, characters follow their current target into the new engagement.
+  - **RECONCILE**: Compare components against existing engagements — create new, sync members, or merge overlapping.
+  - **CLEAN**: Remove characters no longer in any component; prune empty engagements.
+  - **Spatial separation**: Engagement anchors repel each other when closer than 12 units apart.
+  - Key API: `SetTargeting(attacker, target)` updates the graph, `RemoveFromGraph(character)` cleans up on death/leave (removes both outgoing and incoming edges), `GetEngagementOf(character)` queries current engagement, `GetTargetOf(character)` returns their current graph target, `GetBestTargetFor(attacker)` finds the optimal target (closest in non-full engagement, with **self-targeting prevention**).
 - **CombatFormation (Organic Positioning)**: Each `EngagementGroup` owns a `CombatFormation` that calculates dynamic positions based on character role. Melee fighters position at `MELEE_PREFERRED_DISTANCE = 4m` from the opponent center, ranged at `RANGED_MIN_DISTANCE = 8m`. Same-role allies spread along the Z axis with configurable spacing (`MELEE_SPACING = 2.5`, `RANGED_SPACING = 2.0`). There are no fixed ring slots — positions are recomputed each call to `GetOrganicPosition()`. Role detection uses `CombatStyleExpertise.Style is RangedCombatStyleSO`. Deterministic per-character jitter (based on `GetInstanceID()`) prevents stacking. `CombatEngagement.GetAssignedPosition()` delegates to the group's formation with team side sign (-1 for GroupA, +1 for GroupB).
 - **Victory Condition**: The manager continuously polls `.IsTeamEliminated()` in its `Update()` loop. This physical guarantee ensures the battle definitively ends if an entire team is wiped out or silently despawned, rather than relying exclusively on volatile event triggers.
 - **Incapacitation Handling**: When a character faints/dies, `HandleCharacterIncapacitated` calls `RedirectIncapacitated` which removes the victim from the targeting graph via `RemoveFromGraph` (clears both outgoing and incoming edges, plus leaves engagement) before running `CleanupEngagements`. All characters (including players) are auto-targeted via `SetTargeting` when they join the battle — no `IsPlayer()` guard.
-- **Robust Teardown**: Upon ending, the manager wraps `LeaveBattle` calls in a `try-catch` block to quarantine aggressive UI exceptions (like `PlayerUI` crashing) from aborting the shutdown script. It also unsubscribes all character events explicitly in `OnDestroy()` to prevent zombie memory leaks.
+- **Battle Initialization**: `SeedMutualTargeting` runs at battle init to create immediate mutual targeting pairs between opposing teams. Mid-battle joins also seed mutual targeting via `AddParticipantInternal`. This ensures engagements form immediately on battle start.
+- **Robust Teardown**: Upon ending, the manager wraps `LeaveBattle` calls in a `try-catch` block to quarantine aggressive UI exceptions (like `PlayerUI` crashing) from aborting the shutdown script. It also unsubscribes all character events explicitly in `OnDestroy()` to prevent zombie memory leaks. `LeaveBattle` and `ForceExitCombatMode` clear `PlannedAction`, `PlannedTarget`, and look target to fully reset combat state.
 - **Tick System**: It is the `BattleManager` that sets the pace (`PerformBattleTick()`), and *not the Update method of each character*.
 
 ### 2. CharacterCombat (Local Logic)
@@ -33,14 +42,24 @@ This is the component every NPC/Player has in order to fight.
   - The `.IsReadyToAct` method checks if the Initiative (in Stats) is full.
   - The `.ConsumeInitiative()` method resets initiative to 0 after a successful attack.
   - The `.UpdateInitiativeTick(amount)` method is **called by the BattleManager** to fill the bar.
+- **Unified Targeting (`SetPlannedTarget` is the SINGLE entry point)**: All target changes route through `SetPlannedTarget(Character)`, which performs: (1) update `CharacterVisual.SetLookTarget`, (2) update `BattleManager.SetTargeting()` in the targeting graph, (3) `EvaluateEngagements()`, (4) issue immediate movement command toward new target. Self-targeting is prevented. All callers route through this:
+  - `SetActionIntent(Action, target)` routes through `SetPlannedTarget`
+  - `BTAction_Combat` routes through `SetPlannedTarget`
+  - `RegisterCharacter` routes through `SetPlannedTarget`
+  - `SeedMutualTargeting` uses `SetPlannedTarget`
+  - UI click/TAB targeting calls `SetPlannedTarget` to redirect without cancelling queued attacks.
 - **Action Intent & Execution (`CombatAILogic.cs`)**: Actions are no longer executed blindly by UI buttons or Behaviour Trees.
-  - **`SetActionIntent(Action, target)`** logs what the character *intends* to do. It sets both `PlannedAction` and `PlannedTarget`, synchronizes `CharacterVisual.SetLookTarget`, and calls `BattleManager.SetTargeting()` to update the targeting graph for engagement reconciliation.
-  - **`SetPlannedTarget(Character)`** sets only the target without touching `PlannedAction`. Used by the UI targeting system (click/TAB) to redirect the combat AI to a new enemy without cancelling a queued attack. Also calls `BattleManager.SetTargeting()` to update the targeting graph.
-  - **`CombatAILogic.Tick(target)`** is the shared brain for both Players and NPCs. At the top of each tick, it checks `CharacterCombat.PlannedTarget` — if set and alive, it **overrides** the coordinator-assigned `currentTarget` so that player click/TAB selection is respected by all movement and execution logic. It uses `GetEffectiveAttackRange()` which returns `RangedRange` for ranged characters and `MeleeRange` for melee, ensuring ranged characters use their actual weapon range for all approach calculations. It moves the character into valid strike range (evaluating effective range, X-depth limits, and Z-alignment `<= 1.6f`) and ONLY calls `ExecuteAction` when perfectly positioned and `IsReadyToAct` is true.
+  - **`SetActionIntent(Action, target)`** logs what the character *intends* to do. It sets `PlannedAction` and routes the target through `SetPlannedTarget`.
+  - **`CombatAILogic.Tick(target)`** is the shared brain for both Players and NPCs. At the top of each tick, it checks `CharacterCombat.PlannedTarget` — if set and alive, it **overrides** the coordinator-assigned `currentTarget` so that player click/TAB selection is respected by all movement and execution logic. It uses `GetEffectiveAttackRange()` which returns `RangedRange` for ranged characters and `MeleeRange` for melee, ensuring ranged characters use their actual weapon range for all approach calculations.
+  - **Side-view range check**: This is a side-view game. Melee range uses **X distance only** (`dx <= attackRange && dx >= 1.0`). Z alignment requires `zDist <= 1.5` for melee; ranged bypasses Z alignment entirely. Melee approach sets stagger Z = 0 (match target depth lane for hitbox alignment).
   - **Ranged approach behavior**: Ranged characters (detected via `IsRangedCharacter()` — checks `Style is RangedCombatStyleSO`) that are already within weapon range skip the approach phase entirely and proceed straight to execution. They also bypass the Z-alignment requirement since projectiles handle targeting. Ranged characters **never flee reactively** — they hold ground when melee enemies approach and only reposition after their own attack turn.
   - The attack closure uses **dynamic PlannedTarget evaluation**: `() => Attack(_characterCombat.PlannedTarget)` rather than capturing a fixed target. This ensures retargeting after queuing is respected.
+  - **Target change detection**: `ForceImmediateReposition()` is called when the target changes, resetting the tactical pacer throttle and drift timer for instant response.
+  - **Stuck reposition**: A 2-second timeout detects when a character is in position but cannot execute (e.g., initiative not ready). After timeout, forces a reposition to prevent standing still indefinitely.
   - While waiting for Initiative, `CombatAILogic` Phase 3 queries `CombatTacticalPacer.GetTacticalDestination(target, attackRange, engagement, isCharging)` for dynamic movement. After a successful action execution in Phase 2, it calls `NotifyAttackCompleted()` and `ResetSwayCenter()` on the pacer to trigger melee step-back.
   - For standard hits, NPCs automatically pull intents (and register them in Phase 1) when ready. Players strictly declare intents via `UI_CombatActionMenu`.
+  - **BTAction_Combat integration**: When the blackboard target is null, queries `GetBestTargetFor()` for a fallback target. Routes all targeting through `SetPlannedTarget`.
+  - **PlayerCombatCommand exit**: Exits when `IsInBattle` becomes false, using `ResetPath + Resume` (not `Stop`) to allow post-battle movement.
 
 ### 3. Weapons & Styles (3-Layer Architecture)
 
@@ -177,7 +196,12 @@ Weapons use physical types. Spells typically use magical types.
 - After the knockback window ends, `FixedUpdate` re-enables the NavMeshAgent (if in combat) and sets the Rigidbody back to kinematic.
 
 ### 12. Facing System (Single Source of Truth)
-During combat, a character's facing direction is driven exclusively by their `PlannedTarget`. When `SetActionIntent()` or `SetPlannedTarget()` is called, `CharacterVisual.SetLookTarget(target)` is invoked to point the character at their current combat target. No other system (movement, animation, AI) overrides facing during battle. This eliminates sprite-flip jitter from competing flip sources. When leaving combat, `ClearLookTarget()` returns control to the normal movement-based facing.
+During combat, a character's facing direction is driven exclusively by their `PlannedTarget`. The implementation chain:
+- **`CharacterVisual.LateUpdate`** reads the character's own `PlannedTarget` via the look target reference and flips the sprite accordingly. This is the single evaluation point — no competing `UpdateFlip`/`FaceTarget` calls exist in `CombatAILogic`.
+- **`SetPlannedTarget()`** (the unified entry point) calls `CharacterVisual.SetLookTarget(target)` to set the look target reference.
+- **`ClearActionIntent()`** only clears the look target when the character is **NOT in battle**. This prevents the character from turning away during step-back or other tactical movement while still in combat.
+- **`LeaveBattle()` and `ForceExitCombatMode()`** clear `PlannedAction`, `PlannedTarget`, and look target to fully reset facing control.
+- No other system (movement, animation, AI) overrides facing during battle. This eliminates sprite-flip jitter from competing flip sources. When leaving combat, `ClearLookTarget()` returns control to the normal movement-based facing.
 
 ### 13. CombatTacticalPacer (Dynamic Movement)
 
@@ -186,31 +210,40 @@ During combat, a character's facing direction is driven exclusively by their `Pl
 **Signature**: `GetTacticalDestination(Character target, float attackRange, CombatEngagement engagement, bool isCharging)`
 
 **Movement states (priority order):**
-1. **Post-attack step-back** (melee only): After `NotifyAttackCompleted()` is called, the character steps `MELEE_STEPBACK_DISTANCE = 2m` away from the target. Fires once per attack, then resets.
-2. **Unengaged follow**: If no `CombatEngagement` exists, trails the target at `attackRange` (ranged) or `UNENGAGED_FOLLOW_MELEE_DISTANCE = 5m` (melee). Falls back to idle sway if within range.
-3. **Tactical circling**: When outnumbering opponents 2:1+ (via `engagement.GetOutnumberRatio()`), melee fighters orbit the opponent center at `MELEE_PREFERRED_DISTANCE + CIRCLE_RADIUS_OFFSET = 6m`. Each character starts at a random angle to avoid stacking.
-4. **Idle sway**: Perlin noise micro-movement around the sway center (`IDLE_SWAY_RADIUS = 0.7m`, `IDLE_SWAY_SPEED = 0.5`). Prevents characters from standing perfectly still.
+1. **Post-attack step-back** (melee only): After `NotifyAttackCompleted()` is called, the character steps `MELEE_STEPBACK_DISTANCE = 2m` away from the target. Fires **immediately** (no throttle). Fires once per attack, then resets.
+2. **Unengaged follow**: If no `CombatEngagement` exists, trails the target at `attackRange` (ranged) or `UNENGAGED_FOLLOW_MELEE_DISTANCE = 5m` (melee). Uses **1-second throttle** for re-pathing. Falls back to idle drift if within range.
+3. **Tactical circling**: When outnumbering opponents 2:1+ (via `engagement.GetOutnumberRatio()`), melee fighters orbit the opponent center at `MELEE_PREFERRED_DISTANCE + CIRCLE_RADIUS_OFFSET = 6m`. **Angular slot spreading**: allies on the same side get evenly-spaced angles across a 180-degree semicircle to prevent stacking.
+4. **Idle standoff/drift**: Random angle + distance from focal point every **5-7 seconds**, up to **5 units**. Constrained within a standoff distance band: `min = 1`, `max = attackRange * 1.5 + 6` from opponent center. Uses **5-second throttle** for re-pathing.
+
+**ForceImmediateReposition**: Resets both the path update throttle and the drift timer, enabling instant response to target changes or other urgent repositioning needs.
 
 **Leash system**: All engaged destinations are soft-constrained to the engagement's `LeashRadius` (15m from `AnchorPoint`). Overshoot is pulled back at `LEASH_PULL_STRENGTH = 0.3` — a gentle pull, not a hard clamp.
 
-**Path update throttle**: `PATH_UPDATE_INTERVAL = 0.8s` prevents excessive re-pathing.
-
-**Ranged behavior**: Ranged characters (detected via `CombatStyleExpertise.Style is RangedCombatStyleSO`) skip step-back and circling — they hold position and idle sway.
+**Ranged behavior**: Ranged characters (detected via `CombatStyleExpertise.Style is RangedCombatStyleSO`) skip step-back and circling — they hold position and idle drift only.
 
 ### 14. Battle Ground Circle Indicators
-Visual-only, local-player feature. When the local player joins a battle, colored circles appear on the ground beneath every participant: **Blue** for allies, **Red** for enemies. Colors are relative to the viewer's team.
+Client-side visual. Colored circles beneath characters: **Blue** (ally), **Green** (party member), **Red** (enemy). Outside combat, party members always show green. Colors relative to local player.
 
 **Components:**
-- **`BattleGroundCircle.cs`** (`Assets/Scripts/BattleManager/`): MonoBehaviour on an instantiated prefab. Manages one `DecalProjector` — handles fade-in on spawn, `Dim()` for incapacitated characters, `Cleanup()` for fade-out + self-destruct. All fade coroutines use `Time.unscaledDeltaTime` (UI-class visual, Rule 24).
-- **`BattleCircleManager.cs`** (`Assets/Scripts/BattleManager/`): `CharacterSystem` on a child GameObject of the Character prefab. Only activates for `IsOwner`. Subscribes to `CharacterCombat.OnBattleJoined` / `OnBattleLeft` and `BattleManager.OnParticipantAdded`. Maintains `Dictionary<Character, BattleGroundCircle>`.
+- **`BattleGroundCircle.cs`**: Flat Quad prefab with `MeshRenderer` + `Custom/BattleGroundCircle` shader. Per-instance `_FadeFactor`, `_InitProgress`, `_InitFlash` via `MaterialPropertyBlock` (outside `CBUFFER_START`). `SetInitiativeProgress(float)` fills clockwise arc ring; flash burst when initiative hits 100%.
+- **`BattleCircleManager.cs`**: `CharacterSystem` on Character prefab child. **Uses `_character.IsLocalPlayer`** (not `IsOwner`). Guard via `ShouldManageCircles()` at handler time. Subscribes to battle AND party events.
 
-**Key events used:**
-- `CharacterCombat.OnBattleJoined(BattleManager)` — fired at end of `JoinBattle()`, on all clients
-- `CharacterCombat.OnBattleLeft` — fired in `LeaveBattle()`, on all clients
-- `BattleManager.OnParticipantAdded(Character)` — fired at end of `RegisterCharacter()`, on all clients
-- `Character.OnIncapacitated` / `OnWakeUp` — per-character dim/restore
+**Color priority** (`PickMaterial`): Enemy (red) → Party member (green, same `PartyData.PartyId`) → Ally (blue).
 
-**Rendering:** URP `DecalProjector` with shared materials (2 total: ally + enemy). No per-instance material clones. Per-instance opacity via `DecalProjector.fadeFactor`. Requires Decal Renderer Feature on URP Renderer assets.
+**Party circles:** Green on party members (excluding self) outside combat. On battle end: self + enemy removed, party circles kept and swapped to green.
+
+**Initiative arc ring:** Fills clockwise from 12 o'clock. `Update()` reads `Initiative.CurrentAmount / MaxValue`. Configurable: `_InitInner`, `_InitOuter`, `_InitColor`.
+
+**Initiative sync:** `ConsumeInitiative()` fires `SyncInitiativeResetClientRpc`. Called from `ExecuteAction(Func<bool>)` AND `ExecuteAttackLocally`.
+
+**Rendering:** URP Unlit transparent shader on flat Quad, `Euler(-90,0,0)`. Three materials (ally, party, enemy). Dynamic sizing via `GetCharacterGroundRadius` + 10 units.
+
+### 15. Battle Zone Visual Border
+Translucent gold border + ambient particles on zone perimeter.
+
+- **LineRenderer**: `M_BattleZoneBorder.mat` (Additive HDR gold), width 0.15, rounded corners.
+- **ParticleSystem** (`BattleZoneParticles`): Box edge emission, 25/sec, max 80. Settings exposed on `BattleManager` (`ZoneParticleSettings`).
+- **Smooth resize:** `BattleZoneController.Tick()` lerps `_visualSize` at `RESIZE_SPEED = 3f`. Collider snaps; visuals smooth. Starts tiny on creation.
 
 ## Tips & Troubleshooting
 - **A character never attacks**:

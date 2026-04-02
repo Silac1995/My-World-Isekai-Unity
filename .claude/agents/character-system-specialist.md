@@ -208,6 +208,7 @@ Uses the standard CharacterSystem RPC relay:
 - `IOfflineCatchUp` — macro-simulation catch-up (`CalculateOfflineDelta(float elapsedDays)`)
 - `CharacterSaveData` includes `ArchetypeId` for prefab selection on load
 - Dynamic capability overrides persisted as enable/disable lists
+- **Name sync rule:** Any `Deserialize` or `ImportProfile` that writes `_characterName` must also update `NetworkCharacterName.Value` on the server, otherwise late-joining clients see stale names. `Character.OnNetworkSpawn` subscribes to `NetworkCharacterName.OnValueChanged` to apply incoming name updates.
 
 ---
 

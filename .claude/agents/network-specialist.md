@@ -127,11 +127,13 @@ All `CharacterSystem` subclasses follow this universal pattern:
 5. **Visual Broadcast** — server sends Rpc(SendTo.Everyone) for animations/VFX
 6. **Hitbox Protection** — overlap triggers gated by `if (!IsServer) return;`
 
-### 10. Persistent Character Identity
+### 10. Persistent Character Identity & Name Sync
 
 - Each character generates `NetworkCharacterId` (GUID) on first `OnNetworkSpawn` (server-side)
 - Use `Character.FindByUUID(uuid)` for network-safe lookup
 - Never rely on `NetworkObjectId` for persistence — it changes across sessions
+- `NetworkCharacterName` syncs character names to all clients via `OnValueChanged` callback (subscribed in `OnNetworkSpawn`, unsubscribed in `OnNetworkDespawn`)
+- **Critical:** Any server-side code that changes `_characterName` (profile import, save restore) must also write to `NetworkCharacterName.Value`, otherwise clients see stale names
 
 ## Key Networked Scripts
 
@@ -148,7 +150,7 @@ All `CharacterSystem` subclasses follow this universal pattern:
 | `MapController` | Map lifecycle | `ExteriorMapId`, `IsActive` |
 | `DoorLock` | Door state | `IsLocked` |
 | `BattleManager` | Battle coordination | `InitializeClientRpc`, `AddParticipantClientRpc` |
-| `GameSpeedController` | Time scale sync | `_serverTimeScale`, `RequestSpeedChangeRpc` |
+| `GameSpeedController` | Time scale + absolute time sync | `_serverTimeScale`, `_serverDay`, `_serverTime01`, `RequestSpeedChangeRpc` |
 
 ## Mandatory Rules
 

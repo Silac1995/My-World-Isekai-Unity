@@ -45,13 +45,14 @@ CombatAILogic (pure C# — shared Player/NPC)
 ### 2. Battle Flow
 
 1. **Initiation**: `CharacterCombat.StartFight(target)` → creates `BattleManager` → `Initialize(initiator, target)`
-2. **Team Assignment**: Participants sorted into `BattleTeam`s, auto-targeted via `SetTargeting`, engagement coordinator groups them via targeting graph
-3. **Tick Loop**: `BattleManager.PerformBattleTick()` at 10 Hz → `UpdateInitiativeTick(amount)` per character
+2. **Team Assignment**: Participants sorted into `BattleTeam`s. `SeedMutualTargeting` creates immediate mutual targeting pairs between opposing teams. Mid-battle joins also seed mutual targeting via `AddParticipantInternal`.
+3. **Tick Loop**: `BattleManager.PerformBattleTick()` at 10 Hz → `UpdateInitiativeTick(amount)` per character → `EvaluateEngagements()` per tick
 4. **Initiative**: `baseInitiativePerTick + Speed * speedMultiplier`, capped at 2.0. When full → `IsReadyToAct = true`
-5. **Intent**: UI or AI calls `SetActionIntent(Func<bool> action, Character target)`
+5. **Intent**: UI or AI calls `SetActionIntent(Func<bool> action, Character target)` — routes through `SetPlannedTarget`
 6. **Execution**: `CombatAILogic.Tick()` moves into range → `ExecuteAction(PlannedAction)` → `ConsumeInitiative()`
 7. **Resolution**: Server validates, applies damage, broadcasts via ClientRpc
-8. **End**: Team elimination check → `EndBattle()`
+8. **End**: Team elimination check → `EndBattle()` → `LeaveBattle` clears PlannedAction, PlannedTarget, and look target
+9. **Post-battle**: `PlayerCombatCommand` exits when `IsInBattle` becomes false (uses `ResetPath + Resume`, not `Stop`)
 
 ### 3. Combat Action Flow (CharacterAction Integration)
 
@@ -139,9 +140,23 @@ RequestDespawnHitboxServerRpc()
 BroadcastAttackRpc(ulong targetNetworkObjectId, bool isFacingRight)
 BroadcastUseAbilityRpc(int slotIndex, ulong targetNetworkObjectId)
 SyncDamageClientRpc(float amount, DamageType type, float serverHpAfter, ulong sourceId)
+SyncInitiativeResetClientRpc()  // syncs initiative reset to clients for circle visuals
 ```
 
 **Pattern**: Owner predicts visuals locally → sends request to server → server validates → broadcasts to all
+
+### 8a. Battle Circle & Zone Visuals
+
+**Circle system** (`BattleCircleManager` + `BattleGroundCircle`):
+- Only `_character.IsLocalPlayer` manages circles (NOT `IsOwner` — on host, `IsOwner` is true for all server-owned objects including NPCs)
+- Three colors: Blue (ally), Green (party member via `PartyData.PartyId` match), Red (enemy)
+- Party circles persist outside combat; battle circles replace them during combat
+- Initiative arc ring in shader fills clockwise, driven by `Update()` reading `Stats.Initiative`
+- `ConsumeInitiative()` must be called in ALL action paths (abilities AND `ExecuteAttackLocally`) and syncs via `SyncInitiativeResetClientRpc`
+
+**Zone border** (`BattleZoneController`):
+- `Tick()` called from `BattleManager.Update()` — smooth visual resize via lerp
+- Particle settings exposed on `BattleManager` as serialized fields (`ZoneParticleSettings` struct)
 
 ### 9. Key Events
 
@@ -175,6 +190,10 @@ OnParticipantAdded(Character)
 | `CharacterPhysicalAbilityAction` | `Assets/Scripts/Character/CharacterActions/` | CharacterAction |
 | `CharacterSpellCastAction` | `Assets/Scripts/Character/CharacterActions/` | CharacterAction |
 | `AbilitySO` / `PhysicalAbilitySO` / `SpellSO` / `PassiveAbilitySO` | `Assets/Scripts/` | ScriptableObjects |
+| `BattleGroundCircle` | `Assets/Scripts/BattleManager/` | MonoBehaviour (quad + shader) |
+| `BattleCircleManager` | `Assets/Scripts/BattleManager/` | CharacterSystem |
+| `BattleZoneController` | `Assets/Scripts/BattleManager/` | Pure C# |
+| `BattleGroundCircle.shader` | `Assets/Shaders/` | URP Unlit Transparent |
 | `AbilityInstance` / `PhysicalAbilityInstance` / `SpellInstance` | `Assets/Scripts/` | Pure C# |
 | `IDamageable` | `Assets/Scripts/` | Interface |
 

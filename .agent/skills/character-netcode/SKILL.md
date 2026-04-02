@@ -52,6 +52,13 @@ To ensure characters are uniquely identifiable across sessions, reconnects, and 
 - **Usage:** Always use `CharacterId` (the string wrapper for the network variable) when referencing a character in data structures, building ownership, or narrative save files.
 - **Lookup:** Use `Character.FindByUUID(string uuid)` to locate a spawned character instance by its persistent ID.
 
+### 4. Character Name Network Sync
+`NetworkCharacterName` (FixedString64Bytes, server-write) holds the authoritative character name.
+- `Character.OnNetworkSpawn` subscribes to `NetworkCharacterName.OnValueChanged`, applying the value to the local `_characterName` field and updating `gameObject.name` in the hierarchy.
+- `Character.OnNetworkDespawn` unsubscribes from the callback.
+- **Critical rule:** Any code that changes `_characterName` on the server (profile import, save restore, rename) **must also write to `NetworkCharacterName.Value`**. If only the local field is set, clients will never see the change. Both `CharacterDataCoordinator.ImportProfile` and `CharacterProfile.Deserialize` follow this pattern.
+- The `OnValueChanged` callback ensures late-joining clients receive the correct name even if the value arrives slightly after `OnNetworkSpawn`.
+
 ## Verification Checklist
 - [ ] Does this specific CharacterSystem use NetworkVariables for persistent data?
 - [ ] Do Client actions trigger a ServerRpc instead of running local logic?

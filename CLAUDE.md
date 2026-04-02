@@ -99,3 +99,7 @@ The Character entity uses a **Facade + Child Hierarchy** pattern:
 ## Defensive Coding & Exception Handling
 
 31. Wrap operations that can fail at runtime (file I/O, deserialization, network callbacks, external data parsing, `GetComponent` on uncertain targets) in `try/catch` blocks. Log the exception with `Debug.LogException(e)` or `Debug.LogError` including context (what was being attempted, which object, which data). The goal is to prevent one failing subsystem from crashing the entire game — gracefully degrade instead. Do **not** swallow exceptions silently; always log them. For performance-critical paths (Update loops, tight loops), prefer null-checks and validation over try/catch.
+
+## World Scale Reference
+
+32. **11 Unity units = 1.67m (average human height).** Use this ratio for all spatial calculations — distances, sizes, speeds, ranges, spawn offsets, combat positions, building dimensions, furniture placement, and any other measurement. When designing or reviewing any value that represents a real-world distance, convert using this scale: **1 Unity unit ≈ 0.152m (≈15.2 cm)**.
