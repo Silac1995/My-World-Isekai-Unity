@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Linq;
 
 /// <summary>
 /// Determines combat movement based on character state:
