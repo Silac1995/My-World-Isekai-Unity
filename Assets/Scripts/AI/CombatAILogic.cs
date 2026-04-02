@@ -111,9 +111,10 @@ namespace MWI.AI
                 // Melee also needs a minimum X distance — too close and the hitbox fires behind the target.
                 bool isWithinRange = isRanged
                     ? distToTarget <= attackRange
-                    : dx <= attackRange && dx >= 1.0f;
-                // Melee needs tight Z alignment to connect; ranged doesn't care.
-                bool isZAligned = isRanged || zDist <= 1.5f;
+                    : dx <= attackRange && dx >= 5f; // ~0.75m minimum X distance
+                // Side-view: melee needs tight Z alignment; ranged doesn't care.
+                // Scale: 11 units = 1.67m → 8 units ≈ 1.2m Z tolerance
+                bool isZAligned = isRanged || zDist <= 8f;
 
                 // Ranged characters: if already within weapon range, skip approach entirely.
                 // They hold ground and fire from current position — no need to close further distance.
@@ -205,7 +206,7 @@ namespace MWI.AI
                             if (doLog) Debug.Log($"<color=red>[CombatAI]</color> {_self.CharacterName} [Phase 2] Stuck for {stuckDuration:F1}s, forcing reposition!");
                             _stuckSinceTime = 0f;
                             float rSide = (_self.transform.position.x < currentTarget.transform.position.x) ? -1f : 1f;
-                            Vector3 repositionTarget = currentTarget.transform.position + new Vector3(rSide * (attackRange - 0.3f), 0, 0);
+                            Vector3 repositionTarget = currentTarget.transform.position + new Vector3(rSide * (attackRange - 2f), 0, 0);
                             movement.SetDestination(repositionTarget);
                         }
                         else if (doLog)
@@ -232,7 +233,7 @@ namespace MWI.AI
 
                 // If pacer returns current position, it means "hold" — don't issue a movement command
                 float distToFinal = Vector3.Distance(_self.transform.position, finalPos);
-                if (distToFinal > 0.3f)
+                if (distToFinal > 2f) // ~30cm threshold
                 {
                     movement.SetDestination(finalPos);
                     if (doLog) Debug.Log($"<color=orange>[CombatAI]</color> {_self.CharacterName} [Phase 3] Dispatching to Tactical Dest: {finalPos}");

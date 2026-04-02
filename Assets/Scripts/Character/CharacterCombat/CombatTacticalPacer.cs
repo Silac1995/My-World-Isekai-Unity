@@ -10,22 +10,23 @@ using UnityEngine;
 /// </summary>
 public class CombatTacticalPacer
 {
-    private const float IDLE_DRIFT_RADIUS = 5.0f;
+    // Scale: 11 units = 1.67m (human height). 1 unit ≈ 15cm.
+    private const float IDLE_DRIFT_RADIUS = 30f;         // ~4.5m drift range
     private const float IDLE_DRIFT_MIN_INTERVAL = 5.0f;
     private const float IDLE_DRIFT_MAX_INTERVAL = 7.0f;
-    private const float CIRCLE_SPEED = 1.5f;
-    private const float CIRCLE_RADIUS_OFFSET = 2.0f;
-    private const float MELEE_STEPBACK_DISTANCE = 2.0f;
-    private const float STANDOFF_MIN_DISTANCE = 1.0f;  // Closest a character can idle to opponent center
-    private const float UNENGAGED_FOLLOW_MELEE_DISTANCE = 5.0f;
+    private const float CIRCLE_SPEED = 1.5f;              // Angular speed (radians/s, scale-independent)
+    private const float CIRCLE_RADIUS_OFFSET = 12f;       // ~1.8m outside preferred distance
+    private const float MELEE_STEPBACK_DISTANCE = 8f;     // ~1.2m step back after attack
+    private const float STANDOFF_MIN_DISTANCE = 5f;       // ~0.75m minimum from opponent center
+    private const float UNENGAGED_FOLLOW_MELEE_DISTANCE = 25f; // ~3.8m follow distance when unengaged
     private const float LEASH_PULL_STRENGTH = 0.3f;
-    private const float PATH_UPDATE_INTERVAL = 5.0f; // Match drift interval — only re-evaluate every 5s
+    private const float PATH_UPDATE_INTERVAL = 5.0f;
 
     /// <summary>
     /// Mirrors CombatFormation.MELEE_PREFERRED_DISTANCE (private in CombatFormation).
     /// Keep in sync if that value ever changes.
     /// </summary>
-    private const float MELEE_PREFERRED_DISTANCE = 4.0f;
+    private const float MELEE_PREFERRED_DISTANCE = 20f;   // ~3m melee engagement distance
 
     private Character _self;
     private Vector3 _swayCenter;
@@ -202,7 +203,7 @@ public class CombatTacticalPacer
     private Vector3 CalculateIdleStandoff(Character target, float attackRange, bool isRanged, CombatEngagement engagement)
     {
         Vector3 selfPos = _self.transform.position;
-        float maxDist = isRanged ? attackRange : (attackRange * 1.5f + 6f);
+        float maxDist = isRanged ? attackRange : (attackRange * 3f + 35f); // ~6-7m from opponent center
         float minDist = STANDOFF_MIN_DISTANCE;
 
         // Use the opponent group center as reference (stable)

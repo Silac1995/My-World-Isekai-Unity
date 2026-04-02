@@ -14,7 +14,7 @@ public class CombatEngagement
     /// Maximum distance a participant should stray from the engagement anchor point.
     /// Used by tactical pacing and formation systems to keep fighters within the engagement area.
     /// </summary>
-    private const float LEASH_RADIUS = 15f;
+    private const float LEASH_RADIUS = 90f; // ~13.5m — keeps fight in a readable area
     public float LeashRadius => LEASH_RADIUS;
 
     // Les deux camps qui composent cette escarmouche
