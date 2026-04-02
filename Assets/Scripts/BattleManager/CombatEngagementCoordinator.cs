@@ -103,9 +103,11 @@ public class CombatEngagementCoordinator
         }
 
         // Step 2: Build connected components using Union-Find
+        // ONLY mutual pairs form the engagement seeds. One-way edges join
+        // you into your target's component but do NOT bridge separate mutual groups.
         var unionFind = new Dictionary<Character, Character>();
 
-        // Seed with mutual pairs
+        // Seed with mutual pairs — each mutual pair is its own component
         foreach (var (a, b) in mutualPairs)
         {
             EnsureInUnionFind(unionFind, a);
@@ -113,11 +115,18 @@ public class CombatEngagementCoordinator
             Union(unionFind, a, b);
         }
 
-        // Join edges: if X targets someone already in union-find, X joins that component
+        // Join edges: one-way targeters join their target's component.
+        // Only added if the attacker is NOT already part of a mutual pair
+        // (to avoid bridging two separate mutual-pair groups).
         foreach (var kvp in graphSnapshot)
         {
             Character attacker = kvp.Key;
             Character target = kvp.Value;
+
+            // Skip if attacker is already seeded (part of a mutual pair)
+            if (unionFind.ContainsKey(attacker)) continue;
+
+            // Only join if target is in a mutual-pair component
             if (target != null && unionFind.ContainsKey(target))
             {
                 EnsureInUnionFind(unionFind, attacker);
