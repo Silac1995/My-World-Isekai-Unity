@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using Unity.Netcode;
 using Unity.Collections;
+using MWI.Terrain;
 using MWI.Time;
 using System.Linq;
 
@@ -828,6 +829,11 @@ namespace MWI.WorldSystem
                 LastHibernationTime = GetAbsoluteTimeInDays()
             };
 
+            // 0. Serialize terrain cell data before NPC serialization
+            var terrainGrid = GetComponent<TerrainCellGrid>();
+            if (terrainGrid != null)
+                _hibernationData.TerrainCells = terrainGrid.SerializeCells();
+
             // 1. Find all NPCs inside this Map
             Collider[] colliders = Physics.OverlapBox(_mapTrigger.bounds.center, _mapTrigger.bounds.extents, Quaternion.identity);
             Debug.Log($"<color=orange>[MapController:Hibernate]</color> OverlapBox found {colliders.Length} colliders in '{MapId}'.");
@@ -1091,6 +1097,11 @@ namespace MWI.WorldSystem
                 // 4. Run MacroSimulator catch-up on NPCs
                 MacroSimulator.SimulateCatchUp(_hibernationData, _timeManager.CurrentDay, _timeManager.CurrentTime01, JobYields);
 
+                // 4b. Restore terrain cells after macro-simulation has updated them
+                var terrainGrid = GetComponent<TerrainCellGrid>();
+                if (terrainGrid != null && _hibernationData?.TerrainCells != null)
+                    terrainGrid.RestoreFromSaveData(_hibernationData.TerrainCells);
+
                 // 5. Spawn NPCs at their simulated positions (shared with snapshot restore)
                 SpawnNPCsFromSnapshot(_hibernationData);
             }
@@ -1105,7 +1116,19 @@ namespace MWI.WorldSystem
         #endregion
         
         /// <summary>
-        /// Call this directly from Map Transition doors/portals to force a fast Add/Remove 
+        /// Sends the full terrain grid state to a specific client (e.g. late-joining player).
+        /// Server-only: call this when a new player enters the map.
+        /// </summary>
+        [ClientRpc]
+        private void SendTerrainGridClientRpc(TerrainCellSaveData[] cells, ClientRpcParams rpcParams = default)
+        {
+            var grid = GetComponent<TerrainCellGrid>();
+            if (grid != null)
+                grid.RestoreFromSaveData(cells);
+        }
+
+        /// <summary>
+        /// Call this directly from Map Transition doors/portals to force a fast Add/Remove
         /// before physics triggers have a chance to update.
         /// </summary>
         public void ForcePlayerTransition(ulong clientId, bool entering)

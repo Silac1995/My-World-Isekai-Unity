@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using MWI.Terrain;
+using MWI.Weather;
 using MWI.WorldSystem;
 
 namespace MWI.Time
@@ -53,6 +55,19 @@ namespace MWI.Time
                     double daysSinceHarvest = currentDay - (pool.LastHarvestedDay > 0 ? pool.LastHarvestedDay : currentDay);
                     // Standard offline regeneration
                     pool.CurrentAmount = Mathf.Min(pool.CurrentAmount + Mathf.CeilToInt(entry.BaseYieldQuantity) * fullDays, pool.MaxAmount);
+                }
+            }
+
+            // Terrain catch-up
+            if (savedData.TerrainCells != null)
+            {
+                var climateProfile = map?.Biome?.ClimateProfile;
+                if (climateProfile != null)
+                {
+                    var transitionRules = Resources.LoadAll<TerrainTransitionRule>("Data/Terrain/TransitionRules");
+                    SimulateTerrainCatchUp(savedData.TerrainCells, climateProfile, hoursPassed,
+                        new List<TerrainTransitionRule>(transitionRules));
+                    SimulateVegetationCatchUp(savedData.TerrainCells, climateProfile, hoursPassed);
                 }
             }
 
@@ -224,7 +239,7 @@ namespace MWI.Time
         private static bool IsHourInRange(int currentHour, int startHour, int endHour)
         {
             if (startHour == endHour) return false;
-            
+
             if (startHour < endHour)
             {
                 // Normal daytime shift (e.g. 8 to 18)
@@ -233,7 +248,89 @@ namespace MWI.Time
             else
             {
                 // Overnight shift (e.g. 22 to 8)
-                return currentHour >= startHour || currentHour < endHour; 
+                return currentHour >= startHour || currentHour < endHour;
+            }
+        }
+
+        /// <summary>
+        /// Offline catch-up for terrain cell moisture, temperature, and type transitions.
+        /// Runs pure math on serialized cell data — no live Unity systems required.
+        /// </summary>
+        public static void SimulateTerrainCatchUp(
+            TerrainCellSaveData[] cells,
+            BiomeClimateProfile climate,
+            float hoursPassed,
+            List<TerrainTransitionRule> rules)
+        {
+            if (cells == null || climate == null) return;
+
+            float estimatedRainHours = hoursPassed * climate.RainProbability;
+            float estimatedDryHours = hoursPassed * (1f - climate.RainProbability - climate.SnowProbability - climate.CloudyProbability);
+            float ambientTempAvg = (climate.AmbientTemperatureMin + climate.AmbientTemperatureMax) / 2f;
+
+            for (int i = 0; i < cells.Length; i++)
+            {
+                cells[i].Moisture += estimatedRainHours * 0.1f;
+                cells[i].Moisture -= estimatedDryHours * climate.EvaporationRate;
+                cells[i].Moisture = Mathf.Clamp01(cells[i].Moisture);
+                cells[i].Temperature = ambientTempAvg;
+
+                if (estimatedRainHours > 0)
+                    cells[i].TimeSinceLastWatered = 0f;
+                else
+                    cells[i].TimeSinceLastWatered += hoursPassed;
+
+                if (rules != null)
+                {
+                    foreach (var rule in rules)
+                    {
+                        if (rule.SourceType.TypeId != cells[i].CurrentTypeId
+                            && rule.SourceType.TypeId != cells[i].BaseTypeId) continue;
+                        if (rule.Evaluate(cells[i].Moisture, cells[i].Temperature, cells[i].SnowDepth))
+                        {
+                            cells[i].CurrentTypeId = rule.ResultType.TypeId;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Offline catch-up for vegetation growth and drought death on terrain cells.
+        /// Runs pure math on serialized cell data — no live Unity systems required.
+        /// </summary>
+        public static void SimulateVegetationCatchUp(
+            TerrainCellSaveData[] cells,
+            BiomeClimateProfile climate,
+            float hoursPassed,
+            float minimumMoistureForGrowth = 0.2f,
+            float droughtDeathHours = 48f)
+        {
+            if (cells == null || climate == null) return;
+
+            float avgMoisture = climate.BaselineMoisture + (climate.RainProbability * 0.3f);
+
+            for (int i = 0; i < cells.Length; i++)
+            {
+                var type = TerrainTypeRegistry.Get(cells[i].CurrentTypeId);
+                if (type == null || !type.CanGrowVegetation) continue;
+                if (cells[i].IsPlowed) continue;
+
+                if (avgMoisture >= minimumMoistureForGrowth)
+                {
+                    cells[i].GrowthTimer += hoursPassed;
+                    cells[i].TimeSinceLastWatered = 0f;
+                }
+                else
+                {
+                    cells[i].TimeSinceLastWatered += hoursPassed;
+                    if (cells[i].TimeSinceLastWatered > droughtDeathHours)
+                    {
+                        cells[i].GrowthTimer = 0f;
+                        cells[i].PlantedCropId = null;
+                    }
+                }
             }
         }
     }
