@@ -7,6 +7,8 @@ using System.Threading.Tasks;
 using Newtonsoft.Json;
 using UnityEngine;
 using MWI.WorldSystem;
+using MWI.Weather;
+using MWI.Terrain;
 
 public class SaveManager : MonoBehaviour
 {
@@ -129,6 +131,9 @@ public class SaveManager : MonoBehaviour
         {
             Destroy(Unity.Netcode.NetworkManager.Singleton.gameObject);
         }
+
+        BiomeRegion.ClearRegistry();
+        TerrainTypeRegistry.Clear();
 
         Debug.Log("<color=green>[SaveManager]</color> Reset for new session — world singletons destroyed.");
     }
