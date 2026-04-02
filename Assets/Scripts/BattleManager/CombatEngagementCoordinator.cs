@@ -39,6 +39,16 @@ public class CombatEngagementCoordinator
     }
 
     /// <summary>
+    /// Returns who this character is currently targeting, or null.
+    /// </summary>
+    public Character GetTargetOf(Character character)
+    {
+        if (character == null) return null;
+        _targetingGraph.TryGetValue(character, out Character target);
+        return target;
+    }
+
+    /// <summary>
     /// Removes a character from the targeting graph entirely (both as attacker and as target).
     /// Called when a character dies or leaves battle.
     /// </summary>

@@ -77,12 +77,15 @@ public class BattleManager : NetworkBehaviour
         // 2. Création physique de la zone
         _zoneController.CreateBattleZone(initiator, target);
 
-        // 3. Inscription des participants
+        // 3. Inscription des participants (each gets a one-way best-target edge)
         RegisterParticipants();
 
-        // 4. Seed the targeting graph with the initial combatants
+        // 4. Seed mutual targeting: the initial pair + any character whose best target
+        //    already targets them back. This creates multiple mutual pairs immediately
+        //    instead of waiting for the AI to decide (initiative starts at 0).
         _engagementCoordinator.SetTargeting(initiator, target);
         _engagementCoordinator.SetTargeting(target, initiator);
+        SeedMutualTargeting();
         _engagementCoordinator.EvaluateEngagements();
 
         // 5. Rendu visuel UNIQUE (pas dans Update)
@@ -251,6 +254,42 @@ public class BattleManager : NetworkBehaviour
             {
                 if (character == null) continue;
                 RegisterCharacter(character);
+            }
+        }
+    }
+
+    /// <summary>
+    /// After all characters have one-way targeting from RegisterCharacter,
+    /// check for pairs that happen to target each other and make them mutual.
+    /// Also assigns targets to characters that don't have one yet.
+    /// This ensures engagements form immediately at battle start.
+    /// </summary>
+    private void SeedMutualTargeting()
+    {
+        // First: ensure every character has a target
+        foreach (var character in _allParticipants)
+        {
+            if (character == null || !character.IsAlive()) continue;
+            Character bestTarget = _engagementCoordinator.GetBestTargetFor(character);
+            if (bestTarget != null)
+            {
+                _engagementCoordinator.SetTargeting(character, bestTarget);
+            }
+        }
+
+        // Second pass: for each character, check if their target's best target is them.
+        // If so, make it mutual by ensuring the reverse edge exists.
+        foreach (var character in _allParticipants)
+        {
+            if (character == null || !character.IsAlive()) continue;
+            Character myTarget = _engagementCoordinator.GetTargetOf(character);
+            if (myTarget == null) continue;
+
+            Character theirTarget = _engagementCoordinator.GetTargetOf(myTarget);
+            if (theirTarget == null)
+            {
+                // Target has no target yet — make them target us back for mutual
+                _engagementCoordinator.SetTargeting(myTarget, character);
             }
         }
     }
