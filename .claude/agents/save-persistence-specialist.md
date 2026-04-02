@@ -89,10 +89,11 @@ Lives on the **root GameObject** alongside `Character.cs` (facade-level orchestr
 4. Recursively exports NPC party members (skips players)
 
 ### ImportProfile()
-1. Overrides `NetworkCharacterId` with saved GUID
-2. Sorts subsystems by `LoadPriority` ascending
-3. Deserializes each in order
-4. Logs warnings for missing/orphaned keys
+1. Restores `CharacterName` and syncs it to `NetworkCharacterName.Value` (server-side) so clients see the correct name
+2. Overrides `NetworkCharacterId` with saved GUID
+3. Sorts subsystems by `LoadPriority` ascending
+4. Deserializes each in order (subsystem `Deserialize` methods that set names must also update `NetworkCharacterName`)
+5. Logs warnings for missing/orphaned keys
 
 ---
 
@@ -190,6 +191,16 @@ Singleton coroutine orchestrator for the full game load sequence:
 
 **GameSessionManager note:** Does NOT use DontDestroyOnLoad. It is recreated fresh each scene load. Static flags survive across scenes.
 
+### Party NPC Spawning on Load
+
+GameLauncher iterates over `CharacterProfileSaveData.partyMembers` and spawns each NPC:
+
+1. **Prefab resolution:** `ResolveCharacterPrefab()` determines the correct NPC prefab by extracting the `raceId` from the saved profile's `componentStates` via `ExtractRaceIdFromProfile()`. Also extracts `visualSeed` via `ExtractVisualSeedFromProfile()`.
+2. **NetworkVariable pre-seeding:** Sets `NetworkCharacterId`, `NetworkCharacterName`, `NetworkRaceId`, and `NetworkVisualSeed` on the prefab instance BEFORE calling `Spawn()` — same pattern used by `MapController.WakeUp()` for hibernated NPCs.
+3. **Duplication check:** Calls `Character.FindByUUID()` before spawning. If an NPC with that UUID already exists in the world (e.g., an abandoned copy), reconnects to it instead of spawning a duplicate.
+4. **Foreign world position handling:** When a party NPC is loaded in a world that is NOT their origin world, `CharacterMapTracker.SkipPositionRestore` is set to `true` before calling `ImportProfile()`. This prevents the saved position (from a different world) from overriding the spawn position near the party leader.
+5. **Party re-formation:** After all NPCs are spawned and profiles imported, the leader calls `CreateParty()`, then each NPC calls `JoinParty()` to reconstruct the party structure.
+
 ---
 
 ## 10. WorldAssociation & GUID-Based Worlds
@@ -273,3 +284,5 @@ Relationships keyed by `targetCharacterId + targetWorldGuid`. Same template NPC 
 9. **Profile is source of truth** — client's copy wins on reclaim
 10. **Solo = hosted server** — no separate code path
 11. **NPCs and players share prefabs** — ReclaimNPCInteraction works via `IsAbandoned` check, no separate prefab needed
+12. **Party NPCs in foreign worlds spawn near leader, not at saved position** — saved position belongs to a different world and must not override spawn placement
+13. **`SkipPositionRestore` on `CharacterMapTracker`** prevents position override during `ImportProfile` for NPCs loaded into a world that is not their origin

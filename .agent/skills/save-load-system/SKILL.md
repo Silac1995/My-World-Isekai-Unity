@@ -103,6 +103,28 @@ Portable character profiles that travel across worlds. Characters are independen
 5. Add bridge methods: `string ICharacterSaveData.SerializeToJson() => CharacterSaveDataHelper.SerializeToJson(this);`
 6. Test via ContextMenu on CharacterDataCoordinator: Debug Save/Load
 
+## Party NPC Spawning on Load
+
+GameLauncher handles spawning party NPCs from `CharacterProfileSaveData.partyMembers` during the load sequence:
+
+### Prefab Resolution
+- `ResolveCharacterPrefab()` extracts `raceId` from the saved profile's `componentStates` via `ExtractRaceIdFromProfile()` to determine the correct NPC prefab
+- `ExtractVisualSeedFromProfile()` extracts the visual seed for appearance reconstruction
+
+### NetworkVariable Pre-Seeding
+- `NetworkCharacterId`, `NetworkCharacterName`, `NetworkRaceId`, `NetworkVisualSeed` are set BEFORE `Spawn()` — same pattern as `MapController.WakeUp()` for hibernated NPCs
+
+### Duplication Check
+- `Character.FindByUUID()` is called before spawning — if an NPC with the same UUID already exists (e.g., abandoned copy), reconnect instead of spawning a duplicate
+
+### Foreign World Position Handling
+- When a party NPC is in a world that is NOT their origin, `CharacterMapTracker.SkipPositionRestore = true` is set before `ImportProfile()`
+- This prevents saved position (from a different world) from overriding spawn position near the party leader
+
+### Party Re-Formation
+- After all NPCs are spawned and profiles imported, the leader calls `CreateParty()`
+- Each NPC then calls `JoinParty()` to reconstruct the party structure
+
 ## Abandoned NPC System
 - When party leader disconnects: NPCs flagged `IsAbandoned` with `FormerPartyLeaderId`
 - Duplicate NPCs can coexist (portal copy + abandoned copy)
