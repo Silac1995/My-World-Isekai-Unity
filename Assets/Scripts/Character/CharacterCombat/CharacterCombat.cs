@@ -92,6 +92,14 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
         {
             CurrentBattleManager.SetTargeting(_character, target);
             CurrentBattleManager.Coordinator?.EvaluateEngagements();
+
+            // Immediately start moving toward the target.
+            // CombatAILogic will refine the destination once it starts ticking.
+            if (_character.CharacterMovement != null)
+            {
+                _character.CharacterMovement.Resume();
+                _character.CharacterMovement.SetDestination(target.transform.position);
+            }
         }
     }
 
