@@ -16,8 +16,7 @@ namespace MWI.Terrain
         public float GrowthTimer;
         public float TimeSinceLastWatered;
 
-        // Uncomment after Task 2 (TerrainType + TerrainTypeRegistry)
-        // public TerrainType GetBaseType() => TerrainTypeRegistry.Get(BaseTypeId);
-        // public TerrainType GetCurrentType() => TerrainTypeRegistry.Get(CurrentTypeId);
+        public TerrainType GetBaseType() => TerrainTypeRegistry.Get(BaseTypeId);
+        public TerrainType GetCurrentType() => TerrainTypeRegistry.Get(CurrentTypeId);
     }
 }
