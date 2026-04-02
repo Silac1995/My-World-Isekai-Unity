@@ -233,16 +233,22 @@ public class CombatTacticalPacer
             return _currentDriftTarget;
         }
 
-        // Within band — pick a new random drift destination every 4.5-7 seconds
+        // Within band — pick a new drift destination every 5-7 seconds.
+        // Each character gets an angular slot based on their index in the group
+        // so allies spread out instead of stacking on top of each other.
         if (Time.time >= _nextDriftTime)
         {
-            float randomAngle = Random.Range(0f, Mathf.PI * 2f);
+            // Determine this character's slot angle within their side
+            float baseAngle = GetSlotAngle(engagement, focalPoint);
+            // Add random variation within the slot (±30°)
+            float angleVariation = Random.Range(-0.52f, 0.52f);
+            float finalAngle = baseAngle + angleVariation;
             float randomDist = Random.Range(minDist, maxDist);
 
             _currentDriftTarget = focalPoint + new Vector3(
-                Mathf.Cos(randomAngle) * randomDist,
+                Mathf.Cos(finalAngle) * randomDist,
                 0,
-                Mathf.Sin(randomAngle) * randomDist
+                Mathf.Sin(finalAngle) * randomDist
             );
 
             _swayCenter = _currentDriftTarget;
@@ -252,6 +258,43 @@ public class CombatTacticalPacer
 
         // Timer not expired — hold position (don't re-send movement commands)
         return _self.transform.position;
+    }
+
+    /// <summary>
+    /// Returns the base angle for this character's position around the focal point.
+    /// Characters on the same side are evenly spread across a 180° arc on their side.
+    /// </summary>
+    private float GetSlotAngle(CombatEngagement engagement, Vector3 focalPoint)
+    {
+        if (engagement == null)
+        {
+            // No engagement — use instance ID for a deterministic angle
+            return (Mathf.Abs(_self.GetInstanceID()) % 12) * (Mathf.PI * 2f / 12f);
+        }
+
+        // Find which group this character is in and their index
+        bool inGroupA = engagement.GroupA.Members.Contains(_self);
+        var myGroup = inGroupA ? engagement.GroupA : engagement.GroupB;
+
+        int myIndex = 0;
+        int aliveCount = 0;
+        for (int i = 0; i < myGroup.Members.Count; i++)
+        {
+            var m = myGroup.Members[i];
+            if (m == null || !m.IsAlive()) continue;
+            if (m == _self) myIndex = aliveCount;
+            aliveCount++;
+        }
+
+        if (aliveCount <= 1) aliveCount = 1;
+
+        // GroupA occupies the left semicircle (PI/2 to 3PI/2), GroupB occupies the right (-PI/2 to PI/2)
+        float sideCenter = inGroupA ? Mathf.PI : 0f;
+        float arcSpread = Mathf.PI; // 180° arc per side
+        float slotStep = arcSpread / Mathf.Max(1, aliveCount);
+        float startAngle = sideCenter - arcSpread / 2f + slotStep / 2f;
+
+        return startAngle + myIndex * slotStep;
     }
 
     /// <summary>
