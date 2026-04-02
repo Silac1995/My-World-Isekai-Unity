@@ -136,6 +136,9 @@ public class GameLauncher : MonoBehaviour
 
         Debug.Log($"{LOG_TAG} Scene '{_gameSceneName}' loaded.");
 
+        // ── Step 3b: Initialize terrain type registry ───────────────
+        MWI.Terrain.TerrainTypeRegistry.Initialize();
+
         // ── Step 4: Wait for network to start and player to spawn ───
         // On first load, GameSessionManager.Start() auto-starts the network.
         // On subsequent loads (DontDestroyOnLoad), Start() doesn't fire again,
