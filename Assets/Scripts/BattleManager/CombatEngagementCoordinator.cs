@@ -143,6 +143,10 @@ public class CombatEngagementCoordinator
         // Step 5: Clean up empty or finished engagements
         _activeEngagements.RemoveAll(e => e.IsFinished());
 
+        // Step 6: Separate overlapping engagements so they don't stack on top of each other
+        if (_activeEngagements.Count > 1)
+            SeparateEngagements();
+
         // DEBUG: Log engagement state
         if (mutualPairs.Count > 0 || _activeEngagements.Count > 0)
         {
@@ -421,6 +425,52 @@ public class CombatEngagementCoordinator
             }
         }
         return closest;
+    }
+
+    // ───────────────────────────────────────────────
+    //  Engagement Spatial Separation
+    // ───────────────────────────────────────────────
+
+    private const float MIN_ENGAGEMENT_SEPARATION = 12f; // Minimum distance between engagement anchors
+    private const float SEPARATION_PUSH_SPEED = 2f;      // How fast anchors push apart per tick
+
+    /// <summary>
+    /// Pushes engagement anchors apart so engagements don't visually overlap.
+    /// Uses simple pairwise repulsion: if two anchors are closer than MIN_ENGAGEMENT_SEPARATION,
+    /// they're pushed away from each other along the line between them.
+    /// </summary>
+    private void SeparateEngagements()
+    {
+        for (int i = 0; i < _activeEngagements.Count; i++)
+        {
+            for (int j = i + 1; j < _activeEngagements.Count; j++)
+            {
+                var engA = _activeEngagements[i];
+                var engB = _activeEngagements[j];
+
+                Vector3 anchorA = engA.AnchorPoint;
+                Vector3 anchorB = engB.AnchorPoint;
+
+                float dist = Vector3.Distance(anchorA, anchorB);
+                if (dist < MIN_ENGAGEMENT_SEPARATION && dist > 0.01f)
+                {
+                    // Push apart along the line between anchors
+                    Vector3 dir = (anchorB - anchorA).normalized;
+                    float overlap = MIN_ENGAGEMENT_SEPARATION - dist;
+                    float pushAmount = Mathf.Min(overlap * 0.5f, SEPARATION_PUSH_SPEED);
+
+                    engA.SetAnchorPoint(anchorA - dir * pushAmount);
+                    engB.SetAnchorPoint(anchorB + dir * pushAmount);
+                }
+                else if (dist <= 0.01f)
+                {
+                    // Perfectly overlapping — push in a deterministic direction
+                    Vector3 offset = new Vector3(MIN_ENGAGEMENT_SEPARATION * 0.5f, 0, 0);
+                    engA.SetAnchorPoint(anchorA - offset);
+                    engB.SetAnchorPoint(anchorB + offset);
+                }
+            }
+        }
     }
 
     // ───────────────────────────────────────────────
