@@ -438,6 +438,20 @@ public class BattleManager : NetworkBehaviour
         }
 
         RegisterCharacter(newParticipant);
+
+        // Seed mutual targeting for the new joiner so engagements form immediately
+        Character bestTarget = _engagementCoordinator?.GetBestTargetFor(newParticipant);
+        if (bestTarget != null)
+        {
+            _engagementCoordinator.SetTargeting(newParticipant, bestTarget);
+            // If the target has no target yet, make them target back for instant mutual
+            Character theirTarget = _engagementCoordinator.GetTargetOf(bestTarget);
+            if (theirTarget == null)
+            {
+                _engagementCoordinator.SetTargeting(bestTarget, newParticipant);
+            }
+        }
+        _engagementCoordinator?.EvaluateEngagements();
     }
 
     private void UpdateBattleZoneWith(Character character)
