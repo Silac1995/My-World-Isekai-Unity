@@ -97,3 +97,9 @@ InitTestScene*.unity*
 
 # Auto-generated scenes by play mode tests
 /[Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*
+
+# ---- LLM wiki / editor noise ----
+.DS_Store
+node_modules/
+.obsidian/workspace*
+.obsidian/appearance.json
