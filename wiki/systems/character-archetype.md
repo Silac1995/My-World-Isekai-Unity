@@ -26,13 +26,25 @@ Class archetype blueprints (Warrior, Mage, Rogue, etc.) that seed a character's 
 - Seeding starting values on character creation.
 - Integrating with [[visuals]] for sprite / body-part pack selection.
 
+## Partial implementation (terrain-driven)
+
+The [[terrain-and-weather]] Phase 1 work added one field to `CharacterArchetype`:
+
+- `_defaultFootSurface : FootSurfaceType` — enum (`BareSkin`, `Hooves`, `Padded`, `Clawed`, `Scaled`). Used as fallback by [[character-terrain|FootstepAudioResolver]] when the character has no boots equipped. Different from the boot's `ItemMaterial` because creature feet are not items — a wolf's paws aren't "Leather."
+
+See [[character-terrain]] for how this field is consumed.
+
 ## Open questions
-- [ ] Entire page — fill after feature branch merges.
+- [ ] Entire page — fill out after full archetype system (class blueprints, starting skills/stats/visuals) is implemented.
 - [ ] Exact scope: is this a character creator / class-select system, or a runtime archetype-swap tool?
 
 ## Change log
 - 2026-04-19 — Stub created pre-merge. — Claude / [[kevin]]
+- 2026-04-19 — Noted `_defaultFootSurface` field added by Phase 1 terrain/weather work. — Claude / [[kevin]]
 
 ## Sources
 - Feature branch `feature/character-archetype-system`.
+- [Assets/Scripts/Character/Archetype/FootSurfaceType.cs](../../Assets/Scripts/Character/Archetype/FootSurfaceType.cs) — enum added by terrain system.
+- [[character-terrain]] — consumer.
+- [[terrain-and-weather]] — parent system that introduced the field.
 - Memory `project_visual_migration_order`.

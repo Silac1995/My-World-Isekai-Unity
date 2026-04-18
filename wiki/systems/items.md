@@ -3,7 +3,7 @@ type: system
 title: "Items, Inventory & Equipment"
 tags: [items, inventory, equipment, gameplay, tier-1]
 created: 2026-04-18
-updated: 2026-04-18
+updated: 2026-04-19
 sources: []
 related:
   - "[[character]]"
@@ -164,7 +164,7 @@ ItemInstance.Color_Primary ──► InitializePrefab searches child nodes tagge
 ## Open questions / TODO
 
 - [ ] `Assets/Scripts/Items/` (plural) exists alongside `Assets/Scripts/Item/` (singular). Is one legacy? Flag for cleanup.
-- [ ] `ItemMaterial.cs` (in `Assets/Scripts/Items/`) is newly added and has no SKILL coverage. Tracked in [[TODO-skills]].
+- [ ] `ItemMaterial.cs` (in `Assets/Scripts/Items/`) is covered by [[terrain-and-weather]] — drives footstep audio via [[character-terrain]]. Future uses: weapon×armor impact sounds, item drop sounds via `WorldItem.OnCollisionEnter`. See `.agent/skills/terrain-weather/SKILL.md`.
 
 ## Child sub-pages (to be written in Batch 2)
 
@@ -177,6 +177,7 @@ ItemInstance.Color_Primary ──► InitializePrefab searches child nodes tagge
 
 ## Change log
 - 2026-04-18 — Initial documentation pass. — Claude / [[kevin]]
+- 2026-04-19 — `ItemMaterial` now covered by [[terrain-and-weather]] / [[character-terrain]]. Updated open questions to reflect coverage. — Claude / [[kevin]]
 
 ## Sources
 - [.agent/skills/item_system/SKILL.md](../../.agent/skills/item_system/SKILL.md)
