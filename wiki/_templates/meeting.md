@@ -7,6 +7,7 @@ updated: YYYY-MM-DD
 sources: []
 related: []
 status: held
+confidence: high
 meeting_date: YYYY-MM-DD
 attendees: []
 ---
