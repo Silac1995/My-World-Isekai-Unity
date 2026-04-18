@@ -6,7 +6,9 @@ Systems whose code lives on the feature branch `feature/character-archetype-syst
 
 | Wiki page | Reason | Priority |
 |---|---|---|
-| (to be populated by Batch 1 and onward) | | |
+| [[terrain-and-weather]] | Entire Terrain/, Weather/, CharacterTerrain/, Audio/footstep code is on feature branch. SKILL.md files for `terrain-weather` and `character-terrain` also live only there. | high |
+| [[character-archetype]] | `Assets/Scripts/Character/Archetype/` is empty on `multiplayyer`; code on feature branch. | high |
+| [[character-terrain]] | `Assets/Scripts/Character/CharacterTerrain/` is empty on `multiplayyer`; code on feature branch. | medium |
 
 ## How to process after merge
 
