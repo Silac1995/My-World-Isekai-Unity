@@ -103,3 +103,6 @@ InitTestScene*.unity*
 node_modules/
 .obsidian/workspace*
 .obsidian/appearance.json
+
+# ---- Superpowers brainstorm session files (local only) ----
+.superpowers/
