@@ -52,10 +52,10 @@ namespace MWI.Weather
 
             // Move based on combined wind (simulation time)
             Vector2 vel = ActualVelocity;
-            transform.position += new Vector3(vel.x, 0f, vel.y) * Time.deltaTime;
+            transform.position += new Vector3(vel.x, 0f, vel.y) * UnityEngine.Time.deltaTime;
 
             // Decay lifetime
-            RemainingLifetime.Value -= Time.deltaTime;
+            RemainingLifetime.Value -= UnityEngine.Time.deltaTime;
             if (RemainingLifetime.Value <= 0f)
             {
                 _parentRegion?.OnFrontExpired(this);

@@ -39,7 +39,7 @@ namespace MWI.Terrain
             if (_grid == null) return;
             if (!NetworkManager.Singleton.IsServer) return;
 
-            _timeSinceLastTick += Time.deltaTime;
+            _timeSinceLastTick += UnityEngine.Time.deltaTime;
 
             float tickInterval = _tickIntervalGameHours * 3600f;
             while (_timeSinceLastTick >= tickInterval)

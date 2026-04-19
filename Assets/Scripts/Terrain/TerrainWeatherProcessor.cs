@@ -34,7 +34,7 @@ namespace MWI.Terrain
             if (_grid == null || _biomeRegion == null) return;
             if (!NetworkManager.Singleton.IsServer) return;
 
-            _timeSinceLastTick += Time.deltaTime;
+            _timeSinceLastTick += UnityEngine.Time.deltaTime;
 
             float tickInterval = _tickIntervalGameMinutes * 60f;
             while (_timeSinceLastTick >= tickInterval)

@@ -49,7 +49,7 @@ namespace MWI.Weather
 
             // Gradual wind direction drift using simulation time.
             // Clamped to 0.5f to prevent wind snapping at Giga Speed (CLAUDE.md Rule 26).
-            float dt = Mathf.Min(Time.deltaTime, 0.5f);
+            float dt = Mathf.Min(UnityEngine.Time.deltaTime, 0.5f);
             _driftAngle += _driftSpeed * dt * 10f;
             float rad = _driftAngle * Mathf.Deg2Rad;
             WindDirection.Value = new Vector2(Mathf.Cos(rad), Mathf.Sin(rad)).normalized;
