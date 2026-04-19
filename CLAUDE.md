@@ -2,6 +2,8 @@
 
 These rules are **mandatory** and apply to every conversation, every task, and every line of code.
 
+> **LLM Wiki schema:** wiki content is governed by [wiki/CLAUDE.md](wiki/CLAUDE.md). Those rules only apply to operations inside `wiki/` (INGEST / QUERY / LINT / DOCUMENT-SYSTEM / SAVE / MAP). The 32 project rules below always take precedence.
+
 ## General Approach
 
 1. This is a Unity game project — complexity is almost always higher than it first appears.
