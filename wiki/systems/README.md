@@ -56,6 +56,13 @@ Code lives on `feature/character-archetype-system`. Tracked in [[TODO-post-merge
 
 ---
 
+## Rendering (Tier 1)
+
+### [[shadows]] — 2D sprite cast shadows (URP)
+No child sub-pages yet.
+
+---
+
 ## Infrastructure (Tier 2)
 
 - [[save-load]] — Character profile + world save pipelines.
