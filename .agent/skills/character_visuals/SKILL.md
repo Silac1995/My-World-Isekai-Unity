@@ -39,3 +39,13 @@ The architecture uses a hub, `CharacterBodyPartsController`, which contains sub-
 ## Tips & Troubleshooting
 - **A sprite does not appear / Visual bug**: Verify that the logic actually calls the basic API (`SetPose()`, `SetClosed()`). The fact that the underlying technology is temporary (SpriteResolver) does not excuse bypassing the modular architecture!
 - If you create a new GOAP/BT action (e.g., "Fall asleep"), don't forget to include the visual call for your actions: `Character.CharacterVisual.BodyPartsController.EyesController.SetClosed(true)`.
+
+## Shadow casting
+
+`CharacterVisual` does not own shadow logic. Cast shadows are a pass on the material the `SpriteRenderer` already holds — the `MWI/Sprite-Lit-ShadowCaster` shader's `ShadowCaster` pass alpha-tests the sprite and writes depth only. A prefab opts in by swapping its `SpriteRenderer.sharedMaterial` to `Assets/Materials/Sprites/DefaultSpriteShadowCaster.mat` and setting `shadowCastingMode = On`.
+
+Because the shadow pass renders from the sun's viewpoint (not the camera), the billboard rotation applied at runtime is irrelevant to the cast shadow — the quad's silhouette is what gets projected. `IsFacingRight` (scale.x flip) mirrors the quad in place, and the shadow mirrors correspondingly without re-orienting the caster plane.
+
+After the Spine 2D migration, the `SkeletonAnimation.MeshRenderer` uses `Spine-Skeleton-Lit-ZWrite` instead (already in the project). Shadow behaviour stays identical; `ICharacterVisual` is not touched.
+
+See: [.agent/skills/rendering/shadows/SKILL.md](../rendering/shadows/SKILL.md)
