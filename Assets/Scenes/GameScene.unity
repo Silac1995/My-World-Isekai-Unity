@@ -842,8 +842,8 @@ Light:
     m_Resolution: -1
     m_CustomResolution: -1
     m_Strength: 1
-    m_Bias: 0.05
-    m_NormalBias: 0.4
+    m_Bias: 0
+    m_NormalBias: 0.8
     m_NearPlane: 0.2
     m_CullingMatrixOverride:
       e00: 1
@@ -944,6 +944,30 @@ MonoBehaviour:
     m_NumColorKeys: 2
     m_NumAlphaKeys: 2
   _intensityCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 1
+      outSlope: 1
+      tangentMode: 34
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 1
+      value: 1
+      inSlope: 1
+      outSlope: 1
+      tangentMode: 34
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  _shadowStrengthCurve:
     serializedVersion: 2
     m_Curve: []
     m_PreInfinity: 2
@@ -1411,6 +1435,64 @@ Mesh:
       - serializedVersion: 1
         m_IndexStart: 0
         m_IndexCount: 0
+--- !u!1 &321587749
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 321587751}
+  - component: {fileID: 321587750}
+  m_Layer: 0
+  m_Name: GlobalWindController
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &321587750
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 321587749}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fcd87fb416d9fd848978f4c1473eafb4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MWI.Weather.GlobalWindController
+  ShowTopMostFoldoutHeaderGroup: 1
+  WindDirection:
+    UpdateTraits:
+      MinSecondsBetweenUpdates: 0
+      MaxSecondsBetweenUpdates: 0
+    m_InternalValue: {x: 1, y: 0}
+  WindStrength:
+    UpdateTraits:
+      MinSecondsBetweenUpdates: 0
+      MaxSecondsBetweenUpdates: 0
+    m_InternalValue: 0.3
+  _driftSpeed: 0.01
+  _gustFrequency: 0.1
+  _maxGustStrength: 0.2
+--- !u!4 &321587751
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 321587749}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 767.9194, y: 381.95242, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &331547336
 GameObject:
   m_ObjectHideFlags: 0
@@ -6691,7 +6773,7 @@ PrefabInstance:
       objectReference: {fileID: 1179453253}
     - target: {fileID: 1993662638366838712, guid: 8a3406ba3f26764478d04877b8d81db5, type: 3}
       propertyPath: m_VersionIndex
-      value: 1649
+      value: 1691
       objectReference: {fileID: 0}
     - target: {fileID: 3385614697158057403, guid: 8a3406ba3f26764478d04877b8d81db5, type: 3}
       propertyPath: m_Mesh
@@ -6719,7 +6801,7 @@ PrefabInstance:
       objectReference: {fileID: 745977276}
     - target: {fileID: 4476098308969719139, guid: 8a3406ba3f26764478d04877b8d81db5, type: 3}
       propertyPath: m_VersionIndex
-      value: 3567
+      value: 3609
       objectReference: {fileID: 0}
     - target: {fileID: 6039220025866599932, guid: 8a3406ba3f26764478d04877b8d81db5, type: 3}
       propertyPath: m_LocalPosition.x
@@ -11429,6 +11511,7 @@ SceneRoots:
   - {fileID: 1575275824}
   - {fileID: 1015726393}
   - {fileID: 1144193956}
+  - {fileID: 321587751}
   - {fileID: 963258220}
   - {fileID: 270720767}
   - {fileID: 203844589}
