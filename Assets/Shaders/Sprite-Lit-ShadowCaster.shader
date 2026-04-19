@@ -99,6 +99,10 @@ Shader "MWI/Sprite-Lit-ShadowCaster"
                 float wrap = 0.5 + 0.5 * NdotL;
 
                 float3 sunContrib = mainLight.color * mainLight.shadowAttenuation * wrap;
+                // Billboard quad - the sprite normal points at the camera, which is
+                // not a meaningful direction for ambient sky probe lookup. Sampling
+                // the SH at world-up gives a consistent sky-side contribution that
+                // never darkens the sprite from behind, regardless of flip (scale.x).
                 float3 ambient = SampleSH(float3(0, 1, 0));
 
                 col.rgb *= sunContrib + ambient;
