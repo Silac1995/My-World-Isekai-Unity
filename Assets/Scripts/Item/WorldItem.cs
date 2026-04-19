@@ -123,6 +123,29 @@ public class WorldItem : NetworkBehaviour
                 // Fallback : Si ce n'est pas un equipement avec handler (ex: une pomme)
                 _itemInstance.InitializeWorldPrefab(gameObject);
             }
+
+            ApplyShadowCastingFromItemSO();
+        }
+    }
+
+    /// <summary>
+    /// Applies ShadowCastingMode to every Renderer under this WorldItem based on the ItemSO
+    /// override. Called after visual attachment so both wearables and simple items inherit
+    /// the correct setting. Receivers are always enabled — only the CAST side is opt-out.
+    /// </summary>
+    private void ApplyShadowCastingFromItemSO()
+    {
+        if (_itemInstance == null || _itemInstance.ItemSO == null) return;
+
+        UnityEngine.Rendering.ShadowCastingMode mode = _itemInstance.ItemSO.CastsShadow
+            ? UnityEngine.Rendering.ShadowCastingMode.On
+            : UnityEngine.Rendering.ShadowCastingMode.Off;
+
+        Renderer[] renderers = GetComponentsInChildren<Renderer>(true);
+        for (int i = 0; i < renderers.Length; i++)
+        {
+            renderers[i].shadowCastingMode = mode;
+            renderers[i].receiveShadows = true;
         }
     }
 
