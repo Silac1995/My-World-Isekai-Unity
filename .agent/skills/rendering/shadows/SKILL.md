@@ -65,6 +65,19 @@ No networked surface. Shadows are per-client rendering. `TimeManager.CurrentTime
 
 Zero surface. Pure visual, no serialization.
 
+## Known gotchas
+
+- **Humanoid characters currently have no cast shadows.** `Humanoid_Base.prefab` and `Humanoid_Base_old.prefab` were skipped during the initial rollout because of pre-existing uncommitted work. Before shipping the feature to players, swap their SpriteRenderers' materials to `DefaultSpriteShadowCaster.mat` + set `shadowCastingMode = On`. Same pattern as the Quadruped_Base commit.
+- **No DepthOnly pass in the shader.** The sprite shader has only ForwardLit + ShadowCaster. If the project ever enables SSAO or any URP screen-space effect that relies on the camera depth prepass, sprites will not write to the depth texture and silhouettes will disappear from the depth-dependent effect. Fix when needed: add a standard URP DepthOnly pass (10-line modeled on URP `Unlit`) with the same alpha clip as the ShadowCaster pass.
+- **ShadowsOnlyRoof default size is 14x14.** Interior prefabs larger than ~10u footprint will leak sun at shallow dawn/dusk angles. Verify per-interior in Play Mode at `TimeManager.CurrentTime01 = 0.25` and `0.75`; resize the child quad in the Inspector where needed.
+
+## Open items (tunable after playtest)
+
+- `Light.shadowNormalBias` defaults to 0.8 - tune 0.5-1.5 if acne or Peter-Panning appears.
+- `DefaultSpriteShadowCaster._Cutoff = 0.5` / `SmallPropShadowCaster._Cutoff = 0.7` - artists can override per material if a specific sprite clips wrong.
+- Per-interior `ShadowsOnlyRoof` scale - default `(14, 1, 14)`, resize if the interior footprint is larger or low-angle sun leaks.
+- Mobile `m_SoftShadowQuality = Medium` - if jagged shadow edges are visible on-device, raise to High (2-3x fragment cost).
+
 ## Out of scope (future work)
 
 - Cloud / weather shadows (separate spec, `WeatherFront`-driven).
