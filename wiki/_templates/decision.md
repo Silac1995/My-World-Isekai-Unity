@@ -7,6 +7,7 @@ updated: YYYY-MM-DD
 sources: []
 related: []
 status: proposed
+confidence: high
 decision_date: YYYY-MM-DD
 decided_by: "team"
 supersedes: null

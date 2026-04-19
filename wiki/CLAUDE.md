@@ -66,8 +66,15 @@ updated: YYYY-MM-DD                # required — bumped on every edit
 sources: []                        # required — see §5
 related: []                        # required — list of [[wikilinks]] to related pages, can be empty
 status: active                     # required — see allowed values per type below
+confidence: high                   # required — high | medium | low — how sure Claude is of the content
 ---
 ```
+
+**`confidence` rule:** any page with `confidence: medium` or `confidence: low`
+**must** list the specific uncertainty in its `## Open questions / TODO` section
+(for system pages) or an equivalent section for other entity types. When
+confidence drops because of missing code access, missing user answer, or
+reliance on inference, say so explicitly.
 
 ### Per-type `status` values
 
