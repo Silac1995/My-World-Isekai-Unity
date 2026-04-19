@@ -33,6 +33,12 @@ public abstract class ItemSO : ScriptableObject
     public int Tier => _tier;
     public abstract System.Type InstanceType { get; }
 
+    [Header("Rendering")]
+    [Tooltip("If false, this item's world-prefab SpriteRenderer will have ShadowCastingMode.Off. Use for small/noisy sprites (rings, potions) whose alpha-tested shadows look bad at grazing sun.")]
+    [SerializeField] private bool _castsShadow = true;
+
+    public bool CastsShadow => _castsShadow;
+
     [Header("Crafting Requirements")]
     [SerializeField] private SkillSO _requiredCraftingSkill;
     [SerializeField] private int _requiredCraftingLevel = 1;
