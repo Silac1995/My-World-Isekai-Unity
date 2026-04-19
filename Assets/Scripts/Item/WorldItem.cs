@@ -131,7 +131,8 @@ public class WorldItem : NetworkBehaviour
     /// <summary>
     /// Applies ShadowCastingMode to every Renderer under this WorldItem based on the ItemSO
     /// override. Called after visual attachment so both wearables and simple items inherit
-    /// the correct setting. Receivers are always enabled — only the CAST side is opt-out.
+    /// the correct setting. receiveShadows is left to prefab authoring - this method does
+    /// not touch it.
     /// </summary>
     private void ApplyShadowCastingFromItemSO()
     {
@@ -145,7 +146,6 @@ public class WorldItem : NetworkBehaviour
         for (int i = 0; i < renderers.Length; i++)
         {
             renderers[i].shadowCastingMode = mode;
-            renderers[i].receiveShadows = true;
         }
     }
 
