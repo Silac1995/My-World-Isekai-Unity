@@ -133,7 +133,7 @@ When the **Armed** toggle is on, `DevSpawnModule.Update()`:
 2. If `EventSystem.current.IsPointerOverGameObject()` → return (click landed on the dev panel).
 3. Build ray: `Camera.main.ScreenPointToRay(Input.mousePosition)`.
 4. `Physics.Raycast(ray, out hit, 500f, LayerMask.GetMask("Environment"))`. No hit → `Debug.LogWarning` and return.
-5. Let `N = Mathf.Max(1, Count.value)`; `radius = 1f * Mathf.Sqrt(N)`.
+5. Let `N = Mathf.Max(1, Count.value)`; `radius = 4f * Mathf.Sqrt(N)` Unity units (see §6.4 for rule-32 reasoning).
 6. For each of N spawns:
    - `anchor = hit.point`
    - If N > 1: add random XZ offset within `radius`.
