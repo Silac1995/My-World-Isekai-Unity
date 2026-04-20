@@ -160,8 +160,7 @@ public class DebugScript : MonoBehaviour
             SpawnManager.Instance.SpawnCharacter(
                 pos: pos,
                 race: selectedRace,
-                visualPrefab: selectedCharacterDefaultPrefab,
-                isPlayer: isPlayerToggle.isOn && i == 0
+                visualPrefab: selectedCharacterDefaultPrefab
             );
         }
     }

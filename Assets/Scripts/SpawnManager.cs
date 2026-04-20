@@ -164,7 +164,7 @@ public class SpawnManager : MonoBehaviour
 
     // --- Logique de Spawn de Personnages ---
 
-    public Character SpawnCharacter(Vector3 pos, RaceSO race, GameObject visualPrefab, bool isPlayer, CharacterPersonalitySO personality = null)
+    public Character SpawnCharacter(Vector3 pos, RaceSO race, GameObject visualPrefab, CharacterPersonalitySO personality = null)
     {
         Vector3 spawnPos = pos == Vector3.zero && spawnGameObject != null ? spawnGameObject.transform.position : pos;
 
@@ -206,7 +206,10 @@ public class SpawnManager : MonoBehaviour
             }
         }
 
-        if (!InitializeSpawnedCharacter(character, race, isPlayer, personality))
+        // Public SpawnManager.SpawnCharacter always spawns NPCs. The networked player-spawn path
+        // runs through Character.OnNetworkSpawn → InitializeSpawnedCharacter(isPlayerObject: true)
+        // and does not go through this method.
+        if (!InitializeSpawnedCharacter(character, race, isPlayerObject: false, personality: personality))
         {
             Destroy(characterPrefabObj);
             return null;
