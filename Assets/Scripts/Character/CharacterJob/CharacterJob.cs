@@ -320,6 +320,8 @@ public class CharacterJob : CharacterSystem, ICharacterSaveData<JobSaveData>
 
     /// <summary>
     /// Devient propriétaire. Optionnellement, prend le 1er job dans la foulée.
+    /// Server-only: forwards to `CommercialBuilding.SetOwner` which now early-returns on
+    /// non-server callers.
     /// </summary>
     public bool BecomeOwner(CommercialBuilding building, Job optionalJob = null)
     {

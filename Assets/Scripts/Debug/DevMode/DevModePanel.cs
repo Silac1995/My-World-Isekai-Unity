@@ -22,8 +22,6 @@ public class DevModePanel : MonoBehaviour
     [SerializeField] private GameObject _contentRoot;
     [SerializeField] private List<TabEntry> _tabs = new List<TabEntry>();
 
-    private int _activeTabIndex = -1;
-
     private void Start()
     {
         // Wire each tab button to switch to its own index.
@@ -85,6 +83,5 @@ public class DevModePanel : MonoBehaviour
                 _tabs[i].Content.SetActive(i == index);
             }
         }
-        _activeTabIndex = index;
     }
 }

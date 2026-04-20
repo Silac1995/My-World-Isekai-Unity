@@ -116,7 +116,7 @@ public class DevActionAssignBuilding : MonoBehaviour, IDevAction
     private void RefreshAvailability()
     {
         if (_button == null) return;
-        _button.interactable = !_waitingForBuildingPick && IsAvailable(_selection);
+        _button.interactable = _layerMaskResolved && !_waitingForBuildingPick && IsAvailable(_selection);
     }
 
     private void SetButtonState(bool armed)
@@ -226,7 +226,6 @@ public class DevActionAssignBuilding : MonoBehaviour, IDevAction
         Debug.Log($"<color=green>[DevAction]</color> {_pendingCharacter.CharacterName} set as owner of {building.name}.");
 
         // Release the click slot; keep selection intact so user can chain further actions.
-        Character doneChar = _pendingCharacter;
         _pendingCharacter = null;
         _waitingForBuildingPick = false;
         SetButtonState(armed: false);
