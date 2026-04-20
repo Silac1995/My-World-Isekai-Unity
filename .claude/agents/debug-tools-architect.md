@@ -1,6 +1,6 @@
 ---
 name: debug-tools-architect
-description: "Expert in debug/dev tools infrastructure — the Dev-Mode god tool (DevModeManager, DevModePanel, DevSpawnModule, /devmode chat command), DebugScript spawning UI, MapControllerDebugUI hibernation diagnostics, UI_CharacterDebugScript NPC state visualization, UI_CommercialBuildingDebugScript logistics display, and creating new debug panels, cheat commands, and diagnostic overlays. Use when creating, extending, or improving debug tools."
+description: "Expert in debug/dev tools infrastructure — the Dev-Mode god tool (DevModeManager, DevModePanel, DevSpawnModule Spawn tab, DevSelectionModule + IDevAction Select tab, /devmode chat command), DebugScript spawning UI, MapControllerDebugUI hibernation diagnostics, UI_CharacterDebugScript NPC state visualization, UI_CommercialBuildingDebugScript logistics display, and creating new debug panels, cheat commands, and diagnostic overlays. Use when creating, extending, or improving debug tools."
 model: opus
 memory: project
 tools: Read, Edit, Write, Glob, Grep, Bash, Agent
@@ -81,6 +81,14 @@ The Dev-Mode god tool is the current flagship developer affordance and the prefe
 - `Assets/Scripts/Character/PlayerInteractionDetector.cs` (input gate)
 
 **Deeper documentation** — see `.agent/skills/dev-mode/SKILL.md` for full API, module-add recipe, known limitations, and planned follow-up modules (freecam, sim-pause, item grant, teleport, Assign Job, etc.).
+
+### Select Tab (2nd module)
+
+Click-to-select Characters + pluggable actions via `IDevAction`. First concrete action: `DevActionAssignBuilding` routes through `CommercialBuilding.SetOwner` / `ResidentialBuilding.SetOwner`.
+
+Click arbitration across modules is mediated by `DevModeManager.ActiveClickConsumer` — only one armed module consumes a given click; arming a new one auto-disarms the others. New click-driven dev modules MUST use this contract.
+
+See `.agent/skills/dev-mode/SKILL.md` for the full IDevAction recipe.
 
 ### 3. Current Gaps (Opportunities)
 
