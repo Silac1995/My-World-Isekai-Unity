@@ -135,7 +135,7 @@ Attached to the SelectTab GameObject in `DevModePanel.prefab`. Public API:
 
 Selection is cleared automatically on `SceneManager.sceneUnloaded` and on `DevModeManager.OnDevModeChanged(false)` — prevents stale references.
 
-Click flow: armed toggle claims the click slot; next click raycasts `~0` layers with a `GetComponentInParent<Character>()` filter. Accepts any `Character` — player or NPC, local or remote-replicated.
+Click flow: armed toggle claims the click slot; next click raycasts against the `RigidBody` layer (exposed as `[SerializeField] LayerMask _characterLayerMask`, resolved to `GetMask("RigidBody")` at `Start` if left at 0), then applies a `GetComponentInParent<Character>()` filter. The layer scopes the pick to the character's body collider so awareness/interaction zones can't produce false hits. Accepts any `Character` — player or NPC, local or remote-replicated.
 
 ### IDevAction
 

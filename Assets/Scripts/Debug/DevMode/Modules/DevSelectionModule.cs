@@ -17,6 +17,11 @@ public class DevSelectionModule : MonoBehaviour
     [SerializeField] private TMP_Text _selectedLabel;
     [SerializeField] private Button _clearButton;
 
+    [Header("Raycast")]
+    [Tooltip("Layer mask for character picks. Defaults to 'RigidBody' at runtime if left at zero.")]
+    [SerializeField] private LayerMask _characterLayerMask;
+    private bool _layerMaskResolved;
+
     public Character SelectedCharacter { get; private set; }
 
     /// <summary>Fires whenever SelectedCharacter changes (including to/from null).</summary>
@@ -24,6 +29,7 @@ public class DevSelectionModule : MonoBehaviour
 
     private void Start()
     {
+        ResolveLayerMask();
         WireListeners();
         RefreshLabel();
     }
@@ -130,6 +136,25 @@ public class DevSelectionModule : MonoBehaviour
             : "Selected: —";
     }
 
+    private void ResolveLayerMask()
+    {
+        if (_characterLayerMask.value != 0)
+        {
+            _layerMaskResolved = true;
+            return;
+        }
+
+        int layer = LayerMask.NameToLayer("RigidBody");
+        if (layer < 0)
+        {
+            Debug.LogError("<color=red>[DevSelect]</color> 'RigidBody' layer is missing from Tags & Layers. Character pick will not function.");
+            _layerMaskResolved = false;
+            return;
+        }
+        _characterLayerMask = 1 << layer;
+        _layerMaskResolved = true;
+    }
+
     // ─── Click loop ───────────────────────────────────────────────────
 
     private void Update()
@@ -137,6 +162,7 @@ public class DevSelectionModule : MonoBehaviour
         if (DevModeManager.Instance == null || !DevModeManager.Instance.IsEnabled) return;
         if (_armedToggle == null || !_armedToggle.isOn) return;
         if (DevModeManager.Instance.ActiveClickConsumer != this) return;
+        if (!_layerMaskResolved) return;
 
         if (Input.GetKeyDown(KeyCode.Escape))
         {
@@ -159,16 +185,16 @@ public class DevSelectionModule : MonoBehaviour
         }
 
         Ray ray = cam.ScreenPointToRay(Input.mousePosition);
-        if (!Physics.Raycast(ray, out RaycastHit hit, 500f, ~0))
+        if (!Physics.Raycast(ray, out RaycastHit hit, 500f, _characterLayerMask))
         {
-            Debug.LogWarning("<color=orange>[DevSelect]</color> Raycast missed — click into the world.");
+            Debug.LogWarning("<color=orange>[DevSelect]</color> Click missed the RigidBody layer.");
             return;
         }
 
         Character c = hit.collider.GetComponentInParent<Character>();
         if (c == null)
         {
-            Debug.LogWarning("<color=orange>[DevSelect]</color> Click missed a Character.");
+            Debug.LogWarning("<color=orange>[DevSelect]</color> RigidBody hit but no Character component found in parent chain.");
             return;
         }
 
