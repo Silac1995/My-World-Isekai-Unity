@@ -157,6 +157,7 @@ public class DevSpawnModule : MonoBehaviour
         if (DevModeManager.Instance != null)
         {
             DevModeManager.Instance.OnDevModeChanged += HandleDevModeChanged;
+            DevModeManager.Instance.OnClickConsumerChanged += HandleClickConsumerChanged;
         }
     }
 
@@ -170,6 +171,7 @@ public class DevSpawnModule : MonoBehaviour
         if (DevModeManager.Instance != null)
         {
             DevModeManager.Instance.OnDevModeChanged -= HandleDevModeChanged;
+            DevModeManager.Instance.OnClickConsumerChanged -= HandleClickConsumerChanged;
         }
 
         foreach (var row in _combatRows) if (row != null) row.OnRemoveClicked -= HandleCombatRowRemove;
@@ -184,6 +186,14 @@ public class DevSpawnModule : MonoBehaviour
         {
             _armedToggle.isOn = false;
         }
+    }
+
+    private void HandleClickConsumerChanged()
+    {
+        if (DevModeManager.Instance == null) return;
+        if (DevModeManager.Instance.ActiveClickConsumer == this) return;
+        // Another module claimed the click stream — disarm our toggle.
+        if (_armedToggle != null && _armedToggle.isOn) _armedToggle.isOn = false;
     }
 
     // ─── Row management ───────────────────────────────────────────────
@@ -243,12 +253,16 @@ public class DevSpawnModule : MonoBehaviour
     private void HandleArmedChanged(bool armed)
     {
         Debug.Log($"<color=cyan>[DevSpawn]</color> Armed: {armed}");
+        if (DevModeManager.Instance == null) return;
+        if (armed) DevModeManager.Instance.SetClickConsumer(this);
+        else DevModeManager.Instance.ClearClickConsumer(this);
     }
 
     private void Update()
     {
         if (DevModeManager.Instance == null || !DevModeManager.Instance.IsEnabled) return;
         if (_armedToggle == null || !_armedToggle.isOn) return;
+        if (DevModeManager.Instance.ActiveClickConsumer != this) return;
 
         if (Input.GetKeyDown(KeyCode.Escape))
         {
