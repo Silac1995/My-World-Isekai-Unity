@@ -1,6 +1,6 @@
 ---
 name: debug-tools-architect
-description: "Expert in debug/dev tools infrastructure — DebugScript spawning UI, MapControllerDebugUI hibernation diagnostics, UI_CharacterDebugScript NPC state visualization, UI_CommercialBuildingDebugScript logistics display, and creating new debug panels, cheat commands, and diagnostic overlays. Use when creating, extending, or improving debug tools."
+description: "Expert in debug/dev tools infrastructure — the Dev-Mode god tool (DevModeManager, DevModePanel, DevSpawnModule, /devmode chat command), DebugScript spawning UI, MapControllerDebugUI hibernation diagnostics, UI_CharacterDebugScript NPC state visualization, UI_CommercialBuildingDebugScript logistics display, and creating new debug panels, cheat commands, and diagnostic overlays. Use when creating, extending, or improving debug tools."
 model: opus
 memory: project
 tools: Read, Edit, Write, Glob, Grep, Bash, Agent
@@ -18,6 +18,10 @@ You design and implement debug tools, dev-mode features, and diagnostic systems 
 
 | Script | Purpose | Location |
 |--------|---------|----------|
+| `DevModeManager` | Singleton host-only dev-mode god tool — F3 toggle (editor/dev), `/devmode on\|off` (release), `SuppressPlayerInput` static input gate, `OnDevModeChanged` event | `Assets/Scripts/Debug/DevMode/DevModeManager.cs` |
+| `DevModePanel` | Dev-mode panel root, lazy-loaded from `Resources/UI/DevModePanel`; hosts module children under `ContentRoot` | `Assets/Scripts/Debug/DevMode/DevModePanel.cs` |
+| `DevSpawnModule` | First dev-mode module — click-to-spawn NPCs with race/prefab/personality/trait/combat styles/skills/count/armed, scatter radius `4 * sqrt(N)` units | `Assets/Scripts/Debug/DevMode/Modules/DevSpawnModule.cs` |
+| `DevChatCommands` | Slash-command parser — `/devmode on\|off` today; `Handle(rawInput)` is the single entry point from `UI_ChatBar` | `Assets/Scripts/Debug/DevMode/DevChatCommands.cs` |
 | `DebugScript` | Character/item spawning UI — race dropdown, prefab selector, item spawner, furniture placement | `Assets/Scripts/DebugScript.cs` |
 | `MapControllerDebugUI` | Per-map diagnostics — map state (Active/Hibernating), player tracking, hibernation data, NPC counts | `Assets/Scripts/World/MapSystem/MapControllerDebugUI.cs` |
 | `UI_CharacterDebugScript` | Per-character state viz — current action, behaviour stack, needs urgency, NavMesh state, GOAP goals, phase | `Assets/Scripts/UI/WorldUI/UI_CharacterDebugScript.cs` |
@@ -39,15 +43,54 @@ You design and implement debug tools, dev-mode features, and diagnostic systems 
 
 **Null safety**: Defensive null checks throughout. Debug tools must never crash the game.
 
+### 2b. Dev-Mode System
+
+The Dev-Mode god tool is the current flagship developer affordance and the preferred home for new host-side dev features. It lives under `Assets/Scripts/Debug/DevMode/` and is documented in depth in `.agent/skills/dev-mode/SKILL.md`.
+
+**Activation**
+
+| Build / Context | F3 unlocks at Awake? | `/devmode on\|off` in chat |
+|---|---|---|
+| Unity Editor | Yes | Yes |
+| `DEVELOPMENT_BUILD` | Yes | Yes |
+| Release build | No (locked) | Yes — host types `/devmode on` once per session to unlock |
+| Client (any build) | N/A | Logs "host-only" and no-ops |
+
+**Host-only authority** — `DevModeManager.TryEnable()` and `DevChatCommands.Handle(...)` both check `NetworkManager.Singleton.IsHost` / `IsServer` before doing anything. Clients never see a panel and never mutate state.
+
+**Module registry pattern (self-service, no central API)** — `DevModePanel` owns a `ContentRoot` Transform. Each module is a `MonoBehaviour` on a child GameObject under `ContentRoot`. Modules subscribe to `DevModeManager.OnDevModeChanged` in their own `OnEnable` / `Start` and unsubscribe in `OnDisable` / `OnDestroy`. Adding a new module requires **no edit** to `DevModeManager` or `DevModePanel`.
+
+**Input gating contract** — `DevModeManager.SuppressPlayerInput` is a `static bool` mirroring `IsEnabled`. Two hot paths read it every frame:
+- `PlayerController.Update()` — zeroes `_inputDir` (then lets `base.Update()` / `Move()` run so NavMeshAgent state stays consistent).
+- `PlayerInteractionDetector.Update()` — full early-out.
+
+**Lock vs. Disable semantics** — `/devmode off` calls `Disable()` (keeps session unlocked). `Lock()` is a full teardown that also resets `IsUnlocked`. Use `Lock()` only when you truly want to re-lock the session.
+
+**File locations**
+- `Assets/Scripts/Debug/DevMode/DevModeManager.cs`
+- `Assets/Scripts/Debug/DevMode/DevModePanel.cs`
+- `Assets/Scripts/Debug/DevMode/DevChatCommands.cs`
+- `Assets/Scripts/Debug/DevMode/Modules/DevSpawnModule.cs`
+- `Assets/Scripts/Debug/DevMode/Modules/DevSpawnRow.cs`
+- `Assets/Resources/UI/DevModePanel.prefab`
+- `Assets/Resources/UI/DevSpawnRow.prefab`
+- `Assets/Scripts/SpawnManager.cs` (extended with `PendingDevConfig` dict + `ApplyDevExtras`)
+- `Assets/Scripts/Character/CharacterCombat/CharacterCombat.cs` (`UnlockCombatStyle(style, level)` overload)
+- `Assets/Scripts/UI/UI_ChatBar.cs` (routes `/`-prefixed messages)
+- `Assets/Scripts/Character/CharacterControllers/PlayerController.cs` (input gate)
+- `Assets/Scripts/Character/PlayerInteractionDetector.cs` (input gate)
+
+**Deeper documentation** — see `.agent/skills/dev-mode/SKILL.md` for full API, module-add recipe, known limitations, and planned follow-up modules (freecam, sim-pause, item grant, teleport, Assign Job, etc.).
+
 ### 3. Current Gaps (Opportunities)
 
 | Gap | Status |
 |-----|--------|
-| **No conditional compilation** | Debug scripts always compiled — no `#if DEVELOPMENT_BUILD` guards |
-| **No central registration** | No DebugUI manager to coordinate panels |
-| **No key binding system** | Access only through UI, no hotkeys |
-| **No cheat command console** | No text-based command system |
-| **No dev mode flag** | No global toggle for all debug features |
+| ~~**No conditional compilation**~~ | **CLOSED** — `DevModeManager` gates F3 auto-unlock behind `#if UNITY_EDITOR \|\| DEVELOPMENT_BUILD`. Legacy debug scripts remain always-compiled. |
+| ~~**No central registration**~~ | **CLOSED (dev-mode)** — `DevModeManager.Instance` is the central coordinator for dev-mode modules via `OnDevModeChanged`. Legacy panels (MapControllerDebugUI, etc.) remain independent. |
+| ~~**No key binding system**~~ | **CLOSED** — F3 toggles dev mode (in editor / dev builds). |
+| ~~**No cheat command console**~~ | **CLOSED (seed)** — `/devmode on\|off` chat command routed through `UI_ChatBar` -> `DevChatCommands.Handle`. Extensible by adding new branches. |
+| ~~**No dev mode flag**~~ | **CLOSED** — `DevModeManager.IsEnabled` (instance) and `DevModeManager.SuppressPlayerInput` (static) are the single read for all dev-mode gating. |
 | **No visualization overlays** | No gizmo-based debug visualizations |
 | **No click-to-inspect** | No entity inspection tool |
 
