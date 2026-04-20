@@ -5,17 +5,19 @@ using UnityEngine;
 
 /// <summary>
 /// Manages all active speech bubble instances for a single character.
-/// Handles spawning, positioning, bubble cap, mouth controller, and separator visibility.
+/// Owns the logical list, cap, Habbo cross-character push, and mouth-animation
+/// ref count.
 ///
-/// Cross-character collision avoidance (Habbo Hotel style):
-/// - Uses a SphereCollider trigger on the SpeechZone layer to detect nearby stacks
+/// HUD rewrite: bubbles are instantiated as children of a per-stack CanvasGroup
+/// wrapper under HUDSpeechBubbleLayer.Local.ContentRoot (screen-space). Proximity
+/// to the local player character and on-screen status drive a fade on the wrapper.
+///
+/// Cross-character detection (Habbo style):
+/// - SphereCollider trigger on the SpeechZone physics layer (radius 25)
 /// - When this character speaks, ALL existing bubbles in ALL nearby stacks (and own)
-///   are pushed UP by the new bubble's height
-/// - New bubble always appears at the base (closest to character)
-/// - Pushed bubbles never come back down — they stay where they were pushed
-/// - Each bubble expires independently; no gap closing across characters
-///
-/// This is a plain MonoBehaviour — purely local visual management.
+///   are pushed UP by the new bubble's height, measured in HUD pixels.
+/// - New bubble always appears at the base (Y = 0)
+/// - Pushed bubbles never come back down
 /// </summary>
 [RequireComponent(typeof(SphereCollider))]
 [RequireComponent(typeof(Rigidbody))]
@@ -24,8 +26,10 @@ public class SpeechBubbleStack : MonoBehaviour
     // ── Serialized Fields ──────────────────────────────────────────────
     [SerializeField] private SpeechBubbleInstance _bubbleInstancePrefab;
     [SerializeField] private int _maxBubbles = 5;
-    [SerializeField] private float _separatorSpacing = 0.03f;
-    [SerializeField] private float _speechZoneRadius = 15f;
+    [SerializeField] private float _separatorSpacingPx = 4f;
+    [SerializeField] private float _speechZoneRadius = 25f;
+    [SerializeField] private float _proximityRadius = 25f;
+    [SerializeField] private float _fadeSpeed = 4f;
 
     // ── Private Fields ─────────────────────────────────────────────────
     private readonly List<SpeechBubbleInstance> _bubbles = new List<SpeechBubbleInstance>();
@@ -34,6 +38,10 @@ public class SpeechBubbleStack : MonoBehaviour
     private int _typingCount;
     private SphereCollider _zoneCollider;
 
+    private GameObject _wrapperGO;
+    private CanvasGroup _wrapperGroup;
+    private RectTransform _wrapperRect;
+
     // ── Public Properties ──────────────────────────────────────────────
     public Transform OwnerRoot { get; private set; }
     public bool IsAnyTyping => _typingCount > 0;
@@ -41,9 +49,6 @@ public class SpeechBubbleStack : MonoBehaviour
 
     // ── Initialization ─────────────────────────────────────────────────
 
-    /// <summary>
-    /// Called by CharacterSpeech during setup. Stores owner root and mouth controller references.
-    /// </summary>
     public void Init(Transform ownerRoot, MouthController mouthController)
     {
         OwnerRoot = ownerRoot;
@@ -63,12 +68,66 @@ public class SpeechBubbleStack : MonoBehaviour
         rb.useGravity = false;
     }
 
+    private void Update()
+    {
+        try
+        {
+            // Lazy re-parent in case the HUD layer appeared late (session boot race).
+            if (_wrapperGO != null && _wrapperGO.transform.parent == null)
+            {
+                var layer = HUDSpeechBubbleLayer.Local;
+                if (layer != null && layer.ContentRoot != null)
+                {
+                    _wrapperGO.transform.SetParent(layer.ContentRoot, worldPositionStays: false);
+                    _wrapperGO.SetActive(true);
+                }
+            }
+
+            if (_wrapperGroup == null || _bubbles.Count == 0) return;
+
+            var local = HUDSpeechBubbleLayer.Local;
+            if (local == null || local.LocalPlayerAnchor == null)
+            {
+                _wrapperGroup.alpha = Mathf.MoveTowards(_wrapperGroup.alpha, 0f, _fadeSpeed * Time.unscaledDeltaTime);
+                return;
+            }
+
+            // Measure feet-to-feet (root-to-root). The stack's transform is the speech
+            // anchor at +9u above the character's feet; using OwnerRoot keeps proximity
+            // grounded so a "25u hearing range" matches player intuition about distance
+            // to the character, not to their head.
+            Vector3 speakerPos = OwnerRoot != null ? OwnerRoot.position : transform.position;
+            float distSq = (local.LocalPlayerAnchor.position - speakerPos).sqrMagnitude;
+            bool inRange = distSq <= _proximityRadius * _proximityRadius;
+
+            bool anyOnScreen = false;
+            for (int i = 0; i < _bubbles.Count; i++)
+            {
+                if (_bubbles[i] != null && !_bubbles[i].IsOffScreen) { anyOnScreen = true; break; }
+            }
+
+            float targetAlpha = (inRange && anyOnScreen) ? 1f : 0f;
+            _wrapperGroup.alpha = Mathf.MoveTowards(_wrapperGroup.alpha, targetAlpha, _fadeSpeed * Time.unscaledDeltaTime);
+        }
+        catch (Exception e)
+        {
+            Debug.LogError($"[SpeechBubbleStack] Update error: {e.Message}\n{e.StackTrace}");
+        }
+    }
+
     private void OnDisable()
     {
         try
         {
             ClearAll();
             _nearbyStacks.Clear();
+            if (_wrapperGO != null)
+            {
+                Destroy(_wrapperGO);
+                _wrapperGO = null;
+                _wrapperGroup = null;
+                _wrapperRect = null;
+            }
         }
         catch (Exception e)
         {
@@ -96,51 +155,31 @@ public class SpeechBubbleStack : MonoBehaviour
 
     // ── Public API ─────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Pushes a standard timed bubble onto the stack.
-    /// New bubble appears at base (Y=0). All existing nearby bubbles are pushed up.
-    /// </summary>
     public void PushBubble(string message, float duration, float typingSpeed,
         AudioSource audioSource, VoiceSO voiceSO, float pitch)
     {
         try
         {
-            // 1. Enforce bubble cap — dismiss oldest if at max
-            if (_bubbles.Count >= _maxBubbles)
-            {
-                var oldest = _bubbles[_bubbles.Count - 1];
-                _bubbles.RemoveAt(_bubbles.Count - 1);
-                UnsubscribeEvents(oldest);
-                oldest.Dismiss();
-            }
+            EnforceCap();
+            CompleteNewestTyping();
 
-            // 2. If the newest bubble is still typing, complete it immediately
-            if (_bubbles.Count > 0 && _bubbles[0].IsTyping)
-            {
-                _bubbles[0].CompleteTypingImmediately();
-            }
+            var wrapper = EnsureStackWrapper();
+            var instance = Instantiate(_bubbleInstancePrefab, wrapper);
 
-            // 3. Instantiate new bubble at base position
-            var instance = Instantiate(_bubbleInstancePrefab, transform);
+            instance.SetSpeakerAnchor(transform);
+            instance.SetCamera(HUDSpeechBubbleLayer.Local?.Camera);
 
-            // 4. Setup the bubble
             instance.Setup(message, audioSource, voiceSO, pitch, typingSpeed, duration,
                 onExpired: () => OnBubbleExpired(instance));
 
-            // 5. Subscribe to events
             instance.OnTypingStateChanged += OnTypingStateChanged;
+            instance.SetStackOffsetPx(Vector2.zero);
 
-            // 6. Insert at front (newest = index 0)
             _bubbles.Insert(0, instance);
 
-            // 7. New bubble starts at base (Y=0)
-            instance.SetTargetPosition(Vector3.zero);
+            float pushHeightPx = instance.GetHeightPx() + _separatorSpacingPx;
+            PushAllBubblesUp(pushHeightPx, instance);
 
-            // 8. Push ALL existing bubbles (own + nearby) up by this bubble's height
-            float pushHeight = instance.GetHeight() + _separatorSpacing;
-            PushAllBubblesUp(pushHeight, instance);
-
-            // 9. Update separator visibility
             UpdateSeparatorVisibility();
         }
         catch (Exception e)
@@ -149,49 +188,30 @@ public class SpeechBubbleStack : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Pushes a scripted bubble (no auto-expiration) onto the stack.
-    /// </summary>
     public void PushScriptedBubble(string message, float typingSpeed,
         AudioSource audioSource, VoiceSO voiceSO, float pitch, Action onTypingFinished)
     {
         try
         {
-            // 1. Enforce bubble cap
-            if (_bubbles.Count >= _maxBubbles)
-            {
-                var oldest = _bubbles[_bubbles.Count - 1];
-                _bubbles.RemoveAt(_bubbles.Count - 1);
-                UnsubscribeEvents(oldest);
-                oldest.Dismiss();
-            }
+            EnforceCap();
+            CompleteNewestTyping();
 
-            // 2. Complete typing on newest if still typing
-            if (_bubbles.Count > 0 && _bubbles[0].IsTyping)
-            {
-                _bubbles[0].CompleteTypingImmediately();
-            }
+            var wrapper = EnsureStackWrapper();
+            var instance = Instantiate(_bubbleInstancePrefab, wrapper);
 
-            // 3. Instantiate
-            var instance = Instantiate(_bubbleInstancePrefab, transform);
+            instance.SetSpeakerAnchor(transform);
+            instance.SetCamera(HUDSpeechBubbleLayer.Local?.Camera);
 
-            // 4. Setup scripted
             instance.SetupScripted(message, audioSource, voiceSO, pitch, typingSpeed, onTypingFinished);
 
-            // 5. Subscribe to events
             instance.OnTypingStateChanged += OnTypingStateChanged;
+            instance.SetStackOffsetPx(Vector2.zero);
 
-            // 6. Insert at front
             _bubbles.Insert(0, instance);
 
-            // 7. New bubble at base
-            instance.SetTargetPosition(Vector3.zero);
+            float pushHeightPx = instance.GetHeightPx() + _separatorSpacingPx;
+            PushAllBubblesUp(pushHeightPx, instance);
 
-            // 8. Push all existing bubbles up
-            float pushHeight = instance.GetHeight() + _separatorSpacing;
-            PushAllBubblesUp(pushHeight, instance);
-
-            // 9. Update separators
             UpdateSeparatorVisibility();
         }
         catch (Exception e)
@@ -200,9 +220,6 @@ public class SpeechBubbleStack : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Dismisses the bottom-most (newest) bubble in the stack (index 0).
-    /// </summary>
     public void DismissBottom()
     {
         if (_bubbles.Count <= 0) return;
@@ -211,9 +228,6 @@ public class SpeechBubbleStack : MonoBehaviour
         bottom.Dismiss(() => { RemoveBubble(bottom); });
     }
 
-    /// <summary>
-    /// Dismisses all active bubbles with exit animations.
-    /// </summary>
     public void DismissAll()
     {
         var toRemove = new List<SpeechBubbleInstance>(_bubbles);
@@ -229,9 +243,6 @@ public class SpeechBubbleStack : MonoBehaviour
         _mouthController?.StopTalking();
     }
 
-    /// <summary>
-    /// Dismisses only scripted bubbles.
-    /// </summary>
     public void DismissAllScripted()
     {
         var scripted = _bubbles.Where(b => b.IsScripted).ToList();
@@ -247,9 +258,6 @@ public class SpeechBubbleStack : MonoBehaviour
         if (_typingCount == 0) _mouthController?.StopTalking();
     }
 
-    /// <summary>
-    /// Immediately destroys all bubbles without exit animations.
-    /// </summary>
     public void ClearAll()
     {
         foreach (var bubble in _bubbles)
@@ -266,60 +274,91 @@ public class SpeechBubbleStack : MonoBehaviour
         _mouthController?.StopTalking();
     }
 
-    /// <summary>
-    /// Pushes all bubbles in this stack up by the given height.
-    /// Called by nearby stacks when they spawn a new bubble.
-    /// </summary>
-    public void PushAllBubblesUpBy(float height)
+    public void PushAllBubblesUpBy(float heightPx)
     {
         foreach (var bubble in _bubbles)
         {
             if (bubble == null) continue;
-            var currentTarget = bubble.GetTargetPosition();
-            bubble.SetTargetPosition(new Vector3(currentTarget.x, currentTarget.y + height, currentTarget.z));
+            var currentOffset = bubble.GetStackOffsetPx();
+            bubble.SetStackOffsetPx(new Vector2(currentOffset.x, currentOffset.y + heightPx));
             bubble.ResetExpirationTimer();
         }
     }
 
     // ── Private Methods ────────────────────────────────────────────────
 
-    /// <summary>
-    /// Pushes ALL existing bubbles up — own older bubbles + all nearby stacks' bubbles.
-    /// The newly created bubble (excludeInstance) is skipped since it's at base.
-    /// </summary>
-    private void PushAllBubblesUp(float height, SpeechBubbleInstance excludeInstance)
+    private Transform EnsureStackWrapper()
     {
-        // Push own older bubbles up
+        if (_wrapperGO != null) return _wrapperGO.transform;
+
+        _wrapperGO = new GameObject($"SpeechStackWrapper_{gameObject.name}", typeof(RectTransform), typeof(CanvasGroup));
+        _wrapperRect = _wrapperGO.GetComponent<RectTransform>();
+        _wrapperGroup = _wrapperGO.GetComponent<CanvasGroup>();
+        _wrapperGroup.alpha = 0f;
+        _wrapperGroup.blocksRaycasts = false;
+        _wrapperGroup.interactable = false;
+
+        _wrapperRect.anchorMin = Vector2.zero;
+        _wrapperRect.anchorMax = Vector2.one;
+        _wrapperRect.offsetMin = Vector2.zero;
+        _wrapperRect.offsetMax = Vector2.zero;
+
+        var layer = HUDSpeechBubbleLayer.Local;
+        if (layer != null && layer.ContentRoot != null)
+        {
+            _wrapperGO.transform.SetParent(layer.ContentRoot, worldPositionStays: false);
+        }
+        else
+        {
+            _wrapperGO.SetActive(false);
+            Debug.LogWarning($"[SpeechBubbleStack] HUDSpeechBubbleLayer.Local missing at PushBubble — wrapper parked inactive until layer appears.");
+        }
+
+        return _wrapperGO.transform;
+    }
+
+    private void EnforceCap()
+    {
+        if (_bubbles.Count < _maxBubbles) return;
+
+        var oldest = _bubbles[_bubbles.Count - 1];
+        _bubbles.RemoveAt(_bubbles.Count - 1);
+        UnsubscribeEvents(oldest);
+        oldest.Dismiss();
+    }
+
+    private void CompleteNewestTyping()
+    {
+        if (_bubbles.Count > 0 && _bubbles[0].IsTyping)
+        {
+            _bubbles[0].CompleteTypingImmediately();
+        }
+    }
+
+    private void PushAllBubblesUp(float heightPx, SpeechBubbleInstance excludeInstance)
+    {
         foreach (var bubble in _bubbles)
         {
             if (bubble == null || bubble == excludeInstance) continue;
-            var currentTarget = bubble.GetTargetPosition();
-            bubble.SetTargetPosition(new Vector3(currentTarget.x, currentTarget.y + height, currentTarget.z));
+            var currentOffset = bubble.GetStackOffsetPx();
+            bubble.SetStackOffsetPx(new Vector2(currentOffset.x, currentOffset.y + heightPx));
         }
 
-        // Push all nearby stacks' bubbles up
         _nearbyStacks.RemoveWhere(s => s == null);
         foreach (var stack in _nearbyStacks)
         {
             if (stack.HasActiveBubbles)
             {
-                stack.PushAllBubblesUpBy(height);
+                stack.PushAllBubblesUpBy(heightPx);
             }
         }
     }
 
-    /// <summary>
-    /// Callback when a bubble's expiration timer fires.
-    /// Bubble fades out on its own — no gap closing, no repositioning.
-    /// </summary>
     private void OnBubbleExpired(SpeechBubbleInstance instance)
     {
         RemoveBubble(instance);
     }
 
-    /// <summary>
-    /// Removes a bubble from the list. No repositioning — bubbles stay where they are.
-    /// </summary>
     private void RemoveBubble(SpeechBubbleInstance instance)
     {
         if (instance == null) return;
@@ -328,19 +367,14 @@ public class SpeechBubbleStack : MonoBehaviour
         UnsubscribeEvents(instance);
         _bubbles.Remove(instance);
         UpdateSeparatorVisibility();
-        // No RecalculatePositions — bubbles stay where they were pushed (Habbo style)
     }
 
-    /// <summary>
-    /// Tracks how many bubbles are currently typing to control mouth animation.
-    /// </summary>
     private void OnTypingStateChanged(bool isTyping)
     {
         if (isTyping)
         {
             _typingCount++;
-            if (_typingCount == 1)
-                _mouthController?.StartTalking();
+            if (_typingCount == 1) _mouthController?.StartTalking();
         }
         else
         {
@@ -353,9 +387,6 @@ public class SpeechBubbleStack : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Updates separator line visibility: hidden for index 0 (newest), visible for all others.
-    /// </summary>
     private void UpdateSeparatorVisibility()
     {
         for (int i = 0; i < _bubbles.Count; i++)
@@ -365,9 +396,6 @@ public class SpeechBubbleStack : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Unsubscribes from a bubble instance's events.
-    /// </summary>
     private void UnsubscribeEvents(SpeechBubbleInstance instance)
     {
         if (instance == null) return;

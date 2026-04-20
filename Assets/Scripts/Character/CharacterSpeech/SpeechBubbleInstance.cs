@@ -5,21 +5,28 @@ using System.Collections;
 using Random = UnityEngine.Random;
 
 /// <summary>
-/// Manages a single speech bubble's lifecycle: typing animation, voice playback,
-/// entrance/exit animations, expiration timer, and height tracking.
-/// Spawned and managed by SpeechBubbleStack.
+/// A single speech bubble instance — typing, voice, entrance/exit animation,
+/// expiration timer, height tracking. Spawned and owned by SpeechBubbleStack.
+///
+/// HUD-space rewrite: bubbles now live as RectTransform children of
+/// HUDSpeechBubbleLayer.Local.ContentRoot (inside a per-stack CanvasGroup
+/// wrapper). Each frame the bubble projects its speaker anchor's world
+/// position to screen coordinates and lerps anchoredPosition.
 /// </summary>
 [RequireComponent(typeof(CanvasGroup))]
+[RequireComponent(typeof(RectTransform))]
 public class SpeechBubbleInstance : MonoBehaviour
 {
     // ── Serialized Fields ──────────────────────────────────────────────
     [SerializeField] private TextMeshProUGUI _textElement;
     [SerializeField] private GameObject _separatorLine;
-    [Header("Animation")]
+
+    [Header("Animation (reference-resolution pixels)")]
     [SerializeField] private float _entranceDuration = 0.3f;
-    [SerializeField] private float _entranceSlideDistance = 15f;
+    [SerializeField] private float _entranceSlideDistance = 40f;
     [SerializeField] private float _exitDuration = 0.3f;
-    [SerializeField] private float _exitSlideDistance = 10f;
+    [SerializeField] private float _exitSlideDistance = 25f;
+    [SerializeField] private float _positionLerpSpeed = 8f;
 
     // ── Events ─────────────────────────────────────────────────────────
     public Action OnExpired;
@@ -29,14 +36,19 @@ public class SpeechBubbleInstance : MonoBehaviour
     // ── Public Properties ──────────────────────────────────────────────
     public bool IsTyping => _typeRoutine != null;
     public bool IsScripted => _isScripted;
+    public bool IsOffScreen => _isOffScreen;
 
     // ── Private Fields ─────────────────────────────────────────────────
     private CanvasGroup _canvasGroup;
-    private RectTransform _rectTransform;
+    private RectTransform _rect;
     private Coroutine _typeRoutine;
     private Coroutine _animRoutine;
     private Coroutine _expirationRoutine;
-    private Vector3 _targetPosition;
+
+    private Transform _speakerAnchor;
+    private Camera _camera;
+    private Vector2 _stackOffsetPx;
+    private bool _isOffScreen;
     private float _cachedHeight;
     private bool _isScripted;
 
@@ -55,19 +67,32 @@ public class SpeechBubbleInstance : MonoBehaviour
     private void Awake()
     {
         _canvasGroup = GetComponent<CanvasGroup>();
-        _rectTransform = GetComponent<RectTransform>();
-        _targetPosition = transform.localPosition;
-        _cachedHeight = _rectTransform.rect.height;
+        _rect = GetComponent<RectTransform>();
+        _cachedHeight = _rect.rect.height;
     }
 
     private void Update()
     {
-        if ((transform.localPosition - _targetPosition).sqrMagnitude < 0.001f) return;
-        transform.localPosition = Vector3.Lerp(
-            transform.localPosition,
-            _targetPosition,
-            8f * Time.unscaledDeltaTime
-        );
+        if (_speakerAnchor == null) return;
+
+        // Lazy camera resolution: NPC bubbles can be created before the local player HUD
+        // is ready on a freshly-joined client. Re-resolve on every frame until we have one.
+        if (_camera == null)
+        {
+            _camera = HUDSpeechBubbleLayer.Local?.Camera;
+            if (_camera == null) return;
+        }
+
+        Vector3 sp = _camera.WorldToScreenPoint(_speakerAnchor.position);
+        _isOffScreen = sp.z < 0f
+                    || sp.x < 0f || sp.x > Screen.width
+                    || sp.y < 0f || sp.y > Screen.height;
+
+        Vector2 target = (Vector2)sp + _stackOffsetPx;
+        _rect.anchoredPosition = Vector2.Lerp(
+            _rect.anchoredPosition,
+            target,
+            _positionLerpSpeed * Time.unscaledDeltaTime);
     }
 
     private void OnDisable()
@@ -93,9 +118,11 @@ public class SpeechBubbleInstance : MonoBehaviour
 
     // ── Public API ─────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Standard bubble setup. Plays entrance, types the message, waits for duration, then dismisses.
-    /// </summary>
+    public void SetSpeakerAnchor(Transform anchor) => _speakerAnchor = anchor;
+    public void SetCamera(Camera camera) => _camera = camera;
+    public void SetStackOffsetPx(Vector2 offsetPx) => _stackOffsetPx = offsetPx;
+    public Vector2 GetStackOffsetPx() => _stackOffsetPx;
+
     public void Setup(string message, AudioSource audioSource, VoiceSO voiceSO,
         float pitch, float typingSpeed, float duration, Action onExpired)
     {
@@ -110,7 +137,7 @@ public class SpeechBubbleInstance : MonoBehaviour
             _onExpiredCallback = onExpired;
             _isScripted = false;
 
-            _cachedHeight = _rectTransform.rect.height;
+            _cachedHeight = _rect.rect.height;
 
             if (_animRoutine != null) StopCoroutine(_animRoutine);
             _animRoutine = StartCoroutine(EntranceAnimation(() =>
@@ -118,7 +145,6 @@ public class SpeechBubbleInstance : MonoBehaviour
                 if (_typeRoutine != null) StopCoroutine(_typeRoutine);
                 _typeRoutine = StartCoroutine(TypeMessage(() =>
                 {
-                    // Typing complete — start expiration timer
                     if (_expirationRoutine != null) StopCoroutine(_expirationRoutine);
                     _expirationRoutine = StartCoroutine(ExpirationTimer());
                 }));
@@ -130,9 +156,6 @@ public class SpeechBubbleInstance : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Scripted bubble setup. Types the message, fires callback when done. No expiration timer.
-    /// </summary>
     public void SetupScripted(string message, AudioSource audioSource, VoiceSO voiceSO,
         float pitch, float typingSpeed, Action onTypingFinished)
     {
@@ -146,7 +169,7 @@ public class SpeechBubbleInstance : MonoBehaviour
             _onTypingFinishedCallback = onTypingFinished;
             _isScripted = true;
 
-            _cachedHeight = _rectTransform.rect.height;
+            _cachedHeight = _rect.rect.height;
 
             if (_animRoutine != null) StopCoroutine(_animRoutine);
             _animRoutine = StartCoroutine(EntranceAnimation(() =>
@@ -164,9 +187,6 @@ public class SpeechBubbleInstance : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Immediately completes the typing animation, showing the full message.
-    /// </summary>
     public void CompleteTypingImmediately()
     {
         if (_typeRoutine == null) return;
@@ -180,7 +200,6 @@ public class SpeechBubbleInstance : MonoBehaviour
         OnTypingStateChanged?.Invoke(false);
         CheckHeightChanged();
 
-        // Fire the same completion logic that TypeMessage's onComplete would have triggered
         if (_isScripted)
         {
             _onTypingFinishedCallback?.Invoke();
@@ -193,26 +212,17 @@ public class SpeechBubbleInstance : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Restarts the expiration timer from scratch. Called when this bubble is pushed
-    /// by a nearby character's speech, so it stays visible during the conversation.
-    /// Has no effect on scripted bubbles (they don't auto-expire).
-    /// </summary>
     public void ResetExpirationTimer()
     {
         if (_isScripted || _duration <= 0f) return;
-        if (_expirationRoutine == null) return; // not yet expiring (still typing) or already dismissed
+        if (_expirationRoutine == null) return;
 
         StopCoroutine(_expirationRoutine);
         _expirationRoutine = StartCoroutine(ExpirationTimer());
     }
 
-    /// <summary>
-    /// Plays exit animation, then destroys this bubble.
-    /// </summary>
     public void Dismiss(Action onComplete = null)
     {
-        // Stop any running expiration so we don't double-dismiss
         if (_expirationRoutine != null)
         {
             StopCoroutine(_expirationRoutine);
@@ -234,39 +244,15 @@ public class SpeechBubbleInstance : MonoBehaviour
     }
 
     /// <summary>
-    /// Returns the current height of this bubble in the parent stack's local space.
-    /// The Canvas uses canvas-local units (e.g. 70) but the root's localScale (e.g. 0.03)
-    /// converts those to the stack's coordinate system. Multiply canvas height by root scale.
+    /// Returns the bubble's current rendered height in reference-resolution HUD pixels.
+    /// Called right after Setup() to compute the push height for the Habbo stack.
     /// </summary>
-    public float GetHeight()
+    public float GetHeightPx()
     {
-        if (_textElement == null) return 0f;
-        // Use the Canvas RectTransform (parent of text element) for the full bubble height
-        var canvasRect = _textElement.canvas?.GetComponent<RectTransform>();
-        if (canvasRect == null) return 0f;
-        // Canvas rect.height is in canvas-local units. Root's localScale.y converts to parent (stack) space.
-        return canvasRect.rect.height * transform.localScale.y;
+        if (_rect == null) return 0f;
+        return _rect.rect.height;
     }
 
-    /// <summary>
-    /// Sets the target local position this bubble will lerp toward in Update().
-    /// </summary>
-    public void SetTargetPosition(Vector3 localPos)
-    {
-        _targetPosition = localPos;
-    }
-
-    /// <summary>
-    /// Returns the current target position this bubble is lerping toward.
-    /// </summary>
-    public Vector3 GetTargetPosition()
-    {
-        return _targetPosition;
-    }
-
-    /// <summary>
-    /// Shows or hides the separator line between stacked bubbles.
-    /// </summary>
     public void SetSeparatorVisible(bool visible)
     {
         if (_separatorLine != null)
@@ -275,20 +261,13 @@ public class SpeechBubbleInstance : MonoBehaviour
 
     // ── Coroutines ─────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Letter-by-letter typing using a time accumulator. Preserved from Speech.cs.
-    /// Uses unscaled time so UI is unaffected by GameSpeedController.
-    /// </summary>
     private IEnumerator TypeMessage(Action onComplete)
     {
         OnTypingStateChanged?.Invoke(true);
 
-        // Set full text upfront so layout calculates final frame size immediately.
-        // Use maxVisibleCharacters to reveal text letter-by-letter.
         _textElement.text = _fullMessage;
         _textElement.maxVisibleCharacters = 0;
 
-        // Force layout rebuild so ContentSizeFitter computes final height now
         _textElement.ForceMeshUpdate();
         CheckHeightChanged();
 
@@ -322,7 +301,6 @@ public class SpeechBubbleInstance : MonoBehaviour
                     charCount++;
                     lettersAdded++;
 
-                    // Voice playback every 3rd non-space character — same logic as Speech.cs
                     if (letter != ' ' && charCount % 3 == 0 && _voiceSO != null && _audioSource != null)
                     {
                         AudioClip clipToPlay = _voiceSO.GetRandomClip();
@@ -335,8 +313,6 @@ public class SpeechBubbleInstance : MonoBehaviour
                 }
 
                 _textElement.maxVisibleCharacters = charCount;
-
-                // Subtract consumed time
                 timeAccumulator -= lettersToAdd * currentSpeed;
             }
 
@@ -348,47 +324,43 @@ public class SpeechBubbleInstance : MonoBehaviour
         onComplete?.Invoke();
     }
 
-    /// <summary>
-    /// Entrance: fade in from alpha 0 and slide up from -15 offset. EaseOut curve.
-    /// </summary>
     private IEnumerator EntranceAnimation(Action onComplete)
     {
         _canvasGroup.alpha = 0f;
-        Vector3 startPos = transform.localPosition;
-        startPos.y -= _entranceSlideDistance;
-        transform.localPosition = startPos;
 
-        Vector3 endPos = _targetPosition;
+        // Start position: _stackOffsetPx shifted DOWN by the slide distance.
+        // The Update() lerp will aim at _stackOffsetPx, so we temporarily bias the
+        // offset downward, fade in, then restore.
+        Vector2 targetOffset = _stackOffsetPx;
+        _stackOffsetPx = new Vector2(targetOffset.x, targetOffset.y - _entranceSlideDistance);
+
         float elapsed = 0f;
 
         while (elapsed < _entranceDuration)
         {
             elapsed += Time.unscaledDeltaTime;
             float t = Mathf.Clamp01(elapsed / _entranceDuration);
-            // EaseOut: 1 - (1 - t)^2
             float eased = 1f - (1f - t) * (1f - t);
 
             _canvasGroup.alpha = Mathf.Lerp(0f, 1f, eased);
-            transform.localPosition = Vector3.Lerp(startPos, endPos, eased);
+            _stackOffsetPx = new Vector2(
+                targetOffset.x,
+                Mathf.Lerp(targetOffset.y - _entranceSlideDistance, targetOffset.y, eased));
 
             yield return null;
         }
 
         _canvasGroup.alpha = 1f;
-        transform.localPosition = endPos;
+        _stackOffsetPx = targetOffset;
         _animRoutine = null;
 
         onComplete?.Invoke();
     }
 
-    /// <summary>
-    /// Exit: fade out to alpha 0 and slide up +10. EaseIn curve.
-    /// </summary>
     private IEnumerator ExitAnimation(Action onComplete)
     {
-        Vector3 startPos = transform.localPosition;
-        Vector3 endPos = startPos;
-        endPos.y += _exitSlideDistance;
+        Vector2 startOffset = _stackOffsetPx;
+        Vector2 endOffset = new Vector2(startOffset.x, startOffset.y + _exitSlideDistance);
 
         float startAlpha = _canvasGroup.alpha;
         float elapsed = 0f;
@@ -397,11 +369,10 @@ public class SpeechBubbleInstance : MonoBehaviour
         {
             elapsed += Time.unscaledDeltaTime;
             float t = Mathf.Clamp01(elapsed / _exitDuration);
-            // EaseIn: t^2
             float eased = t * t;
 
             _canvasGroup.alpha = Mathf.Lerp(startAlpha, 0f, eased);
-            transform.localPosition = Vector3.Lerp(startPos, endPos, eased);
+            _stackOffsetPx = Vector2.Lerp(startOffset, endOffset, eased);
 
             yield return null;
         }
@@ -412,9 +383,6 @@ public class SpeechBubbleInstance : MonoBehaviour
         onComplete?.Invoke();
     }
 
-    /// <summary>
-    /// Waits for the configured duration, then dismisses and fires the expired callback.
-    /// </summary>
     private IEnumerator ExpirationTimer()
     {
         yield return new WaitForSecondsRealtime(_duration);
@@ -432,7 +400,7 @@ public class SpeechBubbleInstance : MonoBehaviour
 
     private void CheckHeightChanged()
     {
-        float currentHeight = _rectTransform.rect.height;
+        float currentHeight = _rect.rect.height;
         if (!Mathf.Approximately(currentHeight, _cachedHeight))
         {
             _cachedHeight = currentHeight;
