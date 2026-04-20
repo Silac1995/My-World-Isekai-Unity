@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Linq;
+using System.Collections.Generic;
 
 public class SpawnManager : MonoBehaviour
 {
@@ -8,6 +9,15 @@ public class SpawnManager : MonoBehaviour
     [SerializeField] private GameObject spawnGameObject;
     [SerializeField] private GameObject _defaultItemPrefab;
     [SerializeField] private RaceSO _defaultFallbackRace;
+
+    private struct PendingDevConfig
+    {
+        public CharacterBehavioralTraitsSO Traits;
+        public List<(CombatStyleSO style, int level)> CombatStyles;
+        public List<(SkillSO skill, int level)> Skills;
+    }
+
+    private readonly Dictionary<ulong, PendingDevConfig> _pendingDevConfig = new Dictionary<ulong, PendingDevConfig>();
 
     public Vector3 DefaultSpawnPosition => spawnGameObject != null ? spawnGameObject.transform.position : Vector3.zero;
     public Quaternion DefaultSpawnRotation => spawnGameObject != null ? spawnGameObject.transform.rotation : Quaternion.identity;
@@ -164,7 +174,14 @@ public class SpawnManager : MonoBehaviour
 
     // --- Logique de Spawn de Personnages ---
 
-    public Character SpawnCharacter(Vector3 pos, RaceSO race, GameObject visualPrefab, CharacterPersonalitySO personality = null)
+    public Character SpawnCharacter(
+        Vector3 pos,
+        RaceSO race,
+        GameObject visualPrefab,
+        CharacterPersonalitySO personality = null,
+        CharacterBehavioralTraitsSO traits = null,
+        List<(CombatStyleSO style, int level)> combatStyles = null,
+        List<(SkillSO skill, int level)> skills = null)
     {
         Vector3 spawnPos = pos == Vector3.zero && spawnGameObject != null ? spawnGameObject.transform.position : pos;
 
@@ -198,6 +215,16 @@ public class SpawnManager : MonoBehaviour
 
                     character.NetworkVisualSeed.Value = Random.Range(int.MinValue, int.MaxValue);
 
+                    if ((traits != null) || (combatStyles != null && combatStyles.Count > 0) || (skills != null && skills.Count > 0))
+                    {
+                        _pendingDevConfig[netObj.NetworkObjectId] = new PendingDevConfig
+                        {
+                            Traits = traits,
+                            CombatStyles = combatStyles,
+                            Skills = skills
+                        };
+                    }
+
                     // L'objet réseau va appeler InitializeSpawnedCharacter via OnNetworkSpawn.
                     netObj.Spawn(true);
 
@@ -214,6 +241,7 @@ public class SpawnManager : MonoBehaviour
             Destroy(characterPrefabObj);
             return null;
         }
+        ApplyDevExtras(character, traits, combatStyles, skills);
 
         return character;
     }
@@ -292,6 +320,17 @@ public class SpawnManager : MonoBehaviour
             Debug.Log($"<color=cyan>[Spawn]</color> {character.CharacterName} a reçu le profil comportemental : {randomTrait.name}");
         }
 
+        // --- DEV-MODE OVERRIDES ---
+        // Applies any pending dev config recorded by SpawnCharacter just before network spawn.
+        // Only fires for networked spawns where SpawnCharacter returned before InitializeSpawnedCharacter
+        // ran (Character.OnNetworkSpawn is the caller). Offline spawns apply via ApplyDevExtras inline.
+        if (character.IsSpawned && character.NetworkObject != null
+            && _pendingDevConfig.TryGetValue(character.NetworkObject.NetworkObjectId, out var pending))
+        {
+            _pendingDevConfig.Remove(character.NetworkObject.NetworkObjectId);
+            ApplyDevExtras(character, pending.Traits, pending.CombatStyles, pending.Skills);
+        }
+
         return true;
     }
 
@@ -368,5 +407,40 @@ public class SpawnManager : MonoBehaviour
         float s = minS + (float)(rng.NextDouble() * (maxS - minS));
         float v = minV + (float)(rng.NextDouble() * (maxV - minV));
         return Color.HSVToRGB(h, s, v);
+    }
+
+    private void ApplyDevExtras(
+        Character character,
+        CharacterBehavioralTraitsSO traits,
+        List<(CombatStyleSO style, int level)> combatStyles,
+        List<(SkillSO skill, int level)> skills)
+    {
+        if (character == null) return;
+
+        if (traits != null && character.CharacterTraits != null)
+        {
+            character.CharacterTraits.behavioralTraitsProfile = traits;
+            Debug.Log($"<color=cyan>[Spawn]</color> Dev-mode: {character.CharacterName} trait overridden to {traits.name}");
+        }
+
+        if (combatStyles != null && character.CharacterCombat != null)
+        {
+            foreach (var entry in combatStyles)
+            {
+                if (entry.style == null) continue;
+                character.CharacterCombat.UnlockCombatStyle(entry.style, entry.level);
+                Debug.Log($"<color=cyan>[Spawn]</color> Dev-mode: {character.CharacterName} combat style {entry.style.StyleName} L{entry.level}");
+            }
+        }
+
+        if (skills != null && character.CharacterSkills != null)
+        {
+            foreach (var entry in skills)
+            {
+                if (entry.skill == null) continue;
+                character.CharacterSkills.AddSkill(entry.skill, entry.level);
+                Debug.Log($"<color=cyan>[Spawn]</color> Dev-mode: {character.CharacterName} skill {entry.skill.SkillName} L{entry.level}");
+            }
+        }
     }
 }

@@ -856,6 +856,23 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
         }
     }
 
+    /// <summary>
+    /// Unlocks a known combat style at a specific starting level. Used by dev-mode spawn
+    /// and by save/load restore. XP starts at 0. No-op if the style is already known.
+    /// </summary>
+    public void UnlockCombatStyle(CombatStyleSO style, int level)
+    {
+        if (style == null) return;
+        if (_knownStyles.Exists(s => s.Style == style))
+        {
+            Debug.LogWarning($"<color=orange>[Combat]</color> {_character.CharacterName} already knows {style.StyleName} — ignoring dev-mode unlock.");
+            return;
+        }
+
+        _knownStyles.Add(new CombatStyleExpertise(style, level, 0f));
+        Debug.Log($"<color=yellow>[Combat]</color> {_character.CharacterName} learned {style.StyleName} at L{level} (dev-mode).");
+    }
+
     #region ICharacterSaveData Implementation
 
     public string SaveKey => "CharacterCombat";
