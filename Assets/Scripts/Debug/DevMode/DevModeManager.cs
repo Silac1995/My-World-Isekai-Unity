@@ -32,6 +32,19 @@ public class DevModeManager : MonoBehaviour
 
     public event Action<bool> OnDevModeChanged;
 
+    /// <summary>
+    /// The MonoBehaviour that currently owns the click stream (e.g. the active dev module's
+    /// armed state). Only one module consumes clicks at a time; when a new module claims the
+    /// slot, the previous owner is evicted and auto-disarms via OnClickConsumerChanged.
+    /// </summary>
+    public MonoBehaviour ActiveClickConsumer { get; private set; }
+
+    /// <summary>
+    /// Fires whenever ActiveClickConsumer changes. Click-reading modules subscribe to disarm
+    /// themselves when they are no longer the owner.
+    /// </summary>
+    public event Action OnClickConsumerChanged;
+
     private GameObject _panelInstance;
 
     private void Awake()
@@ -111,6 +124,7 @@ public class DevModeManager : MonoBehaviour
 
     public void Disable()
     {
+        ActiveClickConsumer = null;
         if (!IsEnabled) return;
         IsEnabled = false;
         if (_panelInstance != null) _panelInstance.SetActive(false);
@@ -122,6 +136,29 @@ public class DevModeManager : MonoBehaviour
     {
         if (IsEnabled) { Disable(); return true; }
         return TryEnable();
+    }
+
+    /// <summary>
+    /// Claims the click slot for the given consumer. If a different consumer held the slot,
+    /// OnClickConsumerChanged fires so the previous owner can auto-disarm. Passing null
+    /// releases the slot (same as ClearClickConsumer).
+    /// </summary>
+    public void SetClickConsumer(MonoBehaviour consumer)
+    {
+        if (ActiveClickConsumer == consumer) return;
+        ActiveClickConsumer = consumer;
+        OnClickConsumerChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// Releases the click slot, but only if the given consumer is the current owner. Other
+    /// callers are ignored — prevents a stale subscriber from clearing someone else's claim.
+    /// </summary>
+    public void ClearClickConsumer(MonoBehaviour consumer)
+    {
+        if (ActiveClickConsumer != consumer) return;
+        ActiveClickConsumer = null;
+        OnClickConsumerChanged?.Invoke();
     }
 
     private void EnsurePanel()
