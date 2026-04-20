@@ -1,6 +1,6 @@
 ---
 name: dev-mode
-description: Host-only god-mode developer tool. F3 toggle (editor/dev), /devmode on|off in chat (release). First module: click-to-spawn NPCs with full configuration.
+description: Host-only god-mode developer tool. F3 toggle (editor/dev), /devmode on|off in chat (release). Modules: Spawn (click-to-spawn NPCs with full configuration), Select (click-to-select Characters + IDevAction plug-in; first action assigns building ownership).
 ---
 
 # Dev Mode System
@@ -89,6 +89,10 @@ While `DevModeManager.IsEnabled == true`, the two input-reading components short
 
 No edit to `DevModeManager` or `DevModePanel` is required to add a module.
 
+### Click arbitration
+
+`DevModeManager` exposes a single-slot click consumer: `ActiveClickConsumer` (MonoBehaviour), `OnClickConsumerChanged` (event), `SetClickConsumer(x)`, `ClearClickConsumer(x)`. Armed dev modules MUST claim the slot when arming and release when disarming, and MUST gate their click loop on `ActiveClickConsumer == this`. Subscribing to `OnClickConsumerChanged` lets a module auto-disarm when another claims the slot — so arming Select flips Spawn off, and vice versa.
+
 ## 7. Dev Spawn Module Details
 
 `DevSpawnModule` — the first shipping module. Lets the host click anywhere on the `Environment` layer to spawn fully configured NPCs.
@@ -115,6 +119,52 @@ No edit to `DevModeManager` or `DevModePanel` is required to add a module.
 5. `SpawnManager.ApplyDevExtras(...)` fires post-spawn on the server, applying combat styles via `CharacterCombat.UnlockCombatStyle(style, level)` and skills via the existing `CharacterSkills` API.
 
 **Why a pending-config dict?** `SpawnCharacter` is an async network spawn — we don't have the instance yet when we configure it. The dict is populated on the main thread before spawn and drained in the spawn callback by NetworkObjectId.
+
+## Select Tab
+
+Click-to-select for Characters + pluggable actions via the `IDevAction` interface.
+
+### DevSelectionModule
+
+Attached to the SelectTab GameObject in `DevModePanel.prefab`. Public API:
+
+- `Character SelectedCharacter { get; }` — the currently selected Character, or null.
+- `event Action OnSelectionChanged` — fires on any change (including to/from null).
+- `void SetSelectedCharacter(Character c)` — replaces the selection.
+- `void ClearSelection()` — sets selection to null.
+
+Selection is cleared automatically on `SceneManager.sceneUnloaded` and on `DevModeManager.OnDevModeChanged(false)` — prevents stale references.
+
+Click flow: armed toggle claims the click slot; next click raycasts `~0` layers with a `GetComponentInParent<Character>()` filter. Accepts any `Character` — player or NPC, local or remote-replicated.
+
+### IDevAction
+
+Plug-in interface for Select-tab actions. Each action is a MonoBehaviour parented under the Select tab's ActionsContainer.
+
+```csharp
+public interface IDevAction
+{
+    string Label { get; }
+    bool IsAvailable(DevSelectionModule sel);
+    void Execute(DevSelectionModule sel);
+}
+```
+
+Action recipe:
+1. Create `MyDevAction : MonoBehaviour, IDevAction` under `Assets/Scripts/Debug/DevMode/Modules/Actions/`.
+2. Hold `[SerializeField] DevSelectionModule _selection; [SerializeField] Button _button; [SerializeField] TMP_Text _buttonLabel;`.
+3. In `Start`, wire the button click to `OnButtonClicked` and subscribe to `_selection.OnSelectionChanged` to refresh the button's interactable state via `IsAvailable`.
+4. If the action needs to consume additional clicks (e.g., pick a second target), use `DevModeManager.SetClickConsumer(this)` while armed and the standard click-loop pattern.
+5. Add the action GameObject as a child of the SelectTab's `ActionsContainer` in the prefab.
+
+### DevActionAssignBuilding (first action)
+
+Enabled when a Character is selected. On `Execute`, claims the click slot and waits for the next `LayerMask.GetMask("Building")` hit. Dispatches polymorphically:
+
+- `CommercialBuilding` → `SetOwner(character, null)` (makes character the boss).
+- `ResidentialBuilding` → `SetOwner(character)` (sets primary owner; character also becomes resident).
+
+ESC cancels. Another module claiming the click slot also cancels. Selection is preserved after success so further actions can chain.
 
 ## 8. Integration Points
 
@@ -147,6 +197,13 @@ Explicit list of what this first slice does **not** cover. These are follow-up w
 - **Client dev-mode** — out of scope. Dev Mode is host-only today. Giving clients any of this power needs a separate design pass for trust and replication.
 - **Panel has no ScrollView** — plain `Transform` containers. Long combat-style / skill lists will overflow vertically. A scroll pass is deferred.
 - **Prefab's TMP Dropdowns and InputFields use minimal default visuals** — no custom arrow sprite, no custom checkmark. Visual polish is deferred; functionality is the priority for this slice.
+- **No visual selection indicator** — the selected character is shown by label only in the panel. Follow-up slice can add a world-space outline (shader-based per rule 25) or a UI marker.
+- **No undo on ownership assignment** — the new owner replaces the previous via `SetOwner`'s existing semantics. No confirmation dialog.
+- **Character-first flow only** — "click building first, then assign a character to it" is deferred.
+- **No multi-character selection** — one at a time.
+- **No exclude-self filter** — clicking on the host's own character selects it. Add a toggle if this becomes annoying.
+- **Worker/resident/job actions** — deferred. Assign Building sets ownership only.
+- **Item selection + actions** — not in this slice.
 
 ## 10. Extension Notes (Follow-Up Modules)
 
