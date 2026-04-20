@@ -290,7 +290,18 @@ public class PlayerUI : MonoBehaviour
         }
     }
 
-    public void OpenInteractionMenu(List<InteractionOption> options)
+    /// <summary>
+    /// Opens the interaction menu with the given options.
+    /// </summary>
+    /// <param name="persistAcrossClicks">
+    /// When true, the menu stays open after a button click and buttons re-lock — used by
+    /// turn-based character dialogue, where the menu must remain visible for the full
+    /// interaction and be explicitly closed via <see cref="CloseInteractionMenu"/> when
+    /// the CharacterInteraction terminates.
+    /// When false (default), the menu closes as soon as any option is clicked — used by
+    /// one-shot interactions (hold-E context menu on doors, chests, furniture).
+    /// </param>
+    public void OpenInteractionMenu(List<InteractionOption> options, bool persistAcrossClicks = false)
     {
         if (_interactionMenu == null)
         {
@@ -299,7 +310,7 @@ public class PlayerUI : MonoBehaviour
         }
 
         _interactionMenu.gameObject.SetActive(true);
-        _interactionMenu.Initialize(options, lockByDefault: false);
+        _interactionMenu.Initialize(options, lockByDefault: persistAcrossClicks);
     }
 
     public void CloseInteractionMenu()

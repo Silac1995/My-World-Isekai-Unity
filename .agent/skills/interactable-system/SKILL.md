@@ -66,7 +66,7 @@ These options call the corresponding `DoorLock` / `DoorHealth` ServerRpcs. All c
 - It dynamically pulls `GetDialogueInteractionOptions()` (e.g., *Talk*, *Insult*) and displays them in the context menu.
 
 ### 4. UI Stability & Single Responsibility
-- **Player-Only Guarding**: Event subscriptions in `PlayerInteractionDetector` (`OnInteractionStateChanged`, `OnPlayerTurnStarted`, etc.) MUST be strictly guarded with an `if (!Character.IsPlayer()) return;` check. This prevents the Player's HUD from reacting to background NPC-to-NPC interactions.
+- **Local-Player Guarding**: Event subscriptions in `PlayerInteractionDetector` (`OnInteractionStateChanged`, `OnPlayerTurnStarted`, etc.) MUST be guarded with `if (!IsLocalPlayerCharacter()) return;` — which checks both `Character.IsPlayer()` AND `(!Character.IsSpawned || Character.IsOwner)`. A plain `IsPlayer()` check is insufficient in multiplayer: remote player Characters also have a `PlayerController` (for control switching), so `IsPlayer()` returns true on every machine, which would cause every player's HUD to open its interaction menu whenever any player starts an interaction. The ownership check ensures only the LOCAL player's HUD reacts.
 - **Menu Closure Efficiency**: The `PlayerUI.CloseInteractionMenu()` should only be called once when the target changes or is lost, **instead of polling every empty frame**. Check if the target was actually lost (`if (_currentInteractableObjectTarget != null)`) before destroying the UI prompt and closing the menu to preserve performance and prevent log spam.
 
 ## 5. Targeted Selection System

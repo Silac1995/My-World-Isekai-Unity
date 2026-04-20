@@ -101,14 +101,15 @@ All HUD windows inherit from `UI_WindowBase`, which provides centralized logic f
 ---
 
 ### Dynamic Interaction Menu
-The `PlayerUI` handles displaying context-sensitive actions through `OpenInteractionMenu(List<InteractionOption> options)`.
+The `PlayerUI` handles displaying context-sensitive actions through `OpenInteractionMenu(List<InteractionOption> options, bool persistAcrossClicks = false)`.
 
 **Usage**:
-- **Extended World Actions**: Triggered by the `PlayerInteractionDetector` when the player *holds* the interaction key. Shows actions like "Greet", "Follow", "Carry".
-- **Turn-based Dialogue**: Triggered when `OnPlayerTurnStarted` fires during a conversation. Shows choices like "Talk" or "Insult".
+- **Extended World Actions** (one-shot): Triggered by `PlayerInteractionDetector` when the player *holds* the interaction key. Shows actions like "Greet", "Follow", "Carry". Call with `persistAcrossClicks: false` (default) — the menu closes as soon as the player clicks any option.
+- **Turn-based Dialogue** (persistent): Triggered from `HandleInteractionStateChanged(..., started: true)` when a `CharacterInteraction` formally begins. Call with `persistAcrossClicks: true` — the menu stays visible for the entire interaction, buttons re-lock after each click, and closure happens only when the `CharacterInteraction` terminates (the `started: false` branch calls `CloseInteractionMenu()`).
 
 **Implementation Details**:
-- Action callbacks defined in the `InteractionOption` are executed directly when the corresponding UI button is clicked. 
+- `persistAcrossClicks` is forwarded to `UI_InteractionMenu.Initialize(options, lockByDefault: ...)`. When `true`, the menu also starts with all buttons locked, awaiting `SetInteractionMenuInteractable(true)` on `OnPlayerTurnStarted`.
+- Action callbacks defined in the `InteractionOption` are executed directly when the corresponding UI button is clicked.
 - For dialogue, the action should call `interactor.CharacterInteraction.PerformInteraction(action)` to register the player's choice and advance the turn logic.
 
 ---

@@ -67,12 +67,25 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
     }
 
     /// <summary>
+    /// True only if this detector's Character is the LOCAL player's character.
+    /// Remote player Characters also have a PlayerController (so IsPlayer() returns true on every
+    /// machine), which would otherwise cause the interaction HUD to open for every player when
+    /// any player starts an interaction. In solo play the NetworkObject is not spawned, so we
+    /// fall back to IsPlayer() alone.
+    /// </summary>
+    private bool IsLocalPlayerCharacter()
+    {
+        if (!Character.IsPlayer()) return false;
+        return !Character.IsSpawned || Character.IsOwner;
+    }
+
+    /// <summary>
     /// Called when the interaction formally starts or ends.
     /// Opens the menu (locked) when the interaction begins, closes it when it ends.
     /// </summary>
     private void HandleInteractionStateChanged(Character target, bool started)
     {
-        if (!Character.IsPlayer()) return;
+        if (!IsLocalPlayerCharacter()) return;
 
         EnsurePlayerUI();
         if (_playerUI == null) return;
@@ -95,8 +108,11 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
                 var options = interactable.GetDialogueInteractionOptions(Character);
                 if (options != null && options.Count > 0)
                 {
-                    _playerUI.OpenInteractionMenu(options);
-                    _playerUI.SetInteractionMenuInteractable(false);
+                    // persistAcrossClicks: dialogue menu must stay open for the whole
+                    // CharacterInteraction — clicking an option re-locks the buttons but
+                    // does NOT close the menu. Closure happens only when the interaction
+                    // ends (the `else` branch below calls CloseInteractionMenu()).
+                    _playerUI.OpenInteractionMenu(options, persistAcrossClicks: true);
                     _playerUI.UpdateInteractionMenuTimer(1f);
                 }
             }
@@ -112,7 +128,7 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
     /// </summary>
     private void HandlePlayerTurnStarted(Character listener)
     {
-        if (!Character.IsPlayer()) return;
+        if (!IsLocalPlayerCharacter()) return;
 
         EnsurePlayerUI();
         if (_playerUI != null)
@@ -127,7 +143,7 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
     /// </summary>
     private void HandlePlayerTurnEnded(Character listener)
     {
-        if (!Character.IsPlayer()) return;
+        if (!IsLocalPlayerCharacter()) return;
 
         EnsurePlayerUI();
         if (_playerUI != null)
@@ -141,7 +157,7 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
     /// </summary>
     private void HandlePlayerTurnTimerUpdated(float normalizedValue)
     {
-        if (!Character.IsPlayer()) return;
+        if (!IsLocalPlayerCharacter()) return;
 
         EnsurePlayerUI();
         if (_playerUI != null)
