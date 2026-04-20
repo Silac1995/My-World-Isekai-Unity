@@ -166,11 +166,11 @@ public Character SpawnCharacter(
     List<(SkillSO skill, int level)> skills = null);
 ```
 
-`null` on any optional argument preserves the current random/default behavior. `InitializeSpawnedCharacter` is updated to receive and apply these.
+`null` on any optional argument preserves the current random/default behavior. The new extras (traits/combat/skills) are NOT threaded through `InitializeSpawnedCharacter`'s signature — that would break the existing `Character.OnNetworkSpawn` call at `Character.cs:397`. Instead, `SpawnCharacter` stores extras in a private `Dictionary<ulong, PendingDevConfig>` keyed on `NetworkObject.NetworkObjectId` right before `netObj.Spawn(true)`. `InitializeSpawnedCharacter` drains this dictionary at the end of its own body via a helper `ApplyDevExtras(...)`. Offline spawns call `ApplyDevExtras` inline after `InitializeSpawnedCharacter` returns. `InitializeSpawnedCharacter`'s public signature remains `(Character, RaceSO, bool isPlayerObject, bool isLocalOwner = false, CharacterPersonalitySO personality = null)` — unchanged from today.
 
-### 7.3 `CharacterCombat.AddCombatStyle(CombatStyleSO, int level)`
+### 7.3 `CharacterCombat.UnlockCombatStyle(CombatStyleSO, int level)`
 
-New overload that constructs `new CombatStyleExpertise(style, level, 0f)` using the existing save-restore constructor and appends to `_knownStyles` (dedup on style SO, as today).
+New overload of the existing `UnlockCombatStyle(style)` method. Constructs `new CombatStyleExpertise(style, level, 0f)` using the existing save-restore constructor and appends to `_knownStyles` (dedup on style SO, as today).
 
 `CharacterSkills.AddSkill(SkillSO, int startingLevel)` already exists — no change needed.
 
@@ -248,8 +248,8 @@ Implementation: both files add `if (DevModeManager.SuppressPlayerInput) return;`
 
 ### 11.2 Modified files
 
-- `Assets/Scripts/SpawnManager.cs` — drop `isPlayer`, extend `SpawnCharacter` signature, thread new params into `InitializeSpawnedCharacter`.
-- `Assets/Scripts/Character/CharacterCombat/CharacterCombat.cs` — add `AddCombatStyle(CombatStyleSO, int level)` overload.
+- `Assets/Scripts/SpawnManager.cs` — drop `isPlayer` from the public `SpawnCharacter` API, extend that signature with optional traits/combat/skills, add a pending-dev-config dictionary + `ApplyDevExtras` helper drained inside the unchanged `InitializeSpawnedCharacter`.
+- `Assets/Scripts/Character/CharacterCombat/CharacterCombat.cs` — add `UnlockCombatStyle(CombatStyleSO, int level)` overload.
 - `Assets/Scripts/UI/UI_ChatBar.cs` — route `/`-prefixed lines to `DevChatCommands.Handle`.
 - `Assets/Scripts/DebugScript.cs` — remove character-spawn UI wiring; keep item/furniture buttons (folded into dev-mode tabs in a later slice).
 - `Assets/Scripts/Character/CharacterControllers/PlayerController.cs` — input gating.

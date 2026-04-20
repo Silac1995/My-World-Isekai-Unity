@@ -30,7 +30,7 @@
 
 ### Files modified
 - `Assets/Scripts/SpawnManager.cs` — drop `isPlayer`, extend `SpawnCharacter` signature
-- `Assets/Scripts/Character/CharacterCombat/CharacterCombat.cs` — add `AddCombatStyle(style, level)` overload
+- `Assets/Scripts/Character/CharacterCombat/CharacterCombat.cs` — add `UnlockCombatStyle(style, level)` overload
 - `Assets/Scripts/UI/UI_ChatBar.cs` — route `/`-prefixed lines to `DevChatCommands.Handle`
 - `Assets/Scripts/DebugScript.cs` — remove character-spawn UI wiring (keep item/furniture)
 - `Assets/Scripts/Character/CharacterControllers/PlayerController.cs` — input gating
