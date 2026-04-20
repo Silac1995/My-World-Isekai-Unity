@@ -18,7 +18,7 @@ public class SpawnManager : MonoBehaviour
         public List<(SkillSO skill, int level)> Skills;
     }
 
-    private readonly Dictionary<ulong, PendingDevConfig> _pendingDevConfig = new Dictionary<ulong, PendingDevConfig>();
+    private readonly Dictionary<int, PendingDevConfig> _pendingDevConfig = new Dictionary<int, PendingDevConfig>();
 
     public Vector3 DefaultSpawnPosition => spawnGameObject != null ? spawnGameObject.transform.position : Vector3.zero;
     public Quaternion DefaultSpawnRotation => spawnGameObject != null ? spawnGameObject.transform.rotation : Quaternion.identity;
@@ -226,7 +226,12 @@ public class SpawnManager : MonoBehaviour
 
                     if (personality != null || traits != null || (combatStyles != null && combatStyles.Count > 0) || (skills != null && skills.Count > 0))
                     {
-                        _pendingDevConfig[netObj.NetworkObjectId] = new PendingDevConfig
+                        // Key by Character.GetInstanceID, NOT netObj.NetworkObjectId. NetworkObjectId is
+                        // zero/undefined until Spawn(true) is called, but OnNetworkSpawn fires synchronously
+                        // inside Spawn on the server against the SAME Character instance — so GetInstanceID
+                        // is a stable key. Clients receive a replicated Character with a different
+                        // InstanceID, so their drain naturally no-ops (server-only intent preserved).
+                        _pendingDevConfig[character.GetInstanceID()] = new PendingDevConfig
                         {
                             Personality = personality,
                             Traits = traits,
@@ -243,7 +248,7 @@ public class SpawnManager : MonoBehaviour
                     catch (System.Exception ex)
                     {
                         // Prevent pending-config leak if the network spawn throws.
-                        _pendingDevConfig.Remove(netObj.NetworkObjectId);
+                        _pendingDevConfig.Remove(character.GetInstanceID());
                         Debug.LogException(ex);
                         throw;
                     }
@@ -279,10 +284,10 @@ public class SpawnManager : MonoBehaviour
         // Popping the entry now (instead of at the tail) ensures the dictionary
         // never leaks if an init step below returns false and short-circuits.
         PendingDevConfig? pendingDev = null;
-        if (character.IsSpawned && character.NetworkObject != null
-            && _pendingDevConfig.TryGetValue(character.NetworkObject.NetworkObjectId, out var popped))
+        int devConfigKey = character.GetInstanceID();
+        if (_pendingDevConfig.TryGetValue(devConfigKey, out var popped))
         {
-            _pendingDevConfig.Remove(character.NetworkObject.NetworkObjectId);
+            _pendingDevConfig.Remove(devConfigKey);
             pendingDev = popped;
         }
 
