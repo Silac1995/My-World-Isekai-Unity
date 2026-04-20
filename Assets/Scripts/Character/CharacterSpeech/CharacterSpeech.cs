@@ -181,7 +181,4 @@ public class CharacterSpeech : CharacterSystem
         CloseSpeech();
         _isResetting = false;
     }
-
-    protected override void HandleDeath(Character character) => _speechBubbleStack?.ClearAll();
-    protected override void HandleIncapacitated(Character character) => _speechBubbleStack?.ClearAll();
 }
