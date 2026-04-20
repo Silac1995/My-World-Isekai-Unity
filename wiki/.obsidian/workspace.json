@@ -20,19 +20,8 @@
               "icon": "lucide-file",
               "title": "terrain-and-weather"
             }
-          },
-          {
-            "id": "dda2c00eaf82f417",
-            "type": "leaf",
-            "state": {
-              "type": "graph",
-              "state": {},
-              "icon": "lucide-git-fork",
-              "title": "Graph view"
-            }
           }
-        ],
-        "currentTab": 1
+        ]
       }
     ],
     "direction": "vertical"
@@ -191,8 +180,9 @@
       "bases:Create new base": false
     }
   },
-  "active": "dda2c00eaf82f417",
+  "active": "1c48891fc2a5391d",
   "lastOpenFiles": [
+    "systems/character-blueprints.md",
     "Untitled.md",
     "systems/terrain-and-weather.md"
   ]

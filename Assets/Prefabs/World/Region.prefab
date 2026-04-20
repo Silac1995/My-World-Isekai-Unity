@@ -9,6 +9,8 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 7913118582212991796}
+  - component: {fileID: 393293362313819047}
+  - component: {fileID: 2441600719876971824}
   m_Layer: 0
   m_Name: Region
   m_TagString: Untagged
@@ -31,3 +33,40 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!65 &393293362313819047
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4476412768407588135}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 1, y: 1, z: 1}
+  m_Center: {x: 0, y: 0, z: 0}
+--- !u!114 &2441600719876971824
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4476412768407588135}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4fa3ed2f20ae3064188a5e35e0549f05, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MWI.Weather.BiomeRegion
+  _regionId: Region-Default
+  _biomeDefinition: {fileID: 11400000, guid: 2a50db0abe38d2142ab3eaa8920b594d, type: 2}
+  _climateProfile: {fileID: 11400000, guid: 9e70f493535fac94f9e21fdc30bb3c1f, type: 2}
+  _weatherFrontPrefab: {fileID: 789681433390728677, guid: f91d206c35bee1347beb9a29af2e135f, type: 3}

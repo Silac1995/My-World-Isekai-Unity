@@ -44,6 +44,9 @@ GameObject:
   - component: {fileID: 46143135857637699}
   - component: {fileID: 8172288352403909900}
   - component: {fileID: 7218502835284804781}
+  - component: {fileID: 4887475367487696576}
+  - component: {fileID: 6058460527841351557}
+  - component: {fileID: 6291281785602581745}
   m_Layer: 0
   m_Name: MapController
   m_TagString: Untagged
@@ -66,6 +69,7 @@ Transform:
   m_Children:
   - {fileID: 4833820946188670974}
   - {fileID: 771358955964829756}
+  - {fileID: 8487839763568403737}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!65 &2102395634537560268
@@ -279,7 +283,6 @@ MonoBehaviour:
       MinSecondsBetweenUpdates: 0
       MaxSecondsBetweenUpdates: 0
     m_InternalValue: {x: 0, y: 0, z: 0}
-  _buildingsContainer: {fileID: 771358955964829756}
   ConnectedPlayersCount: 0
   IsHibernating: 0
   _activePlayerCount: 0
@@ -324,6 +327,127 @@ MonoBehaviour:
   m_MinRegionArea: 2
   m_NavMeshData: {fileID: 0}
   m_BuildHeightMesh: 0
+--- !u!114 &4887475367487696576
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1364089202766551707}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6edc7438eb6715140b9a26b4d840aaed, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MWI.Terrain.TerrainCellGrid
+  _cellSize: 4
+--- !u!114 &6058460527841351557
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1364089202766551707}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cc3fca3b8bea9c0408b68bb7941e75d8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MWI.Terrain.TerrainWeatherProcessor
+  _tickIntervalGameMinutes: 2
+  _transitionRules: []
+  _rainMoistureRate: 0.1
+  _snowAccumulationRate: 0.05
+--- !u!114 &6291281785602581745
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1364089202766551707}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e809a05936b2fc8499ba29f39932fa04, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MWI.Terrain.VegetationGrowthSystem
+  _tickIntervalGameHours: 1
+  _minimumMoistureForGrowth: 0.2
+  _droughtDeathHours: 48
+  _sproutTime: 6
+  _bushTime: 24
+  _saplingTime: 72
+  _treeTime: 168
+  _sproutPrefab: {fileID: 0}
+  _bushPrefab: {fileID: 0}
+  _saplingPrefab: {fileID: 0}
+  _treePrefab: {fileID: 0}
+--- !u!1 &3023920411817021948
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 8487839763568403737}
+  - component: {fileID: 4235942678859527457}
+  - component: {fileID: 7696508353557492560}
+  m_Layer: 0
+  m_Name: Patch_Fertile
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &8487839763568403737
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3023920411817021948}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1268749088860370059}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!65 &4235942678859527457
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3023920411817021948}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 5, y: 3, z: 5}
+  m_Center: {x: 0, y: 0, z: 0}
+--- !u!114 &7696508353557492560
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3023920411817021948}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 29b3446ca3086574a90cd057a00a08bd, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MWI.Terrain.TerrainPatch
+  _baseTerrainType: {fileID: 11400000, guid: b2a97f6eb7e63014b9de67c7615c68a0, type: 2}
+  _baseFertility: 0.5
+  _priority: 0
 --- !u!1001 &3668980562977090954
 PrefabInstance:
   m_ObjectHideFlags: 0
