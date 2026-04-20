@@ -978,6 +978,7 @@ MonoBehaviour:
   _characterVisual: {fileID: 4467461276411840628}
   _controller: {fileID: 8530357501166543435}
   _equipment: {fileID: 8408755073701722020}
+  _terrainEffects: {fileID: 0}
   _characterInteraction: {fileID: 3273106316842190247}
   _characterRelation: {fileID: 6939122470468663269}
   _characterCombat: {fileID: 1098445929855123690}
@@ -1746,7 +1747,6 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 4343276709589627961}
-  - component: {fileID: 2253845832804560315}
   - component: {fileID: 8306674267293205722}
   - component: {fileID: 358579176842047037}
   - component: {fileID: 4055456571732718095}
@@ -1772,18 +1772,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 3706432557554459124}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &2253845832804560315
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4293528212799256685}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 83d56f2fdc857fc4db2b4c6004d591d4, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Billboard
 --- !u!114 &8306674267293205722
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1798,8 +1786,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SpeechBubbleStack
   _bubbleInstancePrefab: {fileID: 61685653468973228, guid: a01de0a411e64da4e981decfe69f90ef, type: 3}
   _maxBubbles: 5
-  _separatorSpacing: 0.06
-  _speechZoneRadius: 5
+  _separatorSpacingPx: 4
+  _speechZoneRadius: 25
+  _proximityRadius: 25
+  _fadeSpeed: 4
 --- !u!135 &358579176842047037
 SphereCollider:
   m_ObjectHideFlags: 0
@@ -1819,7 +1809,7 @@ SphereCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Radius: 0.5
+  m_Radius: 25
   m_Center: {x: 0, y: 0, z: 0}
 --- !u!54 &4055456571732718095
 Rigidbody:
