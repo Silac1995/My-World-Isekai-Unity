@@ -75,10 +75,10 @@ public class DevModeManager : MonoBehaviour
 
     public event Action<bool> OnDevModeChanged;        // (isEnabled)
 
-    public void Unlock();                              // arms the feature
-    public void Lock();                                // hides panel + disables
+    public void Unlock();                              // arms the feature (sets IsUnlocked = true)
+    public void Lock();                                // fully relocks: disables AND clears IsUnlocked. Used only by explicit teardown (e.g. scene unload or an explicit /devmode lock if added later). `/devmode off` uses Disable() instead, so the user doesn't need to retype /devmode on.
     public bool TryEnable();                           // requires IsUnlocked && IsHost
-    public void Disable();
+    public void Disable();                             // hides panel, turns IsEnabled = false, preserves IsUnlocked
     public bool TryToggle();
 }
 ```
@@ -145,7 +145,7 @@ When the **Armed** toggle is on, `DevSpawnModule.Update()`:
 ### 6.4 Count & scatter
 
 - N=1 → spawn at exact `hit.point`.
-- N>1 → scatter on XZ within `radius = 1 * sqrt(N)`. Keeps density roughly constant as N grows.
+- N>1 → scatter on XZ within `radius = 4f * Mathf.Sqrt(N)` Unity units. Per project rule 32 (11 units = 1.67 m), this gives ≈ 61 cm for N=1, ≈ 1.9 m for N=10, ≈ 6.1 m for N=100. Roughly constant density appropriate for humanoid NPC footprint.
 
 ## 7. `SpawnManager` Changes
 
@@ -217,6 +217,8 @@ While `DevModeManager.IsEnabled` is true on the host:
 
 Implementation: both files add `if (DevModeManager.SuppressPlayerInput) return;` at the top of each input-reading method.
 
+**Click ordering** — `DevSpawnModule.Update()` and `PlayerController.Update()` both read `Input.GetMouseButtonDown(0)` in the same frame. Because both `PlayerController` and `PlayerInteractionDetector` early-out on `SuppressPlayerInput`, there is no race: when dev mode is on, only `DevSpawnModule` responds to the click. No explicit execution-order requirement is needed. The `IsPointerOverGameObject()` check in §6.3 additionally prevents UI clicks from spawning; UI click events propagate through Unity's EventSystem which is independent of the MonoBehaviour Update loop and is unaffected by the gate.
+
 ## 10. Multiplayer Validation Matrix
 
 | Scenario | Expected |
@@ -230,7 +232,7 @@ Implementation: both files add `if (DevModeManager.SuppressPlayerInput) return;`
 | Host spawns NPC with Skill Leadership L5 | NPC exists on host; Leadership L5 replicates via the existing `NetworkList` in `CharacterSkills`. |
 | Host spawns NPC with Combat Style Bow L10 | Applied server-side. Replication to clients happens through the save/load pathway on reconnect; live sync is a follow-up. |
 | Host dev mode ON, client dev mode OFF | Host's player input is suppressed for the host only; client controls normally. |
-| Host spawns with Count=10, Personality=Random | 10 NPCs scattered within `radius = sqrt(10) ≈ 3.16` Unity units of `hit.point`. Personality rolled per NPC. |
+| Host spawns with Count=10, Personality=Random | 10 NPCs scattered within `radius = 4 * sqrt(10) ≈ 12.6` Unity units (≈ 1.9 m) of `hit.point`. Personality rolled per NPC. |
 
 ## 11. File Plan
 
@@ -264,7 +266,15 @@ Documented explicitly in `.agent/skills/dev-mode/SKILL.md`:
 5. **Freecam, pause, invulnerability, item grant, teleport** are out of scope — future modules.
 6. **Client dev mode** is out of scope — all dev actions are host-only for this slice.
 
-## 13. Post-Implementation Tasks
+## 13. Pre-Implementation Checklist
+
+Planning phase must verify these before coding begins:
+
+1. **`SpawnCharacter(..., isPlayer: true)` call-site audit.** Grep the codebase for every call passing `isPlayer: true` and document a migration target for each. If any call site genuinely depends on spawn-as-player semantics, either keep a separate `SpawnPlayerCharacter` method or route it through the normal session flow. No silent drops.
+2. **"Environment" layer coverage.** Confirm every valid spawn surface (terrain, building floors, interior walkable, bridges) is actually on the `Environment` layer. If gaps exist, surface the layer mask as a `[SerializeField]` on `DevSpawnModule` (default = `Environment`) so future adjustments don't require recompile.
+3. **Prefab wiring.** Decide whether the `DevModePanel` prefab is authored fresh or migrated from the existing `DebugScript` panel. Fresh is cleaner; migration preserves existing item/furniture buttons for the transitional slice.
+
+## 14. Post-Implementation Tasks
 
 Per project rules:
 
