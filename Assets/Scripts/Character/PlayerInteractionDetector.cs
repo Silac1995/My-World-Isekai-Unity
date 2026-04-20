@@ -180,6 +180,12 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
             return;
         }
 
+        // Dev mode suppresses gameplay input. Nearby-target tracking above still runs.
+        if (DevModeManager.SuppressPlayerInput)
+        {
+            return;
+        }
+
         if (_playerUI == null)
             _playerUI = UnityEngine.Object.FindAnyObjectByType<PlayerUI>(FindObjectsInactive.Include);
 
