@@ -1041,6 +1041,7 @@ GameObject:
   - component: {fileID: 231686117}
   - component: {fileID: 231686118}
   - component: {fileID: 231686119}
+  - component: {fileID: 231686120}
   m_Layer: 0
   m_Name: GameManager
   m_TagString: Untagged
@@ -1129,6 +1130,19 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MWI.Time.GameSpeedController
   ShowTopMostFoldoutHeaderGroup: 1
+--- !u!114 &231686120
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 231686113}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 49d4b6a38ae38aa48ba9bb228e8f1431, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::DevModeManager
+  _panelPrefab: {fileID: 0}
 --- !u!1 &270720765
 GameObject:
   m_ObjectHideFlags: 0
