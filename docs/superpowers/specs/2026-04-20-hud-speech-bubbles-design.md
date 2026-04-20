@@ -65,7 +65,8 @@ Changes:
    - `wrapper.alpha = MoveTowards(current, target, _fadeSpeed * Time.unscaledDeltaTime)`. Default `_fadeSpeed = 4f`.
 3. **Push-height units.** `pushHeight = instance.GetHeightPx() + _separatorSpacingPx`. New field `[SerializeField] float _separatorSpacingPx = 4f`. Old `_separatorSpacing` world-unit field removed.
 4. **Trigger radius.** `_speechZoneRadius` default bumped 15 → **25** to match `_proximityRadius`. Kept as serialized for per-prefab override.
-5. **HUD layer unavailability.** If `HUDSpeechBubbleLayer.Local` is null at `PushBubble` time (NPC speech before HUD is up, or during scene transition), the stack still runs its logical cap / push math; the bubble instance is instantiated under a detached wrapper and its GameObject is toggled inactive until a HUD layer is found. Purely defensive — the common path always has a HUD.
+5. **HUD layer unavailability.** If `HUDSpeechBubbleLayer.Local` is null at `PushBubble` time (NPC speech before HUD is up, or during scene transition), the stack still runs its logical cap / push math; the bubble instance is instantiated under a detached wrapper and its GameObject is toggled inactive until a HUD layer is found. The re-attach hook lives in `SpeechBubbleStack.Update`: when `_wrapper.parent == null && HUDSpeechBubbleLayer.Local != null`, re-parent the wrapper under `Local.ContentRoot` and re-activate. Purely defensive — the common path always has a HUD.
+6. **Tunable constants.** Expose as `[SerializeField]` on the stack: `_fadeSpeed = 4f` (alpha MoveTowards speed) and `_proximityRadius = 25f`. Keeps designers out of the code for tuning.
 
 ### 4.3 Modified: `SpeechBubbleInstance`
 
@@ -92,9 +93,12 @@ _rect.anchoredPosition = Vector2.Lerp(_rect.anchoredPosition, target,
 Existing preserved behaviour:
 - Entrance / exit coroutines, EaseOut / EaseIn curves, typing coroutine with voice playback, `CompleteTypingImmediately`, `ResetExpirationTimer`, `Dismiss`, `OnExpired / OnHeightChanged / OnTypingStateChanged` events, coroutine cleanup in `OnDisable`, delegate nulling in `OnDestroy`.
 
-Rescales (world units → HUD pixels):
+Rescales (world units → **reference-resolution** HUD pixels; final on-screen pixels scale via `CanvasScaler` at a 1920×1080 reference):
 - `_entranceSlideDistance`: 15 → **40**
 - `_exitSlideDistance`: 10 → **25**
+- Position lerp factor: **8f** (kept), exposed as `[SerializeField] _positionLerpSpeed = 8f`.
+
+All pixel-valued serialized fields throughout this spec (push offsets, slide distances, separator spacing) are authored against the same reference resolution; designers tune in those units.
 
 Renames / replacements:
 - `GetHeight()` → `GetHeightPx()`: returns `_rect.rect.height` (no `localScale.y` multiplication — children of a screen-space canvas).
@@ -104,7 +108,7 @@ Prefab root changes (see §7).
 
 ### 4.4 Modified: `CharacterSpeech`
 
-Only change: remove the `HandleDeath` and `HandleIncapacitated` overrides entirely. Bubbles on a dying character continue their natural lifecycle (expiration timer, dismissal, or `OnDisable → ClearAll` when the character is despawned). Everything else (`Say`, `SayScripted`, `CloseSpeech`, `ResetSpeech`, RPC routing, `VoiceSO` / audio / pitch) untouched.
+Only change: remove the `HandleDeath` and `HandleIncapacitated` overrides entirely. Both are declared as `protected virtual` with empty bodies in `CharacterSystem.cs` (not abstract), so removing the overrides is safe — the system simply reverts to the base no-op. Bubbles on a dying character continue their natural lifecycle (expiration timer, dismissal, or `OnDisable → ClearAll` when the character is despawned). Everything else (`Say`, `SayScripted`, `CloseSpeech`, `ResetSpeech`, RPC routing, `VoiceSO` / audio / pitch) untouched.
 
 ### 4.5 Removed
 
@@ -275,7 +279,9 @@ Files touched:
 | `Assets/Scripts/Character/CharacterSpeech/SpeechBubbleInstance.cs` | Add `_speakerAnchor` / `_camera` / `_stackOffsetPx`, screen-space `Update`, pixel slide distances, `GetHeightPx()`. |
 | `Assets/Scripts/UI/HUDSpeechBubbleLayer.cs` *(new)* | HUD layer with static `Local` accessor, camera + local-player-anchor lazy resolution. |
 | `Assets/Prefabs/SpeechBubbleInstance_Prefab.prefab` | Remove WorldSpace Canvas; restructure as UI RectTransform; tune fonts/sizes. |
-| `Assets/Prefabs/Character/Character_Default.prefab` | Remove Billboard on speech anchor; bump SphereCollider radius 15 → 25. Apply to all Character prefab variants. |
+| `Assets/Prefabs/Character/Character_Default.prefab` | Remove Billboard on speech anchor; bump SphereCollider radius 15 → 25. |
+| `Assets/Prefabs/Character/Character_Default_Humanoid.prefab` | Same as above (variant). |
+| `Assets/Prefabs/Character/Character_Default_Quadruped.prefab` | Same as above (variant). |
 | HUD Canvas prefab *(existing local-player HUD)* | Add `HUDSpeechBubbleLayer` + `ContentRoot` children. |
 | `.agent/skills/speech-system/SKILL.md` | Update per §8. |
 | `.claude/agents/character-system-specialist.md` | One-liner reference update. |
