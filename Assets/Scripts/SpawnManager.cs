@@ -226,7 +226,17 @@ public class SpawnManager : MonoBehaviour
                     }
 
                     // L'objet réseau va appeler InitializeSpawnedCharacter via OnNetworkSpawn.
-                    netObj.Spawn(true);
+                    try
+                    {
+                        netObj.Spawn(true);
+                    }
+                    catch (System.Exception ex)
+                    {
+                        // Prevent pending-config leak if the network spawn throws.
+                        _pendingDevConfig.Remove(netObj.NetworkObjectId);
+                        Debug.LogException(ex);
+                        throw;
+                    }
 
                     return character;
                 }
@@ -253,6 +263,17 @@ public class SpawnManager : MonoBehaviour
         {
             race = _defaultFallbackRace;
             if (race == null) Debug.LogWarning("[SpawnManager] Fallback race is missing in inspector!");
+        }
+
+        // --- DRAIN PENDING DEV CONFIG UP-FRONT ---
+        // Popping the entry now (instead of at the tail) ensures the dictionary
+        // never leaks if an init step below returns false and short-circuits.
+        PendingDevConfig? pendingDev = null;
+        if (character.IsSpawned && character.NetworkObject != null
+            && _pendingDevConfig.TryGetValue(character.NetworkObject.NetworkObjectId, out var popped))
+        {
+            _pendingDevConfig.Remove(character.NetworkObject.NetworkObjectId);
+            pendingDev = popped;
         }
 
         // --- DETERMINISTIC SEED ---
@@ -313,22 +334,25 @@ public class SpawnManager : MonoBehaviour
         }
 
         // --- GESTION DES TRAITS COMPORTEMENTAUX ---
-        if (_availableTraits != null && _availableTraits.Length > 0 && character.CharacterTraits != null)
+        // Skip random trait assignment if a dev-mode trait override is queued for this character.
+        // Note: in the offline path (non-networked), the caller's ApplyDevExtras runs AFTER this
+        // method and will overwrite any random trait assignment done above. Two logs will appear
+        // for offline dev-spawns. This is acceptable — offline dev-spawn is a dev-only flow.
+        bool devTraitPending = pendingDev.HasValue && pendingDev.Value.Traits != null;
+        if (!devTraitPending && _availableTraits != null && _availableTraits.Length > 0 && character.CharacterTraits != null)
         {
             CharacterBehavioralTraitsSO randomTrait = _availableTraits[rng.Next(0, _availableTraits.Length)];
             character.CharacterTraits.behavioralTraitsProfile = randomTrait;
             Debug.Log($"<color=cyan>[Spawn]</color> {character.CharacterName} a reçu le profil comportemental : {randomTrait.name}");
         }
 
-        // --- DEV-MODE OVERRIDES ---
-        // Applies any pending dev config recorded by SpawnCharacter just before network spawn.
-        // Only fires for networked spawns where SpawnCharacter returned before InitializeSpawnedCharacter
-        // ran (Character.OnNetworkSpawn is the caller). Offline spawns apply via ApplyDevExtras inline.
-        if (character.IsSpawned && character.NetworkObject != null
-            && _pendingDevConfig.TryGetValue(character.NetworkObject.NetworkObjectId, out var pending))
+        // --- APPLY DEV-MODE OVERRIDES ---
+        // Takes priority over any random assignments done above.
+        // The entry was popped from _pendingDevConfig at the top of this method so the
+        // dictionary cannot leak if any earlier init step returned false and short-circuited.
+        if (pendingDev.HasValue)
         {
-            _pendingDevConfig.Remove(character.NetworkObject.NetworkObjectId);
-            ApplyDevExtras(character, pending.Traits, pending.CombatStyles, pending.Skills);
+            ApplyDevExtras(character, pendingDev.Value.Traits, pendingDev.Value.CombatStyles, pendingDev.Value.Skills);
         }
 
         return true;
