@@ -48,6 +48,7 @@ public class SpeechBubbleInstance : MonoBehaviour
     private Transform _speakerAnchor;
     private Camera _camera;
     private Vector2 _stackOffsetPx;
+    private Vector2 _animationBiasPx;
     private bool _isOffScreen;
     private float _cachedHeight;
     private bool _isScripted;
@@ -88,7 +89,7 @@ public class SpeechBubbleInstance : MonoBehaviour
                     || sp.x < 0f || sp.x > Screen.width
                     || sp.y < 0f || sp.y > Screen.height;
 
-        Vector2 target = (Vector2)sp + _stackOffsetPx;
+        Vector2 target = (Vector2)sp + _stackOffsetPx + _animationBiasPx;
         _rect.anchoredPosition = Vector2.Lerp(
             _rect.anchoredPosition,
             target,
@@ -327,12 +328,7 @@ public class SpeechBubbleInstance : MonoBehaviour
     private IEnumerator EntranceAnimation(Action onComplete)
     {
         _canvasGroup.alpha = 0f;
-
-        // Start position: _stackOffsetPx shifted DOWN by the slide distance.
-        // The Update() lerp will aim at _stackOffsetPx, so we temporarily bias the
-        // offset downward, fade in, then restore.
-        Vector2 targetOffset = _stackOffsetPx;
-        _stackOffsetPx = new Vector2(targetOffset.x, targetOffset.y - _entranceSlideDistance);
+        _animationBiasPx = new Vector2(0f, -_entranceSlideDistance);
 
         float elapsed = 0f;
 
@@ -343,15 +339,13 @@ public class SpeechBubbleInstance : MonoBehaviour
             float eased = 1f - (1f - t) * (1f - t);
 
             _canvasGroup.alpha = Mathf.Lerp(0f, 1f, eased);
-            _stackOffsetPx = new Vector2(
-                targetOffset.x,
-                Mathf.Lerp(targetOffset.y - _entranceSlideDistance, targetOffset.y, eased));
+            _animationBiasPx = new Vector2(0f, Mathf.Lerp(-_entranceSlideDistance, 0f, eased));
 
             yield return null;
         }
 
         _canvasGroup.alpha = 1f;
-        _stackOffsetPx = targetOffset;
+        _animationBiasPx = Vector2.zero;
         _animRoutine = null;
 
         onComplete?.Invoke();
@@ -359,8 +353,8 @@ public class SpeechBubbleInstance : MonoBehaviour
 
     private IEnumerator ExitAnimation(Action onComplete)
     {
-        Vector2 startOffset = _stackOffsetPx;
-        Vector2 endOffset = new Vector2(startOffset.x, startOffset.y + _exitSlideDistance);
+        float startBiasY = _animationBiasPx.y;
+        float endBiasY = startBiasY + _exitSlideDistance;
 
         float startAlpha = _canvasGroup.alpha;
         float elapsed = 0f;
@@ -372,7 +366,7 @@ public class SpeechBubbleInstance : MonoBehaviour
             float eased = t * t;
 
             _canvasGroup.alpha = Mathf.Lerp(startAlpha, 0f, eased);
-            _stackOffsetPx = Vector2.Lerp(startOffset, endOffset, eased);
+            _animationBiasPx = new Vector2(0f, Mathf.Lerp(startBiasY, endBiasY, eased));
 
             yield return null;
         }

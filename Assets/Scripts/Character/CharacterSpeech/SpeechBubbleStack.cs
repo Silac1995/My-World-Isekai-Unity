@@ -294,7 +294,7 @@ public class SpeechBubbleStack : MonoBehaviour
         _wrapperGO = new GameObject($"SpeechStackWrapper_{gameObject.name}", typeof(RectTransform), typeof(CanvasGroup));
         _wrapperRect = _wrapperGO.GetComponent<RectTransform>();
         _wrapperGroup = _wrapperGO.GetComponent<CanvasGroup>();
-        _wrapperGroup.alpha = 0f;
+        _wrapperGroup.alpha = 1f;
         _wrapperGroup.blocksRaycasts = false;
         _wrapperGroup.interactable = false;
 
