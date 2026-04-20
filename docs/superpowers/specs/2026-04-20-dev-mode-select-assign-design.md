@@ -132,7 +132,8 @@ No "is player?" filter. A later slice may add an exclude-self toggle if near-cli
 - Toggle ON → `DevModeManager.Instance.SetClickConsumer(this)`.
 - Toggle OFF → if `ActiveClickConsumer == this`, `ClearClickConsumer(this)`.
 - `OnClickConsumerChanged` handler → if `ActiveClickConsumer != this` and toggle is on, flip toggle off (idempotent).
-- Dev mode disabled → `OnDevModeChanged(false)` listener flips toggle off and clears state if held.
+- `DevModeManager.OnDevModeChanged(false)` → disarm toggle, release consumer, clear `SelectedCharacter`.
+- `SceneManager.sceneUnloaded` → clear `SelectedCharacter` (the previously-held reference may be destroyed). Subscribe in `OnEnable`, unsubscribe in `OnDisable` (rule 16).
 
 ## 6. `IDevAction` interface
 
@@ -179,8 +180,9 @@ MonoBehaviour implementing `IDevAction`.
 
 ### 7.3 Host authority
 
-- `Building.SetOwner` on both subtypes is already server-only (defensive `IsServer` gates inside each).
-- Dev mode itself is host-only, so this action is unreachable from clients regardless. Double gate.
+- `ResidentialBuilding.SetOwner` has a defensive `if (!IsServer) return;` guard at the top.
+- `CommercialBuilding.SetOwner` does **not** have an internal `IsServer` guard today. This slice adds one (one-line defensive change) so the two subtypes match, and so any non-dev caller on a client is also protected. Without that fix, only the dev-mode host-only gate protects it — fine for this feature, but asymmetric with `ResidentialBuilding`.
+- Dev mode itself is host-only, so this action is unreachable from clients regardless. With the added guard, it's a proper double gate.
 
 ## 8. `DevModePanel` — tab infrastructure
 
@@ -204,16 +206,20 @@ public class DevModePanel : MonoBehaviour
 }
 ```
 
-The prefab gains a tab bar directly inside `ContentRoot`, with two buttons (`Spawn`, `Select`) and two content GameObjects (`SpawnTab`, `SelectTab`). The existing Spawn UI is re-parented under `SpawnTab` without content changes. Only one tab's content is active at a time; selection state on the Select module persists across tab switches because the `DevSelectionModule` GameObject stays active via its data (the `SelectTab` GameObject may go inactive, but the state is a MonoBehaviour field on the tab itself; fields survive deactivation).
+The prefab gains a tab bar directly inside `ContentRoot`, with two buttons (`Spawn`, `Select`) and two content GameObjects (`SpawnTab`, `SelectTab`). The existing Spawn UI is re-parented under `SpawnTab` without content changes. Only one tab's content is active at a time.
+
+**Selection state persistence across tab switches:** `SetActive(false)` only halts `Update` and disables rendering; MonoBehaviour fields retain their values. `DevSelectionModule.SelectedCharacter` therefore survives tab switches even when `SelectTab` is inactive. As a side benefit, the click loop (in `Update`) correctly stops while the Select tab is hidden, so a click elsewhere in the panel can't accidentally register as a selection.
 
 ## 9. Raycast Layer Strategy
 
 | Target | Raycast layers | Filter |
 |---|---|---|
 | Character pick | `~0` (all) | `GetComponentInParent<Character>()` |
-| Building pick | `LayerMask.GetMask("Building")` | `GetComponentInParent<Building>()` |
+| Building pick | `_buildingLayerMask` (SerializeField, default `LayerMask.GetMask("Building")`) | `GetComponentInParent<Building>()` |
 
 Rationale: Characters may live on various child collider layers (rigidbody, interaction, awareness); component-based filtering is robust and cheap at dev-tool scale. Buildings have a dedicated `Building` layer with a `BoxCollider` on the prefab, so layer filtering is precise and avoids accidentally ray-hitting furniture or props inside.
+
+The building mask is exposed as a `[SerializeField] LayerMask` on `DevActionAssignBuilding` (following the first slice's pattern for the `Environment` layer). Default value is `GetMask("Building")` resolved at `Start`; if the layer doesn't exist the action logs an error and no-ops. Exposing it in the inspector lets future layer renames or additions (e.g., a distinct `BuildingInterior` layer) be handled without a code change.
 
 ## 10. Multiplayer Validation Matrix
 
@@ -227,7 +233,8 @@ Rationale: Characters may live on various child collider layers (rigidbody, inte
 | Host arms Spawn (in Spawn tab), switches to Select tab, arms Select | Spawn toggle auto-disarms via `OnClickConsumerChanged`. Only Select consumes next click. |
 | Host arms Select, switches back to Spawn tab and arms Spawn | Select toggle auto-disarms. Reverse direction works the same. |
 | Host arms Assign Building, presses ESC | Action cancels, consumer released, button label restored. No state mutation. |
-| Host re-selects a different Character while a building pick is pending | The pending `_pendingCharacter` is already captured, so Assign Building still targets the original. This is intentional — the action is a transaction once started. |
+| Host re-selects a different Character while a building pick is pending | **Cancel-on-reselect.** Re-arming the Select toggle calls `SetClickConsumer(selectionModule)`, which fires `OnClickConsumerChanged`. `DevActionAssignBuilding` sees it's no longer the consumer and cancels its pending pick, releasing `_pendingCharacter` and restoring the button label. The user then re-clicks Assign Building to start a fresh transaction targeting the new selection. This is the cleaner rule — re-arming Select is explicit user intent to re-target. |
+| Host switches scene / map while a selection is held OR disables dev mode | `DevSelectionModule` clears `SelectedCharacter` on `SceneManager.sceneUnloaded` and on `DevModeManager.OnDevModeChanged(false)`. Prevents a destroyed Character reference from causing Unity fake-null exceptions in the next `Execute`. |
 | Client opens dev panel | Host-only gate already blocks. Select tab never renders for clients. |
 | Host clicks empty space while Select armed | Warning logged, stays armed. |
 
@@ -244,6 +251,7 @@ Rationale: Characters may live on various child collider layers (rigidbody, inte
 - `Assets/Scripts/Debug/DevMode/DevModeManager.cs` — add `ActiveClickConsumer`, `OnClickConsumerChanged`, `SetClickConsumer`, `ClearClickConsumer`.
 - `Assets/Scripts/Debug/DevMode/DevModePanel.cs` — add `TabEntry` struct + `_tabs` list + `SwitchTab(int)` + wiring in `Start`.
 - `Assets/Scripts/Debug/DevMode/Modules/DevSpawnModule.cs` — refactor armed click loop to use `ActiveClickConsumer` contract; subscribe to `OnClickConsumerChanged` for auto-disarm.
+- `Assets/Scripts/World/Buildings/CommercialBuilding.cs` — add `if (!IsServer) return;` at the top of `SetOwner(...)` to match `ResidentialBuilding.SetOwner` (defense in depth; dev-mode host-only gate already protects this path today).
 - `Assets/Resources/UI/DevModePanel.prefab` — restructure: insert tab bar, re-parent existing Spawn UI under new `SpawnTab`, add `SelectTab` with its controls and `DevSelectionModule` + `DevActionAssignBuilding`, populate `_tabs` list in the `DevModePanel` component.
 - `.agent/skills/dev-mode/SKILL.md` — new Select Tab section, `IDevAction` recipe, updated click arbitration note, extended known limitations.
 
