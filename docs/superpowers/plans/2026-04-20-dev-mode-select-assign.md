@@ -853,6 +853,9 @@ public class DevActionAssignBuilding : MonoBehaviour, IDevAction
             return;
         }
 
+        // CommercialBuilding is abstract; the pattern-match covers every concrete
+        // subclass (Tavern, Shop, etc.) polymorphically. Same for ResidentialBuilding
+        // subclasses. Order matters only if a subclass inherits from both — none does.
         if (building is CommercialBuilding commercial)
         {
             commercial.SetOwner(_pendingCharacter, null);
@@ -967,6 +970,18 @@ non-server caller."
 This task is authored in the Unity Editor via MCP tools. The goal: the existing Spawn UI is re-parented under a new `SpawnTab` child, a new `SelectTab` sibling is created with its controls, and the tab bar + `_tabs` list on `DevModePanel` are wired.
 
 Given the size of this prefab edit, prefer the `script-execute` fallback approach used in Task 13 of the first slice's plan (commit `2528701`). A `PrefabUtility.SaveAsPrefabAsset` round-trip is more reliable than chaining dozens of individual MCP calls.
+
+- [ ] **Step 8.0: Inspect the current prefab**
+
+Before editing, use `mcp__ai-game-developer__assets-prefab-open` on `Assets/Resources/UI/DevModePanel.prefab` and walk the hierarchy. Record specifically:
+
+1. The exact path to the `DevSpawnModule` component (which GameObject it lives on — ContentRoot itself, or a child).
+2. The list of direct children of `ContentRoot` (these are the pieces that will be re-parented into `SpawnTab`).
+3. Whether `DevSpawnModule._rowPrefab` and the other SerializeField references point to GameObjects that are direct children of ContentRoot or nested deeper.
+
+This evidence drives Step 8.2's "wrap children into SpawnTab but leave DevSpawnModule where it is" strategy. If the state differs from expectations (e.g. `DevSpawnModule` is on a deep nested child that itself would be re-parented), adjust the script in Step 8.3 so component references survive — Unity object references are GUID-based, so surviving a parent swap is fine, but record it as explicit intent.
+
+Close the prefab with `mcp__ai-game-developer__assets-prefab-close` when done inspecting.
 
 - [ ] **Step 8.1: Strategy decision**
 
