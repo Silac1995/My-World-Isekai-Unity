@@ -12,6 +12,7 @@ public class SpawnManager : MonoBehaviour
 
     private struct PendingDevConfig
     {
+        public CharacterPersonalitySO Personality;
         public CharacterBehavioralTraitsSO Traits;
         public List<(CombatStyleSO style, int level)> CombatStyles;
         public List<(SkillSO skill, int level)> Skills;
@@ -36,6 +37,14 @@ public class SpawnManager : MonoBehaviour
 
         Instance = this;
         DontDestroyOnLoad(gameObject);
+
+        // Defensive: clear the pending dev-config dictionary on any NetworkManager shutdown so
+        // stale entries can't survive into the next session and collide with a reused NetworkObjectId.
+        if (Unity.Netcode.NetworkManager.Singleton != null)
+        {
+            Unity.Netcode.NetworkManager.Singleton.OnServerStopped += HandleNetworkStopped;
+            Unity.Netcode.NetworkManager.Singleton.OnClientStopped += HandleNetworkStopped;
+        }
 
         // Chargement des personnalités pour le spawn aléatoire
         _availablePersonalities = Resources.LoadAll<CharacterPersonalitySO>("Data/Personnality");
@@ -215,10 +224,11 @@ public class SpawnManager : MonoBehaviour
 
                     character.NetworkVisualSeed.Value = Random.Range(int.MinValue, int.MaxValue);
 
-                    if ((traits != null) || (combatStyles != null && combatStyles.Count > 0) || (skills != null && skills.Count > 0))
+                    if (personality != null || traits != null || (combatStyles != null && combatStyles.Count > 0) || (skills != null && skills.Count > 0))
                     {
                         _pendingDevConfig[netObj.NetworkObjectId] = new PendingDevConfig
                         {
+                            Personality = personality,
                             Traits = traits,
                             CombatStyles = combatStyles,
                             Skills = skills
@@ -274,6 +284,13 @@ public class SpawnManager : MonoBehaviour
         {
             _pendingDevConfig.Remove(character.NetworkObject.NetworkObjectId);
             pendingDev = popped;
+        }
+
+        // Dev-mode personality override promoted into the parameter so the rest of the
+        // method uses it uniformly (random fallback still applies when no override).
+        if (pendingDev.HasValue && pendingDev.Value.Personality != null)
+        {
+            personality = pendingDev.Value.Personality;
         }
 
         // --- DETERMINISTIC SEED ---
@@ -431,6 +448,24 @@ public class SpawnManager : MonoBehaviour
         float s = minS + (float)(rng.NextDouble() * (maxS - minS));
         float v = minV + (float)(rng.NextDouble() * (maxV - minV));
         return Color.HSVToRGB(h, s, v);
+    }
+
+    private void HandleNetworkStopped(bool _)
+    {
+        if (_pendingDevConfig.Count > 0)
+        {
+            Debug.Log($"<color=cyan>[Spawn]</color> NetworkManager stopped — clearing {_pendingDevConfig.Count} pending dev-config entries.");
+            _pendingDevConfig.Clear();
+        }
+    }
+
+    private void OnDestroy()
+    {
+        if (Unity.Netcode.NetworkManager.Singleton != null)
+        {
+            Unity.Netcode.NetworkManager.Singleton.OnServerStopped -= HandleNetworkStopped;
+            Unity.Netcode.NetworkManager.Singleton.OnClientStopped -= HandleNetworkStopped;
+        }
     }
 
     private void ApplyDevExtras(

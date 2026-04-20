@@ -139,7 +139,7 @@ Files touched by the dev-mode slice:
 
 Explicit list of what this first slice does **not** cover. These are follow-up work, not bugs.
 
-- **Personality & behavioral trait replication** to late-joining / non-host clients is a pre-existing gap. The server applies the value on the spawned Character, but no dedicated `NetworkVariable` replicates it. A late-joiner sees defaults until the next full save round-trip. Follow-up slice.
+- **Personality IS applied server-side** on both networked and offline spawns (fixed post-review — `PendingDevConfig.Personality` now carries the dev-picked value into `InitializeSpawnedCharacter`). **Behavioral trait replication** to late-joining / non-host clients is still a known gap — the server applies the value on the spawned Character, but no dedicated `NetworkVariable` replicates it across all clients. A late-joiner sees defaults until the next full save round-trip. Follow-up slice.
 - **Combat style live sync** — only the server applies styles via `UnlockCombatStyle(style, level)`. Reconnecting clients rebuild state from save data. A live `NetworkList<>`-based equivalent for combat styles is future work.
 - **Skills do replicate** — `CharacterSkills` already owns `NetworkList<NetworkSkillSyncData>`, so skill levels granted by dev-mode propagate correctly to all clients. No additional work needed.
 - **Jobs are deliberately excluded** from this slice. Assigning a job requires a `CommercialBuilding` workplace; it will ship as its own "Assign Job" module that lets the host target a building after spawning.
