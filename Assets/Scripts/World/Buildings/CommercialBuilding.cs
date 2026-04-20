@@ -123,6 +123,8 @@ public abstract class CommercialBuilding : Building
 
     public void SetOwner(Character newOwner, Job ownerJob = null)
     {
+        if (!IsServer) return;
+
         // Remove from old community
         if (_ownerCommunity != null && _ownerCommunity.ownedBuildings.Contains(this))
         {
