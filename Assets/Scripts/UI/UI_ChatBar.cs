@@ -93,6 +93,23 @@ public class UI_ChatBar : MonoBehaviour
             return;
         }
 
+        string trimmed = text.Trim();
+        if (trimmed.StartsWith("/"))
+        {
+            DevChatCommands.Handle(trimmed);
+
+            if (_inputField != null)
+            {
+                _inputField.text = string.Empty;
+                _inputField.DeactivateInputField();
+            }
+            if (UnityEngine.EventSystems.EventSystem.current != null)
+            {
+                UnityEngine.EventSystems.EventSystem.current.SetSelectedGameObject(null);
+            }
+            return;
+        }
+
         if (_character != null)
         {
             if (_character.CharacterSpeech != null)
