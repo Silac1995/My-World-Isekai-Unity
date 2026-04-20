@@ -51,6 +51,14 @@ public class PlayerController : CharacterGameController
     {
         if (IsOwner)
         {
+            if (DevModeManager.SuppressPlayerInput)
+            {
+                _inputDir = Vector3.zero;
+                base.Update();
+                Move();
+                return;
+            }
+
             // Block player movement/action input if typing in any UI text field
             if (UnityEngine.EventSystems.EventSystem.current != null && 
                 UnityEngine.EventSystems.EventSystem.current.currentSelectedGameObject != null && 
