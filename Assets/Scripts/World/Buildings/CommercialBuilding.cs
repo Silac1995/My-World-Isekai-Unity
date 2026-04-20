@@ -12,7 +12,6 @@ using UnityEngine;
 public abstract class CommercialBuilding : Building
 {
     [Header("Commercial")]
-    [SerializeField] protected Character _owner; // Individual owner
     [SerializeField] protected Community _ownerCommunity; // Collective owner
     [SerializeField] protected Zone _storageZone;
 
@@ -23,7 +22,7 @@ public abstract class CommercialBuilding : Building
     protected BuildingTaskManager _taskManager;
     protected BuildingLogisticsManager _logisticsManager;
 
-    public Character Owner => _owner;
+    public Character Owner => _ownerIds.Count > 0 ? Character.FindByUUID(_ownerIds[0].ToString()) : null;
     public Community OwnerCommunity => _ownerCommunity;
     public IReadOnlyList<Job> Jobs => _jobs;
     public IReadOnlyList<Character> ActiveWorkersOnShift => _activeWorkersOnShift;
@@ -131,12 +130,15 @@ public abstract class CommercialBuilding : Building
             _ownerCommunity.ownedBuildings.Remove(this);
         }
 
-        _owner = newOwner;
-        
+        // Replicate owner via _ownerIds (mirror ResidentialBuilding). Server-only write;
+        // clients receive the change via NetworkList replication.
+        while (_ownerIds.Count > 0) _ownerIds.RemoveAt(0);
+        if (newOwner != null) AddOwner(newOwner); // Inherited from Room — adds newOwner.CharacterId to _ownerIds.
+
         // Add to new community if applicable
-        if (_owner != null && _owner.CharacterCommunity != null && _owner.CharacterCommunity.CurrentCommunity != null)
+        if (newOwner != null && newOwner.CharacterCommunity != null && newOwner.CharacterCommunity.CurrentCommunity != null)
         {
-            _ownerCommunity = _owner.CharacterCommunity.CurrentCommunity;
+            _ownerCommunity = newOwner.CharacterCommunity.CurrentCommunity;
             if (!_ownerCommunity.ownedBuildings.Contains(this))
             {
                 _ownerCommunity.ownedBuildings.Add(this);
@@ -181,7 +183,14 @@ public abstract class CommercialBuilding : Building
     /// <summary>
     /// Le building a-t-il un owner/boss (individuel) ?
     /// </summary>
-    public bool HasOwner => _owner != null && _owner.IsAlive();
+    public bool HasOwner
+    {
+        get
+        {
+            Character o = Owner;
+            return o != null && o.IsAlive();
+        }
+    }
 
     /// <summary>
     /// Checks if this building is located in a map that has a recognized Community Leader.
