@@ -94,7 +94,7 @@ Owner detects intent → [Rpc(SendTo.Server)] request
 - `ResetForNewSession()` is the **required teardown path** before starting a new session. It:
   1. Clears `_worldSaveables`, `IsReady`, `CurrentWorldGuid`, `CurrentWorldName`
   2. Clears `MapController.PendingSnapshots` and `MapController.ActiveControllers`
-  3. Destroys singletons: `CommunityTracker.Instance`, `WorldOffsetAllocator.Instance`, `BuildingInteriorRegistry.Instance`
+  3. Destroys singletons: `MapRegistry.Instance`, `WorldOffsetAllocator.Instance`, `BuildingInteriorRegistry.Instance`, `WildernessZoneManager.Instance`
   4. Destroys `NetworkManager.Singleton.gameObject`
   5. Resets save/load state to `Idle`
 

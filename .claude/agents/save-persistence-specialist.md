@@ -59,7 +59,7 @@ public interface ICharacterSaveData<T> : ICharacterSaveData
 What subsystems actually implement. Bridge methods via `CharacterSaveDataHelper`.
 
 ### ISaveable — World-Scoped Only
-For world systems (TimeManager, CommunityTracker, WorldOffsetAllocator, BuildingInteriorRegistry). Character subsystems do NOT use this.
+For world systems (TimeManager, MapRegistry, WorldOffsetAllocator, BuildingInteriorRegistry, Regions, WildernessZones). Character subsystems do NOT use this.
 
 ---
 
@@ -125,7 +125,7 @@ Single entry point for all save operations. Coroutine-based flow:
 SaveManager tracks readiness via `IsReady` + `OnReady` event. After all ISaveables register and a settling period passes with no new registrations, `IsReady` becomes true. This replaces hardcoded delays for determining when the world is ready to save/load.
 
 ### Session Reset
-`SaveManager.ResetForNewSession()` clears ISaveable registrations, readiness state, current world info, and save/load state. Called during session teardown alongside destruction of `CommunityTracker`, `WorldOffsetAllocator`, `BuildingInteriorRegistry`, and `NetworkManager` singletons.
+`SaveManager.ResetForNewSession()` clears ISaveable registrations, readiness state, current world info, and save/load state. Called during session teardown alongside destruction of `MapRegistry`, `WorldOffsetAllocator`, `BuildingInteriorRegistry`, `WildernessZoneManager`, and `NetworkManager` singletons.
 
 **Important:** `NetworkManager` must be explicitly destroyed because NGO auto-applies `DontDestroyOnLoad` to it.
 

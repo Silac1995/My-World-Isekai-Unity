@@ -33,12 +33,12 @@ You own deep expertise in the **Living World** architecture, which spans these s
   5. City Growth (max 1 building per 7 offline days, +20%/day construction)
 - **All offline math uses `TimeManager.CurrentDay` + `CurrentTime01`** — never `Time.time` or `Time.deltaTime`.
 
-### 4. Community Lifecycle
-- `CommunityTracker` monitors NPC populations and drives a state machine:
-  - `RoamingCamp` → `Settlement` → `EstablishedCity` → `AbandonedCity` (and reclamation paths)
-- Settlement promotion allocates a world slot, instantiates a `MapController`, spawns terrain, migrates NPCs, and adopts existing buildings.
+### 4. Community Lifecycle (Phase 1 refactor — ADR-0001)
+- `MapRegistry` (renamed from `CommunityTracker`) holds the `CommunityData` list and exposes `CreateMapAtPosition`, `AdoptExistingBuildings`, `ImposeJobOnCitizen`, `ProcessPendingBuildingClaims`. The old cluster-promotion state machine (`RoamingCamp → Settlement → EstablishedCity → AbandonedCity`) has been deleted — maps are now born via scene authoring or explicit `CreateMapAtPosition` calls (BuildingPlacementManager).
 - `CommunityData` tracks: MapId, Tier, LeaderIds, ConstructedBuildings, ResourcePools, BuildPermits, PendingBuildingClaims.
-- City growth is driven by the Community Leader's `UnlockedBuildingIds` blueprint knowledge.
+- City growth is driven by the Community Leader's `UnlockedBuildingIds` blueprint knowledge via `MacroSimulator.SimulateCityGrowth`.
+- World hierarchy: `Region → { MapController, WildernessZone, WeatherFront }` where all three implement `IWorldZone`.
+- `WildernessZoneManager` spawns runtime wilderness zones; `WorldSettingsData.MapMinSeparation` enforces minimum zone spacing in both `MapRegistry.CreateMapAtPosition` and `WildernessZoneManager.SpawnZone`.
 
 ### 5. Biome & Resources
 - `BiomeDefinition` defines harvestable density, resource entries (ResourceId, Weight, BaseYieldQuantity, RegenerationDays).
@@ -57,7 +57,7 @@ You own deep expertise in the **Living World** architecture, which spans these s
 **Teardown — `SaveManager.ResetForNewSession()`** (called when returning to main menu):
 1. Clears `_worldSaveables`, `IsReady`, `CurrentWorldGuid`, `CurrentWorldName`
 2. Clears `MapController.PendingSnapshots` and `MapController.ActiveControllers` (static collections)
-3. Destroys singletons: `CommunityTracker.Instance`, `WorldOffsetAllocator.Instance`, `BuildingInteriorRegistry.Instance`
+3. Destroys singletons: `MapRegistry.Instance`, `WorldOffsetAllocator.Instance`, `BuildingInteriorRegistry.Instance`, `WildernessZoneManager.Instance`
 4. Destroys `NetworkManager.Singleton.gameObject` (NGO auto-applies DontDestroyOnLoad)
 5. Resets save/load state to `Idle`
 
@@ -99,7 +99,10 @@ These public methods are called by `SaveManager` and `GameLauncher` during save/
 | Script | Namespace | Location |
 |--------|-----------|----------|
 | `MapController` | MWI.WorldSystem | `Assets/Scripts/World/MapSystem/` |
-| `CommunityTracker` | MWI.WorldSystem | `Assets/Scripts/World/MapSystem/` |
+| `MapRegistry` | MWI.WorldSystem | `Assets/Scripts/World/MapSystem/` |
+| `WildernessZoneManager` | MWI.WorldSystem | `Assets/Scripts/World/Zones/` |
+| `Region` | MWI.WorldSystem | `Assets/Scripts/World/MapSystem/` |
+| `WildernessZone` | MWI.WorldSystem | `Assets/Scripts/World/Zones/` |
 | `WorldOffsetAllocator` | MWI.WorldSystem | `Assets/Scripts/World/MapSystem/` |
 | `MacroSimulator` | MWI.WorldSystem | `Assets/Scripts/World/MapSystem/` |
 | `TimeManager` | MWI.Time | `Assets/Scripts/DayNightCycle/` |
@@ -124,7 +127,7 @@ These public methods are called by `SaveManager` and `GameLauncher` during save/
 8. **Abandoned cities never release their spatial slot** — 0 CPU cost but permanent world presence.
 9. **Server-authoritative** — all map state changes (hibernation, wake-up, transitions) are server-side. Clients receive updates via NetworkVariable or ClientRpc.
 10. **Always validate across Host/Client/NPC scenarios** — data on the server is invisible to clients unless explicitly synced.
-11. **Session transitions must call `SaveManager.ResetForNewSession()`** — this destroys world singletons (`CommunityTracker`, `WorldOffsetAllocator`, `BuildingInteriorRegistry`) and `NetworkManager`. Skipping this causes duplicate singletons and stale state.
+11. **Session transitions must call `SaveManager.ResetForNewSession()`** — this destroys world singletons (`MapRegistry`, `WorldOffsetAllocator`, `BuildingInteriorRegistry`, `WildernessZoneManager`) and `NetworkManager`. Skipping this causes duplicate singletons and stale state.
 
 ## Working Style
 

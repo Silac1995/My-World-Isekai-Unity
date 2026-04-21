@@ -5,6 +5,8 @@ description: Manages the social and territorial structure of NPCs, including hie
 
 # Community System
 
+> **Phase 1 refactor (ADR-0001):** `CommunityTracker` was renamed to `MapRegistry`. The cluster-driven auto-promotion lifecycle (`Roaming Camp → Settlement → Established City → Abandoned City`) has been removed — maps are now born only via scene authoring or `MapRegistry.CreateMapAtPosition` (building placement / future procedural). `CommunityData` itself is unchanged. Any reference below to `CommunityTracker.Instance.XXX` still works via `MapRegistry.Instance.XXX` (same API surface minus cluster methods). Save-file key `"CommunityTracker_Data"` is intentionally preserved for back-compat.
+
 The Community System handles the social grouping and territorial management of characters in the world. It allows for hierarchical structures (parent and sub-communities) and defines physical zones belonging to a community.
 
 ## When to use this skill
@@ -66,7 +68,7 @@ Every character can contain a `CharacterBlueprints` component, storing a list of
 The recognized leader can unilaterally bypass individual character schedules to assign work.
 ```csharp
 // Forcefully assigning a job to a citizen, bypassing their own schedule decisions
-CommunityTracker.Instance.ImposeJobOnCitizen(mapId, leaderId, citizen, job, building);
+MapRegistry.Instance.ImposeJobOnCitizen(mapId, leaderId, citizen, job, building);
 ```
 
 ### 6. Manual and Global Management

@@ -42,13 +42,27 @@ Transitions are standardized via `MapTransitionDoor` (exterior-to-exterior) and 
 *   **No Cross-Map Physics:** A projectile from Map A will never reach Map B. Do not attempt it. Any inter-map effects (e.g. economy shipments) must be calculated purely via Math in the `JobLogisticsManager`, not via physical objects driving across the emptiness.
 *   **Character Maps are Authoritative:** Always rely on `CharacterMapTracker.CurrentMapID.Value` to know what map a character belongs to.
 
-## 6. Dynamic City System (Open-World Stamping)
-The Physical generation of Maps is entirely data-driven, triggered by NPC clustering behaviors.
-*   **WorldSettingsData:** Defines thresholds for communities (ProximityChunkSize, SustainedDays, MinimumPopulation).
-*   **CommunityTracker:** A Server-side heartbeat that monitors NPC populations. It evaluates the map state machine: `Roaming Camp -> Settlement -> Established City -> Abandoned City -> Reclaimed`. It triggers physical chunk instantiations upon promotion.
-*   **Open-World Stamping:** When a new dynamic map (e.g. Settlement) is formed, the `CommunityTracker` asks the `WorldOffsetAllocator` for a **logical Slot ID** (for saving/data separation) but overrides the physical placement to spawn the `MapController` anchor exactly at the NPC cluster's centroid on the main open-world plane. The NPCs roam freely and are never warped away.
-*   **Building Identity:** Dynamic buildings in these maps must not use hardcoded IDs. Each `Building` component generates a unique `NetworkBuildingId` (GUID) on spawn to ensure that multiple instances of the same shop prefab can each link to their own unique interior Map slot.
-*   **Abandoned Cities:** Cities never truly dissolve. If population drops to 0 for a prolonged baseline, the city turns "Abandoned", hibernates infinitely at 0 CPU cost, and retains its world slot permanently.
+## 6. World Hierarchy (Phase 1 refactor — ADR-0001)
+The world is organized as: **`Region` (authored container) → { `MapController`, `WildernessZone`, `WeatherFront` }**. All three implement `IWorldZone`.
+*   **Region:** MonoBehaviour + ISaveable placed in the scene. Holds a `BiomeDefinition`, `BiomeClimateProfile`, and a BoxCollider trigger. Auto-discovers child `MapController`s and `WildernessZone`s in `Awake` via `GetComponentsInChildren`. Dynamic wilderness zones register via `RegisterWildernessZone`. Server-only; clients learn their region via the `CharacterMapTracker.CurrentRegionId` NetworkVariable.
+*   **WildernessZone:** NetworkBehaviour + ISaveable. Virtual-content region holding `List<ResourcePoolEntry>` (harvestables) + `List<HibernatedNPCData>` (wildlife, future). Contents stream via `IStreamable` only when a player is within spawn radius. Can move via pluggable `IZoneMotionStrategy` SO assets. Spawned either by scene authoring or via `WildernessZoneManager.SpawnZone(pos, def, parent)`.
+*   **WeatherFront:** Atmospheric region spawned by a parent `Region` on a timer (unchanged from the pre-refactor behavior — formerly owned by `BiomeRegion`).
+
+### 6.1 Map Birth (no more cluster auto-promotion)
+Maps are **never** created by NPC-cluster auto-promotion (the old `CommunityTracker.PromoteToSettlement` path is removed). They are born via:
+*   **(a) Scene authoring** — designer places a `MapController` inside a `Region` in the scene.
+*   **(b) Building placement** — `BuildingPlacementManager` calls `MapRegistry.CreateMapAtPosition(worldPosition)` when a player places a building outside any existing map. Enforces `WorldSettingsData.MapMinSeparation` to prevent overlap with other `MapController`s and `WildernessZone`s.
+*   **(c) Future procedural generation** — not implemented.
+
+`MapRegistry` (renamed from `CommunityTracker`; `SaveKey = "CommunityTracker_Data"` preserved for save-file back-compat) holds the persistent `CommunityData` list (leaders, constructed buildings, resource pools, build permits, pending claims). It no longer runs population heartbeats — only `ProcessPendingBuildingClaims` on `TimeManager.OnNewDay`.
+
+### 6.2 Zone Motion (MacroSimulator step 6)
+Each `WildernessZone` has a `List<ScriptableZoneMotionStrategy>`. Default `StaticMotionStrategy` returns `Vector3.zero`. `MacroSimulator.TickZoneMotion(daysSinceLastTick)` sums per-zone deltas, clamps by `MapMinSeparation` (zone-vs-zone overlap prevention), and applies. Runs on map wake-up as step 6 of `SimulateCatchUp`. Phase 1 is a no-op until reactive strategies (`RandomDrift`, `AvoidWeatherFront`, `FollowResourceAbundance`, …) ship in later phases.
+
+### 6.3 Identity & Legacy
+*   **Building Identity:** Dynamic buildings generate a unique `NetworkBuildingId` (GUID) on spawn.
+*   **Abandoned Cities:** Cities never truly dissolve — if population drops, the city hibernates and retains its slot permanently.
+*   **Spawn channels for `WildernessZone`** include debug tools, quest scripts, and environmental systems (e.g. a `WeatherFront` spawning a temporary berry zone). All go through `WildernessZoneManager.SpawnZone`.
 
 ## 7. Offset Allocation (Instanced Cells)
 While dynamic open-world content uses centroid-stamping, pure instanced content (like Dungeons, specific Buildings, or isolated narrative maps) uses the `WorldOffsetAllocator`'s physical spatial coordinates.
