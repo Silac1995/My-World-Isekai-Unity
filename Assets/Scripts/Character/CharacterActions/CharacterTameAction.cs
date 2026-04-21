@@ -1,3 +1,4 @@
+using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
@@ -69,7 +70,7 @@ public class CharacterTameAction : CharacterAction
 
         // Route to server. If we're already on the server, call directly;
         // otherwise go through the ServerRpc.
-        Unity.Netcode.NetworkObject interactorNetObj = character != null ? character.NetworkObject : null;
+        NetworkObject interactorNetObj = character != null ? character.NetworkObject : null;
         if (interactorNetObj == null || !interactorNetObj.IsSpawned)
         {
             Debug.LogError($"[CharacterTameAction] Interactor has no spawned NetworkObject — cannot route tame.");
@@ -78,11 +79,11 @@ public class CharacterTameAction : CharacterAction
 
         if (animal.IsServer)
         {
-            animal.TryTameOnServer(new Unity.Netcode.NetworkObjectReference(interactorNetObj));
+            animal.TryTameOnServer(new NetworkObjectReference(interactorNetObj));
         }
         else
         {
-            animal.RequestTameServerRpc(new Unity.Netcode.NetworkObjectReference(interactorNetObj));
+            animal.RequestTameServerRpc(new NetworkObjectReference(interactorNetObj));
         }
     }
 }
