@@ -128,7 +128,7 @@ Only runtime state. Archetype-derived fields are re-seeded on respawn.
    - **Target's current controller is NOT a `PlayerController`.** Can't tame a character while a human drives it. (See §3.)
    - Any check fails → silent rejection, no state change, optional server log. No floating text for rejections — those are "illegal" attempts, not "failures."
 6. **Roll.** `bool success = UnityEngine.Random.value > target.TameDifficulty;`
-7. **Success:** server writes `_isTamed.Value = true`, `_ownerProfileId.Value = interactor.ProfileId`. Broadcasts "Tamed!" floating text via the existing `FloatingTextSpawner` path (already RPC-routed).
+7. **Success:** server writes `_isTamed.Value = true`, `_ownerProfileId.Value = <interactor profile-ID accessor — exact name to be resolved in §3>`. Broadcasts "Tamed!" floating text via the existing `FloatingTextSpawner` path (already RPC-routed).
 8. **Failure:** server broadcasts "Failed!" floating text. No state change.
 
 ### Network Authority (Rule 18)
@@ -175,6 +175,8 @@ This means a player inhabiting a wolf can tame animals under that wolf-avatar's 
 
 **Open question flagged for verification at plan time:** the exact accessor on `Character` that returns the "current owner profile ID" regardless of controller type. Candidate names: `Character.ProfileId`, `Character.OwnerId`, `Character.GetSaveId()`. The plan phase will grep the codebase before committing to a name; if none exists, add one as part of the plan.
 
+**ID collision & length:** `OwnerProfileId` is stored as `FixedString64Bytes` (63 chars + null). Plan-time verification must confirm (a) neither player character-profile IDs nor NPC stable hibernation IDs exceed this, and (b) the two ID spaces cannot collide — if they can, introduce a prefix discriminator (`"p:<guid>"` vs `"n:<id>"`) so lookups are unambiguous.
+
 ---
 
 ## Section 4: Save / Load Integration
@@ -184,7 +186,7 @@ This means a player inhabiting a wolf can tame animals under that wolf-avatar's 
 `CharacterAnimal` implements `ICharacterSaveData<AnimalSaveData>`:
 
 - `Export()` returns `new AnimalSaveData { IsTamed = _isTamed.Value, OwnerProfileId = _ownerProfileId.Value.ToString() }`.
-- `Import(AnimalSaveData data)` runs server-side on respawn; writes both NVs. Client-side calls are no-ops with a debug log.
+- `Import(AnimalSaveData data)` runs server-side on respawn; writes both NVs. Plan-time verification: confirm whether `CharacterDataCoordinator` ever dispatches `Import` on clients. If not, the client-side branch is dead code and should be removed rather than kept as a no-op.
 - Priority in `CharacterDataCoordinator`: mid-tier. Must run *after* identity/archetype resolution (so the archetype is known and `_isTameable`/`_tameDifficulty` are already seeded) and *before* any future tamed-state-dependent systems (e.g., owner-follow AI). Exact numeric priority to be chosen at plan time by reading existing providers.
 
 ### What Is NOT Saved
@@ -216,7 +218,7 @@ Every entry point that can fail — `Import`, archetype lookup during seeding, t
 | `Assets/Scripts/Character/CharacterActions/CharacterTameAction.cs` | `CharacterAction` subclass. Server roll, state write, floating text. |
 | `.agent/skills/character-animal/SKILL.md` | Procedures: add a tameable archetype, query `IsTamed`, extend the roll. |
 | `wiki/systems/character-animal.md` | Architecture: registry role, save flow, network authority, evolution to `CharacterMountable`. |
-| `Assets/Resources/Data/CharacterArchetype/Deer.asset` (or similar) | One example tameable archetype for demo/test. |
+| `Assets/Resources/Data/CharacterArchetype/Deer.asset` | One example tameable archetype for demo/test. Fields: `IsTameable=true`, `TameDifficulty=0.5`, `BodyType=Quadruped`, basic movement speeds. |
 
 ### Edited Files
 
@@ -247,7 +249,9 @@ The Animal prefab is assembled only for animal archetypes. Humanoid/sapient arch
 
 - `TameDifficulty=0` → 100 rolls succeed.
 - `TameDifficulty=1` → 100 rolls fail.
-- `TameDifficulty=0.5` with a seeded `Random` over N=1000 → ~50% success within a tolerance band.
+- `TameDifficulty=0.5` with a seeded RNG over N=1000 → ~50% success within a tolerance band.
+
+**RNG seam:** `UnityEngine.Random` can be seeded via `Random.InitState(seed)` but is global state, which is hostile to parallel tests. The plan phase must introduce an injectable `IRandomProvider` (or equivalent `Func<float>` seam) on `CharacterTameAction` so tests can substitute a deterministic sequence. This is a constructor-shape decision that must be made on day one, not retrofitted later.
 
 ### Editor Smoke (Solo)
 
