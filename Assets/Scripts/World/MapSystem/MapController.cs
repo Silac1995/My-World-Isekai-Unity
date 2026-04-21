@@ -298,6 +298,15 @@ namespace MWI.WorldSystem
                 if (character.NetworkObject != null && character.NetworkObject.IsPlayerObject)
                 {
                     AddPlayer(character.OwnerClientId);
+
+                    // Update the character's tracker so CurrentMapID reflects "I'm in this map now".
+                    // Door transitions also set this explicitly; this path covers plain walking
+                    // between maps on the same plane (e.g., entering a wild map in a Region).
+                    var tracker = character.GetComponent<CharacterMapTracker>();
+                    if (tracker != null && tracker.CurrentMapID.Value.ToString() != MapId)
+                    {
+                        tracker.SetCurrentMap(MapId);
+                    }
                 }
             }
         }
@@ -311,6 +320,15 @@ namespace MWI.WorldSystem
                 if (character.NetworkObject != null && character.NetworkObject.IsPlayerObject)
                 {
                     RemovePlayer(character.OwnerClientId);
+
+                    // Clear the tracker only if it still references THIS map. If the player
+                    // entered an adjacent map in the same frame, that map's OnTriggerEnter
+                    // may already have set CurrentMapID; don't clobber it.
+                    var tracker = character.GetComponent<CharacterMapTracker>();
+                    if (tracker != null && tracker.CurrentMapID.Value.ToString() == MapId)
+                    {
+                        tracker.SetCurrentMap("");
+                    }
                 }
             }
         }

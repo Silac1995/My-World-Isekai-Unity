@@ -104,6 +104,19 @@ public static class BuildingInteriorSpawner
         if (netObj != null)
         {
             netObj.Spawn(true);
+
+            // Reparent under the exterior MapController for a clean scene hierarchy.
+            // Exterior MapController is a NetworkObject so NGO TrySetParent is valid and
+            // the parent change replicates to clients.
+            MapController exteriorMap = MapController.GetByMapId(record.ExteriorMapId);
+            if (exteriorMap != null)
+            {
+                bool parented = netObj.TrySetParent(exteriorMap.transform, worldPositionStays: true);
+                if (!parented)
+                {
+                    Debug.LogWarning($"<color=yellow>[BuildingInteriorSpawner]</color> NGO TrySetParent failed: interior '{record.InteriorMapId}' stays at scene root but is still networked.");
+                }
+            }
         }
         else
         {
