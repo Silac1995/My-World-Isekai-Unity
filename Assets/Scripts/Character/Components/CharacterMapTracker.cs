@@ -17,7 +17,7 @@ public class CharacterMapTracker : NetworkBehaviour, ICharacterSaveData<MapTrack
     );
 
     [Tooltip("The ID of the parent Region this Character is currently in (empty when outside any Region).")]
-    public NetworkVariable<FixedString64Bytes> CurrentRegionId = new NetworkVariable<FixedString64Bytes>(
+    public NetworkVariable<FixedString128Bytes> CurrentRegionId = new NetworkVariable<FixedString128Bytes>(
         "",
         NetworkVariableReadPermission.Everyone,
         NetworkVariableWritePermission.Server
@@ -57,7 +57,7 @@ public class CharacterMapTracker : NetworkBehaviour, ICharacterSaveData<MapTrack
             string id = region != null ? region.ZoneId : "";
             if (CurrentRegionId.Value.ToString() != id)
             {
-                CurrentRegionId.Value = new FixedString64Bytes(id);
+                CurrentRegionId.Value = new FixedString128Bytes(id);
             }
         }
         catch (Exception e)

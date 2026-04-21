@@ -390,29 +390,48 @@ namespace MWI.WorldSystem
                 }
             }
 
-            // 3. Join the nearest exterior map within the global MapMinSeparation.
+            // 3. Region-aware branching.
+            //    If the placement is inside an authored Region that has no enclosing map,
+            //    create a new wild map *in that region*. Don't poach a map from a different
+            //    region via the nearest-map-within-MinSep fallback.
             float minSep = _settings != null ? _settings.MapMinSeparation : 150f;
             if (map == null)
             {
-                MapController nearest = MapController.GetNearestExteriorMap(worldPosition, minSep);
-                if (nearest != null)
-                {
-                    map = nearest;
-                    Debug.Log($"<color=yellow>[BuildingPlacementManager:Register]</color> No enclosing map. Joining nearest exterior map '{map.MapId}' within {minSep} units.");
-                }
-            }
+                Region parentRegion = Region.GetRegionAtPosition(worldPosition);
 
-            // 4. Last resort — spawn a brand-new wild map centered on the placement.
-            if (map == null && MapRegistry.Instance != null)
-            {
-                Debug.Log($"<color=yellow>[BuildingPlacementManager:Register]</color> No nearby map within {minSep} units. Creating a new wild map at {worldPosition}.");
-                try
+                if (parentRegion != null && MapRegistry.Instance != null)
                 {
-                    map = MapRegistry.Instance.CreateMapAtPosition(worldPosition);
+                    Debug.Log($"<color=yellow>[BuildingPlacementManager:Register]</color> Inside Region '{parentRegion.ZoneId}' with no enclosing map. Creating a new wild map at {worldPosition}.");
+                    try
+                    {
+                        map = MapRegistry.Instance.CreateMapAtPosition(worldPosition);
+                    }
+                    catch (System.Exception e)
+                    {
+                        Debug.LogException(e);
+                    }
                 }
-                catch (System.Exception e)
+                else
                 {
-                    Debug.LogException(e);
+                    // Open world (outside any Region): use the legacy join-nearest-else-create flow.
+                    MapController nearest = MapController.GetNearestExteriorMap(worldPosition, minSep);
+                    if (nearest != null)
+                    {
+                        map = nearest;
+                        Debug.Log($"<color=yellow>[BuildingPlacementManager:Register]</color> Open world. Joining nearest exterior map '{map.MapId}' within {minSep} units.");
+                    }
+                    else if (MapRegistry.Instance != null)
+                    {
+                        Debug.Log($"<color=yellow>[BuildingPlacementManager:Register]</color> Open world. Creating a new wild map at {worldPosition}.");
+                        try
+                        {
+                            map = MapRegistry.Instance.CreateMapAtPosition(worldPosition);
+                        }
+                        catch (System.Exception e)
+                        {
+                            Debug.LogException(e);
+                        }
+                    }
                 }
             }
 

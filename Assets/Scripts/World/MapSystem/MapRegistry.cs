@@ -295,7 +295,12 @@ namespace MWI.WorldSystem
                 }
             }
 
-            // Enforce MapMinSeparation — reject if another zone center is too close.
+            // Enforce MapMinSeparation, scoped by Region — reject only if another zone
+            // center is too close AND lives in the same Region as the new map (or the
+            // open world, when neither has a parent Region). Two maps in different
+            // Regions are allowed to be physically close because Regions are
+            // independent spatial scopes authored by the designer.
+            Region targetRegion = Region.GetRegionAtPosition(worldPosition);
             if (_settings != null)
             {
                 float minSep = _settings.MapMinSeparation;
@@ -305,9 +310,11 @@ namespace MWI.WorldSystem
                 foreach (var m in allMaps)
                 {
                     if (m == null || m.Type == MapType.Interior) continue;
+                    Region mapRegion = m.GetComponentInParent<Region>();
+                    if (mapRegion != targetRegion) continue; // skip cross-region maps
                     if ((m.transform.position - worldPosition).sqrMagnitude < minSqr)
                     {
-                        Debug.LogWarning($"<color=yellow>[MapRegistry:CreateMapAtPosition]</color> Rejected map at {worldPosition}: within {minSep} units of map '{m.MapId}'.");
+                        Debug.LogWarning($"<color=yellow>[MapRegistry:CreateMapAtPosition]</color> Rejected map at {worldPosition}: within {minSep} units of map '{m.MapId}' (same region '{(targetRegion != null ? targetRegion.ZoneId : "<open>")}' ).");
                         return null;
                     }
                 }
@@ -316,9 +323,11 @@ namespace MWI.WorldSystem
                 foreach (var z in allZones)
                 {
                     if (z == null) continue;
+                    Region zoneRegion = z.ParentRegion != null ? z.ParentRegion : z.GetComponentInParent<Region>();
+                    if (zoneRegion != targetRegion) continue; // skip cross-region zones
                     if ((z.transform.position - worldPosition).sqrMagnitude < minSqr)
                     {
-                        Debug.LogWarning($"<color=yellow>[MapRegistry:CreateMapAtPosition]</color> Rejected map at {worldPosition}: within {minSep} units of zone '{z.ZoneId}'.");
+                        Debug.LogWarning($"<color=yellow>[MapRegistry:CreateMapAtPosition]</color> Rejected map at {worldPosition}: within {minSep} units of zone '{z.ZoneId}' (same region '{(targetRegion != null ? targetRegion.ZoneId : "<open>")}' ).");
                         return null;
                     }
                 }
@@ -394,7 +403,17 @@ namespace MWI.WorldSystem
                 return null;
             }
 
-            Debug.Log($"<color=magenta>[MapRegistry:CreateMapAtPosition]</color> Wild map '{mapId}' spawned at {worldPosition} (slot={slotIndex}, chunk={originChunk}).");
+            // Register with the containing Region so Region.Maps stays consistent.
+            // We intentionally do NOT reparent the MapController under the Region transform —
+            // Region is a plain MonoBehaviour (no NetworkObject), and NGO doesn't replicate
+            // cross-hierarchy parenting cleanly. The logical association is enough for
+            // Region.GetRegionAtPosition + Maps-list consumers.
+            if (targetRegion != null)
+            {
+                targetRegion.RegisterMap(mapController);
+            }
+
+            Debug.Log($"<color=magenta>[MapRegistry:CreateMapAtPosition]</color> Wild map '{mapId}' spawned at {worldPosition} (slot={slotIndex}, chunk={originChunk}, region={(targetRegion != null ? targetRegion.ZoneId : "<open>")}).");
             return mapController;
         }
 

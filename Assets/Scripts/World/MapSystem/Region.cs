@@ -126,6 +126,22 @@ namespace MWI.WorldSystem
             _wildernessZones.Remove(zone);
         }
 
+        // --- Dynamic Map Registration ---
+
+        /// <summary>Called by MapRegistry.CreateMapAtPosition when a wild MapController is spawned inside this region.</summary>
+        public void RegisterMap(MapController map)
+        {
+            if (map == null || _maps.Contains(map)) return;
+            _maps.Add(map);
+        }
+
+        /// <summary>Called on map despawn to keep the list clean.</summary>
+        public void UnregisterMap(MapController map)
+        {
+            if (map == null) return;
+            _maps.Remove(map);
+        }
+
         // --- IWorldZone ---
         public string ZoneId => _regionId;
         public Vector3 Center => _bounds != null ? _bounds.bounds.center : transform.position;
