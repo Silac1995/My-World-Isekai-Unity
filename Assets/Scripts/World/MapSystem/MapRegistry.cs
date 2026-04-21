@@ -787,8 +787,13 @@ namespace MWI.WorldSystem
                         netObj.TrySetParent(parentRegion.transform, worldPositionStays: true);
                     }
 
+                    // Respawn the buildings saved in this community. GameLauncher only does this
+                    // for predefined maps on world load; dynamic wild maps need the call here.
+                    mapController.SpawnSavedBuildings();
+
                     respawned++;
-                    Debug.Log($"<color=green>[MapRegistry:RespawnDynamicMaps]</color> Respawned '{comm.MapId}' at {comm.SpawnPosition} (region={parentRegion?.ZoneId ?? "<open>"}).");
+                    int buildingCount = comm.ConstructedBuildings?.Count ?? 0;
+                    Debug.Log($"<color=green>[MapRegistry:RespawnDynamicMaps]</color> Respawned '{comm.MapId}' at {comm.SpawnPosition} (region={parentRegion?.ZoneId ?? "<open>"}, buildings={buildingCount}).");
                 }
                 catch (Exception e)
                 {
