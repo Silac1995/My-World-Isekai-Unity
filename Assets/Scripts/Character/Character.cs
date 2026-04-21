@@ -74,6 +74,7 @@ public class Character : NetworkBehaviour
     [SerializeField] private CharacterBookKnowledge _characterBookKnowledge;
     [SerializeField] private BattleCircleManager _battleCircleManager;
     [SerializeField] private FloatingTextSpawner _floatingTextSpawner;
+    [SerializeField] private CharacterAnimal _animal;
     [SerializeField] private CharacterParty _characterParty;
     [SerializeField] private FurniturePlacementManager _furniturePlacementManager;
     #endregion
@@ -241,6 +242,7 @@ public class Character : NetworkBehaviour
     public CharacterBookKnowledge CharacterBookKnowledge => TryGet<CharacterBookKnowledge>(out var s27) ? s27 : _characterBookKnowledge;
     public BattleCircleManager BattleCircleManager => TryGet<BattleCircleManager>(out var s28) ? s28 : _battleCircleManager;
     public FloatingTextSpawner FloatingTextSpawner => TryGet<FloatingTextSpawner>(out var s29) ? s29 : _floatingTextSpawner;
+    public CharacterAnimal CharacterAnimal => TryGet<CharacterAnimal>(out var sAnimal) ? sAnimal : _animal;
     public BuildingPlacementManager PlacementManager { get { var blueprints = TryGet<CharacterBlueprints>(out var reg) ? reg : _characterBlueprints; return blueprints != null ? blueprints.PlacementManager : null; } }
     public FurniturePlacementManager FurniturePlacementManager => TryGet<FurniturePlacementManager>(out var s31) ? s31 : _furniturePlacementManager;
     public bool IsBuilding => _isBuilding;
@@ -487,6 +489,7 @@ public class Character : NetworkBehaviour
         if (_characterBookKnowledge == null) _characterBookKnowledge = GetComponent<CharacterBookKnowledge>();
         if (_battleCircleManager == null) _battleCircleManager = GetComponentInChildren<BattleCircleManager>();
         if (_floatingTextSpawner == null) _floatingTextSpawner = GetComponentInChildren<FloatingTextSpawner>();
+        if (_animal == null) _animal = GetComponentInChildren<CharacterAnimal>();
         if (_characterParty == null) _characterParty = GetComponentInChildren<CharacterParty>();
         if (_furniturePlacementManager == null) _furniturePlacementManager = GetComponentInChildren<FurniturePlacementManager>();
         if (_terrainEffects == null) _terrainEffects = GetComponentInChildren<CharacterTerrainEffects>();
