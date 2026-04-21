@@ -24,7 +24,11 @@ namespace MWI.WorldSystem
         [Header("Community Tracker: Proximity")]
         [Tooltip("Radius around an NPC to search for other NPCs to form a community chunk.")]
         public float ProximityChunkSize = 75f;
-        
+
+        [Header("Zone Placement")]
+        [Tooltip("Minimum world-unit distance between any two IWorldZone centers. Enforced at building placement AND procedural zone spawning. 11 units = 1.67m (see CLAUDE.md rule 32). Default 150 units ≈ 22.7m.")]
+        public float MapMinSeparation = 150f;
+
         [Header("Community Tracker: Settlement Promotion")]
         [Tooltip("Minimum NPCs required to promote a Roaming Camp to a Settlement.")]
         public int SettlementMinPopulation = 6;
