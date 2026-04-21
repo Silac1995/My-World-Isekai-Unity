@@ -67,6 +67,7 @@ While `DevModeManager.IsEnabled == true`, the two input-reading components selec
 
 - `PlayerController.Update()` — reads WASD into `_inputDir` as usual, then **skips the gameplay-action block** (right-click move, TAB target, combat-command auto-assignment, Space attack) when `SuppressPlayerInput` is true. `_isCrouching` is also forced false. The character keeps moving via WASD; `Move()` swaps the speed argument to `DevModeManager.GodModeMovementSpeed` so god-mode flying feels brisk.
 - `PlayerInteractionDetector.Update()` — early-outs after the proximity refresh. Nearby-target tracking still updates (so the prompt restores instantly when you exit dev mode), but the E-key press path is blocked.
+- `CameraFollow.LateUpdate()` — also reads `SuppressPlayerInput` (out of necessity, not as a gate). When dev mode is on, the scroll-wheel zoom drops its upper clamp (`Mathf.Max(0f, ...)` instead of `Mathf.Clamp01`) and the offset interpolation switches to `Mathf.LerpUnclamped` so the camera can pull back without limit. Exiting dev mode re-applies the clamp; `_targetZoom` snaps back to `[0, 1]` and the camera smoothly returns to the normal zoom range.
 
 `SuppressPlayerInput` is a **static** on `DevModeManager` so hot-path Updates don't dereference the instance every frame.
 

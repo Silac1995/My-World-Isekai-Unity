@@ -62,14 +62,28 @@ public class CameraFollow : MonoBehaviour
 
         // Zoom via scroll - Disabled during building mode
         bool isBuilding = character != null && character.IsBuilding;
+        bool devMode = DevModeManager.SuppressPlayerInput;
         float scroll = Input.GetAxis("Mouse ScrollWheel");
-        _targetZoom = Mathf.Clamp01(_targetZoom - scroll * zoomSpeed);
+
+        // Dev mode lifts the upper clamp so the camera can pull back without limit.
+        // Lower bound (zoomed in) stays at 0 so we don't invert the Y/Z offsets.
+        _targetZoom = devMode
+            ? Mathf.Max(0f, _targetZoom - scroll * zoomSpeed)
+            : Mathf.Clamp01(_targetZoom - scroll * zoomSpeed);
 
         _currentZoom = Mathf.Lerp(_currentZoom, _targetZoom, Time.deltaTime * zoomSmoothing);
-        
+
         float offsetY, offsetZ;
 
-        if (isBuilding)
+        if (devMode)
+        {
+            // LerpUnclamped extrapolates past maxOffsetY/Z when _currentZoom > 1, giving
+            // unbounded zoom-out for god-mode flying. Building mode is intentionally
+            // ignored here — dev mode takes precedence.
+            offsetY = Mathf.LerpUnclamped(minOffsetY, maxOffsetY, _currentZoom);
+            offsetZ = Mathf.LerpUnclamped(minOffsetZ, maxOffsetZ, _currentZoom);
+        }
+        else if (isBuilding)
         {
             // When building, we use the specific building offsets
             offsetY = Mathf.Lerp(minOffsetY, buildingOffsetY, _currentZoom);
