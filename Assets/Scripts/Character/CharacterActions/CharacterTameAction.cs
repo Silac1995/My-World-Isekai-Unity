@@ -55,6 +55,34 @@ public class CharacterTameAction : CharacterAction
 
     public override void OnApplyEffect()
     {
-        // Implemented in Task 10.
+        if (_target == null)
+        {
+            Debug.LogWarning($"[CharacterTameAction] Target vanished before effect on {character?.CharacterName}.");
+            return;
+        }
+
+        if (!_target.TryGet<CharacterAnimal>(out var animal))
+        {
+            Debug.LogWarning($"[CharacterTameAction] Target '{_target.CharacterName}' lost its CharacterAnimal component mid-action.");
+            return;
+        }
+
+        // Route to server. If we're already on the server, call directly;
+        // otherwise go through the ServerRpc.
+        Unity.Netcode.NetworkObject interactorNetObj = character != null ? character.NetworkObject : null;
+        if (interactorNetObj == null || !interactorNetObj.IsSpawned)
+        {
+            Debug.LogError($"[CharacterTameAction] Interactor has no spawned NetworkObject — cannot route tame.");
+            return;
+        }
+
+        if (animal.IsServer)
+        {
+            animal.TryTameOnServer(new Unity.Netcode.NetworkObjectReference(interactorNetObj));
+        }
+        else
+        {
+            animal.RequestTameServerRpc(new Unity.Netcode.NetworkObjectReference(interactorNetObj));
+        }
     }
 }
