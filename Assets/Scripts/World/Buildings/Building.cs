@@ -233,9 +233,9 @@ public class Building : ComplexRoom
             OnConstructionComplete?.Invoke();
 
             // Sync state to CommunityData so hibernation save data stays accurate
-            if (IsServer && MWI.WorldSystem.CommunityTracker.Instance != null)
+            if (IsServer && MWI.WorldSystem.MapRegistry.Instance != null)
             {
-                foreach (var comm in MWI.WorldSystem.CommunityTracker.Instance.GetAllCommunities())
+                foreach (var comm in MWI.WorldSystem.MapRegistry.Instance.GetAllCommunities())
                 {
                     var entry = comm.ConstructedBuildings.Find(b => b.BuildingId == BuildingId);
                     if (entry != null)

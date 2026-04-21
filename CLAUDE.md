@@ -87,17 +87,19 @@ The Character entity uses a **Facade + Child Hierarchy** pattern:
 
 ## World System & Simulation
 
-30. The game uses a Living World architecture based on Map Hibernation and Macro/Micro Simulation. Before implementing any system that involves NPCs, resources, buildings, time, or map state, you must account for both simulation layers:
+30. The game uses a Living World architecture based on Map Hibernation and Macro/Micro Simulation. The world is organized as a nested hierarchy: **`Region` (authored container) → { `MapController`, `WildernessZone`, `WeatherFront` }**. All three children implement `IWorldZone`. Before implementing any system that involves NPCs, resources, buildings, time, or map state, you must account for both simulation layers:
 
-- **Micro-Simulation** (Map is Active): Real-time GOAP, NavMesh pathfinding, live logistics orders, physical harvestables, and NetworkObject presence. All live logic runs only when at least one player is present on the map.
-- **Macro-Simulation** (Map is Hibernating): When player count reaches 0, the map freezes. All NPCs are serialized into `HibernatedNPCData` and despawned. On wake-up, `MacroSimulator` runs a catch-up loop in strict order: (1) Resource Pool Regeneration, (2) Inventory Yields via `JobYieldRegistry` + `BiomeDefinition`, (3) Needs Decay, (4) Position Snap. No live Unity systems (NavMesh, physics, NetworkObject) exist during hibernation — all offline progress is pure math.
+- **Micro-Simulation** (Map active / player near zone): Real-time GOAP, NavMesh, live logistics, physical harvestables, NetworkObject presence. Runs for a `MapController` only when ≥ 1 player is present. Runs for a `WildernessZone` only for content streamed in within the player's spawn radius.
+- **Macro-Simulation** (Map hibernating / no player near zone): Maps freeze, NPCs serialize into `HibernatedNPCData` and despawn. `WildernessZone`s and `WeatherFront`s never host live GameObjects when no player is near — their state exists purely as data. On wake-up / player approach, `MacroSimulator` runs a catch-up loop in order: (1) Resource Pool Regeneration, (2) Inventory Yields, (3) Needs Decay, (4) Position Snap, (5) City Growth, (6) Zone Motion (apply accumulated daily deltas from each zone's `IZoneMotionStrategy` list). No live Unity systems during hibernation — all offline progress is pure math.
 
 **Key rules:**
-- Any new NPC stat, need, or behavior that changes over time must have a corresponding offline catch-up formula in `MacroSimulator`.
-- Any new resource or harvestable must be registered in `BiomeDefinition` and have a `ResourcePoolEntry` in `CommunityData`. Never hardcode resource availability.
+- Any new NPC stat, need, or behavior that changes over time must have an offline catch-up formula in `MacroSimulator`.
+- Any new resource or harvestable must be registered in `BiomeDefinition`. Runtime counts live as `ResourcePoolEntry` inside `CommunityData.ResourcePools` (map-attached) **or** `WildernessZone.Harvestables` (wilderness-attached). Never hardcode resource availability.
 - Any new job type must have a `JobYieldRecipe` entry in `JobYieldRegistry`. Biome-driven jobs must set `IsBiomeDriven = true`.
-- `TimeManager` global time is the single source of truth for all simulation math. Never use `Time.time` or `Time.deltaTime` for offline delta calculations — always use `TimeManager.CurrentDay` + `CurrentTime01`.
-- Maps are dynamic. New maps are born via `CommunityTracker` → `WorldOffsetAllocator` → `MapController` bootstrapping. Abandoned cities never release their spatial slot. Predefined maps register via `SaveManager.RegisterPredefinedMaps()` on boot.
+- `TimeManager` is the single source of truth for all simulation math. Never use `Time.time` or `Time.deltaTime` for offline delta calculations — use `TimeManager.CurrentDay` + `CurrentTime01`.
+- **Maps are never created by NPC-cluster auto-promotion.** They are born via (a) scene authoring, (b) `BuildingPlacementManager` when a player places a building outside any existing map, or (c) future procedural generation. All dynamic creation routes through `MapRegistry.CreateMapAtPosition` and must respect `WorldSettingsData.MapMinSeparation`. Abandoned cities never release their spatial slot.
+- **`WildernessZone`s** are born via (a) scene authoring, (b) `WildernessZoneManager.SpawnZone` — callable from debug tools, quest scripts, or environmental systems (e.g., a `WeatherFront` spawning a temporary berry zone), or (c) future procedural generation. They hold `List<ResourcePoolEntry>` (harvestables) and `List<HibernatedNPCData>` (wildlife, future). Contents stream via `IStreamable` only when a player is within the zone's spawn radius. Zones can move via pluggable `IZoneMotionStrategy` SO assets (default `StaticMotionStrategy`).
+- **`IWorldZone`** is the shared abstraction for anything with spatial identity. Any new spatial entity type must implement it.
 - Always refer to `world-system/SKILL.md` before touching any map, NPC lifecycle, or simulation logic.
 
 ## Defensive Coding & Exception Handling

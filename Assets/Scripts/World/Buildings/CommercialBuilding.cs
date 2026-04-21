@@ -360,9 +360,9 @@ public abstract class CommercialBuilding : Building
     public bool HasCommunityLeader()
     {
         var mapController = GetComponentInParent<MWI.WorldSystem.MapController>();
-        if (mapController != null && MWI.WorldSystem.CommunityTracker.Instance != null)
+        if (mapController != null && MWI.WorldSystem.MapRegistry.Instance != null)
         {
-            var comm = MWI.WorldSystem.CommunityTracker.Instance.GetCommunity(mapController.MapId);
+            var comm = MWI.WorldSystem.MapRegistry.Instance.GetCommunity(mapController.MapId);
             if (comm != null && !string.IsNullOrEmpty(comm.LeaderNpcId))
             {
                 return true;

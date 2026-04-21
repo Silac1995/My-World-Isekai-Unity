@@ -22,9 +22,6 @@ namespace MWI.WorldSystem
         [Header("Notifications")]
         [SerializeField] private ToastNotificationChannel _toastChannel;
 
-        [Tooltip("When placing outside any existing MapController, the building will join the nearest exterior map within this radius (Unity units). If no map is within this radius, a new wild map is spawned centered on the placement.")]
-        [SerializeField] private float _nearbyMapJoinRadius = 150f;
-
         [SerializeField] private WorldSettingsData _settings;
         private GameObject _ghostInstance;
         private string _activePrefabId;
@@ -273,8 +270,8 @@ namespace MWI.WorldSystem
             MapController map = MapController.GetMapAtPosition(position);
             if (map == null) return true; // Open world — no restriction
 
-            if (CommunityTracker.Instance == null) return true;
-            CommunityData community = CommunityTracker.Instance.GetCommunity(map.MapId);
+            if (MapRegistry.Instance == null) return true;
+            CommunityData community = MapRegistry.Instance.GetCommunity(map.MapId);
             if (community == null) return true; // Map with no community data — allow
 
             // If the community has no leaders at all, there's no authority to deny placement
@@ -308,9 +305,9 @@ namespace MWI.WorldSystem
 
             // Consume a build permit if applicable (leaders don't need permits)
             MapController map = MapController.GetMapAtPosition(position);
-            if (map != null && CommunityTracker.Instance != null && _character != null)
+            if (map != null && MapRegistry.Instance != null && _character != null)
             {
-                CommunityData community = CommunityTracker.Instance.GetCommunity(map.MapId);
+                CommunityData community = MapRegistry.Instance.GetCommunity(map.MapId);
                 if (community != null && !community.IsLeader(_character.CharacterId))
                 {
                     community.ConsumePermit(_character.CharacterId);
@@ -393,28 +390,48 @@ namespace MWI.WorldSystem
                 }
             }
 
-            // 3. Join the nearest exterior map within the configured radius.
+            // 3. Region-aware branching.
+            //    If the placement is inside an authored Region that has no enclosing map,
+            //    create a new wild map *in that region*. Don't poach a map from a different
+            //    region via the nearest-map-within-MinSep fallback.
+            float minSep = _settings != null ? _settings.MapMinSeparation : 150f;
             if (map == null)
             {
-                MapController nearest = MapController.GetNearestExteriorMap(worldPosition, _nearbyMapJoinRadius);
-                if (nearest != null)
-                {
-                    map = nearest;
-                    Debug.Log($"<color=yellow>[BuildingPlacementManager:Register]</color> No enclosing map. Joining nearest exterior map '{map.MapId}' within {_nearbyMapJoinRadius} units.");
-                }
-            }
+                Region parentRegion = Region.GetRegionAtPosition(worldPosition);
 
-            // 4. Last resort — spawn a brand-new wild map centered on the placement.
-            if (map == null && CommunityTracker.Instance != null)
-            {
-                Debug.Log($"<color=yellow>[BuildingPlacementManager:Register]</color> No nearby map within {_nearbyMapJoinRadius} units. Creating a new wild map at {worldPosition}.");
-                try
+                if (parentRegion != null && MapRegistry.Instance != null)
                 {
-                    map = CommunityTracker.Instance.CreateMapAtPosition(worldPosition);
+                    Debug.Log($"<color=yellow>[BuildingPlacementManager:Register]</color> Inside Region '{parentRegion.ZoneId}' with no enclosing map. Creating a new wild map at {worldPosition}.");
+                    try
+                    {
+                        map = MapRegistry.Instance.CreateMapAtPosition(worldPosition);
+                    }
+                    catch (System.Exception e)
+                    {
+                        Debug.LogException(e);
+                    }
                 }
-                catch (System.Exception e)
+                else
                 {
-                    Debug.LogException(e);
+                    // Open world (outside any Region): use the legacy join-nearest-else-create flow.
+                    MapController nearest = MapController.GetNearestExteriorMap(worldPosition, minSep);
+                    if (nearest != null)
+                    {
+                        map = nearest;
+                        Debug.Log($"<color=yellow>[BuildingPlacementManager:Register]</color> Open world. Joining nearest exterior map '{map.MapId}' within {minSep} units.");
+                    }
+                    else if (MapRegistry.Instance != null)
+                    {
+                        Debug.Log($"<color=yellow>[BuildingPlacementManager:Register]</color> Open world. Creating a new wild map at {worldPosition}.");
+                        try
+                        {
+                            map = MapRegistry.Instance.CreateMapAtPosition(worldPosition);
+                        }
+                        catch (System.Exception e)
+                        {
+                            Debug.LogException(e);
+                        }
+                    }
                 }
             }
 
@@ -430,9 +447,9 @@ namespace MWI.WorldSystem
             buildingObj.transform.SetParent(map.transform);
 
             // Add to CommunityData.ConstructedBuildings
-            if (CommunityTracker.Instance != null)
+            if (MapRegistry.Instance != null)
             {
-                CommunityData community = CommunityTracker.Instance.GetCommunity(map.MapId);
+                CommunityData community = MapRegistry.Instance.GetCommunity(map.MapId);
                 if (community != null)
                 {
                     if (!community.ConstructedBuildings.Exists(b => b.BuildingId == building.BuildingId))

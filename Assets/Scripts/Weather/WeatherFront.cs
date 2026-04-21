@@ -1,5 +1,6 @@
 using Unity.Netcode;
 using UnityEngine;
+using MWI.WorldSystem;
 
 namespace MWI.Weather
 {
@@ -14,7 +15,7 @@ namespace MWI.Weather
         public NetworkVariable<float> TemperatureModifier = new();
         public NetworkVariable<float> RemainingLifetime = new();
 
-        private BiomeRegion _parentRegion;
+        private Region _parentRegion;
 
         public Vector2 ActualVelocity
         {
@@ -27,7 +28,7 @@ namespace MWI.Weather
             }
         }
 
-        public void Initialize(BiomeRegion parent, WeatherType type, Vector3 spawnPos,
+        public void Initialize(Region parent, WeatherType type, Vector3 spawnPos,
             Vector2 localWind, float localWindStrength, float radius, float intensity,
             float tempModifier, float lifetime)
         {

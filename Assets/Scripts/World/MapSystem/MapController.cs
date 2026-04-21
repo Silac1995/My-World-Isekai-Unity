@@ -229,20 +229,20 @@ namespace MWI.WorldSystem
         }
 
         /// <summary>
-        /// Ensures a CommunityData entry exists for this map in CommunityTracker.
+        /// Ensures a CommunityData entry exists for this map in MapRegistry.
         /// Predefined maps and dynamically spawned maps both need this for building persistence.
         /// </summary>
         private void EnsureCommunityData()
         {
             if (string.IsNullOrEmpty(MapId)) return;
-            if (CommunityTracker.Instance == null) return;
+            if (MapRegistry.Instance == null) return;
 
-            CommunityData existing = CommunityTracker.Instance.GetCommunity(MapId);
+            CommunityData existing = MapRegistry.Instance.GetCommunity(MapId);
             if (existing != null) return;
 
             // Auto-create a CommunityData entry for this map
             // Set OriginChunk from actual position so NPC proximity matching works correctly
-            float chunkSize = 75f; // Match CommunityTracker default
+            float chunkSize = 75f; // Match MapRegistry default
             Vector2Int originChunk = new Vector2Int(
                 Mathf.FloorToInt(transform.position.x / chunkSize),
                 Mathf.FloorToInt(transform.position.z / chunkSize)
@@ -255,7 +255,7 @@ namespace MWI.WorldSystem
                 OriginChunk = originChunk
             };
 
-            CommunityTracker.Instance.AddCommunity(newCommunity);
+            MapRegistry.Instance.AddCommunity(newCommunity);
             Debug.Log($"<color=green>[MapController]</color> Auto-created CommunityData for map '{MapId}' (IsPredefined={IsPredefinedMap}, Tier={newCommunity.Tier}).");
         }
 
@@ -298,6 +298,15 @@ namespace MWI.WorldSystem
                 if (character.NetworkObject != null && character.NetworkObject.IsPlayerObject)
                 {
                     AddPlayer(character.OwnerClientId);
+
+                    // Update the character's tracker so CurrentMapID reflects "I'm in this map now".
+                    // Door transitions also set this explicitly; this path covers plain walking
+                    // between maps on the same plane (e.g., entering a wild map in a Region).
+                    var tracker = character.GetComponent<CharacterMapTracker>();
+                    if (tracker != null && tracker.CurrentMapID.Value.ToString() != MapId)
+                    {
+                        tracker.SetCurrentMap(MapId);
+                    }
                 }
             }
         }
@@ -311,6 +320,15 @@ namespace MWI.WorldSystem
                 if (character.NetworkObject != null && character.NetworkObject.IsPlayerObject)
                 {
                     RemovePlayer(character.OwnerClientId);
+
+                    // Clear the tracker only if it still references THIS map. If the player
+                    // entered an adjacent map in the same frame, that map's OnTriggerEnter
+                    // may already have set CurrentMapID; don't clobber it.
+                    var tracker = character.GetComponent<CharacterMapTracker>();
+                    if (tracker != null && tracker.CurrentMapID.Value.ToString() == MapId)
+                    {
+                        tracker.SetCurrentMap("");
+                    }
                 }
             }
         }
@@ -406,8 +424,8 @@ namespace MWI.WorldSystem
 
         public ResourcePoolEntry GetResourcePool(string resourceId)
         {
-            if (CommunityTracker.Instance == null) return null;
-            var community = CommunityTracker.Instance.GetCommunity(MapId);
+            if (MapRegistry.Instance == null) return null;
+            var community = MapRegistry.Instance.GetCommunity(MapId);
             if (community == null || community.ResourcePools == null) return null;
 
             return community.ResourcePools.Find(p => p.ResourceId == resourceId);
@@ -440,9 +458,9 @@ namespace MWI.WorldSystem
             if (Biome == null || Biome.Harvestables == null) return;
             
             CommunityData community = null;
-            if (CommunityTracker.Instance != null)
+            if (MapRegistry.Instance != null)
             {
-                community = CommunityTracker.Instance.GetCommunity(MapId);
+                community = MapRegistry.Instance.GetCommunity(MapId);
             }
 
             if (community?.ResourcePools == null) return;
@@ -623,13 +641,13 @@ namespace MWI.WorldSystem
         /// </summary>
         public void SnapshotActiveBuildings()
         {
-            if (CommunityTracker.Instance == null)
+            if (MapRegistry.Instance == null)
             {
-                Debug.LogWarning($"<color=orange>[MapController:SnapshotActiveBuildings]</color> CommunityTracker.Instance is null for '{MapId}' — cannot snapshot buildings.");
+                Debug.LogWarning($"<color=orange>[MapController:SnapshotActiveBuildings]</color> MapRegistry.Instance is null for '{MapId}' — cannot snapshot buildings.");
                 return;
             }
 
-            var community = CommunityTracker.Instance.GetCommunity(MapId);
+            var community = MapRegistry.Instance.GetCommunity(MapId);
             if (community == null)
             {
                 Debug.LogWarning($"<color=orange>[MapController:SnapshotActiveBuildings]</color> No CommunityData for MapId='{MapId}' — cannot snapshot buildings.");
@@ -685,9 +703,9 @@ namespace MWI.WorldSystem
         /// </summary>
         public void SpawnSavedBuildings()
         {
-            if (CommunityTracker.Instance == null) return;
+            if (MapRegistry.Instance == null) return;
 
-            var community = CommunityTracker.Instance.GetCommunity(MapId);
+            var community = MapRegistry.Instance.GetCommunity(MapId);
             if (community == null || community.ConstructedBuildings == null || community.ConstructedBuildings.Count == 0)
             {
                 Debug.Log($"<color=cyan>[MapController:SpawnSavedBuildings]</color> No buildings to spawn for '{MapId}'.");
@@ -959,14 +977,14 @@ namespace MWI.WorldSystem
 
             // 2.5 Sync live building state to ConstructedBuildings, then despawn
             CommunityData community = null;
-            if (CommunityTracker.Instance != null)
+            if (MapRegistry.Instance != null)
             {
-                community = CommunityTracker.Instance.GetCommunity(MapId);
-                Debug.Log($"<color=orange>[MapController:Hibernate]</color> CommunityTracker lookup for MapId='{MapId}': {(community != null ? "FOUND" : "NULL — buildings WILL NOT be saved!")}");
+                community = MapRegistry.Instance.GetCommunity(MapId);
+                Debug.Log($"<color=orange>[MapController:Hibernate]</color> MapRegistry lookup for MapId='{MapId}': {(community != null ? "FOUND" : "NULL — buildings WILL NOT be saved!")}");
             }
             else
             {
-                Debug.LogError($"<color=red>[MapController:Hibernate]</color> CommunityTracker.Instance is NULL! Cannot save buildings for '{MapId}'.");
+                Debug.LogError($"<color=red>[MapController:Hibernate]</color> MapRegistry.Instance is NULL! Cannot save buildings for '{MapId}'.");
             }
 
             HashSet<Building> processedBuildings = new HashSet<Building>();
@@ -1043,14 +1061,14 @@ namespace MWI.WorldSystem
 
             // Get Community Data for Map Tier and Buildings
             CommunityData community = null;
-            if (CommunityTracker.Instance != null)
+            if (MapRegistry.Instance != null)
             {
-                community = CommunityTracker.Instance.GetCommunity(MapId);
-                Debug.Log($"<color=green>[MapController:WakeUp]</color> CommunityTracker lookup for MapId='{MapId}': {(community != null ? $"FOUND (Tier={community.Tier}, Buildings={community.ConstructedBuildings?.Count ?? 0})" : "NULL — no buildings to respawn!")}");
+                community = MapRegistry.Instance.GetCommunity(MapId);
+                Debug.Log($"<color=green>[MapController:WakeUp]</color> MapRegistry lookup for MapId='{MapId}': {(community != null ? $"FOUND (Tier={community.Tier}, Buildings={community.ConstructedBuildings?.Count ?? 0})" : "NULL — no buildings to respawn!")}");
             }
             else
             {
-                Debug.LogError($"<color=red>[MapController:WakeUp]</color> CommunityTracker.Instance is NULL!");
+                Debug.LogError($"<color=red>[MapController:WakeUp]</color> MapRegistry.Instance is NULL!");
             }
 
             WorldSettingsData settings = Resources.Load<WorldSettingsData>("Data/World/WorldSettingsData");

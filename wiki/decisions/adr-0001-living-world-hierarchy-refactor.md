@@ -89,12 +89,25 @@ Detailed class layout, file moves, and step order live in [the Phase 1 design sp
 - Harvestable live-prefab spawning is explicitly deferred to Phase 2 — Phase 1 lands only the data model. Macro-sim regen math continues to work.
 - `WeatherFront` is not adapted to `IWorldZone` in Phase 1 — it remains a first-class object that simply isn't queryable through the new interface yet. Adapting it is a Phase-2 concern.
 
+## Post-implementation notes (2026-04-21, same day)
+
+Implementation landed across 25 commits on `feature/living-world-phase-1`. Deviations and late fixes:
+
+- **`Region` upgraded from `MonoBehaviour` to `NetworkBehaviour`.** The initial plan modeled `Region` as a server-side MonoBehaviour to keep the network surface small. In practice, NGO throws `InvalidParentException` when a `NetworkObject` (MapController / WildernessZone) is parented under a non-NetworkObject. Switching `Region` to `NetworkBehaviour` (with `[RequireComponent(NetworkObject)]`) restored valid parenting and — as a bonus — now replicates region hierarchy to clients.
+- **Placement became region-aware.** `BuildingPlacementManager.RegisterBuildingWithMap` first checks if the placement position is inside a `Region`. If yes and no MapController covers the point, it creates a new wild map in that region rather than falling through to "join nearest map within MinSep," which previously poached maps across region boundaries.
+- **`MapMinSeparation` became region-scoped.** `MapRegistry.CreateMapAtPosition` only counts maps/zones in the SAME region when rejecting; two regions can legitimately host close maps.
+- **`CurrentMapID` now updates on `OnTriggerEnter`/`OnTriggerExit`.** Original design assumed every map change went through a door RPC; wild maps on the same plane break that assumption.
+- **Interiors re-parent under their exterior MapController** via NGO-aware `NetworkObject.TrySetParent` in `BuildingInteriorSpawner`.
+- **Wild maps strip `Biome`/`JobYields`** on instantiation (`MapRegistry.CreateMapAtPosition`) so `MapController.SpawnVirtualBuildings` short-circuits — no `VirtualResourceSupplier_*` children on small player outposts.
+- **Save/load round-trip** for dynamic wild maps: `CommunityData.SpawnPosition` (new field) records where each wild map lives; `MapRegistry.RestoreState` schedules a 1.5s-deferred `RespawnDynamicMapsDeferred` that re-instantiates each non-predefined community's MapController and calls `SpawnSavedBuildings` so the children come back too.
+- **Debug overlay** `UI_CharacterMapTrackerOverlay` added because NGO 2.10's `NetworkBehaviourEditor` shows `Type not renderable` for `NetworkVariable<FixedString128Bytes>` and `NetworkVariable<Vector3>` — only `int/uint/long/float/bool/string/enum` are drawn. Runtime values replicate fine; the overlay makes them visible in the top-left corner during play-mode (toggle F6).
+
 ## Links
 
 - [[world]]
-- [[world-community]] — pending refactor (`CommunityTracker` → `MapRegistry`)
-- [[world-biome-region]] — pending refactor (`BiomeRegion` → `Region`, file move)
-- [[world-macro-simulation]] — pending extension (adds Zone Motion catch-up step)
+- [[world-community]] — refactor implemented (`CommunityTracker` → `MapRegistry`)
+- [[world-biome-region]] — refactor implemented (`BiomeRegion` → `Region` as NetworkBehaviour)
+- [[world-macro-simulation]] — extension implemented (Zone Motion step 6)
 - [[world-map-hibernation]]
 - [[world-map-transitions]]
 - [[building-placement-manager]]
@@ -104,6 +117,7 @@ Detailed class layout, file moves, and step order live in [the Phase 1 design sp
 ## Change log
 
 - 2026-04-21 — proposed, accepted same day — Claude / [[kevin]]
+- 2026-04-21 — implementation complete (25 commits on `feature/living-world-phase-1`). Added post-implementation notes covering Region→NetworkBehaviour upgrade, region-aware placement, region-scoped MapMinSeparation, CurrentMapID on trigger events, interior re-parenting, wild-map Biome/JobYields stripping, save/load round-trip with SpawnPosition, and debug overlay. — Claude / [[kevin]]
 
 ## Sources
 

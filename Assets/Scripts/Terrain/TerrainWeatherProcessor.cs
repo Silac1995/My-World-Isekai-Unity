@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using Unity.Netcode;
 using MWI.Weather;
+using MWI.WorldSystem;
 
 namespace MWI.Terrain
 {
@@ -15,13 +16,13 @@ namespace MWI.Terrain
         [SerializeField] private float _snowAccumulationRate = 0.05f;
 
         private TerrainCellGrid _grid;
-        private BiomeRegion _biomeRegion;
+        private Region _biomeRegion;
         private float _timeSinceLastTick;
         private HashSet<int> _dirtyCells = new();
 
         public event Action<int, int, TerrainType> OnCellTerrainChanged;
 
-        public void Initialize(TerrainCellGrid grid, BiomeRegion region)
+        public void Initialize(TerrainCellGrid grid, Region region)
         {
             _grid = grid;
             _biomeRegion = region;

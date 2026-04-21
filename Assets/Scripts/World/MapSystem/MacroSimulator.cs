@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -9,6 +10,68 @@ namespace MWI.Time
 {
     public static class MacroSimulator
     {
+        /// <summary>
+        /// Step 5 of the catch-up loop (Phase 1). Iterates all WildernessZones and applies
+        /// accumulated daily deltas from their IZoneMotionStrategy lists. Clamps each
+        /// proposed position by WorldSettingsData.MapMinSeparation to prevent zone-on-zone
+        /// overlap.
+        ///
+        /// Phase 1 note: all zones default to StaticMotionStrategy which returns
+        /// Vector3.zero, so this is effectively a no-op until reactive strategies land in
+        /// later phases. Active-play daily ticking is deferred — SimulateCatchUp (called
+        /// on map wake-up) applies the accumulated drift at that moment.
+        /// </summary>
+        public static void TickZoneMotion(int daysSinceLastTick)
+        {
+            if (daysSinceLastTick <= 0) return;
+
+            int currentDay = TimeManager.Instance != null ? TimeManager.Instance.CurrentDay : 0;
+            WorldSettingsData settings = Resources.Load<WorldSettingsData>("Data/World/WorldSettingsData");
+            float minSep = settings != null ? settings.MapMinSeparation : 150f;
+            float minSqr = minSep * minSep;
+
+            var zones = UnityEngine.Object.FindObjectsByType<WildernessZone>(FindObjectsSortMode.None);
+            foreach (var zone in zones)
+            {
+                if (zone == null || zone.MotionStrategies == null || zone.MotionStrategies.Count == 0) continue;
+
+                Vector3 totalDelta = Vector3.zero;
+                foreach (var strategy in zone.MotionStrategies)
+                {
+                    if (strategy == null) continue;
+                    try
+                    {
+                        totalDelta += strategy.ComputeDailyDelta(zone, currentDay);
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.LogException(e);
+                    }
+                }
+
+                if (totalDelta == Vector3.zero) continue;
+
+                Vector3 proposed = zone.transform.position + totalDelta * daysSinceLastTick;
+
+                // Clamp: skip the update if proposed position is within MapMinSeparation of another zone.
+                bool blocked = false;
+                foreach (var other in zones)
+                {
+                    if (other == null || other == zone) continue;
+                    if ((other.transform.position - proposed).sqrMagnitude < minSqr)
+                    {
+                        blocked = true;
+                        break;
+                    }
+                }
+
+                if (!blocked)
+                {
+                    zone.transform.position = proposed;
+                }
+            }
+        }
+
         /// <summary>
         /// Fast-forwards the hibernated data based on the elapsed time.
         /// </summary>
@@ -28,7 +91,7 @@ namespace MWI.Time
             Debug.Log($"<color=orange>[MacroSim]</color> Fast-forwarding Map '{savedData.MapId}' by {hoursPassed:F2} in-game hours.");
 
             MapController map = null;
-            MapController[] activeMaps = Object.FindObjectsByType<MapController>(FindObjectsSortMode.None);
+            MapController[] activeMaps = UnityEngine.Object.FindObjectsByType<MapController>(FindObjectsSortMode.None);
             foreach (var m in activeMaps)
             {
                 if (m.MapId == savedData.MapId)
@@ -39,9 +102,9 @@ namespace MWI.Time
             }
 
             CommunityData community = null;
-            if (CommunityTracker.Instance != null)
+            if (MapRegistry.Instance != null)
             {
-                community = CommunityTracker.Instance.GetCommunity(savedData.MapId);
+                community = MapRegistry.Instance.GetCommunity(savedData.MapId);
             }
 
             // 1. Resource Regeneration
@@ -112,6 +175,10 @@ namespace MWI.Time
             {
                 SimulateCityGrowth(community, daysPassed, savedData);
             }
+
+            // 6. Zone Motion (Phase 1: no-op under StaticMotionStrategy)
+            int dayDelta = Mathf.Max(1, fullDays);
+            TickZoneMotion(dayDelta);
         }
 
         private static void SimulateCityGrowth(CommunityData community, double daysPassed, MapSaveData mapData)

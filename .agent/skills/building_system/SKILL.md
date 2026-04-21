@@ -215,6 +215,7 @@ The connection is established via **`BuildingInteriorDoor.cs`** on the exterior 
 - **Auto-detection:** The door derives `BuildingId` and `PrefabId` from `GetComponentInParent<Building>()`. The `ExteriorMapId` is auto-detected from the interactor's `CurrentMapID`, a parent `MapController`, or falls back to `"World"`.
 - **Deterministic ID:** Interior `MapId` = `"{ExteriorMapId}_Interior_{BuildingId}"`. Both client and server can compute this independently.
 - **Lazy Spawning:** The interior is only spawned when the first player interacts with the door. The server handles this in `CharacterMapTracker.ResolveInteriorPosition()`.
+- **Scene hierarchy:** After `netObj.Spawn(true)`, `BuildingInteriorSpawner` calls `MapController.GetByMapId(record.ExteriorMapId)` and `netObj.TrySetParent(exteriorMap.transform, worldPositionStays: true)` so the interior MapController becomes a child of its exterior in both server and client hierarchies. Valid because both are NetworkObjects — cross-NetworkObject parenting is NGO-safe. If `TrySetParent` fails, a warning is logged and the interior stays at scene root (still fully networked, just visually disconnected).
 
 ### 2. Interior Prefab Requirements
 Every Interior Prefab root must contain:
@@ -291,8 +292,8 @@ Player-placed buildings are registered with the `MapController` they're placed i
 1. **On placement** (`BuildingPlacementManager.RequestPlacementServerRpc` → `RegisterBuildingWithMap`):
    - `MapController.GetMapAtPosition(position)` tries the containing map.
    - **Bounds fallback** — iterates all exterior `MapController`s and tests `BoxCollider.bounds.Contains`.
-   - **Join nearby** — if still none, `MapController.GetNearestExteriorMap(position, NearbyMapJoinRadius)` returns the closest exterior map within the configured radius (default 150 Unity units ≈ 23 m). If one exists, the building joins it.
-   - **Create wild map** — if still none, `CommunityTracker.CreateMapAtPosition(position)` spawns a new exterior MapController centered on the placement, registers a fresh `CommunityData` (Tier=Settlement, no leaders, no biome, MapId = `Wild_<guid8>`), and allocates a `WorldOffsetAllocator` slot.
+   - **Join nearby** — if still none, `MapController.GetNearestExteriorMap(position, WorldSettingsData.MapMinSeparation)` returns the closest exterior map within the configured radius (default 150 Unity units ≈ 23 m). If one exists, the building joins it.
+   - **Create wild map** — if still none, `MapRegistry.CreateMapAtPosition(position)` spawns a new exterior MapController centered on the placement. The call also **enforces `MapMinSeparation`** server-side: if another `MapController` or `WildernessZone` center is within that distance, creation is rejected with a warning log. On success, registers a fresh `CommunityData` (Tier=Settlement, no leaders, no biome, MapId = `Wild_<guid8>`), and allocates a `WorldOffsetAllocator` slot.
    - Building is parented to the resolved MapController via `SetParent()`.
    - A `BuildingSaveData` entry is added to `CommunityData.ConstructedBuildings`.
    - `Building.PlacedByCharacterId` is set to the placing character's UUID.
@@ -312,8 +313,8 @@ Static utility that iterates `_mapRegistry`, skips interiors, returns the first 
 ### `MapController.GetNearestExteriorMap(Vector3, float maxDistance)`
 Static utility that iterates `_mapRegistry`, skips interiors, and returns the map whose trigger's `ClosestPoint(position)` is within `maxDistance`. Used by `BuildingPlacementManager` to "join" a nearby existing map before falling back to creating a new wild map.
 
-### `CommunityTracker.CreateMapAtPosition(Vector3)`
-Server-only. Instantiates the MapController prefab at `worldPosition`, allocates a unique MapId (`Wild_<guid8>`) + `WorldOffsetAllocator` slot, pre-registers a `CommunityData` (Tier=Settlement, no leaders, no biome, `IsPredefinedMap=false`), then spawns the `NetworkObject`. Returns the new MapController or null on failure. **Caveat:** `MapController.MapId` is a plain `string`, not a NetworkVariable — clients will not learn the MapId of dynamically spawned maps without a dedicated sync. Same limitation applies to `CommunityTracker.PromoteToSettlement`. Tracked as a broader follow-up; the new wild-map path inherits this behavior.
+### `MapRegistry.CreateMapAtPosition(Vector3)`
+(`CommunityTracker` was renamed to `MapRegistry` in Phase 1 — ADR-0001.) Server-only. Instantiates the MapController prefab at `worldPosition`, allocates a unique MapId (`Wild_<guid8>`) + `WorldOffsetAllocator` slot, pre-registers a `CommunityData` (Tier=Settlement, no leaders, no biome, `IsPredefinedMap=false`), then spawns the `NetworkObject`. Returns the new MapController or null on failure. **Enforces `WorldSettingsData.MapMinSeparation`** — rejects if another `MapController` (exterior) or `WildernessZone` center is within the configured distance, returns null with a warning log. **Caveat:** `MapController.MapId` is a plain `string`, not a NetworkVariable — clients will not learn the MapId of dynamically spawned maps without a dedicated sync. Tracked as a broader follow-up; the wild-map path inherits this behavior.
 
 ### `BuildingSaveData.FromBuilding(Building, Vector3 mapCenter)`
 Static factory creating a save entry with position **relative** to map center. Also captures:
@@ -368,7 +369,7 @@ Extends `InteractionInvitation`. A non-leader asks a community leader for permis
 
 ## Community Expansion & Building Adoption
 
-When `CommunityTracker.PromoteToSettlement()` creates a new MapController, it discovers existing buildings in the new zone.
+`MapRegistry.AdoptExistingBuildings(MapController, CommunityData)` is the preserved API for discovering existing buildings inside a newly-created MapController's bounds (Phase 1 ADR-0001 removed its only caller — `PromoteToSettlement` — but the method remains for future wiring into `CreateMapAtPosition` when the placement landing lands near orphan buildings).
 
 ### Adoption Rules
 - **Unowned buildings** (`PlacedByCharacterId` empty): Auto-claimed immediately
@@ -380,7 +381,7 @@ Extends `InteractionInvitation`. Community leader negotiates with the building o
 
 ### Pending Building Claims
 - `PendingBuildingClaim`: `BuildingId`, `OwnerCharacterId`, `DayClaimed`, `TimeoutDays`
-- Processed daily in `CommunityTracker.HandleNewDay()`
+- Processed daily in `MapRegistry.HandleNewDay()` (renamed from `CommunityTracker.HandleNewDay`)
 - If owner returns: negotiation invitation triggered
 - If timeout expires: auto-claimed into community
 - `BuildingManager.FindBuildingById(id)` resolves live Building instances

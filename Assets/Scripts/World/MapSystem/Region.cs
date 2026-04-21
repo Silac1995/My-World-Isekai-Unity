@@ -3,14 +3,15 @@ using System.Collections.Generic;
 using System.Linq;
 using Unity.Netcode;
 using UnityEngine;
-using MWI.WorldSystem;
+using MWI.Weather;
 using MWI.Terrain;
 using MWI.Time;
 
-namespace MWI.Weather
+namespace MWI.WorldSystem
 {
     [RequireComponent(typeof(BoxCollider))]
-    public class BiomeRegion : MonoBehaviour, ISaveable
+    [RequireComponent(typeof(Unity.Netcode.NetworkObject))]
+    public class Region : Unity.Netcode.NetworkBehaviour, IWorldZone, ISaveable
     {
         [SerializeField] private string _regionId;
         [SerializeField] private BiomeDefinition _biomeDefinition;
@@ -24,10 +25,16 @@ namespace MWI.Weather
         private BoxCollider _bounds;
         private double _lastHibernationTime;
 
-        // --- Static Registry ---
-        private static List<BiomeRegion> _allRegions = new();
+        // --- NEW: Child MapController and WildernessZone tracking (Phase 1) ---
+        private readonly List<MapController> _maps = new List<MapController>();
+        private readonly List<WildernessZone> _wildernessZones = new List<WildernessZone>();
+        public IReadOnlyList<MapController> Maps => _maps;
+        public IReadOnlyList<WildernessZone> WildernessZones => _wildernessZones;
 
-        public static BiomeRegion GetRegionAtPosition(Vector3 worldPos)
+        // --- Static Registry ---
+        private static List<Region> _allRegions = new();
+
+        public static Region GetRegionAtPosition(Vector3 worldPos)
         {
             foreach (var region in _allRegions)
             {
@@ -37,9 +44,9 @@ namespace MWI.Weather
             return null;
         }
 
-        public static List<BiomeRegion> GetAdjacentRegions(BiomeRegion region)
+        public static List<Region> GetAdjacentRegions(Region region)
         {
-            var result = new List<BiomeRegion>();
+            var result = new List<Region>();
             if (region._bounds == null) return result;
 
             var expanded = region._bounds.bounds;
@@ -96,6 +103,59 @@ namespace MWI.Weather
             _bounds = GetComponent<BoxCollider>();
             _bounds.isTrigger = true;
             _allRegions.Add(this);
+
+            // Auto-discover child MapControllers and WildernessZones.
+            // Dynamic additions (via WildernessZoneManager) call RegisterWildernessZone / UnregisterWildernessZone directly.
+            _maps.AddRange(GetComponentsInChildren<MapController>(includeInactive: true));
+            _wildernessZones.AddRange(GetComponentsInChildren<WildernessZone>(includeInactive: true));
+            Debug.Log($"<color=cyan>[Region:Awake]</color> '{_regionId}' discovered {_maps.Count} maps, {_wildernessZones.Count} wilderness zones.");
+        }
+
+        // --- Dynamic Wilderness Zone Registration ---
+
+        /// <summary>Called by WildernessZoneManager when a zone is spawned inside this region at runtime.</summary>
+        public void RegisterWildernessZone(WildernessZone zone)
+        {
+            if (zone == null || _wildernessZones.Contains(zone)) return;
+            _wildernessZones.Add(zone);
+        }
+
+        /// <summary>Called on zone despawn to keep the list clean.</summary>
+        public void UnregisterWildernessZone(WildernessZone zone)
+        {
+            if (zone == null) return;
+            _wildernessZones.Remove(zone);
+        }
+
+        // --- Dynamic Map Registration ---
+
+        /// <summary>Called by MapRegistry.CreateMapAtPosition when a wild MapController is spawned inside this region.</summary>
+        public void RegisterMap(MapController map)
+        {
+            if (map == null || _maps.Contains(map)) return;
+            _maps.Add(map);
+        }
+
+        /// <summary>Called on map despawn to keep the list clean.</summary>
+        public void UnregisterMap(MapController map)
+        {
+            if (map == null) return;
+            _maps.Remove(map);
+        }
+
+        // --- IWorldZone ---
+        public string ZoneId => _regionId;
+        public Vector3 Center => _bounds != null ? _bounds.bounds.center : transform.position;
+        public float Radius => _bounds != null ? _bounds.bounds.extents.magnitude : 0f;
+
+        public bool Contains(Vector3 worldPos)
+            => _bounds != null && _bounds.bounds.Contains(worldPos);
+
+        public float DistanceTo(Vector3 worldPos)
+        {
+            if (_bounds == null) return Vector3.Distance(transform.position, worldPos);
+            Vector3 closest = _bounds.ClosestPoint(worldPos);
+            return Vector3.Distance(closest, worldPos);
         }
 
         private void OnDestroy()
@@ -164,7 +224,7 @@ namespace MWI.Weather
             }
             catch (Exception e)
             {
-                Debug.LogError($"[BiomeRegion] Failed to spawn WeatherFront: {e.Message}");
+                Debug.LogError($"[Region] Failed to spawn WeatherFront: {e.Message}");
             }
         }
 
@@ -261,7 +321,7 @@ namespace MWI.Weather
                     }
                     catch (Exception e)
                     {
-                        Debug.LogError($"[BiomeRegion] Failed to respawn front on wake: {e.Message}");
+                        Debug.LogError($"[Region] Failed to respawn front on wake: {e.Message}");
                     }
                 }
 
@@ -277,7 +337,7 @@ namespace MWI.Weather
                 _climateProfile.FrontSpawnIntervalMinHours * 3600f,
                 _climateProfile.FrontSpawnIntervalMaxHours * 3600f);
 
-            Debug.Log($"[BiomeRegion] '{_regionId}' woke up after {elapsed:F2} days. " +
+            Debug.Log($"[Region] '{_regionId}' woke up after {elapsed:F2} days. " +
                       $"Restored {survivingSnapshots.Count} fronts, spawned {Mathf.FloorToInt(elapsedSeconds / ((_climateProfile.FrontSpawnIntervalMinHours + _climateProfile.FrontSpawnIntervalMaxHours) / 2f * 3600f))} new.");
         }
 
@@ -306,7 +366,7 @@ namespace MWI.Weather
             }
             _activeFronts.Clear();
 
-            Debug.Log($"[BiomeRegion] '{_regionId}' hibernated. Serialized {_hibernatedFronts.Count} fronts.");
+            Debug.Log($"[Region] '{_regionId}' hibernated. Serialized {_hibernatedFronts.Count} fronts.");
         }
 
         // --- ISaveable ---
@@ -314,32 +374,61 @@ namespace MWI.Weather
 
         public object CaptureState()
         {
-            return new BiomeRegionSaveData
+            var state = new RegionSaveData
             {
                 RegionId = _regionId,
                 IsHibernating = _isHibernating,
                 LastHibernationTime = _lastHibernationTime,
                 HibernatedFronts = _hibernatedFronts.ToArray()
             };
+
+            // Dynamic wilderness zones (authored ones restore from scene, not here)
+            state.DynamicWildernessZones = new List<WildernessZoneSaveData>();
+            foreach (var zone in _wildernessZones)
+            {
+                if (zone == null || !zone.IsDynamicallySpawned) continue;
+                state.DynamicWildernessZones.Add(zone.CaptureZoneState());
+            }
+
+            return state;
         }
 
         public void RestoreState(object state)
         {
-            if (state is BiomeRegionSaveData data)
+            if (state is RegionSaveData data)
             {
                 _isHibernating = data.IsHibernating;
                 _lastHibernationTime = data.LastHibernationTime;
                 _hibernatedFronts = data.HibernatedFronts?.ToList() ?? new List<WeatherFrontSnapshot>();
+
+                // Respawn dynamic wilderness zones via the manager
+                if (data.DynamicWildernessZones != null && WildernessZoneManager.Instance != null)
+                {
+                    foreach (var zoneData in data.DynamicWildernessZones)
+                    {
+                        try
+                        {
+                            WildernessZoneManager.Instance.RestoreZone(zoneData, this);
+                        }
+                        catch (Exception e)
+                        {
+                            Debug.LogException(e);
+                        }
+                    }
+                }
             }
         }
     }
 
     [Serializable]
-    public class BiomeRegionSaveData
+    public class RegionSaveData
     {
         public string RegionId;
         public bool IsHibernating;
         public double LastHibernationTime;
         public WeatherFrontSnapshot[] HibernatedFronts;
+
+        // NEW (Task 10): dynamic wilderness zones to restore on load
+        public List<WildernessZoneSaveData> DynamicWildernessZones = new List<WildernessZoneSaveData>();
     }
 }
