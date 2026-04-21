@@ -30,7 +30,8 @@
       "Bash(git -C \"c:/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity\" add .agent/skills/dev-mode/SKILL.md Assets/Scripts/Debug/DevMode/Modules/Actions/DevActionAssignBuilding.cs Assets/Scripts/Debug/DevMode/DevModePanel.cs Assets/Scripts/Character/CharacterJob/CharacterJob.cs)",
       "Bash(git -C 'c:/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity' commit -m ' *)",
       "Bash(git -C \"c:/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity\" show --stat HEAD)",
-      "Bash(grep -nA1 \"m_GameObject\" \"c:/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity/Assets/Prefabs/Building/House/House prefab.prefab\")"
+      "Bash(grep -nA1 \"m_GameObject\" \"c:/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity/Assets/Prefabs/Building/House/House prefab.prefab\")",
+      "mcp__ai-game-developer__script-read"
     ]
   },
   "enableAllProjectMcpServers": true,

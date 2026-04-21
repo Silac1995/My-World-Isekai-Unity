@@ -306,6 +306,7 @@ GameObject:
   m_Component:
   - component: {fileID: 6993029267619590529}
   - component: {fileID: 8287813692774729394}
+  - component: {fileID: 6907094611939996210}
   m_Layer: 0
   m_Name: Environment Interaction
   m_TagString: Untagged
@@ -340,6 +341,20 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9d29c3aea0c6c00498c27c544632b5f9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: '::'
+--- !u!114 &6907094611939996210
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 855250111993393986}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dd182ffe0e665154181a0a632b4bb220, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CharacterTerrainEffects
+  ShowTopMostFoldoutHeaderGroup: 1
+  _character: {fileID: 2536622428659117900}
 --- !u!1 &1414068113162694572
 GameObject:
   m_ObjectHideFlags: 0
@@ -978,7 +993,7 @@ MonoBehaviour:
   _characterVisual: {fileID: 4467461276411840628}
   _controller: {fileID: 8530357501166543435}
   _equipment: {fileID: 8408755073701722020}
-  _terrainEffects: {fileID: 0}
+  _terrainEffects: {fileID: 6907094611939996210}
   _characterInteraction: {fileID: 3273106316842190247}
   _characterRelation: {fileID: 6939122470468663269}
   _characterCombat: {fileID: 1098445929855123690}
@@ -1002,6 +1017,7 @@ MonoBehaviour:
   _characterBookKnowledge: {fileID: 8645682828846456051}
   _battleCircleManager: {fileID: 3483208149316237170}
   _floatingTextSpawner: {fileID: 2207825800403359661}
+  _animal: {fileID: 0}
   _characterParty: {fileID: 906099563299357296}
   _furniturePlacementManager: {fileID: 6177199399255119807}
   NetworkRaceId:
@@ -1412,6 +1428,7 @@ MonoBehaviour:
   _ghostMaterialValid: {fileID: 2100000, guid: 2355107420148c14fa2d7aed19a6f0e2, type: 2}
   _ghostMaterialInvalid: {fileID: 2100000, guid: 0ebd97f12b174f94ab6e52b1876209e2, type: 2}
   _toastChannel: {fileID: 0}
+  _nearbyMapJoinRadius: 150
   _settings: {fileID: 11400000, guid: fa09af645c119e34f88e692c85b8846d, type: 2}
 --- !u!114 &6928231690367793910
 MonoBehaviour:
@@ -2622,6 +2639,7 @@ MonoBehaviour:
   _ghostMaterialValid: {fileID: 2100000, guid: 2355107420148c14fa2d7aed19a6f0e2, type: 2}
   _ghostMaterialInvalid: {fileID: 2100000, guid: 0ebd97f12b174f94ab6e52b1876209e2, type: 2}
   _toastChannel: {fileID: 11400000, guid: ea961c82479cb974997317e89f3aa9b6, type: 2}
+  _nearbyMapJoinRadius: 150
   _settings: {fileID: 11400000, guid: fa09af645c119e34f88e692c85b8846d, type: 2}
 --- !u!1 &6078244054854696647
 GameObject:

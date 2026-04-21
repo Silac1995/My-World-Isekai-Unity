@@ -20,6 +20,7 @@ MonoBehaviour:
   character_prefabs:
   - {fileID: 5456933137695734175, guid: 7b374d387037c9647bef899d050bac5c, type: 3}
   - {fileID: 5722855078630121073, guid: 0ac29b0de8149704287ff029d3a05e46, type: 3}
+  - {fileID: 5323818704027098699, guid: f47aad7ef9cc58241b8e308212a1886d, type: 3}
   bonusSpeed: 2
   BaseStrength: 3
   BaseAgility: 3
