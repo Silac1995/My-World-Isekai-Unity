@@ -810,6 +810,10 @@ PrefabInstance:
       propertyPath: m_Center.z
       value: -3.9063835
       objectReference: {fileID: 0}
+    - target: {fileID: 6121509161196564493, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_IsTrigger
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 6121972414477404733, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: m_Size.x
       value: 20
@@ -1069,6 +1073,8 @@ MonoBehaviour:
   _boundsTarget: {fileID: 1509406451548798437}
   _boundsTargets: []
   _roomName: 
+  _floorTerrainType: {fileID: 0}
+  _isExposed: 0
   _subRooms: []
   buildingName: Lumberyard building
   _isPublicLocation: 0
@@ -1221,7 +1227,6 @@ MonoBehaviour:
         byte0059: 0
         byte0060: 0
         byte0061: 0
-  _owner: {fileID: 0}
   _ownerCommunity:
     communityName: 
     level: 0

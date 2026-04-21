@@ -288,11 +288,14 @@ Building doors (both `BuildingInteriorDoor` on the exterior and the exit `MapTra
 Player-placed buildings are registered with the `MapController` they're placed inside, ensuring they survive map hibernation.
 
 ### Key Flow
-1. **On placement** (`BuildingPlacementManager.RequestPlacementServerRpc`):
-   - `MapController.GetMapAtPosition(position)` finds the containing map
-   - Building is parented to the MapController via `SetParent()`
-   - A `BuildingSaveData` entry is added to `CommunityData.ConstructedBuildings`
-   - `Building.PlacedByCharacterId` is set to the placing character's UUID
+1. **On placement** (`BuildingPlacementManager.RequestPlacementServerRpc` → `RegisterBuildingWithMap`):
+   - `MapController.GetMapAtPosition(position)` tries the containing map.
+   - **Bounds fallback** — iterates all exterior `MapController`s and tests `BoxCollider.bounds.Contains`.
+   - **Join nearby** — if still none, `MapController.GetNearestExteriorMap(position, NearbyMapJoinRadius)` returns the closest exterior map within the configured radius (default 150 Unity units ≈ 23 m). If one exists, the building joins it.
+   - **Create wild map** — if still none, `CommunityTracker.CreateMapAtPosition(position)` spawns a new exterior MapController centered on the placement, registers a fresh `CommunityData` (Tier=Settlement, no leaders, no biome, MapId = `Wild_<guid8>`), and allocates a `WorldOffsetAllocator` slot.
+   - Building is parented to the resolved MapController via `SetParent()`.
+   - A `BuildingSaveData` entry is added to `CommunityData.ConstructedBuildings`.
+   - `Building.PlacedByCharacterId` is set to the placing character's UUID.
 2. **On hibernation** (`MapController.Hibernate()`): Buildings are synced to save data and despawned (matching the NPC pattern)
 3. **On wake-up** (`MapController.WakeUp()`): Buildings are re-instantiated from `ConstructedBuildings`, with `BuildingId` restored (not regenerated) to prevent duplication
 4. **Construction completion** (`Building.HandleStateChanged`): State is synced back to the matching `ConstructedBuildings` entry
@@ -305,6 +308,12 @@ Player-placed buildings are registered with the `MapController` they're placed i
 
 ### `MapController.GetMapAtPosition(Vector3)`
 Static utility that iterates `_mapRegistry`, skips interiors, returns the first map whose `_mapTrigger.bounds.Contains(position)`. Returns null for open world.
+
+### `MapController.GetNearestExteriorMap(Vector3, float maxDistance)`
+Static utility that iterates `_mapRegistry`, skips interiors, and returns the map whose trigger's `ClosestPoint(position)` is within `maxDistance`. Used by `BuildingPlacementManager` to "join" a nearby existing map before falling back to creating a new wild map.
+
+### `CommunityTracker.CreateMapAtPosition(Vector3)`
+Server-only. Instantiates the MapController prefab at `worldPosition`, allocates a unique MapId (`Wild_<guid8>`) + `WorldOffsetAllocator` slot, pre-registers a `CommunityData` (Tier=Settlement, no leaders, no biome, `IsPredefinedMap=false`), then spawns the `NetworkObject`. Returns the new MapController or null on failure. **Caveat:** `MapController.MapId` is a plain `string`, not a NetworkVariable — clients will not learn the MapId of dynamically spawned maps without a dedicated sync. Same limitation applies to `CommunityTracker.PromoteToSettlement`. Tracked as a broader follow-up; the new wild-map path inherits this behavior.
 
 ### `BuildingSaveData.FromBuilding(Building, Vector3 mapCenter)`
 Static factory creating a save entry with position **relative** to map center. Also captures:

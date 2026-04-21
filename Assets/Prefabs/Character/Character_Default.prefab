@@ -2594,6 +2594,7 @@ MonoBehaviour:
   _unlockedBuildingIds:
   - B000-Lumberyard
   - B001-Crafting
+  - B005-TransportBuilding
   - B002-SmallHouseA
   - B003-MediumHouseA
   _placementManager: {fileID: 3143325427494173382}

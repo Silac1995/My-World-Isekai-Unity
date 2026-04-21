@@ -49,7 +49,7 @@ BoxCollider:
     serializedVersion: 2
     m_Bits: 0
   m_LayerOverridePriority: 0
-  m_IsTrigger: 0
+  m_IsTrigger: 1
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
@@ -84,9 +84,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 556ce41a973a5704fbfc8c807ad8ecd2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Zone
+  ShowTopMostFoldoutHeaderGroup: 1
   zoneType: 0
   zoneName: Storage Zone
   _boundsTarget: {fileID: 0}
+  _boundsTargets: []
 --- !u!1 &8059175993661564468
 GameObject:
   m_ObjectHideFlags: 0
@@ -171,9 +173,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 556ce41a973a5704fbfc8c807ad8ecd2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Zone
+  ShowTopMostFoldoutHeaderGroup: 1
   zoneType: 0
   zoneName: 
   _boundsTarget: {fileID: 0}
+  _boundsTargets: []
 --- !u!1001 &2556902707163336854
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -459,6 +463,10 @@ PrefabInstance:
     - target: {fileID: 3315547130765415992, guid: 3912e32b2a079d942b67533a34636010, type: 3}
       propertyPath: m_Name
       value: CommercialBuilding_prefab
+      objectReference: {fileID: 0}
+    - target: {fileID: 7551676047501188179, guid: 3912e32b2a079d942b67533a34636010, type: 3}
+      propertyPath: GlobalObjectIdHash
+      value: 3826203255
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

@@ -3004,7 +3004,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8824244859434443465, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       propertyPath: _unlockedBuildingIds.Array.size
-      value: 5
+      value: 6
       objectReference: {fileID: 0}
     - target: {fileID: 8824244859434443465, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       propertyPath: '_unlockedBuildingIds.Array.data[2]'
@@ -3012,10 +3012,14 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8824244859434443465, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       propertyPath: '_unlockedBuildingIds.Array.data[3]'
-      value: B002-SmallHouseA
+      value: B005-TransportBuilding
       objectReference: {fileID: 0}
     - target: {fileID: 8824244859434443465, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       propertyPath: '_unlockedBuildingIds.Array.data[4]'
+      value: B002-SmallHouseA
+      objectReference: {fileID: 0}
+    - target: {fileID: 8824244859434443465, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
+      propertyPath: '_unlockedBuildingIds.Array.data[5]'
       value: B003-MediumHouseA
       objectReference: {fileID: 0}
     - target: {fileID: 9197436005975429803, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}

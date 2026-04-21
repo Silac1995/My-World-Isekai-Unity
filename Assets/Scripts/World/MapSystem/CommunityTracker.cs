@@ -277,6 +277,104 @@ namespace MWI.WorldSystem
         public IReadOnlyList<CommunityData> GetAllCommunities() => _communities;
 
         /// <summary>
+        /// Server-only. Spawns a fresh exterior MapController centered on the given world position
+        /// and registers a matching CommunityData entry. Used by BuildingPlacementManager when a
+        /// building is placed outside any existing map and no nearby map can be joined.
+        /// </summary>
+        /// <returns>The newly spawned MapController, or null on failure.</returns>
+        public MapController CreateMapAtPosition(Vector3 worldPosition)
+        {
+            if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsServer)
+            {
+                Debug.LogError("<color=red>[CommunityTracker:CreateMapAtPosition]</color> Must run on the server.");
+                return null;
+            }
+
+            if (_mapControllerPrefab == null)
+            {
+                _mapControllerPrefab = Resources.Load<GameObject>("Prefabs/World/MapController");
+                if (_mapControllerPrefab == null)
+                {
+                    Debug.LogError("<color=red>[CommunityTracker:CreateMapAtPosition]</color> MapController prefab is not assigned and could not be loaded from Resources.");
+                    return null;
+                }
+            }
+
+            float chunkSize = _settings != null ? _settings.ProximityChunkSize : 75f;
+            Vector2Int originChunk = new Vector2Int(
+                Mathf.FloorToInt(worldPosition.x / chunkSize),
+                Mathf.FloorToInt(worldPosition.z / chunkSize)
+            );
+
+            string mapId = $"Wild_{System.Guid.NewGuid().ToString("N").Substring(0, 8)}";
+            int slotIndex = WorldOffsetAllocator.Instance != null
+                ? WorldOffsetAllocator.Instance.AllocateSlotIndex()
+                : -1;
+            int currentDay = TimeManager.Instance != null ? TimeManager.Instance.CurrentDay : 0;
+
+            // Pre-register the CommunityData so MapController.Start() does not auto-create
+            // a RoamingCamp stub for this map. Tier is Settlement because a player (or NPC)
+            // actively founded it by placing a building.
+            CommunityData newCommunity = new CommunityData
+            {
+                MapId = mapId,
+                SlotIndex = slotIndex,
+                Tier = CommunityTier.Settlement,
+                OriginChunk = originChunk,
+                DayStartedSustaining = currentDay,
+                IsPredefinedMap = false
+            };
+            AddCommunity(newCommunity);
+
+            GameObject mapObj;
+            try
+            {
+                mapObj = Instantiate(_mapControllerPrefab, worldPosition, Quaternion.identity);
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+                _communities.Remove(newCommunity);
+                return null;
+            }
+
+            MapController mapController = mapObj.GetComponent<MapController>();
+            if (mapController == null)
+            {
+                Debug.LogError("<color=red>[CommunityTracker:CreateMapAtPosition]</color> Prefab is missing a MapController component.");
+                Destroy(mapObj);
+                _communities.Remove(newCommunity);
+                return null;
+            }
+
+            mapController.MapId = mapId;
+
+            NetworkObject netObj = mapObj.GetComponent<NetworkObject>();
+            if (netObj == null)
+            {
+                Debug.LogError("<color=red>[CommunityTracker:CreateMapAtPosition]</color> Prefab is missing a NetworkObject component.");
+                Destroy(mapObj);
+                _communities.Remove(newCommunity);
+                return null;
+            }
+
+            try
+            {
+                netObj.Spawn();
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+                Destroy(mapObj);
+                _communities.Remove(newCommunity);
+                return null;
+            }
+
+            Debug.Log($"<color=magenta>[CommunityTracker:CreateMapAtPosition]</color> Wild map '{mapId}' spawned at {worldPosition} (slot={slotIndex}, chunk={originChunk}).");
+            return mapController;
+        }
+
+        /// <summary>
         /// Allows the recognized leader of a community to forcefully assign a job to a citizen.
         /// </summary>
         public bool ImposeJobOnCitizen(string mapId, string leaderId, Character citizen, Job job, CommercialBuilding building)

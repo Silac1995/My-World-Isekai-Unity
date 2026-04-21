@@ -120,6 +120,35 @@ namespace MWI.WorldSystem
         }
 
         /// <summary>
+        /// Returns the nearest non-interior MapController whose trigger bounds lie within
+        /// <paramref name="maxDistance"/> world units of the given position, or null if none qualify.
+        /// Distance is measured from the trigger's closest surface point, so a position just outside
+        /// a large map is correctly picked up.
+        /// </summary>
+        public static MapController GetNearestExteriorMap(Vector3 worldPosition, float maxDistance)
+        {
+            MapController best = null;
+            float bestSqr = maxDistance * maxDistance;
+            foreach (var kvp in _mapRegistry)
+            {
+                MapController map = kvp.Value;
+                if (map == null) continue;
+                if (map.Type == MapType.Interior) continue;
+
+                Vector3 refPoint = map._mapTrigger != null
+                    ? map._mapTrigger.ClosestPoint(worldPosition)
+                    : map.transform.position;
+                float sqr = (refPoint - worldPosition).sqrMagnitude;
+                if (sqr <= bestSqr)
+                {
+                    bestSqr = sqr;
+                    best = map;
+                }
+            }
+            return best;
+        }
+
+        /// <summary>
         /// Notifies source and destination MapControllers about a player transition.
         /// Ensures hibernation/wake-up triggers before physics colliders update.
         /// </summary>

@@ -22,6 +22,9 @@ namespace MWI.WorldSystem
         [Header("Notifications")]
         [SerializeField] private ToastNotificationChannel _toastChannel;
 
+        [Tooltip("When placing outside any existing MapController, the building will join the nearest exterior map within this radius (Unity units). If no map is within this radius, a new wild map is spawned centered on the placement.")]
+        [SerializeField] private float _nearbyMapJoinRadius = 150f;
+
         [SerializeField] private WorldSettingsData _settings;
         private GameObject _ghostInstance;
         private string _activePrefabId;
@@ -370,17 +373,16 @@ namespace MWI.WorldSystem
 
             Debug.Log($"<color=yellow>[BuildingPlacementManager:Register]</color> Trying to find MapController for building '{building.BuildingName}' at {worldPosition}.");
 
-            // Find the containing MapController — GetMapAtPosition skips Interiors,
-            // so also do a bounds check on all non-interior maps that contain the position.
+            // 1. Is the placement inside the trigger bounds of an existing exterior map?
             MapController map = MapController.GetMapAtPosition(worldPosition);
 
-            // Fallback: check ALL maps (including those GetMapAtPosition skips)
+            // 2. Bounds fallback — catches maps that GetMapAtPosition skips (e.g. registry lag).
             if (map == null)
             {
                 var allMaps = UnityEngine.Object.FindObjectsByType<MapController>(FindObjectsSortMode.None);
                 foreach (var m in allMaps)
                 {
-                    if (m == null) continue;
+                    if (m == null || m.Type == MapType.Interior) continue;
                     var col = m.GetComponent<BoxCollider>();
                     if (col != null && col.bounds.Contains(worldPosition))
                     {
@@ -391,9 +393,34 @@ namespace MWI.WorldSystem
                 }
             }
 
+            // 3. Join the nearest exterior map within the configured radius.
             if (map == null)
             {
-                Debug.LogWarning($"<color=yellow>[BuildingPlacementManager:Register]</color> No MapController contains position {worldPosition}. Building '{building.BuildingName}' placed in open world.");
+                MapController nearest = MapController.GetNearestExteriorMap(worldPosition, _nearbyMapJoinRadius);
+                if (nearest != null)
+                {
+                    map = nearest;
+                    Debug.Log($"<color=yellow>[BuildingPlacementManager:Register]</color> No enclosing map. Joining nearest exterior map '{map.MapId}' within {_nearbyMapJoinRadius} units.");
+                }
+            }
+
+            // 4. Last resort — spawn a brand-new wild map centered on the placement.
+            if (map == null && CommunityTracker.Instance != null)
+            {
+                Debug.Log($"<color=yellow>[BuildingPlacementManager:Register]</color> No nearby map within {_nearbyMapJoinRadius} units. Creating a new wild map at {worldPosition}.");
+                try
+                {
+                    map = CommunityTracker.Instance.CreateMapAtPosition(worldPosition);
+                }
+                catch (System.Exception e)
+                {
+                    Debug.LogException(e);
+                }
+            }
+
+            if (map == null)
+            {
+                Debug.LogWarning($"<color=yellow>[BuildingPlacementManager:Register]</color> Failed to find or create a MapController for building '{building.BuildingName}' at {worldPosition}. Building will not survive hibernation.");
                 return;
             }
 
