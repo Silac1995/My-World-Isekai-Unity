@@ -3,13 +3,14 @@ type: system
 title: "World Macro Simulation"
 tags: [world, hibernation, macro-sim, tier-2]
 created: 2026-04-19
-updated: 2026-04-19
+updated: 2026-04-21
 sources: []
 related:
   - "[[world]]"
   - "[[character-needs]]"
   - "[[jobs-and-logistics]]"
   - "[[save-load]]"
+  - "[[adr-0001-living-world-hierarchy-refactor]]"
   - "[[kevin]]"
 status: stable
 confidence: high
@@ -25,6 +26,9 @@ depended_on_by:
 ---
 
 # World Macro Simulation
+
+> ⚠️ **Pending Phase 1 extension — see [[adr-0001-living-world-hierarchy-refactor]].**
+> The catch-up loop gains a 5th step — **Zone Motion** — which iterates all `WildernessZone` + `WeatherFront` instances, sums their `IZoneMotionStrategy` daily deltas, clamps by `WorldSettingsData.MapMinSeparation`, and applies the result. Runs both on `TimeManager.OnNewDay` during active play AND on map wake-up with accumulated `daysSinceLastTick`. All zones default to `StaticMotionStrategy` in Phase 1, so this step is a no-op until later phases introduce reactive strategies. Sections below describe the **pre-refactor** state.
 
 ## Summary
 When a hibernating map wakes up, the `MacroSimulator` runs a catch-up pass over the elapsed delta (`CurrentTime - HibernationTime`) in strict order: (1) resource pool regen, (2) biome-driven inventory yields via `JobYieldRegistry`, (3) needs decay per character, (4) schedule snap (skip to end of current scheduled task, snap position). It's pure math over serialized data — no Unity Update loops, no NavMesh, no NetworkObject. Everything consumes `TimeManager.CurrentDay` + `CurrentTime01`, never `Time.time`.
@@ -113,6 +117,7 @@ The actual physical scaffolds materialize when the map wakes — at wake time th
 
 ## Change log
 - 2026-04-19 — Initial pass. — Claude / [[kevin]]
+- 2026-04-21 — Added pending-extension notice (Zone Motion catch-up step) pointing to [[adr-0001-living-world-hierarchy-refactor]]. — Claude / [[kevin]]
 
 ## Sources
 - [.agent/skills/world-system/SKILL.md](../../.agent/skills/world-system/SKILL.md) §2–§3.

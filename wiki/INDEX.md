@@ -52,8 +52,8 @@ _(empty — populate via `/ingest` as design discussions surface)_
 ## Projects (0)
 _(empty — Spine 2D migration should get its own project page; see memory `project_spine2d_migration`)_
 
-## Decisions / ADRs (0)
-_(empty — use `/save decision <title>` to capture decisions from conversations)_
+## Decisions / ADRs (1)
+- [[adr-0001-living-world-hierarchy-refactor]] — Region → { MapController, WildernessZone, WeatherFront } (accepted 2026-04-21).
 
 ## Gotchas (0)
 _(empty — use `/save gotcha <title>` as new pitfalls are surfaced)_

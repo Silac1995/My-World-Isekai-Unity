@@ -3,7 +3,7 @@ type: system
 title: "World Biome & Region"
 tags: [world, biome, region, tier-2]
 created: 2026-04-19
-updated: 2026-04-19
+updated: 2026-04-21
 sources: []
 related:
   - "[[world]]"
@@ -11,6 +11,7 @@ related:
   - "[[jobs-and-logistics]]"
   - "[[world-macro-simulation]]"
   - "[[save-load]]"
+  - "[[adr-0001-living-world-hierarchy-refactor]]"
   - "[[kevin]]"
 status: stable
 confidence: medium
@@ -25,6 +26,9 @@ depended_on_by:
 ---
 
 # World Biome & Region
+
+> ⚠️ **Pending Phase 1 refactor — see [[adr-0001-living-world-hierarchy-refactor]].**
+> `BiomeRegion` is being renamed to `Region`, moved from `Assets/Scripts/Weather/` to `Assets/Scripts/World/MapSystem/`, and its namespace from `MWI.Weather` to `MWI.WorldSystem`. It gains `List<MapController> Maps` + `List<WildernessZone> WildernessZones` auto-discovered from its transform children, and implements the new `IWorldZone` interface. Existing responsibilities (BiomeDefinition ref, ClimateProfile, BoxCollider bounds, hibernation, static `GetRegionAtPosition`, `WeatherFront` spawning) are preserved. `.cs` + `.meta` move as a pair to keep scene-serialized component references intact. Sections below describe the **pre-refactor** state.
 
 ## Summary
 Subdivides the world map into climate-typed regions. `BiomeDefinition` (ScriptableObject) holds per-biome resource lists, yield weights, and a `BiomeClimateProfile` reference for weather/terrain parameters. `BiomeRegion` (MonoBehaviour + ISaveable) is the runtime placement of a biome on the world map — it owns a collider bounds, spawns [[terrain-and-weather|WeatherFronts]] on a timer, and hibernates them when no players are in or near its bounds. Feeds `JobYieldRegistry` and the macro-simulator's offline inventory pass.
@@ -152,6 +156,7 @@ BiomeRegion (MonoBehaviour)
 
 - 2026-04-19 — Stub. — Claude / [[kevin]]
 - 2026-04-19 — Full pass after Phase 1 terrain/weather implementation landed. Described runtime `BiomeRegion` alongside data-side `BiomeDefinition`. Added API, data flow, dependencies. — Claude / [[kevin]]
+- 2026-04-21 — Added pending-refactor notice pointing to [[adr-0001-living-world-hierarchy-refactor]]. — Claude / [[kevin]]
 
 ## Sources
 - [Assets/Scripts/World/Data/BiomeDefinition.cs](../../Assets/Scripts/World/Data/BiomeDefinition.cs) — SO definition (now with climate profile linkage).
