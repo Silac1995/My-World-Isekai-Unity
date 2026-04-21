@@ -60,6 +60,51 @@ if (character.TryGet<CharacterAnimal>(out var animal) && animal.IsTamed)
 }
 ```
 
+## Current Status (2026-04-21)
+
+Feature shipped on branch `multiplayyer` in 15 commits (spec `cbb0db5`, final
+commit `6fec3c7`). Smoke-tested in solo mode: a player initiated a tame against
+NPC Samantha (Deer archetype, `TameDifficulty=0.5`) via the interaction menu,
+the server executed the roll, NetworkVariables wrote correctly, and the
+floating-text broadcast fired on the local client.
+
+**Verified paths:**
+- Interaction option surfaces only for eligible targets (`IsTameable && !IsTamed`).
+- `CharacterTameAction` routes through `OnApplyEffect` → server-side
+  `TryTameOnServer`.
+- Server-side roll + NV writes + `ShowTameResultClientRpc` broadcast.
+
+**Not yet smoke-tested (see plan Task 16 for the full matrix):**
+- Host↔Client parity — multiplayer roundtrip.
+- Client↔Client (two non-hosts).
+- "Target currently player-controlled" rejection (`Character.IsPlayer()` gate).
+- Hibernation round-trip (tamed animal survives map unload/reload).
+- Exception safety on corrupted `AnimalSaveData` JSON.
+
+Until those are exercised, treat the system as "works in solo, multiplayer
+unverified." None of the unverified paths are expected to break — they all go
+through the same `TryTameOnServer` entry point — but book the tests before
+building anything that depends on them.
+
+## Known Follow-Ups
+
+Reviewer advisories that were accepted-but-not-applied during implementation:
+
+- **`Deserialize` non-server branch** — likely dead code under the current
+  `CharacterDataCoordinator` flow (only the server calls `Deserialize`).
+  Verify during hibernation testing and remove if confirmed unreachable.
+- **Empty-`CharacterId` log severity** — currently `LogWarning` when a tame
+  succeeds but the interactor's profile ID is empty. Consider elevating to
+  `LogError` — a tamed animal with blank ownership indicates an identity-init
+  bug, not a normal condition.
+- **Deterministic roll tests** — the `IRandomProvider` seam is in place but
+  unused. When the project grows a test asmdef, a seeded-RNG test of the roll
+  formula becomes a ~10-line unit test.
+- **`CharacterMountable` + split.** When mounting is added, `CharacterAnimal`
+  will likely split into a pure marker + sibling `CharacterTameable` /
+  `CharacterMountable` components. Structured the current class so the split
+  is mechanical.
+
 ## Evolution Path
 
 When `CharacterMountable` is added, consider splitting `CharacterAnimal` into a

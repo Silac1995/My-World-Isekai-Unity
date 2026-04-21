@@ -304,6 +304,15 @@ attempt on a player-controlled character even if it somehow queues the RPC.
 
 ## Open questions / TODO
 
+- [ ] **Multiplayer / hibernation / exception-safety paths unverified** — as of
+  2026-04-21 the feature has been smoke-tested only in solo mode (happy path:
+  player tames NPC, server rolls, NVs update, floating text fires). The
+  scenarios from [[character-animal]]'s test matrix that remain unexercised:
+  Host↔Client parity, Client↔Client, the "target currently player-controlled"
+  rejection, hibernation round-trip, and corrupted-`AnimalSaveData` exception
+  safety. All of these go through the same server entry point
+  (`TryTameOnServer`) so they are expected to work, but treat ownership and
+  persistence as unconfirmed until the full matrix is exercised.
 - [ ] **`CharacterMountable`** — sibling component planned to handle mount logic
   (enter/exit, speed modifiers, dismount). When added, evaluate splitting
   `CharacterAnimal` into a pure marker + `CharacterTameable` + `CharacterMountable`
@@ -325,6 +334,7 @@ attempt on a player-controlled character even if it somehow queues the RPC.
 ## Change log
 
 - 2026-04-21 — Initial architecture page. — Claude / [[kevin]]
+- 2026-04-21 — Solo-mode smoke test passed (player tames NPC, server rolls, NVs update, floating text broadcasts). Multiplayer/hibernation/exception paths remain unverified; noted in Open questions. — Claude / [[kevin]]
 
 ## Links
 
