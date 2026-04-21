@@ -53,3 +53,15 @@ MonoBehaviour:
     BuildingPrefab: {fileID: 7621944366838805257, guid: 756bcda2155bb7b49979c63d3e421831, type: 3}
     InteriorPrefab: {fileID: 7854107599248192519, guid: 7461a9cf6956142408743195b7ed11a7, type: 3}
     CommunityPriority: 3
+  - PrefabId: B004-ClothingShop
+    BuildingName: Clothing Shop
+    Icon: {fileID: 0}
+    BuildingPrefab: {fileID: 8583950583208608182, guid: b96c1faa2ecbdf847a0b88b67e0a52df, type: 3}
+    InteriorPrefab: {fileID: 0}
+    CommunityPriority: 3
+  - PrefabId: B005-TransportBuilding
+    BuildingName: Transport Building
+    Icon: {fileID: 0}
+    BuildingPrefab: {fileID: 7206197390350540711, guid: e77d7c4bb571b7844a1031c7a7e9a6d8, type: 3}
+    InteriorPrefab: {fileID: 0}
+    CommunityPriority: 3

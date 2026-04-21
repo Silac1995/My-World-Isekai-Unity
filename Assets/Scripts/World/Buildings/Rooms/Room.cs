@@ -58,6 +58,32 @@ public class Room : Zone
     public int OwnerCount => _ownerIds.Count;
     public int ResidentCount => _residentIds.Count;
 
+    /// <summary>
+    /// Raw owner UUIDs. Unlike <see cref="Owners"/>, this does NOT call FindByUUID,
+    /// so it includes IDs whose Character is hibernated on another map. Use for
+    /// serialization paths (BuildingSaveData) where the live Character may not exist.
+    /// </summary>
+    public IEnumerable<string> OwnerIds
+    {
+        get
+        {
+            for (int i = 0; i < _ownerIds.Count; i++)
+                yield return _ownerIds[i].ToString();
+        }
+    }
+
+    /// <summary>
+    /// Raw resident UUIDs. See <see cref="OwnerIds"/> for rationale.
+    /// </summary>
+    public IEnumerable<string> ResidentIds
+    {
+        get
+        {
+            for (int i = 0; i < _residentIds.Count; i++)
+                yield return _residentIds[i].ToString();
+        }
+    }
+
     public virtual bool IsResident(Character character)
     {
         if (character == null) return false;

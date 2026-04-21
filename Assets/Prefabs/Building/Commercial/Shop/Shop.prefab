@@ -525,15 +525,15 @@ PrefabInstance:
       objectReference: {fileID: -7333590944410843724}
     - target: {fileID: 6121509161196564493, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: m_Size.x
-      value: 1
+      value: 12.071939
       objectReference: {fileID: 0}
     - target: {fileID: 6121509161196564493, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: m_Size.y
-      value: 1
+      value: 9.417143
       objectReference: {fileID: 0}
     - target: {fileID: 6121509161196564493, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: m_Size.z
-      value: 1
+      value: 10.543383
       objectReference: {fileID: 0}
     - target: {fileID: 6121509161196564493, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: m_Center.x
@@ -601,11 +601,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7099042916959401025, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 36
+      value: 27.7
       objectReference: {fileID: 0}
     - target: {fileID: 7099042916959401025, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: m_LocalPosition.z
-      value: -28
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 7289148798581441162, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: m_LocalPosition.x
@@ -696,7 +696,8 @@ PrefabInstance:
       value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
-    m_RemovedGameObjects: []
+    m_RemovedGameObjects:
+    - {fileID: 8958831282016579807, guid: 0266b0096947362429f7d224956a5096, type: 3}
     m_AddedGameObjects:
     - targetCorrespondingSourceObject: {fileID: 8729890495040055940, guid: 0266b0096947362429f7d224956a5096, type: 3}
       insertIndex: -1
@@ -774,6 +775,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FurnitureGrid
   _cellSize: 1
+  _floorRenderers: []
+  _gridWidth: 0
+  _gridDepth: 0
+  _gridOrigin: {x: 0, y: 0, z: 0}
+  _cells: []
 --- !u!114 &-418595900359902167
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -820,7 +826,10 @@ MonoBehaviour:
   zoneType: 3
   zoneName: Shop Zone
   _boundsTarget: {fileID: 0}
+  _boundsTargets: []
   _roomName: Shop Room
+  _floorTerrainType: {fileID: 0}
+  _isExposed: 0
   _subRooms: []
   buildingName: Shop building
   _isPublicLocation: 1
@@ -828,7 +837,151 @@ MonoBehaviour:
   _buildingZone: {fileID: 8333455769947060722}
   _deliveryZone: {fileID: 4690730239702237897}
   _constructionRequirements: []
-  _owner: {fileID: 0}
+  _prefabId: 
+  NetworkBuildingId:
+    UpdateTraits:
+      MinSecondsBetweenUpdates: 0
+      MaxSecondsBetweenUpdates: 0
+    m_InternalValue:
+      utf8LengthInBytes: 0
+      bytes:
+        offset0000:
+          byte0000: 0
+          byte0001: 0
+          byte0002: 0
+          byte0003: 0
+          byte0004: 0
+          byte0005: 0
+          byte0006: 0
+          byte0007: 0
+          byte0008: 0
+          byte0009: 0
+          byte0010: 0
+          byte0011: 0
+          byte0012: 0
+          byte0013: 0
+          byte0014: 0
+          byte0015: 0
+        offset0016:
+          byte0000: 0
+          byte0001: 0
+          byte0002: 0
+          byte0003: 0
+          byte0004: 0
+          byte0005: 0
+          byte0006: 0
+          byte0007: 0
+          byte0008: 0
+          byte0009: 0
+          byte0010: 0
+          byte0011: 0
+          byte0012: 0
+          byte0013: 0
+          byte0014: 0
+          byte0015: 0
+        offset0032:
+          byte0000: 0
+          byte0001: 0
+          byte0002: 0
+          byte0003: 0
+          byte0004: 0
+          byte0005: 0
+          byte0006: 0
+          byte0007: 0
+          byte0008: 0
+          byte0009: 0
+          byte0010: 0
+          byte0011: 0
+          byte0012: 0
+          byte0013: 0
+          byte0014: 0
+          byte0015: 0
+        byte0048: 0
+        byte0049: 0
+        byte0050: 0
+        byte0051: 0
+        byte0052: 0
+        byte0053: 0
+        byte0054: 0
+        byte0055: 0
+        byte0056: 0
+        byte0057: 0
+        byte0058: 0
+        byte0059: 0
+        byte0060: 0
+        byte0061: 0
+  PlacedByCharacterId:
+    UpdateTraits:
+      MinSecondsBetweenUpdates: 0
+      MaxSecondsBetweenUpdates: 0
+    m_InternalValue:
+      utf8LengthInBytes: 0
+      bytes:
+        offset0000:
+          byte0000: 0
+          byte0001: 0
+          byte0002: 0
+          byte0003: 0
+          byte0004: 0
+          byte0005: 0
+          byte0006: 0
+          byte0007: 0
+          byte0008: 0
+          byte0009: 0
+          byte0010: 0
+          byte0011: 0
+          byte0012: 0
+          byte0013: 0
+          byte0014: 0
+          byte0015: 0
+        offset0016:
+          byte0000: 0
+          byte0001: 0
+          byte0002: 0
+          byte0003: 0
+          byte0004: 0
+          byte0005: 0
+          byte0006: 0
+          byte0007: 0
+          byte0008: 0
+          byte0009: 0
+          byte0010: 0
+          byte0011: 0
+          byte0012: 0
+          byte0013: 0
+          byte0014: 0
+          byte0015: 0
+        offset0032:
+          byte0000: 0
+          byte0001: 0
+          byte0002: 0
+          byte0003: 0
+          byte0004: 0
+          byte0005: 0
+          byte0006: 0
+          byte0007: 0
+          byte0008: 0
+          byte0009: 0
+          byte0010: 0
+          byte0011: 0
+          byte0012: 0
+          byte0013: 0
+          byte0014: 0
+          byte0015: 0
+        byte0048: 0
+        byte0049: 0
+        byte0050: 0
+        byte0051: 0
+        byte0052: 0
+        byte0053: 0
+        byte0054: 0
+        byte0055: 0
+        byte0056: 0
+        byte0057: 0
+        byte0058: 0
+        byte0059: 0
+        byte0060: 0
+        byte0061: 0
   _ownerCommunity:
     communityName: 
     level: 0

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using MWI.WorldSystem;
 
 /// <summary>
 /// Classe abstraite pour les bâtiments commerciaux.
@@ -120,7 +121,7 @@ public abstract class CommercialBuilding : Building
         }
     }
 
-    public void SetOwner(Character newOwner, Job ownerJob = null)
+    public void SetOwner(Character newOwner, Job ownerJob = null, bool autoAssignJob = true)
     {
         if (!IsServer) return;
 
@@ -151,6 +152,11 @@ public abstract class CommercialBuilding : Building
 
         Debug.Log($"<color=green>[Building]</color> {newOwner?.CharacterName} est propriétaire de {buildingName}.");
 
+        // Restore path passes autoAssignJob=false because the saved Employees list
+        // already carries the boss's actual job (avoids the auto-pick stealing a slot
+        // that another saved employee owns).
+        if (!autoAssignJob) return;
+
         if (ownerJob == null)
         {
             // Y a-t-il DÉJÀ quelqu'un qui est assigné (occupé) à un JobLogisticsManager dans ce building ?
@@ -178,6 +184,162 @@ public abstract class CommercialBuilding : Building
                 charJob.TakeJob(ownerJob, this);
             }
         }
+    }
+
+    // ---------------------------------------------------------------------------------
+    //  Save / Load — Owner & Employee restoration
+    // ---------------------------------------------------------------------------------
+
+    /// <summary>Owner UUIDs awaiting Character spawn (server-only).</summary>
+    private readonly List<string> _pendingOwnerIds = new List<string>();
+    /// <summary>Employee assignments awaiting Character spawn (server-only).</summary>
+    private readonly List<EmployeeSaveEntry> _pendingEmployees = new List<EmployeeSaveEntry>();
+    /// <summary>True while subscribed to <see cref="Character.OnCharacterSpawned"/>.</summary>
+    private bool _waitingForCharacters = false;
+
+    /// <summary>
+    /// Server-only. Re-binds saved owner + employees back to this freshly-spawned building.
+    /// Characters that aren't loaded yet are queued — a Character.OnCharacterSpawned subscription
+    /// retries them until everyone is bound or the building despawns.
+    ///
+    /// Call once, immediately after the building is NetworkObject.Spawn()'d and its
+    /// NetworkBuildingId has been overwritten with the saved GUID.
+    /// </summary>
+    public void RestoreFromSaveData(List<string> ownerIds, List<EmployeeSaveEntry> employees)
+    {
+        if (!IsServer) return;
+
+        _pendingOwnerIds.Clear();
+        _pendingEmployees.Clear();
+
+        if (ownerIds != null)
+        {
+            foreach (var id in ownerIds)
+            {
+                if (!string.IsNullOrEmpty(id)) _pendingOwnerIds.Add(id);
+            }
+        }
+        if (employees != null)
+        {
+            foreach (var e in employees)
+            {
+                if (e != null && !string.IsNullOrEmpty(e.CharacterId) && !string.IsNullOrEmpty(e.JobType))
+                    _pendingEmployees.Add(e);
+            }
+        }
+
+        if (_pendingOwnerIds.Count == 0 && _pendingEmployees.Count == 0) return;
+
+        Debug.Log($"<color=cyan>[CommercialBuilding:Restore]</color> {buildingName}: pending owners={_pendingOwnerIds.Count}, employees={_pendingEmployees.Count}");
+
+        // Try to resolve everything that's already loaded.
+        TryResolvePending();
+
+        // Anything left? Subscribe and let OnCharacterSpawned drive future binds.
+        if ((_pendingOwnerIds.Count > 0 || _pendingEmployees.Count > 0) && !_waitingForCharacters)
+        {
+            Character.OnCharacterSpawned += HandleCharacterSpawnedForRestore;
+            _waitingForCharacters = true;
+            Debug.Log($"<color=cyan>[CommercialBuilding:Restore]</color> {buildingName}: subscribed to OnCharacterSpawned for {_pendingOwnerIds.Count} owner(s) + {_pendingEmployees.Count} employee(s).");
+        }
+    }
+
+    private void HandleCharacterSpawnedForRestore(Character spawned)
+    {
+        if (!IsServer || spawned == null) return;
+        TryResolvePending();
+
+        if (_pendingOwnerIds.Count == 0 && _pendingEmployees.Count == 0)
+        {
+            UnsubscribeRestoreListener();
+        }
+    }
+
+    private void TryResolvePending()
+    {
+        // --- Owners ---
+        for (int i = _pendingOwnerIds.Count - 1; i >= 0; i--)
+        {
+            string id = _pendingOwnerIds[i];
+            Character owner = Character.FindByUUID(id);
+            if (owner == null) continue;
+
+            // Find the owner's saved job (if any) so we can restore it directly,
+            // bypassing SetOwner's auto-job-pick (which could conflict with employees).
+            Job ownerJob = null;
+            var ownerEmployeeEntry = _pendingEmployees.FirstOrDefault(e => e.CharacterId == id);
+            if (ownerEmployeeEntry != null)
+            {
+                ownerJob = FindFreeJobByType(ownerEmployeeEntry.JobType);
+            }
+
+            // Apply ownership without auto-pick. If the saved data had an explicit ownerJob,
+            // SetOwner's tail will route it to TakeJob.
+            SetOwner(owner, ownerJob, autoAssignJob: false);
+
+            // The TakeJob inside SetOwner only fires when ownerJob != null (and autoAssign=false),
+            // so explicitly call it here when we resolved a job slot for the owner.
+            if (ownerJob != null && owner.CharacterJob != null)
+            {
+                owner.CharacterJob.TakeJob(ownerJob, this);
+                _pendingEmployees.Remove(ownerEmployeeEntry);
+            }
+
+            Debug.Log($"<color=green>[CommercialBuilding:Restore]</color> {buildingName}: bound owner '{owner.CharacterName}' (id={id}).");
+            _pendingOwnerIds.RemoveAt(i);
+        }
+
+        // --- Employees ---
+        for (int i = _pendingEmployees.Count - 1; i >= 0; i--)
+        {
+            var entry = _pendingEmployees[i];
+            Character worker = Character.FindByUUID(entry.CharacterId);
+            if (worker == null) continue;
+
+            Job job = FindFreeJobByType(entry.JobType);
+            if (job == null)
+            {
+                // Job type missing from this building's roster (data drift) —
+                // log and drop so we don't keep retrying forever.
+                Debug.LogWarning($"<color=orange>[CommercialBuilding:Restore]</color> {buildingName}: no free '{entry.JobType}' slot for worker '{worker.CharacterName}'. Dropping pending entry.");
+                _pendingEmployees.RemoveAt(i);
+                continue;
+            }
+
+            if (worker.CharacterJob != null && worker.CharacterJob.TakeJob(job, this))
+            {
+                Debug.Log($"<color=green>[CommercialBuilding:Restore]</color> {buildingName}: bound '{worker.CharacterName}' to {entry.JobType}.");
+            }
+            else
+            {
+                Debug.LogWarning($"<color=orange>[CommercialBuilding:Restore]</color> {buildingName}: TakeJob failed for '{worker.CharacterName}' on '{entry.JobType}' (schedule conflict?). Dropping pending entry.");
+            }
+            _pendingEmployees.RemoveAt(i);
+        }
+    }
+
+    private Job FindFreeJobByType(string typeName)
+    {
+        if (string.IsNullOrEmpty(typeName)) return null;
+        foreach (var j in _jobs)
+        {
+            if (j == null || j.IsAssigned) continue;
+            if (j.GetType().Name == typeName) return j;
+        }
+        return null;
+    }
+
+    private void UnsubscribeRestoreListener()
+    {
+        if (!_waitingForCharacters) return;
+        Character.OnCharacterSpawned -= HandleCharacterSpawnedForRestore;
+        _waitingForCharacters = false;
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        UnsubscribeRestoreListener();
+        base.OnNetworkDespawn();
     }
 
     /// <summary>

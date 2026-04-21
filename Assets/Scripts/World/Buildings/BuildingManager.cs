@@ -13,6 +13,13 @@ public class BuildingManager : MonoBehaviour
     [Header("All Buildings")]
     public List<Building> allBuildings = new List<Building>();
 
+    /// <summary>
+    /// Fires after any Building completes registration. Subscribers (e.g. CharacterJob)
+    /// use this to re-bind to a workplace whose BuildingId was loaded from save data
+    /// before the live Building instance existed.
+    /// </summary>
+    public static event System.Action<Building> OnBuildingRegistered;
+
     private void Awake()
     {
         if (Instance == null)
@@ -34,6 +41,7 @@ public class BuildingManager : MonoBehaviour
         {
             allBuildings.Add(building);
             Debug.Log($"<color=cyan>[Building Manager]</color> Bâtiment enregistré : {building.BuildingName} ({building.BuildingType})");
+            OnBuildingRegistered?.Invoke(building);
         }
     }
 

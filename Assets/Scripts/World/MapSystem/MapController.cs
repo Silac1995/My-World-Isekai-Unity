@@ -629,10 +629,14 @@ namespace MWI.WorldSystem
                 var saveEntry = community.ConstructedBuildings.Find(b => b.BuildingId == building.BuildingId);
                 if (saveEntry != null)
                 {
-                    // Update existing entry with current state
-                    saveEntry.State = building.CurrentState;
-                    saveEntry.Position = building.transform.position - transform.position;
-                    saveEntry.Rotation = building.transform.rotation;
+                    // Update existing entry with current state. Replace dynamic fields
+                    // (owners, employees) wholesale so changes since last snapshot stick.
+                    var refreshed = BuildingSaveData.FromBuilding(building, transform.position);
+                    saveEntry.State = refreshed.State;
+                    saveEntry.Position = refreshed.Position;
+                    saveEntry.Rotation = refreshed.Rotation;
+                    saveEntry.OwnerCharacterIds = refreshed.OwnerCharacterIds;
+                    saveEntry.Employees = refreshed.Employees;
                 }
                 else
                 {
@@ -706,6 +710,14 @@ namespace MWI.WorldSystem
                         if (restoredBuilding != null)
                         {
                             restoredBuilding.NetworkBuildingId.Value = bSave.BuildingId;
+
+                            // Restore who originally placed the building (saved but previously dropped on load).
+                            if (!string.IsNullOrEmpty(bSave.PlacedByCharacterId))
+                                restoredBuilding.PlacedByCharacterId.Value = new Unity.Collections.FixedString64Bytes(bSave.PlacedByCharacterId);
+
+                            // Restore boss + crew. Owner field also covers ResidentialBuilding via the Building.OwnerIds path.
+                            if (restoredBuilding is CommercialBuilding commercial)
+                                commercial.RestoreFromSaveData(bSave.OwnerCharacterIds, bSave.Employees);
                         }
                     }
                     spawnedCount++;
@@ -942,14 +954,18 @@ namespace MWI.WorldSystem
                     var saveEntry = community.ConstructedBuildings.Find(b => b.BuildingId == building.BuildingId);
                     if (saveEntry != null)
                     {
-                        saveEntry.State = building.CurrentState;
-                        Debug.Log($"<color=orange>[MapController:Hibernate]</color> Updated existing save entry for '{building.BuildingName}'. State={saveEntry.State}");
+                        // Refresh dynamic fields from the live building before despawn.
+                        var refreshed = BuildingSaveData.FromBuilding(building, transform.position);
+                        saveEntry.State = refreshed.State;
+                        saveEntry.OwnerCharacterIds = refreshed.OwnerCharacterIds;
+                        saveEntry.Employees = refreshed.Employees;
+                        Debug.Log($"<color=orange>[MapController:Hibernate]</color> Updated existing save entry for '{building.BuildingName}'. State={saveEntry.State}, owners={saveEntry.OwnerCharacterIds.Count}, employees={saveEntry.Employees.Count}");
                     }
                     else
                     {
                         var newEntry = BuildingSaveData.FromBuilding(building, transform.position);
                         community.ConstructedBuildings.Add(newEntry);
-                        Debug.Log($"<color=cyan>[MapController:Hibernate]</color> Auto-registered untracked building '{building.BuildingName}' into '{MapId}'. PrefabId='{newEntry.PrefabId}', RelPos={newEntry.Position}");
+                        Debug.Log($"<color=cyan>[MapController:Hibernate]</color> Auto-registered untracked building '{building.BuildingName}' into '{MapId}'. PrefabId='{newEntry.PrefabId}', RelPos={newEntry.Position}, owners={newEntry.OwnerCharacterIds.Count}, employees={newEntry.Employees.Count}");
                     }
                 }
                 else
@@ -1069,6 +1085,16 @@ namespace MWI.WorldSystem
                                 if (restoredBuilding != null)
                                 {
                                     restoredBuilding.NetworkBuildingId.Value = bSave.BuildingId;
+
+                                    if (!string.IsNullOrEmpty(bSave.PlacedByCharacterId))
+                                        restoredBuilding.PlacedByCharacterId.Value = new Unity.Collections.FixedString64Bytes(bSave.PlacedByCharacterId);
+
+                                    // Restore boss + crew. Characters from THIS map haven't spawned yet
+                                    // (SpawnNPCsFromSnapshot runs after this loop), so the resolver will
+                                    // queue them and bind on Character.OnCharacterSpawned.
+                                    if (restoredBuilding is CommercialBuilding commercial)
+                                        commercial.RestoreFromSaveData(bSave.OwnerCharacterIds, bSave.Employees);
+
                                     Debug.Log($"<color=green>[MapController:WakeUp]</color> Building '{bSave.PrefabId}' restored with ID={bSave.BuildingId} at {worldPos}.");
                                 }
                             }

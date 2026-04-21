@@ -16,7 +16,20 @@
       "Bash(npm list:*)",
       "Bash(find /c/Users/Kevin/AppData -name unity-mcp-cli* -type f)",
       "mcp__ai-game-developer__scene-list-opened",
-      "mcp__ai-game-developer__scene-get-data"
+      "mcp__ai-game-developer__scene-get-data",
+      "Bash(git -C \"c:\\\\Users\\\\Kevin\\\\Unity\\\\Unity Projects\\\\Git\\\\MWI - Version Control\\\\My-World-Isekai-Unity\" show --stat HEAD)",
+      "Bash(git -C \"c:/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity\" add .agent/skills/dev-mode/SKILL.md)",
+      "Bash(git -C 'c:/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity' commit -m 'docs\\(skill\\): document Select tab + IDevAction pattern *)",
+      "Bash(git -C \"c:/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity\" add .claude/agents/debug-tools-architect.md)",
+      "Bash(git -C \"c:/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity\" commit -m \"docs\\(agent\\): extend debug-tools-architect with Select tab\")",
+      "Bash(git -C \"c:/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity\" log --oneline 095ad8e..9685612)",
+      "Bash(git -C \"c:/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity\" diff --stat 095ad8e..9685612)",
+      "Bash(git -C \"c:/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity\" show 87e8b37 -- \"Assets/Scripts/World/Buildings/CommercialBuilding.cs\")",
+      "Bash(git -C \"c:/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity\" show 4378d00 -- Assets/Scripts/Debug/DevMode/Modules/DevSpawnModule.cs)",
+      "Bash(git -C \"c:/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity\" show --stat 84afde5)",
+      "Bash(git -C \"c:/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity\" add .agent/skills/dev-mode/SKILL.md Assets/Scripts/Debug/DevMode/Modules/Actions/DevActionAssignBuilding.cs Assets/Scripts/Debug/DevMode/DevModePanel.cs Assets/Scripts/Character/CharacterJob/CharacterJob.cs)",
+      "Bash(git -C 'c:/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity' commit -m ' *)",
+      "Bash(git -C \"c:/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity\" show --stat HEAD)"
     ]
   },
   "enableAllProjectMcpServers": true,

@@ -74,6 +74,28 @@ In the future, if the AI Agent needs to create a "Blacksmith":
 2. Create or modify the `ForgeBuilding` inheriting from `CraftingBuilding` (and not just `CommercialBuilding`) so its `InitializeJobs()` function adds a `JobBlacksmith` + a `JobLogisticsManager` (for orders).
 3. Done! The player can go ask for the job (if they have the right skill level), and place crafting orders with the Logistics Manager.
 
+## Save / Load Restoration
+
+Job assignments survive both **map hibernation** and **player profile import** via a two-sided resolver. The same `(workerCharacterId, jobType, workplaceBuildingId)` link is stored on both ends so whichever side spawns first can rebuild the binding.
+
+### Building side (authoritative)
+`BuildingSaveData.Employees` (in `CommunityTracker`) holds the full crew per building. On load, `MapController.SpawnSavedBuildings()` / `WakeUp()` calls `CommercialBuilding.RestoreFromSaveData(ownerIds, employees)` immediately after `bNet.Spawn()`. The resolver:
+- Tries `Character.FindByUUID` for each entry.
+- Owner is bound via `SetOwner(owner, ownerJob, autoAssignJob: false)` — the new `autoAssignJob` flag bypasses the LogisticsManager auto-pick so the saved data is authoritative.
+- Workers are bound via `worker.CharacterJob.TakeJob(job, building)`.
+- Anything unresolved subscribes to `Character.OnCharacterSpawned` until empty (then unsubscribes). Cleanup in `OnNetworkDespawn` for re-hibernation.
+
+### Character side
+`CharacterJob.Deserialize(JobSaveData)` parks unresolved entries in `_pendingJobData`, then:
+- Tries to bind any building already in `BuildingManager.allBuildings` (workplace map currently active).
+- Subscribes to `BuildingManager.OnBuildingRegistered` for unresolved entries (workplace map hibernated and will spawn its buildings later).
+- `Serialize()` re-emits unresolved pending entries so they survive multiple save/load cycles.
+
+### Why both sides?
+- **Building-first** (workplace map wakes, character lives elsewhere): building-side resolver waits on `Character.OnCharacterSpawned`.
+- **Character-first** (player profile imports, workplace hibernated): character-side resolver waits on `BuildingManager.OnBuildingRegistered`.
+- **Both already loaded**: whichever resolver fires first wins; the other's `alreadyActive`/`IsAssigned` guard prevents double-binding.
+
 ## Strict Architectural Rules
 - **Interaction Distance**: To interact with an object or get in range, **always** use the `InteractionZone` (its colliders or explicit properties).
 - **Physical Destruction**: When picking up an item from the scene/world, you must **always destroy it IN THE `Assets/Scripts/Character/CharacterActions/CharacterPickUpItem.cs`**. NOWHERE ELSE.

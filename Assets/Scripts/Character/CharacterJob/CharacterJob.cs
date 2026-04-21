@@ -21,10 +21,12 @@ public class CharacterJob : CharacterSystem, ICharacterSaveData<JobSaveData>
     private CommercialBuilding _ownedBuilding; // Lieu dont il est prioritaire
 
     /// <summary>
-    /// Saved job data from deserialization. Workplace references are resolved at runtime
-    /// when buildings become available.
+    /// Saved job data from deserialization, keyed on workplace BuildingId. Resolved
+    /// when the matching CommercialBuilding registers with BuildingManager (event-driven —
+    /// works for hibernated workplaces that haven't spawned yet).
     /// </summary>
     private List<JobAssignmentSaveEntry> _pendingJobData = new List<JobAssignmentSaveEntry>();
+    private bool _waitingForBuildings = false;
 
     public Character Character => _character;
     public IReadOnlyList<JobAssignment> ActiveJobs => _activeJobs;
@@ -301,16 +303,97 @@ public class CharacterJob : CharacterSystem, ICharacterSaveData<JobSaveData>
 
     public void Deserialize(JobSaveData data)
     {
-        if (data == null || data.jobs == null) return;
-
+        UnsubscribeBuildingResolver();
         _pendingJobData.Clear();
 
-        // Job assignments require workplace references that may not exist yet.
-        // Store as pending — resolved when the map loads and buildings spawn.
+        if (data == null || data.jobs == null) return;
+
         foreach (var entry in data.jobs)
         {
+            if (entry == null || string.IsNullOrEmpty(entry.workplaceBuildingId) || string.IsNullOrEmpty(entry.jobType))
+                continue;
             _pendingJobData.Add(entry);
         }
+
+        if (_pendingJobData.Count == 0) return;
+
+        // Try buildings already registered (e.g. workplace map is currently active).
+        TryResolvePendingJobs();
+
+        // Anything left? Subscribe and let BuildingManager.OnBuildingRegistered drive future binds.
+        // Covers the case where the workplace map is hibernated and will only spawn its buildings later.
+        if (_pendingJobData.Count > 0 && !_waitingForBuildings)
+        {
+            BuildingManager.OnBuildingRegistered += HandleBuildingRegistered;
+            _waitingForBuildings = true;
+            Debug.Log($"<color=cyan>[CharacterJob:Restore]</color> {_character?.CharacterName}: subscribed to OnBuildingRegistered for {_pendingJobData.Count} pending job(s).");
+        }
+    }
+
+    private void HandleBuildingRegistered(Building building)
+    {
+        if (building == null || _pendingJobData.Count == 0) return;
+        TryResolvePendingJobs();
+        if (_pendingJobData.Count == 0) UnsubscribeBuildingResolver();
+    }
+
+    private void TryResolvePendingJobs()
+    {
+        if (_character == null || BuildingManager.Instance == null) return;
+
+        for (int i = _pendingJobData.Count - 1; i >= 0; i--)
+        {
+            var entry = _pendingJobData[i];
+            Building b = BuildingManager.Instance.FindBuildingById(entry.workplaceBuildingId);
+            if (b is not CommercialBuilding workplace) continue;
+
+            // Already linked (e.g. building-side resolver beat us to it)?
+            bool alreadyActive = _activeJobs.Any(a =>
+                a.Workplace == workplace &&
+                a.AssignedJob != null &&
+                a.AssignedJob.GetType().Name == entry.jobType);
+            if (alreadyActive)
+            {
+                _pendingJobData.RemoveAt(i);
+                continue;
+            }
+
+            // Find a free job slot of the saved type.
+            Job freeJob = null;
+            foreach (var j in workplace.Jobs)
+            {
+                if (j == null || j.IsAssigned) continue;
+                if (j.GetType().Name == entry.jobType) { freeJob = j; break; }
+            }
+            if (freeJob == null)
+            {
+                Debug.LogWarning($"<color=orange>[CharacterJob:Restore]</color> {_character.CharacterName}: no free '{entry.jobType}' slot at '{workplace.BuildingName}'. Dropping.");
+                _pendingJobData.RemoveAt(i);
+                continue;
+            }
+
+            if (TakeJob(freeJob, workplace))
+            {
+                Debug.Log($"<color=green>[CharacterJob:Restore]</color> {_character.CharacterName} re-bound to '{entry.jobType}' at '{workplace.BuildingName}'.");
+            }
+            else
+            {
+                Debug.LogWarning($"<color=orange>[CharacterJob:Restore]</color> {_character.CharacterName}: TakeJob failed for '{entry.jobType}' at '{workplace.BuildingName}'.");
+            }
+            _pendingJobData.RemoveAt(i);
+        }
+    }
+
+    private void UnsubscribeBuildingResolver()
+    {
+        if (!_waitingForBuildings) return;
+        BuildingManager.OnBuildingRegistered -= HandleBuildingRegistered;
+        _waitingForBuildings = false;
+    }
+
+    private void OnDestroy()
+    {
+        UnsubscribeBuildingResolver();
     }
 
     string ICharacterSaveData.SerializeToJson() => CharacterSaveDataHelper.SerializeToJson(this);

@@ -54,6 +54,7 @@ Aggregated page for small cross-cutting systems that don't warrant their own ful
 
 ### Debug / diagnostic
 
+- **[[dev-mode]]** — Promoted to its own Tier-2 page. Host-only F3/`/devmode` developer panel with Spawn + Select modules and the `IDevAction` plug-in contract. Primary owner: `debug-tools-architect` agent. Has SKILL.md.
 - **[[debug-script]]** — `Assets/Scripts/DebugScript.cs`. In-editor cheat and spawn UI. Primary owner: `debug-tools-architect` agent. No SKILL.md.
 - **[[map-controller-debug-ui]]** — per-map hibernation diagnostics overlay. Referenced in [[world]] §8.
 - **[[network-troubleshooting]]** — desync + RPC logging helpers. Has SKILL.md.

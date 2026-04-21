@@ -21,6 +21,17 @@ namespace MWI.WorldSystem
         Ruined = 2
     }
 
+    /// <summary>
+    /// One employee assignment inside a CommercialBuilding. Persisted alongside
+    /// the building's owner so that crews survive hibernation and world save/load.
+    /// </summary>
+    [Serializable]
+    public class EmployeeSaveEntry
+    {
+        public string CharacterId;   // Worker's persistent UUID
+        public string JobType;       // Reflection-friendly type name (e.g. "JobBarman")
+    }
+
     [Serializable]
     public class BuildingSaveData
     {
@@ -28,7 +39,9 @@ namespace MWI.WorldSystem
         public string PrefabId;          // Registry key, NOT a path
         public Vector3 Position;
         public Quaternion Rotation;
-        public string OwnerNpcId;
+        /// <summary>All owner UUIDs (Room/Building.OwnerIds). Replaces the old single-owner
+        /// OwnerNpcId field. For CommercialBuilding the boss is OwnerCharacterIds[0] by convention.</summary>
+        public List<string> OwnerCharacterIds = new List<string>();
         public BuildingState State;      // UnderConstruction, Complete, Ruined
         public float ConstructionProgress; // 0-1, only relevant if UnderConstruction
 
@@ -39,23 +52,59 @@ namespace MWI.WorldSystem
         // Who originally placed this building (distinct from CommercialBuilding.Owner who runs the business)
         public string PlacedByCharacterId;
 
+        /// <summary>Saved employee → job assignments. Populated only for CommercialBuilding.</summary>
+        public List<EmployeeSaveEntry> Employees = new List<EmployeeSaveEntry>();
+
         /// <summary>
         /// Creates a BuildingSaveData entry from a live Building, storing position
         /// relative to the given map center.
         /// </summary>
         public static BuildingSaveData FromBuilding(Building building, Vector3 mapCenter)
         {
-            return new BuildingSaveData
+            var data = new BuildingSaveData
             {
                 BuildingId = building.BuildingId,
                 PrefabId = building.PrefabId,
                 Position = building.transform.position - mapCenter,
                 Rotation = building.transform.rotation,
-                OwnerNpcId = "",
                 State = building.CurrentState,
                 ConstructionProgress = building.CurrentState == BuildingState.Complete ? 1f : 0f,
                 PlacedByCharacterId = building.PlacedByCharacterId.Value.ToString()
             };
+
+            // Owner UUIDs (works for both Residential and Commercial).
+            // We read raw IDs (NOT Owners getter) so hibernated owners are preserved.
+            try
+            {
+                foreach (string id in building.OwnerIds)
+                {
+                    if (!string.IsNullOrEmpty(id))
+                        data.OwnerCharacterIds.Add(id);
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+            }
+
+            // Employees: only commercial buildings have a Jobs roster.
+            if (building is CommercialBuilding commercial)
+            {
+                foreach (var job in commercial.Jobs)
+                {
+                    if (job == null || !job.IsAssigned || job.Worker == null) continue;
+                    string workerId = job.Worker.CharacterId;
+                    if (string.IsNullOrEmpty(workerId)) continue;
+
+                    data.Employees.Add(new EmployeeSaveEntry
+                    {
+                        CharacterId = workerId,
+                        JobType = job.GetType().Name
+                    });
+                }
+            }
+
+            return data;
         }
     }
 

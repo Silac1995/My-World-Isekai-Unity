@@ -69,6 +69,7 @@ No child sub-pages yet.
 - [[network]] — Unity NGO server-authority model. ⚠ Missing `NETWORK_ARCHITECTURE.md`.
 - [[visuals]] — `ICharacterVisual` abstraction; Spine migration planned.
 - [[player-ui]] — HUD, menus, notifications (49 files).
+- [[dev-mode]] — Host-only F3/`/devmode` developer panel. Spawn + Select modules with `IDevAction` plug-ins.
 
 ---
 

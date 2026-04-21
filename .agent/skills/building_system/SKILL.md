@@ -307,10 +307,27 @@ Player-placed buildings are registered with the `MapController` they're placed i
 Static utility that iterates `_mapRegistry`, skips interiors, returns the first map whose `_mapTrigger.bounds.Contains(position)`. Returns null for open world.
 
 ### `BuildingSaveData.FromBuilding(Building, Vector3 mapCenter)`
-Static factory creating a save entry with position **relative** to map center.
+Static factory creating a save entry with position **relative** to map center. Also captures:
+- `OwnerCharacterIds` — `List<string>` from `Room.OwnerIds` (raw NetworkList read; works for both Residential and Commercial; preserves hibernated owners). Replaces the deprecated `OwnerNpcId` single-string field.
+- `Employees` — `List<EmployeeSaveEntry>` (`CharacterId`, `JobType`) for CommercialBuilding crews. Iterates `commercial.Jobs` and emits one entry per assigned job.
+
+`MapController.SnapshotActiveBuildings()` and `MapController.Hibernate()` always *replace* the dynamic fields (`OwnerCharacterIds`, `Employees`, `State`, `Position`, `Rotation`) on existing entries — do not patch fields individually or stale ownership leaks across saves.
+
+### Building Ownership/Employee Restoration
+`CommercialBuilding.RestoreFromSaveData(List<string> ownerIds, List<EmployeeSaveEntry> employees)` (server-only) is called by `MapController.SpawnSavedBuildings()` and `WakeUp()` immediately after `bNet.Spawn()` and `NetworkBuildingId` injection. It:
+
+1. Tries to bind owner + every employee via `Character.FindByUUID`.
+2. For unresolved entries, subscribes to `Character.OnCharacterSpawned` and retries on each spawn until empty (then unsubscribes).
+3. Owner is bound through `SetOwner(owner, ownerJob, autoAssignJob: false)` — the new `autoAssignJob` flag suppresses SetOwner's auto-LogisticsManager pick so it doesn't steal a slot earmarked for a saved employee. The owner's saved job (if any) is fed in explicitly from the `Employees` list.
+4. Employees go through `worker.CharacterJob.TakeJob(job, building)` so the bidirectional link (building.Jobs ↔ character._activeJobs) is consistent.
+
+`OnNetworkDespawn` unsubscribes the listener — needed for re-hibernation cycles.
 
 ### `Building.PlacedByCharacterId`
-`NetworkVariable<FixedString64Bytes>` tracking who originally placed the building. Distinct from `CommercialBuilding.Owner` (business operator).
+`NetworkVariable<FixedString64Bytes>` tracking who originally placed the building. Distinct from `CommercialBuilding.Owner` (business operator). **Always restored** by `MapController.SpawnSavedBuildings()` / `WakeUp()` from `BuildingSaveData.PlacedByCharacterId` — early implementations dropped it on load.
+
+### `BuildingManager.OnBuildingRegistered`
+`static event Action<Building>` fired by `BuildingManager.RegisterBuilding`. Used by `CharacterJob` to lazily re-bind to a saved workplace when the building's map wakes up (event-driven; works for hibernated workplaces).
 
 ---
 

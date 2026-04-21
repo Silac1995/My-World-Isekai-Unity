@@ -5,7 +5,7 @@ tags: [building, commercial, jobs, tier-2, stub]
 created: 2026-04-19
 updated: 2026-04-19
 sources: []
-related: ["[[building]]", "[[jobs-and-logistics]]", "[[shops]]", "[[kevin]]"]
+related: ["[[building]]", "[[jobs-and-logistics]]", "[[shops]]", "[[dev-mode]]", "[[kevin]]"]
 status: stable
 confidence: high
 primary_agent: building-furniture-specialist
