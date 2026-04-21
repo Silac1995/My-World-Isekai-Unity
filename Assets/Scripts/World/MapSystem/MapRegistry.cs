@@ -295,6 +295,35 @@ namespace MWI.WorldSystem
                 }
             }
 
+            // Enforce MapMinSeparation — reject if another zone center is too close.
+            if (_settings != null)
+            {
+                float minSep = _settings.MapMinSeparation;
+                float minSqr = minSep * minSep;
+
+                var allMaps = UnityEngine.Object.FindObjectsByType<MapController>(FindObjectsSortMode.None);
+                foreach (var m in allMaps)
+                {
+                    if (m == null || m.Type == MapType.Interior) continue;
+                    if ((m.transform.position - worldPosition).sqrMagnitude < minSqr)
+                    {
+                        Debug.LogWarning($"<color=yellow>[MapRegistry:CreateMapAtPosition]</color> Rejected map at {worldPosition}: within {minSep} units of map '{m.MapId}'.");
+                        return null;
+                    }
+                }
+
+                var allZones = UnityEngine.Object.FindObjectsByType<WildernessZone>(FindObjectsSortMode.None);
+                foreach (var z in allZones)
+                {
+                    if (z == null) continue;
+                    if ((z.transform.position - worldPosition).sqrMagnitude < minSqr)
+                    {
+                        Debug.LogWarning($"<color=yellow>[MapRegistry:CreateMapAtPosition]</color> Rejected map at {worldPosition}: within {minSep} units of zone '{z.ZoneId}'.");
+                        return null;
+                    }
+                }
+            }
+
             float chunkSize = _settings != null ? _settings.ProximityChunkSize : 75f;
             Vector2Int originChunk = new Vector2Int(
                 Mathf.FloorToInt(worldPosition.x / chunkSize),

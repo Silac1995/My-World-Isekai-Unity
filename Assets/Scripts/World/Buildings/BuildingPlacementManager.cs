@@ -22,9 +22,6 @@ namespace MWI.WorldSystem
         [Header("Notifications")]
         [SerializeField] private ToastNotificationChannel _toastChannel;
 
-        [Tooltip("When placing outside any existing MapController, the building will join the nearest exterior map within this radius (Unity units). If no map is within this radius, a new wild map is spawned centered on the placement.")]
-        [SerializeField] private float _nearbyMapJoinRadius = 150f;
-
         [SerializeField] private WorldSettingsData _settings;
         private GameObject _ghostInstance;
         private string _activePrefabId;
@@ -393,21 +390,22 @@ namespace MWI.WorldSystem
                 }
             }
 
-            // 3. Join the nearest exterior map within the configured radius.
+            // 3. Join the nearest exterior map within the global MapMinSeparation.
+            float minSep = _settings != null ? _settings.MapMinSeparation : 150f;
             if (map == null)
             {
-                MapController nearest = MapController.GetNearestExteriorMap(worldPosition, _nearbyMapJoinRadius);
+                MapController nearest = MapController.GetNearestExteriorMap(worldPosition, minSep);
                 if (nearest != null)
                 {
                     map = nearest;
-                    Debug.Log($"<color=yellow>[BuildingPlacementManager:Register]</color> No enclosing map. Joining nearest exterior map '{map.MapId}' within {_nearbyMapJoinRadius} units.");
+                    Debug.Log($"<color=yellow>[BuildingPlacementManager:Register]</color> No enclosing map. Joining nearest exterior map '{map.MapId}' within {minSep} units.");
                 }
             }
 
             // 4. Last resort — spawn a brand-new wild map centered on the placement.
             if (map == null && MapRegistry.Instance != null)
             {
-                Debug.Log($"<color=yellow>[BuildingPlacementManager:Register]</color> No nearby map within {_nearbyMapJoinRadius} units. Creating a new wild map at {worldPosition}.");
+                Debug.Log($"<color=yellow>[BuildingPlacementManager:Register]</color> No nearby map within {minSep} units. Creating a new wild map at {worldPosition}.");
                 try
                 {
                     map = MapRegistry.Instance.CreateMapAtPosition(worldPosition);
