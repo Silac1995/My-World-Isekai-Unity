@@ -34,26 +34,31 @@ Phase 1 delivers the scaffolding, performs the rip, and lands the minimal classe
 - Live harvestable GameObject spawning / visual prefabs.
 - Wildlife ecology (animals streamed into wilderness zones).
 - Reactive motion strategies (`AvoidWeatherFront`, `FollowResourceAbundance`, `FleeFromPlayer`, etc.).
-- `WeatherFront` behavior (spawning, precipitation VFX, client-side effects).
+- **Changing existing `WeatherFront` behavior.** `WeatherFront.cs`, `WeatherFrontSnapshot.cs`, and wind-driven movement are already implemented and stay as-is. Adapting them to `IWorldZone` is a Phase-2 concern.
 - Procedural Region generation — all regions are scene-authored for MVP.
 - Cross-server tamed-animal portability.
 
 ## 4. World hierarchy
 
 ```
-Region (authored MonoBehaviour in scene)
+Region (authored MonoBehaviour in scene — renamed/extended from existing BiomeRegion)
 ├── BoxCollider Bounds
 ├── BiomeDefinition DefaultBiome
+├── BiomeClimateProfile ClimateProfile  (existing field, kept as-is)
 ├── RegionId
 └── Children (Unity transform hierarchy, auto-discovered in Awake):
     ├── MapController        (existing — discrete places, hibernate individually)
     ├── WildernessZone       (new — virtual content, streams on player approach)
-    └── WeatherFront         (new stub — future atmospheric regions)
+    └── WeatherFront         (existing — fully implemented; spawned on timer by Region)
 ```
 
 - All three child types implement `IWorldZone`.
-- `Region` is **server-side MonoBehaviour only** — no `NetworkBehaviour` inheritance. Clients learn their current region via a new `CharacterMapTracker.CurrentRegionId` NetworkVariable.
+- `Region` is **server-side MonoBehaviour only** — no `NetworkBehaviour` inheritance. Clients learn their current region via a new `CharacterMapTracker.CurrentRegionId` NetworkVariable. (`WeatherFront` children are themselves `NetworkBehaviour`s — that is independent of `Region`.)
 - A `MapController` or `WildernessZone` can exist **without a parent Region** (rare, e.g., isolated wild placement). `CurrentRegionId` is empty in that case. This preserves flexibility without forcing a region around every orphan map.
+
+### 4.1 Relationship to existing code
+
+`BiomeRegion` already provides ~80% of what `Region` needs — bounds, biome reference, climate profile, static `GetRegionAtPosition` registry, hibernation, and live `WeatherFront` spawning on a timer. Phase 1 renames the class (and moves the file) rather than creating a parallel type. See Section 11 for the concrete rename steps.
 
 ## 5. Classes and interfaces
 
@@ -80,23 +85,44 @@ public interface IStreamable {
 }
 ```
 
-### 5.2 New MonoBehaviours
+### 5.2 MonoBehaviours
+
+**`Region` — rename & extend existing `BiomeRegion`:**
 
 ```csharp
-// Server-side only. Authored in scene.
+// Before: namespace MWI.Weather { public class BiomeRegion : MonoBehaviour, ISaveable { ... } }
+// After:  namespace MWI.WorldSystem { public class Region : MonoBehaviour, IWorldZone, ISaveable { ... } }
+//
+// All existing fields / methods preserved. Additions:
 public class Region : MonoBehaviour, IWorldZone, ISaveable {
-    public string RegionId;
-    public BiomeDefinition DefaultBiome;
-    public BoxCollider Bounds;
+    // EXISTING (kept as-is):
+    //   [SerializeField] string _regionId;
+    //   [SerializeField] BiomeDefinition _biomeDefinition;
+    //   [SerializeField] BiomeClimateProfile _climateProfile;
+    //   [SerializeField] GameObject _weatherFrontPrefab;
+    //   List<WeatherFront> _activeFronts;
+    //   List<WeatherFrontSnapshot> _hibernatedFronts;
+    //   static GetRegionAtPosition / GetAdjacentRegions / ClearRegistry
+    //   WakeUp / Hibernate / ISaveable
 
-    public IReadOnlyList<MapController> Maps { get; }
-    public IReadOnlyList<WildernessZone> WildernessZones { get; }
-    public IReadOnlyList<WeatherFront> WeatherFronts { get; }
+    // NEW:
+    public IReadOnlyList<MapController> Maps { get; }                 // auto-discovered in Awake
+    public IReadOnlyList<WildernessZone> WildernessZones { get; }     // auto-discovered + dynamic additions
 
-    // IWorldZone via Bounds
-    // ISaveable persists dynamically-spawned children (authored ones restore from scene)
+    // IWorldZone impl:
+    public string ZoneId => _regionId;
+    public Vector3 Center => _bounds.bounds.center;
+    public float Radius => _bounds.bounds.extents.magnitude;
+    public bool Contains(Vector3 p) => _bounds.bounds.Contains(p);
+    public float DistanceTo(Vector3 p) => Vector3.Distance(_bounds.ClosestPoint(p), p);
 }
+```
 
+File moves from `Assets/Scripts/Weather/BiomeRegion.cs` → `Assets/Scripts/World/MapSystem/Region.cs`. Move the `.meta` file alongside so the asset GUID is preserved and existing scene references stay intact. Namespace `MWI.Weather` → `MWI.WorldSystem`.
+
+**`WildernessZone` — new class:**
+
+```csharp
 public class WildernessZone : NetworkBehaviour, IWorldZone, ISaveable {
     public string ZoneId;
     public float Radius;
@@ -105,13 +131,9 @@ public class WildernessZone : NetworkBehaviour, IWorldZone, ISaveable {
     public List<HibernatedNPCData> Wildlife;               // existing type, empty in Phase 1
     public List<ScriptableZoneMotionStrategy> MotionStrategies;
 }
-
-public class WeatherFront : NetworkBehaviour, IWorldZone {
-    public string ZoneId;
-    public float Radius;
-    // Stub — no logic in Phase 1
-}
 ```
+
+**`WeatherFront` — unchanged.** Existing class in `Assets/Scripts/Weather/WeatherFront.cs` stays exactly as it is. In Phase 1 it is **not** adapted to `IWorldZone` — that's a Phase-2 concern. The abstraction hierarchy tolerates this: `WeatherFront` is a first-class world object but simply isn't queryable through `IWorldZone` yet.
 
 ### 5.3 Motion strategy base & default impl
 
@@ -142,11 +164,10 @@ public class MapRegistry : MonoBehaviour, ISaveable {
     // SaveKey = "CommunityTracker_Data"  (unchanged for save-file compat)
 }
 
-// Thin static class — iterates all Region instances on demand.
-public static class RegionRegistry {
-    public static Region GetRegionAt(Vector3 worldPos);
-    public static IReadOnlyList<Region> All { get; }
-}
+// Static registry — already exists on BiomeRegion (_allRegions) with
+// GetRegionAtPosition / GetAdjacentRegions / ClearRegistry. Kept as-is
+// after the rename; no separate RegionRegistry class is needed.
+// Callers use: Region.GetRegionAtPosition(worldPos).
 
 // New server-side singleton. ISaveable (persists dynamic zones via their parent Region).
 public class WildernessZoneManager : MonoBehaviour {
@@ -197,16 +218,29 @@ Server updates it whenever the character's position enters a new region's bounds
 
 **Client-side display:** The NV carries only the `RegionId` string. For human-readable display ("You are in the Eastern Woods"), clients load a shared `RegionDefinition` SO keyed by `RegionId` at boot — the SO holds display name, biome reference, UI icon, etc. `Region` MonoBehaviours in the scene reference their matching `RegionDefinition`. This keeps the `Region` itself server-side while letting clients resolve the ID for UI purposes. `RegionDefinition` is added in step 6 alongside the `Region` class.
 
-### 6.4 New save types
+### 6.4 Save types
+
+**`Region` save payload — extend existing `BiomeRegion` `ISaveable` state:**
+
+The existing `BiomeRegion.CaptureState()` already serializes hibernated `WeatherFront`s (`WeatherFrontSnapshot[]`) and hibernation timing. Phase 1 adds `DynamicWildernessZones` to the same payload:
 
 ```csharp
 [Serializable]
 public class RegionSaveData {
-    public string RegionId;
+    // EXISTING fields (kept — currently in BiomeRegion's private save type):
+    public List<WeatherFrontSnapshot> HibernatedFronts;
+    public bool IsHibernating;
+    public double LastHibernationTime;
+
+    // NEW:
     public List<WildernessZoneSaveData> DynamicWildernessZones = new();
     // Authored zones restored from scene prefab, not serialized here.
 }
+```
 
+**`WildernessZoneSaveData` — new:**
+
+```csharp
 [Serializable]
 public class WildernessZoneSaveData {
     public string ZoneId;
@@ -218,6 +252,8 @@ public class WildernessZoneSaveData {
     public List<string> MotionStrategyAssetPaths;
 }
 ```
+
+Back-compat: `RestoreState` reads the new shape. If an old save lacks `DynamicWildernessZones`, the field stays an empty list (default). No explicit legacy branch needed.
 
 ### 6.5 `MapRegistrySaveData` — renamed, shrunk
 
@@ -314,12 +350,12 @@ Four sub-phases. Each row below is one commit.
 | **1b — Rip & rename** | | | |
 | 4 | Rename `CommunityTracker` → `MapRegistry` + `CommunityTrackerSaveData` → `MapRegistrySaveData`. Keep `SaveKey = "CommunityTracker_Data"` for save compat | File rename + all `Instance` callsites | None (pure rename) |
 | 5 | Rip `EvaluatePopulations`, `_pendingClusters`, `RoamingClusterData`, `PromoteToSettlement`, NPC migration block. Add restore-compat branch for old `PendingClusters` blob in saves | ~200 lines deleted, ~10 added | **NPC cluster auto-promotion stops firing** |
-| **1c — New classes** (additive) | | | |
-| 6 | `Region.cs` (MonoBehaviour, `ISaveable`, `IWorldZone`) + `RegionRegistry` static + `RegionSaveData` | 3 new files | None (until scene use) |
-| 7 | `WildernessZone.cs` (NetworkBehaviour, `ISaveable`, `IWorldZone`) + `WildernessZoneSaveData` | 2 new files | None |
-| 8 | `WeatherFront.cs` stub | 1 new file | None |
+| **1c — Rename, extend, add** | | | |
+| 6 | **Rename `BiomeRegion` → `Region`.** Move `Assets/Scripts/Weather/BiomeRegion.cs` → `Assets/Scripts/World/MapSystem/Region.cs` (move `.meta` together to preserve GUID). Update namespace `MWI.Weather` → `MWI.WorldSystem`. Update all 11 call-site files (`TerrainWeatherProcessor`, `GlobalWindController`, `MacroSimulator`, `BiomeDefinition`, `WeatherFront`, `CharacterTerrainEffects`, `SaveManager`, etc.) | 1 file moved + 11 files updated | **Class rename; no behavior change** |
+| 7 | **Extend `Region`** with `IWorldZone` impl + `List<MapController> Maps` + `List<WildernessZone> WildernessZones` auto-discovered in `Awake` via `GetComponentsInChildren`. Extend existing save payload with `DynamicWildernessZones` | ~50 lines added to Region.cs | None (until scene use) |
+| 8 | `WildernessZone.cs` (NetworkBehaviour, `ISaveable`, `IWorldZone`) + `WildernessZoneSaveData` | 2 new files | None |
 | 9 | `WildernessZoneDef` SO + `HarvestableSeedingTable` helper | 2 new files | None |
-| 10 | `WildernessZoneManager.cs` singleton + `SpawnZone(pos, def, parent=null)` with `MapMinSeparation` enforcement and auto-parent via `RegionRegistry.GetRegionAt` | 1 new file | None (until called) |
+| 10 | `WildernessZoneManager.cs` singleton + `SpawnZone(pos, def, parent=null)` with `MapMinSeparation` enforcement and auto-parent via `Region.GetRegionAtPosition` | 1 new file | None (until called) |
 | **1d — Wire & integrate** | | | |
 | 11 | `BuildingPlacementManager`: remove `_nearbyMapJoinRadius`, read from `WorldSettingsData.MapMinSeparation`. Enforce separation inside `MapRegistry.CreateMapAtPosition` | ~20 lines | **Wild-map spawn respects `MapMinSeparation` globally** |
 | 12 | `CharacterMapTracker`: add `CurrentRegionId` NetworkVariable + server-side update on position change (0.25s throttle) | ~15 lines | **Clients know their current region** |
@@ -352,15 +388,17 @@ Each arrow is one strategy or one manager call.
 | Harvestable prefab spawning doesn't exist yet | Explicit non-goal (Section 3). Data model lands in Phase 1; visible prefabs in Phase 2. |
 | `MapId` / `ZoneId` NetworkVariable gap | Pre-existing issue with `MapController.MapId`; carried forward. Separate follow-up PR to convert to NetworkVariable. Flagged in build-system SKILL. |
 | `CharacterMapTracker.CurrentRegionId` update thrashing (character hovering on a region boundary) | Add a 0.25s minimum update interval on the server-side position check. |
+| `BiomeRegion` → `Region` rename touches 11 source files + scenes holding `BiomeRegion` components | Move `.cs` and `.meta` together to preserve the asset GUID so scene-serialized component references survive. Namespace change (`MWI.Weather` → `MWI.WorldSystem`) propagated via grep-and-replace; Unity will recompile and surface any missed callsite. Run full compile pass after step 6 before step 7 starts. |
 
 ## 14. Testing plan
 
 **Unit / edit-mode tests:**
 - `StaticMotionStrategy.ComputeDailyDelta(...)` returns `Vector3.zero` for any input.
-- `Region.Awake()` auto-populates child lists from a fake transform hierarchy.
-- `RegionRegistry.GetRegionAt` returns correct region for in-bounds / null for out-of-bounds.
+- `Region.Awake()` auto-populates child lists (`Maps`, `WildernessZones`) from a fake transform hierarchy, while preserving existing WeatherFront spawn behavior.
+- `Region.GetRegionAtPosition` (renamed from `BiomeRegion.GetRegionAtPosition`) returns correct region for in-bounds / null for out-of-bounds.
 - `MapRegistry` `RestoreState` with legacy `CommunityTrackerSaveData` blob (containing `PendingClusters`) produces a valid `MapRegistry` state without crash and without the pending clusters.
 - `WildernessZoneManager.SpawnZone` rejects spawn within `MapMinSeparation` of another zone.
+- Existing `BiomeRegion` save roundtrip (now `Region`) — WeatherFront hibernation still works after rename.
 
 **Integration / play-mode tests:**
 - Place a building outside any map → `CreateMapAtPosition` is called, new `MapController` is born, separation rule enforced against other maps.
@@ -392,3 +430,4 @@ Each arrow is one strategy or one manager call.
 ## 17. Change log
 
 - 2026-04-21 — Initial design. Claude / Kevin.
+- 2026-04-21 — Reconciled with existing `BiomeRegion` + `WeatherFront` in `Assets/Scripts/Weather/`. `Region` is now a **rename/extend** of `BiomeRegion` (Option A) rather than a new class. `WeatherFront` stays unchanged. Claude / Kevin.
