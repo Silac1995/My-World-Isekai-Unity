@@ -122,6 +122,13 @@ namespace MWI.WorldSystem
 
             zone.InitializeAsDynamic(zoneId, def.DefaultRadius, parent, def.DefaultMotion, initialPool);
 
+            // Physically reparent under the Region transform for scene-hierarchy clarity.
+            // Server-side only — not replicated (Region is not a NetworkObject).
+            if (parent != null)
+            {
+                obj.transform.SetParent(parent.transform, worldPositionStays: true);
+            }
+
             Debug.Log($"<color=magenta>[WildernessZoneManager:SpawnZone]</color> Spawned '{zoneId}' at {pos} (parent={parent?.ZoneId ?? "<none>"}, radius={def.DefaultRadius}).");
             return zone;
         }

@@ -403,14 +403,17 @@ namespace MWI.WorldSystem
                 return null;
             }
 
-            // Register with the containing Region so Region.Maps stays consistent.
-            // We intentionally do NOT reparent the MapController under the Region transform —
-            // Region is a plain MonoBehaviour (no NetworkObject), and NGO doesn't replicate
-            // cross-hierarchy parenting cleanly. The logical association is enough for
-            // Region.GetRegionAtPosition + Maps-list consumers.
+            // Register with the containing Region so Region.Maps stays consistent, AND
+            // reparent physically under the Region transform for a clean scene hierarchy.
+            // NGO caveat: Region is a plain MonoBehaviour (no NetworkObject), so this
+            // parent change is NOT replicated to clients — the MapController will appear
+            // at scene root on clients. That's acceptable because all gameplay queries go
+            // through Region.GetRegionAtPosition (bounds-based) and Region.Maps, not
+            // Unity transform parenting. Flagged in ADR-0001 follow-ups.
             if (targetRegion != null)
             {
                 targetRegion.RegisterMap(mapController);
+                mapObj.transform.SetParent(targetRegion.transform, worldPositionStays: true);
             }
 
             Debug.Log($"<color=magenta>[MapRegistry:CreateMapAtPosition]</color> Wild map '{mapId}' spawned at {worldPosition} (slot={slotIndex}, chunk={originChunk}, region={(targetRegion != null ? targetRegion.ZoneId : "<open>")}).");
