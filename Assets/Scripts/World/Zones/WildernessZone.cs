@@ -50,7 +50,13 @@ namespace MWI.WorldSystem
         }
 
         // --- Server-side init ---
-        /// <summary>Called by WildernessZoneManager.SpawnZone after the NetworkObject is spawned.</summary>
+        /// <summary>
+        /// Called by WildernessZoneManager.SpawnZone after the NetworkObject is spawned.
+        /// SERVER AUTHORITY ONLY. Phase 1 does not replicate _zoneId, _radius, _parentRegion,
+        /// _harvestables, _wildlife, or _motionStrategies to clients — clients see the
+        /// NetworkObject but all configuration stays default-valued until a future phase
+        /// adds NetworkVariable wrappers. See ADR-0001.
+        /// </summary>
         public void InitializeAsDynamic(string zoneId, float radius, Region parent,
             List<ScriptableZoneMotionStrategy> motionStrategies,
             List<ResourcePoolEntry> seededHarvestables)
@@ -58,6 +64,11 @@ namespace MWI.WorldSystem
             if (!IsServer)
             {
                 Debug.LogError("<color=red>[WildernessZone:InitializeAsDynamic]</color> Must be called on server.");
+                return;
+            }
+            if (_isDynamicallySpawned)
+            {
+                Debug.LogWarning($"<color=yellow>[WildernessZone:InitializeAsDynamic]</color> Zone '{_zoneId}' already initialized — refusing to re-init. Authored zones should not be re-initialized as dynamic.");
                 return;
             }
             _zoneId = zoneId;
