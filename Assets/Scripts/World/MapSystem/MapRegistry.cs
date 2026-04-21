@@ -141,8 +141,14 @@ namespace MWI.WorldSystem
         public string MapId;
         public int SlotIndex = -1; // -1 means no slot allocated yet
         public CommunityTier Tier;
-        
+
         public Vector2Int OriginChunk;
+        /// <summary>
+        /// Exact world-space position where the MapController was spawned. Used on save/load
+        /// to respawn dynamic wild maps created via <see cref="MapRegistry.CreateMapAtPosition"/>.
+        /// For predefined (scene-authored) maps this stays Vector3.zero and is unused.
+        /// </summary>
+        public Vector3 SpawnPosition;
         public string LeaderNpcId; // Primary leader UUID
         public List<string> LeaderIds = new List<string>(); // All leaders (primary is first)
 
@@ -354,6 +360,7 @@ namespace MWI.WorldSystem
                 SlotIndex = slotIndex,
                 Tier = CommunityTier.Settlement,
                 OriginChunk = originChunk,
+                SpawnPosition = worldPosition,
                 DayStartedSustaining = currentDay,
                 IsPredefinedMap = false
             };
@@ -709,7 +716,87 @@ namespace MWI.WorldSystem
                 // Legacy CommunityTrackerSaveData may have contained PendingClusters;
                 // those are silently discarded by JSON deserialization. Log so this is traceable.
                 Debug.Log($"<color=cyan>[MapRegistry:RestoreState]</color> Restored {_communities.Count} communities. Legacy cluster data (if any) discarded.");
+
+                // Dynamic wild maps (created via CreateMapAtPosition) live only as runtime
+                // GameObjects — the scene doesn't hold them. Respawn them now from the
+                // CommunityData snapshot. Deferred by 1.5s so scene-placed MapControllers
+                // have time to OnNetworkSpawn and register in _mapRegistry first — otherwise
+                // our "skip if MapId already exists" guard would miss them.
+                CancelInvoke(nameof(RespawnDynamicMapsDeferred));
+                Invoke(nameof(RespawnDynamicMapsDeferred), 1.5f);
             }
+        }
+
+        /// <summary>
+        /// Server-only. Respawns MapControllers for every non-predefined community that
+        /// doesn't already have a live MapController in <see cref="MapController._mapRegistry"/>.
+        /// Used by <see cref="RestoreState"/> to recreate wild maps after a save/load cycle.
+        /// </summary>
+        private void RespawnDynamicMapsDeferred()
+        {
+            if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsServer) return;
+            if (_mapControllerPrefab == null)
+            {
+                _mapControllerPrefab = Resources.Load<GameObject>("Prefabs/World/MapController");
+                if (_mapControllerPrefab == null)
+                {
+                    Debug.LogError("<color=red>[MapRegistry:RespawnDynamicMaps]</color> MapController prefab not assigned — cannot respawn wild maps.");
+                    return;
+                }
+            }
+
+            int respawned = 0;
+            int skippedExisting = 0;
+            foreach (var comm in _communities)
+            {
+                if (comm == null || comm.IsPredefinedMap) continue;
+                if (string.IsNullOrEmpty(comm.MapId)) continue;
+
+                // Skip if a live MapController with this MapId already exists (scene-authored
+                // or already respawned).
+                if (MapController.GetByMapId(comm.MapId) != null)
+                {
+                    skippedExisting++;
+                    continue;
+                }
+
+                try
+                {
+                    GameObject mapObj = Instantiate(_mapControllerPrefab, comm.SpawnPosition, Quaternion.identity);
+                    MapController mapController = mapObj.GetComponent<MapController>();
+                    NetworkObject netObj = mapObj.GetComponent<NetworkObject>();
+                    if (mapController == null || netObj == null)
+                    {
+                        Debug.LogError($"<color=red>[MapRegistry:RespawnDynamicMaps]</color> Prefab is missing MapController or NetworkObject for '{comm.MapId}'.");
+                        Destroy(mapObj);
+                        continue;
+                    }
+
+                    mapController.MapId = comm.MapId;
+                    // Wild-map semantics — no Biome/JobYields (matches CreateMapAtPosition).
+                    mapController.Biome = null;
+                    mapController.JobYields = null;
+
+                    netObj.Spawn();
+
+                    // Re-establish Region parenting if the position falls inside an authored region.
+                    Region parentRegion = Region.GetRegionAtPosition(comm.SpawnPosition);
+                    if (parentRegion != null)
+                    {
+                        parentRegion.RegisterMap(mapController);
+                        netObj.TrySetParent(parentRegion.transform, worldPositionStays: true);
+                    }
+
+                    respawned++;
+                    Debug.Log($"<color=green>[MapRegistry:RespawnDynamicMaps]</color> Respawned '{comm.MapId}' at {comm.SpawnPosition} (region={parentRegion?.ZoneId ?? "<open>"}).");
+                }
+                catch (Exception e)
+                {
+                    Debug.LogException(e);
+                }
+            }
+
+            Debug.Log($"<color=cyan>[MapRegistry:RespawnDynamicMaps]</color> Done. Respawned={respawned}, SkippedExisting={skippedExisting}, TotalCommunities={_communities.Count}.");
         }
 
         #endregion
