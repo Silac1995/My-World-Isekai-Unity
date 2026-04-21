@@ -357,13 +357,23 @@ namespace MWI.WorldSystem
 
         public object CaptureState()
         {
-            return new RegionSaveData
+            var state = new RegionSaveData
             {
                 RegionId = _regionId,
                 IsHibernating = _isHibernating,
                 LastHibernationTime = _lastHibernationTime,
                 HibernatedFronts = _hibernatedFronts.ToArray()
             };
+
+            // Dynamic wilderness zones (authored ones restore from scene, not here)
+            state.DynamicWildernessZones = new List<WildernessZoneSaveData>();
+            foreach (var zone in _wildernessZones)
+            {
+                if (zone == null || !zone.IsDynamicallySpawned) continue;
+                state.DynamicWildernessZones.Add(zone.CaptureZoneState());
+            }
+
+            return state;
         }
 
         public void RestoreState(object state)
@@ -373,6 +383,22 @@ namespace MWI.WorldSystem
                 _isHibernating = data.IsHibernating;
                 _lastHibernationTime = data.LastHibernationTime;
                 _hibernatedFronts = data.HibernatedFronts?.ToList() ?? new List<WeatherFrontSnapshot>();
+
+                // Respawn dynamic wilderness zones via the manager
+                if (data.DynamicWildernessZones != null && WildernessZoneManager.Instance != null)
+                {
+                    foreach (var zoneData in data.DynamicWildernessZones)
+                    {
+                        try
+                        {
+                            WildernessZoneManager.Instance.RestoreZone(zoneData, this);
+                        }
+                        catch (Exception e)
+                        {
+                            Debug.LogException(e);
+                        }
+                    }
+                }
             }
         }
     }
@@ -384,5 +410,8 @@ namespace MWI.WorldSystem
         public bool IsHibernating;
         public double LastHibernationTime;
         public WeatherFrontSnapshot[] HibernatedFronts;
+
+        // NEW (Task 10): dynamic wilderness zones to restore on load
+        public List<WildernessZoneSaveData> DynamicWildernessZones = new List<WildernessZoneSaveData>();
     }
 }
