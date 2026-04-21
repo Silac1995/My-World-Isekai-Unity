@@ -16,11 +16,11 @@ depended_on_by: ["[[world]]", "[[jobs-and-logistics]]"]
 
 # World Community
 
-> ⚠️ **Pending Phase 1 refactor — see [[adr-0001-living-world-hierarchy-refactor]].**
-> `CommunityTracker` is being renamed to `MapRegistry`. NPC-cluster auto-promotion (`EvaluatePopulations`, `PromoteToSettlement`, the `RoamingCamp → Settlement → EstablishedCity` lifecycle) is being deleted. `CommunityData` stays, but is no longer created by cluster detection — only by `MapController.EnsureCommunityData` or explicit `MapRegistry.CreateMapAtPosition` calls. Sections below describe the **pre-refactor** state.
+> **Phase 1 refactor complete — see [[adr-0001-living-world-hierarchy-refactor]].**
+> `CommunityTracker` is now `MapRegistry`. NPC-cluster auto-promotion (`EvaluatePopulations`, `PromoteToSettlement`, the `RoamingCamp → Settlement → EstablishedCity` lifecycle) was deleted. `CommunityData` stays; entries are created only by `MapController.EnsureCommunityData` (scene-authored maps) or `MapRegistry.CreateMapAtPosition` (wild maps from building placement). `SaveKey = "CommunityTracker_Data"` is intentionally preserved for save-file back-compat. Sections below describe the **post-refactor** state.
 
 ## Summary
-Social + territorial grouping of characters. Hierarchical (Kingdom > Duchy > Village); members identified by UUID. `CommunityTracker` runs a server heartbeat evaluating state promotions: Roaming Camp → Settlement → Established City → Abandoned City → Reclaimed. Triggers map birth via `WorldOffsetAllocator` + open-world stamping (physical chunk at cluster centroid).
+Social + territorial grouping of characters. Hierarchical (Kingdom > Duchy > Village); members identified by UUID. `MapRegistry` (renamed from `CommunityTracker`) holds the persistent `CommunityData` list — leaders, constructed buildings, resource pools, build permits, pending claims — and exposes `CreateMapAtPosition` (server-only wild-map birth triggered by out-of-map building placement), `AdoptExistingBuildings`, and `ImposeJobOnCitizen` for leader authority. No cluster heartbeat; no auto-promotion. Map birth is explicit (scene authoring or placement-driven).
 
 ## Key classes / files
 - `Assets/Scripts/World/Community/Community.cs` — the entity.
@@ -34,6 +34,7 @@ See [[character-community]] for the per-character adapter that holds the foundin
 ## Change log
 - 2026-04-19 — Stub. — Claude / [[kevin]]
 - 2026-04-21 — Added pending-refactor notice pointing to [[adr-0001-living-world-hierarchy-refactor]]. — Claude / [[kevin]]
+- 2026-04-21 — Refactor implemented. `CommunityTracker` renamed to `MapRegistry`, cluster-promotion deleted, wild-map save/load round-trip working. — Claude / [[kevin]]
 
 ## Sources
 - [.agent/skills/community-system/SKILL.md](../../.agent/skills/community-system/SKILL.md)

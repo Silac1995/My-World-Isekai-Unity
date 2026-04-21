@@ -27,8 +27,8 @@ depended_on_by:
 
 # World Macro Simulation
 
-> ⚠️ **Pending Phase 1 extension — see [[adr-0001-living-world-hierarchy-refactor]].**
-> The catch-up loop gains a 5th step — **Zone Motion** — which iterates all `WildernessZone` + `WeatherFront` instances, sums their `IZoneMotionStrategy` daily deltas, clamps by `WorldSettingsData.MapMinSeparation`, and applies the result. Runs both on `TimeManager.OnNewDay` during active play AND on map wake-up with accumulated `daysSinceLastTick`. All zones default to `StaticMotionStrategy` in Phase 1, so this step is a no-op until later phases introduce reactive strategies. Sections below describe the **pre-refactor** state.
+> **Phase 1 extension complete — see [[adr-0001-living-world-hierarchy-refactor]].**
+> The catch-up loop now has a 6th step — **Zone Motion** — in `MacroSimulator.TickZoneMotion(daysSinceLastTick)`. It iterates all `WildernessZone` instances, sums their `IZoneMotionStrategy` daily deltas, clamps the proposed position against `WorldSettingsData.MapMinSeparation` (zone-vs-zone overlap prevention), and applies. Called from `SimulateCatchUp` after step 5 (City Growth) so map wake-up catches up accumulated offline drift in one pass. All zones default to `StaticMotionStrategy` in Phase 1, so this step is a no-op until later phases introduce reactive strategies. Active-play daily ticking is deferred — the wake-up catch-up covers observable behavior because static zones never drift. Sections below describe the **post-refactor** state.
 
 ## Summary
 When a hibernating map wakes up, the `MacroSimulator` runs a catch-up pass over the elapsed delta (`CurrentTime - HibernationTime`) in strict order: (1) resource pool regen, (2) biome-driven inventory yields via `JobYieldRegistry`, (3) needs decay per character, (4) schedule snap (skip to end of current scheduled task, snap position). It's pure math over serialized data — no Unity Update loops, no NavMesh, no NetworkObject. Everything consumes `TimeManager.CurrentDay` + `CurrentTime01`, never `Time.time`.
@@ -118,6 +118,7 @@ The actual physical scaffolds materialize when the map wakes — at wake time th
 ## Change log
 - 2026-04-19 — Initial pass. — Claude / [[kevin]]
 - 2026-04-21 — Added pending-extension notice (Zone Motion catch-up step) pointing to [[adr-0001-living-world-hierarchy-refactor]]. — Claude / [[kevin]]
+- 2026-04-21 — Zone Motion step 6 implemented in `MacroSimulator.TickZoneMotion`, called from `SimulateCatchUp` on map wake-up. No-op in Phase 1 with default `StaticMotionStrategy`. — Claude / [[kevin]]
 
 ## Sources
 - [.agent/skills/world-system/SKILL.md](../../.agent/skills/world-system/SKILL.md) §2–§3.
