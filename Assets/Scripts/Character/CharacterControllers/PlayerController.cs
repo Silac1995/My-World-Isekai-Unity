@@ -51,17 +51,9 @@ public class PlayerController : CharacterGameController
     {
         if (IsOwner)
         {
-            if (DevModeManager.SuppressPlayerInput)
-            {
-                _inputDir = Vector3.zero;
-                base.Update();
-                Move();
-                return;
-            }
-
             // Block player movement/action input if typing in any UI text field
-            if (UnityEngine.EventSystems.EventSystem.current != null && 
-                UnityEngine.EventSystems.EventSystem.current.currentSelectedGameObject != null && 
+            if (UnityEngine.EventSystems.EventSystem.current != null &&
+                UnityEngine.EventSystems.EventSystem.current.currentSelectedGameObject != null &&
                 UnityEngine.EventSystems.EventSystem.current.currentSelectedGameObject.GetComponent<TMPro.TMP_InputField>() != null)
             {
                 _inputDir = Vector3.zero;
@@ -70,10 +62,12 @@ public class PlayerController : CharacterGameController
                 return;
             }
 
+            bool devMode = DevModeManager.SuppressPlayerInput;
+
             float h = Input.GetAxisRaw("Horizontal");
             float v = Input.GetAxisRaw("Vertical");
             _inputDir = new Vector3(h, 0f, v).normalized;
-            _isCrouching = Input.GetKey(KeyCode.C);
+            _isCrouching = !devMode && Input.GetKey(KeyCode.C);
 
             if (_inputDir.sqrMagnitude > 0.1f && _currentOrder != null)
             {
@@ -89,77 +83,83 @@ public class PlayerController : CharacterGameController
                 }
             }
 
-            // Right-click to move (standard RPG/MOBA)
-            if (Input.GetMouseButtonDown(1) && !_character.CharacterCombat.IsInBattle)
+            // Dev mode suppresses all gameplay action inputs below — right-click move, TAB target,
+            // combat command auto-assignment, and Space attack — but WASD above still drives
+            // movement (at GodModeMovementSpeed, see Move()).
+            if (!devMode)
             {
-                Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-                if (Physics.Raycast(ray, out RaycastHit hit, 100f))
+                // Right-click to move (standard RPG/MOBA)
+                if (Input.GetMouseButtonDown(1) && !_character.CharacterCombat.IsInBattle)
                 {
-                    SetOrder(new PlayerMoveCommand(hit.point));
-                }
-            }
-
-            // --- TAB: Cycle-select the closest interactable within awareness range ---
-            if (Input.GetKeyDown(KeyCode.Tab))
-            {
-                HandleTabTargeting();
-            }
-
-            // Auto-Trigger Combat Command when in battle. The command handles pacing and action execution.
-            if (_character.CharacterCombat.IsInBattle && !(_currentOrder is PlayerCombatCommand))
-            {
-                Character battleTarget = _character.CharacterCombat.CurrentBattleManager?.GetBestTargetFor(_character);
-                
-                // Fallback: If GetBestTargetFor returns null (e.g. the host was attacked, not the
-                // attacker, and the engagement coordinator hasn't registered them yet), pick any
-                // alive opponent from the opposing team and request an engagement.
-                if (battleTarget == null)
-                {
-                    var bm = _character.CharacterCombat.CurrentBattleManager;
-                    var opponentTeam = bm?.GetOpponentTeamOf(_character);
-                    if (opponentTeam != null)
+                    Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+                    if (Physics.Raycast(ray, out RaycastHit hit, 100f))
                     {
-                        battleTarget = opponentTeam.CharacterList.Find(c => c != null && c.IsAlive());
-                        if (battleTarget != null)
+                        SetOrder(new PlayerMoveCommand(hit.point));
+                    }
+                }
+
+                // --- TAB: Cycle-select the closest interactable within awareness range ---
+                if (Input.GetKeyDown(KeyCode.Tab))
+                {
+                    HandleTabTargeting();
+                }
+
+                // Auto-Trigger Combat Command when in battle. The command handles pacing and action execution.
+                if (_character.CharacterCombat.IsInBattle && !(_currentOrder is PlayerCombatCommand))
+                {
+                    Character battleTarget = _character.CharacterCombat.CurrentBattleManager?.GetBestTargetFor(_character);
+
+                    // Fallback: If GetBestTargetFor returns null (e.g. the host was attacked, not the
+                    // attacker, and the engagement coordinator hasn't registered them yet), pick any
+                    // alive opponent from the opposing team and request an engagement.
+                    if (battleTarget == null)
+                    {
+                        var bm = _character.CharacterCombat.CurrentBattleManager;
+                        var opponentTeam = bm?.GetOpponentTeamOf(_character);
+                        if (opponentTeam != null)
                         {
-                            bm.SetTargeting(_character, battleTarget);
-                            Debug.Log($"<color=yellow>[PlayerCtrl]</color> {_character.CharacterName} fallback targeting set against {battleTarget.CharacterName}");
+                            battleTarget = opponentTeam.CharacterList.Find(c => c != null && c.IsAlive());
+                            if (battleTarget != null)
+                            {
+                                bm.SetTargeting(_character, battleTarget);
+                                Debug.Log($"<color=yellow>[PlayerCtrl]</color> {_character.CharacterName} fallback targeting set against {battleTarget.CharacterName}");
+                            }
+                            else
+                            {
+                                Debug.LogWarning($"<color=red>[PlayerCtrl]</color> {_character.CharacterName} IsInBattle but no alive opponents found in opponent team!");
+                            }
                         }
                         else
                         {
-                            Debug.LogWarning($"<color=red>[PlayerCtrl]</color> {_character.CharacterName} IsInBattle but no alive opponents found in opponent team!");
+                            Debug.LogWarning($"<color=red>[PlayerCtrl]</color> {_character.CharacterName} IsInBattle but GetOpponentTeamOf returned null! BM={bm}");
                         }
                     }
-                    else
+
+                    if (battleTarget != null)
                     {
-                        Debug.LogWarning($"<color=red>[PlayerCtrl]</color> {_character.CharacterName} IsInBattle but GetOpponentTeamOf returned null! BM={bm}");
+                        Debug.Log($"<color=green>[PlayerCtrl]</color> {_character.CharacterName} entering combat mode vs {battleTarget.CharacterName}. NavMesh will be enabled.");
+                        SetOrder(new PlayerCombatCommand(_character, battleTarget));
+
+                        // Sync the target indicator and PlannedTarget to the initial battle target
+                        EnsureTargeting();
+                        if (_targeting != null)
+                        {
+                            var charInteractable = battleTarget.CharacterInteractable;
+                            if (charInteractable != null)
+                                _targeting.SelectInteractable(charInteractable);
+                        }
                     }
                 }
-
-                if (battleTarget != null)
+                else if (!_character.CharacterCombat.IsInBattle && _currentOrder is PlayerCombatCommand)
                 {
-                    Debug.Log($"<color=green>[PlayerCtrl]</color> {_character.CharacterName} entering combat mode vs {battleTarget.CharacterName}. NavMesh will be enabled.");
-                    SetOrder(new PlayerCombatCommand(_character, battleTarget));
-
-                    // Sync the target indicator and PlannedTarget to the initial battle target
-                    EnsureTargeting();
-                    if (_targeting != null)
-                    {
-                        var charInteractable = battleTarget.CharacterInteractable;
-                        if (charInteractable != null)
-                            _targeting.SelectInteractable(charInteractable);
-                    }
+                    // Exit combat gracefully
+                    SetOrder(null);
                 }
-            }
-            else if (!_character.CharacterCombat.IsInBattle && _currentOrder is PlayerCombatCommand)
-            {
-                // Exit combat gracefully
-                SetOrder(null);
-            }
 
-            if (!_character.CharacterCombat.IsInBattle && Input.GetKeyDown(KeyCode.Space))
-            {
-                _character.CharacterCombat.Attack(null);
+                if (!_character.CharacterCombat.IsInBattle && Input.GetKeyDown(KeyCode.Space))
+                {
+                    _character.CharacterCombat.Attack(null);
+                }
             }
         }
 
@@ -280,7 +280,11 @@ public class PlayerController : CharacterGameController
 
             if (moveDir.magnitude > 0.1f && !_isCrouching)
             {
-                _characterMovement.SetDesiredDirection(moveDir, _character.MovementSpeed);
+                // God-mode speed override while dev mode is active.
+                float speed = DevModeManager.SuppressPlayerInput
+                    ? DevModeManager.GodModeMovementSpeed
+                    : _character.MovementSpeed;
+                _characterMovement.SetDesiredDirection(moveDir, speed);
             }
             else
             {

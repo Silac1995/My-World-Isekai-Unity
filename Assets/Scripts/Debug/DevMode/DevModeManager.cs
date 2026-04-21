@@ -26,9 +26,17 @@ public class DevModeManager : MonoBehaviour
 
     /// <summary>
     /// True iff dev mode is currently active on this machine. Read by PlayerController
-    /// and PlayerInteractionDetector to suppress player input while the god tool has focus.
+    /// and PlayerInteractionDetector to suppress gameplay action inputs (right-click move,
+    /// TAB target, Space attack, E interact) while the god tool has focus. WASD movement
+    /// is still allowed — the player controller swaps in <see cref="GodModeMovementSpeed"/>
+    /// so flying around the scene stays fast.
     /// </summary>
     public static bool SuppressPlayerInput => Instance != null && Instance.IsEnabled;
+
+    /// <summary>
+    /// WASD movement speed (units/second) used by PlayerController while dev mode is active.
+    /// </summary>
+    public const float GodModeMovementSpeed = 17f;
 
     public event Action<bool> OnDevModeChanged;
 

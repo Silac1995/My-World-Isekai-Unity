@@ -32,7 +32,8 @@ Dev Mode is a host-only, god-mode developer tool that layers a togglable admin p
 |---|---|---|
 | `IsUnlocked` | `bool` | Session gate. True in editor/dev builds or after `/devmode on` in release. |
 | `IsEnabled` | `bool` | Current panel state. True while the dev panel is open and input is suppressed. |
-| `SuppressPlayerInput` | `static bool` | Global read used by `PlayerController` and `PlayerInteractionDetector` to short-circuit input. Mirrors `IsEnabled` on the active instance. |
+| `SuppressPlayerInput` | `static bool` | Global read used by `PlayerController` and `PlayerInteractionDetector` to suppress gameplay action inputs. Mirrors `IsEnabled` on the active instance. WASD movement is still allowed (god-mode flying); only right-click move, TAB target, Space attack, and E interact are blocked. |
+| `GodModeMovementSpeed` | `static const float` | WASD movement speed (units/second) used by `PlayerController` while dev mode is active. Default `17f`. Edit the constant to tune. |
 
 **Events**
 
@@ -62,10 +63,10 @@ Entry point: `DevChatCommands.Handle(string rawInput)`. Called from `UI_ChatBar`
 
 ## 5. Input Gating Contract
 
-While `DevModeManager.IsEnabled == true`, the two input-reading components short-circuit:
+While `DevModeManager.IsEnabled == true`, the two input-reading components selectively suppress gameplay actions but keep movement live:
 
-- `PlayerController.Update()` — checks `DevModeManager.SuppressPlayerInput` at the top. WASD is suppressed by **zeroing `_inputDir`** and then letting `base.Update()` + `Move()` still run so the NavMeshAgent / animation state stays consistent (no drift, no stuck animations).
-- `PlayerInteractionDetector.Update()` — full early-out. No hover highlights, no click-to-interact, no pickup attempts. Dev-mode click-to-spawn must not collide with the normal interaction layer.
+- `PlayerController.Update()` — reads WASD into `_inputDir` as usual, then **skips the gameplay-action block** (right-click move, TAB target, combat-command auto-assignment, Space attack) when `SuppressPlayerInput` is true. `_isCrouching` is also forced false. The character keeps moving via WASD; `Move()` swaps the speed argument to `DevModeManager.GodModeMovementSpeed` so god-mode flying feels brisk.
+- `PlayerInteractionDetector.Update()` — early-outs after the proximity refresh. Nearby-target tracking still updates (so the prompt restores instantly when you exit dev mode), but the E-key press path is blocked.
 
 `SuppressPlayerInput` is a **static** on `DevModeManager` so hot-path Updates don't dereference the instance every frame.
 
