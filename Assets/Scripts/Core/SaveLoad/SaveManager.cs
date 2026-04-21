@@ -132,7 +132,7 @@ public class SaveManager : MonoBehaviour
             Destroy(Unity.Netcode.NetworkManager.Singleton.gameObject);
         }
 
-        BiomeRegion.ClearRegistry();
+        Region.ClearRegistry();
         TerrainTypeRegistry.Clear();
 
         Debug.Log("<color=green>[SaveManager]</color> Reset for new session — world singletons destroyed.");

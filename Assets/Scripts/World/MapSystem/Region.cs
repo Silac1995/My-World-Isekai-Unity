@@ -3,14 +3,14 @@ using System.Collections.Generic;
 using System.Linq;
 using Unity.Netcode;
 using UnityEngine;
-using MWI.WorldSystem;
+using MWI.Weather;
 using MWI.Terrain;
 using MWI.Time;
 
-namespace MWI.Weather
+namespace MWI.WorldSystem
 {
     [RequireComponent(typeof(BoxCollider))]
-    public class BiomeRegion : MonoBehaviour, ISaveable
+    public class Region : MonoBehaviour, ISaveable
     {
         [SerializeField] private string _regionId;
         [SerializeField] private BiomeDefinition _biomeDefinition;
@@ -25,9 +25,9 @@ namespace MWI.Weather
         private double _lastHibernationTime;
 
         // --- Static Registry ---
-        private static List<BiomeRegion> _allRegions = new();
+        private static List<Region> _allRegions = new();
 
-        public static BiomeRegion GetRegionAtPosition(Vector3 worldPos)
+        public static Region GetRegionAtPosition(Vector3 worldPos)
         {
             foreach (var region in _allRegions)
             {
@@ -37,9 +37,9 @@ namespace MWI.Weather
             return null;
         }
 
-        public static List<BiomeRegion> GetAdjacentRegions(BiomeRegion region)
+        public static List<Region> GetAdjacentRegions(Region region)
         {
-            var result = new List<BiomeRegion>();
+            var result = new List<Region>();
             if (region._bounds == null) return result;
 
             var expanded = region._bounds.bounds;
@@ -164,7 +164,7 @@ namespace MWI.Weather
             }
             catch (Exception e)
             {
-                Debug.LogError($"[BiomeRegion] Failed to spawn WeatherFront: {e.Message}");
+                Debug.LogError($"[Region] Failed to spawn WeatherFront: {e.Message}");
             }
         }
 
@@ -261,7 +261,7 @@ namespace MWI.Weather
                     }
                     catch (Exception e)
                     {
-                        Debug.LogError($"[BiomeRegion] Failed to respawn front on wake: {e.Message}");
+                        Debug.LogError($"[Region] Failed to respawn front on wake: {e.Message}");
                     }
                 }
 
@@ -277,7 +277,7 @@ namespace MWI.Weather
                 _climateProfile.FrontSpawnIntervalMinHours * 3600f,
                 _climateProfile.FrontSpawnIntervalMaxHours * 3600f);
 
-            Debug.Log($"[BiomeRegion] '{_regionId}' woke up after {elapsed:F2} days. " +
+            Debug.Log($"[Region] '{_regionId}' woke up after {elapsed:F2} days. " +
                       $"Restored {survivingSnapshots.Count} fronts, spawned {Mathf.FloorToInt(elapsedSeconds / ((_climateProfile.FrontSpawnIntervalMinHours + _climateProfile.FrontSpawnIntervalMaxHours) / 2f * 3600f))} new.");
         }
 
@@ -306,7 +306,7 @@ namespace MWI.Weather
             }
             _activeFronts.Clear();
 
-            Debug.Log($"[BiomeRegion] '{_regionId}' hibernated. Serialized {_hibernatedFronts.Count} fronts.");
+            Debug.Log($"[Region] '{_regionId}' hibernated. Serialized {_hibernatedFronts.Count} fronts.");
         }
 
         // --- ISaveable ---
@@ -314,7 +314,7 @@ namespace MWI.Weather
 
         public object CaptureState()
         {
-            return new BiomeRegionSaveData
+            return new RegionSaveData
             {
                 RegionId = _regionId,
                 IsHibernating = _isHibernating,
@@ -325,7 +325,7 @@ namespace MWI.Weather
 
         public void RestoreState(object state)
         {
-            if (state is BiomeRegionSaveData data)
+            if (state is RegionSaveData data)
             {
                 _isHibernating = data.IsHibernating;
                 _lastHibernationTime = data.LastHibernationTime;
@@ -335,7 +335,7 @@ namespace MWI.Weather
     }
 
     [Serializable]
-    public class BiomeRegionSaveData
+    public class RegionSaveData
     {
         public string RegionId;
         public bool IsHibernating;

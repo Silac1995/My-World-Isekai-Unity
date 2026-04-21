@@ -62,10 +62,10 @@ public class CharacterTerrainEffects : CharacterSystem
             }
         }
 
-        // Priority 3: Open world — BiomeRegion default
+        // Priority 3: Open world — Region default
         if (newTerrain == null)
         {
-            var region = BiomeRegion.GetRegionAtPosition(pos);
+            var region = Region.GetRegionAtPosition(pos);
             if (region != null)
                 newTerrain = region.GetDefaultTerrainType();
         }
@@ -79,7 +79,7 @@ public class CharacterTerrainEffects : CharacterSystem
         }
 
         // Weather front detection
-        var biome = BiomeRegion.GetRegionAtPosition(pos);
+        var biome = Region.GetRegionAtPosition(pos);
         if (biome != null)
         {
             IsInWeatherFront = false;
