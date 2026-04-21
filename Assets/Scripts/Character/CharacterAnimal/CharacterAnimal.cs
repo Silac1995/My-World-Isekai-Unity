@@ -125,4 +125,106 @@ public class CharacterAnimal : CharacterSystem,
 
     string ICharacterSaveData.SerializeToJson() => CharacterSaveDataHelper.SerializeToJson(this);
     void ICharacterSaveData.DeserializeFromJson(string json) => CharacterSaveDataHelper.DeserializeFromJson(this, json);
+
+    // ── Server-Authoritative Tame Flow (called from CharacterTameAction) ──
+
+    [Rpc(SendTo.Server)]
+    public void RequestTameServerRpc(NetworkObjectReference interactorRef, RpcParams rpcParams = default)
+    {
+        TryTameOnServer(interactorRef);
+    }
+
+    /// <summary>
+    /// Server-side gate + roll. Called directly when the tame action runs on
+    /// the server, or via RequestTameServerRpc when it runs on a client.
+    /// </summary>
+    public void TryTameOnServer(NetworkObjectReference interactorRef)
+    {
+        if (!IsServer)
+        {
+            Debug.LogError($"[CharacterAnimal] TryTameOnServer called on non-server — ignored.");
+            return;
+        }
+
+        if (!interactorRef.TryGet(out NetworkObject interactorNetObj))
+        {
+            Debug.LogWarning($"[CharacterAnimal] Server could not resolve interactor NetworkObject — rejecting tame.");
+            return;
+        }
+
+        Character interactor = interactorNetObj.GetComponent<Character>();
+        if (interactor == null || _character == null)
+        {
+            Debug.LogWarning($"[CharacterAnimal] Missing Character on interactor or target — rejecting tame.");
+            return;
+        }
+
+        // Re-validate server-side (defends against stale client state).
+        if (!IsTameable)
+        {
+            Debug.Log($"[CharacterAnimal] '{_character.CharacterName}' is not tameable — rejecting.");
+            return;
+        }
+        if (IsTamed)
+        {
+            Debug.Log($"[CharacterAnimal] '{_character.CharacterName}' is already tamed — rejecting.");
+            return;
+        }
+        if (_character.IsPlayer())
+        {
+            Debug.Log($"[CharacterAnimal] '{_character.CharacterName}' is currently player-driven — tame blocked.");
+            return;
+        }
+
+        float range = _character.Archetype != null ? _character.Archetype.DefaultInteractionRange : 3.5f;
+        float dist = Vector3.Distance(interactor.transform.position, _character.transform.position);
+        if (dist > range)
+        {
+            Debug.Log($"[CharacterAnimal] '{interactor.CharacterName}' too far to tame '{_character.CharacterName}' (dist={dist:F2}, range={range:F2}).");
+            return;
+        }
+
+        // Roll.
+        bool success = _random.Value() > _tameDifficulty.Value;
+
+        Debug.Log($"<color=cyan>[CharacterAnimal]</color> Roll for '{_character.CharacterName}' — " +
+                  $"difficulty={_tameDifficulty.Value:F2}, success={success}.");
+
+        if (success)
+        {
+            _isTamed.Value = true;
+
+            string profileId = interactor.CharacterId;
+            if (string.IsNullOrEmpty(profileId))
+            {
+                Debug.LogWarning($"[CharacterAnimal] Interactor '{interactor.CharacterName}' has empty CharacterId — " +
+                                 "OwnerProfileId will be blank until identity resolves.");
+                _ownerProfileId.Value = default;
+            }
+            else
+            {
+                if (profileId.Length > 63)
+                {
+                    Debug.LogWarning($"[CharacterAnimal] ProfileId '{profileId}' exceeds FixedString64Bytes capacity — truncating.");
+                    profileId = profileId.Substring(0, 63);
+                }
+                _ownerProfileId.Value = new FixedString64Bytes(profileId);
+            }
+        }
+
+        // Broadcast the result to every client for the floating text (Task 9).
+        ShowTameResultClientRpc(success);
+    }
+
+    [Rpc(SendTo.Everyone)]
+    private void ShowTameResultClientRpc(bool success)
+    {
+        var spawner = _character != null ? _character.FloatingTextSpawner : null;
+        if (spawner == null) return;
+
+        if (success)
+            spawner.SpawnText("Tamed!", Color.green);
+        else
+            spawner.SpawnText("Failed!", new Color(1f, 0.4f, 0.4f));
+    }
 }
