@@ -20,6 +20,7 @@ Subsystem sub-pages:
 - [[character-interaction]], [[character-invitation]], [[character-mentorship]], [[character-relation]] — see [[social]]
 - [[character-community]] — adapter to [[world-community]]
 - [[character-archetype]] **(stub — post-merge)**, [[character-terrain]] **(stub — post-merge)**
+- [[character-animal]] — animal marker + taming; capability-registry, network authority, NPC hibernation persistence
 
 ### [[combat]] — Turn-paced combat
 - [[combat-battle-manager]], [[combat-engagement]], [[combat-ai-logic]], [[combat-damage]], [[combat-abilities]], [[combat-status-effect]], [[combat-circle-indicators]], [[combat-styles]]

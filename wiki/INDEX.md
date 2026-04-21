@@ -4,7 +4,7 @@ _Last regenerated: 2026-04-19 (wiki bootstrap)_
 
 All pages grouped by entity type. Run `/map` to regenerate this file.
 
-## Systems (77)
+## Systems (78)
 
 See also: [[systems/README]] — grouped by category.
 
@@ -23,7 +23,7 @@ See also: [[systems/README]] — grouped by category.
 - [[terrain-and-weather]] — status: wip · confidence: low (post-merge stub)
 
 **Tier 1 children (60)**
-- character: [[character-stats]], [[character-needs]], [[character-movement]], [[character-relation]], [[character-interaction]], [[character-equipment]], [[character-mentorship]], [[character-skills]], [[character-traits]], [[character-bio]], [[character-progression]], [[character-profile]], [[character-book-knowledge]], [[character-blueprints]], [[character-archetype]] (stub), [[character-terrain]] (stub), [[character-schedule]], [[character-job]], [[character-party]], [[character-invitation]], [[character-community]], [[character-locations]], [[character-speech]], [[character-combat]]
+- character: [[character-stats]], [[character-needs]], [[character-movement]], [[character-relation]], [[character-interaction]], [[character-equipment]], [[character-mentorship]], [[character-skills]], [[character-traits]], [[character-bio]], [[character-progression]], [[character-profile]], [[character-book-knowledge]], [[character-blueprints]], [[character-archetype]] (stub), [[character-terrain]] (stub), [[character-schedule]], [[character-job]], [[character-party]], [[character-invitation]], [[character-community]], [[character-locations]], [[character-speech]], [[character-combat]], [[character-animal]]
 - combat: [[combat-battle-manager]], [[combat-engagement]], [[combat-ai-logic]], [[combat-damage]], [[combat-abilities]], [[combat-status-effect]], [[combat-circle-indicators]], [[combat-styles]]
 - ai: [[ai-behaviour-tree]], [[ai-goap]], [[ai-actions]], [[ai-conditions]], [[ai-pathing]], [[ai-navmesh]], [[ai-obstacle-avoidance]], [[ai-player-nav-switch]]
 - items: [[item-data]], [[item-instance]], [[world-items]], [[inventory]], [[keys-and-locks]]
