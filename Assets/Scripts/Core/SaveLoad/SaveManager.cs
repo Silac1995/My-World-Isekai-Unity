@@ -122,7 +122,7 @@ public class SaveManager : MonoBehaviour
 
         // Destroy DontDestroyOnLoad singletons so fresh ones are created from the next GameScene.
         // Without this, stale world data from the previous session bleeds into the next.
-        DestroySingleton(CommunityTracker.Instance);
+        DestroySingleton(MapRegistry.Instance);
         DestroySingleton(WorldOffsetAllocator.Instance);
         DestroySingleton(BuildingInteriorRegistry.Instance);
 
@@ -369,7 +369,7 @@ public class SaveManager : MonoBehaviour
         data.metadata.isEmpty = false;
 
         // Sync live buildings on active maps into CommunityData BEFORE capturing ISaveable states.
-        // This ensures CommunityTracker.CaptureState() includes buildings placed since last hibernation.
+        // This ensures MapRegistry.CaptureState() includes buildings placed since last hibernation.
         foreach (var mc in MapController.ActiveControllers.ToArray())
         {
             if (mc != null && !string.IsNullOrEmpty(mc.MapId))
@@ -476,7 +476,7 @@ public class SaveManager : MonoBehaviour
         {
             if (!map.IsPredefinedMap) continue;
 
-            var tracker = MWI.WorldSystem.CommunityTracker.Instance;
+            var tracker = MWI.WorldSystem.MapRegistry.Instance;
             if (tracker == null) continue; // Safety check
 
             // If this map has no existing save entry, create a default one

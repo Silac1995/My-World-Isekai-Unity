@@ -39,9 +39,9 @@ namespace MWI.Time
             }
 
             CommunityData community = null;
-            if (CommunityTracker.Instance != null)
+            if (MapRegistry.Instance != null)
             {
-                community = CommunityTracker.Instance.GetCommunity(savedData.MapId);
+                community = MapRegistry.Instance.GetCommunity(savedData.MapId);
             }
 
             // 1. Resource Regeneration

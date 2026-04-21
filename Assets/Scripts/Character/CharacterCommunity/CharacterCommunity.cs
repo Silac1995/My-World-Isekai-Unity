@@ -144,11 +144,11 @@ public class CharacterCommunity : CharacterSystem, ICharacterSaveData<CommunityS
 
         if (_currentCommunity != null)
         {
-            // Try to find the community's map ID via CommunityTracker
+            // Try to find the community's map ID via MapRegistry
             string mapId = "";
-            if (MWI.WorldSystem.CommunityTracker.Instance != null)
+            if (MWI.WorldSystem.MapRegistry.Instance != null)
             {
-                foreach (var commData in MWI.WorldSystem.CommunityTracker.Instance.GetAllCommunities())
+                foreach (var commData in MWI.WorldSystem.MapRegistry.Instance.GetAllCommunities())
                 {
                     // Match by leader — communities are uniquely led
                     if (_currentCommunity.leader != null && commData.IsLeader(_currentCommunity.leader.CharacterId))
@@ -177,7 +177,7 @@ public class CharacterCommunity : CharacterSystem, ICharacterSaveData<CommunityS
         _pendingCommunityMapId = data.communityMapId;
 
         // Community references are resolved at runtime when the map loads
-        // and CommunityTracker becomes available.
+        // and MapRegistry becomes available.
     }
 
     string ICharacterSaveData.SerializeToJson() => CharacterSaveDataHelper.SerializeToJson(this);

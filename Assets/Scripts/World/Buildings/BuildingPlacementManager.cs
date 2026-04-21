@@ -273,8 +273,8 @@ namespace MWI.WorldSystem
             MapController map = MapController.GetMapAtPosition(position);
             if (map == null) return true; // Open world — no restriction
 
-            if (CommunityTracker.Instance == null) return true;
-            CommunityData community = CommunityTracker.Instance.GetCommunity(map.MapId);
+            if (MapRegistry.Instance == null) return true;
+            CommunityData community = MapRegistry.Instance.GetCommunity(map.MapId);
             if (community == null) return true; // Map with no community data — allow
 
             // If the community has no leaders at all, there's no authority to deny placement
@@ -308,9 +308,9 @@ namespace MWI.WorldSystem
 
             // Consume a build permit if applicable (leaders don't need permits)
             MapController map = MapController.GetMapAtPosition(position);
-            if (map != null && CommunityTracker.Instance != null && _character != null)
+            if (map != null && MapRegistry.Instance != null && _character != null)
             {
-                CommunityData community = CommunityTracker.Instance.GetCommunity(map.MapId);
+                CommunityData community = MapRegistry.Instance.GetCommunity(map.MapId);
                 if (community != null && !community.IsLeader(_character.CharacterId))
                 {
                     community.ConsumePermit(_character.CharacterId);
@@ -405,12 +405,12 @@ namespace MWI.WorldSystem
             }
 
             // 4. Last resort — spawn a brand-new wild map centered on the placement.
-            if (map == null && CommunityTracker.Instance != null)
+            if (map == null && MapRegistry.Instance != null)
             {
                 Debug.Log($"<color=yellow>[BuildingPlacementManager:Register]</color> No nearby map within {_nearbyMapJoinRadius} units. Creating a new wild map at {worldPosition}.");
                 try
                 {
-                    map = CommunityTracker.Instance.CreateMapAtPosition(worldPosition);
+                    map = MapRegistry.Instance.CreateMapAtPosition(worldPosition);
                 }
                 catch (System.Exception e)
                 {
@@ -430,9 +430,9 @@ namespace MWI.WorldSystem
             buildingObj.transform.SetParent(map.transform);
 
             // Add to CommunityData.ConstructedBuildings
-            if (CommunityTracker.Instance != null)
+            if (MapRegistry.Instance != null)
             {
-                CommunityData community = CommunityTracker.Instance.GetCommunity(map.MapId);
+                CommunityData community = MapRegistry.Instance.GetCommunity(map.MapId);
                 if (community != null)
                 {
                     if (!community.ConstructedBuildings.Exists(b => b.BuildingId == building.BuildingId))

@@ -234,7 +234,7 @@ namespace MWI.WorldSystem
     }
 
     [Serializable]
-    public class CommunityTrackerSaveData
+    public class MapRegistrySaveData
     {
         public List<CommunityData> Communities = new List<CommunityData>();
         public List<RoamingClusterData> PendingClusters = new List<RoamingClusterData>();
@@ -251,9 +251,9 @@ namespace MWI.WorldSystem
     /// Server-side heartbeat system that watches NPC clustering to promote wilderness settlements into proper Maps.
     /// Manages the full state machine: Roaming Camp -> Settlement -> Established City -> Abandoned City -> Reclaimed.
     /// </summary>
-    public class CommunityTracker : MonoBehaviour, ISaveable
+    public class MapRegistry : MonoBehaviour, ISaveable
     {
-        public static CommunityTracker Instance { get; private set; }
+        public static MapRegistry Instance { get; private set; }
 
         [SerializeField] private WorldSettingsData _settings;
         [SerializeField] private GameObject _mapControllerPrefab;
@@ -286,7 +286,7 @@ namespace MWI.WorldSystem
         {
             if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsServer)
             {
-                Debug.LogError("<color=red>[CommunityTracker:CreateMapAtPosition]</color> Must run on the server.");
+                Debug.LogError("<color=red>[MapRegistry:CreateMapAtPosition]</color> Must run on the server.");
                 return null;
             }
 
@@ -295,7 +295,7 @@ namespace MWI.WorldSystem
                 _mapControllerPrefab = Resources.Load<GameObject>("Prefabs/World/MapController");
                 if (_mapControllerPrefab == null)
                 {
-                    Debug.LogError("<color=red>[CommunityTracker:CreateMapAtPosition]</color> MapController prefab is not assigned and could not be loaded from Resources.");
+                    Debug.LogError("<color=red>[MapRegistry:CreateMapAtPosition]</color> MapController prefab is not assigned and could not be loaded from Resources.");
                     return null;
                 }
             }
@@ -341,7 +341,7 @@ namespace MWI.WorldSystem
             MapController mapController = mapObj.GetComponent<MapController>();
             if (mapController == null)
             {
-                Debug.LogError("<color=red>[CommunityTracker:CreateMapAtPosition]</color> Prefab is missing a MapController component.");
+                Debug.LogError("<color=red>[MapRegistry:CreateMapAtPosition]</color> Prefab is missing a MapController component.");
                 Destroy(mapObj);
                 _communities.Remove(newCommunity);
                 return null;
@@ -352,7 +352,7 @@ namespace MWI.WorldSystem
             NetworkObject netObj = mapObj.GetComponent<NetworkObject>();
             if (netObj == null)
             {
-                Debug.LogError("<color=red>[CommunityTracker:CreateMapAtPosition]</color> Prefab is missing a NetworkObject component.");
+                Debug.LogError("<color=red>[MapRegistry:CreateMapAtPosition]</color> Prefab is missing a NetworkObject component.");
                 Destroy(mapObj);
                 _communities.Remove(newCommunity);
                 return null;
@@ -370,7 +370,7 @@ namespace MWI.WorldSystem
                 return null;
             }
 
-            Debug.Log($"<color=magenta>[CommunityTracker:CreateMapAtPosition]</color> Wild map '{mapId}' spawned at {worldPosition} (slot={slotIndex}, chunk={originChunk}).");
+            Debug.Log($"<color=magenta>[MapRegistry:CreateMapAtPosition]</color> Wild map '{mapId}' spawned at {worldPosition} (slot={slotIndex}, chunk={originChunk}).");
             return mapController;
         }
 
@@ -384,13 +384,13 @@ namespace MWI.WorldSystem
             CommunityData comm = GetCommunity(mapId);
             if (comm == null)
             {
-                Debug.LogWarning($"<color=orange>[CommunityTracker]</color> Cannot impose job. Map {mapId} not found.");
+                Debug.LogWarning($"<color=orange>[MapRegistry]</color> Cannot impose job. Map {mapId} not found.");
                 return false;
             }
 
             if (!comm.IsLeader(leaderId))
             {
-                Debug.LogWarning($"<color=red>[CommunityTracker]</color> Character {leaderId} is not a recognized leader of {mapId}. Cannot impose job.");
+                Debug.LogWarning($"<color=red>[MapRegistry]</color> Character {leaderId} is not a recognized leader of {mapId}. Cannot impose job.");
                 return false;
             }
 
@@ -456,7 +456,7 @@ namespace MWI.WorldSystem
             int currentDay = TimeManager.Instance.CurrentDay;
             float chunkSize = _settings != null ? _settings.ProximityChunkSize : 75f;
 
-            Debug.Log($"<color=yellow>[CommunityTracker:Evaluate]</color> Day={currentDay}, ChunkSize={chunkSize}, Communities={_communities.Count}, PendingClusters={_pendingClusters.Count}");
+            Debug.Log($"<color=yellow>[MapRegistry:Evaluate]</color> Day={currentDay}, ChunkSize={chunkSize}, Communities={_communities.Count}, PendingClusters={_pendingClusters.Count}");
 
             // 1. Reset metrics and assume all maps are offline (hibernating)
             foreach (var comm in _communities)
@@ -510,11 +510,11 @@ namespace MWI.WorldSystem
             // Debug: Log unstructured chunk populations
             foreach (var kvp in unstructuredChunks)
             {
-                Debug.Log($"<color=yellow>[CommunityTracker:Evaluate]</color> Unstructured chunk {kvp.Key}: {kvp.Value} NPCs");
+                Debug.Log($"<color=yellow>[MapRegistry:Evaluate]</color> Unstructured chunk {kvp.Key}: {kvp.Value} NPCs");
             }
             foreach (var comm in _communities)
             {
-                Debug.Log($"<color=yellow>[CommunityTracker:Evaluate]</color> Community '{comm.MapId}' (Tier={comm.Tier}, OriginChunk={comm.OriginChunk}): Pop={comm.CurrentDailyPopulation}");
+                Debug.Log($"<color=yellow>[MapRegistry:Evaluate]</color> Community '{comm.MapId}' (Tier={comm.Tier}, OriginChunk={comm.OriginChunk}): Pop={comm.CurrentDailyPopulation}");
             }
 
             ProcessExistingCommunities(currentDay);
@@ -545,7 +545,7 @@ namespace MWI.WorldSystem
                         if (comm.Tier == CommunityTier.RoamingCamp)
                         {
                             // Dissolve completely.
-                            Debug.Log($"<color=orange>[CommunityTracker]</color> Roaming Camp at {comm.OriginChunk} disbanded.");
+                            Debug.Log($"<color=orange>[MapRegistry]</color> Roaming Camp at {comm.OriginChunk} disbanded.");
                             _communities.RemoveAt(i);
                             continue;
                         }
@@ -553,7 +553,7 @@ namespace MWI.WorldSystem
                         {
                             // Turn into Abandoned City. Permanent slot retention.
                             comm.Tier = CommunityTier.AbandonedCity;
-                            Debug.Log($"<color=red>[CommunityTracker]</color> Map {comm.MapId} has been ABANDONED.");
+                            Debug.Log($"<color=red>[MapRegistry]</color> Map {comm.MapId} has been ABANDONED.");
                         }
                     }
                 }
@@ -585,7 +585,7 @@ namespace MWI.WorldSystem
                         {
                             comm.Tier = CommunityTier.EstablishedCity;
                             comm.DayStartedSustaining = currentDay;
-                            Debug.Log($"<color=green>[CommunityTracker]</color> Settlement {comm.MapId} promoted to Established City!");
+                            Debug.Log($"<color=green>[MapRegistry]</color> Settlement {comm.MapId} promoted to Established City!");
                         }
                     }
                     else
@@ -601,7 +601,7 @@ namespace MWI.WorldSystem
                         {
                             comm.Tier = CommunityTier.Settlement; // Reclaimed! Back to Settlement status.
                             comm.DayStartedSustaining = currentDay;
-                            Debug.Log($"<color=cyan>[CommunityTracker]</color> Abandoned City {comm.MapId} has been RECLAIMED!");
+                            Debug.Log($"<color=cyan>[MapRegistry]</color> Abandoned City {comm.MapId} has been RECLAIMED!");
                         }
                     }
                     else
@@ -616,7 +616,7 @@ namespace MWI.WorldSystem
         {
             if (_settings == null) return;
 
-            Debug.Log($"<color=yellow>[CommunityTracker:PendingClusters]</color> Processing {_pendingClusters.Count} pending clusters, {unstructuredChunks.Count} unstructured chunks with 3+ NPCs");
+            Debug.Log($"<color=yellow>[MapRegistry:PendingClusters]</color> Processing {_pendingClusters.Count} pending clusters, {unstructuredChunks.Count} unstructured chunks with 3+ NPCs");
 
             // 1. Update existing pending clusters
             for (int i = _pendingClusters.Count - 1; i >= 0; i--)
@@ -624,7 +624,7 @@ namespace MWI.WorldSystem
                 var cluster = _pendingClusters[i];
                 if (unstructuredChunks.TryGetValue(cluster.Chunk, out int pop))
                 {
-                    Debug.Log($"<color=yellow>[CommunityTracker:PendingClusters]</color> Cluster at {cluster.Chunk}: pop={pop}, age={currentDay - cluster.DayDiscovered} days (need 3+ pop and 3+ days)");
+                    Debug.Log($"<color=yellow>[MapRegistry:PendingClusters]</color> Cluster at {cluster.Chunk}: pop={pop}, age={currentDay - cluster.DayDiscovered} days (need 3+ pop and 3+ days)");
                     if (pop >= 3) // Hardcoding "3" as roaming camp minimum
                     {
                         if (currentDay - cluster.DayDiscovered >= 3) // Hardcoding 3 days
@@ -639,7 +639,7 @@ namespace MWI.WorldSystem
                             };
                             _communities.Add(newCamp);
                             _pendingClusters.RemoveAt(i);
-                            Debug.Log($"<color=yellow>[CommunityTracker]</color> New Roaming Camp formed at {cluster.Chunk}!");
+                            Debug.Log($"<color=yellow>[MapRegistry]</color> New Roaming Camp formed at {cluster.Chunk}!");
                         }
                     }
                     else
@@ -675,17 +675,17 @@ namespace MWI.WorldSystem
             comm.Tier = CommunityTier.Settlement;
             comm.DayStartedSustaining = currentDay;
 
-            Debug.Log($"<color=magenta>[CommunityTracker:Promote]</color> Promoting '{comm.MapId}' to Settlement. OriginChunk={comm.OriginChunk}, Day={currentDay}");
+            Debug.Log($"<color=magenta>[MapRegistry:Promote]</color> Promoting '{comm.MapId}' to Settlement. OriginChunk={comm.OriginChunk}, Day={currentDay}");
 
             if (WorldOffsetAllocator.Instance == null)
             {
-                Debug.LogError("[CommunityTracker:Promote] WorldOffsetAllocator is missing! Cannot promote Settlement to a physical slot.");
+                Debug.LogError("[MapRegistry:Promote] WorldOffsetAllocator is missing! Cannot promote Settlement to a physical slot.");
                 return;
             }
 
             // 1. Allocate Logical Slot
             comm.SlotIndex = WorldOffsetAllocator.Instance.AllocateSlotIndex();
-            Debug.Log($"<color=magenta>[CommunityTracker:Promote]</color> Allocated SlotIndex={comm.SlotIndex}");
+            Debug.Log($"<color=magenta>[MapRegistry:Promote]</color> Allocated SlotIndex={comm.SlotIndex}");
 
             float chunkSize = _settings != null ? _settings.ProximityChunkSize : 75f;
             Vector3 worldPos = new Vector3(
@@ -693,12 +693,12 @@ namespace MWI.WorldSystem
                 0,
                 comm.OriginChunk.y * chunkSize + (chunkSize / 2f)
             );
-            Debug.Log($"<color=magenta>[CommunityTracker:Promote]</color> WorldPos={worldPos}, ChunkSize={chunkSize}");
+            Debug.Log($"<color=magenta>[MapRegistry:Promote]</color> WorldPos={worldPos}, ChunkSize={chunkSize}");
 
             // 2. Instantiate MapController
             if (_mapControllerPrefab != null)
             {
-                Debug.Log($"<color=magenta>[CommunityTracker:Promote]</color> Instantiating MapController prefab '{_mapControllerPrefab.name}' at {worldPos}");
+                Debug.Log($"<color=magenta>[MapRegistry:Promote]</color> Instantiating MapController prefab '{_mapControllerPrefab.name}' at {worldPos}");
                 GameObject mapObj = Instantiate(_mapControllerPrefab, worldPos, Quaternion.identity);
                 MapController mapController = mapObj.GetComponent<MapController>();
                 if (mapController != null)
@@ -708,23 +708,23 @@ namespace MWI.WorldSystem
                     if (netObj != null)
                     {
                         netObj.Spawn();
-                        Debug.Log($"<color=magenta>[CommunityTracker:Promote]</color> MapController spawned. MapId='{comm.MapId}', IsSpawned={netObj.IsSpawned}, GO active={mapObj.activeSelf}");
+                        Debug.Log($"<color=magenta>[MapRegistry:Promote]</color> MapController spawned. MapId='{comm.MapId}', IsSpawned={netObj.IsSpawned}, GO active={mapObj.activeSelf}");
                     }
                     else
                     {
-                        Debug.LogError($"<color=red>[CommunityTracker:Promote]</color> MapController prefab has NO NetworkObject!");
+                        Debug.LogError($"<color=red>[MapRegistry:Promote]</color> MapController prefab has NO NetworkObject!");
                     }
 
                     // Log trigger bounds
                     var trigger = mapObj.GetComponent<BoxCollider>();
                     if (trigger != null)
                     {
-                        Debug.Log($"<color=magenta>[CommunityTracker:Promote]</color> MapController trigger: center={trigger.bounds.center}, extents={trigger.bounds.extents}, isTrigger={trigger.isTrigger}");
+                        Debug.Log($"<color=magenta>[MapRegistry:Promote]</color> MapController trigger: center={trigger.bounds.center}, extents={trigger.bounds.extents}, isTrigger={trigger.isTrigger}");
                     }
                 }
                 else
                 {
-                    Debug.LogError($"<color=red>[CommunityTracker:Promote]</color> MapController prefab has NO MapController component!");
+                    Debug.LogError($"<color=red>[MapRegistry:Promote]</color> MapController prefab has NO MapController component!");
                 }
 
                 // 2.5 Instantiate physical terrain prefab for the Settlement
@@ -754,7 +754,7 @@ namespace MWI.WorldSystem
 
                     if (Mathf.Abs(comm.OriginChunk.x - chunk.x) <= 1 && Mathf.Abs(comm.OriginChunk.y - chunk.y) <= 1)
                     {
-                        Debug.Log($"<color=yellow>[CommunityTracker]</color> Migrating NPC {c.CharacterName} to newly founded Settlement Map {comm.MapId}");
+                        Debug.Log($"<color=yellow>[MapRegistry]</color> Migrating NPC {c.CharacterName} to newly founded Settlement Map {comm.MapId}");
                         
                         // Set Map Tracking & Anchors to the centroid of the new settlement
                         if (c.TryGetComponent(out CharacterMapTracker tracker))
@@ -770,7 +770,7 @@ namespace MWI.WorldSystem
                         if (string.IsNullOrEmpty(comm.LeaderNpcId))
                         {
                             comm.AddLeader(c.CharacterName);
-                            Debug.Log($"<color=magenta>[CommunityTracker]</color> Character '{c.CharacterName}' is now the PRIMARY LEADER of '{comm.MapId}'!");
+                            Debug.Log($"<color=magenta>[MapRegistry]</color> Character '{c.CharacterName}' is now the PRIMARY LEADER of '{comm.MapId}'!");
                         }
                     }
                 }
@@ -780,10 +780,10 @@ namespace MWI.WorldSystem
             }
             else
             {
-                Debug.LogWarning("[CommunityTracker] MapController prefab is not set. Map instantiated logically but not physically.");
+                Debug.LogWarning("[MapRegistry] MapController prefab is not set. Map instantiated logically but not physically.");
             }
 
-            Debug.Log($"<color=green>[CommunityTracker]</color> Roaming Camp promoted to SETTLEMENT! MapID: {comm.MapId} at Slot {comm.SlotIndex}");
+            Debug.Log($"<color=green>[MapRegistry]</color> Roaming Camp promoted to SETTLEMENT! MapID: {comm.MapId} at Slot {comm.SlotIndex}");
         }
 
         // ────────────────────── Building Adoption ──────────────────────
@@ -864,14 +864,14 @@ namespace MWI.WorldSystem
                             DayClaimed = currentDay,
                             TimeoutDays = 7
                         });
-                        Debug.Log($"<color=yellow>[CommunityTracker]</color> Queued pending claim for building '{building.BuildingName}' (owner absent). Auto-claim in 7 days.");
+                        Debug.Log($"<color=yellow>[MapRegistry]</color> Queued pending claim for building '{building.BuildingName}' (owner absent). Auto-claim in 7 days.");
                     }
                 }
             }
 
             if (adoptedCount > 0)
             {
-                Debug.Log($"<color=green>[CommunityTracker]</color> Adopted {adoptedCount} unowned building(s) into Settlement '{comm.MapId}'.");
+                Debug.Log($"<color=green>[MapRegistry]</color> Adopted {adoptedCount} unowned building(s) into Settlement '{comm.MapId}'.");
             }
         }
 
@@ -946,7 +946,7 @@ namespace MWI.WorldSystem
             Building building = FindLiveBuildingById(claim.BuildingId);
             if (building == null)
             {
-                Debug.LogWarning($"<color=orange>[CommunityTracker]</color> Pending claim auto-expired but building '{claim.BuildingId}' no longer exists.");
+                Debug.LogWarning($"<color=orange>[MapRegistry]</color> Pending claim auto-expired but building '{claim.BuildingId}' no longer exists.");
                 return;
             }
 
@@ -956,7 +956,7 @@ namespace MWI.WorldSystem
             }
 
             comm.ConstructedBuildings.Add(BuildingSaveData.FromBuilding(building, map != null ? map.transform.position : Vector3.zero));
-            Debug.Log($"<color=green>[CommunityTracker]</color> Auto-claimed building '{building.BuildingName}' into community '{comm.MapId}' (owner timeout).");
+            Debug.Log($"<color=green>[MapRegistry]</color> Auto-claimed building '{building.BuildingName}' into community '{comm.MapId}' (owner timeout).");
         }
 
         /// <summary>
@@ -972,7 +972,7 @@ namespace MWI.WorldSystem
 
         public object CaptureState()
         {
-            return new CommunityTrackerSaveData
+            return new MapRegistrySaveData
             {
                 Communities = new List<CommunityData>(_communities),
                 PendingClusters = new List<RoamingClusterData>(_pendingClusters)
@@ -981,11 +981,11 @@ namespace MWI.WorldSystem
 
         public void RestoreState(object state)
         {
-            if (state is CommunityTrackerSaveData data)
+            if (state is MapRegistrySaveData data)
             {
                 _communities = data.Communities ?? new List<CommunityData>();
                 _pendingClusters = data.PendingClusters ?? new List<RoamingClusterData>();
-                Debug.Log($"<color=green>[CommunityTracker]</color> Restored {_communities.Count} communities.");
+                Debug.Log($"<color=green>[MapRegistry]</color> Restored {_communities.Count} communities.");
             }
         }
 
