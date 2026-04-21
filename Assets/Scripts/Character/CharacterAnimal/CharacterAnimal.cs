@@ -52,8 +52,29 @@ public class CharacterAnimal : CharacterSystem,
     // ── IInteractionProvider (Task 6) ───────────────────────────────────
     public List<InteractionOption> GetInteractionOptions(Character interactor)
     {
-        // Implemented in Task 6.
-        return new List<InteractionOption>();
+        var options = new List<InteractionOption>();
+
+        if (interactor == null || _character == null) return options;
+        if (!IsTameable || IsTamed) return options;
+        if (interactor == _character) return options;
+
+        // Capture locals for the closure.
+        Character interactorRef = interactor;
+
+        options.Add(new InteractionOption("Tame", () =>
+        {
+            // Queue the action on the interactor. CharacterTameAction's OnApplyEffect
+            // routes to the target's server-side tame RPC (Task 8).
+            if (interactorRef.CharacterActions == null)
+            {
+                Debug.LogWarning($"[CharacterAnimal] '{interactorRef.CharacterName}' has no CharacterActions — cannot tame.");
+                return;
+            }
+
+            interactorRef.CharacterActions.ExecuteAction(new CharacterTameAction(interactorRef, _character));
+        }));
+
+        return options;
     }
 
     // ── ICharacterSaveData<AnimalSaveData> (Task 5) ─────────────────────
