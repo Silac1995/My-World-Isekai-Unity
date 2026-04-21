@@ -10,7 +10,7 @@ using MWI.Time;
 namespace MWI.WorldSystem
 {
     [RequireComponent(typeof(BoxCollider))]
-    public class Region : MonoBehaviour, ISaveable
+    public class Region : MonoBehaviour, IWorldZone, ISaveable
     {
         [SerializeField] private string _regionId;
         [SerializeField] private BiomeDefinition _biomeDefinition;
@@ -23,6 +23,12 @@ namespace MWI.WorldSystem
         private float _nextSpawnTimer;
         private BoxCollider _bounds;
         private double _lastHibernationTime;
+
+        // --- NEW: Child MapController and WildernessZone tracking (Phase 1) ---
+        private readonly List<MapController> _maps = new List<MapController>();
+        private readonly List<WildernessZone> _wildernessZones = new List<WildernessZone>();
+        public IReadOnlyList<MapController> Maps => _maps;
+        public IReadOnlyList<WildernessZone> WildernessZones => _wildernessZones;
 
         // --- Static Registry ---
         private static List<Region> _allRegions = new();
@@ -96,6 +102,43 @@ namespace MWI.WorldSystem
             _bounds = GetComponent<BoxCollider>();
             _bounds.isTrigger = true;
             _allRegions.Add(this);
+
+            // Auto-discover child MapControllers and WildernessZones.
+            // Dynamic additions (via WildernessZoneManager) call RegisterWildernessZone / UnregisterWildernessZone directly.
+            _maps.AddRange(GetComponentsInChildren<MapController>(includeInactive: true));
+            _wildernessZones.AddRange(GetComponentsInChildren<WildernessZone>(includeInactive: true));
+            Debug.Log($"<color=cyan>[Region:Awake]</color> '{_regionId}' discovered {_maps.Count} maps, {_wildernessZones.Count} wilderness zones.");
+        }
+
+        // --- Dynamic Wilderness Zone Registration ---
+
+        /// <summary>Called by WildernessZoneManager when a zone is spawned inside this region at runtime.</summary>
+        public void RegisterWildernessZone(WildernessZone zone)
+        {
+            if (zone == null || _wildernessZones.Contains(zone)) return;
+            _wildernessZones.Add(zone);
+        }
+
+        /// <summary>Called on zone despawn to keep the list clean.</summary>
+        public void UnregisterWildernessZone(WildernessZone zone)
+        {
+            if (zone == null) return;
+            _wildernessZones.Remove(zone);
+        }
+
+        // --- IWorldZone ---
+        public string ZoneId => _regionId;
+        public Vector3 Center => _bounds != null ? _bounds.bounds.center : transform.position;
+        public float Radius => _bounds != null ? _bounds.bounds.extents.magnitude : 0f;
+
+        public bool Contains(Vector3 worldPos)
+            => _bounds != null && _bounds.bounds.Contains(worldPos);
+
+        public float DistanceTo(Vector3 worldPos)
+        {
+            if (_bounds == null) return Vector3.Distance(transform.position, worldPos);
+            Vector3 closest = _bounds.ClosestPoint(worldPos);
+            return Vector3.Distance(closest, worldPos);
         }
 
         private void OnDestroy()
