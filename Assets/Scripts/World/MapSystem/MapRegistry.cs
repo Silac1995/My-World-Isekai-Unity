@@ -382,6 +382,14 @@ namespace MWI.WorldSystem
 
             mapController.MapId = mapId;
 
+            // Wild maps are lean player-founded outposts — strip settlement-specific wiring
+            // from the prefab (Biome + JobYields) so MapController.SpawnVirtualBuildings
+            // (which iterates Biome.Harvestables to create VirtualResourceSupplier children)
+            // short-circuits on its `Biome == null` gate. If NPC logistics later moves in,
+            // a Biome can be assigned explicitly.
+            mapController.Biome = null;
+            mapController.JobYields = null;
+
             NetworkObject netObj = mapObj.GetComponent<NetworkObject>();
             if (netObj == null)
             {
