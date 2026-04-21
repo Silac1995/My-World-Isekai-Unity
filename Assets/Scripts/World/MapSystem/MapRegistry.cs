@@ -450,6 +450,11 @@ namespace MWI.WorldSystem
         /// Discovers existing buildings within the MapController's bounds and adopts them
         /// into the community. Unowned buildings are auto-claimed. Owned buildings trigger
         /// negotiation or are queued as pending claims if the owner is absent.
+        ///
+        /// PRESERVED API — currently has no caller after the Phase 1 cluster-promotion rip
+        /// (ADR-0001). It remains here because <see cref="CreateMapAtPosition"/> will invoke
+        /// it when a player-placed building triggers wild-map creation near existing
+        /// buildings. Do not delete without updating ADR-0001.
         /// </summary>
         private void AdoptExistingBuildings(MapController mapController, CommunityData comm)
         {

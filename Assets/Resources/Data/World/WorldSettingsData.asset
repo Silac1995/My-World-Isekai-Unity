@@ -13,13 +13,7 @@ MonoBehaviour:
   m_Name: WorldSettingsData
   m_EditorClassIdentifier: Assembly-CSharp::MWI.WorldSystem.WorldSettingsData
   ProximityChunkSize: 75
-  SettlementMinPopulation: 1
-  SettlementSustainedDays: 3
-  CityMinPopulation: 15
-  CitySustainedDays: 30
-  ReclamationMinPopulation: 2
-  ReclamationSustainedDays: 2
-  DissolutionGracePeriodDays: 7
+  MapMinSeparation: 150
   SlotOffsetDistance: 10000
   SlotRecycleCooldownDays: 30
   InteriorYOffset: 5000
