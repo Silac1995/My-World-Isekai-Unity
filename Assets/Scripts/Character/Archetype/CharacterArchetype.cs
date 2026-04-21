@@ -38,6 +38,12 @@ public class CharacterArchetype : ScriptableObject
     public bool IsTameable => _isTameable;
     public bool IsMountable => _isMountable;
 
+    [Header("Animal Behavior")]
+    [Tooltip("0 = always tameable, 1 = untameable. Roll: UnityEngine.Random.value > TameDifficulty.")]
+    [SerializeField, Range(0f, 1f)] private float _tameDifficulty = 0.5f;
+
+    public float TameDifficulty => _tameDifficulty;
+
     // ── Locomotion ────────────────────────────────────────────────
     [Header("Locomotion")]
     [SerializeField] private MovementMode _movementModes = MovementMode.Walk | MovementMode.Run;
