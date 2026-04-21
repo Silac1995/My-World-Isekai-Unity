@@ -1,3 +1,4 @@
+using System;
 using Unity.Netcode;
 using Unity.Collections;
 using UnityEngine;
@@ -10,6 +11,13 @@ public class CharacterMapTracker : NetworkBehaviour, ICharacterSaveData<MapTrack
 
     [Tooltip("The ID of the Map/Region this Character is currently in.")]
     public NetworkVariable<FixedString128Bytes> CurrentMapID = new NetworkVariable<FixedString128Bytes>(
+        "",
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server
+    );
+
+    [Tooltip("The ID of the parent Region this Character is currently in (empty when outside any Region).")]
+    public NetworkVariable<FixedString64Bytes> CurrentRegionId = new NetworkVariable<FixedString64Bytes>(
         "",
         NetworkVariableReadPermission.Everyone,
         NetworkVariableWritePermission.Server
@@ -29,9 +37,33 @@ public class CharacterMapTracker : NetworkBehaviour, ICharacterSaveData<MapTrack
         NetworkVariableWritePermission.Server
     );
 
+    private float _nextRegionCheckTime = 0f;
+    private const float RegionCheckIntervalSeconds = 0.25f;
+
     private void Awake()
     {
         _character = GetComponent<Character>();
+    }
+
+    private void Update()
+    {
+        if (!IsServer) return;
+        if (Time.unscaledTime < _nextRegionCheckTime) return;
+        _nextRegionCheckTime = Time.unscaledTime + RegionCheckIntervalSeconds;
+
+        try
+        {
+            var region = Region.GetRegionAtPosition(transform.position);
+            string id = region != null ? region.ZoneId : "";
+            if (CurrentRegionId.Value.ToString() != id)
+            {
+                CurrentRegionId.Value = new FixedString64Bytes(id);
+            }
+        }
+        catch (Exception e)
+        {
+            Debug.LogException(e);
+        }
     }
 
     /// <summary>
@@ -255,7 +287,7 @@ public class CharacterMapTracker : NetworkBehaviour, ICharacterSaveData<MapTrack
     private static BuildingInteriorDoor FindDoorForBuilding(string buildingId)
     {
         // Find the exterior door that references this building
-        var doors = Object.FindObjectsByType<BuildingInteriorDoor>(FindObjectsSortMode.None);
+        var doors = UnityEngine.Object.FindObjectsByType<BuildingInteriorDoor>(FindObjectsSortMode.None);
         foreach (var door in doors)
         {
             if (door.BuildingId == buildingId)
