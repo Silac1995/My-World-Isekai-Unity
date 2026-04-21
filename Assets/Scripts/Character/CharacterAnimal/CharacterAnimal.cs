@@ -129,7 +129,7 @@ public class CharacterAnimal : CharacterSystem,
     // ── Server-Authoritative Tame Flow (called from CharacterTameAction) ──
 
     [Rpc(SendTo.Server)]
-    public void RequestTameServerRpc(NetworkObjectReference interactorRef, RpcParams rpcParams = default)
+    public void RequestTameServerRpc(NetworkObjectReference interactorRef)
     {
         TryTameOnServer(interactorRef);
     }
@@ -212,12 +212,19 @@ public class CharacterAnimal : CharacterSystem,
             }
         }
 
-        // Broadcast the result to every client for the floating text (Task 9).
+        // Spawn the floating text locally on the server, then broadcast to non-server clients.
+        // Matches CharacterActions.cs convention (SendTo.NotServer + explicit server-local call).
+        SpawnTameResultText(success);
         ShowTameResultClientRpc(success);
     }
 
-    [Rpc(SendTo.Everyone)]
+    [Rpc(SendTo.NotServer)]
     private void ShowTameResultClientRpc(bool success)
+    {
+        SpawnTameResultText(success);
+    }
+
+    private void SpawnTameResultText(bool success)
     {
         var spawner = _character != null ? _character.FloatingTextSpawner : null;
         if (spawner == null) return;
