@@ -10,7 +10,8 @@ using MWI.Time;
 namespace MWI.WorldSystem
 {
     [RequireComponent(typeof(BoxCollider))]
-    public class Region : MonoBehaviour, IWorldZone, ISaveable
+    [RequireComponent(typeof(Unity.Netcode.NetworkObject))]
+    public class Region : Unity.Netcode.NetworkBehaviour, IWorldZone, ISaveable
     {
         [SerializeField] private string _regionId;
         [SerializeField] private BiomeDefinition _biomeDefinition;

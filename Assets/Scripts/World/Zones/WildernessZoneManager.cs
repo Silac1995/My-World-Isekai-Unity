@@ -122,11 +122,16 @@ namespace MWI.WorldSystem
 
             zone.InitializeAsDynamic(zoneId, def.DefaultRadius, parent, def.DefaultMotion, initialPool);
 
-            // Physically reparent under the Region transform for scene-hierarchy clarity.
-            // Server-side only — not replicated (Region is not a NetworkObject).
+            // Reparent under the Region's NetworkObject via NGO-aware TrySetParent.
+            // Region is a NetworkBehaviour with its own NetworkObject, so this replicates
+            // cleanly to clients.
             if (parent != null)
             {
-                obj.transform.SetParent(parent.transform, worldPositionStays: true);
+                bool parented = netObj.TrySetParent(parent.transform, worldPositionStays: true);
+                if (!parented)
+                {
+                    Debug.LogWarning($"<color=yellow>[WildernessZoneManager:SpawnZone]</color> NGO TrySetParent failed for zone '{zoneId}' under region '{parent.ZoneId}'. Zone remains at scene root but is still logically registered.");
+                }
             }
 
             Debug.Log($"<color=magenta>[WildernessZoneManager:SpawnZone]</color> Spawned '{zoneId}' at {pos} (parent={parent?.ZoneId ?? "<none>"}, radius={def.DefaultRadius}).");
