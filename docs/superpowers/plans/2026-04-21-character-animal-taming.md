@@ -10,6 +10,8 @@
 
 **Spec reference:** [docs/superpowers/specs/2026-04-21-character-animal-taming-design.md](../specs/2026-04-21-character-animal-taming-design.md)
 
+**Deliberate deviation from spec Section 6 (testing):** the spec calls for a seeded N=1000 deterministic roll test. This project has **no test asmdef** today. Adding one for a single feature is out of scope. The `IRandomProvider` seam (Task 3) is still built, so those unit tests become trivial to add later. For now, Task 16 covers verification via a 7-check manual smoke-test matrix. This is a conscious trade-off, not an oversight.
+
 ---
 
 ## File Structure
@@ -776,7 +778,7 @@ Use `object-modify` MCP tool (or set manually in Inspector):
 | `_isTameable` | `true` |
 | `_isMountable` | `false` |
 | `_tameDifficulty` | `0.5` |
-| `_movementModes` | `Walk | Run` |
+| `_movementModes` | `Walk | Run` (bitmask integer = `3` if using `object-modify` MCP tool — `Walk=1`, `Run=2`) |
 | `_defaultSpeed` | `3.5` |
 | `_runSpeed` | `6` |
 | `_defaultWanderStyle` | `Nervous` |
@@ -966,7 +968,7 @@ Start a Host instance and a Client instance. Spawn a shared Deer.
 
 - [ ] **Check 5: Blocked — target is player-controlled**
 
-Have Player A's character use the Deer archetype and swap Player A into inhabiting it (`SwitchToPlayer`). Have Player B approach.
+Have Player A's character use the Deer archetype and swap Player A into inhabiting it. The controller-swap API name varies — check `PlayerController` / `NPCController` / `CharacterGameController` for the actual method (likely `SwitchToPlayer`, `SwitchToPlayerController`, or similar) before running this check. Have Player B approach.
 - Expected: Tame attempt on the Player-A-driven Deer is silently rejected server-side (console log), no floating text, no state change.
 - Player A swaps out (back to NPCController). Player B retries.
 - Expected: tame proceeds normally.
