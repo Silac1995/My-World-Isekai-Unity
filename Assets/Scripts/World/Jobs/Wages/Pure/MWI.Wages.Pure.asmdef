@@ -1,0 +1,14 @@
+{
+    "name": "MWI.Wages.Pure",
+    "rootNamespace": "MWI.Jobs.Wages",
+    "references": [],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
