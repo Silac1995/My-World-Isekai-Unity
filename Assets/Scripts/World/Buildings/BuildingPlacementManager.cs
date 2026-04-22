@@ -30,6 +30,8 @@ namespace MWI.WorldSystem
         private bool _isInstantMode;
         private bool _permissionToastShown; // Prevents spamming toast every frame
         private bool _outOfRegionToastShown; // Same spam-guard for the out-of-region toast
+        private bool _mapFitToastShown;     // Same spam-guard for region-boundary fit toast
+        private bool _mapMinSepToastShown;  // Same spam-guard for MapMinSeparation toast
 
         public bool IsPlacementActive => _isPlacementActive;
 
@@ -180,21 +182,61 @@ namespace MWI.WorldSystem
                 {
                     _outOfRegionToastShown = false;
 
-                    if (!hasPermission && !_permissionToastShown)
+                    // Spatial-fit toasts only apply when we'd need to create a new wild map.
+                    bool needsNewMap = MapController.GetMapAtPosition(hit.point) == null;
+                    bool mapFits = !needsNewMap || WouldNewMapFitInRegion(hit.point);
+                    bool passesMinSep = !needsNewMap || MapRegistry.Instance == null
+                        || !MapRegistry.Instance.WouldViolateMapMinSeparation(hit.point);
+
+                    if (!mapFits && !_mapFitToastShown)
                     {
-                        _permissionToastShown = true;
+                        _mapFitToastShown = true;
+                        _mapMinSepToastShown = false;
+                        _permissionToastShown = false;
                         if (_toastChannel != null)
                         {
                             _toastChannel.Raise(new ToastNotificationPayload(
-                                message: "You don't have permission to build here. Ask a community leader for a Build Permit.",
+                                message: "Too close to the region border — a new map wouldn't fit. Move further inside.",
                                 type: ToastType.Warning,
                                 duration: 4f
                             ));
                         }
                     }
-                    else if (hasPermission)
+                    else if (mapFits && !passesMinSep && !_mapMinSepToastShown)
                     {
+                        _mapMinSepToastShown = true;
+                        _mapFitToastShown = false;
                         _permissionToastShown = false;
+                        if (_toastChannel != null)
+                        {
+                            _toastChannel.Raise(new ToastNotificationPayload(
+                                message: "Too close to an existing map. Either build inside it or move further away.",
+                                type: ToastType.Warning,
+                                duration: 4f
+                            ));
+                        }
+                    }
+                    else if (mapFits && passesMinSep)
+                    {
+                        _mapFitToastShown = false;
+                        _mapMinSepToastShown = false;
+
+                        if (!hasPermission && !_permissionToastShown)
+                        {
+                            _permissionToastShown = true;
+                            if (_toastChannel != null)
+                            {
+                                _toastChannel.Raise(new ToastNotificationPayload(
+                                    message: "You don't have permission to build here. Ask a community leader for a Build Permit.",
+                                    type: ToastType.Warning,
+                                    duration: 4f
+                                ));
+                            }
+                        }
+                        else if (hasPermission)
+                        {
+                            _permissionToastShown = false;
+                        }
                     }
                 }
             }
@@ -262,7 +304,20 @@ namespace MWI.WorldSystem
             //    navmesh tiling.
             if (!IsInsideRegion(position)) return false;
 
-            // 4. Community zone permission check
+            // 4. Spatial consistency — if the placement is NOT already inside a MapController,
+            //    a new wild map has to be created. Verify it would actually fit:
+            //      (a) entirely inside the target Region's bounds, and
+            //      (b) not too close to another map in the same Region (MapMinSeparation).
+            //    Without this, silent server rejections leave the building orphaned and the
+            //    player confused.
+            MapController enclosingMap = MapController.GetMapAtPosition(position);
+            if (enclosingMap == null)
+            {
+                if (!WouldNewMapFitInRegion(position)) return false;
+                if (MapRegistry.Instance != null && MapRegistry.Instance.WouldViolateMapMinSeparation(position)) return false;
+            }
+
+            // 5. Community zone permission check
             if (!HasCommunityPlacementPermission(position)) return false;
 
             return true;
@@ -271,6 +326,41 @@ namespace MWI.WorldSystem
         /// <summary>Public so NPC AI + server validation can reuse the same gate.</summary>
         public static bool IsInsideRegion(Vector3 worldPosition)
             => Region.GetRegionAtPosition(worldPosition) != null;
+
+        /// <summary>
+        /// Would a new wild MapController's BoxCollider (size derived from the prefab)
+        /// fit entirely inside the containing Region's BoxCollider bounds if spawned at
+        /// <paramref name="worldPosition"/>?
+        /// </summary>
+        public static bool WouldNewMapFitInRegion(Vector3 worldPosition)
+        {
+            Region region = Region.GetRegionAtPosition(worldPosition);
+            if (region == null) return false;
+
+            var regionCol = region.GetComponent<BoxCollider>();
+            if (regionCol == null) return false;
+
+            Vector3 prefabSize = MapRegistry.Instance != null
+                ? MapRegistry.Instance.GetMapControllerPrefabSize()
+                : Vector3.zero;
+            if (prefabSize == Vector3.zero) return true; // unknown prefab size — don't block
+
+            Vector3 hypotheticalHalf = prefabSize * 0.5f;
+            Bounds regionBounds = regionCol.bounds;
+
+            // Check every corner of the hypothetical MapController box.
+            for (int sx = -1; sx <= 1; sx += 2)
+            for (int sy = -1; sy <= 1; sy += 2)
+            for (int sz = -1; sz <= 1; sz += 2)
+            {
+                Vector3 corner = worldPosition + new Vector3(
+                    sx * hypotheticalHalf.x,
+                    sy * hypotheticalHalf.y,
+                    sz * hypotheticalHalf.z);
+                if (!regionBounds.Contains(corner)) return false;
+            }
+            return true;
+        }
 
         // ────────────────────── Visual Helpers ──────────────────────
 

@@ -260,6 +260,55 @@ namespace MWI.WorldSystem
 
         [SerializeField] private List<CommunityData> _communities = new List<CommunityData>();
 
+        /// <summary>
+        /// Size (local extents) of the BoxCollider on the MapController prefab used for new
+        /// wild-map spawns. Used by <see cref="BuildingPlacementManager.ValidatePlacement"/>
+        /// to pre-check whether a new MapController would fit inside the target Region.
+        /// Returns Vector3.zero if the prefab or collider is unavailable.
+        /// </summary>
+        public Vector3 GetMapControllerPrefabSize()
+        {
+            if (_mapControllerPrefab == null)
+            {
+                _mapControllerPrefab = Resources.Load<GameObject>("Prefabs/World/MapController");
+            }
+            if (_mapControllerPrefab == null) return Vector3.zero;
+            var col = _mapControllerPrefab.GetComponent<BoxCollider>();
+            return col != null ? col.size : Vector3.zero;
+        }
+
+        /// <summary>
+        /// Server-preview helper: would a new wild MapController spawned at <paramref name="worldPosition"/>
+        /// be rejected by <see cref="CreateMapAtPosition"/>'s MapMinSeparation check against any
+        /// existing map in the same Region? Used by client-side ValidatePlacement to avoid
+        /// silent server rejections that would leave the building orphaned.
+        /// </summary>
+        public bool WouldViolateMapMinSeparation(Vector3 worldPosition)
+        {
+            if (_settings == null) return false;
+            Region targetRegion = Region.GetRegionAtPosition(worldPosition);
+            float minSep = _settings.MapMinSeparation;
+            float minSqr = minSep * minSep;
+
+            var allMaps = UnityEngine.Object.FindObjectsByType<MapController>(FindObjectsSortMode.None);
+            foreach (var m in allMaps)
+            {
+                if (m == null || m.Type == MapType.Interior) continue;
+                Region mapRegion = m.GetComponentInParent<Region>();
+                if (mapRegion != targetRegion) continue;
+                if ((m.transform.position - worldPosition).sqrMagnitude < minSqr) return true;
+            }
+            var allZones = UnityEngine.Object.FindObjectsByType<WildernessZone>(FindObjectsSortMode.None);
+            foreach (var z in allZones)
+            {
+                if (z == null) continue;
+                Region zoneRegion = z.ParentRegion != null ? z.ParentRegion : z.GetComponentInParent<Region>();
+                if (zoneRegion != targetRegion) continue;
+                if ((z.transform.position - worldPosition).sqrMagnitude < minSqr) return true;
+            }
+            return false;
+        }
+
         // IMPORTANT: Do not rename this literal. Save files on disk key on this string.
         // See ADR-0001 (wiki/decisions/adr-0001-living-world-hierarchy-refactor.md).
         public string SaveKey => "CommunityTracker_Data";
