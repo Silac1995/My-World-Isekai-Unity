@@ -348,15 +348,15 @@ public class WorldItem : NetworkBehaviour
 
     private void OnCollisionEnter(Collision collision)
     {
-        if (FreezeOnGround)
-        {
-            if (TryGetComponent(out Rigidbody rb))
-            {
-                rb.isKinematic = true;
-                FreezeOnGround = false; // Disable it so if it is carried again, it doesn't freeze immediately
-                Debug.Log($"<color=white>[WorldItem]</color> {gameObject.name} ground freeze engaged.");
-            }
-        }
+        // Server-authoritative: only the server decides when an item locks into the navmesh.
+        if (!IsServer) return;
+        if (_obstacleActive.Value) return;
+        if (_itemInstance == null || _itemInstance.ItemSO == null) return;
+        if (!_itemInstance.ItemSO.BlocksPathing) return;
+
+        // Setting the NetworkVariable propagates to every peer; OnObstacleActiveChanged
+        // enables their local NavMeshObstacle.
+        _obstacleActive.Value = true;
     }
 }
 
