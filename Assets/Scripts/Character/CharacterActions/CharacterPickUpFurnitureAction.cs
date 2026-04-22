@@ -94,7 +94,7 @@ public class CharacterPickUpFurnitureAction : CharacterAction
         var hands = character.CharacterVisual?.BodyPartsController?.HandsController;
         if (hands == null || !hands.AreHandsFree())
         {
-            CharacterDropItem.ExecutePhysicalDrop(character, instance, false);
+            CharacterDropItem.ExecutePhysicalDrop(character, instance);
             Debug.LogWarning($"<color=orange>[Action]</color> Hands no longer free. Dropped {itemSO.ItemName} on ground.");
         }
         else

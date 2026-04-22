@@ -61,7 +61,7 @@ public class UI_ItemSlot : MonoBehaviour, IPointerClickHandler, IPointerEnterHan
         {
             if (_itemSlot != null && !_itemSlot.IsEmpty() && _uiInventory != null && _uiInventory.CharacterOwner != null)
             {
-                var dropAction = new CharacterDropItem(_uiInventory.CharacterOwner, _itemSlot.ItemInstance, false);
+                var dropAction = new CharacterDropItem(_uiInventory.CharacterOwner, _itemSlot.ItemInstance);
                 dropAction.OnActionFinished += () => {
                     if (_uiInventory != null) _uiInventory.RefreshDisplay();
                 };

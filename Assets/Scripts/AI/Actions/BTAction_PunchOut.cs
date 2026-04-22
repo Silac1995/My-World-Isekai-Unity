@@ -91,7 +91,7 @@ namespace MWI.AI
             if (dropCol != null && dropCol.bounds.Contains(self.transform.position))
             {
                 movement.Stop();
-                var dropAction = new CharacterDropItem(self, carriedItem, true);
+                var dropAction = new CharacterDropItem(self, carriedItem);
                 
                 if (self.CharacterActions.ExecuteAction(dropAction))
                 {

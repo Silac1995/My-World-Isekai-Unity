@@ -146,7 +146,7 @@ public class GoapAction_DepositResources : GoapAction
             {
                 ItemInstance carriedItem = handsController.CarriedItem;
                 
-                var dropAction = new CharacterDropItem(worker, carriedItem, true);
+                var dropAction = new CharacterDropItem(worker, carriedItem);
                 dropAction.OnActionFinished += () => 
                 {
                     _building.RegisterHarvestedItem(carriedItem.ItemSO);
@@ -175,7 +175,7 @@ public class GoapAction_DepositResources : GoapAction
 
                 if (acceptedItems.Contains(item.ItemSO))
                 {
-                    var dropAction = new CharacterDropItem(worker, item, true);
+                    var dropAction = new CharacterDropItem(worker, item);
                     dropAction.OnActionFinished += () => 
                     {
                         _building.RegisterHarvestedItem(item.ItemSO);

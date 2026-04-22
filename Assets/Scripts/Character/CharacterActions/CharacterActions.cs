@@ -158,7 +158,7 @@ public class CharacterActions : CharacterSystem
     /// Clients cannot spawn NetworkObjects — they send the item data to the server.
     /// </summary>
     [Rpc(SendTo.Server)]
-    public void RequestItemDropServerRpc(string itemId, string jsonData, Vector3 ownerPosition, bool freeze)
+    public void RequestItemDropServerRpc(string itemId, string jsonData, Vector3 ownerPosition)
     {
         ItemSO[] allItems = Resources.LoadAll<ItemSO>("Data/Item");
         ItemSO so = System.Array.Find(allItems, match => match.ItemId == itemId);
@@ -174,10 +174,7 @@ public class CharacterActions : CharacterSystem
 
         Vector3 dropPos = ownerPosition + Vector3.up * 1.5f;
         Vector3 offset = new Vector3(UnityEngine.Random.Range(-0.3f, 0.3f), 0, UnityEngine.Random.Range(-0.3f, 0.3f));
-        WorldItem spawnedItem = WorldItem.SpawnWorldItem(instance, dropPos + offset);
-
-        if (spawnedItem != null)
-            spawnedItem.FreezeOnGround = freeze;
+        WorldItem.SpawnWorldItem(instance, dropPos + offset);
 
         Debug.Log($"<color=green>[CharacterActions]</color> Server spawned dropped item: {so.ItemName}");
     }

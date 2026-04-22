@@ -4,12 +4,10 @@ using UnityEngine.TextCore.Text;
 public class CharacterDropItem : CharacterAction
 {
     private ItemInstance _itemInstance;
-    private bool _freezeOnGround;
 
-    public CharacterDropItem(Character character, ItemInstance item, bool freezeOnGround = false) : base(character, 0.5f)
+    public CharacterDropItem(Character character, ItemInstance item) : base(character, 0.5f)
     {
         _itemInstance = item ?? throw new System.ArgumentNullException(nameof(item));
-        _freezeOnGround = freezeOnGround;
     }
 
     public override void OnStart()
@@ -23,7 +21,7 @@ public class CharacterDropItem : CharacterAction
     public override void OnApplyEffect()
     {
         bool removed = false;
-        
+
         var equip = character.CharacterEquipment;
         if (equip != null && equip.HaveInventory())
         {
@@ -45,7 +43,7 @@ public class CharacterDropItem : CharacterAction
 
         if (removed)
         {
-            ExecutePhysicalDrop(character, _itemInstance, _freezeOnGround);
+            ExecutePhysicalDrop(character, _itemInstance);
         }
     }
 
@@ -53,7 +51,7 @@ public class CharacterDropItem : CharacterAction
     /// Helper statique pour forcer un drop physique immédiat sans passer par l'Animator.
     /// Utile lors de la mort, de l'incapacitation ou de l'entrée en combat.
     /// </summary>
-    public static void ExecutePhysicalDrop(Character owner, ItemInstance item, bool freeze)
+    public static void ExecutePhysicalDrop(Character owner, ItemInstance item)
     {
         if (owner == null || item == null) return;
 
@@ -62,10 +60,7 @@ public class CharacterDropItem : CharacterAction
             // Server: spawn directly
             Vector3 dropPos = owner.transform.position + Vector3.up * 1.5f;
             Vector3 offset = new Vector3(Random.Range(-0.3f, 0.3f), 0, Random.Range(-0.3f, 0.3f));
-            WorldItem spawnedItem = WorldItem.SpawnWorldItem(item, dropPos + offset);
-
-            if (spawnedItem != null)
-                spawnedItem.FreezeOnGround = freeze;
+            WorldItem.SpawnWorldItem(item, dropPos + offset);
 
             Debug.Log($"<color=cyan>[CharacterDropItem]</color> {item.ItemSO.ItemName} dropped in world (server).");
         }
@@ -76,8 +71,7 @@ public class CharacterDropItem : CharacterAction
             owner.CharacterActions.RequestItemDropServerRpc(
                 item.ItemSO.ItemId,
                 jsonData,
-                owner.transform.position,
-                freeze
+                owner.transform.position
             );
             Debug.Log($"<color=cyan>[CharacterDropItem]</color> {item.ItemSO.ItemName} drop requested from client.");
         }

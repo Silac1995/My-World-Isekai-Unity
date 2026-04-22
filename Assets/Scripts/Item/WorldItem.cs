@@ -18,7 +18,6 @@ public class WorldItem : NetworkBehaviour
     public ItemInteractable ItemInteractable => _itemInteractable;
     public UnityEngine.Rendering.SortingGroup SortingGroup { get; private set; }
     public bool IsBeingCarried { get; set; } = false;
-    public bool FreezeOnGround { get; set; } = false;
 
     [SerializeField]
     private NetworkVariable<NetworkItemData> _networkItemData = new NetworkVariable<NetworkItemData>(

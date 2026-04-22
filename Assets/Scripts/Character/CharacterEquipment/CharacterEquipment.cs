@@ -829,7 +829,7 @@ public class CharacterEquipment : CharacterSystem, ICharacterSaveData<EquipmentS
             {
                 // Au lieu de mettre en file d'attente une action (qui serait annulée par l'animation de mort/combat)
                 // On spawn physiquement l'objet au sol instantanément.
-                CharacterDropItem.ExecutePhysicalDrop(_character, droppedItem, false);
+                CharacterDropItem.ExecutePhysicalDrop(_character, droppedItem);
             }
         }
     }
@@ -848,7 +848,7 @@ public class CharacterEquipment : CharacterSystem, ICharacterSaveData<EquipmentS
             if (inventory.RemoveItem(itemToDrop, _character))
             {
                 // L'item a été retiré avec succès, on le fait spawner dans le monde
-                CharacterDropItem.ExecutePhysicalDrop(_character, itemToDrop, false);
+                CharacterDropItem.ExecutePhysicalDrop(_character, itemToDrop);
 
                 if (_toastChannel != null && _character.IsPlayer() && _character.IsOwner)
                 {

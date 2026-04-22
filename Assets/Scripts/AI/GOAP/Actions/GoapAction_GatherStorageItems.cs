@@ -222,7 +222,7 @@ public class GoapAction_GatherStorageItems : GoapAction
                         return;
                     }
 
-                    var dropAction = new CharacterDropItem(worker, carriedItem, true);
+                    var dropAction = new CharacterDropItem(worker, carriedItem);
                     
                     // Si true: L'action a été acceptée et l'animation commence.
                     if (worker.CharacterActions.ExecuteAction(dropAction))
