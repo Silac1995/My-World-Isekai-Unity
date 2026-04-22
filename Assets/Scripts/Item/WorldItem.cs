@@ -49,6 +49,16 @@ public class WorldItem : NetworkBehaviour
         _networkItemData.OnValueChanged += OnItemDataChanged;
         _obstacleActive.OnValueChanged += OnObstacleActiveChanged;
 
+        // Non-server peers must NOT simulate physics: the server owns this item
+        // (Ownership=1 in prefab) and replicates its transform via NetworkTransform.
+        // A non-kinematic Rigidbody on the client would fight the replicated position
+        // and produce visual desync.
+        if (!IsServer)
+        {
+            if (TryGetComponent(out Rigidbody rb))
+                rb.isKinematic = true;
+        }
+
         // Late-joiner: apply current obstacle state immediately
         if (_obstacleActive.Value && _navMeshObstacle != null)
             _navMeshObstacle.enabled = true;
