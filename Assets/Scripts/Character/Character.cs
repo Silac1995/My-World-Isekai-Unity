@@ -63,6 +63,8 @@ public class Character : NetworkBehaviour
     [SerializeField] private CharacterCommunity _characterCommunity;
     [SerializeField] private CharacterInvitation _characterInvitation;
     [SerializeField] private CharacterJob _characterJob;
+    [SerializeField] private CharacterWallet _characterWallet;
+    [SerializeField] private CharacterWorkLog _characterWorkLog;
     [SerializeField] private CharacterSchedule _characterSchedule;
     [SerializeField] private CharacterSkills _characterSkills;
     [SerializeField] private CharacterMentorship _characterMentorship;
@@ -231,6 +233,8 @@ public class Character : NetworkBehaviour
     public CharacterTraits CharacterTraits => TryGet<CharacterTraits>(out var s16) ? s16 : _characterTraits;
     public CharacterInvitation CharacterInvitation => TryGet<CharacterInvitation>(out var s17) ? s17 : _characterInvitation;
     public CharacterJob CharacterJob => TryGet<CharacterJob>(out var s18) ? s18 : _characterJob;
+    public CharacterWallet CharacterWallet => TryGet<CharacterWallet>(out var sWallet) ? sWallet : _characterWallet;
+    public CharacterWorkLog CharacterWorkLog => TryGet<CharacterWorkLog>(out var sWorkLog) ? sWorkLog : _characterWorkLog;
     public CharacterSchedule CharacterSchedule => TryGet<CharacterSchedule>(out var s19) ? s19 : _characterSchedule;
     public CharacterSkills CharacterSkills => TryGet<CharacterSkills>(out var s20) ? s20 : _characterSkills;
     public CharacterMentorship CharacterMentorship => TryGet<CharacterMentorship>(out var s21) ? s21 : _characterMentorship;
