@@ -3,6 +3,7 @@ using System.Linq;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.AI;
+using Unity.AI.Navigation;
 using MWI.WorldSystem;
 using System;
 using Unity.Collections;
@@ -145,24 +146,65 @@ public class Building : ComplexRoom
     }
 
     /// <summary>
-    /// No-op. Previously this rebuilt the per-MapController NavMeshSurface via
-    /// <c>BuildNavMesh()</c> on every placement, which created overlapping world-wide
-    /// navmesh layers when multiple maps existed. The new architecture:
+    /// Triggers a rebuild of the single scene-root <c>NavmeshSurface</c> so the
+    /// newly-placed building's actual 3D geometry (MeshColliders, concave shell
+    /// walls, roof cutouts, etc.) is re-included in the world navmesh. This
+    /// preserves the pre-Phase1 behavior of PRECISE carving matching the
+    /// building's real mesh — the previous <c>BuildNavMesh()</c> approach — while
+    /// avoiding the old multi-layer bug by always targeting ONE surface instead
+    /// of spawning a per-MapController surface on every placement.
     ///
-    ///   * A single scene-root <c>NavMeshSurface</c> (scene GameObject "NavmeshSurface")
-    ///     owns the world-wide navmesh, baked statically in the editor.
-    ///   * Buildings carve holes via a <c>NavMeshObstacle</c> component with
-    ///     <c>carve = true</c> on the prefab — carving happens automatically at runtime
-    ///     when the obstacle is instantiated and intersects the baked surface. No
-    ///     per-placement BuildNavMesh() call is needed.
+    /// NavMeshObstacle(carve=true) components on building prefabs still work
+    /// alongside this — they provide cheap runtime carving if the prefab is
+    /// moved/re-parented, while the bake gives precise initial shape.
     ///
-    /// Building prefabs that don't yet have a <c>NavMeshObstacle</c> (carve=true) should
-    /// get one added to their root or to their blocking geometry. This method remains
-    /// as a hook so callers compile; it deliberately does nothing.
+    /// Runs on every peer (server + clients) because NavMesh data is runtime-only
+    /// and not replicated — each peer needs its own up-to-date navmesh.
     /// </summary>
     private void ConfigureNavMeshObstacles()
     {
-        // Intentionally empty. See the xmldoc above.
+        RebuildWorldNavMesh();
+    }
+
+    private static void RebuildWorldNavMesh()
+    {
+        NavMeshSurface worldSurface = FindWorldNavMeshSurface();
+        if (worldSurface == null)
+        {
+            Debug.LogWarning("<color=orange>[Building]</color> Cannot rebuild world navmesh: no scene-root 'NavmeshSurface' with a NavMeshSurface component found.");
+            return;
+        }
+
+        worldSurface.BuildNavMesh();
+        Debug.Log($"<color=cyan>[Building]</color> World navmesh rebuilt to include new building geometry.");
+    }
+
+    private static NavMeshSurface _cachedWorldSurface;
+
+    private static NavMeshSurface FindWorldNavMeshSurface()
+    {
+        if (_cachedWorldSurface != null) return _cachedWorldSurface;
+
+        // Scene convention: the world-wide surface lives on a root GameObject
+        // literally named "NavmeshSurface". Search by name first (cheap); fall
+        // back to the first matching surface with collectObjects=All.
+        GameObject byName = GameObject.Find("NavmeshSurface");
+        if (byName != null)
+        {
+            _cachedWorldSurface = byName.GetComponent<NavMeshSurface>();
+            if (_cachedWorldSurface != null) return _cachedWorldSurface;
+        }
+
+        foreach (var surf in UnityEngine.Object.FindObjectsByType<NavMeshSurface>(FindObjectsSortMode.None))
+        {
+            if (surf == null) continue;
+            if (surf.collectObjects == CollectObjects.All)
+            {
+                _cachedWorldSurface = surf;
+                return _cachedWorldSurface;
+            }
+        }
+        return null;
     }
 
     protected virtual void Start()
