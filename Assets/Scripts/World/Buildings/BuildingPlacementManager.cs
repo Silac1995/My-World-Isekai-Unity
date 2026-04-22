@@ -30,8 +30,6 @@ namespace MWI.WorldSystem
         private bool _isInstantMode;
         private bool _permissionToastShown; // Prevents spamming toast every frame
         private bool _outOfRegionToastShown; // Same spam-guard for the out-of-region toast
-        private bool _mapFitToastShown;     // Same spam-guard for region-boundary fit toast
-        private bool _mapMinSepToastShown;  // Same spam-guard for MapMinSeparation toast
 
         public bool IsPlacementActive => _isPlacementActive;
 
@@ -182,61 +180,21 @@ namespace MWI.WorldSystem
                 {
                     _outOfRegionToastShown = false;
 
-                    // Spatial-fit toasts only apply when we'd need to create a new wild map.
-                    bool needsNewMap = MapController.GetMapAtPosition(hit.point) == null;
-                    bool mapFits = !needsNewMap || WouldNewMapFitInRegion(hit.point);
-                    bool passesMinSep = !needsNewMap || MapRegistry.Instance == null
-                        || !MapRegistry.Instance.WouldViolateMapMinSeparation(hit.point);
-
-                    if (!mapFits && !_mapFitToastShown)
+                    if (!hasPermission && !_permissionToastShown)
                     {
-                        _mapFitToastShown = true;
-                        _mapMinSepToastShown = false;
-                        _permissionToastShown = false;
+                        _permissionToastShown = true;
                         if (_toastChannel != null)
                         {
                             _toastChannel.Raise(new ToastNotificationPayload(
-                                message: "Too close to the region border — a new map wouldn't fit. Move further inside.",
+                                message: "You don't have permission to build here. Ask a community leader for a Build Permit.",
                                 type: ToastType.Warning,
                                 duration: 4f
                             ));
                         }
                     }
-                    else if (mapFits && !passesMinSep && !_mapMinSepToastShown)
+                    else if (hasPermission)
                     {
-                        _mapMinSepToastShown = true;
-                        _mapFitToastShown = false;
                         _permissionToastShown = false;
-                        if (_toastChannel != null)
-                        {
-                            _toastChannel.Raise(new ToastNotificationPayload(
-                                message: "Too close to an existing map. Either build inside it or move further away.",
-                                type: ToastType.Warning,
-                                duration: 4f
-                            ));
-                        }
-                    }
-                    else if (mapFits && passesMinSep)
-                    {
-                        _mapFitToastShown = false;
-                        _mapMinSepToastShown = false;
-
-                        if (!hasPermission && !_permissionToastShown)
-                        {
-                            _permissionToastShown = true;
-                            if (_toastChannel != null)
-                            {
-                                _toastChannel.Raise(new ToastNotificationPayload(
-                                    message: "You don't have permission to build here. Ask a community leader for a Build Permit.",
-                                    type: ToastType.Warning,
-                                    duration: 4f
-                                ));
-                            }
-                        }
-                        else if (hasPermission)
-                        {
-                            _permissionToastShown = false;
-                        }
                     }
                 }
             }
@@ -304,21 +262,16 @@ namespace MWI.WorldSystem
             //    navmesh tiling.
             if (!IsInsideRegion(position)) return false;
 
-            // 4. Spatial consistency — if the placement is NOT already inside a MapController,
-            //    a new wild map has to be created. Verify it would actually fit:
-            //      (a) entirely inside the target Region's bounds, and
-            //      (b) not too close to another map in the same Region (MapMinSeparation).
-            //    Without this, silent server rejections leave the building orphaned and the
-            //    player confused.
-            MapController enclosingMap = MapController.GetMapAtPosition(position);
-            if (enclosingMap == null)
-            {
-                if (!WouldNewMapFitInRegion(position)) return false;
-                if (MapRegistry.Instance != null && MapRegistry.Instance.WouldViolateMapMinSeparation(position)) return false;
-            }
-
-            // 5. Community zone permission check
+            // 4. Community zone permission check
             if (!HasCommunityPlacementPermission(position)) return false;
+
+            // MapController adapts to the placement — no fit / separation rejection:
+            //   * If the click is inside an existing map -> the building joins it.
+            //   * If the click is near a map in the same Region -> that map EXPANDS
+            //     to envelop the new building (handled in RegisterBuildingWithMap).
+            //   * If the click is far from all maps -> a new wild map is spawned and
+            //     CLAMPS to the Region's bounds (handled in MapRegistry.CreateMapAtPosition).
+            // Small / tight Regions just produce smaller maps. Nothing rejects here.
 
             return true;
         }
@@ -328,38 +281,17 @@ namespace MWI.WorldSystem
             => Region.GetRegionAtPosition(worldPosition) != null;
 
         /// <summary>
-        /// Would a new wild MapController's BoxCollider (size derived from the prefab)
-        /// fit entirely inside the containing Region's BoxCollider bounds if spawned at
-        /// <paramref name="worldPosition"/>?
+        /// Returns the building's footprint size (world-space, axis-aligned) used as a
+        /// margin when expanding the containing MapController. Falls back to a
+        /// conservative 10-unit default if the building has no BoxCollider-based zone.
         /// </summary>
-        public static bool WouldNewMapFitInRegion(Vector3 worldPosition)
+        private static Vector3 GetBuildingFootprintSize(Building building)
         {
-            Region region = Region.GetRegionAtPosition(worldPosition);
-            if (region == null) return false;
-
-            var regionCol = region.GetComponent<BoxCollider>();
-            if (regionCol == null) return false;
-
-            Vector3 prefabSize = MapRegistry.Instance != null
-                ? MapRegistry.Instance.GetMapControllerPrefabSize()
-                : Vector3.zero;
-            if (prefabSize == Vector3.zero) return true; // unknown prefab size — don't block
-
-            Vector3 hypotheticalHalf = prefabSize * 0.5f;
-            Bounds regionBounds = regionCol.bounds;
-
-            // Check every corner of the hypothetical MapController box.
-            for (int sx = -1; sx <= 1; sx += 2)
-            for (int sy = -1; sy <= 1; sy += 2)
-            for (int sz = -1; sz <= 1; sz += 2)
+            if (building != null && building.BuildingZone is BoxCollider box)
             {
-                Vector3 corner = worldPosition + new Vector3(
-                    sx * hypotheticalHalf.x,
-                    sy * hypotheticalHalf.y,
-                    sz * hypotheticalHalf.z);
-                if (!regionBounds.Contains(corner)) return false;
+                return Vector3.Scale(box.size, building.transform.lossyScale);
             }
-            return true;
+            return new Vector3(10f, 10f, 10f);
         }
 
         // ────────────────────── Visual Helpers ──────────────────────
@@ -518,7 +450,10 @@ namespace MWI.WorldSystem
 
             // 3. No enclosing map yet. Placement is guaranteed inside a Region
             //    (ValidatePlacement + server re-validate gates on IsInsideRegion).
-            //    Create a new wild MapController in that Region.
+            //    Prefer to EXPAND a nearby existing map (same region, within MinSep) to envelop
+            //    this new building — keeps communities contiguous and avoids spawning
+            //    many micro-maps. Otherwise, spawn a new wild map (shrink-to-fit clamped by
+            //    Region bounds, handled inside CreateMapAtPosition).
             if (map == null)
             {
                 Region parentRegion = Region.GetRegionAtPosition(worldPosition);
@@ -529,14 +464,31 @@ namespace MWI.WorldSystem
                     return;
                 }
 
-                Debug.Log($"<color=yellow>[BuildingPlacementManager:Register]</color> Inside Region '{parentRegion.ZoneId}' with no enclosing map. Creating a new wild map at {worldPosition}.");
-                try
+                // 3a. Prefer expanding a nearby same-region map over spawning a new one.
+                MapController nearby = MapRegistry.Instance.FindNearestMapInRegion(worldPosition);
+                if (nearby != null)
                 {
-                    map = MapRegistry.Instance.CreateMapAtPosition(worldPosition);
+                    var regionCol = parentRegion.GetComponent<BoxCollider>();
+                    if (regionCol != null)
+                    {
+                        Vector3 footprint = GetBuildingFootprintSize(building);
+                        nearby.ExpandBoundsToInclude(worldPosition, footprint, regionCol.bounds);
+                    }
+                    map = nearby;
+                    Debug.Log($"<color=yellow>[BuildingPlacementManager:Register]</color> Expanded existing map '{nearby.MapId}' to envelop '{building.BuildingName}' at {worldPosition}.");
                 }
-                catch (System.Exception e)
+                else
                 {
-                    Debug.LogException(e);
+                    // 3b. Spawn a new wild map, clamped to the Region.
+                    Debug.Log($"<color=yellow>[BuildingPlacementManager:Register]</color> Inside Region '{parentRegion.ZoneId}' with no nearby map. Creating a new wild map at {worldPosition}.");
+                    try
+                    {
+                        map = MapRegistry.Instance.CreateMapAtPosition(worldPosition);
+                    }
+                    catch (System.Exception e)
+                    {
+                        Debug.LogException(e);
+                    }
                 }
             }
 

@@ -173,6 +173,58 @@ namespace MWI.WorldSystem
             _mapTrigger.isTrigger = true;
         }
 
+        /// <summary>
+        /// Server-only. Grows this MapController's BoxCollider so its world-space bounds
+        /// envelop <paramref name="worldPoint"/> (plus <paramref name="footprintSize"/>
+        /// as a margin around it). Result is clamped to stay inside
+        /// <paramref name="regionBounds"/> — so expansion never leaks outside the parent
+        /// Region. Transform position is NOT modified, so existing child buildings stay
+        /// put; only BoxCollider.center and size change.
+        /// </summary>
+        public void ExpandBoundsToInclude(Vector3 worldPoint, Vector3 footprintSize, Bounds regionBounds)
+        {
+            if (_mapTrigger == null) return;
+
+            Bounds current = _mapTrigger.bounds;
+            Vector3 halfFootprint = footprintSize * 0.5f;
+            Bounds target = current;
+            target.Encapsulate(worldPoint + halfFootprint);
+            target.Encapsulate(worldPoint - halfFootprint);
+
+            ApplyClampedWorldBounds(target, regionBounds);
+        }
+
+        /// <summary>
+        /// Server-only. Clamps this MapController's BoxCollider to the intersection of its
+        /// current world-space bounds and <paramref name="regionBounds"/>. Used right after
+        /// spawn so a freshly-instantiated MapController near a Region border shrinks to fit
+        /// inside the Region instead of leaking outside.
+        /// </summary>
+        public void ClampBoundsToRegion(Bounds regionBounds)
+        {
+            if (_mapTrigger == null) return;
+            ApplyClampedWorldBounds(_mapTrigger.bounds, regionBounds);
+        }
+
+        private void ApplyClampedWorldBounds(Bounds desired, Bounds regionBounds)
+        {
+            Vector3 newMin = Vector3.Max(desired.min, regionBounds.min);
+            Vector3 newMax = Vector3.Min(desired.max, regionBounds.max);
+
+            if (newMax.x <= newMin.x || newMax.y <= newMin.y || newMax.z <= newMin.z)
+            {
+                // Degenerate — no overlap with Region. Shouldn't happen because callers
+                // gate on IsInsideRegion / GetRegionAtPosition, but guard anyway.
+                return;
+            }
+
+            Vector3 newCenterWorld = (newMin + newMax) * 0.5f;
+            Vector3 newSize = newMax - newMin;
+
+            _mapTrigger.center = newCenterWorld - transform.position;
+            _mapTrigger.size = newSize;
+        }
+
         public override void OnNetworkSpawn()
         {
             base.OnNetworkSpawn();

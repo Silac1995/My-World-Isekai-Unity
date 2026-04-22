@@ -278,35 +278,33 @@ namespace MWI.WorldSystem
         }
 
         /// <summary>
-        /// Server-preview helper: would a new wild MapController spawned at <paramref name="worldPosition"/>
-        /// be rejected by <see cref="CreateMapAtPosition"/>'s MapMinSeparation check against any
-        /// existing map in the same Region? Used by client-side ValidatePlacement to avoid
-        /// silent server rejections that would leave the building orphaned.
+        /// Finds the nearest exterior MapController whose center is within
+        /// <see cref="WorldSettingsData.MapMinSeparation"/> of <paramref name="worldPosition"/>
+        /// and lives in the same <see cref="Region"/>. Used by building placement to pick an
+        /// existing map to expand (envelop the new building) instead of spawning a new wild map.
+        /// Returns null if no such map exists → caller should fall back to CreateMapAtPosition.
         /// </summary>
-        public bool WouldViolateMapMinSeparation(Vector3 worldPosition)
+        public MapController FindNearestMapInRegion(Vector3 worldPosition)
         {
-            if (_settings == null) return false;
+            if (_settings == null) return null;
             Region targetRegion = Region.GetRegionAtPosition(worldPosition);
             float minSep = _settings.MapMinSeparation;
-            float minSqr = minSep * minSep;
+            float bestSqr = minSep * minSep;
+            MapController best = null;
 
-            var allMaps = UnityEngine.Object.FindObjectsByType<MapController>(FindObjectsSortMode.None);
-            foreach (var m in allMaps)
+            foreach (var m in UnityEngine.Object.FindObjectsByType<MapController>(FindObjectsSortMode.None))
             {
                 if (m == null || m.Type == MapType.Interior) continue;
                 Region mapRegion = m.GetComponentInParent<Region>();
                 if (mapRegion != targetRegion) continue;
-                if ((m.transform.position - worldPosition).sqrMagnitude < minSqr) return true;
+                float sqr = (m.transform.position - worldPosition).sqrMagnitude;
+                if (sqr < bestSqr)
+                {
+                    bestSqr = sqr;
+                    best = m;
+                }
             }
-            var allZones = UnityEngine.Object.FindObjectsByType<WildernessZone>(FindObjectsSortMode.None);
-            foreach (var z in allZones)
-            {
-                if (z == null) continue;
-                Region zoneRegion = z.ParentRegion != null ? z.ParentRegion : z.GetComponentInParent<Region>();
-                if (zoneRegion != targetRegion) continue;
-                if ((z.transform.position - worldPosition).sqrMagnitude < minSqr) return true;
-            }
-            return false;
+            return best;
         }
 
         // IMPORTANT: Do not rename this literal. Save files on disk key on this string.
@@ -350,43 +348,7 @@ namespace MWI.WorldSystem
                 }
             }
 
-            // Enforce MapMinSeparation, scoped by Region — reject only if another zone
-            // center is too close AND lives in the same Region as the new map (or the
-            // open world, when neither has a parent Region). Two maps in different
-            // Regions are allowed to be physically close because Regions are
-            // independent spatial scopes authored by the designer.
             Region targetRegion = Region.GetRegionAtPosition(worldPosition);
-            if (_settings != null)
-            {
-                float minSep = _settings.MapMinSeparation;
-                float minSqr = minSep * minSep;
-
-                var allMaps = UnityEngine.Object.FindObjectsByType<MapController>(FindObjectsSortMode.None);
-                foreach (var m in allMaps)
-                {
-                    if (m == null || m.Type == MapType.Interior) continue;
-                    Region mapRegion = m.GetComponentInParent<Region>();
-                    if (mapRegion != targetRegion) continue; // skip cross-region maps
-                    if ((m.transform.position - worldPosition).sqrMagnitude < minSqr)
-                    {
-                        Debug.LogWarning($"<color=yellow>[MapRegistry:CreateMapAtPosition]</color> Rejected map at {worldPosition}: within {minSep} units of map '{m.MapId}' (same region '{(targetRegion != null ? targetRegion.ZoneId : "<open>")}' ).");
-                        return null;
-                    }
-                }
-
-                var allZones = UnityEngine.Object.FindObjectsByType<WildernessZone>(FindObjectsSortMode.None);
-                foreach (var z in allZones)
-                {
-                    if (z == null) continue;
-                    Region zoneRegion = z.ParentRegion != null ? z.ParentRegion : z.GetComponentInParent<Region>();
-                    if (zoneRegion != targetRegion) continue; // skip cross-region zones
-                    if ((z.transform.position - worldPosition).sqrMagnitude < minSqr)
-                    {
-                        Debug.LogWarning($"<color=yellow>[MapRegistry:CreateMapAtPosition]</color> Rejected map at {worldPosition}: within {minSep} units of zone '{z.ZoneId}' (same region '{(targetRegion != null ? targetRegion.ZoneId : "<open>")}' ).");
-                        return null;
-                    }
-                }
-            }
 
             float chunkSize = _settings != null ? _settings.ProximityChunkSize : 75f;
             Vector2Int originChunk = new Vector2Int(
@@ -478,6 +440,15 @@ namespace MWI.WorldSystem
                 if (!parented)
                 {
                     Debug.LogWarning($"<color=yellow>[MapRegistry:CreateMapAtPosition]</color> NGO TrySetParent failed for map '{mapId}' under region '{targetRegion.ZoneId}'. Map remains at scene root but is still logically registered.");
+                }
+
+                // Shrink-to-fit: clamp the freshly-instantiated MapController's BoxCollider
+                // to the Region's bounds so it never leaks outside, even when spawned near
+                // a border. Tight Regions just get smaller maps.
+                var regionCol = targetRegion.GetComponent<BoxCollider>();
+                if (regionCol != null)
+                {
+                    mapController.ClampBoundsToRegion(regionCol.bounds);
                 }
             }
 
