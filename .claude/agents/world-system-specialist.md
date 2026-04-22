@@ -40,15 +40,24 @@ You own deep expertise in the **Living World** architecture, which spans these s
 - World hierarchy: `Region → { MapController, WildernessZone, WeatherFront }` where all three implement `IWorldZone`.
 - **`Region` is a `NetworkBehaviour`** (not `MonoBehaviour`) with `[RequireComponent(NetworkObject)]` — required for NGO `TrySetParent` of child MapController/WildernessZone NetworkObjects. Scene-placed Regions auto-acquire a NetworkObject on scene load.
 - `Region` exposes `RegisterMap` / `UnregisterMap` and `RegisterWildernessZone` / `UnregisterWildernessZone` for runtime-spawned children.
-- `WildernessZoneManager` spawns runtime wilderness zones via `NetworkObject.TrySetParent`; `WorldSettingsData.MapMinSeparation` enforces minimum zone spacing **scoped by Region** (two maps in different Regions can legitimately be close) in both `MapRegistry.CreateMapAtPosition` and `WildernessZoneManager.SpawnZone`.
+- `WildernessZoneManager` spawns runtime wilderness zones via `NetworkObject.TrySetParent`.
 
-**Placement flow (region-aware):** `BuildingPlacementManager.RegisterBuildingWithMap` sequence is:
-1. `MapController.GetMapAtPosition` → inside an existing map's bounds?
-2. BoxCollider bounds fallback.
-3. **If position is inside a Region with no enclosing map** → `MapRegistry.CreateMapAtPosition` spawns a new wild map in THAT region. Do NOT poach maps from a neighbor region.
-4. Open world (outside any Region) → legacy `GetNearestExteriorMap(pos, MapMinSeparation)` join-else-create.
+**Elastic MapControllers (post-merge iteration, 2026-04-22):** `MapController.BoxCollider` adapts to Regions and new placements instead of rejecting them.
+- `MapController.ClampBoundsToRegion(regionBounds)` — called by `CreateMapAtPosition` after `Spawn`. Shrinks the freshly-spawned map to fit inside its Region's world-space bounds. Small Regions → small maps.
+- `MapController.ExpandBoundsToInclude(worldPoint, footprintSize, regionBounds)` — called by `BuildingPlacementManager.RegisterBuildingWithMap` when a new building lands near an existing same-region map (within `MapMinSeparation` via `MapRegistry.FindNearestMapInRegion`). Grows the BoxCollider to envelop the new building, clamped to Region bounds.
+- `WorldSettingsData.MapMinSeparation` is a **soft threshold** that routes placement to expansion, not rejection. The previous rejection helpers/toasts (`WouldNewMapFitInRegion`, `WouldViolateMapMinSeparation`) were removed.
+
+**Placement flow (region-aware + elastic):** `BuildingPlacementManager.RegisterBuildingWithMap`:
+1. `MapController.GetMapAtPosition` → inside an existing map's bounds? Join it.
+2. BoxCollider bounds fallback for registry lag.
+3. Inside a Region with no enclosing map:
+   - `MapRegistry.FindNearestMapInRegion(pos)` finds a same-region map within MinSep. If found → `ExpandBoundsToInclude` on that map; building joins it.
+   - Otherwise → `CreateMapAtPosition` spawns a new wild map, then `ClampBoundsToRegion` shrinks it to fit.
+4. Outside any Region → already rejected at `ValidatePlacement` via `IsInsideRegion`. Never reaches this method.
 
 **Wild-map semantics:** `MapRegistry.CreateMapAtPosition` clears `Biome` and `JobYields` on the newly instantiated MapController before `Spawn()`. This short-circuits `MapController.SpawnVirtualBuildings` (gated on `Biome == null`) so wild maps do NOT spawn `VirtualResourceSupplier_*` children — those are for authored settlements with NPC logistics, not small player outposts.
+
+**Known limitation:** `BoxCollider.center`/`size` are plain fields, not `NetworkVariable`s — server-only resize. Clients see the prefab's default bounds until a follow-up PR syncs them. Hibernation / placement / save-load unaffected because server-side.
 
 **CurrentMapID trigger-driven updates:** `MapController.OnTriggerEnter` / `OnTriggerExit` now write to the entering/exiting character's `CharacterMapTracker.CurrentMapID` via `SetCurrentMap(MapId)` / `SetCurrentMap("")`. Exit only clears if the tracker still matches THIS map. Required because wild maps are walkable (same-plane) whereas authored maps used to be reachable only via door RPCs.
 

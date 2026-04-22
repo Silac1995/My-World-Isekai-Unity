@@ -3,7 +3,7 @@ type: decision
 title: "ADR 0001 — Living World hierarchy refactor (Region → Map / WildernessZone / WeatherFront)"
 tags: [world, architecture, living-world, region, wilderness, weather, refactor]
 created: 2026-04-21
-updated: 2026-04-21
+updated: 2026-04-22
 sources:
   - "docs/superpowers/specs/2026-04-21-living-world-phase-1-design.md"
   - "2026-04-21 conversation with Kevin"
@@ -101,6 +101,12 @@ Implementation landed across 25 commits on `feature/living-world-phase-1`. Devia
 - **Wild maps strip `Biome`/`JobYields`** on instantiation (`MapRegistry.CreateMapAtPosition`) so `MapController.SpawnVirtualBuildings` short-circuits — no `VirtualResourceSupplier_*` children on small player outposts.
 - **Save/load round-trip** for dynamic wild maps: `CommunityData.SpawnPosition` (new field) records where each wild map lives; `MapRegistry.RestoreState` schedules a 1.5s-deferred `RespawnDynamicMapsDeferred` that re-instantiates each non-predefined community's MapController and calls `SpawnSavedBuildings` so the children come back too.
 - **Debug overlay** `UI_CharacterMapTrackerOverlay` added because NGO 2.10's `NetworkBehaviourEditor` shows `Type not renderable` for `NetworkVariable<FixedString128Bytes>` and `NetworkVariable<Vector3>` — only `int/uint/long/float/bool/string/enum` are drawn. Runtime values replicate fine; the overlay makes them visible in the top-left corner during play-mode (toggle F6).
+- **Elastic MapControllers (post-merge iteration, 2026-04-22):** early play-testing on small Regions (400x400) showed the initial "reject placements that would produce a misaligned map" logic blocked almost all placements. Replaced with adaptive bounds:
+  - `MapController.ClampBoundsToRegion(regionBounds)` shrinks a freshly-spawned MapController's BoxCollider to fit inside its Region at creation time (called from `MapRegistry.CreateMapAtPosition` after `NetworkObject.Spawn`).
+  - `MapController.ExpandBoundsToInclude(worldPoint, footprint, regionBounds)` grows an existing MapController to envelop a new building's footprint, also clamped to Region bounds.
+  - `BuildingPlacementManager.RegisterBuildingWithMap` now prefers expanding a same-region map within `MapMinSeparation` (via `MapRegistry.FindNearestMapInRegion`) over spawning a new one — communities stay contiguous.
+  - `MapMinSeparation` is now a **soft threshold** that routes placement to expansion instead of rejection. `WouldNewMapFitInRegion` / `WouldViolateMapMinSeparation` helpers and the two associated client toasts were removed.
+  - Known limitation: `BoxCollider.center`/`size` are plain fields, not `NetworkVariable`s — resize is server-only. Clients see the prefab's authored bounds until a follow-up PR syncs them. Hibernation/placement/logic are unaffected.
 
 ## Links
 
@@ -117,6 +123,7 @@ Implementation landed across 25 commits on `feature/living-world-phase-1`. Devia
 ## Change log
 
 - 2026-04-21 — proposed, accepted same day — Claude / [[kevin]]
+- 2026-04-22 — Post-merge iteration: elastic MapController bounds (ClampBoundsToRegion + ExpandBoundsToInclude); MapMinSeparation demoted from hard rejection to soft "route to expansion" threshold; rejection helpers/toasts removed. Navmesh architecture changes (single world NavMeshSurface, per-placement full rebake, NavMeshObstacle kept for later optimization) also noted here. — Claude / [[kevin]]
 - 2026-04-21 — implementation complete (25 commits on `feature/living-world-phase-1`). Added post-implementation notes covering Region→NetworkBehaviour upgrade, region-aware placement, region-scoped MapMinSeparation, CurrentMapID on trigger events, interior re-parenting, wild-map Biome/JobYields stripping, save/load round-trip with SpawnPosition, and debug overlay. — Claude / [[kevin]]
 
 ## Sources
