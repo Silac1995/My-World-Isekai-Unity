@@ -41,12 +41,12 @@ public class CharacterWallet : CharacterSystem, ICharacterSaveData<WalletSaveDat
     {
         if (amount <= 0)
         {
-            Debug.LogError($"[CharacterWallet] AddCoins rejected: amount={amount} source={source} on {_character?.CharacterName}");
+            Debug.LogError($"[CharacterWallet] AddCoins rejected: amount={amount} source={source} on {SafeOwnerName()}");
             return;
         }
         if (!IsServer && NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
         {
-            Debug.LogError($"[CharacterWallet] AddCoins called on non-server instance for {_character?.CharacterName}. Route through a ServerRpc.");
+            Debug.LogError($"[CharacterWallet] AddCoins called on non-server instance for {SafeOwnerName()}. Route through a ServerRpc.");
             return;
         }
         int old = GetBalance(currency);
@@ -59,7 +59,12 @@ public class CharacterWallet : CharacterSystem, ICharacterSaveData<WalletSaveDat
 
     public bool RemoveCoins(CurrencyId currency, int amount, string reason)
     {
-        if (amount <= 0) { Debug.LogError($"[CharacterWallet] RemoveCoins rejected: amount={amount} reason={reason}"); return false; }
+        if (amount <= 0) { Debug.LogError($"[CharacterWallet] RemoveCoins rejected: amount={amount} reason={reason} on {SafeOwnerName()}"); return false; }
+        if (!IsServer && NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+        {
+            Debug.LogError($"[CharacterWallet] RemoveCoins called on non-server instance for {SafeOwnerName()}. Route through a ServerRpc.");
+            return false;
+        }
         int old = GetBalance(currency);
         if (old < amount) return false;
         int next = old - amount;
@@ -67,6 +72,13 @@ public class CharacterWallet : CharacterSystem, ICharacterSaveData<WalletSaveDat
         OnBalanceChanged?.Invoke(currency, old, next);
         BroadcastBalanceChangeClientRpc(currency.Id, next);
         return true;
+    }
+
+    private string SafeOwnerName()
+    {
+        if (_character == null) return "<no-character>";
+        var name = _character.CharacterName;
+        return string.IsNullOrEmpty(name) ? "<unnamed>" : name;
     }
 
     [ClientRpc]
