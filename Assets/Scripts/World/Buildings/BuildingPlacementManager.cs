@@ -29,6 +29,7 @@ namespace MWI.WorldSystem
         private bool _isPlacementActive;
         private bool _isInstantMode;
         private bool _permissionToastShown; // Prevents spamming toast every frame
+        private bool _outOfRegionToastShown; // Same spam-guard for the out-of-region toast
 
         public bool IsPlacementActive => _isPlacementActive;
 
@@ -156,26 +157,45 @@ namespace MWI.WorldSystem
             {
                 _ghostInstance.transform.position = hit.point;
 
+                bool insideRegion = IsInsideRegion(hit.point);
                 bool hasPermission = HasCommunityPlacementPermission(hit.point);
                 bool isValid = ValidatePlacement(hit.point);
                 ApplyGhostMaterials(isValid ? _ghostMaterialValid : _ghostMaterialInvalid);
 
-                // Show toast once when entering a denied zone
-                if (!hasPermission && !_permissionToastShown)
+                // Toast: outside any Region takes precedence over permission toast.
+                if (!insideRegion && !_outOfRegionToastShown)
                 {
-                    _permissionToastShown = true;
+                    _outOfRegionToastShown = true;
+                    _permissionToastShown = false;
                     if (_toastChannel != null)
                     {
                         _toastChannel.Raise(new ToastNotificationPayload(
-                            message: "You don't have permission to build here. Ask a community leader for a Build Permit.",
+                            message: "You can't build outside a Region. Move closer to a settlement or explored area.",
                             type: ToastType.Warning,
                             duration: 4f
                         ));
                     }
                 }
-                else if (hasPermission)
+                else if (insideRegion)
                 {
-                    _permissionToastShown = false;
+                    _outOfRegionToastShown = false;
+
+                    if (!hasPermission && !_permissionToastShown)
+                    {
+                        _permissionToastShown = true;
+                        if (_toastChannel != null)
+                        {
+                            _toastChannel.Raise(new ToastNotificationPayload(
+                                message: "You don't have permission to build here. Ask a community leader for a Build Permit.",
+                                type: ToastType.Warning,
+                                duration: 4f
+                            ));
+                        }
+                    }
+                    else if (hasPermission)
+                    {
+                        _permissionToastShown = false;
+                    }
                 }
             }
         }
@@ -237,11 +257,20 @@ namespace MWI.WorldSystem
                 if (overlaps.Length > 0) return false;
             }
 
-            // 3. Community zone permission check
+            // 3. Must be inside an authored Region. Buildings outside any Region are rejected —
+            //    every placement must land in a spatial scope that owns persistence and (future)
+            //    navmesh tiling.
+            if (!IsInsideRegion(position)) return false;
+
+            // 4. Community zone permission check
             if (!HasCommunityPlacementPermission(position)) return false;
 
             return true;
         }
+
+        /// <summary>Public so NPC AI + server validation can reuse the same gate.</summary>
+        public static bool IsInsideRegion(Vector3 worldPosition)
+            => Region.GetRegionAtPosition(worldPosition) != null;
 
         // ────────────────────── Visual Helpers ──────────────────────
 
@@ -295,6 +324,13 @@ namespace MWI.WorldSystem
         {
             EnsureSettings();
             if (_settings == null) return;
+
+            // Server-side out-of-Region re-validation (client already gates this but trust nothing).
+            if (!IsInsideRegion(position))
+            {
+                Debug.LogWarning($"<color=red>[BuildingPlacementManager]</color> Server rejected placement at {position}: outside any Region.");
+                return;
+            }
 
             // Server-side permission re-validation
             if (!HasCommunityPlacementPermission(position))
@@ -390,48 +426,27 @@ namespace MWI.WorldSystem
                 }
             }
 
-            // 3. Region-aware branching.
-            //    If the placement is inside an authored Region that has no enclosing map,
-            //    create a new wild map *in that region*. Don't poach a map from a different
-            //    region via the nearest-map-within-MinSep fallback.
-            float minSep = _settings != null ? _settings.MapMinSeparation : 150f;
+            // 3. No enclosing map yet. Placement is guaranteed inside a Region
+            //    (ValidatePlacement + server re-validate gates on IsInsideRegion).
+            //    Create a new wild MapController in that Region.
             if (map == null)
             {
                 Region parentRegion = Region.GetRegionAtPosition(worldPosition);
-
-                if (parentRegion != null && MapRegistry.Instance != null)
+                if (parentRegion == null || MapRegistry.Instance == null)
                 {
-                    Debug.Log($"<color=yellow>[BuildingPlacementManager:Register]</color> Inside Region '{parentRegion.ZoneId}' with no enclosing map. Creating a new wild map at {worldPosition}.");
-                    try
-                    {
-                        map = MapRegistry.Instance.CreateMapAtPosition(worldPosition);
-                    }
-                    catch (System.Exception e)
-                    {
-                        Debug.LogException(e);
-                    }
+                    // Should be impossible (validation gate above), but fail safely.
+                    Debug.LogError($"<color=red>[BuildingPlacementManager:Register]</color> Reached RegisterBuildingWithMap with no parent Region for '{building.BuildingName}' at {worldPosition}. ValidatePlacement was bypassed.");
+                    return;
                 }
-                else
+
+                Debug.Log($"<color=yellow>[BuildingPlacementManager:Register]</color> Inside Region '{parentRegion.ZoneId}' with no enclosing map. Creating a new wild map at {worldPosition}.");
+                try
                 {
-                    // Open world (outside any Region): use the legacy join-nearest-else-create flow.
-                    MapController nearest = MapController.GetNearestExteriorMap(worldPosition, minSep);
-                    if (nearest != null)
-                    {
-                        map = nearest;
-                        Debug.Log($"<color=yellow>[BuildingPlacementManager:Register]</color> Open world. Joining nearest exterior map '{map.MapId}' within {minSep} units.");
-                    }
-                    else if (MapRegistry.Instance != null)
-                    {
-                        Debug.Log($"<color=yellow>[BuildingPlacementManager:Register]</color> Open world. Creating a new wild map at {worldPosition}.");
-                        try
-                        {
-                            map = MapRegistry.Instance.CreateMapAtPosition(worldPosition);
-                        }
-                        catch (System.Exception e)
-                        {
-                            Debug.LogException(e);
-                        }
-                    }
+                    map = MapRegistry.Instance.CreateMapAtPosition(worldPosition);
+                }
+                catch (System.Exception e)
+                {
+                    Debug.LogException(e);
                 }
             }
 
