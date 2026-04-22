@@ -64,6 +64,34 @@ Keys are a specialized item type for the door lock system.
 - When `true`, the ingredient is **not consumed** during crafting — it's used as a reference input.
 - Primary use case: key copying recipes where the original key is a reference input (not consumed), and only raw materials are consumed.
 
+## WorldItem Physics & Pathing
+
+**Physics state**
+- WorldItems are non-kinematic Rigidbodies on the **RigidBody** layer (layer 8).
+- Layer matrix: RigidBody ↔ Default (characters) is **enabled** — characters can physically push items aside (this is what prevents drop-at-feet stuck cases).
+- Default mass = 2, linear damping = 3, angular damping = 4 (tuned for the project's 11 units = 1.67m scale).
+- Items are gravity-affected, sleep automatically when settled.
+- The `FreezeOnGround` mechanism has been removed (was the root cause of drop-at-feet stuck bugs).
+
+**AI pathing**
+- Each WorldItem prefab carries a `NavMeshObstacle` (carve=true), **disabled at spawn**.
+- The server-side `OnCollisionEnter` enables it on first contact (with anything — ground, another item, a wall).
+- Activation propagates to all peers via `_obstacleActive` (`NetworkVariable<bool>`, server-write, everyone-read). Each peer's local `OnObstacleActiveChanged` enables their own `NavMeshObstacle` so each navmesh carves correctly. Late-joiners apply the current value in `OnNetworkSpawn`.
+- Items can opt out via `ItemSO.BlocksPathing = false` (use for trash, coins).
+
+**Tuning (NavMeshObstacle)**
+- `Move Threshold = 0.1` — small character-bumps don't trigger re-carve.
+- `Time To Stationary = 0.5s` — tumbling items wait until still before re-carving.
+- `Carve Only Stationary = true` — moving items contribute nothing to the navmesh.
+
+**Performance posture**
+- Settled items cost ~0 (Rigidbody Sleep + carving's stationary handling).
+- Drop event = one carve-create. Pickup event = one carve-destroy. No per-frame cost.
+- If carving cost ever becomes a problem (hundreds of items in a hot area), the lever is distance-based NavMeshObstacle hibernation with hysteresis. Not implemented today.
+
+**Carried items**
+- `HandsController.AttachVisualToHand` instantiates the WorldItem prefab as a hand visual but immediately sets `Rigidbody.isKinematic = true` and disables all colliders. The carried clone never collides with anything, so its `NavMeshObstacle` never activates.
+
 ### 5. Carrying in Hands (`HandsController`)
 When an item cannot be stored in the inventory (bag full or missing), the character can carry a single item in their hands.
 - **Priority**: The system always prioritizes the inventory. Hands are a "last resort" for carrying world objects.

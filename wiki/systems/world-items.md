@@ -3,7 +3,7 @@ type: system
 title: "World Items"
 tags: [items, world, pickup, network, tier-2]
 created: 2026-04-19
-updated: 2026-04-19
+updated: 2026-04-22
 sources: []
 related:
   - "[[items]]"
@@ -20,9 +20,11 @@ depends_on:
   - "[[items]]"
   - "[[character]]"
   - "[[network]]"
+  - "[[ai-navmesh]]"
 depended_on_by:
   - "[[items]]"
   - "[[world]]"
+  - "[[ai-pathing]]"
 ---
 
 # World Items
@@ -59,6 +61,8 @@ Let items exist in the world with spatial, physical, and network presence — wh
 - `WorldItem.ItemInteractable` — the interaction target (serialized property, no GetComponent).
 - `WorldItem.TryCollect(character)` — reserve for pickup; returns true if available.
 - `WorldItem.CancelCollect(character)` — release reservation on failure.
+- `_obstacleActive : NetworkVariable<bool>` — server-set on first collision, replicates to clients.
+- `OnObstacleActiveChanged(bool, bool)` — handler that enables the local NavMeshObstacle.
 
 ## Spawn/despawn flow
 
@@ -118,18 +122,23 @@ Never `GetComponentInChildren<ItemInteractable>()` in AI navigation / interactio
 - Saved: position + instance on the map's save data while the map is active; `HibernatedItemData` while hibernating.
 - Reservations (`_reservedFor`) are transient.
 
-## Known gotchas
+## Known gotchas / edge cases
 
 - **Single destroy entry point** — only `CharacterPickUpItem.cs` destroys. Any other path = ghost item / duplication.
 - **Server-only despawn** — `NetworkObject.Despawn()` from a client throws. Always route through `CharacterActions.RequestDespawnServerRpc`.
 - **`TryCollect`/`CancelCollect` must balance** — failing to cancel on action abort leaves the item unpickable for the session.
 - **`ItemInteractable` via property** — never `GetComponentInChildren`. Performance hit in AI.
 - **Network position sync** — world items use standard NetworkTransform. If dropped rapidly, clients may see a brief mis-position — acceptable trade-off.
+- **RigidBody layer matrix must stay enabled** — the "RigidBody" physics layer (layer 8) ↔ Default layer (0) collision must remain **enabled** in the project's Physics matrix. Disabling it would break the drop-at-feet stuck recovery (characters could no longer push items aside).
+- **NavMeshObstacle carving is event-driven, not per-frame** — stationary items cost ~0; spawning/despawning many items at once does pay a per-event carve cost. If item churn becomes a hotspot (hundreds of items in a small area), the deferred fix is distance-based obstacle hibernation.
+- **`FreezeOnGround` is gone — never reintroduce it** — it was the root cause of the drop-at-feet character-stuck bugs. Items are now permanent non-kinematic physics objects.
 
 ## Change log
 - 2026-04-19 — Initial pass. — Claude / [[kevin]]
+- 2026-04-22 — Removed FreezeOnGround. Items are now permanent non-kinematic physics objects. Added NavMeshObstacle (carve=true) enabled on first ground contact, replicated via `_obstacleActive` NetworkVariable. New `ItemSO.BlocksPathing` flag (default true) for opt-out. Re-tuned base prefab Rigidbody (mass 30→2, drag 0→3, angular drag 0.05→4). — claude
 
 ## Sources
 - [.agent/skills/item_system/SKILL.md](../../.agent/skills/item_system/SKILL.md) §3.
 - [[items]] parent.
 - [WorldItem.cs](../../Assets/Scripts/Item/WorldItem.cs).
+- [docs/superpowers/specs/2026-04-22-worlditem-physics-and-pathing-design.md](../../docs/superpowers/specs/2026-04-22-worlditem-physics-and-pathing-design.md)

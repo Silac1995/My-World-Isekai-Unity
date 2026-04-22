@@ -98,7 +98,13 @@ When inventory is full, items go to character's hands:
 
 **Crafting:** `ItemSO._craftingRecipe` holds reference-only ingredients (not consumed). `_requiredCraftingSkill` + `_requiredCraftingLevel` for gating.
 
-### 8. Network Synchronization
+### 8. WorldItem Physics & Pathing
+
+- **WorldItem physics/pathing**: items are non-kinematic Rigidbody on layer "RigidBody"; `NavMeshObstacle` (carve=true) is enabled by the server on first ground contact and replicated via `_obstacleActive` NetworkVariable. `ItemSO.BlocksPathing` opts trash items out. The `FreezeOnGround` field is removed — never reintroduce it (it was the root cause of drop-at-feet character-stuck bugs).
+- Layer 8 ("RigidBody") ↔ Layer 0 ("Default") collision must stay **enabled** in the Physics matrix — this is what lets characters push items aside on drop.
+- Carried-item clones (hand visuals) have `Rigidbody.isKinematic = true` + all colliders disabled, so their NavMeshObstacle never activates.
+
+### 9. Network Synchronization
 
 **WorldItem sync:**
 ```csharp
@@ -117,7 +123,7 @@ NetworkList<NetworkEquipmentSyncData> // contains:
 
 Methods: `UpdateNetworkSlot()`, `OnEquipmentListChanged()`, `ApplyEquipmentData()`, `FullSyncFromNetwork()`
 
-### 9. CharacterActions (Item Operations)
+### 10. CharacterActions (Item Operations)
 
 | Action | Purpose | Network |
 |--------|---------|---------|
