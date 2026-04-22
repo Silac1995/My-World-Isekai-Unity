@@ -43,7 +43,6 @@ GameObject:
   - component: {fileID: 2102395634537560268}
   - component: {fileID: 46143135857637699}
   - component: {fileID: 8172288352403909900}
-  - component: {fileID: 7218502835284804781}
   - component: {fileID: 4887475367487696576}
   - component: {fileID: 6058460527841351557}
   - component: {fileID: 6291281785602581745}
@@ -295,38 +294,6 @@ MonoBehaviour:
   Biome: {fileID: 0}
   JobYields: {fileID: 0}
   IsPredefinedMap: 0
---- !u!114 &7218502835284804781
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1364089202766551707}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 7a5ac11cc976e418e8d13136b07e1f52, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Unity.AI.Navigation::Unity.AI.Navigation.NavMeshSurface
-  m_SerializedVersion: 0
-  m_AgentTypeID: 0
-  m_CollectObjects: 1
-  m_Size: {x: 50, y: 50, z: 50}
-  m_Center: {x: 0, y: 0, z: 0}
-  m_LayerMask:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  m_UseGeometry: 0
-  m_DefaultArea: 0
-  m_GenerateLinks: 0
-  m_IgnoreNavMeshAgent: 1
-  m_IgnoreNavMeshObstacle: 1
-  m_OverrideTileSize: 0
-  m_TileSize: 256
-  m_OverrideVoxelSize: 0
-  m_VoxelSize: 0.6666667
-  m_MinRegionArea: 2
-  m_NavMeshData: {fileID: 0}
-  m_BuildHeightMesh: 0
 --- !u!114 &4887475367487696576
 MonoBehaviour:
   m_ObjectHideFlags: 0

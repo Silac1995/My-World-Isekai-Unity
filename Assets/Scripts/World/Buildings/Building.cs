@@ -3,7 +3,6 @@ using System.Linq;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.AI;
-using Unity.AI.Navigation;
 using MWI.WorldSystem;
 using System;
 using Unity.Collections;
@@ -146,68 +145,24 @@ public class Building : ComplexRoom
     }
 
     /// <summary>
-    /// Rebuilds the NavMesh for the MapController zone this building sits in.
-    /// The NavMeshSurface lives on the MapController itself, scoped to its
-    /// BoxCollider bounds. All buildings on the same map share one surface.
-    /// Falls back to a local volume around the building if no MapController is found.
-    /// Runs on all clients — each rebuilds its local NavMesh.
+    /// No-op. Previously this rebuilt the per-MapController NavMeshSurface via
+    /// <c>BuildNavMesh()</c> on every placement, which created overlapping world-wide
+    /// navmesh layers when multiple maps existed. The new architecture:
+    ///
+    ///   * A single scene-root <c>NavMeshSurface</c> (scene GameObject "NavmeshSurface")
+    ///     owns the world-wide navmesh, baked statically in the editor.
+    ///   * Buildings carve holes via a <c>NavMeshObstacle</c> component with
+    ///     <c>carve = true</c> on the prefab — carving happens automatically at runtime
+    ///     when the obstacle is instantiated and intersects the baked surface. No
+    ///     per-placement BuildNavMesh() call is needed.
+    ///
+    /// Building prefabs that don't yet have a <c>NavMeshObstacle</c> (carve=true) should
+    /// get one added to their root or to their blocking geometry. This method remains
+    /// as a hook so callers compile; it deliberately does nothing.
     /// </summary>
     private void ConfigureNavMeshObstacles()
     {
-        RebuildMapNavMesh();
-    }
-
-    private void RebuildMapNavMesh()
-    {
-        // Primary: check parent hierarchy (works for pre-placed and parented buildings)
-        MapController map = GetComponentInParent<MapController>();
-
-        // Fallback: position-based lookup
-        if (map == null)
-            map = MapController.GetMapAtPosition(transform.position);
-
-        if (map != null)
-        {
-            // Reuse the map's existing NavMeshSurface (e.g. added on the prefab)
-            NavMeshSurface surface = map.GetComponent<NavMeshSurface>();
-            if (surface == null)
-            {
-                surface = map.gameObject.AddComponent<NavMeshSurface>();
-                surface.collectObjects = CollectObjects.Volume;
-                surface.useGeometry = NavMeshCollectGeometry.RenderMeshes;
-
-                BoxCollider mapCollider = map.GetComponent<BoxCollider>();
-                if (mapCollider != null)
-                {
-                    surface.center = mapCollider.center;
-                    surface.size = mapCollider.size;
-                }
-            }
-
-            surface.BuildNavMesh();
-            Debug.Log($"<color=cyan>[Building]</color> NavMesh rebuilt for map '{map.MapId}' after placing {buildingName}.");
-        }
-        else
-        {
-            // Open world — bake a local volume around the building
-            NavMeshSurface surface = GetComponent<NavMeshSurface>();
-            if (surface == null)
-            {
-                surface = gameObject.AddComponent<NavMeshSurface>();
-                surface.collectObjects = CollectObjects.Volume;
-                surface.useGeometry = NavMeshCollectGeometry.RenderMeshes;
-            }
-
-            Bounds buildingBounds = _buildingZone != null
-                ? _buildingZone.bounds
-                : new Bounds(transform.position, Vector3.one * 20f);
-
-            surface.center = transform.InverseTransformPoint(buildingBounds.center);
-            surface.size = buildingBounds.size + Vector3.one * 10f;
-
-            surface.BuildNavMesh();
-            Debug.Log($"<color=cyan>[Building]</color> Local NavMesh rebuilt for {buildingName} (open world).");
-        }
+        // Intentionally empty. See the xmldoc above.
     }
 
     protected virtual void Start()

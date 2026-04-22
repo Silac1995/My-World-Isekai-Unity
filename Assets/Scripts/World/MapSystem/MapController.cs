@@ -2,7 +2,6 @@ using System.Collections.Generic;
 using UnityEngine;
 using Unity.Netcode;
 using Unity.Collections;
-using Unity.AI.Navigation;
 using MWI.Terrain;
 using MWI.Time;
 using System.Linq;
@@ -172,23 +171,6 @@ namespace MWI.WorldSystem
         {
             _mapTrigger = GetComponent<BoxCollider>();
             _mapTrigger.isTrigger = true;
-            ScopeNavMeshToMapBounds();
-        }
-
-        /// <summary>
-        /// Syncs the NavMeshSurface's volume bounds to this MapController's BoxCollider
-        /// so runtime bakes (triggered by Building.RebuildNavMesh) only cover this map's
-        /// area instead of the entire scene. Prevents multiple MapControllers from each
-        /// baking overlapping world-wide navmesh layers.
-        /// </summary>
-        private void ScopeNavMeshToMapBounds()
-        {
-            if (_mapTrigger == null) return;
-            var surface = GetComponent<NavMeshSurface>();
-            if (surface == null) return;
-            surface.collectObjects = CollectObjects.Volume;
-            surface.center = _mapTrigger.center;
-            surface.size = _mapTrigger.size;
         }
 
         public override void OnNetworkSpawn()
