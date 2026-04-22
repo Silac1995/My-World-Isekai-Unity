@@ -5,11 +5,35 @@ using UnityEngine;
 /// <summary>
 /// Bâtiment spécialisé dans l'artisanat (Forge, Menuiserie, Tissage, etc.).
 /// Gère la collecte des recettes disponibles via les CraftingStations installées.
+///
+/// Implements <see cref="IStockProvider"/> so the <see cref="BuildingLogisticsManager"/>
+/// can proactively restock input materials on every worker punch-in — independently
+/// of whether any external <see cref="CraftingOrder"/> has been commissioned yet.
 /// </summary>
-public abstract class CraftingBuilding : CommercialBuilding
+public abstract class CraftingBuilding : CommercialBuilding, IStockProvider
 {
+    [Header("Crafting Input Stock Targets")]
+    [Tooltip("Input materials this workshop wants to keep on hand at all times. " +
+             "Each entry drives a BuyOrder when the virtual stock (physical + in-flight) " +
+             "drops below MinStock. Authored in the Inspector per prefab.")]
+    [SerializeField] private List<StockTarget> _inputStockTargets = new List<StockTarget>();
+
+    /// <summary>Inspector-authored list of input materials to keep restocked.</summary>
+    public IReadOnlyList<StockTarget> InputStockTargets => _inputStockTargets;
+
+    /// <inheritdoc/>
+    public IEnumerable<StockTarget> GetStockTargets()
+    {
+        foreach (var target in _inputStockTargets)
+        {
+            if (target.ItemToStock == null) continue;
+            if (target.MinStock <= 0) continue;
+            yield return target;
+        }
+    }
+
     /// <summary>
-    /// Scanne toutes les pièces du bâtiment pour trouver les CraftingStations 
+    /// Scanne toutes les pièces du bâtiment pour trouver les CraftingStations
     /// et retourne la liste consolidée de tous les objets pouvant y être fabriqués.
     /// </summary>
     public List<ItemSO> GetCraftableItems()

@@ -15,6 +15,7 @@ namespace MWI.UI
     {
         [SerializeField] private GameObject _menuPanel;
         [SerializeField] private Button _returnToMainMenuButton;
+        [SerializeField] private Button _saveButton;
 
         [Header("Settings")]
         [SerializeField] private float _fadeDuration = 0.5f;
@@ -30,6 +31,11 @@ namespace MWI.UI
             if (_returnToMainMenuButton != null)
             {
                 _returnToMainMenuButton.onClick.AddListener(OnReturnToMainMenuClicked);
+            }
+
+            if (_saveButton != null)
+            {
+                _saveButton.onClick.AddListener(OnSaveClicked);
             }
 
             // Ensure menu starts closed
@@ -94,6 +100,44 @@ namespace MWI.UI
         {
             if (_returnCoroutine != null) return; // Already in progress
             _returnCoroutine = StartCoroutine(ReturnToMainMenuCoroutine());
+        }
+
+        /// <summary>
+        /// Triggers an orchestrated save via SaveManager. Only the host/server can drive
+        /// the world save; clients request the host to save by RPC is out of scope here —
+        /// the button is hidden/disabled for non-server sessions.
+        /// </summary>
+        private void OnSaveClicked()
+        {
+            if (SaveManager.Instance == null)
+            {
+                Debug.LogWarning("<color=yellow>[PauseMenu]</color> Save requested but SaveManager is not available.");
+                return;
+            }
+
+            var nm = NetworkManager.Singleton;
+            if (nm == null || !nm.IsServer)
+            {
+                Debug.LogWarning("<color=yellow>[PauseMenu]</color> Save requested but this session is not the server/host. Only the host can save.");
+                return;
+            }
+
+            var localClient = nm.LocalClient;
+            var playerChar = localClient?.PlayerObject != null
+                ? localClient.PlayerObject.GetComponent<Character>()
+                : null;
+
+            if (playerChar == null)
+            {
+                Debug.LogWarning("<color=yellow>[PauseMenu]</color> Save requested but local player Character was not found.");
+                return;
+            }
+
+            // Close the menu so the "Saving..." overlay is visible and the game resumes
+            // afterwards as expected (SaveManager handles its own timescale freeze).
+            Close();
+
+            SaveManager.Instance.RequestSave(playerChar);
         }
 
         private IEnumerator ReturnToMainMenuCoroutine()
@@ -200,6 +244,11 @@ namespace MWI.UI
             if (_returnToMainMenuButton != null)
             {
                 _returnToMainMenuButton.onClick.RemoveListener(OnReturnToMainMenuClicked);
+            }
+
+            if (_saveButton != null)
+            {
+                _saveButton.onClick.RemoveListener(OnSaveClicked);
             }
 
             // Safety: resume simulation if we're destroyed while paused

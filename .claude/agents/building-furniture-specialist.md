@@ -1,6 +1,6 @@
 ---
 name: building-furniture-specialist
-description: "Expert in building and furniture systems — Building/ComplexRoom/Room hierarchy, FurnitureGrid discrete placement, furniture occupancy state machine, BuildingPlacementManager with community permissions, CommercialBuilding jobs/logistics/tasks, building interiors with spatial offsets, BuildingInteriorRegistry lazy-spawn, and construction state. Use when implementing, debugging, or designing anything related to buildings, furniture, rooms, grids, placement, interiors, or commercial logistics."
+description: "Expert in building and furniture systems — Building/ComplexRoom/Room hierarchy, FurnitureGrid discrete placement, furniture occupancy state machine, BuildingPlacementManager with community permissions, CommercialBuilding jobs/logistics/tasks, IStockProvider contract, pluggable LogisticsPolicy SOs, BuildingLogisticsManager facade + sub-components, building interiors with spatial offsets, BuildingInteriorRegistry lazy-spawn, and construction state. Use when implementing, debugging, or designing anything related to buildings, furniture, rooms, grids, placement, interiors, or commercial logistics."
 model: opus
 color: orange
 memory: project
@@ -170,16 +170,49 @@ ExteriorDoorPosition, PrefabId, IsLocked, DoorCurrentHealth
 - Deduplicates on target (one task per resource node)
 - Task types: `HarvestResourceTask`, `PickupLooseItemTask`
 
-**BuildingLogisticsManager** (order lifecycle):
+**BuildingLogisticsManager is a facade** (2026-04-21 refactor) over three plain-C# sub-components in `Assets/Scripts/World/Buildings/Logistics/`:
+- `LogisticsOrderBook` — all order lists + pending queue (pure state).
+- `LogisticsTransportDispatcher` — reserves items, creates `TransportOrder`s, `FindTransporterBuilding`, `ProcessActiveBuyOrders`, `RetryUnplacedOrders`.
+- `LogisticsStockEvaluator` — `CheckStockTargets(IStockProvider)`, `CheckCraftingIngredients(CraftingBuilding)`, `RequestStock`, `FindSupplierFor`, policy evaluation.
+
+Public API on the facade is byte-stable. Access sub-components via `OrderBook` / `Dispatcher` / `Evaluator` properties. Nested `PendingOrder` struct + `OrderType` enum stayed on the facade for serialization compat.
+
+**Order lifecycle:**
 ```
-Detection (OnWorkerPunchIn: low stock → BuyOrder)
+Detection (OnWorkerPunchIn: IStockProvider → BuyOrder, policy-driven)
   → Placement (JobLogisticsManager walks to supplier, InteractionPlaceOrder)
     → Fulfillment (Supplier creates TransportOrder or CraftingOrder)
       → Delivery (JobTransporter moves items, NotifyDeliveryProgress)
         → Acknowledgment (AcknowledgeDeliveryProgress, remove TransportOrder)
 ```
 
+**IStockProvider contract** — any `CommercialBuilding` that wants autonomous restock implements it and yields `StockTarget { ItemSO ItemToStock; int MinStock }`:
+- `ShopBuilding` projects `_itemsToSell` (default `MinStock=5` for zero/negative `MaxStock`).
+- `CraftingBuilding` exposes Inspector-authored `_inputStockTargets` (Layer A fix — forges now proactively request input materials without waiting for a commission).
+
+**Pluggable `LogisticsPolicy` SO** — per-building stocking strategy:
+- `MinStockPolicy` (default) — refill `MinStock - current` when below.
+- `ReorderPointPolicy` — threshold % + order multiplier.
+- `JustInTimePolicy` — fixed batch size.
+- Resolution: Inspector slot → `Resources.Load("Data/Logistics/DefaultMinStockPolicy")` → runtime `MinStockPolicy` + `LogWarning`.
+
+**Diagnostics:** `_logLogisticsFlow` Inspector bool on `BuildingLogisticsManager` (property `LogLogisticsFlow`) emits `[LogisticsDBG]` traces through the whole chain. `JobLogisticsManager` routes its early-exit log through the same flag. Missing `TransporterBuilding` is now a `Debug.LogError` (was silent warning). Keep OFF in shipped prefabs.
+
+**Editor tool:** `MWI → Logistics → Capability Report` opens `LogisticsCapabilityWindow` (`Assets/Editor/Buildings/LogisticsCapabilityWindow.cs`). Scans loaded scenes, shows "demanded but unsuppliable" (red) vs "supplied but undemanded" (gray). Does NOT scan hibernated `CommunityData.ConstructedBuildings`.
+
 **Virtual stock:** Physical Stock + active uncompleted BuyOrders. Use `CancelBuyOrder` to cascade removal.
+
+**Physical ↔ logical inventory sync (2026-04-22 hardenings):**
+- `CommercialBuilding.RefreshStorageInventory()` Pass 1 (ghost removal) **protects** any `ItemInstance` currently held by a live `TransportOrder.ReservedItems`. Reason: with non-kinematic WorldItem physics (post-`FreezeOnGround` removal), a settling item can briefly be missed by `Physics.OverlapBox` on the StorageZone — ghosting a reserved instance there would cascade `ReportMissingReservedItem` and kill valid in-flight transports.
+- `GoapAction_PickupItem.PrepareAction` self-heals if `RemoveExactItemFromInventory` returns false but the WorldItem's `ItemInstance` is still in the TransportOrder's reservation. Proceeds with pickup and warns (no cancel).
+- `CommercialBuilding.CountUnabsorbedItemsInBuildingZone(ItemSO)` counts matching items that physically exist at the building but aren't in `_inventory` yet — **both** loose WorldItems inside `BuildingZone` AND `ItemInstance`s carried by any of this building's assigned workers (equipment inventory + `HandsController.CarriedItem`). Essential because `CharacterPickUpItem` temporarily despawns the WorldItem during the carry phase.
+- `LogisticsTransportDispatcher.HandleInsufficientStock` gates the "🚨 VOL DETECTÉ" (theft detected) branch: if `inventoryStock + CountUnabsorbedItemsInBuildingZone ≥ completedCraftOrder.Quantity` the branch is skipped — items are mid-transit to storage, not stolen. Without this, a completed `CraftingOrder` + temporarily-invisible physical stock produced runaway over-crafting (e.g. 10 items for a Quantity=3 order).
+- **Order-reception refresh:** `BuildingLogisticsManager.PlaceBuyOrder` and `PlaceCraftingOrder` both call `_building.RefreshStorageInventory()` on reception (via the shared `RefreshStorageOnOrderReceived` helper) so the next `ProcessActiveBuyOrders` tick evaluates dispatch-vs-craft against fresh stock, not stale punch-in-era data. `PlaceTransportOrder` intentionally skips this (TransporterBuilding has no physical stock to reconcile).
+
+**Deferred work (don't promise it's shipped):**
+- `DefaultMinStockPolicy.asset` not authored yet — every building falls to runtime-instance path with a warning.
+- `FindSupplierFor` / `FindTransporterBuilding` are first-match, no ranking or load balancing.
+- Capability report doesn't see hibernated buildings.
 
 ### 8. Construction System
 
@@ -206,7 +239,11 @@ Detection (OnWorkerPunchIn: low stock → BuyOrder)
 | `BuildingPlacementManager` | `Assets/Scripts/World/Buildings/BuildingPlacementManager.cs` |
 | `BuildingManager` | `Assets/Scripts/World/Buildings/BuildingManager.cs` |
 | `BuildingTaskManager` | `Assets/Scripts/World/Buildings/BuildingTaskManager.cs` |
-| `BuildingLogisticsManager` | `Assets/Scripts/World/Buildings/BuildingLogisticsManager.cs` |
+| `BuildingLogisticsManager` (facade) | `Assets/Scripts/World/Buildings/BuildingLogisticsManager.cs` |
+| `IStockProvider` + `StockTarget` | `Assets/Scripts/World/Buildings/IStockProvider.cs` |
+| `LogisticsOrderBook` / `LogisticsTransportDispatcher` / `LogisticsStockEvaluator` | `Assets/Scripts/World/Buildings/Logistics/` |
+| `ILogisticsPolicy` / `LogisticsPolicy` + `MinStock` / `ReorderPoint` / `JustInTime` policies | `Assets/Scripts/World/Buildings/Logistics/` and `Logistics/Policies/` |
+| `LogisticsCapabilityWindow` (Editor) | `Assets/Editor/Buildings/LogisticsCapabilityWindow.cs` |
 | `BuildingInteriorDoor` | `Assets/Scripts/World/Buildings/BuildingInteriorDoor.cs` |
 | `BuildingInteriorRegistry` | `Assets/Scripts/World/Buildings/BuildingInteriorRegistry.cs` |
 | `BuildingInteriorSpawner` | `Assets/Scripts/World/Buildings/BuildingInteriorSpawner.cs` |
@@ -238,6 +275,25 @@ Detection (OnWorkerPunchIn: low stock → BuyOrder)
 - When working with grids: test with both baked (editor) and runtime-initialized grids.
 - After changes, update the building system SKILL.md at `.agent/skills/building_system/SKILL.md`.
 - Proactively flag: missing NavMesh rebuilds, incorrect grid origin calculations, door pairing issues, missing community permission checks.
+
+## Recent changes
+
+- **2026-04-22 — Physical ↔ logical inventory hardenings** (fixes transport stall + craft over-production):
+  - `CommercialBuilding.RefreshStorageInventory` Pass 1 skips instances currently in any `TransportOrder.ReservedItems` — stops ghost-pass from killing in-flight transports during transient `Physics.OverlapBox` misses caused by non-kinematic WorldItem physics.
+  - `GoapAction_PickupItem.PrepareAction` self-heals when the logical inventory lost a reserved instance but the WorldItem is physically present — proceeds with pickup + warns.
+  - `BuildingLogisticsManager.PlaceBuyOrder` and `PlaceCraftingOrder` refresh storage on reception (via `RefreshStorageOnOrderReceived` helper) so the supplier decides dispatch-vs-craft against fresh stock instead of punch-in-era data. `PlaceTransportOrder` intentionally skipped.
+  - New `CommercialBuilding.CountUnabsorbedItemsInBuildingZone(ItemSO)` counts loose WorldItems in `BuildingZone` **plus** items carried by this building's own workers (inventory + `HandsController.CarriedItem`).
+  - `LogisticsTransportDispatcher.HandleInsufficientStock` gates the "🚨 VOL DETECTÉ" branch on the above count — prevents false-theft detection during the craft-output-to-storage transit window (fixes over-production: 10 spawned for a Quantity=3 order, and the "crafter crafts every Manager pickup" symptom).
+
+- **2026-04-21 — Logistics refactor (Layers A + B + C):**
+  - `IStockProvider` contract introduced; `ShopBuilding` + `CraftingBuilding` implement it.
+  - `CraftingBuilding._inputStockTargets` fix — forges now proactively request input materials on every worker punch-in (was commission-only → idle).
+  - Pluggable `LogisticsPolicy` SO system: `MinStockPolicy` (default), `ReorderPointPolicy`, `JustInTimePolicy`. Resolution: Inspector → `Resources/Data/Logistics/DefaultMinStockPolicy` → runtime instance + warning.
+  - `BuildingLogisticsManager` split into a facade over `LogisticsOrderBook` + `LogisticsTransportDispatcher` + `LogisticsStockEvaluator`. Public API byte-stable; sub-components exposed via `OrderBook` / `Dispatcher` / `Evaluator`.
+  - `_logLogisticsFlow` per-building Inspector toggle emits `[LogisticsDBG]` traces through the whole chain.
+  - Missing `TransporterBuilding` is now a `Debug.LogError` with full context (was silent warning).
+  - Editor `LogisticsCapabilityWindow` under `MWI → Logistics → Capability Report`.
+  - `CheckShopInventory` is **gone** — use `OnWorkerPunchIn` or reach into `Evaluator.CheckStockTargets(provider)` directly.
 
 ## Reference Documents
 

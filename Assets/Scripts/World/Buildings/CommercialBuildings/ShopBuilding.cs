@@ -16,13 +16,29 @@ public struct ShopItemEntry
 /// Bâtiment de type Shop.
 /// Nécessite un Vendeur pour vendre ses produits aux clients et un LogisticsManager pour le réapprovisionner.
 /// Gère également la file d'attente (Queue) des clients.
+///
+/// Implements <see cref="IStockProvider"/> so <see cref="BuildingLogisticsManager.CheckStockTargets"/>
+/// can drive shelf restocking through the same unified path as <see cref="CraftingBuilding"/>
+/// input-material restocking.
 /// </summary>
-public class ShopBuilding : CommercialBuilding
+public class ShopBuilding : CommercialBuilding, IStockProvider
 {
     public override BuildingType BuildingType => BuildingType.Shop;
 
     [Header("Shop Settings")]
     [SerializeField] private List<ShopItemEntry> _itemsToSell = new List<ShopItemEntry>();
+
+    /// <inheritdoc/>
+    public IEnumerable<StockTarget> GetStockTargets()
+    {
+        foreach (var entry in _itemsToSell)
+        {
+            if (entry.Item == null) continue;
+            // Preserve the existing ShopBuilding default: treat zero/negative MaxStock as 5.
+            int minStock = entry.MaxStock > 0 ? entry.MaxStock : 5;
+            yield return new StockTarget(entry.Item, minStock);
+        }
+    }
     
     [Header("Work Positions")]
     [SerializeField] private Transform _vendorPoint;

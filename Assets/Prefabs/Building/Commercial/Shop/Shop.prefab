@@ -495,6 +495,10 @@ PrefabInstance:
       propertyPath: m_AnchoredPosition.y
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 2514408287322210108, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: -17
+      objectReference: {fileID: 0}
     - target: {fileID: 3164724048811914063, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: m_AnchorMax.y
       value: 0
@@ -696,8 +700,7 @@ PrefabInstance:
       value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
-    m_RemovedGameObjects:
-    - {fileID: 8958831282016579807, guid: 0266b0096947362429f7d224956a5096, type: 3}
+    m_RemovedGameObjects: []
     m_AddedGameObjects:
     - targetCorrespondingSourceObject: {fileID: 8729890495040055940, guid: 0266b0096947362429f7d224956a5096, type: 3}
       insertIndex: -1
@@ -725,17 +728,6 @@ PrefabInstance:
       insertIndex: -1
       addedObject: {fileID: 2746993426764278371}
   m_SourcePrefab: {fileID: 100100000, guid: 0266b0096947362429f7d224956a5096, type: 3}
---- !u!114 &4690730239702237897 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 7371631401807285046, guid: 0266b0096947362429f7d224956a5096, type: 3}
-  m_PrefabInstance: {fileID: 2834340834780121599}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 556ce41a973a5704fbfc8c807ad8ecd2, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Zone
 --- !u!4 &6805876774776333179 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 8729890495040055940, guid: 0266b0096947362429f7d224956a5096, type: 3}
@@ -744,6 +736,17 @@ Transform:
 --- !u!114 &6942077358948493099 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 5116845001314938580, guid: 0266b0096947362429f7d224956a5096, type: 3}
+  m_PrefabInstance: {fileID: 2834340834780121599}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 556ce41a973a5704fbfc8c807ad8ecd2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Zone
+--- !u!114 &7977594379803944905 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 5324242304186838582, guid: 0266b0096947362429f7d224956a5096, type: 3}
   m_PrefabInstance: {fileID: 2834340834780121599}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 0}
@@ -835,7 +838,7 @@ MonoBehaviour:
   _isPublicLocation: 1
   _buildingType: 0
   _buildingZone: {fileID: 8333455769947060722}
-  _deliveryZone: {fileID: 4690730239702237897}
+  _deliveryZone: {fileID: 7977594379803944905}
   _constructionRequirements: []
   _prefabId: 
   NetworkBuildingId:
@@ -1018,3 +1021,5 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 93e04e1e8920d194498e4213da95ce30, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BuildingLogisticsManager
+  _logLogisticsFlow: 0
+  _logisticsPolicy: {fileID: 0}

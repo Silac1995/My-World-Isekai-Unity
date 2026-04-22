@@ -103,9 +103,9 @@ IsComplete                 // Done?
 | `GoapAction_GoToBoss` | Navigate to job location boss |
 | `GoapAction_WearClothing` | Equip clothing from inventory |
 | `GoapAction_GoShopping` | Navigate to shop, buy item |
-| `GoapAction_LocateItem` | Search for item location |
+| `GoapAction_LocateItem` | Search for item location (transporter: also triggers a `RefreshStorageInventory` fallback audit if all reserved items are invisible to awareness + `GetWorldItemsInStorage`) |
 | `GoapAction_MoveToItem` | Navigate to item location |
-| `GoapAction_PickupItem` | Pick up from container |
+| `GoapAction_PickupItem` | Pick up reserved transport item — self-heals when `source.RemoveExactItemFromInventory` returns false but the `WorldItem.ItemInstance` is still in `CurrentOrder.ReservedItems`; proceeds with pickup + warn-logs. Only reports `ReportMissingReservedItem` + cancel when both the logical inventory AND the reservation are gone. |
 | `GoapAction_PickupLooseItem` | Pick up WorldItem from ground |
 | `GoapAction_MoveToDestination` | Navigate to arbitrary position |
 | `GoapAction_DepositResources` | Drop harvested items in storage |
@@ -168,16 +168,29 @@ Needs are **read-only state sensors** — they DO NOT execute logic. They provid
 ### 10. Logistics Cycle
 
 ```
-Detection (OnWorkerPunchIn: low stock → BuyOrder)
+Detection (OnWorkerPunchIn: IStockProvider → policy-driven BuyOrder)
   → Placement (JobLogisticsManager walks to supplier, InteractionPlaceOrder)
     → Fulfillment (Supplier creates TransportOrder or CraftingOrder)
       → Delivery (JobTransporter moves items, NotifyDeliveryProgress)
         → Acknowledgment (AcknowledgeDeliveryProgress, remove TransportOrder)
 ```
 
-**Data structures**: `_activeOrders`, `_placedBuyOrders`, `_placedTransportOrders`, `_activeCraftingOrders`, `_pendingOrders`
+**Data structures (owned by `LogisticsOrderBook`)**: `ActiveOrders`, `PlacedBuyOrders`, `PlacedTransportOrders`, `ActiveCraftingOrders`, `PendingOrder` queue. Accessed through the `BuildingLogisticsManager` facade (public API stable across the 2026-04-21 refactor).
 
 **Virtual Stock**: Physical Stock + active uncompleted BuyOrders. Use `CancelBuyOrder` to cascade removal.
+
+**`IStockProvider` contract** — drives autonomous restock. Two shipping implementers change what goals/needs NPCs drive:
+- `ShopBuilding` projects `_itemsToSell` → shelf restock (unchanged from pre-refactor, just unified under one code path).
+- `CraftingBuilding` exposes `_inputStockTargets` → **new NPC demand pattern**: crafters' `JobLogisticsManager` proactively requests input materials every punch-in, not only after a `CraftingOrder` lands. Previously idle forges sat doing nothing; now their logistics manager plans a delivery route on shift start.
+
+**Pluggable `LogisticsPolicy` SO** — `MinStockPolicy` (default), `ReorderPointPolicy`, `JustInTimePolicy`. Changes *how much* a `BuyOrder` is for without touching GOAP or BT code.
+
+**Diagnostics for NPC logistics debugging**: `BuildingLogisticsManager._logLogisticsFlow` Inspector bool (property `LogLogisticsFlow`) emits `[LogisticsDBG]` traces through the whole chain for one building. `JobLogisticsManager` routes its own early-exit log through the same flag — so if an NPC punches in at a forge and immediately idles instead of placing orders, turn this on for that building to see exactly which condition bailed out. Missing `TransporterBuilding` is now a `Debug.LogError`.
+
+**Transporter & crafter pickup race (2026-04-22 hardenings)** — three defensive layers prevent cascading false-failures caused by non-kinematic WorldItem physics + the Manager's craft-to-storage relay:
+- `RefreshStorageInventory` Pass 1 skips ghosting any instance currently in a live `TransportOrder.ReservedItems` (protects in-flight transports from a transient `Physics.OverlapBox` miss on a settling item).
+- `GoapAction_PickupItem.PrepareAction` self-heals if logical inventory lost the reservation but the physical WorldItem is right in front — proceeds with pickup + warn-logs.
+- `LogisticsTransportDispatcher.HandleInsufficientStock` gates the "🚨 VOL DETECTÉ" branch on `CommercialBuilding.CountUnabsorbedItemsInBuildingZone(ItemSO)` which sums loose in-zone items + items carried by this building's own workers. Without this, a completed `CraftingOrder` + the window between craft completion and Manager-dropoff triggered runaway over-crafting (JobCrafter restarting the batch on every Manager pickup). Expected log when the gate protects: `HandleInsufficientStock → completed craft for X looks intact (inventory=N + unabsorbed=M ≥ crafted=Q). Skipping 'theft' branch`.
 
 **V2 Virtual Resources**: `VirtualResourceSupplier` creates physical `ItemInstance` from `CommunityData.ResourcePools` via `ItemSO.CreateInstance()`.
 
@@ -227,6 +240,20 @@ Detection (OnWorkerPunchIn: low stock → BuyOrder)
 - When adding a new GOAP action: define `Preconditions`, `Effects`, `Cost`, and test that the planner finds it.
 - After changes, update the relevant SKILL.md files in `.agent/skills/`.
 - Proactively flag: missing interaction sync, action cleanup gaps, potential BT priority conflicts, missing macro-sim formulas.
+
+## Recent changes
+
+- **2026-04-22 — Transporter & crafter pickup hardenings** (fixes transport stall + craft over-production):
+  - `GoapAction_PickupItem.PrepareAction` now self-heals when logical inventory lost a reserved instance but the reservation + WorldItem are still valid — proceeds with pickup instead of cancelling.
+  - `CommercialBuilding.RefreshStorageInventory` Pass 1 protects reserved instances from the ghost-removal pass.
+  - `LogisticsTransportDispatcher.HandleInsufficientStock` gates "theft detected" on `CountUnabsorbedItemsInBuildingZone` (counts loose in-zone items + items carried by the building's own workers). Without this, JobCrafter restarted the craft batch on every Manager pickup of a crafted item. If you see a JobCrafter producing more items than the `CraftingOrder.Quantity`, check this gate first.
+  - `BuildingLogisticsManager.PlaceBuyOrder` / `PlaceCraftingOrder` refresh physical storage on order reception so the next `ProcessActiveBuyOrders` tick decides dispatch-vs-craft against fresh stock.
+
+- **2026-04-21 — Logistics refactor touches the NPC worker path:**
+  - `JobLogisticsManager` reads `BuildingLogisticsManager.LogLogisticsFlow` to gate its early-exit diagnostic log. Flip `_logLogisticsFlow` on a specific building to trace only that workshop/shop.
+  - `CraftingBuilding` now declares `_inputStockTargets`; the logistics worker at a forge will place `BuyOrder`s for iron/coal proactively on punch-in. If an NPC crafter isn't pulling materials, first check the building has an authored `_inputStockTargets` list.
+  - Missing `TransporterBuilding` is now `Debug.LogError` — if an NPC transporter job exists but deliveries never happen, check the log for this error before assuming a GOAP bug.
+  - The stocking strategy is a per-building `LogisticsPolicy` SO; `MinStockPolicy` matches pre-refactor behaviour exactly, so existing NPC expectations should not shift.
 
 ## Reference Documents
 

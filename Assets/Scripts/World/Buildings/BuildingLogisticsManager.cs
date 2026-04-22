@@ -3,34 +3,61 @@ using System.Linq;
 using UnityEngine;
 using MWI.Time;
 
+/// <summary>
+/// Thin MonoBehaviour facade for the logistics subsystem of one
+/// <see cref="CommercialBuilding"/>. Layer C split the legacy monolithic
+/// class into three single-purpose collaborators while keeping the public
+/// API byte-identical so every external caller
+/// (<see cref="JobLogisticsManager"/>, <see cref="InteractionPlaceOrder"/>,
+/// <see cref="GoapAction_PlaceOrder"/>, <see cref="CommercialBuilding"/>,
+/// editor tools, tests) continues to compile and behave the same way.
+///
+/// The three collaborators live in
+/// <c>Assets/Scripts/World/Buildings/Logistics/</c>:
+/// - <see cref="LogisticsOrderBook"/> — state (all order lists + pending queue).
+/// - <see cref="LogisticsTransportDispatcher"/> — reserve items + queue transport.
+/// - <see cref="LogisticsStockEvaluator"/> — policy-driven stock checks + supplier lookup.
+///
+/// This mirrors the Character facade pattern (<c>Character.cs</c>) at the
+/// building scale: one dependency anchor exposing authorable fields, three
+/// specialised services behind it.
+/// </summary>
 [RequireComponent(typeof(CommercialBuilding))]
 public class BuildingLogisticsManager : MonoBehaviour
 {
-    private CommercialBuilding _building;
+    // =========================================================================
+    // AUTHORED FIELDS (Inspector)
+    // =========================================================================
 
-    // Liste des commandes (Achats) liées à d'autres bâtiments clients
-    private List<BuyOrder> _activeOrders = new List<BuyOrder>();
-    public IReadOnlyList<BuyOrder> ActiveOrders => _activeOrders;
+    [Header("Diagnostics")]
+    [Tooltip("Toggle to emit verbose [LogisticsDBG] traces for this building's decision points " +
+             "(stock checks, supplier lookup, dispatch outcomes). Per-building so designers can " +
+             "isolate one forge or shop without drowning the console.")]
+    [SerializeField] private bool _logLogisticsFlow = false;
 
-    // Commandes d'achat qu'on a émises (en tant que client)
-    private List<BuyOrder> _placedBuyOrders = new List<BuyOrder>();
-    public IReadOnlyList<BuyOrder> PlacedBuyOrders => _placedBuyOrders;
+    [Header("Stocking Policy")]
+    [Tooltip("Per-building stocking strategy. If null, defaults to a MinStockPolicy loaded from " +
+             "Resources/Data/Logistics/DefaultMinStockPolicy, falling back to a runtime instance " +
+             "if no asset is present. Drop a ReorderPointPolicy or JustInTimePolicy asset here to " +
+             "change this building's behaviour without touching code.")]
+    [SerializeField] private LogisticsPolicy _logisticsPolicy = null;
 
-    // Commandes de transport qu'on a émises pour satisfaire nos clients (en tant que fournisseur)
-    private List<TransportOrder> _placedTransportOrders = new List<TransportOrder>();
-    public IReadOnlyList<TransportOrder> PlacedTransportOrders => _placedTransportOrders;
+    /// <summary>
+    /// Exposes the diagnostics toggle to external job scripts (e.g. <see cref="JobLogisticsManager"/>)
+    /// so the whole logistics flow for one building can be traced from a single Inspector field.
+    /// </summary>
+    public bool LogLogisticsFlow => _logLogisticsFlow;
 
-    // Commandes de transport (pour le TransporterBuilding)
-    private List<TransportOrder> _activeTransportOrders = new List<TransportOrder>();
-    public IReadOnlyList<TransportOrder> ActiveTransportOrders => _activeTransportOrders;
+    /// <summary>
+    /// The resolved <see cref="ILogisticsPolicy"/> currently active on this building.
+    /// Never null at runtime — falls back to a <see cref="MinStockPolicy"/>
+    /// instance if the Inspector slot is empty.
+    /// </summary>
+    public ILogisticsPolicy Policy => _logisticsPolicy;
 
-    // Liste des commandes de fabrication (Crafting) locales au bâtiment
-    private List<CraftingOrder> _activeCraftingOrders = new List<CraftingOrder>();
-    public IReadOnlyList<CraftingOrder> ActiveCraftingOrders => _activeCraftingOrders;
-
-    // File d'attente des commandes à placer physiquement
-    private Queue<PendingOrder> _pendingOrders = new Queue<PendingOrder>();
-    public bool HasPendingOrders => _pendingOrders.Count > 0;
+    // =========================================================================
+    // NESTED TYPES (kept here for serialization compat with external callers)
+    // =========================================================================
 
     public enum OrderType { Buy, Crafting, Transport }
 
@@ -70,9 +97,44 @@ public class BuildingLogisticsManager : MonoBehaviour
         }
     }
 
+    // =========================================================================
+    // COLLABORATORS (plain C#, lazily constructed)
+    // =========================================================================
+
+    private CommercialBuilding _building;
+    private LogisticsOrderBook _orderBook;
+    private LogisticsTransportDispatcher _dispatcher;
+    private LogisticsStockEvaluator _evaluator;
+
+    // Public accessors so tests / advanced tooling can address a specific sub-component.
+    public LogisticsOrderBook OrderBook => _orderBook;
+    public LogisticsTransportDispatcher Dispatcher => _dispatcher;
+    public LogisticsStockEvaluator Evaluator => _evaluator;
+
+    // =========================================================================
+    // PASS-THROUGH STATE READERS (public API compatibility — external callers)
+    // =========================================================================
+
+    public IReadOnlyList<BuyOrder> ActiveOrders => _orderBook.ActiveOrders;
+    public IReadOnlyList<BuyOrder> PlacedBuyOrders => _orderBook.PlacedBuyOrders;
+    public IReadOnlyList<TransportOrder> PlacedTransportOrders => _orderBook.PlacedTransportOrders;
+    public IReadOnlyList<TransportOrder> ActiveTransportOrders => _orderBook.ActiveTransportOrders;
+    public IReadOnlyList<CraftingOrder> ActiveCraftingOrders => _orderBook.ActiveCraftingOrders;
+    public bool HasPendingOrders => _orderBook.HasPendingOrders;
+
+    // =========================================================================
+    // UNITY LIFECYCLE
+    // =========================================================================
+
     private void Awake()
     {
         _building = GetComponent<CommercialBuilding>();
+
+        EnsurePolicy();
+
+        _orderBook = new LogisticsOrderBook();
+        _dispatcher = new LogisticsTransportDispatcher(_building, _orderBook, this);
+        _evaluator = new LogisticsStockEvaluator(_building, _orderBook, this);
     }
 
     private void Start()
@@ -90,47 +152,80 @@ public class BuildingLogisticsManager : MonoBehaviour
             TimeManager.Instance.OnNewDay -= CheckExpiredOrders;
         }
 
-        foreach (var order in _activeOrders.ToList())
+        if (_orderBook == null) return;
+
+        foreach (var order in _orderBook.ActiveOrders.ToList())
         {
             CancelBuyOrder(order);
         }
-        foreach (var order in _placedBuyOrders.ToList())
+        foreach (var order in _orderBook.PlacedBuyOrders.ToList())
         {
             CancelBuyOrder(order);
         }
     }
 
+    /// <summary>
+    /// Resolve <see cref="_logisticsPolicy"/> to a non-null value. Priority:
+    /// (1) Inspector-assigned asset, (2) Resources/Data/Logistics/DefaultMinStockPolicy,
+    /// (3) a runtime-created <see cref="MinStockPolicy"/> instance with a
+    /// warning so designers notice they should author one.
+    /// </summary>
+    private void EnsurePolicy()
+    {
+        if (_logisticsPolicy != null) return;
+
+        try
+        {
+            _logisticsPolicy = Resources.Load<LogisticsPolicy>("Data/Logistics/DefaultMinStockPolicy");
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogException(e);
+            Debug.LogError($"[BuildingLogisticsManager] {gameObject?.name}: Resources.Load for DefaultMinStockPolicy threw. Falling back to runtime MinStockPolicy.");
+            _logisticsPolicy = null;
+        }
+
+        if (_logisticsPolicy == null)
+        {
+            Debug.LogWarning($"[BuildingLogisticsManager] {gameObject?.name}: no LogisticsPolicy asset assigned and no Resources/Data/Logistics/DefaultMinStockPolicy found — using a runtime MinStockPolicy instance. Behaviour is byte-identical to Layers A+B but designers should author a shared asset to avoid per-building allocations.");
+            _logisticsPolicy = ScriptableObject.CreateInstance<MinStockPolicy>();
+            _logisticsPolicy.name = "MinStockPolicy (runtime-fallback)";
+        }
+    }
+
+    // =========================================================================
+    // PUBLIC API — CANCELLATION
+    // =========================================================================
+
     public void CancelBuyOrder(BuyOrder order)
     {
-        if (order == null) return;
+        if (order == null || _orderBook == null) return;
 
         bool wasRemoved = false;
 
-        if (_activeOrders.Contains(order))
+        if (_orderBook.ActiveOrders.Contains(order))
         {
-            _activeOrders.Remove(order);
+            _orderBook.RemoveActiveOrder(order);
             wasRemoved = true;
             Debug.Log($"<color=orange>[BuildingLogisticsManager]</color> {_building?.BuildingName} : BuyOrder annulée/retirée (Fournisseur) : {order.Quantity}x {order.ItemToTransport.ItemName}");
         }
 
-        if (_placedBuyOrders.Contains(order))
+        if (_orderBook.PlacedBuyOrders.Contains(order))
         {
-            _placedBuyOrders.Remove(order);
-            var newQueue = new Queue<PendingOrder>(_pendingOrders.Where(p => p.BuyOrder != order));
-            _pendingOrders = newQueue;
+            _orderBook.RemovePlacedBuyOrder(order);
+            _orderBook.FilterPending(p => p.BuyOrder != order);
             wasRemoved = true;
             Debug.Log($"<color=orange>[BuildingLogisticsManager]</color> {_building?.BuildingName} : BuyOrder annulée/retirée (Client) : {order.Quantity}x {order.ItemToTransport.ItemName}");
         }
 
         // Remove any strictly linked TransportOrder that hasn't been physically sent yet
-        var linkedTransports = _placedTransportOrders.Where(t => t.AssociatedBuyOrder == order).ToList();
+        var linkedTransports = _orderBook.PlacedTransportOrders.Where(t => t.AssociatedBuyOrder == order).ToList();
         foreach (var lt in linkedTransports)
         {
-            _placedTransportOrders.Remove(lt);
-            var newQueue = new Queue<PendingOrder>(_pendingOrders.Where(p => p.TransportOrder != lt));
-            _pendingOrders = newQueue;
+            _orderBook.RemovePlacedTransportOrder(lt);
+            _orderBook.FilterPending(p => p.TransportOrder != lt);
             Debug.Log($"<color=orange>[BuildingLogisticsManager]</color> {_building?.BuildingName} : TransportOrder liée annulée.");
-            
+
             if (lt.Destination != null && lt.Destination.LogisticsManager != null)
             {
                 lt.Destination.LogisticsManager.CancelActiveTransportOrder(lt);
@@ -146,100 +241,90 @@ public class BuildingLogisticsManager : MonoBehaviour
 
         if (order.Destination != null && order.Destination != _building && order.Destination.LogisticsManager != null)
         {
-             order.Destination.LogisticsManager.CancelBuyOrder(order);
+            order.Destination.LogisticsManager.CancelBuyOrder(order);
         }
     }
 
-    public int GetReservedItemCount(ItemSO itemSO)
-    {
-        HashSet<ItemInstance> reservedInstances = new HashSet<ItemInstance>();
+    public int GetReservedItemCount(ItemSO itemSO) => _orderBook?.GetReservedItemCount(itemSO) ?? 0;
 
-        foreach (var tOrder in _placedTransportOrders)
-            foreach (var item in tOrder.ReservedItems)
-                if (item.ItemSO == itemSO) reservedInstances.Add(item);
-
-        foreach (var bOrder in _placedBuyOrders)
-            foreach (var item in bOrder.ReservedItems)
-                if (item.ItemSO == itemSO) reservedInstances.Add(item);
-
-        foreach (var aOrder in _activeOrders)
-            foreach (var item in aOrder.ReservedItems)
-                if (item.ItemSO == itemSO) reservedInstances.Add(item);
-
-        return reservedInstances.Count;
-    }
+    // =========================================================================
+    // PUBLIC API — ORDER PLACEMENT (server-authoritative)
+    // =========================================================================
 
     public bool PlaceBuyOrder(BuyOrder order)
     {
-        if (order == null || order.Quantity <= 0) return false;
-        _activeOrders.Add(order);
+        RefreshStorageOnOrderReceived(nameof(PlaceBuyOrder));
+
+        if (!_orderBook.AddActiveOrder(order)) return false;
         Debug.Log($"<color=cyan>[BuildingLogisticsManager]</color> Commande reçue : {order.Quantity}x {order.ItemToTransport.ItemName} pour {order.Destination.BuildingName}. Jours restants : {order.RemainingDays}");
         return true;
     }
 
     public bool PlaceCraftingOrder(CraftingOrder order)
     {
-        if (order == null || order.Quantity <= 0) return false;
-        _activeCraftingOrders.Add(order);
+        RefreshStorageOnOrderReceived(nameof(PlaceCraftingOrder));
+
+        if (!_orderBook.AddActiveCraftingOrder(order)) return false;
         Debug.Log($"<color=cyan>[BuildingLogisticsManager]</color> Commande Craft reçue : {order.Quantity}x {order.ItemToCraft.ItemName}. Jours restants : {order.RemainingDays}");
 
         if (_building is CraftingBuilding craftingBuilding)
         {
-            CheckCraftingIngredients(craftingBuilding);
+            _evaluator.CheckCraftingIngredients(craftingBuilding);
         }
         return true;
     }
 
     public bool PlaceTransportOrder(TransportOrder order)
     {
-        if (order == null || order.Quantity <= 0) return false;
-        _activeTransportOrders.Add(order);
+        if (!_orderBook.AddActiveTransportOrder(order)) return false;
         Debug.Log($"<color=cyan>[BuildingLogisticsManager]</color> Commande Transport reçue : {order.Quantity}x {order.ItemToTransport.ItemName} pour {order.Destination.BuildingName}.");
         return true;
     }
 
-    public TransportOrder GetNextAvailableTransportOrder()
+    /// <summary>
+    /// Fresh audit of physical storage vs. logical inventory on every incoming BuyOrder /
+    /// CraftingOrder. Without this, the dispatcher decides fulfillment (transport vs. craft)
+    /// using stale stock data until the next <c>OnWorkerPunchIn</c> / <c>OnNewDay</c>.
+    /// Not called for <see cref="PlaceTransportOrder"/>: that's received by a
+    /// <c>TransporterBuilding</c> which has no physical stock of its own to reconcile.
+    /// </summary>
+    private void RefreshStorageOnOrderReceived(string callerTag)
     {
-        if (_activeTransportOrders.Count == 0) return null;
-        foreach (var order in _activeTransportOrders)
+        if (_building == null) return;
+
+        try
         {
-            if (order.Quantity > order.DeliveredQuantity + order.InTransitQuantity)
-            {
-                return order;
-            }
+            _building.RefreshStorageInventory();
         }
-        return null;
+        catch (System.Exception e)
+        {
+            Debug.LogException(e);
+            Debug.LogError($"[BuildingLogisticsManager] {_building?.BuildingName}: RefreshStorageInventory threw during {callerTag}. Continuing so the order still enters the book.");
+        }
     }
 
-    public CraftingOrder GetNextAvailableCraftingOrder()
-    {
-        var pendingOrders = _activeCraftingOrders.Where(o => !o.IsCompleted).ToList();
-        if (pendingOrders.Count == 0) return null;
-        CraftingOrder nextOrder = pendingOrders[0];
-        foreach (var order in pendingOrders)
-        {
-            if (order.RemainingDays < nextOrder.RemainingDays)
-            {
-                nextOrder = order;
-            }
-        }
-        return nextOrder;
-    }
+    public TransportOrder GetNextAvailableTransportOrder() => _orderBook.GetNextAvailableTransportOrder();
+
+    public CraftingOrder GetNextAvailableCraftingOrder() => _orderBook.GetNextAvailableCraftingOrder();
+
+    // =========================================================================
+    // PUBLIC API — PROGRESS / ACKNOWLEDGEMENT
+    // =========================================================================
 
     public void UpdateOrderProgress(BuyOrder order, int deliveredAmount)
     {
-        if (!_activeOrders.Contains(order)) return;
+        if (!_orderBook.ActiveOrders.Contains(order)) return;
         bool completed = order.RecordDelivery(deliveredAmount);
         if (completed)
         {
-            _activeOrders.Remove(order);
+            _orderBook.RemoveActiveOrder(order);
             Debug.Log($"<color=green>[BuildingLogisticsManager]</color> Commande {order.Quantity}x {order.ItemToTransport.ItemName} COMPLÉTÉE.");
         }
     }
 
     public void UpdateTransportOrderProgress(TransportOrder order, int deliveredAmount)
     {
-        if (!_activeTransportOrders.Contains(order)) return;
+        if (!_orderBook.ActiveTransportOrders.Contains(order)) return;
 
         bool completed = order.RecordDelivery(deliveredAmount);
 
@@ -251,7 +336,7 @@ public class BuildingLogisticsManager : MonoBehaviour
             if (clientLogistics != null)
             {
                 clientLogistics.OnItemsDeliveredByTransporter(order.AssociatedBuyOrder, deliveredAmount);
-                
+
                 var supplierLogistics = order.AssociatedBuyOrder.Source?.LogisticsManager;
                 if (supplierLogistics != null)
                 {
@@ -262,166 +347,19 @@ public class BuildingLogisticsManager : MonoBehaviour
 
         if (completed)
         {
-            _activeTransportOrders.Remove(order);
+            _orderBook.RemoveActiveTransportOrder(order);
             Debug.Log($"<color=green>[BuildingLogisticsManager]</color> Commande Transport {order.Quantity}x {order.ItemToTransport.ItemName} COMPLÉTÉE.");
         }
     }
 
     public void UpdateCraftingOrderProgress(CraftingOrder order, int craftedAmount)
     {
-        if (!_activeCraftingOrders.Contains(order)) return;
+        if (!_orderBook.ActiveCraftingOrders.Contains(order)) return;
         bool completed = order.RecordCraft(craftedAmount);
         if (completed)
         {
             Debug.Log($"<color=green>[BuildingLogisticsManager]</color> Commande Craft {order.Quantity}x {order.ItemToCraft.ItemName} COMPLÉTÉE. Maintenue en mémoire temporairement.");
         }
-    }
-
-    private CommercialBuilding FindTransporterBuilding()
-    {
-        if (BuildingManager.Instance == null) return null;
-        foreach (var b in BuildingManager.Instance.allBuildings)
-        {
-            if (b is TransporterBuilding trans) return trans;
-        }
-        return null;
-    }
-
-    private void CheckExpiredOrders()
-    {
-        if (TimeManager.Instance == null) return;
-        CheckExpiredBuyOrders();
-        CheckExpiredCraftingOrders();
-    }
-
-    public void OnWorkerPunchIn(Character worker)
-    {
-        _building.RefreshStorageInventory();
-
-        if (_building is ShopBuilding shop)
-        {
-            CheckShopInventory(shop, worker);
-        }
-        else if (_building is CraftingBuilding crafting)
-        {
-            CheckCraftingIngredients(crafting, worker);
-        }
-    }
-
-    private void CheckShopInventory(ShopBuilding shop, Character worker)
-    {
-        var entries = shop.ShopEntries;
-        string workerName = worker != null ? worker.CharacterName : "?";
-        Debug.Log($"<color=cyan>[BuildingLogisticsManager]</color> {workerName} vérifie l'inventaire de {shop.BuildingName} ({entries.Count} types d'items).");
-
-        foreach (var entry in entries)
-        {
-            var itemSO = entry.Item;
-            int maxStock = entry.MaxStock > 0 ? entry.MaxStock : 5;
-            int currentStock = shop.GetStockCount(itemSO);
-            
-            int alreadyOrdered = _placedBuyOrders
-                .Where(o => o.ItemToTransport == itemSO && !o.IsCompleted)
-                .Sum(o => o.Quantity);
-
-            int virtualStock = currentStock + alreadyOrdered;
-
-            if (virtualStock >= maxStock)
-            {
-                Debug.Log($"<color=cyan>[BuildingLogisticsManager]</color>   ✓ {itemSO.ItemName}: {virtualStock}/{maxStock} (Virtuel) — stock suffisant.");
-                continue;
-            }
-
-            Debug.Log($"<color=yellow>[BuildingLogisticsManager]</color>   ✗ {itemSO.ItemName}: {virtualStock}/{maxStock} (Virtuel) — stock bas, commande nécessaire...");
-            int quantityToOrder = maxStock - virtualStock;
-            RequestStock(itemSO, quantityToOrder);
-        }
-    }
-
-    private void CheckCraftingIngredients(CraftingBuilding building, Character worker = null)
-    {
-        Dictionary<ItemSO, int> globalIngredientNeeds = new Dictionary<ItemSO, int>();
-
-        foreach (var order in _activeCraftingOrders)
-        {
-            if (order.IsCompleted) continue;
-            var recipe = order.ItemToCraft.CraftingRecipe;
-            if (recipe == null) continue;
-
-            foreach (var ingredient in recipe)
-            {
-                if (!globalIngredientNeeds.ContainsKey(ingredient.Item))
-                    globalIngredientNeeds[ingredient.Item] = 0;
-
-                globalIngredientNeeds[ingredient.Item] += (ingredient.Amount * order.Quantity);
-            }
-        }
-
-        foreach (var kvp in globalIngredientNeeds)
-        {
-            ItemSO itemSO = kvp.Key;
-            int totalNeeded = kvp.Value;
-            int possessed = building.GetItemCount(itemSO);
-            
-            int alreadyOrdered = _placedBuyOrders
-                .Where(o => o.ItemToTransport == itemSO && !o.IsCompleted)
-                .Sum(o => o.Quantity);
-
-            int virtualStock = possessed + alreadyOrdered;
-
-            if (virtualStock < totalNeeded)
-            {
-                int quantityToOrder = totalNeeded - virtualStock;
-                Debug.Log($"<color=yellow>[BuildingLogisticsManager]</color> Déficit global pour {itemSO.ItemName} : {virtualStock}/{totalNeeded} (Possédés:{possessed}, EnAttente:{alreadyOrdered}). Placement d'une commande pour {quantityToOrder}...");
-                RequestStock(itemSO, quantityToOrder);
-            }
-        }
-    }
-
-    private void RequestStock(ItemSO itemSO, int quantityToOrder)
-    {
-        var supplier = FindSupplierFor(itemSO);
-        if (supplier == null)
-        {
-            Debug.LogWarning($"<color=orange>[BuildingLogisticsManager]</color>   Aucun fournisseur trouvé pour {itemSO.ItemName}.");
-            return;
-        }
-
-        var supplierLogistics = supplier.LogisticsManager;
-        if (supplierLogistics == null)
-        {
-            Debug.LogWarning($"<color=orange>[BuildingLogisticsManager]</color>   {supplier.BuildingName} n'a pas de LogisticsManager assigné.");
-            return;
-        }
-
-        bool alreadyOrdered = supplierLogistics.ActiveOrders.Any(o => o.ItemToTransport == itemSO && o.Destination == _building);
-        if (alreadyOrdered)
-        {
-            Debug.Log($"<color=cyan>[BuildingLogisticsManager]</color>   ⏳ {itemSO.ItemName}: BuyOrder déjà en cours chez {supplier.BuildingName}.");
-            return;
-        }
-
-        var pendingOrder = _placedBuyOrders.FirstOrDefault(o => o.ItemToTransport == itemSO && o.Source == supplier && !o.IsPlaced);
-        if (pendingOrder != null)
-        {
-            Debug.Log($"<color=cyan>[BuildingLogisticsManager]</color>   ⏳ {itemSO.ItemName}: Une commande en attente existe! Ajout de la quantité (+{quantityToOrder}) à celle-ci.");
-            pendingOrder.AddQuantity(quantityToOrder);
-            return;
-        }
-
-        var buyOrder = new BuyOrder(
-            itemSO,
-            quantityToOrder,
-            supplier,
-            _building,
-            3,
-            _building.Owner,
-            null
-        );
-
-        _placedBuyOrders.Add(buyOrder);
-        _pendingOrders.Enqueue(new PendingOrder(buyOrder, supplier));
-        Debug.Log($"<color=cyan>[BuildingLogisticsManager]</color>   📦 Enregistrement d'une commande d'achat (BuyOrder) de {quantityToOrder}x {itemSO.ItemName} auprès de {supplier.BuildingName}.");
     }
 
     public void OnItemHarvested(ItemSO itemSO)
@@ -431,75 +369,65 @@ public class BuildingLogisticsManager : MonoBehaviour
 
     public void OnItemsDeliveredByTransporter(BuyOrder clientOrder, int amount)
     {
-        var myOrder = _placedBuyOrders.FirstOrDefault(o => o == clientOrder);
-        if (myOrder != null)
+        var myOrder = _orderBook.PlacedBuyOrders.FirstOrDefault(o => o == clientOrder);
+        if (myOrder != null && myOrder.IsCompleted)
         {
-            if (myOrder.IsCompleted)
+            _orderBook.RemovePlacedBuyOrder(myOrder);
+            Debug.Log($"<color=green><h2>[ECONOMY]</h2></color> <color=yellow>CONGRATULATIONS !</color> La commande de {myOrder.Quantity}x {myOrder.ItemToTransport.ItemName} a été entièrement livrée à {myOrder.Destination.BuildingName} !");
+
+            Character clientBoss = myOrder.ClientBoss;
+            Character supplierBoss = myOrder.Source?.Owner;
+
+            if (clientBoss != null && supplierBoss != null && clientBoss != supplierBoss)
             {
-                _placedBuyOrders.Remove(myOrder);
-                Debug.Log($"<color=green><h2>[ECONOMY]</h2></color> <color=yellow>CONGRATULATIONS !</color> La commande de {myOrder.Quantity}x {myOrder.ItemToTransport.ItemName} a été entièrement livrée à {myOrder.Destination.BuildingName} !");
-                
-                Character clientBoss = myOrder.ClientBoss;
-                Character supplierBoss = myOrder.Source?.Owner;
-                
-                if (clientBoss != null && supplierBoss != null && clientBoss != supplierBoss)
-                {
-                    if (clientBoss.CharacterRelation != null) clientBoss.CharacterRelation.UpdateRelation(supplierBoss, 5);
-                }
+                if (clientBoss.CharacterRelation != null) clientBoss.CharacterRelation.UpdateRelation(supplierBoss, 5);
             }
         }
     }
 
     public void AcknowledgeDeliveryProgress(BuyOrder clientOrder, TransportOrder exactTransportOrder, int amount = 1)
     {
-        var myOrder = _activeOrders.FirstOrDefault(o => o == clientOrder);
-        if (myOrder != null)
+        var myOrder = _orderBook.ActiveOrders.FirstOrDefault(o => o == clientOrder);
+        if (myOrder != null && myOrder.IsCompleted)
         {
-            if (myOrder.IsCompleted)
-            {
-                _activeOrders.Remove(myOrder);
-                Debug.Log($"<color=green>[BuildingLogisticsManager]</color> 🤝 Le client a acquitté avoir reçu {myOrder.Quantity}x {myOrder.ItemToTransport.ItemName} !");
+            _orderBook.RemoveActiveOrder(myOrder);
+            Debug.Log($"<color=green>[BuildingLogisticsManager]</color> 🤝 Le client a acquitté avoir reçu {myOrder.Quantity}x {myOrder.ItemToTransport.ItemName} !");
 
-                Character clientBoss = myOrder.ClientBoss;
-                Character supplierBoss = myOrder.Source?.Owner;
-                
-                if (supplierBoss != null && clientBoss != null && supplierBoss != clientBoss)
-                {
-                    if (supplierBoss.CharacterRelation != null) supplierBoss.CharacterRelation.UpdateRelation(clientBoss, 5);
-                }
+            Character clientBoss = myOrder.ClientBoss;
+            Character supplierBoss = myOrder.Source?.Owner;
+
+            if (supplierBoss != null && clientBoss != null && supplierBoss != clientBoss)
+            {
+                if (supplierBoss.CharacterRelation != null) supplierBoss.CharacterRelation.UpdateRelation(clientBoss, 5);
             }
         }
 
-        if (exactTransportOrder != null && _placedTransportOrders.Contains(exactTransportOrder))
+        if (exactTransportOrder != null && _orderBook.PlacedTransportOrders.Contains(exactTransportOrder) && exactTransportOrder.IsCompleted)
         {
-            if (exactTransportOrder.IsCompleted)
-            {
-                _placedTransportOrders.Remove(exactTransportOrder);
-                Debug.Log($"<color=gray>[BuildingLogisticsManager]</color> TransportOrder {exactTransportOrder.Quantity}x {exactTransportOrder.ItemToTransport.ItemName} retirée du suivi fournisseur.");
-            }
+            _orderBook.RemovePlacedTransportOrder(exactTransportOrder);
+            Debug.Log($"<color=gray>[BuildingLogisticsManager]</color> TransportOrder {exactTransportOrder.Quantity}x {exactTransportOrder.ItemToTransport.ItemName} retirée du suivi fournisseur.");
         }
     }
 
     public void CancelActiveTransportOrder(TransportOrder order)
     {
-        if (order != null && _activeTransportOrders.Contains(order))
+        if (order == null || !_orderBook.ActiveTransportOrders.Contains(order)) return;
+
+        _orderBook.RemoveActiveTransportOrder(order);
+        Debug.Log($"<color=orange>[BuildingLogisticsManager]</color> TransportOrder de {order.Quantity}x {order.ItemToTransport.ItemName} retirée définitivement de la file active (Échec).");
+
+        if (order.Source != null && order.Source.LogisticsManager != null)
         {
-            _activeTransportOrders.Remove(order);
-            Debug.Log($"<color=orange>[BuildingLogisticsManager]</color> TransportOrder de {order.Quantity}x {order.ItemToTransport.ItemName} retirée définitivement de la file active (Échec).");
-            
-            if (order.Source != null && order.Source.LogisticsManager != null)
-            {
-                order.Source.LogisticsManager.ReportCancelledTransporter(order);
-            }
+            order.Source.LogisticsManager.ReportCancelledTransporter(order);
         }
     }
 
     public void ReportCancelledTransporter(TransportOrder order)
     {
-        if (order == null || !_placedTransportOrders.Contains(order)) return;
+        if (order == null || !_orderBook.PlacedTransportOrders.Contains(order)) return;
 
         Debug.LogWarning($"<color=orange>[BuildingLogisticsManager]</color> 🚨 Le transporteur a annulé la livraison pour {order.ItemToTransport.ItemName}. On annule le lien physique pour forcer la reprise.");
-        
+
         order.ReservedItems.Clear();
 
         if (order.AssociatedBuyOrder != null)
@@ -507,19 +435,17 @@ public class BuildingLogisticsManager : MonoBehaviour
             int amountToRecover = order.Quantity - order.DeliveredQuantity;
             order.AssociatedBuyOrder.CancelDispatch(amountToRecover);
         }
-        
-        _placedTransportOrders.Remove(order);
-        
-        var newQueue = new Queue<PendingOrder>(_pendingOrders.Where(p => p.TransportOrder != order));
-        _pendingOrders = newQueue;
+
+        _orderBook.RemovePlacedTransportOrder(order);
+        _orderBook.FilterPending(p => p.TransportOrder != order);
     }
 
     public void ReportMissingReservedItem(TransportOrder order)
     {
-        if (order == null || !_placedTransportOrders.Contains(order)) return;
+        if (order == null || !_orderBook.PlacedTransportOrders.Contains(order)) return;
 
         Debug.LogWarning($"<color=orange>[BuildingLogisticsManager]</color> 🚨 Le transporteur a signalé des items réservés manquants pour {order.Quantity}x {order.ItemToTransport.ItemName}. Annulation de la commande physique pour forcer le recalcul logistics.");
-        
+
         order.ReservedItems.Clear();
 
         if (order.AssociatedBuyOrder != null)
@@ -527,167 +453,81 @@ public class BuildingLogisticsManager : MonoBehaviour
             int amountToRecover = order.Quantity - order.DeliveredQuantity;
             order.AssociatedBuyOrder.CancelDispatch(amountToRecover);
         }
-        
-        _placedTransportOrders.Remove(order);
 
-        var newQueue = new Queue<PendingOrder>(_pendingOrders.Where(p => p.TransportOrder != order));
-        _pendingOrders = newQueue;
+        _orderBook.RemovePlacedTransportOrder(order);
+        _orderBook.FilterPending(p => p.TransportOrder != order);
     }
 
-    public void ProcessActiveBuyOrders()
+    // =========================================================================
+    // PUBLIC API — TICK ENTRY POINTS
+    // =========================================================================
+
+    public void OnWorkerPunchIn(Character worker)
     {
-        HashSet<ItemInstance> globallyReservedItems = new HashSet<ItemInstance>();
-        
-        foreach (var tOrder in _placedTransportOrders)
-            foreach (var item in tOrder.ReservedItems)
-                globallyReservedItems.Add(item);
-                
-        foreach (var bOrder in _placedBuyOrders)
-            foreach (var item in bOrder.ReservedItems)
-                globallyReservedItems.Add(item);
-
-        for (int i = _activeOrders.Count - 1; i >= 0; i--)
+        try
         {
-            var buyOrder = _activeOrders[i];
-            
-            int remainingToDispatch = buyOrder.Quantity - buyOrder.DispatchedQuantity;
-            if (remainingToDispatch <= 0) continue;
+            _building.RefreshStorageInventory();
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogException(e);
+            Debug.LogError($"[BuildingLogisticsManager] {_building?.BuildingName}: RefreshStorageInventory threw during OnWorkerPunchIn(worker={worker?.CharacterName}). Continuing with stock checks.");
+        }
 
-            if (_placedTransportOrders.Any(t => t.ItemToTransport == buyOrder.ItemToTransport && t.Destination == buyOrder.Destination && !t.IsPlaced))
-            {
-                continue;
-            }
+        string workerName = worker != null ? worker.CharacterName : "?";
+        bool isStockProvider = _building is IStockProvider;
+        if (_logLogisticsFlow)
+        {
+            Debug.Log($"<color=#66ccff>[LogisticsDBG]</color> OnWorkerPunchIn → building='{_building?.BuildingName}', worker='{workerName}', isStockProvider={isStockProvider}, isCrafting={_building is CraftingBuilding}, activeCraftingOrders={_orderBook.ActiveCraftingOrders.Count}");
+        }
 
-            // V2 Logistics: Let virtual buildings (like HarvestingBuilding) inject physical instances dynamically
-            _building.TryFulfillOrder(buyOrder, remainingToDispatch);
+        // Stock-maintenance pass: unified for any IStockProvider (Shop, CraftingBuilding, …).
+        if (_building is IStockProvider provider)
+        {
+            _evaluator.CheckStockTargets(provider, worker);
+        }
 
-            var physicallyAvailableInstances = _building.Inventory
-                .Where(inst => inst.ItemSO == buyOrder.ItemToTransport && !globallyReservedItems.Contains(inst))
-                .ToList();
-            
-            if (physicallyAvailableInstances.Count >= remainingToDispatch)
-            {
-                DispatchTransportOrder(buyOrder, remainingToDispatch, physicallyAvailableInstances, globallyReservedItems);
-
-                var linkedCompletedCraft = _activeCraftingOrders.FirstOrDefault(c => c.IsCompleted && c.ItemToCraft == buyOrder.ItemToTransport);
-                if (linkedCompletedCraft != null)
-                {
-                    _activeCraftingOrders.Remove(linkedCompletedCraft);
-                }
-            }
-            else
-            {
-                bool craftInProgress = _activeCraftingOrders.Any(c => !c.IsCompleted && c.ItemToCraft == buyOrder.ItemToTransport);
-                
-                int actuallyAvailableStock = physicallyAvailableInstances.Count;
-                int safeAvailable = Mathf.Max(0, actuallyAvailableStock);
-                
-                var stolenProvenOrder = _activeCraftingOrders.FirstOrDefault(c => c.IsCompleted && c.ItemToCraft == buyOrder.ItemToTransport);
-
-                if (stolenProvenOrder != null)
-                {
-                    Debug.LogWarning($"<color=orange>[BuildingLogisticsManager]</color> 🚨 VOL DETECTÉ: Craft fini pour {buyOrder.ItemToTransport.ItemName} mais items manquants! Livraison partielle de {safeAvailable}.");
-                    
-                    if (safeAvailable > 0)
-                    {
-                        DispatchTransportOrder(buyOrder, safeAvailable, physicallyAvailableInstances, globallyReservedItems);
-                    }
-
-                    _activeCraftingOrders.Remove(stolenProvenOrder);
-                    
-                    int newRemainingToDispatch = buyOrder.Quantity - buyOrder.DispatchedQuantity;
-                    if (newRemainingToDispatch > 0)
-                    {
-                        var craftOrder = new CraftingOrder(
-                            buyOrder.ItemToTransport,
-                            newRemainingToDispatch,
-                            buyOrder.RemainingDays,
-                            _building.Owner,
-                            buyOrder.Destination
-                        );
-                        PlaceCraftingOrder(craftOrder);
-                        Debug.Log($"<color=cyan>[BuildingLogisticsManager]</color>   🔨 Nouvelle commande de craft interne ({newRemainingToDispatch}x) lancée pour compenser le vol.");
-                    }
-                }
-                else
-                {
-                    if (_building.RequiresCraftingFor(buyOrder.ItemToTransport) && !craftInProgress)
-                    {
-                        var craftOrder = new CraftingOrder(
-                            buyOrder.ItemToTransport,
-                            remainingToDispatch,
-                            buyOrder.RemainingDays,
-                            _building.Owner,
-                            buyOrder.Destination
-                        );
-                        PlaceCraftingOrder(craftOrder);
-                        Debug.Log($"<color=cyan>[BuildingLogisticsManager]</color>   🔨 Génération d'un ordre de craft interne pour la BuyOrder de {buyOrder.Destination.BuildingName}.");
-                    }
-                }
-            }
+        // Commission-fulfilment pass: only CraftingBuildings aggregate ingredient demand.
+        if (_building is CraftingBuilding crafting)
+        {
+            _evaluator.CheckCraftingIngredients(crafting, worker);
         }
     }
 
-    private void DispatchTransportOrder(BuyOrder buyOrder, int amountToDispatch, List<ItemInstance> availableInstances, HashSet<ItemInstance> globallyReservedItems)
+    public void ProcessActiveBuyOrders() => _dispatcher.ProcessActiveBuyOrders();
+
+    public void RetryUnplacedOrders(Character worker = null) => _dispatcher.RetryUnplacedOrders(worker);
+
+    // =========================================================================
+    // PUBLIC API — PENDING QUEUE ACCESS (used by GoapAction_PlaceOrder)
+    // =========================================================================
+
+    public PendingOrder PeekPendingOrder() => _orderBook.PeekPending();
+
+    public void DequeuePendingOrder() => _orderBook.DequeuePending();
+
+    public void EnqueuePendingOrder(PendingOrder order) => _orderBook.EnqueuePending(order);
+
+    // =========================================================================
+    // INTERNAL — EXPIRATION SWEEP (subscribed on TimeManager.OnNewDay)
+    // =========================================================================
+
+    private void CheckExpiredOrders()
     {
-        var transporter = FindTransporterBuilding();
-        if (transporter == null)
-        {
-            Debug.LogWarning($"<color=orange>[BuildingLogisticsManager]</color> Aucun TransporterBuilding trouvé pour expédier {buyOrder.ItemToTransport.ItemName} à {buyOrder.Destination.BuildingName}.");
-            return; 
-        }
-
-        var transportOrder = new TransportOrder(
-            buyOrder.ItemToTransport,
-            amountToDispatch,
-            _building,
-            buyOrder.Destination,
-            buyOrder
-        );
-
-        for (int j = 0; j < amountToDispatch; j++)
-        {
-            ItemInstance instanceToReserve = availableInstances[j];
-            transportOrder.ReserveItem(instanceToReserve);
-            buyOrder.ReserveItem(instanceToReserve);
-            globallyReservedItems.Add(instanceToReserve); 
-        }
-
-        buyOrder.RecordDispatch(amountToDispatch);
-
-        _placedTransportOrders.Add(transportOrder); 
-        _pendingOrders.Enqueue(new PendingOrder(transportOrder, transporter));
-        Debug.Log($"<color=cyan>[BuildingLogisticsManager]</color>   🚚 Expédition de {amountToDispatch}x {buyOrder.ItemToTransport.ItemName} vers {buyOrder.Destination.BuildingName} préparée avec réservation physique stricte.");
-    }
-
-    private CommercialBuilding FindSupplierFor(ItemSO item)
-    {
-        if (BuildingManager.Instance == null) return null;
-
-        foreach (var b in BuildingManager.Instance.allBuildings)
-        {
-            if (b == _building || !(b is CommercialBuilding commBuilding)) continue;
-
-            if (commBuilding.ProducesItem(item))
-            {
-                return commBuilding;
-            }
-        }
-        return null;
+        if (TimeManager.Instance == null) return;
+        CheckExpiredBuyOrders();
+        CheckExpiredCraftingOrders();
     }
 
     private void CheckExpiredBuyOrders()
     {
-        if (_activeOrders.Count > 0)
+        if (_orderBook.ActiveOrders.Count > 0)
         {
-            List<BuyOrder> expiredSupplierOrders = new List<BuyOrder>();
-            foreach (var order in _activeOrders)
+            var expiredSupplierOrders = new List<BuyOrder>();
+            foreach (var order in _orderBook.ActiveOrders)
             {
                 order.DecreaseRemainingDays();
-                if (order.RemainingDays <= 0)
-                {
-                    expiredSupplierOrders.Add(order);
-                }
+                if (order.RemainingDays <= 0) expiredSupplierOrders.Add(order);
             }
 
             foreach (var expired in expiredSupplierOrders)
@@ -707,26 +547,18 @@ public class BuildingLogisticsManager : MonoBehaviour
             }
         }
 
-        if (_placedBuyOrders.Count > 0)
+        if (_orderBook.PlacedBuyOrders.Count > 0)
         {
-            List<BuyOrder> expiredClientOrders = new List<BuyOrder>();
-            foreach (var order in _placedBuyOrders)
+            var expiredClientOrders = new List<BuyOrder>();
+            foreach (var order in _orderBook.PlacedBuyOrders)
             {
-                if (!order.IsPlaced)
-                {
-                    order.DecreaseRemainingDays();
-                }
-
-                if (order.RemainingDays <= 0)
-                {
-                    expiredClientOrders.Add(order);
-                }
+                if (!order.IsPlaced) order.DecreaseRemainingDays();
+                if (order.RemainingDays <= 0) expiredClientOrders.Add(order);
             }
 
             foreach (var expired in expiredClientOrders)
             {
                 Debug.Log($"<color=red>[BuildingLogisticsManager]</color> Notre commande de {expired.Quantity}x {expired.ItemToTransport.ItemName} a EXPIRÉ et est retirée de nos suivis client.");
-
                 CancelBuyOrder(expired);
             }
         }
@@ -734,86 +566,29 @@ public class BuildingLogisticsManager : MonoBehaviour
 
     private void CheckExpiredCraftingOrders()
     {
-        if (_activeCraftingOrders.Count == 0) return;
+        if (_orderBook.ActiveCraftingOrders.Count == 0) return;
 
-        List<CraftingOrder> expiredOrders = new List<CraftingOrder>();
+        var expiredOrders = new List<CraftingOrder>();
 
-        foreach (var order in _activeCraftingOrders)
+        foreach (var order in _orderBook.ActiveCraftingOrders)
         {
-            if (order.IsCompleted) continue; 
+            if (order.IsCompleted) continue;
 
             order.DecreaseRemainingDays();
-            if (order.RemainingDays <= 0)
-            {
-                expiredOrders.Add(order);
-            }
+            if (order.RemainingDays <= 0) expiredOrders.Add(order);
         }
 
         foreach (var expired in expiredOrders)
         {
-            _activeCraftingOrders.Remove(expired);
+            _orderBook.RemoveActiveCraftingOrder(expired);
             Debug.Log($"<color=red>[BuildingLogisticsManager]</color> Commande Craft {expired.Quantity}x {expired.ItemToCraft.ItemName} EXPIRÉE.");
 
             if (_building != null && _building.Owner != null)
             {
                 Character workplaceBoss = _building.Owner;
-
                 if (expired.ClientBoss != null && expired.ClientBoss.IsAlive())
                 {
                     expired.ClientBoss.CharacterRelation?.UpdateRelation(workplaceBoss, -25);
-                }
-            }
-        }
-    }
-
-    public PendingOrder PeekPendingOrder()
-    {
-        return _pendingOrders.Peek();
-    }
-
-    public void DequeuePendingOrder()
-    {
-        if (_pendingOrders.Count > 0)
-        {
-            _pendingOrders.Dequeue();
-        }
-    }
-
-    public void EnqueuePendingOrder(PendingOrder order)
-    {
-        _pendingOrders.Enqueue(order);
-    }
-
-    public void RetryUnplacedOrders(Character worker = null)
-    {
-        string workerName = worker != null ? worker.CharacterName : "LogisticsManager";
-
-        foreach (var order in _placedBuyOrders)
-        {
-            if (!order.IsPlaced && !order.IsCompleted)
-            {
-                bool alreadyInQueue = _pendingOrders.Any(p => p.Type == OrderType.Buy && p.BuyOrder == order);
-                if (!alreadyInQueue)
-                {
-                    Debug.Log($"<color=yellow>[BuildingLogisticsManager]</color> {workerName} : La BuyOrder de {order.Quantity}x {order.ItemToTransport.ItemName} pour {order.Source.BuildingName} avait échoué. On retente.");
-                    EnqueuePendingOrder(new PendingOrder(order, order.Source));
-                }
-            }
-        }
-
-        foreach (var order in _placedTransportOrders)
-        {
-            if (!order.IsPlaced && !order.IsCompleted)
-            {
-                bool alreadyInQueue = _pendingOrders.Any(p => p.Type == OrderType.Transport && p.TransportOrder == order);
-                if (!alreadyInQueue)
-                {
-                    var transporter = FindTransporterBuilding();
-                    if (transporter != null)
-                    {
-                        Debug.Log($"<color=yellow>[BuildingLogisticsManager]</color> {workerName} : La TransportOrder de {order.Quantity}x {order.ItemToTransport.ItemName} vers {order.Destination.BuildingName} avait échoué. On retente.");
-                        EnqueuePendingOrder(new PendingOrder(order, transporter));
-                    }
                 }
             }
         }

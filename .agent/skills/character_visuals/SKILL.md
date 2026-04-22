@@ -40,6 +40,14 @@ The architecture uses a hub, `CharacterBodyPartsController`, which contains sub-
 - **A sprite does not appear / Visual bug**: Verify that the logic actually calls the basic API (`SetPose()`, `SetClosed()`). The fact that the underlying technology is temporary (SpriteResolver) does not excuse bypassing the modular architecture!
 - If you create a new GOAP/BT action (e.g., "Fall asleep"), don't forget to include the visual call for your actions: `Character.CharacterVisual.BodyPartsController.EyesController.SetClosed(true)`.
 
+## Extensions beyond body parts
+
+The logical API documented here (eyes, hands, mouth, ears, hair) is **one layer** of the visual system. The broader visual architecture — clothing layers (underwear/clothing/armor), physics-enabled garments (skirts/capes), wound overlays (bruises/cuts), dismemberment (amputations + prosthetics), and cross-archetype equipment sockets (cap on a human vs a wolf) — is documented here:
+
+- **Architecture** (why/what/how-it-connects): see the [Visuals](../../wiki/systems/visuals.md) wiki page.
+- **Procedures** (Spine-specific how-to recipes): see [spine-unity/SKILL.md](../spine-unity/SKILL.md).
+- **Dismemberment system** (amputation + prosthetics): see the [Character Dismemberment](../../wiki/systems/character-dismemberment.md) wiki page — planned, not yet implemented.
+
 ## Shadow casting
 
 `CharacterVisual` does not own shadow logic. Cast shadows are a pass on the material the `SpriteRenderer` already holds — the `MWI/Sprite-Lit-ShadowCaster` shader's `ShadowCaster` pass alpha-tests the sprite and writes depth only. A prefab opts in by swapping its `SpriteRenderer.sharedMaterial` to `Assets/Materials/Sprites/DefaultSpriteShadowCaster.mat` and setting `shadowCastingMode = On`.

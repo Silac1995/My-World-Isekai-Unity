@@ -57,22 +57,34 @@ namespace MWI.AI
 
             CommercialBuilding source = _job.CurrentOrder.Source;
             WorldItem exactTarget = _job.TargetWorldItem;
-            
+
             // --- FIX: On retire L'INSTANCE EXACTE de l'inventaire logistique du Shop, pas n'importe laquelle ---
             ItemInstance logicalItemFromShop = exactTarget.ItemInstance;
             bool success = source.RemoveExactItemFromInventory(logicalItemFromShop);
-            
+
             if (!success)
             {
-                Debug.LogWarning($"<color=orange>[PickupItem]</color> Instance reservee introuvable dans l'inventaire logique ! {_job.Worker.CharacterName} lost the race in logic. Applying cooldown.");
-                var logisticsManager = source.LogisticsManager;
-                if (logisticsManager != null) 
-                { 
-                    logisticsManager.ReportMissingReservedItem(_job.CurrentOrder); 
+                // Self-heal: the WorldItem we're standing in front of carries the exact
+                // ItemInstance reserved by our TransportOrder, but the source's logical
+                // _inventory lost it (almost always a RefreshStorageInventory ghost-pass
+                // that raced a settling non-kinematic WorldItem). The reservation is still
+                // authoritative — proceed with the pickup instead of aborting.
+                if (_job.CurrentOrder.ReservedItems.Contains(logicalItemFromShop))
+                {
+                    Debug.LogWarning($"<color=orange>[PickupItem]</color> {_job.Worker.CharacterName}: logical inventory out of sync for {logicalItemFromShop.ItemSO.ItemName} but reservation + physical item are intact → proceeding (self-heal).");
                 }
-                
-                _job.CancelCurrentOrder(true);
-                return null;
+                else
+                {
+                    Debug.LogWarning($"<color=orange>[PickupItem]</color> Instance reservee introuvable dans l'inventaire logique ET dans la réservation ! {_job.Worker.CharacterName} lost the race in logic. Applying cooldown.");
+                    var logisticsManager = source.LogisticsManager;
+                    if (logisticsManager != null)
+                    {
+                        logisticsManager.ReportMissingReservedItem(_job.CurrentOrder);
+                    }
+
+                    _job.CancelCurrentOrder(true);
+                    return null;
+                }
             }
 
             _takenItem = logicalItemFromShop;

@@ -547,7 +547,7 @@ public abstract class CommercialBuilding : Building
         Vector3 halfExtents = Vector3.Scale(boxCol.size, boxCol.transform.lossyScale) * 0.5f;
 
         Collider[] colliders = Physics.OverlapBox(center, halfExtents, boxCol.transform.rotation, Physics.AllLayers, QueryTriggerInteraction.Collide);
-        
+
         foreach (var col in colliders)
         {
             // Chercher le composant sur l'objet ou sur son parent
@@ -562,17 +562,137 @@ public abstract class CommercialBuilding : Building
     }
 
     /// <summary>
-    /// Effectue un audit de sécurité (Sanity Check) entre l'inventaire logique (_inventory)
-    /// et les objets réellement présents physiquement au sol.
-    /// Utilisé lorsqu'un employé suspecte qu'un objet logique n'existe plus physiquement (bug, tombé sous la map, volé).
+    /// Counts <paramref name="itemSO"/> units that physically exist at this building but are
+    /// NOT yet visible in the logical <see cref="Inventory"/>. Covers two in-flight cases:
+    ///
+    /// 1. Loose WorldItems sitting inside <see cref="Building.BuildingZone"/> (e.g. just
+    ///    spawned at a <c>CraftingStation._outputPoint</c>, waiting for
+    ///    <c>GoapAction_GatherStorageItems</c> or <c>RefreshStorageInventory</c> Pass 2).
+    /// 2. Items carried by this building's own assigned workers (the Logistics Manager
+    ///    picking a crafted item up to move it to storage temporarily despawns the
+    ///    WorldItem, so (1) alone would miss that case).
+    ///
+    /// Used by the dispatcher to distinguish "crafted but mid-transit to storage" from
+    /// "actually stolen" when a completed <see cref="CraftingOrder"/> exists but no physical
+    /// stock is visible in <see cref="StorageZone"/> yet. Returns 0 when there's no
+    /// BuildingZone collider (legacy prefabs) AND no workers hold matching items, which
+    /// degrades gracefully to the pre-fix behavior.
+    /// </summary>
+    public virtual int CountUnabsorbedItemsInBuildingZone(ItemSO itemSO)
+    {
+        if (itemSO == null) return 0;
+
+        int count = 0;
+        HashSet<ItemInstance> counted = new HashSet<ItemInstance>();
+
+        // (1) Loose WorldItems inside BuildingZone.
+        if (BuildingZone is BoxCollider boxCol)
+        {
+            Vector3 center = boxCol.transform.TransformPoint(boxCol.center);
+            Vector3 halfExtents = Vector3.Scale(boxCol.size, boxCol.transform.lossyScale) * 0.5f;
+
+            Collider[] colliders = Physics.OverlapBox(center, halfExtents, boxCol.transform.rotation, Physics.AllLayers, QueryTriggerInteraction.Collide);
+
+            foreach (var col in colliders)
+            {
+                WorldItem wi = col.GetComponent<WorldItem>() ?? col.GetComponentInParent<WorldItem>();
+                if (wi == null || wi.ItemInstance == null) continue;
+                if (wi.IsBeingCarried) continue;
+                if (wi.ItemInstance.ItemSO != itemSO) continue;
+                if (_inventory.Contains(wi.ItemInstance)) continue; // already visible in the dispatcher's view
+                if (!counted.Add(wi.ItemInstance)) continue;
+                count++;
+            }
+        }
+
+        // (2) Items held by this building's own workers. Covers the window where the
+        // Logistics Manager has picked a crafted WorldItem up (despawning it from the
+        // scene) but hasn't yet dropped it in storage via FinishDropoff → AddToInventory.
+        for (int i = 0; i < _jobs.Count; i++)
+        {
+            Character worker = _jobs[i]?.Worker;
+            if (worker == null) continue;
+
+            try
+            {
+                var equipment = worker.CharacterEquipment;
+                if (equipment != null && equipment.HaveInventory())
+                {
+                    var slots = equipment.GetInventory()?.ItemSlots;
+                    if (slots != null)
+                    {
+                        for (int s = 0; s < slots.Count; s++)
+                        {
+                            var slot = slots[s];
+                            if (slot == null || slot.IsEmpty()) continue;
+                            var inst = slot.ItemInstance;
+                            if (inst == null || inst.ItemSO != itemSO) continue;
+                            if (_inventory.Contains(inst)) continue;
+                            if (!counted.Add(inst)) continue;
+                            count++;
+                        }
+                    }
+                }
+
+                var hands = worker.CharacterVisual?.BodyPartsController?.HandsController;
+                if (hands != null && hands.CarriedItem != null && hands.CarriedItem.ItemSO == itemSO)
+                {
+                    var carried = hands.CarriedItem;
+                    if (!_inventory.Contains(carried) && counted.Add(carried)) count++;
+                }
+            }
+            catch (System.Exception e)
+            {
+                // Defensive: a broken equipment component on one worker must not break the whole stock check.
+                Debug.LogException(e);
+                Debug.LogError($"[CommercialBuilding] {buildingName}: CountUnabsorbedItemsInBuildingZone threw while scanning worker '{worker?.CharacterName}'. Skipping that worker's contribution this tick.");
+            }
+        }
+
+        return count;
+    }
+
+    /// <summary>
+    /// Two-way sync between the logical inventory (<see cref="_inventory"/>) and the physical
+    /// WorldItems actually sitting in the <see cref="StorageZone"/>.
+    ///
+    /// Pass 1 — remove ghosts: logical entries with no physical counterpart (fell through the
+    /// map, despawned, stolen, etc.). Any ghost referenced by a live TransportOrder is also
+    /// reported so the order can be recomputed.
+    ///
+    /// Pass 2 — absorb orphans: physical WorldItems inside StorageZone bounds that were never
+    /// registered logically. This happens whenever an item reaches the zone via a path that
+    /// doesn't call <see cref="AddToInventory"/> — harvesters dropping in a DepositZone that
+    /// overlaps StorageZone, couriers dropping directly into the zone, player drops, etc.
+    /// Without this, GetItemCount stays at 0 forever and the logistics stock check re-orders
+    /// wood that physically exists in the yard.
     /// </summary>
     public virtual void RefreshStorageInventory()
     {
         List<WorldItem> physicalItems = GetWorldItemsInStorage();
         List<ItemInstance> ghostlyInstances = new List<ItemInstance>();
 
+        // Collect instances actively reserved by live TransportOrders. These must NEVER be
+        // ghosted here: with non-kinematic WorldItem physics (post-FreezeOnGround removal),
+        // a settling item can be momentarily missed by Physics.OverlapBox while still being
+        // perfectly valid. Ghosting a reserved instance cascades into ReportMissingReservedItem
+        // and kills an in-flight transport. True missing-item detection happens where it
+        // belongs — when the transporter arrives at the source and the pickup resolves.
+        HashSet<ItemInstance> reservedInstances = null;
+        if (LogisticsManager != null)
+        {
+            reservedInstances = new HashSet<ItemInstance>();
+            foreach (var transport in LogisticsManager.PlacedTransportOrders)
+            {
+                if (transport == null || transport.ReservedItems == null) continue;
+                foreach (var r in transport.ReservedItems) reservedInstances.Add(r);
+            }
+        }
+
         foreach (var logicalInstance in _inventory)
         {
+            if (reservedInstances != null && reservedInstances.Contains(logicalInstance)) continue;
+
             bool isPhysicallyPresent = false;
 
             // Vérifier si un WorldItem physique correspond à cette instance logique
@@ -588,7 +708,7 @@ public abstract class CommercialBuilding : Building
             // Si ce n'est pas au sol ET que ce n'est PAS en train d'être porté par quelqu'un, c'est un fantôme !
             if (!isPhysicallyPresent)
             {
-                // Un check supplémentaire : a-t-il vraiment un porteur assigné ? 
+                // Un check supplémentaire : a-t-il vraiment un porteur assigné ?
                 // La propriété IsBeingCarried de WorldItem est liée au portage effectif.
                 // Dans notre architecture, si ItemInstance n'a pas de propriétaire actuel mais est perdu, on le supprime.
                 ghostlyInstances.Add(logicalInstance);
@@ -598,7 +718,7 @@ public abstract class CommercialBuilding : Building
         if (ghostlyInstances.Count > 0)
         {
             Debug.LogWarning($"<color=orange>[CommercialBuilding]</color> {buildingName} : Audit détecte {ghostlyInstances.Count} objets logiques sans réalité physique ! Nettoyage...");
-            
+
             foreach (var ghost in ghostlyInstances)
             {
                 _inventory.Remove(ghost);
@@ -614,6 +734,23 @@ public abstract class CommercialBuilding : Building
                     }
                 }
             }
+        }
+
+        // Pass 2 — absorb orphans: physical items in storage that aren't tracked logically.
+        int absorbed = 0;
+        foreach (var worldItem in physicalItems)
+        {
+            if (worldItem == null || worldItem.ItemInstance == null) continue;
+            if (worldItem.IsBeingCarried) continue;
+            if (_inventory.Contains(worldItem.ItemInstance)) continue;
+
+            _inventory.Add(worldItem.ItemInstance);
+            absorbed++;
+        }
+
+        if (absorbed > 0)
+        {
+            Debug.Log($"<color=green>[CommercialBuilding]</color> {buildingName} : Audit a absorbé {absorbed} objet(s) physique(s) orphelin(s) dans l'inventaire logique.");
         }
     }
 

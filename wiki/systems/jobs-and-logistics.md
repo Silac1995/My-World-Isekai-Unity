@@ -3,7 +3,7 @@ type: system
 title: "Jobs & Logistics"
 tags: [jobs, logistics, economy, tier-1]
 created: 2026-04-18
-updated: 2026-04-18
+updated: 2026-04-21
 sources: []
 related:
   - "[[world]]"
@@ -74,7 +74,10 @@ Simulate a plausible economy without hand-scripting NPC routines. Jobs push dail
 ### Logistics
 | File | Role |
 |------|------|
-| `Assets/Scripts/World/Buildings/BuildingLogisticsManager.cs` | The brain. 5 internal lists. `ProcessActiveBuyOrders`, `CheckShopInventory`, `FindSupplierFor`, `AcknowledgeDeliveryProgress`, `CancelBuyOrder`. |
+| `Assets/Scripts/World/Buildings/BuildingLogisticsManager.cs` | Facade over 3 sub-components. Exposes `ProcessActiveBuyOrders`, `FindSupplierFor`, `AcknowledgeDeliveryProgress`, `CancelBuyOrder`, `LogLogisticsFlow`. See [[building-logistics-manager]]. |
+| `Assets/Scripts/World/Buildings/Logistics/` | `LogisticsOrderBook` (state), `LogisticsTransportDispatcher` (reserve + dispatch), `LogisticsStockEvaluator` (policy + stock checks + supplier lookup), `ILogisticsPolicy` + `LogisticsPolicy` + `Policies/` (`MinStockPolicy`, `ReorderPointPolicy`, `JustInTimePolicy`). |
+| `Assets/Scripts/World/Buildings/IStockProvider.cs` | Contract + `StockTarget` struct. Implemented by `ShopBuilding` and `CraftingBuilding`. |
+| `Assets/Editor/Buildings/LogisticsCapabilityWindow.cs` | Editor-only `MWI > Logistics > Capability Report` diagnostic. |
 | `Assets/Scripts/World/Buildings/BuildingTaskManager.cs` | Blackboard pattern. `ClaimBestTask<T>()`. |
 | `Assets/Scripts/World/Jobs/BuyOrder.cs`, `CraftingOrder.cs`, `TransportOrder.cs`, `PendingOrder.cs` | Order types. |
 | `Assets/Scripts/AI/Actions/GoapAction_PlaceOrder.cs` | Physical order placement via `InteractionPlaceOrder`. |
@@ -126,17 +129,18 @@ CommercialBuilding.AskForJob(character)
 Job.Assign(worker) + CharacterJob.InjectWorkSchedule
 ```
 
-Logistics cycle (shop example):
+Logistics cycle (shop or crafter — unified `IStockProvider` path):
 ```
 OnWorkerPunchIn or OnNewDay
         │
         ▼
-BuildingLogisticsManager.CheckShopInventory
+LogisticsStockEvaluator.CheckStockTargets(building as IStockProvider)
         │
         ├── Physical stock + _placedBuyOrders = Virtual stock
+        ├── ILogisticsPolicy decides: order how much? (MinStock / ReorderPoint / JIT)
         │
         ▼
-For each understock:
+For each understocked target:
         │
         ▼
 EnqueueBuyOrder ──► add to _placedBuyOrders ──► add PendingOrder
@@ -235,6 +239,7 @@ VirtualResourceSupplier.TryFulfillOrder fills pending orders from virtual pools
 - [[crafting-loop]] — `CraftingBuilding`, `CraftingStation`, `JobCrafter` demand-driven flow.
 
 ## Change log
+- 2026-04-21 — Logistics refactor: IStockProvider + pluggable LogisticsPolicy SO + facade split + input stock contract on CraftingBuilding — claude
 - 2026-04-18 — Initial documentation pass. — Claude / [[kevin]]
 
 ## Sources

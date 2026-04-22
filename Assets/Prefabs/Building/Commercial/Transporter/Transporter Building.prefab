@@ -14,7 +14,6 @@ GameObject:
   - component: {fileID: 2472238712724233390}
   - component: {fileID: 482928099175988206}
   - component: {fileID: 8080664698442722300}
-  - component: {fileID: 8663646756962885424}
   - component: {fileID: 146143876631070435}
   m_Layer: 0
   m_Name: Cube
@@ -1078,27 +1077,6 @@ MeshCollider:
   m_Convex: 0
   m_CookingOptions: 30
   m_Mesh: {fileID: 0}
---- !u!65 &8663646756962885424
-BoxCollider:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2202957625622053947}
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_IsTrigger: 0
-  m_ProvidesContacts: 0
-  m_Enabled: 1
-  serializedVersion: 3
-  m_Size: {x: 21, y: 16.5, z: 21}
-  m_Center: {x: -0.5180054, y: 0.25, z: -17.28853}
 --- !u!114 &146143876631070435
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1207,6 +1185,14 @@ PrefabInstance:
     - target: {fileID: 2337483750409059148, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: m_AnchoredPosition.y
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2514408287322210108, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: -17
+      objectReference: {fileID: 0}
+    - target: {fileID: 2514408287322210108, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: -36
       objectReference: {fileID: 0}
     - target: {fileID: 3164724048811914063, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: m_AnchorMax.y
@@ -1329,8 +1315,12 @@ PrefabInstance:
       value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 7289148798581441162, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: -1
+      objectReference: {fileID: 0}
+    - target: {fileID: 7289148798581441162, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: m_LocalPosition.z
-      value: -33.25
+      value: -23
       objectReference: {fileID: 0}
     - target: {fileID: 8729890495040055940, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: m_LocalPosition.x
@@ -1427,17 +1417,6 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 8729890495040055940, guid: 0266b0096947362429f7d224956a5096, type: 3}
   m_PrefabInstance: {fileID: 4510849049106981793}
   m_PrefabAsset: {fileID: 0}
---- !u!114 &6400893783335544983 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 7371631401807285046, guid: 0266b0096947362429f7d224956a5096, type: 3}
-  m_PrefabInstance: {fileID: 4510849049106981793}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 556ce41a973a5704fbfc8c807ad8ecd2, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Zone
 --- !u!1 &7206197390350540711 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 6528054620988570630, guid: 0266b0096947362429f7d224956a5096, type: 3}
@@ -1516,7 +1495,7 @@ MonoBehaviour:
   _isPublicLocation: 0
   _buildingType: 7
   _buildingZone: {fileID: 7668004441454646188}
-  _deliveryZone: {fileID: 6400893783335544983}
+  _deliveryZone: {fileID: 8609267739284458903}
   _constructionRequirements: []
   _prefabId: B005-TransportBuilding
   NetworkBuildingId:
@@ -1696,11 +1675,24 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 93e04e1e8920d194498e4213da95ce30, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BuildingLogisticsManager
+  _logLogisticsFlow: 0
+  _logisticsPolicy: {fileID: 0}
 --- !u!65 &7668004441454646188 stripped
 BoxCollider:
   m_CorrespondingSourceObject: {fileID: 6121509161196564493, guid: 0266b0096947362429f7d224956a5096, type: 3}
   m_PrefabInstance: {fileID: 4510849049106981793}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &8609267739284458903 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 5324242304186838582, guid: 0266b0096947362429f7d224956a5096, type: 3}
+  m_PrefabInstance: {fileID: 4510849049106981793}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 556ce41a973a5704fbfc8c807ad8ecd2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Zone
 --- !u!114 &8762718603653025141 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 5116845001314938580, guid: 0266b0096947362429f7d224956a5096, type: 3}

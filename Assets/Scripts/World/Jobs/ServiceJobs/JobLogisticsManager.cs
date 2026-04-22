@@ -62,10 +62,28 @@ public class JobLogisticsManager : Job
     /// </summary>
     public void OnWorkerPunchIn()
     {
-        if (!IsOwnerOrOnSchedule()) return;
+        bool logFlow = _workplace != null
+            && _workplace.LogisticsManager != null
+            && _workplace.LogisticsManager.LogLogisticsFlow;
+
+        if (!IsOwnerOrOnSchedule())
+        {
+            if (logFlow)
+            {
+                string scheduleInfo = _worker?.CharacterSchedule != null
+                    ? _worker.CharacterSchedule.CurrentActivity.ToString()
+                    : "no-schedule";
+                Debug.Log($"<color=#ff8866>[LogisticsDBG]</color> JobLogisticsManager.OnWorkerPunchIn → EARLY EXIT. worker='{_worker?.CharacterName}', workplace='{_workplace?.BuildingName}', isOwner={(_workplace?.Owner == _worker)}, schedule={scheduleInfo}. Logistics pass skipped.");
+            }
+            return;
+        }
 
         if (_workplace != null && _workplace.LogisticsManager != null)
         {
+            if (logFlow)
+            {
+                Debug.Log($"<color=#66ccff>[LogisticsDBG]</color> JobLogisticsManager.OnWorkerPunchIn → dispatching to BuildingLogisticsManager.OnWorkerPunchIn. worker='{_worker?.CharacterName}', workplace='{_workplace.BuildingName}'.");
+            }
             _workplace.LogisticsManager.OnWorkerPunchIn(_worker);
         }
     }

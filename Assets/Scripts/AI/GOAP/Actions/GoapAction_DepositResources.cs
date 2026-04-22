@@ -113,13 +113,13 @@ public class GoapAction_DepositResources : GoapAction
                 movement.Stop();
                 movement.ResetPath();
                 _isMoving = false;
-                _isDepositing = true;
             }
 
-            if (_isDepositing)
-            {
-                ProcessSequentialDeposit(worker);
-            }
+            // Flip unconditionally when in range — previously gated on _isMoving,
+            // which stranded harvesters that started the action already inside the
+            // deposit zone (replan, short-distance plan, spawn adjacent, etc.).
+            _isDepositing = true;
+            ProcessSequentialDeposit(worker);
         }
     }
 

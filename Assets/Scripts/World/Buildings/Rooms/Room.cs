@@ -129,6 +129,17 @@ public class Room : Zone
         _furnitureManager.LoadExistingFurniture();
     }
 
+    private void Start()
+    {
+        // Re-scan after every sibling's Awake has finished. Nested prefab children (e.g. a
+        // CraftingStation inside Room_Main of a Forge) are sometimes not yet visible to
+        // GetComponentsInChildren<Furniture>() during Awake, depending on network/prefab
+        // spawn order — which left Furnitures empty and made CraftingBuilding.GetCraftableItems()
+        // return [], breaking supplier lookup in the logistics chain. LoadExistingFurniture
+        // replaces the list and RegisterFurniture is idempotent, so re-calling is safe.
+        if (_furnitureManager != null) _furnitureManager.LoadExistingFurniture();
+    }
+
     public override void OnNetworkSpawn()
     {
         base.OnNetworkSpawn();
@@ -139,6 +150,10 @@ public class Room : Zone
         {
             _furnitureManager.Grid.RestoreFromSerializedData();
         }
+
+        // Same race as the Awake scan: on clients the networked furniture children may be spawned
+        // after Room.Awake has run. Rescan on network spawn too.
+        if (_furnitureManager != null) _furnitureManager.LoadExistingFurniture();
     }
 
     public bool IsPointInsideRoom(Vector3 point)

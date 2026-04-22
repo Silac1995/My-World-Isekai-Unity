@@ -148,12 +148,16 @@ public class FurnitureManager : MonoBehaviour
 
     /// <summary>
     /// Peuple la liste initiale des meubles s'ils sont déjà enfants du Transform au lancement du jeu.
+    /// Passe <c>true</c> à <c>GetComponentsInChildren</c> pour inclure les GameObjects inactifs —
+    /// certains meubles (ex. CraftingStation nichée dans Room_Main) peuvent être momentanément
+    /// inactifs pendant le spawn réseau et seraient sinon invisibles pour le manager,
+    /// ce qui cassait <c>CraftingBuilding.GetCraftableItems</c> et toute la chaîne de logistique.
     /// </summary>
     public void LoadExistingFurniture()
     {
         if (_grid == null) return;
 
-        _furnitures = new List<Furniture>(GetComponentsInChildren<Furniture>());
+        _furnitures = new List<Furniture>(GetComponentsInChildren<Furniture>(true));
         foreach (var f in _furnitures)
         {
             _grid.RegisterFurniture(f, f.transform.position, f.SizeInCells);

@@ -49,7 +49,7 @@ BoxCollider:
     serializedVersion: 2
     m_Bits: 0
   m_LayerOverridePriority: 0
-  m_IsTrigger: 0
+  m_IsTrigger: 1
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
@@ -593,7 +593,7 @@ Transform:
   m_GameObject: {fileID: 8884850360139944857}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 35.56, y: 0.9733, z: 0}
+  m_LocalPosition: {x: -2, y: 0.9733, z: -20}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -614,7 +614,7 @@ BoxCollider:
     serializedVersion: 2
     m_Bits: 0
   m_LayerOverridePriority: 0
-  m_IsTrigger: 0
+  m_IsTrigger: 1
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
@@ -753,6 +753,14 @@ PrefabInstance:
     - target: {fileID: 2337483750409059148, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: m_AnchoredPosition.y
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2514408287322210108, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 10
+      objectReference: {fileID: 0}
+    - target: {fileID: 2514408287322210108, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: -24
       objectReference: {fileID: 0}
     - target: {fileID: 3164724048811914063, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: m_AnchorMax.y
@@ -991,17 +999,6 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 8729890495040055940, guid: 0266b0096947362429f7d224956a5096, type: 3}
   m_PrefabInstance: {fileID: 8992601480692979103}
   m_PrefabAsset: {fileID: 0}
---- !u!114 &1909922971633180329 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 7371631401807285046, guid: 0266b0096947362429f7d224956a5096, type: 3}
-  m_PrefabInstance: {fileID: 8992601480692979103}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 556ce41a973a5704fbfc8c807ad8ecd2, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Zone
 --- !u!1 &2761951707981523353 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 6528054620988570630, guid: 0266b0096947362429f7d224956a5096, type: 3}
@@ -1080,7 +1077,7 @@ MonoBehaviour:
   _isPublicLocation: 0
   _buildingType: 6
   _buildingZone: {fileID: 2900277757222118802}
-  _deliveryZone: {fileID: 1909922971633180329}
+  _deliveryZone: {fileID: 3832459157725952937}
   _constructionRequirements: []
   _prefabId: B000-Lumberyard
   NetworkBuildingId:
@@ -1240,7 +1237,7 @@ MonoBehaviour:
     maxQuantity: 50
   _harvesterCount: 2
   _harvesterJobTitle: Harvester
-  _harvesterJobType: 0
+  _harvesterJobType: 1
   _depositZone: {fileID: 3359805275942087306}
   _harvestingAreaZone: {fileID: 460726151524295576}
 --- !u!114 &2324777126058058136
@@ -1267,11 +1264,24 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 93e04e1e8920d194498e4213da95ce30, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BuildingLogisticsManager
+  _logLogisticsFlow: 0
+  _logisticsPolicy: {fileID: 0}
 --- !u!65 &2900277757222118802 stripped
 BoxCollider:
   m_CorrespondingSourceObject: {fileID: 6121509161196564493, guid: 0266b0096947362429f7d224956a5096, type: 3}
   m_PrefabInstance: {fileID: 8992601480692979103}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &3832459157725952937 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 5324242304186838582, guid: 0266b0096947362429f7d224956a5096, type: 3}
+  m_PrefabInstance: {fileID: 8992601480692979103}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 556ce41a973a5704fbfc8c807ad8ecd2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Zone
 --- !u!114 &4309535885151927115 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 5116845001314938580, guid: 0266b0096947362429f7d224956a5096, type: 3}

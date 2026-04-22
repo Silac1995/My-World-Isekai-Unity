@@ -95,6 +95,12 @@ Provides a discrete coordinate system over a room's `BoxCollider`.
 - **Ghost Snapping:** `GetPlacementPositions(cursorPos, sizeInCells)` returns grid-snapped anchor + visual center. Clamps the furniture footprint to grid bounds so it can't extend outside. The anchor is used for grid validation/registration, the visual center for ghost rendering.
 - **Pathfinding:** Works alongside NavMesh but focuses purely on discrete object placement logic.
 
+### Furniture registration / lazy bootstrap
+
+`Room.Awake()` calls `FurnitureManager.LoadExistingFurniture()` to populate `Furnitures` from children. The scan uses `GetComponentsInChildren<Furniture>(true)` (includes inactive GameObjects). Because nested-prefab children can still be late-parented or late-activated — especially for network-spawned buildings where `NetworkObject` children arrive after the parent's Awake — `LoadExistingFurniture()` is **re-invoked in `Room.Start()` and `Room.OnNetworkSpawn()`**. The call is idempotent (replaces the list, `FurnitureGrid.RegisterFurniture` just reassigns `cell.Occupant`).
+
+This bootstrap matters because `CraftingBuilding.GetCraftableItems()` walks `Rooms → FurnitureManager.Furnitures → station.CraftableItems`. If the list is empty, `ProducesItem(item)` returns false for every item and `LogisticsStockEvaluator.FindSupplierFor` can't route to the building. Any other system that queries a room's furniture at runtime depends on the same invariant.
+
 ### Furniture (`Furniture.cs`)
 The base class for interactable or static objects inside rooms.
 - **Space Occupation:** Holds a `_sizeInCells` (Vector2Int) dictating how many grid cells it consumes. This is often auto-calculated via renderer bounds.
