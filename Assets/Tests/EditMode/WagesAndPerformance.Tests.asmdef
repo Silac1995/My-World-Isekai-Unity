@@ -3,7 +3,8 @@
     "rootNamespace": "MWI.Tests",
     "references": [
         "UnityEngine.TestRunner",
-        "UnityEditor.TestRunner"
+        "UnityEditor.TestRunner",
+        "MWI.Wages.Pure"
     ],
     "includePlatforms": [
         "Editor"
