@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.AI;
 using Unity.Netcode;
 using Unity.Collections;
 
@@ -7,6 +8,7 @@ public class WorldItem : NetworkBehaviour
 {
     [Header("References")]
     [SerializeField] private Transform _visualRoot; // Glisse l'objet "Visual" de ton prefab ici
+    [SerializeField] private NavMeshObstacle _navMeshObstacle;
 
     [Header("Data")]
     [SerializeField] private ItemInstance _itemInstance;
@@ -25,6 +27,13 @@ public class WorldItem : NetworkBehaviour
         NetworkVariableWritePermission.Server
     );
 
+    [SerializeField]
+    private NetworkVariable<bool> _obstacleActive = new NetworkVariable<bool>(
+        false,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server
+    );
+
     public void SetNetworkData(NetworkItemData data)
     {
         _networkItemData.Value = data;
@@ -33,11 +42,17 @@ public class WorldItem : NetworkBehaviour
     private void Awake()
     {
         SortingGroup = GetComponent<UnityEngine.Rendering.SortingGroup>();
+        if (_navMeshObstacle == null) _navMeshObstacle = GetComponent<NavMeshObstacle>();
     }
 
     public override void OnNetworkSpawn()
     {
         _networkItemData.OnValueChanged += OnItemDataChanged;
+        _obstacleActive.OnValueChanged += OnObstacleActiveChanged;
+
+        // Late-joiner: apply current obstacle state immediately
+        if (_obstacleActive.Value && _navMeshObstacle != null)
+            _navMeshObstacle.enabled = true;
 
         // Apply data if joining late as a client
         if (IsClient && !IsServer)
@@ -49,6 +64,7 @@ public class WorldItem : NetworkBehaviour
     public override void OnNetworkDespawn()
     {
         _networkItemData.OnValueChanged -= OnItemDataChanged;
+        _obstacleActive.OnValueChanged -= OnObstacleActiveChanged;
     }
 
     private void OnItemDataChanged(NetworkItemData previousValue, NetworkItemData newValue)
@@ -57,6 +73,11 @@ public class WorldItem : NetworkBehaviour
         {
             ApplyNetworkData(newValue);
         }
+    }
+
+    private void OnObstacleActiveChanged(bool previousValue, bool newValue)
+    {
+        if (_navMeshObstacle != null) _navMeshObstacle.enabled = newValue;
     }
 
     private void ApplyNetworkData(NetworkItemData data)

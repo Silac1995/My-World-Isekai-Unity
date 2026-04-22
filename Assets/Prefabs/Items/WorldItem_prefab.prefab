@@ -69,7 +69,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 3407379820
+  GlobalObjectIdHash: 3503010381
   InScenePlacedSourceGlobalObjectIdHash: 0
   DeferredDespawnTick: 0
   Ownership: 1
@@ -96,11 +96,17 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::WorldItem
   ShowTopMostFoldoutHeaderGroup: 1
   _visualRoot: {fileID: 7115953151577608828}
+  _navMeshObstacle: {fileID: 6350223883630068583}
   _itemInteractable: {fileID: 2241389753081601182}
   _networkItemData:
     UpdateTraits:
       MinSecondsBetweenUpdates: 0
       MaxSecondsBetweenUpdates: 0
+  _obstacleActive:
+    UpdateTraits:
+      MinSecondsBetweenUpdates: 0
+      MaxSecondsBetweenUpdates: 0
+    m_InternalValue: 0
 --- !u!65 &2261858023461683581
 BoxCollider:
   m_ObjectHideFlags: 0
