@@ -63,6 +63,8 @@ Current values are wrong for the new behavior model. Update the base `WorldItem_
 
 Per-`ItemSO` overrides (mass, drag) can be added later if/when item-specific tuning is needed — out of scope for v1.
 
+**Carried-item note:** `HandsController.AttachVisualToHand` ([HandsController.cs:320-328](../../../Assets/Scripts/Character/CharacterBodyPartsController/HandsController.cs#L320-L328)) already sets the carried-visual's `Rigidbody.isKinematic = true` and disables all colliders. The new lower mass and non-kinematic *base* state never reach the carried clone because that code path overrides them at attach time. The new `NavMeshObstacle` will likewise stay disabled on the carried clone (it's authored disabled in the prefab and only a server-driven `OnCollisionEnter` enables it — and the clone has no active colliders to fire that). No change needed in `HandsController`.
+
 ### 4.3 NavMeshObstacle (prefab edit + runtime enable)
 
 Add a `NavMeshObstacle` component to the `WorldItem_prefab.prefab`:
@@ -80,7 +82,9 @@ Why disabled at spawn: an item that spawns in the air would carve a hole at its 
 
 This combination means an exploded item flying through the air costs ~0 NavMesh CPU during its flight, then takes one carve hit when it lands.
 
-### 4.4 `WorldItem` runtime hook
+### 4.4 `WorldItem` runtime hook (local-only sketch — superseded by 4.7)
+
+> **Implementer note:** the snippet below shows the *behavior* in isolation. The real implementation must be the **networked** version in section 4.7 (server-authoritative trigger + `NetworkVariable` propagation). Don't copy 4.4 verbatim.
 
 Replace the current `OnCollisionEnter` body (`FreezeOnGround` / `isKinematic = true` block) with NavMeshObstacle activation:
 
@@ -149,6 +153,8 @@ But the **trigger** — `OnCollisionEnter` — fires on every peer that has a `R
 This is a real concern: clients need to enable their *local* NavMeshObstacle so their *local* NavMeshAgents path around the item.
 
 **Resolution:** add a server-driven `NetworkVariable<bool> _obstacleActive`. When `OnCollisionEnter` fires server-side and decides to enable the obstacle, set this to true. Subscribe to `OnValueChanged` on every peer (server included for symmetry) and enable the local `NavMeshObstacle` in response.
+
+> **Implementer note:** `OnNetworkSpawn` / `OnNetworkDespawn` already exist in `WorldItem.cs` ([WorldItem.cs:38-52](../../../Assets/Scripts/Item/WorldItem.cs#L38-L52)) and subscribe to `_networkItemData`. **Add to** the existing overrides — do not declare duplicates. The block below shows the *combined* final body.
 
 ```csharp
 private NetworkVariable<bool> _obstacleActive = new NetworkVariable<bool>(
@@ -241,7 +247,14 @@ Per project rules 28, 29, 29b:
 ## 9. Open questions
 
 - **`ItemSO` location** — confirm path in implementation phase (likely `Assets/Scripts/Item/Data/ItemSO.cs`).
-- **Character Rigidbody collision detection mode** — if characters are kinematic-driven by NavMeshAgent and items are dynamic, does the kinematic-vs-dynamic collision response push items reliably? Standard Unity behavior says yes (kinematic acts as infinite mass), but worth a spot-check in test #2.
+
+## 9b. Resolved questions
+
+- **Character mass/kinematic-mode push reliability.** `CharacterMovement` toggles the character's Rigidbody between two physics modes:
+  - **Kinematic** (default, while NavMeshAgent is driving). Kinematic Rigidbodies push dynamic Rigidbodies via collision response — Unity treats them as effectively infinite mass. Item gets displaced reliably.
+  - **Non-kinematic** (during ~0.4s knockback, [CharacterMovement.cs:410](../../../Assets/Scripts/Character/CharacterMovement/CharacterMovement.cs#L410), or in special incapacitated/dead states). Standard mass-based dynamic collision. Character mass vs. item mass = 2; an in-flight character will scatter items aggressively, which is the desired "lively" behavior.
+  - In both modes the character bumps the item out of the way — the stuck-recovery mechanic works regardless of mode.
+- **Carried items vs. new physics defaults** — handled by existing `HandsController.AttachVisualToHand` overrides. See note in section 4.2.
 
 ## 10. Risks
 
