@@ -39,6 +39,13 @@ public abstract class ItemSO : ScriptableObject
 
     public bool CastsShadow => _castsShadow;
 
+    [Header("Pathing")]
+    [Tooltip("If true, this item gets a NavMeshObstacle when it lands so AI agents path around it. " +
+             "Set to false for trivial items (trash, coins, single grain) that shouldn't litter the navmesh.")]
+    [SerializeField] private bool _blocksPathing = true;
+
+    public bool BlocksPathing => _blocksPathing;
+
     [Header("Crafting Requirements")]
     [SerializeField] private SkillSO _requiredCraftingSkill;
     [SerializeField] private int _requiredCraftingLevel = 1;
