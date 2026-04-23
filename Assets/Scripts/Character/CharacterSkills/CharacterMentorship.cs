@@ -550,6 +550,55 @@ public class CharacterMentorship : CharacterSystem
     }
 
     /// <summary>
+    /// Returns true if <paramref name="student"/> can still learn <paramref name="subject"/>
+    /// from this mentor. A student can learn only while their tier in the subject is strictly
+    /// below <c>mentorTier - 1</c> (e.g. a Master mentor can teach up to Advanced-1, i.e. Intermediate).
+    /// If the student does not know the subject at all, they can always learn it.
+    /// </summary>
+    public bool CanTeachStudent(Character student, ScriptableObject subject)
+    {
+        if (student == null || subject == null) return false;
+
+        // Logic preserved line-for-line from InteractionMentorship.CanStudentStillLearn
+        // (Task 1 is a pure refactor — no behaviour change).
+
+        // 1. Mentor tier for this subject
+        SkillTier mentorTier = SkillTier.Novice;
+        if (subject is SkillSO skill)
+        {
+            mentorTier = SkillTierExtensions.GetTierForLevel(_character.CharacterSkills.GetSkillLevel(skill));
+        }
+        else if (subject is CombatStyleSO style)
+        {
+            var expertise = _character.CharacterCombat.KnownStyles.FirstOrDefault(s => s.Style == style);
+            if (expertise != null) mentorTier = expertise.CurrentTier;
+        }
+        // AbilitySO and any other non-handled type: mentorTier stays Novice.
+        // The tier gate at the bottom then evaluates `Novice < Novice - 1` = false,
+        // which matches the pre-refactor behaviour for abilities.
+
+        // 2. Student tier for this subject
+        SkillTier studentTier = SkillTier.Novice;
+        if (subject is SkillSO studentSkill)
+        {
+            if (!student.CharacterSkills.HasSkill(studentSkill))
+                return true; // Ne connaît pas du tout la compétence, donc peut apprendre
+            studentTier = SkillTierExtensions.GetTierForLevel(student.CharacterSkills.GetSkillLevel(studentSkill));
+        }
+        else if (subject is CombatStyleSO studentStyle)
+        {
+            var expertise = student.CharacterCombat.KnownStyles.FirstOrDefault(s => s.Style == studentStyle);
+            if (expertise != null)
+                studentTier = expertise.CurrentTier;
+            else
+                return true; // Ne connaît pas du tout le style
+        }
+
+        // 3. Gate: student must be strictly below mentorTier - 1
+        return (int)studentTier < (int)mentorTier - 1;
+    }
+
+    /// <summary>
     /// Calcule le pourcentage de chance (0 à 100) que ce mentor accepte de prendre le personnage en tant qu'élève.
     /// Basé principalement sur la relation, le charisme, et potentiellement le nombre d'élèves actuels.
     /// </summary>

@@ -41,36 +41,8 @@ public class InteractionMentorship : InteractionInvitation
 
     private bool CanStudentStillLearn(Character student, Character mentor, ScriptableObject subject)
     {
-        // Récupérer le niveau du mentor
-        SkillTier mentorTier = SkillTier.Novice;
-        if (subject is SkillSO skill)
-            mentorTier = SkillTierExtensions.GetTierForLevel(mentor.CharacterSkills.GetSkillLevel(skill));
-        else if (subject is CombatStyleSO style)
-        {
-            var expertise = mentor.CharacterCombat.KnownStyles.FirstOrDefault(s => s.Style == style);
-            if (expertise != null) mentorTier = expertise.CurrentTier;
-        }
-
-        // Récupérer le niveau de l'élève
-        SkillTier studentTier = SkillTier.Novice;
-        if (subject is SkillSO studentSkill)
-        {
-            if (student.CharacterSkills.HasSkill(studentSkill))
-                studentTier = SkillTierExtensions.GetTierForLevel(student.CharacterSkills.GetSkillLevel(studentSkill));
-            else
-                return true; // Ne connaît pas du tout la compétence, donc peut apprendre
-        }
-        else if (subject is CombatStyleSO studentStyle)
-        {
-            var expertise = student.CharacterCombat.KnownStyles.FirstOrDefault(s => s.Style == studentStyle);
-            if (expertise != null)
-                studentTier = expertise.CurrentTier;
-            else
-                return true; // Ne connaît pas du tout le style
-        }
-
-        // L'élève peut apprendre uniquement s'il est strictement inférieur au Mentor Tier - 1
-        return (int)studentTier < (int)mentorTier - 1;
+        if (mentor == null || mentor.CharacterMentorship == null) return false;
+        return mentor.CharacterMentorship.CanTeachStudent(student, subject);
     }
 
     public override bool? EvaluateCustomInvitation(Character source, Character target)
