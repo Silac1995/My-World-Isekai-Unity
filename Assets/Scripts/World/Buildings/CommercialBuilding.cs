@@ -426,6 +426,82 @@ public abstract class CommercialBuilding : Building
     }
 
     /// <summary>
+    /// Authorization predicate reused by owner-side mutation entry points
+    /// (currently <see cref="TrySetAssignmentWage"/>; future owner-edit UI).
+    /// Mirrors the AskForJob hiring gate: a request is authorized when the
+    /// requester is either the building's direct owner OR the leader of the
+    /// community whose map this building lives in.
+    /// </summary>
+    private bool IsAuthorizedToManage(Character requester)
+    {
+        if (requester == null) return false;
+
+        // Direct owner check — reuses Room.IsOwner(Character), which compares
+        // against the replicated _ownerIds NetworkList.
+        if (IsOwner(requester)) return true;
+
+        // Community-leader check — mirrors HasCommunityLeader's lookup but
+        // verifies the requester's CharacterId matches the recorded leader.
+        var mapController = GetComponentInParent<MWI.WorldSystem.MapController>();
+        if (mapController != null && MWI.WorldSystem.MapRegistry.Instance != null)
+        {
+            var comm = MWI.WorldSystem.MapRegistry.Instance.GetCommunity(mapController.MapId);
+            if (comm != null && !string.IsNullOrEmpty(comm.LeaderNpcId) &&
+                comm.LeaderNpcId == requester.CharacterId)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Server-authoritative wrapper around JobAssignment.SetWage that enforces
+    /// the same owner / community-leader authorization gate used by AskForJob.
+    /// Use null arguments to leave a wage field unchanged.
+    /// Returns true if the change was authorized AND any field was modified.
+    /// </summary>
+    public bool TrySetAssignmentWage(Character requester, Character worker,
+        int? pieceRate = null, int? minimumShift = null, int? fixedShift = null)
+    {
+        if (requester == null || worker == null)
+        {
+            Debug.LogError("[CommercialBuilding] TrySetAssignmentWage: null requester or worker.");
+            return false;
+        }
+
+        // Server-authority guard — mirrors CharacterWallet.AddCoins (Task 7).
+        // In offline/Solo (no NetworkManager listening), allow the call so the
+        // single-player path keeps working.
+        if (!IsServer && Unity.Netcode.NetworkManager.Singleton != null && Unity.Netcode.NetworkManager.Singleton.IsListening)
+        {
+            Debug.LogError("[CommercialBuilding] TrySetAssignmentWage called on non-server instance. Route through a ServerRpc.");
+            return false;
+        }
+
+        if (!IsAuthorizedToManage(requester))
+        {
+            Debug.LogWarning($"[CommercialBuilding] TrySetAssignmentWage denied: {requester.CharacterName} is not authorized to manage {name}.");
+            return false;
+        }
+
+        var charJob = worker.CharacterJob;
+        if (charJob == null) return false;
+
+        foreach (var assn in charJob.ActiveJobs)
+        {
+            if (assn.Workplace == this && assn.AssignedJob != null)
+            {
+                return assn.SetWage(pieceRate, minimumShift, fixedShift);
+            }
+        }
+
+        Debug.LogWarning($"[CommercialBuilding] TrySetAssignmentWage: worker {worker.CharacterName} has no assignment at {name}.");
+        return false;
+    }
+
+    /// <summary>
     /// Appelé par un employé lorsqu'il arrive physiquement sur son lieu de travail
     /// et commence (Punch In).
     /// </summary>
