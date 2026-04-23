@@ -43,6 +43,13 @@ public class PlayerUI : MonoBehaviour
     [SerializeField] private Button _buttonPartyUI;
     [SerializeField] private MWI.UI.PauseMenuController _pauseMenu;
 
+    [Header("Quest UI")]
+    [SerializeField] private UI_QuestTracker _questTrackerUI;
+    [SerializeField] private UI_QuestLogWindow _questLogWindow;
+    [SerializeField] private QuestWorldMarkerRenderer _questMarkerRenderer;
+    [Tooltip("Key that toggles the Quest Log window. Default: L.")]
+    [SerializeField] private KeyCode _questLogToggleKey = KeyCode.L;
+
     private Character characterComponent;
     public Character CharacterComponent => characterComponent;
     public bool IsInitialized => characterComponent != null;
@@ -164,6 +171,22 @@ public class PlayerUI : MonoBehaviour
         if (_buildingUI != null)
         {
             _buildingUI.Initialize(characterComponent);
+        }
+
+        // Quest UI — local-player only, gated by Character.IsOwner.
+        if (_questTrackerUI != null)
+        {
+            _questTrackerUI.Initialize(characterComponent.CharacterQuestLog);
+        }
+        if (_questLogWindow != null)
+        {
+            _questLogWindow.Initialize(characterComponent.CharacterQuestLog);
+            _questLogWindow.CloseWindow();  // start hidden; toggled via _questLogToggleKey in Update.
+        }
+        if (_questMarkerRenderer != null)
+        {
+            characterComponent.TryGetComponent(out CharacterMapTracker tracker);
+            _questMarkerRenderer.Initialize(characterComponent.CharacterQuestLog, tracker);
         }
 
         BuildingPlacementManager placementManager = characterComponent.PlacementManager;
@@ -340,6 +363,16 @@ public class PlayerUI : MonoBehaviour
         if (_interactionMenu != null)
         {
             _interactionMenu.UpdateTimer(normalizedValue);
+        }
+    }
+
+    private void Update()
+    {
+        // Quest log toggle (L key by default). Uses unscaledDeltaTime context — UI input is real-time.
+        if (_questLogWindow != null && Input.GetKeyDown(_questLogToggleKey))
+        {
+            if (_questLogWindow.gameObject.activeSelf) _questLogWindow.CloseWindow();
+            else _questLogWindow.OpenWindow();
         }
     }
 
