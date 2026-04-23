@@ -1,6 +1,6 @@
 ---
 name: debug-tools-architect
-description: "Expert in debug/dev tools infrastructure — the Dev-Mode god tool (DevModeManager, DevModePanel, DevSpawnModule Spawn tab, DevSelectionModule + IDevAction Select tab, /devmode chat command), DebugScript spawning UI, MapControllerDebugUI hibernation diagnostics, UI_CharacterDebugScript NPC state visualization, UI_CommercialBuildingDebugScript logistics display, and creating new debug panels, cheat commands, and diagnostic overlays. Use when creating, extending, or improving debug tools."
+description: "Expert in debug/dev tools infrastructure — the Dev-Mode god tool (DevModeManager, DevModePanel, DevSpawnModule Spawn tab, DevSelectionModule + IDevAction Select tab, Inspect tab with DevInspectModule + IInspectorView + CharacterInspectorView + 10 CharacterSubTab categories, CharacterAIDebugFormatter, /devmode chat command), DebugScript spawning UI, MapControllerDebugUI hibernation diagnostics, UI_CharacterDebugScript NPC state visualization, UI_CommercialBuildingDebugScript logistics display, and creating new debug panels, cheat commands, diagnostic overlays, and inspection views. Use when creating, extending, or improving debug tools."
 model: opus
 memory: project
 tools: Read, Edit, Write, Glob, Grep, Bash, Agent
@@ -90,6 +90,88 @@ Click arbitration across modules is mediated by `DevModeManager.ActiveClickConsu
 
 See `.agent/skills/dev-mode/SKILL.md` for the full IDevAction recipe.
 
+**`DevSelectionModule` was generalized** from Character-only to `InteractableObject`. New surface:
+
+| Member | Purpose |
+|--------|---------|
+| `InteractableObject SelectedInteractable { get; }` | Current interactable (superset of Character). |
+| `event Action<InteractableObject> OnInteractableSelectionChanged` | Fires on any interactable change. `DevInspectModule` subscribes here. |
+| `void SetSelectedInteractable(InteractableObject io)` | Replaces the interactable selection. |
+
+Back-compat: `SelectedCharacter`, `OnSelectionChanged`, and `SetSelectedCharacter` are preserved so existing `IDevAction` consumers require zero changes. Field renamed `_characterLayerMask` → `_selectableLayerMask` with `[FormerlySerializedAs]`.
+
+### Inspect Tab (3rd module)
+
+Read-only runtime inspection of the currently selected `InteractableObject`. Host-only. No RPCs, no mutation.
+
+**Dispatch contract — `IInspectorView`:**
+
+```csharp
+public interface IInspectorView
+{
+    bool CanInspect(InteractableObject target);
+    void SetTarget(InteractableObject target);
+    void Clear();
+}
+```
+
+`DevInspectModule` auto-discovers all `IInspectorView` children via `GetComponentsInChildren<IInspectorView>(true)` at `Awake` — no manual registration. On each selection change it activates the first matching view, deactivates the rest, and shows a placeholder GO when nothing matches. All dispatch calls are wrapped in `try/catch`.
+
+**Character inspector — `CharacterInspectorView`:**
+
+- `CanInspect(target)` → `target is CharacterInteractable`
+- Owns 10 `SubTabEntry` structs (button + content GO + `CharacterSubTab` reference).
+- `Update()` refreshes only the active sub-tab every frame.
+
+**Sub-tab base — `CharacterSubTab`:**
+
+```csharp
+public abstract class CharacterSubTab : MonoBehaviour
+{
+    public void Refresh(Character c);                        // try/catch wrapper
+    public virtual void Clear();                             // resets TMP_Text
+    protected abstract string RenderContent(Character c);   // override per category
+}
+```
+
+**10 concrete sub-tabs (index order):**
+
+| # | Class | Content |
+|---|-------|---------|
+| 0 | `IdentitySubTab` | Name / Gender / Age / Race / Archetype / CharacterId / OriginWorld + state flags |
+| 1 | `StatsSubTab` | CharacterCombatLevel + all 18 CharacterStats fields |
+| 2 | `SkillsTraitsSubTab` | CharacterTraits personality + CharacterSkills.Skills |
+| 3 | `NeedsSubTab` | CharacterNeeds.AllNeeds with urgency + color coding |
+| 4 | `AISubTab` | `CharacterAIDebugFormatter.FormatAll(c)` |
+| 5 | `CombatSubTab` | CharacterCombat state + CharacterStatusManager.ActiveEffects |
+| 6 | `SocialSubTab` | CharacterRelation.Relationships + CharacterCommunity + CharacterMentorship |
+| 7 | `EconomySubTab` | CharacterWallet + CharacterJob + CharacterWorkLog.GetAllHistory() |
+| 8 | `KnowledgeSubTab` | CharacterBookKnowledge + CharacterSchedule (placeholders) |
+| 9 | `InventorySubTab` | CharacterEquipment (placeholder) |
+
+**`CharacterAIDebugFormatter`** is the shared source of truth for AI debug strings. Called by both `UI_CharacterDebugScript` (legacy world overlay) and `AISubTab`. Extending `FormatAll` updates both consumers automatically.
+
+**Adding a new `IInspectorView`** (e.g., for WorldItem): implement the 3-method interface, add a child GO under `DevInspectModule`'s hierarchy — no code changes to the dispatcher.
+
+**Adding a new `CharacterSubTab`**: subclass `CharacterSubTab`, override `RenderContent`, add a GO with ScrollRect + TMP_Text to the prefab, wire the new `SubTabEntry` in `CharacterInspectorView._subTabs` via Inspector.
+
+**File locations (Inspect):**
+
+```
+Assets/Scripts/Debug/DevMode/Inspect/
+  IInspectorView.cs
+  DevInspectModule.cs
+  CharacterInspectorView.cs
+  CharacterAIDebugFormatter.cs
+  SubTabs/
+    CharacterSubTab.cs
+    IdentitySubTab.cs  StatsSubTab.cs  SkillsTraitsSubTab.cs  NeedsSubTab.cs
+    AISubTab.cs  CombatSubTab.cs  SocialSubTab.cs  EconomySubTab.cs
+    KnowledgeSubTab.cs  InventorySubTab.cs
+```
+
+See `.agent/skills/debug-tools/SKILL.md` for the full Inspect tab reference and extension recipes.
+
 ### 3. Current Gaps (Opportunities)
 
 | Gap | Status |
@@ -100,7 +182,7 @@ See `.agent/skills/dev-mode/SKILL.md` for the full IDevAction recipe.
 | ~~**No cheat command console**~~ | **CLOSED (seed)** — `/devmode on\|off` chat command routed through `UI_ChatBar` -> `DevChatCommands.Handle`. Extensible by adding new branches. |
 | ~~**No dev mode flag**~~ | **CLOSED** — `DevModeManager.IsEnabled` (instance) and `DevModeManager.SuppressPlayerInput` (static) are the single read for all dev-mode gating. |
 | **No visualization overlays** | No gizmo-based debug visualizations |
-| **No click-to-inspect** | No entity inspection tool |
+| ~~**No click-to-inspect**~~ | **CLOSED** — Inspect tab ships with `DevInspectModule` + `IInspectorView` + `CharacterInspectorView` + 10 `CharacterSubTab` categories. |
 
 ### 4. Input Pattern
 
@@ -154,5 +236,7 @@ Project uses legacy `Input.GetKey(KeyCode.*)` — not the new InputSystem. Match
 
 - **Project Rules**: `CLAUDE.md`
 - **Network Architecture**: `NETWORK_ARCHITECTURE.md` (for network debug tools)
+- **Debug Tools SKILL.md**: `.agent/skills/debug-tools/SKILL.md` (Inspect tab, IInspectorView, CharacterSubTab, CharacterAIDebugFormatter — full extension recipes)
+- **Dev Mode SKILL.md**: `.agent/skills/dev-mode/SKILL.md` (activation, chat commands, Spawn + Select modules, IDevAction recipe)
 - **World System SKILL.md**: `.agent/skills/world-system/SKILL.md` (for map/hibernation debug)
 - **Combat System SKILL.md**: `.agent/skills/combat_system/SKILL.md` (for battle debug)
