@@ -20,6 +20,9 @@ public class Zone : NetworkBehaviour
     protected BoxCollider _boxCollider;
     protected HashSet<GameObject> _charactersInside = new HashSet<GameObject>();
 
+    /// <summary>World-space bounds of this zone's collider. Returns empty Bounds if no collider.</summary>
+    public Bounds Bounds => _boxCollider != null ? _boxCollider.bounds : new Bounds();
+
     protected virtual void Awake()
     {
         _boxCollider = GetComponent<BoxCollider>();
