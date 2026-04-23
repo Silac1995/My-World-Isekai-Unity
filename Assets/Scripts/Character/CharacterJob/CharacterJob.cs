@@ -303,7 +303,12 @@ public class CharacterJob : CharacterSystem, ICharacterSaveData<JobSaveData>
             var entry = new JobAssignmentSaveEntry
             {
                 jobType = assignment.AssignedJob.GetType().Name,
-                workplaceBuildingId = assignment.Workplace != null ? assignment.Workplace.BuildingId : ""
+                workplaceBuildingId = assignment.Workplace != null ? assignment.Workplace.BuildingId : "",
+                // Wage fields (Task 17). Currency stored as raw int matching CurrencyId.Id.
+                currencyId = assignment.Currency.Id,
+                pieceRate = assignment.PieceRate,
+                minimumShiftWage = assignment.MinimumShiftWage,
+                fixedShiftWage = assignment.FixedShiftWage
             };
             data.jobs.Add(entry);
         }
@@ -395,6 +400,17 @@ public class CharacterJob : CharacterSystem, ICharacterSaveData<JobSaveData>
 
             if (TakeJob(freeJob, workplace))
             {
+                // Restore wage fields (Task 17). Wages are intrinsic to the assignment and
+                // don't depend on the building being live, but the JobAssignment instance is
+                // only created inside TakeJob — so we splice them in here, after the fact.
+                var newAssignment = _activeJobs.FirstOrDefault(a => a.Workplace == workplace && a.AssignedJob == freeJob);
+                if (newAssignment != null)
+                {
+                    newAssignment.Currency = new MWI.Economy.CurrencyId(entry.currencyId);
+                    newAssignment.PieceRate = entry.pieceRate;
+                    newAssignment.MinimumShiftWage = entry.minimumShiftWage;
+                    newAssignment.FixedShiftWage = entry.fixedShiftWage;
+                }
                 Debug.Log($"<color=green>[CharacterJob:Restore]</color> {_character.CharacterName} re-bound to '{entry.jobType}' at '{workplace.BuildingName}'.");
             }
             else
