@@ -261,14 +261,23 @@ public class DevSpawnModule : MonoBehaviour
     private void Update()
     {
         if (DevModeManager.Instance == null || !DevModeManager.Instance.IsEnabled) return;
+
+        // Global shortcut: Space + Right-Click spawns at cursor, any tab, any armed state.
+        HandleShortcut();
+
+        // Armed click-loop (legacy path — kept for discoverability via the toggle).
         if (_armedToggle == null || !_armedToggle.isOn) return;
         if (DevModeManager.Instance.ActiveClickConsumer != this) return;
 
+        // Escape disarms the toggle in armed mode.
         if (Input.GetKeyDown(KeyCode.Escape))
         {
             _armedToggle.isOn = false;
             return;
         }
+
+        // If Space is held, the shortcut handles spawning on right-click — don't double-fire from armed left-click either.
+        if (Input.GetKey(KeyCode.Space)) return;
 
         if (!Input.GetMouseButtonDown(0)) return;
 
@@ -277,21 +286,62 @@ public class DevSpawnModule : MonoBehaviour
             return;
         }
 
+        if (TryRaycastEnvironment(out Vector3 hitPoint))
+        {
+            SpawnAt(hitPoint);
+        }
+    }
+
+    // ─── Shortcut ─────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Space held + Right-Click anywhere on the environment spawns at the cursor using the panel's
+    /// current configuration (race / personality / combat styles / count). Skipped when a text input
+    /// field has focus so typing spaces in the Count field doesn't trigger a spawn.
+    /// </summary>
+    private void HandleShortcut()
+    {
+        if (IsTextInputFocused()) return;
+        if (!Input.GetKey(KeyCode.Space)) return;
+        if (!Input.GetMouseButtonDown(1)) return;
+
+        if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
+            return;
+
+        if (TryRaycastEnvironment(out Vector3 hitPoint))
+        {
+            Debug.Log("<color=cyan>[DevSpawn]</color> Space+RMB shortcut — spawning at cursor.");
+            SpawnAt(hitPoint);
+        }
+    }
+
+    private bool TryRaycastEnvironment(out Vector3 hitPoint)
+    {
+        hitPoint = default;
         Camera cam = Camera.main;
         if (cam == null)
         {
             Debug.LogWarning("<color=orange>[DevSpawn]</color> Camera.main is null — cannot spawn.");
-            return;
+            return false;
         }
 
         Ray ray = cam.ScreenPointToRay(Input.mousePosition);
         if (!Physics.Raycast(ray, out RaycastHit hit, 500f, _environmentLayerMask))
         {
-            Debug.LogWarning("<color=orange>[DevSpawn]</color> Ray missed the Environment layer.");
-            return;
+            return false;
         }
 
-        SpawnAt(hit.point);
+        hitPoint = hit.point;
+        return true;
+    }
+
+    private static bool IsTextInputFocused()
+    {
+        if (EventSystem.current == null) return false;
+        var sel = EventSystem.current.currentSelectedGameObject;
+        if (sel == null) return false;
+        return sel.GetComponent<TMP_InputField>() != null
+            || sel.GetComponent<UnityEngine.UI.InputField>() != null;
     }
 
     private void SpawnAt(Vector3 anchor)

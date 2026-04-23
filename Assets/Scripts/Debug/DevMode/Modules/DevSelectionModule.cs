@@ -201,15 +201,17 @@ public class DevSelectionModule : MonoBehaviour
     private void Update()
     {
         if (DevModeManager.Instance == null || !DevModeManager.Instance.IsEnabled) return;
+
+        // Global shortcuts (work regardless of armed state). Text-input focused → skip.
+        HandleShortcuts();
+
+        // Armed click-loop (legacy path — kept for discoverability via the toggle).
         if (_armedToggle == null || !_armedToggle.isOn) return;
         if (DevModeManager.Instance.ActiveClickConsumer != this) return;
         if (!_layerMaskResolved) return;
 
-        if (Input.GetKeyDown(KeyCode.Escape))
-        {
-            _armedToggle.isOn = false;
-            return;
-        }
+        // If Ctrl is held the shortcut handles the click; don't double-fire here.
+        if (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)) return;
 
         if (!Input.GetMouseButtonDown(0)) return;
 
@@ -218,39 +220,98 @@ public class DevSelectionModule : MonoBehaviour
             return;
         }
 
+        if (TrySelectAtCursor(out string label))
+        {
+            _armedToggle.isOn = false;
+            Debug.Log($"<color=cyan>[DevSelect]</color> Selected: {label}");
+        }
+    }
+
+    // ─── Shortcuts ────────────────────────────────────────────────────
+
+    /// <summary>
+    /// ESC clears selection / disarms the toggle. Ctrl + Left-Click picks anywhere in the world.
+    /// Skipped when a text input field has focus.
+    /// </summary>
+    private void HandleShortcuts()
+    {
+        if (IsTextInputFocused()) return;
+
+        // ESC: deselect and/or disarm — single key to cancel everything.
+        if (Input.GetKeyDown(KeyCode.Escape))
+        {
+            bool hadSomething = false;
+            if (SelectedInteractable != null || SelectedCharacter != null)
+            {
+                ClearSelection();
+                hadSomething = true;
+            }
+            if (_armedToggle != null && _armedToggle.isOn)
+            {
+                _armedToggle.isOn = false;
+                hadSomething = true;
+            }
+            if (hadSomething) Debug.Log("<color=cyan>[DevSelect]</color> ESC — cleared");
+        }
+
+        // Ctrl + Left-Click: select under cursor.
+        bool ctrlHeld = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
+        if (ctrlHeld && Input.GetMouseButtonDown(0))
+        {
+            if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject()) return;
+            if (!_layerMaskResolved) return;
+            if (TrySelectAtCursor(out string label))
+            {
+                Debug.Log($"<color=cyan>[DevSelect]</color> Ctrl+Click selected: {label}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Raycasts from the mouse and selects the first InteractableObject (or Character as fallback).
+    /// Returns true on successful selection; <paramref name="label"/> carries a short identifier for logging.
+    /// </summary>
+    private bool TrySelectAtCursor(out string label)
+    {
+        label = null;
         Camera cam = Camera.main;
         if (cam == null)
         {
             Debug.LogWarning("<color=orange>[DevSelect]</color> Camera.main is null — cannot select.");
-            return;
+            return false;
         }
 
         Ray ray = cam.ScreenPointToRay(Input.mousePosition);
         if (!Physics.Raycast(ray, out RaycastHit hit, 500f, _selectableLayerMask))
         {
-            Debug.LogWarning("<color=orange>[DevSelect]</color> Click missed the selectable layer.");
-            return;
+            return false;
         }
 
-        // General resolution: prefer an InteractableObject in the parent chain; fall back to a direct Character hit.
         InteractableObject interactable = hit.collider.GetComponentInParent<InteractableObject>();
         if (interactable != null)
         {
             SetSelectedInteractable(interactable);
-            _armedToggle.isOn = false;
-            Debug.Log($"<color=cyan>[DevSelect]</color> Selected interactable: {interactable.gameObject.name}");
-            return;
+            label = interactable.gameObject.name;
+            return true;
         }
 
         Character c = hit.collider.GetComponentInParent<Character>();
         if (c != null)
         {
             SetSelectedCharacter(c);
-            _armedToggle.isOn = false;
-            Debug.Log($"<color=cyan>[DevSelect]</color> Selected character: {c.CharacterName}");
-            return;
+            label = c.CharacterName;
+            return true;
         }
 
-        Debug.LogWarning("<color=orange>[DevSelect]</color> Hit found no InteractableObject or Character in the parent chain.");
+        return false;
+    }
+
+    private static bool IsTextInputFocused()
+    {
+        if (EventSystem.current == null) return false;
+        var sel = EventSystem.current.currentSelectedGameObject;
+        if (sel == null) return false;
+        return sel.GetComponent<TMP_InputField>() != null
+            || sel.GetComponent<UnityEngine.UI.InputField>() != null;
     }
 }
