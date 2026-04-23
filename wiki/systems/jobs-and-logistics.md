@@ -3,7 +3,7 @@ type: system
 title: "Jobs & Logistics"
 tags: [jobs, logistics, economy, tier-1]
 created: 2026-04-18
-updated: 2026-04-21
+updated: 2026-04-22
 sources: []
 related:
   - "[[world]]"
@@ -12,6 +12,7 @@ related:
   - "[[items]]"
   - "[[ai]]"
   - "[[character]]"
+  - "[[worker-wages-and-performance]]"
   - "[[kevin]]"
 status: stable
 confidence: high
@@ -29,6 +30,7 @@ depends_on:
 depended_on_by:
   - "[[shops]]"
   - "[[world]]"
+  - "[[worker-wages-and-performance]]"
 ---
 
 # Jobs & Logistics
@@ -239,13 +241,16 @@ VirtualResourceSupplier.TryFulfillOrder fills pending orders from virtual pools
 - [[crafting-loop]] — `CraftingBuilding`, `CraftingStation`, `JobCrafter` demand-driven flow.
 
 ## Change log
+- 2026-04-22 — Wage and worklog hooks added: punch-in/out wage payment via [[worker-wages-and-performance]], per-job credit hooks (deposit / craft / delivery), JobAssignment now carries wage fields seeded at hire-time — claude
 - 2026-04-21 — Logistics refactor: IStockProvider + pluggable LogisticsPolicy SO + facade split + input stock contract on CraftingBuilding — claude
 - 2026-04-18 — Initial documentation pass. — Claude / [[kevin]]
 
 ## Sources
 - [.agent/skills/job_system/SKILL.md](../../.agent/skills/job_system/SKILL.md)
 - [.agent/skills/logistics_cycle/SKILL.md](../../.agent/skills/logistics_cycle/SKILL.md)
+- [.agent/skills/wage-system/SKILL.md](../../.agent/skills/wage-system/SKILL.md)
 - [.claude/agents/building-furniture-specialist.md](../../.claude/agents/building-furniture-specialist.md)
+- [wiki/systems/worker-wages-and-performance.md](worker-wages-and-performance.md)
 - `Assets/Scripts/World/Jobs/` (16 files).
 - `Assets/Scripts/World/Buildings/BuildingLogisticsManager.cs`.
 - `Assets/Scripts/AI/Actions/` — GOAP action library.

@@ -3,16 +3,16 @@ type: system
 title: "Character Job"
 tags: [character, jobs, employment, tier-2, stub]
 created: 2026-04-19
-updated: 2026-04-19
+updated: 2026-04-22
 sources: []
-related: ["[[character]]", "[[jobs-and-logistics]]", "[[character-schedule]]", "[[kevin]]"]
+related: ["[[character]]", "[[jobs-and-logistics]]", "[[character-schedule]]", "[[worker-wages-and-performance]]", "[[kevin]]"]
 status: stable
 confidence: high
 primary_agent: building-furniture-specialist
 secondary_agents: ["character-system-specialist"]
 owner_code_path: "Assets/Scripts/Character/CharacterJob/"
 depends_on: ["[[character]]"]
-depended_on_by: ["[[jobs-and-logistics]]"]
+depended_on_by: ["[[jobs-and-logistics]]", "[[worker-wages-and-performance]]"]
 ---
 
 # Character Job
@@ -34,8 +34,11 @@ Per-character employment state. Holds one or more `JobAssignment` entries, owner
 - [ ] Ownership cascade — if a Boss quits their own building, what happens?
 
 ## Change log
+- 2026-04-22 — `JobAssignment` extended with wage fields (`Currency`, `PieceRate`, `MinimumShiftWage`, `FixedShiftWage`) + `SetWage` mutator; `TakeJob` now seeds defaults via `WageSystemService`; `JobAssignmentSaveEntry` round-trips wage data. See [[worker-wages-and-performance]] — claude
 - 2026-04-19 — Stub. — Claude / [[kevin]]
 
 ## Sources
 - [.agent/skills/job_system/SKILL.md](../../.agent/skills/job_system/SKILL.md) §1.
+- [.agent/skills/wage-system/SKILL.md](../../.agent/skills/wage-system/SKILL.md) — wage seeding + per-assignment overrides.
+- [wiki/systems/worker-wages-and-performance.md](worker-wages-and-performance.md).
 - [[jobs-and-logistics]] parent.
