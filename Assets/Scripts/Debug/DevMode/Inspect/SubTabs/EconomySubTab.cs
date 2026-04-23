@@ -74,10 +74,13 @@ public class EconomySubTab : CharacterSubTab
 
         // ── Work Log (per JobType) ────────────────────────────────────
         sb.AppendLine();
-        sb.AppendLine("<b><color=#FFFFFF>Work Log (per JobType)</color></b>");
+        sb.AppendLine("<b><color=#FFFFFF>Work Log — per JobType</color></b>");
         var log = c.CharacterWorkLog;
         if (log != null)
         {
+            // Collect flat workplace list while we iterate (used in the next section).
+            var flatPlaces = new List<(JobType jt, WorkPlaceRecord rec)>();
+
             foreach (JobType jt in Enum.GetValues(typeof(JobType)))
             {
                 if (jt == JobType.None) continue;
@@ -89,14 +92,34 @@ public class EconomySubTab : CharacterSubTab
 
                 bool hasData = shift > 0 || career > 0 || placeCount > 0;
                 string lineColor = hasData ? "#FFFFFF" : "#888888";
-                sb.AppendLine($"  <color={lineColor}>{jt}:</color> shift={shift}, career={career}, places={placeCount}");
+                sb.AppendLine($"  <color={lineColor}>{jt}:</color> shift={shift} · career={career} · {placeCount} place(s)");
 
                 if (places == null) continue;
                 foreach (var wp in places)
                 {
-                    if (wp == null) continue;
+                    if (wp != null) flatPlaces.Add((jt, wp));
+                }
+            }
+
+            // ── Workplaces (flat list with score per place) ─────────
+            sb.AppendLine();
+            sb.AppendLine("<b><color=#FFFFFF>Workplaces — career history</color></b>");
+            if (flatPlaces.Count == 0)
+            {
+                sb.AppendLine("  <color=grey>No places worked yet.</color>");
+            }
+            else
+            {
+                // Sort by UnitsWorked descending so the highest-scored place comes first.
+                flatPlaces.Sort((a, b) => b.rec.UnitsWorked.CompareTo(a.rec.UnitsWorked));
+
+                foreach (var (jt, wp) in flatPlaces)
+                {
                     string place = string.IsNullOrEmpty(wp.BuildingDisplayName) ? wp.BuildingId : wp.BuildingDisplayName;
-                    sb.AppendLine($"    · {place}: {wp.UnitsWorked}u / {wp.ShiftsCompleted} shift(s), days {wp.FirstWorkedDay}–{wp.LastWorkedDay}");
+                    sb.AppendLine(
+                        $"  · {place} <color=#AAAAAA>({jt})</color> — " +
+                        $"<color=#FFD870>score {wp.UnitsWorked}u</color> · " +
+                        $"{wp.ShiftsCompleted} shift(s) · days {wp.FirstWorkedDay}–{wp.LastWorkedDay}");
                 }
             }
         }
