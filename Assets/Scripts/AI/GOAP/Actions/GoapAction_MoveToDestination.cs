@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.AI;
 
 namespace MWI.AI
 {
@@ -73,10 +74,41 @@ namespace MWI.AI
         protected override Vector3 GetDestinationPoint(Character worker)
         {
             if (_job == null || _job.CurrentOrder == null || _job.CurrentOrder.Destination == null) return worker.transform.position;
-            
+
             CommercialBuilding destination = _job.CurrentOrder.Destination;
             Zone zone = destination.DeliveryZone ?? destination.MainRoom.GetComponent<Zone>();
             return zone != null ? zone.GetRandomPointInZone() : destination.transform.position;
+        }
+
+        /// <summary>
+        /// Phase-B rollback. If the delivery target is unreachable we can't undo the
+        /// pickup (items are already on the worker), but we CAN stop wasting cycles
+        /// walking in circles. Cancel the transport, mark the BuyOrder, and let the
+        /// worker's next plan cycle drop the items at their feet via <c>Unassign</c>
+        /// (or hold them — either way the runaway loop ends here).
+        /// </summary>
+        protected override void OnPathUnreachable(Character worker, Vector3 attemptedDestination, NavMeshPathStatus status)
+        {
+            if (_job == null) return;
+
+            var order = _job.CurrentOrder;
+            if (order != null)
+            {
+                Debug.LogError($"<color=red>[MoveToDestination]</color> {worker?.CharacterName}: unreachable destination — source='{order.Source?.BuildingName}', dest='{order.Destination?.BuildingName}', item='{order.ItemToTransport?.ItemName}', carried={_job.CarriedItems.Count}, attempted='{attemptedDestination}', status={status}. Cancelling TransportOrder.");
+
+                var buyOrder = order.AssociatedBuyOrder;
+                if (buyOrder != null)
+                {
+                    bool stalled = buyOrder.RecordPathUnreachable();
+                    if (stalled)
+                    {
+                        Debug.LogError($"<color=red>[MoveToDestination]</color> BuyOrder for {buyOrder.Quantity}x {buyOrder.ItemToTransport?.ItemName} → {buyOrder.Destination?.BuildingName} reached MaxPathUnreachableAttempts ({BuyOrder.MaxPathUnreachableAttempts}). Parked until expiration.");
+                    }
+                }
+            }
+
+            _job.WaitCooldown = 1.5f;
+            _job.CancelCurrentOrder(true);
         }
     }
 }

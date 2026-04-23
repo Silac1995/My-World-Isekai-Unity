@@ -295,6 +295,44 @@ public void AttachToSocket(string socketName, GameObject obj)
 
 See [[visuals]] §Cross-Archetype Equipment Sockets for the SO schema.
 
+### 6b. Skin Bones — wings and other optional body extensions
+
+Wings, horns, extra arms, and other **rare/variant-heavy/dynamic** body extensions should not be baked into the master skeleton. Use Spine's Skin Bones feature: the skin declares bones + physics constraints + meshes, which are injected on apply and removed on unapply. See [[visuals]] §Skin Bones for the architectural decision rule.
+
+No special runtime code is required — `CombineSkins(..., "wings/angel_feather")` injects the skin's bones into the skeleton automatically. Physics constraints declared inside the skin are picked up by the existing `UpdatePhysicsState()` loop (they appear in `_skeleton.Skeleton.PhysicsConstraints` only when their skin is active).
+
+**Wings animation pattern** — dedicate Track 2 for wing overlays:
+```csharp
+private const int TRACK_MOVEMENT = 0;
+private const int TRACK_COMBAT_OVERLAY = 1;
+private const int TRACK_WINGS = 2;
+
+public void SetWingState(WingState state)
+{
+    if (!HasWingsSkinActive()) return;   // character without wings — no-op
+
+    switch (state)
+    {
+        case WingState.Folded:  _skeleton.AnimationState.SetAnimation(TRACK_WINGS, "wings_fold", true); break;
+        case WingState.Idle:    _skeleton.AnimationState.SetAnimation(TRACK_WINGS, "fly_idle", true); break;
+        case WingState.Flap:    _skeleton.AnimationState.SetAnimation(TRACK_WINGS, "fly_flap", true); break;
+        case WingState.Glide:   _skeleton.AnimationState.SetAnimation(TRACK_WINGS, "fly_glide", true); break;
+    }
+}
+
+private bool HasWingsSkinActive() => _activeSkinNames.Any(n => n.StartsWith("wings/"));
+```
+
+**Combat integration** — when entering combat, fold wings on Track 2 to prevent clipping with sword arcs:
+```csharp
+public void OnEnterCombat() => SetWingState(WingState.Folded);
+public void OnExitCombat()  => SetWingState(WingState.Idle);
+```
+
+**Physics tuning for wings** — wings are lighter than skirts and respond to fast flapping; typical constraint values: Inertia 0.5, Strength 200, Damping 0.6, Mass 0.5, Gravity -3 (less than a skirt). Tune per wing variant (insect wings nearly weightless, dragon wings heavy).
+
+**Gotcha** — Spine silently ignores animation keys referencing bones that don't currently exist. If you key a `fly_flap` animation against wing bones, playing it on a character without wings is a safe no-op. Never add defensive "if wings skin active" guards around `SetAnimation` calls on Track 2 — the silent ignore is by design.
+
 ### 7. Animation Management
 
 - **Track 0**: Reserved for base movement (Idle, Walk, Run).
@@ -333,6 +371,52 @@ void OnSpineEvent(TrackEntry trackEntry, Spine.Event e)
 - **SkeletonUtilityBone**: Use when you need to **override** a bone's position (e.g., procedural looking at a target).
     - Requires a `SkeletonUtility` component on the root.
     - Set mode to `Override` to take control from the animation.
+
+## Multi-family architecture
+
+MWI supports multiple creature archetypes (humanoid, quadruped, bird, insect, aquatic, unique monsters — see [[visuals]] §Archetype Families). The **C# implementation is shared**: one `SpineCharacterVisual` class reads everything from `CharacterArchetype`. Adding a new creature (a fox, a parrot, a slime variant) is data-only — author a Spine skeleton + a `CharacterArchetype` SO, no new scripts.
+
+### Authoring a new non-humanoid creature
+
+1. **Skeleton** — create in Spine Editor using the appropriate family's master skeleton (`QuadrupedSmall_Master`, `Bird_Master`, etc.) or a fully custom one for unique monsters. Follow the family's slot layout (see [[visuals]] §Family-specific slot layouts).
+2. **AnimationSetSO** — declare the `AnimationKey → Spine animation name` mapping. Every key the gameplay layer needs (`Idle`, `Walk`, `Run`, `Attack`, `Hit`, `Death`) must resolve to a real Spine animation in the skeleton.
+3. **EquipmentSocketMap** — list the sockets the creature exposes (dog: `neck_accessory`, `back_accessory`, `body_armor`; slime: none or a single `top_accessory`). Unknown sockets silently fail at equip time.
+4. **CharacterArchetype SO** — wire it all:
+   - `family` = one of the enum values.
+   - `visualPrefab` = the prefab that carries this skeleton.
+   - `socketMap`, `animationSet` = the assets from steps 2-3.
+   - `bodyPartCapabilities` flags = which systems apply (dismemberment, clothing layers, wings, facial).
+5. **Prefab** — `Character_<Name>.prefab` under `Assets/Prefabs/Character/`. Root has `Character.cs` facade, `SpineCharacterVisual` child with the `SkeletonAnimation`, `Sorting Group` component.
+6. **Test compatibility flags** — verify that disabled features no-op cleanly (a slime getting hit should not trigger dismemberment VFX even if combat dispatches the call).
+
+### Capability-gated code pattern
+
+Feature systems must consult `archetype.bodyPartCapabilities` before running their logic. Example for dismemberment:
+
+```csharp
+public void Dismember(BodyPartId part)
+{
+    if (!_character.Archetype.bodyPartCapabilities.HasFlag(BodyPartCapabilities.SupportsDismemberment))
+        return;   // silently no-op for slimes, etc.
+
+    // ... normal dismemberment flow
+}
+```
+
+Same pattern for `CanWearClothing`, `HasWings`, `SupportsFacialExpression`. Never hardcode family checks (`if (family == Humanoid)`) — always gate on capability flags so new families compose cleanly.
+
+### Animation key parity
+
+GOAP/BT actions emit `AnimationKey.Attack` regardless of whether the character is a knight or a wolf. The archetype's `AnimationSetSO` resolves the key to the right Spine animation. **Every family's `AnimationSetSO` must cover the full `AnimationKey` enum** — a missing entry falls back to `Idle` with a warning log. Flag missing entries during integration, never silently.
+
+```csharp
+public string Resolve(AnimationKey key)
+{
+    if (_mapping.TryGetValue(key, out var name)) return name;
+    Debug.LogWarning($"[{name}] Missing animation mapping for {key} on archetype {_archetypeName}; falling back to Idle.");
+    return _mapping[AnimationKey.Idle];
+}
+```
 
 ## Setup Checklist — New Humanoid Spine Character
 

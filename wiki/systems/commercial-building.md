@@ -3,7 +3,7 @@ type: system
 title: "Commercial Building"
 tags: [building, commercial, jobs, tier-2]
 created: 2026-04-19
-updated: 2026-04-22
+updated: 2026-04-23
 sources: []
 related: ["[[building]]", "[[building-logistics-manager]]", "[[building-task-manager]]", "[[jobs-and-logistics]]", "[[shops]]", "[[crafting-loop]]", "[[worker-wages-and-performance]]", "[[dev-mode]]", "[[kevin]]"]
 status: stable
@@ -56,6 +56,14 @@ Force-assignment bypasses consent: `CommunityTracker.ImposeJobOnCitizen()` → `
 
 `GetWorkPosition(Character)` is virtual. Defaults to `GetRandomPointInBuildingZone()` with a per-`InstanceID` offset so multiple workers don't physically stack. `ShopBuilding` overrides for its vendor role to return the counter `VendorPoint`; all other roles wander.
 
+## Zones (authored Inspector fields)
+
+| Zone | Role |
+|---|---|
+| `StorageZone` | Interior inventory plot. `_inventory` physically sits here; `GetWorldItemsInStorage()` scans its collider. |
+| `DeliveryZone` | Reachable destination-side drop point for incoming transporters. `GoapAction_MoveToDestination` targets this (falls back to `MainRoom` if null). |
+| `PickupZone` (optional) | Reachable source-side pickup point for outgoing transporters. If authored, source-side `JobLogisticsManager` stages reserved items here via `GoapAction_StageItemForPickup`, and `GoapAction_MoveToItem` targets it instead of the raw WorldItem position. If null, transporter walks directly to the item (legacy behaviour). See [[building-logistics-manager]] for the staging flow and the NavMesh safety net. |
+
 ## Dependencies
 
 ### Upstream
@@ -73,6 +81,7 @@ Force-assignment bypasses consent: `CommunityTracker.ImposeJobOnCitizen()` → `
 - If a subclass wants autonomous restock, **implementing `IStockProvider` is mandatory** — declaring `_itemsToSell` or `_inputStockTargets` alone does nothing until the contract is wired.
 
 ## Change log
+- 2026-04-23 — Added optional `PickupZone` field for transporter pickup routing + NavMesh-based reachability safety net. Transporter no longer stalls when `StorageZone` is unreachable. See [[building-logistics-manager]] for the full flow. — claude
 - 2026-04-22 — Wage and worklog hooks added: `WorkerStartingShift` records punch-in time + calls `CharacterWorkLog.OnPunchIn`; `WorkerEndingShift` calls `FinalizeShift` + `WageSystemService.ComputeAndPayShiftWage`; new owner-gated `TrySetAssignmentWage`. See [[worker-wages-and-performance]] — claude
 - 2026-04-22 — Documented in-flight physical-state helpers (`GetWorldItemsInStorage`, `RefreshStorageInventory` with reserved-item protection, new `CountUnabsorbedItemsInBuildingZone` covering loose + worker-carried stock) — claude
 - 2026-04-21 — Expanded from stub: IStockProvider contract, InputStockTargets on CraftingBuilding, facade reference. — claude

@@ -396,6 +396,12 @@ public class GoapAction_GatherStorageItems : GoapAction
         Zone deliveryZone = _building.DeliveryZone;
         BoxCollider deliveryCol = deliveryZone != null ? deliveryZone.GetComponent<BoxCollider>() : null;
 
+        // Phase-A: items sitting in PickupZone are OUTBOUND staging — they were deliberately
+        // moved there by GoapAction_StageItemForPickup and must NOT be re-gathered back into
+        // storage (that would undo the staging every tick). Defensive skip below.
+        Zone pickupZone = _building.PickupZone;
+        BoxCollider pickupCol = pickupZone != null ? pickupZone.GetComponent<BoxCollider>() : null;
+
         List<Collider> allCols = new List<Collider>(colliders);
 
         if (depositCol != null)
@@ -427,6 +433,13 @@ public class GoapAction_GatherStorageItems : GoapAction
                 // Vérification avec Y aplati pour inclure les objets en train de tomber ou lévitant légèrement
                 Vector3 flatPos = new Vector3(worldItem.transform.position.x, storageCol.bounds.center.y, worldItem.transform.position.z);
                 if (storageCol.bounds.Contains(flatPos)) continue;
+            }
+
+            // Phase-A: items already staged in PickupZone are outbound reservations; skip.
+            if (pickupCol != null)
+            {
+                Vector3 flatPickup = new Vector3(worldItem.transform.position.x, pickupCol.bounds.center.y, worldItem.transform.position.z);
+                if (pickupCol.bounds.Contains(flatPickup)) continue;
             }
 
             // Optional: check if it belongs to crafting output. 

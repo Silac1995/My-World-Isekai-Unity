@@ -98,6 +98,20 @@ Job assignments survive both **map hibernation** and **player profile import** v
 - **Character-first** (player profile imports, workplace hibernated): character-side resolver waits on `BuildingManager.OnBuildingRegistered`.
 - **Both already loaded**: whichever resolver fires first wins; the other's `alreadyActive`/`IsAssigned` guard prevents double-binding.
 
+## Wage Integration
+
+Jobs now carry a wage contract per assignment, seeded at hire-time and mutable by owners afterwards.
+
+- **Hire-time seeding**: `CharacterJob.TakeJob` calls `WageSystemService.Instance?.SeedAssignmentDefaults(assignment)` after the `JobAssignment` is created and registered. This populates the new wage fields from the building's `JobWageDefaults` (or zero-fallback if the service is missing).
+- **Per-assignment wage fields**: `JobAssignment` now carries `Currency` (`CurrencyId`), `PieceRate`, `MinimumShiftWage`, and `FixedShiftWage`. These travel with the worker across save/load (see `.agent/skills/save-load-system/SKILL.md` for the `JobAssignmentSaveEntry` extension) and are the single source of truth at payment time.
+- **Owner-side mutation**: `CommercialBuilding.TrySetAssignmentWage(requester, worker, currency, pieceRate, minShiftWage, fixedShiftWage)` is the only public path that edits a live assignment's wage. It enforces owner / community-leader gating before mutating the worker's `JobAssignment`. UI and quest scripts must go through this method — never write the wage fields directly.
+- **Per-job credit hooks**: punch-in/out fires in `Action_PunchIn` / `Action_PunchOut`, but the actual unit-of-work credit lives in each Job's gameplay path:
+  - `JobHarvester` deposits credit through `GoapAction_DepositResources` (deficit-bounded; see `.agent/skills/logistics_cycle/SKILL.md`).
+  - `JobCrafter` credits one unit per completed craft.
+  - `JobTransporter` credits per item unloaded (see `.agent/skills/logistics_cycle/SKILL.md`).
+- All hooks call `worker.CharacterWorkLog.LogShiftUnit(workplace, units)`. See `.agent/skills/character-worklog/SKILL.md` for the LogShiftUnit API and shift-window semantics.
+- See `.agent/skills/wage-system/SKILL.md` for the full wage formula (piece-rate × units, clamped by min/max shift wage, plus the fixed-shift component) and the payer architecture (who debits whose `CharacterWallet`).
+
 ## Strict Architectural Rules
 - **Interaction Distance**: To interact with an object or get in range, **always** use the `InteractionZone` (its colliders or explicit properties).
 - **Physical Destruction**: When picking up an item from the scene/world, you must **always destroy it IN THE `Assets/Scripts/Character/CharacterActions/CharacterPickUpItem.cs`**. NOWHERE ELSE.

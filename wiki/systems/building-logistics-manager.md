@@ -3,7 +3,7 @@ type: system
 title: "Building Logistics Manager"
 tags: [logistics, jobs, orders, tier-2]
 created: 2026-04-19
-updated: 2026-04-22
+updated: 2026-04-23
 sources: []
 related:
   - "[[jobs-and-logistics]]"
@@ -188,6 +188,21 @@ Supplier.AcknowledgeDeliveryProgress — remove TransportOrder from PlacedTransp
 Client receives items → remove from PlacedBuyOrders
 ```
 
+## Transporter pickup routing & NavMesh safety net
+
+Between "Supplier.ProcessActiveBuyOrders creates TransportOrder" and "JobTransporter delivers", the transporter has to physically reach the source building's stock, pick it up, and carry it out. The source's interior `StorageZone` is frequently not reachable on NavMesh — doorways too narrow, multi-room interiors, items settled behind furniture. Two layers now handle that:
+
+**Optional `PickupZone` on `CommercialBuilding`.** Mirrors `DeliveryZone`. Authored on reachable ground at the building's entrance. When set:
+- `GoapAction_MoveToItem` targets `source.PickupZone.GetRandomPointInZone()` instead of the raw WorldItem position (backward-compatible — null PickupZone preserves legacy path-to-WorldItem).
+- `GoapAction_PickupItem.IsValid` waits until the reserved WorldItem is physically inside PickupZone bounds, so the transporter doesn't grab-and-run from StorageZone directly.
+- `GoapAction_StageItemForPickup` (new, `Cost = 0.2f`, owned by the source's own `JobLogisticsManager`) picks up reserved `ItemInstance`s from StorageZone and drops them in PickupZone. Ordering: `PlaceOrder` (0.1) > `StageForPickup` (0.2) > `GatherStorageItems` (0.5) > `IdleInCommercialBuilding`.
+- `GoapAction_GatherStorageItems.FindLooseWorldItem` excludes anything already inside PickupZone so the same tick doesn't gather-back.
+- `CommercialBuilding.RefreshStorageInventory` Pass 1 merges PickupZone contents into the `physicalItems` set so staged shipments aren't flagged as missing from storage.
+
+**NavMesh reachability probe.** Both `GoapAction_MoveToItem` and `GoapAction_MoveToDestination` now invoke `NavMesh.CalculatePath` before committing the first `SetDestination`. If the status is `PathInvalid` or `PathPartial`, the action calls the virtual `OnPathUnreachable(worker, dest, status)` hook on `GoapAction_MoveToTarget`. Transporter overrides log an error, call `supplier.LogisticsManager.ReportMissingReservedItem(order)` to release reservations, and `_job.CancelCurrentOrder(true)`. No half-moves, no silent item drops.
+
+**Loop breaker.** `BuyOrder.PathUnreachableCount` increments on every `RecordPathUnreachable()`. After 3 failures the order's `IsReachabilityStalled` flips true and `LogisticsTransportDispatcher.ProcessActiveBuyOrders` skips it, stopping the supplier from re-dispatching transporters into the same dead end. The stale order expires normally via `TimeManager.OnNewDay`; the client's stock check then places a fresh order under current conditions.
+
 ## Cancellation cascade
 
 ```
@@ -239,6 +254,7 @@ All five lists are per-building runtime state. Map hibernation does not currentl
 - [[character-relation]] — expiration penalties.
 
 ## Change log
+- 2026-04-23 — Added optional `PickupZone` routing for transporters + NavMesh upfront reachability probe on `MoveToItem` / `MoveToDestination` + `BuyOrder.PathUnreachableCount` loop breaker + new `GoapAction_StageItemForPickup` on source-side `JobLogisticsManager`. Fixes transporter stalling when `StorageZone` is unreachable. — claude
 - 2026-04-22 — Extend theft-gate scan to also count items carried by the building's own workers; was firing every time the Logistics Manager picked up a crafted item to move it to storage, since the WorldItem temporarily despawns during carry — claude
 - 2026-04-22 — Gate `HandleInsufficientStock`'s "theft detected" branch via `CountUnabsorbedItemsInBuildingZone` so the dispatcher doesn't clone a completed `CraftingOrder` while items are still mid-transit from the station output to storage (fixes over-production: 10 spawned for a Quantity=3 order) — claude
 - 2026-04-22 — `PlaceBuyOrder` and `PlaceCraftingOrder` now refresh physical storage on reception so the supplier/crafter decides dispatch-vs-craft against fresh stock, not stale punch-in data — claude
@@ -249,7 +265,12 @@ All five lists are per-building runtime state. Map hibernation does not currentl
 ## Sources
 - [.agent/skills/logistics_cycle/SKILL.md](../../.agent/skills/logistics_cycle/SKILL.md) — operational procedures (single source of truth for how).
 - [CommercialBuilding.cs](../../Assets/Scripts/World/Buildings/CommercialBuilding.cs) — `RefreshStorageInventory` reserved-item protection + `CountUnabsorbedItemsInBuildingZone` helper.
-- [GoapAction_PickupItem.cs](../../Assets/Scripts/AI/GOAP/Actions/GoapAction_PickupItem.cs) — transporter pickup self-heal.
+- [GoapAction_PickupItem.cs](../../Assets/Scripts/AI/GOAP/Actions/GoapAction_PickupItem.cs) — transporter pickup self-heal + PickupZone gating.
+- [GoapAction_MoveToItem.cs](../../Assets/Scripts/AI/GOAP/Actions/GoapAction_MoveToItem.cs) — PickupZone-first destination + `OnPathUnreachable` override.
+- [GoapAction_MoveToDestination.cs](../../Assets/Scripts/AI/GOAP/Actions/GoapAction_MoveToDestination.cs) — `OnPathUnreachable` override.
+- [GoapAction_StageItemForPickup.cs](../../Assets/Scripts/AI/GOAP/Actions/GoapAction_StageItemForPickup.cs) — source-side staging action.
+- [Base/GoapAction_MoveToTarget.cs](../../Assets/Scripts/AI/GOAP/Actions/Base/GoapAction_MoveToTarget.cs) — NavMesh reachability probe.
+- [BuyOrder.cs](../../Assets/Scripts/World/Jobs/BuyOrder.cs) — `PathUnreachableCount` + `IsReachabilityStalled`.
 - [LogisticsTransportDispatcher.cs](../../Assets/Scripts/World/Buildings/Logistics/LogisticsTransportDispatcher.cs) — theft-branch gating in `HandleInsufficientStock`.
 - [.agent/skills/job_system/SKILL.md](../../.agent/skills/job_system/SKILL.md) §5.
 - [BuildingLogisticsManager.cs](../../Assets/Scripts/World/Buildings/BuildingLogisticsManager.cs) — facade.

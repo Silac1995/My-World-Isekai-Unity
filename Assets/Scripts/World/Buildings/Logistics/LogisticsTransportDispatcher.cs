@@ -75,6 +75,19 @@ public class LogisticsTransportDispatcher
             int remainingToDispatch = buyOrder.Quantity - buyOrder.DispatchedQuantity;
             if (remainingToDispatch <= 0) continue;
 
+            // Phase-B: orders that have failed reachability too many times are parked
+            // until TimeManager.OnNewDay expires them via DecreaseRemainingDays. Stops
+            // the dispatcher from spinning on a destination that no courier can reach
+            // (e.g. building sitting on an island of unbaked NavMesh).
+            if (buyOrder.IsReachabilityStalled)
+            {
+                if (_facade.LogLogisticsFlow)
+                {
+                    Debug.Log($"<color=#ff8866>[LogisticsDBG]</color> ProcessActiveBuyOrders → skipping reachability-stalled BuyOrder {buyOrder.Quantity}x {buyOrder.ItemToTransport?.ItemName} for {buyOrder.Destination?.BuildingName} (unreachableCount={buyOrder.PathUnreachableCount}). Will expire naturally via DecreaseRemainingDays.");
+                }
+                continue;
+            }
+
             // Already have a transport order queued for this destination+item → skip.
             if (placedTransportOrders.Any(t =>
                     t.ItemToTransport == buyOrder.ItemToTransport

@@ -99,6 +99,23 @@ The lifecycle of an item moving between buildings involves several state changes
 4. **Delivery**: `JobTransporter` physically moves items. `NotifyDeliveryProgress()` triggered on drop.
 5. **Acknowledgment**: Supplier calls `BuildingLogisticsManager.AcknowledgeDeliveryProgress()`, removes `TransportOrder` from `_placedTransportOrders`. 
 
+### 2b. PickupZone staging + NavMesh safety net
+
+Transporters used to walk directly to `TargetWorldItem.transform.position`, which sits inside `StorageZone`. If the interior wasn't NavMesh-reachable (doorway too narrow, multi-room building, item settled behind a wall), the transporter squeezed in, picked up, then couldn't path out — the refund at `GoapAction_PickupItem.OnActionFailed/OnActionFinished` left the item physically on the ground and the order never moved. Two layers now prevent that:
+
+**PickupZone (`CommercialBuilding._pickupZone`, optional).** Mirrors `DeliveryZone`. If authored, it's an outdoor / entrance-side `Zone` guaranteed reachable on NavMesh. The transporter flow becomes:
+- `GoapAction_MoveToItem.GetDestinationPoint` — returns `source.PickupZone.GetRandomPointInZone()` when set; else falls back to the raw `TargetWorldItem` position (backward-compatible — every existing scene with `_pickupZone == null` keeps pre-change behaviour).
+- `GoapAction_PickupItem.IsValid` — when `source.PickupZone != null`, requires the target item's position to lie inside the PickupZone's collider bounds. If not, returns false and the action waits one tick → replan → the source's own `JobLogisticsManager` runs the staging action first.
+- `GoapAction_StageItemForPickup` (new, `Cost = 0.2f`) — the source's JobLogisticsManager picks up a reserved `ItemInstance` from `StorageZone` and drops it inside `PickupZone`. Only valid when `_pickupZone != null`, the source has `TransportOrder`s where `Source == this`, and the reserved item isn't already inside PickupZone bounds. Cost ordering: `GoapAction_PlaceOrder` (0.1f) > `StageItemForPickup` (0.2f) > `GatherStorageItems` (0.5f) > `IdleInCommercialBuilding` — placement still beats staging, staging beats inbound gather, nothing idle pre-empts either.
+- `GoapAction_GatherStorageItems.FindLooseWorldItem` — explicitly excludes items inside PickupZone so staged shipments aren't gathered back into storage the same tick.
+- `CommercialBuilding.RefreshStorageInventory` Pass 1 — PickupZone contents are merged into the `physicalItems` set before the ghost-detection scan, so staged items don't get treated as missing from storage. Pass 2 absorption logic is unchanged.
+
+**NavMesh reachability probe (Phase B safety net).** Both `GoapAction_MoveToItem` and `GoapAction_MoveToDestination` now invoke `NavMesh.CalculatePath` before committing the first `SetDestination`. If the status is `PathInvalid` or `PathPartial`, the transporter aborts cleanly (no half-move, no item drop) and the action fires a virtual `OnPathUnreachable(worker, dest, status)` hook on `GoapAction_MoveToTarget`. The transporter overrides log `Debug.LogError`, call `supplier.LogisticsManager.ReportMissingReservedItem(order)` to release reservations, and `_job.CancelCurrentOrder(true)`.
+
+**Reachability loop breaker.** `BuyOrder.PathUnreachableCount` (new field) increments on every `RecordPathUnreachable()` call, fired from the MoveToItem/MoveToDestination `OnPathUnreachable` path. After 3 failures, `BuyOrder.IsReachabilityStalled == true`, and `LogisticsTransportDispatcher.ProcessActiveBuyOrders` skips the order so the supplier stops re-dispatching transporters into the same dead end. The client still holds a record and the order will expire normally via the `TimeManager.OnNewDay` sweep — at which point the client's stock check places a fresh order that gets re-dispatched under current conditions.
+
+**Designer guidance.** Author `PickupZone` on any building whose `StorageZone` sits deep inside the interior. For single-room buildings where `StorageZone` is itself reachable, leaving `_pickupZone == null` is fine and costs nothing.
+
 ### 3. Order Expiration, Cancellation, and Virtual Stock
 **Rule:** Ensure expired or cancelled orders are systematically cleaned from both the supplier's memory AND the client's memory.
 - `CheckStockTargets` (Layer B+C) and `CheckCraftingIngredients` use "Virtual Stock" = physical stock + active uncompleted `PlacedBuyOrders`. The policy compares the virtual stock against the `StockTarget`, never the raw physical count.
@@ -136,6 +153,19 @@ Known gaps left intentionally open by the Layer A+B+C pass:
 - `LogisticsCapabilityWindow` only scans loaded scenes. Hibernated buildings inside `CommunityData.ConstructedBuildings` are invisible to the report. Offline validation passes need a separate enumeration path.
 - `DefaultMinStockPolicy.asset` must be authored in the Editor and dropped into `Resources/Data/Logistics/` before shipping — otherwise every building pays a per-instance `CreateInstance<MinStockPolicy>()` allocation and logs the warning.
 
+## Worker Performance Hooks
+
+The logistics cycle is also the credit pipeline that feeds the wage system. Each productive step inside the supply chain books a unit-of-work against the acting worker's `CharacterWorkLog`, which `WageSystemService` later converts into pay.
+
+- **Transporter deliveries**: `JobTransporter.NotifyDeliveryProgress` credits `worker.CharacterWorkLog.LogShiftUnit(worker.CharacterJob.GetCurrentWorkplace(), unloadedQty)` for each item unloaded at the destination. **Critical:** the credit goes to the worker's EMPLOYER (the `TransporterBuilding` they punched in at), NOT the destination building they just delivered to. Otherwise every transporter would silently work for whichever shop they happened to drop off at.
+- **Harvester deposits**: `GoapAction_DepositResources` credits the harvester's `CharacterWorkLog` with the **deficit-bounded** portion of each deposit, computed via `HarvesterCreditCalculator.GetCreditedAmount(harvestingBuilding, itemSO, depositedQty)`. The intent is that a harvester only earns wages for items the building actually needs (i.e., closes a `StockTarget` deficit) — dumping 99 logs into a forge that already has 100 should not pay 99 units.
+- **Dormant deficit cap**: `HarvesterCreditCalculator` only enforces the deficit ceiling when the workplace implements `IStockProvider`. Currently `HarvestingBuilding` does **not** implement `IStockProvider`, so `GetCreditedAmount` falls back to crediting **1 unit per deposit** regardless of stock state. This is intentional for now — it preserves wage flow until the stock-target authoring lands. Future fix: have `HarvestingBuilding` implement `IStockProvider` so the deficit cap activates.
+- **Crafter completions**: `JobCrafter` credits one unit per completed craft (hook lives in the craft-completion callback inside the job class itself, not in a logistics action).
+- See `.agent/skills/wage-system/SKILL.md` for how these credited units feed the per-shift wage formula and the payer architecture.
+- See `.agent/skills/character-worklog/SKILL.md` for the `LogShiftUnit(workplace, units)` API contract and shift-window enforcement.
+
 ## Last updated
+
+2026-04-23 — Added Worker Performance Hooks section documenting transporter / harvester / crafter unit-of-work credit into `CharacterWorkLog` and the dormant `IStockProvider` deficit cap on `HarvestingBuilding`.
 
 2026-04-21 — Layers A + B + C landed: `IStockProvider` contract, `CraftingBuilding._inputStockTargets` autonomous restock, pluggable `LogisticsPolicy` SO (`MinStock` / `ReorderPoint` / `JustInTime`), three-component facade split (`LogisticsOrderBook` / `LogisticsTransportDispatcher` / `LogisticsStockEvaluator`), `LogLogisticsFlow` diagnostics toggle, missing-transporter now `LogError`, Editor `Capability Report` window.

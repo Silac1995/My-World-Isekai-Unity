@@ -16,6 +16,14 @@ public abstract class CommercialBuilding : Building
     [SerializeField] protected Community _ownerCommunity; // Collective owner
     [SerializeField] protected Zone _storageZone;
 
+    [Tooltip("Optional outbound staging zone. When authored, the building's Logistics Manager " +
+             "moves reserved ItemInstances from StorageZone into this zone before an incoming " +
+             "transporter arrives, and transporters path to this zone instead of the raw " +
+             "WorldItem position. Leave empty to keep legacy behaviour (transporter walks " +
+             "straight into the StorageZone). Prefer a small area adjacent to the building's " +
+             "exterior door — authored, not networked, so no NetworkVariable cost.")]
+    [SerializeField] protected Zone _pickupZone;
+
     protected List<Job> _jobs = new List<Job>();
     protected List<Character> _activeWorkersOnShift = new List<Character>();
     protected List<ItemInstance> _inventory = new List<ItemInstance>();
@@ -33,6 +41,7 @@ public abstract class CommercialBuilding : Building
     public IReadOnlyList<Job> Jobs => _jobs;
     public IReadOnlyList<Character> ActiveWorkersOnShift => _activeWorkersOnShift;
     public Zone StorageZone => _storageZone;
+    public Zone PickupZone => _pickupZone;
     public IReadOnlyList<ItemInstance> Inventory => _inventory;
     
     public BuildingTaskManager TaskManager => _taskManager;
@@ -826,6 +835,38 @@ public abstract class CommercialBuilding : Building
     public virtual void RefreshStorageInventory()
     {
         List<WorldItem> physicalItems = GetWorldItemsInStorage();
+
+        // Phase-A: PickupZone contents are outbound staging — still "ours" logically, but not
+        // in StorageZone. Merge them into the physical set for Pass-1 presence checks so a
+        // staged instance isn't flagged as a ghost. Pass-2 absorption intentionally does NOT
+        // include them (they're already reserved by a TransportOrder and will leave with the
+        // transporter, so re-absorbing would re-register them in _inventory needlessly —
+        // _inventory.Contains(...) already protects correctly-tracked instances anyway).
+        if (_pickupZone != null)
+        {
+            BoxCollider pickupBox = _pickupZone.GetComponent<BoxCollider>();
+            if (pickupBox != null)
+            {
+                Vector3 center = pickupBox.transform.TransformPoint(pickupBox.center);
+                Vector3 halfExtents = Vector3.Scale(pickupBox.size, pickupBox.transform.lossyScale) * 0.5f;
+                try
+                {
+                    Collider[] pickupCols = Physics.OverlapBox(center, halfExtents, pickupBox.transform.rotation, Physics.AllLayers, QueryTriggerInteraction.Collide);
+                    foreach (var col in pickupCols)
+                    {
+                        WorldItem wi = col.GetComponent<WorldItem>() ?? col.GetComponentInParent<WorldItem>();
+                        if (wi != null && !physicalItems.Contains(wi)) physicalItems.Add(wi);
+                    }
+                }
+                catch (System.Exception e)
+                {
+                    // Defensive (rule #31): a PhysX hiccup on PickupZone scan must not derail the whole refresh.
+                    Debug.LogException(e);
+                    Debug.LogError($"[CommercialBuilding] {buildingName}: Physics.OverlapBox threw while scanning PickupZone. Pass 1 proceeds with StorageZone items only.");
+                }
+            }
+        }
+
         List<ItemInstance> ghostlyInstances = new List<ItemInstance>();
 
         // Collect instances actively reserved by live TransportOrders. These must NEVER be

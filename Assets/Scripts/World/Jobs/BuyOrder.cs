@@ -29,6 +29,28 @@ public class BuyOrder
     // The physical ItemInstances explicitly reserved for this order from the source building's inventory
     public System.Collections.Generic.List<ItemInstance> ReservedItems { get; private set; } = new System.Collections.Generic.List<ItemInstance>();
 
+    /// <summary>
+    /// Phase-B reachability-failure counter. Incremented each time a transporter
+    /// bound to this BuyOrder aborts movement because <c>NavMesh.CalculatePath</c>
+    /// returned <c>PathInvalid</c> or <c>PathPartial</c>. After <see cref="MaxPathUnreachableAttempts"/>
+    /// the dispatcher flags this order as reachability-stalled so the logistics tick
+    /// stops re-dispatching until it expires via <c>DecreaseRemainingDays</c>.
+    /// </summary>
+    public int PathUnreachableCount { get; private set; } = 0;
+    public const int MaxPathUnreachableAttempts = 3;
+    public bool IsReachabilityStalled => PathUnreachableCount >= MaxPathUnreachableAttempts;
+
+    /// <summary>
+    /// Bump the reachability-failure counter. Returns <c>true</c> if this increment
+    /// pushed the order past <see cref="MaxPathUnreachableAttempts"/> and it should
+    /// now be treated as stalled (logged + left to expire naturally).
+    /// </summary>
+    public bool RecordPathUnreachable()
+    {
+        PathUnreachableCount++;
+        return IsReachabilityStalled;
+    }
+
     public BuyOrder(ItemSO item, int quantity, CommercialBuilding source, CommercialBuilding dest, int remainingDays, Character clientBoss, Character intermediaryBoss = null)
     {
         ItemToTransport = item;

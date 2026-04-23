@@ -161,6 +161,7 @@ public class JobLogisticsManager : Job
         _availableActions = new List<GoapAction>
         {
             new GoapAction_PlaceOrder(this),
+            new GoapAction_StageItemForPickup(this),
             new GoapAction_GatherStorageItems(this),
             new GoapAction_IdleInCommercialBuilding(_workplace as CommercialBuilding)
         };
