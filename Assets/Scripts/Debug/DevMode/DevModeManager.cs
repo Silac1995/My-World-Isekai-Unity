@@ -1,5 +1,7 @@
 using System;
+using TMPro;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using Unity.Netcode;
 
 /// <summary>
@@ -55,6 +57,11 @@ public class DevModeManager : MonoBehaviour
 
     private GameObject _panelInstance;
 
+    // Cached references on the instantiated panel; populated in EnsurePanel so global shortcuts
+    // can dispatch to the modules regardless of which tab is currently active.
+    private DevSelectionModule _selectionModule;
+    private DevSpawnModule _spawnModule;
+
     private void Awake()
     {
         if (Instance != null && Instance != this)
@@ -80,6 +87,70 @@ public class DevModeManager : MonoBehaviour
         {
             TryToggle();
         }
+
+        // Global shortcuts — active only while dev mode is enabled. These live here (not on
+        // individual tab modules) because tab content GameObjects are deactivated when another
+        // tab is selected, which would otherwise suspend their Update loop.
+        if (IsEnabled) HandleGlobalShortcuts();
+    }
+
+    private void HandleGlobalShortcuts()
+    {
+        if (IsTextInputFocused()) return;
+
+        bool ctrl = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
+        bool space = Input.GetKey(KeyCode.Space);
+
+        // ESC — cancel everything: clear selection and disarm any armed toggle.
+        if (Input.GetKeyDown(KeyCode.Escape))
+        {
+            bool handled = false;
+            if (_selectionModule != null && _selectionModule.SelectedInteractable != null)
+            {
+                _selectionModule.ClearSelection();
+                handled = true;
+            }
+            if (_selectionModule != null && _selectionModule.IsArmed)
+            {
+                _selectionModule.DisarmToggle();
+                handled = true;
+            }
+            if (_spawnModule != null && _spawnModule.IsArmed)
+            {
+                _spawnModule.DisarmToggle();
+                handled = true;
+            }
+            if (handled) Debug.Log("<color=magenta>[DevMode]</color> ESC — cancelled");
+        }
+
+        // Ctrl + Left-Click → select (mutually exclusive with the Spawn shortcut).
+        if (ctrl && !space && Input.GetMouseButtonDown(0))
+        {
+            if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject()) return;
+            if (_selectionModule != null && _selectionModule.TrySelectAtCursor(out string label))
+            {
+                Debug.Log($"<color=magenta>[DevMode]</color> Ctrl+Click selected: {label}");
+            }
+        }
+
+        // Space + Left-Click → spawn (mutually exclusive with the Select shortcut).
+        if (space && !ctrl && Input.GetMouseButtonDown(0))
+        {
+            if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject()) return;
+            if (_spawnModule != null && _spawnModule.TrySpawnAtCursor())
+            {
+                Debug.Log("<color=magenta>[DevMode]</color> Space+Click spawned");
+            }
+        }
+    }
+
+    private static bool IsTextInputFocused()
+    {
+        if (EventSystem.current == null) return false;
+        var sel = EventSystem.current.currentSelectedGameObject;
+        if (sel == null) return false;
+        return sel.GetComponent<TMP_InputField>() != null
+            || sel.GetComponent<UnityEngine.UI.InputField>() != null;
     }
 
     /// <summary>
@@ -187,6 +258,13 @@ public class DevModeManager : MonoBehaviour
         _panelInstance = Instantiate(prefab);
         _panelInstance.SetActive(false);
         DontDestroyOnLoad(_panelInstance);
+
+        // Cache module references via includeInactive so we find them even when their owning
+        // tab content GameObject is disabled (the non-current tab state).
+        _selectionModule = _panelInstance.GetComponentInChildren<DevSelectionModule>(true);
+        _spawnModule = _panelInstance.GetComponentInChildren<DevSpawnModule>(true);
+        if (_selectionModule == null) Debug.LogWarning("<color=orange>[DevMode]</color> DevSelectionModule not found on panel — shortcuts will no-op for selection.");
+        if (_spawnModule == null) Debug.LogWarning("<color=orange>[DevMode]</color> DevSpawnModule not found on panel — shortcuts will no-op for spawning.");
     }
 
     private void OnDestroy()

@@ -262,22 +262,20 @@ public class DevSpawnModule : MonoBehaviour
     {
         if (DevModeManager.Instance == null || !DevModeManager.Instance.IsEnabled) return;
 
-        // Global shortcut: Space + Right-Click spawns at cursor, any tab, any armed state.
-        HandleShortcut();
-
         // Armed click-loop (legacy path — kept for discoverability via the toggle).
+        // Global shortcuts (Ctrl+Click / Space+Click / ESC) are handled by DevModeManager so
+        // they keep working regardless of which tab's content is currently active.
         if (_armedToggle == null || !_armedToggle.isOn) return;
         if (DevModeManager.Instance.ActiveClickConsumer != this) return;
 
-        // Escape disarms the toggle in armed mode.
+        // Escape disarms the toggle in armed mode (also handled globally by DevModeManager).
         if (Input.GetKeyDown(KeyCode.Escape))
         {
             _armedToggle.isOn = false;
             return;
         }
 
-        // If Space is held, the Spawn shortcut handles the click; if Ctrl is held the Select
-        // shortcut owns the click — either way, don't let the armed Spawn loop double-fire.
+        // If Space or Ctrl is held, DevModeManager handles the click — don't double-fire here.
         if (Input.GetKey(KeyCode.Space)) return;
         if (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)) return;
 
@@ -294,30 +292,30 @@ public class DevSpawnModule : MonoBehaviour
         }
     }
 
-    // ─── Shortcut ─────────────────────────────────────────────────────
+    // ─── Shortcut API (invoked by DevModeManager) ─────────────────────
 
     /// <summary>
-    /// Space held + Left-Click anywhere on the environment spawns at the cursor using the panel's
-    /// current configuration (race / personality / combat styles / count). Skipped when a text input
-    /// field has focus so typing spaces in the Count field doesn't trigger a spawn.
+    /// Raycasts the environment and spawns using the panel's current configuration. Returns true
+    /// on successful spawn. Public so <see cref="DevModeManager"/> can invoke it as a global shortcut.
     /// </summary>
-    private void HandleShortcut()
+    public bool TrySpawnAtCursor()
     {
-        if (IsTextInputFocused()) return;
-        if (!Input.GetKey(KeyCode.Space)) return;
-        // If Ctrl is also held, the Select shortcut owns the click (mutually exclusive).
-        if (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)) return;
-        if (!Input.GetMouseButtonDown(0)) return;
-
-        if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
-            return;
-
         if (TryRaycastEnvironment(out Vector3 hitPoint))
         {
-            Debug.Log("<color=cyan>[DevSpawn]</color> Space+LMB shortcut — spawning at cursor.");
             SpawnAt(hitPoint);
+            return true;
         }
+        return false;
     }
+
+    /// <summary>Disarm the armed toggle if on (invoked by DevModeManager's ESC shortcut).</summary>
+    public void DisarmToggle()
+    {
+        if (_armedToggle != null && _armedToggle.isOn) _armedToggle.isOn = false;
+    }
+
+    /// <summary>True iff the armed Spawn toggle is currently on.</summary>
+    public bool IsArmed => _armedToggle != null && _armedToggle.isOn;
 
     private bool TryRaycastEnvironment(out Vector3 hitPoint)
     {
@@ -337,15 +335,6 @@ public class DevSpawnModule : MonoBehaviour
 
         hitPoint = hit.point;
         return true;
-    }
-
-    private static bool IsTextInputFocused()
-    {
-        if (EventSystem.current == null) return false;
-        var sel = EventSystem.current.currentSelectedGameObject;
-        if (sel == null) return false;
-        return sel.GetComponent<TMP_InputField>() != null
-            || sel.GetComponent<UnityEngine.UI.InputField>() != null;
     }
 
     private void SpawnAt(Vector3 anchor)

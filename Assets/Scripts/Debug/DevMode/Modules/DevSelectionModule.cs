@@ -202,16 +202,14 @@ public class DevSelectionModule : MonoBehaviour
     {
         if (DevModeManager.Instance == null || !DevModeManager.Instance.IsEnabled) return;
 
-        // Global shortcuts (work regardless of armed state). Text-input focused → skip.
-        HandleShortcuts();
-
         // Armed click-loop (legacy path — kept for discoverability via the toggle).
+        // Global shortcuts (Ctrl+Click / Space+Click / ESC) are handled by DevModeManager so
+        // they keep working regardless of which tab's content is currently active.
         if (_armedToggle == null || !_armedToggle.isOn) return;
         if (DevModeManager.Instance.ActiveClickConsumer != this) return;
         if (!_layerMaskResolved) return;
 
-        // If Ctrl is held the Select shortcut handles the click; if Space is held the Spawn
-        // shortcut owns the click — either way, don't let the armed Select loop double-fire.
+        // If Ctrl or Space is held, DevModeManager handles the click — don't double-fire here.
         if (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)) return;
         if (Input.GetKey(KeyCode.Space)) return;
 
@@ -229,55 +227,18 @@ public class DevSelectionModule : MonoBehaviour
         }
     }
 
-    // ─── Shortcuts ────────────────────────────────────────────────────
-
-    /// <summary>
-    /// ESC clears selection / disarms the toggle. Ctrl + Left-Click picks anywhere in the world.
-    /// Skipped when a text input field has focus.
-    /// </summary>
-    private void HandleShortcuts()
-    {
-        if (IsTextInputFocused()) return;
-
-        // ESC: deselect and/or disarm — single key to cancel everything.
-        if (Input.GetKeyDown(KeyCode.Escape))
-        {
-            bool hadSomething = false;
-            if (SelectedInteractable != null || SelectedCharacter != null)
-            {
-                ClearSelection();
-                hadSomething = true;
-            }
-            if (_armedToggle != null && _armedToggle.isOn)
-            {
-                _armedToggle.isOn = false;
-                hadSomething = true;
-            }
-            if (hadSomething) Debug.Log("<color=cyan>[DevSelect]</color> ESC — cleared");
-        }
-
-        // Ctrl + Left-Click: select under cursor. If Space is also held, the Spawn shortcut owns
-        // the click — keep the two mutually exclusive so exactly one action fires per click.
-        bool ctrlHeld = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
-        bool spaceHeld = Input.GetKey(KeyCode.Space);
-        if (ctrlHeld && !spaceHeld && Input.GetMouseButtonDown(0))
-        {
-            if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject()) return;
-            if (!_layerMaskResolved) return;
-            if (TrySelectAtCursor(out string label))
-            {
-                Debug.Log($"<color=cyan>[DevSelect]</color> Ctrl+Click selected: {label}");
-            }
-        }
-    }
+    // ─── Shortcut API (invoked by DevModeManager) ─────────────────────
 
     /// <summary>
     /// Raycasts from the mouse and selects the first InteractableObject (or Character as fallback).
     /// Returns true on successful selection; <paramref name="label"/> carries a short identifier for logging.
+    /// Public so <see cref="DevModeManager"/> can invoke it as a global shortcut.
     /// </summary>
-    private bool TrySelectAtCursor(out string label)
+    public bool TrySelectAtCursor(out string label)
     {
         label = null;
+        if (!_layerMaskResolved) return false;
+
         Camera cam = Camera.main;
         if (cam == null)
         {
@@ -310,12 +271,15 @@ public class DevSelectionModule : MonoBehaviour
         return false;
     }
 
-    private static bool IsTextInputFocused()
+    /// <summary>
+    /// Disarm the armed toggle if on. Used by DevModeManager's ESC shortcut so a single ESC
+    /// cancels both the active selection and any armed state in one keystroke.
+    /// </summary>
+    public void DisarmToggle()
     {
-        if (EventSystem.current == null) return false;
-        var sel = EventSystem.current.currentSelectedGameObject;
-        if (sel == null) return false;
-        return sel.GetComponent<TMP_InputField>() != null
-            || sel.GetComponent<UnityEngine.UI.InputField>() != null;
+        if (_armedToggle != null && _armedToggle.isOn) _armedToggle.isOn = false;
     }
+
+    /// <summary>True iff the armed Select toggle is currently on.</summary>
+    public bool IsArmed => _armedToggle != null && _armedToggle.isOn;
 }
