@@ -41,7 +41,11 @@ public class InteractionMentorship : InteractionInvitation
 
     private bool CanStudentStillLearn(Character student, Character mentor, ScriptableObject subject)
     {
-        if (mentor == null || mentor.CharacterMentorship == null) return false;
+        if (mentor == null || mentor.CharacterMentorship == null)
+        {
+            Debug.LogWarning($"[Mentorship] CanStudentStillLearn called with null mentor or missing CharacterMentorship (mentor={mentor?.CharacterName})");
+            return false;
+        }
         return mentor.CharacterMentorship.CanTeachStudent(student, subject);
     }
 

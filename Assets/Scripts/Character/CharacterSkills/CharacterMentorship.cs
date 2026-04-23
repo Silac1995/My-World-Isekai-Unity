@@ -557,21 +557,31 @@ public class CharacterMentorship : CharacterSystem
     /// </summary>
     public bool CanTeachStudent(Character student, ScriptableObject subject)
     {
-        if (student == null || subject == null) return false;
+        if (student == null || subject == null)
+        {
+            Debug.LogWarning($"[Mentorship] CanTeachStudent called with null argument on {_character?.CharacterName} (student={student}, subject={subject})");
+            return false;
+        }
 
-        // Logic preserved line-for-line from InteractionMentorship.CanStudentStillLearn
-        // (Task 1 is a pure refactor — no behaviour change).
+        // Logic preserved from InteractionMentorship.CanStudentStillLearn with subsystem null-guards
+        // matching the pattern in GetTeachableSubjects() above and ReceiveLessonTick() elsewhere.
 
         // 1. Mentor tier for this subject
         SkillTier mentorTier = SkillTier.Novice;
         if (subject is SkillSO skill)
         {
-            mentorTier = SkillTierExtensions.GetTierForLevel(_character.CharacterSkills.GetSkillLevel(skill));
+            CharacterSkills skills = _character.CharacterSkills;
+            if (skills != null)
+                mentorTier = SkillTierExtensions.GetTierForLevel(skills.GetSkillLevel(skill));
         }
         else if (subject is CombatStyleSO style)
         {
-            var expertise = _character.CharacterCombat.KnownStyles.FirstOrDefault(s => s.Style == style);
-            if (expertise != null) mentorTier = expertise.CurrentTier;
+            CharacterCombat combat = _character.CharacterCombat;
+            if (combat != null)
+            {
+                var expertise = combat.KnownStyles.FirstOrDefault(s => s.Style == style);
+                if (expertise != null) mentorTier = expertise.CurrentTier;
+            }
         }
         // AbilitySO and any other non-handled type: mentorTier stays Novice.
         // The tier gate at the bottom then evaluates `Novice < Novice - 1` = false,
@@ -581,17 +591,21 @@ public class CharacterMentorship : CharacterSystem
         SkillTier studentTier = SkillTier.Novice;
         if (subject is SkillSO studentSkill)
         {
-            if (!student.CharacterSkills.HasSkill(studentSkill))
-                return true; // Ne connaît pas du tout la compétence, donc peut apprendre
-            studentTier = SkillTierExtensions.GetTierForLevel(student.CharacterSkills.GetSkillLevel(studentSkill));
+            CharacterSkills studentSkills = student.CharacterSkills;
+            if (studentSkills == null || !studentSkills.HasSkill(studentSkill))
+                return true; // Student doesn't know this skill at all, so they can always start learning
+            studentTier = SkillTierExtensions.GetTierForLevel(studentSkills.GetSkillLevel(studentSkill));
         }
         else if (subject is CombatStyleSO studentStyle)
         {
-            var expertise = student.CharacterCombat.KnownStyles.FirstOrDefault(s => s.Style == studentStyle);
+            CharacterCombat studentCombat = student.CharacterCombat;
+            if (studentCombat == null)
+                return true; // Student doesn't know this style at all, so they can always start learning
+            var expertise = studentCombat.KnownStyles.FirstOrDefault(s => s.Style == studentStyle);
             if (expertise != null)
                 studentTier = expertise.CurrentTier;
             else
-                return true; // Ne connaît pas du tout le style
+                return true; // Student doesn't know this style at all, so they can always start learning
         }
 
         // 3. Gate: student must be strictly below mentorTier - 1
