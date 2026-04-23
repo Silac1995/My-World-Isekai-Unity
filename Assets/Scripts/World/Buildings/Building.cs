@@ -58,6 +58,21 @@ public class Building : ComplexRoom
     public string BuildingId => NetworkBuildingId.Value.ToString();
 
     /// <summary>
+    /// Human-readable label for this building. Used by WorkPlaceRecord (snapshot at first
+    /// punch-in) and any UI / log surface that wants to show "where" a worker punched in.
+    ///
+    /// Defaults to the authored <see cref="BuildingName"/> Inspector field; if that's blank
+    /// (legacy prefabs / dynamically-named instances), falls back to the GameObject name.
+    /// Subclasses may override to compose a friendlier label (e.g. owner + business name).
+    ///
+    /// Stable identity for keying still belongs to <see cref="BuildingId"/> — this is purely
+    /// the display string captured ONCE in <c>WorkPlaceRecord.BuildingDisplayName</c> at
+    /// first work-time, so renaming later doesn't retroactively rewrite history.
+    /// </summary>
+    public virtual string BuildingDisplayName =>
+        string.IsNullOrEmpty(buildingName) ? name : buildingName;
+
+    /// <summary>
     /// True if a spawned interior MapController exists for this building.
     /// </summary>
     public bool HasInterior

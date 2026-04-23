@@ -888,21 +888,25 @@ public abstract class CommercialBuilding : Building
         return Mathf.Clamp01(latestEndHour / 24f);
     }
 
-    // TODO Task 25: Replace with a stable BuildingId (e.g., a GUID set on the
-    // building at spawn time, persisted in CommunityData). GameObject name is
-    // a placeholder.
     /// <summary>
-    /// Returns a stable id for the WorkLog. Uses the building's name as a placeholder
-    /// — Task 25 introduces a proper BuildingDisplayName / BuildingId convention.
+    /// Stable per-building id used as the WorkPlaceRecord key. Backed by
+    /// <see cref="Building.BuildingId"/> — a GUID assigned at network spawn time and
+    /// persisted in CommunityData / save files. Renaming the GameObject at runtime no
+    /// longer forks WorkPlaceRecord history.
     /// </summary>
     private string GetBuildingIdForWorklog()
     {
-        return name;
+        return BuildingId;
     }
 
+    /// <summary>
+    /// Human-readable label snapshot-stored ONCE in
+    /// <c>WorkPlaceRecord.BuildingDisplayName</c> at the worker's first punch-in.
+    /// Backed by <see cref="Building.BuildingDisplayName"/>.
+    /// </summary>
     private string GetBuildingDisplayNameForWorklog()
     {
-        return name;
+        return BuildingDisplayName;
     }
 
     /// <summary>

@@ -246,9 +246,10 @@ public class GoapAction_DepositResources : GoapAction
             : MWI.Jobs.Wages.HarvesterCreditCalculator.GetCreditedAmount(depositedQty, deficit);
         if (credit <= 0) return;
 
-        // TODO Task 25: replace GameObject name with the stable building id used by
-        // CommercialBuilding.GetBuildingIdForWorklog (currently the same — both use .name).
-        string buildingId = building.name;
+        // Use the stable BuildingId (GUID from Building.NetworkBuildingId), not the
+        // GameObject name — matches CommercialBuilding.GetBuildingIdForWorklog so a
+        // rename never forks WorkPlaceRecord history.
+        string buildingId = building.BuildingId;
         workLog.LogShiftUnit(jobType, buildingId, credit);
     }
 

@@ -281,7 +281,10 @@ public class JobBlacksmith : JobCrafter
         var workLog = worker.CharacterWorkLog;
         if (workLog == null) return;
 
-        string buildingId = _workplace.name;
+        // Stable BuildingId (GUID from Building.NetworkBuildingId), not GameObject name —
+        // matches CommercialBuilding.GetBuildingIdForWorklog so renaming the workplace
+        // never forks WorkPlaceRecord history.
+        string buildingId = _workplace.BuildingId;
         workLog.LogShiftUnit(this.Type, buildingId, amount);
     }
 }

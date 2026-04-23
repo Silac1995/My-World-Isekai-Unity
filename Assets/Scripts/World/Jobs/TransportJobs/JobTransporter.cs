@@ -419,8 +419,10 @@ public class JobTransporter : Job
         var workLog = worker.CharacterWorkLog;
         if (workLog == null) return;
 
-        // Use this transporter's JobType (always Transporter) and the employer building's name as id.
-        string buildingId = _workplace.name;
+        // Use this transporter's JobType (always Transporter) and the employer building's
+        // stable BuildingId (GUID, not GameObject name) — see Building.BuildingId. Keeps
+        // history rename-proof, matches CommercialBuilding.GetBuildingIdForWorklog.
+        string buildingId = _workplace.BuildingId;
         workLog.LogShiftUnit(MWI.WorldSystem.JobType.Transporter, buildingId, amount);
     }
 }
