@@ -243,6 +243,17 @@ Detection (OnWorkerPunchIn: IStockProvider → policy-driven BuyOrder)
 
 ## Recent changes
 
+- **2026-04-22 — Worker wages & performance** (Tasks 1-27 of `docs/superpowers/plans/2026-04-22-worker-wages-and-performance.md`):
+  - Two new Character subsystems exist on every `Character_Default` prefab variant: `CharacterWallet` (multi-currency `Dictionary<CurrencyId,int>`, `[ClientRpc]` sync) and `CharacterWorkLog` (per-shift transient + per-(JobType, BuildingId) lifetime career counters). Access via `Character.CharacterWallet` / `Character.CharacterWorkLog`.
+  - **Wages are paid as a side-effect of `CommercialBuilding.WorkerEndingShift`.** The path: `WorkLog.FinalizeShift` → `WageSystemService.ComputeAndPayShiftWage` → `IWagePayer.PayWages` → `Wallet.AddCoins`. Today `MintedWagePayer` mints from nothing; future swap is `BuildingTreasuryWagePayer`.
+  - **Wage formula** (piece-work): `(clamp01(hoursWorked/scheduledHours) * MinimumShiftWage) + (PieceRate * shiftUnits)`. Fixed-wage: `clamp01(hoursWorked/scheduledHours) * FixedShiftWage`. Ratio caps at 1.0 → no overtime pay; piece bonus is not prorated.
+  - **No-overtime-bonus rule**: `CharacterWorkLog.LogShiftUnit` only increments the shift counter when `now ≤ scheduledShiftEnd`. Late units accrue to lifetime only — they're history but pay nothing.
+  - **Per-job credit hooks**: `GoapAction_DepositResources` (Harvester family, deficit-bounded), `JobBlacksmith` (per craft against active CraftingOrder), `JobTransporter.NotifyDeliveryProgress` (per item unloaded — credit goes to the EMPLOYER, not the destination).
+  - **`JobBlacksmith.Type` and `JobBlacksmithApprentice.Type` were latent bugs** returning `JobType.None` — fixed in Task 24. Always override `Type` on new Job subclasses.
+  - **Hibernated NPCs do NOT accrue WorkLog units offline.** `MacroSimulator` has a TODO marker — `HibernatedNPCData` doesn't carry profile state today, so offline yields go into community pools but the NPC's career counter is frozen until they wake up. If you add a new NPC stat that should accrue offline, look at this pattern.
+  - **Harvester deficit cap is dormant**: `HarvestingBuilding` does not implement `IStockProvider`, so `HarvesterCreditCalculator` always credits the full deposit qty. Bounded by `HarvestingBuilding.IsResourceAtLimit` (workers stop depositing). Future fix: `HarvestingBuilding : IStockProvider`.
+  - See `.agent/skills/character-wallet/SKILL.md`, `.agent/skills/character-worklog/SKILL.md`, `.agent/skills/wage-system/SKILL.md`, and `wiki/systems/worker-wages-and-performance.md`.
+
 - **2026-04-22 — Transporter & crafter pickup hardenings** (fixes transport stall + craft over-production):
   - `GoapAction_PickupItem.PrepareAction` now self-heals when logical inventory lost a reserved instance but the reservation + WorldItem are still valid — proceeds with pickup instead of cancelling.
   - `CommercialBuilding.RefreshStorageInventory` Pass 1 protects reserved instances from the ghost-removal pass.

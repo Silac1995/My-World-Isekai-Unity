@@ -278,6 +278,20 @@ Detection (OnWorkerPunchIn: IStockProvider → BuyOrder, policy-driven)
 
 ## Recent changes
 
+- **2026-04-22 — Worker wages & performance** (Tasks 1-27 of `docs/superpowers/plans/2026-04-22-worker-wages-and-performance.md`):
+  - **`CommercialBuilding.WorkerStartingShift`** now records `_punchInTimeByWorker[worker] = TimeManager.CurrentTime01 * 24f` and calls `worker.CharacterWorkLog.OnPunchIn(jobType, BuildingId, BuildingDisplayName, scheduledEndTime01)`. Inserted BEFORE the existing `_activeWorkersOnShift.Contains` guard so the wage hook fires even for duplicate calls (the duplicate's punch-in time wins, which is fine for v1).
+  - **`CommercialBuilding.WorkerEndingShift`** computes `hoursWorked = min(now, scheduledEnd) - punchInTime`, calls `worker.CharacterWorkLog.FinalizeShift(jobType, BuildingId)`, then `WageSystemService.Instance?.ComputeAndPayShiftWage(worker, assignment, summary, scheduledHours, hoursWorked, currency)`, then `_punchInTimeByWorker.Remove(worker)`.
+  - **`JobAssignment` carries wage fields**: `Currency` (`MWI.Economy.CurrencyId`), `PieceRate`, `MinimumShiftWage`, `FixedShiftWage`. Seeded at hire-time by `WageSystemService.SeedAssignmentDefaults` from `Assets/ScriptableObjects/Jobs/WageRates.asset`. Round-tripped through `JobAssignmentSaveEntry` (Task 17 extended the save shape; backward-compatible with old saves — missing fields default to 0 and re-seed at next hire).
+  - **`CommercialBuilding.TrySetAssignmentWage(requester, worker, pieceRate?, minimumShift?, fixedShift?)`** — new public, server-authoritative, owner-gated entry point for runtime wage edits. Composes `Room.IsOwner(requester)` + community-leader lookup. The future owner-edit UI calls this; clients must route via a ServerRpc.
+  - **`Building.BuildingId` (NetworkVariable GUID) and `Building.BuildingDisplayName`** are the workplace identifier used by the WorkLog (Task 25 replaced earlier `name` placeholders). Display name is denormalized into `WorkPlaceRecord` at first-work-time so history survives building destruction.
+  - **WageSystemService singleton** lives in `GameScene` at scene root with `_defaultRates → WageRates.asset` and `_useMintedPayer = true`.
+  - **Per-job credit hooks** (live in the GOAP action / Job class, not the building):
+    - `GoapAction_DepositResources.TryCreditWorkLog` — Harvester family (Woodcutter/Miner/Forager/Farmer), uses `HarvesterCreditCalculator.GetCreditedAmount(depositQty, deficitBefore)` to compute the deficit-bounded portion.
+    - `JobBlacksmith.TryCreditWorkLog` — per item crafted against an active CraftingOrder (also fixes a latent `JobType.None` bug — Blacksmith Type was unimplemented).
+    - `JobTransporter.TryCreditWorkLog` — per item unloaded; credit goes to the EMPLOYER (`_workplace`), not the destination.
+  - **Harvester deficit cap is currently dormant**: `HarvestingBuilding` does not implement `IStockProvider`, so the `GetCreditedAmount` deficit branch is unreachable today. Each deposit credits 1 unit; bounded by `IsResourceAtLimit`. Future fix: make `HarvestingBuilding : IStockProvider`.
+  - See `wiki/systems/worker-wages-and-performance.md`, `.agent/skills/wage-system/SKILL.md`, `.agent/skills/character-wallet/SKILL.md`, `.agent/skills/character-worklog/SKILL.md`.
+
 - **2026-04-22 — Physical ↔ logical inventory hardenings** (fixes transport stall + craft over-production):
   - `CommercialBuilding.RefreshStorageInventory` Pass 1 skips instances currently in any `TransportOrder.ReservedItems` — stops ghost-pass from killing in-flight transports during transient `Physics.OverlapBox` misses caused by non-kinematic WorldItem physics.
   - `GoapAction_PickupItem.PrepareAction` self-heals when the logical inventory lost a reserved instance but the WorldItem is physically present — proceeds with pickup + warns.
@@ -301,5 +315,7 @@ Detection (OnWorkerPunchIn: IStockProvider → BuyOrder, policy-driven)
 - **World System SKILL.md**: `.agent/skills/world-system/SKILL.md` (interiors, hibernation)
 - **Community System SKILL.md**: `.agent/skills/community-system/SKILL.md` (permits, ownership)
 - **Logistics Cycle SKILL.md**: `.agent/skills/logistics_cycle/SKILL.md`
+- **Wage System SKILL.md**: `.agent/skills/wage-system/SKILL.md` (formulas, payer architecture, hire-time seeding)
+- **Worker Wages & Performance wiki**: `wiki/systems/worker-wages-and-performance.md` (architecture overview)
 - **Network Architecture**: `NETWORK_ARCHITECTURE.md`
 - **Project Rules**: `CLAUDE.md`
