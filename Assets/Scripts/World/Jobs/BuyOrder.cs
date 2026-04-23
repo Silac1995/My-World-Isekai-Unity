@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -5,7 +7,7 @@ using UnityEngine;
 /// Utilisé par les JobLogisticsManager et JobTransporter pour gérer l'économie.
 /// </summary>
 [System.Serializable]
-public class BuyOrder
+public class BuyOrder : MWI.Quests.IQuest
 {
     public ItemSO ItemToTransport { get; private set; }
     public int Quantity { get; private set; }
@@ -112,5 +114,85 @@ public class BuyOrder
         {
             ReservedItems.Remove(item);
         }
+    }
+
+    // === IQuest implementation ===
+
+    public string QuestId { get; private set; } = System.Guid.NewGuid().ToString("N");
+    public string OriginWorldId { get; set; } = string.Empty;
+    public string OriginMapId { get; set; } = string.Empty;
+    public Character Issuer { get; set; }
+    public MWI.Quests.QuestType Type => MWI.Quests.QuestType.Job;
+
+    public string Title => "Place Buy Order";
+    public string InstructionLine
+    {
+        get
+        {
+            string item = ItemToTransport != null ? ItemToTransport.ItemName : "<unknown>";
+            string source = Source != null ? Source.BuildingDisplayName : "<unknown>";
+            return $"Procure {Quantity} {item} from {source}.";
+        }
+    }
+    public string Description =>
+        $"Place a buy order at {(Source != null ? Source.BuildingDisplayName : "<unknown>")} for {Quantity} {(ItemToTransport != null ? ItemToTransport.ItemName : "<unknown>")}.";
+
+    public MWI.Quests.QuestState State
+    {
+        get
+        {
+            if (RemainingDays <= 0) return MWI.Quests.QuestState.Expired;
+            if (IsCompleted) return MWI.Quests.QuestState.Completed;
+            if (_contributors.Count >= MaxContributors) return MWI.Quests.QuestState.Full;
+            return MWI.Quests.QuestState.Open;
+        }
+    }
+    public bool IsExpired => RemainingDays <= 0;
+
+    public int TotalProgress => DeliveredQuantity;
+    public int Required => Quantity;
+    public int MaxContributors => 1;  // one transporter per buy order
+
+    private readonly List<Character> _contributors = new List<Character>();
+    private readonly Dictionary<string, int> _contribution = new Dictionary<string, int>();
+    public IReadOnlyList<Character> Contributors => _contributors;
+    public IReadOnlyDictionary<string, int> Contribution => _contribution;
+
+    private MWI.Quests.IQuestTarget _target;
+    public MWI.Quests.IQuestTarget Target
+    {
+        get
+        {
+            if (_target == null && Source != null) _target = new MWI.Quests.BuildingTarget(Source);
+            return _target;
+        }
+    }
+
+    public event Action<MWI.Quests.IQuest> OnStateChanged;
+    public event Action<MWI.Quests.IQuest, Character, int> OnProgressRecorded;
+
+    public bool TryJoin(Character character)
+    {
+        if (character == null || _contributors.Count >= MaxContributors || _contributors.Contains(character)) return false;
+        _contributors.Add(character);
+        OnStateChanged?.Invoke(this);
+        return true;
+    }
+    public bool TryLeave(Character character)
+    {
+        if (character == null) return false;
+        bool removed = _contributors.Remove(character);
+        if (removed) OnStateChanged?.Invoke(this);
+        return removed;
+    }
+    public void RecordProgress(Character character, int amount)
+    {
+        if (character == null || amount <= 0) return;
+        var id = character.CharacterId;
+        if (string.IsNullOrEmpty(id)) return;
+        _contribution.TryGetValue(id, out int prev);
+        _contribution[id] = prev + amount;
+        OnProgressRecorded?.Invoke(this, character, amount);
+        if (IsCompleted) OnStateChanged?.Invoke(this);
     }
 }
