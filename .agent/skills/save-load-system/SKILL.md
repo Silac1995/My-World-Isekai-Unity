@@ -131,6 +131,32 @@ GameLauncher handles spawning party NPCs from `CharacterProfileSaveData.partyMem
 - Reclaim interaction: abandoned NPC destroyed, portal copy stays
 - `FindByUUID()` prefers non-abandoned; `FindAbandonedByFormerLeader()` for reclaim
 
+## Wallet & WorkLog Persistence
+
+Two new `ICharacterSaveData<T>` implementations were added by the worker-wages-and-performance feature:
+
+| Subsystem | SaveKey | LoadPriority | DTO |
+|---|---|---|---|
+| `CharacterWallet` | `"CharacterWallet"` | `35` | `WalletSaveData` (list of `CurrencyBalanceEntry`) |
+| `CharacterWorkLog` | `"CharacterWorkLog"` | `65` | `WorkLogSaveData` (list of `WorkLogJobEntry` with `WorkPlaceSaveEntry` workplaces) |
+
+Auto-discovered by `CharacterDataCoordinator.GetComponentsInChildren<ICharacterSaveData>` — no explicit registration. Round-trip via `CharacterSaveDataHelper` (Newtonsoft) like all other subsystems.
+
+`CharacterWorkLog` only persists the **lifetime** career counter (`_careerByJob`). The transient per-shift counter and the active-shift end-time are NOT persisted — loading mid-shift is treated as a fresh start (the worker punches in again the next time their schedule fires).
+
+`JobAssignmentSaveEntry` was extended with four wage fields:
+
+```csharp
+public int currencyId;        // raw CurrencyId.Id
+public int pieceRate;
+public int minimumShiftWage;
+public int fixedShiftWage;
+```
+
+Backward-compatible — old saves without these fields deserialize to `0` / `CurrencyId.Default` and get re-seeded by `WageSystemService.SeedAssignmentDefaults` at next hire.
+
+See `.agent/skills/character-wallet/SKILL.md`, `.agent/skills/character-worklog/SKILL.md`, `.agent/skills/wage-system/SKILL.md`.
+
 ## File Locations
 - `Assets/Scripts/Character/SaveLoad/ICharacterSaveData.cs`
 - `Assets/Scripts/Character/SaveLoad/CharacterSaveDataBase.cs`
