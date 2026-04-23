@@ -276,8 +276,10 @@ public class DevSpawnModule : MonoBehaviour
             return;
         }
 
-        // If Space is held, the shortcut handles spawning on right-click — don't double-fire from armed left-click either.
+        // If Space is held, the Spawn shortcut handles the click; if Ctrl is held the Select
+        // shortcut owns the click — either way, don't let the armed Spawn loop double-fire.
         if (Input.GetKey(KeyCode.Space)) return;
+        if (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)) return;
 
         if (!Input.GetMouseButtonDown(0)) return;
 
@@ -295,7 +297,7 @@ public class DevSpawnModule : MonoBehaviour
     // ─── Shortcut ─────────────────────────────────────────────────────
 
     /// <summary>
-    /// Space held + Right-Click anywhere on the environment spawns at the cursor using the panel's
+    /// Space held + Left-Click anywhere on the environment spawns at the cursor using the panel's
     /// current configuration (race / personality / combat styles / count). Skipped when a text input
     /// field has focus so typing spaces in the Count field doesn't trigger a spawn.
     /// </summary>
@@ -303,14 +305,16 @@ public class DevSpawnModule : MonoBehaviour
     {
         if (IsTextInputFocused()) return;
         if (!Input.GetKey(KeyCode.Space)) return;
-        if (!Input.GetMouseButtonDown(1)) return;
+        // If Ctrl is also held, the Select shortcut owns the click (mutually exclusive).
+        if (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)) return;
+        if (!Input.GetMouseButtonDown(0)) return;
 
         if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
             return;
 
         if (TryRaycastEnvironment(out Vector3 hitPoint))
         {
-            Debug.Log("<color=cyan>[DevSpawn]</color> Space+RMB shortcut — spawning at cursor.");
+            Debug.Log("<color=cyan>[DevSpawn]</color> Space+LMB shortcut — spawning at cursor.");
             SpawnAt(hitPoint);
         }
     }

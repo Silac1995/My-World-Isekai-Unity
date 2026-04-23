@@ -210,8 +210,10 @@ public class DevSelectionModule : MonoBehaviour
         if (DevModeManager.Instance.ActiveClickConsumer != this) return;
         if (!_layerMaskResolved) return;
 
-        // If Ctrl is held the shortcut handles the click; don't double-fire here.
+        // If Ctrl is held the Select shortcut handles the click; if Space is held the Spawn
+        // shortcut owns the click — either way, don't let the armed Select loop double-fire.
         if (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)) return;
+        if (Input.GetKey(KeyCode.Space)) return;
 
         if (!Input.GetMouseButtonDown(0)) return;
 
@@ -254,9 +256,11 @@ public class DevSelectionModule : MonoBehaviour
             if (hadSomething) Debug.Log("<color=cyan>[DevSelect]</color> ESC — cleared");
         }
 
-        // Ctrl + Left-Click: select under cursor.
+        // Ctrl + Left-Click: select under cursor. If Space is also held, the Spawn shortcut owns
+        // the click — keep the two mutually exclusive so exactly one action fires per click.
         bool ctrlHeld = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
-        if (ctrlHeld && Input.GetMouseButtonDown(0))
+        bool spaceHeld = Input.GetKey(KeyCode.Space);
+        if (ctrlHeld && !spaceHeld && Input.GetMouseButtonDown(0))
         {
             if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject()) return;
             if (!_layerMaskResolved) return;
