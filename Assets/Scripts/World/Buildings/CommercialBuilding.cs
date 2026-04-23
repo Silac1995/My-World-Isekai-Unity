@@ -515,6 +515,51 @@ public abstract class CommercialBuilding : Building
     /// </summary>
     public virtual void WorkerEndingShift(Character worker)
     {
+        // Wage system hook: finalize WorkLog shift + compute & pay wage.
+        // Mirrors WorkerStartingShift's lack of a server-authority guard — the wallet's
+        // own AddCoins guard is the defense in depth (wage payment will no-op on clients).
+        if (worker != null)
+        {
+            // Look up the assignment for this worker at this building.
+            // NOTE v1 limitation: if a worker holds multiple roles at the same building,
+            // only the FIRST matching assignment gets paid this shift.
+            var charJob = worker.CharacterJob;
+            JobAssignment matchingAssignment = null;
+            if (charJob != null)
+            {
+                foreach (var assn in charJob.ActiveJobs)
+                {
+                    if (assn.Workplace == this && assn.AssignedJob != null)
+                    {
+                        matchingAssignment = assn;
+                        break;
+                    }
+                }
+            }
+
+            if (matchingAssignment != null)
+            {
+                var workLog = worker.CharacterWorkLog;
+                var jobType = matchingAssignment.AssignedJob.Type;
+                var summary = workLog != null
+                    ? workLog.FinalizeShift(jobType, GetBuildingIdForWorklog())
+                    : new ShiftSummary();
+
+                // Compute hours worked and scheduled length.
+                float scheduledShiftHours = ComputeScheduledShiftHours(matchingAssignment);
+                float hoursWorked = ComputeHoursWorked(worker);
+
+                var paymentCurrency = matchingAssignment.Currency.Id == 0
+                    ? MWI.Economy.CurrencyId.Default
+                    : matchingAssignment.Currency;
+
+                WageSystemService.Instance?.ComputeAndPayShiftWage(
+                    worker, matchingAssignment, summary, scheduledShiftHours, hoursWorked, paymentCurrency);
+            }
+
+            _punchInTimeByWorker.Remove(worker);
+        }
+
         if (worker != null && _activeWorkersOnShift.Contains(worker))
         {
             _activeWorkersOnShift.Remove(worker);
@@ -858,5 +903,37 @@ public abstract class CommercialBuilding : Building
     private string GetBuildingDisplayNameForWorklog()
     {
         return name;
+    }
+
+    /// <summary>
+    /// Sum of (endHour - startHour) across the assignment's WorkScheduleEntries.
+    /// Returns 8f as a defensive default if no entries are present.
+    /// </summary>
+    private float ComputeScheduledShiftHours(JobAssignment assignment)
+    {
+        if (assignment == null || assignment.WorkScheduleEntries == null || assignment.WorkScheduleEntries.Count == 0)
+            return 8f;
+        int totalHours = 0;
+        for (int i = 0; i < assignment.WorkScheduleEntries.Count; i++)
+        {
+            var entry = assignment.WorkScheduleEntries[i];
+            int duration = entry.endHour - entry.startHour;
+            if (duration > 0) totalHours += duration;
+        }
+        return Mathf.Max(0.0001f, totalHours);
+    }
+
+    /// <summary>
+    /// (now - punchInTime) in hours, capped at scheduled-end-of-shift (no overtime credit
+    /// for the minimum wage component — handled also by WageCalculator clamp01, but capping
+    /// here keeps the hours-worked field truthful for diagnostics).
+    /// </summary>
+    private float ComputeHoursWorked(Character worker)
+    {
+        if (!_punchInTimeByWorker.TryGetValue(worker, out float punchInHours)) return 0f;
+        float nowHours = MWI.Time.TimeManager.Instance != null
+            ? MWI.Time.TimeManager.Instance.CurrentTime01 * 24f
+            : punchInHours;
+        return Mathf.Max(0f, nowHours - punchInHours);
     }
 }
