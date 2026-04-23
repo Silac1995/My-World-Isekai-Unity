@@ -120,6 +120,12 @@ public class CharacterJob : CharacterSystem, ICharacterSaveData<JobSaveData>
             // Injecter les horaires de travail dans le schedule du joueur
             InjectWorkSchedule(newEntries);
 
+            // Seed default wage rates from WageSystemService (Task 18). Null-conditional in case
+            // the service isn't in the scene yet (early-init / test scenes — Task 19 wires it up).
+            // Save-restore path (TryResolvePendingJobs) splices saved wages AFTER TakeJob returns,
+            // so unconditional seeding here is safe — restored wages overwrite the defaults.
+            WageSystemService.Instance?.SeedAssignmentDefaults(assignment);
+
             Debug.Log($"<color=yellow>[CharacterJob]</color> {_character.CharacterName} a pris le poste de {job.JobTitle} à {building.BuildingName}.");
             return true;
         }
