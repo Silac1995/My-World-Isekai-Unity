@@ -3,7 +3,7 @@ type: system
 title: "Dev Mode"
 tags: [debug, host-only, dev-tools, tier-2]
 created: 2026-04-21
-updated: 2026-04-21
+updated: 2026-04-23
 sources: []
 related:
   - "[[engine-plumbing]]"
@@ -12,6 +12,9 @@ related:
   - "[[character]]"
   - "[[character-combat]]"
   - "[[character-skills]]"
+  - "[[character-needs]]"
+  - "[[character-wallet]]"
+  - "[[character-work-log]]"
   - "[[player-ui]]"
   - "[[network]]"
   - "[[kevin]]"
@@ -27,6 +30,9 @@ depends_on:
   - "[[character]]"
   - "[[character-combat]]"
   - "[[character-skills]]"
+  - "[[character-needs]]"
+  - "[[character-wallet]]"
+  - "[[character-work-log]]"
   - "[[network]]"
 depended_on_by: []
 ---
@@ -34,7 +40,7 @@ depended_on_by: []
 # Dev Mode
 
 ## Summary
-Host-only developer/god-mode overlay that layers a togglable admin panel and input-gate on top of the normal gameplay loop. Activated via `F3` in editor/dev builds or `/devmode on` in release builds; clients never see it take effect. Ships two modules today — **Spawn** (click-to-spawn fully configured NPCs) and **Select** (click-to-select a Character and run `IDevAction` plug-ins, starting with "Assign Building as Owner"). Input gating keeps WASD movement live (at god-mode speed) while suppressing right-click move, TAB target, Space attack, and E interact so the host can fly around and poke at state without fighting the player controller. For the procedural how-to (adding modules, adding actions, UI wiring), follow [.agent/skills/dev-mode/SKILL.md](../../.agent/skills/dev-mode/SKILL.md).
+Host-only developer/god-mode overlay that layers a togglable admin panel and input-gate on top of the normal gameplay loop. Activated via `F3` in editor/dev builds or `/devmode on` in release builds; clients never see it take effect. Ships three modules — **Spawn** (click-to-spawn fully configured NPCs), **Select** (click-to-select a Character and run `IDevAction` plug-ins), and **Inspect** (read-only runtime inspection of the selected `InteractableObject`, with a 10-tab [[character]] inspector). Input gating keeps WASD movement live (at god-mode speed) while suppressing right-click move, TAB target, Space attack, and E interact. For the procedural how-to (adding modules, adding actions, adding inspector views and sub-tabs), follow [.agent/skills/debug-tools/SKILL.md](../../.agent/skills/debug-tools/SKILL.md) and [.agent/skills/dev-mode/SKILL.md](../../.agent/skills/dev-mode/SKILL.md).
 
 ## Purpose
 Developers and hosts need to iterate on content and reproduce bugs without restarting sessions: spawn NPCs with hand-picked personalities, traits, combat styles, and skills; click to assign a Character as owner of a building; eventually grant items, teleport, pause sim, and edit live state. Before this system existed, the only options were scripted spawn buttons in [[engine-plumbing|debug-script]] (flat UI, no config), save-file editing, or full session restarts. Dev Mode consolidates these into a single host-authoritative tool with a plug-in contract so new modules can be added without touching the core.
@@ -49,6 +55,7 @@ Release safety is explicit: the whole system is locked behind `#if UNITY_EDITOR 
 - Hosts a tab-based panel prefab (`DevModePanel`) lazy-loaded from `Resources/UI/DevModePanel`; modules live as child GameObjects and self-register by subscribing to `OnDevModeChanged`.
 - Routes `/`-prefixed chat input through `DevChatCommands.Handle` and rejects non-host callers with a warning.
 - Provides the `IDevAction` plug-in contract for Select-tab actions (`Label`, `IsAvailable`, `Execute`).
+- Provides read-only runtime inspection of the selected `InteractableObject` (Inspect tab) via the `IInspectorView` dispatch contract and `CharacterInspectorView` with 10 sub-tabs.
 
 **Non-responsibilities** (common misconceptions):
 - Not responsible for save/load — dev-mode state is runtime-only, never serialized. Persistence of spawned NPCs is handled by [[save-load]] the same way any other runtime NPC is persisted.
@@ -65,9 +72,25 @@ Release safety is explicit: the whole system is locked behind `#if UNITY_EDITOR 
 | [DevChatCommands.cs](../../Assets/Scripts/Debug/DevMode/DevChatCommands.cs) | Static `Handle(rawInput)` parsing `/devmode on\|off`. Host-only; clients get a warning. |
 | [DevSpawnModule.cs](../../Assets/Scripts/Debug/DevMode/Modules/DevSpawnModule.cs) | Spawn tab. Configures race/prefab/personality/trait/combat-styles/skills and click-spawns on the `Environment` layer. |
 | [DevSpawnRow.cs](../../Assets/Scripts/Debug/DevMode/Modules/DevSpawnRow.cs) | Reusable multi-entry row (dropdown + level + remove button) for combat styles and skills. |
-| [DevSelectionModule.cs](../../Assets/Scripts/Debug/DevMode/Modules/DevSelectionModule.cs) | Select tab. Raycasts against the `RigidBody` layer and exposes `SelectedCharacter` + `OnSelectionChanged`. |
+| [DevSelectionModule.cs](../../Assets/Scripts/Debug/DevMode/Modules/DevSelectionModule.cs) | Select tab. Generalized from Character-only to `InteractableObject`. Exposes `SelectedInteractable` + `OnInteractableSelectionChanged` (new) and `SelectedCharacter` + `OnSelectionChanged` (back-compat). Field `_characterLayerMask` renamed `_selectableLayerMask` with `[FormerlySerializedAs]`. |
 | [IDevAction.cs](../../Assets/Scripts/Debug/DevMode/Modules/Actions/IDevAction.cs) | Plug-in interface for Select-tab actions (`Label`, `IsAvailable`, `Execute`). |
 | [DevActionAssignBuilding.cs](../../Assets/Scripts/Debug/DevMode/Modules/Actions/DevActionAssignBuilding.cs) | First action. Claims the click slot and dispatches polymorphically to `CommercialBuilding.SetOwner` or `ResidentialBuilding.SetOwner`. |
+| [IInspectorView.cs](../../Assets/Scripts/Debug/DevMode/Inspect/IInspectorView.cs) | Dispatch contract for Inspect tab: `CanInspect(InteractableObject)`, `SetTarget(InteractableObject)`, `Clear()`. |
+| [DevInspectModule.cs](../../Assets/Scripts/Debug/DevMode/Inspect/DevInspectModule.cs) | Inspect tab root. Auto-discovers `IInspectorView` children at `Awake`, activates first matching view on selection change, shows placeholder when none match. |
+| [CharacterInspectorView.cs](../../Assets/Scripts/Debug/DevMode/Inspect/CharacterInspectorView.cs) | `IInspectorView` for `CharacterInteractable`. Owns 10 `SubTabEntry` references; `Update()` refreshes only the active sub-tab. |
+| [CharacterAIDebugFormatter.cs](../../Assets/Scripts/Debug/DevMode/Inspect/CharacterAIDebugFormatter.cs) | Static helpers for AI debug strings. Shared by `UI_CharacterDebugScript` and `AISubTab`. `FormatAll(Character)` composes all helpers. |
+| [CharacterSubTab.cs](../../Assets/Scripts/Debug/DevMode/Inspect/SubTabs/CharacterSubTab.cs) | Abstract base. `Refresh(Character)` wraps `RenderContent` in try/catch; `Clear()` resets TMP. |
+| [IdentitySubTab.cs](../../Assets/Scripts/Debug/DevMode/Inspect/SubTabs/IdentitySubTab.cs) | Name / Gender / Age / Race / Archetype / CharacterId / OriginWorld + state flags. |
+| [StatsSubTab.cs](../../Assets/Scripts/Debug/DevMode/Inspect/SubTabs/StatsSubTab.cs) | CharacterCombatLevel + all 18 CharacterStats fields. |
+| [SkillsTraitsSubTab.cs](../../Assets/Scripts/Debug/DevMode/Inspect/SubTabs/SkillsTraitsSubTab.cs) | CharacterTraits personality + CharacterSkills.Skills. |
+| [NeedsSubTab.cs](../../Assets/Scripts/Debug/DevMode/Inspect/SubTabs/NeedsSubTab.cs) | CharacterNeeds.AllNeeds with urgency + color coding. |
+| [AISubTab.cs](../../Assets/Scripts/Debug/DevMode/Inspect/SubTabs/AISubTab.cs) | Delegates to `CharacterAIDebugFormatter.FormatAll`. |
+| [CombatSubTab.cs](../../Assets/Scripts/Debug/DevMode/Inspect/SubTabs/CombatSubTab.cs) | CharacterCombat state + CharacterStatusManager.ActiveEffects. |
+| [SocialSubTab.cs](../../Assets/Scripts/Debug/DevMode/Inspect/SubTabs/SocialSubTab.cs) | CharacterRelation.Relationships + CharacterCommunity + CharacterMentorship. |
+| [EconomySubTab.cs](../../Assets/Scripts/Debug/DevMode/Inspect/SubTabs/EconomySubTab.cs) | CharacterWallet.GetAllBalances() + CharacterJob + CharacterWorkLog.GetAllHistory(). |
+| [KnowledgeSubTab.cs](../../Assets/Scripts/Debug/DevMode/Inspect/SubTabs/KnowledgeSubTab.cs) | CharacterBookKnowledge + CharacterSchedule (ToString() placeholders; follow-up). |
+| [InventorySubTab.cs](../../Assets/Scripts/Debug/DevMode/Inspect/SubTabs/InventorySubTab.cs) | CharacterEquipment (ToString() placeholder; follow-up). |
+| [UI_CharacterDebugScript.cs](../../Assets/Scripts/UI/WorldUI/UI_CharacterDebugScript.cs) | Legacy per-entity overlay. Formatting logic replaced with `CharacterAIDebugFormatter` calls (zero behaviour change). |
 | `Assets/Resources/UI/DevModePanel.prefab` | Panel prefab (tab buttons + `ContentRoot` + module children). |
 | `Assets/Resources/UI/DevSpawnRow.prefab` | Row prefab for combat-style / skill entries. |
 
@@ -82,7 +105,27 @@ Release safety is explicit: the whole system is locked behind `#if UNITY_EDITOR 
 - `DevChatCommands.Handle(string rawInput)` — entry point from [[player-ui|UI_ChatBar]] for `/`-prefixed input.
 - `IDevAction` interface — plug-in contract for Select-tab actions. Action is a MonoBehaviour under `SelectTab/ActionsContainer`.
 
-Follow [.agent/skills/dev-mode/SKILL.md §6–§7](../../.agent/skills/dev-mode/SKILL.md) for the module-authoring recipe and the `IDevAction` action recipe. The wiki page describes shape and intent; the SKILL.md describes the steps.
+**DevSelectionModule (additive surface — Select tab + Inspect tab):**
+- `SelectedInteractable : InteractableObject` — current interactable (any type).
+- `OnInteractableSelectionChanged : Action<InteractableObject>` — fires on any change. Subscribed by `DevInspectModule`.
+- `SetSelectedInteractable(InteractableObject)` — replaces selection.
+- `SelectedCharacter`, `OnSelectionChanged`, `SetSelectedCharacter` — back-compat paths preserved for existing `IDevAction` consumers.
+
+**Inspect tab — `IInspectorView` contract:**
+- `bool CanInspect(InteractableObject target)` — returns true if this view handles the target type.
+- `void SetTarget(InteractableObject target)` — activates and populates the view.
+- `void Clear()` — resets to placeholder state.
+
+**Character sub-tabs — `CharacterSubTab`:**
+- `void Refresh(Character c)` — public entry point; wraps `RenderContent` in try/catch.
+- `void Clear()` — virtual; resets TMP_Text to placeholder.
+- `protected abstract string RenderContent(Character c)` — override per category.
+
+**Shared AI strings — `CharacterAIDebugFormatter`:**
+- `string FormatAll(Character c)` — composes all helpers into one debug string. Called by `AISubTab` and `UI_CharacterDebugScript`.
+- Individual helpers: `FormatAction`, `FormatBehaviourStack`, `FormatInteraction`, `FormatAgent`, `FormatBusyReason`, `FormatWorkPhaseGoap`, `FormatBt`, `FormatLifeGoap`.
+
+For extension recipes (adding a new `IInspectorView`, adding a new `CharacterSubTab`, module authoring, `IDevAction`), see [.agent/skills/debug-tools/SKILL.md](../../.agent/skills/debug-tools/SKILL.md) and [.agent/skills/dev-mode/SKILL.md](../../.agent/skills/dev-mode/SKILL.md).
 
 ## Data flow
 
@@ -127,6 +170,19 @@ Armed Select toggle + click on RigidBody layer
   → Owner replicates via Room._ownerIds NetworkList<FixedString64Bytes>
 ```
 
+**Click-to-inspect** (Inspect module):
+```
+Player clicks on an InteractableObject
+  → DevSelectionModule resolves InteractableObject from raycast
+  → OnInteractableSelectionChanged(io) fires
+  → DevInspectModule.HandleSelection(io)
+  → Iterates IInspectorView children via CanInspect(io)
+  → First match: SetTarget(io); others: Clear() + SetActive(false)
+  → No match: placeholder GO shown
+  → CharacterInspectorView: derives Character, activates sub-tab 0 by default
+  → Update(): active CharacterSubTab.Refresh(character) every frame
+```
+
 **Authority:** every mutation is host-only (guarded by `IsServer` on the underlying APIs). Clients only observe results through existing networked channels — they never run dev-mode code paths.
 
 ## Dependencies
@@ -136,9 +192,12 @@ Armed Select toggle + click on RigidBody layer
 - [[engine-plumbing|camera-follow]] — reads `SuppressPlayerInput` to drop the zoom clamp and switch to `LerpUnclamped`.
 - [[commercial-building]] — `SetOwner(character, null)` for the "Assign Building" action.
 - [[building|ResidentialBuilding]] — `SetOwner(character)` for the same action (polymorphic dispatch from the action).
-- [[character]] — the entity being selected and mutated. Selection raycasts against the `RigidBody` layer and walks up to `GetComponentInParent<Character>()`.
-- [[character-combat]] — `UnlockCombatStyle(style, level)` overload used by Spawn module.
-- [[character-skills]] — its `NetworkList<NetworkSkillSyncData>` handles per-level skill replication for dev-spawned NPCs.
+- [[character]] — the entity being selected and mutated. Selection raycasts against the `RigidBody` layer and walks up to `GetComponentInParent<Character>()`. The Inspect tab reads all character subsystems (read-only).
+- [[character-combat]] — `UnlockCombatStyle(style, level)` overload used by Spawn module; `CombatSubTab` reads combat state for display.
+- [[character-skills]] — its `NetworkList<NetworkSkillSyncData>` handles per-level skill replication for dev-spawned NPCs; `SkillsTraitsSubTab` reads skills for display.
+- [[character-needs]] — `NeedsSubTab` reads `CharacterNeeds.AllNeeds` for display.
+- [[character-wallet]] — `EconomySubTab` reads `CharacterWallet.GetAllBalances()` for display.
+- [[character-work-log]] — `EconomySubTab` reads `CharacterWorkLog.GetAllHistory()` for display.
 - [[network]] — host-only gating checks `NetworkManager.Singleton.IsServer`; `Room._ownerIds` NetworkList is where ownership propagates.
 - [[player-ui|UI_ChatBar]] — routes `/`-prefixed chat to `DevChatCommands.Handle`.
 
@@ -178,23 +237,36 @@ No gameplay system declares a hard dependency on dev mode — it is strictly add
 - [ ] Add "click building first, then assign a character to it" reverse flow.
 - [ ] Multi-character selection.
 - [ ] Follow-up modules: Freecam, Sim-pause, Item grant, Teleport, Time-of-day slider, Assign Job.
+- [ ] Wire the Inspect tab prefab (Task 17) — `DevInspectModule`, `CharacterInspectorView`, 10 sub-tab GOs.
+- [ ] Refine `KnowledgeSubTab` and `InventorySubTab` once `CharacterBookKnowledge`, `CharacterSchedule`, and `CharacterEquipment` APIs are stabilized.
+- [ ] Add `IInspectorView` implementations for WorldItem and Building entity types.
 
 ## Change log
 - 2026-04-21 — Initial page. Documents F3/chat activation, input gating, click arbitration, Spawn + Select modules, `IDevAction` contract, `DevActionAssignBuilding`, god-mode WASD speed + unbounded zoom. — Claude / [[kevin]]
+- 2026-04-23 — Added Inspect tab (IInspectorView + CharacterInspectorView + 10 sub-tabs); generalized DevSelectionModule to InteractableObject; extracted CharacterAIDebugFormatter; updated Key classes, Public API, Data flow, Dependencies, Open questions, Sources. — claude
 
 ## Sources
 - [DevModeManager.cs](../../Assets/Scripts/Debug/DevMode/DevModeManager.cs) — singleton, state, events.
 - [DevModePanel.cs](../../Assets/Scripts/Debug/DevMode/DevModePanel.cs) — panel root + tab registry.
 - [DevChatCommands.cs](../../Assets/Scripts/Debug/DevMode/DevChatCommands.cs) — `/devmode` parser.
 - [DevSpawnModule.cs](../../Assets/Scripts/Debug/DevMode/Modules/DevSpawnModule.cs) — click-to-spawn.
-- [DevSelectionModule.cs](../../Assets/Scripts/Debug/DevMode/Modules/DevSelectionModule.cs) — click-to-select.
+- [DevSelectionModule.cs](../../Assets/Scripts/Debug/DevMode/Modules/DevSelectionModule.cs) — click-to-select; generalized to `InteractableObject`.
 - [IDevAction.cs](../../Assets/Scripts/Debug/DevMode/Modules/Actions/IDevAction.cs) — plug-in contract.
 - [DevActionAssignBuilding.cs](../../Assets/Scripts/Debug/DevMode/Modules/Actions/DevActionAssignBuilding.cs) — first shipping action.
+- [IInspectorView.cs](../../Assets/Scripts/Debug/DevMode/Inspect/IInspectorView.cs) — Inspect dispatch contract.
+- [DevInspectModule.cs](../../Assets/Scripts/Debug/DevMode/Inspect/DevInspectModule.cs) — Inspect tab dispatcher.
+- [CharacterInspectorView.cs](../../Assets/Scripts/Debug/DevMode/Inspect/CharacterInspectorView.cs) — 10-tab character inspector view.
+- [CharacterAIDebugFormatter.cs](../../Assets/Scripts/Debug/DevMode/Inspect/CharacterAIDebugFormatter.cs) — shared AI debug string helpers.
+- [CharacterSubTab.cs](../../Assets/Scripts/Debug/DevMode/Inspect/SubTabs/CharacterSubTab.cs) — abstract sub-tab base.
+- `Assets/Scripts/Debug/DevMode/Inspect/SubTabs/` — IdentitySubTab, StatsSubTab, SkillsTraitsSubTab, NeedsSubTab, AISubTab, CombatSubTab, SocialSubTab, EconomySubTab, KnowledgeSubTab, InventorySubTab.
+- [UI_CharacterDebugScript.cs](../../Assets/Scripts/UI/WorldUI/UI_CharacterDebugScript.cs) — legacy overlay; now delegates AI strings to `CharacterAIDebugFormatter`.
 - [SpawnManager.cs](../../Assets/Scripts/SpawnManager.cs) — extended spawn API consumed by Spawn module.
 - [PlayerController.cs](../../Assets/Scripts/Character/CharacterControllers/PlayerController.cs) — input gate (WASD kept live at god-mode speed; action inputs suppressed).
 - [PlayerInteractionDetector.cs](../../Assets/Scripts/Character/PlayerInteractionDetector.cs) — E-key gate.
 - [CameraFollow.cs](../../Assets/Scripts/CameraFollow.cs) — unbounded zoom when dev mode is active.
 - [CommercialBuilding.cs](../../Assets/Scripts/World/Buildings/CommercialBuilding.cs) — `SetOwner` target for first action; `_ownerIds` NetworkList replication.
-- [.agent/skills/dev-mode/SKILL.md](../../.agent/skills/dev-mode/SKILL.md) — procedural how-to (module authoring, action authoring, UI wiring).
+- [.agent/skills/debug-tools/SKILL.md](../../.agent/skills/debug-tools/SKILL.md) — procedural source of truth: Inspect tab, IInspectorView, CharacterSubTab, CharacterAIDebugFormatter, and legacy script patterns.
+- [.agent/skills/dev-mode/SKILL.md](../../.agent/skills/dev-mode/SKILL.md) — procedural how-to (module authoring, action authoring, Spawn + Select UI wiring).
 - [.claude/agents/debug-tools-architect.md](../../.claude/agents/debug-tools-architect.md) — specialist agent for dev-mode + other debug infra.
 - 2026-04-21 conversation with [[kevin]] — god-mode movement speed (17), unbounded zoom, `RigidBody` layer for character picks, commercial-building owner replication fix.
+- 2026-04-23 implementation — Inspect tab (16 commits, 76e470e–8a1a90f): IInspectorView, DevInspectModule, CharacterInspectorView, 10 CharacterSubTab subclasses, CharacterAIDebugFormatter, DevSelectionModule generalization.
