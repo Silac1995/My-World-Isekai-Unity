@@ -3,12 +3,14 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
+using UnityEngine.Serialization;
 using UnityEngine.UI;
 
 /// <summary>
-/// Select tab of the dev-mode panel. Owns cross-cutting selection state (currently just
-/// SelectedCharacter) and handles the click-to-select loop for characters. Actions attach
-/// as children of the actions container and consume this module via the IDevAction contract.
+/// Select tab of the dev-mode panel. Owns cross-cutting selection state and the click-to-select loop.
+/// Holds a general <see cref="InteractableObject"/> selection; <see cref="SelectedCharacter"/> is a
+/// back-compat convenience populated whenever the interactable resolves to a Character. All existing
+/// <c>IDevAction</c> implementations that depend on <see cref="SelectedCharacter"/> keep working.
 /// </summary>
 public class DevSelectionModule : MonoBehaviour
 {
@@ -18,13 +20,18 @@ public class DevSelectionModule : MonoBehaviour
     [SerializeField] private Button _clearButton;
 
     [Header("Raycast")]
-    [Tooltip("Layer mask for character picks. Defaults to 'RigidBody' at runtime if left at zero.")]
-    [SerializeField] private LayerMask _characterLayerMask;
+    [Tooltip("Layer mask for picks. Defaults to 'RigidBody' at runtime if left at zero. Widen here when adding WorldItem/Building inspectors later.")]
+    [FormerlySerializedAs("_characterLayerMask")]
+    [SerializeField] private LayerMask _selectableLayerMask;
     private bool _layerMaskResolved;
 
+    public InteractableObject SelectedInteractable { get; private set; }
     public Character SelectedCharacter { get; private set; }
 
-    /// <summary>Fires whenever SelectedCharacter changes (including to/from null).</summary>
+    /// <summary>Fires whenever <see cref="SelectedInteractable"/> changes (including to/from null).</summary>
+    public event Action<InteractableObject> OnInteractableSelectionChanged;
+
+    /// <summary>Fires whenever <see cref="SelectedCharacter"/> changes. Kept for back-compat with existing IDevActions.</summary>
     public event Action OnSelectionChanged;
 
     private void Start()
@@ -48,8 +55,6 @@ public class DevSelectionModule : MonoBehaviour
     {
         SceneManager.sceneUnloaded -= HandleSceneUnloaded;
     }
-
-    // ─── Wiring ───────────────────────────────────────────────────────
 
     private void WireListeners()
     {
@@ -87,9 +92,8 @@ public class DevSelectionModule : MonoBehaviour
     {
         if (!isEnabled)
         {
-            // Dev mode turned off — disarm and clear selection so we don't carry stale state.
             if (_armedToggle != null && _armedToggle.isOn) _armedToggle.isOn = false;
-            if (SelectedCharacter != null) ClearSelection();
+            if (SelectedInteractable != null) ClearSelection();
         }
     }
 
@@ -97,48 +101,87 @@ public class DevSelectionModule : MonoBehaviour
     {
         if (DevModeManager.Instance == null) return;
         if (DevModeManager.Instance.ActiveClickConsumer == this) return;
-        // Another module claimed the click stream — disarm our toggle.
         if (_armedToggle != null && _armedToggle.isOn) _armedToggle.isOn = false;
     }
 
     private void HandleSceneUnloaded(Scene _)
     {
-        if (SelectedCharacter != null) ClearSelection();
+        if (SelectedInteractable != null) ClearSelection();
     }
 
     // ─── Public API ───────────────────────────────────────────────────
 
+    /// <summary>General entry point. Accepts any InteractableObject; derives SelectedCharacter automatically.</summary>
+    public void SetSelectedInteractable(InteractableObject interactable)
+    {
+        if (SelectedInteractable == interactable) return;
+
+        SelectedInteractable = interactable;
+        Character derived = null;
+        if (interactable is CharacterInteractable ci)
+        {
+            derived = ci.Character;
+        }
+        UpdateDerivedCharacter(derived);
+        RefreshLabel();
+        OnInteractableSelectionChanged?.Invoke(SelectedInteractable);
+    }
+
+    /// <summary>Back-compat convenience. Prefer <see cref="SetSelectedInteractable"/>.</summary>
     public void SetSelectedCharacter(Character c)
     {
-        if (SelectedCharacter == c) return;
-        SelectedCharacter = c;
-        RefreshLabel();
-        OnSelectionChanged?.Invoke();
+        if (c == null) { ClearSelection(); return; }
+        var interactable = c.GetComponentInChildren<CharacterInteractable>();
+        if (interactable == null)
+        {
+            // No CharacterInteractable on this Character — fall back to direct-character selection.
+            if (SelectedCharacter == c) return;
+            bool interactableChanged = SelectedInteractable != null;
+            SelectedInteractable = null;
+            UpdateDerivedCharacter(c);
+            RefreshLabel();
+            if (interactableChanged) OnInteractableSelectionChanged?.Invoke(null);
+            return;
+        }
+        SetSelectedInteractable(interactable);
     }
 
     public void ClearSelection()
     {
-        if (SelectedCharacter == null)
-        {
-            RefreshLabel();
-            return;
-        }
-        SelectedCharacter = null;
+        bool hadSomething = SelectedInteractable != null || SelectedCharacter != null;
+        SelectedInteractable = null;
+        UpdateDerivedCharacter(null);
         RefreshLabel();
+        if (hadSomething) OnInteractableSelectionChanged?.Invoke(null);
+    }
+
+    private void UpdateDerivedCharacter(Character c)
+    {
+        if (SelectedCharacter == c) return;
+        SelectedCharacter = c;
         OnSelectionChanged?.Invoke();
     }
 
     private void RefreshLabel()
     {
         if (_selectedLabel == null) return;
-        _selectedLabel.text = SelectedCharacter != null
-            ? $"Selected: {SelectedCharacter.CharacterName}"
-            : "Selected: —";
+        if (SelectedCharacter != null)
+        {
+            _selectedLabel.text = $"Selected: {SelectedCharacter.CharacterName}";
+        }
+        else if (SelectedInteractable != null)
+        {
+            _selectedLabel.text = $"Selected: {SelectedInteractable.gameObject.name}";
+        }
+        else
+        {
+            _selectedLabel.text = "Selected: —";
+        }
     }
 
     private void ResolveLayerMask()
     {
-        if (_characterLayerMask.value != 0)
+        if (_selectableLayerMask.value != 0)
         {
             _layerMaskResolved = true;
             return;
@@ -151,11 +194,9 @@ public class DevSelectionModule : MonoBehaviour
             _layerMaskResolved = false;
             return;
         }
-        _characterLayerMask = 1 << layer;
+        _selectableLayerMask = 1 << layer;
         _layerMaskResolved = true;
     }
-
-    // ─── Click loop ───────────────────────────────────────────────────
 
     private void Update()
     {
@@ -185,21 +226,31 @@ public class DevSelectionModule : MonoBehaviour
         }
 
         Ray ray = cam.ScreenPointToRay(Input.mousePosition);
-        if (!Physics.Raycast(ray, out RaycastHit hit, 500f, _characterLayerMask))
+        if (!Physics.Raycast(ray, out RaycastHit hit, 500f, _selectableLayerMask))
         {
-            Debug.LogWarning("<color=orange>[DevSelect]</color> Click missed the RigidBody layer.");
+            Debug.LogWarning("<color=orange>[DevSelect]</color> Click missed the selectable layer.");
+            return;
+        }
+
+        // General resolution: prefer an InteractableObject in the parent chain; fall back to a direct Character hit.
+        InteractableObject interactable = hit.collider.GetComponentInParent<InteractableObject>();
+        if (interactable != null)
+        {
+            SetSelectedInteractable(interactable);
+            _armedToggle.isOn = false;
+            Debug.Log($"<color=cyan>[DevSelect]</color> Selected interactable: {interactable.gameObject.name}");
             return;
         }
 
         Character c = hit.collider.GetComponentInParent<Character>();
-        if (c == null)
+        if (c != null)
         {
-            Debug.LogWarning("<color=orange>[DevSelect]</color> RigidBody hit but no Character component found in parent chain.");
+            SetSelectedCharacter(c);
+            _armedToggle.isOn = false;
+            Debug.Log($"<color=cyan>[DevSelect]</color> Selected character: {c.CharacterName}");
             return;
         }
 
-        SetSelectedCharacter(c);
-        _armedToggle.isOn = false;
-        Debug.Log($"<color=cyan>[DevSelect]</color> Selected: {c.CharacterName}");
+        Debug.LogWarning("<color=orange>[DevSelect]</color> Hit found no InteractableObject or Character in the parent chain.");
     }
 }
