@@ -169,3 +169,11 @@ The logistics cycle is also the credit pipeline that feeds the wage system. Each
 2026-04-23 — Added Worker Performance Hooks section documenting transporter / harvester / crafter unit-of-work credit into `CharacterWorkLog` and the dormant `IStockProvider` deficit cap on `HarvestingBuilding`.
 
 2026-04-21 — Layers A + B + C landed: `IStockProvider` contract, `CraftingBuilding._inputStockTargets` autonomous restock, pluggable `LogisticsPolicy` SO (`MinStock` / `ReorderPoint` / `JustInTime`), three-component facade split (`LogisticsOrderBook` / `LogisticsTransportDispatcher` / `LogisticsStockEvaluator`), `LogLogisticsFlow` diagnostics toggle, missing-transporter now `LogError`, Editor `Capability Report` window.
+
+## Quest Integration (2026-04-23)
+
+`BuyOrder`, `TransportOrder`, `CraftingOrder` now implement `MWI.Quests.IQuest` directly. `LogisticsOrderBook` fires `OnBuyOrderAdded` / `OnTransportOrderAdded` / `OnCraftingOrderAdded` from each `Add*` method, and `OnAnyOrderRemoved` from each `Remove*`. `CommercialBuilding` aggregates these into `OnQuestPublished` / `OnQuestStateChanged` events, stamping `Issuer` (LogisticsManager Worker > Owner > null) + `OriginMapId` on each new quest before publication.
+
+`CraftingOrder` gained an optional `Workshop` constructor parameter — call sites in `LogisticsTransportDispatcher` updated to pass `_building` so the auto-generated `BuildingTarget(Workshop)` resolves correctly.
+
+See `.agent/skills/quest-system/SKILL.md`.

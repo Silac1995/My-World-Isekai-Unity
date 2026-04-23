@@ -119,3 +119,13 @@ Jobs now carry a wage contract per assignment, seeded at hire-time and mutable b
     - If it's an existing item, use the methods in `Assets/Scripts/Item/ItemInstance.cs` to keep the ItemInstance parameters intact.
 - **Centralized Drop Execution**: NEVER manually instantiate items on the ground via `WorldItem.SpawnWorldItem()` inside Job or GOAP scripts. You must always funnel dropping through the physical execution pipeline by calling `worker.CharacterActions.ExecuteAction(new CharacterDropItem(worker, item))` to ensure animations, inventory extractions, and ground offsets are perfectly synchronized.
 - **Job Cancellation Null-Safety**: When an invalid state logically forces a job to abort (`CancelCurrentOrder()`), it will aggressively forcefully nullify `_currentAction = null` down the chain. Wrapper execution loops (like `JobTransporter.Execute()`) must rigidly verify `if (_currentAction != null)` upon returning from `.Execute()` before blindly querying `_currentAction.IsComplete`, preventing fatal `NullReferenceException` game locks.
+
+## Quest Integration (2026-04-23)
+
+`BuildingTask` now implements `MWI.Quests.IQuest` directly (Hybrid C unification). Existing NPC GOAP code (`BuildingTaskManager.ClaimBestTask<T>`) is unchanged — the returned objects just additionally satisfy `IQuest`. New player-side flow:
+
+- `CommercialBuilding.WorkerStartingShift` auto-claims eligible quests for on-shift players AND subscribes for future-published ones during the shift.
+- Eligibility per (JobType, IQuest concrete type) lives in `CommercialBuilding.DoesJobTypeAcceptQuest` switch — extend when adding new jobs/quests.
+- `JobAssignment` already carries the wage fields; quest claim is orthogonal — workers can be claimed onto a quest without changing their employment.
+
+See `.agent/skills/quest-system/SKILL.md` and `wiki/systems/quest-system.md` for the full architecture.

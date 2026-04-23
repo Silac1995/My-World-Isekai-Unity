@@ -178,3 +178,15 @@ See `.agent/skills/character-wallet/SKILL.md`, `.agent/skills/character-worklog/
 - Newtonsoft.Json
 - NGO 2.10+
 - CharacterArchetype system (for archetypeId-based spawning)
+
+## Quest Persistence (2026-04-23)
+
+A new `ICharacterSaveData<QuestLogSaveData>` implementation: `CharacterQuestLog`, SaveKey `"CharacterQuestLog"`, LoadPriority `70` (after CharacterJob 60 + CharacterWorkLog 65).
+
+`QuestLogSaveData` flattens `_snapshots` + `_dormantSnapshots` into a single `activeQuests` list of `QuestSnapshotEntry` plus a `focusedQuestId`. On `Deserialize`:
+- Snapshots whose `originMapId == currentMapId` reconcile against the live `IQuest` (resolved via `BuildingManager.Instance.allBuildings → CommercialBuilding.GetQuestById`). Dropped silently if no longer resolvable.
+- Snapshots whose `originMapId` differs enter `_dormantSnapshots` and wake on the next `CharacterMapTracker.CurrentMapID` change.
+
+`QuestSnapshotEntry` implements `INetworkSerializable` for `[ClientRpc]` push.
+
+See `.agent/skills/quest-system/SKILL.md`.

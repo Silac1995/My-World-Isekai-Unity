@@ -160,3 +160,17 @@ In combat (or specialized click-to-move states), the HUD takes over input handli
 ## Stats Integration
 - `OnValueChanged(oldMax, newMax)`: Fired when the max value changes.
 - `OnAmountChanged(oldAmount, newAmount)`: Fired when current resource changes.
+
+## Quest HUD (2026-04-23)
+
+Three new MonoBehaviours under `Assets/Scripts/UI/Quest/`, registered on `PlayerUI`:
+
+- **`UI_QuestTracker`** — top-right minimal widget. Title + InstructionLine with `(N / M)` progress suffix. Hidden when no active quests. Bound to `Character.CharacterQuestLog.OnFocusedChanged` + `OnQuestProgressChanged` + `OnQuestAdded`.
+- **`UI_QuestLogWindow`** (extends `UI_WindowBase`) — 2-column list/details panel. Toggled by L key (configurable `_questLogToggleKey`) in `PlayerUI.Update`. Set Focused / Abandon buttons mutate via `CharacterQuestLog`.
+- **`QuestWorldMarkerRenderer`** — spawns one of three prefabs per quest target: diamond (object), beacon (movement), zone-fill (region). Filter: `quest.OriginMapId == localPlayer.CharacterMapTracker.CurrentMapID.Value.ToString()`.
+
+All three are wired by `PlayerUI.Initialize(playerCharacter)`; `Character.SwitchToNPC` clears them via the existing PlayerUI lifecycle pattern.
+
+Prefabs needed in GameScene: `UI_QuestTracker.prefab`, `UI_QuestLogWindow.prefab`, `QuestMarker_Diamond.prefab`, `QuestMarker_Beacon.prefab`, `QuestZone_Fill.prefab`.
+
+See `.agent/skills/quest-system/SKILL.md`.
