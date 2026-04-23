@@ -13,7 +13,11 @@ public class SocialSubTab : CharacterSubTab
             foreach (var r in rel.Relationships)
             {
                 if (r == null) continue;
-                sb.AppendLine($"  {r}");
+                string otherName = r.RelatedCharacter != null ? r.RelatedCharacter.CharacterName : "<missing>";
+                int value = r.RelationValue;
+                string valueColor = value > 0 ? "#7FFF7F" : (value < 0 ? "#FF7F7F" : "#AAAAAA");
+                string metMark = r.HasMet ? "<color=#7FFF7F>met</color>" : "<color=#888888>unmet</color>";
+                sb.AppendLine($"  {otherName} — {r.RelationType} (<color={valueColor}>{value:+#;-#;0}</color>) [{metMark}]");
             }
         }
         else
