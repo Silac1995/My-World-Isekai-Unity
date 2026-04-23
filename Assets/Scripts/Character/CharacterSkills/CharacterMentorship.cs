@@ -1,9 +1,10 @@
-using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
+using UnityEngine;
+using Unity.Netcode;
 using MWI.Time;
 
-public class CharacterMentorship : CharacterSystem
+public class CharacterMentorship : CharacterSystem, IInteractionProvider
 {
     
     [Header("Student Data")]
@@ -652,5 +653,110 @@ public class CharacterMentorship : CharacterSystem
         baseChance += 10f;
 
         return Mathf.Clamp(baseChance, 0f, 100f);
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    //  IInteractionProvider — hold-E menu entries ("Ask to teach X")
+    // ─────────────────────────────────────────────────────────────
+
+    public List<InteractionOption> GetInteractionOptions(Character interactor)
+    {
+        if (interactor == null || interactor == _character) return null;
+        if (interactor.CharacterMentorship == null) return null; // source can't learn anyway
+
+        var teachable = GetTeachableSubjects();
+        if (teachable == null || teachable.Count == 0) return null;
+
+        var options = new List<InteractionOption>(teachable.Count);
+        foreach (var subject in teachable)
+        {
+            if (subject == null) continue;
+
+            // Already the student of THIS mentor in THIS subject → hide entry entirely
+            if (interactor.CharacterMentorship.CurrentMentor == _character &&
+                interactor.CharacterMentorship.LearningSubject == subject)
+                continue;
+
+            bool disabled = false;
+            string reason = null;
+
+            if (interactor.CharacterMentorship.CurrentMentor != null)
+            {
+                disabled = true;
+                reason = "you already have a mentor";
+            }
+            else if (!CanTeachStudent(interactor, subject))
+            {
+                disabled = true;
+                reason = "you're already skilled enough";
+            }
+
+            string subjectName = GetSubjectDisplayName(subject);
+            string label = disabled
+                ? $"Ask to teach {subjectName} ({reason})"
+                : $"Ask to teach {subjectName}";
+
+            var capturedSubject = subject;
+            var capturedInteractor = interactor;
+            options.Add(new InteractionOption
+            {
+                Name = label,
+                IsDisabled = disabled,
+                Action = () => OnMentorshipEntryClicked(capturedInteractor, capturedSubject, disabled)
+            });
+        }
+
+        return options.Count > 0 ? options : null;
+    }
+
+    private static string GetSubjectDisplayName(ScriptableObject subject)
+    {
+        if (subject is SkillSO skill) return skill.SkillName;
+        if (subject is CombatStyleSO style) return style.StyleName;
+        // AbilitySO and any future ScriptableObject fall back to the asset name
+        return subject.name;
+    }
+
+    private void OnMentorshipEntryClicked(Character interactor, ScriptableObject subject, bool disabled)
+    {
+        if (disabled) return; // defensive — menu already prevents clicks on disabled entries
+        if (interactor == null || subject == null) return;
+
+        if (IsServer)
+        {
+            var invitation = new InteractionMentorship(subject);
+            if (invitation.CanExecute(interactor, _character))
+                invitation.Execute(interactor, _character);
+            return;
+        }
+
+        // Remote client → route via ServerRpc on the interactor's own CharacterMentorship
+        if (interactor.CharacterMentorship == null || _character.NetworkObject == null) return;
+        string key = $"{subject.GetType().Name}:{subject.name}";
+        interactor.CharacterMentorship.RequestMentorshipServerRpc(_character.NetworkObject.NetworkObjectId, key);
+    }
+
+    [Rpc(SendTo.Server)]
+    public void RequestMentorshipServerRpc(ulong mentorNetId, string subjectAssetKey)
+    {
+        // Defensive lookups + re-validation. The client cannot be trusted.
+        if (NetworkManager.Singleton == null) return;
+        if (!NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(mentorNetId, out var mentorObj))
+            return;
+        var mentor = mentorObj != null ? mentorObj.GetComponent<Character>() : null;
+        if (mentor == null || mentor.CharacterMentorship == null) return;
+
+        // Resolve the subject by looking it up inside the mentor's own teachable list.
+        // This is lookup AND security in one step: a client cannot request a subject
+        // this mentor is not actually offering.
+        var parts = subjectAssetKey?.Split(':');
+        if (parts == null || parts.Length != 2) return;
+        var subject = mentor.CharacterMentorship.GetTeachableSubjects()
+            .FirstOrDefault(s => s != null && s.GetType().Name == parts[0] && s.name == parts[1]);
+        if (subject == null) return;
+
+        var invitation = new InteractionMentorship(subject);
+        if (!invitation.CanExecute(_character, mentor)) return;
+        invitation.Execute(_character, mentor);
     }
 }
