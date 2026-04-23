@@ -13,6 +13,13 @@ public class BuildingTaskManager : MonoBehaviour
     public IReadOnlyList<BuildingTask> AvailableTasks => _availableTasks;
     public IReadOnlyList<BuildingTask> InProgressTasks => _inProgressTasks;
 
+    // Quest-system publish events. Subscribed by CommercialBuilding (Task 16) to surface
+    // BuildingTasks as IQuests to the player's CharacterQuestLog + NPC auto-claim path.
+    public event System.Action<BuildingTask> OnTaskRegistered;
+    public event System.Action<BuildingTask, Character> OnTaskClaimed;
+    public event System.Action<BuildingTask, Character> OnTaskUnclaimed;
+    public event System.Action<BuildingTask> OnTaskCompleted;
+
     /// <summary>
     /// Registers a new task if a task for the same target doesn't already exist.
     /// </summary>
@@ -28,6 +35,7 @@ public class BuildingTaskManager : MonoBehaviour
         {
             _availableTasks.Add(newTask);
             Debug.Log($"<color=cyan>[TaskManager]</color> Task registered: {newTask.GetType().Name} for {newTask.Target.name}.");
+            OnTaskRegistered?.Invoke(newTask);
         }
     }
 
@@ -69,6 +77,7 @@ public class BuildingTaskManager : MonoBehaviour
                 _inProgressTasks.Add(bestTask);
             }
             Debug.Log($"<color=green>[TaskManager]</color> {worker.CharacterName} claimed task {typeof(T).Name} for {bestTask.Target.name}.");
+            OnTaskClaimed?.Invoke(bestTask, worker);
         }
 
         return bestTask;
@@ -97,6 +106,8 @@ public class BuildingTaskManager : MonoBehaviour
             {
                 Debug.Log($"<color=orange>[TaskManager]</color> Task unclaimed but target invalid, discarded: {task.GetType().Name}.");
             }
+
+            OnTaskUnclaimed?.Invoke(task, worker);
         }
     }
 
@@ -110,6 +121,7 @@ public class BuildingTaskManager : MonoBehaviour
             _inProgressTasks.Remove(task);
             _availableTasks.Remove(task);
             Debug.Log($"<color=green>[TaskManager]</color> Task completed: {task.GetType().Name}.");
+            OnTaskCompleted?.Invoke(task);
         }
     }
 
