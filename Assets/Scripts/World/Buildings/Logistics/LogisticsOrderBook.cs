@@ -41,6 +41,13 @@ public class LogisticsOrderBook
     public bool HasPendingOrders => _pendingOrders.Count > 0;
     public int PendingOrderCount => _pendingOrders.Count;
 
+    // --- Quest-system publish events (Task 15). Surfaced by BuildingLogisticsManager / CommercialBuilding ---
+    // Each event fires AFTER the order has been added to or removed from its list.
+    public event System.Action<BuyOrder> OnBuyOrderAdded;
+    public event System.Action<TransportOrder> OnTransportOrderAdded;
+    public event System.Action<CraftingOrder> OnCraftingOrderAdded;
+    public event System.Action<MWI.Quests.IQuest> OnAnyOrderRemoved;
+
     // =========================================================================
     // ACTIVE ORDERS (supplier-side)
     // =========================================================================
@@ -62,9 +69,16 @@ public class LogisticsOrderBook
     {
         if (order == null) return;
         _placedBuyOrders.Add(order);
+        OnBuyOrderAdded?.Invoke(order);
     }
 
-    public bool RemovePlacedBuyOrder(BuyOrder order) => order != null && _placedBuyOrders.Remove(order);
+    public bool RemovePlacedBuyOrder(BuyOrder order)
+    {
+        if (order == null) return false;
+        bool removed = _placedBuyOrders.Remove(order);
+        if (removed) OnAnyOrderRemoved?.Invoke(order);
+        return removed;
+    }
 
     public BuyOrder FindUnplacedBuyOrder(ItemSO item, CommercialBuilding supplier)
     {
@@ -88,9 +102,16 @@ public class LogisticsOrderBook
     {
         if (order == null) return;
         _placedTransportOrders.Add(order);
+        OnTransportOrderAdded?.Invoke(order);
     }
 
-    public bool RemovePlacedTransportOrder(TransportOrder order) => order != null && _placedTransportOrders.Remove(order);
+    public bool RemovePlacedTransportOrder(TransportOrder order)
+    {
+        if (order == null) return false;
+        bool removed = _placedTransportOrders.Remove(order);
+        if (removed) OnAnyOrderRemoved?.Invoke(order);
+        return removed;
+    }
 
     public bool AddActiveTransportOrder(TransportOrder order)
     {
@@ -120,10 +141,17 @@ public class LogisticsOrderBook
     {
         if (order == null || order.Quantity <= 0) return false;
         _activeCraftingOrders.Add(order);
+        OnCraftingOrderAdded?.Invoke(order);
         return true;
     }
 
-    public bool RemoveActiveCraftingOrder(CraftingOrder order) => order != null && _activeCraftingOrders.Remove(order);
+    public bool RemoveActiveCraftingOrder(CraftingOrder order)
+    {
+        if (order == null) return false;
+        bool removed = _activeCraftingOrders.Remove(order);
+        if (removed) OnAnyOrderRemoved?.Invoke(order);
+        return removed;
+    }
 
     public CraftingOrder GetNextAvailableCraftingOrder()
     {
