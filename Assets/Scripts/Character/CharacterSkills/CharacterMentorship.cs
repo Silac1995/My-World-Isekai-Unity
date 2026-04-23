@@ -29,20 +29,22 @@ public class CharacterMentorship : CharacterSystem, IInteractionProvider
 
     private ScheduleEntry _dynamicClassEntry;
 
-    private void OnEnable()
+    protected override void OnEnable()
     {
+        base.OnEnable();
+
         if (TimeManager.Instance != null)
         {
             TimeManager.Instance.OnHourChanged += OnHourChanged;
         }
-        
+
         if (_character != null && _character.CharacterCombat != null)
         {
             _character.CharacterCombat.OnCombatModeChanged += HandleCombatModeChanged;
         }
     }
 
-    private void OnDisable()
+    protected override void OnDisable()
     {
         if (TimeManager.Instance != null)
         {
@@ -53,6 +55,8 @@ public class CharacterMentorship : CharacterSystem, IInteractionProvider
         {
             _character.CharacterCombat.OnCombatModeChanged -= HandleCombatModeChanged;
         }
+
+        base.OnDisable();
     }
 
     private void HandleCombatModeChanged(bool isInCombat)
