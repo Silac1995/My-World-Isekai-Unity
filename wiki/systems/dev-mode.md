@@ -67,12 +67,13 @@ Release safety is explicit: the whole system is locked behind `#if UNITY_EDITOR 
 
 | File | Role |
 |------|------|
-| [DevModeManager.cs](../../Assets/Scripts/Debug/DevMode/DevModeManager.cs) | Singleton. Owns `IsUnlocked`, `IsEnabled`, `SuppressPlayerInput` static, `GodModeMovementSpeed` const, click-consumer slot, `F3` input, `OnDevModeChanged` + `OnClickConsumerChanged` events. |
+| [DevModeManager.cs](../../Assets/Scripts/Debug/DevMode/DevModeManager.cs) | Singleton. Owns `IsUnlocked`, `IsEnabled`, `SuppressPlayerInput` static, `GodModeMovementSpeed` const, click-consumer slot, `F3` input, `OnDevModeChanged` + `OnClickConsumerChanged` events. **Also owns the global shortcut layer** (`HandleGlobalShortcuts` — Ctrl+Click / Space+LMB / ESC) because tab content GameObjects are deactivated off-tab, so shortcut logic can't live on tab modules. Caches `DevSelectionModule` + `DevSpawnModule` refs (via `GetComponentInChildren(true)`) after `EnsurePanel`. |
 | [DevModePanel.cs](../../Assets/Scripts/Debug/DevMode/DevModePanel.cs) | Panel root. Tab registry (`TabEntry` struct + `SwitchTab(int)`) + `ContentRoot` hosting module children. |
 | [DevChatCommands.cs](../../Assets/Scripts/Debug/DevMode/DevChatCommands.cs) | Static `Handle(rawInput)` parsing `/devmode on\|off`. Host-only; clients get a warning. |
-| [DevSpawnModule.cs](../../Assets/Scripts/Debug/DevMode/Modules/DevSpawnModule.cs) | Spawn tab. Configures race/prefab/personality/trait/combat-styles/skills and click-spawns on the `Environment` layer. |
+| [DevSpawnModule.cs](../../Assets/Scripts/Debug/DevMode/Modules/DevSpawnModule.cs) | Spawn tab. Configures race/prefab/personality/trait/combat-styles/skills and click-spawns on the `Environment` layer. Public shortcut entry: `TrySpawnAtCursor()`. |
+| [DevInspectTabBuilder.cs](../../Assets/Editor/DevMode/DevInspectTabBuilder.cs) | Editor-only one-shot utility. `[MenuItem("Tools/DevMode/Build Inspect Tab")]` programmatically builds the Inspect tab hierarchy in the DevModePanel prefab and wires every serialized reference. Idempotent + destructive-rebuild variants. |
 | [DevSpawnRow.cs](../../Assets/Scripts/Debug/DevMode/Modules/DevSpawnRow.cs) | Reusable multi-entry row (dropdown + level + remove button) for combat styles and skills. |
-| [DevSelectionModule.cs](../../Assets/Scripts/Debug/DevMode/Modules/DevSelectionModule.cs) | Select tab. Generalized from Character-only to `InteractableObject`. Exposes `SelectedInteractable` + `OnInteractableSelectionChanged` (new) and `SelectedCharacter` + `OnSelectionChanged` (back-compat). Field `_characterLayerMask` renamed `_selectableLayerMask` with `[FormerlySerializedAs]`. |
+| [DevSelectionModule.cs](../../Assets/Scripts/Debug/DevMode/Modules/DevSelectionModule.cs) | Select tab. Generalized from Character-only to `InteractableObject`. Exposes `SelectedInteractable` + `OnInteractableSelectionChanged` (new) and `SelectedCharacter` + `OnSelectionChanged` (back-compat). Field `_characterLayerMask` renamed `_selectableLayerMask` with `[FormerlySerializedAs]`. Public shortcut entries: `TrySelectAtCursor(out label)`, `ClearSelection()`, `DisarmToggle()`, `IsArmed`. |
 | [IDevAction.cs](../../Assets/Scripts/Debug/DevMode/Modules/Actions/IDevAction.cs) | Plug-in interface for Select-tab actions (`Label`, `IsAvailable`, `Execute`). |
 | [DevActionAssignBuilding.cs](../../Assets/Scripts/Debug/DevMode/Modules/Actions/DevActionAssignBuilding.cs) | First action. Claims the click slot and dispatches polymorphically to `CommercialBuilding.SetOwner` or `ResidentialBuilding.SetOwner`. |
 | [IInspectorView.cs](../../Assets/Scripts/Debug/DevMode/Inspect/IInspectorView.cs) | Dispatch contract for Inspect tab: `CanInspect(InteractableObject)`, `SetTarget(InteractableObject)`, `Clear()`. |
@@ -183,6 +184,18 @@ Player clicks on an InteractableObject
   → Update(): active CharacterSubTab.Refresh(character) every frame
 ```
 
+**Global shortcuts** (DevModeManager, works on any tab):
+```
+DevModeManager.Update every frame while IsEnabled
+  → HandleGlobalShortcuts()
+  → IsTextInputFocused() returns true? → abort
+  → ESC pressed? → clear _selectionModule.SelectedInteractable + disarm both toggles
+  → Ctrl held + !Space + LMB down? → _selectionModule.TrySelectAtCursor(out label)
+  → Space held + !Ctrl + LMB down? → _spawnModule.TrySpawnAtCursor()
+  → Ctrl+Space mutex: both held = neither fires (prevents fat-finger spawn)
+  → Armed click-loops on modules skip their path when Ctrl or Space is held (no double-fire)
+```
+
 **Authority:** every mutation is host-only (guarded by `IsServer` on the underlying APIs). Clients only observe results through existing networked channels — they never run dev-mode code paths.
 
 ## Dependencies
@@ -237,13 +250,14 @@ No gameplay system declares a hard dependency on dev mode — it is strictly add
 - [ ] Add "click building first, then assign a character to it" reverse flow.
 - [ ] Multi-character selection.
 - [ ] Follow-up modules: Freecam, Sim-pause, Item grant, Teleport, Time-of-day slider, Assign Job.
-- [ ] Wire the Inspect tab prefab (Task 17) — `DevInspectModule`, `CharacterInspectorView`, 10 sub-tab GOs.
-- [ ] Refine `KnowledgeSubTab` and `InventorySubTab` once `CharacterBookKnowledge`, `CharacterSchedule`, and `CharacterEquipment` APIs are stabilized.
+- [x] ~~Wire the Inspect tab prefab (Task 17) — `DevInspectModule`, `CharacterInspectorView`, 10 sub-tab GOs.~~ Shipped 2026-04-23 via `Assets/Editor/DevMode/DevInspectTabBuilder.cs`.
+- [ ] Refine `KnowledgeSubTab` (BookKnowledge portion) and `InventorySubTab` once their public APIs are stabilized. Schedule portion of Knowledge is fully rendered as of 2026-04-23.
 - [ ] Add `IInspectorView` implementations for WorldItem and Building entity types.
 
 ## Change log
 - 2026-04-21 — Initial page. Documents F3/chat activation, input gating, click arbitration, Spawn + Select modules, `IDevAction` contract, `DevActionAssignBuilding`, god-mode WASD speed + unbounded zoom. — Claude / [[kevin]]
 - 2026-04-23 — Added Inspect tab (IInspectorView + CharacterInspectorView + 10 sub-tabs); generalized DevSelectionModule to InteractableObject; extracted CharacterAIDebugFormatter; updated Key classes, Public API, Data flow, Dependencies, Open questions, Sources. — claude
+- 2026-04-23 — Inspect tab prefab wired via DevInspectTabBuilder Editor utility. Global shortcuts (Ctrl+Click, Space+LMB, ESC) relocated to DevModeManager so they work on any tab. Social / SkillsTraits / Economy / Knowledge sub-tab rendering polished: relationship details with HasMet flag, behavioural profile name + personality description + compatibility lists, per-CurrencyId and per-JobType enumeration + flat Workplaces list sorted by score, full Schedule rendering with active-now highlight. — claude
 
 ## Sources
 - [DevModeManager.cs](../../Assets/Scripts/Debug/DevMode/DevModeManager.cs) — singleton, state, events.
@@ -270,3 +284,4 @@ No gameplay system declares a hard dependency on dev mode — it is strictly add
 - [.claude/agents/debug-tools-architect.md](../../.claude/agents/debug-tools-architect.md) — specialist agent for dev-mode + other debug infra.
 - 2026-04-21 conversation with [[kevin]] — god-mode movement speed (17), unbounded zoom, `RigidBody` layer for character picks, commercial-building owner replication fix.
 - 2026-04-23 implementation — Inspect tab (16 commits, 76e470e–8a1a90f): IInspectorView, DevInspectModule, CharacterInspectorView, 10 CharacterSubTab subclasses, CharacterAIDebugFormatter, DevSelectionModule generalization.
+- 2026-04-23 follow-up — Prefab wiring + polish pass (commits caa8275, 7559138, 0deea49, e8231e2, fe2baae, 6fa15f1, e005608, 2c455a6, e36d404): DevInspectTabBuilder Editor script, relationship details, behavioural profile + personality, Ctrl+Click / Space+LMB / ESC shortcuts consolidated on DevModeManager, per-currency / per-JobType enumeration, flat Workplaces list, full Schedule rendering.

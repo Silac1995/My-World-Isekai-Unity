@@ -1,6 +1,6 @@
 ---
 name: debug-tools
-description: Covers the full debug/dev-tools infrastructure — DevModeManager, DevModePanel, DevSpawnModule (Spawn tab), DevSelectionModule (Select tab, IDevAction plug-ins), the new Inspect tab (DevInspectModule, IInspectorView, CharacterInspectorView, CharacterSubTab hierarchy), CharacterAIDebugFormatter, and legacy diagnostic scripts (UI_CharacterDebugScript, MapControllerDebugUI). Use when creating, extending, or debugging any dev tool, diagnostic panel, or in-editor/in-game inspection flow.
+description: Covers the full debug/dev-tools infrastructure — DevModeManager (now hosts global shortcuts Ctrl+Click / Space+LMB / ESC), DevModePanel, DevSpawnModule (Spawn tab), DevSelectionModule (Select tab, IDevAction plug-ins, generalized to InteractableObject), the Inspect tab (DevInspectModule, IInspectorView, CharacterInspectorView, CharacterSubTab hierarchy), CharacterAIDebugFormatter, DevInspectTabBuilder one-shot Editor script for wiring the Inspect prefab, and legacy diagnostic scripts (UI_CharacterDebugScript, MapControllerDebugUI). Use when creating, extending, or debugging any dev tool, diagnostic panel, or in-editor/in-game inspection flow.
 ---
 
 # Debug Tools System
@@ -78,13 +78,13 @@ Sub-tab content is displayed in a TMP_Text component inside a ScrollRect. Only t
 |-------|-------|---------|
 | 0 | `IdentitySubTab` | Name / Gender / Age / Race / Archetype / CharacterId / OriginWorld + state flags (BusyReason, alive/unconscious/building/player, party membership, abandoned flag + former leader id) |
 | 1 | `StatsSubTab` | CharacterCombatLevel (Level / XP / unassigned points / history count) + all 18 CharacterStats fields |
-| 2 | `SkillsTraitsSubTab` | CharacterTraits personality (Aggressivity / Sociability / Loyalty / CanCreateCommunity) + CharacterSkills.Skills |
+| 2 | `SkillsTraitsSubTab` | Behavioural profile **name** (SO asset) + numeric traits (Aggressivity / Sociability / Loyalty / CanCreateCommunity). Personality: Name + Description + Compatible / Incompatible lists (colour-coded). CharacterSkills.Skills list |
 | 3 | `NeedsSubTab` | CharacterNeeds.AllNeeds with urgency, active status, and color coding |
 | 4 | `AISubTab` | `CharacterAIDebugFormatter.FormatAll(c)` — one-liner delegation |
 | 5 | `CombatSubTab` | CharacterCombat (IsInBattle / IsCombatMode / PlannedTarget / CurrentBattleManager / KnownStyles) + CharacterStatusManager.ActiveEffects |
-| 6 | `SocialSubTab` | CharacterRelation.Relationships + CharacterCommunity + CharacterMentorship.IsCurrentlyTeaching |
-| 7 | `EconomySubTab` | CharacterWallet.GetAllBalances() + CharacterJob (CurrentJob / ActiveJobs / IsWorking) + CharacterWorkLog.GetAllHistory() |
-| 8 | `KnowledgeSubTab` | CharacterBookKnowledge + CharacterSchedule (initial ToString() placeholders; API to be refined in a follow-up) |
+| 6 | `SocialSubTab` | Relationships rendered as `Name — Type (±value) [met/unmet]` with value colour-coded (green positive, red negative, grey zero). + CharacterCommunity + CharacterMentorship.IsCurrentlyTeaching |
+| 7 | `EconomySubTab` | Wallet enumerates every known `CurrencyId` (static-readonly fields via reflection) always showing balance, even at 0. Job block (CurrentJob / ActiveJobs / IsWorking). Work Log per-JobType summary (iterates `Enum.GetValues(typeof(JobType))`) + dedicated flat **Workplaces** list sorted by UnitsWorked desc, each entry showing name / JobType tag / score (units) / shifts / day range |
+| 8 | `KnowledgeSubTab` | CharacterBookKnowledge (ToString placeholder) + fully-rendered Schedule: CurrentActivity, TimeManager CurrentHour, list of every ScheduleEntry as `HHh–HHh · Activity · priority N`, active-now entry highlighted green with `◆ active` tag |
 | 9 | `InventorySubTab` | CharacterEquipment (initial ToString() placeholder) |
 
 ### 5. `CharacterAIDebugFormatter` — Shared AI Debug Strings
@@ -103,7 +103,31 @@ Static class with helpers:
 
 **Rule:** `CharacterAIDebugFormatter` is the **single source of truth** for AI debug strings. Both `UI_CharacterDebugScript` (legacy per-entity overlay) and `AISubTab` (Inspect panel tab) delegate to it. Extending `FormatAll` automatically updates both consumers.
 
-### 6. `DevSelectionModule` — Extended Surface
+### 6. Global Shortcuts (Ctrl+Click / Space+LMB / ESC)
+
+Global shortcuts live on **`DevModeManager`** — not on the individual tab modules — so they keep working regardless of which tab's content is currently active (tab content GameObjects are `SetActive(false)` when the user switches away, which would otherwise suspend their `Update` loop).
+
+| Input | Action | Gate |
+|-------|--------|------|
+| Ctrl + Left-Click | Select the `InteractableObject` under the cursor | DevMode enabled + pointer not over UI + no text input focused + Space not also held |
+| Space + Left-Click | Spawn at cursor using the panel's current Spawn config | DevMode enabled + pointer not over UI + no text input focused + Ctrl not also held |
+| Escape | Clear any `SelectedInteractable` + disarm all armed toggles | DevMode enabled + no text input focused |
+
+**Wiring:** `DevModeManager.EnsurePanel` caches the panel's modules via `GetComponentInChildren<DevSelectionModule>(true)` / `GetComponentInChildren<DevSpawnModule>(true)` (`includeInactive: true` — critical, since non-current tabs are deactivated). `Update` runs `HandleGlobalShortcuts()` every frame while `IsEnabled`.
+
+**Dispatch entry points on the modules (all public):**
+
+- `DevSelectionModule.TrySelectAtCursor(out string label)` — raycasts + sets selection. Returns `false` if raycast missed.
+- `DevSelectionModule.ClearSelection()` — clears selection + fires change events.
+- `DevSelectionModule.DisarmToggle()` / `IsArmed` — armed-toggle control.
+- `DevSpawnModule.TrySpawnAtCursor()` — raycasts the Environment layer + spawns via existing `SpawnAt` path.
+- `DevSpawnModule.DisarmToggle()` / `IsArmed`.
+
+**Mutex:** Ctrl and Space are handled as mutually exclusive on the same click. Ctrl+Space+LMB fires nothing — prevents accidental destructive spawn from a fat-finger. The per-module armed click-loops also short-circuit when either modifier is held so they never double-fire with the shortcut.
+
+**Text-input guard:** `IsTextInputFocused()` returns true if `EventSystem.current.currentSelectedGameObject` has a `TMP_InputField` / `InputField` component. All shortcuts skip when true so typing `Space` in the Count field doesn't spawn.
+
+### 7. `DevSelectionModule` — Extended Surface
 
 The Select tab's `DevSelectionModule` was generalized to work with `InteractableObject` (not just `Character`). The following surface was **added** (back-compat paths preserved):
 
@@ -164,8 +188,11 @@ These scripts predate Dev Mode and remain independent. They self-manage their ow
 ## File Locations
 
 ```
+Assets/Editor/DevMode/
+  DevInspectTabBuilder.cs         ← one-shot Editor utility that builds the Inspect prefab hierarchy
+
 Assets/Scripts/Debug/DevMode/
-  DevModeManager.cs
+  DevModeManager.cs               ← now owns global shortcuts (Ctrl+Click, Space+LMB, ESC)
   DevModePanel.cs
   DevChatCommands.cs
   Modules/
@@ -208,6 +235,9 @@ Assets/Scripts/
 
 - **Sub-tab order in `_subTabs[]` is authoritative.** The tab buttons are index-matched to the array; mismatching them in the Inspector produces wrong labels on correct content.
 - **`CanInspect` ordering.** `DevInspectModule` picks the first match. If two views both return `true` for the same target, only the one earlier in child order is used. Make `CanInspect` checks specific enough to avoid overlap.
-- **`KnowledgeSubTab` and `InventorySubTab` are placeholders.** Their `RenderContent` calls `ToString()` on the subsystem — real formatting is a follow-up task once the API surfaces of `CharacterBookKnowledge`, `CharacterSchedule`, and `CharacterEquipment` are stabilized.
+- **`KnowledgeSubTab` — Schedule is fully rendered; BookKnowledge is still a placeholder.** Schedule now lists every `ScheduleEntry` with its hours range, activity, priority, and active-now flag. BookKnowledge still calls `ToString()` — refine once `CharacterBookKnowledge` exposes a richer public surface.
+- **`InventorySubTab` is a placeholder.** Calls `CharacterEquipment.ToString()`. Refine once equipment slot enumeration is public.
+- **Global shortcut ownership.** `Ctrl+Click`, `Space+LMB`, and `ESC` are handled exclusively by `DevModeManager.HandleGlobalShortcuts` — not by the per-tab modules. If you find yourself adding shortcut logic to a tab module, stop: put it on `DevModeManager` instead, or the shortcut will silently stop working whenever that tab isn't the active one.
+- **`Assets/Editor/DevMode/DevInspectTabBuilder.cs`** is a one-shot `[MenuItem("Tools/DevMode/Build Inspect Tab")]` Editor utility that programmatically builds the Inspect tab hierarchy inside the DevModePanel prefab, wires every `SerializedObject` field via reflection, and saves the prefab. It is idempotent (aborts if `InspectContent` exists) and has a destructive `Rebuild` variant with a confirmation dialog. If you add new sub-tabs, extending this builder is the cleanest way to keep the prefab regeneration reproducible.
 - **Host-only.** `DevInspectModule`, like all Dev Mode modules, only runs on the host. Never add RPCs or server calls inside a sub-tab — read from local state only.
 - **Legacy scripts are always compiled.** Only the Dev Mode family is behind `#if UNITY_EDITOR || DEVELOPMENT_BUILD` conditional-unlock (for the F3 auto-unlock path). The legacy scripts activate via `UI_SessionManager` checking `_isSolo`.

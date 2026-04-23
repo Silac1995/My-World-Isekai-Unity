@@ -1,6 +1,6 @@
 ---
 name: debug-tools-architect
-description: "Expert in debug/dev tools infrastructure — the Dev-Mode god tool (DevModeManager, DevModePanel, DevSpawnModule Spawn tab, DevSelectionModule + IDevAction Select tab, Inspect tab with DevInspectModule + IInspectorView + CharacterInspectorView + 10 CharacterSubTab categories, CharacterAIDebugFormatter, /devmode chat command), DebugScript spawning UI, MapControllerDebugUI hibernation diagnostics, UI_CharacterDebugScript NPC state visualization, UI_CommercialBuildingDebugScript logistics display, and creating new debug panels, cheat commands, diagnostic overlays, and inspection views. Use when creating, extending, or improving debug tools."
+description: "Expert in debug/dev tools infrastructure — the Dev-Mode god tool (DevModeManager now owning global shortcuts Ctrl+Click / Space+LMB / ESC, DevModePanel, DevSpawnModule Spawn tab, DevSelectionModule + IDevAction Select tab generalized to InteractableObject, Inspect tab with DevInspectModule + IInspectorView + CharacterInspectorView + 10 CharacterSubTab categories, CharacterAIDebugFormatter, DevInspectTabBuilder Editor script, /devmode chat command), DebugScript spawning UI, MapControllerDebugUI hibernation diagnostics, UI_CharacterDebugScript NPC state visualization, UI_CommercialBuildingDebugScript logistics display, and creating new debug panels, cheat commands, diagnostic overlays, and inspection views. Use when creating, extending, or improving debug tools."
 model: opus
 memory: project
 tools: Read, Edit, Write, Glob, Grep, Bash, Agent
@@ -140,13 +140,13 @@ public abstract class CharacterSubTab : MonoBehaviour
 |---|-------|---------|
 | 0 | `IdentitySubTab` | Name / Gender / Age / Race / Archetype / CharacterId / OriginWorld + state flags |
 | 1 | `StatsSubTab` | CharacterCombatLevel + all 18 CharacterStats fields |
-| 2 | `SkillsTraitsSubTab` | CharacterTraits personality + CharacterSkills.Skills |
+| 2 | `SkillsTraitsSubTab` | Behavioural profile **name** + numeric traits + full Personality (name / description / compatible / incompatible) + CharacterSkills.Skills |
 | 3 | `NeedsSubTab` | CharacterNeeds.AllNeeds with urgency + color coding |
 | 4 | `AISubTab` | `CharacterAIDebugFormatter.FormatAll(c)` |
 | 5 | `CombatSubTab` | CharacterCombat state + CharacterStatusManager.ActiveEffects |
-| 6 | `SocialSubTab` | CharacterRelation.Relationships + CharacterCommunity + CharacterMentorship |
-| 7 | `EconomySubTab` | CharacterWallet + CharacterJob + CharacterWorkLog.GetAllHistory() |
-| 8 | `KnowledgeSubTab` | CharacterBookKnowledge + CharacterSchedule (placeholders) |
+| 6 | `SocialSubTab` | Relationships as `Name — Type (±value) [met/unmet]` with colour-coded value + CharacterCommunity + CharacterMentorship |
+| 7 | `EconomySubTab` | Per-currency wallet (enumerated via reflection over static CurrencyId fields) + CharacterJob + per-JobType Work Log + flat Workplaces list sorted by score |
+| 8 | `KnowledgeSubTab` | CharacterBookKnowledge (placeholder) + fully-rendered Schedule (CurrentActivity, hour, every ScheduleEntry with active-now flag) |
 | 9 | `InventorySubTab` | CharacterEquipment (placeholder) |
 
 **`CharacterAIDebugFormatter`** is the shared source of truth for AI debug strings. Called by both `UI_CharacterDebugScript` (legacy world overlay) and `AISubTab`. Extending `FormatAll` updates both consumers automatically.
@@ -171,6 +171,24 @@ Assets/Scripts/Debug/DevMode/Inspect/
 ```
 
 See `.agent/skills/debug-tools/SKILL.md` for the full Inspect tab reference and extension recipes.
+
+### Global Shortcuts (owned by DevModeManager)
+
+Ctrl+LMB, Space+LMB, and ESC live on **`DevModeManager.HandleGlobalShortcuts`** — NOT on the individual tab modules. This is deliberate: tab content GameObjects are `SetActive(false)` when the user switches away, so shortcut code on a tab module would silently stop working off-tab.
+
+| Input | Dispatches to |
+|-------|---------------|
+| Ctrl + Left-Click (no Space) | `DevSelectionModule.TrySelectAtCursor(out label)` |
+| Space + Left-Click (no Ctrl) | `DevSpawnModule.TrySpawnAtCursor()` |
+| Escape | `ClearSelection()` + `DisarmToggle()` on both modules |
+
+DevModeManager caches module refs via `GetComponentInChildren<T>(true)` during `EnsurePanel`, with `includeInactive: true` so non-current tabs are found. Armed click-loops on the modules skip their path when Ctrl or Space is held to prevent double-fire. Ctrl+Space+LMB is a deliberate mutex — neither shortcut fires. Shortcuts skip when a `TMP_InputField` / `InputField` has focus so typing in the Count field doesn't spawn.
+
+**Rule:** never add a global shortcut to a tab module's Update. Put it on DevModeManager and expose a public entry point on the module for DevModeManager to dispatch into.
+
+### Inspect prefab generator
+
+`Assets/Editor/DevMode/DevInspectTabBuilder.cs` is a one-shot `[MenuItem("Tools/DevMode/Build Inspect Tab")]` utility that reconstructs the Inspect tab hierarchy inside the DevModePanel prefab — 30+ GameObjects, TMP layout, ScrollRects, and every `SerializedObject` wire. Idempotent (aborts if `InspectContent` exists); destructive rebuild variant with a confirmation dialog. Extend this if sub-tabs change — it's the cheapest way to keep the prefab regeneration reproducible.
 
 ### 3. Current Gaps (Opportunities)
 
