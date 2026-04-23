@@ -673,7 +673,100 @@ public abstract class CommercialBuilding : Building
                     logisticsJob.OnWorkerPunchIn();
                 }
             }
+
+            // Quest system hook: auto-claim eligible already-published quests + subscribe for
+            // future publications during this shift.
+            TryAutoClaimExistingQuests(worker);
+            SubscribeWorkerQuestAutoClaim(worker);
         }
+    }
+
+    // =========================================================================
+    // Quest auto-claim (Task 21)
+    // =========================================================================
+
+    private readonly System.Collections.Generic.Dictionary<Character, System.Action<MWI.Quests.IQuest>> _questAutoClaimHandlers
+        = new System.Collections.Generic.Dictionary<Character, System.Action<MWI.Quests.IQuest>>();
+
+    private void TryAutoClaimExistingQuests(Character worker)
+    {
+        if (worker == null || worker.CharacterQuestLog == null) return;
+        foreach (var quest in GetAvailableQuests())
+        {
+            if (IsQuestEligibleForWorker(quest, worker))
+            {
+                worker.CharacterQuestLog.TryClaim(quest);
+            }
+        }
+    }
+
+    private void SubscribeWorkerQuestAutoClaim(Character worker)
+    {
+        if (worker == null) return;
+        if (_questAutoClaimHandlers.ContainsKey(worker)) return;
+
+        System.Action<MWI.Quests.IQuest> handler = quest => TryAutoClaimForOnShiftWorker(quest, worker);
+        _questAutoClaimHandlers[worker] = handler;
+        OnQuestPublished += handler;
+    }
+
+    private void UnsubscribeWorkerQuestAutoClaim(Character worker)
+    {
+        if (worker == null) return;
+        if (_questAutoClaimHandlers.TryGetValue(worker, out var handler))
+        {
+            OnQuestPublished -= handler;
+            _questAutoClaimHandlers.Remove(worker);
+        }
+    }
+
+    private void TryAutoClaimForOnShiftWorker(MWI.Quests.IQuest quest, Character worker)
+    {
+        if (worker == null || worker.CharacterQuestLog == null) return;
+        if (!IsQuestEligibleForWorker(quest, worker)) return;
+        worker.CharacterQuestLog.TryClaim(quest);
+    }
+
+    private bool IsQuestEligibleForWorker(MWI.Quests.IQuest quest, Character worker)
+    {
+        if (quest == null || worker == null) return false;
+        if (quest.State != MWI.Quests.QuestState.Open) return false;
+
+        var charJob = worker.CharacterJob;
+        if (charJob == null) return false;
+        foreach (var assn in charJob.ActiveJobs)
+        {
+            if (assn.Workplace == this && assn.AssignedJob != null)
+            {
+                return DoesJobTypeAcceptQuest(assn.AssignedJob.Type, quest);
+            }
+        }
+        return false;
+    }
+
+    private static bool DoesJobTypeAcceptQuest(MWI.WorldSystem.JobType jobType, MWI.Quests.IQuest quest)
+    {
+        // v1 mapping — harvest tasks to harvester family, pickup/buy to logistics manager,
+        // transport to transporter, craft to crafter family. Refine as new jobs land.
+        if (quest is HarvestResourceTask)
+        {
+            return jobType == MWI.WorldSystem.JobType.Woodcutter
+                || jobType == MWI.WorldSystem.JobType.Miner
+                || jobType == MWI.WorldSystem.JobType.Forager
+                || jobType == MWI.WorldSystem.JobType.Farmer;
+        }
+        if (quest is PickupLooseItemTask)
+            return jobType == MWI.WorldSystem.JobType.LogisticsManager
+                || jobType == MWI.WorldSystem.JobType.Transporter;
+        if (quest is BuyOrder)
+            return jobType == MWI.WorldSystem.JobType.LogisticsManager;
+        if (quest is TransportOrder)
+            return jobType == MWI.WorldSystem.JobType.Transporter;
+        if (quest is CraftingOrder)
+            return jobType == MWI.WorldSystem.JobType.Crafter
+                || jobType == MWI.WorldSystem.JobType.Blacksmith
+                || jobType == MWI.WorldSystem.JobType.BlacksmithApprentice;
+        return false;
     }
 
     /// <summary>
@@ -752,6 +845,7 @@ public abstract class CommercialBuilding : Building
             }
 
             _punchInTimeByWorker.Remove(worker);
+            UnsubscribeWorkerQuestAutoClaim(worker);
         }
 
         if (worker != null && _activeWorkersOnShift.Contains(worker))
