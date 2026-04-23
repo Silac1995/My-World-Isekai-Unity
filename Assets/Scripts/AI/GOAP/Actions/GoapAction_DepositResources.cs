@@ -147,9 +147,12 @@ public class GoapAction_DepositResources : GoapAction
                 ItemInstance carriedItem = handsController.CarriedItem;
                 
                 var dropAction = new CharacterDropItem(worker, carriedItem);
-                dropAction.OnActionFinished += () => 
+                dropAction.OnActionFinished += () =>
                 {
                     _building.RegisterHarvestedItem(carriedItem.ItemSO);
+                    // Wage system hook: credit the worker's WorkLog with the deficit-bounded portion.
+                    // Each drop is one unit (one ItemInstance per CharacterDropItem call).
+                    TryCreditWorkLog(worker, _building, carriedItem.ItemSO, 1);
                     Debug.Log($"<color=green>[GOAP Deposit]</color> {worker.CharacterName} a physiquement lâché {carriedItem.ItemSO.ItemName} (mains).");
                 };
 
@@ -176,9 +179,12 @@ public class GoapAction_DepositResources : GoapAction
                 if (acceptedItems.Contains(item.ItemSO))
                 {
                     var dropAction = new CharacterDropItem(worker, item);
-                    dropAction.OnActionFinished += () => 
+                    dropAction.OnActionFinished += () =>
                     {
                         _building.RegisterHarvestedItem(item.ItemSO);
+                        // Wage system hook: credit the worker's WorkLog with the deficit-bounded portion.
+                        // Each drop is one unit (one ItemInstance per CharacterDropItem call).
+                        TryCreditWorkLog(worker, _building, item.ItemSO, 1);
                         Debug.Log($"<color=green>[GOAP Deposit]</color> {worker.CharacterName} a physiquement lâché {item.ItemSO.ItemName} (sac).");
                     };
 
@@ -201,5 +207,93 @@ public class GoapAction_DepositResources : GoapAction
         _isDepositing = false;
         worker.CharacterMovement?.Stop();
         worker.CharacterMovement?.ResetPath();
+    }
+
+    // === Wage system: harvester credit on deposit ===========================
+
+    /// <summary>
+    /// Credit the harvester's WorkLog for a deposit, bounded by the building's outstanding deficit
+    /// for the item (if the building is an IStockProvider). No deficit info -> full credit.
+    /// Only Woodcutter / Miner / Forager / Farmer assignments are credited via this path.
+    /// </summary>
+    private static void TryCreditWorkLog(Character worker, CommercialBuilding building, ItemSO item, int depositedQty)
+    {
+        if (worker == null || building == null || item == null || depositedQty <= 0) return;
+
+        var workLog = worker.CharacterWorkLog;
+        if (workLog == null) return;
+        var charJob = worker.CharacterJob;
+        if (charJob == null) return;
+
+        // Find this worker's assignment at this building so we know the JobType.
+        MWI.WorldSystem.JobType jobType = MWI.WorldSystem.JobType.None;
+        foreach (var assn in charJob.ActiveJobs)
+        {
+            if (assn.Workplace == building && assn.AssignedJob != null)
+            {
+                jobType = assn.AssignedJob.Type;
+                break;
+            }
+        }
+        if (jobType == MWI.WorldSystem.JobType.None) return;
+        if (!IsHarvesterFamily(jobType)) return; // not a harvester deposit; no credit
+
+        // Compute deficit-before-deposit if the building is an IStockProvider.
+        // <0 from ComputeDeficitForItem signals "no IStockProvider info" -> full credit.
+        int deficit = ComputeDeficitForItem(building, item);
+        int credit = deficit < 0
+            ? depositedQty // no deficit info -> full credit
+            : MWI.Jobs.Wages.HarvesterCreditCalculator.GetCreditedAmount(depositedQty, deficit);
+        if (credit <= 0) return;
+
+        // TODO Task 25: replace GameObject name with the stable building id used by
+        // CommercialBuilding.GetBuildingIdForWorklog (currently the same — both use .name).
+        string buildingId = building.name;
+        workLog.LogShiftUnit(jobType, buildingId, credit);
+    }
+
+    private static bool IsHarvesterFamily(MWI.WorldSystem.JobType jobType)
+    {
+        switch (jobType)
+        {
+            case MWI.WorldSystem.JobType.Woodcutter:
+            case MWI.WorldSystem.JobType.Miner:
+            case MWI.WorldSystem.JobType.Forager:
+            case MWI.WorldSystem.JobType.Farmer:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    /// <summary>
+    /// Returns the building's outstanding deficit for the given item (target min - current stock),
+    /// or -1 if the building is not an IStockProvider (caller should treat this as "no cap, full credit").
+    /// Returns 0 if the building is an IStockProvider but doesn't list this item as a target
+    /// (no credit — the building doesn't want this item).
+    /// </summary>
+    private static int ComputeDeficitForItem(CommercialBuilding building, ItemSO item)
+    {
+        var provider = building as IStockProvider;
+        if (provider == null) return -1;
+
+        int targetMin = 0;
+        bool foundTarget = false;
+        foreach (var target in provider.GetStockTargets())
+        {
+            if (target.ItemToStock == item)
+            {
+                targetMin = target.MinStock;
+                foundTarget = true;
+                break;
+            }
+        }
+        if (!foundTarget) return 0; // building doesn't want this item: no credit
+
+        // Current stock count for this item — read just before the deposit lands.
+        // CommercialBuilding.GetItemCount(ItemSO) is the inventory accessor.
+        int currentStock = building.GetItemCount(item);
+        int deficit = targetMin - currentStock;
+        return Mathf.Max(0, deficit);
     }
 }
