@@ -161,6 +161,16 @@ namespace MWI.Time
                                 }
                                 pool.CurrentAmount += yieldAmount;
                                 Debug.Log($"<color=orange>[MacroSim]</color> Offline Yields: {npc.CharacterId} produced {yieldAmount} {output.ResourceId}.");
+
+                                // TODO Task 26: Accrue WorkLog units here once HibernatedNPCData carries
+                                // per-NPC CharacterWorkLog data (likely scenario b: load profile, mutate, save).
+                                // For v1 the WorkLog career counter is wake-up-time-only; offline yields
+                                // flow into community.ResourcePools but are NOT credited to the NPC's WorkLog.
+                                // Player-visible impact: NPCs that hibernated through productive shifts will
+                                // not have those shifts in their work history when they wake up.
+                                // Resolution path: extend HibernatedNPCData with a WorkLogSaveData field,
+                                // then call workLog.LogShiftUnit(npc.SavedJobType, workplaceBuildingId, yieldAmount)
+                                // on the deserialized log before re-serializing.
                             }
                         }
                     }
