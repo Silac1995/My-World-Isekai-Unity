@@ -977,6 +977,7 @@ Transform:
   - {fileID: 2032391772194138208}
   - {fileID: 4502016627596780149}
   - {fileID: 5049945013540626227}
+  - {fileID: 7515537849703212639}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!54 &3937668831498777898
@@ -1041,7 +1042,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 2563509225
+  GlobalObjectIdHash: 3352754046
   InScenePlacedSourceGlobalObjectIdHash: 0
   DeferredDespawnTick: 0
   Ownership: 1
@@ -1102,6 +1103,7 @@ MonoBehaviour:
   _characterJob: {fileID: 360546061650157614}
   _characterWallet: {fileID: 991017114719176628}
   _characterWorkLog: {fileID: 4895102964629391532}
+  _characterQuestLog: {fileID: 8465202081740333003}
   _characterSchedule: {fileID: 8656923019881374110}
   _characterSkills: {fileID: 2759972866297852151}
   _characterMentorship: {fileID: 7383321509428321023}
@@ -2630,6 +2632,52 @@ MonoBehaviour:
   _damageOutlineColor: {r: 0.75, g: 0, b: 0, a: 1}
   _healOutlineColor: {r: 0, g: 0.6, b: 0.1, a: 1}
   _healTextColor: {r: 1, g: 1, b: 1, a: 1}
+--- !u!1 &5785796017503805859
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 7515537849703212639}
+  - component: {fileID: 8465202081740333003}
+  m_Layer: 0
+  m_Name: CharacterQuestLog
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &7515537849703212639
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5785796017503805859}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 6179432398992828966}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &8465202081740333003
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5785796017503805859}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0683680c9f7c7f647b9288244083d2d7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CharacterQuestLog
+  ShowTopMostFoldoutHeaderGroup: 1
+  _character: {fileID: 2536622428659117900}
 --- !u!1 &5828594169861188924
 GameObject:
   m_ObjectHideFlags: 0
