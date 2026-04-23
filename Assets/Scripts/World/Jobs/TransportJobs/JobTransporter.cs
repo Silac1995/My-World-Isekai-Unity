@@ -354,6 +354,10 @@ public class JobTransporter : Job
                 manager.UpdateTransportOrderProgress(CurrentOrder, amount);
             }
 
+            // Wage system hook: credit the worker's WorkLog for each item delivered.
+            // Credit goes to the worker's EMPLOYER (_workplace), not the delivery destination.
+            TryCreditWorkLog(amount);
+
             if (CurrentOrder.IsCompleted)
             {
                 if (CarriedItems.Count > 0)
@@ -406,4 +410,17 @@ public class JobTransporter : Job
 
     public override string CurrentActionName => _currentAction != null ? _currentAction.ActionName : "En attente de commandes";
     public override string CurrentGoalName => _transporterGoal != null ? _transporterGoal.GoalName : "No Goal";
+
+    private void TryCreditWorkLog(int amount)
+    {
+        if (amount <= 0 || _workplace == null) return;
+        var worker = Worker;
+        if (worker == null) return;
+        var workLog = worker.CharacterWorkLog;
+        if (workLog == null) return;
+
+        // Use this transporter's JobType (always Transporter) and the employer building's name as id.
+        string buildingId = _workplace.name;
+        workLog.LogShiftUnit(MWI.WorldSystem.JobType.Transporter, buildingId, amount);
+    }
 }
