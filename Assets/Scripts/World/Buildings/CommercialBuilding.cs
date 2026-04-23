@@ -23,6 +23,11 @@ public abstract class CommercialBuilding : Building
     protected BuildingTaskManager _taskManager;
     protected BuildingLogisticsManager _logisticsManager;
 
+    // Per-active-worker punch-in time in hours (TimeManager.CurrentTime01 * 24f).
+    // Used at punch-out to compute attendance ratio for wage calculation.
+    private readonly System.Collections.Generic.Dictionary<Character, float> _punchInTimeByWorker
+        = new System.Collections.Generic.Dictionary<Character, float>();
+
     public Character Owner => _ownerIds.Count > 0 ? Character.FindByUUID(_ownerIds[0].ToString()) : null;
     public Community OwnerCommunity => _ownerCommunity;
     public IReadOnlyList<Job> Jobs => _jobs;
@@ -426,6 +431,36 @@ public abstract class CommercialBuilding : Building
     /// </summary>
     public virtual void WorkerStartingShift(Character worker)
     {
+        // Wage system hook: record punch-in time + notify worker's WorkLog.
+        if (worker != null)
+        {
+            float nowHours = MWI.Time.TimeManager.Instance != null
+                ? MWI.Time.TimeManager.Instance.CurrentTime01 * 24f
+                : 0f;
+            _punchInTimeByWorker[worker] = nowHours;
+
+            var workLog = worker.CharacterWorkLog;
+            if (workLog != null)
+            {
+                // Find the assignment for THIS worker at THIS building so we know the JobType + scheduled end.
+                var charJob = worker.CharacterJob;
+                if (charJob != null)
+                {
+                    foreach (var assn in charJob.ActiveJobs)
+                    {
+                        if (assn.Workplace == this && assn.AssignedJob != null)
+                        {
+                            var jobType = assn.AssignedJob.Type;
+                            // Find the scheduled end-of-shift in 0..1 time-of-day from this assignment's WorkScheduleEntries.
+                            float scheduledEndTime01 = ComputeScheduledEndTime01(assn);
+                            workLog.OnPunchIn(jobType, GetBuildingIdForWorklog(), GetBuildingDisplayNameForWorklog(), scheduledEndTime01);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
         if (worker != null && !_activeWorkersOnShift.Contains(worker))
         {
             _activeWorkersOnShift.Add(worker);
@@ -788,5 +823,40 @@ public abstract class CommercialBuilding : Building
     public virtual bool TryFulfillOrder(BuyOrder order, int amount)
     {
         return false;
+    }
+
+    /// <summary>
+    /// Compute the end-of-shift time as a 0..1 fraction of the day, by finding the
+    /// latest endHour across all of this assignment's work-schedule entries.
+    /// Returns 1.0 (end-of-day) if no entries are present (defensive default).
+    /// </summary>
+    private float ComputeScheduledEndTime01(JobAssignment assignment)
+    {
+        if (assignment == null || assignment.WorkScheduleEntries == null || assignment.WorkScheduleEntries.Count == 0)
+            return 1f;
+        int latestEndHour = 0;
+        for (int i = 0; i < assignment.WorkScheduleEntries.Count; i++)
+        {
+            var entry = assignment.WorkScheduleEntries[i];
+            if (entry.endHour > latestEndHour) latestEndHour = entry.endHour;
+        }
+        return Mathf.Clamp01(latestEndHour / 24f);
+    }
+
+    // TODO Task 25: Replace with a stable BuildingId (e.g., a GUID set on the
+    // building at spawn time, persisted in CommunityData). GameObject name is
+    // a placeholder.
+    /// <summary>
+    /// Returns a stable id for the WorkLog. Uses the building's name as a placeholder
+    /// — Task 25 introduces a proper BuildingDisplayName / BuildingId convention.
+    /// </summary>
+    private string GetBuildingIdForWorklog()
+    {
+        return name;
+    }
+
+    private string GetBuildingDisplayNameForWorklog()
+    {
+        return name;
     }
 }
