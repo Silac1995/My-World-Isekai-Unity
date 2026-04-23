@@ -41,6 +41,13 @@ public class Harvestable : InteractableObject
     /// <summary>L'objet est-il épuisé ?</summary>
     public bool IsDepleted => _isDepleted;
 
+    /// <summary>
+    /// Remaining yield this harvestable can produce. int.MaxValue if non-depletable.
+    /// </summary>
+    public int RemainingYield => _isDepletable
+        ? Mathf.Max(0, _maxHarvestCount - _currentHarvestCount)
+        : int.MaxValue;
+
     /// <summary>Peut-on récolter cet objet ?</summary>
     public bool CanHarvest() => !_isDepleted && _outputItems.Count > 0;
 
