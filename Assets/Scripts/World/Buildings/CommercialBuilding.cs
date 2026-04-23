@@ -67,8 +67,117 @@ public abstract class CommercialBuilding : Building
         {
             _logisticsManager = gameObject.AddComponent<BuildingLogisticsManager>();
         }
-        
+
         InitializeJobs();
+        HookQuestPublishingEvents();
+    }
+
+    // =========================================================================
+    // QUEST PUBLISHING (Task 16 — aggregates TaskManager + LogisticsManager events)
+    // =========================================================================
+
+    /// <summary>Fires after a new IQuest has been enqueued at this building (TaskManager or OrderBook).</summary>
+    public event System.Action<MWI.Quests.IQuest> OnQuestPublished;
+
+    /// <summary>Fires when a tracked IQuest's state changes (join/leave/progress/completion).</summary>
+    public event System.Action<MWI.Quests.IQuest> OnQuestStateChanged;
+
+    private void HookQuestPublishingEvents()
+    {
+        if (_taskManager != null)
+        {
+            _taskManager.OnTaskRegistered += HandleTaskRegistered;
+        }
+        if (_logisticsManager != null && _logisticsManager.OrderBook != null)
+        {
+            _logisticsManager.OrderBook.OnBuyOrderAdded += HandleOrderPublished;
+            _logisticsManager.OrderBook.OnTransportOrderAdded += HandleOrderPublished;
+            _logisticsManager.OrderBook.OnCraftingOrderAdded += HandleOrderPublished;
+        }
+    }
+
+    private void HandleTaskRegistered(BuildingTask task) => PublishQuest(task);
+    private void HandleOrderPublished(MWI.Quests.IQuest quest) => PublishQuest(quest);
+
+    /// <summary>Stamp issuer + world/map, subscribe to state changes, fire OnQuestPublished.</summary>
+    private void PublishQuest(MWI.Quests.IQuest quest)
+    {
+        if (quest == null) return;
+
+        Character issuer = ResolveIssuer();
+        if (issuer != null) AssignIssuerIfPossible(quest, issuer);
+        StampOriginWorldAndMap(quest);
+
+        quest.OnStateChanged += HandleQuestStateChanged;
+        OnQuestPublished?.Invoke(quest);
+    }
+
+    private void HandleQuestStateChanged(MWI.Quests.IQuest quest) => OnQuestStateChanged?.Invoke(quest);
+
+    private static void AssignIssuerIfPossible(MWI.Quests.IQuest quest, Character issuer)
+    {
+        // IQuest.Issuer is declared get-only; concrete types expose public setters.
+        switch (quest)
+        {
+            case BuildingTask bt: bt.Issuer = issuer; break;
+            case BuyOrder bo: bo.Issuer = issuer; break;
+            case TransportOrder to: to.Issuer = issuer; break;
+            case CraftingOrder co: co.Issuer = issuer; break;
+        }
+    }
+
+    private void StampOriginWorldAndMap(MWI.Quests.IQuest quest)
+    {
+        var mapController = GetComponentInParent<MWI.WorldSystem.MapController>();
+        string mapId = mapController != null ? mapController.MapId : string.Empty;
+        string worldId = string.Empty;  // TODO: source from active WorldAssociation when the singleton is available to buildings.
+        switch (quest)
+        {
+            case BuildingTask bt: bt.StampOrigin(worldId, mapId); break;
+            case BuyOrder bo: bo.OriginWorldId = worldId; bo.OriginMapId = mapId; break;
+            case TransportOrder to: to.OriginWorldId = worldId; to.OriginMapId = mapId; break;
+            case CraftingOrder co: co.OriginWorldId = worldId; co.OriginMapId = mapId; break;
+        }
+    }
+
+    /// <summary>
+    /// Resolve the Character who acts as the quest issuer for this building. Priority:
+    /// 1. An assigned JobLogisticsManager worker.
+    /// 2. The building's Owner (if set and alive).
+    /// 3. null (system-issued — quest still functional).
+    /// </summary>
+    private Character ResolveIssuer()
+    {
+        var lmJob = _jobs.OfType<JobLogisticsManager>().FirstOrDefault(j => j.IsAssigned);
+        if (lmJob != null && lmJob.Worker != null) return lmJob.Worker;
+        if (HasOwner) return Owner;
+        return null;
+    }
+
+    /// <summary>Enumerate every IQuest this building currently publishes (TaskManager + OrderBook).</summary>
+    public System.Collections.Generic.IEnumerable<MWI.Quests.IQuest> GetAvailableQuests()
+    {
+        if (_taskManager != null)
+        {
+            foreach (var task in _taskManager.AvailableTasks) yield return task;
+        }
+        if (_logisticsManager != null && _logisticsManager.OrderBook != null)
+        {
+            foreach (var bo in _logisticsManager.OrderBook.PlacedBuyOrders) yield return bo;
+            foreach (var to in _logisticsManager.OrderBook.PlacedTransportOrders) yield return to;
+            foreach (var co in _logisticsManager.OrderBook.ActiveCraftingOrders) yield return co;
+        }
+    }
+
+    /// <summary>Find a tracked IQuest by id (used by save/load reconciliation on CharacterQuestLog).</summary>
+    public MWI.Quests.IQuest GetQuestById(string questId)
+    {
+        if (string.IsNullOrEmpty(questId)) return null;
+        foreach (var q in GetAvailableQuests())
+        {
+            if (q.QuestId == questId) return q;
+        }
+        return null;
     }
 
     /// <summary>
