@@ -3,7 +3,7 @@ type: system
 title: "Worker Wages and Performance"
 tags: [character, jobs, economy, wages, worklog, save, network, tier-2]
 created: 2026-04-22
-updated: 2026-04-22
+updated: 2026-04-23
 sources:
   - "Assets/Scripts/Character/CharacterWallet/CharacterWallet.cs"
   - "Assets/Scripts/Character/CharacterWorkLog/CharacterWorkLog.cs"
@@ -26,6 +26,7 @@ related:
   - "[[save-load]]"
   - "[[network]]"
   - "[[world-macro-simulation]]"
+  - "[[quest-system]]"
 status: stable
 confidence: high
 primary_agent: building-furniture-specialist
@@ -219,6 +220,7 @@ Network: wallet uses `[ClientRpc]` on every mutation. **v1 limitation:** no init
 
 ## Change log
 
+- 2026-04-23 — Cross-link with new [[quest-system]] — quests share the Character facade (`CharacterQuestLog` sits alongside `CharacterWallet` + `CharacterWorkLog`). Wage payment flow unchanged; quests are orthogonal (workers can be on a quest without changing employment). — claude
 - 2026-04-22 — Initial implementation (Tasks 1-27 of the plan + Tasks 29-35 docs) — claude
 
 ## Sources

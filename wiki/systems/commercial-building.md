@@ -5,13 +5,13 @@ tags: [building, commercial, jobs, tier-2]
 created: 2026-04-19
 updated: 2026-04-23
 sources: []
-related: ["[[building]]", "[[building-logistics-manager]]", "[[building-task-manager]]", "[[jobs-and-logistics]]", "[[shops]]", "[[crafting-loop]]", "[[worker-wages-and-performance]]", "[[dev-mode]]", "[[kevin]]"]
+related: ["[[building]]", "[[building-logistics-manager]]", "[[building-task-manager]]", "[[jobs-and-logistics]]", "[[shops]]", "[[crafting-loop]]", "[[worker-wages-and-performance]]", "[[quest-system]]", "[[dev-mode]]", "[[kevin]]"]
 status: stable
 confidence: high
 primary_agent: building-furniture-specialist
 owner_code_path: "Assets/Scripts/World/Buildings/"
 depends_on: ["[[building]]"]
-depended_on_by: ["[[jobs-and-logistics]]", "[[shops]]", "[[crafting-loop]]", "[[worker-wages-and-performance]]"]
+depended_on_by: ["[[jobs-and-logistics]]", "[[shops]]", "[[crafting-loop]]", "[[worker-wages-and-performance]]", "[[quest-system]]"]
 ---
 
 # Commercial Building
@@ -81,6 +81,7 @@ Force-assignment bypasses consent: `CommunityTracker.ImposeJobOnCitizen()` → `
 - If a subclass wants autonomous restock, **implementing `IStockProvider` is mandatory** — declaring `_itemsToSell` or `_inputStockTargets` alone does nothing until the contract is wired.
 
 ## Change log
+- 2026-04-23 — Quest aggregator: `GetAvailableQuests`, `GetQuestById`, `ResolveIssuer` (LogisticsManager Worker > Owner > null), `PublishQuest` stamps Issuer + OriginMapId. `WorkerStartingShift` auto-claims eligible quests for on-shift workers + subscribes for future publications. See [[quest-system]]. — claude
 - 2026-04-23 — Added optional `PickupZone` field for transporter pickup routing + NavMesh-based reachability safety net. Transporter no longer stalls when `StorageZone` is unreachable. See [[building-logistics-manager]] for the full flow. — claude
 - 2026-04-22 — Wage and worklog hooks added: `WorkerStartingShift` records punch-in time + calls `CharacterWorkLog.OnPunchIn`; `WorkerEndingShift` calls `FinalizeShift` + `WageSystemService.ComputeAndPayShiftWage`; new owner-gated `TrySetAssignmentWage`. See [[worker-wages-and-performance]] — claude
 - 2026-04-22 — Documented in-flight physical-state helpers (`GetWorldItemsInStorage`, `RefreshStorageInventory` with reserved-item protection, new `CountUnabsorbedItemsInBuildingZone` covering loose + worker-carried stock) — claude

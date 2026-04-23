@@ -3,7 +3,7 @@ type: system
 title: "Jobs & Logistics"
 tags: [jobs, logistics, economy, tier-1]
 created: 2026-04-18
-updated: 2026-04-22
+updated: 2026-04-23
 sources: []
 related:
   - "[[world]]"
@@ -13,6 +13,7 @@ related:
   - "[[ai]]"
   - "[[character]]"
   - "[[worker-wages-and-performance]]"
+  - "[[quest-system]]"
   - "[[kevin]]"
 status: stable
 confidence: high
@@ -31,6 +32,7 @@ depended_on_by:
   - "[[shops]]"
   - "[[world]]"
   - "[[worker-wages-and-performance]]"
+  - "[[quest-system]]"
 ---
 
 # Jobs & Logistics
@@ -241,6 +243,7 @@ VirtualResourceSupplier.TryFulfillOrder fills pending orders from virtual pools
 - [[crafting-loop]] — `CraftingBuilding`, `CraftingStation`, `JobCrafter` demand-driven flow.
 
 ## Change log
+- 2026-04-23 — Quest integration: `BuildingTask` + `BuyOrder` + `TransportOrder` + `CraftingOrder` now implement `MWI.Quests.IQuest` (Hybrid C unification). `BuildingTaskManager` + `LogisticsOrderBook` fire Add/Remove events; `CommercialBuilding` aggregates them into `OnQuestPublished` and auto-claims eligible quests for on-shift workers. Player-side HUD + save/load via `CharacterQuestLog`. Zero behavior change for NPC GOAP (`ClaimBestTask<T>` still works). See [[quest-system]]. — claude
 - 2026-04-22 — Wage and worklog hooks added: punch-in/out wage payment via [[worker-wages-and-performance]], per-job credit hooks (deposit / craft / delivery), JobAssignment now carries wage fields seeded at hire-time — claude
 - 2026-04-21 — Logistics refactor: IStockProvider + pluggable LogisticsPolicy SO + facade split + input stock contract on CraftingBuilding — claude
 - 2026-04-18 — Initial documentation pass. — Claude / [[kevin]]

@@ -12,6 +12,7 @@ related:
   - "[[commercial-building]]"
   - "[[crafting-loop]]"
   - "[[items]]"
+  - "[[quest-system]]"
   - "[[kevin]]"
 status: stable
 confidence: high
@@ -254,6 +255,7 @@ All five lists are per-building runtime state. Map hibernation does not currentl
 - [[character-relation]] — expiration penalties.
 
 ## Change log
+- 2026-04-23 — Quest integration: `BuyOrder`, `TransportOrder`, `CraftingOrder` now implement `MWI.Quests.IQuest` directly (Hybrid C). `LogisticsOrderBook` fires `OnBuyOrderAdded` / `OnTransportOrderAdded` / `OnCraftingOrderAdded` + `OnAnyOrderRemoved` events. `CraftingOrder.Workshop` parameter added (optional, default null; `LogisticsTransportDispatcher` call sites updated to pass `_building`). See [[quest-system]]. — claude
 - 2026-04-23 — Added optional `PickupZone` routing for transporters + NavMesh upfront reachability probe on `MoveToItem` / `MoveToDestination` + `BuyOrder.PathUnreachableCount` loop breaker + new `GoapAction_StageItemForPickup` on source-side `JobLogisticsManager`. Fixes transporter stalling when `StorageZone` is unreachable. — claude
 - 2026-04-22 — Extend theft-gate scan to also count items carried by the building's own workers; was firing every time the Logistics Manager picked up a crafted item to move it to storage, since the WorldItem temporarily despawns during carry — claude
 - 2026-04-22 — Gate `HandleInsufficientStock`'s "theft detected" branch via `CountUnabsorbedItemsInBuildingZone` so the dispatcher doesn't clone a completed `CraftingOrder` while items are still mid-transit from the station output to storage (fixes over-production: 10 spawned for a Quantity=3 order) — claude
