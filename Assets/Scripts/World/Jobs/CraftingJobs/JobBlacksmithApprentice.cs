@@ -1,4 +1,5 @@
 using UnityEngine;
+using MWI.WorldSystem;
 
 /// <summary>
 /// Job d'Apprenti Forgeron : assiste le forgeron principal.
@@ -7,6 +8,7 @@ using UnityEngine;
 public class JobBlacksmithApprentice : JobCrafter
 {
     public override string JobTitle => "Apprenti Forgeron";
+    public override JobType Type => JobType.BlacksmithApprentice;
 
     public JobBlacksmithApprentice(SkillSO smithingSkill, SkillTier tier = SkillTier.Novice) : base(smithingSkill, tier)
     {

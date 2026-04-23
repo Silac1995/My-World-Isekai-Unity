@@ -1,5 +1,6 @@
 using System.Linq;
 using UnityEngine;
+using MWI.WorldSystem;
 
 /// <summary>
 /// Job de Forgeron : craft des armes et armures dans une ForgeBuilding.
@@ -8,6 +9,7 @@ using UnityEngine;
 public class JobBlacksmith : JobCrafter
 {
     public override string JobTitle => "Forgeron";
+    public override JobType Type => JobType.Blacksmith;
 
     private CraftingStation _currentStation;
     private CraftingOrder _currentOrder;
@@ -204,6 +206,11 @@ public class JobBlacksmith : JobCrafter
             }
 
             _manager.UpdateCraftingOrderProgress(_currentOrder, 1);
+
+            // Wage system hook: credit the worker's WorkLog with one shift unit per item crafted
+            // against an active CraftingOrder. Only reached when _currentOrder != null, so free-form
+            // crafts (no order) do NOT get credited — per spec.
+            TryCreditWorkLog(1);
         }
 
         if (RequiredSkill != null && _worker.CharacterSkills != null)
@@ -259,5 +266,22 @@ public class JobBlacksmith : JobCrafter
         _manager = null;
         _worker?.CharacterMovement?.ResetPath();
         base.Unassign();
+    }
+
+    /// <summary>
+    /// Wage system hook: credit the worker's WorkLog with shift units for items crafted.
+    /// Uses this.Type so subclasses (e.g., JobBlacksmith → JobType.Blacksmith) credit their own bucket.
+    /// CharacterWorkLog.LogShiftUnit enforces the "no overtime" rule (post-shift logs only touch lifetime).
+    /// </summary>
+    private void TryCreditWorkLog(int amount)
+    {
+        if (amount <= 0 || _workplace == null) return;
+        var worker = Worker;
+        if (worker == null) return;
+        var workLog = worker.CharacterWorkLog;
+        if (workLog == null) return;
+
+        string buildingId = _workplace.name;
+        workLog.LogShiftUnit(this.Type, buildingId, amount);
     }
 }
