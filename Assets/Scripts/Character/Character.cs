@@ -361,6 +361,19 @@ public class Character : NetworkBehaviour
             NetworkCharacterId.Value = Guid.NewGuid().ToString("N");
         }
 
+        // Stamp OriginWorldGuid from the current world on first spawn. Server-only; save-restore
+        // overwrites with the saved value afterwards via CharacterDataCoordinator.Deserialize. If
+        // SaveManager.CurrentWorldGuid isn't ready yet (early boot, tests), leave it empty — the
+        // next spawn in a world context will fill it.
+        if (IsServer && string.IsNullOrEmpty(_originWorldGuid))
+        {
+            string currentWorld = SaveManager.Instance != null ? SaveManager.Instance.CurrentWorldGuid : null;
+            if (!string.IsNullOrEmpty(currentWorld))
+            {
+                _originWorldGuid = currentWorld;
+            }
+        }
+
         // Very important: IsOwner is true for the Host for ALL NPCs in the scene.
         // We only want the local client's specific avatar to become a "Player" with UI and Camera,
         // but ALL instances of a PlayerObject must use PlayerController logic.
