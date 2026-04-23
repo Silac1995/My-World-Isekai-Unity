@@ -8,6 +8,27 @@ public class JobAssignment
     [SerializeReference] public Job AssignedJob;
     public CommercialBuilding Workplace;
     public List<ScheduleEntry> WorkScheduleEntries = new List<ScheduleEntry>();
+
+    // Wage fields. Seeded at hire time via WageSystemService.SeedAssignmentDefaults.
+    // Owner-editable at runtime via SetWage(). Persisted via JobAssignmentSaveEntry (Task 17).
+    public MWI.Economy.CurrencyId Currency;
+    public int PieceRate;          // coins per shift unit (piece-work jobs only)
+    public int MinimumShiftWage;   // floor for piece-work jobs (additive, prorated)
+    public int FixedShiftWage;     // shop / vendor / barman / server / logistics manager
+
+    /// <summary>
+    /// Mutate wage rates at runtime. Use null to leave a field unchanged.
+    /// Caller is responsible for authorization (owner / community leader gate is in Task 27).
+    /// Returns true if any field was changed.
+    /// </summary>
+    public bool SetWage(int? pieceRate = null, int? minimumShift = null, int? fixedShift = null)
+    {
+        bool changed = false;
+        if (pieceRate.HasValue && pieceRate.Value >= 0 && pieceRate.Value != PieceRate) { PieceRate = pieceRate.Value; changed = true; }
+        if (minimumShift.HasValue && minimumShift.Value >= 0 && minimumShift.Value != MinimumShiftWage) { MinimumShiftWage = minimumShift.Value; changed = true; }
+        if (fixedShift.HasValue && fixedShift.Value >= 0 && fixedShift.Value != FixedShiftWage) { FixedShiftWage = fixedShift.Value; changed = true; }
+        return changed;
+    }
 }
 
 /// <summary>
