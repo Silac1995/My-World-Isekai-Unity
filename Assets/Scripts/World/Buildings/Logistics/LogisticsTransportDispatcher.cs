@@ -165,7 +165,8 @@ public class LogisticsTransportDispatcher
                     newRemainingToDispatch,
                     buyOrder.RemainingDays,
                     _building.Owner,
-                    buyOrder.Destination
+                    buyOrder.Destination,
+                    _building
                 );
                 _facade.PlaceCraftingOrder(craftOrder);
                 Debug.Log($"<color=cyan>[BuildingLogisticsManager]</color>   🔨 Nouvelle commande de craft interne ({newRemainingToDispatch}x) lancée pour compenser le vol.");
@@ -178,7 +179,8 @@ public class LogisticsTransportDispatcher
                 remainingToDispatch,
                 buyOrder.RemainingDays,
                 _building.Owner,
-                buyOrder.Destination
+                buyOrder.Destination,
+                _building
             );
             _facade.PlaceCraftingOrder(craftOrder);
             Debug.Log($"<color=cyan>[BuildingLogisticsManager]</color>   🔨 Génération d'un ordre de craft interne pour la BuyOrder de {buyOrder.Destination.BuildingName}.");
