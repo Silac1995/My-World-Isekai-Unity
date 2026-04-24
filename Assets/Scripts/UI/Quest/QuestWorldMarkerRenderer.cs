@@ -154,14 +154,22 @@ public class QuestWorldMarkerRenderer : MonoBehaviour
             var go = new GameObject($"QuestMarker_{label}", typeof(RectTransform), typeof(Image));
             var rect = go.GetComponent<RectTransform>();
             rect.SetParent(_markerContainer, false);
-            rect.sizeDelta = _markerSize;
-            rect.anchorMin = new Vector2(0f, 0f);
-            rect.anchorMax = new Vector2(0f, 0f);
+            // Anchor + pivot at center so transform.position (set in pixel coords for
+            // Screen Space Overlay canvases) places the marker's center at that pixel.
+            rect.anchorMin = new Vector2(0.5f, 0.5f);
+            rect.anchorMax = new Vector2(0.5f, 0.5f);
             rect.pivot = new Vector2(0.5f, 0.5f);
+            rect.sizeDelta = _markerSize;
+            rect.localScale = Vector3.one;
             var img = go.GetComponent<Image>();
             img.color = _markerColor;
             img.raycastTarget = false;
             v.HudMarker = rect;
+            Debug.Log($"[QuestMarker] Spawned HUD marker for '{quest.Title}' under {_markerContainer.name}.");
+        }
+        else
+        {
+            Debug.LogWarning("[QuestMarker] _markerContainer is null — HUD markers will not render.");
         }
 
         // Spawn world-space zone fill if the target reports a zone.
@@ -190,7 +198,19 @@ public class QuestWorldMarkerRenderer : MonoBehaviour
 
         float clampedX = Mathf.Clamp(screenPos.x, _edgePadding, Screen.width - _edgePadding);
         float clampedY = Mathf.Clamp(screenPos.y, _edgePadding, Screen.height - _edgePadding);
-        rect.anchoredPosition = new Vector2(clampedX, clampedY);
+
+        // Use ScreenPointToLocalPointInRectangle to convert screen pixels into the
+        // marker container's local coordinate space. This handles all three Canvas modes
+        // (Screen Space Overlay / Screen Space Camera / World Space) AND all CanvasScaler
+        // settings correctly — using rect.anchoredPosition with raw screen pixels
+        // breaks under "Scale With Screen Size" (where 1 unit != 1 pixel).
+        var canvas = _markerContainer != null ? _markerContainer.GetComponentInParent<Canvas>() : null;
+        Camera uiCam = (canvas != null && canvas.renderMode == RenderMode.ScreenSpaceOverlay) ? null : (canvas != null ? canvas.worldCamera : null);
+
+        if (RectTransformUtility.ScreenPointToLocalPointInRectangle(_markerContainer, new Vector2(clampedX, clampedY), uiCam, out var localPoint))
+        {
+            rect.anchoredPosition = localPoint;
+        }
     }
 
     private void DestroyVisuals(QuestVisuals v)
