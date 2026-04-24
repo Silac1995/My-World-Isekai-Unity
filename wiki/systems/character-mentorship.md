@@ -3,7 +3,7 @@ type: system
 title: "Character Mentorship"
 tags: [character, mentorship, social, teaching, tier-2]
 created: 2026-04-19
-updated: 2026-04-19
+updated: 2026-04-24
 sources: []
 related:
   - "[[social]]"
@@ -56,6 +56,10 @@ Let knowledge move through the world through social ties rather than flat unlock
 - `character.CharacterMentorship.ReceiveLessonTick(teacher, topic)` — called every tick during a lesson.
 - `character.CharacterMentorship.CanTeach(skill or abilitySO)` — gate.
 - `character.CharacterMentorship.BeginLesson(student, topic)` / `EndLesson()`.
+- `character.CharacterMentorship.CanTeachStudent(student, subject)` — tier gate (student must be strictly below `mentorTier - 1`; unknown subjects always learnable). Used by both the `InteractionMentorship` invitation and the hold-E menu provider.
+- `character.CharacterMentorship.GetInteractionOptions(interactor)` — `IInteractionProvider` hook. Emits one "Ask to teach {Subject}" entry per teachable subject, disabled-with-reason when the interactor already has a mentor or is too high-tier.
+- `character.CharacterMentorship.RequestMentorshipServerRpc(mentorNetId, subjectAssetKey)` — client-routed path for hold-E clicks. Subject key format `"{TypeName}:{AssetName}"` resolved server-side against the mentor's own `GetTeachableSubjects()` list (lookup doubles as security check).
+- `character.CharacterMentorship.CurrentMentorNetId` — server-authoritative `NetworkVariable<ulong>` tracking the mentor's `NetworkObjectId`. `CurrentMentor` property falls back to this when `_currentMentor` is null (the remote-client case).
 
 ## Dependencies
 
@@ -88,10 +92,12 @@ Let knowledge move through the world through social ties rather than flat unlock
 - [ ] Mentorship zone — is there a physical zone that gates lessons (per SKILL listing), or purely character-to-character?
 
 ## Change log
+- 2026-04-24 — Added `IInteractionProvider` surface for hold-E menu ("Ask to teach {Subject}") + `CanTeachStudent` public API (lifted from `InteractionMentorship.CanStudentStillLearn`) + `RequestMentorshipServerRpc` + `CurrentMentorNetId` NetworkVariable so remote clients see their own mentor status. Also fixed pre-existing `OnEnable/OnDisable` lifecycle bug (was `private` hiding the base → `_character.Register(this)` never ran, blocking `GetAll<IInteractionProvider>` discovery). — claude
 - 2026-04-19 — Initial pass. — Claude / [[kevin]]
 
 ## Sources
 - [.agent/skills/character-mentorship/SKILL.md](../../.agent/skills/character-mentorship/SKILL.md)
 - [.agent/skills/character-mentorship/examples/mentorship_patterns.md](../../.agent/skills/character-mentorship/examples/mentorship_patterns.md)
+- [docs/superpowers/specs/2026-04-23-ask-mentorship-and-job-interactions-design.md](../../docs/superpowers/specs/2026-04-23-ask-mentorship-and-job-interactions-design.md) — hold-E menu design spec.
 - [[social]] parent (Q7: Social hosts Mentorship sub-page).
 - [[combat]] SKILL §9.H on book learning via `IAbilitySource`.

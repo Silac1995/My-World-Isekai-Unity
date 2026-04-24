@@ -96,7 +96,10 @@ Optional overrides: `GetAcceptMessage()`, `GetRefuseMessage()`, `OnRefused()`, `
 - `PartyInvitation` — join party (requires Leadership skill)
 - `CombatAssistInvitation` — request combat help
 - `InteractionAskForJob` — job application (custom evaluation based on skills, not friendship)
+- `InteractionMentorship` — request mentorship for a specific skill/style/ability (custom evaluation via `CharacterMentorship.CalculateAcceptanceChance`; surfaced in the hold-E menu by `CharacterMentorship.IInteractionProvider` since 2026-04-24)
 - `InteractionInviteCommunity` — community membership
+
+**Hold-E provider pattern (2026-04-24):** `CharacterMentorship` and `CharacterJob` now implement `IInteractionProvider` to advertise `"Ask to teach {Subject}"` / `"Apply for {JobTitle}"` entries in the hold-E menu. Each provider has a companion `[Rpc(SendTo.Server)] Request*ServerRpc` that mirrors the existing `CharacterParty.RequestInviteToPartyServerRpc` pattern — client menu click fires the RPC on the source's own subsystem, server re-validates and calls `invitation.Execute(source, target)`. For subject transport, keys are `"{TypeName}:{AssetName}"` resolved server-side inside `GetTeachableSubjects()` (lookup = security check). Client-visible state for "has current mentor?" is via `CharacterMentorship.CurrentMentorNetId` (`NetworkVariable<ulong>`). See `.agent/skills/character-mentorship/SKILL.md` + `.agent/skills/job_system/SKILL.md` for the full API surface.
 
 ### 5. Party System (`CharacterParty`)
 

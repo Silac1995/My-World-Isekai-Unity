@@ -98,6 +98,24 @@ Job assignments survive both **map hibernation** and **player profile import** v
 - **Character-first** (player profile imports, workplace hibernated): character-side resolver waits on `BuildingManager.OnBuildingRegistered`.
 - **Both already loaded**: whichever resolver fires first wins; the other's `alreadyActive`/`IsAssigned` guard prevents double-binding.
 
+## Worker Replication (`Job.IsAssigned` / `Job.Worker` on clients)
+
+`Job` is a plain `[System.Serializable]` class, not a `NetworkBehaviour`. Its `_worker` / `_workplace` fields are set by `Job.Assign(worker, workplace)`, which is called only on the server (through `CommercialBuilding.AssignWorker`). Without replication, every client would see `_worker == null` — so `Job.IsAssigned` would return false, and client-side queries (the hold-E "Apply for Job" menu, `IsOperational`, `UI_CommercialBuildingDebugScript`, etc.) would think every slot is vacant.
+
+The replication model:
+
+- `CommercialBuilding._jobWorkerIds` — `NetworkList<FixedString64Bytes>`, **parallel to `_jobs` by index**. Empty string = unassigned. Server writes it inside `AssignWorker` / `RemoveWorker`; NGO replicates to all peers automatically.
+- `OnNetworkSpawn` pads the list to `_jobs.Count` on server, subscribes `HandleJobWorkerIdChanged`, and calls `SyncAllJobWorkersFromList()` once on clients to materialise the initial replicated state into local `Job._worker` via `Job.Assign(c, this)`.
+- `HandleJobWorkerIdChanged` fires on clients whenever the server mutates a slot; it maps the changed index back to a `Character` via `Character.FindByUUID`, then calls `Job.Assign` / `Job.Unassign` locally so `job.IsAssigned` / `job.Worker` now answer correctly.
+- **Late-join / map wake-up deferral**: if `FindByUUID` returns null (character not yet spawned on this peer), the slot is queued in `_pendingJobWorkerBinds` and a one-shot `Character.OnCharacterSpawned` subscription retries until the dictionary empties (mirrors the existing `RestoreFromSaveData` pattern). Cleanup in `OnNetworkDespawn`.
+- **Server is source of truth**: `HandleJobWorkerIdChanged` short-circuits on `IsServer` — the server already has the correct `_worker` reference from `job.Assign`, and re-applying could flip state on `Clear`/`RemoveAt` events.
+
+**Parallel-by-index invariant**: every peer runs `InitializeJobs()` locally in `Awake`, so `_jobs` has identical length and order across host, client, and NPC simulation. Never mutate `_jobs` conditionally per peer — breaking the invariant would desync the list.
+
+**Consequence for call sites**: `job.IsAssigned` / `job.Worker` now return correct values on every peer. Any existing call site (`CharacterJob.GetInteractionOptions`, `CommercialBuilding.IsOperational`, `CommercialBuilding.GetAvailableJobs`, debug UIs, etc.) works without modification.
+
+**Server-only API**: `AssignWorker` / `RemoveWorker` are now `if (!IsServer) return` guarded. Client callers must route through `CharacterJob.RequestJobApplicationServerRpc` or equivalent.
+
 ## Wage Integration
 
 Jobs now carry a wage contract per assignment, seeded at hire-time and mutable by owners afterwards.
@@ -119,6 +137,24 @@ Jobs now carry a wage contract per assignment, seeded at hire-time and mutable b
     - If it's an existing item, use the methods in `Assets/Scripts/Item/ItemInstance.cs` to keep the ItemInstance parameters intact.
 - **Centralized Drop Execution**: NEVER manually instantiate items on the ground via `WorldItem.SpawnWorldItem()` inside Job or GOAP scripts. You must always funnel dropping through the physical execution pipeline by calling `worker.CharacterActions.ExecuteAction(new CharacterDropItem(worker, item))` to ensure animations, inventory extractions, and ground offsets are perfectly synchronized.
 - **Job Cancellation Null-Safety**: When an invalid state logically forces a job to abort (`CancelCurrentOrder()`), it will aggressively forcefully nullify `_currentAction = null` down the chain. Wrapper execution loops (like `JobTransporter.Execute()`) must rigidly verify `if (_currentAction != null)` upon returning from `.Execute()` before blindly querying `_currentAction.IsComplete`, preventing fatal `NullReferenceException` game locks.
+
+## Player Entry Point: Hold-E Menu Provider (2026-04-24)
+
+`CharacterJob` implements `IInteractionProvider`. When a player holds E on a character that owns a `CommercialBuilding` (`IsOwner == true`) with vacant jobs, the hold-E menu emits one `"Apply for {JobTitle}"` entry per vacant job.
+
+- **Gating:** Entry is disabled with `(you already have a job)` when the interactor's `CharacterJob.HasJob == true`. Entries are NOT emitted for fully-staffed buildings, non-owner targets, or targets missing `CharacterJob`.
+- **Stable job index:** the provider iterates the full `CommercialBuilding.Jobs` list (not the volatile `GetAvailableJobs()` subset) and passes the natural index to the click handler. This survives races where another NPC takes a slot between menu-build and click — the server revalidates `!job.IsAssigned` before constructing the invitation.
+- **Click routing:** `IsServer` → direct `InteractionAskForJob(building, job).Execute(interactor, owner)`. Remote clients route via `RequestJobApplicationServerRpc(ownerNetId, jobStableIndex)`. Server re-validates ownership, index range, and vacancy before executing.
+- **Player-to-player support:** `InteractionAskForJob` inherits `InteractionInvitation`, so player-owner targets automatically get the `UI_InvitationPrompt` accept/refuse flow with no new UI.
+
+### Ownership state consistency fix shipped alongside
+
+The old `CharacterJob._ownedBuilding` private field was a cached reference set by `BecomeOwner`, but it wasn't replicated — remote clients saw it as null even when the server had assigned ownership, breaking both the provider's `IsOwner` gate and any consumer of `CharacterJob.OwnedBuilding`. Fix: `OwnedBuilding` is now derived — it scans `BuildingManager.Instance.allBuildings` for the first `CommercialBuilding` whose `Room._ownerIds` NetworkList lists this character (`Room.IsOwner(Character)`). `IsOwner` is derived from `OwnedBuilding != null`. Since `Room._ownerIds` is a replicated NetworkList, every peer now sees consistent ownership.
+
+### New public APIs
+- `CharacterJob.OwnedBuilding` (property, was `_ownedBuilding` private field).
+- `CharacterJob.GetInteractionOptions(interactor)` — `IInteractionProvider` hook.
+- `CharacterJob.RequestJobApplicationServerRpc(ulong ownerNetId, int jobStableIndex)` — `[Rpc(SendTo.Server)]` entry point.
 
 ## Quest Integration (2026-04-23)
 
