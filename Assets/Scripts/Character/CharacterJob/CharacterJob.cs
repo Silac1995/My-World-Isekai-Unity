@@ -40,7 +40,6 @@ public class CharacterJob : CharacterSystem, ICharacterSaveData<JobSaveData>, II
 {
 
     [SerializeField] private List<JobAssignment> _activeJobs = new List<JobAssignment>();
-    private CommercialBuilding _ownedBuilding; // Lieu dont il est prioritaire
 
     /// <summary>
     /// Saved job data from deserialization, keyed on workplace BuildingId. Resolved
@@ -232,11 +231,30 @@ public class CharacterJob : CharacterSystem, ICharacterSaveData<JobSaveData>, II
     }
 
     /// <summary>
+    /// The first CommercialBuilding in the world registry where this character is listed
+    /// as an owner. Derived from the replicated `Room._ownerIds` NetworkList via
+    /// `Room.IsOwner(Character)`, so the answer is consistent on every peer (host, remote
+    /// client, NPC) — no cached field to go stale.
+    /// </summary>
+    public CommercialBuilding OwnedBuilding
+    {
+        get
+        {
+            if (_character == null || BuildingManager.Instance == null) return null;
+            var all = BuildingManager.Instance.allBuildings;
+            for (int i = 0; i < all.Count; i++)
+            {
+                if (all[i] is CommercialBuilding commercial && commercial.IsOwner(_character))
+                    return commercial;
+            }
+            return null;
+        }
+    }
+
+    /// <summary>
     /// Le personnage est-il propriétaire de son lieu de travail ?
     /// </summary>
-    public bool IsOwner => _ownedBuilding != null && _ownedBuilding.Owner == _character;
-
-    public CommercialBuilding OwnedBuilding => _ownedBuilding;
+    public bool IsOwner => OwnedBuilding != null;
 
     /// <summary>
     /// Demande un job en passant par le building.
@@ -456,9 +474,11 @@ public class CharacterJob : CharacterSystem, ICharacterSaveData<JobSaveData>, II
     {
         if (building == null) return false;
 
-        // Devenir propriétaire (SetOwner assigne le Owner du building)
+        // Devenir propriétaire (SetOwner replicates _ownerIds via NetworkList; the
+        // derived IsOwner/OwnedBuilding accessors now read from that replicated state,
+        // so no cached local field is needed — avoids the dev-mode bypass bug where the
+        // cache went stale when ownership was set via Building.SetOwner directly).
         building.SetOwner(_character, optionalJob);
-        _ownedBuilding = building;
 
         if (optionalJob != null)
         {
@@ -478,9 +498,8 @@ public class CharacterJob : CharacterSystem, ICharacterSaveData<JobSaveData>, II
         if (interactor == null || interactor == _character) return null;
         if (interactor.CharacterJob == null) return null; // source can't hold jobs
 
-        if (!IsOwner) return null;
         var building = OwnedBuilding;
-        if (building == null) return null;
+        if (building == null) return null; // not an owner of any CommercialBuilding
 
         // Iterate the full Jobs list once with a natural stable index; skip assigned.
         // Avoids computing index via GetAvailableJobs + IndexOf (O(N²) + IReadOnlyList.IndexOf unavailable).
