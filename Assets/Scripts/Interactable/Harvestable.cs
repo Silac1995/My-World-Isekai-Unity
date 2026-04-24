@@ -99,6 +99,18 @@ public class Harvestable : InteractableObject
 
         _currentHarvestCount++;
 
+        // Quest progress: if the harvester has an active HarvestResourceTask whose
+        // target IS this harvestable, record one unit of progress so the HUD updates
+        // live (and the quest auto-completes when TotalProgress >= Required). Server-only
+        // because Harvest itself is server-only (CharacterActions.ApplyHarvestOnServer
+        // gates this with `if (IsSpawned && !IsServer) return null;`).
+        //
+        // Recorded BEFORE Deplete so the final harvest goes through the "Completed" state
+        // path (TotalProgress >= Required while IsValid still true) instead of "Expired"
+        // (IsValid flips false the moment we Deplete). End-user impact is the same — the
+        // quest disappears from the log either way — but Completed is the natural state.
+        NotifyHarvesterQuestProgress(harvester);
+
         if (_isDepletable && _currentHarvestCount >= _maxHarvestCount)
         {
             Deplete();
@@ -106,6 +118,19 @@ public class Harvestable : InteractableObject
 
         Debug.Log($"<color=green>[Harvest]</color> {harvester.CharacterName} a récolté {harvestedItem.ItemName}.");
         return harvestedItem;
+    }
+
+    private void NotifyHarvesterQuestProgress(Character harvester)
+    {
+        if (harvester == null || harvester.CharacterQuestLog == null) return;
+        foreach (var quest in harvester.CharacterQuestLog.ActiveQuests)
+        {
+            if (quest is HarvestResourceTask hrt && hrt.HarvestableTarget == this)
+            {
+                quest.RecordProgress(harvester, 1);
+                return;
+            }
+        }
     }
 
     /// <summary>
