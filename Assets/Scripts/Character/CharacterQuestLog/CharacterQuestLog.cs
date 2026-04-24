@@ -34,9 +34,22 @@ public class CharacterQuestLog : CharacterSystem, ICharacterSaveData<QuestLogSav
     {
         get
         {
-            var list = new List<IQuest>(_liveQuests.Count);
-            foreach (var q in _liveQuests.Values) list.Add(q);
-            return list;
+            // Server: live IQuest references in _liveQuests.
+            // Client: snapshot proxies built from _snapshots (live refs aren't replicated
+            // across the network — the ClientRpc only ships the denormalized snapshot).
+            if (_liveQuests.Count > 0)
+            {
+                var list = new List<IQuest>(_liveQuests.Count);
+                foreach (var q in _liveQuests.Values) list.Add(q);
+                return list;
+            }
+            if (_snapshots.Count > 0)
+            {
+                var list = new List<IQuest>(_snapshots.Count);
+                foreach (var snap in _snapshots.Values) list.Add(new SnapshotQuestProxy(snap));
+                return list;
+            }
+            return Array.Empty<IQuest>();
         }
     }
 
@@ -45,7 +58,11 @@ public class CharacterQuestLog : CharacterSystem, ICharacterSaveData<QuestLogSav
         get
         {
             var id = _focusedQuestId.Value.ToString();
-            return string.IsNullOrEmpty(id) ? null : (_liveQuests.TryGetValue(id, out var q) ? q : null);
+            if (string.IsNullOrEmpty(id)) return null;
+            // Prefer the live ref (server). On client the live dict is empty — fall back to snapshot.
+            if (_liveQuests.TryGetValue(id, out var live)) return live;
+            if (_snapshots.TryGetValue(id, out var snap)) return new SnapshotQuestProxy(snap);
+            return null;
         }
     }
 

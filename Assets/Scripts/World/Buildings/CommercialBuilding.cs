@@ -1,5 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
+using Unity.Collections;
+using Unity.Netcode;
 using UnityEngine;
 using MWI.WorldSystem;
 
@@ -28,6 +30,33 @@ public abstract class CommercialBuilding : Building
     protected List<Character> _activeWorkersOnShift = new List<Character>();
     protected List<ItemInstance> _inventory = new List<ItemInstance>();
 
+    /// <summary>
+    /// Server-authoritative replicated worker assignments, parallel to <see cref="_jobs"/> by index.
+    /// Empty string = unassigned. Clients mirror each entry into their local Job._worker via
+    /// <see cref="HandleJobWorkerIdChanged"/>, so Job.IsAssigned / Job.Worker evaluate consistently
+    /// on every peer. Without this, the plain C# field `Job._worker` is only set on the server
+    /// and the hold-E menu (plus any other client-side query) would see every slot as vacant.
+    /// </summary>
+    private NetworkList<FixedString64Bytes> _jobWorkerIds;
+
+    /// <summary>
+    /// Server-authoritative replicated roster of workers currently on shift (punched in).
+    /// Mirrors <see cref="_activeWorkersOnShift"/> by CharacterId so clients can answer
+    /// "am I / is X on shift here?" without server-only <c>List&lt;Character&gt;</c> access.
+    /// Used by <see cref="IsWorkerOnShift"/> + the Time Clock interactable's Punch In /
+    /// Punch Out UI picker. Server writes via <c>WorkerStartingShift</c> /
+    /// <c>WorkerEndingShift</c>; clients are read-only.
+    /// </summary>
+    private NetworkList<FixedString64Bytes> _activeWorkerIds;
+
+    /// <summary>
+    /// Client-side pending binds. Populated when the replicated list arrives before the
+    /// referenced Character instance has spawned on this peer (late-join / map wake-up).
+    /// Resolved via <see cref="HandleCharacterSpawnedForJobWorkerBind"/>.
+    /// </summary>
+    private readonly Dictionary<int, string> _pendingJobWorkerBinds = new Dictionary<int, string>();
+    private bool _waitingForJobWorkerBinds = false;
+
     protected BuildingTaskManager _taskManager;
     protected BuildingLogisticsManager _logisticsManager;
 
@@ -43,9 +72,27 @@ public abstract class CommercialBuilding : Building
     public Zone StorageZone => _storageZone;
     public Zone PickupZone => _pickupZone;
     public IReadOnlyList<ItemInstance> Inventory => _inventory;
-    
+
     public BuildingTaskManager TaskManager => _taskManager;
     public BuildingLogisticsManager LogisticsManager => _logisticsManager;
+
+    // Cached once — TimeClock is a child furniture authored into the prefab/scene.
+    // Rebuilds lazily when we detect the cached reference was destroyed (furniture
+    // pick-up / replace). Null when the building has no clock authored yet, which
+    // BTAction_Work + BTAction_PunchOut treat as a soft-fallback condition
+    // (legacy "punch anywhere in BuildingZone" keeps working).
+    private TimeClockFurniture _cachedTimeClock;
+    public TimeClockFurniture TimeClock
+    {
+        get
+        {
+            if (_cachedTimeClock == null)
+            {
+                _cachedTimeClock = GetComponentInChildren<TimeClockFurniture>(includeInactive: false);
+            }
+            return _cachedTimeClock;
+        }
+    }
 
     /// <summary>
     /// Le building est opérationnel si tous les jobs sont occupés par un worker et s'il a terminé sa construction.
@@ -54,14 +101,19 @@ public abstract class CommercialBuilding : Building
 
     protected override void Awake()
     {
+        // NetworkList must exist before base.Awake (matches Room._ownerIds pattern —
+        // NGO inspects the list handle during SceneNetworkObject registration).
+        _jobWorkerIds = new NetworkList<FixedString64Bytes>();
+        _activeWorkerIds = new NetworkList<FixedString64Bytes>();
+
         base.Awake();
-        
+
         _taskManager = gameObject.GetComponent<BuildingTaskManager>();
         if (_taskManager == null)
         {
             _taskManager = gameObject.AddComponent<BuildingTaskManager>();
         }
-        
+
         _logisticsManager = gameObject.GetComponent<BuildingLogisticsManager>();
         if (_logisticsManager == null)
         {
@@ -70,6 +122,32 @@ public abstract class CommercialBuilding : Building
 
         InitializeJobs();
         HookQuestPublishingEvents();
+    }
+
+    public override void OnNetworkSpawn()
+    {
+        base.OnNetworkSpawn();
+
+        if (IsServer)
+        {
+            // Pad the replicated list to match the authored _jobs roster.
+            // Every peer ran InitializeJobs() locally in Awake, so `_jobs.Count` is
+            // identical across peers and the parallel-by-index scheme is safe.
+            while (_jobWorkerIds.Count < _jobs.Count)
+            {
+                _jobWorkerIds.Add(new FixedString64Bytes(""));
+            }
+        }
+
+        _jobWorkerIds.OnListChanged += HandleJobWorkerIdChanged;
+
+        // Late-join / wake-up: the NetworkList arrives populated; walk it once to
+        // materialise Job._worker on this peer. Skipped on the server because
+        // AssignWorker already set _worker directly via job.Assign.
+        if (!IsServer)
+        {
+            SyncAllJobWorkersFromList();
+        }
     }
 
     // =========================================================================
@@ -187,25 +265,134 @@ public abstract class CommercialBuilding : Building
     protected abstract void InitializeJobs();
 
     /// <summary>
-    /// Assigne un worker à un job spécifique dans ce building.
+    /// Assigne un worker à un job spécifique dans ce building. Server-only —
+    /// writes to the replicated <see cref="_jobWorkerIds"/> list so clients mirror
+    /// the change into their local Job._worker via the OnListChanged callback.
     /// </summary>
     public bool AssignWorker(Character worker, Job job)
     {
+        if (!IsServer) return false;
         if (worker == null || job == null) return false;
-        if (!_jobs.Contains(job)) return false;
+        int idx = _jobs.IndexOf(job);
+        if (idx < 0) return false;
         if (job.IsAssigned) return false;
 
         job.Assign(worker, this);
+
+        // Pad defensively in case OnNetworkSpawn hasn't run yet (e.g. restore during spawn).
+        while (_jobWorkerIds.Count <= idx)
+        {
+            _jobWorkerIds.Add(new FixedString64Bytes(""));
+        }
+        _jobWorkerIds[idx] = new FixedString64Bytes(worker.CharacterId ?? "");
         return true;
     }
 
     /// <summary>
-    /// Retire un worker d'un job.
+    /// Retire un worker d'un job. Server-only — clears the replicated slot so clients
+    /// mirror the un-assignment.
     /// </summary>
     public void RemoveWorker(Job job)
     {
-        if (job == null || !_jobs.Contains(job)) return;
+        if (!IsServer) return;
+        if (job == null) return;
+        int idx = _jobs.IndexOf(job);
+        if (idx < 0) return;
+
         job.Unassign();
+        if (idx < _jobWorkerIds.Count)
+        {
+            _jobWorkerIds[idx] = new FixedString64Bytes("");
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    //  Client-side worker-assignment mirroring
+    // ─────────────────────────────────────────────────────────────
+
+    private void SyncAllJobWorkersFromList()
+    {
+        if (IsServer) return;
+        int bound = System.Math.Min(_jobs.Count, _jobWorkerIds.Count);
+        for (int i = 0; i < bound; i++)
+        {
+            ApplyJobWorkerIdFromList(i);
+        }
+    }
+
+    private void HandleJobWorkerIdChanged(NetworkListEvent<FixedString64Bytes> evt)
+    {
+        // Server already has the correct local _worker reference from job.Assign — don't
+        // double-apply (would at best be a no-op, at worst flip state if the event type
+        // is Clear/RemoveAt and we re-materialise from a stale index).
+        if (IsServer) return;
+        ApplyJobWorkerIdFromList(evt.Index);
+    }
+
+    private void ApplyJobWorkerIdFromList(int idx)
+    {
+        if (idx < 0 || idx >= _jobs.Count || idx >= _jobWorkerIds.Count) return;
+        var job = _jobs[idx];
+        if (job == null) return;
+
+        string id = _jobWorkerIds[idx].ToString();
+        _pendingJobWorkerBinds.Remove(idx); // any stale pending entry for this slot is obsolete
+
+        if (string.IsNullOrEmpty(id))
+        {
+            if (job.IsAssigned) job.Unassign();
+            return;
+        }
+
+        Character c = Character.FindByUUID(id);
+        if (c != null)
+        {
+            if (job.IsAssigned && job.Worker != c) job.Unassign();
+            if (!job.IsAssigned) job.Assign(c, this);
+            return;
+        }
+
+        // Character isn't loaded on this peer yet — queue and retry on CharacterSpawned.
+        _pendingJobWorkerBinds[idx] = id;
+        SubscribeJobWorkerBindListener();
+    }
+
+    private void SubscribeJobWorkerBindListener()
+    {
+        if (_waitingForJobWorkerBinds) return;
+        Character.OnCharacterSpawned += HandleCharacterSpawnedForJobWorkerBind;
+        _waitingForJobWorkerBinds = true;
+    }
+
+    private void UnsubscribeJobWorkerBindListener()
+    {
+        if (!_waitingForJobWorkerBinds) return;
+        Character.OnCharacterSpawned -= HandleCharacterSpawnedForJobWorkerBind;
+        _waitingForJobWorkerBinds = false;
+    }
+
+    private void HandleCharacterSpawnedForJobWorkerBind(Character spawned)
+    {
+        if (spawned == null || _pendingJobWorkerBinds.Count == 0) return;
+        string spawnedId = spawned.CharacterId;
+        if (string.IsNullOrEmpty(spawnedId)) return;
+
+        List<int> resolved = null;
+        foreach (var kvp in _pendingJobWorkerBinds)
+        {
+            if (kvp.Value == spawnedId)
+            {
+                (resolved ??= new List<int>()).Add(kvp.Key);
+            }
+        }
+        if (resolved == null) return;
+
+        foreach (int idx in resolved)
+        {
+            ApplyJobWorkerIdFromList(idx); // Remove-from-pending happens inside Apply.
+        }
+
+        if (_pendingJobWorkerBinds.Count == 0) UnsubscribeJobWorkerBindListener();
     }
 
     /// <summary>
@@ -248,6 +435,18 @@ public abstract class CommercialBuilding : Building
     {
         if (!IsServer) return;
 
+        // Mirror the upcoming _ownerIds clear into each old owner's CharacterLocations
+        // BEFORE we clear the NetworkList — otherwise we lose the ability to resolve them
+        // and their OwnedBuildings would keep a dangling reference to this building.
+        for (int i = _ownerIds.Count - 1; i >= 0; i--)
+        {
+            Character oldOwner = Character.FindByUUID(_ownerIds[i].ToString());
+            if (oldOwner != null && oldOwner.CharacterLocations != null)
+            {
+                oldOwner.CharacterLocations.UnregisterOwnedBuilding(this);
+            }
+        }
+
         // Remove from old community
         if (_ownerCommunity != null && _ownerCommunity.ownedBuildings.Contains(this))
         {
@@ -258,6 +457,13 @@ public abstract class CommercialBuilding : Building
         // clients receive the change via NetworkList replication.
         while (_ownerIds.Count > 0) _ownerIds.RemoveAt(0);
         if (newOwner != null) AddOwner(newOwner); // Inherited from Room — adds newOwner.CharacterId to _ownerIds.
+
+        // Mirror into the new owner's CharacterLocations so OwnedBuildings stays in sync
+        // with the building-side _ownerIds NetworkList.
+        if (newOwner != null && newOwner.CharacterLocations != null)
+        {
+            newOwner.CharacterLocations.RegisterOwnedBuilding(this);
+        }
 
         // Add to new community if applicable
         if (newOwner != null && newOwner.CharacterCommunity != null && newOwner.CharacterCommunity.CurrentCommunity != null)
@@ -461,6 +667,11 @@ public abstract class CommercialBuilding : Building
 
     public override void OnNetworkDespawn()
     {
+        if (_jobWorkerIds != null)
+        {
+            _jobWorkerIds.OnListChanged -= HandleJobWorkerIdChanged;
+        }
+        UnsubscribeJobWorkerBindListener();
         UnsubscribeRestoreListener();
         base.OnNetworkDespawn();
     }
@@ -620,11 +831,118 @@ public abstract class CommercialBuilding : Building
     }
 
     /// <summary>
+    /// Client → Server entry point for a player touching this building's Time Clock
+    /// furniture. Server re-validates employment + resolves the worker by id, then
+    /// routes to the shared <see cref="TimeClockFurnitureInteractable.RunPunchCycleServerSide"/>
+    /// so player and NPC punch cycles share a single code path.
+    /// NPCs never send this RPC — they live on the server and call the interactable
+    /// directly via BT nodes.
+    /// </summary>
+    [Unity.Netcode.ServerRpc(RequireOwnership = false)]
+    public void RequestPunchAtTimeClockServerRpc(string workerId)
+    {
+        if (string.IsNullOrEmpty(workerId)) return;
+        Character worker = Character.FindByUUID(workerId);
+        if (worker == null)
+        {
+            Debug.LogWarning($"[CommercialBuilding] RequestPunchAtTimeClockServerRpc: worker '{workerId}' not found on server.");
+            return;
+        }
+
+        // Re-validate authorization server-side (defence-in-depth; client-side check
+        // in TimeClockFurnitureInteractable.Interact is UX-only).
+        if (!IsWorkerEmployedHere(worker))
+        {
+            Debug.LogWarning($"[CommercialBuilding] Punch denied: {worker.CharacterName} is not employed at {buildingName}.");
+            return;
+        }
+
+        var clock = TimeClock;
+        if (clock == null)
+        {
+            Debug.LogWarning($"[CommercialBuilding] {buildingName} has no TimeClockFurniture authored — cannot honour player punch request.");
+            return;
+        }
+
+        var interactable = clock.GetComponent<TimeClockFurnitureInteractable>();
+        if (interactable == null)
+        {
+            Debug.LogError($"[CommercialBuilding] TimeClockFurniture on {buildingName} is missing a TimeClockFurnitureInteractable sibling component.");
+            return;
+        }
+
+        // Proximity gate — prevent a rogue/modded client from firing the RPC
+        // from anywhere. Canonical Interactable-System rule:
+        // InteractableObject.IsCharacterInInteractionZone(character) tests
+        // Character.Rigidbody.position against the authored InteractionZone
+        // AABB. Zone size is the single source of truth — no bespoke
+        // Vector3.Distance < radius checks.
+        if (!interactable.IsCharacterInInteractionZone(worker))
+        {
+            Debug.LogWarning($"[CommercialBuilding] Punch denied: {worker.CharacterName} is not inside the Time Clock interaction zone at {buildingName}.");
+            return;
+        }
+
+        interactable.RunPunchCycleServerSide(worker);
+    }
+
+    /// <summary>
+    /// Employment predicate used by the punch ServerRpc + the interactable's
+    /// client-side eligibility short-circuit. Reads the replicated
+    /// <see cref="_jobWorkerIds"/> NetworkList so the answer is identical on
+    /// server and clients — <c>CharacterJob._activeJobs</c> itself is
+    /// server-only, which is why we can't rely on it for the client-side
+    /// short-circuit (clients would always see "not employed" and the toast
+    /// would fire before the ServerRpc could even go out).
+    /// </summary>
+    public bool IsWorkerEmployedHere(Character worker)
+    {
+        if (worker == null) return false;
+        string id = worker.CharacterId;
+        if (string.IsNullOrEmpty(id)) return false;
+        for (int i = 0; i < _jobWorkerIds.Count; i++)
+        {
+            if (_jobWorkerIds[i].ToString() == id) return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Shift-presence predicate reading the replicated <see cref="_activeWorkerIds"/>
+    /// NetworkList. Works on server and clients — clients can see who is punched in
+    /// without relying on the server-only <see cref="_activeWorkersOnShift"/>.
+    /// Used by the Time Clock interactable to pick Punch In vs Punch Out both
+    /// client-side (UI prompt) and server-side (action choice).
+    /// </summary>
+    public bool IsWorkerOnShift(Character worker)
+    {
+        if (worker == null) return false;
+        string id = worker.CharacterId;
+        if (string.IsNullOrEmpty(id)) return false;
+        for (int i = 0; i < _activeWorkerIds.Count; i++)
+        {
+            if (_activeWorkerIds[i].ToString() == id) return true;
+        }
+        return false;
+    }
+
+    /// <summary>
     /// Appelé par un employé lorsqu'il arrive physiquement sur son lieu de travail
     /// et commence (Punch In).
     /// </summary>
     public virtual void WorkerStartingShift(Character worker)
     {
+        // Server-authority guard (defence-in-depth). WorkerStartingShift mutates
+        // server-only state (_activeWorkersOnShift, _punchInTimeByWorker, quest
+        // auto-claim hooks). Client-side callers must route through
+        // RequestPunchAtTimeClockServerRpc. Offline / solo keeps working because
+        // NetworkManager.Singleton is null OR !IsListening.
+        if (!IsServer && Unity.Netcode.NetworkManager.Singleton != null && Unity.Netcode.NetworkManager.Singleton.IsListening)
+        {
+            Debug.LogError("[CommercialBuilding] WorkerStartingShift called on non-server instance. Route through RequestPunchAtTimeClockServerRpc.");
+            return;
+        }
+
         // Wage system hook: record punch-in time + notify worker's WorkLog.
         if (worker != null)
         {
@@ -658,6 +976,19 @@ public abstract class CommercialBuilding : Building
         if (worker != null && !_activeWorkersOnShift.Contains(worker))
         {
             _activeWorkersOnShift.Add(worker);
+
+            // Mirror into the replicated roster so clients can answer IsWorkerOnShift.
+            // Server-only write; NetworkList replicates the change to every peer.
+            if (_activeWorkerIds != null && !string.IsNullOrEmpty(worker.CharacterId))
+            {
+                bool alreadyPresent = false;
+                for (int i = 0; i < _activeWorkerIds.Count; i++)
+                {
+                    if (_activeWorkerIds[i].ToString() == worker.CharacterId) { alreadyPresent = true; break; }
+                }
+                if (!alreadyPresent) _activeWorkerIds.Add(new FixedString64Bytes(worker.CharacterId));
+            }
+
             Debug.Log($"<color=green>[Building]</color> {worker.CharacterName} a pointé (Punch In) à {buildingName}.");
 
             // Déclencher la logique logistique si c'est le manager
@@ -688,6 +1019,12 @@ public abstract class CommercialBuilding : Building
     private readonly System.Collections.Generic.Dictionary<Character, System.Action<MWI.Quests.IQuest>> _questAutoClaimHandlers
         = new System.Collections.Generic.Dictionary<Character, System.Action<MWI.Quests.IQuest>>();
 
+    // Per-worker set of quest IDs this building auto-claimed onto them. Used by
+    // WorkerEndingShift to abandon those quests on punch-out so the worker isn't
+    // left holding employer-issued work after they go off shift.
+    private readonly System.Collections.Generic.Dictionary<Character, System.Collections.Generic.HashSet<string>> _workerClaimedQuestIds
+        = new System.Collections.Generic.Dictionary<Character, System.Collections.Generic.HashSet<string>>();
+
     private void TryAutoClaimExistingQuests(Character worker)
     {
         if (worker == null || worker.CharacterQuestLog == null) return;
@@ -695,7 +1032,10 @@ public abstract class CommercialBuilding : Building
         {
             if (IsQuestEligibleForWorker(quest, worker))
             {
-                worker.CharacterQuestLog.TryClaim(quest);
+                if (worker.CharacterQuestLog.TryClaim(quest))
+                {
+                    RecordWorkerClaimed(worker, quest.QuestId);
+                }
             }
         }
     }
@@ -724,7 +1064,56 @@ public abstract class CommercialBuilding : Building
     {
         if (worker == null || worker.CharacterQuestLog == null) return;
         if (!IsQuestEligibleForWorker(quest, worker)) return;
-        worker.CharacterQuestLog.TryClaim(quest);
+        if (worker.CharacterQuestLog.TryClaim(quest))
+        {
+            RecordWorkerClaimed(worker, quest.QuestId);
+        }
+    }
+
+    private void RecordWorkerClaimed(Character worker, string questId)
+    {
+        if (worker == null || string.IsNullOrEmpty(questId)) return;
+        if (!_workerClaimedQuestIds.TryGetValue(worker, out var set))
+        {
+            set = new System.Collections.Generic.HashSet<string>();
+            _workerClaimedQuestIds[worker] = set;
+        }
+        set.Add(questId);
+    }
+
+    /// <summary>
+    /// Abandon every quest this building has auto-claimed onto <paramref name="worker"/>
+    /// during their shift. Called from WorkerEndingShift so workers don't keep
+    /// employer-issued quests on their log after punching out.
+    ///
+    /// Tracking-set approach (vs. walking ActiveQuests + checking issuer): correct
+    /// even when GetAvailableQuests no longer reports the quest (HarvestResourceTask
+    /// moves to in-progress on claim and disappears from AvailableTasks immediately).
+    /// </summary>
+    private void AbandonWorkerClaimedQuests(Character worker)
+    {
+        if (worker == null || worker.CharacterQuestLog == null) return;
+        if (!_workerClaimedQuestIds.TryGetValue(worker, out var set) || set.Count == 0)
+        {
+            _workerClaimedQuestIds.Remove(worker);
+            return;
+        }
+
+        // Snapshot ids so we don't mutate the set we're iterating, and we can drop
+        // it whole at the end.
+        var ids = new System.Collections.Generic.List<string>(set);
+        foreach (var questId in ids)
+        {
+            // Find the live quest in the worker's active list (server only — client
+            // path is no-op here because punch-out runs on the server).
+            MWI.Quests.IQuest match = null;
+            foreach (var q in worker.CharacterQuestLog.ActiveQuests)
+            {
+                if (q != null && q.QuestId == questId) { match = q; break; }
+            }
+            if (match != null) worker.CharacterQuestLog.TryAbandon(match);
+        }
+        _workerClaimedQuestIds.Remove(worker);
     }
 
     private bool IsQuestEligibleForWorker(MWI.Quests.IQuest quest, Character worker)
@@ -802,9 +1191,16 @@ public abstract class CommercialBuilding : Building
     /// </summary>
     public virtual void WorkerEndingShift(Character worker)
     {
+        // Server-authority guard — mirror WorkerStartingShift. Defence-in-depth;
+        // CharacterWallet.AddCoins also guards wage payment, but bailing early keeps
+        // _activeWorkersOnShift + WorkLog writes consistent across peers.
+        if (!IsServer && Unity.Netcode.NetworkManager.Singleton != null && Unity.Netcode.NetworkManager.Singleton.IsListening)
+        {
+            Debug.LogError("[CommercialBuilding] WorkerEndingShift called on non-server instance. Route through RequestPunchAtTimeClockServerRpc.");
+            return;
+        }
+
         // Wage system hook: finalize WorkLog shift + compute & pay wage.
-        // Mirrors WorkerStartingShift's lack of a server-authority guard — the wallet's
-        // own AddCoins guard is the defense in depth (wage payment will no-op on clients).
         if (worker != null)
         {
             // Look up the assignment for this worker at this building.
@@ -845,12 +1241,29 @@ public abstract class CommercialBuilding : Building
             }
 
             _punchInTimeByWorker.Remove(worker);
+            // Quest cleanup: drop the OnQuestPublished subscription AND abandon every
+            // quest this building auto-claimed onto the worker during their shift.
             UnsubscribeWorkerQuestAutoClaim(worker);
+            AbandonWorkerClaimedQuests(worker);
         }
 
         if (worker != null && _activeWorkersOnShift.Contains(worker))
         {
             _activeWorkersOnShift.Remove(worker);
+
+            // Mirror removal into the replicated roster. Server-only write.
+            if (_activeWorkerIds != null && !string.IsNullOrEmpty(worker.CharacterId))
+            {
+                for (int i = _activeWorkerIds.Count - 1; i >= 0; i--)
+                {
+                    if (_activeWorkerIds[i].ToString() == worker.CharacterId)
+                    {
+                        _activeWorkerIds.RemoveAt(i);
+                        break;
+                    }
+                }
+            }
+
             Debug.Log($"<color=orange>[Building]</color> {worker.CharacterName} a dépointé (Punch Out) de {buildingName}.");
 
             if (worker.CharacterJob != null)
