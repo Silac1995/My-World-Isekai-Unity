@@ -54,7 +54,7 @@ public class QuestWorldMarkerRenderer : MonoBehaviour
 
     [Header("Diagnostics")]
     [Tooltip("Logs why each active quest is/isn't spawning a marker. Disable once stable.")]
-    [SerializeField] private bool _verboseLogs = false;
+    [SerializeField] private bool _verboseLogs = true;
 
     private CharacterQuestLog _log;
     private CharacterMapTracker _mapTracker;

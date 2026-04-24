@@ -240,11 +240,21 @@ public class CharacterQuestLog : CharacterSystem, ICharacterSaveData<QuestLogSav
     {
         // Server already updated local state in ServerTryClaim/Abandon. Clients:
         if (IsServer) return;
-        if (evt.Type == NetworkListEvent<FixedString64Bytes>.EventType.Remove)
+        // Both Remove (by-value) and RemoveAt (by-index) fire when the server abandons or
+        // punches out — ServerTryAbandon uses RemoveAt. Without the second branch the
+        // client snapshot stays forever (HUD tracker, log window, world marker all stuck).
+        // See CharacterEquipment.HandleEquipmentSyncListChanged for the same pattern.
+        if (evt.Type == NetworkListEvent<FixedString64Bytes>.EventType.Remove ||
+            evt.Type == NetworkListEvent<FixedString64Bytes>.EventType.RemoveAt)
         {
             var id = evt.Value.ToString();
             _snapshots.Remove(id);
             OnQuestRemoved?.Invoke(null);  // HUD reads _snapshots directly to resolve
+        }
+        else if (evt.Type == NetworkListEvent<FixedString64Bytes>.EventType.Clear)
+        {
+            _snapshots.Clear();
+            OnQuestRemoved?.Invoke(null);
         }
     }
 
