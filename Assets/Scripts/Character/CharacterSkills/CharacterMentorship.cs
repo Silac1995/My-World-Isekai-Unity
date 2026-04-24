@@ -11,7 +11,15 @@ public class CharacterMentorship : CharacterSystem, IInteractionProvider
     [SerializeField] private Character _currentMentor;
     [SerializeField] private ScriptableObject _learningSubject;
     [SerializeField] private float _learningProgress = 0f; // 0 to 100
-    
+
+    // Server-authoritative sync of the mentor's NetworkObjectId so remote clients can
+    // resolve CurrentMentor without relying on the serialized _currentMentor field
+    // (which is only mutated on the server inside SetMentor / ClearMentor).
+    public NetworkVariable<ulong> CurrentMentorNetId = new NetworkVariable<ulong>(
+        0UL,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server);
+
     [Header("Mentor Data")]
     [SerializeField] private bool _isCurrentlyTeaching = false;
     [SerializeField] private List<MentorshipClass> _hostedClasses = new List<MentorshipClass>();
@@ -19,7 +27,22 @@ public class CharacterMentorship : CharacterSystem, IInteractionProvider
     [SerializeField] private GameObject _mentorClassZonePrefab;
     private MentorClassZone _spawnedClassZone;
 
-    public Character CurrentMentor => _currentMentor;
+    public Character CurrentMentor
+    {
+        get
+        {
+            // Server / host keeps the authoritative reference in _currentMentor.
+            if (_currentMentor != null) return _currentMentor;
+
+            // Remote clients resolve via the replicated NetworkObjectId.
+            ulong id = CurrentMentorNetId.Value;
+            if (id == 0) return null;
+            if (NetworkManager.Singleton == null) return null;
+            if (NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(id, out var obj) && obj != null)
+                return obj.GetComponent<Character>();
+            return null;
+        }
+    }
     public ScriptableObject LearningSubject => _learningSubject;
     public float LearningProgress => _learningProgress;
     public bool IsCurrentlyTeaching { get => _isCurrentlyTeaching; set => _isCurrentlyTeaching = value; }
@@ -194,6 +217,16 @@ public class CharacterMentorship : CharacterSystem, IInteractionProvider
         _learningSubject = subject;
         _learningProgress = 0f;
 
+        // Replicate the mentor's net-id so remote clients (notably the student's own
+        // owning client when the student is a remote player) can see they now have a
+        // mentor — otherwise hold-E menus on other mentors won't gray out the entries.
+        if (IsServer)
+        {
+            CurrentMentorNetId.Value = (mentor != null && mentor.NetworkObject != null)
+                ? mentor.NetworkObject.NetworkObjectId
+                : 0UL;
+        }
+
         if (targetClass != null)
         {
             targetClass.OnClassStarted -= HandleMentorClassStarted;
@@ -219,6 +252,13 @@ public class CharacterMentorship : CharacterSystem, IInteractionProvider
         _currentMentor = null;
         _learningSubject = null;
         _learningProgress = 0f;
+
+        // Clear the replicated id so remote clients see the student become mentor-less
+        // (enables menu entries on other mentors to un-gray).
+        if (IsServer)
+        {
+            CurrentMentorNetId.Value = 0UL;
+        }
     }
 
     private void HandleMentorClassStarted(MentorshipClass activeClass)
