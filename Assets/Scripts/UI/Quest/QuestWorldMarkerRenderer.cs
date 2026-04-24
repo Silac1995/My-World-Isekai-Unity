@@ -52,6 +52,10 @@ public class QuestWorldMarkerRenderer : MonoBehaviour
     [Tooltip("Brainstorm option B world-space variant: vertical light shaft for movement targets.")]
     [SerializeField] private GameObject _beaconPrefab;
 
+    [Header("Diagnostics")]
+    [Tooltip("Logs why each active quest is/isn't spawning a marker. Disable once stable.")]
+    [SerializeField] private bool _verboseLogs = false;
+
     private CharacterQuestLog _log;
     private CharacterMapTracker _mapTracker;
 
@@ -95,19 +99,37 @@ public class QuestWorldMarkerRenderer : MonoBehaviour
 
     private void Update()
     {
-        if (_log == null) return;
+        if (_log == null)
+        {
+            if (_verboseLogs) Debug.LogWarning("[QuestMarker] Update bail: _log is null (Initialize was never called or got null).");
+            return;
+        }
 
         var cam = _gameplayCamera != null ? _gameplayCamera : Camera.main;
-        if (cam == null) return;
+        if (cam == null)
+        {
+            if (_verboseLogs) Debug.LogWarning("[QuestMarker] Update bail: no camera (Camera.main and _gameplayCamera both null).");
+            return;
+        }
 
         string currentMapId = _mapTracker != null ? _mapTracker.CurrentMapID.Value.ToString() : string.Empty;
 
         // Diff active quests against currently-spawned visuals.
         var seen = new HashSet<string>();
+        int activeCount = 0;
         foreach (var q in _log.ActiveQuests)
         {
-            if (q == null || q.Target == null) continue;
-            if (!string.IsNullOrEmpty(currentMapId) && !string.IsNullOrEmpty(q.OriginMapId) && q.OriginMapId != currentMapId) continue;
+            activeCount++;
+            if (q == null || q.Target == null)
+            {
+                if (_verboseLogs) Debug.LogWarning($"[QuestMarker] Skip: quest {(q == null ? "null" : q.QuestId)} has null Target.");
+                continue;
+            }
+            if (!string.IsNullOrEmpty(currentMapId) && !string.IsNullOrEmpty(q.OriginMapId) && q.OriginMapId != currentMapId)
+            {
+                if (_verboseLogs) Debug.Log($"[QuestMarker] Skip '{q.Title}': map mismatch (quest='{q.OriginMapId}', player='{currentMapId}').");
+                continue;
+            }
 
             seen.Add(q.QuestId);
 
@@ -123,6 +145,13 @@ public class QuestWorldMarkerRenderer : MonoBehaviour
             }
             // World-space zone-fill is static once spawned (anchored at zone bounds);
             // no per-frame work needed unless the zone moves at runtime.
+        }
+
+        if (_verboseLogs && activeCount == 0 && _visuals.Count == 0)
+        {
+            // Throttled to once per second so we don't flood Console.
+            if (Time.frameCount % 60 == 0)
+                Debug.Log($"[QuestMarker] No active quests in log. _log.ActiveQuests is empty.");
         }
 
         // Despawn visuals whose quests are no longer active.
@@ -165,7 +194,7 @@ public class QuestWorldMarkerRenderer : MonoBehaviour
             img.color = _markerColor;
             img.raycastTarget = false;
             v.HudMarker = rect;
-            Debug.Log($"[QuestMarker] Spawned HUD marker for '{quest.Title}' under {_markerContainer.name}.");
+            if (_verboseLogs) Debug.Log($"[QuestMarker] Spawned HUD marker for '{quest.Title}' under {_markerContainer.name}.");
         }
         else
         {

@@ -165,6 +165,7 @@ On map transition, `HandleMapChanged` promotes matching dormant snapshots back t
 - **`Abandon` on dormant snapshots is disallowed** in v1 UI (button greyed) — the live source isn't reachable so we can't `TryLeave` the underlying quest.
 - **Late-joiner client snapshots gap** — same as wallet's known limitation. Snapshots only push from join-time forward.
 - **`OnQuestRemoved` event passes `null` on clients** — clients don't have live `IQuest` references; HUD reads from `_snapshots` dict directly.
+- **Two parallel claim paths on `BuildingTask`**: `BuildingTaskManager.ClaimBestTask<T>` (NPC GOAP) AND `IQuest.TryJoin/TryLeave` (player via `CharacterQuestLog.TryClaim/TryAbandon`). The latter would historically only mutate `ClaimedByWorkers` and leave `BuildingTaskManager`'s `Available`/`InProgress` buckets stale. Fix: `BuildingTask.Manager` is a back-reference assigned in `BuildingTaskManager.RegisterTask`; `TryJoin`/`TryLeave` now call `Manager.NotifyTaskExternallyClaimed` / `NotifyTaskExternallyUnclaimed` so the buckets stay consistent (no more "Unknown Worker" rows in the debug HUD, and unclaimed tasks return to the available pool for the next claimer).
 
 ## Related
 

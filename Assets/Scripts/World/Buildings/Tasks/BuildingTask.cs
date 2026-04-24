@@ -28,6 +28,14 @@ public abstract class BuildingTask : IQuest
     /// </summary>
     public virtual int MaxWorkers => 1;
 
+    /// <summary>
+    /// Back-reference to the BuildingTaskManager this task is registered with.
+    /// Set by <see cref="BuildingTaskManager.RegisterTask"/>; let the IQuest
+    /// path (TryLeave) bookkeep the task list correctly when the player
+    /// abandons via the IQuest API instead of TaskManager.UnclaimTask.
+    /// </summary>
+    public BuildingTaskManager Manager { get; internal set; }
+
     protected BuildingTask(MonoBehaviour target)
     {
         Target = target;
@@ -87,6 +95,11 @@ public abstract class BuildingTask : IQuest
         if (character == null || !CanBeClaimed() || ClaimedByWorkers.Contains(character)) return false;
         Claim(character);
         OnStateChanged?.Invoke(this);
+        // Mirror TryLeave: tell the manager so the InProgress / Available buckets
+        // reflect the IQuest claim. Without this the player's claim only lives in
+        // ClaimedByWorkers while the task stays in _availableTasks, and the debug
+        // UI / worker queries don't see the player as actively working it.
+        Manager?.NotifyTaskExternallyClaimed(this, character);
         return true;
     }
 
@@ -95,6 +108,11 @@ public abstract class BuildingTask : IQuest
         if (character == null || !ClaimedByWorkers.Contains(character)) return false;
         Unclaim(character);
         OnStateChanged?.Invoke(this);
+        // The IQuest path bypasses BuildingTaskManager.UnclaimTask; tell the manager
+        // to re-evaluate this task's bucket so the InProgress list doesn't keep an
+        // orphaned entry with empty ClaimedByWorkers (causes "Unknown Worker" in
+        // the debug UI and prevents a fresh claimer from picking the task back up).
+        Manager?.NotifyTaskExternallyUnclaimed(this);
         return true;
     }
 

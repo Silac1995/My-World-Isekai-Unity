@@ -33,9 +33,61 @@ public class BuildingTaskManager : MonoBehaviour
 
         if (!taskExists)
         {
+            // Back-reference so BuildingTask.TryJoin/TryLeave (the IQuest path) can
+            // notify us when a player claims/leaves outside the ClaimBestTask flow.
+            newTask.Manager = this;
             _availableTasks.Add(newTask);
             Debug.Log($"<color=cyan>[TaskManager]</color> Task registered: {newTask.GetType().Name} for {newTask.Target.name}.");
             OnTaskRegistered?.Invoke(newTask);
+        }
+    }
+
+    /// <summary>
+    /// Called by <see cref="BuildingTask.TryJoin"/> after a player claims a task
+    /// via the IQuest API (which bypasses <see cref="ClaimBestTask{T}"/>).
+    /// Moves the task into the InProgress bucket so the debug UI and worker
+    /// queries see it consistently with the NPC claim path.
+    /// </summary>
+    public void NotifyTaskExternallyClaimed(BuildingTask task, Character worker)
+    {
+        if (task == null) return;
+
+        if (!task.CanBeClaimed())
+        {
+            _availableTasks.Remove(task);
+        }
+
+        if (!_inProgressTasks.Contains(task))
+        {
+            _inProgressTasks.Add(task);
+        }
+
+        OnTaskClaimed?.Invoke(task, worker);
+    }
+
+    /// <summary>
+    /// Called by <see cref="BuildingTask.TryLeave"/> after a player abandons a
+    /// task via the IQuest API. Re-evaluates the bucket so we don't leave an
+    /// orphaned entry with empty ClaimedByWorkers in InProgressTasks (which the
+    /// debug UI would render as "Unknown Worker") and so a fresh claimer can
+    /// pick the task back up from AvailableTasks.
+    /// </summary>
+    public void NotifyTaskExternallyUnclaimed(BuildingTask task)
+    {
+        if (task == null) return;
+
+        if (!task.IsClaimed)
+        {
+            _inProgressTasks.Remove(task);
+        }
+
+        if (task.IsValid() && task.CanBeClaimed() && !_availableTasks.Contains(task))
+        {
+            _availableTasks.Add(task);
+        }
+        else if (!task.IsValid())
+        {
+            _availableTasks.Remove(task);
         }
     }
 
