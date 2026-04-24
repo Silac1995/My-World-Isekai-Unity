@@ -3,7 +3,7 @@ type: system
 title: "Quest System"
 tags: [quests, character, jobs, ui, hud, network, save, tier-2]
 created: 2026-04-23
-updated: 2026-04-23
+updated: 2026-04-24
 sources:
   - "Assets/Scripts/Quest/IQuest.cs"
   - "Assets/Scripts/Quest/IQuestTarget.cs"
@@ -204,6 +204,8 @@ Server authority: all mutations (`TryJoin`/`TryLeave`/`RecordProgress`/`SetFocus
 - **Late-joiner snapshot gap** — same v1 limitation as wallet's ClientRpc-on-change. Snapshots only push from join time forward.
 - **`OnQuestRemoved` event passes `null` on clients** — clients have no live `IQuest` reference; HUD reads `_snapshots` dict to identify the removed quest.
 - **`Issuer` setter is concrete-class-public**, not interface-public — `CommercialBuilding.PublishQuest` casts to the concrete type to stamp it.
+- **`HandleClaimedListChanged` must branch on `Remove` AND `RemoveAt`** — `ServerTryAbandon` removes by index (`_claimedQuestIds.RemoveAt(i)`), which fires `NetworkListEvent<T>.EventType.RemoveAt` on the wire, not `EventType.Remove`. Handling only one of the two leaves clients with stale snapshots (HUD tracker / log / world marker stuck after Abandon or punch-out). Fixed 2026-04-24; pattern lifted from `CharacterEquipment.cs:73-74`.
+- **Two parallel claim paths on `BuildingTask`** — `BuildingTaskManager.ClaimBestTask<T>` (NPC GOAP) and `IQuest.TryJoin/TryLeave` (player via `CharacterQuestLog`). The latter historically only mutated `ClaimedByWorkers`, leaving the manager's `Available`/`InProgress` buckets stale ("Unknown Worker" rows in the debug HUD; tasks not re-pickable after abandon). Fixed 2026-04-24 with `BuildingTask.Manager` back-ref + `Manager.NotifyTaskExternallyClaimed` / `NotifyTaskExternallyUnclaimed` hooks. See [[building-task-manager]].
 - **Hibernated NPCs don't accrue quest progress offline** — same gap as worker-wages WorkLog; `MacroSimulator` would need to feed `RecordProgress` on hibernated quests for offline workers.
 - **Abandon on dormant snapshots disabled** in v1 UI — Abandon button greyed because the live source isn't reachable.
 - **`JobBlacksmith.Type` (and apprentice) latent bug from wage system was already fixed** — needed for crafter quest eligibility too.
@@ -224,6 +226,7 @@ Server authority: all mutations (`TryJoin`/`TryLeave`/`RecordProgress`/`SetFocus
 
 ## Change log
 
+- 2026-04-24 — Fixed two multiplayer regressions: (1) client snapshot removal on Abandon / punch-out — `HandleClaimedListChanged` now handles `RemoveAt` (and `Clear`) in addition to `Remove`; (2) `BuildingTaskManager` `Available`/`InProgress` buckets desyncing from `IQuest.TryJoin/TryLeave` — `BuildingTask.Manager` back-ref + `NotifyTaskExternally{Claimed,Unclaimed}` hooks. Diagnostic `_verboseLogs` flag added on `QuestWorldMarkerRenderer` for future marker triage. — claude
 - 2026-04-23 — Initial implementation. Tasks 1-21 (code) + Task 28 (smoke test) + Tasks 29-33 (docs) per `docs/superpowers/plans/2026-04-23-quest-system.md`. — claude
 
 ## Sources

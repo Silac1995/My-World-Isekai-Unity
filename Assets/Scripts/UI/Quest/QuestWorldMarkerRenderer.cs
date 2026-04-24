@@ -53,8 +53,8 @@ public class QuestWorldMarkerRenderer : MonoBehaviour
     [SerializeField] private GameObject _beaconPrefab;
 
     [Header("Diagnostics")]
-    [Tooltip("Logs why each active quest is/isn't spawning a marker. Disable once stable.")]
-    [SerializeField] private bool _verboseLogs = true;
+    [Tooltip("Logs why each active quest is/isn't spawning a marker. Tick when triaging marker bugs.")]
+    [SerializeField] private bool _verboseLogs = false;
 
     private CharacterQuestLog _log;
     private CharacterMapTracker _mapTracker;

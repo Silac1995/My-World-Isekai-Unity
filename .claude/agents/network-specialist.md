@@ -117,6 +117,12 @@ Owner detects intent → [Rpc(SendTo.Server)] request
 - `OnValueChanged` handlers ensure continuous UI/visual updates
 - Data that lives only on the server is invisible to clients — always sync via NetworkVariable, ClientRpc, or OnValueChanged
 
+**NetworkList event-type fan-out (silent client desync):**
+- `NetworkList<T>.OnListChanged` fires distinct `EventType` values per mutator: `Add`, `Insert`, `Value`, `Remove` (by-value), `RemoveAt` (by-index), `Clear`, `Full`. Handlers that only branch on one removal type silently drop the others. Symptom: a server-side `RemoveAt(i)` correctly mutates the list and fires the event, but the client handler ignores it because it only listens for `EventType.Remove`. Client UI / snapshot dictionaries that should clear stay populated forever.
+- **Rule:** any client-side handler that reacts to removal must check **both** `EventType.Remove` and `EventType.RemoveAt` (and ideally `EventType.Clear` defensively).
+- **Reference implementations:** `Assets/Scripts/Character/CharacterEquipment/CharacterEquipment.cs:67-77` and `Assets/Scripts/Character/CharacterQuestLog/CharacterQuestLog.cs:HandleClaimedListChanged` are the canonical patterns.
+- This bug class is invisible during single-player testing because the server's local state is already correct — only clients see the desync. Test list mutations across host↔client.
+
 ### 9. Character Netcode Pattern
 
 All `CharacterSystem` subclasses follow this universal pattern:

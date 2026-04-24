@@ -89,6 +89,9 @@ You own this domain. When other agents touch quest-related code, they should def
 15. **`[ClientRpc]` snapshot push is targeted to the owning client** (`RpcTargetForOwner()`). Don't broadcast snapshots to all clients — the snapshot is per-character per-claim, only the owning player's HUD needs it.
 16. **`JobBlacksmith.Type` and `JobBlacksmithApprentice.Type` were latent bugs returning `JobType.None`** before the wage system fix (Task 24 of wage plan). Quest eligibility relies on accurate `Job.Type`. **Always override `Type` on new Job subclasses.**
 17. **Auto-claim handler subscriptions are tracked per-worker** in `_questAutoClaimHandlers : Dictionary<Character, Action<IQuest>>` on `CommercialBuilding`. Cleanup happens in `WorkerEndingShift` via `UnsubscribeWorkerQuestAutoClaim`. Don't leak handlers — they capture the worker reference.
+18. **`HandleClaimedListChanged` MUST branch on `Remove` AND `RemoveAt`.** NGO's `NetworkList<T>` distinguishes `EventType.Remove` (by-value) from `EventType.RemoveAt` (by-index). `ServerTryAbandon` removes by index — silently dropped on the client side if you only check `Remove`. Symptom: client Abandon button "doesn't work" and punch-out leaves quests stuck. Pattern lifted from `CharacterEquipment.HandleEquipmentSyncListChanged`. Also handle `Clear` defensively for bulk wipes.
+19. **Two parallel claim paths on `BuildingTask`** must keep `BuildingTaskManager`'s `Available`/`InProgress` buckets in sync. NPC GOAP uses `BuildingTaskManager.ClaimBestTask<T>` / `UnclaimTask` (mutates ClaimedByWorkers AND moves between buckets). Player goes through `CharacterQuestLog.TryClaim/TryAbandon → IQuest.TryJoin/TryLeave`, which now also notifies the manager via `Manager.NotifyTaskExternallyClaimed` / `NotifyTaskExternallyUnclaimed`. The `Manager` back-ref on `BuildingTask` is wired in `BuildingTaskManager.RegisterTask`. Without this, the InProgress bucket either keeps an orphaned entry ("Unknown Worker" rows in the debug HUD) or never sees the task at all.
+20. **`QuestWorldMarkerRenderer._verboseLogs`** is the in-Editor diagnostic switch for marker problems. Logs at every silent failure point: null `_log`, null camera, null `q.Target`, map-id mismatch, `_markerContainer` not wired, "no active quests" tick. Default OFF — tick when triaging.
 
 ## Cross-system dependencies — who you depend on, who depends on you
 
@@ -128,6 +131,11 @@ You own this domain. When other agents touch quest-related code, they should def
 - Promoting `QuestId` to stable hash, or introducing the `QuestRegistry` singleton.
 
 ## Recent changes
+
+- **2026-04-24 — Multiplayer regression fixes** (commits `2d739f3`, `1292ee5`):
+  - `CharacterQuestLog.HandleClaimedListChanged` now handles `EventType.RemoveAt` and `EventType.Clear` in addition to `EventType.Remove`. Without it, every client Abandon and every client punch-out left snapshots stuck in the HUD/log/markers because `ServerTryAbandon` removes by index.
+  - `BuildingTask.Manager` back-ref + `BuildingTaskManager.NotifyTaskExternallyClaimed` / `NotifyTaskExternallyUnclaimed` keep the manager's Available/InProgress buckets consistent across the NPC `ClaimBestTask` path and the player `IQuest.TryJoin/TryLeave` path. Symptoms before fix: "Unknown Worker" rows in `UI_CommercialBuildingDebugScript`, and tasks not re-pickable after a player abandoned them.
+  - `QuestWorldMarkerRenderer._verboseLogs` SerializeField added — gates structured `[QuestMarker]` diagnostics for the four silent-failure spots in marker rendering.
 
 - **2026-04-23 — Initial implementation** (all 34 tasks of `docs/superpowers/plans/2026-04-23-quest-system.md` shipped):
   - All architectural pieces above are live.
