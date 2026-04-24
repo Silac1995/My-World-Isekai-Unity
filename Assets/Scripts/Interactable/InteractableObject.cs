@@ -22,6 +22,30 @@ public abstract class InteractableObject : MonoBehaviour
     }
     public Collider InteractionZone => _interactionZone;
 
+    /// <summary>
+    /// Canonical proximity gate. Returns true iff the given character's world-space
+    /// position sits inside this interactable's <see cref="InteractionZone"/> (AABB
+    /// containment). One-sided containment per the Interactable System rule —
+    /// NOT a mutual zone-vs-zone overlap.
+    ///
+    /// Reads <see cref="Character.transform.position"/> (not <c>Character.Rigidbody.position</c>)
+    /// so the check matches what <c>ClientNetworkTransform</c> syncs directly to the server.
+    /// On a server-authoritative RPC validating a client's proximity, the client's
+    /// Rigidbody on the server is kinematic and <c>rb.position</c> trails
+    /// <c>transform.position</c> by up to one physics tick, which was enough to
+    /// false-negative right-at-the-edge punches despite the client UI showing the
+    /// prompt. <c>transform.position</c> is the source of truth on both peers.
+    ///
+    /// Use this from any code path (player input, server RPCs, GOAP, BT actions)
+    /// that needs to decide whether a character is close enough to interact.
+    /// If the interactable has no <see cref="InteractionZone"/> assigned, returns false.
+    /// </summary>
+    public bool IsCharacterInInteractionZone(Character character)
+    {
+        if (character == null || _interactionZone == null) return false;
+        return _interactionZone.bounds.Contains(character.transform.position);
+    }
+
     // On passe le Character qui déclenche l'action
     public abstract void Interact(Character interactor);
 

@@ -5,5 +5,6 @@ public enum FurnitureTag
     Cooking,    // Cuisine
     Crafting,   // Atelier
     Storage,    // Entrepôt
-    Seating     // Salon / Taverne
+    Seating,    // Salon / Taverne
+    TimeClock   // Punch-in / punch-out station for a CommercialBuilding
 }

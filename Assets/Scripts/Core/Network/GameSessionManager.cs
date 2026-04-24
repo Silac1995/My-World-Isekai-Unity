@@ -179,9 +179,16 @@ public class GameSessionManager : MonoBehaviour
 
     private void ApprovalCheck(NetworkManager.ConnectionApprovalRequest request, NetworkManager.ConnectionApprovalResponse response)
     {
+        // Diagnostic: scan the server's spawned NetworkObjects for broken entries BEFORE
+        // NGO runs its SynchronizeNetworkObjects loop. Any destroyed-but-still-tracked
+        // NetworkObject with a null NetworkManagerOwner field will NRE inside
+        // NetworkObject.Serialize during sync and kill the whole client approval.
+        // Purge them here so the join succeeds and we log which one was broken.
+        PurgeBrokenSpawnedNetworkObjects();
+
         // Approve all connections
         response.Approved = true;
-        
+
         // Disable automatic player spawning so we can instantiate custom prefabs with custom settings!
         response.CreatePlayerObject = false;
 
@@ -195,8 +202,172 @@ public class GameSessionManager : MonoBehaviour
         _pendingClientRaces[request.ClientNetworkId] = requestedRace;
     }
 
+    // Cached reflection accessors for NGO internals.
+    // `NetworkManagerOwner` is the internal field that becomes null when a NetworkObject
+    // is "half-spawned" — in the spawn list but missing its manager reference. The public
+    // `NetworkObject.NetworkManager` property silently falls back to `NetworkManager.Singleton`
+    // so it does NOT expose this state. We read the field directly + also try to invoke
+    // `Serialize` on each entry so any NRE-inducing combination is caught.
+    private static System.Reflection.FieldInfo s_networkManagerOwnerField;
+    private static System.Reflection.MethodInfo s_serializeMethod;
+    private static System.Reflection.FieldInfo GetNetworkManagerOwnerField()
+    {
+        if (s_networkManagerOwnerField != null) return s_networkManagerOwnerField;
+        s_networkManagerOwnerField = typeof(NetworkObject).GetField(
+            "NetworkManagerOwner",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        return s_networkManagerOwnerField;
+    }
+    private static System.Reflection.MethodInfo GetSerializeMethod()
+    {
+        if (s_serializeMethod != null) return s_serializeMethod;
+        s_serializeMethod = typeof(NetworkObject).GetMethod(
+            "Serialize",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic,
+            binder: null,
+            types: new[] { typeof(ulong), typeof(bool) },
+            modifiers: null);
+        return s_serializeMethod;
+    }
+
+    /// <summary>
+    /// Iterates the server's spawned NetworkObjects and removes any entry that would
+    /// make <c>NetworkObject.Serialize</c> NRE during client connection sync.
+    /// Two cases catch it:
+    /// 1. The GameObject/NetworkObject component has been destroyed (Unity fake-null).
+    /// 2. The internal <c>NetworkManagerOwner</c> field is null — which makes the
+    ///    <c>NetworkManagerOwner.DistributedAuthorityMode</c> access at
+    ///    NetworkObject.cs:3182 throw. The public <c>NetworkManager</c> property on
+    ///    NetworkObject falls back to <c>NetworkManager.Singleton</c> and so does
+    ///    NOT reveal this state — we reflect into the field directly.
+    /// Logs each purged entry with id + name so the underlying despawn/reparenting
+    /// bug can be traced to its source.
+    /// </summary>
+    private void PurgeBrokenSpawnedNetworkObjects()
+    {
+        var nm = NetworkManager.Singleton;
+        if (nm == null || !nm.IsServer) return;
+
+        var spawned = nm.SpawnManager?.SpawnedObjects;
+        if (spawned == null || spawned.Count == 0) return;
+
+        var ownerField = GetNetworkManagerOwnerField();
+        var serializeMethod = GetSerializeMethod();
+
+        System.Collections.Generic.List<(ulong id, string reason, string name)> broken = null;
+
+        // Snapshot the dict keys first to allow mutation inside the loop.
+        var keys = new System.Collections.Generic.List<ulong>(spawned.Keys);
+        foreach (var id in keys)
+        {
+            if (!spawned.TryGetValue(id, out var no)) continue;
+            string reason = null;
+            string noName = "<null>";
+
+            // Unity's overloaded ==null catches both real null and destroyed fake-null.
+            if (no == null)
+            {
+                reason = "NetworkObject reference is null (destroyed?)";
+            }
+            else
+            {
+                noName = no.name;
+                if (!no.gameObject)
+                {
+                    reason = "GameObject has been destroyed";
+                }
+                else if (ownerField != null)
+                {
+                    try
+                    {
+                        var owner = ownerField.GetValue(no) as NetworkManager;
+                        if (owner == null)
+                        {
+                            reason = "NetworkManagerOwner field is null";
+                        }
+                    }
+                    catch (System.Exception e)
+                    {
+                        reason = $"Exception reading NetworkManagerOwner: {e.Message}";
+                    }
+                }
+
+                // Final catch-all: actually invoke the same Serialize NGO calls during sync.
+                // Any field combination that NRE's there gets flagged even if our explicit
+                // checks missed it. Serialize has no side effects beyond building the struct.
+                if (reason == null && serializeMethod != null)
+                {
+                    try
+                    {
+                        serializeMethod.Invoke(no, new object[] { NetworkManager.ServerClientId, false });
+                    }
+                    catch (System.Reflection.TargetInvocationException tie)
+                    {
+                        var inner = tie.InnerException ?? tie;
+                        reason = $"Serialize probe threw {inner.GetType().Name}: {inner.Message}";
+                    }
+                    catch (System.Exception e)
+                    {
+                        reason = $"Serialize probe threw {e.GetType().Name}: {e.Message}";
+                    }
+                }
+            }
+
+            if (reason != null)
+            {
+                (broken ??= new System.Collections.Generic.List<(ulong, string, string)>()).Add((id, reason, noName));
+            }
+        }
+
+        if (broken == null)
+        {
+            Debug.Log($"[GameSession] Pre-sync scan: {spawned.Count} spawned NetworkObjects, none broken. If Serialize still NRE's, the problem isn't in SpawnedObjects — investigate scene NOs or parenting.");
+            return;
+        }
+
+        foreach (var entry in broken)
+        {
+            Debug.LogWarning(
+                $"[GameSession] Purging broken spawned NetworkObject id={entry.id} name='{entry.name}' reason='{entry.reason}'. " +
+                "This would have NRE'd NetworkObject.Serialize during client-sync. Trace the despawn/reparenting bug at the source.");
+            spawned.Remove(entry.id);
+        }
+    }
+
+    /// <summary>
+    /// Transport tuning for content-heavy worlds. The default
+    /// <see cref="Unity.Netcode.Transports.UTP.UnityTransport.MaxPacketQueueSize"/> of 128
+    /// overflows on client connect when the server blasts the initial snapshot for
+    /// a loaded save (many scene-placed NetworkObjects + spawned buildings + NPCs +
+    /// WorldItems). Overflow drops spawn packets → clients log
+    /// "Receive queue is full" followed by "[Deferred OnSpawn] ... NetworkObject was
+    /// not received within 10s" 10 seconds later. Set a high queue + long spawn
+    /// timeout at session start so every entry point (Solo/Host/Client) benefits.
+    /// Values chosen empirically to cover a 28-root scene + ~50 spawned dynamic
+    /// NetworkObjects with plenty of headroom; bump higher if you hit the warning
+    /// again with a larger save.
+    /// </summary>
+    private const int TRANSPORT_MAX_PACKET_QUEUE_SIZE = 4096;
+    private const float NETWORK_SPAWN_TIMEOUT_SECONDS = 30f;
+
+    private void ApplyTransportTuning()
+    {
+        var nm = NetworkManager.Singleton;
+        if (nm == null) return;
+
+        nm.NetworkConfig.SpawnTimeout = NETWORK_SPAWN_TIMEOUT_SECONDS;
+
+        var transport = nm.GetComponent<Unity.Netcode.Transports.UTP.UnityTransport>();
+        if (transport != null)
+        {
+            transport.MaxPacketQueueSize = TRANSPORT_MAX_PACKET_QUEUE_SIZE;
+        }
+    }
+
     public void StartSolo()
     {
+        ApplyTransportTuning();
+
         var transport = NetworkManager.Singleton.GetComponent<Unity.Netcode.Transports.UTP.UnityTransport>();
         if (transport != null)
         {
@@ -219,6 +390,8 @@ public class GameSessionManager : MonoBehaviour
             ShowToast("Resetting connection... Try joining again.", MWI.UI.Notifications.ToastType.Warning);
             return;
         }
+
+        ApplyTransportTuning();
 
         var transport = NetworkManager.Singleton.GetComponent<Unity.Netcode.Transports.UTP.UnityTransport>();
         if (transport != null)

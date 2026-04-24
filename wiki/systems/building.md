@@ -3,7 +3,7 @@ type: system
 title: "Building & Furniture"
 tags: [building, furniture, world, tier-1]
 created: 2026-04-18
-updated: 2026-04-18
+updated: 2026-04-24
 sources: []
 related:
   - "[[world]]"
@@ -185,6 +185,7 @@ FurnitureManager.Place(instance) ──► serialize cell occupancy
 - [[building-placement-manager]] — community permission gate.
 
 ## Change log
+- 2026-04-24 — Known save-restore gotcha documented: `MapController.SpawnSavedBuildings` spawns the building's `NetworkObject` **before** reparenting it under the MapController transform, which can produce a half-spawned NO that later NRE's NGO's `NetworkObject.Serialize` during client-sync and silently breaks every join against a loaded save. Defensive purge in `GameSessionManager.PurgeBrokenSpawnedNetworkObjects` masks the symptom; real fix is parent-before-spawn. Full write-up in [[network]] and [[save-load]]. — claude
 - 2026-04-18 — Initial documentation pass. — Claude / [[kevin]]
 
 ## Sources

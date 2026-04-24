@@ -694,6 +694,10 @@ PrefabInstance:
       propertyPath: m_AnchoredPosition.y
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 1557253237276263553, guid: cf8746b58cfecc543880c4a7798357d6, type: 3}
+      propertyPath: _building
+      value: 
+      objectReference: {fileID: 1212698209497657851}
     - target: {fileID: 2320957451676507050, guid: cf8746b58cfecc543880c4a7798357d6, type: 3}
       propertyPath: m_VersionIndex
       value: 3945
@@ -1250,6 +1254,14 @@ PrefabInstance:
       propertyPath: m_LocalPosition.z
       value: -12.84
       objectReference: {fileID: 0}
+    - target: {fileID: 7735909224228063526, guid: cf8746b58cfecc543880c4a7798357d6, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 11
+      objectReference: {fileID: 0}
+    - target: {fileID: 7735909224228063526, guid: cf8746b58cfecc543880c4a7798357d6, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: -13
+      objectReference: {fileID: 0}
     - target: {fileID: 8331664264156578754, guid: cf8746b58cfecc543880c4a7798357d6, type: 3}
       propertyPath: m_Size.x
       value: 15
@@ -1338,6 +1350,17 @@ PrefabInstance:
       addedObject: {fileID: 8216684300698700089}
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: cf8746b58cfecc543880c4a7798357d6, type: 3}
+--- !u!114 &1212698209497657851 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: -7333590944410843724, guid: cf8746b58cfecc543880c4a7798357d6, type: 3}
+  m_PrefabInstance: {fileID: 787434479500325967}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7a123c464e8ba8f468bd989e4783527a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ShopBuilding
 --- !u!4 &4561677551341348487 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 3865164819909956296, guid: cf8746b58cfecc543880c4a7798357d6, type: 3}

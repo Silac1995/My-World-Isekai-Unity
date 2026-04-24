@@ -13,14 +13,17 @@ namespace MWI.AI
         {
             CleaningUpInventory,
             MovingToBuilding,
+            MovingToTimeClock,
             PunchingOut
         }
 
         private PunchOutPhase _currentPhase = PunchOutPhase.CleaningUpInventory;
+        private bool _warnedNoTimeClock = false;
 
         protected override void OnEnter(Blackboard bb)
         {
             _currentPhase = PunchOutPhase.CleaningUpInventory;
+            _warnedNoTimeClock = false;
         }
 
         protected override BTNodeStatus OnExecute(Blackboard bb)
@@ -29,7 +32,7 @@ namespace MWI.AI
             if (self == null) return BTNodeStatus.Failure;
 
             CommercialBuilding workplace = self.CharacterJob?.Workplace;
-            if (workplace == null || !workplace.ActiveWorkersOnShift.Contains(self))
+            if (workplace == null || !workplace.IsWorkerOnShift(self))
             {
                 // Si on a plus de building ou qu'on n'est plus dedans (Action_PunchOut a réussi), succès.
                 return BTNodeStatus.Success;
@@ -44,6 +47,8 @@ namespace MWI.AI
                     return HandleCleaningUpInventory(self, movement, workplace);
                 case PunchOutPhase.MovingToBuilding:
                     return HandleMovementToBuilding(self, movement, workplace);
+                case PunchOutPhase.MovingToTimeClock:
+                    return HandleMovementToTimeClock(self, movement, workplace);
                 case PunchOutPhase.PunchingOut:
                     return HandlePunchingOut(self);
             }
@@ -134,17 +139,13 @@ namespace MWI.AI
 
         private BTNodeStatus HandleMovementToBuilding(Character self, CharacterMovement movement, CommercialBuilding workplace)
         {
+            // Arrived inside the BuildingZone → advance to the TimeClock phase
+            // (which itself soft-falls-back to zone-punch if no clock is authored).
             if (workplace.BuildingZone != null && workplace.BuildingZone.bounds.Contains(self.transform.position))
             {
                 movement.Stop();
-                _currentPhase = PunchOutPhase.PunchingOut;
-                
-                Action_PunchOut punchOut = new Action_PunchOut(self, workplace);
-                if (punchOut.CanExecute())
-                {
-                    self.CharacterActions.ExecuteAction(punchOut);
-                    return BTNodeStatus.Running;
-                }
+                _currentPhase = PunchOutPhase.MovingToTimeClock;
+                return BTNodeStatus.Running;
             }
 
             if (!movement.HasPath || movement.RemainingDistance <= movement.StoppingDistance + 0.5f)
@@ -155,7 +156,66 @@ namespace MWI.AI
                     movement.SetDestination(dest);
                 }
             }
-            
+
+            return BTNodeStatus.Running;
+        }
+
+        private BTNodeStatus HandleMovementToTimeClock(Character self, CharacterMovement movement, CommercialBuilding workplace)
+        {
+            var clock = workplace.TimeClock;
+
+            // Soft fallback (rule #4): no clock authored → use the legacy zone-punch
+            // directly. One-shot warning so the author sees the gap.
+            if (clock == null)
+            {
+                if (!_warnedNoTimeClock)
+                {
+                    Debug.LogWarning($"<color=orange>[BTAction_PunchOut]</color> {workplace.BuildingName} has no TimeClockFurniture. Falling back to zone-punch for {self.CharacterName}.");
+                    _warnedNoTimeClock = true;
+                }
+                movement.Stop();
+                _currentPhase = PunchOutPhase.PunchingOut;
+                Action_PunchOut fallback = new Action_PunchOut(self, workplace);
+                if (fallback.CanExecute())
+                {
+                    self.CharacterActions.ExecuteAction(fallback);
+                }
+                return BTNodeStatus.Running;
+            }
+
+            var interactable = clock.GetComponent<TimeClockFurnitureInteractable>();
+            if (interactable == null)
+            {
+                Debug.LogError($"<color=red>[BTAction_PunchOut]</color> {workplace.BuildingName}'s TimeClockFurniture has no TimeClockFurnitureInteractable sibling. Falling back to zone-punch.");
+                movement.Stop();
+                _currentPhase = PunchOutPhase.PunchingOut;
+                Action_PunchOut fallback = new Action_PunchOut(self, workplace);
+                if (fallback.CanExecute())
+                {
+                    self.CharacterActions.ExecuteAction(fallback);
+                }
+                return BTNodeStatus.Running;
+            }
+
+            // Arrival: canonical Interactable-System rule via
+            // InteractableObject.IsCharacterInInteractionZone — tests
+            // Character.transform.position against the authored InteractionZone.
+            bool inZone = interactable.IsCharacterInInteractionZone(self);
+
+            if (inZone)
+            {
+                movement.Stop();
+                interactable.Interact(self);
+                _currentPhase = PunchOutPhase.PunchingOut;
+                return BTNodeStatus.Running;
+            }
+
+            // Not yet in range — path toward the authored InteractionPoint.
+            Vector3 clockTarget = clock.GetInteractionPosition();
+            if (!movement.HasPath || movement.RemainingDistance <= movement.StoppingDistance + 0.5f)
+            {
+                movement.SetDestination(clockTarget);
+            }
             return BTNodeStatus.Running;
         }
 
@@ -181,7 +241,7 @@ namespace MWI.AI
             if (self != null && self.CharacterJob != null)
             {
                 var workplace = self.CharacterJob.Workplace;
-                if (workplace != null && workplace.ActiveWorkersOnShift.Contains(self))
+                if (workplace != null && workplace.IsWorkerOnShift(self))
                 {
                     workplace.WorkerEndingShift(self);
                 }

@@ -3,7 +3,7 @@ type: system
 title: "Save / Load"
 tags: [save-load, persistence, network, tier-2]
 created: 2026-04-19
-updated: 2026-04-19
+updated: 2026-04-24
 sources: []
 related:
   - "[[character]]"
@@ -96,14 +96,20 @@ Decouple characters from any one session so a player's character can visit frien
 - `Assets/Scripts/World/MapSystem/MapSaveData.cs`, `HibernatedNPCData.cs`, `HibernatedItemData.cs` — world side.
 - `ICharacterSaveData<T>`, `ISaveable` interfaces.
 
+## Known gotchas / edge cases
+
+- **Save-restore can leave half-spawned `NetworkObject`s** that kill client-join. Symptom: host throws `NullReferenceException` at `NetworkObject.Serialize` during `NetworkSceneManager.SynchronizeNetworkObjects` when a client tries to join — only with loaded worlds, fresh worlds are fine. Root cause sits in restore code paths that `Spawn()` a NetworkObject and then reparent it (e.g. `MapController.SpawnSavedBuildings` calls `bNet.Spawn()` **before** `bObj.transform.SetParent(this.transform)`). The internal `NetworkManagerOwner` field on the spawned NO can end up null — invisible via the public `NetworkObject.NetworkManager` property (which falls back to the singleton). A defensive purge in `GameSessionManager.PurgeBrokenSpawnedNetworkObjects` (run from `ApprovalCheck`) invokes `Serialize` as a probe and removes any NRE-inducing entries before NGO's sync loop sees them — this lets joins succeed but doesn't remove the broken state, it just suppresses the symptom. See [[network]] for the full write-up and the canonical fix (parent before spawn).
+
 ## Open questions / TODO
 
 - [ ] **Data-flow diagram needs concrete code verification** — the above sketch is based on SKILL docs + CLAUDE.md rule #20. Walk Assets/Scripts/Core/SaveLoad/ when expanding.
 - [ ] How does the abandoned-NPC-reclaim flow work exactly? Mentioned in the save-persistence-specialist agent.
-- [ ] Save version migration — is there a strategy for breaking schema changes?
+- [ ] Save version migration — is there a strategy for breaking schema changes? Worth adding now — adding TimeClock as a child of existing building prefabs AFTER saves were created silently poisoned those saves (buildings replay through `SpawnSavedBuildings` with a different authored child set).
 - [ ] Exact priority ordering of `ICharacterSaveData<T>` providers — does priority dictate load order too, or just export?
+- [ ] **Audit every `NetworkObject.Spawn()` + `SetParent` pair** in save-restore code — enforce the NGO-preferred parent-before-spawn order.
 
 ## Change log
+- 2026-04-24 — Added a Known gotchas section documenting the half-spawned-NetworkObject bug in save-restore paths (root cause + defensive purge). Cross-linked to [[network]]. — claude
 - 2026-04-19 — Stub with architectural sketch. Full code walkthrough deferred — tier-2 per Kevin's plan. — Claude / [[kevin]]
 
 ## Sources

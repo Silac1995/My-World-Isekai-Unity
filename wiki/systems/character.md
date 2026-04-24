@@ -3,7 +3,7 @@ type: system
 title: "Character"
 tags: [character, facade, gameplay, tier-1]
 created: 2026-04-18
-updated: 2026-04-18
+updated: 2026-04-24
 sources: []
 related:
   - "[[combat]]"
@@ -63,7 +63,7 @@ Give the project one substitutable "living being" type so any gameplay feature (
 | File | Role |
 |------|------|
 | [Character.cs](../../Assets/Scripts/Character/Character.cs) | Root facade. Holds every subsystem getter; owns incapacitation/death. |
-| [CharacterActions.cs](../../Assets/Scripts/Character/CharacterActions/CharacterActions.cs) | Hosts `CharacterAction` lifecycle + server RPCs (`RequestDespawnServerRpc`, `RequestCraftServerRpc`). |
+| [CharacterActions.cs](../../Assets/Scripts/Character/CharacterActions/CharacterActions.cs) | Hosts `CharacterAction` lifecycle + server RPCs (`RequestDespawnServerRpc`, `RequestCraftServerRpc`, `RequestHarvestServerRpc`, `RequestItemDropServerRpc`, furniture place/pickup). |
 
 ### Controllers
 | File | Role |
@@ -195,6 +195,7 @@ Input (player) or AI tick (NPC)
 
 ## Change log
 - 2026-04-18 — Initial documentation pass (wiki bootstrap). — Claude / [[kevin]]
+- 2026-04-24 — Added `RequestHarvestServerRpc` + `ApplyHarvestOnServer` helper on `CharacterActions`; documented the `IsSpawned && !IsServer` client-routing pattern for server-authoritative `OnApplyEffect`. Fixes client-triggered `WorldItem.SpawnWorldItem` error from `CharacterHarvestAction`. — Claude
 
 ## Sources
 - [.agent/skills/character_core/SKILL.md](../../.agent/skills/character_core/SKILL.md)

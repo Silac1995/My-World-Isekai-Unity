@@ -27,7 +27,6 @@ public abstract class CommercialBuilding : Building
     [SerializeField] protected Zone _pickupZone;
 
     protected List<Job> _jobs = new List<Job>();
-    protected List<Character> _activeWorkersOnShift = new List<Character>();
     protected List<ItemInstance> _inventory = new List<ItemInstance>();
 
     /// <summary>
@@ -40,12 +39,15 @@ public abstract class CommercialBuilding : Building
     private NetworkList<FixedString64Bytes> _jobWorkerIds;
 
     /// <summary>
-    /// Server-authoritative replicated roster of workers currently on shift (punched in).
-    /// Mirrors <see cref="_activeWorkersOnShift"/> by CharacterId so clients can answer
-    /// "am I / is X on shift here?" without server-only <c>List&lt;Character&gt;</c> access.
-    /// Used by <see cref="IsWorkerOnShift"/> + the Time Clock interactable's Punch In /
-    /// Punch Out UI picker. Server writes via <c>WorkerStartingShift</c> /
-    /// <c>WorkerEndingShift</c>; clients are read-only.
+    /// Server-authoritative replicated roster of workers currently on shift (punched in),
+    /// stored by <c>Character.CharacterId</c>. Single source of truth for both server and
+    /// client — previously a server-only <c>List&lt;Character&gt;</c> mirror existed in
+    /// parallel, but it made <see cref="ActiveWorkersOnShift"/> return an empty list on
+    /// clients and caused the Time Clock UI / debug overlay / BT checks to see the wrong
+    /// shift state. The public <see cref="ActiveWorkersOnShift"/> property now materialises
+    /// Character references from this NetworkList on demand so every peer sees the same data.
+    /// Server writes via <c>WorkerStartingShift</c> / <c>WorkerEndingShift</c>; clients are
+    /// read-only.
     /// </summary>
     private NetworkList<FixedString64Bytes> _activeWorkerIds;
 
@@ -68,7 +70,31 @@ public abstract class CommercialBuilding : Building
     public Character Owner => _ownerIds.Count > 0 ? Character.FindByUUID(_ownerIds[0].ToString()) : null;
     public Community OwnerCommunity => _ownerCommunity;
     public IReadOnlyList<Job> Jobs => _jobs;
-    public IReadOnlyList<Character> ActiveWorkersOnShift => _activeWorkersOnShift;
+
+    /// <summary>
+    /// Workers currently on shift, materialised from the replicated
+    /// <see cref="_activeWorkerIds"/> NetworkList. Consistent on server AND client —
+    /// every peer sees the same roster. Use this for UI ("who is punched in?"),
+    /// quest eligibility, debug overlays. Use <see cref="IsWorkerOnShift"/> for
+    /// allocation-free Contains-style checks.
+    /// Allocates a fresh list on each call; safe for tick-rate consumers.
+    /// </summary>
+    public IReadOnlyList<Character> ActiveWorkersOnShift
+    {
+        get
+        {
+            if (_activeWorkerIds == null) return System.Array.Empty<Character>();
+            var result = new List<Character>(_activeWorkerIds.Count);
+            for (int i = 0; i < _activeWorkerIds.Count; i++)
+            {
+                string id = _activeWorkerIds[i].ToString();
+                if (string.IsNullOrEmpty(id)) continue;
+                var c = Character.FindByUUID(id);
+                if (c != null) result.Add(c);
+            }
+            return result;
+        }
+    }
     public Zone StorageZone => _storageZone;
     public Zone PickupZone => _pickupZone;
     public IReadOnlyList<ItemInstance> Inventory => _inventory;
@@ -841,45 +867,70 @@ public abstract class CommercialBuilding : Building
     [Unity.Netcode.ServerRpc(RequireOwnership = false)]
     public void RequestPunchAtTimeClockServerRpc(string workerId)
     {
-        if (string.IsNullOrEmpty(workerId)) return;
+        Debug.Log($"<color=cyan>[CommercialBuilding:PunchRpc]</color> received on server. building='{buildingName}', workerId='{workerId}'.");
+        if (string.IsNullOrEmpty(workerId))
+        {
+            Debug.LogWarning($"<color=orange>[CommercialBuilding:PunchRpc]</color> aborted — workerId is empty.");
+            return;
+        }
         Character worker = Character.FindByUUID(workerId);
         if (worker == null)
         {
-            Debug.LogWarning($"[CommercialBuilding] RequestPunchAtTimeClockServerRpc: worker '{workerId}' not found on server.");
+            Debug.LogWarning($"<color=orange>[CommercialBuilding:PunchRpc]</color> FindByUUID('{workerId}') returned null on server.");
             return;
         }
+        Debug.Log($"<color=cyan>[CommercialBuilding:PunchRpc]</color> resolved worker: name='{worker.CharacterName}', id='{worker.CharacterId}', IsAbandoned={worker.IsAbandoned}.");
 
         // Re-validate authorization server-side (defence-in-depth; client-side check
         // in TimeClockFurnitureInteractable.Interact is UX-only).
-        if (!IsWorkerEmployedHere(worker))
+        bool employedServer = IsWorkerEmployedHere(worker);
+        Debug.Log($"<color=cyan>[CommercialBuilding:PunchRpc]</color> server IsWorkerEmployedHere({worker.CharacterName})={employedServer}. _jobWorkerIds.Count={_jobWorkerIds?.Count ?? -1}.");
+        if (!employedServer)
         {
-            Debug.LogWarning($"[CommercialBuilding] Punch denied: {worker.CharacterName} is not employed at {buildingName}.");
+            // Dump the replicated roster so we can diagnose mismatches between clientCharId and server state.
+            if (_jobWorkerIds != null)
+            {
+                for (int i = 0; i < _jobWorkerIds.Count; i++)
+                {
+                    Debug.Log($"<color=orange>[CommercialBuilding:PunchRpc]</color>   _jobWorkerIds[{i}]='{_jobWorkerIds[i].ToString()}'.");
+                }
+            }
+            Debug.LogWarning($"<color=orange>[CommercialBuilding:PunchRpc]</color> Punch denied: {worker.CharacterName} (id='{worker.CharacterId}') not employed at {buildingName}.");
             return;
         }
 
         var clock = TimeClock;
         if (clock == null)
         {
-            Debug.LogWarning($"[CommercialBuilding] {buildingName} has no TimeClockFurniture authored — cannot honour player punch request.");
+            Debug.LogWarning($"<color=orange>[CommercialBuilding:PunchRpc]</color> {buildingName} has no TimeClockFurniture authored — cannot honour player punch request.");
             return;
         }
 
         var interactable = clock.GetComponent<TimeClockFurnitureInteractable>();
         if (interactable == null)
         {
-            Debug.LogError($"[CommercialBuilding] TimeClockFurniture on {buildingName} is missing a TimeClockFurnitureInteractable sibling component.");
+            Debug.LogError($"<color=red>[CommercialBuilding:PunchRpc]</color> TimeClockFurniture on {buildingName} is missing a TimeClockFurnitureInteractable sibling component.");
             return;
         }
 
         // Proximity gate — prevent a rogue/modded client from firing the RPC
         // from anywhere. Canonical Interactable-System rule:
         // InteractableObject.IsCharacterInInteractionZone(character) tests
-        // Character.Rigidbody.position against the authored InteractionZone
-        // AABB. Zone size is the single source of truth — no bespoke
-        // Vector3.Distance < radius checks.
+        // Character.transform.position against the authored InteractionZone
+        // AABB (transform rather than Rigidbody so ClientNetworkTransform's
+        // latest synced value is read — rb.position can trail by a physics
+        // tick on the server's kinematic rigidbody for a client-owned player).
         if (!interactable.IsCharacterInInteractionZone(worker))
         {
-            Debug.LogWarning($"[CommercialBuilding] Punch denied: {worker.CharacterName} is not inside the Time Clock interaction zone at {buildingName}.");
+            var zone = interactable.InteractionZone;
+            string zoneInfo = zone != null
+                ? $"bounds.center={zone.bounds.center} extents={zone.bounds.extents}"
+                : "zone=null";
+            Debug.LogWarning(
+                $"[CommercialBuilding] Punch denied: {worker.CharacterName} is not inside the Time Clock interaction zone at {buildingName}. " +
+                $"worker.transform.position={worker.transform.position} " +
+                $"worker.Rigidbody.position={(worker.Rigidbody != null ? worker.Rigidbody.position.ToString() : "null")} " +
+                $"zone.{zoneInfo}");
             return;
         }
 
@@ -909,10 +960,11 @@ public abstract class CommercialBuilding : Building
 
     /// <summary>
     /// Shift-presence predicate reading the replicated <see cref="_activeWorkerIds"/>
-    /// NetworkList. Works on server and clients — clients can see who is punched in
-    /// without relying on the server-only <see cref="_activeWorkersOnShift"/>.
-    /// Used by the Time Clock interactable to pick Punch In vs Punch Out both
-    /// client-side (UI prompt) and server-side (action choice).
+    /// NetworkList. Works on server and clients — the same list is the single source
+    /// of truth for both peers, which is why the public <see cref="ActiveWorkersOnShift"/>
+    /// materialiser also reads from it. Used by the Time Clock interactable to pick
+    /// Punch In vs Punch Out both client-side (UI prompt) and server-side (action choice),
+    /// and by BT nodes that need a cheap allocation-free containment check.
     /// </summary>
     public bool IsWorkerOnShift(Character worker)
     {
@@ -933,7 +985,7 @@ public abstract class CommercialBuilding : Building
     public virtual void WorkerStartingShift(Character worker)
     {
         // Server-authority guard (defence-in-depth). WorkerStartingShift mutates
-        // server-only state (_activeWorkersOnShift, _punchInTimeByWorker, quest
+        // server-only state (_activeWorkerIds NetworkList, _punchInTimeByWorker, quest
         // auto-claim hooks). Client-side callers must route through
         // RequestPunchAtTimeClockServerRpc. Offline / solo keeps working because
         // NetworkManager.Singleton is null OR !IsListening.
@@ -973,21 +1025,18 @@ public abstract class CommercialBuilding : Building
             }
         }
 
-        if (worker != null && !_activeWorkersOnShift.Contains(worker))
+        // Add to the replicated roster (single source of truth). `IsWorkerOnShift`
+        // reads the same list and is the idempotency gate — identical to the server
+        // and client view.
+        if (worker != null && !IsWorkerOnShift(worker))
         {
-            _activeWorkersOnShift.Add(worker);
-
-            // Mirror into the replicated roster so clients can answer IsWorkerOnShift.
-            // Server-only write; NetworkList replicates the change to every peer.
-            if (_activeWorkerIds != null && !string.IsNullOrEmpty(worker.CharacterId))
+            if (string.IsNullOrEmpty(worker.CharacterId))
             {
-                bool alreadyPresent = false;
-                for (int i = 0; i < _activeWorkerIds.Count; i++)
-                {
-                    if (_activeWorkerIds[i].ToString() == worker.CharacterId) { alreadyPresent = true; break; }
-                }
-                if (!alreadyPresent) _activeWorkerIds.Add(new FixedString64Bytes(worker.CharacterId));
+                Debug.LogError($"[CommercialBuilding] WorkerStartingShift: {worker.CharacterName} has empty CharacterId — shift state cannot be replicated.");
+                return;
             }
+
+            _activeWorkerIds.Add(new FixedString64Bytes(worker.CharacterId));
 
             Debug.Log($"<color=green>[Building]</color> {worker.CharacterName} a pointé (Punch In) à {buildingName}.");
 
@@ -1193,7 +1242,7 @@ public abstract class CommercialBuilding : Building
     {
         // Server-authority guard — mirror WorkerStartingShift. Defence-in-depth;
         // CharacterWallet.AddCoins also guards wage payment, but bailing early keeps
-        // _activeWorkersOnShift + WorkLog writes consistent across peers.
+        // _activeWorkerIds + WorkLog writes consistent across peers.
         if (!IsServer && Unity.Netcode.NetworkManager.Singleton != null && Unity.Netcode.NetworkManager.Singleton.IsListening)
         {
             Debug.LogError("[CommercialBuilding] WorkerEndingShift called on non-server instance. Route through RequestPunchAtTimeClockServerRpc.");
@@ -1247,11 +1296,9 @@ public abstract class CommercialBuilding : Building
             AbandonWorkerClaimedQuests(worker);
         }
 
-        if (worker != null && _activeWorkersOnShift.Contains(worker))
+        if (worker != null && IsWorkerOnShift(worker))
         {
-            _activeWorkersOnShift.Remove(worker);
-
-            // Mirror removal into the replicated roster. Server-only write.
+            // Remove from the replicated roster (single source of truth).
             if (_activeWorkerIds != null && !string.IsNullOrEmpty(worker.CharacterId))
             {
                 for (int i = _activeWorkerIds.Count - 1; i >= 0; i--)

@@ -101,8 +101,27 @@ public class CharacterLocations : CharacterSystem
 
     /// <summary>
     /// Called by SpawnManager or Purchase System to grant global building ownership to this character.
+    /// Updates both sides: local OwnedBuildings + the building's NetworkList (_ownerIds via AddOwner).
     /// </summary>
     public void ReceiveOwnership(Building building)
+    {
+        if (building == null) return;
+
+        RegisterOwnedBuilding(building);
+
+        // Also tell the building backend that this character is an owner
+        building.AddOwner(_character);
+
+        Debug.Log($"<color=green>[CharacterLocations]</color> {_character.name} has received ownership of {building.RoomName}.");
+    }
+
+    /// <summary>
+    /// Character-side ownership sync. Call this when the building's _ownerIds NetworkList
+    /// has already been updated elsewhere (e.g. inside Building.SetOwner) and we only need
+    /// to mirror the change into CharacterLocations state. Does NOT call back into
+    /// building.AddOwner — avoids circular calls and double-add into the NetworkList.
+    /// </summary>
+    public void RegisterOwnedBuilding(Building building)
     {
         if (building == null) return;
 
@@ -110,9 +129,6 @@ public class CharacterLocations : CharacterSystem
         {
             OwnedBuildings.Add(building);
         }
-
-        // Also tell the building backend that this character is an owner
-        building.AddOwner(_character);
 
         // If this is a residential building, set up home zone and schedule
         if (building is ResidentialBuilding residential)
@@ -122,7 +138,29 @@ public class CharacterLocations : CharacterSystem
             InjectHomeSchedule();
         }
 
-        Debug.Log($"<color=green>[CharacterLocations]</color> {_character.name} has received ownership of {building.RoomName}.");
+        Debug.Log($"<color=cyan>[CharacterLocations]</color> {_character?.name} registered ownership of {building.BuildingName}. OwnedBuildings count = {OwnedBuildings.Count}.");
+    }
+
+    /// <summary>
+    /// Character-side ownership revocation. Call this when the building's _ownerIds
+    /// NetworkList has already been (or is about to be) cleared elsewhere and we only need
+    /// to mirror the removal into CharacterLocations state. If the removed building was the
+    /// character's current home, home ties are cleared so stale references don't persist.
+    /// </summary>
+    public void UnregisterOwnedBuilding(Building building)
+    {
+        if (building == null) return;
+
+        bool removed = OwnedBuildings.Remove(building);
+        if (!removed) return;
+
+        if (building is ResidentialBuilding residential && homeBuilding == residential)
+        {
+            homeBuilding = null;
+            homeZone = null;
+        }
+
+        Debug.Log($"<color=cyan>[CharacterLocations]</color> {_character?.name} unregistered ownership of {building.BuildingName}. OwnedBuildings count = {OwnedBuildings.Count}.");
     }
 
     // ==========================================

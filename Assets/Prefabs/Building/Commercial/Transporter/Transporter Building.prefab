@@ -1218,10 +1218,22 @@ PrefabInstance:
       propertyPath: m_AnchoredPosition.y
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 3659702915743468926, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: _building
+      value: 
+      objectReference: {fileID: 1908222509836554634}
     - target: {fileID: 4927771276047822767, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: _building
       value: 
       objectReference: {fileID: 1908222509836554634}
+    - target: {fileID: 5480565783836491993, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 6
+      objectReference: {fileID: 0}
+    - target: {fileID: 5480565783836491993, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: -25
+      objectReference: {fileID: 0}
     - target: {fileID: 6121509161196564493, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: m_Size.x
       value: 21
@@ -1650,6 +1662,7 @@ MonoBehaviour:
     communityZones: []
     ownedBuildings: []
   _storageZone: {fileID: 8762718603653025141}
+  _pickupZone: {fileID: 0}
   _transporterCount: 3
 --- !u!114 &1717850346848683089
 MonoBehaviour:

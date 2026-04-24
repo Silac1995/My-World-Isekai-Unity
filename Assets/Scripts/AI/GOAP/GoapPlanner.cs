@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
 
 /// <summary>
@@ -11,6 +10,18 @@ using UnityEngine;
 public static class GoapPlanner
 {
     private const int MAX_DEPTH = 10;
+
+    /// <summary>
+    /// Set to true in the editor to see per-plan success/failure logs. Kept off by default because
+    /// the planner runs on the server once per NPC per replan and a jobless NPC would fill the
+    /// Unity console in minutes (which on Windows progressively stalls the editor).
+    /// </summary>
+    public static bool VerboseLogging = false;
+
+    // Scratch buffer: tracks actions currently "used" along the recursion path.
+    // Single-threaded (server main thread, non-reentrant), so one static HashSet is safe
+    // and eliminates the per-recursion `Where().ToList()` allocation.
+    private static readonly HashSet<GoapAction> _usedActions = new HashSet<GoapAction>();
 
     /// <summary>
     /// Planifie une séquence d'actions pour atteindre le goal depuis le world state actuel.
@@ -32,16 +43,23 @@ public static class GoapPlanner
         var leaves = new List<PlanNode>();
         var startNode = new PlanNode(null, 0f, worldState, null);
 
+        _usedActions.Clear();
         bool found = BuildGraph(startNode, leaves, availableActions, goal, 0);
 
         if (!found || leaves.Count == 0)
         {
-            Debug.Log($"<color=red>[GOAP]</color> Aucun plan trouvé pour le goal '{goal.GoalName}'.");
+            if (VerboseLogging)
+                Debug.Log($"<color=red>[GOAP]</color> Aucun plan trouvé pour le goal '{goal.GoalName}'.");
             return null;
         }
 
-        // Trouver le plan le moins coûteux
-        PlanNode cheapest = leaves.OrderBy(n => n.RunningCost).First();
+        // Trouver le plan le moins coûteux (scan linéaire au lieu d'OrderBy().First() pour éviter l'allocation LINQ)
+        PlanNode cheapest = leaves[0];
+        for (int i = 1; i < leaves.Count; i++)
+        {
+            if (leaves[i].RunningCost < cheapest.RunningCost)
+                cheapest = leaves[i];
+        }
 
         // Reconstruire le plan en remontant les parents
         var plan = new List<GoapAction>();
@@ -56,13 +74,21 @@ public static class GoapPlanner
         // Inverser (on a remonté depuis la feuille)
         plan.Reverse();
 
-        Debug.Log($"<color=green>[GOAP]</color> Plan trouvé pour '{goal.GoalName}' : {string.Join(" → ", plan.Select(a => a.ActionName))}");
+        if (VerboseLogging)
+        {
+            var names = new string[plan.Count];
+            for (int i = 0; i < plan.Count; i++) names[i] = plan[i].ActionName;
+            Debug.Log($"<color=green>[GOAP]</color> Plan trouvé pour '{goal.GoalName}' : {string.Join(" → ", names)}");
+        }
 
         return new Queue<GoapAction>(plan);
     }
 
     /// <summary>
     /// Construit récursivement le graphe de plans possibles (forward search).
+    /// Uses a shared `_usedActions` set with backtracking to avoid allocating a filtered list
+    /// at every recursive call (previously `availableActions.Where(a => a != action).ToList()`
+    /// allocated up to O(actions^depth) lists during a single Plan).
     /// </summary>
     private static bool BuildGraph(
         PlanNode parent,
@@ -77,6 +103,10 @@ public static class GoapPlanner
 
         foreach (var action in availableActions)
         {
+            // Skip actions déjà utilisées sur le chemin courant de la recherche
+            if (_usedActions.Contains(action))
+                continue;
+
             // L'action doit avoir ses préconditions satisfaites par l'état courant
             if (!action.ArePreconditionsMet(parent.State))
                 continue;
@@ -95,12 +125,12 @@ public static class GoapPlanner
             }
             else
             {
-                // Sinon, continuer à chercher (sans réutiliser la même action)
-                var remainingActions = availableActions.Where(a => a != action).ToList();
-                if (BuildGraph(node, leaves, remainingActions, goal, depth + 1))
+                _usedActions.Add(action);
+                if (BuildGraph(node, leaves, availableActions, goal, depth + 1))
                 {
                     foundPlan = true;
                 }
+                _usedActions.Remove(action); // backtrack
             }
         }
 

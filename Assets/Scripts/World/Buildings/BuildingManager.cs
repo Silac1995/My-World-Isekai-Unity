@@ -109,11 +109,15 @@ public class BuildingManager : MonoBehaviour
     /// </summary>
     public (CommercialBuilding building, T job) FindAvailableJob<T>(bool requireBoss = false) where T : Job
     {
-        // Shuffle the list of buildings so that characters don't all flock to the same boss first.
-        var shuffledBuildings = allBuildings.OrderBy(b => UnityEngine.Random.value);
+        // Iterate from a random start index so callers don't all flock to the same boss first,
+        // while avoiding the allocation and O(B log B) cost of `allBuildings.OrderBy(Random.value)`.
+        int count = allBuildings.Count;
+        if (count == 0) return (null, null);
 
-        foreach (var building in shuffledBuildings)
+        int start = UnityEngine.Random.Range(0, count);
+        for (int offset = 0; offset < count; offset++)
         {
+            var building = allBuildings[(start + offset) % count];
             if (building is CommercialBuilding commercial)
             {
                 if (requireBoss && !commercial.HasOwner) continue;

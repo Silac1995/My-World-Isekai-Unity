@@ -5,8 +5,8 @@ namespace MWI.AI
 {
     /// <summary>
     /// Condition : Le personnage vient de finir son shift (son ScheduleActivity n'est PLUS Work)
-    /// mais il est TOUJOURS enregistré physiquement dans l'ActiveWorkersOnShift du bâtiment.
-    /// Il DOIT dépointer.
+    /// mais il est TOUJOURS enregistré physiquement comme on-shift dans le bâtiment
+    /// (IsWorkerOnShift retourne vrai). Il DOIT dépointer.
     /// </summary>
     public class BTCond_NeedsToPunchOut : BTNode
     {
@@ -27,7 +27,7 @@ namespace MWI.AI
 
             // Sinon, est-on encore enregistré au travail ?
             CommercialBuilding workplace = jobInfo.Workplace;
-            if (workplace == null || !workplace.ActiveWorkersOnShift.Contains(self))
+            if (workplace == null || !workplace.IsWorkerOnShift(self))
                 return BTNodeStatus.Failure; // Déjà dépointé ou chômeur
 
             // On délègue à l'action native de BT pour dépointer

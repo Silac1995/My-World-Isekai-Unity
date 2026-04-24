@@ -64,12 +64,10 @@ public class UI_CommercialBuildingDebugScript : MonoBehaviour
             {
                 if (job.IsAssigned && job.Worker != null)
                 {
-                    bool onShift = false;
-                    if (_building.ActiveWorkersOnShift != null)
-                    {
-                        onShift = _building.ActiveWorkersOnShift.Contains(job.Worker);
-                    }
-                    
+                    // Reads the replicated _activeWorkerIds NetworkList via IsWorkerOnShift,
+                    // so host and remote clients show the same shift state.
+                    bool onShift = _building.IsWorkerOnShift(job.Worker);
+
                     string shiftStatus = onShift ? "<color=#00FF00>[On Shift]</color>" : "<color=#888888>[Off Shift]</color>";
                     sb.AppendLine($"- {job.JobTitle}: <color=#FFFF00>{job.Worker.CharacterName}</color> {shiftStatus}");
                     

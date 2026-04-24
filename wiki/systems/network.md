@@ -3,7 +3,7 @@ type: system
 title: "Network (NGO)"
 tags: [network, multiplayer, ngo, tier-2]
 created: 2026-04-19
-updated: 2026-04-19
+updated: 2026-04-24
 sources: []
 related:
   - "[[character]]"
@@ -54,10 +54,32 @@ The project runs on **Unity NGO (Netcode for GameObjects)** with a **server-auth
 
 ## Key classes / files
 
-- `Assets/Scripts/Core/Network/GameSessionManager.cs` — session lifecycle.
+- `Assets/Scripts/Core/Network/GameSessionManager.cs` — session lifecycle. Applies `ApplyTransportTuning` on `StartSolo` / `JoinMultiplayer` (raises `UnityTransport.MaxPacketQueueSize` to 4096 and `NetworkConfig.SpawnTimeout` to 30 s — defaults are 128 / 10 s which overflow at connect time for content-heavy worlds). Also runs `PurgeBrokenSpawnedNetworkObjects` inside `ApprovalCheck` as a defence-in-depth against half-spawned NOs blowing up NGO sync.
 - `Assets/Scripts/Core/Network/ClientNetworkTransform.cs` — owner-authoritative transform.
-- `Assets/DefaultNetworkPrefabs.asset` — network prefab registry.
+- `Assets/DefaultNetworkPrefabs.asset` — network prefab registry. Only prefabs with a `NetworkObject` component at their root belong here. Entries without one (or pointing to deleted assets) are silently stripped at NGO init, but pollute logs and bloat the index.
 - `Character`, `CharacterActions`, `BattleManager` — all `NetworkBehaviour`.
+
+## Transport tuning & connect-time failure modes
+
+Two classes of client-join failure show up as NGO log spam or a stuck handshake. Both are handled at runtime in `GameSessionManager`:
+
+### A. `Receive queue is full` + `[Deferred OnSpawn] ... NetworkObject was not received within 10s`
+
+**What's happening:** the server blasts the entire initial snapshot (all scene-placed + spawned `NetworkObject`s + their `NetworkVariable` state + `NetworkTransform` ticks) when a client joins. `UnityTransport.MaxPacketQueueSize` is the per-connection receive-queue capacity; default **128** overflows for any world with more than a handful of networked entities. Dropped packets cost spawn messages → client receives deltas for NOs it never knew → 10 s `SpawnTimeout` → purge.
+
+**Fix:** `ApplyTransportTuning()` runs before every `StartHost` / `StartClient`, setting:
+- `UnityTransport.MaxPacketQueueSize = 4096`
+- `NetworkConfig.SpawnTimeout = 30` seconds
+
+Chosen empirically. Bump higher if you still see the warnings with a larger save. Architectural levers if queue size alone isn't enough: interest management via `NetworkVisibility`, lower `NetworkTransform` tick rate on idle objects, shard via `NetworkSceneManager`.
+
+### B. Host NRE at `NetworkObject.Serialize` during connection approval
+
+**What's happening:** a spawned NetworkObject on the host has a null internal `NetworkManagerOwner` field (or other half-spawned state) — usually left behind by save-restore paths that `Destroy` a GO without proper `NetworkObject.Despawn()`, or that reparent a spawned NO in a way NGO doesn't expect. The NRE kills the whole client-approval handshake, so every client silently fails to join. **Fresh worlds are unaffected** because nothing gets restored; the bug only manifests with loaded saves.
+
+**Fix (defensive):** `PurgeBrokenSpawnedNetworkObjects` runs inside `ApprovalCheck`. It iterates `NetworkManager.SpawnManager.SpawnedObjects`, checks three conditions via reflection (null ref, destroyed GO, null `NetworkManagerOwner`), then **invokes `Serialize` as a probe** and catches any exception. Any NO that would have NRE'd is removed before NGO's sync loop touches it. A `Pre-sync scan: N spawned NetworkObjects, none broken.` info log confirms the purge ran clean; `Purging broken spawned NetworkObject id=X name='Y' reason='…'` warnings identify the offenders for source-level follow-up.
+
+**Fix (root cause — still open):** the save-restore path should be audited so this doesn't happen in the first place. Suspected culprit: `MapController.SpawnSavedBuildings` calls `bNet.Spawn()` before `SetParent(this.transform)`; NGO prefers the parent to be set *before* spawn. Tracked in Open questions.
 
 ## Specialized agents
 
@@ -72,8 +94,10 @@ Use the validator proactively after any networked change.
 - [ ] Enumerate the NPC state that goes over the wire vs stays server-only — a common bug class.
 - [ ] Client late-join — how does it catch up state? Especially hibernated map contents.
 - [ ] Confirm the exact interest-management config: pure-distance? per-map scoping?
+- [ ] **Save-restore ordering audit** — `MapController.SpawnSavedBuildings` calls `NetworkObject.Spawn()` before `transform.SetParent(mapController.transform)`. NGO's preferred order is parent-before-spawn. Saves created with old building prefabs can produce half-spawned NOs that later NRE `NetworkObject.Serialize` during client-sync (only visible with loaded worlds, fresh worlds are fine). The defensive purge in `GameSessionManager.PurgeBrokenSpawnedNetworkObjects` masks the symptom; root fix is switching the order + auditing any other server-side spawn path that reparents post-spawn.
 
 ## Change log
+- 2026-04-24 — Documented transport tuning (`MaxPacketQueueSize`, `SpawnTimeout`) applied at runtime in `GameSessionManager.ApplyTransportTuning`, and the defensive half-spawned-NetworkObject purge (`PurgeBrokenSpawnedNetworkObjects`) invoked from `ApprovalCheck`. Added the save-restore ordering gotcha to Open questions. — claude
 - 2026-04-19 — Stub. Low confidence until NETWORK_ARCHITECTURE.md exists. — Claude / [[kevin]]
 
 ## Sources

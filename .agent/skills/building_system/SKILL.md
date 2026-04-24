@@ -110,6 +110,11 @@ The base class for interactable or static objects inside rooms.
   - `_occupant`: A character is currently using it physically.
   - Both prevent other characters from using the furniture simultaneously.
 
+#### Typed subclasses
+- **`ChairFurniture` / `ChairFurnitureInteractable`** — sit-and-stay seating; Release() ends occupation.
+- **`CraftingStation` + `CraftingFurnitureInteractable`** — opens the crafting window for a worker.
+- **`TimeClockFurniture` + `TimeClockFurnitureInteractable`** — punch-in / punch-out station for the parent `CommercialBuilding`. Acts as a one-shot interaction: `Furniture.Use(...)` → `Action_PunchIn` / `Action_PunchOut` → `Furniture.Release()` fires in the action's `OnActionFinished`. Players hop through `CommercialBuilding.RequestPunchAtTimeClockServerRpc` (client-side `Interact` detects `!IsServer` and routes); NPCs target the clock from `BTAction_Work` / `BTAction_PunchOut` directly on the server. Eligibility: the interactor must have a `JobAssignment` where `Workplace == this building`. Missing clock → one-shot warning + legacy zone-punch fallback.
+
 ### Furniture Placement & Pickup (Player + NPC)
 
 Furniture has two forms:
@@ -314,6 +319,7 @@ Player-placed buildings are registered with the `MapController` they're placed i
 - **Combat knockback**: Player can be knocked outside MapController trigger → OnTriggerExit → player count 0 → Hibernate fires mid-combat. Fix: add a 2-3s grace period in `CheckHibernationState` before calling `Hibernate()`.
 - **Community auto-creation**: `EnsureCommunityData()` creates a CommunityData with no leaders for predefined maps. Permission check allows everyone to build when `LeaderIds.Count == 0`.
 - **Predefined map OriginChunk**: Auto-created CommunityData now uses the map's actual world position for `OriginChunk` (not default `(0,0)`).
+- **Spawn-then-reparent ordering in `SpawnSavedBuildings`** — current order is `bNet.Spawn()` → `bObj.transform.SetParent(this.transform)`. NGO prefers parent-before-spawn; the current order has been observed to produce half-spawned `NetworkObject`s whose internal `NetworkManagerOwner` ends up null, causing `NetworkObject.Serialize` to NRE during a client-join approval handshake and silently break every join against a loaded save. Fresh worlds are unaffected. Defensive purge lives in `GameSessionManager.PurgeBrokenSpawnedNetworkObjects` but the root fix is to reorder to `SetParent` first, `Spawn()` second. See [[network]] in the wiki for the full diagnostic write-up.
 
 ### `MapController.GetMapAtPosition(Vector3)`
 Static utility that iterates `_mapRegistry`, skips interiors, returns the first map whose `_mapTrigger.bounds.Contains(position)`. Returns null for open world.
@@ -330,6 +336,22 @@ Static factory creating a save entry with position **relative** to map center. A
 - `Employees` — `List<EmployeeSaveEntry>` (`CharacterId`, `JobType`) for CommercialBuilding crews. Iterates `commercial.Jobs` and emits one entry per assigned job.
 
 `MapController.SnapshotActiveBuildings()` and `MapController.Hibernate()` always *replace* the dynamic fields (`OwnerCharacterIds`, `Employees`, `State`, `Position`, `Rotation`) on existing entries — do not patch fields individually or stale ownership leaks across saves.
+
+### Ownership Sync Invariant (`_ownerIds` ↔ `CharacterLocations.OwnedBuildings`)
+
+Ownership lives on **both** sides and must stay in sync:
+
+- **Building side** — `Room._ownerIds` (NetworkList<FixedString64Bytes>) replicates to clients. Mutated by `Room.AddOwner`, `Room.RemoveOwner`, and `CommercialBuilding.SetOwner` / `ResidentialBuilding.SetOwner` (which clear + refill).
+- **Character side** — `CharacterLocations.OwnedBuildings` (plain `List<Building>`, server-only today). Mirrors which buildings this character owns. Used by permission logic (`AddOwnerToBuilding`, `AddResidentToRoom`) and home resolution (`GetHomeBuilding`, `GetAssignedBed`).
+
+Two entry points keep both sides consistent:
+
+1. `CharacterLocations.ReceiveOwnership(Building)` — character-first path. Adds to `OwnedBuildings`, then calls `building.AddOwner(_character)`. Used by `SpawnManager` / purchase flows.
+2. `Building.SetOwner(Character)` — building-first path. Unregisters the **old** owners (`oldOwner.CharacterLocations.UnregisterOwnedBuilding(this)`), clears `_ownerIds`, calls `AddOwner(newOwner)`, then calls `newOwner.CharacterLocations.RegisterOwnedBuilding(this)`. Used by dev-mode Assign-Building, `CharacterJob.BecomeBoss`, save/restore, and residential ownership transfer.
+
+`RegisterOwnedBuilding` / `UnregisterOwnedBuilding` are lightweight character-side mirrors — they do **not** call back into `building.AddOwner`, which avoids circular calls and double-inserts into `_ownerIds`.
+
+**Known gap:** `OwnedBuildings` is not networked. Remote clients see an empty list for their own character unless they are also the host. If a non-host client needs to query its own ownership, read `building.IsOwner(character)` (replicated via `_ownerIds`) instead. A future refactor could replace `OwnedBuildings` with a derived `BuildingManager.GetAllBuildings().Where(b => b.IsOwner(_character))` getter.
 
 ### Building Ownership/Employee Restoration
 `CommercialBuilding.RestoreFromSaveData(List<string> ownerIds, List<EmployeeSaveEntry> employees)` (server-only) is called by `MapController.SpawnSavedBuildings()` and `WakeUp()` immediately after `bNet.Spawn()` and `NetworkBuildingId` injection. It:

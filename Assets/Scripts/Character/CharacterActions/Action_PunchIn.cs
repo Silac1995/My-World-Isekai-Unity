@@ -34,6 +34,7 @@ public class Action_PunchIn : CharacterAction
 
     public override void OnApplyEffect()
     {
+        Debug.Log($"<color=green>[Action_PunchIn:OnApplyEffect]</color> {character.CharacterName} → WorkerStartingShift at {_workplace.BuildingName}.");
         _workplace.WorkerStartingShift(character);
     }
 }

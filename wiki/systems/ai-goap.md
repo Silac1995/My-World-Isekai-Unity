@@ -3,7 +3,7 @@ type: system
 title: "AI GOAP"
 tags: [ai, goap, planning, npc, tier-2]
 created: 2026-04-19
-updated: 2026-04-19
+updated: 2026-04-24
 sources: []
 related:
   - "[[ai]]"
@@ -103,6 +103,9 @@ currentAction = plan[index]
 - **Cost tuning drives behaviour** — a cheap "Steal" action will be picked over "EarnMoney" unless traits/personality raise its cost.
 - **NativeGoapAction in JobTransporter** — `GoapAction_LoadTransport` / `GoapAction_UnloadTransport` run inside `JobTransporter.Execute()` to decouple state from FSM. See [[jobs-and-logistics]].
 - **Needs threshold oscillation** — thresholds near the boundary churn replans. Hysteresis is your friend.
+- **Host-only performance trap — `Replan()` throttle is mandatory** — `CharacterGoapController.Replan()` is guarded by `_planReevaluationInterval` (default 2s). Without the guard, a jobless NPC bounces Replan→fail→Wander→re-enter GOAP every BT tick (0.1s), scanning all buildings twice per attempt. With `N` NPCs and `B` buildings that is `O(N·B·log B·20)` per second on the host (server-authoritative). Clients are unaffected because `NPCBehaviourTree.Update` early-returns on non-server. If you add a new entry point that forces a replan, always route it through `CancelPlan()` (which resets the throttle) instead of bypassing it.
+- **`GoapPlanner._usedActions` is a static scratch buffer** — used for path-tracking during backward search. Safe only because `Plan()` is called on the server main thread and is non-reentrant. Do not call `Plan()` recursively from inside a `GoapAction`, and if you ever parallelise planning, give each worker its own buffer.
+- **`GoapPlanner.VerboseLogging` is off by default** — on Windows, the Unity console stalls progressively as entries pile up. Flip the static on only while debugging.
 
 ## Dependencies
 
@@ -123,6 +126,7 @@ currentAction = plan[index]
 
 ## Change log
 - 2026-04-19 — Initial pass. — Claude / [[kevin]]
+- 2026-04-24 — Host-only perf fix: `Replan()` now honours `_planReevaluationInterval` (was dead code); `GoapPlanner` recursion uses a shared `HashSet<GoapAction>` with backtracking instead of per-level `.Where().ToList()`; Debug logs gated behind `GoapPlanner.VerboseLogging`; `BuildingManager.FindAvailableJob` replaces `OrderBy(Random.value)` shuffle with random-start iteration; `UpdateWorldState()` caches `FindAvailableJob` result across the two sensor calls in a single Replan. — claude
 
 ## Sources
 - [.agent/skills/goap/SKILL.md](../../.agent/skills/goap/SKILL.md)

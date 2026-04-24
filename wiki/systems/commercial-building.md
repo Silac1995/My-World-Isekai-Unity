@@ -3,7 +3,7 @@ type: system
 title: "Commercial Building"
 tags: [building, commercial, jobs, tier-2]
 created: 2026-04-19
-updated: 2026-04-23
+updated: 2026-04-24
 sources: []
 related: ["[[building]]", "[[building-logistics-manager]]", "[[building-task-manager]]", "[[jobs-and-logistics]]", "[[shops]]", "[[crafting-loop]]", "[[worker-wages-and-performance]]", "[[quest-system]]", "[[dev-mode]]", "[[kevin]]"]
 status: stable
@@ -23,7 +23,9 @@ depended_on_by: ["[[jobs-and-logistics]]", "[[shops]]", "[[crafting-loop]]", "[[
 
 | File | Role |
 |---|---|
-| `Assets/Scripts/World/Buildings/CommercialBuilding.cs` | Abstract base. Owner, jobs, task manager, logistics manager, `GetWorkPosition`. |
+| `Assets/Scripts/World/Buildings/CommercialBuilding.cs` | Abstract base. Owner, jobs, task manager, logistics manager, `GetWorkPosition`, `TimeClock` lookup, `RequestPunchAtTimeClockServerRpc`. |
+| `Assets/Scripts/World/Furniture/TimeClockFurniture.cs` | Typed marker furniture — authored inside a CommercialBuilding's prefab/scene so the building can find its punch station via `GetComponentInChildren<TimeClockFurniture>()`. |
+| `Assets/Scripts/Interactable/TimeClockFurnitureInteractable.cs` | Player + NPC entry point: `Interact` routes to a ServerRpc (client) or `RunPunchCycleServerSide` (server/NPC), which picks `Action_PunchIn` / `Action_PunchOut` from shift state. |
 | `Assets/Scripts/World/Buildings/IStockProvider.cs` | Contract for autonomous restock + `StockTarget` struct. |
 | `Assets/Scripts/World/Buildings/CommercialBuildings/ShopBuilding.cs` | Implements `IStockProvider` by projecting `_itemsToSell`. |
 | `Assets/Scripts/World/Buildings/CommercialBuildings/CraftingBuilding.cs` | Implements `IStockProvider` via Inspector-authored `_inputStockTargets`. |
@@ -81,6 +83,8 @@ Force-assignment bypasses consent: `CommunityTracker.ImposeJobOnCitizen()` → `
 - If a subclass wants autonomous restock, **implementing `IStockProvider` is mandatory** — declaring `_itemsToSell` or `_inputStockTargets` alone does nothing until the contract is wired.
 
 ## Change log
+- 2026-04-24 — Shift roster now single-sourced from the replicated `_activeWorkerIds` `NetworkList<FixedString64Bytes>`. Removed the parallel server-only `_activeWorkersOnShift : List<Character>` — it made `ActiveWorkersOnShift` return empty on remote clients, which silently broke the Time Clock UI / `UI_CommercialBuildingDebugScript` / `BTCond_NeedsToPunchOut` across peers. `ActiveWorkersOnShift` is now a materialiser that walks `_activeWorkerIds` via `Character.FindByUUID`; `IsWorkerOnShift` is the allocation-free containment check. `BTAction_Work`, `BTAction_PunchOut`, `BTCond_NeedsToPunchOut`, and `UI_CommercialBuildingDebugScript` were migrated to `IsWorkerOnShift` for both correctness on clients and fewer per-tick allocations. — claude
+- 2026-04-24 — Physical punch-in: `TimeClockFurniture` + `TimeClockFurnitureInteractable` added. Both players and NPCs must interact with a Time Clock to punch; `BTAction_Work` / `BTAction_PunchOut` now target `workplace.TimeClock.GetInteractionPosition()` with a soft fallback to zone-punch when no clock is authored. New `CommercialBuilding.RequestPunchAtTimeClockServerRpc` routes player clients; `WorkerStartingShift` / `WorkerEndingShift` carry `!IsServer` defence-in-depth guards. Spec: `docs/superpowers/specs/2026-04-24-time-clock-furniture-design.md`. — claude
 - 2026-04-23 — Quest aggregator: `GetAvailableQuests`, `GetQuestById`, `ResolveIssuer` (LogisticsManager Worker > Owner > null), `PublishQuest` stamps Issuer + OriginMapId. `WorkerStartingShift` auto-claims eligible quests for on-shift workers + subscribes for future publications. See [[quest-system]]. — claude
 - 2026-04-23 — Added optional `PickupZone` field for transporter pickup routing + NavMesh-based reachability safety net. Transporter no longer stalls when `StorageZone` is unreachable. See [[building-logistics-manager]] for the full flow. — claude
 - 2026-04-22 — Wage and worklog hooks added: `WorkerStartingShift` records punch-in time + calls `CharacterWorkLog.OnPunchIn`; `WorkerEndingShift` calls `FinalizeShift` + `WageSystemService.ComputeAndPayShiftWage`; new owner-gated `TrySetAssignmentWage`. See [[worker-wages-and-performance]] — claude

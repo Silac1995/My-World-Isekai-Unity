@@ -10,17 +10,17 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: b9e4df412478a694d88998d71e0d1de9, type: 3}
-  m_Name: CraftingStation
+  m_Name: Time Clock
   m_EditorClassIdentifier: Assembly-CSharp::FurnitureItemSO
   category_name: 
   _spriteLibrary: {fileID: 0}
-  itemId: F00-CraftingStation
-  itemName: Crafting Station
-  description: Craft items.
+  itemId: F01-TimeClock
+  itemName: Time Clock
+  description: Punch in and out to start/ends shift.
   icon: {fileID: 0}
   item_prefab: {fileID: 5368253223231017792, guid: 3a4b4877e6aa64b40857f3c3704c8a91, type: 3}
   worldItem_prefab: {fileID: 718778511601405242, guid: d05bd27244da29941a5703671cff1688, type: 3}
-  _weight: 2
+  _weight: 1
   _material: 0
   _tier: 0
   _castsShadow: 1
@@ -29,4 +29,4 @@ MonoBehaviour:
   _requiredCraftingLevel: 1
   _craftingDuration: 3
   _craftingRecipe: []
-  _installedFurniturePrefab: {fileID: 4748126588462873856, guid: 1b70e0c4872313f4cad3ce1a3b5b403b, type: 3}
+  _installedFurniturePrefab: {fileID: 8908655753091272922, guid: 6b8cc99cbd2da024f82364c1d4cd7be9, type: 3}

@@ -10,10 +10,25 @@ The root (most parent) GameObject of a Character prefab contains the essential c
 - `Character.cs` (`Assets/Scripts/Character/Character.cs`)
 - `CharacterActions.cs` (`Assets/Scripts/Character/CharacterActions/CharacterActions.cs`)
 - `NPCController.cs` and `PlayerController.cs` (`Assets/Scripts/Character/CharacterControllers/NPCController.cs` and `Assets/Scripts/Character/CharacterControllers/PlayerController.cs`)
-- `Rigidbody`
+- `Rigidbody` — exposed as `character.Rigidbody`. **This is the physical body used for all proximity/interaction checks.**
 - `CapsuleCollider`
 
 The `Character.cs` script is the most important class of the entity. It is the Central Architecture (Facade Pattern) through which **everything** passes.
+
+> [!IMPORTANT]
+> **Interaction Proximity Rule — mandatory.** For a `Character` to interact with any `InteractableObject` (items, NPCs, harvestables, doors, furniture, crafting stations…), the Character's **`Rigidbody` position** **MUST** be inside the target's `InteractionZone`. The **only sanctioned check** is:
+>
+> ```csharp
+> interactable.IsCharacterInInteractionZone(character);
+> ```
+>
+> This method lives on the `InteractableObject` base class and is the single source of truth for the rule. Call it at the top of every `Interact()` override, `CharacterAction.CanExecute()`, GOAP precondition, BT action, and server RPC handler that resolves an interaction. If it returns `false`, abort — no distance fallback, no zone-overlap shortcut, no `transform.position` substitute.
+>
+> **Do not confuse the two kinds of `InteractionZone`:**
+> - `InteractableObject.InteractionZone` — authored on every interactable prefab; the single source of truth for "am I close enough to interact with this object?".
+> - `CharacterInteraction.InteractionZone` — lives on the social subsystem (`CharacterInteraction` = character-to-character dialogue/invitations) and detects **other characters** for social exchanges only. It is **not** a general-purpose proximity collider and must never be the gate for item pickup, furniture use, harvesting, or any other non-social interaction.
+>
+> See `.agent/skills/interactable-system/SKILL.md` §Core Rule #1 and §Proximity-Check API for the authoritative definition and forbidden anti-patterns.
 
 ## 1. Facade Pattern (Obligations)
 
@@ -82,8 +97,25 @@ The `CharacterActions` component manages distinct, timed actions (Harvesting, Cr
 
 - **`RequestDespawnServerRpc(NetworkObjectReference)`**: Generic despawn for any NetworkObject. Used by `CharacterPickUpItem` and `CharacterPickUpFurnitureAction` to remove WorldItems/Furniture from the network. Clients cannot call `NetworkObject.Despawn()` directly — always route through this RPC.
 - **`RequestCraftServerRpc(...)`**: Server-side crafting via CraftingStation.
+- **`RequestHarvestServerRpc(Vector3 harvestablePosition)`**: Server-side harvest execution. Resolves the `Harvestable` by position, runs `Harvest()`, spawns the yield as a `WorldItem`, and registers a `PickupLooseItemTask` on the worker's workplace. Paired with `ApplyHarvestOnServer(Harvestable)` which is the shared server/offline helper — callable directly from the server or offline path.
+- **`RequestItemDropServerRpc(itemId, jsonData, ownerPosition)`**: Server-side drop. Rehydrates the `ItemInstance` from JSON and spawns a `WorldItem` near the character.
 - **`RequestFurniturePlaceServerRpc(itemSOId, visualPos, gridAnchor, rotation)`**: Server instantiates + spawns furniture + registers on grid.
 - **`RequestFurniturePickUpServerRpc(NetworkObjectReference)`**: Server unregisters furniture from grid + despawns.
+
+### Client-vs-server routing pattern for `OnApplyEffect`
+
+An action whose effect is server-authoritative (spawning/despawning NetworkObjects, mutating scene-shared state) must detect whether it runs on a networked client and forward the work via ServerRpc. The canonical check is:
+
+```csharp
+var actions = character.CharacterActions;
+bool isNetworkedClient = actions.IsSpawned && !actions.IsServer;
+if (isNetworkedClient)
+    actions.RequestXxxServerRpc(...);      // networked client → server
+else
+    actions.ApplyXxxOnServer(...);         // server OR offline (IsSpawned == false)
+```
+
+Using `!IsServer` alone is **wrong** — it also matches offline mode (no active NetworkManager), where the RPC would silently drop. `IsSpawned && !IsServer` is the safe "networked-client only" test. See `CharacterHarvestAction`, `CharacterCraftAction`, `CharacterDropItem` for the pattern in practice.
 
 > [!IMPORTANT]
 > Any `CharacterAction.OnApplyEffect()` that needs to Spawn or Despawn a `NetworkObject` **must** use a ServerRpc on `CharacterActions`. `OnApplyEffect` runs on the owner (which may be a client), but only the server can Spawn/Despawn. Never call `NetworkObject.Spawn()` or `Despawn()` directly in an action — always route through `character.CharacterActions.RequestDespawnServerRpc()` or a specialized RPC.

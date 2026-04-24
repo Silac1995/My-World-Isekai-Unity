@@ -117,6 +117,23 @@ To prevent infinite planner loops where an NPC tries endlessly to interact with 
 - **Fail Fast:** In custom movement loops (e.g. `GoapAction_GatherStorageItems`), use `NavMeshUtility.HasPathFailed()`. If it fails, call `worker.PathingMemory.RecordFailure(targetId)`. If blacklisted, aggressively abort the action (`_isComplete = true`) so the Planner re-evaluates.
 - **Filter Targets:** When locating `WorldItem`s or `Characters` using Physics overlaps, ignore any target where `worker.PathingMemory.IsBlacklisted(targetId)` is true.
 
+### 8.5 Performance: Replan Throttle & Non-Allocating Planner (Host-Critical)
+
+GOAP runs **server-authoritative** from `NPCBehaviourTree.Update()` (gated by `if (!IsServer) return;`) every `_tickIntervalSeconds` (default 0.1s). That is the single biggest source of host-only CPU cost. Two rules keep it bounded:
+
+1. **`CharacterGoapController.Replan()` is throttled** by `_planReevaluationInterval` (default `2f` seconds). If the previous attempt ran within that window, the call returns early (`_currentAction != null`) without touching `BuildingManager`, `CharacterNeeds`, or `GoapPlanner`. Without this guard, a jobless NPC calls Replan ~20×/sec because the BT re-enters the GOAP branch each tick and fires `OnEnter` → `Replan` → fail → Wander → re-enter. That compounds with `B` buildings and `N` NPCs into `O(N · B · log B · 20)` per second.
+   - `CancelPlan()` resets `_lastReplanAttemptTime = -999f` so combat-end / branch-switch / incapacitated→alive transitions can replan immediately without waiting out the throttle.
+   - `UpdateWorldState()` caches the result of `BuildingManager.FindAvailableJob<Job>(true)` via `GetCachedVacantJobBuilding()` so `CheckForJobKnowledge()` and `CheckAtBossLocation()` share a single O(B) scan per Replan instead of doing it twice.
+
+2. **`GoapPlanner.Plan()` is allocation-minimised**:
+   - Recursion uses a shared `_usedActions` `HashSet<GoapAction>` with **backtracking** (Add before recursing, Remove after). This replaces the previous `availableActions.Where(a => a != action).ToList()` which allocated a new filtered list at every recursive node (worst case `O(actions^depth)` lists per Plan).
+   - Cheapest-leaf selection is a linear scan instead of `leaves.OrderBy(n => n.RunningCost).First()` (avoids a LINQ iterator).
+   - **Debug logs are gated behind `GoapPlanner.VerboseLogging = false`** (static, default off). On Windows, the Unity console slows progressively as entries accumulate — 50 jobless NPCs × 20 failed plans/sec fills the buffer within minutes. Only flip the static on when actively diagnosing a planner issue.
+
+3. **`BuildingManager.FindAvailableJob<T>()`** iterates from a random start index (`UnityEngine.Random.Range(0, count)`) instead of `allBuildings.OrderBy(b => Random.value)`. Same "don't flock to the same boss first" property, zero LINQ allocation, O(B) worst case instead of O(B log B).
+
+**Non-reentrancy assumption:** `GoapPlanner._usedActions` is a single static scratch buffer. It's safe because `Plan()` runs on the server main thread and is not reentrant (each NPC's Replan finishes before the next NPC's Replan starts, and no GoapAction inside Plan calls Plan recursively). If you ever add parallel/async GOAP planning, give each worker its own buffer.
+
 ### 9. Anti-Patterns & Safety Guidelines
 - **The "False Success" Anti-Pattern:** When an execution error or race condition occurs inside a `GoapAction` (e.g. an item is destroyed by another NPC first), **never** fallback to setting `_isComplete = true` to manually bypass the loop! Doing so falsely tricks the parent GOAP plan into believing the step succeeded, and it will forcefully pop the action and pass corrupted context (like empty hands) to the next sequential action (like `MoveToDestination`). Instead, nullify the target and let `IsValid()` organically fail on the next tick to trigger a clean `replanification`. 
 - **The Self-Sabotage Race Condition:** When a `GoapAction` executes a physical `CharacterAction` (e.g. `CharacterPickUpItem`), be hyper-aware that the physical action might immediately assert locks on the object (e.g. `IsBeingCarried = true`) while the animation plays over several frames. The `GoapAction` must strictly wrap its external race-condition assertions inside `if (!_isActionStarted)` to guarantee it does not mistakenly read its *own* physical lock on the next frame and violently cancel itself!

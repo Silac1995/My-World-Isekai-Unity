@@ -48,12 +48,32 @@ public class ResidentialBuilding : Building
     {
         if (!IsServer) return;
 
+        // Mirror the upcoming _ownerIds clear into each old owner's CharacterLocations
+        // BEFORE we clear the NetworkList — otherwise their OwnedBuildings would keep a
+        // dangling reference to this building.
+        for (int i = _ownerIds.Count - 1; i >= 0; i--)
+        {
+            Character oldOwner = Character.FindByUUID(_ownerIds[i].ToString());
+            if (oldOwner != null && oldOwner.CharacterLocations != null)
+            {
+                oldOwner.CharacterLocations.UnregisterOwnedBuilding(this);
+            }
+        }
+
         // Clear all existing owners
         while (_ownerIds.Count > 0) _ownerIds.RemoveAt(0);
 
         if (newOwner != null)
         {
             AddOwner(newOwner);
+
+            // Mirror into the new owner's CharacterLocations so OwnedBuildings stays in
+            // sync with the building-side _ownerIds NetworkList.
+            if (newOwner.CharacterLocations != null)
+            {
+                newOwner.CharacterLocations.RegisterOwnedBuilding(this);
+            }
+
             if (!IsResident(newOwner))
             {
                 AddResident(newOwner);

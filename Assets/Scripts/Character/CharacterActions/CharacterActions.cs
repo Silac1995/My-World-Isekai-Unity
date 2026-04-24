@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Linq;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -23,8 +24,21 @@ public class CharacterActions : CharacterSystem
 
     public bool ExecuteAction(CharacterAction action)
     {
-        if (action == null || _currentAction != null) return false;
-        if (!action.CanExecute()) return false;
+        if (action == null)
+        {
+            Debug.LogWarning($"<color=orange>[CharacterActions:Execute]</color> rejected — action is null on '{(_character != null ? _character.CharacterName : "<no character>")}'.");
+            return false;
+        }
+        if (_currentAction != null)
+        {
+            Debug.LogWarning($"<color=orange>[CharacterActions:Execute]</color> rejected — '{_character?.CharacterName}' already has CurrentAction '{_currentAction.GetType().Name}' while trying to start '{action.GetType().Name}'. IsServer={IsServer}, IsOwner={IsOwner}.");
+            return false;
+        }
+        if (!action.CanExecute())
+        {
+            Debug.LogWarning($"<color=orange>[CharacterActions:Execute]</color> rejected — '{action.GetType().Name}.CanExecute()' returned false on '{_character?.CharacterName}'. IsServer={IsServer}, IsOwner={IsOwner}.");
+            return false;
+        }
 
         // Owner/Client -> Server Intent (Only if it's the real action, not a proxy)
         if (!IsServer && IsOwner && !(action is CharacterVisualProxyAction) && !action.IsReplicatedInternally)
@@ -151,6 +165,74 @@ public class CharacterActions : CharacterSystem
 
         if (netObj.IsSpawned)
             netObj.Despawn(true);
+    }
+
+    /// <summary>
+    /// Client requests the server to run the harvest effect: run Harvest() on the target,
+    /// spawn the resulting WorldItem, and register a pickup task for NPC workers.
+    /// The target Harvestable is resolved by world position (Harvestable is a scene-authored
+    /// MonoBehaviour, so its position is identical on server and client).
+    /// </summary>
+    [Rpc(SendTo.Server)]
+    public void RequestHarvestServerRpc(Vector3 harvestablePosition)
+    {
+        Harvestable target = FindHarvestableNear(harvestablePosition);
+        if (target == null)
+        {
+            Debug.LogWarning($"[CharacterActions] Server: Could not find Harvestable near {harvestablePosition}");
+            return;
+        }
+
+        ApplyHarvestOnServer(target);
+    }
+
+    /// <summary>
+    /// Server-side (or offline) harvest execution. Runs the Harvest, spawns the WorldItem,
+    /// and registers a pickup task for NPC workers. Called from:
+    ///   - RequestHarvestServerRpc (networked client-owner path)
+    ///   - CharacterHarvestAction.OnApplyEffect on the server (NPCs / host)
+    ///   - CharacterHarvestAction.OnApplyEffect in offline mode (NetworkObject not spawned)
+    /// Blocks only the networked-client case: IsSpawned && !IsServer.
+    /// </summary>
+    public ItemSO ApplyHarvestOnServer(Harvestable target)
+    {
+        if (IsSpawned && !IsServer) return null;
+        if (target == null || !target.CanHarvest()) return null;
+        if (_character == null) return null;
+
+        ItemSO harvestedItem = target.Harvest(_character);
+        if (harvestedItem == null) return null;
+
+        Vector3 spawnPos = _character.transform.position + _character.transform.forward * 0.5f + Vector3.up * 0.3f;
+        WorldItem spawnedItem = WorldItem.SpawnWorldItem(harvestedItem, spawnPos);
+
+        if (spawnedItem != null && _character.CharacterJob != null)
+        {
+            var workAssignment = _character.CharacterJob.ActiveJobs.FirstOrDefault(j => j.AssignedJob is JobHarvester);
+            if (workAssignment != null && workAssignment.Workplace != null)
+            {
+                workAssignment.Workplace.TaskManager?.RegisterTask(new PickupLooseItemTask(spawnedItem));
+            }
+        }
+
+        return harvestedItem;
+    }
+
+    private Harvestable FindHarvestableNear(Vector3 position, float maxDistance = 2.5f)
+    {
+        Harvestable[] all = UnityEngine.Object.FindObjectsByType<Harvestable>(FindObjectsSortMode.None);
+        Harvestable best = null;
+        float bestDist = maxDistance;
+        foreach (var h in all)
+        {
+            float dist = Vector3.Distance(h.transform.position, position);
+            if (dist < bestDist)
+            {
+                bestDist = dist;
+                best = h;
+            }
+        }
+        return best;
     }
 
     /// <summary>
