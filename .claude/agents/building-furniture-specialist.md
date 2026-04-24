@@ -278,7 +278,7 @@ Detection (OnWorkerPunchIn: IStockProvider → BuyOrder, policy-driven)
 
 ## Recent changes
 
-- **2026-04-23 — Quest System** (all 34 tasks of `docs/superpowers/plans/2026-04-23-quest-system.md` shipped):
+- **2026-04-23 — Quest System** (all 34 tasks of `docs/superpowers/plans/2026-04-23-quest-system.md` shipped). **Owned by `quest-system-specialist`** — defer to that agent for any quest-domain work. The summary below covers only the building-side surface area you should know about as a building specialist:
   - **`BuildingTask`** + `HarvestResourceTask` + `PickupLooseItemTask` + `BuyOrder` + `TransportOrder` + `CraftingOrder` now **implement `MWI.Quests.IQuest` directly** (Hybrid C unification). NPC GOAP code (`BuildingTaskManager.ClaimBestTask<T>`) unchanged — the returned objects additionally satisfy `IQuest`.
   - **`BuildingTaskManager`** fires `OnTaskRegistered` / `OnTaskClaimed` / `OnTaskUnclaimed` / `OnTaskCompleted`. **`LogisticsOrderBook`** fires `OnBuyOrderAdded` / `OnTransportOrderAdded` / `OnCraftingOrderAdded` + `OnAnyOrderRemoved`.
   - **`CommercialBuilding.PublishQuest(quest)`** stamps `Issuer` (LogisticsManager Worker > Owner > null) + `OriginMapId` (from `MapController`). Surfaced via `OnQuestPublished` / `OnQuestStateChanged` events. Aggregator methods: `GetAvailableQuests()` (yields from both TaskManager + OrderBook), `GetQuestById(questId)`.

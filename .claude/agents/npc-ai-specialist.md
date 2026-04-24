@@ -243,7 +243,7 @@ Detection (OnWorkerPunchIn: IStockProvider → policy-driven BuyOrder)
 
 ## Recent changes
 
-- **2026-04-23 — Quest System** (Tasks 1-25 + 28-33 of `docs/superpowers/plans/2026-04-23-quest-system.md`):
+- **2026-04-23 — Quest System** (all 34 tasks of `docs/superpowers/plans/2026-04-23-quest-system.md` shipped). **Owned by `quest-system-specialist`** — defer to that agent for any quest-domain work. The summary below covers only what NPC AI behavior needs to know:
   - **Zero behavior change for NPC GOAP.** `BuildingTaskManager.ClaimBestTask<HarvestResourceTask>()` (and siblings) returns the same types — those types now additionally implement `MWI.Quests.IQuest`. GOAP sites use the typed API; the interface exists so a parallel player HUD can read the same data.
   - **`BuildingTask` abstract base is now `IQuest`** — carries `QuestId` (auto-Guid), `Issuer` (Character), `OriginWorldId/MapId`, per-character `Contribution` dict, `TryJoin`/`TryLeave`/`RecordProgress` mutators. Existing `ClaimedByWorkers` is exposed as `Contributors`.
   - **Auto-claim for player workers** lives in `CommercialBuilding.WorkerStartingShift` — sweeps `GetAvailableQuests()` + subscribes to `OnQuestPublished`. Only relevant to the NPC path in that NPCs can now receive quest state-change events via `CharacterQuestLog` if they're set up to listen (v1 doesn't wire NPC AI to respond to the log — NPCs still use `ClaimBestTask<T>` directly).
