@@ -54,7 +54,6 @@ Let knowledge move through the world through social ties rather than flat unlock
 ## Public API
 
 - `character.CharacterMentorship.ReceiveLessonTick(teacher, topic)` — called every tick during a lesson.
-- `character.CharacterMentorship.CanTeach(skill or abilitySO)` — gate.
 - `character.CharacterMentorship.BeginLesson(student, topic)` / `EndLesson()`.
 - `character.CharacterMentorship.CanTeachStudent(student, subject)` — tier gate (student must be strictly below `mentorTier - 1`; unknown subjects always learnable). Used by both the `InteractionMentorship` invitation and the hold-E menu provider.
 - `character.CharacterMentorship.GetInteractionOptions(interactor)` — `IInteractionProvider` hook. Emits one "Ask to teach {Subject}" entry per teachable subject, disabled-with-reason when the interactor already has a mentor or is too high-tier.

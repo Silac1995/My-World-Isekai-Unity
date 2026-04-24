@@ -724,7 +724,15 @@ public class CharacterMentorship : CharacterSystem, IInteractionProvider
             bool disabled = false;
             string reason = null;
 
-            if (interactor.CharacterMentorship.CurrentMentor != null)
+            // Primary check: resolved CurrentMentor (works on server and when the mentor's
+            // NetworkObject is live on the client). Secondary check: CurrentMentorNetId != 0
+            // covers the edge case where the student's mentor is currently hibernated /
+            // NetworkObject-despawned — SpawnedObjects lookup fails but the student IS
+            // still enrolled server-side, and CanExecute would silently reject the click.
+            bool hasActiveMentor = interactor.CharacterMentorship.CurrentMentor != null
+                                || interactor.CharacterMentorship.CurrentMentorNetId.Value != 0UL;
+
+            if (hasActiveMentor)
             {
                 disabled = true;
                 reason = "you already have a mentor";
