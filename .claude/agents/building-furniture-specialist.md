@@ -278,14 +278,14 @@ Detection (OnWorkerPunchIn: IStockProvider → BuyOrder, policy-driven)
 
 ## Recent changes
 
-- **2026-04-23 — Quest System** (Tasks 1-25 + 28-33 of `docs/superpowers/plans/2026-04-23-quest-system.md`; Task 26 prefab/scene work deferred to user):
+- **2026-04-23 — Quest System** (all 34 tasks of `docs/superpowers/plans/2026-04-23-quest-system.md` shipped):
   - **`BuildingTask`** + `HarvestResourceTask` + `PickupLooseItemTask` + `BuyOrder` + `TransportOrder` + `CraftingOrder` now **implement `MWI.Quests.IQuest` directly** (Hybrid C unification). NPC GOAP code (`BuildingTaskManager.ClaimBestTask<T>`) unchanged — the returned objects additionally satisfy `IQuest`.
   - **`BuildingTaskManager`** fires `OnTaskRegistered` / `OnTaskClaimed` / `OnTaskUnclaimed` / `OnTaskCompleted`. **`LogisticsOrderBook`** fires `OnBuyOrderAdded` / `OnTransportOrderAdded` / `OnCraftingOrderAdded` + `OnAnyOrderRemoved`.
   - **`CommercialBuilding.PublishQuest(quest)`** stamps `Issuer` (LogisticsManager Worker > Owner > null) + `OriginMapId` (from `MapController`). Surfaced via `OnQuestPublished` / `OnQuestStateChanged` events. Aggregator methods: `GetAvailableQuests()` (yields from both TaskManager + OrderBook), `GetQuestById(questId)`.
   - **Auto-claim on `WorkerStartingShift`** — sweeps `GetAvailableQuests()` + subscribes to `OnQuestPublished` for the duration of the shift. Eligibility per `(JobType, IQuest concrete type)` in the `DoesJobTypeAcceptQuest` switch — extend when adding new jobs or quest types. Unsubscribed in `WorkerEndingShift`.
   - **`CraftingOrder.Workshop`** parameter added (optional, default null); `LogisticsTransportDispatcher` call sites updated to pass `_building`. This drives `BuildingTarget(Workshop)` for HUD routing.
   - **Player HUD hooks** — three scripts under `Assets/Scripts/UI/Quest/`: `UI_QuestTracker` (minimal top-right), `UI_QuestLogWindow` (L-key full panel, extends `UI_WindowBase`), `QuestWorldMarkerRenderer` (spawns diamond / beacon / zone-fill prefabs, map-id filtered). Wired on `PlayerUI`.
-  - **Outstanding user action (Task 26):** create 5 prefabs — `UI_QuestTracker.prefab`, `UI_QuestLogWindow.prefab`, `QuestMarker_Diamond.prefab`, `QuestMarker_Beacon.prefab`, `QuestZone_Fill.prefab` — and wire them in GameScene.
+  - **Task 26 (prefabs + scene wiring) shipped via MCP**: 3 marker prefabs at `Assets/Prefabs/UI/Quest/` (Diamond/Beacon/ZoneFill, shared `QuestMarker_Gold.mat` URP/Unlit, primitive-mesh placeholders). `UI_QuestTracker` + `UI_QuestLogWindow` + `QuestWorldMarkerRenderer` are scene GameObjects under `UI_PlayerHUD` (bare-component placeholders — TMP children + visual layout still need designer iteration). All 3 PlayerUI SerializeField slots wired.
   - See `.agent/skills/quest-system/SKILL.md`, `wiki/systems/quest-system.md`, the smoke test at `docs/superpowers/smoketests/2026-04-23-quest-system-smoketest.md`.
 
 - **2026-04-22 — Worker wages & performance** (Tasks 1-27 of `docs/superpowers/plans/2026-04-22-worker-wages-and-performance.md`):

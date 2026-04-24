@@ -171,6 +171,9 @@ Three new MonoBehaviours under `Assets/Scripts/UI/Quest/`, registered on `Player
 
 All three are wired by `PlayerUI.Initialize(playerCharacter)`; `Character.SwitchToNPC` clears them via the existing PlayerUI lifecycle pattern.
 
-Prefabs needed in GameScene: `UI_QuestTracker.prefab`, `UI_QuestLogWindow.prefab`, `QuestMarker_Diamond.prefab`, `QuestMarker_Beacon.prefab`, `QuestZone_Fill.prefab`.
+Wiring in GameScene (live as of Task 26):
+- `UI_QuestTracker` and `UI_QuestLogWindow` are **scene GameObjects** under `UI_PlayerHUD` (bare-component placeholders — author TMP children + layout in Unity Editor as needed).
+- `QuestWorldMarkerRenderer` is a scene GameObject under `UI_PlayerHUD` with the 3 marker prefabs wired into `_diamondPrefab` / `_beaconPrefab` / `_zoneFillPrefab`.
+- Marker prefab assets at `Assets/Prefabs/UI/Quest/`: `QuestMarker_Diamond.prefab`, `QuestMarker_Beacon.prefab`, `QuestZone_Fill.prefab` — all share `QuestMarker_Gold.mat` (URP/Unlit). Placeholder Unity-primitive meshes; designers replace freely.
 
 See `.agent/skills/quest-system/SKILL.md`.
