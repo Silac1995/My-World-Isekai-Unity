@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using Unity.Netcode;
 
 [System.Serializable]
 public class JobAssignment
@@ -35,7 +36,7 @@ public class JobAssignment
 /// Composant attaché au personnage pour gérer ses différents jobs actuels.
 /// Permet d'assigner, quitter, et exécuter plusieurs jobs dans des CommercialBuilding.
 /// </summary>
-public class CharacterJob : CharacterSystem, ICharacterSaveData<JobSaveData>
+public class CharacterJob : CharacterSystem, ICharacterSaveData<JobSaveData>, IInteractionProvider
 {
 
     [SerializeField] private List<JobAssignment> _activeJobs = new List<JobAssignment>();
@@ -234,6 +235,8 @@ public class CharacterJob : CharacterSystem, ICharacterSaveData<JobSaveData>
     /// Le personnage est-il propriétaire de son lieu de travail ?
     /// </summary>
     public bool IsOwner => _ownedBuilding != null && _ownedBuilding.Owner == _character;
+
+    public CommercialBuilding OwnedBuilding => _ownedBuilding;
 
     /// <summary>
     /// Demande un job en passant par le building.
@@ -464,5 +467,93 @@ public class CharacterJob : CharacterSystem, ICharacterSaveData<JobSaveData>
 
         Debug.Log($"<color=green>[CharacterJob]</color> {_character.CharacterName} est devenu propriétaire de {building.BuildingName}.");
         return true;
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    //  IInteractionProvider — hold-E menu entries ("Apply for X")
+    // ─────────────────────────────────────────────────────────────
+
+    public List<InteractionOption> GetInteractionOptions(Character interactor)
+    {
+        if (interactor == null || interactor == _character) return null;
+        if (interactor.CharacterJob == null) return null; // source can't hold jobs
+
+        if (!IsOwner) return null;
+        var building = OwnedBuilding;
+        if (building == null) return null;
+
+        // Iterate the full Jobs list once with a natural stable index; skip assigned.
+        // Avoids computing index via GetAvailableJobs + IndexOf (O(N²) + IReadOnlyList.IndexOf unavailable).
+        var options = new List<InteractionOption>();
+        for (int idx = 0; idx < building.Jobs.Count; idx++)
+        {
+            var job = building.Jobs[idx];
+            if (job == null || job.IsAssigned) continue;
+
+            bool disabled = false;
+            string reason = null;
+            if (interactor.CharacterJob.HasJob)
+            {
+                disabled = true;
+                reason = "you already have a job";
+            }
+
+            string title = string.IsNullOrEmpty(job.JobTitle) ? "Worker" : job.JobTitle;
+            string label = disabled
+                ? $"Apply for {title} ({reason})"
+                : $"Apply for {title}";
+
+            var capturedInteractor = interactor;
+            var capturedBuilding = building;
+            var capturedJob = job;
+            var capturedIdx = idx;
+            options.Add(new InteractionOption
+            {
+                Name = label,
+                IsDisabled = disabled,
+                Action = () => OnJobEntryClicked(capturedInteractor, capturedBuilding, capturedJob, capturedIdx, disabled)
+            });
+        }
+
+        return options.Count > 0 ? options : null;
+    }
+
+    private void OnJobEntryClicked(Character interactor, CommercialBuilding building, Job job, int stableIdx, bool disabled)
+    {
+        if (disabled) return;
+        if (interactor == null || building == null || job == null) return;
+
+        if (IsServer)
+        {
+            var invitation = new InteractionAskForJob(building, job);
+            if (invitation.CanExecute(interactor, _character))
+                invitation.Execute(interactor, _character);
+            return;
+        }
+
+        // Remote client → route via ServerRpc on the interactor's own CharacterJob
+        if (interactor.CharacterJob == null || _character.NetworkObject == null) return;
+        interactor.CharacterJob.RequestJobApplicationServerRpc(_character.NetworkObject.NetworkObjectId, stableIdx);
+    }
+
+    [Rpc(SendTo.Server)]
+    public void RequestJobApplicationServerRpc(ulong ownerNetId, int jobStableIndex)
+    {
+        if (NetworkManager.Singleton == null) return;
+        if (!NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(ownerNetId, out var ownerObj))
+            return;
+        var owner = ownerObj != null ? ownerObj.GetComponent<Character>() : null;
+        if (owner == null || owner.CharacterJob == null || !owner.CharacterJob.IsOwner) return;
+
+        var building = owner.CharacterJob.OwnedBuilding;
+        if (building == null) return;
+        if (jobStableIndex < 0 || jobStableIndex >= building.Jobs.Count) return;
+
+        var job = building.Jobs[jobStableIndex];
+        if (job == null || job.IsAssigned) return; // race: filled since client built menu
+
+        var invitation = new InteractionAskForJob(building, job);
+        if (!invitation.CanExecute(_character, owner)) return;
+        invitation.Execute(_character, owner);
     }
 }
