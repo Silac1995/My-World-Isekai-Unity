@@ -141,6 +141,14 @@ All `CharacterSystem` subclasses follow this universal pattern:
 - `NetworkCharacterName` syncs character names to all clients via `OnValueChanged` callback (subscribed in `OnNetworkSpawn`, unsubscribed in `OnNetworkDespawn`)
 - **Critical:** Any server-side code that changes `_characterName` (profile import, save restore) must also write to `NetworkCharacterName.Value`, otherwise clients see stale names
 
+### 11. Surfacing Connection Progress to UI — driver pattern
+
+- A multiplayer client-join walks transport-handshake → approval → scene load → spawn streaming → finalize and can take many seconds. Without a loading screen the user sees a frozen window and assumes the game crashed.
+- **Pattern:** UI MonoBehaviours never subscribe to `NetworkManager` events directly — that couples UI to networking and leaks event handlers across scene loads. Instead a short-lived **driver** observes the relevant NGO events and pushes already-translated stage data into a generic UI controller.
+- Canonical example: `NetworkConnectionLoadingDriver` (`Assets/Scripts/UI/Loading/`) instantiated by `GameSessionManager.JoinMultiplayer()` immediately before `StartClient()`. It hooks `OnClientStarted` / `OnSceneEvent` (`Load` / `Synchronize` / `SynchronizeComplete`) / `OnClientConnectedCallback` / `OnClientDisconnectCallback` in `OnEnable`, polls `SpawnManager.SpawnedObjectsList.Count` at 10 Hz during the synchronize stage to report a live `{n} entities loaded` counter, and self-destructs on connect/disconnect/cancel. The overlay (`MWI.UI.Loading.LoadingOverlay`) it pushes into is a generic `Show / SetStage / SetDetail / SetCancelHandler / ShowFailure / Hide` API — it knows nothing about NGO.
+- **Implications for new networked features that take time:** if a feature has a multi-second client-visible latency window (large save-restore, scene streaming, etc.), don't add NGO-event subscriptions to a UI script. Author a new driver MonoBehaviour with the same lifetime pattern and push into `LoadingOverlay`. See [[loading-overlay]] in the wiki for full architecture.
+- Driver must exist BEFORE `StartClient` (or whatever event it hooks) — `OnEnable` subscribes synchronously and the first event can fire inside the same call.
+
 ## Key Networked Scripts
 
 | Script | Role | Key NetworkVariables / RPCs |
@@ -157,6 +165,8 @@ All `CharacterSystem` subclasses follow this universal pattern:
 | `DoorLock` | Door state | `IsLocked` |
 | `BattleManager` | Battle coordination | `InitializeClientRpc`, `AddParticipantClientRpc` |
 | `GameSpeedController` | Time scale + absolute time sync | `_serverTimeScale`, `_serverDay`, `_serverTime01`, `RequestSpeedChangeRpc` |
+| `LoadingOverlay` (`MWI.UI.Loading`) | Generic loading UI singleton — pure UI, NOT a NetworkBehaviour | none — push API only |
+| `NetworkConnectionLoadingDriver` | Short-lived NGO observer that drives `LoadingOverlay` during client-join | hooks `OnClientStarted` / `OnSceneEvent` / `OnClientConnectedCallback` / `OnClientDisconnectCallback` |
 
 ## Mandatory Rules
 
@@ -189,4 +199,6 @@ All `CharacterSystem` subclasses follow this universal pattern:
 - **Network Troubleshooting SKILL.md**: `.agent/skills/network-troubleshooting/SKILL.md`
 - **Netcode Patterns Examples**: `.agent/skills/multiplayer/examples/netcode_patterns.md`
 - **Network Architecture**: `NETWORK_ARCHITECTURE.md`
+- **Loading overlay system page**: `wiki/systems/loading-overlay.md` — `LoadingOverlay` + `NetworkConnectionLoadingDriver` architecture, stage map, edge cases.
+- **Loading overlay design spec**: `docs/superpowers/specs/2026-04-25-loading-overlay-design.md`
 - **Project Rules**: `CLAUDE.md`
