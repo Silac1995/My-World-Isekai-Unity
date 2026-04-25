@@ -489,6 +489,14 @@ public class GameSessionManager : MonoBehaviour
 
         NetworkManager.Singleton.NetworkConfig.ConnectionData = System.Text.Encoding.ASCII.GetBytes(SelectedPlayerRace);
 
+        // Show the loading overlay and spin up the driver BEFORE StartClient — the driver
+        // hooks NetworkManager.OnClientStarted in its OnEnable, so it must exist before the
+        // event fires. The driver self-destructs on connect/disconnect/cancel.
+        MWI.UI.Loading.LoadingOverlay.Instance?.Show("Joining game…");
+        var loadingDriverGo = new GameObject("NetworkConnectionLoadingDriver");
+        var loadingDriver = loadingDriverGo.AddComponent<MWI.UI.Loading.NetworkConnectionLoadingDriver>();
+        loadingDriver.RegisterCancelHandler();
+
         if (NetworkManager.Singleton.StartClient())
         {
             Debug.Log("<color=cyan>[GameSession]</color> Started Client Mode");
@@ -496,6 +504,7 @@ public class GameSessionManager : MonoBehaviour
         else
         {
             ShowToast("Failed to start client.", MWI.UI.Notifications.ToastType.Error);
+            MWI.UI.Loading.LoadingOverlay.Instance?.ShowFailure("Failed to start client");
         }
     }
 
