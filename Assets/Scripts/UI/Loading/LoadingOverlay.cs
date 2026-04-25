@@ -64,7 +64,10 @@ namespace MWI.UI.Loading
 
                 var go = Instantiate(prefab);
                 go.name = "UI_LoadingOverlay (singleton)";
-                DontDestroyOnLoad(go);
+                // DontDestroyOnLoad only works in playmode; calling it from EditMode (e.g. an editor
+                // smoke test or asset utility instantiating the singleton) throws. Guarding so the
+                // singleton is usable from EditMode without changing runtime behavior in playmode.
+                if (Application.isPlaying) DontDestroyOnLoad(go);
                 s_instance = go.GetComponent<LoadingOverlay>();
                 if (s_instance == null)
                 {
