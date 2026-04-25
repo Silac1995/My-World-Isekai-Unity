@@ -27,6 +27,13 @@ public class JobHarvester : Job
     private Queue<GoapAction> _currentPlan;
     private GoapAction _currentAction;
 
+    // Per-tick allocation pool (see PlanNextActions). Without these, each tick allocated a
+    // new worldState dict, a new List of 5 new GoapAction objects, and two new GoapGoal instances
+    // with their own dicts — a dominant GC source under heavy worker load.
+    private readonly Dictionary<string, bool> _scratchWorldState = new Dictionary<string, bool>(6);
+    private GoapGoal _cachedIdleGoal;
+    private GoapGoal _cachedHarvestAndDepositGoal;
+
     public override string CurrentActionName => _currentAction != null ? _currentAction.ActionName : "Planning / Idle";
     public override string CurrentGoalName => _harvestGoal != null ? _harvestGoal.GoalName : "No Goal";
 
@@ -50,7 +57,8 @@ public class JobHarvester : Job
             // Vérifier que l'action est encore valide
             if (!_currentAction.IsValid(_worker))
             {
-                Debug.Log($"<color=orange>[JobHarvester]</color> {_worker.CharacterName} : action {_currentAction.ActionName} invalide, replanification...");
+                if (NPCDebug.VerboseJobs)
+                    Debug.Log($"<color=orange>[JobHarvester]</color> {_worker.CharacterName} : action {_currentAction.ActionName} invalide, replanification...");
                 _currentAction.Exit(_worker);
                 _currentAction = null;
                 _currentPlan = null;
@@ -61,7 +69,8 @@ public class JobHarvester : Job
 
             if (_currentAction.IsComplete)
             {
-                Debug.Log($"<color=cyan>[JobHarvester]</color> {_worker.CharacterName} : action {_currentAction.ActionName} terminée.");
+                if (NPCDebug.VerboseJobs)
+                    Debug.Log($"<color=cyan>[JobHarvester]</color> {_worker.CharacterName} : action {_currentAction.ActionName} terminée.");
                 _currentAction.Exit(_worker);
                 _currentAction = null;
 
@@ -173,52 +182,51 @@ public class JobHarvester : Job
             });
         }
 
-        var worldState = new Dictionary<string, bool>
-        {
-            { "hasHarvestZone", hasValidHarvestTasks }, // True only if tasks exist, forces ExploreForResources
-            { "looseItemExists", looseItemExists },
-            { "hasResources", hasResourcesForGoap },
-            { "hasDepositedResources", false },
-            { "needsToWork", needsToWork },
-            { "isIdling", false }
-        };
+        // Reuse the scratch world-state dict (cleared + repopulated each tick — zero allocation after warm-up).
+        _scratchWorldState.Clear();
+        _scratchWorldState["hasHarvestZone"] = hasValidHarvestTasks; // True only if tasks exist, forces ExploreForResources
+        _scratchWorldState["looseItemExists"] = looseItemExists;
+        _scratchWorldState["hasResources"] = hasResourcesForGoap;
+        _scratchWorldState["hasDepositedResources"] = false;
+        _scratchWorldState["needsToWork"] = needsToWork;
+        _scratchWorldState["isIdling"] = false;
 
-        // Créer les actions fraîches (chaque instance est stateful)
-        _availableActions = new List<GoapAction>
-        {
-            new GoapAction_ExploreForHarvestables(building),
-            new GoapAction_HarvestResources(building),
-            new GoapAction_PickupLooseItem(building),
-            new GoapAction_DepositResources(building),
-            new GoapAction_IdleInBuilding(building)
-        };
+        // Action instances are stateful (per-plan _currentTarget/_isComplete), so we must
+        // create fresh ones each plan. But the LIST wrapper and the GoapGoals are stable —
+        // pool those to avoid per-tick allocations.
+        if (_availableActions == null) _availableActions = new List<GoapAction>(5);
+        _availableActions.Clear();
+        _availableActions.Add(new GoapAction_ExploreForHarvestables(building));
+        _availableActions.Add(new GoapAction_HarvestResources(building));
+        _availableActions.Add(new GoapAction_PickupLooseItem(building));
+        _availableActions.Add(new GoapAction_DepositResources(building));
+        _availableActions.Add(new GoapAction_IdleInBuilding(building));
 
-        // Définir l'objectif prioritaire
-        GoapGoal targetGoal;
-        
+        // Cache both goals (their DesiredState dicts are constant).
+        if (_cachedIdleGoal == null)
+            _cachedIdleGoal = new GoapGoal("Idle", new Dictionary<string, bool> { { "isIdling", true } }, priority: 1);
+        if (_cachedHarvestAndDepositGoal == null)
+            _cachedHarvestAndDepositGoal = new GoapGoal("HarvestAndDeposit", new Dictionary<string, bool> { { "hasDepositedResources", true } }, priority: 1);
+
         bool trulyFinishedWork = allResourcesHarvested && !hasAtLeastOneResource;
         bool stuckWaitingForTrees = building.HasHarvestableZone && !canHarvest && !looseItemExists && !hasAtLeastOneResource;
 
-        if (trulyFinishedWork || stuckWaitingForTrees)
-        {
-            targetGoal = new GoapGoal("Idle", new Dictionary<string, bool> { { "isIdling", true } }, priority: 1);
-        }
-        else
-        {
-            targetGoal = new GoapGoal("HarvestAndDeposit", new Dictionary<string, bool> { { "hasDepositedResources", true } }, priority: 1);
-        }
+        GoapGoal targetGoal = (trulyFinishedWork || stuckWaitingForTrees)
+            ? _cachedIdleGoal
+            : _cachedHarvestAndDepositGoal;
 
         _harvestGoal = targetGoal; // On sauvegarde l'objectif courant pour l'UI de Debug
-        
+
         // Planifier
-        _currentPlan = GoapPlanner.Plan(worldState, _availableActions, targetGoal);
+        _currentPlan = GoapPlanner.Plan(_scratchWorldState, _availableActions, targetGoal);
 
         if (_currentPlan != null && _currentPlan.Count > 0)
         {
             _currentAction = _currentPlan.Dequeue();
-            Debug.Log($"<color=green>[JobHarvester]</color> {_worker.CharacterName} : nouveau plan ! Première action → {_currentAction.ActionName}");
+            if (NPCDebug.VerboseJobs)
+                Debug.Log($"<color=green>[JobHarvester]</color> {_worker.CharacterName} : nouveau plan ! Première action → {_currentAction.ActionName}");
         }
-        else
+        else if (NPCDebug.VerboseJobs)
         {
             Debug.Log($"<color=orange>[JobHarvester]</color> {_worker.CharacterName} : impossible de planifier.");
         }

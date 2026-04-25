@@ -317,19 +317,38 @@ public class HarvestingBuilding : CommercialBuilding
     }
 
     /// <summary>
-    /// Enregistre un item récolté. Incrémente le compteur de la ressource correspondante.
-    /// Retourne true si l'item était bien voulu.
+    /// Enregistre un item récolté. Ajoute logiquement l'instance à <see cref="CommercialBuilding.Inventory"/>
+    /// si la ressource est wanted, ce qui permet à <see cref="CommercialBuilding.GetItemCount"/> de retourner
+    /// le bon total sans dépendre d'un balayage physique de la zone à chaque appel.
+    ///
+    /// Pourquoi : un harvester laisse tomber l'item dans la <c>DepositZone</c> qui chevauche la
+    /// <c>StorageZone</c>, court-circuitant le flux normal "logistics manager picks up → drops in storage"
+    /// qui appelle <see cref="CommercialBuilding.AddToInventory"/>. Sans cet add explicite, le stock logique
+    /// reste à 0 jusqu'au prochain <see cref="CommercialBuilding.RefreshStorageInventory"/> (punch-in / order
+    /// reçu), donc le LogisticsManager peut ré-ouvrir des BuyOrders pour des ressources déjà disponibles.
     /// </summary>
-    public bool RegisterHarvestedItem(ItemSO item)
+    /// <returns>true si l'item était wanted et a été ajouté à l'inventaire logique.</returns>
+    public bool RegisterHarvestedItem(ItemInstance instance)
     {
-        if (item == null) return false;
+        if (instance == null || instance.ItemSO == null) return false;
 
         foreach (var entry in _wantedResources)
         {
-            if (entry.targetItem == item)
+            if (entry.targetItem == instance.ItemSO)
             {
-                int actualStock = GetItemCount(item);
-                Debug.Log($"<color=cyan>[HarvestingBuilding]</color> {buildingName} : {item.ItemName} récolté ({actualStock} en stock physique réel).");
+                // Idempotency: don't double-add. RefreshStorageInventory.Pass2 also adds physically-present
+                // items to _inventory, so a deposit followed by a refresh would otherwise add the same
+                // ItemInstance twice. AddToInventory uses _inventory.Add unconditionally so we guard here.
+                if (!Inventory.Contains(instance))
+                {
+                    AddToInventory(instance);
+                }
+
+                if (NPCDebug.VerboseJobs)
+                {
+                    int actualStock = GetItemCount(instance.ItemSO);
+                    Debug.Log($"<color=cyan>[HarvestingBuilding]</color> {buildingName} : {instance.ItemSO.ItemName} récolté ({actualStock} en stock logique).");
+                }
                 return true;
             }
         }

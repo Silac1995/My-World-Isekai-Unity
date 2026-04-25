@@ -69,6 +69,43 @@ public override bool CanExecute()
 
 If the method returns `false`, the interaction must not proceed. There is no fallback, no grace distance, no "close enough" override. Move the character inside the zone, or cancel the interaction.
 
+### Re-validate at apply time for any `CharacterAction` with non-zero duration
+
+`CharacterAction.CanExecute()` is called once before the action starts. Anything with a duration window (animation, channel, multi-tick craft) leaves room for the character to drift out of the zone between `OnStart` and `OnApplyEffect` — knockback, station picked up by another worker, station despawned, parent building hibernated. Without a re-check, the action would still produce its effect (item spawn, stat change, world mutation) even though the character is no longer at the interactable.
+
+The required pattern (see `CharacterCraftAction.cs` for the canonical reference):
+
+```csharp
+public override bool CanExecute()
+{
+    var interactable = _station.GetComponent<InteractableObject>();
+    if (interactable != null && interactable.InteractionZone != null
+        && !interactable.IsCharacterInInteractionZone(character))
+    {
+        Debug.LogWarning($"[Action] {character.CharacterName} not in {_station.FurnitureName}'s InteractionZone — abort.");
+        return false;
+    }
+    // …other preconditions…
+}
+
+public override void OnApplyEffect()
+{
+    // Re-validate — the duration window between OnStart and OnApplyEffect lets the character
+    // drift out of the zone without anyone else knowing. Without this gate the effect fires
+    // anyway and produces a "ghost" outcome (item crafted from across the room, etc.).
+    var interactable = _station.GetComponent<InteractableObject>();
+    if (interactable != null && interactable.InteractionZone != null
+        && !interactable.IsCharacterInInteractionZone(character))
+    {
+        Debug.LogWarning($"[Action] {character.CharacterName} drifted out of zone before effect applied — skipped.");
+        return;
+    }
+    // …apply the effect…
+}
+```
+
+The conjunction `interactable != null && interactable.InteractionZone != null` short-circuits the gate when a station has no paired interactable or no zone collider authored — keeping legacy prefabs working while strictly enforcing the rule everywhere a zone exists. The caller (typically the worker's Job class — see `JobBlacksmith.HandleMovementToStation`) is responsible for moving the character *into* the zone before triggering the action; that arrival check uses the same `IsCharacterInInteractionZone` call, so the four call sites (job arrival → action `CanExecute` → action `OnApplyEffect`, plus any server-authoritative RPC) agree on a single notion of "close enough".
+
 ### What you must NOT do
 
 | Anti-pattern | Why it's forbidden |

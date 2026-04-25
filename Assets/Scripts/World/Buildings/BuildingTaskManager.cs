@@ -1,14 +1,19 @@
 using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
 
 /// <summary>
 /// Centralized manager for handling BuildingTasks (Harvesting, Pickup, etc.) within a CommercialBuilding.
+///
+/// HOT PATH: <see cref="ClaimBestTask{T}"/> is called by every active worker on every GOAP plan cycle.
+/// With N workers and frequent task churn, GC pressure here compounds fast — so this file avoids all
+/// LINQ (`.OfType`/`.Any`/`.RemoveAll`-with-predicate) which allocates closures/enumerators per call.
+/// All per-event `Debug.Log` calls are gated behind <see cref="NPCDebug.VerboseJobs"/> because the
+/// Unity Editor console fills up progressively under worker activity and progressively stalls the host.
 /// </summary>
 public class BuildingTaskManager : MonoBehaviour
 {
-    private List<BuildingTask> _availableTasks = new List<BuildingTask>();
-    private List<BuildingTask> _inProgressTasks = new List<BuildingTask>();
+    private readonly List<BuildingTask> _availableTasks = new List<BuildingTask>();
+    private readonly List<BuildingTask> _inProgressTasks = new List<BuildingTask>();
 
     public IReadOnlyList<BuildingTask> AvailableTasks => _availableTasks;
     public IReadOnlyList<BuildingTask> InProgressTasks => _inProgressTasks;
@@ -27,19 +32,26 @@ public class BuildingTaskManager : MonoBehaviour
     {
         if (newTask == null || newTask.Target == null) return;
 
-        // Ensure we don't register duplicate tasks for the same target
-        bool taskExists = _availableTasks.Any(t => t.Target == newTask.Target) || 
-                          _inProgressTasks.Any(t => t.Target == newTask.Target);
+        // Manual duplicate-target check — avoids two LINQ `.Any(...)` closure allocations per call.
+        if (ContainsTargetInList(_availableTasks, newTask.Target)) return;
+        if (ContainsTargetInList(_inProgressTasks, newTask.Target)) return;
 
-        if (!taskExists)
-        {
-            // Back-reference so BuildingTask.TryJoin/TryLeave (the IQuest path) can
-            // notify us when a player claims/leaves outside the ClaimBestTask flow.
-            newTask.Manager = this;
-            _availableTasks.Add(newTask);
+        // Back-reference so BuildingTask.TryJoin/TryLeave (the IQuest path) can
+        // notify us when a player claims/leaves outside the ClaimBestTask flow.
+        newTask.Manager = this;
+        _availableTasks.Add(newTask);
+        if (NPCDebug.VerboseJobs)
             Debug.Log($"<color=cyan>[TaskManager]</color> Task registered: {newTask.GetType().Name} for {newTask.Target.name}.");
-            OnTaskRegistered?.Invoke(newTask);
+        OnTaskRegistered?.Invoke(newTask);
+    }
+
+    private static bool ContainsTargetInList(List<BuildingTask> list, MonoBehaviour target)
+    {
+        for (int i = 0; i < list.Count; i++)
+        {
+            if (list[i].Target == target) return true;
         }
+        return false;
     }
 
     /// <summary>
@@ -93,42 +105,51 @@ public class BuildingTaskManager : MonoBehaviour
 
     /// <summary>
     /// Finds the closest valid task of type T, claims it for the worker, and moves it to in-progress.
+    /// Called every GOAP plan cycle per worker — kept allocation-free on the hot path.
     /// </summary>
     public T ClaimBestTask<T>(Character worker, System.Predicate<T> predicate = null) where T : BuildingTask
     {
-        // Clean up invalid tasks first (e.g. items destroyed outside of tasks)
-        _availableTasks.RemoveAll(t => !t.IsValid());
+        // Drop invalid tasks in place — avoids the predicate+closure allocation of List.RemoveAll.
+        for (int i = _availableTasks.Count - 1; i >= 0; i--)
+        {
+            if (!_availableTasks[i].IsValid())
+                _availableTasks.RemoveAt(i);
+        }
 
         T bestTask = null;
         float bestDist = float.MaxValue;
+        Vector3 workerPos = worker.transform.position;
 
-        foreach (var task in _availableTasks.OfType<T>())
+        // Manual loop + type-check replaces `.OfType<T>()` (which allocates an enumerator wrapper).
+        for (int i = 0; i < _availableTasks.Count; i++)
         {
-            if (task.IsValid() && task.CanBeClaimed() && (predicate == null || predicate(task)))
+            if (!(_availableTasks[i] is T task)) continue;
+            if (!task.IsValid() || !task.CanBeClaimed()) continue;
+            if (predicate != null && !predicate(task)) continue;
+
+            float dist = Vector3.Distance(workerPos, task.Target.transform.position);
+            if (dist < bestDist)
             {
-                float dist = Vector3.Distance(worker.transform.position, task.Target.transform.position);
-                if (dist < bestDist)
-                {
-                    bestDist = dist;
-                    bestTask = task;
-                }
+                bestDist = dist;
+                bestTask = task;
             }
         }
 
         if (bestTask != null)
         {
             bestTask.Claim(worker);
-            
+
             if (!bestTask.CanBeClaimed())
             {
                 _availableTasks.Remove(bestTask);
             }
-            
+
             if (!_inProgressTasks.Contains(bestTask))
             {
                 _inProgressTasks.Add(bestTask);
             }
-            Debug.Log($"<color=green>[TaskManager]</color> {worker.CharacterName} claimed task {typeof(T).Name} for {bestTask.Target.name}.");
+            if (NPCDebug.VerboseJobs)
+                Debug.Log($"<color=green>[TaskManager]</color> {worker.CharacterName} claimed task {typeof(T).Name} for {bestTask.Target.name}.");
             OnTaskClaimed?.Invoke(bestTask, worker);
         }
 
@@ -152,11 +173,13 @@ public class BuildingTaskManager : MonoBehaviour
             if (task.IsValid() && task.CanBeClaimed() && !_availableTasks.Contains(task))
             {
                 _availableTasks.Add(task);
-                Debug.Log($"<color=orange>[TaskManager]</color> Task unclaimed and returned to pool: {task.GetType().Name} for {task.Target.name}.");
+                if (NPCDebug.VerboseJobs)
+                    Debug.Log($"<color=orange>[TaskManager]</color> Task unclaimed and returned to pool: {task.GetType().Name} for {task.Target.name}.");
             }
             else if (!task.IsValid())
             {
-                Debug.Log($"<color=orange>[TaskManager]</color> Task unclaimed but target invalid, discarded: {task.GetType().Name}.");
+                if (NPCDebug.VerboseJobs)
+                    Debug.Log($"<color=orange>[TaskManager]</color> Task unclaimed but target invalid, discarded: {task.GetType().Name}.");
             }
 
             OnTaskUnclaimed?.Invoke(task, worker);
@@ -172,49 +195,80 @@ public class BuildingTaskManager : MonoBehaviour
         {
             _inProgressTasks.Remove(task);
             _availableTasks.Remove(task);
-            Debug.Log($"<color=green>[TaskManager]</color> Task completed: {task.GetType().Name}.");
+            if (NPCDebug.VerboseJobs)
+                Debug.Log($"<color=green>[TaskManager]</color> Task completed: {task.GetType().Name}.");
             OnTaskCompleted?.Invoke(task);
         }
     }
 
     /// <summary>
-    /// Removes any task associated with a specific target.
+    /// Removes any task associated with a specific target. Manual loops avoid the
+    /// predicate+closure allocation of List.RemoveAll.
     /// </summary>
     public void UnregisterTaskByTarget(MonoBehaviour target)
     {
         if (target == null) return;
 
-        _availableTasks.RemoveAll(t => t.Target == target);
-        _inProgressTasks.RemoveAll(t => t.Target == target);
+        for (int i = _availableTasks.Count - 1; i >= 0; i--)
+        {
+            if (_availableTasks[i].Target == target) _availableTasks.RemoveAt(i);
+        }
+        for (int i = _inProgressTasks.Count - 1; i >= 0; i--)
+        {
+            if (_inProgressTasks[i].Target == target) _inProgressTasks.RemoveAt(i);
+        }
     }
 
     /// <summary>
     /// Checks if there is any available or currently claimed (by this worker) task of the specified type.
+    /// Manual loops replace `.OfType<T>().Any(...)` which allocates an enumerator + predicate closure per call.
     /// </summary>
     public bool HasAvailableOrClaimedTask<T>(Character worker = null, System.Predicate<T> predicate = null) where T : BuildingTask
     {
-        bool hasAvailable = _availableTasks.OfType<T>().Any(t => t.IsValid() && t.CanBeClaimed() && (predicate == null || predicate(t)));
-        if (hasAvailable) return true;
+        for (int i = 0; i < _availableTasks.Count; i++)
+        {
+            if (!(_availableTasks[i] is T task)) continue;
+            if (!task.IsValid() || !task.CanBeClaimed()) continue;
+            if (predicate != null && !predicate(task)) continue;
+            return true;
+        }
 
         if (worker != null)
         {
-            return _inProgressTasks.OfType<T>().Any(t => t.ClaimedByWorkers.Contains(worker) && t.IsValid() && (predicate == null || predicate(t)));
+            for (int i = 0; i < _inProgressTasks.Count; i++)
+            {
+                if (!(_inProgressTasks[i] is T task)) continue;
+                if (!task.ClaimedByWorkers.Contains(worker)) continue;
+                if (!task.IsValid()) continue;
+                if (predicate != null && !predicate(task)) continue;
+                return true;
+            }
         }
 
         return false;
     }
 
     /// <summary>
-    /// Checks if there is ANY registered task of the specified type, whether available or currently claimed by someone.
-    /// This is useful to distinguish between "No available tasks right now" and "No tasks exist at all".
+    /// Checks if there is ANY registered task of the specified type, whether available or currently claimed.
+    /// Useful to distinguish between "no available tasks right now" and "no tasks exist at all".
     /// </summary>
     public bool HasAnyTaskOfType<T>(System.Predicate<T> predicate = null) where T : BuildingTask
     {
-        bool hasAvailable = _availableTasks.OfType<T>().Any(t => t.IsValid() && (predicate == null || predicate(t)));
-        if (hasAvailable) return true;
-
-        bool hasInProgress = _inProgressTasks.OfType<T>().Any(t => t.IsValid() && (predicate == null || predicate(t)));
-        return hasInProgress;
+        for (int i = 0; i < _availableTasks.Count; i++)
+        {
+            if (!(_availableTasks[i] is T task)) continue;
+            if (!task.IsValid()) continue;
+            if (predicate != null && !predicate(task)) continue;
+            return true;
+        }
+        for (int i = 0; i < _inProgressTasks.Count; i++)
+        {
+            if (!(_inProgressTasks[i] is T task)) continue;
+            if (!task.IsValid()) continue;
+            if (predicate != null && !predicate(task)) continue;
+            return true;
+        }
+        return false;
     }
 
     /// <summary>
@@ -222,6 +276,9 @@ public class BuildingTaskManager : MonoBehaviour
     /// </summary>
     public void ClearAvailableTasksOfType<T>() where T : BuildingTask
     {
-        _availableTasks.RemoveAll(t => t is T);
+        for (int i = _availableTasks.Count - 1; i >= 0; i--)
+        {
+            if (_availableTasks[i] is T) _availableTasks.RemoveAt(i);
+        }
     }
 }

@@ -593,7 +593,7 @@ Transform:
   m_GameObject: {fileID: 8884850360139944857}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -2, y: 0.9733, z: -20}
+  m_LocalPosition: {x: -2, y: 0.9733, z: -23}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -618,7 +618,7 @@ BoxCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Size: {x: 30, y: 20, z: 30}
+  m_Size: {x: 6, y: 6, z: 6}
   m_Center: {x: 0, y: 0, z: 0}
 --- !u!114 &5703158974336014131
 MonoBehaviour:
@@ -836,15 +836,15 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6121972414477404733, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: m_Size.x
-      value: 20
+      value: 10
       objectReference: {fileID: 0}
     - target: {fileID: 6121972414477404733, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: m_Size.y
-      value: 20
+      value: 10
       objectReference: {fileID: 0}
     - target: {fileID: 6121972414477404733, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: m_Size.z
-      value: 20
+      value: 10
       objectReference: {fileID: 0}
     - target: {fileID: 6383464023724560883, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: m_AnchorMax.y
@@ -896,7 +896,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7289148798581441162, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: m_LocalPosition.z
-      value: -13.7
+      value: -12
       objectReference: {fileID: 0}
     - target: {fileID: 7371631401807285046, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: zoneName
@@ -1030,10 +1030,892 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::FurnitureGrid
   _cellSize: 1
   _floorRenderers: []
-  _gridWidth: 0
-  _gridDepth: 0
-  _gridOrigin: {x: 0, y: 0, z: 0}
-  _cells: []
+  _gridWidth: 21
+  _gridDepth: 14
+  _gridOrigin: {x: -3.8307958, y: 8, z: -10.6563835}
+  _cells:
+  - WorldPosition: {x: -3.3307958, y: -0.43226624, z: -10.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -3.3307958, y: -0.43226624, z: -9.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -3.3307958, y: -0.43226624, z: -8.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -3.3307958, y: -0.43226624, z: -7.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -3.3307958, y: -0.43226624, z: -6.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -3.3307958, y: -0.43226624, z: -5.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -3.3307958, y: -0.43226624, z: -4.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -3.3307958, y: -0.43226624, z: -3.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -3.3307958, y: -0.43226624, z: -2.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -3.3307958, y: -0.43226624, z: -1.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -3.3307958, y: -0.43226624, z: -0.15638351}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -3.3307958, y: -0.43226624, z: 0.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -3.3307958, y: -0.43226624, z: 1.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -3.3307958, y: -0.43226624, z: 2.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -2.3307958, y: -0.43226624, z: -10.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -2.3307958, y: -0.43226624, z: -9.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -2.3307958, y: -0.43226624, z: -8.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -2.3307958, y: -0.43226624, z: -7.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -2.3307958, y: -0.43226624, z: -6.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -2.3307958, y: -0.43226624, z: -5.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -2.3307958, y: -0.43226624, z: -4.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -2.3307958, y: -0.43226624, z: -3.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -2.3307958, y: -0.43226624, z: -2.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -2.3307958, y: -0.43226624, z: -1.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -2.3307958, y: -0.43226624, z: -0.15638351}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -2.3307958, y: -0.43226624, z: 0.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -2.3307958, y: -0.43226624, z: 1.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -2.3307958, y: -0.43226624, z: 2.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -1.3307958, y: -0.43226624, z: -10.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -1.3307958, y: -0.43226624, z: -9.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -1.3307958, y: -0.43226624, z: -8.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -1.3307958, y: -0.43226624, z: -7.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -1.3307958, y: -0.43226624, z: -6.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -1.3307958, y: -0.43226624, z: -5.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -1.3307958, y: -0.43226624, z: -4.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -1.3307958, y: -0.43226624, z: -3.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -1.3307958, y: -0.43226624, z: -2.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -1.3307958, y: -0.43226624, z: -1.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -1.3307958, y: -0.43226624, z: -0.15638351}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -1.3307958, y: -0.43226624, z: 0.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -1.3307958, y: -0.43226624, z: 1.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -1.3307958, y: -0.43226624, z: 2.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -0.33079576, y: -0.43226624, z: -10.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -0.33079576, y: -0.43226624, z: -9.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -0.33079576, y: -0.43226624, z: -8.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -0.33079576, y: -0.43226624, z: -7.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -0.33079576, y: -0.43226624, z: -6.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -0.33079576, y: -0.43226624, z: -5.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -0.33079576, y: -0.43226624, z: -4.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -0.33079576, y: -0.43226624, z: -3.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -0.33079576, y: -0.43226624, z: -2.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -0.33079576, y: -0.43226624, z: -1.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -0.33079576, y: -0.43226624, z: -0.15638351}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -0.33079576, y: -0.43226624, z: 0.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -0.33079576, y: -0.43226624, z: 1.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: -0.33079576, y: -0.43226624, z: 2.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 0.66920424, y: -0.43226624, z: -10.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 0.66920424, y: -0.43226624, z: -9.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 0.66920424, y: -0.43226624, z: -8.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 0.66920424, y: -0.43226624, z: -7.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 0.66920424, y: -0.43226624, z: -6.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 0.66920424, y: -0.43226624, z: -5.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 0.66920424, y: -0.43226624, z: -4.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 0.66920424, y: -0.43226624, z: -3.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 0.66920424, y: -0.43226624, z: -2.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 0.66920424, y: -0.43226624, z: -1.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 0.66920424, y: -0.43226624, z: -0.15638351}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 0.66920424, y: -0.43226624, z: 0.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 0.66920424, y: -0.43226624, z: 1.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 0.66920424, y: -0.43226624, z: 2.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 1.6692042, y: -0.43226624, z: -10.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 1.6692042, y: -0.43226624, z: -9.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 1.6692042, y: -0.43226624, z: -8.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 1.6692042, y: -0.43226624, z: -7.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 1.6692042, y: -0.43226624, z: -6.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 1.6692042, y: -0.43226624, z: -5.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 1.6692042, y: -0.43226624, z: -4.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 1.6692042, y: -0.43226624, z: -3.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 1.6692042, y: -0.43226624, z: -2.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 1.6692042, y: -0.43226624, z: -1.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 1.6692042, y: -0.43226624, z: -0.15638351}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 1.6692042, y: -0.43226624, z: 0.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 1.6692042, y: -0.43226624, z: 1.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 1.6692042, y: -0.43226624, z: 2.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 2.6692042, y: -0.43226624, z: -10.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 2.6692042, y: -0.43226624, z: -9.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 2.6692042, y: -0.43226624, z: -8.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 2.6692042, y: -0.43226624, z: -7.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 2.6692042, y: -0.43226624, z: -6.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 2.6692042, y: -0.43226624, z: -5.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 2.6692042, y: -0.43226624, z: -4.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 2.6692042, y: -0.43226624, z: -3.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 2.6692042, y: -0.43226624, z: -2.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 2.6692042, y: -0.43226624, z: -1.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 2.6692042, y: -0.43226624, z: -0.15638351}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 2.6692042, y: -0.43226624, z: 0.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 2.6692042, y: -0.43226624, z: 1.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 2.6692042, y: -0.43226624, z: 2.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 3.6692042, y: -0.43226624, z: -10.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 3.6692042, y: -0.43226624, z: -9.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 3.6692042, y: -0.43226624, z: -8.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 3.6692042, y: -0.43226624, z: -7.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 3.6692042, y: -0.43226624, z: -6.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 3.6692042, y: -0.43226624, z: -5.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 3.6692042, y: -0.43226624, z: -4.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 3.6692042, y: -0.43226624, z: -3.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 3.6692042, y: -0.43226624, z: -2.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 3.6692042, y: -0.43226624, z: -1.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 3.6692042, y: -0.43226624, z: -0.15638351}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 3.6692042, y: -0.43226624, z: 0.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 3.6692042, y: -0.43226624, z: 1.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 3.6692042, y: -0.43226624, z: 2.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 4.669204, y: -0.43226624, z: -10.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 4.669204, y: -0.43226624, z: -9.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 4.669204, y: -0.43226624, z: -8.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 4.669204, y: -0.43226624, z: -7.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 4.669204, y: -0.43226624, z: -6.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 4.669204, y: -0.43226624, z: -5.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 4.669204, y: -0.43226624, z: -4.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 4.669204, y: -0.43226624, z: -3.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 4.669204, y: -0.43226624, z: -2.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 4.669204, y: -0.43226624, z: -1.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 4.669204, y: -0.43226624, z: -0.15638351}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 4.669204, y: -0.43226624, z: 0.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 4.669204, y: -0.43226624, z: 1.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 4.669204, y: -0.43226624, z: 2.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 5.669204, y: -0.43226624, z: -10.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 5.669204, y: -0.43226624, z: -9.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 5.669204, y: -0.43226624, z: -8.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 5.669204, y: -0.43226624, z: -7.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 5.669204, y: -0.43226624, z: -6.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 5.669204, y: -0.43226624, z: -5.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 5.669204, y: -0.43226624, z: -4.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 5.669204, y: -0.43226624, z: -3.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 5.669204, y: -0.43226624, z: -2.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 5.669204, y: -0.43226624, z: -1.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 5.669204, y: -0.43226624, z: -0.15638351}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 5.669204, y: -0.43226624, z: 0.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 5.669204, y: -0.43226624, z: 1.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 5.669204, y: -0.43226624, z: 2.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 6.669204, y: -0.43226624, z: -10.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 6.669204, y: -0.43226624, z: -9.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 6.669204, y: -0.43226624, z: -8.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 6.669204, y: -0.43226624, z: -7.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 6.669204, y: -0.43226624, z: -6.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 6.669204, y: -0.43226624, z: -5.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 6.669204, y: -0.43226624, z: -4.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 6.669204, y: -0.43226624, z: -3.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 6.669204, y: -0.43226624, z: -2.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 6.669204, y: -0.43226624, z: -1.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 6.669204, y: -0.43226624, z: -0.15638351}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 6.669204, y: -0.43226624, z: 0.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 6.669204, y: -0.43226624, z: 1.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 6.669204, y: -0.43226624, z: 2.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 7.669204, y: -0.43226624, z: -10.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 7.669204, y: -0.43226624, z: -9.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 7.669204, y: -0.43226624, z: -8.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 7.669204, y: -0.43226624, z: -7.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 7.669204, y: -0.43226624, z: -6.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 7.669204, y: -0.43226624, z: -5.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 7.669204, y: -0.43226624, z: -4.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 7.669204, y: -0.43226624, z: -3.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 7.669204, y: -0.43226624, z: -2.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 7.669204, y: -0.43226624, z: -1.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 7.669204, y: -0.43226624, z: -0.15638351}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 7.669204, y: -0.43226624, z: 0.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 7.669204, y: -0.43226624, z: 1.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 7.669204, y: -0.43226624, z: 2.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 8.669205, y: -0.43226624, z: -10.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 8.669205, y: -0.43226624, z: -9.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 8.669205, y: -0.43226624, z: -8.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 8.669205, y: -0.43226624, z: -7.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 8.669205, y: -0.43226624, z: -6.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 8.669205, y: -0.43226624, z: -5.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 8.669205, y: -0.43226624, z: -4.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 8.669205, y: -0.43226624, z: -3.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 8.669205, y: -0.43226624, z: -2.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 8.669205, y: -0.43226624, z: -1.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 8.669205, y: -0.43226624, z: -0.15638351}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 8.669205, y: -0.43226624, z: 0.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 8.669205, y: -0.43226624, z: 1.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 8.669205, y: -0.43226624, z: 2.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 9.669205, y: -0.43226624, z: -10.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 9.669205, y: -0.43226624, z: -9.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 9.669205, y: -0.43226624, z: -8.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 9.669205, y: -0.43226624, z: -7.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 9.669205, y: -0.43226624, z: -6.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 9.669205, y: -0.43226624, z: -5.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 9.669205, y: -0.43226624, z: -4.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 9.669205, y: -0.43226624, z: -3.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 9.669205, y: -0.43226624, z: -2.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 9.669205, y: -0.43226624, z: -1.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 9.669205, y: -0.43226624, z: -0.15638351}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 9.669205, y: -0.43226624, z: 0.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 9.669205, y: -0.43226624, z: 1.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 9.669205, y: -0.43226624, z: 2.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 10.669205, y: -0.43226624, z: -10.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 10.669205, y: -0.43226624, z: -9.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 10.669205, y: -0.43226624, z: -8.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 10.669205, y: -0.43226624, z: -7.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 10.669205, y: -0.43226624, z: -6.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 10.669205, y: -0.43226624, z: -5.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 10.669205, y: -0.43226624, z: -4.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 10.669205, y: -0.43226624, z: -3.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 10.669205, y: -0.43226624, z: -2.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 10.669205, y: -0.43226624, z: -1.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 10.669205, y: -0.43226624, z: -0.15638351}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 10.669205, y: -0.43226624, z: 0.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 10.669205, y: -0.43226624, z: 1.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 10.669205, y: -0.43226624, z: 2.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 11.669205, y: -0.43226624, z: -10.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 11.669205, y: -0.43226624, z: -9.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 11.669205, y: -0.43226624, z: -8.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 11.669205, y: -0.43226624, z: -7.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 11.669205, y: -0.43226624, z: -6.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 11.669205, y: -0.43226624, z: -5.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 11.669205, y: -0.43226624, z: -4.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 11.669205, y: -0.43226624, z: -3.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 11.669205, y: -0.43226624, z: -2.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 11.669205, y: -0.43226624, z: -1.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 11.669205, y: -0.43226624, z: -0.15638351}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 11.669205, y: -0.43226624, z: 0.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 11.669205, y: -0.43226624, z: 1.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 11.669205, y: -0.43226624, z: 2.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 12.669205, y: -0.43226624, z: -10.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 12.669205, y: -0.43226624, z: -9.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 12.669205, y: -0.43226624, z: -8.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 12.669205, y: -0.43226624, z: -7.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 12.669205, y: -0.43226624, z: -6.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 12.669205, y: -0.43226624, z: -5.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 12.669205, y: -0.43226624, z: -4.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 12.669205, y: -0.43226624, z: -3.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 12.669205, y: -0.43226624, z: -2.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 12.669205, y: -0.43226624, z: -1.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 12.669205, y: -0.43226624, z: -0.15638351}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 12.669205, y: -0.43226624, z: 0.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 12.669205, y: -0.43226624, z: 1.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 12.669205, y: -0.43226624, z: 2.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 13.669205, y: -0.43226624, z: -10.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 13.669205, y: -0.43226624, z: -9.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 13.669205, y: -0.43226624, z: -8.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 13.669205, y: -0.43226624, z: -7.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 13.669205, y: -0.43226624, z: -6.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 13.669205, y: -0.43226624, z: -5.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 13.669205, y: -0.43226624, z: -4.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 13.669205, y: -0.43226624, z: -3.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 13.669205, y: -0.43226624, z: -2.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 13.669205, y: -0.43226624, z: -1.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 13.669205, y: -0.43226624, z: -0.15638351}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 13.669205, y: -0.43226624, z: 0.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 13.669205, y: -0.43226624, z: 1.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 13.669205, y: -0.43226624, z: 2.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 14.669205, y: -0.43226624, z: -10.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 14.669205, y: -0.43226624, z: -9.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 14.669205, y: -0.43226624, z: -8.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 14.669205, y: -0.43226624, z: -7.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 14.669205, y: -0.43226624, z: -6.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 14.669205, y: -0.43226624, z: -5.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 14.669205, y: -0.43226624, z: -4.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 14.669205, y: -0.43226624, z: -3.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 14.669205, y: -0.43226624, z: -2.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 14.669205, y: -0.43226624, z: -1.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 14.669205, y: -0.43226624, z: -0.15638351}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 14.669205, y: -0.43226624, z: 0.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 14.669205, y: -0.43226624, z: 1.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 14.669205, y: -0.43226624, z: 2.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 15.669205, y: -0.43226624, z: -10.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 15.669205, y: -0.43226624, z: -9.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 15.669205, y: -0.43226624, z: -8.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 15.669205, y: -0.43226624, z: -7.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 15.669205, y: -0.43226624, z: -6.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 15.669205, y: -0.43226624, z: -5.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 15.669205, y: -0.43226624, z: -4.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 15.669205, y: -0.43226624, z: -3.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 15.669205, y: -0.43226624, z: -2.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 15.669205, y: -0.43226624, z: -1.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 15.669205, y: -0.43226624, z: -0.15638351}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 15.669205, y: -0.43226624, z: 0.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 15.669205, y: -0.43226624, z: 1.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 15.669205, y: -0.43226624, z: 2.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 16.669205, y: -0.43226624, z: -10.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 16.669205, y: -0.43226624, z: -9.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 16.669205, y: -0.43226624, z: -8.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 16.669205, y: -0.43226624, z: -7.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 16.669205, y: -0.43226624, z: -6.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 16.669205, y: -0.43226624, z: -5.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 16.669205, y: -0.43226624, z: -4.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 16.669205, y: -0.43226624, z: -3.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 16.669205, y: -0.43226624, z: -2.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 16.669205, y: -0.43226624, z: -1.1563835}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 16.669205, y: -0.43226624, z: -0.15638351}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 16.669205, y: -0.43226624, z: 0.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 16.669205, y: -0.43226624, z: 1.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
+  - WorldPosition: {x: 16.669205, y: -0.43226624, z: 2.8436165}
+    Occupant: {fileID: 0}
+    IsWall: 0
 --- !u!114 &1524187949893558564
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1244,10 +2126,15 @@ MonoBehaviour:
     communityZones: []
     ownedBuildings: []
   _storageZone: {fileID: 4309535885151927115}
+  _defaultFurnitureLayout:
+  - ItemSO: {fileID: 11400000, guid: c48f624b69e3054479bf2af6637b5355, type: 2}
+    LocalPosition: {x: 0, y: 0, z: -3}
+    LocalEulerAngles: {x: 0, y: 0, z: 0}
+    TargetRoom: {fileID: 4782189456039868823}
   _pickupZone: {fileID: 0}
   _wantedResources:
   - targetItem: {fileID: 11400000, guid: a3f0471c4178efd4b9b5efdb38aea516, type: 2}
-    maxQuantity: 50
+    maxQuantity: 10
   _harvesterCount: 2
   _harvesterJobTitle: Harvester
   _harvesterJobType: 1

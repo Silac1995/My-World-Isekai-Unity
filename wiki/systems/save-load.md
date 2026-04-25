@@ -3,7 +3,7 @@ type: system
 title: "Save / Load"
 tags: [save-load, persistence, network, tier-2]
 created: 2026-04-19
-updated: 2026-04-24
+updated: 2026-04-25
 sources: []
 related:
   - "[[character]]"
@@ -62,7 +62,7 @@ Decouple characters from any one session so a player's character can visit frien
 │     ├── MapSaveData[]        (per map — active + hibernated)    │
 │     │     ├── Alive Characters (as CharacterSaveData)           │
 │     │     ├── HibernatedNPCData[]                               │
-│     │     ├── HibernatedItemData[]                              │
+│     │     ├── WorldItemSaveData[]   (dropped items)             │
 │     │     ├── Resource pools                                    │
 │     │     └── Last hibernation time                             │
 │     ├── CommunityRegistry                                       │
@@ -109,6 +109,7 @@ Decouple characters from any one session so a player's character can visit frien
 - [ ] **Audit every `NetworkObject.Spawn()` + `SetParent` pair** in save-restore code — enforce the NGO-preferred parent-before-spawn order.
 
 ## Change log
+- 2026-04-25 — Implemented WorldItem persistence. `MapSaveData.WorldItems` (`WorldItemSaveData` list) rides alongside `HibernatedNPCs` on each `MapSnapshot_{mapId}`. `MapController.SnapshotActiveNPCs` / `SpawnNPCsFromSnapshot` / `Hibernate` now also handle items; `WorldItem.SpawnWorldItem` reparents the GO under the containing map via new `MapController.GetAnyMapAtPosition`. — claude
 - 2026-04-24 — Added a Known gotchas section documenting the half-spawned-NetworkObject bug in save-restore paths (root cause + defensive purge). Cross-linked to [[network]]. — claude
 - 2026-04-19 — Stub with architectural sketch. Full code walkthrough deferred — tier-2 per Kevin's plan. — Claude / [[kevin]]
 

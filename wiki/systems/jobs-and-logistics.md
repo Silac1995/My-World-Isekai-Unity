@@ -3,7 +3,7 @@ type: system
 title: "Jobs & Logistics"
 tags: [jobs, logistics, economy, tier-1]
 created: 2026-04-18
-updated: 2026-04-23
+updated: 2026-04-25
 sources: []
 related:
   - "[[world]]"
@@ -225,6 +225,9 @@ VirtualResourceSupplier.TryFulfillOrder fills pending orders from virtual pools
 - **Transport accounting global, not per-transporter** — use `InTransitQuantity` globally to avoid over-delivery.
 - **Crafters are demand-driven** — `JobCrafter` does **not** craft in a vacuum; it waits for an active `CraftingOrder` on its building's logistics manager.
 - **`ImposeJobOnCitizen` overrides consent** — community leaders can force-assign work; intentionally dissolves overlapping jobs.
+- **Don't cache GoapAction instances across plans in `Job.PlanNextActions`** — `GoapAction_PlaceOrder`, `_StageItemForPickup`, etc. carry per-plan state (`_isComplete`, `_isMoving`, target refs). Reusing the same instance across multiple plans risks `_isComplete=true` leaking from a previous plan, which makes `IsValid` return false on the next plan, the planner can't satisfy the goal, and any remaining queued orders stall (e.g. shop only ever places the *first* `BuyOrder` and never the rest). Pool the *list wrapper* and per-plan goal+worldState scratch dicts (those are stateless), but `Clear()` and re-add fresh action instances each plan. `JobHarvester` and `JobTransporter` already use the safe pattern; `JobLogisticsManager` had to be reverted to it after a brief regression. Lesson: caching is fine for stateless fields, never for objects whose lifecycle is "OnEnter / Execute / Exit per plan".
+- **Worker job code that searches for furniture uses `CraftingBuilding.GetAllStations()`, not `cb.Rooms.GetFurnitureOfType<>()` directly.** The room-only walk misses stations that landed in the building's transform tree but didn't make it into a `Room.FurnitureManager._furnitures` list (default-furniture spawn race). Same hardening applies to `GetCraftableItems` / `GetStationsOfType`. See [[crafting-loop]] gotchas.
+- **Arrival / proximity checks at any furniture or interactable use `InteractableObject.IsCharacterInInteractionZone(character)`, not bounds math.** A `Vector3.Distance` arrival check is sensitive to the authored Y of an `InteractionPoint` Transform — when the point sits on top of a chest-high mesh and the worker is on the floor, 3D distance never crosses the threshold. The zone collider is the canonical source of truth across BT, GOAP, server RPCs, and player input. Worker job code that triggers a `CharacterAction` at a station also re-validates the zone in the action's `CanExecute` and `OnApplyEffect` (e.g. `CharacterCraftAction`) so the worker can't ghost-finish from outside the zone after a knockback / station despawn / station picked up.
 
 ## Open questions / TODO
 
@@ -243,6 +246,7 @@ VirtualResourceSupplier.TryFulfillOrder fills pending orders from virtual pools
 - [[crafting-loop]] — `CraftingBuilding`, `CraftingStation`, `JobCrafter` demand-driven flow.
 
 ## Change log
+- 2026-04-25 — Diagnosed and documented two regressions on `JobLogisticsManager` + the crafting chain: (a) caching `_availableActions` with stateful `GoapAction` instances across plans caused the boss to only place the first queued `BuyOrder` and stall on the rest — reverted to fresh-per-plan instances, kept worldState dict + goal pooling. (b) `JobBlacksmith.HandleSearchOrder` iterated `cb.Rooms` directly to find a `CraftingStation`, missing stations spawned via `_defaultFurnitureLayout` that didn't register into a `Room.FurnitureManager._furnitures` list — switched to new `CraftingBuilding.GetAllStations()`. (c) `JobBlacksmith.HandleMovementToStation` and `CharacterCraftAction` now use `InteractableObject.IsCharacterInInteractionZone(character)` for the proximity gate (was a Y-sensitive 3D-distance check that never converged when the InteractionPoint Transform was elevated). New gotchas added in this section. — claude
 - 2026-04-23 — Quest integration: `BuildingTask` + `BuyOrder` + `TransportOrder` + `CraftingOrder` now implement `MWI.Quests.IQuest` (Hybrid C unification). `BuildingTaskManager` + `LogisticsOrderBook` fire Add/Remove events; `CommercialBuilding` aggregates them into `OnQuestPublished` and auto-claims eligible quests for on-shift workers. Player-side HUD + save/load via `CharacterQuestLog`. Zero behavior change for NPC GOAP (`ClaimBestTask<T>` still works). See [[quest-system]]. — claude
 - 2026-04-22 — Wage and worklog hooks added: punch-in/out wage payment via [[worker-wages-and-performance]], per-job credit hooks (deposit / craft / delivery), JobAssignment now carries wage fields seeded at hire-time — claude
 - 2026-04-21 — Logistics refactor: IStockProvider + pluggable LogisticsPolicy SO + facade split + input stock contract on CraftingBuilding — claude

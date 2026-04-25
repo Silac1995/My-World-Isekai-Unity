@@ -613,7 +613,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7289148798581441162, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: m_LocalPosition.x
-      value: 0
+      value: 6
       objectReference: {fileID: 0}
     - target: {fileID: 7289148798581441162, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: m_LocalPosition.y
@@ -621,7 +621,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7289148798581441162, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 0
+      value: -17
       objectReference: {fileID: 0}
     - target: {fileID: 7371631401807285046, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: zoneName
@@ -993,6 +993,8 @@ MonoBehaviour:
     communityZones: []
     ownedBuildings: []
   _storageZone: {fileID: 6942077358948493099}
+  _defaultFurnitureLayout: []
+  _pickupZone: {fileID: 0}
   _itemsToSell:
   - Item: {fileID: 0}
     MaxStock: 0

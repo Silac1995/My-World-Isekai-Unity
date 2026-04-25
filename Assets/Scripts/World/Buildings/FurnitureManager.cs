@@ -119,6 +119,35 @@ public class FurnitureManager : MonoBehaviour
     }
 
     /// <summary>
+    /// Server-authored variant of <see cref="RegisterSpawnedFurniture"/> that bypasses the
+    /// <c>CanPlaceFurniture</c> validation. Validation exists to gate runtime user input
+    /// (player placement); for furniture authored at design time — like <c>CommercialBuilding._defaultFurnitureLayout</c> —
+    /// the level designer is the source of truth and the cell at the chosen position is trusted
+    /// even if it lies on a wall-marked cell, partially out of bounds, or in any configuration the
+    /// validator would otherwise reject. The grid still records the occupancy so subsequent
+    /// queries (FindAvailableFurniture, GetCraftableItems) work normally.
+    ///
+    /// IMPORTANT: this method does **not** SetParent the furniture under the room transform.
+    /// The room is a <c>NetworkBehaviour</c> on a non-<c>NetworkObject</c> GameObject (only the
+    /// building root carries a NetworkObject). NGO throws <c>InvalidParentException</c> when a
+    /// NetworkObject is reparented under a non-NetworkObject. The caller is responsible for
+    /// parenting the furniture under a valid NetworkObject ancestor (the building root) before
+    /// calling this method. Logical room membership lives in <c>_furnitures</c>, not in transform
+    /// parenting — all <c>Room.GetFurniture*</c> queries hit that list, not <c>GetComponentsInChildren</c>.
+    /// </summary>
+    public bool RegisterSpawnedFurnitureUnchecked(Furniture furniture, Vector3 targetPosition)
+    {
+        if (_grid == null || furniture == null) return false;
+
+        _grid.RegisterFurniture(furniture, targetPosition, furniture.SizeInCells);
+        _furnitures.Add(furniture);
+
+        string roomName = _room != null ? _room.RoomName : gameObject.name;
+        Debug.Log($"<color=green>[FurnitureManager]</color> Registered (unchecked, no reparent) spawned {furniture.FurnitureName} at {targetPosition} in {roomName}.");
+        return true;
+    }
+
+    /// <summary>
     /// Unregisters furniture from grid and list without destroying the GameObject.
     /// Caller handles destruction/despawn (e.g. NetworkObject.Despawn).
     /// Used by CharacterPickUpFurnitureAction for networked furniture.
@@ -147,19 +176,41 @@ public class FurnitureManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Peuple la liste initiale des meubles s'ils sont déjà enfants du Transform au lancement du jeu.
-    /// Passe <c>true</c> à <c>GetComponentsInChildren</c> pour inclure les GameObjects inactifs —
-    /// certains meubles (ex. CraftingStation nichée dans Room_Main) peuvent être momentanément
-    /// inactifs pendant le spawn réseau et seraient sinon invisibles pour le manager,
-    /// ce qui cassait <c>CraftingBuilding.GetCraftableItems</c> et toute la chaîne de logistique.
+    /// Merges any Furniture currently parented under this room's transform into <see cref="_furnitures"/>
+    /// (without wiping prior entries) and registers each on the grid. Includes inactive children so
+    /// briefly-disabled networked furniture isn't missed during the spawn cascade.
+    ///
+    /// IMPORTANT: this method is **additive**, not replace-style. Earlier revisions did
+    /// <c>_furnitures = new List&lt;Furniture&gt;(GetComponentsInChildren&lt;Furniture&gt;(true))</c>
+    /// — which silently destroyed registrations made via <see cref="RegisterSpawnedFurnitureUnchecked"/>.
+    /// That path is the canonical channel for <c>CommercialBuilding._defaultFurnitureLayout</c>:
+    /// the spawned furniture is parented under the **building root** (NGO requires a NetworkObject
+    /// ancestor; the room sits on a non-NO GameObject so reparenting under it throws
+    /// <c>InvalidParentException</c>). Logical room ownership lives in this <c>_furnitures</c>
+    /// list, not in transform parenting — so a transform-only rescan can never see those entries
+    /// and must not be allowed to clobber them.
+    ///
+    /// Idempotency: a re-discovered child is skipped (Contains check); the grid registration is
+    /// itself idempotent (<see cref="FurnitureGrid.RegisterFurniture"/> just writes Occupant per cell).
+    /// Dead references (Unity fake-null after a destroy that bypassed the Remove* helpers) are pruned
+    /// up-front so they don't accumulate across <c>OnNetworkSpawn</c> / <c>Start</c> re-runs.
     /// </summary>
     public void LoadExistingFurniture()
     {
         if (_grid == null) return;
 
-        _furnitures = new List<Furniture>(GetComponentsInChildren<Furniture>(true));
-        foreach (var f in _furnitures)
+        // Drop any Unity fake-null entries left behind by a destroy that didn't go through
+        // RemoveFurniture / UnregisterAndRemove.
+        _furnitures.RemoveAll(f => f == null);
+
+        Furniture[] childFurniture = GetComponentsInChildren<Furniture>(true);
+        foreach (var f in childFurniture)
         {
+            if (f == null) continue;
+            if (!_furnitures.Contains(f))
+            {
+                _furnitures.Add(f);
+            }
             _grid.RegisterFurniture(f, f.transform.position, f.SizeInCells);
         }
     }

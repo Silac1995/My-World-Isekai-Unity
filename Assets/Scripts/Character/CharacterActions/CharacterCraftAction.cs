@@ -22,8 +22,24 @@ public class CharacterCraftAction : CharacterAction
 
     public override bool CanExecute()
     {
-        if (_station == null || _itemToCraft == null || !_station.CanCraft(_itemToCraft)) 
+        if (_station == null || _itemToCraft == null || !_station.CanCraft(_itemToCraft))
             return false;
+
+        // --- PROXIMITY CHECK ---
+        // Canonical "close enough to interact" gate via InteractableObject.IsCharacterInInteractionZone
+        // (project rule). When the station has a paired InteractableObject sibling with an
+        // InteractionZone collider, require the character's transform.position to be inside it.
+        // Skip the check if no interactable is paired — legacy stations / authored without a
+        // CraftingFurnitureInteractable still work (the caller — typically JobBlacksmith — has
+        // already done its own arrival validation).
+        var stationInteractable = _station.GetComponent<InteractableObject>();
+        if (stationInteractable != null && stationInteractable.InteractionZone != null
+            && !stationInteractable.IsCharacterInInteractionZone(character))
+        {
+            Debug.LogWarning($"<color=orange>[Crafting]</color> {character.CharacterName} is not inside {_station.FurnitureName}'s InteractionZone — craft aborted. " +
+                             $"Move the character into the zone before triggering CharacterCraftAction.");
+            return false;
+        }
 
         // --- SKILL CHECK ---
         if (_itemToCraft.RequiredCraftingSkill != null)
@@ -58,6 +74,19 @@ public class CharacterCraftAction : CharacterAction
         if (_station == null || _itemToCraft == null)
         {
             Debug.LogWarning($"<color=orange>[Action]</color> {character.CharacterName} a annulé son craft car la station ou l'objet n'existe plus.");
+            return;
+        }
+
+        // Re-validate proximity at apply time — the action's duration window leaves room for
+        // the character to drift out of the InteractionZone (knockback, station picked up by
+        // someone else, station despawned, etc.) between OnStart and OnApplyEffect. Without this
+        // re-check, the craft would still fire and spawn the item even though the worker is no
+        // longer at the station. Mirrors the CanExecute proximity gate.
+        var stationInteractable = _station.GetComponent<InteractableObject>();
+        if (stationInteractable != null && stationInteractable.InteractionZone != null
+            && !stationInteractable.IsCharacterInInteractionZone(character))
+        {
+            Debug.LogWarning($"<color=orange>[Action]</color> {character.CharacterName} drifted out of {_station.FurnitureName}'s InteractionZone before the craft completed — effect not applied.");
             return;
         }
 

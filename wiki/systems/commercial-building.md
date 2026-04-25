@@ -3,7 +3,7 @@ type: system
 title: "Commercial Building"
 tags: [building, commercial, jobs, tier-2]
 created: 2026-04-19
-updated: 2026-04-24
+updated: 2026-04-25
 sources: []
 related: ["[[building]]", "[[building-logistics-manager]]", "[[building-task-manager]]", "[[jobs-and-logistics]]", "[[shops]]", "[[crafting-loop]]", "[[worker-wages-and-performance]]", "[[quest-system]]", "[[dev-mode]]", "[[kevin]]"]
 status: stable
@@ -58,6 +58,14 @@ Force-assignment bypasses consent: `CommunityTracker.ImposeJobOnCitizen()` → `
 
 `GetWorkPosition(Character)` is virtual. Defaults to `GetRandomPointInBuildingZone()` with a per-`InstanceID` offset so multiple workers don't physically stack. `ShopBuilding` overrides for its vendor role to return the counter `VendorPoint`; all other roles wander.
 
+## Default furniture spawn (`_defaultFurnitureLayout`)
+
+`CommercialBuilding` carries an authored `List<DefaultFurnitureSlot>` (each slot: `FurnitureItemSO`, `Vector3 LocalPosition` in building-local space, `Vector3 LocalEulerAngles`, `Room TargetRoom`). On the server-side branch of `OnNetworkSpawn`, `TrySpawnDefaultFurniture()` instantiates each slot's `InstalledFurniturePrefab`, calls `NetworkObject.Spawn()`, parents under the **building root** (the only NetworkObject in this hierarchy — see [[network]] §B and `.agent/skills/multiplayer/SKILL.md` §10), then calls `TargetRoom.FurnitureManager.RegisterSpawnedFurnitureUnchecked` to record grid + furniture-list membership without re-parenting.
+
+**Why this exists:** baking a furniture instance whose prefab carries a `NetworkObject` into a runtime-spawned building prefab makes NGO half-register the child during the parent's spawn — the child ends up in `SpawnManager.SpawnedObjectsList` with a null `NetworkManagerOwner` and NRE's `NetworkObject.Serialize` during the next client-sync, breaking client approval entirely. The runtime-spawn path produces the same end-state without the half-spawn class.
+
+**Authoring rule:** only NetworkObject-FREE furniture (e.g. `TimeClock`, which strips its NO via `m_RemovedComponents` in the prefab variant) may be nested directly in a building prefab. Anything network-bearing — `CraftingStation`, `Bed` — must move to `_defaultFurnitureLayout` with `TargetRoom` set. `Forge.prefab` is the canonical example: one slot pointing at the CraftingStation `FurnitureItemSO` at local position `(-7, 0, 4.9582)` with `TargetRoom = Room_Main`.
+
 ## Zones (authored Inspector fields)
 
 | Zone | Role |
@@ -83,6 +91,8 @@ Force-assignment bypasses consent: `CommunityTracker.ImposeJobOnCitizen()` → `
 - If a subclass wants autonomous restock, **implementing `IStockProvider` is mandatory** — declaring `_itemsToSell` or `_inputStockTargets` alone does nothing until the contract is wired.
 
 ## Change log
+- 2026-04-25 — Fixed `_defaultFurnitureLayout` registrations being silently wiped by `Room.Start` / `Room.OnNetworkSpawn`. `FurnitureManager.LoadExistingFurniture` is now additive: it prunes fake-null entries and merges any new transform child into `_furnitures` instead of replacing the list with `GetComponentsInChildren<Furniture>(true)`. Previous replace-style rescan would clobber `RegisterSpawnedFurnitureUnchecked` writes (the spawned furniture lives on the building root, not under the target room's transform — so the rescan saw an empty room and reset the list). Symptom on the Forge: `Room_Main.FurnitureManager.Furnitures` empty after placement; crafting only worked through `CraftingBuilding.GetCraftableItems`'s transform-tree fallback, which logged a one-shot warning. — claude
+- 2026-04-25 — Added `_defaultFurnitureLayout` (`List<DefaultFurnitureSlot>`) + `TrySpawnDefaultFurniture()` server-side runtime-spawn path. Replaces the previous nested-furniture-with-NetworkObject pattern that was half-spawning during NGO sync and silently aborting client connection-approval. New `FurnitureManager.RegisterSpawnedFurnitureUnchecked(furniture, worldPos)` helper bypasses `CanPlaceFurniture` validation (server-authored content is trusted) and skips the SetParent step (caller must already have parented under a valid NetworkObject ancestor — Room_Main is a non-NO so SetParent under it would throw `InvalidParentException`). Forge prefab updated as the canonical example. — claude
 - 2026-04-24 — Shift roster now single-sourced from the replicated `_activeWorkerIds` `NetworkList<FixedString64Bytes>`. Removed the parallel server-only `_activeWorkersOnShift : List<Character>` — it made `ActiveWorkersOnShift` return empty on remote clients, which silently broke the Time Clock UI / `UI_CommercialBuildingDebugScript` / `BTCond_NeedsToPunchOut` across peers. `ActiveWorkersOnShift` is now a materialiser that walks `_activeWorkerIds` via `Character.FindByUUID`; `IsWorkerOnShift` is the allocation-free containment check. `BTAction_Work`, `BTAction_PunchOut`, `BTCond_NeedsToPunchOut`, and `UI_CommercialBuildingDebugScript` were migrated to `IsWorkerOnShift` for both correctness on clients and fewer per-tick allocations. — claude
 - 2026-04-24 — Physical punch-in: `TimeClockFurniture` + `TimeClockFurnitureInteractable` added. Both players and NPCs must interact with a Time Clock to punch; `BTAction_Work` / `BTAction_PunchOut` now target `workplace.TimeClock.GetInteractionPosition()` with a soft fallback to zone-punch when no clock is authored. New `CommercialBuilding.RequestPunchAtTimeClockServerRpc` routes player clients; `WorkerStartingShift` / `WorkerEndingShift` carry `!IsServer` defence-in-depth guards. Spec: `docs/superpowers/specs/2026-04-24-time-clock-furniture-design.md`. — claude
 - 2026-04-23 — Quest aggregator: `GetAvailableQuests`, `GetQuestById`, `ResolveIssuer` (LogisticsManager Worker > Owner > null), `PublishQuest` stamps Issuer + OriginMapId. `WorkerStartingShift` auto-claims eligible quests for on-shift workers + subscribes for future publications. See [[quest-system]]. — claude

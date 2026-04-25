@@ -130,14 +130,18 @@ Click-to-select for Characters + pluggable actions via the `IDevAction` interfac
 
 Attached to the SelectTab GameObject in `DevModePanel.prefab`. Public API:
 
-- `Character SelectedCharacter { get; }` — the currently selected Character, or null.
-- `event Action OnSelectionChanged` — fires on any change (including to/from null).
-- `void SetSelectedCharacter(Character c)` — replaces the selection.
+- `InteractableObject SelectedInteractable { get; }` — the currently selected interactable (any type), or null. Generalized from the original Character-only API.
+- `Character SelectedCharacter { get; }` — back-compat convenience populated whenever the interactable resolves to a Character. Existing `IDevAction` consumers keep working unchanged.
+- `event Action<InteractableObject> OnInteractableSelectionChanged` — fires on any interactable selection change. `DevInspectModule` subscribes here.
+- `event Action OnSelectionChanged` — back-compat event; fires when `SelectedCharacter` changes.
+- `void SetSelectedInteractable(InteractableObject)` / `void SetSelectedCharacter(Character)` — replaces the selection. The character overload routes through `SetSelectedInteractable` once it has resolved a `CharacterInteractable`.
 - `void ClearSelection()` — sets selection to null.
+- `bool TrySelectAtCursor(out string label)` — interior raycast against `_selectableLayerMask` (default `RigidBody + Furniture`). Backs the armed Select toggle and the global Ctrl+Click shortcut.
+- `bool TrySelectBuildingAtCursor(out string label)` — building raycast against `_buildingLayerMask` (default `Building`). Backs the global Alt+Click shortcut. Bypasses the interior pick when the user explicitly wants the building shell, even when furniture or characters sit along the same ray.
 
 Selection is cleared automatically on `SceneManager.sceneUnloaded` and on `DevModeManager.OnDevModeChanged(false)` — prevents stale references.
 
-Click flow: armed toggle claims the click slot; next click raycasts against the `RigidBody` layer (exposed as `[SerializeField] LayerMask _characterLayerMask`, resolved to `GetMask("RigidBody")` at `Start` if left at 0), then applies a `GetComponentInParent<Character>()` filter. The layer scopes the pick to the character's body collider so awareness/interaction zones can't produce false hits. Accepts any `Character` — player or NPC, local or remote-replicated.
+**Click flow (dual mask, two entry points):** armed toggle (legacy) and Ctrl+Click both call `TrySelectAtCursor`, which raycasts the **interior** mask (`_selectableLayerMask`, default `RigidBody + Furniture`); Alt+Click calls `TrySelectBuildingAtCursor`, which raycasts the **building** mask (`_buildingLayerMask`, default `Building`). Both paths walk parents via `GetComponentInParent<InteractableObject>()` first, falling back to `GetComponentInParent<Character>()` when the collider's hierarchy has no interactable wrapper. The two-mask split exists because building shells physically enclose their interior contents — a single-pass raycast against `(RigidBody | Furniture | Building)` would always hit the building first, blocking selection of the chest, bed, or NPC inside. The serialized fields are `[FormerlySerializedAs("_characterLayerMask")] _selectableLayerMask` and `_buildingLayerMask`; both auto-default at runtime when left at zero, with `BuildMask` tolerating any layer name missing from Tags & Layers.
 
 ### IDevAction
 

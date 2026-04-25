@@ -118,14 +118,19 @@ public class CharacterGoapController : CharacterSystem
         // For jobless NPCs that bounces Replan→fail→Wander→re-enter GOAP at 20Hz, each firing 2×
         // FindAvailableJob scans (O(buildings) + LINQ shuffle) plus a factorial GOAP graph build.
         // Keep a single cadence: at most one attempt per `_planReevaluationInterval` seconds per NPC.
+        //
+        // Throttled calls are SILENT (no Debug.Log) even when `_debugLog` is true, because they fire
+        // ~20×/sec per NPC and would flood the Windows console (the exact progressive-freeze pattern
+        // this module is here to prevent). Only the actual, non-throttled attempt logs below.
         float now = UnityEngine.Time.time;
         if (now - _lastReplanAttemptTime < _planReevaluationInterval)
         {
-            if (_debugLog)
-                Debug.Log($"<color=grey>[GOAP]</color> {_character.CharacterName}: replan throttled ({now - _lastReplanAttemptTime:F2}s < {_planReevaluationInterval}s).");
             return _currentAction != null;
         }
         _lastReplanAttemptTime = now;
+
+        if (_debugLog)
+            Debug.Log($"<color=grey>[GOAP]</color> {_character.CharacterName}: Replan() running at t={now:F2}s (interval={_planReevaluationInterval}s).");
 
         UpdateWorldState();
 
@@ -226,8 +231,23 @@ public class CharacterGoapController : CharacterSystem
         _currentAction = null;
         _currentPlan = null;
 
-        // External cancellation (combat ends, branch switch, incapacitated→alive) should allow
-        // the next BT tick to Replan immediately instead of being blocked by the throttle.
+        // IMPORTANT: do NOT reset `_lastReplanAttemptTime` here.
+        //
+        // `BTAction_ExecuteGoapPlan.OnExit` calls CancelPlan every time the GOAP branch returns Failure —
+        // which for a jobless NPC is every single BT tick (0.1s). Resetting the throttle here would
+        // defeat the throttle entirely, reverting host-side CPU cost to the pre-fix 10 Replans/sec/NPC.
+        //
+        // If you need a specific transition (e.g., combat ends, NPC revives) to force an immediate
+        // replan regardless of the throttle, call `ForceReplanNextTick()` explicitly at that site.
+    }
+
+    /// <summary>
+    /// Allows the next BT tick to Replan immediately, bypassing <see cref="_planReevaluationInterval"/>.
+    /// Use for rare, intent-driven transitions (combat-end, NPC revival, player dialogue choice) — never
+    /// from internal BT OnExit paths, which would defeat the throttle.
+    /// </summary>
+    public void ForceReplanNextTick()
+    {
         _lastReplanAttemptTime = -999f;
     }
 }

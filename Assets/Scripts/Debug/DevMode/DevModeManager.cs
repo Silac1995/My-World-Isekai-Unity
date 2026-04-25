@@ -99,6 +99,7 @@ public class DevModeManager : MonoBehaviour
         if (IsTextInputFocused()) return;
 
         bool ctrl = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
+        bool alt = Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt);
         bool space = Input.GetKey(KeyCode.Space);
 
         // ESC — cancel everything: clear selection and disarm any armed toggle.
@@ -123,8 +124,8 @@ public class DevModeManager : MonoBehaviour
             if (handled) Debug.Log("<color=magenta>[DevMode]</color> ESC — cancelled");
         }
 
-        // Ctrl + Left-Click → select (mutually exclusive with the Spawn shortcut).
-        if (ctrl && !space && Input.GetMouseButtonDown(0))
+        // Ctrl + Left-Click → interior select (RigidBody + Furniture). Mutually exclusive with Alt and Space.
+        if (ctrl && !alt && !space && Input.GetMouseButtonDown(0))
         {
             if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject()) return;
             if (_selectionModule != null && _selectionModule.TrySelectAtCursor(out string label))
@@ -133,8 +134,18 @@ public class DevModeManager : MonoBehaviour
             }
         }
 
-        // Space + Left-Click → spawn (mutually exclusive with the Select shortcut).
-        if (space && !ctrl && Input.GetMouseButtonDown(0))
+        // Alt + Left-Click → building select (Building layer only). Mutually exclusive with Ctrl and Space.
+        if (alt && !ctrl && !space && Input.GetMouseButtonDown(0))
+        {
+            if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject()) return;
+            if (_selectionModule != null && _selectionModule.TrySelectBuildingAtCursor(out string label))
+            {
+                Debug.Log($"<color=magenta>[DevMode]</color> Alt+Click selected building: {label}");
+            }
+        }
+
+        // Space + Left-Click → spawn. Mutually exclusive with the Select shortcuts.
+        if (space && !ctrl && !alt && Input.GetMouseButtonDown(0))
         {
             if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject()) return;
             if (_spawnModule != null && _spawnModule.TrySpawnAtCursor())

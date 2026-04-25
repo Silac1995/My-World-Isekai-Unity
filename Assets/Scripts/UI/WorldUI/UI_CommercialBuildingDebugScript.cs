@@ -239,21 +239,34 @@ public class UI_CommercialBuildingDebugScript : MonoBehaviour
         StringBuilder sb = new StringBuilder();
         sb.AppendLine("<b>Storage Inventory:</b>");
 
-        var inventory = _building.Inventory;
-        if (inventory == null || inventory.Count == 0)
+        // Read from the network-safe count view. The raw `_building.Inventory` (full ItemInstance
+        // objects) is server-only and returns empty on clients, which used to render this panel
+        // as "Empty." on every non-host peer even when the storage was full.
+        int total = _building.InventoryTotalCount;
+
+        if (total == 0)
         {
             sb.AppendLine("<color=#888888>Empty.</color>");
         }
         else
         {
-            var grouped = inventory
-                .Where(i => i != null && i.ItemSO != null)
-                .GroupBy(i => i.ItemSO.ItemName);
+            // Trust the replicated count first — it's the authoritative number on every peer.
+            // The breakdown by item name depends on resolving each replicated ItemSO.ItemId back
+            // to a local ItemSO; if Resources.LoadAll fails to find a match, we still show the
+            // total so the UI doesn't mislead with "Empty" when there's clearly stock.
+            sb.AppendLine($"<color=#00FF00>Total Items: {total}</color>");
 
-            sb.AppendLine($"<color=#00FF00>Total Items: {inventory.Count}</color>");
-            foreach (var group in grouped)
+            var counts = _building.GetInventoryCountsByItemSO();
+            if (counts != null && counts.Count > 0)
             {
-                sb.AppendLine($"  - {group.Key}: {group.Count()}");
+                foreach (var kvp in counts)
+                {
+                    sb.AppendLine($"  - {kvp.Key.ItemName}: {kvp.Value}");
+                }
+            }
+            else
+            {
+                sb.AppendLine($"<color=#888888>(item-name resolution unavailable)</color>");
             }
         }
 

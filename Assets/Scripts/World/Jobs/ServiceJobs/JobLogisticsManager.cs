@@ -19,6 +19,16 @@ public class JobLogisticsManager : Job
     private Queue<GoapAction> _currentPlan;
     private GoapAction _currentAction;
 
+    // PlanNextActions hot path — called every tick while the boss has no current action.
+    // Pre-allocate once; reuse forever. Without this, each tick allocates a new worldState dict,
+    // a new List of 4 new GoapAction instances, a new GoapGoal with a new dict, and the LINQ
+    // `.Where().ToList()` enumerator+list pair. With N bosses × 10Hz that's thousands of
+    // short-lived allocations/sec → GC pressure that manifests as progressive host-side freeze.
+    private readonly Dictionary<string, bool> _scratchWorldState = new Dictionary<string, bool>(4);
+    private readonly List<GoapAction> _scratchValidActions = new List<GoapAction>(8);
+    private GoapGoal _cachedProcessOrdersGoal;
+    private GoapGoal _cachedIdleGoal;
+
     public override string CurrentActionName => _currentAction != null ? _currentAction.ActionName : "Planning / Idle";
     public override string CurrentGoalName => _logisticsGoal != null ? _logisticsGoal.GoalName : "No Goal";
 
@@ -125,7 +135,8 @@ public class JobLogisticsManager : Job
             // Vérifier que l'action est encore valide
             if (!_currentAction.IsValid(_worker))
             {
-                Debug.Log($"<color=orange>[JobLogistics]</color> {_worker.CharacterName} : action {_currentAction.ActionName} invalide, replanification...");
+                if (NPCDebug.VerboseJobs)
+                    Debug.Log($"<color=orange>[JobLogistics]</color> {_worker.CharacterName} : action {_currentAction.ActionName} invalide, replanification...");
                 _currentAction.Exit(_worker);
                 _currentAction = null;
                 _currentPlan = null;
@@ -136,7 +147,8 @@ public class JobLogisticsManager : Job
 
             if (_currentAction.IsComplete)
             {
-                Debug.Log($"<color=cyan>[JobLogistics]</color> {_worker.CharacterName} : action {_currentAction.ActionName} terminée.");
+                if (NPCDebug.VerboseJobs)
+                    Debug.Log($"<color=cyan>[JobLogistics]</color> {_worker.CharacterName} : action {_currentAction.ActionName} terminée.");
                 _currentAction.Exit(_worker);
                 _currentAction = null;
                 _currentPlan = null; // Forcer la replanification
@@ -152,43 +164,59 @@ public class JobLogisticsManager : Job
     {
         if (_workplace == null || _workplace.LogisticsManager == null) return;
 
-        var worldState = new Dictionary<string, bool>
-        {
-            { "hasPendingOrders", _workplace.LogisticsManager.HasPendingOrders },
-            { "isIdling", false }
-        };
+        // Reuse the scratch world-state dict (allocation-free after warm-up).
+        _scratchWorldState.Clear();
+        bool hasOrders = _workplace.LogisticsManager.HasPendingOrders;
+        _scratchWorldState["hasPendingOrders"] = hasOrders;
+        _scratchWorldState["isIdling"] = false;
 
-        _availableActions = new List<GoapAction>
-        {
-            new GoapAction_PlaceOrder(this),
-            new GoapAction_StageItemForPickup(this),
-            new GoapAction_GatherStorageItems(this),
-            new GoapAction_IdleInCommercialBuilding(_workplace as CommercialBuilding)
-        };
+        // GoapAction instances are stateful per-plan (`_isComplete`, `_isMoving`, etc.). Caching
+        // the SAME instance across multiple plans risks stale state leaking when the BT branches
+        // out of Work mid-action without propagating Exit() down to the Job's _currentAction —
+        // PlaceOrder.IsValid then returns false because `_isComplete=true` was carried over, the
+        // planner can't satisfy hasPendingOrders=false, and any subsequent BuyOrders in the queue
+        // (e.g. tshirt + jeans for a clothing shop where wood was already placed) stay stuck.
+        //
+        // Mirror the JobHarvester / JobTransporter pattern: reuse the List wrapper to save the
+        // single allocation, but Clear() and re-add fresh action instances each plan so state
+        // can never leak. The 4 ctors per plan are negligible vs. the GoapPlanner work.
+        if (_availableActions == null) _availableActions = new List<GoapAction>(4);
+        _availableActions.Clear();
+        _availableActions.Add(new GoapAction_PlaceOrder(this));
+        _availableActions.Add(new GoapAction_StageItemForPickup(this));
+        _availableActions.Add(new GoapAction_GatherStorageItems(this));
+        _availableActions.Add(new GoapAction_IdleInCommercialBuilding(_workplace as CommercialBuilding));
 
-        GoapGoal targetGoal;
-        if (_workplace.LogisticsManager.HasPendingOrders)
-        {
-            targetGoal = new GoapGoal("ProcessOrders", new Dictionary<string, bool> { { "hasPendingOrders", false } }, priority: 1);
-        }
-        else
-        {
-            targetGoal = new GoapGoal("Idle", new Dictionary<string, bool> { { "isIdling", true } }, priority: 1);
-        }
+        // Cache the two possible goals (stable targets with stable DesiredState dicts).
+        if (_cachedProcessOrdersGoal == null)
+            _cachedProcessOrdersGoal = new GoapGoal("ProcessOrders", new Dictionary<string, bool> { { "hasPendingOrders", false } }, priority: 1);
+        if (_cachedIdleGoal == null)
+            _cachedIdleGoal = new GoapGoal("Idle", new Dictionary<string, bool> { { "isIdling", true } }, priority: 1);
 
+        GoapGoal targetGoal = hasOrders ? _cachedProcessOrdersGoal : _cachedIdleGoal;
         _logisticsGoal = targetGoal;
-        
-        var validActions = _availableActions.Where(a => a.IsValid(_worker)).ToList();
-        
-        _currentPlan = GoapPlanner.Plan(worldState, validActions, targetGoal);
+
+        // Reuse the valid-actions scratch list (allocation-free after warm-up). Replaces the
+        // `_availableActions.Where(a => a.IsValid(_worker)).ToList()` enumerator+list allocation.
+        _scratchValidActions.Clear();
+        for (int i = 0; i < _availableActions.Count; i++)
+        {
+            var a = _availableActions[i];
+            if (a.IsValid(_worker)) _scratchValidActions.Add(a);
+        }
+
+        _currentPlan = GoapPlanner.Plan(_scratchWorldState, _scratchValidActions, targetGoal);
 
         if (_currentPlan != null && _currentPlan.Count > 0)
         {
             _currentAction = _currentPlan.Dequeue();
-            Debug.Log($"<color=green>[JobLogistics]</color> {_worker.CharacterName} : nouveau plan ! Première action → {_currentAction.ActionName}");
+            if (NPCDebug.VerboseJobs)
+                Debug.Log($"<color=green>[JobLogistics]</color> {_worker.CharacterName} : nouveau plan ! Première action → {_currentAction.ActionName}");
         }
-        else
+        else if (NPCDebug.VerboseJobs)
         {
+            // Without the gate this fires every Execute tick (10Hz) whenever a worker has no viable plan —
+            // the main driver of progressive Unity-console filling under heavy worker load.
             Debug.Log($"<color=orange>[JobLogistics]</color> {_worker.CharacterName} : impossible de planifier.");
         }
     }

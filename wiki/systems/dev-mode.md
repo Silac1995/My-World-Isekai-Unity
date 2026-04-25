@@ -3,7 +3,7 @@ type: system
 title: "Dev Mode"
 tags: [debug, host-only, dev-tools, tier-2]
 created: 2026-04-21
-updated: 2026-04-23
+updated: 2026-04-25
 sources: []
 related:
   - "[[engine-plumbing]]"
@@ -40,7 +40,7 @@ depended_on_by: []
 # Dev Mode
 
 ## Summary
-Host-only developer/god-mode overlay that layers a togglable admin panel and input-gate on top of the normal gameplay loop. Activated via `F3` in editor/dev builds or `/devmode on` in release builds; clients never see it take effect. Ships three modules — **Spawn** (click-to-spawn fully configured NPCs), **Select** (click-to-select a Character and run `IDevAction` plug-ins), and **Inspect** (read-only runtime inspection of the selected `InteractableObject`, with a 10-tab [[character]] inspector). Input gating keeps WASD movement live (at god-mode speed) while suppressing right-click move, TAB target, Space attack, and E interact. For the procedural how-to (adding modules, adding actions, adding inspector views and sub-tabs), follow [.agent/skills/debug-tools/SKILL.md](../../.agent/skills/debug-tools/SKILL.md) and [.agent/skills/dev-mode/SKILL.md](../../.agent/skills/dev-mode/SKILL.md).
+Host-only developer/god-mode overlay that layers a togglable admin panel and input-gate on top of the normal gameplay loop. Activated via `F3` in editor/dev builds or `/devmode on` in release builds; clients never see it take effect. Ships three modules — **Spawn** (click-to-spawn fully configured NPCs), **Select** (click-to-select a Character and run `IDevAction` plug-ins), and **Inspect** (read-only runtime inspection of the selected `InteractableObject`, with a 10-tab [[character]] inspector + a storage-furniture view that lists every slot of a chest/shelf/barrel/wardrobe). Input gating keeps WASD movement live (at god-mode speed) while suppressing right-click move, TAB target, Space attack, and E interact. For the procedural how-to (adding modules, adding actions, adding inspector views and sub-tabs), follow [.agent/skills/debug-tools/SKILL.md](../../.agent/skills/debug-tools/SKILL.md) and [.agent/skills/dev-mode/SKILL.md](../../.agent/skills/dev-mode/SKILL.md).
 
 ## Purpose
 Developers and hosts need to iterate on content and reproduce bugs without restarting sessions: spawn NPCs with hand-picked personalities, traits, combat styles, and skills; click to assign a Character as owner of a building; eventually grant items, teleport, pause sim, and edit live state. Before this system existed, the only options were scripted spawn buttons in [[engine-plumbing|debug-script]] (flat UI, no config), save-file editing, or full session restarts. Dev Mode consolidates these into a single host-authoritative tool with a plug-in contract so new modules can be added without touching the core.
@@ -67,13 +67,13 @@ Release safety is explicit: the whole system is locked behind `#if UNITY_EDITOR 
 
 | File | Role |
 |------|------|
-| [DevModeManager.cs](../../Assets/Scripts/Debug/DevMode/DevModeManager.cs) | Singleton. Owns `IsUnlocked`, `IsEnabled`, `SuppressPlayerInput` static, `GodModeMovementSpeed` const, click-consumer slot, `F3` input, `OnDevModeChanged` + `OnClickConsumerChanged` events. **Also owns the global shortcut layer** (`HandleGlobalShortcuts` — Ctrl+Click / Space+LMB / ESC) because tab content GameObjects are deactivated off-tab, so shortcut logic can't live on tab modules. Caches `DevSelectionModule` + `DevSpawnModule` refs (via `GetComponentInChildren(true)`) after `EnsurePanel`. |
+| [DevModeManager.cs](../../Assets/Scripts/Debug/DevMode/DevModeManager.cs) | Singleton. Owns `IsUnlocked`, `IsEnabled`, `SuppressPlayerInput` static, `GodModeMovementSpeed` const, click-consumer slot, `F3` input, `OnDevModeChanged` + `OnClickConsumerChanged` events. **Also owns the global shortcut layer** (`HandleGlobalShortcuts` — Ctrl+Click interior-select / Alt+Click building-select / Space+LMB spawn / ESC cancel) because tab content GameObjects are deactivated off-tab, so shortcut logic can't live on tab modules. Caches `DevSelectionModule` + `DevSpawnModule` refs (via `GetComponentInChildren(true)`) after `EnsurePanel`. |
 | [DevModePanel.cs](../../Assets/Scripts/Debug/DevMode/DevModePanel.cs) | Panel root. Tab registry (`TabEntry` struct + `SwitchTab(int)`) + `ContentRoot` hosting module children. |
 | [DevChatCommands.cs](../../Assets/Scripts/Debug/DevMode/DevChatCommands.cs) | Static `Handle(rawInput)` parsing `/devmode on\|off`. Host-only; clients get a warning. |
 | [DevSpawnModule.cs](../../Assets/Scripts/Debug/DevMode/Modules/DevSpawnModule.cs) | Spawn tab. Configures race/prefab/personality/trait/combat-styles/skills and click-spawns on the `Environment` layer. Public shortcut entry: `TrySpawnAtCursor()`. |
 | [DevInspectTabBuilder.cs](../../Assets/Editor/DevMode/DevInspectTabBuilder.cs) | Editor-only one-shot utility. `[MenuItem("Tools/DevMode/Build Inspect Tab")]` programmatically builds the Inspect tab hierarchy in the DevModePanel prefab and wires every serialized reference. Idempotent + destructive-rebuild variants. |
 | [DevSpawnRow.cs](../../Assets/Scripts/Debug/DevMode/Modules/DevSpawnRow.cs) | Reusable multi-entry row (dropdown + level + remove button) for combat styles and skills. |
-| [DevSelectionModule.cs](../../Assets/Scripts/Debug/DevMode/Modules/DevSelectionModule.cs) | Select tab. Generalized from Character-only to `InteractableObject`. Exposes `SelectedInteractable` + `OnInteractableSelectionChanged` (new) and `SelectedCharacter` + `OnSelectionChanged` (back-compat). Field `_characterLayerMask` renamed `_selectableLayerMask` with `[FormerlySerializedAs]`. Public shortcut entries: `TrySelectAtCursor(out label)`, `ClearSelection()`, `DisarmToggle()`, `IsArmed`. |
+| [DevSelectionModule.cs](../../Assets/Scripts/Debug/DevMode/Modules/DevSelectionModule.cs) | Select tab. Generalized from Character-only to `InteractableObject`. Exposes `SelectedInteractable` + `OnInteractableSelectionChanged` (new) and `SelectedCharacter` + `OnSelectionChanged` (back-compat). Two raycast masks: `_selectableLayerMask` (interior — Ctrl+Click, default `RigidBody + Furniture`; field `_characterLayerMask` renamed with `[FormerlySerializedAs]`) and `_buildingLayerMask` (Alt+Click, default `Building`). Public shortcut entries: `TrySelectAtCursor(out label)`, `TrySelectBuildingAtCursor(out label)`, `ClearSelection()`, `DisarmToggle()`, `IsArmed`. |
 | [IDevAction.cs](../../Assets/Scripts/Debug/DevMode/Modules/Actions/IDevAction.cs) | Plug-in interface for Select-tab actions (`Label`, `IsAvailable`, `Execute`). |
 | [DevActionAssignBuilding.cs](../../Assets/Scripts/Debug/DevMode/Modules/Actions/DevActionAssignBuilding.cs) | First action. Claims the click slot and dispatches polymorphically to `CommercialBuilding.SetOwner` or `ResidentialBuilding.SetOwner`. |
 | [IInspectorView.cs](../../Assets/Scripts/Debug/DevMode/Inspect/IInspectorView.cs) | Dispatch contract for Inspect tab: `CanInspect(InteractableObject)`, `SetTarget(InteractableObject)`, `Clear()`. |
@@ -91,6 +91,8 @@ Release safety is explicit: the whole system is locked behind `#if UNITY_EDITOR 
 | [EconomySubTab.cs](../../Assets/Scripts/Debug/DevMode/Inspect/SubTabs/EconomySubTab.cs) | CharacterWallet.GetAllBalances() + CharacterJob + CharacterWorkLog.GetAllHistory(). |
 | [KnowledgeSubTab.cs](../../Assets/Scripts/Debug/DevMode/Inspect/SubTabs/KnowledgeSubTab.cs) | CharacterBookKnowledge + CharacterSchedule (ToString() placeholders; follow-up). |
 | [InventorySubTab.cs](../../Assets/Scripts/Debug/DevMode/Inspect/SubTabs/InventorySubTab.cs) | CharacterEquipment (ToString() placeholder; follow-up). |
+| [StorageFurnitureInspectorView.cs](../../Assets/Scripts/Debug/DevMode/Inspect/StorageFurnitureInspectorView.cs) | `IInspectorView` for `FurnitureInteractable` whose `Furniture` is a `StorageFurniture`. Renders a header + per-frame slot listing (capacity / locked / full + `[index] <SlotType> — <item>` lines). Read-only, no inventory mutation. |
+| [DevStorageFurnitureInspectorBuilder.cs](../../Assets/Editor/DevMode/DevStorageFurnitureInspectorBuilder.cs) | Editor-only one-shot. `[MenuItem("Tools/DevMode/Build Storage Furniture Inspector")]` adds the storage view GO under `InspectContent/Views`, sibling to `CharacterInspectorView`, and wires `_headerLabel` + `_content`. Idempotent + destructive-rebuild variants. |
 | [UI_CharacterDebugScript.cs](../../Assets/Scripts/UI/WorldUI/UI_CharacterDebugScript.cs) | Legacy per-entity overlay. Formatting logic replaced with `CharacterAIDebugFormatter` calls (zero behaviour change). |
 | `Assets/Resources/UI/DevModePanel.prefab` | Panel prefab (tab buttons + `ContentRoot` + module children). |
 | `Assets/Resources/UI/DevSpawnRow.prefab` | Row prefab for combat-style / skill entries. |
@@ -110,6 +112,8 @@ Release safety is explicit: the whole system is locked behind `#if UNITY_EDITOR 
 - `SelectedInteractable : InteractableObject` — current interactable (any type).
 - `OnInteractableSelectionChanged : Action<InteractableObject>` — fires on any change. Subscribed by `DevInspectModule`.
 - `SetSelectedInteractable(InteractableObject)` — replaces selection.
+- `TrySelectAtCursor(out string label)` — interior raycast (`_selectableLayerMask`, default `RigidBody + Furniture`). Used by Ctrl+Click and the armed Select toggle.
+- `TrySelectBuildingAtCursor(out string label)` — building raycast (`_buildingLayerMask`, default `Building`). Used by Alt+Click. Bypasses building shells when the user explicitly wants the building.
 - `SelectedCharacter`, `OnSelectionChanged`, `SetSelectedCharacter` — back-compat paths preserved for existing `IDevAction` consumers.
 
 **Inspect tab — `IInspectorView` contract:**
@@ -190,10 +194,11 @@ DevModeManager.Update every frame while IsEnabled
   → HandleGlobalShortcuts()
   → IsTextInputFocused() returns true? → abort
   → ESC pressed? → clear _selectionModule.SelectedInteractable + disarm both toggles
-  → Ctrl held + !Space + LMB down? → _selectionModule.TrySelectAtCursor(out label)
-  → Space held + !Ctrl + LMB down? → _spawnModule.TrySpawnAtCursor()
-  → Ctrl+Space mutex: both held = neither fires (prevents fat-finger spawn)
-  → Armed click-loops on modules skip their path when Ctrl or Space is held (no double-fire)
+  → Ctrl held + !Alt + !Space + LMB down? → _selectionModule.TrySelectAtCursor(out label)         // interior: RigidBody + Furniture
+  → Alt held + !Ctrl + !Space + LMB down? → _selectionModule.TrySelectBuildingAtCursor(out label) // building: Building only
+  → Space held + !Ctrl + !Alt + LMB down? → _spawnModule.TrySpawnAtCursor()
+  → Ctrl/Alt/Space mutex: any two held = nothing fires (prevents fat-finger spawn + ambiguous picks)
+  → Armed click-loops on modules skip their path when Ctrl, Alt, or Space is held (no double-fire)
 ```
 
 **Authority:** every mutation is host-only (guarded by `IsServer` on the underlying APIs). Clients only observe results through existing networked channels — they never run dev-mode code paths.
@@ -205,7 +210,7 @@ DevModeManager.Update every frame while IsEnabled
 - [[engine-plumbing|camera-follow]] — reads `SuppressPlayerInput` to drop the zoom clamp and switch to `LerpUnclamped`.
 - [[commercial-building]] — `SetOwner(character, null)` for the "Assign Building" action.
 - [[building|ResidentialBuilding]] — `SetOwner(character)` for the same action (polymorphic dispatch from the action).
-- [[character]] — the entity being selected and mutated. Selection raycasts against the `RigidBody` layer and walks up to `GetComponentInParent<Character>()`. The Inspect tab reads all character subsystems (read-only).
+- [[character]] — the entity being selected and mutated. The interior selection raycast (`RigidBody + Furniture` by default) walks up via `GetComponentInParent<InteractableObject>()` and falls back to `GetComponentInParent<Character>()`. The Inspect tab reads all character subsystems (read-only).
 - [[character-combat]] — `UnlockCombatStyle(style, level)` overload used by Spawn module; `CombatSubTab` reads combat state for display.
 - [[character-skills]] — its `NetworkList<NetworkSkillSyncData>` handles per-level skill replication for dev-spawned NPCs; `SkillsTraitsSubTab` reads skills for display.
 - [[character-needs]] — `NeedsSubTab` reads `CharacterNeeds.AllNeeds` for display.
@@ -234,8 +239,11 @@ No gameplay system declares a hard dependency on dev mode — it is strictly add
 - **Combat style doesn't live-sync.** Only the server applies styles via `CharacterCombat.UnlockCombatStyle(style, level)`. Reconnecting clients rebuild state from save data. Skills, by contrast, already replicate via `CharacterSkills.NetworkList<NetworkSkillSyncData>` and propagate correctly.
 - **Personality bug (fixed).** Earlier in development the networked path dropped dev-picked personality because `PendingDevConfig` didn't include it. Fixed in commit `18ae654` by adding a `Personality` field to `PendingDevConfig` and promoting it at the top of `InitializeSpawnedCharacter`.
 - **`PendingDevConfig` keying.** Keyed on `character.GetInstanceID()`, NOT `NetworkObject.NetworkObjectId`. Rationale: `NetworkObjectId` is 0 until `Spawn(true)` is called, so a dict keyed on it would miss the drain in the spawn callback. Fixed in commit `2dbbc54`.
-- **Click target layer for character selection.** Select module raycasts against the `RigidBody` layer specifically (not `~0`). If the Character prefab ever stops using that layer for its body collider, selection silently fails. See `[SerializeField] LayerMask _characterLayerMask` in `DevSelectionModule`, which resolves `GetMask("RigidBody")` at `Start` if left at 0.
-- **Click target layer for building ownership.** `DevActionAssignBuilding` raycasts against `LayerMask.GetMask("Building")`. Same fragility — changing the Building layer breaks this action silently. Fail loud by logging a warning if the raycast misses.
+- **Click target layers for selection (dual mask).** `DevSelectionModule` raycasts against two named masks resolved at `Start` when the serialized fields are left at zero:
+  - `_selectableLayerMask` (Ctrl+Click — interior) defaults to `RigidBody + Furniture`. Building is intentionally absent so a building shell collider doesn't block selection of the chest or NPC inside.
+  - `_buildingLayerMask` (Alt+Click — building) defaults to `Building`.
+  Renaming or deleting any of those layers in **Tags & Layers** silently degrades selection (the resolver tolerates missing names — `BuildMask` skips them and only logs an error when **both** masks resolve to zero). Override either field on the `DevModePanel` prefab to narrow the mask if a project ever needs to exclude one of those layers.
+- **Click target layer for building ownership.** `DevActionAssignBuilding` raycasts against `LayerMask.GetMask("Building")` directly. Same fragility — changing the Building layer breaks this action silently. Fail loud by logging a warning if the raycast misses.
 - **No ScrollView in the panel.** Long combat-style / skill lists overflow vertically. Deferred polish.
 - **No exclude-self filter.** Clicking on the host's own character selects it. Intentional for now (you may want to assign yourself as building owner); add a toggle if it becomes annoying.
 - **Nested NetworkObject warning at client-join** (intermittent). Pre-existing issue unrelated to dev mode — some building prefabs (`Small house`, `Forge`) host two NetworkObjects. Dev Mode's `DevActionAssignBuilding` does not create the nesting; it just calls `SetOwner`. Tracked under [[building]] refactor work.
@@ -258,6 +266,8 @@ No gameplay system declares a hard dependency on dev mode — it is strictly add
 - 2026-04-21 — Initial page. Documents F3/chat activation, input gating, click arbitration, Spawn + Select modules, `IDevAction` contract, `DevActionAssignBuilding`, god-mode WASD speed + unbounded zoom. — Claude / [[kevin]]
 - 2026-04-23 — Added Inspect tab (IInspectorView + CharacterInspectorView + 10 sub-tabs); generalized DevSelectionModule to InteractableObject; extracted CharacterAIDebugFormatter; updated Key classes, Public API, Data flow, Dependencies, Open questions, Sources. — claude
 - 2026-04-23 — Inspect tab prefab wired via DevInspectTabBuilder Editor utility. Global shortcuts (Ctrl+Click, Space+LMB, ESC) relocated to DevModeManager so they work on any tab. Social / SkillsTraits / Economy / Knowledge sub-tab rendering polished: relationship details with HasMet flag, behavioural profile name + personality description + compatibility lists, per-CurrencyId and per-JobType enumeration + flat Workplaces list sorted by score, full Schedule rendering with active-now highlight. — claude
+- 2026-04-25 — Added `StorageFurnitureInspectorView` so storage furniture (chests, shelves, barrels, wardrobes — anything inheriting `StorageFurniture`) can be selected via Ctrl+Click and inspected in the Inspect tab (capacity / locked / full + per-slot listing). View is added to the prefab by the new `DevStorageFurnitureInspectorBuilder` Editor utility (`Tools/DevMode/Build Storage Furniture Inspector`). No changes to selection or `DevInspectModule` — the view is auto-discovered. — claude
+- 2026-04-25 — Split selection raycast into two masks. `DevSelectionModule._selectableLayerMask` (Ctrl+Click "interior") auto-defaults to `RigidBody + Furniture` — Building is intentionally excluded so a building's shell collider doesn't block selection of the chest, bed, or NPC inside it. New `_buildingLayerMask` field auto-defaults to `Building` and is consumed by the new **Alt + Left-Click** global shortcut (`TrySelectBuildingAtCursor`). Mutex extended: Ctrl / Alt / Space are mutually exclusive on the same click. Authored prefab masks still override the runtime defaults; the armed click loop now also short-circuits on Alt. — claude
 
 ## Sources
 - [DevModeManager.cs](../../Assets/Scripts/Debug/DevMode/DevModeManager.cs) — singleton, state, events.
@@ -273,6 +283,10 @@ No gameplay system declares a hard dependency on dev mode — it is strictly add
 - [CharacterAIDebugFormatter.cs](../../Assets/Scripts/Debug/DevMode/Inspect/CharacterAIDebugFormatter.cs) — shared AI debug string helpers.
 - [CharacterSubTab.cs](../../Assets/Scripts/Debug/DevMode/Inspect/SubTabs/CharacterSubTab.cs) — abstract sub-tab base.
 - `Assets/Scripts/Debug/DevMode/Inspect/SubTabs/` — IdentitySubTab, StatsSubTab, SkillsTraitsSubTab, NeedsSubTab, AISubTab, CombatSubTab, SocialSubTab, EconomySubTab, KnowledgeSubTab, InventorySubTab.
+- [StorageFurnitureInspectorView.cs](../../Assets/Scripts/Debug/DevMode/Inspect/StorageFurnitureInspectorView.cs) — `IInspectorView` for `StorageFurniture` (chests, shelves, barrels, wardrobes).
+- [DevStorageFurnitureInspectorBuilder.cs](../../Assets/Editor/DevMode/DevStorageFurnitureInspectorBuilder.cs) — Editor-only one-shot prefab builder for the storage view.
+- [StorageFurniture.cs](../../Assets/Scripts/World/Furniture/StorageFurniture.cs) — slot-based container; the inspected target.
+- [FurnitureInteractable.cs](../../Assets/Scripts/Interactable/FurnitureInteractable.cs) — `InteractableObject` wrapper that exposes the underlying `Furniture` (used by `CanInspect`).
 - [UI_CharacterDebugScript.cs](../../Assets/Scripts/UI/WorldUI/UI_CharacterDebugScript.cs) — legacy overlay; now delegates AI strings to `CharacterAIDebugFormatter`.
 - [SpawnManager.cs](../../Assets/Scripts/SpawnManager.cs) — extended spawn API consumed by Spawn module.
 - [PlayerController.cs](../../Assets/Scripts/Character/CharacterControllers/PlayerController.cs) — input gate (WASD kept live at god-mode speed; action inputs suppressed).

@@ -14,10 +14,19 @@ namespace MWI.AI
         {
             if (_goapController == null)
             {
-                _goapController = bb.Self.GetComponent<CharacterGoapController>();
+                // Prefer a child GameObject (project convention: subsystems on children, see CLAUDE.md Character Facade pattern).
+                // `GetComponentInChildren` also matches a controller on the root itself, so this is strictly more tolerant than `GetComponent`.
+                _goapController = bb.Self.GetComponentInChildren<CharacterGoapController>();
+
                 if (_goapController == null)
                 {
-                    // Fallback : Ajouter le component s'il manque
+                    // Legacy prefabs (Character_Default_Humanoid, Character_Default_Quadruped, Character_Animal) don't have
+                    // a dedicated GOAPController child. We silently add the component on the root — `CharacterSystem.OnEnable`
+                    // auto-registers it with the character's capability registry, so `Character.CharacterGoap` resolves after this.
+                    //
+                    // IMPORTANT: never `Debug.LogError` in this branch. It fires every BT tick (0.1s) for every such NPC,
+                    // and the Unity console accumulation on Windows progressively stalls the editor — that's the exact
+                    // "host-only progressive freeze" pattern this module is meant to prevent.
                     _goapController = bb.Self.gameObject.AddComponent<CharacterGoapController>();
                 }
             }

@@ -83,6 +83,17 @@ Each layer is managed by `EquipmentLayer.cs` with per-type sockets (head, chest,
 - Key methods: `HasFreeSpaceForItem()`, `AddItem()`, `RemoveItem()`, `DropItem()`, `DropRandomItem()`
 - Bag provides extra inventory via `BagInstance._inventory`
 
+**`ItemSlot` subclasses** (all under `Assets/Scripts/Inventory/`):
+
+| Slot | Accepts |
+|------|---------|
+| `WeaponSlot` | `WeaponInstance` only |
+| `MiscSlot` | Anything except `WeaponInstance` (wearables fit too — `Inventory.HasFreeSpaceForWearable` looks for empty `MiscSlot`s) |
+| `WearableSlot` | `WearableInstance` only — added for storage furniture variants (wardrobes, racks) |
+| `AnySlot` | Any non-null `ItemInstance` — added for "global" storage variants |
+
+`Inventory.cs` (player bag) only ever uses `MiscSlot` + `WeaponSlot`. `WearableSlot` and `AnySlot` are authored on `StorageFurniture` prefabs (chests, shelves, wardrobes) — see [[storage-furniture]] in the wiki and the `building-furniture-specialist` agent. `StorageFurniture.AddItem` runs strict-first slot priority: wearables try `WearableSlot → MiscSlot → AnySlot`; weapons try `WeaponSlot → AnySlot`; everything else `MiscSlot → AnySlot`. Dedicated typed slots fill before the generic catch-all.
+
 ### 6. Hands System
 
 When inventory is full, items go to character's hands:
@@ -129,8 +140,10 @@ Methods: `UpdateNetworkSlot()`, `OnEquipmentListChanged()`, `ApplyEquipmentData(
 |--------|---------|---------|
 | `CharacterPickUpItem` | Pick up WorldItem | `RequestDespawnServerRpc()` |
 | `CharacterDropItem` | Drop from inventory/hands | `RequestItemDropServerRpc()` |
+| `CharacterStoreInFurnitureAction` | Worker → `StorageFurniture` slot. **No `WorldItem` spawned** — slot data is logical-only. | Server-authoritative (slot mutation runs on server only) |
+| `CharacterTakeFromFurnitureAction` | `StorageFurniture` slot → worker hands. | Server-authoritative |
 
-Flow: Owner triggers animation → `OnApplyEffect()` → server validates → spawn/despawn WorldItem
+Flow: Owner triggers animation → `OnApplyEffect()` → server validates → spawn/despawn WorldItem (or slot mutation for the furniture variants)
 
 ## Key Scripts
 

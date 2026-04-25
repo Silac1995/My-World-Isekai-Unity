@@ -112,24 +112,32 @@ public class ShopBuilding : CommercialBuilding, IStockProvider
 
     /// <summary>
     /// Ajoute physiquement un objet à l'inventaire du magasin (ex: par un Transporter).
+    /// Override (not shadow) the base virtual so the base's network-count mirror stays in sync —
+    /// otherwise items added through a <see cref="ShopBuilding"/>-typed reference would never
+    /// appear in <see cref="CommercialBuilding.GetInventoryCountsByItemSO"/> on clients, breaking
+    /// shop UI / <see cref="InteractionBuyItem"/>'s stock check on remote players.
     /// </summary>
-    public void AddToInventory(ItemInstance item)
+    public override void AddToInventory(ItemInstance item)
     {
-        if (item != null)
-        {
-            _inventory.Add(item);
-        }
+        // Defer to the base implementation: it appends to _inventory AND mirrors into the
+        // replicated _inventoryItemIds NetworkList in one place.
+        base.AddToInventory(item);
     }
 
     /// <summary>
-    /// Retire et retourne un objet de l'inventaire lors d'une vente.
+    /// Retire et retourne un objet de l'inventaire lors d'une vente. Routes through
+    /// <see cref="CommercialBuilding.RemoveExactItemFromInventory"/> to keep the network-count
+    /// mirror in sync — same reason as <see cref="AddToInventory"/>.
     /// </summary>
     public ItemInstance SellItem(ItemSO requestedItem)
     {
         var itemInstance = _inventory.Find(i => i.ItemSO == requestedItem);
         if (itemInstance != null)
         {
-            _inventory.Remove(itemInstance);
+            // Use the base helper (which calls MirrorInventoryRemove server-side) instead of
+            // _inventory.Remove(...) directly. Same observable behaviour on the host, plus the
+            // replicated count drops by one on every peer.
+            RemoveExactItemFromInventory(itemInstance);
             return itemInstance;
         }
         return null;
@@ -137,18 +145,21 @@ public class ShopBuilding : CommercialBuilding, IStockProvider
 
     /// <summary>
     /// Vérifie si l'inventaire contient au moins un exemplaire de l'objet demandé.
+    /// Routes through <see cref="CommercialBuilding.GetItemCount"/> so it returns the correct
+    /// answer on both server and client (the underlying NetworkList is replicated).
     /// </summary>
     public bool HasItemInStock(ItemSO item)
     {
-        return _inventory.Exists(i => i.ItemSO == item);
+        return GetItemCount(item) > 0;
     }
 
     /// <summary>
-    /// Retourne le nombre d'exemplaires de cet item dans l'inventaire.
+    /// Retourne le nombre d'exemplaires de cet item dans l'inventaire. Same client-safe path
+    /// as <see cref="HasItemInStock"/>.
     /// </summary>
     public int GetStockCount(ItemSO item)
     {
-        return _inventory.Count(i => i.ItemSO == item);
+        return GetItemCount(item);
     }
 
     /// <summary>

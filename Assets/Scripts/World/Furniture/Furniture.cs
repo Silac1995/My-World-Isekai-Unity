@@ -86,11 +86,106 @@ public class Furniture : MonoBehaviour
 
     /// <summary>
     /// Position où le personnage doit se placer pour utiliser le meuble.
-    /// Si pas d'InteractionPoint défini, utilise la position du meuble.
+    ///
+    /// Resolution order:
+    /// <list type="number">
+    ///   <item>Authored <see cref="_interactionPoint"/> Transform — preferred and always wins.</item>
+    ///   <item>The attached <see cref="FurnitureInteractable"/>'s <c>InteractionZone</c> bounds centre,
+    ///         when present. Better than nothing because the InteractionZone is usually authored
+    ///         to extend slightly beyond the furniture footprint, but for a zone shaped like the
+    ///         furniture itself the centre is still inside the NavMeshObstacle carve. Prefer the
+    ///         <see cref="GetInteractionPosition(Vector3)"/> overload — it returns the closest point
+    ///         on the zone bounds to <c>fromPosition</c>, which lands on the navmesh-walkable face.</item>
+    ///   <item>The furniture's own <c>transform.position</c> — last-resort, almost always inside the
+    ///         carve. The 5-second softlock guard in <c>GoapAction_GatherStorageItems</c> exists
+    ///         specifically for this case.</item>
+    /// </list>
     /// </summary>
     public Vector3 GetInteractionPosition()
     {
-        return _interactionPoint != null ? _interactionPoint.position : transform.position;
+        if (_interactionPoint != null) return _interactionPoint.position;
+
+        var interactable = GetComponent<FurnitureInteractable>();
+        if (interactable != null && interactable.InteractionZone != null)
+        {
+            return interactable.InteractionZone.bounds.center;
+        }
+
+        return transform.position;
+    }
+
+    /// <summary>
+    /// Position-aware overload. When no <see cref="_interactionPoint"/> is authored but an
+    /// <see cref="FurnitureInteractable"/> is present, returns the closest point on the
+    /// interactable's <c>InteractionZone</c> bounds to <paramref name="fromPosition"/> —
+    /// typically the worker's current location. This lands the target on the navmesh-walkable
+    /// face of the zone instead of inside the obstacle carve.
+    ///
+    /// Use this overload from any AI / GOAP action that has the worker's transform available.
+    /// </summary>
+    public Vector3 GetInteractionPosition(Vector3 fromPosition)
+    {
+        if (_interactionPoint != null) return _interactionPoint.position;
+
+        var interactable = GetComponent<FurnitureInteractable>();
+        if (interactable != null && interactable.InteractionZone != null)
+        {
+            return interactable.InteractionZone.bounds.ClosestPoint(fromPosition);
+        }
+
+        return transform.position;
+    }
+
+    /// <summary>
+    /// Authoring helper. Creates an `InteractionPoint` child placed in front of the
+    /// furniture (along its local +Z axis) at a distance just outside the renderer
+    /// bounds — so the spawned point is on walkable NavMesh, NOT inside the
+    /// `NavMeshObstacle` carve from the base Furniture prefab. Workers walking to
+    /// `GetInteractionPosition()` can then actually reach it.
+    ///
+    /// Without an interaction point, `GetInteractionPosition()` falls back to the
+    /// furniture's `transform.position` (its centre), which is inside the carve —
+    /// the worker will pathfind, never arrive within 1.5f, and the gather GOAP action
+    /// will time out and fall back to the loose StorageZone drop.
+    /// </summary>
+    [ContextMenu("Auto Create Interaction Point")]
+    private void AutoCreateInteractionPoint()
+    {
+        if (_interactionPoint != null)
+        {
+            Debug.LogWarning($"<color=orange>[Furniture]</color> {name} already has an _interactionPoint ({_interactionPoint.name}). Delete it first if you want to regenerate.");
+            return;
+        }
+
+        Renderer[] renderers = GetComponentsInChildren<Renderer>(true);
+        float depth = 1f;
+        if (renderers.Length > 0)
+        {
+            Bounds bounds = renderers[0].bounds;
+            for (int i = 1; i < renderers.Length; i++)
+            {
+                if (!(renderers[i] is ParticleSystemRenderer))
+                    bounds.Encapsulate(renderers[i].bounds);
+            }
+            // Half the front-back footprint plus a 1u standoff so the worker stands
+            // ~1u clear of the NavMeshObstacle carve.
+            depth = (bounds.size.z * 0.5f) + 1f;
+        }
+
+        var go = new GameObject("InteractionPoint");
+        go.transform.SetParent(transform, worldPositionStays: false);
+        // Local +Z is "forward". Y stays at 0 so the point sits on the floor.
+        go.transform.localPosition = new Vector3(0f, 0f, depth);
+        go.transform.localRotation = Quaternion.identity;
+
+        _interactionPoint = go.transform;
+
+#if UNITY_EDITOR
+        UnityEditor.EditorUtility.SetDirty(this);
+        UnityEditor.EditorUtility.SetDirty(go);
+#endif
+
+        Debug.Log($"<color=cyan>[Furniture]</color> {name}: created InteractionPoint at local (0, 0, {depth:F2}). Verify it stands on walkable NavMesh in the Scene view.");
     }
 
     [ContextMenu("Auto Calculate Grid Size")]
@@ -126,6 +221,26 @@ public class Furniture : MonoBehaviour
         _sizeInCells = new Vector2Int(widthCells, depthCells);
         _sizeCalculated = true;
         // Debug.Log($"<color=cyan>[Furniture]</color> {_furnitureName} fait {_sizeInCells.x} x {_sizeInCells.y} cellules.");
+
+        // Piggyback the interaction-point setup so authors don't have to remember it.
+        // No-op when one is already assigned.
+        if (_interactionPoint == null)
+        {
+            AutoCreateInteractionPoint();
+        }
+    }
+
+    /// <summary>
+    /// Editor-only: fires when the component is first added or right-clicked → Reset.
+    /// Auto-creates an InteractionPoint child so newly-authored furniture is immediately
+    /// usable by AI without a separate manual step.
+    /// </summary>
+    private void Reset()
+    {
+        if (_interactionPoint == null)
+        {
+            AutoCreateInteractionPoint();
+        }
     }
 
 #if UNITY_EDITOR

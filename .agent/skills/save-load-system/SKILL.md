@@ -56,6 +56,14 @@ Portable character profiles that travel across worlds. Characters are independen
 - `MapController.SpawnSavedBuildings()` respawns player-placed buildings on predefined maps during load
 - Both called by SaveManager/GameLauncher during save/load cycles
 
+## Active Map WorldItem Snapshots
+- Dropped `WorldItem`s ride on the same `MapSnapshot_{mapId}` payload as NPCs — no separate ISaveable
+- `MapSaveData.WorldItems` is a `List<WorldItemSaveData>` (ItemId + JsonData + Position + Rotation)
+- `MapController.SnapshotActiveNPCs()` also calls `SnapshotActiveWorldItems()` to populate the list (skips items with `IsBeingCarried`)
+- `MapController.SpawnNPCsFromSnapshot()` also calls `SpawnWorldItemsFromSnapshot()` — looks up `ItemSO` by ID in `Resources/Data/Item`, rehydrates `ItemInstance` from JSON, calls `WorldItem.SpawnWorldItem(instance, pos, rot)`
+- `MapController.Hibernate()` serializes + despawns items the same way it does NPCs; `WakeUp()` triggers respawn whenever the map has saved items OR NPCs
+- `WorldItem.SpawnWorldItem(...)` parents the spawned GO under the containing map via `MapController.GetAnyMapAtPosition(pos)` (interior- and exterior-aware) — keeps the scene hierarchy clean and lets future map-scoped iteration work
+
 ## GameLauncher
 - Singleton coroutine orchestrator for the full game load sequence
 - Sets `GameSessionManager` static flags (GameSessionManager does NOT use DontDestroyOnLoad — recreated per scene)

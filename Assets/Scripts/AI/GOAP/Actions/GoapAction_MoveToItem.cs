@@ -28,6 +28,12 @@ namespace MWI.AI
 
         public override bool IsValid(Character worker)
         {
+            // Furniture-first mutual exclusion: when LocateItem committed to the slot
+            // pickup path, GoapAction_TakeFromSourceFurniture handles arrival + extraction
+            // in a single action and this leg becomes redundant. Returning false here lets
+            // the planner skip MoveToItem in favour of the cheaper furniture path.
+            if (_job != null && _job.TargetSourceFurniture != null) return false;
+
             return _job != null && _job.CurrentOrder != null && _job.TargetWorldItem != null;
         }
 

@@ -22,6 +22,15 @@ public class JobTransporter : Job
     // La référence physique de l'item ciblé au sol
     public WorldItem TargetWorldItem { get; set; }
 
+    // Furniture-source pickup path. When non-null, the transporter is targeting an item
+    // sitting in a StorageFurniture slot rather than a loose WorldItem. Mutually exclusive
+    // with TargetWorldItem — GoapAction_LocateItem clears the loose target whenever it
+    // commits to a slot pickup, and the planner is gated so PickupItem/MoveToItem refuse
+    // to run while these are set (see their IsValid early-out). Cleared anywhere
+    // TargetWorldItem is cleared.
+    public StorageFurniture TargetSourceFurniture { get; set; }
+    public ItemInstance TargetItemFromFurniture { get; set; }
+
     public bool ForceDeliverPartialBatch { get; set; } = false;
     public float WaitCooldown { get; set; } = 0f;
 
@@ -29,6 +38,13 @@ public class JobTransporter : Job
     private GoapGoal _transporterGoal;
     private Queue<GoapAction> _currentPlan;
     private GoapAction _currentAction;
+
+    // Per-tick allocation pool (see PlanNextActions). Worldstate + goals are stable across ticks,
+    // the action list is reused (instances are still recreated — they're stateful per-plan).
+    private readonly Dictionary<string, bool> _scratchWorldState = new Dictionary<string, bool>(7);
+    private List<GoapAction> _availableActions;
+    private GoapGoal _cachedDeliverItemsGoal;
+    private GoapGoal _cachedIdleGoal;
 
     public JobTransporter(string title = "Transporter")
     {
@@ -43,7 +59,9 @@ public class JobTransporter : Job
             Debug.Log($"<color=green>[JobTransporter]</color> {_worker?.CharacterName} commence la demande: Livrer {order.ItemToTransport.ItemName} à {order.Destination.BuildingName}.");
             CarriedItems.Clear();
             TargetWorldItem = null;
-            
+            TargetSourceFurniture = null;
+            TargetItemFromFurniture = null;
+
             // Forcer la replanification GOAP
             if (_currentAction != null)
             {
@@ -102,7 +120,8 @@ public class JobTransporter : Job
         {
             if (!_currentAction.IsValid(_worker))
             {
-                Debug.Log($"<color=orange>[JobTransporter]</color> {_worker.CharacterName} : action {_currentAction.ActionName} invalide, replanification... (TargetWorldItem = {(TargetWorldItem != null ? TargetWorldItem.name : "NULL")})");
+                if (NPCDebug.VerboseJobs)
+                    Debug.Log($"<color=orange>[JobTransporter]</color> {_worker.CharacterName} : action {_currentAction.ActionName} invalide, replanification... (TargetWorldItem = {(TargetWorldItem != null ? TargetWorldItem.name : "NULL")})");
                 _currentAction.Exit(_worker);
                 _currentAction = null;
                 _currentPlan = null;
@@ -114,7 +133,8 @@ public class JobTransporter : Job
             // _currentAction may have been set to null by CancelCurrentOrder() internally inside Execute!
             if (_currentAction != null && _currentAction.IsComplete)
             {
-                Debug.Log($"<color=cyan>[JobTransporter]</color> {_worker.CharacterName} : action {_currentAction.ActionName} terminée.");
+                if (NPCDebug.VerboseJobs)
+                    Debug.Log($"<color=cyan>[JobTransporter]</color> {_worker.CharacterName} : action {_currentAction.ActionName} terminée.");
                 _currentAction.Exit(_worker);
                 _currentAction = null;
                 // Si on a d'autres actions dans le plan, on prend la suivante,
@@ -122,7 +142,8 @@ public class JobTransporter : Job
                 if (_currentPlan != null && _currentPlan.Count > 0)
                 {
                     _currentAction = _currentPlan.Dequeue();
-                    Debug.Log($"<color=green>[JobTransporter]</color> {_worker.CharacterName} : passe à l'action suivante → {_currentAction.ActionName} (TargetWorldItem = {(TargetWorldItem != null ? TargetWorldItem.name : "NULL")})");
+                    if (NPCDebug.VerboseJobs)
+                        Debug.Log($"<color=green>[JobTransporter]</color> {_worker.CharacterName} : passe à l'action suivante → {_currentAction.ActionName} (TargetWorldItem = {(TargetWorldItem != null ? TargetWorldItem.name : "NULL")})");
                 }
                 else
                 {
@@ -138,7 +159,7 @@ public class JobTransporter : Job
     private void PlanNextActions()
     {
         bool itemLocated = TargetWorldItem != null;
-        if (!itemLocated && _currentPlan != null) Debug.Log($"[JobTransporter] PlanNextActions triggered while TargetWorldItem is NULL.");
+        if (NPCDebug.VerboseJobs && !itemLocated && _currentPlan != null) Debug.Log($"[JobTransporter] PlanNextActions triggered while TargetWorldItem is NULL.");
         bool atItem = false;
         
         bool atSourceStorage = false;
@@ -196,6 +217,8 @@ public class JobTransporter : Job
                     itemCarried = true;
                     // Important: clear TargetWorldItem so we don't hold a phantom reference while delivering
                     TargetWorldItem = null;
+                    TargetSourceFurniture = null;
+                    TargetItemFromFurniture = null;
                     itemLocated = false;
                 }
             }
@@ -237,48 +260,56 @@ public class JobTransporter : Job
             }
         }
 
-        var worldState = new Dictionary<string, bool>
-        {
-            { "atSourceStorage", atSourceStorage },
-            { "itemLocated", itemLocated },
-            { "atItem", atItem },
-            { "itemCarried", itemCarried },
-            { "atDestination", atDestination },
-            { "itemDelivered", itemDelivered },
-            { "isIdling", false }
-        };
+        // Reuse the scratch world-state dict (allocation-free after warm-up).
+        _scratchWorldState.Clear();
+        _scratchWorldState["atSourceStorage"] = atSourceStorage;
+        _scratchWorldState["itemLocated"] = itemLocated;
+        _scratchWorldState["atItem"] = atItem;
+        _scratchWorldState["itemCarried"] = itemCarried;
+        _scratchWorldState["atDestination"] = atDestination;
+        _scratchWorldState["itemDelivered"] = itemDelivered;
+        _scratchWorldState["isIdling"] = false;
 
-        var availableActions = new List<GoapAction>
-        {
-            new GoapAction_GoToSourceStorage(this),
-            new GoapAction_LocateItem(this),
-            new GoapAction_MoveToItem(this),
-            new GoapAction_PickupItem(this),
-            new GoapAction_MoveToDestination(this),
-            new GoapAction_DeliverItem(this),
-            new GoapAction_IdleInCommercialBuilding(_workplace as CommercialBuilding)
-        };
+        // Action instances are stateful (per-plan state like _currentAction phase) so we recreate
+        // them each plan — but we reuse the List wrapper to avoid one allocation per tick.
+        if (_availableActions == null) _availableActions = new List<GoapAction>(8);
+        _availableActions.Clear();
+        _availableActions.Add(new GoapAction_GoToSourceStorage(this));
+        _availableActions.Add(new GoapAction_LocateItem(this));
+        _availableActions.Add(new GoapAction_MoveToItem(this));
+        _availableActions.Add(new GoapAction_PickupItem(this));
+        // Furniture-source pickup. Only registered when LocateItem has already committed
+        // to the furniture path (TargetSourceFurniture set). The planner does not call
+        // IsValid during search, so registering this unconditionally would let it pick
+        // the cheapest TakeFromSourceFurniture plan even when the loose-WorldItem path
+        // is active — runtime IsValid would then fail every tick and the resulting
+        // replan would re-pick the same invalid action (busy loop). Gating on
+        // TargetSourceFurniture keeps the planner's cost-driven preference intact while
+        // making the path mutually exclusive with MoveToItem/PickupItem.
+        if (TargetSourceFurniture != null)
+            _availableActions.Add(new GoapAction_TakeFromSourceFurniture(this));
+        _availableActions.Add(new GoapAction_MoveToDestination(this));
+        _availableActions.Add(new GoapAction_DeliverItem(this));
+        _availableActions.Add(new GoapAction_IdleInCommercialBuilding(_workplace as CommercialBuilding));
 
-        GoapGoal targetGoal;
-        if (CurrentOrder != null)
-        {
-            targetGoal = new GoapGoal("DeliverItems", new Dictionary<string, bool> { { "itemDelivered", true } }, priority: 1);
-        }
-        else
-        {
-            targetGoal = new GoapGoal("Idle", new Dictionary<string, bool> { { "isIdling", true } }, priority: 1);
-        }
+        // Cache the two goals (stable DesiredState dicts).
+        if (_cachedDeliverItemsGoal == null)
+            _cachedDeliverItemsGoal = new GoapGoal("DeliverItems", new Dictionary<string, bool> { { "itemDelivered", true } }, priority: 1);
+        if (_cachedIdleGoal == null)
+            _cachedIdleGoal = new GoapGoal("Idle", new Dictionary<string, bool> { { "isIdling", true } }, priority: 1);
 
+        GoapGoal targetGoal = CurrentOrder != null ? _cachedDeliverItemsGoal : _cachedIdleGoal;
         _transporterGoal = targetGoal;
-        
-        _currentPlan = GoapPlanner.Plan(worldState, availableActions, targetGoal);
+
+        _currentPlan = GoapPlanner.Plan(_scratchWorldState, _availableActions, targetGoal);
 
         if (_currentPlan != null && _currentPlan.Count > 0)
         {
             _currentAction = _currentPlan.Dequeue();
-            Debug.Log($"<color=green>[JobTransporter]</color> {_worker.CharacterName} : nouveau plan GOAP ! Première action → {_currentAction.ActionName}");
+            if (NPCDebug.VerboseJobs)
+                Debug.Log($"<color=green>[JobTransporter]</color> {_worker.CharacterName} : nouveau plan GOAP ! Première action → {_currentAction.ActionName}");
         }
-        else
+        else if (NPCDebug.VerboseJobs)
         {
             Debug.Log($"<color=orange>[JobTransporter]</color> {_worker.CharacterName} : impossible de planifier pour l'objectif {targetGoal.GoalName}.");
         }
@@ -311,6 +342,8 @@ public class JobTransporter : Job
         
         CarriedItems.Clear();
         TargetWorldItem = null;
+        TargetSourceFurniture = null;
+        TargetItemFromFurniture = null;
         CurrentOrder = null;
 
         base.Unassign();
@@ -367,13 +400,15 @@ public class JobTransporter : Job
                 
                 CurrentOrder = null;
                 TargetWorldItem = null;
+                TargetSourceFurniture = null;
+                TargetItemFromFurniture = null;
                 if (_currentAction != null)
                 {
                     _currentAction.Exit(_worker);
                     _currentAction = null;
                 }
                 _currentPlan = null;
-                CarriedItems.Clear(); 
+                CarriedItems.Clear();
             }
         }
     }
@@ -399,7 +434,9 @@ public class JobTransporter : Job
         CurrentOrder = null;
         CarriedItems.Clear();
         TargetWorldItem = null;
-        
+        TargetSourceFurniture = null;
+        TargetItemFromFurniture = null;
+
         if (_currentAction != null)
         {
             _currentAction.Exit(_worker);

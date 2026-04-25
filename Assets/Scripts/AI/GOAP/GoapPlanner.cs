@@ -23,6 +23,48 @@ public static class GoapPlanner
     // and eliminates the per-recursion `Where().ToList()` allocation.
     private static readonly HashSet<GoapAction> _usedActions = new HashSet<GoapAction>();
 
+    // Scratch world-state dictionary, mutated in place during the backward search and restored
+    // on backtrack. Replaces the per-node `new Dictionary<string, bool>(parent.State)` copy that
+    // used to happen inside `GoapAction.ApplyEffects` — with 22 actions × depth 10, that pattern
+    // allocated thousands of dictionaries per Plan() call, driving most of the GC pressure.
+    private static readonly Dictionary<string, bool> _scratchState = new Dictionary<string, bool>();
+
+    // Per-recursion-level restore journal: one list of (key, hadValue, oldValue) triples, pooled
+    // so we don't allocate a new list for every action tried at every depth.
+    private readonly struct StateRestoreEntry
+    {
+        public readonly string Key;
+        public readonly bool HadValue;
+        public readonly bool OldValue;
+
+        public StateRestoreEntry(string key, bool hadValue, bool oldValue)
+        {
+            Key = key;
+            HadValue = hadValue;
+            OldValue = oldValue;
+        }
+    }
+
+    private static readonly Stack<List<StateRestoreEntry>> _restorePool = new Stack<List<StateRestoreEntry>>();
+
+    private static List<StateRestoreEntry> RentRestoreList()
+    {
+        if (_restorePool.Count > 0)
+        {
+            var list = _restorePool.Pop();
+            list.Clear();
+            return list;
+        }
+        return new List<StateRestoreEntry>(4);
+    }
+
+    private static void ReleaseRestoreList(List<StateRestoreEntry> list)
+    {
+        if (list == null) return;
+        list.Clear();
+        _restorePool.Push(list);
+    }
+
     /// <summary>
     /// Planifie une séquence d'actions pour atteindre le goal depuis le world state actuel.
     /// Retourne null si aucun plan n'est possible.
@@ -41,7 +83,13 @@ public static class GoapPlanner
 
         // Construire l'arbre de plans possibles
         var leaves = new List<PlanNode>();
-        var startNode = new PlanNode(null, 0f, worldState, null);
+        var startNode = new PlanNode(null, 0f, null);
+
+        // Seed the scratch state from the caller-provided world state, then mutate in place through
+        // the recursion (restored on backtrack). Non-reentrant — see notes on _usedActions above.
+        _scratchState.Clear();
+        foreach (var kvp in worldState)
+            _scratchState[kvp.Key] = kvp.Value;
 
         _usedActions.Clear();
         bool found = BuildGraph(startNode, leaves, availableActions, goal, 0);
@@ -87,8 +135,9 @@ public static class GoapPlanner
     /// <summary>
     /// Construit récursivement le graphe de plans possibles (forward search).
     /// Uses a shared `_usedActions` set with backtracking to avoid allocating a filtered list
-    /// at every recursive call (previously `availableActions.Where(a => a != action).ToList()`
-    /// allocated up to O(actions^depth) lists during a single Plan).
+    /// at every recursive call (previously `availableActions.Where(a => a != action).ToList()`).
+    /// Uses a shared `_scratchState` dictionary with mutate+restore so we don't allocate a new
+    /// `Dictionary&lt;string, bool&gt;` copy at every node of the graph.
     /// </summary>
     private static bool BuildGraph(
         PlanNode parent,
@@ -108,17 +157,23 @@ public static class GoapPlanner
                 continue;
 
             // L'action doit avoir ses préconditions satisfaites par l'état courant
-            if (!action.ArePreconditionsMet(parent.State))
+            if (!action.ArePreconditionsMet(_scratchState))
                 continue;
 
-            // Appliquer les effets de l'action pour obtenir le nouvel état
-            var newState = action.ApplyEffects(parent.State);
-            float newCost = parent.RunningCost + action.Cost;
+            // Apply effects in place, journaling previous values for backtrack.
+            var restore = RentRestoreList();
+            foreach (var effect in action.Effects)
+            {
+                bool had = _scratchState.TryGetValue(effect.Key, out bool old);
+                restore.Add(new StateRestoreEntry(effect.Key, had, old));
+                _scratchState[effect.Key] = effect.Value;
+            }
 
-            var node = new PlanNode(parent, newCost, newState, action);
+            float newCost = parent.RunningCost + action.Cost;
+            var node = new PlanNode(parent, newCost, action);
 
             // Si le goal est atteint, c'est une feuille valide
-            if (goal.IsSatisfied(newState))
+            if (goal.IsSatisfied(_scratchState))
             {
                 leaves.Add(node);
                 foundPlan = true;
@@ -130,28 +185,40 @@ public static class GoapPlanner
                 {
                     foundPlan = true;
                 }
-                _usedActions.Remove(action); // backtrack
+                _usedActions.Remove(action); // backtrack action-used set
             }
+
+            // Undo effects (in reverse order of application) so the next sibling action at this
+            // depth sees the same parent state we started with.
+            for (int i = restore.Count - 1; i >= 0; i--)
+            {
+                var entry = restore[i];
+                if (entry.HadValue)
+                    _scratchState[entry.Key] = entry.OldValue;
+                else
+                    _scratchState.Remove(entry.Key);
+            }
+            ReleaseRestoreList(restore);
         }
 
         return foundPlan;
     }
 
     /// <summary>
-    /// Noeud interne pour construire l'arbre de plans.
+    /// Noeud interne pour construire l'arbre de plans. L'ancien champ <c>State</c> a été retiré —
+    /// la recherche utilise un seul <c>_scratchState</c> mutable et journalise les
+    /// changements pour le backtrack, donc aucun node n'a besoin de garder un snapshot.
     /// </summary>
     private class PlanNode
     {
         public PlanNode Parent;
         public float RunningCost;
-        public Dictionary<string, bool> State;
         public GoapAction Action;
 
-        public PlanNode(PlanNode parent, float runningCost, Dictionary<string, bool> state, GoapAction action)
+        public PlanNode(PlanNode parent, float runningCost, GoapAction action)
         {
             Parent = parent;
             RunningCost = runningCost;
-            State = state;
             Action = action;
         }
     }

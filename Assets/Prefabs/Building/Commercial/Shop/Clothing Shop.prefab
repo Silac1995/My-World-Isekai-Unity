@@ -629,11 +629,11 @@ PrefabInstance:
     - target: {fileID: -7333590944410843724, guid: cf8746b58cfecc543880c4a7798357d6, type: 3}
       propertyPath: _itemsToSell.Array.data[1].Item
       value: 
-      objectReference: {fileID: 11400000, guid: 079154c3c6187704eb45940ba6600ecf, type: 2}
+      objectReference: {fileID: 11400000, guid: a3f0471c4178efd4b9b5efdb38aea516, type: 2}
     - target: {fileID: -7333590944410843724, guid: cf8746b58cfecc543880c4a7798357d6, type: 3}
       propertyPath: _itemsToSell.Array.data[2].Item
       value: 
-      objectReference: {fileID: 11400000, guid: a3f0471c4178efd4b9b5efdb38aea516, type: 2}
+      objectReference: {fileID: 11400000, guid: 079154c3c6187704eb45940ba6600ecf, type: 2}
     - target: {fileID: -7333590944410843724, guid: cf8746b58cfecc543880c4a7798357d6, type: 3}
       propertyPath: _itemsToSell.Array.data[0].MaxStock
       value: 3

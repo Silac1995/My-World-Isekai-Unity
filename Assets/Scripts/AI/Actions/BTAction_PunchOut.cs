@@ -19,11 +19,13 @@ namespace MWI.AI
 
         private PunchOutPhase _currentPhase = PunchOutPhase.CleaningUpInventory;
         private bool _warnedNoTimeClock = false;
+        private bool _warnedNoInteractable = false;
 
         protected override void OnEnter(Blackboard bb)
         {
             _currentPhase = PunchOutPhase.CleaningUpInventory;
             _warnedNoTimeClock = false;
+            _warnedNoInteractable = false;
         }
 
         protected override BTNodeStatus OnExecute(Blackboard bb)
@@ -186,7 +188,13 @@ namespace MWI.AI
             var interactable = clock.GetComponent<TimeClockFurnitureInteractable>();
             if (interactable == null)
             {
-                Debug.LogError($"<color=red>[BTAction_PunchOut]</color> {workplace.BuildingName}'s TimeClockFurniture has no TimeClockFurnitureInteractable sibling. Falling back to zone-punch.");
+                if (!_warnedNoInteractable)
+                {
+                    // One-shot per BT-branch-entry (OnEnter resets the flag) to avoid per-tick spam
+                    // on misconfigured workplaces.
+                    Debug.LogError($"<color=red>[BTAction_PunchOut]</color> {workplace.BuildingName}'s TimeClockFurniture has no TimeClockFurnitureInteractable sibling. Falling back to zone-punch.");
+                    _warnedNoInteractable = true;
+                }
                 movement.Stop();
                 _currentPhase = PunchOutPhase.PunchingOut;
                 Action_PunchOut fallback = new Action_PunchOut(self, workplace);

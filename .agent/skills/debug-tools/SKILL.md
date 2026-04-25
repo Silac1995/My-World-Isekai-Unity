@@ -1,6 +1,6 @@
 ---
 name: debug-tools
-description: Covers the full debug/dev-tools infrastructure — DevModeManager (now hosts global shortcuts Ctrl+Click / Space+LMB / ESC), DevModePanel, DevSpawnModule (Spawn tab), DevSelectionModule (Select tab, IDevAction plug-ins, generalized to InteractableObject), the Inspect tab (DevInspectModule, IInspectorView, CharacterInspectorView, CharacterSubTab hierarchy), CharacterAIDebugFormatter, DevInspectTabBuilder one-shot Editor script for wiring the Inspect prefab, and legacy diagnostic scripts (UI_CharacterDebugScript, MapControllerDebugUI). Use when creating, extending, or debugging any dev tool, diagnostic panel, or in-editor/in-game inspection flow.
+description: Covers the full debug/dev-tools infrastructure — DevModeManager (hosts global shortcuts Ctrl+Click interior-select / Alt+Click building-select / Space+LMB spawn / ESC cancel), DevModePanel, DevSpawnModule (Spawn tab), DevSelectionModule (Select tab, IDevAction plug-ins, generalized to InteractableObject, dual-mask interior + building), the Inspect tab (DevInspectModule, IInspectorView, CharacterInspectorView, CharacterSubTab hierarchy, StorageFurnitureInspectorView), CharacterAIDebugFormatter, DevInspectTabBuilder + DevStorageFurnitureInspectorBuilder one-shot Editor scripts for wiring the Inspect prefab, and legacy diagnostic scripts (UI_CharacterDebugScript, MapControllerDebugUI). Use when creating, extending, or debugging any dev tool, diagnostic panel, or in-editor/in-game inspection flow.
 ---
 
 # Debug Tools System
@@ -87,6 +87,18 @@ Sub-tab content is displayed in a TMP_Text component inside a ScrollRect. Only t
 | 8 | `KnowledgeSubTab` | CharacterBookKnowledge (ToString placeholder) + fully-rendered Schedule: CurrentActivity, TimeManager CurrentHour, list of every ScheduleEntry as `HHh–HHh · Activity · priority N`, active-now entry highlighted green with `◆ active` tag |
 | 9 | `InventorySubTab` | CharacterEquipment (initial ToString() placeholder) |
 
+### 4b. Storage Furniture Inspector — `StorageFurnitureInspectorView`
+
+`StorageFurnitureInspectorView : MonoBehaviour, IInspectorView` (`Assets/Scripts/Debug/DevMode/Inspect/StorageFurnitureInspectorView.cs`).
+
+- `CanInspect(target)` returns `target is FurnitureInteractable fi && fi.Furniture is StorageFurniture`. Selection works for free — every storage prefab already exposes a `FurnitureInteractable`, which is an `InteractableObject` and is therefore picked up by `DevSelectionModule.TrySelectAtCursor`.
+- `SetTarget` caches the `StorageFurniture` and the underlying `Furniture` (header label).
+- `Update()` re-renders the slot listing every frame (cheap — only the active view runs while it is the inspector match).
+- Renders: capacity (filled / total), `IsLocked`, `IsFull`, then per-slot `[index] <SlotType> — <item display name>`. Slot type label maps `WeaponSlot/WearableSlot/MiscSlot/AnySlot` to `Weapon/Wearable/Misc/Any`. Item display name prefers `ItemInstance.CustomizedName`, falls back to `ItemSO.ItemName`.
+- Read-only by design — the view never mutates inventory, mirroring the rest of the Inspect tab.
+
+The view GameObject is added to the prefab by the **`DevStorageFurnitureInspectorBuilder`** Editor utility (menu `Tools/DevMode/Build Storage Furniture Inspector`, with destructive rebuild variant). It places the new GO under `DevModePanel/ContentRoot/InspectContent/Views`, sibling to `CharacterInspectorView`, and wires the `_headerLabel` + `_content` serialized fields. `DevInspectModule` auto-discovers it at `Awake` via `GetComponentsInChildren<IInspectorView>(true)` — no further wiring required.
+
 ### 5. `CharacterAIDebugFormatter` — Shared AI Debug Strings
 
 Static class with helpers:
@@ -103,27 +115,29 @@ Static class with helpers:
 
 **Rule:** `CharacterAIDebugFormatter` is the **single source of truth** for AI debug strings. Both `UI_CharacterDebugScript` (legacy per-entity overlay) and `AISubTab` (Inspect panel tab) delegate to it. Extending `FormatAll` automatically updates both consumers.
 
-### 6. Global Shortcuts (Ctrl+Click / Space+LMB / ESC)
+### 6. Global Shortcuts (Ctrl+Click / Alt+Click / Space+LMB / ESC)
 
 Global shortcuts live on **`DevModeManager`** — not on the individual tab modules — so they keep working regardless of which tab's content is currently active (tab content GameObjects are `SetActive(false)` when the user switches away, which would otherwise suspend their `Update` loop).
 
 | Input | Action | Gate |
 |-------|--------|------|
-| Ctrl + Left-Click | Select the `InteractableObject` under the cursor | DevMode enabled + pointer not over UI + no text input focused + Space not also held |
-| Space + Left-Click | Spawn at cursor using the panel's current Spawn config | DevMode enabled + pointer not over UI + no text input focused + Ctrl not also held |
+| Ctrl + Left-Click | **Interior select** — raycasts `RigidBody + Furniture` (default) and selects the first matching `InteractableObject` (Character fallback). Used for chests, beds, crafting stations, NPCs, players. | DevMode enabled + pointer not over UI + no text input focused + Alt/Space not also held |
+| Alt + Left-Click | **Building select** — raycasts `Building` (default) and selects the building's `InteractableObject`. Bypasses the interior pick when the user explicitly wants the building shell. | DevMode enabled + pointer not over UI + no text input focused + Ctrl/Space not also held |
+| Space + Left-Click | Spawn at cursor using the panel's current Spawn config | DevMode enabled + pointer not over UI + no text input focused + Ctrl/Alt not also held |
 | Escape | Clear any `SelectedInteractable` + disarm all armed toggles | DevMode enabled + no text input focused |
 
 **Wiring:** `DevModeManager.EnsurePanel` caches the panel's modules via `GetComponentInChildren<DevSelectionModule>(true)` / `GetComponentInChildren<DevSpawnModule>(true)` (`includeInactive: true` — critical, since non-current tabs are deactivated). `Update` runs `HandleGlobalShortcuts()` every frame while `IsEnabled`.
 
 **Dispatch entry points on the modules (all public):**
 
-- `DevSelectionModule.TrySelectAtCursor(out string label)` — raycasts + sets selection. Returns `false` if raycast missed.
+- `DevSelectionModule.TrySelectAtCursor(out string label)` — interior raycast (`_selectableLayerMask`, default `RigidBody + Furniture`) + sets selection. Returns `false` if raycast missed.
+- `DevSelectionModule.TrySelectBuildingAtCursor(out string label)` — building raycast (`_buildingLayerMask`, default `Building`) + sets selection. Returns `false` if raycast missed.
 - `DevSelectionModule.ClearSelection()` — clears selection + fires change events.
 - `DevSelectionModule.DisarmToggle()` / `IsArmed` — armed-toggle control.
 - `DevSpawnModule.TrySpawnAtCursor()` — raycasts the Environment layer + spawns via existing `SpawnAt` path.
 - `DevSpawnModule.DisarmToggle()` / `IsArmed`.
 
-**Mutex:** Ctrl and Space are handled as mutually exclusive on the same click. Ctrl+Space+LMB fires nothing — prevents accidental destructive spawn from a fat-finger. The per-module armed click-loops also short-circuit when either modifier is held so they never double-fire with the shortcut.
+**Mutex:** Ctrl, Alt, and Space are handled as mutually exclusive on the same click — any combination of them fires nothing. Prevents accidental destructive spawn from a fat-finger and avoids ambiguity between interior / building picks. The per-module armed click-loops also short-circuit when any of the three modifiers is held so they never double-fire with the shortcut.
 
 **Text-input guard:** `IsTextInputFocused()` returns true if `EventSystem.current.currentSelectedGameObject` has a `TMP_InputField` / `InputField` component. All shortcuts skip when true so typing `Space` in the Count field doesn't spawn.
 
@@ -147,6 +161,13 @@ The Select tab's `DevSelectionModule` was generalized to work with `Interactable
 
 The field `_characterLayerMask` was renamed `_selectableLayerMask` with `[FormerlySerializedAs("_characterLayerMask")]` to preserve serialized prefab data.
 
+**Default layer masks:** when the serialized fields are left at zero (the prefab default), `ResolveLayerMask` ORs:
+
+- `_selectableLayerMask` ← `RigidBody + Furniture` — the **interior** mask used by Ctrl+Click. **Building is intentionally excluded** so a building's shell collider doesn't block selection of the chest, bed, or NPC inside it.
+- `_buildingLayerMask` ← `Building` — used by Alt+Click to explicitly pick a building.
+
+Missing layer names are tolerated (skipped) so the project can drop a layer without breaking dev-mode selection. Override either field on the prefab to narrow the mask, or keep them at zero to use the runtime defaults.
+
 ---
 
 ## Adding a New `IInspectorView` (e.g., for WorldItem or Building)
@@ -159,6 +180,8 @@ The field `_characterLayerMask` was renamed `_selectableLayerMask` with `[Former
 6. No edit to `DevInspectModule` is required — it auto-discovers via `GetComponentsInChildren<IInspectorView>(true)`.
 
 **Priority:** `DevInspectModule` picks the first `CanInspect` match in component order. Order child GameObjects in the prefab to control priority.
+
+**Reference example:** `StorageFurnitureInspectorView` (script) + `DevStorageFurnitureInspectorBuilder` (one-shot editor builder under `Assets/Editor/DevMode/`). The builder mirrors `DevInspectTabBuilder`'s helpers (`CreateUIGameObject`, `CreateTMPLabel`, `CreateScrollRect`) and saves the prefab via `PrefabUtility.SaveAsPrefabAsset`. Prefer this pattern for any non-trivial inspector view so prefab wiring stays reproducible and source-controlled.
 
 ## Adding a New `CharacterSubTab`
 
@@ -189,16 +212,17 @@ These scripts predate Dev Mode and remain independent. They self-manage their ow
 
 ```
 Assets/Editor/DevMode/
-  DevInspectTabBuilder.cs         ← one-shot Editor utility that builds the Inspect prefab hierarchy
+  DevInspectTabBuilder.cs                  ← builds the Inspect tab hierarchy + 10 character sub-tabs
+  DevStorageFurnitureInspectorBuilder.cs   ← adds the StorageFurnitureInspectorView GO under Views
 
 Assets/Scripts/Debug/DevMode/
-  DevModeManager.cs               ← now owns global shortcuts (Ctrl+Click, Space+LMB, ESC)
+  DevModeManager.cs               ← now owns global shortcuts (Ctrl+Click / Alt+Click / Space+LMB / ESC)
   DevModePanel.cs
   DevChatCommands.cs
   Modules/
     DevSpawnModule.cs
     DevSpawnRow.cs
-    DevSelectionModule.cs           ← generalized to InteractableObject
+    DevSelectionModule.cs           ← generalized to InteractableObject; dual interior + building masks
     Actions/
       IDevAction.cs
       DevActionAssignBuilding.cs
@@ -206,6 +230,7 @@ Assets/Scripts/Debug/DevMode/
     IInspectorView.cs               ← dispatch contract
     DevInspectModule.cs             ← root dispatcher
     CharacterInspectorView.cs       ← character view (10 sub-tabs)
+    StorageFurnitureInspectorView.cs ← storage view (chest / shelf / barrel / wardrobe slot listing)
     CharacterAIDebugFormatter.cs    ← shared AI debug strings
     SubTabs/
       CharacterSubTab.cs            ← abstract base
@@ -237,7 +262,11 @@ Assets/Scripts/
 - **`CanInspect` ordering.** `DevInspectModule` picks the first match. If two views both return `true` for the same target, only the one earlier in child order is used. Make `CanInspect` checks specific enough to avoid overlap.
 - **`KnowledgeSubTab` — Schedule is fully rendered; BookKnowledge is still a placeholder.** Schedule now lists every `ScheduleEntry` with its hours range, activity, priority, and active-now flag. BookKnowledge still calls `ToString()` — refine once `CharacterBookKnowledge` exposes a richer public surface.
 - **`InventorySubTab` is a placeholder.** Calls `CharacterEquipment.ToString()`. Refine once equipment slot enumeration is public.
-- **Global shortcut ownership.** `Ctrl+Click`, `Space+LMB`, and `ESC` are handled exclusively by `DevModeManager.HandleGlobalShortcuts` — not by the per-tab modules. If you find yourself adding shortcut logic to a tab module, stop: put it on `DevModeManager` instead, or the shortcut will silently stop working whenever that tab isn't the active one.
-- **`Assets/Editor/DevMode/DevInspectTabBuilder.cs`** is a one-shot `[MenuItem("Tools/DevMode/Build Inspect Tab")]` Editor utility that programmatically builds the Inspect tab hierarchy inside the DevModePanel prefab, wires every `SerializedObject` field via reflection, and saves the prefab. It is idempotent (aborts if `InspectContent` exists) and has a destructive `Rebuild` variant with a confirmation dialog. If you add new sub-tabs, extending this builder is the cleanest way to keep the prefab regeneration reproducible.
+- **Global shortcut ownership.** `Ctrl+Click`, `Alt+Click`, `Space+LMB`, and `ESC` are handled exclusively by `DevModeManager.HandleGlobalShortcuts` — not by the per-tab modules. If you find yourself adding shortcut logic to a tab module, stop: put it on `DevModeManager` instead, or the shortcut will silently stop working whenever that tab isn't the active one.
+- **One-shot Editor builders.**
+  - `Assets/Editor/DevMode/DevInspectTabBuilder.cs` — `[MenuItem("Tools/DevMode/Build Inspect Tab")]`. Builds the Inspect tab hierarchy + 10 character sub-tabs inside the DevModePanel prefab and wires every `SerializedObject` field. Idempotent; destructive `Rebuild` variant with confirmation dialog.
+  - `Assets/Editor/DevMode/DevStorageFurnitureInspectorBuilder.cs` — `[MenuItem("Tools/DevMode/Build Storage Furniture Inspector")]`. Adds the `StorageFurnitureInspectorView` GameObject under `InspectContent/Views`, sibling to `CharacterInspectorView`, and wires `_headerLabel` + `_content`. Same idempotent + destructive pair.
+
+  Prefer extending these builders when you add a new view or sub-tab — it keeps prefab regeneration reproducible and source-controlled.
 - **Host-only.** `DevInspectModule`, like all Dev Mode modules, only runs on the host. Never add RPCs or server calls inside a sub-tab — read from local state only.
 - **Legacy scripts are always compiled.** Only the Dev Mode family is behind `#if UNITY_EDITOR || DEVELOPMENT_BUILD` conditional-unlock (for the F3 auto-unlock path). The legacy scripts activate via `UI_SessionManager` checking `_isSolo`.

@@ -29,6 +29,13 @@ namespace MWI.AI
 
         public override bool IsValid(Character worker)
         {
+            // Furniture-first mutual exclusion: when LocateItem committed to the slot
+            // pickup path, GoapAction_TakeFromSourceFurniture owns the cycle. This action
+            // must refuse to run so the planner falls back to the furniture path. Placed
+            // before the _isActionStarted ride-out because once we've started, the loose
+            // path is already locked in (TargetSourceFurniture would already be null).
+            if (_job != null && _job.TargetSourceFurniture != null) return false;
+
             if (_isActionStarted) return true;
             if (_job == null || _job.CurrentOrder == null || _job.TargetWorldItem == null || _job.CurrentOrder.Source == null)
                 return false;

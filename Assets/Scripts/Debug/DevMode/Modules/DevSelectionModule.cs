@@ -20,10 +20,17 @@ public class DevSelectionModule : MonoBehaviour
     [SerializeField] private Button _clearButton;
 
     [Header("Raycast")]
-    [Tooltip("Layer mask for picks. Defaults to 'RigidBody' at runtime if left at zero. Widen here when adding WorldItem/Building inspectors later.")]
+    [Tooltip("Layer mask for the Ctrl+Click 'interior' pick (characters + furniture). Defaults at runtime to 'RigidBody + Furniture' when left at zero — buildings are excluded so their shell colliders don't block selection of furniture inside.")]
     [FormerlySerializedAs("_characterLayerMask")]
     [SerializeField] private LayerMask _selectableLayerMask;
+    [Tooltip("Layer mask for the Alt+Click 'building' pick. Defaults at runtime to 'Building' when left at zero.")]
+    [SerializeField] private LayerMask _buildingLayerMask;
     private bool _layerMaskResolved;
+
+    // Default layer names per pick kind. Missing layers are tolerated — BuildMask skips any name
+    // not present in Tags & Layers, so the project can drop a layer without breaking dev-mode selection.
+    private static readonly string[] _defaultInteriorLayers = { "RigidBody", "Furniture" };
+    private static readonly string[] _defaultBuildingLayers = { "Building" };
 
     public InteractableObject SelectedInteractable { get; private set; }
     public Character SelectedCharacter { get; private set; }
@@ -181,21 +188,28 @@ public class DevSelectionModule : MonoBehaviour
 
     private void ResolveLayerMask()
     {
-        if (_selectableLayerMask.value != 0)
-        {
-            _layerMaskResolved = true;
-            return;
-        }
+        if (_selectableLayerMask.value == 0) _selectableLayerMask = BuildMask(_defaultInteriorLayers);
+        if (_buildingLayerMask.value == 0) _buildingLayerMask = BuildMask(_defaultBuildingLayers);
 
-        int layer = LayerMask.NameToLayer("RigidBody");
-        if (layer < 0)
+        if (_selectableLayerMask.value == 0 && _buildingLayerMask.value == 0)
         {
-            Debug.LogError("<color=red>[DevSelect]</color> 'RigidBody' layer is missing from Tags & Layers. Character pick will not function.");
+            Debug.LogError($"<color=red>[DevSelect]</color> None of the default selectable layers exist in Tags & Layers (interior: {string.Join(", ", _defaultInteriorLayers)} | building: {string.Join(", ", _defaultBuildingLayers)}). Selection will not function.");
             _layerMaskResolved = false;
             return;
         }
-        _selectableLayerMask = 1 << layer;
+
         _layerMaskResolved = true;
+    }
+
+    private static int BuildMask(string[] layerNames)
+    {
+        int mask = 0;
+        for (int i = 0; i < layerNames.Length; i++)
+        {
+            int layer = LayerMask.NameToLayer(layerNames[i]);
+            if (layer >= 0) mask |= 1 << layer;
+        }
+        return mask;
     }
 
     private void Update()
@@ -209,8 +223,9 @@ public class DevSelectionModule : MonoBehaviour
         if (DevModeManager.Instance.ActiveClickConsumer != this) return;
         if (!_layerMaskResolved) return;
 
-        // If Ctrl or Space is held, DevModeManager handles the click — don't double-fire here.
+        // If Ctrl / Alt / Space is held, DevModeManager handles the click — don't double-fire here.
         if (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)) return;
+        if (Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt)) return;
         if (Input.GetKey(KeyCode.Space)) return;
 
         if (!Input.GetMouseButtonDown(0)) return;
@@ -230,14 +245,32 @@ public class DevSelectionModule : MonoBehaviour
     // ─── Shortcut API (invoked by DevModeManager) ─────────────────────
 
     /// <summary>
-    /// Raycasts from the mouse and selects the first InteractableObject (or Character as fallback).
-    /// Returns true on successful selection; <paramref name="label"/> carries a short identifier for logging.
-    /// Public so <see cref="DevModeManager"/> can invoke it as a global shortcut.
+    /// Ctrl+Click entry point. Raycasts the interior mask (RigidBody + Furniture by default) and
+    /// selects the first InteractableObject — Character is a fallback when the hit collider
+    /// has no InteractableObject component. Buildings are excluded so their shell colliders
+    /// don't block selection of furniture / characters inside.
     /// </summary>
     public bool TrySelectAtCursor(out string label)
     {
+        return TryRaycastAndSelect(_selectableLayerMask, out label);
+    }
+
+    /// <summary>
+    /// Alt+Click entry point. Raycasts the building mask only and selects the first
+    /// InteractableObject (a Building's interactable wrapper). Used to bypass the interior
+    /// pick when the user explicitly wants the building shell, even when furniture or
+    /// characters are present along the same ray.
+    /// </summary>
+    public bool TrySelectBuildingAtCursor(out string label)
+    {
+        return TryRaycastAndSelect(_buildingLayerMask, out label);
+    }
+
+    private bool TryRaycastAndSelect(LayerMask mask, out string label)
+    {
         label = null;
         if (!_layerMaskResolved) return false;
+        if (mask.value == 0) return false;
 
         Camera cam = Camera.main;
         if (cam == null)
@@ -247,7 +280,7 @@ public class DevSelectionModule : MonoBehaviour
         }
 
         Ray ray = cam.ScreenPointToRay(Input.mousePosition);
-        if (!Physics.Raycast(ray, out RaycastHit hit, 500f, _selectableLayerMask))
+        if (!Physics.Raycast(ray, out RaycastHit hit, 500f, mask))
         {
             return false;
         }

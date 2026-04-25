@@ -492,7 +492,7 @@ public class Character : NetworkBehaviour
         if (_characterSkills == null) _characterSkills = GetComponent<CharacterSkills>();
         if (_characterMentorship == null) _characterMentorship = GetComponent<CharacterMentorship>();
         if (_characterLocations == null) _characterLocations = GetComponent<CharacterLocations>();
-        if (_characterGoap == null) _characterGoap = GetComponent<CharacterGoapController>();
+        if (_characterGoap == null) _characterGoap = GetComponentInChildren<CharacterGoapController>();
         if (_characterCombatLevel == null) _characterCombatLevel = GetComponent<CharacterCombatLevel>();
         if (_characterBlueprints == null) _characterBlueprints = GetComponent<CharacterBlueprints>();
         if (_characterInteraction == null) _characterInteraction = GetComponent<CharacterInteraction>();

@@ -32,6 +32,42 @@ namespace MWI.WorldSystem
         public string JobType;       // Reflection-friendly type name (e.g. "JobBarman")
     }
 
+    /// <summary>
+    /// One non-empty slot inside a saved <see cref="StorageFurniture"/>. Mirrors the
+    /// network sync wire format (<c>NetworkStorageSlotEntry</c>): we keep the same
+    /// JsonUtility-overwrite-then-rebind ItemSO trick so the live, the network, and
+    /// the disk paths share one serialization recipe.
+    /// </summary>
+    [Serializable]
+    public class StorageSlotSaveEntry
+    {
+        public int SlotIndex;     // Index in StorageFurniture._itemSlots
+        public string ItemId;     // ItemSO.ItemId — used to resolve the SO on load
+        public string JsonData;   // JsonUtility.ToJson(ItemInstance)
+    }
+
+    /// <summary>
+    /// Saved contents of one <see cref="StorageFurniture"/> living inside a building.
+    /// <para>
+    /// The <see cref="FurnitureKey"/> is a composite of the authored
+    /// <c>FurnitureItemSO.ItemId</c> and the building-local position, formatted as
+    /// <c>"{itemId}@{x:F2},{y:F2},{z:F2}"</c>. Locally-authored coords are stable
+    /// across save/load (the layout is server-only spawn data) so the key survives
+    /// list reorders in <c>_defaultFurnitureLayout</c> and supports multiple same-
+    /// typed storages per building (two crates of the same kind at different spots).
+    /// </para>
+    /// <para>
+    /// We do NOT persist <c>IsLocked</c> yet — it isn't replicated either, both gaps
+    /// will be addressed together when lock state becomes a network-visible concern.
+    /// </para>
+    /// </summary>
+    [Serializable]
+    public class StorageFurnitureSaveEntry
+    {
+        public string FurnitureKey;
+        public List<StorageSlotSaveEntry> Slots = new List<StorageSlotSaveEntry>();
+    }
+
     [Serializable]
     public class BuildingSaveData
     {
@@ -54,6 +90,14 @@ namespace MWI.WorldSystem
 
         /// <summary>Saved employee → job assignments. Populated only for CommercialBuilding.</summary>
         public List<EmployeeSaveEntry> Employees = new List<EmployeeSaveEntry>();
+
+        /// <summary>
+        /// Saved <see cref="StorageFurniture"/> contents (chests, shelves, crates, …).
+        /// Default-empty so older save files (no field) deserialize cleanly. Each entry
+        /// is keyed by <see cref="StorageFurnitureSaveEntry.FurnitureKey"/> — see that
+        /// type for the keying scheme.
+        /// </summary>
+        public List<StorageFurnitureSaveEntry> StorageFurnitures = new List<StorageFurnitureSaveEntry>();
 
         /// <summary>
         /// Creates a BuildingSaveData entry from a live Building, storing position
@@ -104,7 +148,89 @@ namespace MWI.WorldSystem
                 }
             }
 
+            // Storage furniture contents — walk every StorageFurniture under this
+            // building (Building extends ComplexRoom, so GetFurnitureOfType recurses
+            // through every sub-room) and snapshot non-empty slots. Defensive per-slot
+            // try/catch: a single bad ItemInstance never blocks the whole save.
+            try
+            {
+                foreach (var storage in building.GetFurnitureOfType<StorageFurniture>())
+                {
+                    if (storage == null) continue;
+
+                    var entry = new StorageFurnitureSaveEntry
+                    {
+                        FurnitureKey = ComputeStorageFurnitureKey(storage, building.transform)
+                    };
+
+                    var slots = storage.ItemSlots;
+                    if (slots != null)
+                    {
+                        for (int i = 0; i < slots.Count; i++)
+                        {
+                            var slot = slots[i];
+                            if (slot == null || slot.IsEmpty() || slot.ItemInstance == null) continue;
+                            var inst = slot.ItemInstance;
+                            if (inst.ItemSO == null) continue;
+
+                            string json;
+                            try
+                            {
+                                json = JsonUtility.ToJson(inst);
+                            }
+                            catch (Exception e)
+                            {
+                                Debug.LogException(e);
+                                Debug.LogError($"<color=red>[BuildingSaveData:FromBuilding]</color> Failed to serialize ItemInstance '{inst.ItemSO.ItemName}' at slot {i} on '{storage.name}' — entry skipped.");
+                                continue;
+                            }
+
+                            entry.Slots.Add(new StorageSlotSaveEntry
+                            {
+                                SlotIndex = i,
+                                ItemId = inst.ItemSO.ItemId,
+                                JsonData = json
+                            });
+                        }
+                    }
+
+                    // Always store the entry, even if Slots is empty — guarantees that
+                    // a previously stocked storage that was just emptied no longer has
+                    // stale items reappearing on the next load.
+                    data.StorageFurnitures.Add(entry);
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+            }
+
             return data;
+        }
+
+        /// <summary>
+        /// Composite key combining the storage's <c>FurnitureItemSO.ItemId</c> with its
+        /// building-local position rounded to 2 decimals. Stable across layout reorders
+        /// in <c>_defaultFurnitureLayout</c> and supports multiple same-typed storages
+        /// per building. Falls back to a name-based key when the FurnitureItemSO is
+        /// missing (e.g. test/debug furniture spawned outside the default-layout path).
+        /// </summary>
+        public static string ComputeStorageFurnitureKey(StorageFurniture storage, Transform buildingRoot)
+        {
+            if (storage == null) return string.Empty;
+
+            string idPart = storage.FurnitureItemSO != null && !string.IsNullOrEmpty(storage.FurnitureItemSO.ItemId)
+                ? storage.FurnitureItemSO.ItemId
+                : storage.name;
+
+            Vector3 local = buildingRoot != null
+                ? buildingRoot.InverseTransformPoint(storage.transform.position)
+                : storage.transform.localPosition;
+
+            // InvariantCulture: avoid "1,23"/"1.23" mismatches between locales — saves must round-trip
+            // identically regardless of where the host machine is configured.
+            var inv = System.Globalization.CultureInfo.InvariantCulture;
+            return string.Format(inv, "{0}@{1:F2},{2:F2},{3:F2}", idPart, local.x, local.y, local.z);
         }
     }
 

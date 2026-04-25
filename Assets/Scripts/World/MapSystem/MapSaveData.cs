@@ -15,8 +15,22 @@ namespace MWI.WorldSystem
         public string MapId;
         public double LastHibernationTime; // Absolute time in Days (CurrentDay + CurrentTime01)
         public List<HibernatedNPCData> HibernatedNPCs = new List<HibernatedNPCData>();
+        public List<WorldItemSaveData> WorldItems = new List<WorldItemSaveData>();
         public TerrainCellSaveData[] TerrainCells;
         public double TerrainLastUpdateTime;
+    }
+
+    /// <summary>
+    /// Serialized state of a dropped WorldItem on a map. Holds enough to recreate the
+    /// item via WorldItem.SpawnWorldItem(ItemInstance, position, rotation) on respawn.
+    /// </summary>
+    [Serializable]
+    public class WorldItemSaveData
+    {
+        public string ItemId;       // ItemSO.ItemId — looked up in Resources/Data/Item on respawn
+        public string JsonData;     // JsonUtility.ToJson(ItemInstance) — preserves durability, colors, etc.
+        public Vector3 Position;
+        public Quaternion Rotation;
     }
 
     [Serializable]

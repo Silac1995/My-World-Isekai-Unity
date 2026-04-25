@@ -46,11 +46,22 @@ public class GoapAction_StageItemForPickup : GoapAction
     private StageState _state = StageState.Finding;
     private Vector3 _targetPos;
 
+    // Furniture-source path: when a reserved instance lives inside a StorageFurniture
+    // slot (rather than as a loose WorldItem in StorageZone), we walk to the furniture's
+    // interaction point, queue a CharacterTakeFromFurnitureAction, then continue
+    // through the standard MovingToPickup → DroppingOff flow that spawns a fresh
+    // WorldItem in the PickupZone. The transporter's expectations are unchanged — it
+    // still picks up a loose WorldItem from the staging zone.
+    private StorageFurniture _sourceFurniture;
+    private ItemInstance _sourceFromFurniture;
+
     private enum StageState
     {
         Finding,
         MovingToItem,
         PickingUp,
+        MovingToFurnitureSource,
+        TakingFromFurniture,
         MovingToPickup,
         DroppingOff
     }
@@ -72,13 +83,19 @@ public class GoapAction_StageItemForPickup : GoapAction
         if (_actionStarted) return true;
 
         // We also stay valid while already holding a reserved instance, regardless of any
-        // book-keeping change mid-flight.
+        // book-keeping change mid-flight. Covers both the WorldItem-source and
+        // furniture-source paths — once an instance is in our hands we must finish staging.
         if (_targetInstance != null && GetCarriedItem(worker) == _targetInstance) return true;
+        if (_sourceFromFurniture != null && GetCarriedItem(worker) == _sourceFromFurniture) return true;
 
-        // Is there anything worth staging? i.e. a reserved physical instance currently in StorageZone
-        // that hasn't already been moved into PickupZone.
-        _targetItem = FindReservedItemInStorage();
-        return _targetItem != null;
+        // Is there anything worth staging? Two source types in priority order:
+        //   1) A reserved loose WorldItem inside StorageZone (legacy path)
+        //   2) A reserved ItemInstance sitting in a StorageFurniture slot (new path)
+        _targetItem = FindReservedWorldItemInStorage();
+        if (_targetItem != null) return true;
+
+        var furnitureSource = FindReservedItemInFurniture();
+        return furnitureSource.furniture != null && furnitureSource.item != null;
     }
 
     public override void Execute(Character worker)
@@ -90,15 +107,31 @@ public class GoapAction_StageItemForPickup : GoapAction
         switch (_state)
         {
             case StageState.Finding:
-                if (_targetItem == null) _targetItem = FindReservedItemInStorage();
-                if (_targetItem == null)
+                // Prefer loose WorldItem path (cheap pickup, no slot bookkeeping).
+                if (_targetItem == null) _targetItem = FindReservedWorldItemInStorage();
+                if (_targetItem != null)
                 {
-                    _isComplete = true;
-                    return;
+                    _targetInstance = _targetItem.ItemInstance;
+                    _state = StageState.MovingToItem;
+                    break;
                 }
-                _targetInstance = _targetItem.ItemInstance;
-                _state = StageState.MovingToItem;
-                break;
+
+                // Otherwise try the furniture-source path: a reserved ItemInstance
+                // sitting in a StorageFurniture slot. We walk to the furniture, take
+                // the item into hands, then re-join the standard PickupZone drop flow.
+                var furnitureSource = FindReservedItemInFurniture();
+                if (furnitureSource.furniture != null && furnitureSource.item != null)
+                {
+                    _sourceFurniture = furnitureSource.furniture;
+                    _sourceFromFurniture = furnitureSource.item;
+                    // Worker-aware overload — see GetInteractionPosition(Vector3) docstring.
+                    _targetPos = _sourceFurniture.GetInteractionPosition(worker.transform.position);
+                    _state = StageState.MovingToFurnitureSource;
+                    break;
+                }
+
+                _isComplete = true;
+                return;
 
             case StageState.MovingToItem:
                 if (_targetItem == null || _targetItem.gameObject == null || _targetItem.IsBeingCarried)
@@ -144,6 +177,82 @@ public class GoapAction_StageItemForPickup : GoapAction
                     else
                     {
                         Debug.LogWarning($"<color=orange>[StageForPickup]</color> {worker.CharacterName} could not start PickUp. Retrying from Finding.");
+                        _state = StageState.Finding;
+                    }
+                }
+                break;
+
+            case StageState.MovingToFurnitureSource:
+                if (_sourceFurniture == null || _sourceFromFurniture == null)
+                {
+                    // Furniture or instance vanished mid-travel — go back to Finding.
+                    _state = StageState.Finding;
+                    _sourceFurniture = null;
+                    _sourceFromFurniture = null;
+                    return;
+                }
+
+                // No collider to early-exit on (the furniture interaction point is a
+                // single Vector3) — use a flat-XZ proximity check matching HandleMovementTo's
+                // 1.5f threshold so behaviour is consistent with the loose-pickup path.
+                HandleMovementTo(worker, _targetPos, out bool arrivedAtFurniture, null);
+                if (!arrivedAtFurniture)
+                {
+                    Vector3 flatWorker = new Vector3(worker.transform.position.x, 0f, worker.transform.position.z);
+                    Vector3 flatTarget = new Vector3(_targetPos.x, 0f, _targetPos.z);
+                    if (Vector3.Distance(flatWorker, flatTarget) <= 1.5f)
+                    {
+                        worker.CharacterMovement.ResetPath();
+                        arrivedAtFurniture = true;
+                    }
+                }
+                if (arrivedAtFurniture)
+                {
+                    _state = StageState.TakingFromFurniture;
+                    _actionStarted = false;
+                }
+                break;
+
+            case StageState.TakingFromFurniture:
+                if (_sourceFurniture == null || _sourceFromFurniture == null)
+                {
+                    _state = StageState.Finding;
+                    return;
+                }
+
+                if (!_actionStarted)
+                {
+                    var takeAction = new CharacterTakeFromFurnitureAction(worker, _sourceFromFurniture, _sourceFurniture);
+                    if (worker.CharacterActions.ExecuteAction(takeAction))
+                    {
+                        _actionStarted = true;
+                        // Capture for the closure in case fields are reset before the lambda fires.
+                        ItemInstance takenInstance = _sourceFromFurniture;
+                        takeAction.OnActionFinished += () =>
+                        {
+                            if (takeAction.Taken)
+                            {
+                                // Reuse the existing _targetInstance ride-out guard in IsValid by
+                                // promoting the furniture-sourced instance to _targetInstance once
+                                // it's in our hands. CharacterDropItem in DroppingOff will then spawn
+                                // a fresh WorldItem inside PickupZone exactly like the legacy path.
+                                _targetInstance = takenInstance;
+                                _targetPos = ComputePickupDropPoint();
+                                _state = StageState.MovingToPickup;
+                            }
+                            else
+                            {
+                                Debug.LogWarning($"<color=orange>[StageForPickup]</color> {worker.CharacterName} take-from-furniture finished without success. Retrying from Finding.");
+                                _state = StageState.Finding;
+                                _sourceFurniture = null;
+                                _sourceFromFurniture = null;
+                            }
+                            _actionStarted = false;
+                        };
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"<color=orange>[StageForPickup]</color> {worker.CharacterName} could not start TakeFromFurniture. Retrying from Finding.");
                         _state = StageState.Finding;
                     }
                 }
@@ -217,31 +326,44 @@ public class GoapAction_StageItemForPickup : GoapAction
     }
 
     /// <summary>
-    /// Reserved-instance scanner. Walks every live outbound TransportOrder on this
-    /// building and returns the first physical WorldItem that:
-    ///   (a) is currently inside StorageZone
-    ///   (b) is NOT already inside PickupZone
-    ///   (c) carries an ItemInstance that the TransportOrder has reserved.
-    /// Returns null when nothing needs staging.
+    /// Builds the set of <see cref="ItemInstance"/>s that are currently reserved by
+    /// this building's outbound (we-are-Source) transport orders. Shared between
+    /// <see cref="FindReservedWorldItemInStorage"/> (loose WorldItem path) and
+    /// <see cref="FindReservedItemInFurniture"/> (slot-stored path).
+    ///
+    /// Outbound transports = those WE arranged — PlacedTransportOrders with
+    /// Source == _building. ActiveTransportOrders is for the destination side and
+    /// must NOT be considered here.
     /// </summary>
-    private WorldItem FindReservedItemInStorage()
+    private HashSet<ItemInstance> CollectReservedOutgoingInstances()
     {
-        if (_building == null) return null;
-        var logistics = _building.LogisticsManager;
-        if (logistics == null) return null;
-
-        // Outbound transports ARE the ones this building sources — PlacedTransportOrders is the
-        // list of transports WE arranged (Source == _building). ActiveTransportOrders is for the
-        // destination side. See BuildingLogisticsManager.DispatchTransportOrder → AddPlacedTransportOrder.
-        HashSet<ItemInstance> reservedForOutgoing = new HashSet<ItemInstance>();
+        var reserved = new HashSet<ItemInstance>();
+        var logistics = _building != null ? _building.LogisticsManager : null;
+        if (logistics == null) return reserved;
         foreach (var t in logistics.PlacedTransportOrders)
         {
             if (t == null || t.ReservedItems == null) continue;
             if (t.Source != _building) continue;
             if (t.IsCompleted) continue;
-            foreach (var inst in t.ReservedItems) reservedForOutgoing.Add(inst);
+            foreach (var inst in t.ReservedItems) reserved.Add(inst);
         }
+        return reserved;
+    }
 
+    /// <summary>
+    /// Reserved-instance scanner (loose WorldItem path). Walks every live outbound
+    /// TransportOrder on this building and returns the first physical WorldItem that:
+    ///   (a) is currently inside StorageZone
+    ///   (b) is NOT already inside PickupZone
+    ///   (c) carries an ItemInstance that the TransportOrder has reserved.
+    /// Returns null when nothing needs staging via this path — caller should then
+    /// try <see cref="FindReservedItemInFurniture"/>.
+    /// </summary>
+    private WorldItem FindReservedWorldItemInStorage()
+    {
+        if (_building == null) return null;
+
+        HashSet<ItemInstance> reservedForOutgoing = CollectReservedOutgoingInstances();
         if (reservedForOutgoing.Count == 0) return null;
 
         var storageCol = _building.StorageZone != null ? _building.StorageZone.GetComponent<Collider>() : null;
@@ -266,6 +388,29 @@ public class GoapAction_StageItemForPickup : GoapAction
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Reserved-instance scanner (furniture-source path). Iterates every
+    /// <see cref="ItemInstance"/> currently sitting in a <see cref="StorageFurniture"/>
+    /// slot inside this building and returns the first one reserved by an outbound
+    /// transport order. Used after the loose WorldItem scan turns up nothing.
+    /// Returns <c>(null, null)</c> when no reserved furniture-stored instance exists.
+    /// </summary>
+    private (StorageFurniture furniture, ItemInstance item) FindReservedItemInFurniture()
+    {
+        if (_building == null) return (null, null);
+        HashSet<ItemInstance> reservedForOutgoing = CollectReservedOutgoingInstances();
+        if (reservedForOutgoing.Count == 0) return (null, null);
+
+        foreach (var (furniture, instance) in _building.GetItemsInStorageFurniture())
+        {
+            if (furniture == null || instance == null) continue;
+            if (furniture.IsLocked) continue;
+            if (!reservedForOutgoing.Contains(instance)) continue;
+            return (furniture, instance);
+        }
+        return (null, null);
     }
 
     private Vector3 ComputePickupDropPoint()
@@ -351,5 +496,7 @@ public class GoapAction_StageItemForPickup : GoapAction
         _state = StageState.Finding;
         _targetItem = null;
         _targetInstance = null;
+        _sourceFurniture = null;
+        _sourceFromFurniture = null;
     }
 }

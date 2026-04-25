@@ -206,7 +206,7 @@ public class WorldItem : NetworkBehaviour
     /// Instancie le WorldItem prefab de l'ItemSO et l'initialise dans le monde.
     /// Utilisé quand on veut drop un item au sol (ex: deposit).
     /// </summary>
-    public static WorldItem SpawnWorldItem(ItemSO itemSO, Vector3 position)
+    public static WorldItem SpawnWorldItem(ItemSO itemSO, Vector3 position, Quaternion? rotation = null)
     {
         if (NetworkManager.Singleton != null && !NetworkManager.Singleton.IsServer)
         {
@@ -221,7 +221,7 @@ public class WorldItem : NetworkBehaviour
             return null;
         }
 
-        GameObject worldItemGo = Object.Instantiate(prefab, position, Quaternion.identity);
+        GameObject worldItemGo = Object.Instantiate(prefab, position, rotation ?? Quaternion.identity);
         worldItemGo.name = $"WorldItem_{itemSO.ItemName}";
 
         ItemInstance instance = itemSO.CreateInstance();
@@ -233,6 +233,7 @@ public class WorldItem : NetworkBehaviour
             if (worldItemGo.TryGetComponent(out NetworkObject netObj))
             {
                 netObj.Spawn(true);
+                ParentToContainingMap(worldItemGo);
             }
             else
             {
@@ -259,7 +260,7 @@ public class WorldItem : NetworkBehaviour
     /// <summary>
     /// Instancie le WorldItem prefab en utilisant une instance existante (pour préserver sa durabilité, couleurs, etc).
     /// </summary>
-    public static WorldItem SpawnWorldItem(ItemInstance instance, Vector3 position)
+    public static WorldItem SpawnWorldItem(ItemInstance instance, Vector3 position, Quaternion? rotation = null)
     {
         if (NetworkManager.Singleton != null && !NetworkManager.Singleton.IsServer)
         {
@@ -276,7 +277,7 @@ public class WorldItem : NetworkBehaviour
             return null;
         }
 
-        GameObject worldItemGo = Object.Instantiate(prefab, position, Quaternion.identity);
+        GameObject worldItemGo = Object.Instantiate(prefab, position, rotation ?? Quaternion.identity);
         worldItemGo.name = $"WorldItem_{instance.ItemSO.ItemName}";
 
         if (worldItemGo.TryGetComponent(out WorldItem worldItem))
@@ -286,6 +287,7 @@ public class WorldItem : NetworkBehaviour
             if (worldItemGo.TryGetComponent(out NetworkObject netObj))
             {
                 netObj.Spawn(true);
+                ParentToContainingMap(worldItemGo);
             }
             else
             {
@@ -306,6 +308,23 @@ public class WorldItem : NetworkBehaviour
             Debug.LogError($"<color=red>[Gather]</color> Le prefab de {instance.ItemSO.ItemName} n'a pas de composant WorldItem !");
             Object.Destroy(worldItemGo);
             return null;
+        }
+    }
+
+    /// <summary>
+    /// Server-side. Reparents a freshly-spawned WorldItem GameObject under the MapController
+    /// whose trigger bounds contain its current world position. Looked up via
+    /// MapController.GetAnyMapAtPosition so interiors and exteriors both qualify. Falls back
+    /// silently to scene root if the spawn happens outside any registered map (open world).
+    /// Must be called AFTER NetworkObject.Spawn so the parent is replicated to clients.
+    /// Public so other spawn paths (e.g. SpawnManager.SpawnCopyOfItem for crafting) can use the same helper.
+    /// </summary>
+    public static void ParentToContainingMap(GameObject worldItemGo)
+    {
+        var map = MWI.WorldSystem.MapController.GetAnyMapAtPosition(worldItemGo.transform.position);
+        if (map != null)
+        {
+            worldItemGo.transform.SetParent(map.transform, worldPositionStays: true);
         }
     }
 

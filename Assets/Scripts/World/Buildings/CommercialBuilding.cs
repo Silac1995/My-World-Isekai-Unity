@@ -14,9 +14,50 @@ using MWI.WorldSystem;
 [RequireComponent(typeof(BuildingLogisticsManager))]
 public abstract class CommercialBuilding : Building
 {
+    /// <summary>
+    /// One entry of <see cref="_defaultFurnitureLayout"/> — a furniture item the server spawns
+    /// as a child of the building when the building first comes into existence in a fresh world
+    /// (i.e. via <c>BuildingPlacementManager</c>, NOT via save-restore).
+    ///
+    /// Use this — NOT nested PrefabInstances inside the building prefab — for any furniture whose
+    /// prefab carries a NetworkObject. Nesting a network-bearing furniture instance inside a
+    /// runtime-spawned building prefab makes NGO half-register the child during the parent's
+    /// spawn, leaving a broken NetworkObject in <c>SpawnManager.SpawnedObjectsList</c> that
+    /// NRE's during the next client-sync (see wiki/gotchas/host-progressive-freeze-debug-log-spam.md
+    /// neighbouring entries on half-spawned NOs, and .agent/skills/multiplayer/SKILL.md §10).
+    /// </summary>
+    [System.Serializable]
+    public class DefaultFurnitureSlot
+    {
+        [Tooltip("FurnitureItemSO whose InstalledFurniturePrefab will be Instantiate+Spawn'd as a child of the building.")]
+        public FurnitureItemSO ItemSO;
+
+        [Tooltip("Position relative to the building root, in building-local space. Used to compute the world spawn position; the room's FurnitureGrid then snaps + occupies the matching cell.")]
+        public Vector3 LocalPosition;
+
+        [Tooltip("Rotation relative to the building root, in building-local space (Euler degrees).")]
+        public Vector3 LocalEulerAngles;
+
+        [Tooltip("Room whose FurnitureManager owns and grid-registers this furniture. Mirror of the legacy nested-prefab parenting (e.g. Forge/Room_Main/CraftingStation → set TargetRoom to Room_Main). Required for any furniture that should appear on a room's FurnitureGrid; if left null the furniture spawns parented directly under the building root and is NOT grid-registered.")]
+        public Room TargetRoom;
+    }
+
     [Header("Commercial")]
     [SerializeField] protected Community _ownerCommunity; // Collective owner
     [SerializeField] protected Zone _storageZone;
+
+    [Tooltip("Furniture spawned automatically by the server when this building first comes into existence in a fresh world.\n" +
+             "Skipped on save-restore — restored buildings reuse their persisted furniture state.\n" +
+             "Use this for any furniture whose prefab carries a NetworkObject; nesting a network-bearing furniture\n" +
+             "PrefabInstance directly inside the building prefab half-spawns the child and NRE's NGO sync.")]
+    [SerializeField] private List<DefaultFurnitureSlot> _defaultFurnitureLayout = new List<DefaultFurnitureSlot>();
+
+    /// <summary>
+    /// Set true after <see cref="TrySpawnDefaultFurniture"/> runs so multiple OnNetworkSpawn
+    /// invocations (rare, e.g. domain reload during a session) cannot duplicate the layout.
+    /// Not networked — clients never spawn furniture; this flag is server-only state.
+    /// </summary>
+    private bool _defaultFurnitureSpawned;
 
     [Tooltip("Optional outbound staging zone. When authored, the building's Logistics Manager " +
              "moves reserved ItemInstances from StorageZone into this zone before an incoming " +
@@ -50,6 +91,23 @@ public abstract class CommercialBuilding : Building
     /// read-only.
     /// </summary>
     private NetworkList<FixedString64Bytes> _activeWorkerIds;
+
+    /// <summary>
+    /// Server-authoritative replicated count-only mirror of <see cref="_inventory"/>: one entry
+    /// per <c>ItemInstance</c>, holding its <c>ItemSO.ItemId</c>. Lets <see cref="GetItemCount"/>
+    /// return the correct number on clients without serialising every full <c>ItemInstance</c>
+    /// (colors, custom names, etc. — that would require a much bigger refactor of the abstract
+    /// ItemInstance class to be NGO-serialisable).
+    ///
+    /// Server writes from <see cref="AddToInventory"/> / <see cref="TakeFromInventory"/> /
+    /// <see cref="RemoveExactItemFromInventory"/> / <see cref="RefreshStorageInventory"/>.
+    /// Clients are read-only.
+    ///
+    /// Why we need this: previously <c>_inventory</c> was a plain server-only <c>List&lt;ItemInstance&gt;</c>;
+    /// clients always saw an empty inventory and the building debug UI / shop counts / craft-availability
+    /// checks would render zero on the client peer.
+    /// </summary>
+    private NetworkList<FixedString64Bytes> _inventoryItemIds;
 
     /// <summary>
     /// Client-side pending binds. Populated when the replicated list arrives before the
@@ -131,6 +189,7 @@ public abstract class CommercialBuilding : Building
         // NGO inspects the list handle during SceneNetworkObject registration).
         _jobWorkerIds = new NetworkList<FixedString64Bytes>();
         _activeWorkerIds = new NetworkList<FixedString64Bytes>();
+        _inventoryItemIds = new NetworkList<FixedString64Bytes>();
 
         base.Awake();
 
@@ -163,9 +222,12 @@ public abstract class CommercialBuilding : Building
             {
                 _jobWorkerIds.Add(new FixedString64Bytes(""));
             }
+
+            TrySpawnDefaultFurniture();
         }
 
         _jobWorkerIds.OnListChanged += HandleJobWorkerIdChanged;
+        _inventoryItemIds.OnListChanged += HandleInventoryItemIdsChanged;
 
         // Late-join / wake-up: the NetworkList arrives populated; walk it once to
         // materialise Job._worker on this peer. Skipped on the server because
@@ -173,6 +235,124 @@ public abstract class CommercialBuilding : Building
         if (!IsServer)
         {
             SyncAllJobWorkersFromList();
+        }
+    }
+
+    /// <summary>
+    /// Diagnostic only — fires on every peer (host + clients) when the replicated inventory
+    /// count list changes. Lets us prove whether NGO replication is delivering the writes.
+    /// Gated behind <see cref="DebugInventorySync"/> so it's silent in production.
+    /// </summary>
+    private void HandleInventoryItemIdsChanged(NetworkListEvent<FixedString64Bytes> evt)
+    {
+        if (!DebugInventorySync) return;
+        string role = IsServer ? "Server" : "Client";
+        Debug.Log($"<color=#88ddff>[InventorySync:{role}-OnChanged]</color> {buildingName}: event={evt.Type} value='{evt.Value}' (NetworkList now {_inventoryItemIds.Count} entries).");
+    }
+
+    // =========================================================================
+    // DEFAULT FURNITURE SPAWN (server-only)
+    // =========================================================================
+
+    /// <summary>
+    /// Server-only. Instantiates and Spawn()s entries in <see cref="_defaultFurnitureLayout"/>
+    /// that don't already have a matching Furniture child on this building. The per-slot match
+    /// (by FurnitureItemSO) replaces the earlier "any Furniture child present → skip all" guard,
+    /// which was too aggressive: baked NetworkObject-FREE furniture (e.g. TimeClock on the Forge)
+    /// is a legitimate child and would have suppressed every slot. Survives the save-restore path
+    /// the same way: persisted furniture children block their corresponding slot from re-spawning,
+    /// while never-baked slots still spawn on first OnNetworkSpawn.
+    /// </summary>
+    private void TrySpawnDefaultFurniture()
+    {
+        if (_defaultFurnitureSpawned) return;
+        _defaultFurnitureSpawned = true;
+
+        if (_defaultFurnitureLayout == null || _defaultFurnitureLayout.Count == 0)
+        {
+            Debug.Log($"[CommercialBuilding] {buildingName}: TrySpawnDefaultFurniture — layout is empty, nothing to spawn.", this);
+            return;
+        }
+
+        // Snapshot existing Furniture children once. Per-slot match is by FurnitureItemSO ref.
+        var existing = GetComponentsInChildren<Furniture>(includeInactive: true);
+        var existingItemSOs = new System.Collections.Generic.HashSet<FurnitureItemSO>();
+        foreach (var f in existing)
+        {
+            if (f != null && f.FurnitureItemSO != null) existingItemSOs.Add(f.FurnitureItemSO);
+        }
+
+        Debug.Log($"[CommercialBuilding] {buildingName}: TrySpawnDefaultFurniture — layout count={_defaultFurnitureLayout.Count}, existing Furniture children={existing.Length}.", this);
+
+        for (int i = 0; i < _defaultFurnitureLayout.Count; i++)
+        {
+            var slot = _defaultFurnitureLayout[i];
+            if (slot == null || slot.ItemSO == null || slot.ItemSO.InstalledFurniturePrefab == null)
+            {
+                Debug.LogWarning($"[CommercialBuilding] {buildingName}: _defaultFurnitureLayout[{i}] is missing ItemSO or InstalledFurniturePrefab — slot skipped.", this);
+                continue;
+            }
+
+            if (existingItemSOs.Contains(slot.ItemSO))
+            {
+                Debug.Log($"[CommercialBuilding] {buildingName}: slot[{i}] '{slot.ItemSO.name}' already present as a baked or restored child — skipping spawn.", this);
+                continue;
+            }
+
+            try
+            {
+                SpawnDefaultFurnitureSlot(slot);
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogException(e, this);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Server-only. Mirrors the player furniture-place flow at
+    /// <c>CharacterActions.RequestFurniturePlaceServerRpc</c>: Instantiate at world position,
+    /// <c>NetworkObject.Spawn()</c> as a top-level NO, then hand off to the target room's
+    /// <see cref="FurnitureManager.RegisterSpawnedFurniture"/> which re-parents the furniture
+    /// under the room and registers the cell occupancy on the room's <c>FurnitureGrid</c>.
+    /// NGO's <c>AutoObjectParentSync</c> replicates the post-spawn re-parent to clients.
+    /// </summary>
+    private void SpawnDefaultFurnitureSlot(DefaultFurnitureSlot slot)
+    {
+        Furniture prefab = slot.ItemSO.InstalledFurniturePrefab;
+        Vector3 worldPos = transform.TransformPoint(slot.LocalPosition);
+        Quaternion worldRot = transform.rotation * Quaternion.Euler(slot.LocalEulerAngles);
+
+        Furniture instance = Instantiate(prefab, worldPos, worldRot);
+
+        var netObj = instance.GetComponent<NetworkObject>();
+        if (netObj != null && !netObj.IsSpawned)
+        {
+            netObj.Spawn();
+        }
+
+        // Parent under the building root — the only NetworkObject in this hierarchy. Parenting
+        // under Room_Main (a NetworkBehaviour on a non-NO) throws NGO's InvalidParentException;
+        // the building root is the closest valid NO ancestor. Visually the furniture lives
+        // inside the building at the correct world position; logical room membership is tracked
+        // in the FurnitureManager._furnitures list (see RegisterSpawnedFurnitureUnchecked notes).
+        instance.transform.SetParent(transform, worldPositionStays: true);
+
+        // Use the UNCHECKED register path: default furniture is server-authored content (the level
+        // designer placed the slot), not runtime user input — CanPlaceFurniture validation is for
+        // the player-place flow. Unchecked register adds to grid occupancy + the room's furniture
+        // list WITHOUT touching transform.parent (we already parented above).
+        if (slot.TargetRoom != null && slot.TargetRoom.FurnitureManager != null)
+        {
+            slot.TargetRoom.FurnitureManager.RegisterSpawnedFurnitureUnchecked(instance, worldPos);
+        }
+        else if (slot.TargetRoom == null)
+        {
+            Debug.LogWarning(
+                $"[CommercialBuilding] {buildingName}: default furniture slot for '{slot.ItemSO.name}' has no TargetRoom. " +
+                $"Set TargetRoom on the slot so it appears in the room's FurnitureManager list.",
+                this);
         }
     }
 
@@ -216,7 +396,22 @@ public abstract class CommercialBuilding : Building
         OnQuestPublished?.Invoke(quest);
     }
 
-    private void HandleQuestStateChanged(MWI.Quests.IQuest quest) => OnQuestStateChanged?.Invoke(quest);
+    private void HandleQuestStateChanged(MWI.Quests.IQuest quest)
+    {
+        OnQuestStateChanged?.Invoke(quest);
+
+        // Auto-unsubscribe once the quest reaches a terminal state. Without this, the quest
+        // keeps a delegate reference pointing back at this building forever (even after the
+        // quest is removed from its TaskManager/OrderBook list), and the quest object itself
+        // can't be GC'd. With hundreds of quests published over a long worker shift, this drove
+        // a slow-but-steady accumulation that compounded with the Job.Execute hot-path allocations.
+        if (quest.State == MWI.Quests.QuestState.Completed ||
+            quest.State == MWI.Quests.QuestState.Abandoned ||
+            quest.State == MWI.Quests.QuestState.Expired)
+        {
+            quest.OnStateChanged -= HandleQuestStateChanged;
+        }
+    }
 
     private static void AssignIssuerIfPossible(MWI.Quests.IQuest quest, Character issuer)
     {
@@ -696,6 +891,10 @@ public abstract class CommercialBuilding : Building
         if (_jobWorkerIds != null)
         {
             _jobWorkerIds.OnListChanged -= HandleJobWorkerIdChanged;
+        }
+        if (_inventoryItemIds != null)
+        {
+            _inventoryItemIds.OnListChanged -= HandleInventoryItemIdsChanged;
         }
         UnsubscribeJobWorkerBindListener();
         UnsubscribeRestoreListener();
@@ -1327,8 +1526,26 @@ public abstract class CommercialBuilding : Building
     public virtual void AddToInventory(ItemInstance item)
     {
         if (item == null) return;
+        // Idempotent on instance reference. Without this guard, an item that was
+        // already absorbed into _inventory (via RefreshStorageInventory Pass 2 or
+        // a prior AddToInventory) would double-count on every re-deposit:
+        //   pickup → drop → FinishDropoff calls AddToInventory → same instance,
+        //   already in list → list grows to 2 entries → GetItemCount returns 2.
+        // The list intentionally tracks per-instance (not per-SO), so the dedupe
+        // is on reference equality, which is what List<T>.Contains uses for class types.
+        if (_inventory.Contains(item))
+        {
+            if (NPCDebug.VerboseJobs)
+                Debug.Log($"<color=#888888>[Building]</color> {item.ItemSO.ItemName} déjà dans l'inventaire de {buildingName} — skip duplicate add.");
+            return;
+        }
         _inventory.Add(item);
-        Debug.Log($"<color=green>[Building]</color> {item.ItemSO.ItemName} ajouté à l'inventaire de {buildingName}.");
+        MirrorInventoryAdd(item.ItemSO);
+        // Per-tick reachable from JobTransporter.NotifyDeliveryProgress / crafting completion / harvest deposit.
+        // Gated to avoid the Windows console-buffer progressive-freeze documented in
+        // wiki/gotchas/host-progressive-freeze-debug-log-spam.md.
+        if (NPCDebug.VerboseJobs)
+            Debug.Log($"<color=green>[Building]</color> {item.ItemSO.ItemName} ajouté à l'inventaire de {buildingName}.");
     }
 
     public virtual ItemInstance TakeFromInventory(ItemSO itemSO)
@@ -1337,6 +1554,7 @@ public abstract class CommercialBuilding : Building
         if (item != null)
         {
             _inventory.Remove(item);
+            MirrorInventoryRemove(item.ItemSO);
             return item;
         }
         return null;
@@ -1347,14 +1565,143 @@ public abstract class CommercialBuilding : Building
         if (exactItem != null && _inventory.Contains(exactItem))
         {
             _inventory.Remove(exactItem);
+            MirrorInventoryRemove(exactItem.ItemSO);
             return true;
         }
         return false;
     }
 
+    /// <summary>
+    /// Read from the replicated <see cref="_inventoryItemIds"/> NetworkList so server AND clients
+    /// return the same count. Falls back to the local <c>_inventory</c> on the server-only
+    /// pre-OnNetworkSpawn window where the NetworkList isn't initialised yet.
+    /// </summary>
     public virtual int GetItemCount(ItemSO itemSO)
     {
+        if (itemSO == null) return 0;
+
+        if (_inventoryItemIds != null && _inventoryItemIds.Count > 0)
+        {
+            var targetId = ResolveItemNetKey(itemSO);
+            int count = 0;
+            for (int i = 0; i < _inventoryItemIds.Count; i++)
+            {
+                if (_inventoryItemIds[i].Equals(targetId)) count++;
+            }
+            return count;
+        }
+
+        // Fallback: server logical inventory (also covers pre-network-spawn warm-up on the host).
         return _inventory.Count(i => i.ItemSO == itemSO);
+    }
+
+    /// <summary>
+    /// Diagnostic toggle: flip true at runtime to trace inventory NetworkList writes/reads
+    /// across server and client. Default off — when on, every server mirror write and every
+    /// client display read logs once. Use to confirm whether replication or display is broken.
+    /// </summary>
+    public static bool DebugInventorySync = false;
+
+    /// <summary>
+    /// Resolve a stable network key for an ItemSO. Prefer the designer-set <see cref="ItemSO.ItemId"/>;
+    /// fall back to the asset's <c>name</c> (always unique within a Resources folder) so empty IDs
+    /// don't silently collapse every item into the same FixedString key. Without this fallback,
+    /// every dropped item with a blank ItemId looks identical in the NetworkList — and
+    /// <see cref="GetItemCount"/> for one ItemSO would falsely include every other empty-ID item,
+    /// making the stock evaluator believe every shelf is already full.
+    /// </summary>
+    private static FixedString64Bytes ResolveItemNetKey(ItemSO itemSO)
+    {
+        if (itemSO == null) return new FixedString64Bytes(string.Empty);
+        string id = itemSO.ItemId;
+        if (string.IsNullOrEmpty(id))
+        {
+            id = itemSO.name; // asset filename — guaranteed non-empty for a real ScriptableObject asset
+            Debug.LogWarning($"[CommercialBuilding] ItemSO '{itemSO.name}' has empty ItemId. Falling back to asset name as the network key — set ItemId in the inspector to silence this warning.");
+        }
+        return new FixedString64Bytes(id);
+    }
+
+    /// <summary>Server-only mirror helper: append an ItemSO ID to the replicated count list.</summary>
+    private void MirrorInventoryAdd(ItemSO itemSO)
+    {
+        if (!IsServer || _inventoryItemIds == null || itemSO == null) return;
+        _inventoryItemIds.Add(ResolveItemNetKey(itemSO));
+        if (DebugInventorySync)
+            Debug.Log($"<color=#88ff88>[InventorySync:Server-Add]</color> {buildingName}: +{itemSO.ItemId} (NetworkList now {_inventoryItemIds.Count} entries).");
+    }
+
+    // Cache of every ItemSO under Resources/Data/Item, lazily loaded once per session.
+    // Lets <see cref="GetInventoryCountsByItemSO"/> resolve replicated ItemSO IDs back into
+    // ItemSO references on the client (where the live ItemInstance objects don't exist).
+    private static ItemSO[] _cachedAllItemSOs;
+
+    /// <summary>
+    /// Server- AND client-safe view of the storage inventory grouped by <see cref="ItemSO"/>,
+    /// materialised from the replicated <see cref="_inventoryItemIds"/> NetworkList. Use this
+    /// from any UI / display path that needs to render counts on a non-server peer — the
+    /// raw <see cref="Inventory"/> list (full <c>ItemInstance</c> objects) is server-only and
+    /// will return empty on clients.
+    ///
+    /// Allocates a fresh dictionary per call; safe for UI tick rates, avoid in tight loops.
+    /// </summary>
+    public Dictionary<ItemSO, int> GetInventoryCountsByItemSO()
+    {
+        var result = new Dictionary<ItemSO, int>();
+        if (_inventoryItemIds == null || _inventoryItemIds.Count == 0) return result;
+
+        if (_cachedAllItemSOs == null)
+        {
+            try
+            {
+                _cachedAllItemSOs = Resources.LoadAll<ItemSO>("Data/Item");
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogException(e);
+                Debug.LogError($"[CommercialBuilding] {buildingName}: GetInventoryCountsByItemSO failed to load ItemSOs from Resources/Data/Item.");
+                return result;
+            }
+        }
+
+        for (int i = 0; i < _inventoryItemIds.Count; i++)
+        {
+            string id = _inventoryItemIds[i].ToString();
+            if (string.IsNullOrEmpty(id)) continue;
+
+            // Match by ItemId first, fall back to asset name — mirror of ResolveItemNetKey
+            // so items with empty ItemId still resolve back to the right ItemSO.
+            ItemSO so = System.Array.Find(_cachedAllItemSOs, m => m != null && (m.ItemId == id || m.name == id));
+            if (so == null) continue;
+
+            if (result.TryGetValue(so, out int count)) result[so] = count + 1;
+            else result[so] = 1;
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Total number of items in the storage inventory (sum of replicated counts), safe to read
+    /// on both server and client. Equivalent to summing <see cref="GetInventoryCountsByItemSO"/>
+    /// values, but doesn't allocate a dictionary or do ItemSO resolution.
+    /// </summary>
+    public int InventoryTotalCount => _inventoryItemIds != null ? _inventoryItemIds.Count : _inventory.Count;
+
+    /// <summary>Server-only mirror helper: remove the first matching ItemSO ID from the replicated count list.</summary>
+    private void MirrorInventoryRemove(ItemSO itemSO)
+    {
+        if (!IsServer || _inventoryItemIds == null || itemSO == null) return;
+        var targetId = ResolveItemNetKey(itemSO);
+        for (int i = 0; i < _inventoryItemIds.Count; i++)
+        {
+            if (_inventoryItemIds[i].Equals(targetId))
+            {
+                _inventoryItemIds.RemoveAt(i);
+                if (DebugInventorySync)
+                    Debug.Log($"<color=#ff8888>[InventorySync:Server-Remove]</color> {buildingName}: -{itemSO.ItemId} (NetworkList now {_inventoryItemIds.Count} entries).");
+                return;
+            }
+        }
     }
 
     /// <summary>
@@ -1387,6 +1734,53 @@ public abstract class CommercialBuilding : Building
         }
 
         return foundItems;
+    }
+
+    /// <summary>
+    /// Walks every <see cref="StorageFurniture"/> in this building (across all sub-rooms)
+    /// and returns the first one that is unlocked and has a free slot compatible with
+    /// <paramref name="item"/>. Used by the logistics cycle to prefer slot-based storage
+    /// over the loose <see cref="StorageZone"/> drop.
+    ///
+    /// Selection is first-fit by furniture order in <see cref="ComplexRoom.GetFurnitureOfType{T}"/>;
+    /// type-affinity (a wardrobe with only <c>WearableSlot</c>s rejecting a sword)
+    /// falls out for free because <see cref="StorageFurniture.HasFreeSpaceForItem"/>
+    /// already inspects per-slot <c>CanAcceptItem</c>.
+    ///
+    /// Returns <c>null</c> when no compatible furniture exists — caller should fall back
+    /// to the legacy zone-drop behavior.
+    /// </summary>
+    public StorageFurniture FindStorageFurnitureForItem(ItemInstance item)
+    {
+        if (item == null) return null;
+        foreach (var furniture in GetFurnitureOfType<StorageFurniture>())
+        {
+            if (furniture == null || furniture.IsLocked) continue;
+            if (furniture.HasFreeSpaceForItem(item)) return furniture;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Returns every <see cref="ItemInstance"/> currently held in a <see cref="StorageFurniture"/>
+    /// slot inside this building, paired with the owning furniture so the caller can
+    /// queue a <c>CharacterTakeFromFurnitureAction</c>. Used by
+    /// <c>GoapAction_StageItemForPickup</c> to find reserved instances that live in
+    /// slots rather than as loose <see cref="WorldItem"/>s.
+    /// </summary>
+    public IEnumerable<(StorageFurniture furniture, ItemInstance item)> GetItemsInStorageFurniture()
+    {
+        foreach (var furniture in GetFurnitureOfType<StorageFurniture>())
+        {
+            if (furniture == null) continue;
+            var slots = furniture.ItemSlots;
+            if (slots == null) continue;
+            for (int i = 0; i < slots.Count; i++)
+            {
+                var slot = slots[i];
+                if (slot != null && !slot.IsEmpty()) yield return (furniture, slot.ItemInstance);
+            }
+        }
     }
 
     /// <summary>
@@ -1549,9 +1943,21 @@ public abstract class CommercialBuilding : Building
             }
         }
 
+        // Items currently held in StorageFurniture slots have NO matching WorldItem
+        // (they live as logical-only data inside the furniture's _itemSlots — the
+        // CharacterStoreInFurnitureAction path never spawns a WorldItem). Without this
+        // set, Pass 1 would ghost every furniture-stored instance on the next punch-in,
+        // silently undoing every deposit done by the logistics-cycle furniture path.
+        HashSet<ItemInstance> furnitureStoredInstances = new HashSet<ItemInstance>();
+        foreach (var (_, slotItem) in GetItemsInStorageFurniture())
+        {
+            if (slotItem != null) furnitureStoredInstances.Add(slotItem);
+        }
+
         foreach (var logicalInstance in _inventory)
         {
             if (reservedInstances != null && reservedInstances.Contains(logicalInstance)) continue;
+            if (furnitureStoredInstances.Contains(logicalInstance)) continue;
 
             bool isPhysicallyPresent = false;
 
@@ -1582,6 +1988,7 @@ public abstract class CommercialBuilding : Building
             foreach (var ghost in ghostlyInstances)
             {
                 _inventory.Remove(ghost);
+                MirrorInventoryRemove(ghost.ItemSO);
 
                 // Si cet objet fantôme était réservé par un logisticien pour une commande (Transport/Achats), on le signale.
                 if (LogisticsManager != null)
@@ -1605,6 +2012,7 @@ public abstract class CommercialBuilding : Building
             if (_inventory.Contains(worldItem.ItemInstance)) continue;
 
             _inventory.Add(worldItem.ItemInstance);
+            MirrorInventoryAdd(worldItem.ItemInstance.ItemSO);
             absorbed++;
         }
 

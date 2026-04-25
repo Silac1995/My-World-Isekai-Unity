@@ -120,6 +120,27 @@ namespace MWI.WorldSystem
         }
 
         /// <summary>
+        /// Same as <see cref="GetMapAtPosition"/> but also considers Interior maps. Used by
+        /// runtime systems that need a parent transform regardless of map type — e.g. WorldItem
+        /// spawning, where an item dropped inside a building interior must be parented to that
+        /// interior MapController, not the (distant) exterior. Building placement still uses
+        /// GetMapAtPosition because interiors are off-limits to player-built structures.
+        /// </summary>
+        public static MapController GetAnyMapAtPosition(Vector3 worldPosition)
+        {
+            foreach (var kvp in _mapRegistry)
+            {
+                MapController map = kvp.Value;
+                if (map == null) continue;
+                if (map._mapTrigger != null && map._mapTrigger.bounds.Contains(worldPosition))
+                {
+                    return map;
+                }
+            }
+            return null;
+        }
+
+        /// <summary>
         /// Returns the nearest non-interior MapController whose trigger bounds lie within
         /// <paramref name="maxDistance"/> world units of the given position, or null if none qualify.
         /// Distance is measured from the trigger's closest surface point, so a position just outside
@@ -681,9 +702,40 @@ namespace MWI.WorldSystem
                 }
             }
 
+            // Also snapshot live WorldItems on this map so dropped items survive save/load.
+            // Reuses the same OverlapBox result — every WorldItem in the trigger gets a save entry
+            // unless it's currently being carried (in which case it belongs to a Character's inventory).
+            SnapshotActiveWorldItems(colliders, snapshot);
+
             Debug.Log($"<color=cyan>[MapController:SnapshotActiveNPCs]</color> Map '{MapId}' snapshot complete. " +
-                      $"{snapshot.HibernatedNPCs.Count} NPCs serialized, {characterTagCount} Character-tagged colliders found, {playerSkipCount} players skipped.");
+                      $"{snapshot.HibernatedNPCs.Count} NPCs, {snapshot.WorldItems.Count} WorldItems serialized, {characterTagCount} Character-tagged colliders found, {playerSkipCount} players skipped.");
             return snapshot;
+        }
+
+        /// <summary>
+        /// Walks the given collider set, serializes every live WorldItem found into
+        /// <paramref name="snapshot"/>.WorldItems. Skips items currently being carried —
+        /// those belong to a Character's inventory and are saved through the character profile.
+        /// Does NOT despawn or modify any WorldItem; pure read.
+        /// </summary>
+        private void SnapshotActiveWorldItems(Collider[] colliders, MapSaveData snapshot)
+        {
+            HashSet<WorldItem> processed = new HashSet<WorldItem>();
+            foreach (var col in colliders)
+            {
+                WorldItem worldItem = col.GetComponent<WorldItem>() ?? col.GetComponentInParent<WorldItem>();
+                if (worldItem == null || !processed.Add(worldItem)) continue;
+                if (worldItem.IsBeingCarried) continue;
+                if (worldItem.ItemInstance == null || worldItem.ItemInstance.ItemSO == null) continue;
+
+                snapshot.WorldItems.Add(new WorldItemSaveData
+                {
+                    ItemId = worldItem.ItemInstance.ItemSO.ItemId,
+                    JsonData = JsonUtility.ToJson(worldItem.ItemInstance),
+                    Position = worldItem.transform.position,
+                    Rotation = worldItem.transform.rotation
+                });
+            }
         }
 
         /// <summary>
@@ -729,13 +781,15 @@ namespace MWI.WorldSystem
                 if (saveEntry != null)
                 {
                     // Update existing entry with current state. Replace dynamic fields
-                    // (owners, employees) wholesale so changes since last snapshot stick.
+                    // (owners, employees, storage contents) wholesale so changes since
+                    // last snapshot stick.
                     var refreshed = BuildingSaveData.FromBuilding(building, transform.position);
                     saveEntry.State = refreshed.State;
                     saveEntry.Position = refreshed.Position;
                     saveEntry.Rotation = refreshed.Rotation;
                     saveEntry.OwnerCharacterIds = refreshed.OwnerCharacterIds;
                     saveEntry.Employees = refreshed.Employees;
+                    saveEntry.StorageFurnitures = refreshed.StorageFurnitures;
                 }
                 else
                 {
@@ -817,6 +871,11 @@ namespace MWI.WorldSystem
                             // Restore boss + crew. Owner field also covers ResidentialBuilding via the Building.OwnerIds path.
                             if (restoredBuilding is CommercialBuilding commercial)
                                 commercial.RestoreFromSaveData(bSave.OwnerCharacterIds, bSave.Employees);
+
+                            // Restore storage furniture contents. TrySpawnDefaultFurniture
+                            // ran synchronously inside the building's OnNetworkSpawn above,
+                            // so live StorageFurniture instances are present and addressable.
+                            RestoreStorageFurnitureContents(restoredBuilding, bSave);
                         }
                     }
                     spawnedCount++;
@@ -828,6 +887,101 @@ namespace MWI.WorldSystem
             }
 
             Debug.Log($"<color=cyan>[MapController:SpawnSavedBuildings]</color> Map '{MapId}': spawned {spawnedCount} building(s) from save data.");
+        }
+
+        /// <summary>
+        /// Server-only. Restores the saved <see cref="StorageFurniture"/> contents on a
+        /// freshly-spawned <paramref name="building"/> from <paramref name="bSave"/>.
+        /// Walks every live StorageFurniture on the building, looks up its persisted
+        /// entry by composite key (see <see cref="BuildingSaveData.ComputeStorageFurnitureKey"/>),
+        /// rehydrates each non-empty slot's <see cref="ItemInstance"/> via the same
+        /// recipe as <c>StorageFurnitureNetworkSync.TryDeserializeEntry</c>
+        /// (Resources lookup → CreateInstance → JsonOverwrite → re-bind ItemSO),
+        /// and pushes the result through <see cref="StorageFurniture.RestoreFromSaveData"/>.
+        ///
+        /// The <c>OnInventoryChanged</c> fired at the end of <c>RestoreFromSaveData</c>
+        /// flows through the sibling <c>StorageFurnitureNetworkSync</c> (already
+        /// subscribed in its server-side OnNetworkSpawn) which rewrites the replicated
+        /// <c>NetworkList</c>. Late-joining clients see populated state on connect.
+        ///
+        /// Per-slot try/catch (rule #31): one bad item never blocks the rest of the
+        /// restore. Per-furniture try/catch (rule #31): one bad storage never blocks
+        /// other storages on the same building.
+        /// </summary>
+        private void RestoreStorageFurnitureContents(Building building, BuildingSaveData bSave)
+        {
+            if (building == null || bSave == null || bSave.StorageFurnitures == null || bSave.StorageFurnitures.Count == 0)
+                return;
+
+            // Cache the SO catalog ONCE per building rather than per-slot — Resources.LoadAll
+            // is expensive and the live storage count per building is small.
+            ItemSO[] allItems = Resources.LoadAll<ItemSO>("Data/Item");
+
+            int restoredFurniture = 0;
+            int restoredItems = 0;
+
+            foreach (var storage in building.GetFurnitureOfType<StorageFurniture>())
+            {
+                if (storage == null) continue;
+
+                try
+                {
+                    string liveKey = BuildingSaveData.ComputeStorageFurnitureKey(storage, building.transform);
+                    var saved = bSave.StorageFurnitures.Find(s => s != null && s.FurnitureKey == liveKey);
+                    if (saved == null)
+                    {
+                        // Not all storages need to be in the save (e.g. a brand-new chest
+                        // added to an authored layout after the world was saved). Silent OK.
+                        continue;
+                    }
+
+                    var entries = new List<(int slotIndex, ItemInstance instance)>(saved.Slots != null ? saved.Slots.Count : 0);
+                    if (saved.Slots != null)
+                    {
+                        foreach (var slotSave in saved.Slots)
+                        {
+                            if (slotSave == null || string.IsNullOrEmpty(slotSave.ItemId)) continue;
+
+                            try
+                            {
+                                ItemSO so = System.Array.Find(allItems, m => m != null && m.ItemId == slotSave.ItemId);
+                                if (so == null)
+                                {
+                                    Debug.LogError($"<color=red>[MapController:RestoreStorage]</color> Could not resolve ItemSO id='{slotSave.ItemId}' for storage '{liveKey}' on building '{building.BuildingName}'. Slot LOST.");
+                                    continue;
+                                }
+
+                                ItemInstance inst = so.CreateInstance();
+                                if (!string.IsNullOrEmpty(slotSave.JsonData))
+                                {
+                                    JsonUtility.FromJsonOverwrite(slotSave.JsonData, inst);
+                                }
+                                inst.ItemSO = so; // FromJsonOverwrite wipes the SO ref — restore it.
+                                entries.Add((slotSave.SlotIndex, inst));
+                            }
+                            catch (System.Exception ex)
+                            {
+                                Debug.LogException(ex);
+                                Debug.LogError($"<color=red>[MapController:RestoreStorage]</color> Failed to deserialize slot {slotSave.SlotIndex} (id='{slotSave.ItemId}') on '{liveKey}' — skipped.");
+                            }
+                        }
+                    }
+
+                    storage.RestoreFromSaveData(entries);
+                    restoredFurniture++;
+                    restoredItems += entries.Count;
+                }
+                catch (System.Exception ex)
+                {
+                    Debug.LogException(ex);
+                    Debug.LogError($"<color=red>[MapController:RestoreStorage]</color> Failed to restore storage on building '{building.BuildingName}'.");
+                }
+            }
+
+            if (restoredFurniture > 0 || (bSave.StorageFurnitures != null && bSave.StorageFurnitures.Count > 0))
+            {
+                Debug.Log($"<color=green>[MapController:RestoreStorage]</color> Building '{building.BuildingName}' on '{MapId}': restored {restoredItems} item(s) across {restoredFurniture} storage furniture(s).");
+            }
         }
 
         /// <summary>
@@ -920,7 +1074,60 @@ namespace MWI.WorldSystem
                 }
             }
 
-            Debug.Log($"<color=green>[MapController:SpawnNPCsFromSnapshot]</color> Spawned {snapshotData.HibernatedNPCs.Count} NPCs from snapshot on map '{MapId}'.");
+            // Also respawn any saved WorldItems for this map.
+            SpawnWorldItemsFromSnapshot(snapshotData);
+
+            Debug.Log($"<color=green>[MapController:SpawnNPCsFromSnapshot]</color> Spawned {snapshotData.HibernatedNPCs.Count} NPCs and {snapshotData.WorldItems.Count} WorldItems from snapshot on map '{MapId}'.");
+        }
+
+        /// <summary>
+        /// Server-only. Recreates each saved WorldItem on this map. Looks up the ItemSO by ID
+        /// from Resources/Data/Item, rehydrates the ItemInstance from its JSON state, and calls
+        /// WorldItem.SpawnWorldItem which networks the item and parents it under this map.
+        /// </summary>
+        private void SpawnWorldItemsFromSnapshot(MapSaveData snapshotData)
+        {
+            if (snapshotData == null || snapshotData.WorldItems == null || snapshotData.WorldItems.Count == 0)
+                return;
+
+            ItemSO[] allItems = Resources.LoadAll<ItemSO>("Data/Item");
+
+            int spawnedCount = 0;
+            foreach (var itemSave in snapshotData.WorldItems)
+            {
+                if (string.IsNullOrEmpty(itemSave.ItemId))
+                {
+                    Debug.LogWarning($"<color=orange>[MapController:SpawnWorldItemsFromSnapshot]</color> WorldItem entry has empty ItemId on map '{MapId}'. Skipping.");
+                    continue;
+                }
+
+                ItemSO so = System.Array.Find(allItems, m => m.ItemId == itemSave.ItemId);
+                if (so == null)
+                {
+                    Debug.LogError($"<color=red>[MapController:SpawnWorldItemsFromSnapshot]</color> Could not find ItemSO with ID='{itemSave.ItemId}' for map '{MapId}'. Item LOST.");
+                    continue;
+                }
+
+                try
+                {
+                    ItemInstance instance = so.CreateInstance();
+                    if (!string.IsNullOrEmpty(itemSave.JsonData))
+                    {
+                        JsonUtility.FromJsonOverwrite(itemSave.JsonData, instance);
+                    }
+                    instance.ItemSO = so;
+
+                    WorldItem.SpawnWorldItem(instance, itemSave.Position, itemSave.Rotation);
+                    spawnedCount++;
+                }
+                catch (System.Exception ex)
+                {
+                    Debug.LogException(ex);
+                    Debug.LogError($"<color=red>[MapController:SpawnWorldItemsFromSnapshot]</color> Failed to respawn WorldItem '{itemSave.ItemId}' on map '{MapId}': {ex.Message}");
+                }
+            }
+
+            Debug.Log($"<color=green>[MapController:SpawnWorldItemsFromSnapshot]</color> Respawned {spawnedCount}/{snapshotData.WorldItems.Count} WorldItems on map '{MapId}'.");
         }
 
         private void Hibernate()
@@ -1058,7 +1265,8 @@ namespace MWI.WorldSystem
                         saveEntry.State = refreshed.State;
                         saveEntry.OwnerCharacterIds = refreshed.OwnerCharacterIds;
                         saveEntry.Employees = refreshed.Employees;
-                        Debug.Log($"<color=orange>[MapController:Hibernate]</color> Updated existing save entry for '{building.BuildingName}'. State={saveEntry.State}, owners={saveEntry.OwnerCharacterIds.Count}, employees={saveEntry.Employees.Count}");
+                        saveEntry.StorageFurnitures = refreshed.StorageFurnitures;
+                        Debug.Log($"<color=orange>[MapController:Hibernate]</color> Updated existing save entry for '{building.BuildingName}'. State={saveEntry.State}, owners={saveEntry.OwnerCharacterIds.Count}, employees={saveEntry.Employees.Count}, storages={saveEntry.StorageFurnitures.Count}");
                     }
                     else
                     {
@@ -1085,6 +1293,30 @@ namespace MWI.WorldSystem
                 }
             }
 
+            // 2.6 Serialize and despawn WorldItems on this map (mirrors NPC hibernation).
+            // Items currently being carried are skipped — they live in a Character's inventory.
+            HashSet<WorldItem> processedItems = new HashSet<WorldItem>();
+            foreach (var col in colliders)
+            {
+                WorldItem worldItem = col.GetComponent<WorldItem>() ?? col.GetComponentInParent<WorldItem>();
+                if (worldItem == null || !processedItems.Add(worldItem)) continue;
+                if (worldItem.IsBeingCarried) continue;
+                if (worldItem.ItemInstance == null || worldItem.ItemInstance.ItemSO == null) continue;
+
+                _hibernationData.WorldItems.Add(new WorldItemSaveData
+                {
+                    ItemId = worldItem.ItemInstance.ItemSO.ItemId,
+                    JsonData = JsonUtility.ToJson(worldItem.ItemInstance),
+                    Position = worldItem.transform.position,
+                    Rotation = worldItem.transform.rotation
+                });
+
+                if (worldItem.NetworkObject != null && worldItem.NetworkObject.IsSpawned)
+                    worldItem.NetworkObject.Despawn(true);
+                else
+                    Destroy(worldItem.gameObject);
+            }
+
             // 3. Destroy Virtual Harvesting Buildings
             foreach (Transform child in transform)
             {
@@ -1094,7 +1326,7 @@ namespace MWI.WorldSystem
                 }
             }
 
-            Debug.Log($"<color=orange>[MapController]</color> Map '{MapId}' Hibernated. {_hibernationData.HibernatedNPCs.Count} NPCs and {processedBuildings.Count} buildings serialized and despawned.");
+            Debug.Log($"<color=orange>[MapController]</color> Map '{MapId}' Hibernated. {_hibernationData.HibernatedNPCs.Count} NPCs, {processedBuildings.Count} buildings, and {_hibernationData.WorldItems.Count} WorldItems serialized and despawned.");
         }
 
         private void WakeUp()
@@ -1194,6 +1426,9 @@ namespace MWI.WorldSystem
                                     if (restoredBuilding is CommercialBuilding commercial)
                                         commercial.RestoreFromSaveData(bSave.OwnerCharacterIds, bSave.Employees);
 
+                                    // Restore storage furniture contents (mirrors SpawnSavedBuildings).
+                                    RestoreStorageFurnitureContents(restoredBuilding, bSave);
+
                                     Debug.Log($"<color=green>[MapController:WakeUp]</color> Building '{bSave.PrefabId}' restored with ID={bSave.BuildingId} at {worldPos}.");
                                 }
                             }
@@ -1217,7 +1452,8 @@ namespace MWI.WorldSystem
                 SpawnVirtualBuildings();
             }
 
-            if (_hibernationData != null && _hibernationData.HibernatedNPCs.Count > 0)
+            if (_hibernationData != null &&
+                (_hibernationData.HibernatedNPCs.Count > 0 || _hibernationData.WorldItems.Count > 0))
             {
                 // 4. Run MacroSimulator catch-up on NPCs
                 MacroSimulator.SimulateCatchUp(_hibernationData, _timeManager.CurrentDay, _timeManager.CurrentTime01, JobYields);
@@ -1227,7 +1463,7 @@ namespace MWI.WorldSystem
                 if (terrainGrid != null && _hibernationData?.TerrainCells != null)
                     terrainGrid.RestoreFromSaveData(_hibernationData.TerrainCells);
 
-                // 5. Spawn NPCs at their simulated positions (shared with snapshot restore)
+                // 5. Spawn NPCs and WorldItems at their simulated positions (shared with snapshot restore)
                 SpawnNPCsFromSnapshot(_hibernationData);
             }
 

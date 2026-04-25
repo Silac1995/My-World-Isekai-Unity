@@ -25,11 +25,13 @@ namespace MWI.AI
 
         private WorkPhase _currentPhase = WorkPhase.MovingToBuilding;
         private bool _warnedNoTimeClock = false;
+        private bool _warnedNoInteractable = false;
 
         protected override void OnEnter(Blackboard bb)
         {
             _currentPhase = WorkPhase.MovingToBuilding;
             _warnedNoTimeClock = false;
+            _warnedNoInteractable = false;
         }
 
         protected override BTNodeStatus OnExecute(Blackboard bb)
@@ -116,7 +118,14 @@ namespace MWI.AI
             var interactable = clock.GetComponent<TimeClockFurnitureInteractable>();
             if (interactable == null)
             {
-                Debug.LogError($"<color=red>[BTAction_Work]</color> {workplace.BuildingName}'s TimeClockFurniture has no TimeClockFurnitureInteractable sibling. Falling back to zone-punch.");
+                if (!_warnedNoInteractable)
+                {
+                    // One-shot per BT-branch-entry (OnEnter resets the flag). Otherwise this LogError
+                    // fires every BT tick per NPC attempting to work at a misconfigured workplace and
+                    // progressively fills the console buffer.
+                    Debug.LogError($"<color=red>[BTAction_Work]</color> {workplace.BuildingName}'s TimeClockFurniture has no TimeClockFurnitureInteractable sibling. Falling back to zone-punch.");
+                    _warnedNoInteractable = true;
+                }
                 movement.Stop();
                 _currentPhase = WorkPhase.PunchingIn;
                 Action_PunchIn fallback = new Action_PunchIn(self, workplace);

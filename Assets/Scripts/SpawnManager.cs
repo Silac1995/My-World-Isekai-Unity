@@ -116,6 +116,7 @@ public class SpawnManager : MonoBehaviour
                 });
 
                 netObj.Spawn(true);
+                WorldItem.ParentToContainingMap(worldItemGo);
             }
             else
             {
@@ -171,6 +172,7 @@ public class SpawnManager : MonoBehaviour
             if (go.TryGetComponent(out Unity.Netcode.NetworkObject netObj))
             {
                 netObj.Spawn(true);
+                WorldItem.ParentToContainingMap(go);
             }
 
             worldItem.SetNetworkData(new NetworkItemData

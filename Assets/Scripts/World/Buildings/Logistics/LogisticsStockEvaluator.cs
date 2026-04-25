@@ -61,52 +61,76 @@ public class LogisticsStockEvaluator
 
         var policy = _facade.Policy;
 
-        foreach (var target in targets)
+        // Defensive iteration (rule #31): wrap the body in try/catch so a single item failing —
+        // null supplier, broken policy, missing reference — doesn't abort the whole stock pass and
+        // silently skip every subsequent item in the list. Without this wrapper, a NullRef on
+        // _itemsToSell[1] would prevent _itemsToSell[2] from ever being checked, exactly matching
+        // the "only orders the first item" symptom.
+        for (int i = 0; i < targets.Count; i++)
         {
-            ItemSO itemSO = target.ItemToStock;
-            int minStock = target.MinStock;
-            if (itemSO == null || minStock <= 0) continue;
-
-            int currentStock = _building.GetItemCount(itemSO);
-            int alreadyOrdered = _orderBook.SumInFlightQuantityFor(itemSO);
-            int virtualStock = currentStock + alreadyOrdered;
-
-            int quantityToOrder = 0;
+            var target = targets[i];
             try
             {
-                quantityToOrder = policy.ComputeReorderQuantity(virtualStock, target);
+                ProcessOneStockTarget(target, policy, i, targets.Count);
             }
             catch (System.Exception e)
             {
                 Debug.LogException(e);
-                Debug.LogError($"[LogisticsStockEvaluator] {_building?.BuildingName}: policy '{(policy as Object)?.name ?? "<null>"}' threw for item '{itemSO.ItemName}'. Falling back to 0.");
-                quantityToOrder = 0;
+                Debug.LogError($"[LogisticsStockEvaluator] {_building?.BuildingName}: ProcessOneStockTarget threw for target index {i} (item='{target.ItemToStock?.ItemName}'). Continuing with next target.");
             }
+        }
+    }
 
-            if (quantityToOrder <= 0)
-            {
-                if (_facade.LogLogisticsFlow)
-                {
-                    Debug.Log($"<color=#66ccff>[LogisticsDBG]</color>   ✓ {itemSO.ItemName}: virtual={virtualStock} (physical={currentStock}, inFlight={alreadyOrdered}) / min={minStock} — policy says no order.");
-                }
-                else
-                {
-                    Debug.Log($"<color=cyan>[BuildingLogisticsManager]</color>   ✓ {itemSO.ItemName}: {virtualStock}/{minStock} (Virtuel) — stock suffisant.");
-                }
-                continue;
-            }
+    private void ProcessOneStockTarget(StockTarget target, ILogisticsPolicy policy, int index, int totalTargets)
+    {
+        ItemSO itemSO = target.ItemToStock;
+        int minStock = target.MinStock;
+        if (itemSO == null || minStock <= 0) return;
 
+        int currentStock = _building.GetItemCount(itemSO);
+        int alreadyOrdered = _orderBook.SumInFlightQuantityFor(itemSO);
+        int virtualStock = currentStock + alreadyOrdered;
+
+        int quantityToOrder = 0;
+        try
+        {
+            quantityToOrder = policy.ComputeReorderQuantity(virtualStock, target);
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogException(e);
+            Debug.LogError($"[LogisticsStockEvaluator] {_building?.BuildingName}: policy '{(policy as Object)?.name ?? "<null>"}' threw for item '{itemSO.ItemName}'. Falling back to 0.");
+            quantityToOrder = 0;
+        }
+
+        if (CommercialBuilding.DebugInventorySync)
+        {
+            Debug.Log($"<color=#aaccff>[StockCheck {index + 1}/{totalTargets}]</color> {_building.BuildingName} :: {itemSO.ItemName} (id='{itemSO.ItemId}') → physical={currentStock}, inFlight={alreadyOrdered}, virtual={virtualStock}, min={minStock}, policy→order={quantityToOrder}.");
+        }
+
+        if (quantityToOrder <= 0)
+        {
             if (_facade.LogLogisticsFlow)
             {
-                Debug.Log($"<color=#ffcc66>[LogisticsDBG]</color>   ✗ {itemSO.ItemName}: virtual={virtualStock} (physical={currentStock}, inFlight={alreadyOrdered}) / min={minStock} — policy requests {quantityToOrder}, routing to supplier.");
+                Debug.Log($"<color=#66ccff>[LogisticsDBG]</color>   ✓ {itemSO.ItemName}: virtual={virtualStock} (physical={currentStock}, inFlight={alreadyOrdered}) / min={minStock} — policy says no order.");
             }
             else
             {
-                Debug.Log($"<color=yellow>[BuildingLogisticsManager]</color>   ✗ {itemSO.ItemName}: {virtualStock}/{minStock} (Virtuel) — stock bas, commande nécessaire...");
+                Debug.Log($"<color=cyan>[BuildingLogisticsManager]</color>   ✓ {itemSO.ItemName}: {virtualStock}/{minStock} (Virtuel) — stock suffisant.");
             }
-
-            RequestStock(itemSO, quantityToOrder);
+            return;
         }
+
+        if (_facade.LogLogisticsFlow)
+        {
+            Debug.Log($"<color=#ffcc66>[LogisticsDBG]</color>   ✗ {itemSO.ItemName}: virtual={virtualStock} (physical={currentStock}, inFlight={alreadyOrdered}) / min={minStock} — policy requests {quantityToOrder}, routing to supplier.");
+        }
+        else
+        {
+            Debug.Log($"<color=yellow>[BuildingLogisticsManager]</color>   ✗ {itemSO.ItemName}: {virtualStock}/{minStock} (Virtuel) — stock bas, commande nécessaire...");
+        }
+
+        RequestStock(itemSO, quantityToOrder);
     }
 
     /// <summary>

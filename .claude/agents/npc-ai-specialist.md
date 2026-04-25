@@ -1,6 +1,6 @@
 ---
 name: npc-ai-specialist
-description: "Expert in NPC autonomous behavior — Behaviour Tree priority system, GOAP backward-search planner, CharacterNeeds provider pattern, CharacterSchedule time slots, job system (CharacterJob + CommercialBuilding + work phases), logistics cycle, and all 19 GOAP actions. Use when implementing, debugging, or designing anything related to NPC decision-making, AI behavior, needs, schedules, jobs, or GOAP goals."
+description: "Expert in NPC autonomous behavior — Behaviour Tree priority system, GOAP backward-search planner, CharacterNeeds provider pattern, CharacterSchedule time slots, job system (CharacterJob + CommercialBuilding + work phases), logistics cycle (incl. furniture-first deposit + pickup paths), and all 20 GOAP actions. Use when implementing, debugging, or designing anything related to NPC decision-making, AI behavior, needs, schedules, jobs, or GOAP goals."
 model: opus
 color: green
 memory: project
@@ -94,7 +94,7 @@ IsComplete                 // Done?
 2. `Replan()` — collect goals from needs, sort by priority, find cheapest plan
 3. `ExecutePlan()` — tick current action, dequeue on completion, invalidate on `!IsValid()`
 
-### 6. All 19 GOAP Actions
+### 6. All 20 GOAP Actions
 
 | Action | Purpose |
 |--------|---------|
@@ -103,18 +103,20 @@ IsComplete                 // Done?
 | `GoapAction_GoToBoss` | Navigate to job location boss |
 | `GoapAction_WearClothing` | Equip clothing from inventory |
 | `GoapAction_GoShopping` | Navigate to shop, buy item |
-| `GoapAction_LocateItem` | Search for item location (transporter: also triggers a `RefreshStorageInventory` fallback audit if all reserved items are invisible to awareness + `GetWorldItemsInStorage`) |
-| `GoapAction_MoveToItem` | Navigate to item location |
-| `GoapAction_PickupItem` | Pick up reserved transport item — self-heals when `source.RemoveExactItemFromInventory` returns false but the `WorldItem.ItemInstance` is still in `CurrentOrder.ReservedItems`; proceeds with pickup + warn-logs. Only reports `ReportMissingReservedItem` + cancel when both the logical inventory AND the reservation are gone. |
+| `GoapAction_LocateItem` | **Furniture-first scan**: walks `source.GetItemsInStorageFurniture()` first, sets `JobTransporter.TargetSourceFurniture` + `TargetItemFromFurniture` on hit. Falls back to CharacterAwareness scan + `GetWorldItemsInStorage`. Audit branch (logical-but-not-physical) preserves slot-stored items via a `GetItemsInStorageFurniture()` check before triggering `RefreshStorageInventory` + cancel. |
+| `GoapAction_MoveToItem` | Navigate to item location. **Mutual-exclusion guard**: `IsValid` returns false when `JobTransporter.TargetSourceFurniture != null` (the furniture path runs `GoapAction_TakeFromSourceFurniture` instead). |
+| `GoapAction_PickupItem` | Pick up reserved transport item from a `WorldItem`. **Mutual-exclusion guard**: `IsValid` returns false when `TargetSourceFurniture != null`. Self-heals when `source.RemoveExactItemFromInventory` returns false but the `WorldItem.ItemInstance` is still in `CurrentOrder.ReservedItems`; proceeds with pickup + warn-logs. Only reports `ReportMissingReservedItem` + cancel when both the logical inventory AND the reservation are gone. |
+| `GoapAction_TakeFromSourceFurniture` | **Transporter furniture-first pickup**: walks to `TargetSourceFurniture.GetInteractionPosition(worker)`, runs `CharacterTakeFromFurnitureAction`, calls `source.RemoveExactItemFromInventory` + `JobTransporter.AddCarriedItem`. 5-second softlock guard with `PathingMemory.RecordFailure` on timeout (clears `TargetSourceFurniture` so LocateItem replans into the loose path). Mutually exclusive with `MoveToItem` / `PickupItem` via the guard above. Cost = 0.5f. |
 | `GoapAction_PickupLooseItem` | Pick up WorldItem from ground |
 | `GoapAction_MoveToDestination` | Navigate to arbitrary position |
-| `GoapAction_DepositResources` | Drop harvested items in storage |
-| `GoapAction_GatherStorageItems` | Collect items from building storage |
+| `GoapAction_DepositResources` | Drop harvested items in storage. **Furniture-opportunistic**: before queuing `CharacterDropItem`, calls `FindStorageFurnitureForItem` and gates on `Vector3.Distance(worker, furniture.GetInteractionPosition(worker)) ≤ 5f` (≈0.76 m). On hit, queues `CharacterStoreInFurnitureAction` instead. Threshold preserves harvester throughput — long-haul slot organization belongs to the LogisticsManager. |
+| `GoapAction_GatherStorageItems` | LogisticsManager inbound. **Furniture-first with per-item re-targeting**: `DetermineStoragePosition()` calls `FindStorageFurnitureForItem(carriedItem)` first; on hit sets `_targetFurniture` + `_targetPos = furniture.GetInteractionPosition(worker)`. `MovingToStorage` flat-XZ ≤1.5u arrival check when furniture target. `DroppingOff` queues `CharacterStoreInFurnitureAction` on furniture target, falls back to `CharacterDropItem` otherwise. After every successful deposit, `FinishDropoff` peeks the next carried item and re-routes per-item — multi-item delivery can fan across furniture pieces. **5-second softlock guard** with per-action `_excludedFurniture` HashSet — falls back to zone after timeout, blacklists the furniture for the rest of this action invocation. State-transition logging behind `NPCDebug.VerboseActions` (`[GatherDBG]`). |
 | `GoapAction_ExploreForHarvestables` | Scan for harvestable resources |
 | `GoapAction_HarvestResources` | Execute harvest on resource node |
 | `GoapAction_PlaceOrder` | Place commercial order with NPC |
 | `GoapAction_DeliverItem` | Transport item to destination |
 | `GoapAction_GoToSourceStorage` | Move to supplier building |
+| `GoapAction_StageItemForPickup` | LogisticsManager outbound. Moves reserved transport items from `StorageFurniture` slots OR `StorageZone` `WorldItem`s into the building's `PickupZone`. Slot-source path: `FindReservedItemInFurniture()` → `MovingToFurnitureSource` → `TakingFromFurniture` (`CharacterTakeFromFurnitureAction`) → `MovingToPickup` → `DroppingOff`. Loose-source path: original WorldItem flow. Cost = 0.2f (cheaper than `GatherStorageItems` 0.5f, deferring to `PlaceOrder` 0.1f). |
 | `GoapAction_IdleInCommercialBuilding` | Wait in commercial building |
 | `GoapAction_IdleInBuilding` | Wait in generic building |
 
@@ -214,7 +216,7 @@ Detection (OnWorkerPunchIn: IStockProvider → policy-driven BuyOrder)
 | `NPCController` | `Assets/Scripts/Character/CharacterControllers/NPCController.cs` |
 | All BT conditions | `Assets/Scripts/AI/Conditions/` |
 | All BT actions | `Assets/Scripts/AI/Actions/` |
-| All GOAP actions (19) | `Assets/Scripts/AI/GOAP/Actions/` |
+| All GOAP actions (20) | `Assets/Scripts/AI/GOAP/Actions/` |
 
 ## Mandatory Rules
 
@@ -242,6 +244,14 @@ Detection (OnWorkerPunchIn: IStockProvider → policy-driven BuyOrder)
 - Proactively flag: missing interaction sync, action cleanup gaps, potential BT priority conflicts, missing macro-sim formulas.
 
 ## Recent changes
+
+- **2026-04-24 — Host-only progressive-freeze fix (GOAP throttle + log discipline + planner allocation purge).** Three independent root causes converged on the same symptom (host stays smooth for minutes, then progressively freezes; clients unaffected):
+  - **GOAP Replan throttle.** `CharacterGoapController._planReevaluationInterval` (default 2f) was declared as a SerializeField but never wired up — `_timer` was never incremented. Jobless NPCs replanned 10–20×/sec (OnEnter + OnExecute every BT tick) instead of once per 2s. Fix: gate `Replan()` on `UnityEngine.Time.time - _lastReplanAttemptTime < _planReevaluationInterval`. **Do NOT reset the timer in `CancelPlan()`** — `BTAction_ExecuteGoapPlan.OnExit` calls Cancel every failed tick and would defeat the throttle. For rare intent-driven immediate replans (combat end, revival, dialogue), call the new `ForceReplanNextTick()` explicitly. See [Assets/Scripts/Character/CharacterGoapController.cs](../../Assets/Scripts/Character/CharacterGoapController.cs).
+  - **GoapPlanner allocation elimination.** `GoapAction.ApplyEffects` used to allocate a fresh `Dictionary<string, bool>` at every node of the backward search — thousands per Plan, dominant GC source. `GoapPlanner` now mutates a single static `_scratchState` with a pooled journal-based undo (`StateRestoreEntry` + `_restorePool` stack). `PlanNode.State` was removed (reconstruction walks `Parent` + `Action` only). Also: `_usedActions` HashSet with backtracking replaces the old `availableActions.Where(a => a != action).ToList()` recursion. Non-reentrant — do not call `Plan()` recursively from any `GoapAction` method.
+  - **Debug.Log discipline.** On Windows, Unity's Editor console rendering cost grows super-linearly with entries, so any un-gated `Debug.Log` in a per-tick hot path (BT tick, `Job.Execute`, `GoapAction.Execute`, `Update`/`FixedUpdate`) progressively stalls the editor. Introduced [Assets/Scripts/AI/NPCDebug.cs](../../Assets/Scripts/AI/NPCDebug.cs) with four domain flags (`VerbosePlanning`, `VerboseJobs`, `VerboseActions`, `VerboseMovement`, all default `false`). Gated all per-tick logs in `JobLogisticsManager`, `JobTransporter`, `JobHarvester`, `GoapAction_HarvestResources`, `GoapAction_LocateItem`, `GoapPlanner` (via its existing `VerboseLogging`), and `CharacterGoapController._debugLog`. Added `_warnedNoInteractable` one-shot flags in `BTAction_Work` and `BTAction_PunchOut` to mirror the existing `_warnedNoTimeClock` pattern. **When adding any new log in these areas: gate it, period.** See [[host-progressive-freeze-debug-log-spam]] gotcha page for the full guard-pattern menu.
+  - **BTAction_ExecuteGoapPlan resolver tolerance.** `OnEnter` now prefers `GetComponentInChildren<CharacterGoapController>()` (honors the Character Facade convention on `Character_Default.prefab` which has a `GOAPController` child), with a silent `AddComponent<CharacterGoapController>()` fallback on the root for prefabs without the child (`Character_Default_Humanoid/Quadruped`, `Character_Animal`). `CharacterSystem.OnEnable` auto-registers the component with the capability registry so `Character.CharacterGoap` resolves afterwards. **Never put a `Debug.LogError` in the not-found branch** — it fires every BT tick per NPC and recreates the host-freeze pattern.
+  - **`BuildingManager.FindAvailableJob<T>`** now iterates from a random start index (`Random.Range(0, count)` + modulo) instead of `allBuildings.OrderBy(b => Random.value)`. Same "don't flock to the same boss first" property; O(B) instead of O(B·log B); zero LINQ allocation.
+  - See [.agent/skills/goap/SKILL.md](../../.agent/skills/goap/SKILL.md) §8.5 "Performance: Replan Throttle & Non-Allocating Planner" for the full rule set, and [[ai-goap]] for the architectural write-up.
 
 - **2026-04-24 — Hold-E "Apply for Job" menu entries + ownership replication fix.** `CharacterJob` now implements `IInteractionProvider`; when the target is a boss/owner with vacant jobs, the hold-E menu emits one `"Apply for {JobTitle}"` entry per vacancy (disabled with `(you already have a job)` when the interactor has one). Click routes via direct `InteractionAskForJob.Execute` on host or `CharacterJob.RequestJobApplicationServerRpc(ownerNetId, jobStableIndex)` on remote clients. Server re-validates ownership, index range, and `!job.IsAssigned`. **Ownership state refactor shipped alongside:** the old `_ownedBuilding` private field (not replicated) is gone — `CharacterJob.OwnedBuilding` is now derived by scanning `BuildingManager.Instance.allBuildings` for the first `CommercialBuilding` whose `Room._ownerIds` NetworkList lists this character (`Room.IsOwner(Character)`); `IsOwner` is derived from `OwnedBuilding != null`. This closes a silent-failure class where remote clients' `IsOwner`/`OwnedBuilding` was stale. `jobStableIndex` is the index in the full `CommercialBuilding.Jobs` list, NOT the volatile `GetAvailableJobs()` subset. See `.agent/skills/job_system/SKILL.md` §"Player Entry Point".
 

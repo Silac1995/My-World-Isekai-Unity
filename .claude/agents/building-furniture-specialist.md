@@ -1,6 +1,6 @@
 ---
 name: building-furniture-specialist
-description: "Expert in building and furniture systems — Building/ComplexRoom/Room hierarchy, FurnitureGrid discrete placement, furniture occupancy state machine, BuildingPlacementManager with community permissions, CommercialBuilding jobs/logistics/tasks, IStockProvider contract, pluggable LogisticsPolicy SOs, BuildingLogisticsManager facade + sub-components, building interiors with spatial offsets, BuildingInteriorRegistry lazy-spawn, and construction state. Use when implementing, debugging, or designing anything related to buildings, furniture, rooms, grids, placement, interiors, or commercial logistics."
+description: "Expert in building and furniture systems — Building/ComplexRoom/Room hierarchy, FurnitureGrid discrete placement, furniture occupancy state machine, BuildingPlacementManager with community permissions, CommercialBuilding jobs/logistics/tasks, IStockProvider contract, pluggable LogisticsPolicy SOs, BuildingLogisticsManager facade + sub-components, StorageFurniture slot-based containers + StorageVisualDisplay renderer, FindStorageFurnitureForItem / GetItemsInStorageFurniture logistics hooks, building interiors with spatial offsets, BuildingInteriorRegistry lazy-spawn, and construction state. Use when implementing, debugging, or designing anything related to buildings, furniture, rooms, grids, placement, interiors, storage containers, or commercial logistics."
 model: opus
 color: orange
 memory: project
@@ -70,6 +70,46 @@ Free (Occupant=null, ReservedBy=null)
 Only one character can occupy. `Furniture.IsFree()` checks both occupant and reserved.
 
 **Furniture fields:** `_furnitureName`, `_furnitureTag` (enum), `_interactionPoint`, `_sizeInCells`, `_furnitureItemSO` (bidirectional link to portable form)
+
+**`Furniture.GetInteractionPosition()` resolution chain** — used by every AI action targeting a piece of furniture:
+1. Authored `_interactionPoint` Transform (preferred, always wins).
+2. Attached `FurnitureInteractable.InteractionZone.bounds` (`bounds.center` for parameterless overload, `bounds.ClosestPoint(fromPosition)` for the worker-aware overload — lands on navmesh-walkable face).
+3. `transform.position` (last resort — almost always inside the `NavMeshObstacle` carve, will softlock GOAP arrival; the 5s timeout in `GoapAction_GatherStorageItems` and `GoapAction_TakeFromSourceFurniture` exists to catch this).
+
+`Furniture.Reset()` and the `[ContextMenu] "Auto Calculate Grid Size"` action both auto-create an `InteractionPoint` child at `(0, 0, halfDepth + 1)` when none exists. Always pass the worker's position via the `GetInteractionPosition(Vector3)` overload from any AI/GOAP code that has it — keeps the navmesh-walkable-face fallback live.
+
+### 3b. StorageFurniture — Slot-Based Container
+
+`StorageFurniture` extends `Furniture` and mirrors the player [[inventory]] pattern. See [[storage-furniture]] in `wiki/systems/` for the full architectural write-up.
+
+**Authoring:** four capacity ints on the prefab (`_miscCapacity`, `_weaponCapacity`, `_wearableCapacity`, `_anyCapacity`) → flat `List<ItemSlot>` built in `Awake()`. Slot subclasses (`Assets/Scripts/Inventory/`):
+- `MiscSlot` — anything except `WeaponInstance` (matches `Inventory.cs` convention; wearables fit too).
+- `WeaponSlot` — only `WeaponInstance`.
+- `WearableSlot` — only `WearableInstance` (added for storage authoring).
+- `AnySlot` — permissive catch-all (added for "global" storage).
+
+**Strict-first AddItem priority** — wearables: `WearableSlot → MiscSlot → AnySlot`; weapons: `WeaponSlot → AnySlot`; everything else: `MiscSlot → AnySlot`. Dedicated typed slots fill before the generic `AnySlot`.
+
+**Public API** — `AddItem(ItemInstance)`, `RemoveItem(ItemInstance)`, `RemoveItemFromSlot(ItemSlot)`, `GetItemSlot(int)`, `HasFreeSpaceFor*` family, `IsLocked` / `Lock()` / `Unlock()`, `event Action OnInventoryChanged`. `IsFull` getter iterates slots.
+
+**`StorageVisualDisplay` (optional renderer)** — add this companion component to shelves where contents should be visible; omit on chests for zero rendering cost. Authoring: `_displayAnchors` (`List<Transform>`; first-N-occupied mapping — see SKILL), `_itemScale` (uniform scale applied to spawned visuals; 0.7 is a sane shelf default). **Visual pipeline mirrors `WorldItem.Initialize` directly** but instantiates `ItemSO.ItemPrefab` (the visual sub-prefab — same content `WorldItem.AttachVisualPrefab` uses internally) instead of the full `WorldItemPrefab` wrapper. Adds a `SortingGroup` to the spawned root so 2D sprites layer correctly (the only thing the wrapper provided beyond raw visuals). Then applies `WearableHandlerBase` (sprite library + category + primary/secondary colors) for equipment or falls back to `ItemInstance.InitializeWorldPrefab` for simple items (apple, potion). Same shadow-casting policy as `WorldItem` via `ItemSO.CastsShadow`. **Critical client-side gotcha:** never instantiate the full `WorldItemPrefab` for visual-only purposes — the cloned `NetworkObject` interferes with parenting/visibility on clients, where NGO's spawn-tracking is stricter than the host's. Performance contract: per-ItemSO object pool (taking + re-storing the same item type doesn't allocate after the first time), event-driven via `OnInventoryChanged` (no `Update`, no coroutines), runtime physics/collider/NavMeshObstacle stripping on first instantiation so static shelf items can never push workers, carve the navmesh, or trigger collisions. **No distance gating today** — per-peer local culling tracked in `wiki/projects/optimisation-backlog.md`.
+
+**Logistics integration** — `CommercialBuilding` exposes two helpers:
+- `FindStorageFurnitureForItem(ItemInstance)` — first-fit unlocked furniture with compatible space; returns null when none fits.
+- `GetItemsInStorageFurniture()` — `IEnumerable<(furniture, item)>` enumerating every slot-stored instance, used by outbound logistics actions.
+
+**Two character actions** wire the slot transfer:
+- `CharacterStoreInFurnitureAction` — removes item from worker inventory/hands, inserts in slot. **No `WorldItem` is spawned** — slot data is logical-only. Re-validates lock + free-space at `OnApplyEffect`; rolls back to hands on slot-insert failure.
+- `CharacterTakeFromFurnitureAction` — mirror: pulls item out of slot, places in worker hands. Used by transporter pickup and outbound staging.
+
+**`AddToInventory` is idempotent** — `if (_inventory.Contains(item)) return;` was added to fix double-counting when an instance is re-added (e.g. after `RefreshStorageInventory` Pass 2 absorbed it then a worker drop calls `AddToInventory` again).
+
+**`RefreshStorageInventory` Pass 1 protects slot contents** — without this, every slot-stored item would be silently ghosted on the next punch-in (no `WorldItem` in `StorageZone` → flagged as ghost → removed from `_inventory`). The protection builds a `furnitureStoredInstances` HashSet from `GetItemsInStorageFurniture()` and skips those instances in the ghost check.
+
+**Known limitations (planned follow-ups)**:
+- Slot contents are server-only C# state (no `NetworkVariable` / `NetworkList` sync). Clients see empty containers; `StorageVisualDisplay` only renders on host.
+- `BuildingSaveData` does not include slot contents. Items vanish on map hibernation.
+- Both gaps are scheduled for a follow-up agent run on 2026-05-09.
 
 ### 4. Furniture Placement Flow
 
@@ -277,6 +317,14 @@ Detection (OnWorkerPunchIn: IStockProvider → BuyOrder, policy-driven)
 - Proactively flag: missing NavMesh rebuilds, incorrect grid origin calculations, door pairing issues, missing community permission checks.
 
 ## Recent changes
+
+- **2026-04-25 — `FurnitureManager.LoadExistingFurniture` is additive, not replace-style** (gotcha: `wiki/gotchas/furnituremanager-replace-style-rescan.md`):
+  - `Room.OnNetworkSpawn` and `Room.Start` both invoke `FurnitureManager.LoadExistingFurniture()` to handle nested-prefab bootstrap races (especially on clients, where child `NetworkObject`s can spawn after the parent's `OnNetworkSpawn`). The previous implementation did `_furnitures = new List<Furniture>(GetComponentsInChildren<Furniture>(true))` — a destructive snapshot.
+  - That snapshot **silently wiped** any furniture registered via `RegisterSpawnedFurnitureUnchecked`. `_defaultFurnitureLayout` parents the spawned furniture under the **building root** (NGO requires NetworkObject children to live under a NO ancestor; Room sits on a non-NO and reparenting throws `InvalidParentException`), so the room's transform tree never contained those entries — the rescan reset the list on every invocation.
+  - Symptom on the Forge: `Room_Main.FurnitureManager.Furnitures` empty after placement; crafting only worked through `CraftingBuilding.GetCraftableItems`'s transform-tree fallback (`GetComponentsInChildren<CraftingStation>(true)` on the building) which logged the `N CraftingStation(s) ... missing from any Room.FurnitureManager._furnitures list` warning every call.
+  - Fix: `LoadExistingFurniture` now prunes Unity fake-null entries, then merges newly-discovered transform children via `Contains`-then-`Add`. Grid registration on top is itself idempotent. **Never reintroduce a replace-style assignment to `_furnitures`** — the list is co-owned by transform-children discovery and programmatic registration; a snapshot rescan must respect both.
+  - The transform-tree fallback in `CraftingBuilding.GetCraftableItems` / `GetAllStations` / `GetStationsOfType` stays in place as defense-in-depth (covers `slot.TargetRoom` left unset, missing `FurnitureGrid`, and pure clients where `RegisterSpawnedFurnitureUnchecked` doesn't run). Its warning is now a real signal, not chronic noise.
+  - Pure-client gap: `_furnitures` on remote clients is still empty for default furniture (server-only registration, no NetworkList sync). Acceptable while no client-side reader other than the crafting fallback exists. If a client UI ever reads `Room.Furnitures` directly, network the registration (e.g. a `NetworkList<FixedString64Bytes>` keyed on `NetworkObjectId`).
 
 - **2026-04-24 — Time Clock furniture + shift roster single-sourced to NetworkList** (spec: `docs/superpowers/specs/2026-04-24-time-clock-furniture-design.md`):
   - **`TimeClockFurniture` + `TimeClockFurnitureInteractable`** added at `Assets/Scripts/World/Furniture/` + `Assets/Scripts/Interactable/`. `FurnitureTag.TimeClock` enum value. Prefab at `Assets/Prefabs/Furniture/TimeClock.prefab` — plain MonoBehaviours, **no NetworkObject** (crucial — nested NetworkObjects inside a runtime-spawned building prefab silently half-spawn and break client scene sync; parent `CommercialBuilding`'s NetworkBehaviour carries all replicated state).
