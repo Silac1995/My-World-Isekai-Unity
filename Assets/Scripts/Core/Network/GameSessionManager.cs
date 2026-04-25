@@ -249,12 +249,16 @@ public class GameSessionManager : MonoBehaviour
         if (nm == null || !nm.IsServer) return;
 
         var spawned = nm.SpawnManager?.SpawnedObjects;
+        var spawnedList = nm.SpawnManager?.SpawnedObjectsList;
         if (spawned == null || spawned.Count == 0) return;
 
         var ownerField = GetNetworkManagerOwnerField();
         var serializeMethod = GetSerializeMethod();
 
-        System.Collections.Generic.List<(ulong id, string reason, string name)> broken = null;
+        // Track the NetworkObject reference too — NGO's client-sync iterates SpawnedObjectsList
+        // (a HashSet<NetworkObject>) NOT the SpawnedObjects dict, so removing only from the dict
+        // leaves the broken entry in the iteration source and the NRE still fires.
+        System.Collections.Generic.List<(ulong id, string reason, string name, NetworkObject no)> broken = null;
 
         // Snapshot the dict keys first to allow mutation inside the loop.
         var keys = new System.Collections.Generic.List<ulong>(spawned.Keys);
@@ -315,22 +319,105 @@ public class GameSessionManager : MonoBehaviour
 
             if (reason != null)
             {
-                (broken ??= new System.Collections.Generic.List<(ulong, string, string)>()).Add((id, reason, noName));
+                (broken ??= new System.Collections.Generic.List<(ulong, string, string, NetworkObject)>()).Add((id, reason, noName, no));
             }
         }
 
-        if (broken == null)
+        // Defense-in-depth sweep: SpawnedObjectsList may contain entries the dict scan
+        // missed entirely (Spawn() that populated the HashSet but failed to add to the dict,
+        // Object.Destroy without proper Despawn, etc.). Probe every HashSet entry with the
+        // SAME checks we use on the dict — null, destroyed gameObject, null NetworkManagerOwner,
+        // and the Serialize() probe that NGO's actual sync would invoke.
+        System.Collections.Generic.List<(NetworkObject no, string reason, string name)> orphanedListEntries = null;
+        if (spawnedList != null)
         {
-            Debug.Log($"[GameSession] Pre-sync scan: {spawned.Count} spawned NetworkObjects, none broken. If Serialize still NRE's, the problem isn't in SpawnedObjects — investigate scene NOs or parenting.");
+            foreach (var listEntry in spawnedList)
+            {
+                string reason = null;
+                string entryName = "<null>";
+
+                if (listEntry == null)
+                {
+                    reason = "HashSet entry is null (destroyed?)";
+                }
+                else
+                {
+                    entryName = listEntry.name;
+                    if (!listEntry.gameObject)
+                    {
+                        reason = "HashSet entry GameObject destroyed";
+                    }
+                    else if (ownerField != null)
+                    {
+                        try
+                        {
+                            var owner = ownerField.GetValue(listEntry) as NetworkManager;
+                            if (owner == null)
+                            {
+                                reason = "HashSet entry NetworkManagerOwner is null";
+                            }
+                        }
+                        catch (System.Exception e)
+                        {
+                            reason = $"HashSet entry Exception reading NetworkManagerOwner: {e.Message}";
+                        }
+                    }
+
+                    if (reason == null && serializeMethod != null)
+                    {
+                        try
+                        {
+                            serializeMethod.Invoke(listEntry, new object[] { NetworkManager.ServerClientId, false });
+                        }
+                        catch (System.Reflection.TargetInvocationException tie)
+                        {
+                            var inner = tie.InnerException ?? tie;
+                            reason = $"HashSet entry Serialize probe threw {inner.GetType().Name}: {inner.Message}";
+                        }
+                        catch (System.Exception e)
+                        {
+                            reason = $"HashSet entry Serialize probe threw {e.GetType().Name}: {e.Message}";
+                        }
+                    }
+                }
+
+                if (reason != null)
+                {
+                    (orphanedListEntries ??= new System.Collections.Generic.List<(NetworkObject, string, string)>()).Add((listEntry, reason, entryName));
+                }
+            }
+        }
+
+        if (broken == null && orphanedListEntries == null)
+        {
+            Debug.Log($"[GameSession] Pre-sync scan: {spawned.Count} spawned NetworkObjects (HashSet count: {spawnedList?.Count ?? -1}), none broken. If Serialize still NRE's, the problem isn't in SpawnedObjects — investigate scene NOs or parenting.");
             return;
         }
 
-        foreach (var entry in broken)
+        if (broken != null)
         {
-            Debug.LogWarning(
-                $"[GameSession] Purging broken spawned NetworkObject id={entry.id} name='{entry.name}' reason='{entry.reason}'. " +
-                "This would have NRE'd NetworkObject.Serialize during client-sync. Trace the despawn/reparenting bug at the source.");
-            spawned.Remove(entry.id);
+            foreach (var entry in broken)
+            {
+                Debug.LogWarning(
+                    $"[GameSession] Purging broken spawned NetworkObject id={entry.id} name='{entry.name}' reason='{entry.reason}'. " +
+                    "This would have NRE'd NetworkObject.Serialize during client-sync. Trace the despawn/reparenting bug at the source.");
+                spawned.Remove(entry.id);
+                // CRITICAL: NGO's SceneEventData.AddSpawnedNetworkObjects iterates SpawnManager.SpawnedObjectsList
+                // (a HashSet<NetworkObject>), not SpawnedObjects (the dict). Removing only from the dict leaves
+                // the broken entry in the iteration source and Serialize still NRE's during client sync.
+                spawnedList?.Remove(entry.no);
+            }
+        }
+
+        if (orphanedListEntries != null)
+        {
+            foreach (var orphan in orphanedListEntries)
+            {
+                Debug.LogWarning(
+                    $"[GameSession] Purging orphaned SpawnedObjectsList entry name='{orphan.name}' reason='{orphan.reason}'. " +
+                    "This would have NRE'd NetworkObject.Serialize during client-sync. Trace the despawn/reparenting bug at the source.");
+                spawnedList.Remove(orphan.no);
+            }
         }
     }
 
