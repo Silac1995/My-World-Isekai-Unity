@@ -38,6 +38,7 @@ public class PlayerUI : MonoBehaviour
     [SerializeField] private UI_ChatBar _chatBar;
     [SerializeField] private UI_InteractionMenu _interactionMenu;
     [SerializeField] private MWI.UI.UI_InvitationPrompt _invitationPrompt;
+    [SerializeField] private MWI.UI.Orders.UI_OrderImmediatePopup _orderImmediatePopup;
     [SerializeField] private UI_PartyPanel _partyPanel;
     [SerializeField] private UI_PartyWindow _partyWindow;
     [SerializeField] private Button _buttonPartyUI;
@@ -128,6 +129,11 @@ public class PlayerUI : MonoBehaviour
         if (_invitationPrompt != null && characterComponent.CharacterInvitation != null)
         {
             _invitationPrompt.Initialize(characterComponent.CharacterInvitation);
+        }
+
+        if (_orderImmediatePopup != null)
+        {
+            _orderImmediatePopup.BindToLocalPlayer(characterComponent.CharacterOrders);
         }
 
         if (_partyPanel != null)
@@ -411,6 +417,10 @@ public class PlayerUI : MonoBehaviour
         if (_invitationPrompt != null)
         {
             _invitationPrompt.Initialize(null);
+        }
+        if (_orderImmediatePopup != null)
+        {
+            _orderImmediatePopup.BindToLocalPlayer(null);
         }
         if (_partyPanel != null)
         {
