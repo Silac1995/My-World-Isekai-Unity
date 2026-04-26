@@ -17,9 +17,15 @@ public class DevSpawnModule : MonoBehaviour
     [SerializeField] private TMP_Dropdown _personalityDropdown;
     [SerializeField] private TMP_Dropdown _traitDropdown;
 
-    [Header("Item override (optional)")]
-    [Tooltip("When set to anything other than <None>, click-to-spawn will drop this item instead of spawning a character. Reset to <None> to restore character spawn.")]
+    [Header("Item dropdown (Item sub-tab)")]
+    [Tooltip("Item list shown by the Item sub-tab. Selecting any item drops it (or N copies) at the click point. The Character sub-tab ignores this dropdown.")]
     [SerializeField] private TMP_Dropdown _itemDropdown;
+
+    [Header("Sub-tabs (Character / Item)")]
+    [SerializeField] private Button _charSubTabButton;
+    [SerializeField] private Button _itemSubTabButton;
+    [SerializeField] private GameObject _charSubPanel;
+    [SerializeField] private GameObject _itemSubPanel;
 
     [Header("Combat styles list")]
     [SerializeField] private Transform _combatStylesContainer;
@@ -48,6 +54,9 @@ public class DevSpawnModule : MonoBehaviour
 
     private readonly List<DevSpawnRow> _combatRows = new List<DevSpawnRow>();
     private readonly List<DevSpawnRow> _skillRows = new List<DevSpawnRow>();
+
+    private enum SpawnSubTab { Character, Item }
+    private SpawnSubTab _activeSubTab = SpawnSubTab.Character;
 
     private const int ENVIRONMENT_LAYER_MASK_FALLBACK = ~0; // used only if Environment layer missing
     private int _environmentLayerMask;
@@ -135,8 +144,8 @@ public class DevSpawnModule : MonoBehaviour
 
         if (_itemDropdown != null)
         {
-            // Index 0 is the sentinel — when selected, click-to-spawn falls through to character spawn.
-            var names = new List<string> { "<None — spawn character>" };
+            // Sub-tab determines mode now — the dropdown is just a list of items (no sentinel).
+            var names = new List<string>();
             foreach (var it in _items)
             {
                 if (it == null) continue;
@@ -175,6 +184,34 @@ public class DevSpawnModule : MonoBehaviour
         _prefabDropdown.RefreshShownValue();
     }
 
+    // ─── Sub-tab navigation ───────────────────────────────────────────
+
+    private void ShowCharacterSubTab()
+    {
+        _activeSubTab = SpawnSubTab.Character;
+        if (_charSubPanel != null) _charSubPanel.SetActive(true);
+        if (_itemSubPanel != null) _itemSubPanel.SetActive(false);
+        UpdateSubTabVisuals();
+    }
+
+    private void ShowItemSubTab()
+    {
+        _activeSubTab = SpawnSubTab.Item;
+        if (_charSubPanel != null) _charSubPanel.SetActive(false);
+        if (_itemSubPanel != null) _itemSubPanel.SetActive(true);
+        UpdateSubTabVisuals();
+    }
+
+    /// <summary>
+    /// Disables the active sub-tab button so it reads as "selected" while the inactive one
+    /// stays clickable. Cheap visual cue without an extra style asset or selection sprite.
+    /// </summary>
+    private void UpdateSubTabVisuals()
+    {
+        if (_charSubTabButton != null) _charSubTabButton.interactable = (_activeSubTab != SpawnSubTab.Character);
+        if (_itemSubTabButton != null) _itemSubTabButton.interactable = (_activeSubTab != SpawnSubTab.Item);
+    }
+
     // ─── Listener wiring ─────────────────────────────────────────────
 
     private void WireListeners()
@@ -184,11 +221,17 @@ public class DevSpawnModule : MonoBehaviour
         if (_addSkillButton != null) _addSkillButton.onClick.AddListener(AddSkillRow);
         if (_armedToggle != null) _armedToggle.onValueChanged.AddListener(HandleArmedChanged);
 
+        if (_charSubTabButton != null) _charSubTabButton.onClick.AddListener(ShowCharacterSubTab);
+        if (_itemSubTabButton != null) _itemSubTabButton.onClick.AddListener(ShowItemSubTab);
+
         if (DevModeManager.Instance != null)
         {
             DevModeManager.Instance.OnDevModeChanged += HandleDevModeChanged;
             DevModeManager.Instance.OnClickConsumerChanged += HandleClickConsumerChanged;
         }
+
+        // Default to character sub-tab on startup.
+        ShowCharacterSubTab();
     }
 
     private void UnwireListeners()
@@ -197,6 +240,9 @@ public class DevSpawnModule : MonoBehaviour
         if (_addCombatStyleButton != null) _addCombatStyleButton.onClick.RemoveListener(AddCombatRow);
         if (_addSkillButton != null) _addSkillButton.onClick.RemoveListener(AddSkillRow);
         if (_armedToggle != null) _armedToggle.onValueChanged.RemoveListener(HandleArmedChanged);
+
+        if (_charSubTabButton != null) _charSubTabButton.onClick.RemoveListener(ShowCharacterSubTab);
+        if (_itemSubTabButton != null) _itemSubTabButton.onClick.RemoveListener(ShowItemSubTab);
 
         if (DevModeManager.Instance != null)
         {
@@ -369,17 +415,21 @@ public class DevSpawnModule : MonoBehaviour
 
     private void SpawnAt(Vector3 anchor)
     {
-        // Item override — when the item dropdown is set to anything other than the <None> sentinel
-        // at index 0, dispatch the click to the item-spawn path and skip character spawning.
-        if (_itemDropdown != null && _itemDropdown.value > 0)
+        // Sub-tab determines spawn type: Item sub-tab routes to SpawnItemBatch using the
+        // currently-selected item; Character sub-tab falls through to NPC spawn below.
+        if (_activeSubTab == SpawnSubTab.Item)
         {
-            int idx = _itemDropdown.value - 1;
-            if (_items != null && idx >= 0 && idx < _items.Count && _items[idx] != null)
+            if (_itemDropdown != null && _items != null
+                && _itemDropdown.value >= 0 && _itemDropdown.value < _items.Count
+                && _items[_itemDropdown.value] != null)
             {
-                SpawnItemBatch(anchor, _items[idx]);
-                return;
+                SpawnItemBatch(anchor, _items[_itemDropdown.value]);
             }
-            Debug.LogWarning($"<color=orange>[DevSpawn]</color> Item dropdown value {_itemDropdown.value} resolved to no item — falling through to character spawn.");
+            else
+            {
+                Debug.LogWarning("<color=orange>[DevSpawn]</color> Item sub-tab active but no valid item selected.");
+            }
+            return;
         }
 
         if (_races.Count == 0 || _racePrefabs.Count == 0)
