@@ -62,9 +62,9 @@ namespace MWI.Orders
             }
         }
 
-        public override Dictionary<string, object> GetGoapPrecondition()
+        public override Dictionary<string, bool> GetGoapPrecondition()
         {
-            return new Dictionary<string, object>
+            return new Dictionary<string, bool>
             {
                 { $"TargetIsDead_{TargetCharacterNetId}", true }
             };

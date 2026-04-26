@@ -28,12 +28,11 @@ namespace MWI.Orders
             return Vector3.Distance(Receiver.transform.position, ZoneCenter) > ZoneRadius;
         }
 
-        public override Dictionary<string, object> GetGoapPrecondition()
+        public override Dictionary<string, bool> GetGoapPrecondition()
         {
-            // GOAP key the planner looks at to know "agent must be outside zone X".
-            // Goap_MoveToPosition (or equivalent) should satisfy this when the world-state
-            // evaluator computes distance-from-center against the receiver's position.
-            return new Dictionary<string, object>
+            // GOAP key the planner needs satisfied. A future GOAP integration must add
+            // an action whose Effects include this dynamic key.
+            return new Dictionary<string, bool>
             {
                 { $"OutsideZone_{ZoneEntityId}", true }
             };

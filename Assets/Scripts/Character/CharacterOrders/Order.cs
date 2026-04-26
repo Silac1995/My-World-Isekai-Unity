@@ -58,7 +58,15 @@ namespace MWI.Orders
         /// <summary>Type-specific payload bytes → fields. Called on save reload.</summary>
         public abstract void DeserializeOrderPayload(byte[] data);
 
-        /// <summary>GOAP world-state precondition this order needs satisfied. e.g. { "TargetIsDead_42": true }.</summary>
-        public abstract Dictionary<string, object> GetGoapPrecondition();
+        /// <summary>
+        /// GOAP world-state precondition this order needs satisfied. Keys are GOAP world-state
+        /// flags; values are the bool the planner needs them to equal. e.g. { "TargetIsDead_42": true }.
+        ///
+        /// The current GOAP layer (CharacterGoapController) does not yet consume this directly —
+        /// hooking it requires (a) injecting an order-derived GoapGoal into Replan() alongside
+        /// need-derived goals, and (b) adding GoapAction(s) whose Effects satisfy these dynamic
+        /// keys. Both are deferred to a follow-up GOAP integration pass.
+        /// </summary>
+        public abstract Dictionary<string, bool> GetGoapPrecondition();
     }
 }
