@@ -22,7 +22,7 @@ public enum CharacterBusyReason
 
 [RequireComponent(typeof(CapsuleCollider), typeof(Rigidbody))]
 
-public class Character : NetworkBehaviour
+public class Character : NetworkBehaviour, MWI.Orders.IOrderIssuer
 {
     #region Serialized Fields
     [Header("Archetype")]
@@ -141,6 +141,13 @@ public class Character : NetworkBehaviour
                 yield return match;
         }
     }
+    #endregion
+
+    #region IOrderIssuer
+    // ── IOrderIssuer ─────────────────────────────────────────────────
+    Character MWI.Orders.IOrderIssuer.AsCharacter => this;
+    string    MWI.Orders.IOrderIssuer.DisplayName => CharacterName;
+    ulong     MWI.Orders.IOrderIssuer.IssuerNetId => NetworkObject != null ? NetworkObject.NetworkObjectId : 0;
     #endregion
 
     #region Network Variables
