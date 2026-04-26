@@ -79,6 +79,7 @@ public class Character : NetworkBehaviour, MWI.Orders.IOrderIssuer
     [SerializeField] private FloatingTextSpawner _floatingTextSpawner;
     [SerializeField] private CharacterAnimal _animal;
     [SerializeField] private CharacterParty _characterParty;
+    [SerializeField] private MWI.Orders.CharacterOrders _characterOrders;
     [SerializeField] private FurniturePlacementManager _furniturePlacementManager;
     #endregion
 
@@ -230,6 +231,7 @@ public class Character : NetworkBehaviour, MWI.Orders.IOrderIssuer
     public CharacterTerrainEffects TerrainEffects => TryGet<CharacterTerrainEffects>(out var ste) ? ste : _terrainEffects;
     public CharacterRelation CharacterRelation => TryGet<CharacterRelation>(out var s6) ? s6 : _characterRelation;
     public CharacterParty CharacterParty => TryGet<CharacterParty>(out var s7) ? s7 : _characterParty;
+    public MWI.Orders.CharacterOrders CharacterOrders => TryGet<MWI.Orders.CharacterOrders>(out var sOrders) ? sOrders : _characterOrders;
     public CharacterCommunity CharacterCommunity => TryGet<CharacterCommunity>(out var s8) ? s8 : _characterCommunity;
     public CharacterInteractable CharacterInteractable => _characterInteractable;
     public CharacterCombat CharacterCombat => TryGet<CharacterCombat>(out var s10) ? s10 : _characterCombat;
@@ -518,6 +520,7 @@ public class Character : NetworkBehaviour, MWI.Orders.IOrderIssuer
         if (_animal == null) _animal = GetComponentInChildren<CharacterAnimal>();
         if (_characterParty == null) _characterParty = GetComponentInChildren<CharacterParty>();
         if (_furniturePlacementManager == null) _furniturePlacementManager = GetComponentInChildren<FurniturePlacementManager>();
+        if (_characterOrders == null) _characterOrders = GetComponentInChildren<MWI.Orders.CharacterOrders>();
         if (_terrainEffects == null) _terrainEffects = GetComponentInChildren<CharacterTerrainEffects>();
 
         _cachedNavMeshAgent = GetComponent<NavMeshAgent>();

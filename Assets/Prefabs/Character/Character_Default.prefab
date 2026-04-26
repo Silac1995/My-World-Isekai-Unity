@@ -47,6 +47,7 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   _character: {fileID: 2536622428659117900}
   _planReevaluationInterval: 2
+  _debugLog: 0
 --- !u!1 &226592772466241420
 GameObject:
   m_ObjectHideFlags: 0
@@ -843,6 +844,54 @@ MonoBehaviour:
   _levelHistory: []
   _expToastChannel: {fileID: 11400000, guid: ea961c82479cb974997317e89f3aa9b6, type: 2}
   _statsBadgeChannel: {fileID: 11400000, guid: 50f77503e7342c44f98065645853cec3, type: 2}
+--- !u!1 &4002253945167212373
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 3520371595149480146}
+  - component: {fileID: 8206033801913871682}
+  m_Layer: 0
+  m_Name: CharacterOrders
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &3520371595149480146
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4002253945167212373}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 6179432398992828966}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &8206033801913871682
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4002253945167212373}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fe589a2881ed824468c722b4ebf0ac7e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MWI.Orders.CharacterOrders
+  ShowTopMostFoldoutHeaderGroup: 1
+  _character: {fileID: 0}
+  _responseDelay: 1
+  _compliancePollInterval: 0.5
 --- !u!1 &4064236070124105173
 GameObject:
   m_ObjectHideFlags: 0
@@ -978,6 +1027,7 @@ Transform:
   - {fileID: 4502016627596780149}
   - {fileID: 5049945013540626227}
   - {fileID: 7515537849703212639}
+  - {fileID: 3520371595149480146}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!54 &3937668831498777898
@@ -1117,6 +1167,7 @@ MonoBehaviour:
   _floatingTextSpawner: {fileID: 2207825800403359661}
   _animal: {fileID: 0}
   _characterParty: {fileID: 906099563299357296}
+  _characterOrders: {fileID: 0}
   _furniturePlacementManager: {fileID: 6177199399255119807}
   NetworkRaceId:
     UpdateTraits:
@@ -2727,6 +2778,11 @@ MonoBehaviour:
   _currentMentor: {fileID: 0}
   _learningSubject: {fileID: 0}
   _learningProgress: 0
+  CurrentMentorNetId:
+    UpdateTraits:
+      MinSecondsBetweenUpdates: 0
+      MaxSecondsBetweenUpdates: 0
+    m_InternalValue: 0
   _isCurrentlyTeaching: 0
   _hostedClasses: []
   _currentActiveClass:

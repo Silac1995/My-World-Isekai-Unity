@@ -186,6 +186,54 @@ Transform:
   m_Children: []
   m_Father: {fileID: 3726147211122949586}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &7252036381414086810
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 6092484278773173898}
+  - component: {fileID: 8686520455517952749}
+  m_Layer: 0
+  m_Name: CharacterOrders
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &6092484278773173898
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7252036381414086810}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 2671037216042078075}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &8686520455517952749
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7252036381414086810}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fe589a2881ed824468c722b4ebf0ac7e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MWI.Orders.CharacterOrders
+  ShowTopMostFoldoutHeaderGroup: 1
+  _character: {fileID: 0}
+  _responseDelay: 1
+  _compliancePollInterval: 0.5
 --- !u!1 &7292240506433091545
 GameObject:
   m_ObjectHideFlags: 0
@@ -3030,6 +3078,9 @@ PrefabInstance:
     - {fileID: 5591531300363831708, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
     m_RemovedGameObjects: []
     m_AddedGameObjects:
+    - targetCorrespondingSourceObject: {fileID: 6179432398992828966, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 6092484278773173898}
     - targetCorrespondingSourceObject: {fileID: 1385890570874089402, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       insertIndex: -1
       addedObject: {fileID: 7412350087301386769}
@@ -3123,6 +3174,11 @@ MonoBehaviour:
   glovesSocket: {fileID: 0}
   legsSocket: {fileID: 0}
   bootsSocket: {fileID: 0}
+--- !u!4 &2671037216042078075 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 6179432398992828966, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
+  m_PrefabInstance: {fileID: 8129189969094288733}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &4035394106473422696 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 5246753746272467509, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
