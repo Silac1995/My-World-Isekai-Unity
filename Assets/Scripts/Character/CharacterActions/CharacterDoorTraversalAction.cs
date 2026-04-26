@@ -20,9 +20,15 @@ public abstract class CharacterDoorTraversalAction : CharacterAction
 {
     private const float WalkTimeoutSeconds = 15f;
     private const float RepathIntervalSeconds = 2f;
+    // 0.3 s covers the server-side IsLocked.Value write and one NetworkVariable
+    // replication tick (~0.05–0.1 s at default tickrate). This action is intended for
+    // server-driven NPCs (per rule #18), so the write is synchronous; a player-driven
+    // call would have one round-trip (~RTT + tick), still well under 0.3 s on a healthy
+    // connection.
     private const float PostInteractWaitSeconds = 0.3f;
 
     private Coroutine _walkCoroutine;
+    private bool _didFreeze;
 
     protected CharacterDoorTraversalAction(Character actor) : base(actor, duration: 0f) { }
 
@@ -63,6 +69,7 @@ public abstract class CharacterDoorTraversalAction : CharacterAction
         if (!character.IsPlayer() && character.Controller != null)
         {
             character.Controller.Freeze();
+            _didFreeze = true;
         }
         character.CharacterMovement?.Resume();
 
@@ -86,9 +93,10 @@ public abstract class CharacterDoorTraversalAction : CharacterAction
         if (character != null)
         {
             character.CharacterMovement?.Stop();
-            if (!character.IsPlayer() && character.Controller != null)
+            if (_didFreeze && character.Controller != null)
             {
                 character.Controller.Unfreeze();
+                _didFreeze = false;
             }
         }
     }
@@ -133,8 +141,12 @@ public abstract class CharacterDoorTraversalAction : CharacterAction
                 character.CharacterMovement.Stop();
 
                 // Release our slot so door.Interact can queue CharacterMapTransitionAction.
-                // ClearCurrentAction triggers our OnCancel, which unfreezes the controller —
-                // exactly what we want before the door takes over.
+                // We are still inside this coroutine, so null _walkCoroutine first — that way
+                // OnCancel (invoked synchronously by ClearCurrentAction) skips its StopCoroutine
+                // call and we keep yielding past the upcoming WaitForSeconds. OnCancel still
+                // unfreezes and stops movement, which is exactly the state we want before the
+                // door takes over.
+                _walkCoroutine = null;
                 character.CharacterActions.ClearCurrentAction();
 
                 door.Interact(character);
