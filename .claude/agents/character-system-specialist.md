@@ -155,7 +155,8 @@ All sprites are white, colored via shaders + MPB. **Never use `sr.color` directl
 `CharacterActions` manages timed actions (Harvesting, Crafting, Attacking):
 - Template method: `OnStart()` → wait duration → `OnApplyEffect()` → `Finish()`
 - Events: `OnActionStarted`, `OnActionFinished` drive controller behavior
-- `ShouldPlayGenericActionAnimation` — each action opts in/out
+- `ShouldPlayGenericActionAnimation` — each action opts in/out of the generic "is doing action" idle animator bool
+- `AllowsMovementDuringAction` (default `false`) — each action opts in/out of `CharacterGameController` keeping the NavMeshAgent path-following while the action is current. Default = stationary action (legacy behaviour: Stop every Update). Walking actions (e.g. `CharacterDoorTraversalAction`) override to `true`.
 - **Server RPCs** for Spawn/Despawn: `RequestDespawnServerRpc`, `RequestCraftServerRpc`, `RequestFurniturePlaceServerRpc`, `RequestFurniturePickUpServerRpc`
 
 **Rule:** Any `OnApplyEffect()` that needs Spawn/Despawn must use a ServerRpc on CharacterActions. Never call `NetworkObject.Spawn()`/`Despawn()` directly from an action.
@@ -164,7 +165,7 @@ All sprites are white, colored via shaders + MPB. **Never use `sr.color` directl
 
 - `CharacterEnterBuildingAction(actor, Building)` — autonomous walk-to-door + interact for entering a specific building.
 - `CharacterLeaveInteriorAction(actor)` — autonomous walk-to-door + interact for leaving the current interior.
-- `CharacterDoorTraversalAction` — abstract base for both; owns the shared walk-loop, locked-key two-step retry, freeze/unfreeze, timeout. Subclasses override `ResolveDoor()` and `IsActionRedundant()`.
+- `CharacterDoorTraversalAction` — abstract base for both; owns the shared walk-loop, locked-with-key two-step retry, timeout. Sets `AllowsMovementDuringAction = true` and `ShouldPlayGenericActionAnimation = false`. The NPC always walks up to the door regardless of lock state — `door.Interact(actor)` decides what happens at arrival (rattle / unlock / transition). Subclasses override `ResolveDoor()` and `IsActionRedundant()`.
 
 ---
 

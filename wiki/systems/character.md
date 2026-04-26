@@ -3,7 +3,7 @@ type: system
 title: "Character"
 tags: [character, facade, gameplay, tier-1]
 created: 2026-04-18
-updated: 2026-04-26
+updated: 2026-04-27
 sources: []
 related:
   - "[[combat]]"
@@ -133,8 +133,20 @@ Actions:
 
 - **`CharacterEnterBuildingAction(actor, Building)`** — walks the actor to the closest [[building-interior|`BuildingInteriorDoor`]] of the target building and triggers it. Delegates the actual map transition to the existing `door.Interact` → `CharacterMapTransitionAction` chain. No-ops if the actor is already inside.
 - **`CharacterLeaveInteriorAction(actor)`** — walks the actor to the closest exit `MapTransitionDoor` on the actor's current interior `MapController` and triggers it. No-ops if the actor is already on an exterior map.
-- Both inherit the internal abstract `CharacterDoorTraversalAction`, which owns the shared walk-loop (freeze, repath, locked-key retry, timeout, unfreeze on cancel). The door itself owns the lock/key/rattle decisions — these actions are pure "navigate + tap".
+- Both inherit the internal abstract `CharacterDoorTraversalAction`, which owns the shared walk-loop (repath, locked-with-key two-step retry, timeout). The door itself owns the lock/key/rattle decisions — these actions are pure "navigate + tap": the NPC walks up regardless of lock state, then `door.Interact` either rattles (locked, no key), unlocks + we re-Interact (locked, has key), or queues the transition (open).
+- The base sets `AllowsMovementDuringAction = true` (so the NavMeshAgent keeps path-following while the action is current — see "CharacterAction movement opt-in" below) and `ShouldPlayGenericActionAnimation = false` (so the actor plays locomotion, not the idle "doing action" pose). No `Controller.Freeze()` is needed — `NPCBehaviourTree.Tick` already early-outs on `CurrentAction != null`.
 - Used by [[character-party]]'s building-door follow path. Intended consumers also include the upcoming order system, BT decisions ("go home to sleep"), and GOAP plans that need to deposit/pick up from interior storage.
+
+### CharacterAction movement opt-in
+
+`CharacterGameController.Update` historically hard-stopped the NavMeshAgent every frame whenever `CurrentAction != null`, on the assumption that actions are stationary (harvest, craft, pickup). Walking actions like the door-traversal pair need movement to keep flowing while they are the current action. The contract:
+
+```csharp
+// CharacterAction.cs
+public virtual bool AllowsMovementDuringAction => false;  // legacy default
+```
+
+When an action overrides this to `true`, the controller skips the per-frame `Stop()` (and the immediate `Stop()` in `HandleActionStarted`, and the post-action settling cooldown, and the flip-suppression in `UpdateVisuals`). Stationary actions retain the old behavior verbatim. Any future action that wants to drive its own movement (chase target, retreat, follow waypoints) should opt in by overriding this property.
 
 ## Data flow
 
@@ -205,6 +217,7 @@ Input (player) or AI tick (NPC)
 - 2026-04-18 — Initial documentation pass (wiki bootstrap). — Claude / [[kevin]]
 - 2026-04-24 — Added `RequestHarvestServerRpc` + `ApplyHarvestOnServer` helper on `CharacterActions`; documented the `IsSpawned && !IsServer` client-routing pattern for server-authoritative `OnApplyEffect`. Fixes client-triggered `WorldItem.SpawnWorldItem` error from `CharacterHarvestAction`. — Claude
 - 2026-04-26 — added Enter / Leave building actions (CharacterDoorTraversalAction base) — claude
+- 2026-04-27 — added `CharacterAction.AllowsMovementDuringAction` virtual (default false) so walking actions opt out of `CharacterGameController`'s per-frame agent Stop; CharacterDoorTraversalAction opts in + drops obsolete Freeze/Unfreeze; NPC now always walks to the door regardless of lock state (rattle / unlock-with-key / transition all decided by `door.Interact` at arrival) — claude
 
 ## Sources
 - [.agent/skills/character_core/SKILL.md](../../.agent/skills/character_core/SKILL.md)
