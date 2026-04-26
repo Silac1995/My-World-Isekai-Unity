@@ -15,9 +15,9 @@ namespace MWI.Needs
         public const float DEFAULT_MAX = 100f;
         public const float DEFAULT_LOW_THRESHOLD = 30f;
 
-        protected float _currentValue;
-        protected float _maxValue = DEFAULT_MAX;
-        protected float _lowThreshold = DEFAULT_LOW_THRESHOLD;
+        private float _currentValue;
+        private float _maxValue = DEFAULT_MAX;
+        private float _lowThreshold = DEFAULT_LOW_THRESHOLD;
         private bool _isStarving;
 
         /// <summary>Fires whenever CurrentValue changes (passes the new value). HUD subscribes.</summary>
@@ -38,7 +38,7 @@ namespace MWI.Needs
             _isStarving = _currentValue <= 0f;
         }
 
-        public virtual float CurrentValue
+        public float CurrentValue
         {
             get => _currentValue;
             set
