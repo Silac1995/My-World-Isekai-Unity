@@ -117,20 +117,9 @@ public abstract class CharacterDoorTraversalAction : CharacterAction
 
     private IEnumerator WalkRoutine(MapTransitionDoor door)
     {
-        // Pre-check: locked-no-key fails fast (no point walking over).
-        // The door itself would also reject us, but bailing now avoids the wasted walk.
-        DoorLock doorLock = door.GetComponent<DoorLock>();
-        bool wasLocked = doorLock != null && doorLock.IsSpawned && doorLock.IsLocked.Value;
-        if (wasLocked)
-        {
-            KeyInstance key = character.CharacterEquipment?.FindKeyForLock(doorLock.LockId, doorLock.RequiredTier);
-            if (key == null)
-            {
-                FailAndCancel($"[DoorTraversal] {character.CharacterName}: door '{door.name}' is locked and no key in inventory.");
-                yield break;
-            }
-        }
-
+        // No pre-check on lock state — the NPC always walks up and tries the door, just
+        // like a player. door.Interact decides what happens on arrival: rattle if locked
+        // (and no key), unlock if locked-with-key, or transition if open.
         character.CharacterMovement.SetDestination(door.transform.position);
 
         float elapsed = 0f;
@@ -147,6 +136,11 @@ public abstract class CharacterDoorTraversalAction : CharacterAction
             if (door.IsCharacterInInteractionZone(character))
             {
                 character.CharacterMovement.Stop();
+
+                // Capture lock state AT ARRIVAL (not pre-walk) — the door may have been
+                // locked or unlocked by another character while we were walking.
+                DoorLock doorLock = door.GetComponent<DoorLock>();
+                bool wasLockedOnArrival = doorLock != null && doorLock.IsSpawned && doorLock.IsLocked.Value;
 
                 // Release our slot so door.Interact can queue CharacterMapTransitionAction.
                 // We are still inside this coroutine, so null _walkCoroutine first — that way
@@ -166,9 +160,9 @@ public abstract class CharacterDoorTraversalAction : CharacterAction
                     yield break;
                 }
 
-                // Locked-with-key path: the door called RequestUnlockServerRpc and returned.
-                // Give the unlock a moment to replicate, then re-Interact once.
-                if (wasLocked && doorLock != null && !doorLock.IsLocked.Value)
+                // Locked-with-key path: door.Interact called RequestUnlockServerRpc and
+                // returned; give the unlock a moment to replicate, then re-Interact once.
+                if (wasLockedOnArrival && doorLock != null && !doorLock.IsLocked.Value)
                 {
                     door.Interact(character);
                     yield return new WaitForSeconds(PostInteractWaitSeconds);
@@ -179,7 +173,9 @@ public abstract class CharacterDoorTraversalAction : CharacterAction
                     }
                 }
 
-                // Door rejected us (rattle case, or some other door gate). Already released, just log.
+                // Door refused entry (rattle case — locked + no key — or some other gate).
+                // The door already played its rattle/jiggle SFX and showed the toast (for
+                // players); we just observed nothing happened.
                 Debug.LogWarning($"<color=orange>[DoorTraversal] {character?.CharacterName}: door '{door.name}' refused entry.</color>");
                 yield break;
             }
