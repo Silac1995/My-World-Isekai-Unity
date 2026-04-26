@@ -280,6 +280,12 @@ namespace MWI.Time
                     need.Value -= (hoursPassed * drainRate);
                     if (need.Value < 0) need.Value = 0;
                 }
+                else if (need.NeedType == "NeedHunger")
+                {
+                    // 100 hunger per day = 100/24 per hour. Matches NeedHunger._decayPerPhase=25 x 4 phases.
+                    const float drainRatePerHour = 100f / 24f;
+                    need.Value = MWI.Needs.HungerCatchUpMath.ApplyDecay(need.Value, drainRatePerHour, hoursPassed);
+                }
             }
 
             // Tier 1: Snap Position based on Anchors (Step 4)
