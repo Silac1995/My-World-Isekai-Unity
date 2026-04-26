@@ -310,8 +310,10 @@ namespace MWI.Orders
                 State                = (byte)order.State,
                 TimeoutSeconds       = order.TimeoutSeconds,
                 ElapsedSeconds       = order.ElapsedSeconds,
-                IsQuestBacked        = false,    // Set true once OrderQuest exists (Task 26)
-                LinkedQuestId        = 0,        // Set when OrderQuest accepted (Task 26)
+                IsQuestBacked        = order is OrderQuest,
+                // The actual quest log key is the string "Order_{OrderId}". Clients derive it
+                // from OrderId; the numeric LinkedQuestId field is reserved for future use.
+                LinkedQuestId        = 0,
             };
 
             // Convert byte[] payload into FixedBytes62. Trim to 62 bytes; warn if oversized.

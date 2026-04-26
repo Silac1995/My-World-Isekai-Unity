@@ -20,7 +20,8 @@ namespace MWI.Orders
         static OrderFactory()
         {
             Register<Order_Leave>("Order_Leave");
-            // New concrete order types add a Register call here. Order_Kill (Task 27) will register itself.
+            Register<Order_Kill>("Order_Kill");
+            // New concrete order types add a Register call here.
         }
 
         public static void Register<T>(string typeName) where T : Order, new()
