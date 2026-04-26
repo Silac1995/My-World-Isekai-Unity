@@ -26,6 +26,20 @@ public class HandsController : MonoBehaviour
     /// <summary>Le personnage porte-t-il un item ?</summary>
     public bool IsCarrying => _carriedItem != null;
 
+    /// <summary>
+    /// Clears the currently carried item without spawning a WorldItem (unlike CharacterDropItem).
+    /// Used by consume-from-hand flow (food, potion). The item is destroyed, not dropped.
+    /// </summary>
+    public void ClearCarriedItem()
+    {
+        _carriedItem = null;
+        if (_carriedVisual != null)
+        {
+            Destroy(_carriedVisual);
+            _carriedVisual = null;
+        }
+    }
+
     public void Initialize()
     {
         RetrieveHandObjects();

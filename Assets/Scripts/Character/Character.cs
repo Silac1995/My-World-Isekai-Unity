@@ -976,7 +976,36 @@ public class Character : NetworkBehaviour, MWI.Orders.IOrderIssuer
 
     public void UseConsumable(ConsumableInstance consumable)
     {
-        // TODO: Implement
+        if (consumable == null)
+        {
+            Debug.LogWarning($"<color=orange>[Character]</color> {CharacterName} UseConsumable called with null instance.");
+            return;
+        }
+
+        try
+        {
+            consumable.ApplyEffect(this);
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogException(e);
+            return;
+        }
+
+        var so = consumable.ConsumableData;
+        if (so == null || !so.DestroyOnUse) return;
+
+        // Remove the item from wherever it lives (hands and/or inventory).
+        var hands = CharacterVisual?.BodyPartsController?.HandsController;
+        if (hands != null && hands.IsCarrying && hands.CarriedItem == consumable)
+        {
+            hands.ClearCarriedItem();
+        }
+
+        if (CharacterEquipment != null && CharacterEquipment.HaveInventory())
+        {
+            CharacterEquipment.GetInventory().RemoveItem(consumable, this);
+        }
     }
 
     public void EquipGear(EquipmentInstance equipment)
