@@ -62,19 +62,24 @@ Give every character a tractable set of drives that AI can plan against, without
 - `need.OnNeedCritical`, `need.OnNeedSatisfied` events.
 - `CharacterNeeds.ComputeOfflineDecay(deltaDays)` — used by [[world]] macro-sim.
 
-### NeedHunger (added 2026-04-26)
+### NeedHunger (added 2026-04-26, made server-authoritative 2026-04-26)
 
 Phase-decay need (25 per `TimeManager.OnPhaseChanged`, 4× per in-game day → fully empty in 24 h).
 
-- `IsStarving` — true when `CurrentValue == 0`.
-- `OnStarvingChanged(bool)` — fired whenever the starving flag transitions.
-- `OnValueChanged(float)` — fired on every decay or restore step.
-- `IncreaseValue(float)` / `DecreaseValue(float)` — clamped to [0, MaxValue=100].
+**Server-authoritative as of 2026-04-26:** the actual current value lives in a `NetworkVariable<float>` on `CharacterNeeds` (read: Everyone, write: Server). `NeedHunger` is a thin POCO bridge — reads the NV, routes writes through the server (direct or via `RequestAdjustHungerRpc` ServerRpc), and forwards `NetworkVariable.OnValueChanged` to its public `OnValueChanged` / `OnStarvingChanged` events. HUD code is unchanged because the public surface (`MaxValue`, `CurrentValue`, `OnValueChanged`, `OnStarvingChanged`) is preserved.
+
+- `IsStarving` — true when networked value ≤ 0.
+- `OnStarvingChanged(bool)` — fired on transitions, on every peer.
+- `OnValueChanged(float)` — fired on every networked value change, on every peer.
+- `IncreaseValue(float)` / `DecreaseValue(float)` — server: direct write. Client: ServerRpc.
 - `IsLow()` — true at or below 30.
-- `TrySubscribeToPhase()` / `UnsubscribeFromPhase()` — defensive TimeManager subscription.
+- `TrySubscribeToPhase()` / `UnsubscribeFromPhase()` — defensive TimeManager subscription. Decay handler gated by `IsServer` to prevent double-decay.
+- `BindNetworkBridge()` / `UnbindNetworkBridge()` — wires NV.OnValueChanged → public events. Called in `OnNetworkSpawn` / `OnNetworkDespawn`.
 - `SetCooldown()` — rearms the GOAP activation cooldown after eating.
 
-For procedural details (decay formula, GOAP resolver, macro-sim catch-up) see [.agent/skills/character_needs/SKILL.md](../../.agent/skills/character_needs/SKILL.md).
+**Spawn-order fix:** `CharacterNeeds` registration was moved from `Start()` to `Awake()` so `GetNeed<NeedHunger>()` works inside `OnNetworkSpawn`, before `PlayerUI.Initialize → UI_HungerBar.Initialize` fires. Previously the local-owner client's HUD initialised with `null` and displayed `0/0`.
+
+For procedural details (decay formula, GOAP resolver, macro-sim catch-up, ServerRpc surface) see [.agent/skills/character_needs/SKILL.md](../../.agent/skills/character_needs/SKILL.md).
 
 ## Data flow
 
@@ -138,6 +143,7 @@ for each HibernatedNPCData:
 ## Change log
 - 2026-04-18 — Initial pass. — Claude / [[kevin]]
 - 2026-04-26 — added NeedHunger (phase-tick decay, IsStarving event) + FoodSO consumable subtype + GoapAction_GoToFood/Eat — claude
+- 2026-04-26 — NeedHunger made server-authoritative via `NetworkVariable<float>` on `CharacterNeeds`; eat path routes through `RequestAdjustHungerRpc`; need registration moved from Start→Awake to fix `0/0` HUD bug on local-owner clients — claude
 
 ## Sources
 - [.agent/skills/character_needs/SKILL.md](../../.agent/skills/character_needs/SKILL.md)

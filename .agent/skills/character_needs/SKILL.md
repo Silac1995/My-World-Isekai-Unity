@@ -58,19 +58,30 @@ Because Needs are simply Data Providers, the resolution happens naturally in Pri
 
 Phase-decay need that drains 25 per `TimeManager.OnPhaseChanged` tick (4× per in-game day, fully empty in 24 h).
 
+**As of 2026-04-26: server-authoritative.** The actual current value lives in a `NetworkVariable<float>` on `CharacterNeeds` (`NetworkVariableReadPermission.Everyone`, `NetworkVariableWritePermission.Server`). `NeedHunger` itself is a thin POCO bridge — it reads the NV through `CharacterNeeds.NetworkedHungerValue`, routes writes through the server (direct NV write if `IsServer`, else `RequestAdjustHungerRpc(delta)` ServerRpc), and bridges `NetworkVariable.OnValueChanged` to its public `Action<float>` events so HUD code is unchanged.
+
 ### Public API
-- `OnValueChanged(float)` — fired on every decay or restore step.
-- `OnStarvingChanged(bool)` — fired whenever the starving flag transitions.
-- `IncreaseValue(float)`, `DecreaseValue(float)` — clamped to [0, MaxValue=100].
-- `IsStarving` — true when `CurrentValue == 0`.
+- `OnValueChanged(float)` — fired on every networked value change (every peer).
+- `OnStarvingChanged(bool)` — fired whenever the starving flag transitions (every peer).
+- `IncreaseValue(float)`, `DecreaseValue(float)` — server: direct NV write. Client: ServerRpc.
+- `CurrentValue` (getter) — reads the NV. Setter: server-direct or ServerRpc.
+- `IsStarving` — recomputed every NV change; true when networked value ≤ 0.
 - `IsLow()` — true at or below 30.
-- `TrySubscribeToPhase()` / `UnsubscribeFromPhase()` — defensive TimeManager subscription (re-attempted in `Start` if `Instance` was null in ctor).
+- `TrySubscribeToPhase()` / `UnsubscribeFromPhase()` — defensive TimeManager subscription. Now called in `CharacterNeeds.OnNetworkSpawn` (every peer); decay handler is gated by `IsServer` so only the server actually decays.
+- `BindNetworkBridge()` / `UnbindNetworkBridge()` — wires `NetworkVariable.OnValueChanged` → `OnValueChanged` / `OnStarvingChanged`. Idempotent. Subscribed in `OnNetworkSpawn`, unsubscribed in `OnNetworkDespawn`.
 - `SetCooldown()` — rearms the GOAP activation cooldown after eating.
 
 ### Lifecycle
-- Constructed in `CharacterNeeds.Start()` after `NeedJob`.
-- Subscribes to `MWI.Time.TimeManager.OnPhaseChanged` defensively (re-attempts in `Start` if `Instance` was null at construction time).
-- Unsubscribed in `CharacterNeeds.OnDestroy()`.
+- Constructed in `CharacterNeeds.Awake()` (moved from `Start()` so `GetNeed<NeedHunger>()` works inside `OnNetworkSpawn`, before HUD initialization).
+- Server seeds the NV to `DEFAULT_START` (80) in `CharacterNeeds.OnNetworkPreSpawn`. Save-restore (`Deserialize`) overwrites with the saved value if applicable.
+- Bridge bound in `CharacterNeeds.OnNetworkSpawn` (every peer); unbound in `OnNetworkDespawn`.
+- Phase decay subscribed in `OnNetworkSpawn`; the handler is server-gated.
+
+### Networking authority
+- **Server** runs phase decay, NPC GOAP eat effects, and player-character eat effects (via ServerRpc from the client).
+- **Clients** observe via `NetworkVariable.OnValueChanged` → `NeedHunger.OnValueChanged`.
+- **Eat path:** `FoodInstance.ApplyEffect` calls `hunger.IncreaseValue(amount)`. On the server this writes the NV directly. On a client (player E-key flow) it fires `RequestAdjustHungerRpc(amount)`. Either way the new value replicates to all peers.
+- **Pre-existing inventory/hands gap:** `Inventory.RemoveItem` and `HandsController.ClearCarriedItem` are NOT yet networked. When a client-owned player eats, the host does NOT see the bread leave the client's inventory or hands — that's a separate bug outside the hunger-sync fix. Hunger value is correctly synced; inventory state is not. Track separately if needed.
 
 ### GOAP integration
 - `IsActive()` returns true when controller is `NPCController` AND `IsLow()` AND cooldown has elapsed.
@@ -78,7 +89,9 @@ Phase-decay need that drains 25 per `TimeManager.OnPhaseChanged` tick (4× per i
 - `GetGoapActions()` scans `CharacterJob.Workplace.GetItemsInStorageFurniture()` for any `FoodSO` item and returns `[GoapAction_GoToFood, GoapAction_Eat]`.
 
 ### Persistence
-- Auto-handled by the existing `NeedsSaveData` serialization strategy (serializes by need-type-name + current value). No extra code required.
+- `Serialize()` reads `NeedHunger.CurrentValue` which reads the NV — works on the server (the only place save runs).
+- `Deserialize(NeedsSaveData)` writes `matchingNeed.CurrentValue = entry.value`. On the server this writes the NV directly; the value replicates to all clients.
+- Macro-sim catch-up still mutates `HibernatedNPCData.SavedNeeds` (offline data) directly — that's not a live `NeedHunger` instance and is unaffected by the network-authority change.
 
 ### Macro-simulation catch-up
 - `MacroSimulator.SimulateNPCCatchUp` has a NeedHunger branch that calls `MWI.Needs.HungerCatchUpMath.ApplyDecay` at a rate of 100/24 per hour (matching the online decay of 25 per phase × 4 phases/day).
