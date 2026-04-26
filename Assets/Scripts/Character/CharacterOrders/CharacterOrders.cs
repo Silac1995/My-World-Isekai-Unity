@@ -68,6 +68,20 @@ namespace MWI.Orders
             _pendingOrdersSync = new NetworkList<PendingOrderSyncData>();
         }
 
+        protected override void OnEnable()
+        {
+            base.OnEnable();
+            // Dormant-issued-order resolution: when any Character spawns, check if it matches
+            // a deferred entry from save data. Same pattern as CharacterRelation.
+            Character.OnCharacterSpawned += HandleCharacterSpawned;
+        }
+
+        protected override void OnDisable()
+        {
+            Character.OnCharacterSpawned -= HandleCharacterSpawned;
+            base.OnDisable();
+        }
+
         public override void OnNetworkSpawn()
         {
             base.OnNetworkSpawn();
@@ -93,15 +107,176 @@ namespace MWI.Orders
         }
 
         // ── ICharacterSaveData<OrdersSaveData> ────────────────────
-        // Stubs to satisfy the interface; full impls in Task 33+34.
+        // Persists only the issuer-side ledger:
+        //   - Receiver-side OrderQuests are persisted by CharacterQuestLog (they implement IQuest).
+        //   - Receiver-side OrderImmediates are intentionally transient.
         public string SaveKey      => "CharacterOrders";
-        public int    LoadPriority => 60;
+        public int    LoadPriority => 60;   // After CharacterRelation (50) and CharacterQuestLog (55)
 
-        public OrdersSaveData Serialize() => new OrdersSaveData();
-        public void           Deserialize(OrdersSaveData data) { /* Task 33+34 */ }
+        // Dormant entries — orders whose receiver isn't in the world yet. Resolved when
+        // Character.OnCharacterSpawned fires for the matching CharacterId. Same pattern as
+        // CharacterRelation (see CharacterRelation.cs lines 95-135).
+        private readonly List<IssuedOrderSaveEntry> _dormantIssuedOrders = new();
+
+        public OrdersSaveData Serialize()
+        {
+            var data = new OrdersSaveData();
+            foreach (var order in _issuedOrdersServer)
+            {
+                if (order == null || order.Receiver == null) continue;
+
+                var entry = new IssuedOrderSaveEntry
+                {
+                    receiverCharacterId  = ParseCharacterIdToUlong(order.Receiver.CharacterId),
+                    orderTypeName        = order.OrderTypeName,
+                    authorityContextName = order.AuthorityContext != null ? order.AuthorityContext.ContextName : "Stranger",
+                    urgency              = (byte)order.Urgency,
+                    timeoutRemaining     = Mathf.Max(0f, order.TimeoutSeconds - order.ElapsedSeconds),
+                    orderPayload         = order.SerializeOrderPayload(),
+                    isQuestBacked        = order is OrderQuest,
+                    linkedQuestId        = 0,   // Reserved; QuestId is derivable from OrderId server-side.
+                };
+                if (order.Consequences != null)
+                {
+                    foreach (var c in order.Consequences) if (c != null) entry.consequenceSoNames.Add(c.SoName);
+                }
+                if (order.Rewards != null)
+                {
+                    foreach (var r in order.Rewards) if (r != null) entry.rewardSoNames.Add(r.SoName);
+                }
+
+                // Stash the original receiver's GUID string in a sidecar field via a deterministic encoding,
+                // so the GUID-based FindByUUID still works on reload. We pack it into a separate string slot
+                // by reusing the orderPayload — but orderPayload is already used. So instead, store the
+                // CharacterId string directly. The IssuedOrderSaveEntry uses ulong by design, but the project's
+                // CharacterId is a Guid string. Convert via a stable hash for storage and resolve via FindByUUID
+                // on reload using the original string (which we keep as a parallel field). Update the entry now.
+                entry.receiverCharacterIdString = order.Receiver.CharacterId;
+
+                data.issuedOrders.Add(entry);
+            }
+            return data;
+        }
+
+        public void Deserialize(OrdersSaveData data)
+        {
+            if (data == null || data.issuedOrders == null) return;
+            _dormantIssuedOrders.Clear();
+
+            if (!IsServer)
+            {
+                // Save data only matters server-side. Cache as dormant and bail.
+                _dormantIssuedOrders.AddRange(data.issuedOrders);
+                return;
+            }
+
+            foreach (var entry in data.issuedOrders)
+            {
+                var receiver = ResolveReceiver(entry);
+                if (receiver != null)
+                {
+                    ReviveOrderFromEntry(entry, receiver);
+                }
+                else
+                {
+                    _dormantIssuedOrders.Add(entry);
+                }
+            }
+        }
 
         string ICharacterSaveData.SerializeToJson()                => CharacterSaveDataHelper.SerializeToJson(this);
         void   ICharacterSaveData.DeserializeFromJson(string json) => CharacterSaveDataHelper.DeserializeFromJson(this, json);
+
+        // ── Save/load helpers ─────────────────────────────────────────────────
+        private Character ResolveReceiver(IssuedOrderSaveEntry entry)
+        {
+            if (!string.IsNullOrEmpty(entry.receiverCharacterIdString))
+            {
+                return Character.FindByUUID(entry.receiverCharacterIdString);
+            }
+            return null;
+        }
+
+        /// <summary>Stable hash of the GUID string for the ulong ledger field. Not used for resolution — we use the parallel string field.</summary>
+        private static ulong ParseCharacterIdToUlong(string charId)
+        {
+            if (string.IsNullOrEmpty(charId)) return 0;
+            unchecked
+            {
+                ulong h = 14695981039346656037UL;
+                foreach (char c in charId)
+                {
+                    h ^= c;
+                    h *= 1099511628211UL;
+                }
+                return h;
+            }
+        }
+
+        private Order ReviveOrderFromEntry(IssuedOrderSaveEntry entry, Character receiver)
+        {
+            try
+            {
+                var order = OrderFactory.Create(entry.orderTypeName);
+                if (order == null) return null;
+
+                order.OrderTypeName    = entry.orderTypeName;
+                order.Issuer           = _character;
+                order.Receiver         = receiver;
+                order.Urgency          = (OrderUrgency)entry.urgency;
+                order.TimeoutSeconds   = entry.timeoutRemaining;
+                order.ElapsedSeconds   = 0f;
+
+                order.AuthorityContext = Resources.Load<AuthorityContextSO>(
+                    $"Data/AuthorityContexts/Authority_{entry.authorityContextName}");
+                int basePri = order.AuthorityContext != null ? order.AuthorityContext.BasePriority : 20;
+                order.Priority = Mathf.Clamp(basePri + (int)order.Urgency, 0, 100);
+
+                order.DeserializeOrderPayload(entry.orderPayload);
+
+                if (entry.consequenceSoNames != null)
+                {
+                    foreach (var n in entry.consequenceSoNames)
+                    {
+                        var so = Resources.Load<ScriptableObject>($"Data/OrderConsequences/{n}");
+                        if (so is IOrderConsequence c) order.Consequences.Add(c);
+                    }
+                }
+                if (entry.rewardSoNames != null)
+                {
+                    foreach (var n in entry.rewardSoNames)
+                    {
+                        var so = Resources.Load<ScriptableObject>($"Data/OrderRewards/{n}");
+                        if (so is IOrderReward r) order.Rewards.Add(r);
+                    }
+                }
+
+                IssueOrder(order);
+                Debug.Log($"<color=cyan>[Order]</color> Restored issued order: {_character.CharacterName} -> {receiver.CharacterName} ({entry.orderTypeName})");
+                return order;
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogException(e);
+                return null;
+            }
+        }
+
+        private void HandleCharacterSpawned(Character spawned)
+        {
+            if (!IsServer) return;
+            if (_dormantIssuedOrders.Count == 0) return;
+            if (spawned == null || spawned == _character) return;
+
+            for (int i = _dormantIssuedOrders.Count - 1; i >= 0; i--)
+            {
+                var entry = _dormantIssuedOrders[i];
+                if (entry.receiverCharacterIdString != spawned.CharacterId) continue;
+
+                ReviveOrderFromEntry(entry, spawned);
+                _dormantIssuedOrders.RemoveAt(i);
+            }
+        }
 
         // ── Issuance (server-side) ───────────────────────────────────────
         /// <summary>Server-side helper to issue an Order. Returns the new OrderId, or 0 on rejection.</summary>

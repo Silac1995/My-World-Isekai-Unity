@@ -20,7 +20,12 @@ namespace MWI.Orders
     [Serializable]
     public class IssuedOrderSaveEntry
     {
-        public ulong        receiverCharacterId;       // Character.CharacterId, NOT NetworkObjectId
+        // Stable hash of the receiver's GUID — kept for diagnostics / future use.
+        // (Character.CharacterId is a Guid string; we hash it for the ulong field but use the
+        //  string version for FindByUUID resolution on reload.)
+        public ulong        receiverCharacterId;
+        // The actual GUID string used to resolve via Character.FindByUUID across save/load.
+        public string       receiverCharacterIdString;
         public string       orderTypeName;
         public string       authorityContextName;
         public byte         urgency;
