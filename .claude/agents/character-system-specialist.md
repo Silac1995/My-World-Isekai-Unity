@@ -333,4 +333,11 @@ Every subsystem exposed on `Character.cs` (lines 202-244). Properties delegate t
 
 ## Recent changes
 
-- NeedHunger (phase-decay + IsStarving event) and Character.UseConsumable wiring through ConsumableInstance.ApplyEffect virtual.
+- **2026-04-26 — Food & Hunger System.**
+  - `NeedHunger` (phase-decay + `IsStarving` event) wired through `Character.UseConsumable` → `ConsumableInstance.ApplyEffect(Character)` virtual. `FoodInstance.ApplyEffect` calls `character.CharacterNeeds.GetNeed<NeedHunger>().IncreaseValue(...)`.
+  - **`NeedHunger` is server-authoritative.** The actual value is a `NetworkVariable<float>` on `CharacterNeeds` (read: Everyone, write: Server). `NeedHunger` is a thin POCO bridge over the NV — clients route writes via `RequestAdjustHungerRpc`. Bridge bind/unbind is in `CharacterNeeds.OnNetworkSpawn` / `OnNetworkDespawn`. Phase-decay handler is `IsServer`-gated.
+  - Need registration moved from `CharacterNeeds.Start()` → `Awake()` so `GetNeed<NeedHunger>()` resolves before `OnNetworkSpawn → SwitchToPlayer → PlayerUI.Initialize → UI_HungerBar.Initialize`. Without this fix, the local-owner client's HUD initialised with a null need and displayed `0/0`.
+  - HUD widget: new `UI_HungerBar` MonoBehaviour at `Assets/UI/Player HUD/UI_HungerBar.cs` (uses unscaled time per rule #26). Lives on `Bar_Hunger` in `UI_PlayerInfo.prefab` between Stamina and EXP.
+  - Persistence: existing `NeedsSaveData` continues to work because `Serialize`/`Deserialize` go through `CurrentValue`, which on the server writes the NV directly.
+  - **Known gap (not fixed here):** `Inventory.RemoveItem` and `HandsController.ClearCarriedItem` are not networked. When a client-owned player eats, the host doesn't see the item leave the client's inventory/hands. Hunger value is correctly synced. Pre-existing networking gap; flagged for follow-up.
+- See [.claude/agents/npc-ai-specialist.md](npc-ai-specialist.md) for the GOAP food-finding paths (workplace storage + world-item ground pickup).

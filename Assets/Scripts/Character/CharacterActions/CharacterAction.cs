@@ -24,6 +24,15 @@ public abstract class CharacterAction
     /// </summary>
     public virtual bool IsReplicatedInternally => false;
 
+    /// <summary>
+    /// If true, the CharacterGameController allows movement (NavMeshAgent path-following) to
+    /// continue while this action is the CurrentAction. Default false matches the legacy
+    /// "actor stands still and does a thing" assumption (harvest, craft, pickup, attack).
+    /// Walking actions (e.g. CharacterDoorTraversalAction) override to true so the controller
+    /// does not stop the agent every Update.
+    /// </summary>
+    public virtual bool AllowsMovementDuringAction => false;
+
     protected CharacterAction(Character character, float duration = 0f)
     {
         this.character = character;

@@ -130,7 +130,7 @@ Needs are **read-only state sensors** — they DO NOT execute logic. They provid
 | `NeedJob` | !HasJob + not player + cooldown | 60 (fixed) | `FindJob` | `GoToBoss` → `AskForJob` |
 | `NeedToWearClothing` | Chest/groin exposed | 60-100 | `WearClothing` | `GoapAction_WearClothing` |
 | `NeedShopping` | Has desired item + not player | 55 (fixed) | `GoShopping` | `GoapAction_GoShopping` |
-| `NeedHunger` | `IsLow()` (≤30) + NPC + cooldown elapsed | `MaxValue - CurrentValue` | `{"isHungry": false}` | `GoapAction_GoToFood` → `GoapAction_Eat` |
+| `NeedHunger` | `IsLow()` (≤30) + NPC + cooldown elapsed | `MaxValue - CurrentValue` | `{"isHungry": false}` | World-food (preempts): `GoapAction_GoToWorldFood` → `GoapAction_PickupWorldFood` → `GoapAction_EatCarriedFood`. Workplace fallback: `GoapAction_GoToFood` → `GoapAction_Eat`. Disjoint state keys. |
 
 **Decay**: `NeedSocial` loses 45 points per day via `TimeManager.OnNewDay`. Offline decay formula in `MacroSimulator`.
 
@@ -290,7 +290,10 @@ Detection (OnWorkerPunchIn: IStockProvider → policy-driven BuyOrder)
   - The stocking strategy is a per-building `LogisticsPolicy` SO; `MinStockPolicy` matches pre-refactor behaviour exactly, so existing NPC expectations should not shift.
 
 - **2026-04-26 — Food & Hunger System:**
-  - GoapAction_GoToFood + GoapAction_Eat — NPC food acquisition from CommercialBuilding storage furniture (NeedHunger.GetGoapActions resolver scans CharacterJob.Workplace).
+  - GoapAction_GoToFood + GoapAction_Eat — NPC food acquisition from CommercialBuilding storage furniture (NeedHunger.GetGoapActions resolver scans `CharacterJob.Workplace`).
+  - **NeedHunger made server-authoritative** via `NetworkVariable<float>` on `CharacterNeeds` (read: Everyone, write: Server). NeedHunger is now a thin POCO bridge — eat path on a client routes through `CharacterNeeds.RequestAdjustHungerRpc`. Phase-decay handler is `IsServer`-gated so only the host decays; clients receive updates via `NetworkVariable.OnValueChanged`. Need registration moved from `Start()` → `Awake()` so `GetNeed<NeedHunger>()` resolves inside `OnNetworkSpawn` (fixes `0/0` HUD bug for joining clients).
+  - **World-item food path added** (preempts workplace fallback). New chain: `GoapAction_GoToWorldFood` → `GoapAction_PickupWorldFood` → `GoapAction_EatCarriedFood`. Scans `CharacterAwareness.GetVisibleInteractables()` for `WorldItem`s whose instance is `FoodInstance`. Reuses `CharacterPickUpItem` and `CharacterUseConsumableAction` so the consume path is identical to the player's E-key flow (rule #22 parity). Disjoint state keys (`atWorldFood` / `carryingFood` vs `atFood`) make the two chains uncrossable in the planner. WorldItem is reached via `interactable.GetComponent<WorldItem>()` — they're sibling NetworkBehaviours, not type-related.
+  - **Pre-existing inventory/hands gap (not fixed):** when a *client*-owned player eats, the bread visually leaves the client only — the host doesn't see it removed from inventory/hands because those subsystems aren't networked. Hunger value is correctly synced. Track separately if it becomes a player-visible bug.
 
 ## Reference Documents
 

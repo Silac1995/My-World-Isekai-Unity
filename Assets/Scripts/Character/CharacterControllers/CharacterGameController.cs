@@ -72,9 +72,16 @@ public abstract class CharacterGameController : CharacterSystem
 
     private void HandleActionStarted(CharacterAction action)
     {
-        _wasDoingAction = true;
-        _actionCooldownTimer = ACTION_RESUME_DELAY;
-        _characterMovement?.Stop();
+        // Walking actions (AllowsMovementDuringAction = true) keep the agent path-following;
+        // stationary actions (the default) stop it so the actor doesn't drift while doing things.
+        // Only stationary actions arm the post-action settling cooldown — walking actions never
+        // paused movement, so they have no jerk to settle out of.
+        if (!action.AllowsMovementDuringAction)
+        {
+            _wasDoingAction = true;
+            _actionCooldownTimer = ACTION_RESUME_DELAY;
+            _characterMovement?.Stop();
+        }
 
         if (action.ShouldPlayGenericActionAnimation)
         {
@@ -116,8 +123,12 @@ public abstract class CharacterGameController : CharacterSystem
 
     protected virtual void Update()
     {
-        // 1. Check if we are performing a specific CharacterAction (animation/logic sequence)
-        if (_character.CharacterActions.CurrentAction != null)
+        // 1. Check if we are performing a specific CharacterAction (animation/logic sequence).
+        //    Walking actions (AllowsMovementDuringAction = true) skip this gate so they can drive
+        //    the NavMeshAgent themselves; stationary actions (the default) hard-stop movement
+        //    every frame to keep the actor anchored while the action animation plays.
+        var currentAction = _character.CharacterActions.CurrentAction;
+        if (currentAction != null && !currentAction.AllowsMovementDuringAction)
         {
             _characterMovement?.Stop();
             UpdateVisuals(true); // Force speed 0 and skip flip
@@ -156,8 +167,11 @@ public abstract class CharacterGameController : CharacterSystem
     private void UpdateVisuals(bool forceIdle = false)
     {
         UpdateAnimations(forceIdle);
-        // Only flip if not doing an action and not forced idle
-        if (!forceIdle && _character.CharacterActions.CurrentAction == null)
+        // Only flip if not forced idle and (no action active OR the active action allows movement).
+        // Walking actions (AllowsMovementDuringAction = true) need flip to follow walk direction.
+        var currentAction = _character.CharacterActions.CurrentAction;
+        bool actionAllowsFlip = currentAction == null || currentAction.AllowsMovementDuringAction;
+        if (!forceIdle && actionAllowsFlip)
         {
             UpdateFlip();
         }
@@ -169,9 +183,12 @@ public abstract class CharacterGameController : CharacterSystem
     {
         if (_isFrozen) return; // NEVER resume movement if the brain is frozen!
 
-        // Hard safety: only call Resume() if we are not doing anything
-        // AND the settling cooldown has finished.
-        if (_character.CharacterActions.CurrentAction != null || _wasDoingAction)
+        // Hard safety: only call Resume() if we are not doing a stationary action
+        // AND the settling cooldown has finished. Walking actions (AllowsMovementDuringAction
+        // = true) are explicitly allowed to keep moving — Resume is fine there too.
+        var currentAction = _character.CharacterActions.CurrentAction;
+        bool stationaryActionActive = currentAction != null && !currentAction.AllowsMovementDuringAction;
+        if (stationaryActionActive || _wasDoingAction)
         {
             _characterMovement.Stop(); // Double-lock as a safety net
             return;

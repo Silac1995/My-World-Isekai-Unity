@@ -11,15 +11,27 @@ using UnityEngine;
 /// queue so the door can queue <see cref="CharacterMapTransitionAction"/> normally.
 ///
 /// Lifecycle:
-///   OnStart → resolve door, freeze controller (NPC), launch walk coroutine.
+///   OnStart → resolve door, launch walk coroutine.
 ///   Walk coroutine → repath every 2 s, time out at 15 s, on arrival release self
 ///   and call door.Interact.
-///   OnCancel → stop coroutine, unfreeze controller, stop movement.
+///   OnCancel → stop coroutine, stop movement.
 ///
-/// Duration is set to WalkTimeoutSeconds (not 0) so this action remains the active
-/// CharacterAction for the duration of the walk; this makes ClearCurrentAction() trigger
-/// OnCancel as expected. OnApplyEffect is a no-op safety net if WalkRoutine somehow lasts
-/// the full timeout without self-completing.
+/// Movement opt-in: <see cref="AllowsMovementDuringAction"/> = true so
+/// CharacterGameController does NOT hard-stop the NavMeshAgent every frame while we
+/// are the CurrentAction. Without this opt-in, our SetDestination calls would be
+/// reset on the next Update tick and the actor would never move.
+///
+/// Animation opt-out: <see cref="ShouldPlayGenericActionAnimation"/> = false so
+/// the actor plays the locomotion (walk) animation, not the generic "doing action"
+/// idle pose.
+///
+/// BT non-interference: NPCBehaviourTree.Tick early-outs when CurrentAction != null
+/// (no need to Freeze the controller — the BT pauses for the whole action duration).
+///
+/// Duration is set to <see cref="WalkTimeoutSeconds"/> (not 0) so this action stays
+/// the active CharacterAction for the duration of the walk; this makes
+/// ClearCurrentAction() trigger OnCancel as expected. OnApplyEffect is a no-op
+/// safety net if WalkRoutine somehow lasts the full timeout without self-completing.
 /// </summary>
 public abstract class CharacterDoorTraversalAction : CharacterAction
 {
@@ -33,16 +45,11 @@ public abstract class CharacterDoorTraversalAction : CharacterAction
     private const float PostInteractWaitSeconds = 0.3f;
 
     private Coroutine _walkCoroutine;
-    private bool _didFreeze;
 
-    // Duration is set to WalkTimeoutSeconds (not 0f) so _currentAction stays set for the
-    // entire walk. With duration=0 the base CharacterActions queue auto-fires Finish() right
-    // after OnStart, leaving _currentAction null while the walk coroutine is still running —
-    // and any later ClearCurrentAction() call would silently no-op (OnCancel never fires →
-    // Controller.Freeze leaks). Setting duration to the timeout means OnApplyEffect fires as
-    // a graceful timeout fallback only if WalkRoutine somehow lasts the full 15s without
-    // self-completing; in normal flow WalkRoutine calls ClearCurrentAction() to terminate.
     protected CharacterDoorTraversalAction(Character actor) : base(actor, duration: WalkTimeoutSeconds) { }
+
+    public override bool AllowsMovementDuringAction => true;
+    public override bool ShouldPlayGenericActionAnimation => false;
 
     /// <summary>
     /// Returns the door this action should navigate to and interact with,
@@ -78,11 +85,7 @@ public abstract class CharacterDoorTraversalAction : CharacterAction
             return;
         }
 
-        if (!character.IsPlayer() && character.Controller != null)
-        {
-            character.Controller.Freeze();
-            _didFreeze = true;
-        }
+        // Make sure the agent is path-following (a previous action or BT state may have stopped it).
         character.CharacterMovement?.Resume();
 
         _walkCoroutine = character.StartCoroutine(WalkRoutine(door));
@@ -90,8 +93,9 @@ public abstract class CharacterDoorTraversalAction : CharacterAction
 
     public override void OnApplyEffect()
     {
-        // Duration is 0; this fires immediately after OnStart. All real work runs
-        // inside the walk coroutine launched in OnStart, so nothing to do here.
+        // Fires only as a safety-net timeout if the walk coroutine somehow lasts the full
+        // WalkTimeoutSeconds without self-completing via ClearCurrentAction(). Normal flow
+        // ends earlier inside WalkRoutine.
     }
 
     public override void OnCancel()
@@ -102,15 +106,7 @@ public abstract class CharacterDoorTraversalAction : CharacterAction
             _walkCoroutine = null;
         }
 
-        if (character != null)
-        {
-            character.CharacterMovement?.Stop();
-            if (_didFreeze && character.Controller != null)
-            {
-                character.Controller.Unfreeze();
-                _didFreeze = false;
-            }
-        }
+        character?.CharacterMovement?.Stop();
     }
 
     private void FailAndCancel(string warning)
@@ -156,8 +152,7 @@ public abstract class CharacterDoorTraversalAction : CharacterAction
                 // We are still inside this coroutine, so null _walkCoroutine first — that way
                 // OnCancel (invoked synchronously by ClearCurrentAction) skips its StopCoroutine
                 // call and we keep yielding past the upcoming WaitForSeconds. OnCancel still
-                // unfreezes and stops movement, which is exactly the state we want before the
-                // door takes over.
+                // stops movement, which is exactly the state we want before the door takes over.
                 _walkCoroutine = null;
                 character.CharacterActions.ClearCurrentAction();
 

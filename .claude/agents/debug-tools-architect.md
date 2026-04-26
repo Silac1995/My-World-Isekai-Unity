@@ -263,7 +263,9 @@ Project uses legacy `Input.GetKey(KeyCode.*)` — not the new InputSystem. Match
 - After completing work, provide a testing guide (what to press, what to look for).
 - Proactively recommend debug tooling for systems that currently lack observability.
 
-## Reference Documents
+## Recent changes
+
+- **2026-04-26 — Spawn tab gained Character/Item sub-tabs.** The `DevSpawnModule` Spawn tab now hosts a `SubTabBar` with two buttons (`SubTab_Character`, `SubTab_Item`) above two sibling content panels (`CharacterSubPanel`, `ItemSubPanel`). The active sub-tab is tracked in `_activeSubTab` (`enum SpawnSubTab { Character, Item }`) and drives `SpawnAt`'s branching — clicking the armed environment routes to `SpawnItemBatch` when in Item mode (calls `SpawnManager.Instance.SpawnItem`), or the existing NPC-spawn pipeline when in Character mode. Count + ArmedToggle stay shared at the bottom and apply to whichever mode is active. Visual cue for the active sub-tab uses `Button.interactable = false` on the active button (no extra style asset needed). The `_itemDropdown` (under the Item sub-panel) lists every `ItemSO` from `Resources.LoadAll<ItemSO>("Data/Item")` alphabetised by `ItemName` — no `<None>` sentinel since the sub-tab itself signals the mode. See `.agent/skills/dev-mode/SKILL.md` for the full recipe.
 
 - **Project Rules**: `CLAUDE.md`
 - **Network Architecture**: `NETWORK_ARCHITECTURE.md` (for network debug tools)
