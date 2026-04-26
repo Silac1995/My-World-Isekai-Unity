@@ -79,7 +79,14 @@ Phase-decay need (25 per `TimeManager.OnPhaseChanged`, 4× per in-game day → f
 
 **Spawn-order fix:** `CharacterNeeds` registration was moved from `Start()` to `Awake()` so `GetNeed<NeedHunger>()` works inside `OnNetworkSpawn`, before `PlayerUI.Initialize → UI_HungerBar.Initialize` fires. Previously the local-owner client's HUD initialised with `null` and displayed `0/0`.
 
-For procedural details (decay formula, GOAP resolver, macro-sim catch-up, ServerRpc surface) see [.agent/skills/character_needs/SKILL.md](../../.agent/skills/character_needs/SKILL.md).
+**GOAP resolver — two paths (added 2026-04-26):** `NeedHunger.GetGoapActions()` returns one of two **disjoint** chains, never both. The world-item path preempts because food on the ground next to the NPC is closer than walking back to the workplace.
+
+1. **World-item path (preempts).** Scans `_character.CharacterAwareness.GetVisibleInteractables()` for the first non-carried `WorldItem` whose `ItemInstance is FoodInstance`. Chain: `[GoapAction_GoToWorldFood → GoapAction_PickupWorldFood → GoapAction_EatCarriedFood]`. Effect keys: `atWorldFood` → `carryingFood` → `isHungry=false`.
+2. **Workplace storage path (fallback).** Walks `CharacterJob.Workplace.GetItemsInStorageFurniture()` for the first `FoodSO`. Chain: `[GoapAction_GoToFood → GoapAction_Eat]`. Effect keys: `atFood` → `isHungry=false`.
+
+The two chains use disjoint intermediate state keys — even if both were ever returned together (currently they aren't), the planner could not cross-link a `GoToWorldFood` to a workplace `Eat`.
+
+For procedural details (decay formula, full GOAP integration, macro-sim catch-up, ServerRpc surface) see [.agent/skills/character_needs/SKILL.md](../../.agent/skills/character_needs/SKILL.md).
 
 ## Data flow
 
@@ -144,6 +151,7 @@ for each HibernatedNPCData:
 - 2026-04-18 — Initial pass. — Claude / [[kevin]]
 - 2026-04-26 — added NeedHunger (phase-tick decay, IsStarving event) + FoodSO consumable subtype + GoapAction_GoToFood/Eat — claude
 - 2026-04-26 — NeedHunger made server-authoritative via `NetworkVariable<float>` on `CharacterNeeds`; eat path routes through `RequestAdjustHungerRpc`; need registration moved from Start→Awake to fix `0/0` HUD bug on local-owner clients — claude
+- 2026-04-26 — NeedHunger gained a second food source: loose `WorldItem`s in awareness radius. New chain `[GoapAction_GoToWorldFood → GoapAction_PickupWorldFood → GoapAction_EatCarriedFood]` preempts the workplace-storage chain when ground food is detected. Disjoint state keys (`atWorldFood` / `carryingFood` vs `atFood`) prevent planner cross-linking — claude
 
 ## Sources
 - [.agent/skills/character_needs/SKILL.md](../../.agent/skills/character_needs/SKILL.md)
@@ -153,4 +161,9 @@ for each HibernatedNPCData:
 - [Assets/Scripts/Character/CharacterNeeds/Pure/HungerCatchUpMath.cs](../../Assets/Scripts/Character/CharacterNeeds/Pure/HungerCatchUpMath.cs)
 - [Assets/Resources/Data/Item/FoodSO.cs](../../Assets/Resources/Data/Item/FoodSO.cs)
 - [Assets/Scripts/Item/FoodInstance.cs](../../Assets/Scripts/Item/FoodInstance.cs)
+- [Assets/Scripts/AI/GOAP/Actions/GoapAction_GoToFood.cs](../../Assets/Scripts/AI/GOAP/Actions/GoapAction_GoToFood.cs)
+- [Assets/Scripts/AI/GOAP/Actions/GoapAction_Eat.cs](../../Assets/Scripts/AI/GOAP/Actions/GoapAction_Eat.cs)
+- [Assets/Scripts/AI/GOAP/Actions/GoapAction_GoToWorldFood.cs](../../Assets/Scripts/AI/GOAP/Actions/GoapAction_GoToWorldFood.cs)
+- [Assets/Scripts/AI/GOAP/Actions/GoapAction_PickupWorldFood.cs](../../Assets/Scripts/AI/GOAP/Actions/GoapAction_PickupWorldFood.cs)
+- [Assets/Scripts/AI/GOAP/Actions/GoapAction_EatCarriedFood.cs](../../Assets/Scripts/AI/GOAP/Actions/GoapAction_EatCarriedFood.cs)
 - [[ai]] and [[world]] (parents-of-interest).

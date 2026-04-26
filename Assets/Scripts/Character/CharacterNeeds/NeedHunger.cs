@@ -241,27 +241,112 @@ public class NeedHunger : CharacterNeed
     }
 
     /// <summary>
-    /// Returns the GOAP action chain to satisfy hunger:
-    /// [ GoapAction_GoToFood(furniture), GoapAction_Eat(furniture) ]
-    /// v1: only scans the NPC's current job Workplace. Home building fallback is deferred.
+    /// Returns the GOAP action chain to satisfy hunger. Two paths are considered:
+    /// <list type="number">
+    ///   <item>
+    ///     <description><b>World-item food</b> (preempts when present): a loose
+    ///     <see cref="WorldItem"/> within <see cref="CharacterAwareness.AwarenessRadius"/>
+    ///     whose instance is a <see cref="FoodInstance"/>. Chain:
+    ///     [ <see cref="GoapAction_GoToWorldFood"/>,
+    ///       <see cref="GoapAction_PickupWorldFood"/>,
+    ///       <see cref="GoapAction_EatCarriedFood"/> ].
+    ///     This wins because food on the ground next to the NPC is closer (and almost
+    ///     always faster) than walking back to the workplace.</description>
+    ///   </item>
+    ///   <item>
+    ///     <description><b>Workplace storage food</b> (fallback): a
+    ///     <see cref="FoodInstance"/> in any <see cref="StorageFurniture"/> at the NPC's
+    ///     current <see cref="CommercialBuilding"/> workplace. Chain:
+    ///     [ <see cref="GoapAction_GoToFood"/>, <see cref="GoapAction_Eat"/> ].</description>
+    ///   </item>
+    /// </list>
+    /// Both paths share the single <see cref="_searchCooldown"/> bucket — there is no
+    /// separate cooldown for world-item scans.
     /// </summary>
     public override List<GoapAction> GetGoapActions()
     {
-        var actions = new List<GoapAction>();
-
         if (_character == null)
         {
             Debug.LogWarning("<color=orange>[NeedHunger]</color> GetGoapActions: _character is null.");
-            return actions;
+            return new List<GoapAction>();
         }
 
-        // v1 source: the building the NPC currently works at.
+        // 1. World-item path (preempts).
+        var worldFoodActions = TryFindWorldFood();
+        if (worldFoodActions != null)
+        {
+            _lastSearchTime = UnityEngine.Time.time;
+            return worldFoodActions;
+        }
+
+        // 2. Workplace storage path (fallback).
+        var workplaceFoodActions = TryFindWorkplaceFood();
+        if (workplaceFoodActions != null)
+        {
+            _lastSearchTime = UnityEngine.Time.time;
+            return workplaceFoodActions;
+        }
+
+        // 3. Nothing found. Start the cooldown to avoid GOAP spam.
+        Debug.Log($"<color=cyan>[NeedHunger]</color> {_character.CharacterName}: no food found on the ground or at workplace. Starting cooldown.");
+        _lastSearchTime = UnityEngine.Time.time;
+        return new List<GoapAction>();
+    }
+
+    /// <summary>
+    /// Scans the NPC's <see cref="CharacterAwareness"/> radius for a loose
+    /// <see cref="WorldItem"/> backed by a <see cref="FoodInstance"/>. Returns the
+    /// world-item action chain if one is found, otherwise null. The shared awareness
+    /// list is read-only and must not be held across ticks (see
+    /// <see cref="CharacterAwareness.GetVisibleInteractables"/>) — we iterate inline.
+    /// </summary>
+    private List<GoapAction> TryFindWorldFood()
+    {
+        var awareness = _character.CharacterAwareness;
+        if (awareness == null) return null;
+
+        try
+        {
+            var visible = awareness.GetVisibleInteractables();
+            if (visible == null) return null;
+
+            for (int i = 0; i < visible.Count; i++)
+            {
+                if (visible[i] is not WorldItem worldItem) continue;
+                if (worldItem.IsBeingCarried) continue;
+                if (worldItem.ItemInstance is not FoodInstance foodInstance) continue;
+
+                Debug.Log($"<color=green>[NeedHunger]</color> {_character.CharacterName} spotted loose food '{foodInstance.CustomizedName}' on the ground — preempting workplace path.");
+
+                return new List<GoapAction>
+                {
+                    new GoapAction_GoToWorldFood(worldItem),
+                    new GoapAction_PickupWorldFood(worldItem),
+                    new GoapAction_EatCarriedFood()
+                };
+            }
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogException(e);
+            Debug.LogError($"<color=red>[NeedHunger]</color> {_character.CharacterName}: exception while scanning awareness for loose food.");
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Scans the NPC's job <see cref="CommercialBuilding"/> for a
+    /// <see cref="FoodInstance"/> living in a <see cref="StorageFurniture"/> slot.
+    /// Returns the workplace action chain if a hit is found, otherwise null.
+    /// </summary>
+    private List<GoapAction> TryFindWorkplaceFood()
+    {
         CommercialBuilding workplace = _character.CharacterJob?.Workplace;
         if (workplace == null)
         {
-            Debug.Log($"<color=cyan>[NeedHunger]</color> {_character.CharacterName} has no Workplace — cannot locate food.");
-            _lastSearchTime = UnityEngine.Time.time;
-            return actions;
+            Debug.Log($"<color=cyan>[NeedHunger]</color> {_character.CharacterName} has no Workplace — cannot locate workplace food.");
+            return null;
         }
 
         try
@@ -270,11 +355,12 @@ public class NeedHunger : CharacterNeed
             {
                 if (item?.ItemSO is FoodSO)
                 {
-                    actions.Add(new GoapAction_GoToFood(furniture));
-                    actions.Add(new GoapAction_Eat(furniture));
-                    _lastSearchTime = UnityEngine.Time.time;
                     Debug.Log($"<color=green>[NeedHunger]</color> {_character.CharacterName} found food '{item.CustomizedName}' in '{furniture.FurnitureName}' at '{workplace.BuildingName}'.");
-                    return actions;
+                    return new List<GoapAction>
+                    {
+                        new GoapAction_GoToFood(furniture),
+                        new GoapAction_Eat(furniture)
+                    };
                 }
             }
         }
@@ -284,8 +370,6 @@ public class NeedHunger : CharacterNeed
             Debug.LogError($"<color=red>[NeedHunger]</color> {_character.CharacterName}: exception while scanning '{workplace.BuildingName}' for food.");
         }
 
-        Debug.Log($"<color=cyan>[NeedHunger]</color> {_character.CharacterName}: no FoodInstance found in '{workplace.BuildingName}'. Starting cooldown.");
-        _lastSearchTime = UnityEngine.Time.time;
-        return actions;
+        return null;
     }
 }

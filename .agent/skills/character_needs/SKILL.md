@@ -50,7 +50,9 @@ Because Needs are simply Data Providers, the resolution happens naturally in Pri
 - `NeedJob` -> `GoapGoal("FindJob")` -> `GoapAction_AskForJob`.
 - `NeedToWearClothing` -> `GoapGoal("WearClothing")` -> `GoapAction_WearClothing`.
 - `NeedShopping` -> `GoapGoal("GoShopping")` -> `GoapAction_GoShopping`.
-- `NeedHunger` -> `GoapGoal({"isHungry": false})` -> `[GoapAction_GoToFood, GoapAction_Eat]`.
+- `NeedHunger` -> `GoapGoal({"isHungry": false})` -> two paths returned **disjointly** (one or the other, never both — see GOAP integration below):
+  - World-item (preempts): `[GoapAction_GoToWorldFood, GoapAction_PickupWorldFood, GoapAction_EatCarriedFood]`.
+  - Workplace storage (fallback): `[GoapAction_GoToFood, GoapAction_Eat]`.
 
 ---
 
@@ -86,7 +88,11 @@ Phase-decay need that drains 25 per `TimeManager.OnPhaseChanged` tick (4× per i
 ### GOAP integration
 - `IsActive()` returns true when controller is `NPCController` AND `IsLow()` AND cooldown has elapsed.
 - `GetGoapGoal()` → `{"isHungry": false}` with urgency `MaxValue - CurrentValue`.
-- `GetGoapActions()` scans `CharacterJob.Workplace.GetItemsInStorageFurniture()` for any `FoodSO` item and returns `[GoapAction_GoToFood, GoapAction_Eat]`.
+- `GetGoapActions()` runs two scans, returns **at most one chain** (never both — keeps the planner from cross-linking):
+  1. **World-item scan (preempts).** Reads `_character.CharacterAwareness.GetVisibleInteractables()` and looks for the first non-carried `WorldItem` whose `ItemInstance is FoodInstance`. On hit returns `[GoapAction_GoToWorldFood, GoapAction_PickupWorldFood, GoapAction_EatCarriedFood]`. The world-item path wins because food on the ground next to the NPC is closer than walking to the workplace and avoids one wasteful round trip.
+  2. **Workplace storage scan (fallback).** Walks `CharacterJob.Workplace.GetItemsInStorageFurniture()` for any `FoodSO` item. On hit returns `[GoapAction_GoToFood, GoapAction_Eat]`.
+- Both paths share the single `_searchCooldown` bucket — there is no separate cooldown per path.
+- The two chains use **disjoint** intermediate world-state keys (`atFood` for the workplace path, `atWorldFood` + `carryingFood` for the world-item path) so the planner cannot cross-link a `GoapAction_GoToWorldFood` with a `GoapAction_Eat` (or vice versa). If you ever return both chains together, this disjointness is what makes that safe.
 
 ### Persistence
 - `Serialize()` reads `NeedHunger.CurrentValue` which reads the NV — works on the server (the only place save runs).
@@ -102,5 +108,8 @@ Phase-decay need that drains 25 per `TimeManager.OnPhaseChanged` tick (4× per i
 - `Assets/Scripts/Character/CharacterNeeds/Pure/HungerCatchUpMath.cs` — offline catch-up formula.
 - `Assets/Resources/Data/Item/FoodSO.cs` — `ConsumableSO` subtype with `_hungerRestored` + `FoodCategory`.
 - `Assets/Scripts/Item/FoodInstance.cs` — `ConsumableInstance` subtype; `ApplyEffect` overrides to call `NeedHunger.IncreaseValue`.
-- `Assets/Scripts/AI/GOAP/Actions/GoapAction_GoToFood.cs` — navigates to storage furniture with food.
-- `Assets/Scripts/AI/GOAP/Actions/GoapAction_Eat.cs` — executes the eat action and restores hunger.
+- `Assets/Scripts/AI/GOAP/Actions/GoapAction_GoToFood.cs` — workplace path: navigates to storage furniture with food.
+- `Assets/Scripts/AI/GOAP/Actions/GoapAction_Eat.cs` — workplace path: pulls FoodInstance from a furniture slot and runs `CharacterUseConsumableAction`.
+- `Assets/Scripts/AI/GOAP/Actions/GoapAction_GoToWorldFood.cs` — world-item path: navigates to a loose `WorldItem` whose instance is a `FoodInstance` (effect `atWorldFood = true`).
+- `Assets/Scripts/AI/GOAP/Actions/GoapAction_PickupWorldFood.cs` — world-item path: runs `CharacterPickUpItem` on the loose food (effect `carryingFood = true`).
+- `Assets/Scripts/AI/GOAP/Actions/GoapAction_EatCarriedFood.cs` — world-item path: scans hands first then inventory for a `FoodInstance`, runs `CharacterUseConsumableAction` (effect `isHungry = false`).
