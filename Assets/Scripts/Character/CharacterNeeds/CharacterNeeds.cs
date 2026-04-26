@@ -2,6 +2,8 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using System.Linq;
+using Unity.Netcode;
+using MWI.Needs;
 
 public class CharacterNeeds : CharacterSystem, ICharacterSaveData<NeedsSaveData>
 {
@@ -19,31 +21,163 @@ public class CharacterNeeds : CharacterSystem, ICharacterSaveData<NeedsSaveData>
         }
         return null;
     }
-    
+
     private NeedSocial _socialNeed;
 
-    private void Start()
+    // ── Server-authoritative hunger ─────────────────────────────────────────
+    // The single source of truth for NeedHunger.CurrentValue across all peers.
+    // Server writes (phase decay, eating); clients read via OnValueChanged bridge.
+    // Starts full (DEFAULT_MAX) so late-joiners see something sensible while
+    // spawn handshake replicates the actual value.
+    private NetworkVariable<float> _networkedHunger = new NetworkVariable<float>(
+        NeedHungerMath.DEFAULT_MAX,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server);
+
+    /// <summary>Current hunger value as held in the NetworkVariable. Read-only public surface.</summary>
+    public float NetworkedHungerValue => _networkedHunger.Value;
+
+    /// <summary>
+    /// Subscribe a handler to the underlying NetworkVariable's OnValueChanged.
+    /// Used by NeedHunger to bridge replicated changes into its public Action&lt;float&gt; events.
+    /// Pairs with <see cref="UnsubscribeNetworkedHungerChanged"/> for cleanup.
+    /// </summary>
+    public void SubscribeNetworkedHungerChanged(NetworkVariable<float>.OnValueChangedDelegate handler)
     {
-        // Initialisation du besoin social
-        _socialNeed = new NeedSocial(_character);
-        _allNeeds.Add(_socialNeed);
+        _networkedHunger.OnValueChanged += handler;
+    }
 
-        _allNeeds.Add(new NeedToWearClothing(_character));
-        _allNeeds.Add(new NeedJob(_character));
+    /// <summary>
+    /// Unsubscribe a previously-registered handler from the NetworkVariable.
+    /// </summary>
+    public void UnsubscribeNetworkedHungerChanged(NetworkVariable<float>.OnValueChangedDelegate handler)
+    {
+        _networkedHunger.OnValueChanged -= handler;
+    }
 
-        var hunger = new NeedHunger(_character);
-        // Re-attempt subscription in case TimeManager wasn't ready in NeedHunger ctor.
-        hunger.TrySubscribeToPhase();
-        _allNeeds.Add(hunger);
+    /// <summary>
+    /// Server-only direct write to the hunger NetworkVariable. Clamps to [0, MaxValue].
+    /// Used by NeedHunger for both phase decay and IncreaseValue/DecreaseValue when on the server.
+    /// </summary>
+    public void ServerSetHunger(float value)
+    {
+        if (!IsSpawned)
+        {
+            // Pre-spawn write (e.g., during OnNetworkPreSpawn or save-restore that runs before spawn).
+            // NetworkVariable supports server-side writes pre-spawn — clients receive the initial value.
+            // No-op guard: if not server, skip.
+            if (NetworkManager.Singleton != null && !NetworkManager.Singleton.IsServer) return;
+        }
+        else if (!IsServer)
+        {
+            Debug.LogWarning($"<color=orange>[CharacterNeeds]</color> ServerSetHunger called on non-server peer for {gameObject.name}. Ignored.");
+            return;
+        }
 
-        if (MWI.Time.TimeManager.Instance != null)
+        float clamped = Mathf.Clamp(value, 0f, NeedHungerMath.DEFAULT_MAX);
+        _networkedHunger.Value = clamped;
+    }
+
+    /// <summary>
+    /// Client → Server request to bump the hunger value by <paramref name="amount"/> (positive = restore, negative = drain).
+    /// Server validates and writes the NetworkVariable. Used by FoodInstance.ApplyEffect when called on a non-server peer.
+    /// </summary>
+    [Rpc(SendTo.Server)]
+    public void RequestAdjustHungerRpc(float amount)
+    {
+        // Defensive: server is the only writer.
+        if (!IsServer) return;
+
+        float current = _networkedHunger.Value;
+        ServerSetHunger(current + amount);
+    }
+
+    protected override void Awake()
+    {
+        base.Awake();
+
+        // Register all needs in Awake so GetNeed<T>() works inside OnNetworkSpawn,
+        // BEFORE PlayerUI.Initialize → UI_HungerBar.Initialize fires. Previously
+        // these were created in Start(), which runs AFTER OnNetworkSpawn — that
+        // caused the local player's UI_HungerBar to receive null and display 0/0.
+        if (_character == null)
+        {
+            Debug.LogError($"<color=red>[CharacterNeeds]</color> _character is null in Awake on {gameObject.name}. Needs will not be initialised.");
+            return;
+        }
+
+        if (_allNeeds.Count == 0)
+        {
+            _socialNeed = new NeedSocial(_character);
+            _allNeeds.Add(_socialNeed);
+
+            _allNeeds.Add(new NeedToWearClothing(_character));
+            _allNeeds.Add(new NeedJob(_character));
+
+            // NeedHunger needs a back-reference to CharacterNeeds so it can read/write the NetworkVariable.
+            var hunger = new NeedHunger(_character, this);
+            _allNeeds.Add(hunger);
+        }
+    }
+
+    protected override void OnNetworkPreSpawn(ref NetworkManager networkManager)
+    {
+        base.OnNetworkPreSpawn(ref networkManager);
+
+        // Server-side: seed the hunger NetworkVariable to the default starting value (80) so
+        // a fresh character spawns at 80/100 instead of the NV constructor default of 100/100.
+        // Save-restore (ImportProfile → Deserialize) runs AFTER this and overwrites with the
+        // saved value if applicable. Clients receive whichever is the final value via standard
+        // NetworkVariable replication.
+        if (networkManager != null && networkManager.IsServer)
+        {
+            _networkedHunger.Value = NeedHunger.DEFAULT_START;
+        }
+    }
+
+    public override void OnNetworkSpawn()
+    {
+        base.OnNetworkSpawn();
+
+        // Phase-tick subscription: defensive, may run on server or client. NeedHunger
+        // itself guards HandlePhaseChanged with IsServer so non-authoritative peers
+        // never decay locally.
+        var hunger = GetNeed<NeedHunger>();
+        if (hunger != null)
+        {
+            hunger.TrySubscribeToPhase();
+            hunger.BindNetworkBridge();
+        }
+
+        if (IsServer && MWI.Time.TimeManager.Instance != null)
         {
             MWI.Time.TimeManager.Instance.OnNewDay += HandleNewDay;
         }
     }
 
+    public override void OnNetworkDespawn()
+    {
+        base.OnNetworkDespawn();
+
+        var hunger = GetNeed<NeedHunger>();
+        if (hunger != null)
+        {
+            hunger.UnsubscribeFromPhase();
+            hunger.UnbindNetworkBridge();
+        }
+
+        if (IsServer && MWI.Time.TimeManager.Instance != null)
+        {
+            MWI.Time.TimeManager.Instance.OnNewDay -= HandleNewDay;
+        }
+    }
+
     private void HandleNewDay()
     {
+        // Server-only — NeedSocial decay is currently a plain POCO, so only the server
+        // should decay it. (Future: migrate NeedSocial to the same NetworkVariable pattern as hunger.)
+        if (!IsServer) return;
+
         if (_socialNeed != null)
         {
             // Decays social need by 15 every in-game day
@@ -51,15 +185,24 @@ public class CharacterNeeds : CharacterSystem, ICharacterSaveData<NeedsSaveData>
         }
     }
 
-    private void OnDestroy()
+    public override void OnDestroy()
     {
+        // Defensive cleanup. OnNetworkDespawn already unsubscribes everything for the
+        // happy path, but if the object is destroyed without despawning (editor stop,
+        // domain reload, scene unload mid-spawn) we still need to release the listeners.
         var hungerNeed = GetNeed<NeedHunger>();
-        if (hungerNeed != null) hungerNeed.UnsubscribeFromPhase();
+        if (hungerNeed != null)
+        {
+            hungerNeed.UnsubscribeFromPhase();
+            hungerNeed.UnbindNetworkBridge();
+        }
 
         if (MWI.Time.TimeManager.Instance != null)
         {
             MWI.Time.TimeManager.Instance.OnNewDay -= HandleNewDay;
         }
+
+        base.OnDestroy();
     }
 
     // --- ICharacterSaveData IMPLEMENTATION ---
@@ -92,6 +235,9 @@ public class CharacterNeeds : CharacterSystem, ICharacterSaveData<NeedsSaveData>
             var matchingNeed = _allNeeds.Find(n => n.GetType().Name == entry.needType);
             if (matchingNeed != null)
             {
+                // For NeedHunger this writes through to the NetworkVariable when called
+                // on the server (the only place save-restore runs). Clients receive the
+                // value via standard NetworkVariable replication.
                 matchingNeed.CurrentValue = entry.value;
             }
             else

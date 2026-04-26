@@ -32,11 +32,14 @@ public class FoodInstance : ConsumableInstance
         var hunger = character.CharacterNeeds.GetNeed<NeedHunger>();
         if (hunger == null)
         {
-            Debug.LogWarning($"<color=orange>[FoodInstance]</color> {character.CharacterName} has no NeedHunger. Was it registered in CharacterNeeds.Start?");
+            Debug.LogWarning($"<color=orange>[FoodInstance]</color> {character.CharacterName} has no NeedHunger. Was it registered in CharacterNeeds.Awake?");
             return;
         }
 
+        // NeedHunger.IncreaseValue is server-authoritative: server-side calls write the
+        // NetworkVariable directly; non-server calls fan out via a ServerRpc on
+        // CharacterNeeds. Either way the new value replicates to all peers.
         hunger.IncreaseValue(FoodData.HungerRestored);
-        Debug.Log($"<color=green>[FoodInstance]</color> {character.CharacterName} ate {CustomizedName} → +{FoodData.HungerRestored} hunger.");
+        Debug.Log($"<color=green>[FoodInstance]</color> {character.CharacterName} ate {CustomizedName} → +{FoodData.HungerRestored} hunger (server-authoritative).");
     }
 }
