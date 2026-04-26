@@ -23,6 +23,10 @@ public class CharacterEquipmentUI : MonoBehaviour
     [SerializeField] private Button _unequipBootsButton;
     [SerializeField] private Button _unequipBagButton;
 
+    [Header("Hands (Carry)")]
+    [Tooltip("Drops the item the character is currently carrying in their hands (HandsController.CarriedItem). Hidden / disabled when nothing is being carried. Mirrors the G hotkey in PlayerController.")]
+    [SerializeField] private Button _dropHandsItemButton;
+
     private EquipmentLayer _currentLayer;
 
     private void OnEnable()
@@ -75,6 +79,8 @@ public class CharacterEquipmentUI : MonoBehaviour
         _unequipPantsButton?.onClick.AddListener(() => RequestUnequip(WearableType.Pants));
         _unequipBootsButton?.onClick.AddListener(() => RequestUnequip(WearableType.Boots));
         _unequipBagButton?.onClick.AddListener(() => RequestUnequip(WearableType.Bag));
+
+        _dropHandsItemButton?.onClick.AddListener(RequestDropHandsItem);
     }
 
     private void RemoveAllButtonListeners()
@@ -88,6 +94,8 @@ public class CharacterEquipmentUI : MonoBehaviour
         _unequipPantsButton?.onClick.RemoveAllListeners();
         _unequipBootsButton?.onClick.RemoveAllListeners();
         _unequipBagButton?.onClick.RemoveAllListeners();
+
+        _dropHandsItemButton?.onClick.RemoveAllListeners();
     }
 
     public void SetupUI(Character newCharacter)
@@ -147,6 +155,51 @@ public class CharacterEquipmentUI : MonoBehaviour
         {
             _ui_inventory.Initialize(_character.CharacterEquipment.GetInventory(), _character);
         }
+
+        RefreshHandsButton();
+    }
+
+    /// <summary>
+    /// Refreshes the "drop carried item" button. Called from UpdateUI (whenever equipment changes)
+    /// AND from Update() each frame, because HandsController carry state changes do not fire
+    /// OnEquipmentChanged — the carried-in-hands slot is separate from the inventory.
+    /// </summary>
+    private void RefreshHandsButton()
+    {
+        if (_dropHandsItemButton == null) return;
+
+        var hands = _character != null && _character.CharacterVisual != null
+            ? _character.CharacterVisual.BodyPartsController?.HandsController
+            : null;
+
+        ItemInstance carried = hands != null ? hands.CarriedItem : null;
+        UpdateSlotText(_dropHandsItemButton, carried);
+
+        bool busy = _character != null
+            && _character.CharacterActions != null
+            && _character.CharacterActions.CurrentAction != null;
+
+        _dropHandsItemButton.interactable = (carried != null) && !busy;
+    }
+
+    private void Update()
+    {
+        // Hands carry state has no event — poll while the panel is visible.
+        // Only runs while this GameObject is active (panel is open).
+        if (_character != null) RefreshHandsButton();
+    }
+
+    private void RequestDropHandsItem()
+    {
+        if (_character == null) return;
+
+        var hands = _character.CharacterVisual?.BodyPartsController?.HandsController;
+        if (hands == null || !hands.IsCarrying) return;
+
+        if (_character.CharacterActions == null) return;
+        if (_character.CharacterActions.CurrentAction != null) return;
+
+        _character.CharacterActions.ExecuteAction(new CharacterDropItem(_character, hands.CarriedItem));
     }
 
     private void UpdateSlotButtonState(Button btn, WearableType type)

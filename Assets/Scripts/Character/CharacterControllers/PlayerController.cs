@@ -104,6 +104,13 @@ public class PlayerController : CharacterGameController
                     HandleTabTargeting();
                 }
 
+                // --- G: Drop the item currently carried in hands (HandsController.CarriedItem). ---
+                // Mirrors the drop button in CharacterEquipmentUI. Inventory drop is right-click on UI_ItemSlot.
+                if (Input.GetKeyDown(KeyCode.G))
+                {
+                    HandleDropCarriedItem();
+                }
+
                 // Auto-Trigger Combat Command when in battle. The command handles pacing and action execution.
                 if (_character.CharacterCombat.IsInBattle && !(_currentOrder is PlayerCombatCommand))
                 {
@@ -169,6 +176,22 @@ public class PlayerController : CharacterGameController
         {
             Move();
         }
+    }
+
+    /// <summary>
+    /// Drops the item currently carried in the player's hands via CharacterDropItem.
+    /// No-op if hands are empty or another action is already running. Networking is handled
+    /// by CharacterDropItem itself (server spawns directly, client routes via ServerRpc).
+    /// </summary>
+    private void HandleDropCarriedItem()
+    {
+        var hands = _character?.CharacterVisual?.BodyPartsController?.HandsController;
+        if (hands == null || !hands.IsCarrying) return;
+
+        if (_character.CharacterActions == null) return;
+        if (_character.CharacterActions.CurrentAction != null) return;
+
+        _character.CharacterActions.ExecuteAction(new CharacterDropItem(_character, hands.CarriedItem));
     }
 
     /// <summary>

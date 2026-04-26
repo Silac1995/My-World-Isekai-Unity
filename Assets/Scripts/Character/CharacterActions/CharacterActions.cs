@@ -24,21 +24,8 @@ public class CharacterActions : CharacterSystem
 
     public bool ExecuteAction(CharacterAction action)
     {
-        if (action == null)
-        {
-            Debug.LogWarning($"<color=orange>[CharacterActions:Execute]</color> rejected — action is null on '{(_character != null ? _character.CharacterName : "<no character>")}'.");
-            return false;
-        }
-        if (_currentAction != null)
-        {
-            Debug.LogWarning($"<color=orange>[CharacterActions:Execute]</color> rejected — '{_character?.CharacterName}' already has CurrentAction '{_currentAction.GetType().Name}' while trying to start '{action.GetType().Name}'. IsServer={IsServer}, IsOwner={IsOwner}.");
-            return false;
-        }
-        if (!action.CanExecute())
-        {
-            Debug.LogWarning($"<color=orange>[CharacterActions:Execute]</color> rejected — '{action.GetType().Name}.CanExecute()' returned false on '{_character?.CharacterName}'. IsServer={IsServer}, IsOwner={IsOwner}.");
-            return false;
-        }
+        if (action == null || _currentAction != null) return false;
+        if (!action.CanExecute()) return false;
 
         // Owner/Client -> Server Intent (Only if it's the real action, not a proxy)
         if (!IsServer && IsOwner && !(action is CharacterVisualProxyAction) && !action.IsReplicatedInternally)

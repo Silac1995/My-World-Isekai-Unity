@@ -1066,49 +1066,33 @@ public abstract class CommercialBuilding : Building
     [Unity.Netcode.ServerRpc(RequireOwnership = false)]
     public void RequestPunchAtTimeClockServerRpc(string workerId)
     {
-        Debug.Log($"<color=cyan>[CommercialBuilding:PunchRpc]</color> received on server. building='{buildingName}', workerId='{workerId}'.");
-        if (string.IsNullOrEmpty(workerId))
-        {
-            Debug.LogWarning($"<color=orange>[CommercialBuilding:PunchRpc]</color> aborted — workerId is empty.");
-            return;
-        }
+        if (string.IsNullOrEmpty(workerId)) return;
         Character worker = Character.FindByUUID(workerId);
         if (worker == null)
         {
-            Debug.LogWarning($"<color=orange>[CommercialBuilding:PunchRpc]</color> FindByUUID('{workerId}') returned null on server.");
+            Debug.LogWarning($"[CommercialBuilding] RequestPunchAtTimeClockServerRpc: worker '{workerId}' not found on server.");
             return;
         }
-        Debug.Log($"<color=cyan>[CommercialBuilding:PunchRpc]</color> resolved worker: name='{worker.CharacterName}', id='{worker.CharacterId}', IsAbandoned={worker.IsAbandoned}.");
 
         // Re-validate authorization server-side (defence-in-depth; client-side check
         // in TimeClockFurnitureInteractable.Interact is UX-only).
-        bool employedServer = IsWorkerEmployedHere(worker);
-        Debug.Log($"<color=cyan>[CommercialBuilding:PunchRpc]</color> server IsWorkerEmployedHere({worker.CharacterName})={employedServer}. _jobWorkerIds.Count={_jobWorkerIds?.Count ?? -1}.");
-        if (!employedServer)
+        if (!IsWorkerEmployedHere(worker))
         {
-            // Dump the replicated roster so we can diagnose mismatches between clientCharId and server state.
-            if (_jobWorkerIds != null)
-            {
-                for (int i = 0; i < _jobWorkerIds.Count; i++)
-                {
-                    Debug.Log($"<color=orange>[CommercialBuilding:PunchRpc]</color>   _jobWorkerIds[{i}]='{_jobWorkerIds[i].ToString()}'.");
-                }
-            }
-            Debug.LogWarning($"<color=orange>[CommercialBuilding:PunchRpc]</color> Punch denied: {worker.CharacterName} (id='{worker.CharacterId}') not employed at {buildingName}.");
+            Debug.LogWarning($"[CommercialBuilding] Punch denied: {worker.CharacterName} is not employed at {buildingName}.");
             return;
         }
 
         var clock = TimeClock;
         if (clock == null)
         {
-            Debug.LogWarning($"<color=orange>[CommercialBuilding:PunchRpc]</color> {buildingName} has no TimeClockFurniture authored — cannot honour player punch request.");
+            Debug.LogWarning($"[CommercialBuilding] {buildingName} has no TimeClockFurniture authored — cannot honour player punch request.");
             return;
         }
 
         var interactable = clock.GetComponent<TimeClockFurnitureInteractable>();
         if (interactable == null)
         {
-            Debug.LogError($"<color=red>[CommercialBuilding:PunchRpc]</color> TimeClockFurniture on {buildingName} is missing a TimeClockFurnitureInteractable sibling component.");
+            Debug.LogError($"[CommercialBuilding] TimeClockFurniture on {buildingName} is missing a TimeClockFurnitureInteractable sibling component.");
             return;
         }
 

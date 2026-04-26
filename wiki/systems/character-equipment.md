@@ -3,7 +3,7 @@ type: system
 title: "Character Equipment"
 tags: [character, equipment, items, tier-2]
 created: 2026-04-19
-updated: 2026-04-22
+updated: 2026-04-26
 sources: []
 related:
   - "[[items]]"
@@ -126,6 +126,7 @@ character.CharacterEquipment.FindKeyForLock(door.LockId, door.RequiredTier)
 ## Change log
 - 2026-04-19 — Initial pass. — Claude / [[kevin]]
 - 2026-04-22 — Added cross-refs to [[visuals]] (Spine skin composition + socket resolution) and [[character-dismemberment]] (prosthetics + amputated-slot guard). Bumped `depends_on` with [[visuals]]. — Claude / [[kevin]]
+- 2026-04-26 — `CharacterEquipmentUI` now exposes a "drop carried item" button (`_dropHandsItemButton`) for the `HandsController.CarriedItem` slot, alongside the existing inventory + unequip slots. The same drop is also bound to **G** in `PlayerController` (project rule #33 — input ownership). Both routes enqueue the existing `CharacterDropItem` action; no new gameplay path. — Claude / [[kevin]]
 
 ## Sources
 - [.agent/skills/item_system/SKILL.md](../../.agent/skills/item_system/SKILL.md) §4, §6, §7.

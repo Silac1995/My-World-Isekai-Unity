@@ -69,17 +69,9 @@ public class TimeClockFurnitureInteractable : FurnitureInteractable
 
     public override void Interact(Character interactor)
     {
-        Debug.Log($"<color=cyan>[TimeClock:Interact]</color> entry. interactor={(interactor != null ? interactor.CharacterName : "<null>")}, _building={(_building != null ? _building.BuildingName : "<null>")}.");
+        if (interactor == null || _building == null) return;
 
-        if (interactor == null || _building == null)
-        {
-            Debug.LogWarning($"<color=orange>[TimeClock:Interact]</color> aborted — interactor or building is null.");
-            return;
-        }
-
-        bool employed = _building.IsWorkerEmployedHere(interactor);
-        Debug.Log($"<color=cyan>[TimeClock:Interact]</color> IsWorkerEmployedHere({interactor.CharacterName}) = {employed}. interactor.CharacterId='{interactor.CharacterId}'.");
-        if (!employed)
+        if (!_building.IsWorkerEmployedHere(interactor))
         {
             RaiseToast(string.Format("{0} — {1}", interactor.CharacterName, _notEmployeeMessage));
             return;
@@ -91,20 +83,17 @@ public class TimeClockFurnitureInteractable : FurnitureInteractable
         // runs authoritatively on the server.
         var nm = Unity.Netcode.NetworkManager.Singleton;
         bool offline = nm == null || !nm.IsListening;
-        Debug.Log($"<color=cyan>[TimeClock:Interact]</color> network state: offline={offline}, IsServer={(nm != null && nm.IsServer)}, IsClient={(nm != null && nm.IsClient)}, IsHost={(nm != null && nm.IsHost)}, IsListening={(nm != null && nm.IsListening)}.");
         if (offline || nm.IsServer)
         {
-            Debug.Log($"<color=cyan>[TimeClock:Interact]</color> taking SERVER-SIDE path → RunPunchCycleServerSide.");
             RunPunchCycleServerSide(interactor);
         }
         else
         {
             if (string.IsNullOrEmpty(interactor.CharacterId))
             {
-                Debug.LogWarning("[TimeClock:Interact] Cannot route punch ServerRpc — interactor has no CharacterId yet.");
+                Debug.LogWarning("[TimeClock] Cannot route punch ServerRpc — interactor has no CharacterId yet.");
                 return;
             }
-            Debug.Log($"<color=cyan>[TimeClock:Interact]</color> taking CLIENT path → sending RequestPunchAtTimeClockServerRpc(workerId='{interactor.CharacterId}') to building '{_building.BuildingName}'.");
             _building.RequestPunchAtTimeClockServerRpc(interactor.CharacterId);
         }
     }
@@ -117,46 +106,23 @@ public class TimeClockFurnitureInteractable : FurnitureInteractable
     /// </summary>
     public void RunPunchCycleServerSide(Character worker)
     {
-        Debug.Log($"<color=magenta>[TimeClock:RunCycle]</color> entry. worker={(worker != null ? worker.CharacterName : "<null>")}, building={(_building != null ? _building.BuildingName : "<null>")}, Furniture={(Furniture != null ? Furniture.FurnitureName : "<null>")}.");
-        if (worker == null || _building == null || Furniture == null)
-        {
-            Debug.LogWarning($"<color=orange>[TimeClock:RunCycle]</color> aborted — null guard. worker={(worker == null ? "NULL" : "ok")}, _building={(_building == null ? "NULL" : "ok")}, Furniture={(Furniture == null ? "NULL" : "ok")}.");
-            return;
-        }
+        if (worker == null || _building == null || Furniture == null) return;
 
         // If the clock is already in use (another worker is punching right now), let
         // Furniture's occupation gate reject quietly. The occupant flips back to null
         // when the previous worker's OnActionFinished fires.
-        if (Furniture.IsOccupied && Furniture.Occupant != worker)
-        {
-            Debug.LogWarning($"<color=orange>[TimeClock:RunCycle]</color> aborted — clock already occupied by '{Furniture.Occupant.CharacterName}', not '{worker.CharacterName}'.");
-            return;
-        }
+        if (Furniture.IsOccupied && Furniture.Occupant != worker) return;
 
-        if (!Furniture.IsOccupied && !Furniture.Use(worker))
-        {
-            Debug.LogWarning($"<color=orange>[TimeClock:RunCycle]</color> aborted — Furniture.Use({worker.CharacterName}) returned false.");
-            return;
-        }
+        if (!Furniture.IsOccupied && !Furniture.Use(worker)) return;
 
         // Read the replicated roster — same truth on server and clients, and
         // consistent with the UI prompt / hold-menu the client sees.
         bool onShift = _building.IsWorkerOnShift(worker);
-        Debug.Log($"<color=magenta>[TimeClock:RunCycle]</color> shift state: IsWorkerOnShift({worker.CharacterName})={onShift}. Queuing {(onShift ? "Action_PunchOut" : "Action_PunchIn")}.");
         CharacterAction action = onShift
             ? (CharacterAction)new Action_PunchOut(worker, _building)
             : new Action_PunchIn(worker, _building);
 
-        var actions = worker.CharacterActions;
-        if (actions == null)
-        {
-            Debug.LogError($"<color=red>[TimeClock:RunCycle]</color> aborted — worker.CharacterActions is NULL on '{worker.CharacterName}'.");
-            Furniture.Release();
-            return;
-        }
-        bool executed = actions.ExecuteAction(action);
-        Debug.Log($"<color=magenta>[TimeClock:RunCycle]</color> CharacterActions.ExecuteAction returned {executed} (CurrentAction was '{(actions.CurrentAction != null ? actions.CurrentAction.GetType().Name : "<null>")}' before call).");
-        if (!executed)
+        if (worker.CharacterActions == null || !worker.CharacterActions.ExecuteAction(action))
         {
             Furniture.Release();
             return;
