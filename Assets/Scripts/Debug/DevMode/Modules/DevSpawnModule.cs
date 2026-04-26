@@ -17,6 +17,10 @@ public class DevSpawnModule : MonoBehaviour
     [SerializeField] private TMP_Dropdown _personalityDropdown;
     [SerializeField] private TMP_Dropdown _traitDropdown;
 
+    [Header("Item override (optional)")]
+    [Tooltip("When set to anything other than <None>, click-to-spawn will drop this item instead of spawning a character. Reset to <None> to restore character spawn.")]
+    [SerializeField] private TMP_Dropdown _itemDropdown;
+
     [Header("Combat styles list")]
     [SerializeField] private Transform _combatStylesContainer;
     [SerializeField] private Button _addCombatStyleButton;
@@ -40,6 +44,7 @@ public class DevSpawnModule : MonoBehaviour
     private List<CharacterBehavioralTraitsSO> _traits = new List<CharacterBehavioralTraitsSO>();
     private List<CombatStyleSO> _combatStyles = new List<CombatStyleSO>();
     private List<SkillSO> _skills = new List<SkillSO>();
+    private List<ItemSO> _items = new List<ItemSO>();
 
     private readonly List<DevSpawnRow> _combatRows = new List<DevSpawnRow>();
     private readonly List<DevSpawnRow> _skillRows = new List<DevSpawnRow>();
@@ -82,7 +87,17 @@ public class DevSpawnModule : MonoBehaviour
         _skills.Clear();
         _skills.AddRange(Resources.LoadAll<SkillSO>("Data/Skills"));
 
-        Debug.Log($"<color=cyan>[DevSpawn]</color> Catalogs loaded — races:{_races.Count} personalities:{_personalities.Count} traits:{_traits.Count} combat:{_combatStyles.Count} skills:{_skills.Count}");
+        // Items — alphabetised by display name for usability in the override dropdown.
+        _items.Clear();
+        _items.AddRange(Resources.LoadAll<ItemSO>("Data/Item"));
+        _items.Sort((a, b) =>
+        {
+            string an = (a != null && a.ItemName != null) ? a.ItemName : string.Empty;
+            string bn = (b != null && b.ItemName != null) ? b.ItemName : string.Empty;
+            return string.Compare(an, bn, System.StringComparison.OrdinalIgnoreCase);
+        });
+
+        Debug.Log($"<color=cyan>[DevSpawn]</color> Catalogs loaded — races:{_races.Count} personalities:{_personalities.Count} traits:{_traits.Count} combat:{_combatStyles.Count} skills:{_skills.Count} items:{_items.Count}");
     }
 
     private void PopulateCoreDropdowns()
@@ -116,6 +131,21 @@ public class DevSpawnModule : MonoBehaviour
             _traitDropdown.AddOptions(names);
             _traitDropdown.value = 0;
             _traitDropdown.RefreshShownValue();
+        }
+
+        if (_itemDropdown != null)
+        {
+            // Index 0 is the sentinel — when selected, click-to-spawn falls through to character spawn.
+            var names = new List<string> { "<None — spawn character>" };
+            foreach (var it in _items)
+            {
+                if (it == null) continue;
+                names.Add(string.IsNullOrEmpty(it.ItemName) ? it.name : it.ItemName);
+            }
+            _itemDropdown.ClearOptions();
+            _itemDropdown.AddOptions(names);
+            _itemDropdown.value = 0;
+            _itemDropdown.RefreshShownValue();
         }
     }
 
@@ -339,6 +369,19 @@ public class DevSpawnModule : MonoBehaviour
 
     private void SpawnAt(Vector3 anchor)
     {
+        // Item override — when the item dropdown is set to anything other than the <None> sentinel
+        // at index 0, dispatch the click to the item-spawn path and skip character spawning.
+        if (_itemDropdown != null && _itemDropdown.value > 0)
+        {
+            int idx = _itemDropdown.value - 1;
+            if (_items != null && idx >= 0 && idx < _items.Count && _items[idx] != null)
+            {
+                SpawnItemBatch(anchor, _items[idx]);
+                return;
+            }
+            Debug.LogWarning($"<color=orange>[DevSpawn]</color> Item dropdown value {_itemDropdown.value} resolved to no item — falling through to character spawn.");
+        }
+
         if (_races.Count == 0 || _racePrefabs.Count == 0)
         {
             Debug.LogError("<color=red>[DevSpawn]</color> No race or prefab available.");
@@ -384,6 +427,62 @@ public class DevSpawnModule : MonoBehaviour
         }
 
         Debug.Log($"<color=green>[DevSpawn]</color> Spawned {n} NPC(s) near {anchor} (radius {radius:F2}u).");
+    }
+
+    /// <summary>
+    /// Drops N copies of <paramref name="item"/> around <paramref name="anchor"/> using the same
+    /// scatter formula as character spawning (radius = 4 * sqrt(N)). Server-only — bails with a
+    /// clear log if invoked on a client. SpawnManager.SpawnItem also enforces this internally.
+    /// </summary>
+    private void SpawnItemBatch(Vector3 anchor, ItemSO item)
+    {
+        if (item == null)
+        {
+            Debug.LogError("<color=red>[DevSpawn]</color> SpawnItemBatch called with null item.");
+            return;
+        }
+
+        if (SpawnManager.Instance == null)
+        {
+            Debug.LogError("<color=red>[DevSpawn]</color> SpawnManager.Instance is null — cannot spawn item.");
+            return;
+        }
+
+        // Clearer error than SpawnManager's internal check — surfaces the dev-mode origin.
+        if (Unity.Netcode.NetworkManager.Singleton != null && !Unity.Netcode.NetworkManager.Singleton.IsServer)
+        {
+            Debug.LogWarning("<color=orange>[DevSpawn]</color> Item spawn requested on a client — host-only operation, ignoring.");
+            return;
+        }
+
+        int n = 1;
+        if (_countField != null && int.TryParse(_countField.text, out int parsed)) n = Mathf.Max(1, parsed);
+
+        float radius = 4f * Mathf.Sqrt(n);
+        int spawned = 0;
+
+        for (int i = 0; i < n; i++)
+        {
+            Vector3 pos = anchor;
+            if (n > 1)
+            {
+                Vector2 offset = Random.insideUnitCircle * radius;
+                pos += new Vector3(offset.x, 0f, offset.y);
+            }
+
+            try
+            {
+                var instance = SpawnManager.Instance.SpawnItem(item, pos);
+                if (instance != null) spawned++;
+                else Debug.LogWarning($"<color=orange>[DevSpawn]</color> SpawnItem {i} returned null for '{item.ItemName}'.");
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogException(e);
+            }
+        }
+
+        Debug.Log($"<color=green>[DevSpawn]</color> Spawned {spawned}/{n} '{item.ItemName}' near {anchor} (radius {radius:F2}u).");
     }
 
     private CharacterPersonalitySO ResolvePersonality()
