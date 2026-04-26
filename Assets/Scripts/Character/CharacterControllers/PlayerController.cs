@@ -111,6 +111,13 @@ public class PlayerController : CharacterGameController
                     HandleDropCarriedItem();
                 }
 
+                // --- E: Consume the item currently carried in hands if it's a ConsumableInstance. ---
+                // Routed through CharacterUseConsumableAction (rule #22 player-NPC parity).
+                if (Input.GetKeyDown(KeyCode.E))
+                {
+                    HandleConsumeCarriedItem();
+                }
+
                 // Auto-Trigger Combat Command when in battle. The command handles pacing and action execution.
                 if (_character.CharacterCombat.IsInBattle && !(_currentOrder is PlayerCombatCommand))
                 {
@@ -192,6 +199,27 @@ public class PlayerController : CharacterGameController
         if (_character.CharacterActions.CurrentAction != null) return;
 
         _character.CharacterActions.ExecuteAction(new CharacterDropItem(_character, hands.CarriedItem));
+    }
+
+    /// <summary>
+    /// Consumes the item currently carried in hands if it's a ConsumableInstance.
+    /// No-op if hands are empty, item is not consumable, or another action is already running.
+    /// </summary>
+    private void HandleConsumeCarriedItem()
+    {
+        var hands = _character?.CharacterVisual?.BodyPartsController?.HandsController;
+        if (hands == null || !hands.IsCarrying) return;
+
+        if (hands.CarriedItem is not ConsumableInstance consumable)
+        {
+            Debug.Log($"<color=yellow>[PlayerCtrl]</color> Carried item is not a consumable — E ignored.");
+            return;
+        }
+
+        if (_character.CharacterActions == null) return;
+        if (_character.CharacterActions.CurrentAction != null) return;
+
+        _character.CharacterActions.ExecuteAction(new CharacterUseConsumableAction(_character, consumable));
     }
 
     /// <summary>
