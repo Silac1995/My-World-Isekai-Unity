@@ -194,6 +194,8 @@ BuildingId, InteriorMapId, SlotIndex, ExteriorMapId,
 ExteriorDoorPosition, PrefabId, IsLocked, DoorCurrentHealth
 ```
 
+- **NPC interior entry / exit (programmatic)**: `CharacterEnterBuildingAction(actor, Building)` and `CharacterLeaveInteriorAction(actor)` (in `Assets/Scripts/Character/CharacterActions/`) wrap the existing `BuildingInteriorDoor.Interact` flow with NavMesh walking + 15 s timeout + locked-key retry. Both inherit `CharacterDoorTraversalAction` (abstract base, owns the walk-loop). Use these instead of hand-rolling a coroutine when an NPC needs to autonomously enter/leave a building. The door owns lock/key/rattle decisions; the actions are pure "navigate + tap".
+
 ### 7. Commercial Building Operations
 
 **Required components:** `BuildingTaskManager` + `BuildingLogisticsManager`

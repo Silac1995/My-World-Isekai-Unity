@@ -160,6 +160,12 @@ All sprites are white, colored via shaders + MPB. **Never use `sr.color` directl
 
 **Rule:** Any `OnApplyEffect()` that needs Spawn/Despawn must use a ServerRpc on CharacterActions. Never call `NetworkObject.Spawn()`/`Despawn()` directly from an action.
 
+### CharacterAction catalogue
+
+- `CharacterEnterBuildingAction(actor, Building)` — autonomous walk-to-door + interact for entering a specific building.
+- `CharacterLeaveInteriorAction(actor)` — autonomous walk-to-door + interact for leaving the current interior.
+- `CharacterDoorTraversalAction` — abstract base for both; owns the shared walk-loop, locked-key two-step retry, freeze/unfreeze, timeout. Subclasses override `ResolveDoor()` and `IsActionRedundant()`.
+
 ---
 
 ## 7. Interaction Provider Pattern

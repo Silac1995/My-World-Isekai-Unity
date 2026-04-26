@@ -368,6 +368,24 @@ Building doors (both `BuildingInteriorDoor` on the exterior and the exit `MapTra
 - **No nested NetworkObjects**: `DoorLock` and `DoorHealth` sit on the door child GameObject but use the parent building's `NetworkObject`. **Never** add a separate `NetworkObject` to the door child.
 - **IsSpawned guards**: All `NetworkVariable` reads and RPC calls on `DoorLock`/`DoorHealth` must be guarded with `doorLock.IsSpawned` to handle cases where the `NetworkObject` hasn't spawned yet.
 
+### Programmatic NPC interior entry / exit
+
+Two reusable `CharacterAction`s let any caller (BT, GOAP, party, quest, future order system) order an NPC to enter or leave a building interior:
+
+```csharp
+// Enter a specific building
+npc.CharacterActions.ExecuteAction(new CharacterEnterBuildingAction(npc, targetBuilding));
+
+// Leave whatever interior the NPC is currently inside
+npc.CharacterActions.ExecuteAction(new CharacterLeaveInteriorAction(npc));
+```
+
+Both walk the NPC to the appropriate door and call `door.Interact(npc)`, which triggers the existing `BuildingInteriorDoor` lock/key/rattle/transition pipeline. Failure modes (no door, locked-no-key, timeout, unreachable) cancel cleanly with a `Debug.LogWarning` so the caller can observe and react.
+
+Authority: the actions run server-side for NPCs (rule #18). For player actors the action runs on the owning client — currently no UI surfaces it, but it is queueable.
+
+Both inherit an internal abstract `CharacterDoorTraversalAction` that owns the shared walk-loop (freeze NPC controller, repath every 2 s, 15 s timeout, locked-with-key two-step retry, unfreeze on cancel). Subclasses only override `ResolveDoor()` and `IsActionRedundant()`.
+
 ---
 
 ## Building-Map Registration & Hibernation

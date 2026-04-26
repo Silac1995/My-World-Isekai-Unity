@@ -3,7 +3,7 @@ type: system
 title: "Character"
 tags: [character, facade, gameplay, tier-1]
 created: 2026-04-18
-updated: 2026-04-24
+updated: 2026-04-26
 sources: []
 related:
   - "[[combat]]"
@@ -14,6 +14,7 @@ related:
   - "[[save-load]]"
   - "[[network]]"
   - "[[visuals]]"
+  - "[[building-interior]]"
   - "[[kevin]]"
 status: stable
 confidence: high
@@ -128,6 +129,13 @@ Subsystem access (facade):
 Actions:
 - `character.CharacterActions.StartAction(action)` — shared pipeline; players and NPCs queue through it. See [[kevin]] architectural preference ("shared gameplay action layer").
 
+### Building interior traversal
+
+- **`CharacterEnterBuildingAction(actor, Building)`** — walks the actor to the closest [[building-interior|`BuildingInteriorDoor`]] of the target building and triggers it. Delegates the actual map transition to the existing `door.Interact` → `CharacterMapTransitionAction` chain. No-ops if the actor is already inside.
+- **`CharacterLeaveInteriorAction(actor)`** — walks the actor to the closest exit `MapTransitionDoor` on the actor's current interior `MapController` and triggers it. No-ops if the actor is already on an exterior map.
+- Both inherit the internal abstract `CharacterDoorTraversalAction`, which owns the shared walk-loop (freeze, repath, locked-key retry, timeout, unfreeze on cancel). The door itself owns the lock/key/rattle decisions — these actions are pure "navigate + tap".
+- Used by [[character-party]]'s building-door follow path. Intended consumers also include the upcoming order system, BT decisions ("go home to sleep"), and GOAP plans that need to deposit/pick up from interior storage.
+
 ## Data flow
 
 ```
@@ -196,6 +204,7 @@ Input (player) or AI tick (NPC)
 ## Change log
 - 2026-04-18 — Initial documentation pass (wiki bootstrap). — Claude / [[kevin]]
 - 2026-04-24 — Added `RequestHarvestServerRpc` + `ApplyHarvestOnServer` helper on `CharacterActions`; documented the `IsSpawned && !IsServer` client-routing pattern for server-authoritative `OnApplyEffect`. Fixes client-triggered `WorldItem.SpawnWorldItem` error from `CharacterHarvestAction`. — Claude
+- 2026-04-26 — added Enter / Leave building actions (CharacterDoorTraversalAction base) — claude
 
 ## Sources
 - [.agent/skills/character_core/SKILL.md](../../.agent/skills/character_core/SKILL.md)

@@ -160,6 +160,27 @@ Combat/aggression override party follow. Party follow overrides schedule/wander/
 
 ---
 
+### Following the leader through doors (server-side)
+
+Two server-side dispatch sites handle leader-map transitions:
+
+- `OrderFollowersThroughDoor(leaderTargetMapId)` — host-driven, iterates each follower.
+- `OnLeaderMapChanged(prev, newMapId)` — per-follower NetworkVariable callback.
+
+Both branch identically:
+
+1. `FindDoorToMap(member, leaderTargetMapId)` returns the relevant `MapTransitionDoor` (or `BuildingInteriorDoor`) on the follower's current map.
+2. `ClearFollowState()` + `StopPortalFollow()` to cancel any prior follow state and any active portal coroutine (handles rapid leader-map oscillation).
+3. If the door is a `BuildingInteriorDoor`:
+   - Resolve the parent `Building`. If null, log a warning and skip.
+   - `member.CharacterActions.ExecuteAction(new CharacterEnterBuildingAction(member, building))`.
+4. Otherwise (portal door — outdoor↔outdoor / gates):
+   - `member.CharacterParty.StartPortalFollow(door)` — small dedicated coroutine, same walk-loop pattern as `CharacterDoorTraversalAction` but inlined for this single internal user.
+
+Cleanup: `OnDisable` calls `StopPortalFollow()`.
+
+---
+
 ### 4. Gathering Logic
 
 When a party leader tries to transition between Region or Dungeon maps, the transition is intercepted and replaced by a gathering phase.
