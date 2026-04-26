@@ -12,6 +12,7 @@ public class UI_PlayerInfo : MonoBehaviour
     [SerializeField] private TextMeshProUGUI _playerNameText;
     [SerializeField] private UI_HealthBar _healthBar;
     [SerializeField] private UI_HealthBar _staminaBar;
+    [SerializeField] private UI_HungerBar _hungerBar;
     [SerializeField] private UI_CombatExpBar _expBar;
     
     [Header("Status Effects")]
@@ -46,6 +47,12 @@ public class UI_PlayerInfo : MonoBehaviour
         if (_staminaBar != null && characterComponent.Stats != null)
         {
             _staminaBar.Initialize(characterComponent.Stats.Stamina);
+        }
+
+        if (_hungerBar != null && characterComponent.CharacterNeeds != null)
+        {
+            var hunger = characterComponent.CharacterNeeds.GetNeed<NeedHunger>();
+            if (hunger != null) _hungerBar.Initialize(hunger);
         }
 
         if (_expBar != null)
