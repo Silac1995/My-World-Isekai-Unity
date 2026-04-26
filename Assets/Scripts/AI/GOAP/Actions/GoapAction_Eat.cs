@@ -88,8 +88,14 @@ public class GoapAction_Eat : GoapAction_ExecuteCharacterAction
         // Return the extracted item to the furniture so it isn't lost.
         if (_extracted != null && _foodSource != null)
         {
-            _foodSource.AddItem(_extracted);
-            Debug.LogWarning($"<color=orange>[GoapAction_Eat]</color> {worker?.CharacterName}: consume action failed — returned {_extracted.CustomizedName} to {_foodSource.FurnitureName}.");
+            if (!_foodSource.AddItem(_extracted))
+            {
+                Debug.LogError($"<color=red>[GoapAction_Eat]</color> Failed to return {_extracted.CustomizedName} to {_foodSource.name} — furniture locked or full. Item lost.");
+            }
+            else
+            {
+                Debug.LogWarning($"<color=orange>[GoapAction_Eat]</color> {worker?.CharacterName}: consume action failed — returned {_extracted.CustomizedName} to {_foodSource.FurnitureName}.");
+            }
         }
         _extracted = null;
     }

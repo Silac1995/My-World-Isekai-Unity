@@ -15,11 +15,6 @@ public class GoapAction_GoToFood : GoapAction_MoveToTarget
 
     public override string ActionName => "Go To Food";
 
-    public override Dictionary<string, bool> Preconditions => new Dictionary<string, bool>
-    {
-        { "atFood", false }
-    };
-
     public override Dictionary<string, bool> Effects => new Dictionary<string, bool>
     {
         { "atFood", true }
@@ -53,7 +48,16 @@ public class GoapAction_GoToFood : GoapAction_MoveToTarget
     protected override Collider GetTargetCollider(Character worker)
     {
         if (_foodSource == null) return null;
-        return _foodSource.GetComponent<Collider>();
+        var interactable = _foodSource.GetComponent<FurnitureInteractable>();
+        if (interactable != null && interactable.InteractionZone != null)
+            return interactable.InteractionZone;
+
+        var col = _foodSource.GetComponent<Collider>();
+        if (col == null)
+        {
+            Debug.LogWarning($"<color=orange>[GoapAction_GoToFood]</color> {_foodSource.name} has no FurnitureInteractable.InteractionZone or root Collider — arrival check will fail.");
+        }
+        return col;
     }
 
     protected override Vector3 GetDestinationPoint(Character worker)
