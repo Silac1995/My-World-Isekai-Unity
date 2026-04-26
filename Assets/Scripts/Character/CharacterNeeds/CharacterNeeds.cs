@@ -7,6 +7,18 @@ public class CharacterNeeds : CharacterSystem, ICharacterSaveData<NeedsSaveData>
 {
     private List<CharacterNeed> _allNeeds = new List<CharacterNeed>();
     public List<CharacterNeed> AllNeeds => _allNeeds;
+
+    /// <summary>
+    /// Typed accessor for needs. Returns null if no need of type T is registered.
+    /// </summary>
+    public T GetNeed<T>() where T : CharacterNeed
+    {
+        foreach (var need in _allNeeds)
+        {
+            if (need is T typed) return typed;
+        }
+        return null;
+    }
     
     private NeedSocial _socialNeed;
 
@@ -18,6 +30,11 @@ public class CharacterNeeds : CharacterSystem, ICharacterSaveData<NeedsSaveData>
 
         _allNeeds.Add(new NeedToWearClothing(_character));
         _allNeeds.Add(new NeedJob(_character));
+
+        var hunger = new NeedHunger(_character);
+        // Re-attempt subscription in case TimeManager wasn't ready in NeedHunger ctor.
+        hunger.TrySubscribeToPhase();
+        _allNeeds.Add(hunger);
 
         if (MWI.Time.TimeManager.Instance != null)
         {
@@ -36,6 +53,9 @@ public class CharacterNeeds : CharacterSystem, ICharacterSaveData<NeedsSaveData>
 
     private void OnDestroy()
     {
+        var hungerNeed = GetNeed<NeedHunger>();
+        if (hungerNeed != null) hungerNeed.UnsubscribeFromPhase();
+
         if (MWI.Time.TimeManager.Instance != null)
         {
             MWI.Time.TimeManager.Instance.OnNewDay -= HandleNewDay;
