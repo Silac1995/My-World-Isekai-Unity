@@ -147,11 +147,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MWI.UI.Orders.UI_OrderImmediatePopup
   _messageText: {fileID: 4970534246508983676}
+  _timerBarFill: {fileID: 1546388113095172989}
   _acceptButton: {fileID: 5467604315845924516}
   _refuseButton: {fileID: 4949915557610057904}
-  _timerBar: {fileID: 0}
   _canvasGroup: {fileID: 3798233806989371119}
-  _root: {fileID: 0}
   _fadeDuration: 0.3
 --- !u!1 &3649059782422413293
 GameObject:
@@ -401,7 +400,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 171.55, y: -133.8}
+  m_AnchoredPosition: {x: 175, y: -148.8}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &7182939623559324598
@@ -480,7 +479,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 171.55, y: -66.9}
+  m_AnchoredPosition: {x: 175, y: -66.9}
   m_SizeDelta: {x: 323.1, y: 113.8}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &6731642867162600789
