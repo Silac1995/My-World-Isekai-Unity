@@ -15,6 +15,11 @@ using UnityEngine;
 ///   Walk coroutine → repath every 2 s, time out at 15 s, on arrival release self
 ///   and call door.Interact.
 ///   OnCancel → stop coroutine, unfreeze controller, stop movement.
+///
+/// Duration is set to WalkTimeoutSeconds (not 0) so this action remains the active
+/// CharacterAction for the duration of the walk; this makes ClearCurrentAction() trigger
+/// OnCancel as expected. OnApplyEffect is a no-op safety net if WalkRoutine somehow lasts
+/// the full timeout without self-completing.
 /// </summary>
 public abstract class CharacterDoorTraversalAction : CharacterAction
 {
@@ -30,7 +35,14 @@ public abstract class CharacterDoorTraversalAction : CharacterAction
     private Coroutine _walkCoroutine;
     private bool _didFreeze;
 
-    protected CharacterDoorTraversalAction(Character actor) : base(actor, duration: 0f) { }
+    // Duration is set to WalkTimeoutSeconds (not 0f) so _currentAction stays set for the
+    // entire walk. With duration=0 the base CharacterActions queue auto-fires Finish() right
+    // after OnStart, leaving _currentAction null while the walk coroutine is still running —
+    // and any later ClearCurrentAction() call would silently no-op (OnCancel never fires →
+    // Controller.Freeze leaks). Setting duration to the timeout means OnApplyEffect fires as
+    // a graceful timeout fallback only if WalkRoutine somehow lasts the full 15s without
+    // self-completing; in normal flow WalkRoutine calls ClearCurrentAction() to terminate.
+    protected CharacterDoorTraversalAction(Character actor) : base(actor, duration: WalkTimeoutSeconds) { }
 
     /// <summary>
     /// Returns the door this action should navigate to and interact with,

@@ -409,6 +409,7 @@ public class CharacterParty : CharacterSystem, ICharacterSaveData<PartySaveData>
             {
                 ClearFollowState();
                 StopPortalFollow();
+                _character.CharacterActions?.ClearCurrentAction();
 
                 if (door is BuildingInteriorDoor bd)
                 {
@@ -985,10 +986,15 @@ public class CharacterParty : CharacterSystem, ICharacterSaveData<PartySaveData>
     private Coroutine _portalFollowCoroutine;
 
     /// <summary>
-    /// Called when the party leader transitions to a different map.
-    /// For each NPC follower:
-    ///   - If the connecting door is a BuildingInteriorDoor → queue CharacterEnterBuildingAction.
-    ///   - Otherwise (portal / gate / outdoor↔outdoor) → run a small portal-follow coroutine.
+    /// Server-side, host-driven dispatch: iterates each NPC follower and routes them through
+    /// the connecting door (BuildingInteriorDoor → CharacterEnterBuildingAction; otherwise →
+    /// PortalFollowRoutine).
+    ///
+    /// NOTE: Currently dead code — leader-map transitions today fan out via the per-follower
+    /// <c>OnLeaderMapChanged</c> NetworkVariable callback (line ~390). This method is preserved
+    /// for the upcoming order system / direct script-driven dispatch where the host explicitly
+    /// orders the whole party through a door. If you remove it, also remove the corresponding
+    /// section from <c>.agent/skills/party-system/SKILL.md</c>.
     /// </summary>
     public void OrderFollowersThroughDoor(string leaderTargetMapId)
     {
@@ -1009,6 +1015,7 @@ public class CharacterParty : CharacterSystem, ICharacterSaveData<PartySaveData>
             if (member.CharacterParty == null) continue;
             member.CharacterParty.ClearFollowState();
             member.CharacterParty.StopPortalFollow();
+            member.CharacterActions?.ClearCurrentAction();
 
             if (door is BuildingInteriorDoor bd)
             {
@@ -1092,6 +1099,15 @@ public class CharacterParty : CharacterSystem, ICharacterSaveData<PartySaveData>
         {
             StopCoroutine(_portalFollowCoroutine);
             _portalFollowCoroutine = null;
+
+            // The coroutine's natural exit paths Unfreeze and Stop movement, but StopCoroutine
+            // bypasses them — replicate that cleanup here so an external cancel doesn't leak
+            // a frozen controller.
+            if (_character != null)
+            {
+                _character.CharacterMovement?.Stop();
+                if (_character.Controller != null) _character.Controller.Unfreeze();
+            }
         }
     }
 
