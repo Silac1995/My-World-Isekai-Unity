@@ -103,11 +103,51 @@ public class NeedHunger : CharacterNeed
     }
 
     /// <summary>
-    /// Returns the GOAP action chain to satisfy hunger. Filled in Task 10 once
-    /// GoapAction_GoToFood + GoapAction_Eat exist.
+    /// Returns the GOAP action chain to satisfy hunger:
+    /// [ GoapAction_GoToFood(furniture), GoapAction_Eat(furniture) ]
+    /// v1: only scans the NPC's current job Workplace. Home building fallback is deferred.
     /// </summary>
     public override List<GoapAction> GetGoapActions()
     {
-        return new List<GoapAction>();
+        var actions = new List<GoapAction>();
+
+        if (_character == null)
+        {
+            Debug.LogWarning("<color=orange>[NeedHunger]</color> GetGoapActions: _character is null.");
+            return actions;
+        }
+
+        // v1 source: the building the NPC currently works at.
+        CommercialBuilding workplace = _character.CharacterJob?.Workplace;
+        if (workplace == null)
+        {
+            Debug.Log($"<color=cyan>[NeedHunger]</color> {_character.CharacterName} has no Workplace — cannot locate food.");
+            _lastSearchTime = UnityEngine.Time.time;
+            return actions;
+        }
+
+        try
+        {
+            foreach (var (furniture, item) in workplace.GetItemsInStorageFurniture())
+            {
+                if (item?.ItemSO is FoodSO)
+                {
+                    actions.Add(new GoapAction_GoToFood(furniture));
+                    actions.Add(new GoapAction_Eat(furniture));
+                    _lastSearchTime = UnityEngine.Time.time;
+                    Debug.Log($"<color=green>[NeedHunger]</color> {_character.CharacterName} found food '{item.CustomizedName}' in '{furniture.FurnitureName}' at '{workplace.BuildingName}'.");
+                    return actions;
+                }
+            }
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogException(e);
+            Debug.LogError($"<color=red>[NeedHunger]</color> {_character.CharacterName}: exception while scanning '{workplace.BuildingName}' for food.");
+        }
+
+        Debug.Log($"<color=cyan>[NeedHunger]</color> {_character.CharacterName}: no FoodInstance found in '{workplace.BuildingName}'. Starting cooldown.");
+        _lastSearchTime = UnityEngine.Time.time;
+        return actions;
     }
 }
