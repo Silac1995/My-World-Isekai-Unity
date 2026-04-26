@@ -33,13 +33,13 @@ CharacterCombat (CharacterSystem — per-character)
 └── Attack() / UseAbility() (action execution)
 
 CombatAILogic (pure C# — shared Player/NPC)
-├── Phase 1: Decide intent (NPC auto-decide)
-├── Phase 2: Move into range + execute action
+├── Phase 1: Decide intent (NPC auto-decide at 70% initiative)
+├── Phase 2: Move into range + execute action (X-distance check, Z stagger=0 for melee)
 └── Phase 3: Tactical pacing (CombatTacticalPacer)
-    ├── Priority 1: Post-attack step-back (melee, 2m)
-    ├── Priority 2: Unengaged follow (trail target at range)
+    ├── Priority 1: Post-attack step-back (melee, ~2 units, no throttle)
+    ├── Priority 2: Unengaged follow (trail target at range, 1s throttle)
     ├── Priority 3: Tactical circling (melee, 2:1+ outnumber)
-    └── Priority 4: Idle sway (Perlin noise, 0.7m)
+    └── Priority 4: Idle drift (random angle within group's semicircle, 5-7s)
 ```
 
 ### 2. Battle Flow
@@ -107,23 +107,57 @@ All combat effects route through `CharacterAction`:
 
 ### 6a. Facing System
 
-Single source of truth: characters face only their `PlannedTarget` during combat. `SetActionIntent()` and `SetPlannedTarget()` both call `CharacterVisual.SetLookTarget(target)`. No other system overrides facing during battle.
+Single source of truth: characters face only their `PlannedTarget` during combat. `SetPlannedTarget()` calls `CharacterVisual.SetLookTarget(target)`. No other system overrides facing during battle. `ClearActionIntent()` only clears the look target when **NOT in battle** (prevents turning away during step-back).
+
+### 6b. Unified Targeting (CRITICAL)
+
+`SetPlannedTarget(Character)` is the **single entry point for ALL target changes**. It performs:
+1. Reject self-targeting (`target == _character`)
+2. Set look target on `CharacterVisual`
+3. Update `BattleManager.SetTargeting()` (targeting graph)
+4. Run `EvaluateEngagements()` immediately
+5. Issue immediate movement command toward the new target (`Resume + SetDestination`)
+
+All target-changing code routes through it:
+- `SetActionIntent` → `SetPlannedTarget`
+- `BTAction_Combat` → `SetPlannedTarget`
+- `RegisterCharacter` (battle init) → `SetPlannedTarget`
+- `AddParticipantInternal` (mid-battle join) → `SetPlannedTarget`
+- `SeedMutualTargeting` → `SetPlannedTarget`
+- UI click/TAB → `SetPlannedTarget`
+
+**Never call `SetTargeting` directly on the coordinator** — it bypasses the look target, evaluation, and immediate movement, causing characters to stand idle until initiative fills.
+
+**Side-view game**: melee range check uses **X distance only** (`dx <= attackRange && dx >= 1.0`). Z alignment requires `zDist <= 1.5` for melee; ranged bypasses Z. Melee approach uses stagger Z = 0 (match target depth lane for hitbox alignment).
 
 ### 7. Engagement Coordinator (Targeting-Graph Algorithm)
 
 **API**: `SetTargeting(attacker, target)` updates `_targetingGraph`, `EvaluateEngagements()` runs per battle tick
 
 **Algorithm (per tick)**:
-1. **FORM**: Find mutual targeting pairs (A→B and B→A) — these seed Union-Find components
-2. **JOIN**: One-way targeters join the component of their target (if target is in one)
-3. **BUILD**: Collect connected components by Union-Find root
-4. **RECONCILE**: Compare components against existing engagements — create new, sync members, or merge overlapping
-5. **CLEAN**: Remove characters no longer in any component from their engagements; prune empty engagements
+1. **FORM**: Find mutual targeting pairs (A→B and B→A) — these seed Union-Find components. Snapshot the graph first (path compression and `SetTargeting` can mutate during iteration).
+2. **JOIN**: One-way targeters join the component of their target — but ONLY if the attacker is **not already part of a mutual pair**. This prevents a character with a mutual (B↔D) from accidentally bridging into another engagement (A↔C) via a one-way edge.
+3. **BUILD**: Collect connected components by Union-Find root. Snapshot keys before iterating because `Find()` does path compression that mutates the dictionary.
+4. **RECONCILE**: Compare components against existing engagements — create new, sync members, or merge overlapping into the largest. Orphaned characters (in an engagement but not in any component) are removed.
+5. **CLEAN**: Prune empty/finished engagements.
+6. **SEPARATE**: `SeparateEngagements()` runs pairwise repulsion — anchors closer than `MIN_ENGAGEMENT_SEPARATION = 12` are pushed apart at `SEPARATION_PUSH_SPEED = 2`/tick.
+
+**Battle init**: `SeedMutualTargeting` ensures every character has a target and creates mutual pairs immediately so engagements form on the first frame.
 
 **Formation**: Each `EngagementGroup` owns a `CombatFormation`. Melee at ~4m, ranged at ~8m from opponent center. Z-axis spreading with configurable spacing. Deterministic jitter per character. No fixed ring slots.
 
+**Angular slot spreading** (in `CombatTacticalPacer.GetSlotAngle`): Each character's idle drift angle is anchored to a slot derived from their index within their `EngagementGroup`. GroupA spreads across the left semicircle (180° centered on π), GroupB across the right (centered on 0). This prevents allies on the same side from drifting onto the same spot.
+
+**Throttle differentiation** (in `CombatTacticalPacer`):
+- Step-back: no throttle (fires immediately)
+- Unengaged follow: 1s throttle
+- Engaged idle drift: 5s throttle (matches drift interval)
+- `ForceImmediateReposition()` resets both throttle and drift timer for instant response on target changes
+
 **Other API**:
-- `GetBestTargetFor(attacker)` → finds optimal target (closest in non-full engagement)
+- `SetTargeting(attacker, target)` → updates graph (used internally; **prefer `SetPlannedTarget` from outside**)
+- `GetBestTargetFor(attacker)` → finds optimal target (closest in non-full engagement, **excludes the attacker itself**)
+- `GetTargetOf(character)` → returns this character's current graph target (for mutual-pair seeding)
 - `GetEngagementOf(character)` → current engagement or null
 - `RemoveFromGraph(character)` → cleanup on death/leave (removes both outgoing and incoming edges)
 
