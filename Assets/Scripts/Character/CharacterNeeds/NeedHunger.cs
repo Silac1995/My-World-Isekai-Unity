@@ -312,7 +312,12 @@ public class NeedHunger : CharacterNeed
 
             for (int i = 0; i < visible.Count; i++)
             {
-                if (visible[i] is not WorldItem worldItem) continue;
+                var interactable = visible[i];
+                if (interactable == null) continue;
+                // WorldItem is a sibling NetworkBehaviour on the same GameObject as the
+                // InteractableObject (not a subtype), so reach it via GetComponent.
+                var worldItem = interactable.GetComponent<WorldItem>();
+                if (worldItem == null) continue;
                 if (worldItem.IsBeingCarried) continue;
                 if (worldItem.ItemInstance is not FoodInstance foodInstance) continue;
 
