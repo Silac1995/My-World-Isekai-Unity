@@ -22,8 +22,12 @@ namespace MWI.Orders
 
         Character IQuest.Issuer => Issuer?.AsCharacter;
 
-        // ── IQuest display (subclass supplies the gameplay specifics) ──
-        public abstract string Title { get; }
+        // ── IQuest display ─────────────────────────────────────────────────
+        // Subclass supplies DisplayTitle / Description. IQuest.Title wraps DisplayTitle
+        // with a [P:NN] priority decoration so high-priority orders stand out in the
+        // quest log without needing a custom UI_QuestLogEntry prefab.
+        public abstract string DisplayTitle { get; }
+        public string Title => $"[P:{Priority}] {DisplayTitle}";
         public virtual string InstructionLine => Title;
         public abstract string Description { get; }
 

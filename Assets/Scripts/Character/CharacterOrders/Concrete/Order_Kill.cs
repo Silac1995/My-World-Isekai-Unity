@@ -45,7 +45,7 @@ namespace MWI.Orders
             return target == null || !target.IsAlive();
         }
 
-        public override string Title
+        public override string DisplayTitle
             => $"Kill {ResolveTargetCharacter()?.CharacterName ?? "<unknown>"}";
 
         public override string Description
