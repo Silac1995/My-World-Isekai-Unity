@@ -15,6 +15,11 @@ public class GoapAction_GoToFood : GoapAction_MoveToTarget
 
     public override string ActionName => "Go To Food";
 
+    // Empty — this is a "first move" action with no required world-state precondition.
+    // The base GoapAction.Preconditions getter is abstract, so we must implement it
+    // (returning an empty dictionary makes ArePreconditionsMet always return true).
+    public override Dictionary<string, bool> Preconditions => new Dictionary<string, bool>();
+
     public override Dictionary<string, bool> Effects => new Dictionary<string, bool>
     {
         { "atFood", true }
