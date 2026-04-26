@@ -408,6 +408,7 @@ public class CharacterParty : CharacterSystem, ICharacterSaveData<PartySaveData>
             if (door != null)
             {
                 ClearFollowState();
+                StopPortalFollow();
 
                 if (door is BuildingInteriorDoor bd)
                 {
@@ -415,6 +416,10 @@ public class CharacterParty : CharacterSystem, ICharacterSaveData<PartySaveData>
                     if (building != null)
                     {
                         _character.CharacterActions.ExecuteAction(new CharacterEnterBuildingAction(_character, building));
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"<color=orange>[CharacterParty] {_character.CharacterName}: BuildingInteriorDoor '{bd.name}' has no Building parent — skipping follow.</color>");
                     }
                 }
                 else
@@ -1003,6 +1008,7 @@ public class CharacterParty : CharacterSystem, ICharacterSaveData<PartySaveData>
 
             if (member.CharacterParty == null) continue;
             member.CharacterParty.ClearFollowState();
+            member.CharacterParty.StopPortalFollow();
 
             if (door is BuildingInteriorDoor bd)
             {
@@ -1010,6 +1016,10 @@ public class CharacterParty : CharacterSystem, ICharacterSaveData<PartySaveData>
                 if (building != null)
                 {
                     member.CharacterActions.ExecuteAction(new CharacterEnterBuildingAction(member, building));
+                }
+                else
+                {
+                    Debug.LogWarning($"<color=orange>[CharacterParty] {member.CharacterName}: BuildingInteriorDoor '{bd.name}' has no Building parent — skipping follow.</color>");
                 }
             }
             else
@@ -1070,13 +1080,13 @@ public class CharacterParty : CharacterSystem, ICharacterSaveData<PartySaveData>
         return bestDoor;
     }
 
-    private void StartPortalFollow(MapTransitionDoor door)
+    internal void StartPortalFollow(MapTransitionDoor door)
     {
         StopPortalFollow();
         _portalFollowCoroutine = StartCoroutine(PortalFollowRoutine(door));
     }
 
-    private void StopPortalFollow()
+    internal void StopPortalFollow()
     {
         if (_portalFollowCoroutine != null)
         {
