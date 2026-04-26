@@ -12,7 +12,7 @@ public class EquipmentLayer : MonoBehaviour
     [SerializeField] protected EquipmentInstance boots;
 
     [Header("Sockets (Handlers)")]
-    // On remplace les listes par des GameObjects uniques
+    // We replace the lists with unique GameObjects
     [SerializeField] protected GameObject headSocket;
     [SerializeField] protected GameObject chestSocket;
     [SerializeField] protected GameObject glovesSocket;
@@ -23,8 +23,8 @@ public class EquipmentLayer : MonoBehaviour
 
     private void Start()
     {
-        // On s'assure que TOUS les sockets sont instanciés avec leur m_BindPoses correct
-        // tout en cachant visuellement l'équipement de base.
+        // We make sure that ALL sockets are instantiated with their correct m_BindPoses
+        // while visually hiding the base equipment.
         HideAllSockets();
         RefreshAllVisuals();
     }
@@ -47,11 +47,11 @@ public class EquipmentLayer : MonoBehaviour
 
         WearableType type = data.WearableType;
 
-        // 1. Logique de données
+        // 1. Data logic
         Unequip(type);
         SetInstance(type, newInstance);
 
-        // 2. Logique Visuelle
+        // 2. Visual logic
         RefreshSlotVisual(type);
     }
 
@@ -74,7 +74,7 @@ public class EquipmentLayer : MonoBehaviour
 
         if (hasItem)
         {
-            // On cherche le handler de base. Peu importe que ce soit Chest ou Pants !
+            // We look for the base handler. It doesn't matter if it's Chest or Pants!
             if (socket.TryGetComponent(out WearableHandlerBase handler))
             {
                 handler.Initialize(currentItem.ItemSO.SpriteLibraryAsset);
@@ -88,7 +88,7 @@ public class EquipmentLayer : MonoBehaviour
             }
             else
             {
-                // Sécurité pour les items sans script Handler (ex: chapeau simple)
+                // Safety for items without a Handler script (e.g. simple hat)
                 ApplyGenericVisuals(socket, currentItem);
             }
         }
@@ -96,7 +96,7 @@ public class EquipmentLayer : MonoBehaviour
 
     private void ApplyGenericVisuals(GameObject socket, EquipmentInstance item)
     {
-        // On traite le parent et ses enfants Line/Color_Main/etc.
+        // We process the parent and its Line/Color_Main/etc. children
         SpriteResolver[] resolvers = socket.GetComponentsInChildren<SpriteResolver>(true);
         foreach (var res in resolvers)
         {
@@ -104,7 +104,7 @@ public class EquipmentLayer : MonoBehaviour
             res.ResolveSpriteToSpriteRenderer();
         }
 
-        // Application de la couleur sur les enfants spécifiques
+        // Apply the color to the specific children
         if (item.HavePrimaryColor())
         {
             foreach (Transform child in socket.transform)
@@ -119,15 +119,15 @@ public class EquipmentLayer : MonoBehaviour
     {
         if (socket == null) return;
 
-        // FIX (Offset Bug): Au lieu de désactiver le GameObject (ce qui casse le SpriteSkin des NPCs scalés), 
-        // on désactive uniquement les SpriteRenderer
+        // FIX (Offset Bug): Instead of disabling the GameObject (which breaks the SpriteSkin of scaled NPCs),
+        // we only disable the SpriteRenderers
         if (socket.TryGetComponent(out WearableHandlerBase handler))
         {
             handler.SetVisibility(isVisible);
         }
         else
         {
-            // Fallback s'il n'y a pas de handler
+            // Fallback if there is no handler
             SpriteRenderer[] renderers = socket.GetComponentsInChildren<SpriteRenderer>(true);
             foreach (var sr in renderers)
             {
@@ -136,7 +136,7 @@ public class EquipmentLayer : MonoBehaviour
         }
     }
 
-    // --- Helpers de recherche ---
+    // --- Lookup helpers ---
 
     private GameObject GetSocket(WearableType type) => type switch
     {
@@ -176,14 +176,14 @@ public class EquipmentLayer : MonoBehaviour
     }
 
     /// <summary>
-    /// Synchronise l'état visuel de tous les sockets avec les instances actuellement équipées.
-    /// Utile au spawn ou après un chargement.
+    /// Synchronizes the visual state of all sockets with the currently equipped instances.
+    /// Useful at spawn or after a load.
     /// </summary>
     public void RefreshAllVisuals()
     {
-        Debug.Log($"<color=cyan>[Refresh]</color> Rafraîchissement visuel complet pour <b>{gameObject.name}</b>");
+        Debug.Log($"<color=cyan>[Refresh]</color> Full visual refresh for <b>{gameObject.name}</b>");
 
-        // On boucle sur toutes les valeurs de l'Enum EquipmentType
+        // We loop over all the values of the EquipmentType Enum
         foreach (WearableType type in System.Enum.GetValues(typeof(WearableType)))
         {
             RefreshSlotVisual(type);
@@ -194,7 +194,7 @@ public class EquipmentLayer : MonoBehaviour
     {
         if (newInstance.ItemSO is WearableSO data)
         {
-            // On vérifie si le slot (ex: Helmet) contient déjà cette instance précise
+            // We check if the slot (e.g. Helmet) already contains this exact instance
             if (currentEquipment.ContainsKey(data.WearableType))
             {
                 return currentEquipment[data.WearableType] == newInstance;

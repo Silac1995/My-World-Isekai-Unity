@@ -8,7 +8,7 @@ public class FurnitureManager : MonoBehaviour
     [SerializeField] protected List<Furniture> _furnitures = new List<Furniture>();
     
     private FurnitureGrid _grid;
-    private Room _room; // Referénce à la room parente pour les logs et la parenté Transform
+    private Room _room; // Reference to the parent room for logs and Transform parenting
 
     public IReadOnlyList<Furniture> Furnitures => _furnitures;
     public FurnitureGrid Grid => _grid;
@@ -20,8 +20,8 @@ public class FurnitureManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Utilisé pour vérifier si une interface UI ou un PNJ peut placer ce meuble à cet endroit exact.
-    /// Renvoie true si l'emplacement est valide sur la grille.
+    /// Used to check whether a UI or an NPC can place this furniture at this exact location.
+    /// Returns true if the slot is valid on the grid.
     /// </summary>
     public bool IsPlacementValid(Furniture furniturePrefab, Vector3 targetPosition)
     {
@@ -30,7 +30,7 @@ public class FurnitureManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Essaie d'ajouter un meuble à cette room via le manager.
+    /// Attempts to add a piece of furniture to this room via the manager.
     /// </summary>
     public bool AddFurniture(Furniture furniturePrefab, Vector3 targetPosition)
     {
@@ -40,9 +40,9 @@ public class FurnitureManager : MonoBehaviour
         {
             Furniture newFurniture = Instantiate(furniturePrefab, targetPosition, Quaternion.identity, transform);
             
-            // Ajustement du pivot : targetPosition est le centre de la PREMIÈRE cellule (bas-gauche).
-            // Si le meuble fait 3x2 cellules, le centre visuel global du meuble doit être décalé 
-            // pour être au milieu de ces 3x2 cellules, et non centré sur la seule 1ère cellule.
+            // Pivot adjustment: targetPosition is the center of the FIRST cell (bottom-left).
+            // If the furniture spans 3x2 cells, the overall visual center of the furniture must be shifted
+            // to sit in the middle of those 3x2 cells, instead of being centered on the 1st cell only.
             Renderer[] renderers = newFurniture.GetComponentsInChildren<Renderer>();
             if (renderers.Length > 0)
             {
@@ -52,19 +52,19 @@ public class FurnitureManager : MonoBehaviour
                     bounds.Encapsulate(renderers[i].bounds);
                 }
 
-                // L'espace total réservé sur la grille forme un grand rectangle.
-                // On calcule le centre EXACT de ce grand rectangle.
+                // The total space reserved on the grid forms a large rectangle.
+                // Compute the EXACT center of that large rectangle.
                 Vector3 regionCenter = targetPosition + new Vector3(
                     (furniturePrefab.SizeInCells.x - 1) * _grid.CellSize / 2f,
                     0,
                     (furniturePrefab.SizeInCells.y - 1) * _grid.CellSize / 2f
                 );
 
-                // On calcule la distance entre le centre actuel du meuble 3D et le centre voulu de la grille
+                // Compute the distance between the current 3D-furniture center and the desired grid center
                 float offsetX = regionCenter.x - bounds.center.x;
                 float offsetZ = regionCenter.z - bounds.center.z;
-                
-                // Pour la hauteur (Y), on s'assure que le point le plus bas du mesh touche le sol
+
+                // For the height (Y), make sure the lowest point of the mesh touches the floor
                 float offsetY = targetPosition.y - bounds.min.y;
 
                 newFurniture.transform.position += new Vector3(offsetX, offsetY, offsetZ);
@@ -74,12 +74,12 @@ public class FurnitureManager : MonoBehaviour
             _grid.RegisterFurniture(newFurniture, targetPosition, newFurniture.SizeInCells);
             
             string roomName = _room != null ? _room.RoomName : gameObject.name;
-            Debug.Log($"<color=green>[FurnitureManager]</color> Instanciation REUSSIE de {furniturePrefab.name} à {newFurniture.transform.position} dans {roomName} !");
+            Debug.Log($"<color=green>[FurnitureManager]</color> Instantiation SUCCESSFUL: {furniturePrefab.name} at {newFurniture.transform.position} in {roomName}!");
             return true;
         }
 
         string failRoomName = _room != null ? _room.RoomName : gameObject.name;
-        Debug.LogWarning($"<color=orange>[FurnitureManager]</color> Emplacement invalide ou déjà occupé pour le meuble {furniturePrefab.FurnitureName} à {targetPosition} dans {failRoomName}.");
+        Debug.LogWarning($"<color=orange>[FurnitureManager]</color> Invalid or already-occupied slot for furniture {furniturePrefab.FurnitureName} at {targetPosition} in {failRoomName}.");
         return false;
     }
 

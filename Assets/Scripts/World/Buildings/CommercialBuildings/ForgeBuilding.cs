@@ -2,9 +2,9 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// Bâtiment de type Forge.
-/// Nécessite un Forgeron (craft les objets) et optionnellement des Apprentis.
-/// Le boss est typiquement le forgeron principal, ou un LogisticsManager.
+/// Forge-type building.
+/// Requires a Blacksmith (crafts the items) and optionally Apprentices.
+/// The boss is typically the main blacksmith, or a LogisticsManager.
 /// </summary>
 public class ForgeBuilding : CraftingBuilding
 {
@@ -22,7 +22,7 @@ public class ForgeBuilding : CraftingBuilding
 
     protected override void InitializeJobs()
     {
-        _jobs.Add(new JobLogisticsManager("Forge Master")); // Le boss/manager pour prendre les commandes
+        _jobs.Add(new JobLogisticsManager("Forge Master")); // The boss/manager who takes orders
         _jobs.Add(new JobBlacksmith(_smithingSkill, _minimumBlacksmithTier));
         
         for (int i = 0; i < _apprenticeCount; i++)
@@ -30,11 +30,11 @@ public class ForgeBuilding : CraftingBuilding
             _jobs.Add(new JobBlacksmithApprentice(_smithingSkill, _minimumApprenticeTier));
         }
 
-        Debug.Log($"<color=orange>[Forge]</color> {buildingName} initialisée avec 1 Manager, 1 Forgeron et {_apprenticeCount} Apprenti(s).");
+        Debug.Log($"<color=orange>[Forge]</color> {buildingName} initialized with 1 Manager, 1 Blacksmith and {_apprenticeCount} Apprentice(s).");
     }
 
     /// <summary>
-    /// Récupère le job de forgeron de ce building.
+    /// Returns the blacksmith job of this building.
     /// </summary>
     public JobBlacksmith GetBlacksmith()
     {
@@ -46,7 +46,7 @@ public class ForgeBuilding : CraftingBuilding
     }
 
     /// <summary>
-    /// Récupère tous les apprentis de cette forge.
+    /// Returns all apprentices of this forge.
     /// </summary>
     public IEnumerable<JobBlacksmithApprentice> GetApprentices()
     {
@@ -54,7 +54,7 @@ public class ForgeBuilding : CraftingBuilding
     }
 
     /// <summary>
-    /// Trouve une enclume disponible dans la forge.
+    /// Finds an available anvil in the forge.
     /// </summary>
     public CraftingStation FindAvailableAnvil()
     {
@@ -67,7 +67,7 @@ public class ForgeBuilding : CraftingBuilding
     }
 
     /// <summary>
-    /// Trouve une fournaise disponible dans la forge.
+    /// Finds an available furnace in the forge.
     /// </summary>
     public CraftingStation FindAvailableFurnace()
     {

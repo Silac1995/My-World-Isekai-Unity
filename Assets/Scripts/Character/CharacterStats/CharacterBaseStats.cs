@@ -47,13 +47,13 @@ public abstract class CharacterBaseStats
         }
         else
         {
-            Debug.LogWarning($"Modifier introuvable dans la liste des modificateurs pour {statName}");
+            Debug.LogWarning($"Modifier not found in the modifiers list for {statName}");
             return false;
         }
     }
 
     /// <summary>
-    /// Retire tous les modificateurs provenant d'une source spécifique.
+    /// Removes all modifiers coming from a specific source.
     /// </summary>
     public bool RemoveAllModifiersFromSource(object source)
     {

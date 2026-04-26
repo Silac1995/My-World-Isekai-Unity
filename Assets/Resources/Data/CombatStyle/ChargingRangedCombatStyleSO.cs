@@ -1,8 +1,8 @@
 using UnityEngine;
 
 /// <summary>
-/// Style de combat à distance avec charge (ex: arc).
-/// Le personnage doit charger pendant _chargingTime avant de pouvoir tirer.
+/// Charging ranged combat style (e.g. bow).
+/// The character must charge for _chargingTime before being able to fire.
 /// </summary>
 [CreateAssetMenu(fileName = "ChargingRangedStyle", menuName = "Scriptable Objects/Combat Style/Charging Ranged Style")]
 public class ChargingRangedCombatStyleSO : RangedCombatStyleSO

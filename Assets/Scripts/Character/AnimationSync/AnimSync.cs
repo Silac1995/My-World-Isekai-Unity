@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// Gère la synchronisation d'animations entre deux personnages.
-/// Exemple : poignée de main, danse, high-five, etc.
+/// Manages animation synchronization between two characters.
+/// Example: handshake, dance, high-five, etc.
 /// </summary>
 public class AnimSync : MonoBehaviour
 {
@@ -43,10 +43,10 @@ public class AnimSync : MonoBehaviour
     #region Unity Lifecycle
     private void Awake()
     {
-        // Auto-initialise l'initiator depuis le Character du GameObject
+        // Auto-initialize the initiator from the Character on the GameObject
         Initialize();
 
-        // Cache le hash du trigger pour optimiser
+        // Cache the trigger hash for optimization
         if (!string.IsNullOrEmpty(_syncTriggerName))
         {
             _syncAnimationHash = Animator.StringToHash(_syncTriggerName);
@@ -57,7 +57,7 @@ public class AnimSync : MonoBehaviour
     {
         if (_isSyncing)
         {
-            // Vérifie si la synchronisation est terminée
+            // Check whether the synchronization is finished
             if (Time.time >= _syncStartTime + _syncDuration)
             {
                 EndSync();
@@ -70,7 +70,7 @@ public class AnimSync : MonoBehaviour
         if (_isSyncing)
             EndSync();
 
-        // Nettoie les events pour que les subscribers ne gardent pas de ref vers ce composant
+        // Clear the events so subscribers don't keep a ref to this component
         OnSyncStarted = null;
         OnSyncEnded = null;
         _initiator = null;
@@ -80,7 +80,7 @@ public class AnimSync : MonoBehaviour
 
     #region Public Methods
     /// <summary>
-    /// Initialise la synchronisation avec deux personnages.
+    /// Initializes the synchronization with two characters.
     /// </summary>
     public void Initialize(Character initiator, Character target)
     {
@@ -89,23 +89,23 @@ public class AnimSync : MonoBehaviour
     }
 
     /// <summary>
-    /// Initialise l'initiator à partir du Character attaché au même GameObject.
+    /// Initializes the initiator from the Character attached to the same GameObject.
     /// </summary>
     public void Initialize()
     {
         _initiator = GetComponent<Character>();
         if (_initiator == null)
         {
-            Debug.LogWarning("<color=red>[AnimSync]</color> Aucun Character trouvé sur ce GameObject.");
+            Debug.LogWarning("<color=red>[AnimSync]</color> No Character found on this GameObject.");
         }
     }
 
     /// <summary>
-    /// Démarre la synchronisation d'animation avec une cible spécifique.
+    /// Starts the animation synchronization with a specific target.
     /// </summary>
-    /// <param name="target">Le personnage cible pour la synchronisation</param>
-    /// <param name="triggerName">Nom du trigger d'animation à déclencher</param>
-    /// <param name="duration">Durée de la synchronisation (0 = auto-détection)</param>
+    /// <param name="target">The target character for the synchronization</param>
+    /// <param name="triggerName">Name of the animation trigger to fire</param>
+    /// <param name="duration">Duration of the synchronization (0 = auto-detection)</param>
     public void StartSync(Character target, string triggerName = null, float duration = 0f)
     {
         _target = target;

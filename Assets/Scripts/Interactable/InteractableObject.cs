@@ -14,7 +14,7 @@ public abstract class InteractableObject : MonoBehaviour
     {
         get
         {
-            // Si la variable est vide, on prend le root par défaut
+            // If the field is empty, fall back to the default root
             if (_rootgameObject == null)
                 _rootgameObject = transform.root.gameObject;
             return _rootgameObject;
@@ -46,10 +46,10 @@ public abstract class InteractableObject : MonoBehaviour
         return _interactionZone.bounds.Contains(character.transform.position);
     }
 
-    // On passe le Character qui déclenche l'action
+    // We pass the Character that triggers the action
     public abstract void Interact(Character interactor);
 
-    // On peut aussi mettre à jour les méthodes de survol pour savoir qui survole
+    // The hover methods can also be updated to track who is hovering
     public virtual void OnCharacterEnter(Character interactor) { }
     public virtual void OnCharacterExit(Character interactor) { }
 

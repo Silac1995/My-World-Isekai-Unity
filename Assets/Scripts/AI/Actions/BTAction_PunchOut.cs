@@ -4,8 +4,8 @@ using System.Linq;
 namespace MWI.AI
 {
     /// <summary>
-    /// Action de forcer un NPC à dépointer d'un bâtiment commercial quand son horaire se termine.
-    /// Se déplace vers la BuildingZone et déclenche Action_PunchOut.
+    /// Action that forces an NPC to clock out of a commercial building when its shift ends.
+    /// Moves toward the BuildingZone and triggers Action_PunchOut.
     /// </summary>
     public class BTAction_PunchOut : BTNode
     {
@@ -36,7 +36,7 @@ namespace MWI.AI
             CommercialBuilding workplace = self.CharacterJob?.Workplace;
             if (workplace == null || !workplace.IsWorkerOnShift(self))
             {
-                // Si on a plus de building ou qu'on n'est plus dedans (Action_PunchOut a réussi), succès.
+                // If we no longer have a building or are no longer inside it (Action_PunchOut succeeded), success.
                 return BTNodeStatus.Success;
             }
 
@@ -60,7 +60,7 @@ namespace MWI.AI
 
         private BTNodeStatus HandleCleaningUpInventory(Character self, CharacterMovement movement, CommercialBuilding workplace)
         {
-            // Vérifier s'il a un objet en main ou dans son inventaire
+            // Check whether they have an item in hand or in their inventory
             var inventory = self.CharacterEquipment?.GetInventory();
             ItemInstance carriedItem = null;
 
@@ -73,14 +73,14 @@ namespace MWI.AI
                 carriedItem = self.CharacterVisual?.BodyPartsController?.HandsController?.CarriedItem;
             }
 
-            // Si rien à nettoyer, on avance à la phase suivante
+            // If nothing to clean up, advance to the next phase
             if (carriedItem == null)
             {
                 _currentPhase = PunchOutPhase.MovingToBuilding;
                 return BTNodeStatus.Running;
             }
 
-            // Si on porte qqch, on l'amène dans la StorageZone du bâtiment (ou au pire le centre)
+            // If we are carrying something, take it to the building's StorageZone (or at worst the center)
             Zone storageZone = workplace.StorageZone;
             Zone deliveryZone = workplace.DeliveryZone;
             Collider buildingZoneCol = workplace.BuildingZone;
@@ -94,25 +94,25 @@ namespace MWI.AI
             if (storageZone != null) dropPos = storageZone.GetRandomPointInZone();
             else if (deliveryZone != null) dropPos = deliveryZone.GetRandomPointInZone();
 
-            // Arrivé ? On drop.
+            // Arrived? Drop it.
             if (dropCol != null && dropCol.bounds.Contains(self.transform.position))
             {
                 movement.Stop();
                 var dropAction = new CharacterDropItem(self, carriedItem);
-                
+
                 if (self.CharacterActions.ExecuteAction(dropAction))
                 {
-                    // Action acceptée, on laisse l'animation jouer. Au prochain appel, `carriedItem` vérifiera s'il en reste.
-                    // Si on était un harvester/transporter, on réclame que l'objet aille dans le bâtiment pour éviter la perte:
-                    dropAction.OnActionFinished += () => 
+                    // Action accepted, let the animation play. On the next call, `carriedItem` will check if any remains.
+                    // If we were a harvester/transporter, route the item into the building to avoid losing it:
+                    dropAction.OnActionFinished += () =>
                     {
                         workplace.AddToInventory(carriedItem);
-                        Debug.Log($"<color=cyan>[Punch Out]</color> {self.CharacterName} a déposé {carriedItem.ItemSO.ItemName} avant de quitter.");
+                        Debug.Log($"<color=cyan>[Punch Out]</color> {self.CharacterName} dropped {carriedItem.ItemSO.ItemName} before leaving.");
                     };
                 }
                 else
                 {
-                    // Fallback sécurité si action bloquée
+                    // Safety fallback if the action is blocked
                     if (self.CharacterActions.CurrentAction == null)
                     {
                         if (inventory != null && inventory.HasAnyItemSO(new System.Collections.Generic.List<ItemSO> { carriedItem.ItemSO }))
@@ -129,7 +129,7 @@ namespace MWI.AI
             }
             else
             {
-                // Avancer vers la zone de drop
+                // Move toward the drop zone
                 if (!movement.HasPath || movement.RemainingDistance <= movement.StoppingDistance + 0.5f)
                 {
                     movement.SetDestination(dropPos);
@@ -232,10 +232,10 @@ namespace MWI.AI
             var currentAction = self.CharacterActions.CurrentAction;
             if (currentAction != null && currentAction is Action_PunchOut)
             {
-                return BTNodeStatus.Running; // Toujours en train de lire l'animation
+                return BTNodeStatus.Running; // Still playing the animation
             }
 
-            // L'action est terminée, on devrait avoir quitté
+            // The action is complete, we should have left
             return BTNodeStatus.Success;
         }
 
@@ -243,8 +243,8 @@ namespace MWI.AI
         {
             base.OnExit(bb);
             bb.Self?.CharacterMovement?.ResetPath();
-            
-            // Sécurité FailSafe si le root nous abort avant la fin de l'anim
+
+            // FailSafe in case the root aborts us before the animation finishes
             Character self = bb.Self;
             if (self != null && self.CharacterJob != null)
             {
@@ -255,7 +255,7 @@ namespace MWI.AI
                 }
             }
 
-            // Réinitialiser le GOAP pour qu'il passe à autre chose (ex: rentrer chez soi, manger)
+            // Reset the GOAP so it moves on to something else (e.g. go home, eat)
             if (self != null && self.CharacterGoap != null)
             {
                 self.CharacterGoap.CancelPlan();

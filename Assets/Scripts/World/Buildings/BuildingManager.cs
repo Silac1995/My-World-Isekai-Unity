@@ -3,8 +3,8 @@ using System.Linq;
 using UnityEngine;
 
 /// <summary>
-/// Singleton qui gère tous les bâtiments du monde.
-/// Permet de chercher des logements disponibles, des postes de travail, etc.
+/// Singleton that manages all buildings in the world.
+/// Allows searching for available housing, workplaces, etc.
 /// </summary>
 public class BuildingManager : MonoBehaviour
 {
@@ -33,14 +33,14 @@ public class BuildingManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Enregistre un bâtiment dans la liste globale.
+    /// Registers a building in the global list.
     /// </summary>
     public void RegisterBuilding(Building building)
     {
         if (building != null && !allBuildings.Contains(building))
         {
             allBuildings.Add(building);
-            Debug.Log($"<color=cyan>[Building Manager]</color> Bâtiment enregistré : {building.BuildingName} ({building.BuildingType})");
+            Debug.Log($"<color=cyan>[Building Manager]</color> Building registered: {building.BuildingName} ({building.BuildingType})");
             OnBuildingRegistered?.Invoke(building);
         }
     }
@@ -55,7 +55,7 @@ public class BuildingManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Retire un bâtiment de la liste globale.
+    /// Removes a building from the global list.
     /// </summary>
     public void UnregisterBuilding(Building building)
     {
@@ -66,7 +66,7 @@ public class BuildingManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Trouve un logement résidentiel avec de la place disponible (celui qui a le moins de résidents).
+    /// Finds a residential housing with available space (the one with the fewest residents).
     /// </summary>
     public ResidentialBuilding FindAvailableHousing()
     {
@@ -89,7 +89,7 @@ public class BuildingManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Trouve un bâtiment commercial sans propriétaire.
+    /// Finds a commercial building without an owner.
     /// </summary>
     public CommercialBuilding FindUnownedCommercialBuilding()
     {
@@ -104,8 +104,8 @@ public class BuildingManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Trouve un job disponible d'un type spécifique dans tous les buildings commerciaux.
-    /// Retourne le building et le job trouvé, ou null si aucun n'est disponible.
+    /// Finds an available job of a specific type across all commercial buildings.
+    /// Returns the building and the matching job, or null if none is available.
     /// </summary>
     public (CommercialBuilding building, T job) FindAvailableJob<T>(bool requireBoss = false) where T : Job
     {
@@ -133,7 +133,7 @@ public class BuildingManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Assigne un résident à un bâtiment résidentiel.
+    /// Assigns a resident to a residential building.
     /// </summary>
     public bool AssignResident(Character character, ResidentialBuilding building)
     {
@@ -142,7 +142,7 @@ public class BuildingManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Assigne un worker à un job dans un building commercial.
+    /// Assigns a worker to a job in a commercial building.
     /// </summary>
     public bool AssignWorker(Character worker, CommercialBuilding building, Job job)
     {

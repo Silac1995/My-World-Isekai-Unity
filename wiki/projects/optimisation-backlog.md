@@ -66,6 +66,8 @@ Catch-all tracker for performance / scalability / culling work that's been **del
 
 #### Refactor plan (ranked by impact / effort)
 
+> **Status (2026-04-26):** **Tier 1 + Tier 2 SHIPPED.** Aₐ + G + F + D + A all landed and compile clean — the highest-confidence, lowest-risk subset that wins regardless of profiler outcome. **Mandatory profiler-pass NOW** to confirm the predicted gains and to decide whether Tier 3 (B, C, Bₐ, Cₐ, Dₐ, Eₐ) is worth the risk. See `## Shipped 2026-04-26` subsection below for what's in / what's out.
+
 **Recommended ship order: A → B → D → F together as one PR (building-side, no AI-side changes), then E. → G. as drive-bys, then the AI-side bundle (Aₐ → Fₐ).**
 
 ##### Building / logistics side (ship first — pure server-only state, network-safe)
@@ -111,6 +113,36 @@ Specifically inspect:
 4. **Capture twice — once Editor, once Standalone Mono build.** Editor masks console-flush cost; Standalone exposes pure CPU.
 5. **Cross-check the hypothesis:** if `CraftingBuilding.GetCraftableItems` / `GetComponentsInChildren` and `CharacterAwareness` don't dominate self-time, the rankings above are wrong — **push back, reconsider, don't pre-commit to the plan**. The other strong suspect is hidden Debug.Log spam ([[host-progressive-freeze-debug-log-spam]]).
 
+#### Shipped 2026-04-26 (Tier 1 + Tier 2)
+
+Five surgical refactors. All compile clean, all server-only state, all network-safe (Host↔Client / Client↔Client / Host/Client↔NPC).
+
+| Fix | File | What changed | Expected win |
+|-----|------|--------------|--------------|
+| **Aₐ** | [Assets/Scripts/Character/CharacterAwareness.cs](../../Assets/Scripts/Character/CharacterAwareness.cs) | Added 0.3 s TTL cache + reused `Collider[64]` `OverlapSphereNonAlloc` buffer + reused result list. **Deleted ungated `Debug.Log` on the typed overload.** Added `InvalidateCache()` for callers that need immediate freshness. Returned untyped list is now SHARED (callers documented as read-only — verified all 9 callers are non-mutating). | OverlapSphere call rate ~120/sec → ~30-40/sec across the worker mix. Eliminates the line-72 console-flush amplifier (host-progressive-freeze pattern). Per-call allocations on the typed overload drop from `List<InteractableObject>` + `Collider[]` + LINQ enumerator to a single small `List<T>`. |
+| **G** | [Assets/Scripts/World/Buildings/CommercialBuildings/ShopBuilding.cs](../../Assets/Scripts/World/Buildings/CommercialBuildings/ShopBuilding.cs) | `ItemsToSell` getter now lazy-builds a cached `List<ItemSO>` once. Removed unused `using System.Linq;`. | Eliminates a per-access `Select().ToList()` allocation. Magnitude depends on caller frequency; defensive against future hot-loop callers. |
+| **F** | [Assets/Scripts/World/Buildings/CommercialBuilding.cs](../../Assets/Scripts/World/Buildings/CommercialBuilding.cs) | Added shared `Collider[128]` `OverlapBuffer`. Swapped 3 `Physics.OverlapBox` calls to `OverlapBoxNonAlloc` (`GetWorldItemsInStorage`, `CountUnabsorbedItemsInBuildingZone`, `RefreshStorageInventory` PickupZone scan). Each site emits a `Debug.LogWarning` if the buffer saturates (rule #31). | Eliminates 3 `Collider[]` allocations per `RefreshStorageInventory` / `GetWorldItemsInStorage` / `CountUnabsorbedItemsInBuildingZone` call. PhysX cost itself unchanged — this is GC pressure relief. |
+| **D** | [Assets/Scripts/World/Buildings/CommercialBuilding.cs](../../Assets/Scripts/World/Buildings/CommercialBuilding.cs) | Added 2 s TTL cache + `InvalidateStorageFurnitureCache()` hook on `CommercialBuilding`. Replaced the per-call recursive `GetFurnitureOfType<StorageFurniture>()` walk in `FindStorageFurnitureForItem` and `GetItemsInStorageFurniture` with the cached list. | Hundreds of redundant room+furniture walks/sec → one walk per 2 s per building. Hit by 5 GOAP actions across all logistics workers. |
+| **A** | [Assets/Scripts/World/Buildings/CommercialBuildings/CraftingBuilding.cs](../../Assets/Scripts/World/Buildings/CommercialBuildings/CraftingBuilding.cs) | Added 2 s TTL cache (`HashSet<ItemSO>` for `ProducesItem` O(1) lookup + `List<ItemSO>` for `GetCraftableItems`) + `InvalidateCraftableCache()` hook. **Preserved the intentional `GetComponentsInChildren<CraftingStation>(true)` fallback** — now paid once per refresh instead of once per query. Removed unused `using System.Linq;`. | The biggest single win in the bundle. `ProducesItem(item)` fan-out across ~8 buildings × 4 logistics managers × 6 stock targets per shift-change cluster: was ~hundreds of full transform scans inside a 1-2 s window, now amortized to ~one scan per building per 2 s. |
+
+**Trade-off introduced:** The TTL caches (D, A) introduce up to 2 s of staleness for furniture/station changes. Acceptable because:
+- Stations and storage furniture change rarely at runtime (player must physically place/pick up).
+- BuyOrders are retried via `RetryUnplacedOrders` every dispatcher tick — a 2 s delay in supplier discovery is invisible in practice.
+- The intentional `GetCraftableItems` fallback walk still runs (now amortized), so the registration-race correctness it guards is preserved.
+- Manual `InvalidateCraftableCache()` / `InvalidateStorageFurnitureCache()` hooks let callers force immediate freshness when they know things changed (default-furniture spawn completion, player place/pickup). **Future PR can wire these from `CommercialBuilding.SpawnDefaultFurniture` + `CharacterPlaceFurnitureAction` for zero staleness.**
+
+**Verification:** Both `assets-refresh` passes (mid-checkpoint after Tier 1, final after Tier 2) returned zero compile errors and zero runtime exceptions.
+
+#### Deferred to Tier 3 (need profiler data first)
+
+- **B** — Event-driven `ProcessActiveBuyOrders` (dirty-flag gating). Highest expected impact in the building layer but biggest integration surface — must mark dirty on every state change site (reservation cancel, player drops, Pass-2 absorption). Wait for profiler to confirm `ProcessActiveBuyOrders` self-time is dominant.
+- **C** — Incremental reservation tracking on `LogisticsOrderBook`. Redundant if B alone gets us under 16 ms.
+- **E** — Per-tick virtual-stock cache. Lower priority — `CheckStockTargets` is punch-in-only today.
+- **Bₐ** — Event-driven loose-item tracking on `GoapAction_GatherStorageItems`. Pairs with D's invalidation hook; need to wire enter/exit zone events first.
+- **Cₐ** — Stagger `Job.Execute` cadence (10 Hz → 2-3 Hz on heavy phases). Needs per-action audit (some assume 10 Hz).
+- **Dₐ** — Pool `GoapAction` instances. Highest risk — exact concern the `JobLogisticsManager.cs:173-178` comment block warns against. Do this last with full profiler diff.
+- **Eₐ** — Gate the 3 environmental BT conditions. Subsumed by Aₐ (already shipped).
+
 #### Until then
 Keep recommended worker counts low for demos; flag this in any tutorial / sample save.
 
@@ -121,7 +153,9 @@ Keep recommended worker counts low for demos; flag this in any tutorial / sample
 
 ## Milestones
 - [ ] StorageVisualDisplay per-peer culling — no fixed date; pick up when shelf-count perf becomes measurable, OR when player-count testing shows the always-on cost hurts.
-- [ ] Job logistics performance refactor — no fixed date; pick up before any "scale up the workforce" content lands, or sooner if the < 30 fps floor starts blocking real playtesting. **Mandatory profiler pass first** (see "Profiler-pass before any refactor" subsection). Then ship building-side bundle (A → B → D → F + drive-bys E. → G.) as one PR; then AI-side bundle starting with Aₐ.
+- [x] **Tier 1 + Tier 2 shipped 2026-04-26** — Aₐ (CharacterAwareness cache + Debug.Log delete), G (ShopBuilding.ItemsToSell cache), F (Physics.OverlapBoxNonAlloc swap), D (StorageFurniture cache), A (CraftingBuilding.GetCraftableItems cache + HashSet ProducesItem). Compile clean, network-safe, server-only state.
+- [ ] Profiler pass on the same worker mix (3 transporters / 4 logistic managers / 2 harvesters / 1 vendor / 2 crafters) — measure before/after Tier 1 + Tier 2 to confirm gains and decide whether Tier 3 is worth the risk.
+- [ ] Tier 3 — B / C / Bₐ / Cₐ / Dₐ. Only ship items the profiler proves are still costing real ms after Tier 1 + Tier 2.
 
 ## Stakeholders
 - [[kevin]] — decides when to invest.
@@ -135,6 +169,7 @@ Keep recommended worker counts low for demos; flag this in any tutorial / sample
 - [Assets/Scripts/World/Furniture/StorageVisualDisplay.cs](../../Assets/Scripts/World/Furniture/StorageVisualDisplay.cs) — class-level TODO comment.
 - 2026-04-26 conversation with Kevin — job logistics fps report (3 transporters / 4 logistic managers / 2 harvesters / 1 vendor / 2 crafters → < 30 fps).
 - 2026-04-26 dual-agent code audit ([[npc-ai-specialist]] + [[building-furniture-specialist]]) — read-only pass over `Assets/Scripts/World/Jobs/`, `Assets/Scripts/World/Buildings/Logistics/`, `Assets/Scripts/AI/GOAP/Actions/`, `Assets/Scripts/Character/CharacterAwareness.cs`, `Assets/Scripts/AI/NPCBehaviourTree.cs`. Findings cross-checked against the source by Claude.
+- 2026-04-26 implementation pass (Claude, single session) — Tier 1 + Tier 2 shipped. Two `assets-refresh` checkpoints with zero compile errors / exceptions on either pass.
 - [[jobs-and-logistics]] / [[building-logistics-manager]] / [[character-job]] / [[ai-goap]] — wiki entries for the systems involved in the hot path.
 - Verified files (with line ranges):
   - [Assets/Scripts/Character/CharacterAwareness.cs](../../Assets/Scripts/Character/CharacterAwareness.cs):20-76 — line 72 ungated `Debug.Log`.

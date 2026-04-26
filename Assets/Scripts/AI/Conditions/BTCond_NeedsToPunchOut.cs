@@ -4,9 +4,9 @@ using System.Linq;
 namespace MWI.AI
 {
     /// <summary>
-    /// Condition : Le personnage vient de finir son shift (son ScheduleActivity n'est PLUS Work)
-    /// mais il est TOUJOURS enregistré physiquement comme on-shift dans le bâtiment
-    /// (IsWorkerOnShift retourne vrai). Il DOIT dépointer.
+    /// Condition: The character has just finished their shift (their ScheduleActivity is NO LONGER Work)
+    /// but they are STILL physically registered as on-shift in the building
+    /// (IsWorkerOnShift returns true). They MUST clock out.
     /// </summary>
     public class BTCond_NeedsToPunchOut : BTNode
     {
@@ -21,16 +21,16 @@ namespace MWI.AI
             var schedule = self.CharacterSchedule;
             if (jobInfo == null || schedule == null) return BTNodeStatus.Failure;
 
-            // Si le schedule demande de travailler, alors on ne dépointe pas
+            // If the schedule requires work, do not clock out
             if (schedule.CurrentActivity == ScheduleActivity.Work)
                 return BTNodeStatus.Failure;
 
-            // Sinon, est-on encore enregistré au travail ?
+            // Otherwise, are we still registered at work?
             CommercialBuilding workplace = jobInfo.Workplace;
             if (workplace == null || !workplace.IsWorkerOnShift(self))
-                return BTNodeStatus.Failure; // Déjà dépointé ou chômeur
+                return BTNodeStatus.Failure; // Already clocked out or unemployed
 
-            // On délègue à l'action native de BT pour dépointer
+            // Delegate to the native BT action to clock out
             return _actionPunchOut.Execute(bb);
         }
 

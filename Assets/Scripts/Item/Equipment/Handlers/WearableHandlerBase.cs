@@ -9,7 +9,7 @@ public abstract class WearableHandlerBase : MonoBehaviour
     [SerializeField] protected SpriteLibraryAsset _spriteLibraryAsset;
 
     /// <summary>
-    /// Chaque enfant (Pants, Chest) devra fournir sa liste de GameObjects ici.
+    /// Each child (Pants, Chest) must provide its list of GameObjects here.
     /// </summary>
     protected abstract GameObject[] GetAllParts();
 
@@ -23,10 +23,10 @@ public abstract class WearableHandlerBase : MonoBehaviour
     {
         _libraryCategory = category;
 
-        // Update sur le container global
+        // Update on the global container
         if (_visualContainer != null) UpdatePartCategory(_visualContainer);
 
-        // Update sur les parties spécifiques
+        // Update on the specific parts
         foreach (GameObject part in GetAllParts())
         {
             UpdatePartCategory(part);
@@ -59,13 +59,13 @@ public abstract class WearableHandlerBase : MonoBehaviour
 
     private void ApplyColorToAll(string subPartName, Color color)
     {
-        // 1. On vérifie d'abord dans le container visuel global (cas du Sac)
+        // 1. First check inside the global visual container (Bag case)
         if (_visualContainer != null)
         {
             ApplyColorToSpecificTransform(_visualContainer.transform, subPartName, color);
         }
 
-        // 2. On vérifie aussi dans les parties spécifiques (cas du Chest/Pants)
+        // 2. Also check inside the specific parts (Chest/Pants case)
         foreach (GameObject part in GetAllParts())
         {
             if (part == null) continue;
@@ -75,13 +75,13 @@ public abstract class WearableHandlerBase : MonoBehaviour
 
     public void SetVisibility(bool isVisible)
     {
-        // 1. Container Global
+        // 1. Global container
         if (_visualContainer != null)
         {
             ApplyVisibilityToRenderers(_visualContainer, isVisible);
         }
 
-        // 2. Parties spécifiques
+        // 2. Specific parts
         foreach (GameObject part in GetAllParts())
         {
             if (part == null) continue;
@@ -98,7 +98,7 @@ public abstract class WearableHandlerBase : MonoBehaviour
         }
     }
 
-    // Extraction de la logique pour éviter la répétition
+    // Extracted helper to avoid duplicating the logic
     private void ApplyColorToSpecificTransform(Transform root, string subPartName, Color color)
     {
         Transform child = root.Find(subPartName);

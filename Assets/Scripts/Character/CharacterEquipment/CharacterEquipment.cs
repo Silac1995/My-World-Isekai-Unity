@@ -62,7 +62,7 @@ public class CharacterEquipment : CharacterSystem, ICharacterSaveData<EquipmentS
 
     private void OnEquipmentListChanged(NetworkListEvent<NetworkEquipmentSyncData> changeEvent)
     {
-        if (IsServer) return; // Le serveur fait ça de manière locale
+        if (IsServer) return; // The server does this locally
 
         if (changeEvent.Type == NetworkListEvent<NetworkEquipmentSyncData>.EventType.Add ||
             changeEvent.Type == NetworkListEvent<NetworkEquipmentSyncData>.EventType.Insert ||
@@ -77,7 +77,7 @@ public class CharacterEquipment : CharacterSystem, ICharacterSaveData<EquipmentS
         }
         else if (changeEvent.Type == NetworkListEvent<NetworkEquipmentSyncData>.EventType.Clear)
         {
-            // optionnel: clear all
+            // optional: clear all
         }
     }
 
@@ -172,20 +172,20 @@ public class CharacterEquipment : CharacterSystem, ICharacterSaveData<EquipmentS
         };
         return (ushort)(layerOffset + (int)type);
     }
-    // Cet événement sera déclenché chaque fois qu'un équipement change
+    // This event will be triggered each time an equipment changes
     public event Action OnEquipmentChanged;
 
-    // Raccourci de compatibilité pour le code existant
+    // Compatibility shortcut for existing code
     private Character character => _character;
 
     [Header("Combat")]
     [SerializeField] private WeaponInstance _weapon;
-    [SerializeField] private GameObject _weaponSocket; // Le point d'attache visuel de l'arme
+    [SerializeField] private GameObject _weaponSocket; // The visual attachment point of the weapon
 
     public WeaponInstance CurrentWeapon => _weapon;
     public bool HasWeaponInHands => _weapon != null;
 
-    // Tes couches assignées manuellement via [SerializeReference]
+    // Your layers assigned manually via [SerializeReference]
     [SerializeReference] private UnderwearLayer underwearLayer;
     [SerializeReference] private ClothingLayer clothingLayer;
     [SerializeReference] private ArmorLayer armorLayer;
@@ -198,7 +198,7 @@ public class CharacterEquipment : CharacterSystem, ICharacterSaveData<EquipmentS
     [SerializeField] private MWI.UI.Notifications.NotificationChannel _inventoryNotificationChannel;
     [SerializeField] private MWI.UI.Notifications.ToastNotificationChannel _toastChannel;
 
-    // Le systeme de toasts est maintenant centralisé via UI_Toast
+    // The toast system is now centralized via UI_Toast
     // private ToastNotificationChannel _toastChannel;
 
     public void InitializeNotifications(MWI.UI.Notifications.NotificationChannel inventoryChannel, MWI.UI.Notifications.ToastNotificationChannel toastChannel = null)
@@ -221,7 +221,7 @@ public class CharacterEquipment : CharacterSystem, ICharacterSaveData<EquipmentS
         }
     }
 
-    // Getters publics
+    // Public getters
     public UnderwearLayer UnderwearLayer => underwearLayer;
     public ClothingLayer ClothingLayer => clothingLayer;
     public ArmorLayer ArmorLayer => armorLayer;
@@ -232,21 +232,21 @@ public class CharacterEquipment : CharacterSystem, ICharacterSaveData<EquipmentS
     private void Start()
     {
         UpdateBagVisual(_bag != null);
-        UpdateWeaponVisual(); // Cette méthode gère déjà le cas null proprement maintenant
+        UpdateWeaponVisual(); // This method now already handles the null case cleanly
     }
 
     /// <summary>
-    /// Met à jour l'état visuel du socket d'arme et informe le système de combat.
+    /// Updates the visual state of the weapon socket and notifies the combat system.
     /// </summary>
     private void UpdateWeaponVisual()
     {
-        // On considère qu'on a une arme UNIQUEMENT si l'instance ET son SO existent
+        // We consider that we have a weapon ONLY if the instance AND its SO exist
         bool hasValidWeapon = _weapon != null && _weapon.ItemSO != null;
 
-        // 1. GESTION DU SOCKET VISUEL
+        // 1. VISUAL SOCKET HANDLING
         if (_weaponSocket != null)
         {
-            // Si l'arme est invalide ou absente, on DISABLE le socket
+            // If the weapon is invalid or absent, we DISABLE the socket
             _weaponSocket.SetActive(hasValidWeapon);
 
             if (hasValidWeapon)
@@ -255,13 +255,13 @@ public class CharacterEquipment : CharacterSystem, ICharacterSaveData<EquipmentS
             }
         }
 
-        // 2. GESTION DE LA LOGIQUE DE COMBAT
+        // 2. COMBAT LOGIC HANDLING
         if (character != null)
         {
             CharacterCombat combat = character.CharacterCombat;
             if (combat != null)
             {
-                // On envoie l'arme (sera null si invalide, ce qui remettra l'animator en Civil)
+                // We send the weapon (will be null if invalid, which puts the animator back to Civil)
                 combat.OnWeaponChanged(hasValidWeapon ? _weapon : null);
             }
         }
@@ -269,7 +269,7 @@ public class CharacterEquipment : CharacterSystem, ICharacterSaveData<EquipmentS
 
     private void SyncWeaponVisualToSocket()
     {
-        // Double sécurité : on vérifie le SO avant d'accéder à CategoryName
+        // Double safety: we check the SO before accessing CategoryName
         if (_weapon == null || _weapon.ItemSO == null) return;
 
         SpriteResolver[] resolvers = _weaponSocket.GetComponentsInChildren<SpriteResolver>();
@@ -279,8 +279,8 @@ public class CharacterEquipment : CharacterSystem, ICharacterSaveData<EquipmentS
         }
     }
     /// <summary>
-    /// Force la désactivation visuelle de tous les sockets du sac.
-    /// Utile si tu veux vider le visuel sans toucher à la donnée.
+    /// Forces the visual deactivation of all bag sockets.
+    /// Useful if you want to clear the visuals without touching the data.
     /// </summary>
     public void DisableBagVisuals()
     {
@@ -289,27 +289,27 @@ public class CharacterEquipment : CharacterSystem, ICharacterSaveData<EquipmentS
 
     public void Equip(ItemInstance itemInstance)
     {
-        // 1. GESTION DES ARMES
+        // 1. WEAPON HANDLING
         if (itemInstance is WeaponInstance weapon)
         {
-            // On vérifie si c'est déjà l'arme équipée
+            // We check if it's already the equipped weapon
             if (_weapon == weapon) return;
 
-            // Utilisation de la méthode dédiée
+            // Use the dedicated method
             EquipWeapon(weapon);
 
             OnEquipmentChanged?.Invoke();
             return;
         }
 
-        // 2. GESTION DES WEARABLES (Sacs inclus)
+        // 2. WEARABLES HANDLING (Bags included)
         if (itemInstance is WearableInstance wearable)
         {
-            // On récupère le SO typé (WearableSO ou BagSO qui en hérite)
+            // We retrieve the typed SO (WearableSO or BagSO which inherits from it)
             if (wearable.ItemSO is WearableSO data)
             {
-                // --- CAS PARTICULIER : LE SAC ---
-                // On vérifie soit le type d'enum, soit la classe de l'instance
+                // --- SPECIAL CASE: THE BAG ---
+                // We check either the enum type or the class of the instance
                 if (data.WearableType == WearableType.Bag || wearable is BagInstance)
                 {
                     if (wearable is BagInstance bag)
@@ -319,12 +319,12 @@ public class CharacterEquipment : CharacterSystem, ICharacterSaveData<EquipmentS
                     }
                     else
                     {
-                        Debug.LogError($"[Equip] L'item {data.ItemName} est marqué comme Bag mais l'instance n'est pas un BagInstance!");
+                        Debug.LogError($"[Equip] Item {data.ItemName} is marked as Bag but the instance is not a BagInstance!");
                     }
                     return;
                 }
 
-                // --- CAS GÉNÉRAL : COUCHES D'ÉQUIPEMENT ---
+                // --- GENERAL CASE: EQUIPMENT LAYERS ---
                 EquipmentLayer targetLayer = GetTargetLayer(data.EquipmentLayer);
 
                 if (targetLayer != null)
@@ -346,19 +346,19 @@ public class CharacterEquipment : CharacterSystem, ICharacterSaveData<EquipmentS
         }
     }
 
-    // Petite méthode pour préparer la suite (Gestion des mains gauche/droite par ex)
+    // Small method to prepare what follows (Left/right hand handling for example)
     private void EquipWeapon(WeaponInstance weapon)
     {
-        // 1. Mise à jour de la donnée
+        // 1. Data update
         _weapon = weapon;
-        Debug.Log($"<color=red>[Equip-Weapon]</color> {weapon.ItemSO.ItemName} équipée !");
+        Debug.Log($"<color=red>[Equip-Weapon]</color> {weapon.ItemSO.ItemName} equipped!");
 
-        // 2. Mise à jour de TOUTE la chaîne (Visuel + Animator)
+        // 2. Update the WHOLE chain (Visual + Animator)
         UpdateWeaponVisual();
         UpdateNetworkSlot(0, weapon);
     }
     /// <summary>
-    /// Déséquipe l'arme actuelle et repasse en mode civil.
+    /// Unequips the current weapon and goes back to civilian mode.
     /// </summary>
     public void UnequipWeapon()
     {
@@ -367,43 +367,43 @@ public class CharacterEquipment : CharacterSystem, ICharacterSaveData<EquipmentS
         character.DropItem(_weapon);
         _weapon = null;
 
-        UpdateWeaponVisual(); // Désactive le socket + remet l'animator civil
+        UpdateWeaponVisual(); // Deactivates the socket + resets the animator to civilian
         UpdateNetworkSlot(0, null);
         OnEquipmentChanged?.Invoke();
     }
 
     private void EquipBag(BagInstance newBag)
     {
-        // Si un sac est déjà équipé, on pourrait le déséquiper ici
+        // If a bag is already equipped, we could unequip it here
         if (_bag != null)
         {
-            // Logique pour remettre l'ancien sac dans l'inventaire ou au sol
+            // Logic to put the old bag back into the inventory or on the ground
         }
 
         _bag = newBag;
         UpdateBagVisual(true);
         UpdateNetworkSlot(1, newBag);
-        Debug.Log($"<color=green>[Equip-Bag]</color> {newBag.ItemSO.ItemName} équipé sur le slot global.");
+        Debug.Log($"<color=green>[Equip-Bag]</color> {newBag.ItemSO.ItemName} equipped on the global slot.");
     }
 
     /// <summary>
-    /// Retire le sac actuel, met à jour le visuel et fait apparaître l'item au sol.
+    /// Removes the current bag, updates the visuals and spawns the item on the ground.
     /// </summary>
     public void UnequipBag()
     {
         if (_bag == null)
         {
-            Debug.LogWarning("[Unequip] Aucun sac n'est équipé.");
+            Debug.LogWarning("[Unequip] No bag is equipped.");
             return;
         }
 
-        Debug.Log($"<color=orange>[Unequip-Bag]</color> Retrait de : <b>{_bag.ItemSO.ItemName}</b>");
+        Debug.Log($"<color=orange>[Unequip-Bag]</color> Removing: <b>{_bag.ItemSO.ItemName}</b>");
 
-        // 1. On demande au personnage de faire tomber l'item physiquement dans le monde
-        // Cette méthode doit gérer le spawn du prefab WorldItem avec l'instance _bag
+        // 1. We ask the character to drop the item physically into the world
+        // This method must handle the spawn of the WorldItem prefab with the _bag instance
         character.DropItem(_bag);
 
-        // 2. On nettoie la référence et on cache les visuels
+        // 2. We clean up the reference and hide the visuals
         _bag = null;
         UpdateBagVisual(false);
         UpdateNetworkSlot(1, null);
@@ -413,8 +413,8 @@ public class CharacterEquipment : CharacterSystem, ICharacterSaveData<EquipmentS
     {
         if (_bagSockets == null || _bagSockets.Count == 0) return;
 
-        // --- ÉTAPE DE NETTOYAGE ---
-        // Avant d'afficher le nouveau sac, on s'assure que l'ancien nettoie ses armes
+        // --- CLEANUP STEP ---
+        // Before displaying the new bag, we make sure the old one cleans up its weapons
         if (!show || _bag == null)
         {
             ClearAllWeaponVisualsOnBag();
@@ -427,39 +427,39 @@ public class CharacterEquipment : CharacterSystem, ICharacterSaveData<EquipmentS
         {
             if (socket == null) continue;
 
-            // Si on cache le sac, on désactive le socket
+            // If we hide the bag, we deactivate the socket
             socket.SetActive(shouldActuallyShow);
 
             if (shouldActuallyShow)
             {
-                // On récupère le nouveau script de sac
+                // We retrieve the new bag script
                 _bagScript = socket.GetComponent<Bag>();
 
                 if (_bagScript != null)
                 {
                     _bagScript.RefreshAnchors();
 
-                    // Initialisation des sprites du sac (Resolvers)
+                    // Initialize the bag sprites (Resolvers)
                     SpriteResolver[] resolvers = socket.GetComponentsInChildren<SpriteResolver>();
                     foreach (var res in resolvers)
                     {
                         res.SetCategoryAndLabel(_bag.ItemSO.CategoryName, res.GetLabel());
                     }
 
-                    // Initialisation des couleurs
+                    // Initialize the colors
                     ApplyBagColors(socket);
                 }
             }
         }
 
-        // Une fois le nouveau sac prêt, on affiche les armes qu'il contient
+        // Once the new bag is ready, we display the weapons it contains
         if (shouldActuallyShow)
         {
             UpdateWeaponVisualOnBag();
         }
     }
 
-    // Extraction de la logique de couleur pour plus de clarté
+    // Extraction of the color logic for clarity
     private void ApplyBagColors(GameObject socket)
     {
         SpriteRenderer[] renderers = socket.GetComponentsInChildren<SpriteRenderer>();
@@ -473,7 +473,7 @@ public class CharacterEquipment : CharacterSystem, ICharacterSaveData<EquipmentS
         }
     }
     /// <summary>
-    /// Détruit tous les visuels d'armes actuellement fixés sur le sac.
+    /// Destroys all weapon visuals currently attached to the bag.
     /// </summary>
     public void ClearAllWeaponVisualsOnBag()
     {
@@ -490,15 +490,15 @@ public class CharacterEquipment : CharacterSystem, ICharacterSaveData<EquipmentS
         }
     }
     /// <summary>
-    /// Rafraîchit l'affichage des armes sur le sac en utilisant les anchors détectés.
+    /// Refreshes the display of weapons on the bag using the detected anchors.
     /// </summary>
     public void UpdateWeaponVisualOnBag()
     {
-        // 1. Sécurités de base
+        // 1. Basic safeties
         if (_bagScript == null || !HaveInventory()) return;
 
-        // 2. On récupère la liste des slots d'armes de l'inventaire
-        // On filtre pour n'avoir que les armes
+        // 2. We retrieve the list of weapon slots from the inventory
+        // We filter to only have weapons
         List<ItemInstance> weaponsInInventory = new List<ItemInstance>();
         foreach (var slot in GetInventory().ItemSlots)
         {
@@ -508,21 +508,21 @@ public class CharacterEquipment : CharacterSystem, ICharacterSaveData<EquipmentS
             }
         }
 
-        // 3. On récupère les points d'ancrage visuels sur le prefab du sac
+        // 3. We retrieve the visual anchor points on the bag prefab
         List<Transform> anchors = _bagScript.GetAllWeaponAnchors();
 
-        // 4. Nettoyage et Instanciation
+        // 4. Cleanup and Instantiation
         for (int i = 0; i < anchors.Count; i++)
         {
             Transform anchor = anchors[i];
 
-            // On détruit l'ancien visuel s'il existe
+            // We destroy the old visual if it exists
             foreach (Transform child in anchor)
             {
                 Destroy(child.gameObject);
             }
 
-            // Si on a une arme correspondante dans l'inventaire pour cet index d'anchor
+            // If we have a matching weapon in the inventory for this anchor index
             if (i < weaponsInInventory.Count)
             {
                 CreateWeaponVisual(weaponsInInventory[i], anchor);
@@ -535,14 +535,14 @@ public class CharacterEquipment : CharacterSystem, ICharacterSaveData<EquipmentS
         GameObject visualPrefab = weapon.ItemPrefab;
         if (visualPrefab == null) return;
 
-        // 1. Instanciation SANS parent d'abord (très important pour le calcul de matrice propre)
+        // 1. Instantiate WITHOUT parent first (very important for clean matrix calculation)
         GameObject instantiatedWeapon = Instantiate(visualPrefab);
         instantiatedWeapon.name = "Visual_" + weapon.ItemSO.ItemName;
 
-        // 2. Initialisation des visuels (Sprites/Library)
+        // 2. Initialize the visuals (Sprites/Library)
         weapon.InitializePrefab(instantiatedWeapon);
 
-        // 3. On laisse le Bag gérer le parentage ET le skinning d'un seul bloc
+        // 3. We let the Bag handle parenting AND skinning in a single block
         if (_bagScript != null)
         {
             _bagScript.InitializeWeaponBones(instantiatedWeapon, anchor);
@@ -551,11 +551,11 @@ public class CharacterEquipment : CharacterSystem, ICharacterSaveData<EquipmentS
 
 
     /// <summary>
-    /// Retire un équipement spécifique en fonction de sa couche (Layer) et de son emplacement (Slot).
-    /// Gère la destruction de l'instance, la libération du slot et la mise à jour visuelle.
+    /// Removes a specific piece of equipment based on its Layer and its Slot.
+    /// Handles the destruction of the instance, the freeing of the slot and the visual update.
     /// </summary>
-    /// <param name="layerType">La couche concernée (Underwear, Clothing, Armor).</param>
-    /// <param name="slotType">La partie du corps à libérer (Helmet, Armor, Boots, etc.).</param>
+    /// <param name="layerType">The layer concerned (Underwear, Clothing, Armor).</param>
+    /// <param name="slotType">The body part to free (Helmet, Armor, Boots, etc.).</param>
     /// 
 
     public void Unequip(WearableLayerEnum layerType, WearableType slotType)
@@ -571,24 +571,24 @@ public class CharacterEquipment : CharacterSystem, ICharacterSaveData<EquipmentS
 
         if (targetLayer != null)
         {
-            // 1. On récupère l'instance AVANT de vider le slot
+            // 1. We retrieve the instance BEFORE emptying the slot
             EquipmentInstance instanceToDrop = targetLayer.GetInstance(slotType);
 
             if (instanceToDrop == null) return;
 
-            // 2. On vide le slot (visuel + data)
+            // 2. We empty the slot (visual + data)
             targetLayer.Unequip(slotType);
             UpdateNetworkSlot(GetSlotId(layerType, slotType), null);
             OnEquipmentChanged?.Invoke();
 
-            // 3. On fait tomber l'instance qu'on a sauvegardée
+            // 3. We drop the instance we saved
             character.DropItem(instanceToDrop);
 
-            Debug.Log($"<color=orange>[Unequip]</color> {instanceToDrop.ItemSO.ItemName} retiré et jeté.");
+            Debug.Log($"<color=orange>[Unequip]</color> {instanceToDrop.ItemSO.ItemName} removed and dropped.");
         }
     }
 
-    // Logique basée sur l'Enum EquipmentLayerEnum
+    // Logic based on the EquipmentLayerEnum
     private EquipmentLayer GetTargetLayer(WearableLayerEnum layerType)
     {
         switch (layerType)
@@ -600,23 +600,23 @@ public class CharacterEquipment : CharacterSystem, ICharacterSaveData<EquipmentS
             case WearableLayerEnum.Armor:
                 return armorLayer;
             case WearableLayerEnum.Bag:
-                return null; // Le sac n'a pas de composant EquipmentLayer dédié
+                return null; // The bag does not have a dedicated EquipmentLayer component
             default:
                 return null;
         }
     }
 
     /// <summary>
-    /// Vérifie si le personnage possède actuellement un conteneur équipé (Sac).
+    /// Checks whether the character currently has a container equipped (Bag).
     /// </summary>
     public bool HaveInventory()
     {
-        // On vérifie si le sac existe ET s'il possède bien un inventaire initialisé
+        // We check that the bag exists AND that it has a properly initialized inventory
         return _bag != null && _bag.Inventory != null;
     }
 
     /// <summary>
-    /// Retourne l'inventaire du sac équipé. Renvoie null si aucun sac n'est présent.
+    /// Returns the inventory of the equipped bag. Returns null if no bag is present.
     /// </summary>
     public Inventory GetInventory()
     {
@@ -629,8 +629,8 @@ public class CharacterEquipment : CharacterSystem, ICharacterSaveData<EquipmentS
     }
 
     /// <summary>
-    /// Vérifie si l'inventaire posséde au moins un slot vide POUR des objets basiques (bois, pierre).
-    /// Si le personnage n'a pas d'inventaire, retourne faux.
+    /// Checks if the inventory has at least one empty slot FOR basic objects (wood, stone).
+    /// If the character has no inventory, returns false.
     /// </summary>
     public bool HasFreeSpaceForMisc()
     {
@@ -640,7 +640,7 @@ public class CharacterEquipment : CharacterSystem, ICharacterSaveData<EquipmentS
     }
 
     /// <summary>
-    /// Vérifie dynamiquement s'il y a de la place pour un type d'objet donné (Arme, Wearable, Misc).
+    /// Dynamically checks if there is space for a given object type (Weapon, Wearable, Misc).
     /// </summary>
     public bool HasFreeSpaceForItemSO(ItemSO itemSO)
     {
@@ -650,19 +650,19 @@ public class CharacterEquipment : CharacterSystem, ICharacterSaveData<EquipmentS
     }
 
     /// <summary>
-    /// Détermine si le personnage peut encore porter cet item (soit dans son sac, soit dans ses mains).
+    /// Determines whether the character can still carry this item (either in their bag, or in their hands).
     /// </summary>
     public bool CanCarryItemAnyMore(ItemInstance itemInstance)
     {
         if (itemInstance == null) return false;
 
-        // 1. Vérifier s'il y a de la place dans le sac
+        // 1. Check whether there is space in the bag
         if (HaveInventory() && GetInventory().HasFreeSpaceForItem(itemInstance))
         {
             return true;
         }
 
-        // 2. Vérifier si les mains sont libres
+        // 2. Check whether the hands are free
         var handsController = character.CharacterVisual?.BodyPartsController?.HandsController;
         if (handsController != null && handsController.AreHandsFree())
         {
@@ -673,8 +673,8 @@ public class CharacterEquipment : CharacterSystem, ICharacterSaveData<EquipmentS
     }
 
     /// <summary>
-    /// Vérifie si le torse/poitrine du personnage est exposé.
-    /// Retourne True si aucun vêtement de type "Shirt" n'est équipé dans les 3 couches.
+    /// Checks whether the character's torso/chest is exposed.
+    /// Returns True if no "Shirt" type clothing is equipped in any of the 3 layers.
     /// </summary>
     public bool IsChestExposed()
     {
@@ -682,18 +682,18 @@ public class CharacterEquipment : CharacterSystem, ICharacterSaveData<EquipmentS
         bool hasClothingShirt = clothingLayer != null && clothingLayer.GetInstance(WearableType.Armor) != null;
         bool hasArmorShirt = armorLayer != null && armorLayer.GetInstance(WearableType.Armor) != null;
 
-        // Exposé si aucune couche n'a de Shirt
+        // Exposed if no layer has a Shirt
         return !hasUnderwearShirt && !hasClothingShirt && !hasArmorShirt;
     }
 
     /// <summary>
-    /// Vérifie si les parties intimes inférieures sont exposées.
-    /// Retourne True si aucun vêtement de type "Pants" n'est équipé dans les 3 couches.
-    /// Note : C'est techniquement identique à ta logique actuelle de IsNaked().
+    /// Checks whether the lower private parts are exposed.
+    /// Returns True if no "Pants" type clothing is equipped in any of the 3 layers.
+    /// Note: This is technically identical to your current IsNaked() logic.
     /// </summary>
     public bool IsGroinExposed()
     {
-        // On réutilise la logique des Pants
+        // We reuse the Pants logic
         bool hasUnderwearPants = underwearLayer != null && underwearLayer.GetInstance(WearableType.Pants) != null;
         bool hasClothingPants = clothingLayer != null && clothingLayer.GetInstance(WearableType.Pants) != null;
         bool hasArmorPants = armorLayer != null && armorLayer.GetInstance(WearableType.Pants) != null;
@@ -702,7 +702,7 @@ public class CharacterEquipment : CharacterSystem, ICharacterSaveData<EquipmentS
     }
 
     /// <summary>
-    /// Vérifie la nudité totale (Haut et Bas).
+    /// Checks for total nudity (Top and Bottom).
     /// </summary>
     public bool IsFullyNaked()
     {
@@ -710,18 +710,18 @@ public class CharacterEquipment : CharacterSystem, ICharacterSaveData<EquipmentS
     }
 
     /// <summary>
-    /// Vérifie si le personnage est "nu" au niveau des jambes.
-    /// Retourne True si aucun pantalon n'est équipé dans les 3 couches (Underwear, Clothing, Armor).
+    /// Checks whether the character is "naked" at the legs level.
+    /// Returns True if no pants are equipped in any of the 3 layers (Underwear, Clothing, Armor).
     /// </summary>
     public bool IsNaked()
     {
-        // On vérifie le slot Pants dans chaque couche.
-        // Si l'une des couches retourne une instance non nulle, le perso n'est pas nu.
+        // We check the Pants slot in each layer.
+        // If any of the layers returns a non-null instance, the character is not naked.
         bool hasUnderwearPants = underwearLayer != null && underwearLayer.GetInstance(WearableType.Pants) != null;
         bool hasClothingPants = clothingLayer != null && clothingLayer.GetInstance(WearableType.Pants) != null;
         bool hasArmorPants = armorLayer != null && armorLayer.GetInstance(WearableType.Pants) != null;
 
-        // Le personnage est nu s'il n'a AUCUN des trois
+        // The character is naked if they have NONE of the three
         return !hasUnderwearPants && !hasClothingPants && !hasArmorPants;
     }
 
@@ -804,7 +804,7 @@ public class CharacterEquipment : CharacterSystem, ICharacterSaveData<EquipmentS
     }
 
     /// <summary>
-    /// Tente de prendre un objet spécifiquement dans les mains (via HandsController).
+    /// Tries to take an object specifically into the hands (via HandsController).
     /// </summary>
     public bool CarryItemInHand(ItemInstance item)
     {
@@ -817,7 +817,7 @@ public class CharacterEquipment : CharacterSystem, ICharacterSaveData<EquipmentS
     }
 
     /// <summary>
-    /// Fait tomber physiquement l'objet actuellement tenu dans les mains.
+    /// Physically drops the object currently held in the hands.
     /// </summary>
     public void DropItemFromHand()
     {
@@ -827,15 +827,15 @@ public class CharacterEquipment : CharacterSystem, ICharacterSaveData<EquipmentS
             ItemInstance droppedItem = handsController.DropCarriedItem();
             if (droppedItem != null)
             {
-                // Au lieu de mettre en file d'attente une action (qui serait annulée par l'animation de mort/combat)
-                // On spawn physiquement l'objet au sol instantanément.
+                // Instead of queueing an action (which would be cancelled by the death/combat animation)
+                // We physically spawn the object on the ground instantly.
                 CharacterDropItem.ExecutePhysicalDrop(_character, droppedItem);
             }
         }
     }
 
     /// <summary>
-    /// Retire un objet spécifique de l'inventaire du sac et le fait tomber physiquement au sol.
+    /// Removes a specific object from the bag's inventory and physically drops it on the ground.
     /// </summary>
     public bool DropItemFromInventory(ItemInstance itemToDrop)
     {
@@ -844,10 +844,10 @@ public class CharacterEquipment : CharacterSystem, ICharacterSaveData<EquipmentS
         Inventory inventory = GetInventory();
         if (inventory != null)
         {
-            // On tente de retirer l'item de l'inventaire
+            // We try to remove the item from the inventory
             if (inventory.RemoveItem(itemToDrop, _character))
             {
-                // L'item a été retiré avec succès, on le fait spawner dans le monde
+                // The item was successfully removed, we spawn it in the world
                 CharacterDropItem.ExecutePhysicalDrop(_character, itemToDrop);
 
                 if (_toastChannel != null && _character.IsPlayer() && _character.IsOwner)

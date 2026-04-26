@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using Unity.Netcode;
@@ -698,6 +699,25 @@ namespace MWI.WorldSystem
                     if (npc.CharacterParty != null && npc.CharacterParty.IsInParty)
                         npcData.PartyId = npc.CharacterParty.PartyData.PartyId;
 
+                    // Full coordinator profile — stats, equipment, skills, traits, abilities, …
+                    // Without this, only the flat fields above survive a save/load (race + position).
+                    if (npc.TryGetComponent(out CharacterDataCoordinator coordinator))
+                    {
+                        try
+                        {
+                            npcData.ProfileData = coordinator.ExportProfile();
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.LogException(ex);
+                            Debug.LogError($"<color=red>[MapController:SnapshotActiveNPCs]</color> Failed to export full profile for NPC '{npc.CharacterName}' ({npc.CharacterId}) on '{MapId}'. Falling back to flat fields. {ex.Message}");
+                        }
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"<color=orange>[MapController:SnapshotActiveNPCs]</color> NPC '{npc.CharacterName}' ({npc.CharacterId}) has no CharacterDataCoordinator — stats/equipment will reset on respawn.");
+                    }
+
                     snapshot.HibernatedNPCs.Add(npcData);
                 }
             }
@@ -1072,6 +1092,27 @@ namespace MWI.WorldSystem
                 {
                     netObj.Spawn(true);
                 }
+
+                // Replay the full coordinator profile AFTER Spawn so subsystems with
+                // NetworkVariables are live when DeserializeFromJson writes to them.
+                // Mirrors the party-NPC restore in GameLauncher.SpawnPartyMembers.
+                if (npcData.ProfileData != null && inst.TryGetComponent(out CharacterDataCoordinator coordinator))
+                {
+                    try
+                    {
+                        coordinator.ImportProfile(npcData.ProfileData);
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogException(ex);
+                        Debug.LogError($"<color=red>[MapController:SpawnNPCsFromSnapshot]</color> Failed to import full profile for NPC '{npcData.CharacterName}' ({npcData.CharacterId}) on '{MapId}'. Stats/equipment will use defaults. {ex.Message}");
+                    }
+                }
+                else if (npcData.ProfileData == null)
+                {
+                    // Legacy save (pre-profile-blob): only the flat fields above are restored.
+                    Debug.LogWarning($"<color=orange>[MapController:SpawnNPCsFromSnapshot]</color> NPC '{npcData.CharacterName}' ({npcData.CharacterId}) on '{MapId}' has no ProfileData (legacy save). Stats/equipment using defaults.");
+                }
             }
 
             // Also respawn any saved WorldItems for this map.
@@ -1219,6 +1260,26 @@ namespace MWI.WorldSystem
                     // Extract Party membership
                     if (npc.CharacterParty != null && npc.CharacterParty.IsInParty)
                         npcData.PartyId = npc.CharacterParty.PartyData.PartyId;
+
+                    // Full coordinator profile — stats, equipment, skills, traits, abilities, …
+                    // Mirrors SnapshotActiveNPCs so wake-from-hibernation restores the same state
+                    // as wake-from-savefile.
+                    if (npc.TryGetComponent(out CharacterDataCoordinator coordinator))
+                    {
+                        try
+                        {
+                            npcData.ProfileData = coordinator.ExportProfile();
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.LogException(ex);
+                            Debug.LogError($"<color=red>[MapController:Hibernate]</color> Failed to export full profile for NPC '{npc.CharacterName}' ({npc.CharacterId}) on '{MapId}'. Falling back to flat fields. {ex.Message}");
+                        }
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"<color=orange>[MapController:Hibernate]</color> NPC '{npc.CharacterName}' ({npc.CharacterId}) has no CharacterDataCoordinator — stats/equipment will reset on wake.");
+                    }
 
                     _hibernationData.HibernatedNPCs.Add(npcData);
 

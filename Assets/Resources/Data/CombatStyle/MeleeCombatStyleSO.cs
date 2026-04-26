@@ -1,7 +1,7 @@
 using UnityEngine;
 
 /// <summary>
-/// Style de combat au corps à corps. Contient le prefab de hitbox (CombatStyleAttack).
+/// Melee combat style. Holds the hitbox prefab (CombatStyleAttack).
 /// </summary>
 public abstract class MeleeCombatStyleSO : CombatStyleSO
 {
@@ -10,6 +10,6 @@ public abstract class MeleeCombatStyleSO : CombatStyleSO
 
     public GameObject HitboxPrefab => _hitboxPrefab;
 
-    // Compatibilité : les anciennes références utilisent Prefab
+    // Backwards compatibility: older references use Prefab
     public GameObject Prefab => _hitboxPrefab;
 }

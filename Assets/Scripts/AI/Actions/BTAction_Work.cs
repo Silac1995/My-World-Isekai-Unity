@@ -4,14 +4,14 @@ using System.Linq;
 namespace MWI.AI
 {
     /// <summary>
-    /// Nouveau noeud natif de BT pour gérer le cycle de travail sans la pile Legacy.
-    /// Phase 1: Déplacement au bâtiment.
-    /// Phase 1b: Déplacement au TimeClock + Interact (declenche Action_PunchIn).
-    ///           Si le bâtiment n'a pas de TimeClock authored, saute ce phase et
-    ///           retombe sur le comportement historique (Action_PunchIn direct en
-    ///           zone), avec un warning one-shot.
-    /// Phase 2: Attente animation Punch In.
-    /// Phase 3: Exécuter le Job (Job.Execute()).
+    /// New native BT node to handle the work cycle without the Legacy stack.
+    /// Phase 1: Move to the building.
+    /// Phase 1b: Move to the TimeClock and Interact (triggers Action_PunchIn).
+    ///           If the building has no authored TimeClock, this phase is skipped and
+    ///           falls back to the historical behaviour (direct Action_PunchIn in the
+    ///           zone), with a one-shot warning.
+    /// Phase 2: Wait for the Punch In animation.
+    /// Phase 3: Execute the Job (Job.Execute()).
     /// </summary>
     public class BTAction_Work : BTNode
     {
@@ -48,7 +48,7 @@ namespace MWI.AI
             var movement = self.CharacterMovement;
             if (movement == null) return BTNodeStatus.Failure;
 
-            // Déjà validé et enregistré par Action_PunchIn
+            // Already validated and registered by Action_PunchIn
             if (workplace.IsWorkerOnShift(self))
             {
                 _currentPhase = WorkPhase.Working;
@@ -170,16 +170,16 @@ namespace MWI.AI
                 return BTNodeStatus.Running;
             }
 
-            // L'action est terminée, on devrait être dans ActiveWorkersOnShift
+            // The action is complete; we should be in ActiveWorkersOnShift
             _currentPhase = WorkPhase.Working;
             return BTNodeStatus.Running;
         }
 
         private BTNodeStatus HandleWorking(Character self, CharacterJob jobInfo)
         {
-            // C'est au job spécifique de s'occuper de son GOAP ou de ses states.
+            // It is up to the specific Job to handle its own GOAP or states.
             jobInfo.Work();
-            return BTNodeStatus.Running; // Ce Node reste actif tant que l'heure de Schedule est vraie.
+            return BTNodeStatus.Running; // This Node stays active as long as the Schedule hour is true.
         }
 
         protected override void OnExit(Blackboard bb)

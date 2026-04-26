@@ -7,7 +7,7 @@ public class AttendClassBehaviour : IAIBehaviour
     private bool _isMoving = false;
     private bool _hasArrived = false;
     
-    // Le taux auquel l'IA vérifie si la classe est toujours valide
+    // The rate at which the AI checks whether the class is still valid
     private float _checkTimer = 0f;
     private float _checkRate = 3f;
 
@@ -23,7 +23,7 @@ public class AttendClassBehaviour : IAIBehaviour
     {
         if (_isFinished) return;
 
-        // 1. Vérifier si on est toujours libre de suivre ce cours
+        // 1. Check whether we're still free to attend this class
         if (!IsCharacterFreeToAttend(selfCharacter))
         {
             _isFinished = true;
@@ -41,14 +41,14 @@ public class AttendClassBehaviour : IAIBehaviour
         var mentorMentorship = mentorship.CurrentMentor.CharacterMentorship;
         if (mentorMentorship == null || !mentorMentorship.IsCurrentlyTeaching || mentorMentorship.SpawnedClassZone == null)
         {
-            // Le prof n'est pas là ou a fini, la classe est terminée pour l'instant
+            // The teacher isn't there or has finished, the class is over for now
             _isFinished = true;
             return;
         }
 
         var classZone = mentorMentorship.SpawnedClassZone;
 
-        // 3. Déplacement vers la zone
+        // 3. Move to the zone
         _checkTimer += Time.deltaTime;
         if (!_hasArrived || _checkTimer >= _checkRate)
         {
@@ -62,22 +62,22 @@ public class AttendClassBehaviour : IAIBehaviour
         var movement = self.CharacterMovement;
         if (movement == null) return;
 
-        // Récupérer la place attitrée de cet étudiant
+        // Fetch this student's assigned seat
         Vector3 targetPos = classZone.GetStudentSlotPosition(self);
-        
-        // On calcule la distance (sur le plan XZ) par rapport à sa chaise
+
+        // Compute distance (on the XZ plane) from their chair
         Vector3 selfPosFlat = new Vector3(self.transform.position.x, 0, self.transform.position.z);
         Vector3 targetPosFlat = new Vector3(targetPos.x, 0, targetPos.z);
         float distance = Vector3.Distance(selfPosFlat, targetPosFlat);
 
-        // Si on est arrivé à notre place
+        // If we've reached our seat
         if (distance < 0.5f)
         {
             _hasArrived = true;
             _isMoving = false;
             movement.Stop();
-            
-            // Toujours se tourner vers le professeur quand on est assis
+
+            // Always turn towards the teacher once seated
             Vector3 directionToMentor = classZone.Mentor.transform.position - self.transform.position;
             directionToMentor.y = 0;
             if (directionToMentor.sqrMagnitude > 0.1f)
@@ -87,7 +87,7 @@ public class AttendClassBehaviour : IAIBehaviour
             return;
         }
 
-        // Si on n'est pas encore arrivé, on se dirige vers la place
+        // If we haven't arrived yet, head to the seat
         if (!_isMoving || _hasArrived || Vector3.Distance(movement.Destination, targetPos) > 1.0f)
         {
             movement.SetDestination(targetPos);
@@ -98,13 +98,13 @@ public class AttendClassBehaviour : IAIBehaviour
 
     private bool IsCharacterFreeToAttend(Character self)
     {
-        // 1. Vérification système (vivant, pas en combat, pas en dialogue forcé)
+        // 1. System check (alive, not in combat, not in forced dialogue)
         if (!self.IsFree()) return false;
 
-        // 2. Vérification Job (S'il est en train de travailler, le job prime)
+        // 2. Job check (if they're at work, the job takes priority)
         if (self.CharacterJob != null && self.CharacterJob.IsWorking) return false;
 
-        // 3. Vérification des Besoins (Si un système de besoins de type faim/sommeil critique existe)
+        // 3. Needs check (if a critical hunger/sleep need system exists)
         // if (self.CharacterNeeds != null && self.CharacterNeeds.IsCritical) return false;
 
         return true;

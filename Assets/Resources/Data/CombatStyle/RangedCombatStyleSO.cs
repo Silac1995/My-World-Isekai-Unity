@@ -1,7 +1,7 @@
 using UnityEngine;
 
 /// <summary>
-/// Style de combat à distance. Contient le prefab de projectile et les paramètres de tir.
+/// Ranged combat style. Holds the projectile prefab and firing parameters.
 /// </summary>
 public abstract class RangedCombatStyleSO : CombatStyleSO
 {

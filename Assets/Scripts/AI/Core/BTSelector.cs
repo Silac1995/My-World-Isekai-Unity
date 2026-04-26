@@ -3,13 +3,13 @@ using System.Collections.Generic;
 namespace MWI.AI
 {
     /// <summary>
-    /// Selector (OR logique) : essaie chaque enfant dans l'ordre.
-    /// Retourne Success dès qu'un enfant réussit ou Running.
-    /// Retourne Failure si TOUS les enfants échouent.
-    /// 
-    /// IMPORTANT: Si un enfant de rang supérieur redevient valide alors qu'un enfant
-    /// de rang inférieur était Running, le Selector abort l'enfant inférieur et
-    /// bascule sur le supérieur (preemption / priorité dynamique).
+    /// Selector (logical OR): tries each child in order.
+    /// Returns Success as soon as a child succeeds, or Running.
+    /// Returns Failure if ALL children fail.
+    ///
+    /// IMPORTANT: If a higher-priority child becomes valid again while a lower-priority
+    /// child was Running, the Selector aborts the lower child and switches to the
+    /// higher one (preemption / dynamic priority).
     /// </summary>
     public class BTSelector : BTNode
     {
@@ -34,8 +34,8 @@ namespace MWI.AI
 
                 if (status == BTNodeStatus.Running)
                 {
-                    // Si un enfant de rang supérieur prend le relais,
-                    // on abort l'ancien enfant qui était Running
+                    // If a higher-priority child takes over,
+                    // abort the previous child that was Running
                     if (_lastRunningIndex != -1 && _lastRunningIndex != i)
                     {
                         _children[_lastRunningIndex].Abort(bb);
@@ -46,7 +46,7 @@ namespace MWI.AI
 
                 if (status == BTNodeStatus.Success)
                 {
-                    // Abort l'ancien Running s'il y en avait un
+                    // Abort the previous Running child if there was one
                     if (_lastRunningIndex != -1 && _lastRunningIndex != i)
                     {
                         _children[_lastRunningIndex].Abort(bb);
@@ -55,10 +55,10 @@ namespace MWI.AI
                     return BTNodeStatus.Success;
                 }
 
-                // Failure → on passe à l'enfant suivant
+                // Failure -> move on to the next child
             }
 
-            // Tous les enfants ont échoué
+            // All children failed
             if (_lastRunningIndex != -1)
             {
                 _children[_lastRunningIndex].Abort(bb);
@@ -69,7 +69,7 @@ namespace MWI.AI
 
         protected override void OnExit(Blackboard bb)
         {
-            // Cleanup : abort tout enfant encore running
+            // Cleanup: abort any child still running
             if (_lastRunningIndex != -1)
             {
                 _children[_lastRunningIndex].Abort(bb);

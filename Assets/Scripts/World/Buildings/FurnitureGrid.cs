@@ -347,9 +347,9 @@ public class FurnitureGrid : MonoBehaviour
         {
             for (int z = 0; z <= _gridDepth - sizeInCells.y; z++)
             {
-                // On simule une tentative de placement
+                // Simulate a placement attempt
                 Vector3 candidatePos = _grid[x, z].WorldPosition;
-                // Ajustement : si sizeInCells > 1, le point d'ancrage exact dépend de l'objet, on approxime ici
+                // Adjustment: if sizeInCells > 1, the exact anchor point depends on the object, we approximate here
                 
                 if (CanPlaceFurniture(candidatePos, sizeInCells))
                 {
@@ -368,14 +368,14 @@ public class FurnitureGrid : MonoBehaviour
     }
 
     /// <summary>
-    /// Cherche aléatoirement une position valide sur la grille pour un meuble donné.
-    /// Retourne la position Vector3 monde, ou null s'il n'y a plus de place.
+    /// Randomly searches for a valid position on the grid for a given piece of furniture.
+    /// Returns the world Vector3 position, or null if there is no more room.
     /// </summary>
     public Vector3? GetRandomFreePosition(Vector2Int sizeInCells)
     {
         List<Vector3> validPositions = new List<Vector3>();
 
-        // Parcourt toute la grille pour compiler les emplacements valides
+        // Iterate over the entire grid to compile valid locations
         for (int x = 0; x <= _gridWidth - sizeInCells.x; x++)
         {
             for (int z = 0; z <= _gridDepth - sizeInCells.y; z++)

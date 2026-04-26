@@ -2,17 +2,17 @@ using UnityEngine;
 using MWI.AI;
 
 /// <summary>
-/// MonoBehaviour principal du Behaviour Tree pour les NPCs.
-/// Construit l'arbre de décision, maintient le blackboard, et tick l'arbre chaque frame.
-/// 
-/// Arbre de priorités :
-/// 1. ORDRES (joueur/NPC)
-/// 2. COMBAT (déjà en combat)
-/// 3. ENTRAIDE (ami en danger)
-/// 4. AGRESSION (ennemi détecté)
-/// 5. BESOINS (faim, social, vêtements...)
-/// 6. SCHEDULE (travail, sommeil...)
-/// 7. SOCIAL (socialisation spontanée)
+/// Main MonoBehaviour for the NPC Behaviour Tree.
+/// Builds the decision tree, maintains the blackboard, and ticks the tree each frame.
+///
+/// Priority tree:
+/// 1. ORDERS (player/NPC)
+/// 2. COMBAT (already in combat)
+/// 3. ASSIST (friend in danger)
+/// 4. AGGRESSION (enemy detected)
+/// 5. NEEDS (hunger, social, clothing...)
+/// 6. SCHEDULE (work, sleep...)
+/// 7. SOCIAL (spontaneous socialization)
 /// 8. WANDER (fallback)
 /// </summary>
 public class NPCBehaviourTree : CharacterSystem
@@ -25,7 +25,7 @@ public class NPCBehaviourTree : CharacterSystem
     private BTNode _root;
     private bool _isInitialized = false;
 
-    // Les condition nodes (gardés en référence pour debug)
+    // The condition nodes (kept as references for debug)
     private BTCond_HasOrder _orderNode;
     private BTCond_IsInCombat _combatNode;
     private BTCond_FriendInDanger _friendNode;
@@ -54,7 +54,7 @@ public class NPCBehaviourTree : CharacterSystem
     {
         base.Awake();
 
-        // Stagger initial : chaque NPC commence son cycle à un moment légèrement différent
+        // Initial stagger: each NPC starts its cycle at a slightly different time
         _lastTickTime = UnityEngine.Time.time + (GetInstanceID() % 10) * 0.02f;
     }
 
@@ -83,12 +83,12 @@ public class NPCBehaviourTree : CharacterSystem
         _isInitialized = true;
 
         if (_debugLog)
-            Debug.Log($"<color=lime>[BT]</color> {_character.CharacterName} : Behaviour Tree initialisé.");
+            Debug.Log($"<color=lime>[BT]</color> {_character.CharacterName} : Behaviour Tree initialized.");
     }
 
     /// <summary>
-    /// Construit l'arbre de décision complet.
-    /// L'ordre des enfants dans le Selector = l'ordre de priorité.
+    /// Builds the complete decision tree.
+    /// The order of children in the Selector = the order of priority.
     /// </summary>
     private BTNode BuildTree()
     {
@@ -120,12 +120,12 @@ public class NPCBehaviourTree : CharacterSystem
 
         return new BTSelector(
             _legacySequence,    // 0. Imperative actions bypass the intelligent tree
-            _orderNode,         // 1. Ordres (priorité max)
-            _combatNode,        // 2. Combat actif
-            _entraideSequence,  // 3. Entraide
-            _agressionSequence, // 4. Agression
+            _orderNode,         // 1. Orders (max priority)
+            _combatNode,        // 2. Active combat
+            _entraideSequence,  // 3. Assist
+            _agressionSequence, // 4. Aggression
             _partyFollowNode,   // 4.5 Party follow (member follows party leader)
-            _punchOutNode,      // 5. Fin de shift forcé (Must punch out before going home)
+            _punchOutNode,      // 5. Forced end of shift (Must punch out before going home)
             _scheduleNode,      // 5. Schedule (Work/Sleep > Personal Goals)
             _goapNode,          // 6. GOAP (Life Goals / Proactive)
             _socialNode,        // 8. Social
@@ -136,8 +136,8 @@ public class NPCBehaviourTree : CharacterSystem
     private bool _forceNextTick = false;
 
     /// <summary>
-    /// Force le BT à ticker à la prochaine frame, en ignorant le stagger.
-    /// Utile après un Unfreeze pour éviter un délai visible.
+    /// Forces the BT to tick on the next frame, ignoring the stagger.
+    /// Useful after an Unfreeze to avoid a visible delay.
     /// </summary>
     public void ForceNextTick() => _forceNextTick = true;
 
@@ -146,26 +146,26 @@ public class NPCBehaviourTree : CharacterSystem
         if (!IsServer) return;
         if (!_isInitialized || _root == null) return;
 
-        // Stagger basé sur le temps plutôt que sur les frames pour supporter le Time.timeScale élevé (Fast-Forward).
+        // Stagger based on time rather than frames to support high Time.timeScale (Fast-Forward).
         if (!_forceNextTick && Time.time < _lastTickTime + _tickIntervalSeconds) return;
 
         _lastTickTime = Time.time;
         _forceNextTick = false;
 
-        // Le NPC n'est pas un joueur et doit être vivant
+        // The NPC is not a player and must be alive
         if (_character.Controller is PlayerController) return;
         if (!_character.IsAlive()) return;
 
-        // Pause le BT si le controller est gelé (interactions, cinématiques, etc.)
+        // Pause the BT if the controller is frozen (interactions, cutscenes, etc.)
         if (_character.Controller != null && _character.Controller.IsFrozen) return;
 
-        // Pause le BT pendant une interaction ou pendant le positionnement de dialogue (évite les micro-mouvements ou conflits de pathing)
+        // Pause the BT during an interaction or during dialogue positioning (avoids micro-movements or pathing conflicts)
         if (_character.CharacterInteraction != null && (_character.CharacterInteraction.IsInteracting || _character.CharacterInteraction.IsPositioning)) return;
 
-        // NEW: Pause le BT pendant une action (ex: ramasser, travailler, crafter) pour ne pas être interrompu par l'emploi du temps
+        // NEW: Pause the BT during an action (e.g. pick up, work, craft) so it is not interrupted by the schedule
         if (_character.CharacterActions != null && _character.CharacterActions.CurrentAction != null) return;
 
-        // Tick l'arbre
+        // Tick the tree
         BTNodeStatus status = _root.Execute(_blackboard);
 
         // Debug display
@@ -178,36 +178,36 @@ public class NPCBehaviourTree : CharacterSystem
     }
 
     // ========================================
-    //  API publique pour donner des ordres
+    //  Public API for issuing orders
     // ========================================
 
     /// <summary>
-    /// Donne un ordre au NPC. L'ancien ordre est annulé automatiquement.
-    /// Peut être appelé par le joueur, un autre NPC, ou le système.
+    /// Gives an order to the NPC. The previous order is cancelled automatically.
+    /// Can be called by the player, another NPC, or the system.
     /// </summary>
     public void GiveOrder(NPCOrder order)
     {
         if (!_isInitialized) Initialize();
 
-        // Annuler l'ancien ordre s'il y en a un
+        // Cancel the previous order if there is one
         NPCOrder currentOrder = _blackboard.Get<NPCOrder>(Blackboard.KEY_CURRENT_ORDER);
         if (currentOrder != null && !currentOrder.IsComplete)
         {
             currentOrder.Cancel(_character);
         }
 
-        // NEW: Interrompre l'action en cours pour forcer l'ordre (puisque l'action mettait le BT en pause)
+        // NEW: Interrupt the current action to force the order (since the action was pausing the BT)
         if (_character.CharacterActions != null && _character.CharacterActions.CurrentAction != null)
         {
             _character.CharacterActions.ClearCurrentAction();
         }
 
         _blackboard.Set(Blackboard.KEY_CURRENT_ORDER, order);
-        Debug.Log($"<color=magenta>[BT Order]</color> {_character.CharacterName} a reçu l'ordre : {order.OrderType}");
+        Debug.Log($"<color=magenta>[BT Order]</color> {_character.CharacterName} received order: {order.OrderType}");
     }
 
     /// <summary>
-    /// Annule l'ordre en cours.
+    /// Cancels the current order.
     /// </summary>
     public void CancelOrder()
     {
@@ -216,12 +216,12 @@ public class NPCBehaviourTree : CharacterSystem
         {
             currentOrder.Cancel(_character);
             _blackboard.Remove(Blackboard.KEY_CURRENT_ORDER);
-            Debug.Log($"<color=yellow>[BT Order]</color> Ordre annulé pour {_character.CharacterName}.");
+            Debug.Log($"<color=yellow>[BT Order]</color> Order cancelled for {_character.CharacterName}.");
         }
     }
 
     /// <summary>
-    /// L'ordre actuellement actif (null si aucun).
+    /// The currently active order (null if none).
     /// </summary>
     public NPCOrder CurrentOrder => _blackboard?.Get<NPCOrder>(Blackboard.KEY_CURRENT_ORDER);
 

@@ -50,7 +50,7 @@ public class CombatStyleAttack : MonoBehaviour
             // This multiplier is just for initial log/scaling visualization if needed, but the true damage is done in GetDamage().
             _damage = physicalPowerContrib + baseStyleDamage + (statValue * _combatStyleSO.StatMultiplier);
             
-            Debug.Log($"<color=red>[Combat]</color> Dégâts de base calculés pour {_character.CharacterName} : {_damage} (BaseStyle: {baseStyleDamage}, Physical Power ({_combatStyleSO.PhysicalPowerPercentage * 100}%): {physicalPowerContrib}, Stat: {_combatStyleSO.ScalingStat}={statValue} x {_combatStyleSO.StatMultiplier})");
+            Debug.Log($"<color=red>[Combat]</color> Base damage computed for {_character.CharacterName}: {_damage} (BaseStyle: {baseStyleDamage}, Physical Power ({_combatStyleSO.PhysicalPowerPercentage * 100}%): {physicalPowerContrib}, Stat: {_combatStyleSO.ScalingStat}={statValue} x {_combatStyleSO.StatMultiplier})");
         }
     }
 
@@ -63,7 +63,7 @@ public class CombatStyleAttack : MonoBehaviour
 
         if (_hitTargets.Count >= _finalMaxTargets || _potentialTargets.Count == 0) return;
 
-        // --- TRI PAR PRIORITÉ ET DISTANCE ---
+        // --- SORT BY PRIORITY AND DISTANCE ---
         _potentialTargets.Sort((a, b) => 
         {
             bool aIsOpponent = false;
@@ -76,11 +76,11 @@ public class CombatStyleAttack : MonoBehaviour
                 bIsOpponent = bm.AreOpponents(_character, b);
             }
 
-            // Priorité aux opposants r?els dans la bataille
+            // Priority to actual opponents in the battle
             if (aIsOpponent && !bIsOpponent) return -1;
             if (!aIsOpponent && bIsOpponent) return 1;
 
-            // Secondaire : Distance
+            // Secondary: Distance
             float distA = Vector3.Distance(_character.transform.position, a.transform.position);
             float distB = Vector3.Distance(_character.transform.position, b.transform.position);
             return distA.CompareTo(distB);
@@ -106,21 +106,21 @@ public class CombatStyleAttack : MonoBehaviour
             // --- KNOCKBACK ---
             if (_combatStyleSO != null && _combatStyleSO.KnockbackForce > 0)
             {
-                // Calcul de la puissance selon la courbe quadratique
+                // Power computation along the quadratic curve
                 // Multiplier = Max(0.35, 1.0 - (hitIndex / (maxTargets-1))^2 * 0.65)
                 float knockbackMultiplier = 1f;
                 if (_finalMaxTargets > 1)
                 {
-                    int hitIndex = _hitTargets.Count - 1; // 0 pour le premier, 1 pour le second...
+                    int hitIndex = _hitTargets.Count - 1; // 0 for the first, 1 for the second...
                     float progress = (float)hitIndex / (_finalMaxTargets - 1);
                     knockbackMultiplier = Mathf.Max(0.35f, 1.0f - (progress * progress) * 0.65f);
                 }
 
                 float finalForce = _combatStyleSO.KnockbackForce * knockbackMultiplier * UnityEngine.Random.Range(0.7f, 1.3f);
-                
-                // Direction du knockback : de l'attaquant vers la cible
+
+                // Knockback direction: from attacker to target
                 Vector3 knockbackDir = (target.transform.position - _character.transform.position).normalized;
-                knockbackDir.y = 0; // On reste sur le plan horizontal
+                knockbackDir.y = 0; // We stay on the horizontal plane
                 if (knockbackDir == Vector3.zero) knockbackDir = _character.transform.forward;
 
                 if (target.CharacterMovement != null)
@@ -138,7 +138,7 @@ public class CombatStyleAttack : MonoBehaviour
                 _character.CharacterCombat.StartFight(target);
             }
 
-            Debug.Log($"<color=red>[Combat]</color> {_character.CharacterName} a frappé {target.CharacterName} (Priorité: {(_character.CharacterCombat.IsInBattle ? _character.CharacterCombat.CurrentBattleManager.AreOpponents(_character, target) : "N/A")}) pour {damage} dégâts.");
+            Debug.Log($"<color=red>[Combat]</color> {_character.CharacterName} hit {target.CharacterName} (Priority: {(_character.CharacterCombat.IsInBattle ? _character.CharacterCombat.CurrentBattleManager.AreOpponents(_character, target) : "N/A")}) for {damage} damage.");
 
             if (_hitTargets.Count >= _finalMaxTargets) break;
         }

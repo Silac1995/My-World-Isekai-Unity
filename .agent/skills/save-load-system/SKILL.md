@@ -26,6 +26,7 @@ Portable character profiles that travel across worlds. Characters are independen
 |----------|---------|
 | 0 | CharacterProfile |
 | 10 | CharacterStats |
+| 15 | CharacterCombatLevel |
 | 20 | CharacterSkills, CharacterAbilities |
 | 30 | CharacterEquipment |
 | 40 | CharacterNeeds, CharacterTraits |
@@ -49,6 +50,13 @@ Portable character profiles that travel across worlds. Characters are independen
 - `MapController.PendingSnapshots` — stores NPC snapshots for init-time consumption during save/load
 - `MapController.SpawnNPCsFromPendingSnapshot()` — respawns NPCs from pending snapshots after load
 - Ensures NPCs on active (non-hibernated) maps persist through save/load cycles
+
+### Full profile per NPC (`HibernatedNPCData.ProfileData`)
+- Each `HibernatedNPCData` now carries an optional `CharacterProfileSaveData ProfileData` field populated by `CharacterDataCoordinator.ExportProfile()` at snapshot time (both `SnapshotActiveNPCs` and `Hibernate`)
+- On respawn, `SpawnNPCsFromSnapshot` calls `coordinator.ImportProfile(npcData.ProfileData)` AFTER `netObj.Spawn(true)` — mirrors the party-NPC pattern in `GameLauncher.SpawnPartyMembers` so subsystems with NetworkVariables are live when their `DeserializeFromJson` fires
+- This is what makes NPC stats, equipment, skills, traits, abilities, relations, etc. survive save/load — without it only the flat fields (race + position + needs + identity) come back
+- Backward-compatible: legacy saves with `ProfileData == null` fall back to the flat-field restore path and emit a warning
+- Pre-existing follow-up: `SnapshotActiveNPCs` does not skip party NPCs whose leader is a player. Those NPCs are also stored in the leader profile's `partyMembers`. With full `ProfileData` blobs in both places this could cause double-spawn at load and needs to be addressed in a follow-up.
 
 ## Active Map Building Snapshots
 - `MapController.SnapshotActiveBuildings()` syncs live buildings into CommunityData without despawning

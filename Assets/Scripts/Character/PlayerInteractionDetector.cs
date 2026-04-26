@@ -277,7 +277,7 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
         if (_currentInteractableObjectTarget == null) return;
         try
         {
-            // 1. SI C'EST UN PERSONNAGE, ON VÉRIFIE LES ÉTATS
+            // 1. IF IT'S A CHARACTER, CHECK THE STATES
             if (_currentInteractableObjectTarget is CharacterInteractable charInteractable)
             {
                 Character targetChar = charInteractable.Character;
@@ -285,8 +285,8 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
 
                 if (!Character.IsFree() || !targetChar.IsFree())
                 {
-                    Debug.LogWarning($"<color=yellow>[Interaction]</color> Interaction impossible : " +
-                        $"{(!Character.IsFree() ? "Le joueur est occupé" : "La cible est en combat/interaction")}");
+                    Debug.LogWarning($"<color=yellow>[Interaction]</color> Interaction not possible: " +
+                        $"{(!Character.IsFree() ? "the player is busy" : "the target is in combat/interaction")}");
                     return;
                 }
 
@@ -298,12 +298,12 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
                 }
             }
 
-            // 2. TOUS LES TYPES : on délègue à l'Interact() de chaque sous-classe
+            // 2. ALL TYPES: delegate to each subclass's Interact()
             _currentInteractableObjectTarget.Interact(Character);
         }
         catch (System.Exception ex)
         {
-            Debug.LogError($"<color=red>[Interaction Error]</color> Sur {_currentInteractableObjectTarget.name}: {ex.ToString()}");
+            Debug.LogError($"<color=red>[Interaction Error]</color> On {_currentInteractableObjectTarget.name}: {ex.ToString()}");
         }
     }
 
@@ -383,7 +383,7 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
 
         if (closest == null)
         {
-            Debug.LogError("Aucune cible valide trouvée dans nearbyInteractables.", this);
+            Debug.LogError("No valid target found in nearbyInteractables.", this);
             return;
         }
 
@@ -408,7 +408,7 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
     {
         if (interactionPromptPrefab == null)
         {
-            Debug.LogError("interactionPromptPrefab est null. Assigne un prefab dans l'inspecteur ou via InitializePromptUI.", this);
+            Debug.LogError("interactionPromptPrefab is null. Assign a prefab in the inspector or via InitializePromptUI.", this);
             return;
         }
 
@@ -419,14 +419,14 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
         }
         else
         {
-            Debug.LogError("WorldUIManager non trouvé dans la scène !");
+            Debug.LogError("WorldUIManager not found in the scene!");
             return;
         }
 
         InteractionPromptUI promptUIComponent = currentPromptUI.GetComponent<InteractionPromptUI>();
         if (promptUIComponent == null)
         {
-            Debug.LogError("Le prefab interactionPromptPrefab n'a pas de composant InteractionPromptUI.", this);
+            Debug.LogError("The interactionPromptPrefab prefab has no InteractionPromptUI component.", this);
             Destroy(currentPromptUI);
             currentPromptUI = null;
             currentPromptComponent = null;

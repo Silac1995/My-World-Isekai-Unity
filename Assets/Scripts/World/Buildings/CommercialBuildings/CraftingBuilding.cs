@@ -1,10 +1,9 @@
 using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
 
 /// <summary>
-/// Bâtiment spécialisé dans l'artisanat (Forge, Menuiserie, Tissage, etc.).
-/// Gère la collecte des recettes disponibles via les CraftingStations installées.
+/// Building specialized in crafting (Forge, Carpentry, Weaving, etc.).
+/// Handles the collection of available recipes through the installed CraftingStations.
 ///
 /// Implements <see cref="IStockProvider"/> so the <see cref="BuildingLogisticsManager"/>
 /// can proactively restock input materials on every worker punch-in — independently
@@ -32,24 +31,41 @@ public abstract class CraftingBuilding : CommercialBuilding, IStockProvider
         }
     }
 
+    // ── Craftable-items cache (perf, see wiki/projects/optimisation-backlog.md entry #2 / A).
+    // GetCraftableItems was the #1 hot spot — `LogisticsStockEvaluator.FindSupplierFor`
+    // calls `ProducesItem` (which calls `GetCraftableItems`) for every commercial building
+    // in the scene per supplier query. Each call: 2 HashSet allocs, recursive room walk,
+    // plus an unconditional `GetComponentsInChildren<CraftingStation>(true)` fallback walk
+    // (intentionally preserved — see the in-method comment for the registration race it covers).
+    // Cache: HashSet for O(1) ProducesItem lookup + List for the public API. TTL inherited
+    // from CommercialBuilding.FurnitureCacheTTLSeconds; manual invalidation hook for known
+    // state changes (default-furniture spawn completion, station place/pickup).
+    private List<ItemSO> _cachedCraftableList;
+    private HashSet<ItemSO> _cachedCraftableSet;
+    private float _craftableCacheValidUntil = -1f;
+
     /// <summary>
-    /// Scanne toutes les pièces du bâtiment pour trouver les CraftingStations
-    /// et retourne la liste consolidée de tous les objets pouvant y être fabriqués.
-    ///
-    /// Robust to room-registration races: the canonical path walks <see cref="Building.Rooms"/>
-    /// and queries each room's <c>FurnitureManager._furnitures</c> list. If that turns up empty
-    /// (which can happen when the recent <c>_defaultFurnitureLayout</c>/<see cref="CommercialBuilding.SpawnDefaultFurnitureSlot"/>
-    /// flow spawns a CraftingStation but its <c>RegisterSpawnedFurnitureUnchecked</c> didn't land
-    /// — slot.TargetRoom unset, FurnitureGrid null on the target room, OnNetworkSpawn race, etc.)
-    /// we fall back to a transform-tree scan so the building's logical capability still reflects
-    /// the stations physically attached to it. This is the difference between
-    /// "FindSupplierFor(tshirt) returns null and the shop can never order tshirts" vs.
-    /// "logistics works, with a one-shot warning the user can fix at their own pace".
+    /// Force the next <see cref="GetCraftableItems"/> / <see cref="ProducesItem"/> call to
+    /// re-walk rooms + fallback. Call after default-furniture spawn completes, after a
+    /// player places/removes a CraftingStation, or any time the station set changes.
     /// </summary>
-    public List<ItemSO> GetCraftableItems()
+    public void InvalidateCraftableCache()
     {
-        HashSet<ItemSO> uniqueItems = new HashSet<ItemSO>();
-        HashSet<CraftingStation> registeredStations = new HashSet<CraftingStation>();
+        _craftableCacheValidUntil = -1f;
+    }
+
+    private void RebuildCraftableCacheIfStale()
+    {
+        if (Time.time < _craftableCacheValidUntil) return;
+
+        if (_cachedCraftableSet == null) _cachedCraftableSet = new HashSet<ItemSO>();
+        else _cachedCraftableSet.Clear();
+        if (_cachedCraftableList == null) _cachedCraftableList = new List<ItemSO>();
+        else _cachedCraftableList.Clear();
+
+        // Allocated once per refresh, not per call. Used to deduplicate the primary vs fallback
+        // walk (a station registered in a Room AND found via transform scan must only count once).
+        var registeredStations = new HashSet<CraftingStation>();
 
         // Primary path — walk every room's _furnitures list, recursive across MainRoom + every
         // SubRoom (Building.Rooms uses ComplexRoom.GetAllRooms()). Track which stations we found
@@ -64,7 +80,7 @@ public abstract class CraftingBuilding : CommercialBuilding, IStockProvider
                 if (station.CraftableItems == null) continue;
                 foreach (var item in station.CraftableItems)
                 {
-                    if (item != null) uniqueItems.Add(item);
+                    if (item != null && _cachedCraftableSet.Add(item)) _cachedCraftableList.Add(item);
                 }
             }
         }
@@ -81,7 +97,9 @@ public abstract class CraftingBuilding : CommercialBuilding, IStockProvider
         //
         // Important: we run this even when the primary path found stations, because partial
         // registration (some rooms registered, some not) is a real failure mode. We only emit
-        // the diagnostic warning for stations the primary path actually missed.
+        // the diagnostic warning for stations the primary path actually missed. Allocation cost
+        // of GetComponentsInChildren is paid once per refresh (every FurnitureCacheTTLSeconds),
+        // not per FindSupplierFor query.
         var childStations = GetComponentsInChildren<CraftingStation>(includeInactive: true);
         if (childStations != null && childStations.Length > 0)
         {
@@ -94,7 +112,7 @@ public abstract class CraftingBuilding : CommercialBuilding, IStockProvider
                 if (station.CraftableItems == null) continue;
                 foreach (var item in station.CraftableItems)
                 {
-                    if (item != null) uniqueItems.Add(item);
+                    if (item != null && _cachedCraftableSet.Add(item)) _cachedCraftableList.Add(item);
                 }
             }
 
@@ -111,11 +129,34 @@ public abstract class CraftingBuilding : CommercialBuilding, IStockProvider
             }
         }
 
-        return uniqueItems.ToList();
+        _craftableCacheValidUntil = Time.time + FurnitureCacheTTLSeconds;
     }
 
     /// <summary>
-    /// Retourne toutes les stations de craft de ce bâtiment correspondant à un type précis.
+    /// Scans all rooms of the building to find the CraftingStations
+    /// and returns the consolidated list of all items that can be crafted in them.
+    ///
+    /// Robust to room-registration races: the canonical path walks <see cref="Building.Rooms"/>
+    /// and queries each room's <c>FurnitureManager._furnitures</c> list. If that turns up empty
+    /// (which can happen when the recent <c>_defaultFurnitureLayout</c>/<see cref="CommercialBuilding.SpawnDefaultFurnitureSlot"/>
+    /// flow spawns a CraftingStation but its <c>RegisterSpawnedFurnitureUnchecked</c> didn't land
+    /// — slot.TargetRoom unset, FurnitureGrid null on the target room, OnNetworkSpawn race, etc.)
+    /// we fall back to a transform-tree scan so the building's logical capability still reflects
+    /// the stations physically attached to it. This is the difference between
+    /// "FindSupplierFor(tshirt) returns null and the shop can never order tshirts" vs.
+    /// "logistics works, with a one-shot warning the user can fix at their own pace".
+    ///
+    /// Cached behind <see cref="FurnitureCacheTTLSeconds"/> + <see cref="InvalidateCraftableCache"/>.
+    /// The returned list is a SHARED reference — callers must treat it as read-only.
+    /// </summary>
+    public List<ItemSO> GetCraftableItems()
+    {
+        RebuildCraftableCacheIfStale();
+        return _cachedCraftableList;
+    }
+
+    /// <summary>
+    /// Returns all crafting stations of this building matching a specific type.
     /// Mirrors the room-list-then-physical-scan pattern of <see cref="GetCraftableItems"/> so
     /// the worker can still pick a station even if registration into the room's _furnitures
     /// list failed (default-furniture spawn race).
@@ -193,7 +234,9 @@ public abstract class CraftingBuilding : CommercialBuilding, IStockProvider
 
     public override bool ProducesItem(ItemSO item)
     {
-        return GetCraftableItems().Contains(item);
+        if (item == null) return false;
+        RebuildCraftableCacheIfStale();
+        return _cachedCraftableSet.Contains(item);
     }
 
     public override bool RequiresCraftingFor(ItemSO item)

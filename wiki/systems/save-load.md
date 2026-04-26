@@ -3,7 +3,7 @@ type: system
 title: "Save / Load"
 tags: [save-load, persistence, network, tier-2]
 created: 2026-04-19
-updated: 2026-04-25
+updated: 2026-04-26
 sources: []
 related:
   - "[[character]]"
@@ -60,8 +60,10 @@ Decouple characters from any one session so a player's character can visit frien
 │                                                                 │
 │   WorldSaveData                                                 │
 │     ├── MapSaveData[]        (per map — active + hibernated)    │
-│     │     ├── Alive Characters (as CharacterSaveData)           │
 │     │     ├── HibernatedNPCData[]                               │
+│     │     │     ├── flat fields (id, prefab, pos, needs, …)     │
+│     │     │     └── ProfileData = CharacterProfileSaveData      │
+│     │     │           (full coordinator blob, since 2026-04-26) │
 │     │     ├── WorldItemSaveData[]   (dropped items)             │
 │     │     ├── Resource pools                                    │
 │     │     └── Last hibernation time                             │
@@ -107,8 +109,11 @@ Decouple characters from any one session so a player's character can visit frien
 - [ ] Save version migration — is there a strategy for breaking schema changes? Worth adding now — adding TimeClock as a child of existing building prefabs AFTER saves were created silently poisoned those saves (buildings replay through `SpawnSavedBuildings` with a different authored child set).
 - [ ] Exact priority ordering of `ICharacterSaveData<T>` providers — does priority dictate load order too, or just export?
 - [ ] **Audit every `NetworkObject.Spawn()` + `SetParent` pair** in save-restore code — enforce the NGO-preferred parent-before-spawn order.
+- [ ] **Verify `CharacterSkills` per-skill XP persistence end-to-end** once the skill system is feature-complete. Code path looks correct (`CharacterSkills.Serialize` captures `level + currentXP + totalXP`; the 4-arg `SkillInstance` ctor in `Deserialize` re-assigns all three). Deferred 2026-04-26 because the skill system itself is still in progress — Kevin will retest once it ships. If on retest values still don't restore, suspect post-Deserialize override (network sync from prefab default, OnNetworkSpawn re-init, or `RecalculateAllSkillBonuses` triggering an XP reset). See [CharacterSkills.cs:404-476](../../Assets/Scripts/Character/CharacterSkills/CharacterSkills.cs).
 
 ## Change log
+- 2026-04-26 — Fixed: `CharacterCombatLevel` (character-progression XP, level history, unspent stat points) now persists. The system was a `CharacterSystem` with no `ICharacterSaveData<T>` contract, so the coordinator never saw it — both player and NPC progression reset to defaults on load. Added `CombatLevelSaveData` DTO, made `CharacterCombatLevel` implement `ICharacterSaveData<CombatLevelSaveData>` at priority 15 (between Stats and Skills). Restore is direct field assignment with no `LevelUp`/`SpendStatPoint` calls, so stat bonuses are not double-applied (CharacterStats already persists cumulative base values). Verified by Kevin same-day. **Deferred:** per-skill XP (`CharacterSkills`) round-trip cannot be verified yet — skill system still in progress. Open question logged above. — claude
+- 2026-04-26 — Fixed: NPC stats/equipment (and every coordinator-driven subsystem) now survive save/load. Added `HibernatedNPCData.ProfileData` (`CharacterProfileSaveData`); `MapController.SnapshotActiveNPCs` and `Hibernate` populate it via `CharacterDataCoordinator.ExportProfile`, and `SpawnNPCsFromSnapshot` replays it via `ImportProfile` after `Spawn(true)`. Mirrors the party-NPC restore pattern in `GameLauncher.SpawnPartyMembers`. Backward-compatible (legacy saves fall back to flat fields). Pre-existing follow-up flagged: `SnapshotActiveNPCs` does not skip party NPCs of a player leader → potential double-spawn risk. — claude
 - 2026-04-25 — Implemented WorldItem persistence. `MapSaveData.WorldItems` (`WorldItemSaveData` list) rides alongside `HibernatedNPCs` on each `MapSnapshot_{mapId}`. `MapController.SnapshotActiveNPCs` / `SpawnNPCsFromSnapshot` / `Hibernate` now also handle items; `WorldItem.SpawnWorldItem` reparents the GO under the containing map via new `MapController.GetAnyMapAtPosition`. — claude
 - 2026-04-24 — Added a Known gotchas section documenting the half-spawned-NetworkObject bug in save-restore paths (root cause + defensive purge). Cross-linked to [[network]]. — claude
 - 2026-04-19 — Stub with architectural sketch. Full code walkthrough deferred — tier-2 per Kevin's plan. — Claude / [[kevin]]

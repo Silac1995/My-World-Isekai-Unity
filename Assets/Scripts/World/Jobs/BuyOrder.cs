@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// Représente une commande logistique (achat/transport) entre deux bâtiments.
-/// Utilisé par les JobLogisticsManager et JobTransporter pour gérer l'économie.
+/// Represents a logistics order (purchase/transport) between two buildings.
+/// Used by JobLogisticsManager and JobTransporter to manage the economy.
 /// </summary>
 [System.Serializable]
 public class BuyOrder : MWI.Quests.IQuest
@@ -17,15 +17,15 @@ public class BuyOrder : MWI.Quests.IQuest
     public Character ClientBoss { get; private set; }
     public Character IntermediaryBoss { get; private set; }
 
-    // Quantité déjà livrée par les transporteurs
+    // Quantity already delivered by the transporters
     public int DeliveredQuantity { get; private set; }
 
-    // Quantité pour laquelle un TransportOrder a déjà été généré
+    // Quantity for which a TransportOrder has already been generated
     public int DispatchedQuantity { get; private set; }
 
     public bool IsCompleted => DeliveredQuantity >= Quantity;
 
-    // Indique si la commande a été officiellement acceptée par le fournisseur via interaction
+    // Indicates whether the order has been officially accepted by the supplier through interaction
     public bool IsPlaced { get; set; } = false;
 
     // The physical ItemInstances explicitly reserved for this order from the source building's inventory
@@ -72,8 +72,8 @@ public class BuyOrder : MWI.Quests.IQuest
     }
 
     /// <summary>
-    /// Enregistre une livraison partielle ou totale.
-    /// Retourne vrai si la commande globale est désormais complétée.
+    /// Records a partial or full delivery.
+    /// Returns true if the overall order is now complete.
     /// </summary>
     public bool RecordDelivery(int amount)
     {
@@ -91,7 +91,7 @@ public class BuyOrder : MWI.Quests.IQuest
         if (amount > 0 && !IsPlaced)
         {
             Quantity += amount;
-            Debug.Log($"<color=green>[BuyOrder]</color> Quantite augmentee de {amount}. Nouvelle quantite: {Quantity} pour {ItemToTransport.ItemName}");
+            Debug.Log($"<color=green>[BuyOrder]</color> Quantity increased by {amount}. New quantity: {Quantity} for {ItemToTransport.ItemName}");
         }
     }
 

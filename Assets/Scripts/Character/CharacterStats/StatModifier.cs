@@ -1,8 +1,8 @@
 using UnityEngine;
 
 /// <summary>
-/// Représente une modification appliquée à une statistique.
-/// Permet de garder une trace de l'origine (Source) du bonus/malus pour pouvoir le retirer spécifiquement plus tard.
+/// Represents a modification applied to a stat.
+/// Keeps track of the origin (Source) of the bonus/malus so it can be removed specifically later.
 /// </summary>
 public class StatModifier
 {

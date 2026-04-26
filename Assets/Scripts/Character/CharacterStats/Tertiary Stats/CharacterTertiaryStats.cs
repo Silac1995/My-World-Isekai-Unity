@@ -30,7 +30,7 @@ public abstract class CharacterTertiaryStats : CharacterBaseStats
     }
 
     /// <summary>
-    /// Met à jour le multiplicateur et l'offset, utilisé pour modifier les bases raciales de ce personnage.
+    /// Updates the multiplier and the offset, used to modify the racial bases of this character.
     /// </summary>
     public void UpdateScaling(float multiplier, float baseOffset)
     {

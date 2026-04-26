@@ -38,14 +38,14 @@ public class BattleManager : NetworkBehaviour
 
     private bool _isBattleEnded = false;
 
-    // --- NOUVEAUX CONTRÔLEURS DE DÉLÉGATION ---
+    // --- NEW DELEGATION CONTROLLERS ---
     private BattleZoneController _zoneController;
     private CombatEngagementCoordinator _engagementCoordinator;
 
-    // Liste pour le debug
+    // List used for debug
     [SerializeField] private List<Character> _allParticipants = new List<Character>();
 
-    [Header("Debug — Engagements actifs")]
+    [Header("Debug — Active engagements")]
     [SerializeField] private List<string> _debugEngagements = new List<string>();
 
     public List<BattleTeam> BattleTeams => _teams;
@@ -60,7 +60,7 @@ public class BattleManager : NetworkBehaviour
 
         if (initiator == null || target == null) return;
 
-        // 1. Setup des équipes (On s'assure qu'il n'y en a QUE 2)
+        // 1. Team setup (we make sure there are ONLY 2)
         _teams.Clear();
         _battleTeamInitiator = new BattleTeam();
         _battleTeamTarget = new BattleTeam();
@@ -74,7 +74,7 @@ public class BattleManager : NetworkBehaviour
         _zoneController = new BattleZoneController(this, _battleZoneModifier, _battleZoneLine, _battleZoneParticles, BuildParticleSettings(), _baseBattleZoneSize, _perParticipantGrowthRate, _participantsPerTier);
         _engagementCoordinator = new CombatEngagementCoordinator(this);
 
-        // 2. Création physique de la zone
+        // 2. Physical creation of the zone
         _zoneController.CreateBattleZone(initiator, target);
 
         // 3. Inscription des participants (each gets a one-way best-target edge)
@@ -91,7 +91,7 @@ public class BattleManager : NetworkBehaviour
         // 5. Rendu visuel UNIQUE (pas dans Update)
         _zoneController.DrawBattleZoneOutline();
 
-        Debug.Log($"<color=orange>[Battle]</color> Combat lance : {initiator.name} vs {target.name}");
+        Debug.Log($"<color=orange>[Battle]</color> Combat started: {initiator.name} vs {target.name}");
 
         var initNet = initiator.GetComponent<NetworkObject>();
         var targNet = target.GetComponent<NetworkObject>();
@@ -167,20 +167,20 @@ public class BattleManager : NetworkBehaviour
 
         if (_isBattleEnded) return;
 
-        // --- NOUVEAU : VERIFICATION DE FIN DE COMBAT EN CONTINU ---
-        // Seul le serveur valide la fin du combat.
+        // --- NEW: CONTINUOUS BATTLE-END CHECK ---
+        // Only the server validates the end of the battle.
         if (IsServer)
         {
             if (_battleTeamInitiator.IsTeamEliminated() || _battleTeamTarget.IsTeamEliminated())
             {
-                Debug.Log($"<color=red>[Battle]</color> Elimination globale détectée. Fin du combat.");
+                Debug.Log($"<color=red>[Battle]</color> Global elimination detected. Ending combat.");
                 EndBattle();
                 return;
             }
         }
 
-        // Ticks d'initiative autorisés sur TOUS les clients pour la prédiction locale !
-        // Gestion du temps de combat 
+        // Initiative ticks are allowed on ALL clients for local prediction!
+        // Combat time management
         _tickTimer += Time.deltaTime;
         float tickPeriod = 1f / _ticksPerSecond;
 
@@ -201,7 +201,7 @@ public class BattleManager : NetworkBehaviour
         }
 
 #if UNITY_EDITOR
-        // Debug : mise à jour de la liste d'engagements pour l'Inspector
+        // Debug: update the engagement list for the Inspector
         UpdateDebugEngagements();
 #endif
     }
@@ -494,14 +494,14 @@ public class BattleManager : NetworkBehaviour
         BattleTeam myTeam = GetTeamOf(character);
         if (myTeam == null) 
         {
-            Debug.LogWarning($"<color=red>[Battle]</color> {character.CharacterName} n'est dans aucune équipe ! Impossible de trouver son opposant.");
+            Debug.LogWarning($"<color=red>[Battle]</color> {character.CharacterName} is not in any team! Cannot find their opponent.");
             return null;
         }
         return (myTeam == _battleTeamInitiator) ? _battleTeamTarget : _battleTeamInitiator;
     }
 
     /// <summary>
-    /// Passthrough vers le coordinateur pour trouver le meilleur ennemi à cibler.
+    /// Passthrough to the coordinator to find the best enemy to target.
     /// </summary>
     public Character GetBestTargetFor(Character attacker)
     {
@@ -523,20 +523,20 @@ public class BattleManager : NetworkBehaviour
     {
         if (_isBattleEnded) return;
 
-        // --- NOUVEAU : DIAGNOSTIC DE FIN DE COMBAT ---
+        // --- NEW: BATTLE-END DIAGNOSTIC ---
         int initiatorAlive = _battleTeamInitiator.CharacterList.Count(c => c != null && c.IsAlive());
         int targetAlive = _battleTeamTarget.CharacterList.Count(c => c != null && c.IsAlive());
-        
+
         string initiatorNames = string.Join(", ", _battleTeamInitiator.CharacterList.Where(c => c != null && c.IsAlive()).Select(c => c.CharacterName));
         string targetNames = string.Join(", ", _battleTeamTarget.CharacterList.Where(c => c != null && c.IsAlive()).Select(c => c.CharacterName));
 
-        Debug.Log($"<color=white>[Battle Check]</color> {incapacitatedCharacter.CharacterName} tombe. " +
-                  $"Team Initiateur : {initiatorAlive}/{_battleTeamInitiator.CharacterList.Count} ({initiatorNames}) | " +
-                  $"Team Cible : {targetAlive}/{_battleTeamTarget.CharacterList.Count} ({targetNames})");
+        Debug.Log($"<color=white>[Battle Check]</color> {incapacitatedCharacter.CharacterName} is down. " +
+                  $"Initiator Team: {initiatorAlive}/{_battleTeamInitiator.CharacterList.Count} ({initiatorNames}) | " +
+                  $"Target Team: {targetAlive}/{_battleTeamTarget.CharacterList.Count} ({targetNames})");
 
-        // (La vérification globale d'élimination est maintenant gérée passivement dans l'Update)
+        // (The global elimination check is now handled passively in Update.)
 
-        // On libère simplement les slots d'engagements liés à ce personnage.
+        // We simply release the engagement slots tied to this character.
         RedirectIncapacitated(incapacitatedCharacter);
     }
 
@@ -575,7 +575,7 @@ public class BattleManager : NetworkBehaviour
                 }
                 catch (System.Exception e)
                 {
-                    Debug.LogError($"<color=red>[Battle]</color> Exception non-critique durant LeaveBattle pour {character.CharacterName} : {e.Message}. Le nettoyage continue.");
+                    Debug.LogError($"<color=red>[Battle]</color> Non-critical exception during LeaveBattle for {character.CharacterName}: {e.Message}. Cleanup continues.");
                 }
                 
                 _engagementCoordinator?.LeaveCurrentEngagement(character);
@@ -584,7 +584,7 @@ public class BattleManager : NetworkBehaviour
         
         _engagementCoordinator?.ClearAll();
 
-        Debug.Log("<color=red>[Battle]</color> Le combat est TERMINÉ.");
+        Debug.Log("<color=red>[Battle]</color> Combat is OVER.");
         if (NetworkObject != null && NetworkObject.IsSpawned)
             NetworkObject.Despawn(true);
         else 

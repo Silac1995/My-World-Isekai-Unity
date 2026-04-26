@@ -23,7 +23,7 @@ public class PlayerUI : MonoBehaviour
     [SerializeField] private MWI.UI.Notifications.NotificationChannel _relationsChannel;
     [SerializeField] private MWI.UI.Notifications.ToastNotificationChannel _toastChannel;
 
-    // Le seul lien nécessaire pour la barre d'action
+    // The only link required for the action bar
     [SerializeField] private UI_Action_ProgressBar _actionProgressBar;
     
     [Header("Combat UI")]
@@ -72,7 +72,7 @@ public class PlayerUI : MonoBehaviour
 
     public void Initialize(GameObject newCharacter)
     {
-        // On nettoie les anciens liens (Equipement, etc.)
+        // Clean up the previous links (Equipment, etc.)
         CleanupEvents();
 
         if (newCharacter == null)
@@ -93,13 +93,13 @@ public class PlayerUI : MonoBehaviour
 
 
 
-        // Lien avec le système de temps
+        // Hook up the time system
         if (_timeUI != null)
         {
             _timeUI.SetTargetCharacter(characterComponent);
         }
 
-        // On délègue toute la gestion de la barre au script spécialisé
+        // Delegate the entire action-bar management to the specialized script
         if (_actionProgressBar != null)
         {
             _actionProgressBar.InitializeCharacterActions(characterComponent.CharacterActions);
@@ -434,9 +434,9 @@ public class PlayerUI : MonoBehaviour
             characterComponent.CharacterRelation.ClearNotifications();
         }
 
-        // Plus besoin de désabonner les actions ici, 
-        // Plus besoin de désabonner les actions ici, 
-        // c'est UI_Action_ProgressBar qui s'en occupe !
+        // No longer need to unsubscribe actions here,
+        // No longer need to unsubscribe actions here,
+        // UI_Action_ProgressBar takes care of it!
     }
 
     private void OnDestroy()

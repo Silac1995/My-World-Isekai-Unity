@@ -68,7 +68,7 @@ public class Zone : NetworkBehaviour
     }
 
     /// <summary>
-    /// Vérifie si une position donnée se trouve à l'intérieur du collider d'une zone d'un type spécifique.
+    /// Checks whether a given position lies inside the collider of a zone of a specific type.
     /// </summary>
     public static bool IsPositionInZoneType(Vector3 position, ZoneType targetZoneType, float checkRadius = 0.1f)
     {

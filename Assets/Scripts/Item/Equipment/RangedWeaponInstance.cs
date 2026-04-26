@@ -4,7 +4,7 @@ public abstract class RangedWeaponInstance : WeaponInstance
     protected RangedWeaponInstance(ItemSO data) : base(data) { }
 
     /// <summary>
-    /// Indique si l'arme est prête à tirer.
+    /// Indicates whether the weapon is ready to fire.
     /// </summary>
     public abstract bool CanFire();
 }

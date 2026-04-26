@@ -26,11 +26,11 @@ public class GiveLessonBehaviour : IAIBehaviour
                 _myClassZone = mentorship.SpawnedClassZone;
             }
 
-            // Attendre que la classe soit instanciée
-            if (_myClassZone == null) return; 
+            // Wait for the class to be instantiated
+            if (_myClassZone == null) return;
         }
 
-        // Faire face à la classe en plaçant le mentor de façon adéquate
+        // Face the class by positioning the mentor appropriately
         Vector3 directionToZone = _myClassZone.transform.position - character.transform.position;
         directionToZone.y = 0;
         if (directionToZone.sqrMagnitude > 0.1f && character.CharacterMovement != null)
@@ -82,7 +82,7 @@ public class GiveLessonBehaviour : IAIBehaviour
             _relationshipTickCounter = 0;
         }
 
-        // Distribuer l'XP et les relations
+        // Distribute XP and relations
         var students = _myClassZone.ActiveStudents.ToList();
         foreach (var student in students)
         {
@@ -95,11 +95,11 @@ public class GiveLessonBehaviour : IAIBehaviour
                 
                 if (shouldIncreaseRelation)
                 {
-                    // Mentor vers Eleve
+                    // Mentor to Student
                     Relationship mentorToStudent = mentor.CharacterRelation?.AddRelationship(student);
                     if (mentorToStudent != null) mentorToStudent.IncreaseRelationValue(1);
 
-                    // Eleve vers Mentor
+                    // Student to Mentor
                     Relationship studentToMentor = student.CharacterRelation?.AddRelationship(mentor);
                     if (studentToMentor != null) studentToMentor.IncreaseRelationValue(1);
                 }

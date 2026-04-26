@@ -3,8 +3,8 @@ using System.Linq;
 using UnityEngine;
 
 /// <summary>
-/// Représente une "mêlée" ou une "escarmouche" locale entre deux groupes de combattants.
-/// Gère la spatialisation réciproque (Group A encercle le centre de Group B, et vice versa).
+/// Represents a local "melee" or "skirmish" between two groups of fighters.
+/// Handles reciprocal spatialization (Group A surrounds the center of Group B, and vice versa).
 /// </summary>
 public class CombatEngagement
 {
@@ -17,11 +17,11 @@ public class CombatEngagement
     private const float LEASH_RADIUS = 15f;
     public float LeashRadius => LEASH_RADIUS;
 
-    // Les deux camps qui composent cette escarmouche
+    // The two sides making up this skirmish
     public EngagementGroup GroupA { get; private set; }
     public EngagementGroup GroupB { get; private set; }
 
-    // On garde la notion d'équipes globales pour savoir qui va où
+    // We keep the notion of global teams to know who goes where
     private BattleTeam _teamA;
     private BattleTeam _teamB;
 
@@ -52,25 +52,25 @@ public class CombatEngagement
     }
 
     /// <summary>
-    /// Un personnage rejoint l'escarmouche. Il est placé dans le groupe
-    /// correspondant à son équipe dans le BattleManager.
+    /// A character joins the skirmish. They are placed in the group
+    /// matching their team in the BattleManager.
     /// </summary>
     public void JoinEngagement(Character participant)
     {
         if (_teamA.ContainsCharacter(participant))
         {
             GroupA.AddMember(participant);
-            // Debug.Log($"<color=cyan>[Engagement]</color> {participant.CharacterName} rejoint le Group A de l'escarmouche.");
+            // Debug.Log($"<color=cyan>[Engagement]</color> {participant.CharacterName} joins Group A of the skirmish.");
         }
         else if (_teamB.ContainsCharacter(participant))
         {
             GroupB.AddMember(participant);
-            // Debug.Log($"<color=cyan>[Engagement]</color> {participant.CharacterName} rejoint le Group B de l'escarmouche.");
+            // Debug.Log($"<color=cyan>[Engagement]</color> {participant.CharacterName} joins Group B of the skirmish.");
         }
     }
 
     /// <summary>
-    /// Le personnage quitte l'engagement.
+    /// The character leaves the engagement.
     /// </summary>
     public void LeaveEngagement(Character participant)
     {
@@ -79,7 +79,7 @@ public class CombatEngagement
     }
 
     /// <summary>
-    /// L'engagement a-t-il encore un sens ? (L'un des deux camps est vide ou mort)
+    /// Does the engagement still make sense? (One of the two sides is empty or dead)
     /// </summary>
     public bool IsFinished()
     {
@@ -87,9 +87,9 @@ public class CombatEngagement
     }
 
     /// <summary>
-    /// Vérifie si l'engagement est plein pour une équipe spécifique.
-    /// Si le camp adverse n'a qu'un seul personnage, l'engagement n'est jamais considéré comme plein
-    /// car on ne peut pas le diviser.
+    /// Checks whether the engagement is full for a specific team.
+    /// If the opposing side has only one character, the engagement is never considered full
+    /// because it cannot be split.
     /// </summary>
     public bool IsFullFor(BattleTeam team)
     {
@@ -107,8 +107,8 @@ public class CombatEngagement
     }
 
     /// <summary>
-    /// Vérifie si l'engagement doit être séparé en deux (une des deux équipes dépasse la limite,
-    /// et l'autre équipe a plus d'un combattant).
+    /// Checks whether the engagement should be split in two (one of the two teams exceeds the limit,
+    /// and the other team has more than one fighter).
     /// </summary>
     public bool NeedsSplit()
     {
@@ -121,8 +121,8 @@ public class CombatEngagement
     }
 
     /// <summary>
-    /// Donne la coordonnée de front assignée à ce combattant.
-    /// Il est positionné par SA formation, autour du centre du GROUPE ADVERSE.
+    /// Returns the front-line coordinate assigned to this fighter.
+    /// They are positioned by THEIR formation, around the center of the OPPOSING GROUP.
     /// </summary>
     public Vector3 GetAssignedPosition(Character participant)
     {
@@ -169,8 +169,8 @@ public class CombatEngagement
     }
 
     /// <summary>
-    /// Renvoie l'ennemi le plus proche dans le groupe opposé.
-    /// Pratique pour l'IA si sa cible meurt au sein du même engagement.
+    /// Returns the closest enemy in the opposing group.
+    /// Useful for AI when its target dies within the same engagement.
     /// </summary>
     public Character GetClosestOpponent(Character participant)
     {

@@ -10,10 +10,10 @@ public class UI_Action_ProgressBar : MonoBehaviour
     [SerializeField] private Image _fillImage;
     [SerializeField] private TextMeshProUGUI _actionNameText;
 
-    // Cette méthode est appelée par PlayerUI
+    // This method is called by PlayerUI
     public void InitializeCharacterActions(CharacterActions actions)
     {
-        Unsubscribe(); // Sécurité fuite mémoire
+        Unsubscribe(); // Memory-leak safeguard
 
         _characterActions = actions;
 
@@ -23,7 +23,7 @@ public class UI_Action_ProgressBar : MonoBehaviour
             _characterActions.OnActionFinished += HandleActionEnded;
         }
 
-        // On se cache par défaut au démarrage
+        // Hidden by default at startup
         gameObject.SetActive(false);
     }
 
@@ -37,7 +37,7 @@ public class UI_Action_ProgressBar : MonoBehaviour
 
     private void HandleActionStarted(CharacterAction action)
     {
-        // On devient visible seulement quand l'action commence
+        // Become visible only when the action starts
         gameObject.SetActive(true);
         
         if (_actionNameText != null)
@@ -46,7 +46,7 @@ public class UI_Action_ProgressBar : MonoBehaviour
 
     private void HandleActionEnded()
     {
-        // On disparaît complètement
+        // Hide completely
         gameObject.SetActive(false);
     }
 

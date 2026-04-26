@@ -3,8 +3,8 @@ using UnityEngine;
 namespace MWI.AI
 {
     /// <summary>
-    /// Condition : un ami ou coÃ©quipier est en combat et a besoin d'aide.
-    /// Reproduit la logique d'entraide de NPCController.HandleCharacterDetected().
+    /// Condition: a friend or teammate is in combat and needs help.
+    /// Reproduces the assist logic from NPCController.HandleCharacterDetected().
     /// </summary>
     public class BTCond_FriendInDanger : BTNode
     {

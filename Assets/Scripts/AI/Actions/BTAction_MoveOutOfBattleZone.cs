@@ -4,8 +4,8 @@ using UnityEngine.AI;
 namespace MWI.AI
 {
     /// <summary>
-    /// Action native du Behaviour Tree pour fuir une zone de combat.
-    /// Remplace le wrapper de l'ancien MoveOutOfBattleZoneBehaviour.
+    /// Native Behaviour Tree action to flee a combat zone.
+    /// Replaces the wrapper of the old MoveOutOfBattleZoneBehaviour.
     /// </summary>
     public class BTAction_MoveOutOfBattleZone : BTNode
     {
@@ -49,14 +49,14 @@ namespace MWI.AI
                 }
                 else
                 {
-                    // Impossible de trouver un chemin, on termine plus tôt
+                    // Could not find a path; finish early
                     movement.Stop();
                     bb.Remove(Blackboard.KEY_FLEE_BATTLE_MANAGER);
                     return BTNodeStatus.Success;
                 }
             }
 
-            return BTNodeStatus.Running; // Toujours en train de fuir
+            return BTNodeStatus.Running; // Still fleeing
         }
 
         protected override void OnExit(Blackboard bb)

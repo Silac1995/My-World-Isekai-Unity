@@ -2,12 +2,12 @@ using UnityEngine;
 using MWI.WorldSystem;
 
 /// <summary>
-/// Job d'Apprenti Forgeron : assiste le forgeron principal.
-/// Prépare les matériaux, entretient le feu, apprend le métier.
+/// Blacksmith Apprentice job: assists the main blacksmith.
+/// Prepares materials, tends the fire, learns the trade.
 /// </summary>
 public class JobBlacksmithApprentice : JobCrafter
 {
-    public override string JobTitle => "Apprenti Forgeron";
+    public override string JobTitle => "Blacksmith Apprentice";
     public override JobType Type => JobType.BlacksmithApprentice;
 
     public JobBlacksmithApprentice(SkillSO smithingSkill, SkillTier tier = SkillTier.Novice) : base(smithingSkill, tier)
@@ -32,7 +32,7 @@ public class JobBlacksmithApprentice : JobCrafter
     }
 
     /// <summary>
-    /// L'apprenti travaille un peu plus tôt pour préparer la forge.
+    /// The apprentice works slightly earlier to prepare the forge.
     /// </summary>
     public override System.Collections.Generic.List<ScheduleEntry> GetWorkSchedule()
     {

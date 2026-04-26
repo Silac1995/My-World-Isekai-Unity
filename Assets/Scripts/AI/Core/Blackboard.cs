@@ -4,13 +4,13 @@ using UnityEngine;
 namespace MWI.AI
 {
     /// <summary>
-    /// Mémoire partagée du NPC. Stocke les données que les nodes du BT lisent et écrivent.
-    /// Utilise un dictionnaire typé avec des clés string pour la flexibilité.
-    /// Les clés courantes sont définies comme constantes pour éviter les typos.
+    /// Shared memory for the NPC. Stores data that BT nodes read and write.
+    /// Uses a typed dictionary with string keys for flexibility.
+    /// Common keys are defined as constants to avoid typos.
     /// </summary>
     public class Blackboard
     {
-        // --- Clés prédéfinies ---
+        // --- Predefined keys ---
         public const string KEY_SELF = "Self";
         public const string KEY_CURRENT_ORDER = "CurrentOrder";
         public const string KEY_DETECTED_CHARACTER = "DetectedCharacter";
@@ -25,7 +25,7 @@ namespace MWI.AI
         private Dictionary<string, object> _data = new Dictionary<string, object>();
 
         /// <summary>
-        /// Initialise le blackboard avec la référence au personnage.
+        /// Initializes the blackboard with the character reference.
         /// </summary>
         public Blackboard(Character self)
         {
@@ -33,7 +33,7 @@ namespace MWI.AI
         }
 
         /// <summary>
-        /// Écrit une valeur dans le blackboard.
+        /// Writes a value to the blackboard.
         /// </summary>
         public void Set<T>(string key, T value)
         {
@@ -41,7 +41,7 @@ namespace MWI.AI
         }
 
         /// <summary>
-        /// Lit une valeur du blackboard. Retourne default(T) si la clé n'existe pas.
+        /// Reads a value from the blackboard. Returns default(T) if the key does not exist.
         /// </summary>
         public T Get<T>(string key)
         {
@@ -53,7 +53,7 @@ namespace MWI.AI
         }
 
         /// <summary>
-        /// Vérifie si une clé existe et n'est pas null.
+        /// Checks whether a key exists and is not null.
         /// </summary>
         public bool Has(string key)
         {
@@ -61,7 +61,7 @@ namespace MWI.AI
         }
 
         /// <summary>
-        /// Supprime une clé du blackboard.
+        /// Removes a key from the blackboard.
         /// </summary>
         public void Remove(string key)
         {
@@ -69,7 +69,7 @@ namespace MWI.AI
         }
 
         /// <summary>
-        /// Vide tout le blackboard sauf Self.
+        /// Clears the entire blackboard except for Self.
         /// </summary>
         public void Clear()
         {
@@ -78,7 +78,7 @@ namespace MWI.AI
             if (self != null) Set(KEY_SELF, self);
         }
 
-        // --- Raccourcis pour les clés courantes ---
+        // --- Shortcuts for common keys ---
 
         public Character Self => Get<Character>(KEY_SELF);
     }

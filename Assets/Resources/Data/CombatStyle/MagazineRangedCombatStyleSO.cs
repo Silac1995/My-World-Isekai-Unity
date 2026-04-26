@@ -1,8 +1,8 @@
 using UnityEngine;
 
 /// <summary>
-/// Style de combat à distance avec chargeur (ex: pistolet, arbalète).
-/// L'arme a un nombre limité de munitions et nécessite un rechargement.
+/// Magazine-fed ranged combat style (e.g. pistol, crossbow).
+/// The weapon has a limited number of rounds and requires reloading.
 /// </summary>
 [CreateAssetMenu(fileName = "MagazineRangedStyle", menuName = "Scriptable Objects/Combat Style/Magazine Ranged Style")]
 public class MagazineRangedCombatStyleSO : RangedCombatStyleSO
@@ -14,5 +14,5 @@ public class MagazineRangedCombatStyleSO : RangedCombatStyleSO
     public int MagazineSize => _magazineSize;
     public float ReloadTime => _reloadTime;
 
-    public override WeaponType WeaponType => WeaponType.None; // À définir selon le type d'arme
+    public override WeaponType WeaponType => WeaponType.None; // To be set based on weapon type
 }

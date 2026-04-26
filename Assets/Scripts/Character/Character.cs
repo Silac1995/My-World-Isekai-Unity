@@ -179,7 +179,7 @@ public class Character : NetworkBehaviour
     private TimeManager _timeManager;
     private CharacterPathingMemory _pathingMemory;
 
-    // Ressources statiques partagées
+    // Shared static resources
     private static GameObject _worldItemPrefab;
 
     private const string BATTLE_MANAGER_PATH = "Prefabs/BattleManagerPrefab";
@@ -218,7 +218,7 @@ public class Character : NetworkBehaviour
     public CharacterMovement CharacterMovement => TryGet<CharacterMovement>(out var s1) ? s1 : _characterMovement;
     public CharacterVisual CharacterVisual => TryGet<CharacterVisual>(out var s2) ? s2 : _characterVisual;
     public CharacterActions CharacterActions => TryGet<CharacterActions>(out var s3) ? s3 : _characterActions;
-    public CharacterInteraction CharacterInteraction { get { var s = TryGet<CharacterInteraction>(out var reg) ? reg : _characterInteraction; return s ?? throw new NullReferenceException($"CharacterInteraction non initialisé sur {gameObject.name}"); } }
+    public CharacterInteraction CharacterInteraction { get { var s = TryGet<CharacterInteraction>(out var reg) ? reg : _characterInteraction; return s ?? throw new NullReferenceException($"CharacterInteraction not initialised on {gameObject.name}"); } }
     public CharacterEquipment CharacterEquipment => TryGet<CharacterEquipment>(out var s5) ? s5 : _equipment;
     public CharacterTerrainEffects TerrainEffects => TryGet<CharacterTerrainEffects>(out var ste) ? ste : _terrainEffects;
     public CharacterRelation CharacterRelation => TryGet<CharacterRelation>(out var s6) ? s6 : _characterRelation;
@@ -467,13 +467,13 @@ public class Character : NetworkBehaviour
     {
         if (!ValidateRequiredComponents()) return;
 
-        // --- INITIALISATION DE LA BIO ---
-        // Si la bio n'est pas déjà assignée (ou pour s'assurer que le Character est lié)
+        // --- BIO INITIALISATION ---
+        // If the bio isn't already assigned (or to make sure the Character is linked)
         if (_characterBio == null || _characterBio.Character == null)
         {
-            // On utilise le constructeur qu'on a créé
+            // Use the constructor we created
             _characterBio = new CharacterBio(this, _startingGender, 1);
-            Debug.Log($"<color=white>[Bio]</color> Bio initialisée pour {_characterName} ({_startingGender})");
+            Debug.Log($"<color=white>[Bio]</color> Bio initialised for {_characterName} ({_startingGender})");
         }
 
         LoadResources();
@@ -537,7 +537,7 @@ public class Character : NetworkBehaviour
     {
         if (_rb != null && _col != null) return true;
 
-        Debug.LogError($"{name} : Références Rigidbody ou Collider manquantes !");
+        Debug.LogError($"{name} : missing Rigidbody or Collider references!");
         enabled = false;
         return false;
     }
@@ -575,10 +575,10 @@ public class Character : NetworkBehaviour
     {
         if (_characterVisual == null || _col == null) return;
 
-        // On exécute le calcul précis basé sur les sprites
+        // Run the precise sprite-based calculation
         _characterVisual.ResizeColliderToSprite();
 
-        // On s'assure que le Rigidbody n'est pas endormi pour appliquer le changement
+        // Make sure the Rigidbody isn't asleep so the change is applied
         if (_rb != null && !_rb.isKinematic)
         {
             _rb.WakeUp();
@@ -686,47 +686,47 @@ public class Character : NetworkBehaviour
 
         if (unconscious)
         {
-            // 1. Désactivation physique
-            if (_rb != null) 
+            // 1. Physics deactivation
+            if (_rb != null)
             {
                 _rb.isKinematic = true;
                 if (TryGetComponent<Unity.Netcode.Components.NetworkRigidbody>(out var netRb)) netRb.enabled = false;
             }
-            
-            // Si le personnage ne vole pas dans les airs suite à un knockback, on désactive immédiatement le collider au sol
+
+            // If the character isn't flying through the air from a knockback, disable the ground collider immediately
             if (_characterMovement != null && !_characterMovement.IsKnockedBack)
             {
                 if (_col != null) _col.enabled = false;
                 if (_rb != null) _rb.useGravity = false;
             }
 
-            // 4. Animation (Utilise le paramètre isDead pour le moment)
+            // 4. Animation (uses the isDead parameter for now)
             if (_characterVisual != null && _characterVisual.CharacterAnimator != null)
             {
                 _characterVisual.CharacterAnimator.SetDead(true);
             }
 
-            // 5. Désactivation NavMesh
+            // 5. NavMesh deactivation
             ConfigureNavMesh(false);
 
-            Debug.Log($"<color=orange>[Status]</color> {CharacterName} est maintenant inconscient.");
+            Debug.Log($"<color=orange>[Status]</color> {CharacterName} is now unconscious.");
             OnIncapacitated?.Invoke(this);
         }
         else
         {
-            // --- RÉVEIL ---
+            // --- WAKE UP ---
             if (_col != null) _col.enabled = true;
-            if (_rb != null) 
+            if (_rb != null)
             {
                 _rb.useGravity = true;
-                _rb.isKinematic = IsPlayer() ? false : true; // Rétablir selon le type de controller
+                _rb.isKinematic = IsPlayer() ? false : true; // Restore depending on the controller type
                 if (TryGetComponent<Unity.Netcode.Components.NetworkRigidbody>(out var netRb)) netRb.enabled = IsPlayer();
             }
 
             if (_controller != null)
             {
                 _controller.enabled = true;
-                _controller.Initialize(); // Repart sur Wander ou comportement par défaut
+                _controller.Initialize(); // Restart on Wander or default behaviour
             }
 
             if (_characterVisual != null && _characterVisual.CharacterAnimator != null)
@@ -734,10 +734,10 @@ public class Character : NetworkBehaviour
                 _characterVisual.CharacterAnimator.SetDead(false);
             }
 
-            // 5. Restauration NavMesh (Uniquement pour NPCs)
+            // 5. NavMesh restoration (NPCs only)
             ConfigureNavMesh(!IsPlayer());
 
-            Debug.Log($"<color=orange>[Status]</color> {CharacterName} a repris connaissance.");
+            Debug.Log($"<color=orange>[Status]</color> {CharacterName} regained consciousness.");
             OnWakeUp?.Invoke(this);
         }
     }
@@ -758,18 +758,18 @@ public class Character : NetworkBehaviour
             _characterCombat.ExitCombatMode();
 
         _isDead = true;
-        _isUnconscious = false; // La mort prime sur l'inconscience
+        _isUnconscious = false; // Death takes priority over unconsciousness
         OnDeath?.Invoke(this);
 
-        // 1. Désactivation physique
-        if (_rb != null) 
+        // 1. Physics deactivation
+        if (_rb != null)
         {
             _rb.isKinematic = true;
             if (TryGetComponent<Unity.Netcode.Components.NetworkRigidbody>(out var netRb)) netRb.enabled = false;
         }
 
-        // Le collider sera désactivé par CharacterMovement si on subit un knockback.
-        // Sinon, on le désactive tout de suite pour ne pas bloquer les autres joueurs (corps mort)
+        // The collider will be disabled by CharacterMovement if we suffer a knockback.
+        // Otherwise, disable it immediately so we don't block other players (dead body)
         if (_characterMovement != null && !_characterMovement.IsKnockedBack)
         {
             if (_col != null) _col.enabled = false;
@@ -783,7 +783,7 @@ public class Character : NetworkBehaviour
             _characterVisual.CharacterAnimator.SetDead(true);
         }
 
-        // 4. Désactivation NavMesh
+        // 4. NavMesh deactivation
         ConfigureNavMesh(false);
 
         OnIncapacitated?.Invoke(this);
@@ -952,13 +952,13 @@ public class Character : NetworkBehaviour
         WorldItem worldItem = go.GetComponentInChildren<WorldItem>();
         if (worldItem != null) worldItem.Initialize(itemToDrop);
 
-        // Correction : Utilisation du pattern matching direct
+        // Fix: direct pattern matching
         if (itemToDrop is EquipmentInstance equipmentInstance)
         {
-            // On vérifie les couleurs personnalisées
+            // Check the customised colours
             if (equipmentInstance.HavePrimaryColor())
             {
-                // Note : Pour tes sprites 2D, utilise SpriteRenderer au lieu de MeshRenderer
+                // Note: for 2D sprites, use SpriteRenderer instead of MeshRenderer
                 SpriteRenderer visualRenderer = go.GetComponentInChildren<SpriteRenderer>();
                 if (visualRenderer != null)
                     visualRenderer.color = equipmentInstance.PrimaryColor;
@@ -969,12 +969,12 @@ public class Character : NetworkBehaviour
 
     public void UseConsumable(ConsumableInstance consumable)
     {
-        // TODO: Implémenter
+        // TODO: Implement
     }
 
     public void EquipGear(EquipmentInstance equipment)
     {
-        // TODO: Implémenter
+        // TODO: Implement
     }
 
     public void SetTimeManager(TimeManager manager)

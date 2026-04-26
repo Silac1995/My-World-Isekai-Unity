@@ -3,9 +3,9 @@ using System.Linq;
 using UnityEngine;
 
 /// <summary>
-/// Contrôleur central pour le GOAP lié à l'individu (vie, besoins, objectifs personnels).
-/// Contrairement au GOAP des Jobs (ex: JobHarvester), celui-ci gère les actions
-/// permanentes et les buts de vie du personnage.
+/// Central GOAP controller tied to the individual (life, needs, personal goals).
+/// Unlike the Job GOAP (e.g. JobHarvester), this one drives the character's
+/// permanent actions and life goals.
 /// </summary>
 public class CharacterGoapController : CharacterSystem
 {
@@ -15,7 +15,7 @@ public class CharacterGoapController : CharacterSystem
     [Header("Debug")]
     [SerializeField] private bool _debugLog = false;
 
-    // État actuel
+    // Current state
     private GoapGoal _currentGoal;
     private Queue<GoapAction> _currentPlan;
     private GoapAction _currentAction;
@@ -47,7 +47,7 @@ public class CharacterGoapController : CharacterSystem
     }
 
     /// <summary>
-    /// Met à jour le monde intérieur du NPC pour le planner.
+    /// Updates the NPC's inner world for the planner.
     /// </summary>
     public void UpdateWorldState()
     {
@@ -74,7 +74,7 @@ public class CharacterGoapController : CharacterSystem
             }
         }
 
-        // 3. Connaissance locale (Sensors)
+        // 3. Local knowledge (sensors)
         _worldState["knowsVacantJob"] = CheckForJobKnowledge();
         _worldState["atBossLocation"] = CheckAtBossLocation();
     }
@@ -104,11 +104,11 @@ public class CharacterGoapController : CharacterSystem
         if (building == null || !building.HasOwner) return false;
 
         float dist = Vector3.Distance(_character.transform.position, building.Owner.transform.position);
-        return dist < 2.5f; // Distance d'interaction
+        return dist < 2.5f; // Interaction distance
     }
 
     /// <summary>
-    /// Tente de trouver un plan pour satisfaire le but le plus urgent.
+    /// Tries to find a plan to satisfy the most urgent goal.
     /// Throttled by <see cref="_planReevaluationInterval"/>: if a previous attempt ran too recently,
     /// the call is a no-op. Returns whether a current plan is still active.
     /// </summary>
@@ -148,10 +148,10 @@ public class CharacterGoapController : CharacterSystem
             }
         }
 
-        // Trier par priorité et tenter de planifier
+        // Sort by priority and try to plan
         potentialGoals = potentialGoals.OrderByDescending(g => g.Priority).ToList();
 
-        // Récupérer les actions disponibles pour la "Vie"
+        // Fetch the actions available for "Life"
         var availableActions = GetLifeActions();
 
         foreach (var goal in potentialGoals)
@@ -194,7 +194,7 @@ public class CharacterGoapController : CharacterSystem
     }
 
     /// <summary>
-    /// Exécution tick par tick. Appelé par le Behaviour Tree node.
+    /// Tick-by-tick execution. Called by the Behaviour Tree node.
     /// </summary>
     public void ExecutePlan()
     {

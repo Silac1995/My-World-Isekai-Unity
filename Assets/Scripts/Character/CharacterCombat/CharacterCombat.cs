@@ -117,7 +117,7 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
             }
         }
 
-        // Initialisation par défaut si possible
+        // Default initialization when possible
         if (_currentCombatStyleExpertise == null || _currentCombatStyleExpertise.Style == null)
         {
             _currentCombatStyleExpertise = _knownStyles.FirstOrDefault(s => s.WeaponType == WeaponType.Barehands);
@@ -161,7 +161,7 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
             if (Time.time - _lastCombatActionTime > COMBAT_MODE_TIMEOUT)
             {
                 ChangeCombatMode(false);
-                Debug.Log("<color=cyan>[Combat]</color> Mode Combat expire : DESACTIVE");
+                Debug.Log("<color=cyan>[Combat]</color> Combat Mode expired: DISABLED");
             }
         }
     }
@@ -179,7 +179,7 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
 
         if (!enabled && _character.Stats != null && _character.Stats.Initiative != null)
         {
-            // Remplir l'initiative pour être prêt au prochain combat même en cas de raté
+            // Refill initiative to be ready for the next combat even on a miss
             _character.Stats.Initiative.IncreaseCurrentAmount(_character.Stats.Initiative.CurrentValue);
         }
     }
@@ -396,7 +396,7 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
     {
         WeaponType type = (weapon != null && weapon.ItemSO is WeaponSO weaponSO) ? weaponSO.WeaponType : WeaponType.Barehands;
         
-        // Trouver le meilleur style pour cette arme
+        // Find the best style for this weapon
         _currentCombatStyleExpertise = _knownStyles.FirstOrDefault(s => s.WeaponType == type);
         
         if (_currentCombatStyleExpertise == null)
@@ -416,13 +416,13 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
 
         float speedValue = _character.Stats.Speed != null ? _character.Stats.Speed.Value : 0f;
         
-        // 1. Calcul de base
+        // 1. Base computation
         float rawGain = _baseInitiativePerTick + (speedValue * _speedMultiplierInitiative);
-        
-        // 2. On plafonne à 2.0 (On prend la valeur la plus petite entre le calcul et 2.0)
+
+        // 2. Cap at 2.0 (we take the smaller of the computed value and 2.0)
         float cappedGain = Mathf.Min(rawGain, 2.0f);
-        
-        // 3. On applique le Random Range sur la valeur plafonnée
+
+        // 3. Apply Random Range on the capped value
         float totalGain = cappedGain * UnityEngine.Random.Range(0.7f, 1.3f);
         
         bool wasReady = _character.Stats.Initiative.IsReady();
@@ -452,10 +452,10 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
         if (friend == null || !friend.CharacterCombat.IsInBattle) return;
         if (IsInBattle) return;
 
-        // --- SÉCURITÉ : On ne rejoint que si on est LIBRE ---
+        // --- SAFETY: We only join if we are FREE ---
         if (!_character.IsFree())
         {
-            Debug.Log($"<color=orange>[Combat]</color> {_character.CharacterName} est trop occupé pour rejoindre son ami {friend.CharacterName}.");
+            Debug.Log($"<color=orange>[Combat]</color> {_character.CharacterName} is too busy to join their ally {friend.CharacterName}.");
             return;
         }
 
@@ -476,7 +476,7 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
 
         _lastCombatActionTime = Time.time;
 
-        // Le timeout de 7 secondes dans Update() s'en chargera naturellement.
+        // The 7-second timeout in Update() will handle this naturally.
 
         OnBattleLeft?.Invoke();
     }
@@ -487,8 +487,8 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
         
         if (!IsServer) return; // ONLY SERVER CAN SPAWN/MANAGE BATTLES
 
-        // --- PÉNALITÉ DE RELATION ---
-        // On baisse la relation des deux côtés de 10 points car un combat commence
+        // --- RELATIONSHIP PENALTY ---
+        // We lower the relation on both sides by 10 points because a combat is starting
         if (_character.CharacterRelation != null)
             _character.CharacterRelation.UpdateRelation(target, -10);
         
@@ -505,8 +505,8 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
             return;
         }
 
-        // --- NOUVEAU : VÉRIFICATION DYNAMIQUE DE FUSION (BASÉE PHYSIQUE) ---
-        // On cherche un collider "BattleZone" à proximité (ex: 25m) pour éviter les registres statiques globaux
+        // --- NEW: DYNAMIC MERGE CHECK (PHYSICS-BASED) ---
+        // We look for a nearby "BattleZone" collider (e.g., 25m) to avoid global static registries
         BattleManager nearbyBattle = null;
         Character connectionFound = null;
         bool initiatorHasLink = false;
@@ -528,7 +528,7 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
 
         foreach (var battle in detectedBattles)
         {
-            // On vérifie si l'initiateur a un lien
+            // We check whether the initiator has a link
             foreach (var p in battle.BattleTeams.SelectMany(t => t.CharacterList))
             {
                 bool isFriend = _character.CharacterRelation != null && _character.CharacterRelation.IsFriend(p);
@@ -546,7 +546,7 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
             }
             if (nearbyBattle != null) break;
 
-            // On vérifie si la cible a un lien
+            // We check whether the target has a link
             foreach (var p in battle.BattleTeams.SelectMany(t => t.CharacterList))
             {
                 bool isFriend = target.CharacterRelation != null && target.CharacterRelation.IsFriend(p);
@@ -558,7 +558,7 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
                 {
                     nearbyBattle = battle;
                     connectionFound = p;
-                    initiatorHasLink = false; // Le lien appartient à la cible
+                    initiatorHasLink = false; // The link belongs to the target
                     break;
                 }
             }
@@ -567,17 +567,17 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
 
         if (nearbyBattle != null)
         {
-            Debug.Log($"<color=orange>[Battle]</color> Fusion : {_character.CharacterName} et {target.CharacterName} rejoignent le combat de {connectionFound.CharacterName}");
-            
+            Debug.Log($"<color=orange>[Battle]</color> Merge: {_character.CharacterName} and {target.CharacterName} join the combat of {connectionFound.CharacterName}");
+
             if (initiatorHasLink)
             {
-                // L'initiateur rejoint son ami, la cible rejoint en face
+                // The initiator joins their ally, the target joins on the opposite side
                 nearbyBattle.AddParticipant(_character, connectionFound, asAlly: true);
                 nearbyBattle.AddParticipant(target, _character, asAlly: false);
             }
             else
             {
-                // La cible rejoint son ami, l'initiateur rejoint en face
+                // The target joins their ally, the initiator joins on the opposite side
                 nearbyBattle.AddParticipant(target, connectionFound, asAlly: true);
                 nearbyBattle.AddParticipant(_character, target, asAlly: false);
             }
@@ -595,7 +595,7 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
 
         if (manager == null)
         {
-            Debug.LogError("<color=red>[Battle]</color> Le prefab n'a pas le script BattleManager !");
+            Debug.LogError("<color=red>[Battle]</color> The prefab does not have the BattleManager script!");
             Destroy(instanceGo);
             return;
         }
@@ -622,8 +622,8 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
     }
 
     /// <summary>
-    /// Désactive uniquement la posture de combat (animator) sans quitter le BattleManager.
-    /// Utilisé pour éviter les glitches visuels lors de la mort/inconscience.
+    /// Disables only the combat stance (animator) without leaving the BattleManager.
+    /// Used to avoid visual glitches during death/unconsciousness.
     /// </summary>
     public void ExitCombatMode()
     {
@@ -638,7 +638,7 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
     {
         if (_currentCombatStyleExpertise == null || _currentCombatStyleExpertise.Style == null) return;
         
-        // Seuls les styles melee ont un hitbox prefab
+        // Only melee styles have a hitbox prefab
         if (_currentCombatStyleExpertise.Style is not MeleeCombatStyleSO meleeStyle) return;
 
         // If we are Owner but not Server, we tell the Server that the impact frame has been reached 
@@ -673,13 +673,13 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
         GameObject prefab = meleeStyle.HitboxPrefab;
         if (prefab == null) return;
 
-        // Positionnement à l'extrémité visuelle selon la direction et centré en Y
+        // Place at the visual extremity along the facing direction, centered on Y
         Vector3 spawnPos = _character.transform.position;
         if (_character.CharacterVisual != null)
         {
             Vector3 facingDir = _character.CharacterVisual.IsFacingRight ? Vector3.right : Vector3.left;
             spawnPos = _character.CharacterVisual.GetVisualExtremity(facingDir);
-            spawnPos.z = _character.transform.position.z; // Rester sur le même plan Z
+            spawnPos.z = _character.transform.position.z; // Stay on the same Z plane
         }
 
         _activeCombatStyleInstance = Instantiate(prefab, spawnPos, Quaternion.identity, _character.transform);
@@ -729,7 +729,7 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
         {
             var animHandler = _character.CharacterVisual.CharacterAnimator;
 
-            // On n'applique le contrôleur de combat QUE si on est en mode combat
+            // We only apply the combat controller IF we are in combat mode
             if (_isCombatMode && _currentCombatStyleExpertise != null)
             {
                 var controller = _currentCombatStyleExpertise.GetCurrentAnimator();
@@ -742,7 +742,7 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
             }
             else
             {
-                // Sinon on s'assure d'être en mode civil
+                // Otherwise we ensure we are in civil mode
                 if (animHandler.CivilAnimatorController != null)
                 {
                     animHandler.Animator.runtimeAnimatorController = animHandler.CivilAnimatorController;

@@ -14,15 +14,15 @@ public class TransportOrder : MWI.Quests.IQuest
     public CommercialBuilding Source { get; private set; }
     public CommercialBuilding Destination { get; private set; }
 
-    // Quantité déjà livrée par les transporteurs
+    // Quantity already delivered by the transporters
     public int DeliveredQuantity { get; private set; }
 
-    // Quantité actuellement dans les sacs/mains des transporteurs
+    // Quantity currently in the transporters' bags/hands
     public int InTransitQuantity { get; private set; }
 
     public bool IsCompleted => DeliveredQuantity >= Quantity;
 
-    // Indique si la commande a été officiellement acceptée par le fournisseur via interaction
+    // Indicates whether the order has been officially accepted by the supplier through interaction
     public bool IsPlaced { get; set; } = false;
 
     // The physical ItemInstances explicitly reserved for this order from the source building's inventory
@@ -42,8 +42,8 @@ public class TransportOrder : MWI.Quests.IQuest
     }
 
     /// <summary>
-    /// Enregistre une livraison partielle ou totale.
-    /// Retourne vrai si le transport global est désormais complété.
+    /// Records a partial or full delivery.
+    /// Returns true if the overall transport is now complete.
     /// </summary>
     public bool RecordDelivery(int amount)
     {

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using Unity.Netcode;
 using MWI.UI.Notifications;
 
-public class CharacterCombatLevel : CharacterSystem
+public class CharacterCombatLevel : CharacterSystem, ICharacterSaveData<CombatLevelSaveData>
 {
     [Header("Progression Settings")]
     [SerializeField] private int _statPointsPerLevel = 5;
@@ -222,4 +222,55 @@ public class CharacterCombatLevel : CharacterSystem
         newLevel.LevelIndex = CurrentLevel + 1;
         _levelHistory.Add(newLevel);
     }
+
+    // ─── ICharacterSaveData Implementation ──────────────────────────
+    //
+    // Priority 15 — runs after CharacterStats (10) so the stats subsystem is in
+    // place, and before CharacterSkills (20) which can read the restored level.
+    // Stat-point bonuses awarded on past level-ups are NOT re-applied here:
+    // CharacterStats persists the cumulative base values directly, so re-applying
+    // would double-count.
+
+    public string SaveKey => "CharacterCombatLevel";
+    public int LoadPriority => 15;
+
+    public CombatLevelSaveData Serialize()
+    {
+        return new CombatLevelSaveData
+        {
+            currentExperience = _currentExperience,
+            unassignedStatPoints = _unassignedStatPoints,
+            levelHistory = new System.Collections.Generic.List<CombatLevelEntry>(_levelHistory)
+        };
+    }
+
+    public void Deserialize(CombatLevelSaveData data)
+    {
+        if (data == null) return;
+
+        try
+        {
+            _currentExperience = data.currentExperience;
+            _unassignedStatPoints = data.unassignedStatPoints;
+
+            _levelHistory = data.levelHistory != null
+                ? new System.Collections.Generic.List<CombatLevelEntry>(data.levelHistory)
+                : new System.Collections.Generic.List<CombatLevelEntry>();
+
+            // Guarantee the invariant CurrentLevel >= 1 even if the save was empty/corrupt.
+            if (_levelHistory.Count == 0)
+                _levelHistory.Add(new CombatLevelEntry { LevelIndex = 1 });
+
+            OnLevelChanged?.Invoke();
+            OnExperienceChanged?.Invoke();
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogException(ex);
+            Debug.LogError($"<color=red>[CharacterCombatLevel]</color> Failed to deserialize save data on {gameObject.name}: {ex.Message}");
+        }
+    }
+
+    string ICharacterSaveData.SerializeToJson() => CharacterSaveDataHelper.SerializeToJson(this);
+    void ICharacterSaveData.DeserializeFromJson(string json) => CharacterSaveDataHelper.DeserializeFromJson(this, json);
 }

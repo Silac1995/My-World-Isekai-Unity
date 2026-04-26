@@ -1,9 +1,8 @@
 using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
 
 /// <summary>
-/// Entrée de catalogue du shop : un item et sa quantité cible en stock.
+/// Shop catalog entry: an item and its target stock quantity.
 /// </summary>
 [System.Serializable]
 public struct ShopItemEntry
@@ -13,9 +12,9 @@ public struct ShopItemEntry
 }
 
 /// <summary>
-/// Bâtiment de type Shop.
-/// Nécessite un Vendeur pour vendre ses produits aux clients et un LogisticsManager pour le réapprovisionner.
-/// Gère également la file d'attente (Queue) des clients.
+/// Shop-type building.
+/// Requires a Vendor to sell products to customers and a LogisticsManager to restock.
+/// Also manages the customer queue.
 ///
 /// Implements <see cref="IStockProvider"/> so <see cref="BuildingLogisticsManager.CheckStockTargets"/>
 /// can drive shelf restocking through the same unified path as <see cref="CraftingBuilding"/>
@@ -45,33 +44,53 @@ public class ShopBuilding : CommercialBuilding, IStockProvider
     
     public Transform VendorPoint => _vendorPoint;
     
-    // File d'attente des clients
+    // Customer queue
     private Queue<Character> _customerQueue = new Queue<Character>();
 
-    /// <summary>Liste des entrées de catalogue (ItemSO + MaxStock).</summary>
+    /// <summary>List of catalog entries (ItemSO + MaxStock).</summary>
     public IReadOnlyList<ShopItemEntry> ShopEntries => _itemsToSell;
 
-    /// <summary>Liste des ItemSO à vendre (raccourci pour la compatibilité).</summary>
-    public IReadOnlyList<ItemSO> ItemsToSell => _itemsToSell.Select(e => e.Item).ToList();
+    // Cached projection of _itemsToSell → ItemSO list. _itemsToSell is inspector-authored
+    // and not mutated at runtime; the cache stays valid for the lifetime of the building.
+    // Pre-refactor this allocated a fresh List on every property access (perf, see
+    // wiki/projects/optimisation-backlog.md entry #2 / G).
+    private List<ItemSO> _cachedItemsToSell;
+
+    /// <summary>List of ItemSOs to sell (shortcut for compatibility).</summary>
+    public IReadOnlyList<ItemSO> ItemsToSell
+    {
+        get
+        {
+            if (_cachedItemsToSell == null)
+            {
+                _cachedItemsToSell = new List<ItemSO>(_itemsToSell.Count);
+                foreach (var entry in _itemsToSell)
+                {
+                    if (entry.Item != null) _cachedItemsToSell.Add(entry.Item);
+                }
+            }
+            return _cachedItemsToSell;
+        }
+    }
 
     public int CustomersInQueue => _customerQueue.Count;
 
     protected override void InitializeJobs()
     {
-        // Le shop a besoin d'un vendeur au comptoir
+        // The shop needs a vendor at the counter.
         _jobs.Add(new JobVendor());
-        
-        // Et d'un manager logistique pour passer les commandes de réapprovisionnement
+
+        // And a logistics manager to place restocking orders.
         _jobs.Add(new JobLogisticsManager("Shop Manager"));
 
-        Debug.Log($"<color=magenta>[Shop]</color> {buildingName} initialisé avec 1 Vendeur et 1 LogisticsManager.");
+        Debug.Log($"<color=magenta>[Shop]</color> {buildingName} initialized with 1 Vendor and 1 LogisticsManager.");
     }
 
 
 
     /// <summary>
-    /// Seul le Vendeur va à son poste fixe (_vendorPoint).
-    /// Les autres employés (Manager, etc.) utilisent le comportement par défaut (zone du bâtiment).
+    /// Only the Vendor goes to their fixed station (_vendorPoint).
+    /// Other employees (Manager, etc.) use the default behavior (building zone).
     /// </summary>
     public override Vector3 GetWorkPosition(Character worker)
     {
@@ -87,7 +106,7 @@ public class ShopBuilding : CommercialBuilding, IStockProvider
     }
 
     /// <summary>
-    /// Récupère le gestionnaire logistique du shop pour y déposer/créer des BuyOrders.
+    /// Gets the shop's logistics manager so BuyOrders can be deposited/created on it.
     /// </summary>
     public JobLogisticsManager GetLogisticsManager()
     {
@@ -99,7 +118,7 @@ public class ShopBuilding : CommercialBuilding, IStockProvider
     }
 
     /// <summary>
-    /// Récupère le vendeur de ce shop.
+    /// Gets the vendor of this shop.
     /// </summary>
     public JobVendor GetVendor()
     {
@@ -111,7 +130,7 @@ public class ShopBuilding : CommercialBuilding, IStockProvider
     }
 
     /// <summary>
-    /// Ajoute physiquement un objet à l'inventaire du magasin (ex: par un Transporter).
+    /// Physically adds an item to the shop's inventory (e.g. by a Transporter).
     /// Override (not shadow) the base virtual so the base's network-count mirror stays in sync —
     /// otherwise items added through a <see cref="ShopBuilding"/>-typed reference would never
     /// appear in <see cref="CommercialBuilding.GetInventoryCountsByItemSO"/> on clients, breaking
@@ -125,7 +144,7 @@ public class ShopBuilding : CommercialBuilding, IStockProvider
     }
 
     /// <summary>
-    /// Retire et retourne un objet de l'inventaire lors d'une vente. Routes through
+    /// Removes and returns an item from the inventory during a sale. Routes through
     /// <see cref="CommercialBuilding.RemoveExactItemFromInventory"/> to keep the network-count
     /// mirror in sync — same reason as <see cref="AddToInventory"/>.
     /// </summary>
@@ -144,7 +163,7 @@ public class ShopBuilding : CommercialBuilding, IStockProvider
     }
 
     /// <summary>
-    /// Vérifie si l'inventaire contient au moins un exemplaire de l'objet demandé.
+    /// Checks whether the inventory contains at least one copy of the requested item.
     /// Routes through <see cref="CommercialBuilding.GetItemCount"/> so it returns the correct
     /// answer on both server and client (the underlying NetworkList is replicated).
     /// </summary>
@@ -154,7 +173,7 @@ public class ShopBuilding : CommercialBuilding, IStockProvider
     }
 
     /// <summary>
-    /// Retourne le nombre d'exemplaires de cet item dans l'inventaire. Same client-safe path
+    /// Returns the number of copies of this item in the inventory. Same client-safe path
     /// as <see cref="HasItemInStock"/>.
     /// </summary>
     public int GetStockCount(ItemSO item)
@@ -163,7 +182,7 @@ public class ShopBuilding : CommercialBuilding, IStockProvider
     }
 
     /// <summary>
-    /// Vérifie si le stock actuel est inférieur au maximum souhaité pour cet item.
+    /// Checks whether the current stock is below the desired maximum for this item.
     /// </summary>
     public bool NeedsRestock(ItemSO item, int maxStock)
     {
@@ -171,23 +190,23 @@ public class ShopBuilding : CommercialBuilding, IStockProvider
     }
 
     // ==========================================
-    // GESTION DE LA FILE D'ATTENTE (QUEUE)
+    // CUSTOMER QUEUE MANAGEMENT
     // ==========================================
 
     /// <summary>
-    /// Un client s'ajoute à la file d'attente du magasin.
+    /// A customer joins the shop's queue.
     /// </summary>
     public void JoinQueue(Character customer)
     {
         if (customer != null && !_customerQueue.Contains(customer))
         {
             _customerQueue.Enqueue(customer);
-            Debug.Log($"<color=magenta>[Shop]</color> {customer.CharacterName} a rejoint la file d'attente de {buildingName}. (En attente : {_customerQueue.Count})");
+            Debug.Log($"<color=magenta>[Shop]</color> {customer.CharacterName} joined the queue at {buildingName}. (Waiting: {_customerQueue.Count})");
         }
     }
 
     /// <summary>
-    /// Appelé par un Vendeur qui est prêt à servir le prochain client.
+    /// Called by a Vendor who is ready to serve the next customer.
     /// </summary>
     public Character GetNextCustomer()
     {
@@ -199,17 +218,17 @@ public class ShopBuilding : CommercialBuilding, IStockProvider
     }
 
     /// <summary>
-    /// Appelé lorsqu'un Vendeur termine son service. Si aucun autre vendeur n'est dispo,
-    /// la file d'attente est entièrement vidée et les clients rentrent chez eux.
+    /// Called when a Vendor ends their shift. If no other vendor is available,
+    /// the queue is fully cleared and customers go home.
     /// </summary>
     public void ClearQueue()
     {
         if (_customerQueue.Count > 0)
         {
-            Debug.Log($"<color=magenta>[Shop]</color> Le magasin {buildingName} ferme. {_customerQueue.Count} clients sont priés de rentrer chez eux.");
-            
-            // Pour tous les clients dans la file, on pourrait déclencher un event ou un changement de statut
-            // pour qu'ils sachent qu'ils doivent arrêter de patienter (WaitInQueueBehaviour gérera l'éjection).
+            Debug.Log($"<color=magenta>[Shop]</color> Shop {buildingName} is closing. {_customerQueue.Count} customers are asked to go home.");
+
+            // For every customer in the queue we could fire an event or status change so they know
+            // they should stop waiting (WaitInQueueBehaviour will handle the eviction).
             _customerQueue.Clear();
         }
     }

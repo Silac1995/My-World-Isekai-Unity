@@ -4,9 +4,9 @@ using UnityEngine.AI;
 namespace MWI.AI
 {
     /// <summary>
-    /// Action de combat native pour le Behaviour Tree.
-    /// Remplace "AttackTargetBehaviour". Gère le déplacement vers la cible
-    /// et déclenche les attaques via CharacterCombat en tenant compte de la portée.
+    /// Native combat action for the Behaviour Tree.
+    /// Replaces "AttackTargetBehaviour". Handles movement toward the target
+    /// and triggers attacks via CharacterCombat, taking range into account.
     /// </summary>
     public class BTAction_AttackTarget : BTNode
     {
@@ -27,10 +27,10 @@ namespace MWI.AI
                 return BTNodeStatus.Failure;
             }
 
-            // Récupérer la cible depuis le Blackboard
+            // Retrieve the target from the Blackboard
             Character target = bb.Get<Character>(Blackboard.KEY_COMBAT_TARGET);
-            
-            // Si pas de cible ou cible morte/invalide, échec
+
+            // No target, or the target is dead/invalid, fail
             if (target == null || !target.IsAlive())
             {
                 self.CharacterCombat.LeaveBattle();
@@ -43,29 +43,29 @@ namespace MWI.AI
 
             float distance = Vector3.Distance(self.transform.position, target.transform.position);
 
-            // TODO: Remplacer par self.CharacterCombat.AttackRange quand ce sera implémenté
-            float attackRange = 1.5f; 
+            // TODO: Replace with self.CharacterCombat.AttackRange once implemented
+            float attackRange = 1.5f;
 
             if (distance <= attackRange)
             {
-                // A portée : arrêter de bouger et attaquer
+                // In range: stop moving and attack
                 movement.Stop();
                 self.CharacterVisual?.FaceCharacter(target);
-                
-                // Si le délai d'attaque est passé, on frappe
+
+                // If the attack cooldown has elapsed, strike
                 if (self.CharacterCombat.IsReadyToAct)
                 {
                     self.CharacterCombat.Attack(target);
                 }
-                
+
                 bb.Set(Blackboard.KEY_COMBAT_TARGET, target);
-                return BTNodeStatus.Running; // Toujours en combat
+                return BTNodeStatus.Running; // Still in combat
             }
             else
             {
-                // Pas à portée : se rapprocher en évitant le spam NavMesh
-                bool hasPathFailed = (UnityEngine.Time.unscaledTime - _lastRouteRequestTime > 0.2f) 
-                                     && (movement.PathStatus == UnityEngine.AI.NavMeshPathStatus.PathInvalid 
+                // Not in range: close in while avoiding NavMesh spam
+                bool hasPathFailed = (UnityEngine.Time.unscaledTime - _lastRouteRequestTime > 0.2f)
+                                     && (movement.PathStatus == UnityEngine.AI.NavMeshPathStatus.PathInvalid
                                      || (!movement.HasPath && !movement.PathPending));
 
                 if (Vector3.Distance(_lastTargetPos, target.transform.position) > 1f || hasPathFailed)
@@ -74,9 +74,9 @@ namespace MWI.AI
                     _lastTargetPos = target.transform.position;
                     _lastRouteRequestTime = UnityEngine.Time.unscaledTime;
                 }
-                
+
                 bb.Set(Blackboard.KEY_COMBAT_TARGET, target);
-                return BTNodeStatus.Running; // En approche
+                return BTNodeStatus.Running; // Approaching
             }
         }
 

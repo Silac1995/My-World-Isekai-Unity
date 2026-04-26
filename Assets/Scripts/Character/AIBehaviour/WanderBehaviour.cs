@@ -12,13 +12,13 @@ public class WanderBehaviour : IAIBehaviour
     private Coroutine _currentWaitCoroutine;
     private bool _isFinished = false;
 
-    // --- DETECTION DE BORDURE (EDGE AVOIDANCE) ---
+    // --- EDGE DETECTION (EDGE AVOIDANCE) ---
     private float _edgePressureTimer = 0f;
-    private const float MAX_EDGE_PRESSURE_TIME = 3f; // Temps max à raser un mur
-    private const float EDGE_DETECTION_DIST = 1.5f;  // Distance pour détecter un bord
-    private const float FORCE_NEW_DEST_DIST = 0.5f;  // Distance pour force un changement si bloqué
+    private const float MAX_EDGE_PRESSURE_TIME = 3f; // Max time hugging a wall
+    private const float EDGE_DETECTION_DIST = 1.5f;  // Distance to detect an edge
+    private const float FORCE_NEW_DEST_DIST = 0.5f;  // Distance to force a change when stuck
 
-    // --- REPRISE DECTIVITES (Cours, Jobs, etc.) ---
+    // --- ACTIVITY RESUMPTION (Classes, Jobs, etc.) ---
     private float _periodicCheckTimer = 0f;
     private const float PERIODIC_CHECK_RATE = 10f;
 
@@ -45,7 +45,7 @@ public class WanderBehaviour : IAIBehaviour
         var movement = selfCharacter.CharacterMovement;
         if (movement == null || _isFinished) return;
 
-        // 0. VERIFICATION DES ACTIVITÉS INTERROMPUES (Reprise si interrompu par combat/dialogue)
+        // 0. CHECK INTERRUPTED ACTIVITIES (resume if interrupted by combat/dialogue)
         _periodicCheckTimer += Time.deltaTime;
         if (_periodicCheckTimer >= PERIODIC_CHECK_RATE)
         {
@@ -55,15 +55,15 @@ public class WanderBehaviour : IAIBehaviour
 
         if (_isWaiting) return;
 
-        // 1. ARRIVÉE NORMALE
+        // 1. NORMAL ARRIVAL
         if (!movement.PathPending && (!movement.HasPath || movement.RemainingDistance <= movement.StoppingDistance + 0.5f))
         {
             StartWaitCoroutine(selfCharacter);
             return;
         }
 
-        // 2. DÉTECTION DE "PROXIMITÉ EDGE" (Anti-glissade)
-        // Si on est très près d'un bord et qu'on bouge peu (vitesse faible ou collision répétée)
+        // 2. "EDGE PROXIMITY" DETECTION (anti-sliding)
+        // If we're very close to an edge and barely moving (low speed or repeated collision)
         if (NavMesh.FindClosestEdge(selfCharacter.transform.position, out NavMeshHit hit, NavMesh.AllAreas))
         {
             if (hit.distance < FORCE_NEW_DEST_DIST)
@@ -71,7 +71,7 @@ public class WanderBehaviour : IAIBehaviour
                 _edgePressureTimer += Time.deltaTime;
                 if (_edgePressureTimer > MAX_EDGE_PRESSURE_TIME)
                 {
-                    Debug.Log($"<color=orange>[Wander]</color> {selfCharacter.name} semble longer un bord. Changement de direction forcé.");
+                    Debug.Log($"<color=orange>[Wander]</color> {selfCharacter.name} seems to be hugging an edge. Forced direction change.");
                     StartWaitCoroutine(selfCharacter);
                 }
             }
@@ -114,7 +114,7 @@ public class WanderBehaviour : IAIBehaviour
         }
         else
         {
-            // --- LOGIQUE DE "REBOND" NATUREL (Existing logic) ---
+            // --- NATURAL "BOUNCE" LOGIC (existing logic) ---
             Vector3 finalDirectionBias = Vector3.zero;
 
             if (NavMesh.FindClosestEdge(self.transform.position, out NavMeshHit edgeHit, NavMesh.AllAreas))
@@ -174,13 +174,13 @@ public class WanderBehaviour : IAIBehaviour
     }
 
     /// <summary>
-    /// Vérifie si le personnage doit arrêter d'errer pour reprendre une activité plus prioritaire
-    /// qu'il a pu oublier suite à une interruption (combat, dialogue).
-    /// Retourne true si le Behaviour a été remplacé.
+    /// Checks whether the character should stop wandering to resume a higher-priority activity
+    /// they may have forgotten following an interruption (combat, dialogue).
+    /// Returns true if the Behaviour has been replaced.
     /// </summary>
     private bool TryResumeActivity(Character self)
     {
-        // 1. Mentorship / Cours en direct
+        // 1. Mentorship / Class in progress
         var mentorship = self.CharacterMentorship;
         if (mentorship != null && mentorship.CurrentMentor != null)
         {

@@ -1,8 +1,8 @@
 using UnityEngine;
 
 /// <summary>
-/// Arme à distance avec chargeur (ex: pistolet, arbalète).
-/// Nombre limité de munitions, nécessite un rechargement.
+/// Ranged weapon with a magazine (e.g. pistol, crossbow).
+/// Limited ammo count, requires reloading.
 /// </summary>
 [System.Serializable]
 public class MagazineWeaponInstance : RangedWeaponInstance
@@ -28,7 +28,7 @@ public class MagazineWeaponInstance : RangedWeaponInstance
     public override bool CanFire() => _currentAmmo > 0 && !_isReloading;
 
     /// <summary>
-    /// Consomme une munition. Retourne false si le chargeur est vide.
+    /// Consumes one ammo. Returns false if the magazine is empty.
     /// </summary>
     public bool ConsumeAmmo()
     {
@@ -38,7 +38,7 @@ public class MagazineWeaponInstance : RangedWeaponInstance
     }
 
     /// <summary>
-    /// Commence le rechargement.
+    /// Starts reloading.
     /// </summary>
     public void StartReload()
     {
@@ -46,7 +46,7 @@ public class MagazineWeaponInstance : RangedWeaponInstance
     }
 
     /// <summary>
-    /// Termine le rechargement (appelé après le timer de reload).
+    /// Finishes reloading (called after the reload timer expires).
     /// </summary>
     public void FinishReload()
     {

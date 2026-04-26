@@ -3,8 +3,8 @@ using UnityEngine;
 namespace MWI.AI
 {
     /// <summary>
-    /// Base class pour les Action nodes qui wrappent un IAIBehaviour existant.
-    /// Gère le lifecycle Act()/Exit() et traduit IsFinished en BTNodeStatus.
+    /// Base class for Action nodes that wrap an existing IAIBehaviour.
+    /// Handles the Act()/Exit() lifecycle and translates IsFinished into BTNodeStatus.
     /// </summary>
     public abstract class BTActionNode : BTNode
     {

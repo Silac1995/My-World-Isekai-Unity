@@ -7,7 +7,7 @@ using Unity.Collections;
 public class WorldItem : NetworkBehaviour
 {
     [Header("References")]
-    [SerializeField] private Transform _visualRoot; // Glisse l'objet "Visual" de ton prefab ici
+    [SerializeField] private Transform _visualRoot; // Drag the "Visual" object of your prefab here
     [SerializeField] private NavMeshObstacle _navMeshObstacle;
 
     [Header("Data")]
@@ -123,20 +123,20 @@ public class WorldItem : NetworkBehaviour
 
         if (_itemInstance != null && _itemInstance.ItemSO != null)
         {
-            // 1. Instanciation du visuel (le prefab de l'item)
+            // 1. Instantiate the visual (the item's prefab)
             GameObject prefabVisual = _itemInstance.ItemSO.ItemPrefab;
             if (prefabVisual != null)
             {
                 AttachVisualPrefab(prefabVisual);
             }
 
-            // 2. APPLICATION DES COULEURS ET LIBRARY
-            // On recupere le handler qui vient d'etre instancie dans le Visual
+            // 2. APPLY COLORS AND LIBRARY
+            // Grab the handler that was just instantiated inside the Visual
             WearableHandlerBase handler = GetComponentInChildren<WearableHandlerBase>();
 
             if (handler != null)
             {
-                // On utilise le handler pour appliquer les donnees de l'instance
+                // Use the handler to apply the instance data
                 handler.Initialize(_itemInstance.ItemSO.SpriteLibraryAsset);
                 handler.SetLibraryCategory(_itemInstance.ItemSO.CategoryName);
 
@@ -144,13 +144,13 @@ public class WorldItem : NetworkBehaviour
                 {
                     if (eq.HavePrimaryColor()) handler.SetPrimaryColor(eq.PrimaryColor);
                     if (eq.HaveSecondaryColor()) handler.SetSecondaryColor(eq.SecondaryColor);
-                    // Si tu as une couleur principale (Main)
-                    handler.SetMainColor(Color.white); // Ou eq.MainColor si tu l'as ajoutee
+                    // If you have a main color (Main)
+                    handler.SetMainColor(Color.white); // Or eq.MainColor if you have added it
                 }
             }
             else
             {
-                // Fallback : Si ce n'est pas un equipement avec handler (ex: une pomme)
+                // Fallback: if it's not an equipment with handler (e.g. an apple)
                 _itemInstance.InitializeWorldPrefab(gameObject);
             }
 
@@ -183,28 +183,28 @@ public class WorldItem : NetworkBehaviour
     {
         if (_visualRoot == null)
         {
-            Debug.LogError($"[WorldItem] _visualRoot (l'objet Visual) n'est pas assigne sur {gameObject.name}");
+            Debug.LogError($"[WorldItem] _visualRoot (the Visual object) is not assigned on {gameObject.name}");
             return;
         }
 
-        // Nettoyage des anciens visuels s'il y en a
+        // Clean up the previous visuals if any
         foreach (Transform child in _visualRoot)
         {
             Destroy(child.gameObject);
         }
 
-        // Instanciation du prefab d'entree a l'interieur du Visual
+        // Instantiate the input prefab inside the Visual
         GameObject go = Instantiate(prefab, _visualRoot);
 
-        // Reset des transforms pour etre sur qu'il soit bien centre
+        // Reset transforms to make sure it is properly centered
         go.transform.localPosition = Vector3.zero;
         go.transform.localRotation = Quaternion.identity;
         go.transform.localScale = Vector3.one;
     }
 
     /// <summary>
-    /// Instancie le WorldItem prefab de l'ItemSO et l'initialise dans le monde.
-    /// Utilisé quand on veut drop un item au sol (ex: deposit).
+    /// Instantiates the WorldItem prefab from the ItemSO and initializes it in the world.
+    /// Used when an item should be dropped on the ground (e.g. deposit).
     /// </summary>
     public static WorldItem SpawnWorldItem(ItemSO itemSO, Vector3 position, Quaternion? rotation = null)
     {
@@ -217,7 +217,7 @@ public class WorldItem : NetworkBehaviour
         GameObject prefab = itemSO.WorldItemPrefab;
         if (prefab == null)
         {
-            Debug.LogWarning($"<color=orange>[Gather]</color> Pas de WorldItemPrefab sur {itemSO.ItemName}, item non spawné.");
+            Debug.LogWarning($"<color=orange>[Gather]</color> No WorldItemPrefab on {itemSO.ItemName}, item not spawned.");
             return null;
         }
 
@@ -251,14 +251,14 @@ public class WorldItem : NetworkBehaviour
         }
         else
         {
-            Debug.LogError($"<color=red>[Gather]</color> Le prefab de {itemSO.ItemName} n'a pas de composant WorldItem !");
+            Debug.LogError($"<color=red>[Gather]</color> The prefab of {itemSO.ItemName} has no WorldItem component!");
             Object.Destroy(worldItemGo);
             return null;
         }
     }
 
     /// <summary>
-    /// Instancie le WorldItem prefab en utilisant une instance existante (pour préserver sa durabilité, couleurs, etc).
+    /// Instantiates the WorldItem prefab using an existing instance (to preserve durability, colors, etc.).
     /// </summary>
     public static WorldItem SpawnWorldItem(ItemInstance instance, Vector3 position, Quaternion? rotation = null)
     {
@@ -273,7 +273,7 @@ public class WorldItem : NetworkBehaviour
         GameObject prefab = instance.ItemSO.WorldItemPrefab;
         if (prefab == null)
         {
-            Debug.LogWarning($"<color=orange>[Gather]</color> Pas de WorldItemPrefab sur {instance.ItemSO.ItemName}, item non spawné.");
+            Debug.LogWarning($"<color=orange>[Gather]</color> No WorldItemPrefab on {instance.ItemSO.ItemName}, item not spawned.");
             return null;
         }
 
@@ -305,7 +305,7 @@ public class WorldItem : NetworkBehaviour
         }
         else
         {
-            Debug.LogError($"<color=red>[Gather]</color> Le prefab de {instance.ItemSO.ItemName} n'a pas de composant WorldItem !");
+            Debug.LogError($"<color=red>[Gather]</color> The prefab of {instance.ItemSO.ItemName} has no WorldItem component!");
             Object.Destroy(worldItemGo);
             return null;
         }

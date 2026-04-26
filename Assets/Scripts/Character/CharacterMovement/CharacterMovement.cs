@@ -27,9 +27,9 @@ public class CharacterMovement : CharacterSystem
     private bool _wasKinematic = false;
     private bool _wasAgentEnabled = false;
 
-    // Gestion de la stabilité du chemin
+    // Path stability handling
     private int _unstablePathFrames = 0;
-    private const int MAX_UNSTABLE_FRAMES = 30; // ~0.6s à 50fps
+    private const int MAX_UNSTABLE_FRAMES = 30; // ~0.6s at 50fps
 
     // Gestion Stuck Detection
     private float _stuckTimer = 0f;
@@ -43,7 +43,7 @@ public class CharacterMovement : CharacterSystem
     private Vector3 _smoothedEmpiricalVelocity;
     private const float VELOCITY_SMOOTH_SPEED = 8f;
 
-    // --- ENCAPSULATION DE L'AGENT ---
+    // --- AGENT ENCAPSULATION ---
     public NavMeshAgent Agent => _agent;
     public bool PathPending => _agent != null && _agent.pathPending;
     public bool HasPath => _agent != null && _agent.hasPath;
@@ -83,8 +83,8 @@ public class CharacterMovement : CharacterSystem
             
             if (_knockbackTimer <= 0)
             {
-                // Si le personnage est mort ou évanoui pendant le knockback, on ne restaure pas le mouvement NavMesh
-                // MAIS on finit de désactiver sa physique propre (qu'on avait laissée active pour le vol plané)
+                // If the character died or fell unconscious during the knockback, we don't restore the NavMesh movement
+                // BUT we finish disabling their own physics (which we had left active for the glide)
                 if (_character != null && !_character.IsAlive())
                 {
                     if (_rb != null) 
@@ -96,7 +96,7 @@ public class CharacterMovement : CharacterSystem
                     return;
                 }
 
-                // Fin du knockback normal : On restaure l'état
+                // End of normal knockback: We restore the state
                 // IMPORTANT: If the character has entered combat DURING the knockback window,
                 // the pre-knockback state (_wasAgentEnabled=false, _wasKinematic=false) is STALE.
                 // We must respect the current combat state instead of blindly restoring.
@@ -129,7 +129,7 @@ public class CharacterMovement : CharacterSystem
                 _unstablePathFrames++;
                 if (_unstablePathFrames > MAX_UNSTABLE_FRAMES)
                 {
-                    Debug.LogWarning($"<color=orange>[Movement]</color> {name} : Chemin instable prolongé. Reset.");
+                    Debug.LogWarning($"<color=orange>[Movement]</color> {name} : Prolonged unstable path. Reset.");
                     Stop();
                     _unstablePathFrames = 0;
                 }
@@ -179,7 +179,7 @@ public class CharacterMovement : CharacterSystem
                 _stuckTimer = 0f;
                 if (_isSliding)
                 {
-                    // Restauration de l'évitement si on le désactivait pour le slide
+                    // Restore avoidance if we had disabled it for the slide
                     _agent.obstacleAvoidanceType = ObstacleAvoidanceType.HighQualityObstacleAvoidance;
                     _isSliding = false;
                 }
@@ -297,7 +297,7 @@ public class CharacterMovement : CharacterSystem
         if (_agent == null || !_agent.isOnNavMesh) return;
 
         // --- SECURITE BORD DE NAVMESH ---
-        // Augmentation du rayon de recherche à 5m pour plus de souplesse
+        // Increased search radius to 5m for more flexibility
         if (NavMesh.SamplePosition(target, out NavMeshHit hit, 5.0f, NavMesh.AllAreas))
         {
             _isStopped = false;
@@ -308,8 +308,8 @@ public class CharacterMovement : CharacterSystem
         }
         else
         {
-            // On n'appelle plus Stop() ici pour éviter de tout bloquer si un clic/ordre est imprécis
-            Debug.LogWarning($"<color=yellow>[Movement]</color> Destination ignorée (hors NavMesh/Loin) pour {name} : {target}");
+            // We no longer call Stop() here to avoid blocking everything if a click/order is imprecise
+            Debug.LogWarning($"<color=yellow>[Movement]</color> Destination ignored (off NavMesh/Far) for {name} : {target}");
         }
     }
 
@@ -324,13 +324,13 @@ public class CharacterMovement : CharacterSystem
 
     public void Stop()
     {
-        // SÉCURITÉ : On ne réduit pas la vitesse à zéro si on est en plein knockback physique !
+        // SAFETY: We don't reduce the speed to zero if we are in the middle of a physical knockback!
         if (_knockbackTimer > 0) return;
 
         _isStopped = true;
         _unstablePathFrames = 0;
-        
-        // Sécurité : On s'assure d'effacer les inputs physiques résiduels quand on force l'arrêt
+
+        // Safety: We make sure to clear residual physical inputs when we force a stop
         _desiredDirection = Vector3.zero;
 
         if (_agent != null && _agent.isOnNavMesh)
@@ -338,8 +338,8 @@ public class CharacterMovement : CharacterSystem
             _agent.isStopped = true;
             _agent.ResetPath();
             _agent.velocity = Vector3.zero;
-            _agent.obstacleAvoidanceType = ObstacleAvoidanceType.NoObstacleAvoidance; // Empêche d'être poussé pendant les dialogues
-            _isSliding = true; // Empêche notre système de resetter l'évitement par accident
+            _agent.obstacleAvoidanceType = ObstacleAvoidanceType.NoObstacleAvoidance; // Prevents being pushed during dialogues
+            _isSliding = true; // Prevents our system from resetting avoidance by accident
         }
         if (_rb != null && !_rb.isKinematic) _rb.linearVelocity = Vector3.zero;
     }
@@ -361,7 +361,7 @@ public class CharacterMovement : CharacterSystem
         if (_agent != null && _agent.isOnNavMesh)
         {
             _agent.isStopped = false;
-            _agent.obstacleAvoidanceType = ObstacleAvoidanceType.HighQualityObstacleAvoidance; // Rétablit l'évitement
+            _agent.obstacleAvoidanceType = ObstacleAvoidanceType.HighQualityObstacleAvoidance; // Restores avoidance
             _isSliding = false;
         }
         _stuckTimer = 0f;
@@ -384,9 +384,9 @@ public class CharacterMovement : CharacterSystem
     {
         if (_rb == null) return;
 
-        // --- MÉMOIRE ROBUSTE ---
-        // On ne sauvegarde l'état que si on n'est pas déjà en knockback.
-        // Cela évite d'écraser l'état original lors d'un deuxième coup consécutif en plein vol.
+        // --- ROBUST MEMORY ---
+        // We only save the state if we are not already in knockback.
+        // This avoids overwriting the original state on a second consecutive hit mid-flight.
         if (_knockbackTimer <= 0)
         {
             _wasKinematic = _rb.isKinematic;
@@ -404,7 +404,7 @@ public class CharacterMovement : CharacterSystem
         {
             _agent.isStopped = true;
             _agent.ResetPath();
-            _agent.enabled = false; // Désactivation pour laisser la physique agir
+            _agent.enabled = false; // Disable to let the physics take over
         }
 
         _rb.isKinematic = false;

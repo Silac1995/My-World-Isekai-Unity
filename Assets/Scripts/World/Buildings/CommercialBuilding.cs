@@ -6,9 +6,9 @@ using UnityEngine;
 using MWI.WorldSystem;
 
 /// <summary>
-/// Classe abstraite pour les bâtiments commerciaux.
-/// Chaque type de building commercial (Bar, Shop...) hérite de cette classe
-/// et override InitializeJobs() pour définir ses postes de travail.
+/// Abstract base class for commercial buildings.
+/// Each commercial building type (Bar, Shop, ...) inherits from this class
+/// and overrides InitializeJobs() to define its work positions.
 /// </summary>
 [RequireComponent(typeof(BuildingTaskManager))]
 [RequireComponent(typeof(BuildingLogisticsManager))]
@@ -179,7 +179,7 @@ public abstract class CommercialBuilding : Building
     }
 
     /// <summary>
-    /// Le building est opérationnel si tous les jobs sont occupés par un worker et s'il a terminé sa construction.
+    /// The building is operational once all jobs are filled by a worker and construction is finished.
     /// </summary>
     public bool IsOperational => !IsUnderConstruction && _jobs.Count > 0 && _jobs.TrueForAll(j => j.IsAssigned);
 
@@ -480,13 +480,13 @@ public abstract class CommercialBuilding : Building
     }
 
     /// <summary>
-    /// Chaque sous-classe crée ses jobs spécifiques ici.
-    /// Ex: BarBuilding crée un JobBarman + des JobServer.
+    /// Each subclass creates its own specific jobs here.
+    /// e.g. BarBuilding creates one JobBarman + several JobServer.
     /// </summary>
     protected abstract void InitializeJobs();
 
     /// <summary>
-    /// Assigne un worker à un job spécifique dans ce building. Server-only —
+    /// Assigns a worker to a specific job in this building. Server-only —
     /// writes to the replicated <see cref="_jobWorkerIds"/> list so clients mirror
     /// the change into their local Job._worker via the OnListChanged callback.
     /// </summary>
@@ -617,7 +617,7 @@ public abstract class CommercialBuilding : Building
     }
 
     /// <summary>
-    /// Trouve le premier job disponible (non occupé) d'un type donné.
+    /// Finds the first available (unassigned) job of a given type.
     /// </summary>
     public T FindAvailableJob<T>() where T : Job
     {
@@ -630,7 +630,7 @@ public abstract class CommercialBuilding : Building
     }
 
     /// <summary>
-    /// Récupère tous les jobs d'un type donné.
+    /// Returns all jobs of a given type.
     /// </summary>
     public IEnumerable<T> GetJobsOfType<T>() where T : Job
     {
@@ -638,8 +638,8 @@ public abstract class CommercialBuilding : Building
     }
 
     /// <summary>
-    /// Fait travailler tous les employés assignés.
-    /// Appelé régulièrement (par le BuildingManager ou par Update).
+    /// Drives all assigned employees through one work tick.
+    /// Called regularly (by the BuildingManager or by Update).
     /// </summary>
     public void UpdateWorkCycle()
     {
@@ -700,7 +700,7 @@ public abstract class CommercialBuilding : Building
             _ownerCommunity = null;
         }
 
-        Debug.Log($"<color=green>[Building]</color> {newOwner?.CharacterName} est propriétaire de {buildingName}.");
+        Debug.Log($"<color=green>[Building]</color> {newOwner?.CharacterName} now owns {buildingName}.");
 
         // Restore path passes autoAssignJob=false because the saved Employees list
         // already carries the boss's actual job (avoids the auto-pick stealing a slot
@@ -709,23 +709,23 @@ public abstract class CommercialBuilding : Building
 
         if (ownerJob == null)
         {
-            // Y a-t-il DÉJÀ quelqu'un qui est assigné (occupé) à un JobLogisticsManager dans ce building ?
+            // Is there ALREADY someone assigned to a JobLogisticsManager in this building?
             bool hasActiveLogisticsManager = _jobs.OfType<JobLogisticsManager>().Any(j => j.IsAssigned);
 
             if (!hasActiveLogisticsManager)
             {
-                // S'il n'y a personne pour faire la logistique, le boss DOIT prendre ce poste
+                // If no one is doing logistics, the boss MUST take that position.
                 ownerJob = _jobs.OfType<JobLogisticsManager>().FirstOrDefault();
             }
 
-            // Si vraiment il y a déjà un logisticien (ou si le bâtiment n'en a pas du tout), on prend un autre poste libre
+            // If a logistics manager already exists (or the building has none at all), grab any free position.
             if (ownerJob == null)
             {
                 ownerJob = GetAvailableJobs().FirstOrDefault();
             }
         }
 
-        // Le boss peut aussi prendre un job dans son building
+        // The boss can also take a job in their own building.
         if (ownerJob != null && newOwner != null)
         {
             var charJob = newOwner.CharacterJob;
@@ -931,48 +931,48 @@ public abstract class CommercialBuilding : Building
     }
 
     /// <summary>
-    /// Un personnage demande un job au boss de ce building (ou au leader de la communauté).
-    /// Retourne true si l'embauche est acceptée.
+    /// A character asks the boss of this building (or the community leader) for a job.
+    /// Returns true if the hire is approved.
     /// </summary>
     public bool AskForJob(Character applicant, Job job)
     {
         if (applicant == null || job == null) return false;
 
-        // Il faut un boss pour embaucher (boss direct ou leader de communauté)
+        // A boss is required to hire (direct boss or community leader).
         if (!HasOwner && !HasCommunityLeader())
         {
-            Debug.Log($"<color=red>[Building]</color> {buildingName} n'a pas de boss ni de leader de communauté. Personne ne peut embaucher.");
+            Debug.Log($"<color=red>[Building]</color> {buildingName} has no boss or community leader. Nobody can hire here.");
             return false;
         }
 
-        // Le job doit exister dans ce building
+        // The job must exist in this building.
         if (!_jobs.Contains(job))
         {
-            Debug.Log($"<color=red>[Building]</color> Le poste {job.JobTitle} n'existe pas dans {buildingName}.");
+            Debug.Log($"<color=red>[Building]</color> The position {job.JobTitle} does not exist in {buildingName}.");
             return false;
         }
 
-        // Le job doit être libre
+        // The job must be vacant.
         if (job.IsAssigned)
         {
-            Debug.Log($"<color=orange>[Building]</color> Le poste {job.JobTitle} à {buildingName} est déjà pris.");
+            Debug.Log($"<color=orange>[Building]</color> The position {job.JobTitle} at {buildingName} is already taken.");
             return false;
         }
 
-        // Vérifie les prérequis spécifiques du métier (ex: compétences pour un artisan)
+        // Check job-specific prerequisites (e.g. skills for an artisan).
         if (!job.CanTakeJob(applicant))
         {
-            Debug.Log($"<color=orange>[Building]</color> {applicant.CharacterName} n'a pas les prérequis pour le poste de {job.JobTitle}.");
+            Debug.Log($"<color=orange>[Building]</color> {applicant.CharacterName} does not meet the requirements for the {job.JobTitle} position.");
             return false;
         }
 
-        // Embauche approuvée. On retourne true pour que le CharacterJob.TakeJob()
-        // puisse s'occuper de synchroniser l'assignation des deux côtés (Employé et Bâtiment).
+        // Hire approved. Return true so CharacterJob.TakeJob() can synchronize the
+        // assignment on both sides (Employee and Building).
         return true;
     }
 
     /// <summary>
-    /// Retourne tous les jobs non-assignés dans ce building.
+    /// Returns all unassigned jobs in this building.
     /// </summary>
     public IEnumerable<Job> GetAvailableJobs()
     {
@@ -1162,8 +1162,7 @@ public abstract class CommercialBuilding : Building
     }
 
     /// <summary>
-    /// Appelé par un employé lorsqu'il arrive physiquement sur son lieu de travail
-    /// et commence (Punch In).
+    /// Called when an employee physically arrives at their workplace and starts the shift (Punch In).
     /// </summary>
     public virtual void WorkerStartingShift(Character worker)
     {
@@ -1221,9 +1220,9 @@ public abstract class CommercialBuilding : Building
 
             _activeWorkerIds.Add(new FixedString64Bytes(worker.CharacterId));
 
-            Debug.Log($"<color=green>[Building]</color> {worker.CharacterName} a pointé (Punch In) à {buildingName}.");
+            Debug.Log($"<color=green>[Building]</color> {worker.CharacterName} punched in at {buildingName}.");
 
-            // Déclencher la logique logistique si c'est le manager
+            // Trigger the logistics logic if this is the manager.
             if (worker.CharacterJob != null)
             {
                 var logisticsJob = worker.CharacterJob.ActiveJobs
@@ -1391,24 +1390,24 @@ public abstract class CommercialBuilding : Building
     }
 
     /// <summary>
-    /// Retourne la position de travail d'un employé dans ce bâtiment.
-    /// Par défaut, retourne un point aléatoire dans la zone du bâtiment.
-    /// Les sous-classes (ex: ShopBuilding) peuvent override pour fournir un poste précis.
+    /// Returns a worker's work position inside this building.
+    /// By default, returns a random point inside the building zone.
+    /// Subclasses (e.g. ShopBuilding) can override to return a precise station.
     /// </summary>
     public virtual Vector3 GetWorkPosition(Character worker)
     {
-        // On récupère une position de base (zone de building ou centre du building)
+        // Get a base position (building zone or building center).
         Vector3 basePos = GetRandomPointInBuildingZone(worker.transform.position.y);
-        
-        // On ajoute un léger offset basé sur l'ID du worker pour éviter que tout le monde
-        // ne converge exactement sur le même point si la zone est trop petite.
+
+        // Add a small worker-ID-based offset so everyone does not converge on the
+        // exact same point when the zone is too small.
         float offsetRange = 1.5f;
         float offsetX = (Mathf.Abs(worker.gameObject.GetInstanceID() % 100) / 50f - 1f) * offsetRange;
         float offsetZ = (Mathf.Abs((worker.gameObject.GetInstanceID() / 100) % 100) / 50f - 1f) * offsetRange;
-        
+
         Vector3 offsetPos = basePos + new Vector3(offsetX, 0, offsetZ);
 
-        // On vérifie que le point avec offset est toujours valide sur le NavMesh
+        // Verify the offset point is still valid on the NavMesh.
         if (UnityEngine.AI.NavMesh.SamplePosition(offsetPos, out UnityEngine.AI.NavMeshHit hit, 2f, UnityEngine.AI.NavMesh.AllAreas))
         {
             return hit.position;
@@ -1418,8 +1417,8 @@ public abstract class CommercialBuilding : Building
     }
 
     /// <summary>
-    /// Appelé par un employé lorsqu'il quitte son comportement de travail
-    /// (fin de journée, événement spécial) (Punch Out).
+    /// Called when an employee leaves their work behaviour
+    /// (end of day, special event) (Punch Out).
     /// </summary>
     public virtual void WorkerEndingShift(Character worker)
     {
@@ -1494,7 +1493,7 @@ public abstract class CommercialBuilding : Building
                 }
             }
 
-            Debug.Log($"<color=orange>[Building]</color> {worker.CharacterName} a dépointé (Punch Out) de {buildingName}.");
+            Debug.Log($"<color=orange>[Building]</color> {worker.CharacterName} punched out of {buildingName}.");
 
             if (worker.CharacterJob != null)
             {
@@ -1520,7 +1519,7 @@ public abstract class CommercialBuilding : Building
         if (_inventory.Contains(item))
         {
             if (NPCDebug.VerboseJobs)
-                Debug.Log($"<color=#888888>[Building]</color> {item.ItemSO.ItemName} déjà dans l'inventaire de {buildingName} — skip duplicate add.");
+                Debug.Log($"<color=#888888>[Building]</color> {item.ItemSO.ItemName} already in inventory of {buildingName} — skip duplicate add.");
             return;
         }
         _inventory.Add(item);
@@ -1529,7 +1528,7 @@ public abstract class CommercialBuilding : Building
         // Gated to avoid the Windows console-buffer progressive-freeze documented in
         // wiki/gotchas/host-progressive-freeze-debug-log-spam.md.
         if (NPCDebug.VerboseJobs)
-            Debug.Log($"<color=green>[Building]</color> {item.ItemSO.ItemName} ajouté à l'inventaire de {buildingName}.");
+            Debug.Log($"<color=green>[Building]</color> {item.ItemSO.ItemName} added to inventory of {buildingName}.");
     }
 
     public virtual ItemInstance TakeFromInventory(ItemSO itemSO)
@@ -1688,11 +1687,22 @@ public abstract class CommercialBuilding : Building
         }
     }
 
+    // Reused buffer for the building's Physics.OverlapBoxNonAlloc calls
+    // (StorageZone scan, BuildingZone scan, PickupZone scan). Shared across
+    // call sites because all three are main-thread, non-reentrant. Pre-refactor
+    // each call allocated a fresh Collider[] from Physics.OverlapBox (perf,
+    // see wiki/projects/optimisation-backlog.md entry #2 / F).
+    // Buffer size 128 is generous for typical storage zones; if a scan returns
+    // exactly 128 we log a warning so the size can be bumped (defensive coding rule #31).
+    private const int OverlapBufferSize = 128;
+    private Collider[] _overlapBuffer;
+    private Collider[] OverlapBuffer => _overlapBuffer ??= new Collider[OverlapBufferSize];
+
     /// <summary>
-    /// Récupère physiquement tous les WorldItems actuellement déposés dans la StorageZone.
-    /// Pratique pour que les employés (ex: GatherStorageItems) ciblent les bons objets.
+    /// Physically retrieves every WorldItem currently dropped inside the StorageZone.
+    /// Used by employees (e.g. GatherStorageItems) to target the correct objects.
     /// </summary>
-    /// <returns>Une liste de WorldItems se trouvant dans les limites du BoxCollider de la StorageZone.</returns>
+    /// <returns>A list of WorldItems located within the StorageZone's BoxCollider bounds.</returns>
     public virtual List<WorldItem> GetWorldItemsInStorage()
     {
         List<WorldItem> foundItems = new List<WorldItem>();
@@ -1705,10 +1715,17 @@ public abstract class CommercialBuilding : Building
         Vector3 center = boxCol.transform.TransformPoint(boxCol.center);
         Vector3 halfExtents = Vector3.Scale(boxCol.size, boxCol.transform.lossyScale) * 0.5f;
 
-        Collider[] colliders = Physics.OverlapBox(center, halfExtents, boxCol.transform.rotation, Physics.AllLayers, QueryTriggerInteraction.Collide);
-
-        foreach (var col in colliders)
+        var buffer = OverlapBuffer;
+        int hitCount = Physics.OverlapBoxNonAlloc(center, halfExtents, buffer, boxCol.transform.rotation, Physics.AllLayers, QueryTriggerInteraction.Collide);
+        if (hitCount == OverlapBufferSize)
         {
+            Debug.LogWarning($"[CommercialBuilding] {buildingName}: GetWorldItemsInStorage saturated the OverlapBox buffer ({OverlapBufferSize}). Bump OverlapBufferSize — items beyond #{OverlapBufferSize} were truncated this scan.", this);
+        }
+
+        for (int i = 0; i < hitCount; i++)
+        {
+            var col = buffer[i];
+            if (col == null) continue;
             // Chercher le composant sur l'objet ou sur son parent
             WorldItem worldItem = col.GetComponent<WorldItem>() ?? col.GetComponentInParent<WorldItem>();
             if (worldItem != null && !foundItems.Contains(worldItem))
@@ -1718,6 +1735,55 @@ public abstract class CommercialBuilding : Building
         }
 
         return foundItems;
+    }
+
+    // ── StorageFurniture cache (perf, see wiki/projects/optimisation-backlog.md entry #2 / D).
+    // Both FindStorageFurnitureForItem and GetItemsInStorageFurniture used to walk
+    // GetFurnitureOfType<StorageFurniture>() (recursive across MainRoom + every SubRoom,
+    // `is StorageFurniture` cast per furniture) on every call — fired from 5 GOAP actions
+    // and `RefreshStorageInventory`, hundreds of times per second under the audited mix.
+    // We cache the StorageFurniture set with a short TTL; manual invalidation hook covers
+    // bursty changes (default-furniture spawn completion, player furniture place/pickup).
+    protected const float FurnitureCacheTTLSeconds = 2f;
+    private List<StorageFurniture> _cachedStorageFurniture;
+    private float _storageFurnitureCacheValidUntil = -1f;
+
+    /// <summary>
+    /// Returns the cached list of <see cref="StorageFurniture"/> in this building.
+    /// Refreshed lazily on TTL expiry or after <see cref="InvalidateStorageFurnitureCache"/>.
+    /// The returned list is a SHARED reference — callers must treat it as read-only.
+    /// </summary>
+    private List<StorageFurniture> GetStorageFurnitureCached()
+    {
+        if (_cachedStorageFurniture == null)
+        {
+            _cachedStorageFurniture = new List<StorageFurniture>();
+        }
+
+        if (Time.time < _storageFurnitureCacheValidUntil)
+        {
+            return _cachedStorageFurniture;
+        }
+
+        _cachedStorageFurniture.Clear();
+        foreach (var furniture in GetFurnitureOfType<StorageFurniture>())
+        {
+            if (furniture == null) continue;
+            _cachedStorageFurniture.Add(furniture);
+        }
+
+        _storageFurnitureCacheValidUntil = Time.time + FurnitureCacheTTLSeconds;
+        return _cachedStorageFurniture;
+    }
+
+    /// <summary>
+    /// Force the next StorageFurniture lookup to re-walk rooms. Call after a known
+    /// state change that should be reflected immediately — default-furniture spawn
+    /// completion, player furniture place/pickup, etc.
+    /// </summary>
+    public void InvalidateStorageFurnitureCache()
+    {
+        _storageFurnitureCacheValidUntil = -1f;
     }
 
     /// <summary>
@@ -1737,8 +1803,10 @@ public abstract class CommercialBuilding : Building
     public StorageFurniture FindStorageFurnitureForItem(ItemInstance item)
     {
         if (item == null) return null;
-        foreach (var furniture in GetFurnitureOfType<StorageFurniture>())
+        var cached = GetStorageFurnitureCached();
+        for (int i = 0; i < cached.Count; i++)
         {
+            var furniture = cached[i];
             if (furniture == null || furniture.IsLocked) continue;
             if (furniture.HasFreeSpaceForItem(item)) return furniture;
         }
@@ -1754,14 +1822,16 @@ public abstract class CommercialBuilding : Building
     /// </summary>
     public IEnumerable<(StorageFurniture furniture, ItemInstance item)> GetItemsInStorageFurniture()
     {
-        foreach (var furniture in GetFurnitureOfType<StorageFurniture>())
+        var cached = GetStorageFurnitureCached();
+        for (int i = 0; i < cached.Count; i++)
         {
+            var furniture = cached[i];
             if (furniture == null) continue;
             var slots = furniture.ItemSlots;
             if (slots == null) continue;
-            for (int i = 0; i < slots.Count; i++)
+            for (int j = 0; j < slots.Count; j++)
             {
-                var slot = slots[i];
+                var slot = slots[j];
                 if (slot != null && !slot.IsEmpty()) yield return (furniture, slot.ItemInstance);
             }
         }
@@ -1797,10 +1867,17 @@ public abstract class CommercialBuilding : Building
             Vector3 center = boxCol.transform.TransformPoint(boxCol.center);
             Vector3 halfExtents = Vector3.Scale(boxCol.size, boxCol.transform.lossyScale) * 0.5f;
 
-            Collider[] colliders = Physics.OverlapBox(center, halfExtents, boxCol.transform.rotation, Physics.AllLayers, QueryTriggerInteraction.Collide);
-
-            foreach (var col in colliders)
+            var buffer = OverlapBuffer;
+            int hitCount = Physics.OverlapBoxNonAlloc(center, halfExtents, buffer, boxCol.transform.rotation, Physics.AllLayers, QueryTriggerInteraction.Collide);
+            if (hitCount == OverlapBufferSize)
             {
+                Debug.LogWarning($"[CommercialBuilding] {buildingName}: CountUnabsorbedItemsInBuildingZone saturated the OverlapBox buffer ({OverlapBufferSize}). Bump OverlapBufferSize — items beyond #{OverlapBufferSize} were truncated this scan.", this);
+            }
+
+            for (int i = 0; i < hitCount; i++)
+            {
+                var col = buffer[i];
+                if (col == null) continue;
                 WorldItem wi = col.GetComponent<WorldItem>() ?? col.GetComponentInParent<WorldItem>();
                 if (wi == null || wi.ItemInstance == null) continue;
                 if (wi.IsBeingCarried) continue;
@@ -1892,9 +1969,16 @@ public abstract class CommercialBuilding : Building
                 Vector3 halfExtents = Vector3.Scale(pickupBox.size, pickupBox.transform.lossyScale) * 0.5f;
                 try
                 {
-                    Collider[] pickupCols = Physics.OverlapBox(center, halfExtents, pickupBox.transform.rotation, Physics.AllLayers, QueryTriggerInteraction.Collide);
-                    foreach (var col in pickupCols)
+                    var buffer = OverlapBuffer;
+                    int hitCount = Physics.OverlapBoxNonAlloc(center, halfExtents, buffer, pickupBox.transform.rotation, Physics.AllLayers, QueryTriggerInteraction.Collide);
+                    if (hitCount == OverlapBufferSize)
                     {
+                        Debug.LogWarning($"[CommercialBuilding] {buildingName}: RefreshStorageInventory PickupZone scan saturated the OverlapBox buffer ({OverlapBufferSize}). Bump OverlapBufferSize — items beyond #{OverlapBufferSize} were truncated this scan.", this);
+                    }
+                    for (int i = 0; i < hitCount; i++)
+                    {
+                        var col = buffer[i];
+                        if (col == null) continue;
                         WorldItem wi = col.GetComponent<WorldItem>() ?? col.GetComponentInParent<WorldItem>();
                         if (wi != null && !physicalItems.Contains(wi)) physicalItems.Add(wi);
                     }
@@ -1945,7 +2029,7 @@ public abstract class CommercialBuilding : Building
 
             bool isPhysicallyPresent = false;
 
-            // Vérifier si un WorldItem physique correspond à cette instance logique
+            // Check whether a physical WorldItem matches this logical instance.
             foreach (var worldItem in physicalItems)
             {
                 if (worldItem.ItemInstance == logicalInstance)
@@ -1955,29 +2039,29 @@ public abstract class CommercialBuilding : Building
                 }
             }
 
-            // Si ce n'est pas au sol ET que ce n'est PAS en train d'être porté par quelqu'un, c'est un fantôme !
+            // If it is not on the ground AND it is not being carried by anyone, it is a ghost.
             if (!isPhysicallyPresent)
             {
-                // Un check supplémentaire : a-t-il vraiment un porteur assigné ?
-                // La propriété IsBeingCarried de WorldItem est liée au portage effectif.
-                // Dans notre architecture, si ItemInstance n'a pas de propriétaire actuel mais est perdu, on le supprime.
+                // Extra check: does it actually have an assigned carrier?
+                // WorldItem.IsBeingCarried tracks effective carrying.
+                // In our architecture, if an ItemInstance has no current owner and is lost, we remove it.
                 ghostlyInstances.Add(logicalInstance);
             }
         }
 
         if (ghostlyInstances.Count > 0)
         {
-            Debug.LogWarning($"<color=orange>[CommercialBuilding]</color> {buildingName} : Audit détecte {ghostlyInstances.Count} objets logiques sans réalité physique ! Nettoyage...");
+            Debug.LogWarning($"<color=orange>[CommercialBuilding]</color> {buildingName}: Audit detected {ghostlyInstances.Count} logical objects with no physical counterpart! Cleaning up...");
 
             foreach (var ghost in ghostlyInstances)
             {
                 _inventory.Remove(ghost);
                 MirrorInventoryRemove(ghost.ItemSO);
 
-                // Si cet objet fantôme était réservé par un logisticien pour une commande (Transport/Achats), on le signale.
+                // If this ghost item was reserved by a logistics manager for an order (Transport/Buy), report it.
                 if (LogisticsManager != null)
                 {
-                    // Trouver quelle commande avait réservé cet item fantôme
+                    // Find which order had reserved this ghost item.
                     var brokenTransportOrder = LogisticsManager.PlacedTransportOrders.FirstOrDefault(t => t.ReservedItems.Contains(ghost));
                     if (brokenTransportOrder != null)
                     {
@@ -2002,7 +2086,7 @@ public abstract class CommercialBuilding : Building
 
         if (absorbed > 0)
         {
-            Debug.Log($"<color=green>[CommercialBuilding]</color> {buildingName} : Audit a absorbé {absorbed} objet(s) physique(s) orphelin(s) dans l'inventaire logique.");
+            Debug.Log($"<color=green>[CommercialBuilding]</color> {buildingName}: Audit absorbed {absorbed} orphan physical object(s) into the logical inventory.");
         }
     }
 
@@ -2017,8 +2101,8 @@ public abstract class CommercialBuilding : Building
     }
 
     /// <summary>
-    /// Indique si ce bâtiment produit ou fournit l'item demandé.
-    /// Les sous-classes doivent override ceci pour exposer ce qu'elles offrent.
+    /// Indicates whether this building produces or supplies the requested item.
+    /// Subclasses must override this to expose what they offer.
     /// </summary>
     public virtual bool ProducesItem(ItemSO item)
     {
@@ -2026,8 +2110,8 @@ public abstract class CommercialBuilding : Building
     }
 
     /// <summary>
-    /// Indique si la production de cet item nécessite de placer une commande de fabrication (CraftingOrder).
-    /// Si false, on peut directement envoyer un transporteur (TransportOrder) pour récupérer le stock (ex: Harvester).
+    /// Indicates whether producing this item requires a crafting order (CraftingOrder).
+    /// If false, a transporter can be sent directly (TransportOrder) to fetch the stock (e.g. Harvester).
     /// </summary>
     public virtual bool RequiresCraftingFor(ItemSO item)
     {

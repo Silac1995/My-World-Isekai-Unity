@@ -91,5 +91,10 @@ namespace MWI.WorldSystem
         public bool IsAbandoned;
         public string FormerPartyLeaderId;
         public string FormerPartyLeaderWorldGuid;
+
+        // Full character profile (stats, equipment, relations, skills, traits, abilities, …)
+        // captured via CharacterDataCoordinator.ExportProfile and replayed via ImportProfile
+        // on respawn. Null on legacy saves; consumers must fall back to the flat fields above.
+        public CharacterProfileSaveData ProfileData;
     }
 }

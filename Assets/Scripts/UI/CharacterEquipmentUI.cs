@@ -38,7 +38,7 @@ public class CharacterEquipmentUI : MonoBehaviour
     }
 
     /// <summary>
-    /// Initialise la fenêtre avec le personnage cible.
+    /// Initializes the window with the target character.
     /// </summary>
     public void Initialize(Character target)
     {

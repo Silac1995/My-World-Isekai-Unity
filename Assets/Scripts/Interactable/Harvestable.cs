@@ -3,10 +3,10 @@ using UnityEngine;
 using MWI.Interactables;
 
 /// <summary>
-/// Objet récoltable dans le monde (arbre, roche, veine de minerai...).
-/// Hérite d'InteractableObject pour être interactif.
-/// Produit une liste d'ItemSO quand un personnage le récolte.
-/// Peut s'épuiser après un nombre de récoltes et respawn après un délai.
+/// Harvestable object in the world (tree, rock, ore vein, ...).
+/// Inherits InteractableObject to be interactive.
+/// Produces a list of ItemSO when a character harvests it.
+/// Can be depleted after a number of harvests and respawn after a delay.
 /// </summary>
 public class Harvestable : InteractableObject
 {
@@ -16,7 +16,7 @@ public class Harvestable : InteractableObject
     [SerializeField] private float _harvestDuration = 3f;
     [SerializeField] private bool _isDepletable = true;
     [SerializeField] private int _maxHarvestCount = 5;
-    [SerializeField, Tooltip("Nombre de jours in-game avant la réapparition de la ressource")] 
+    [SerializeField, Tooltip("Number of in-game days before the resource respawns")]
     private int _respawnDelayDays = 1;
 
     private int _currentHarvestCount = 0;
@@ -25,20 +25,20 @@ public class Harvestable : InteractableObject
 
     public event System.Action<Harvestable> OnRespawned;
 
-    // Visuels (optionnel)
+    // Visuals (optional)
     [Header("Visuals")]
     [SerializeField] private GameObject _visualRoot;
 
-    /// <summary>Items que cet objet peut produire</summary>
+    /// <summary>Items this object can produce</summary>
     public IReadOnlyList<ItemSO> OutputItems => _outputItems;
 
-    /// <summary>Catégorie de ressource pour filtrage</summary>
+    /// <summary>Resource category used for filtering</summary>
     public HarvestableCategory Category => _category;
 
-    /// <summary>Temps nécessaire pour une récolte</summary>
+    /// <summary>Time required for a single harvest</summary>
     public float HarvestDuration => _harvestDuration;
 
-    /// <summary>L'objet est-il épuisé ?</summary>
+    /// <summary>Is the object depleted?</summary>
     public bool IsDepleted => _isDepleted;
 
     /// <summary>
@@ -48,12 +48,12 @@ public class Harvestable : InteractableObject
         ? Mathf.Max(0, _maxHarvestCount - _currentHarvestCount)
         : int.MaxValue;
 
-    /// <summary>Peut-on récolter cet objet ?</summary>
+    /// <summary>Can this object be harvested?</summary>
     public bool CanHarvest() => !_isDepleted && _outputItems.Count > 0;
 
     /// <summary>
-    /// Vérifie si cet objet produit un item spécifique.
-    /// Utilisé par les harvesters pour trouver des zones compatibles.
+    /// Checks whether this object produces a specific item.
+    /// Used by harvesters to find compatible zones.
     /// </summary>
     public bool HasOutput(ItemSO item)
     {
@@ -62,7 +62,7 @@ public class Harvestable : InteractableObject
     }
 
     /// <summary>
-    /// Vérifie si cet objet produit au moins un des items de la liste.
+    /// Checks whether this object produces at least one of the items in the list.
     /// </summary>
     public bool HasAnyOutput(List<ItemSO> items)
     {
@@ -75,7 +75,7 @@ public class Harvestable : InteractableObject
     }
 
     /// <summary>
-    /// Interaction : lance une CharacterHarvestAction pour récolter avec animation et durée.
+    /// Interaction: launches a CharacterHarvestAction to harvest with animation and duration.
     /// </summary>
     public override void Interact(Character interactor)
     {
@@ -87,8 +87,8 @@ public class Harvestable : InteractableObject
     }
 
     /// <summary>
-    /// Récolte et fait spawn l'item en WorldItem dans le monde.
-    /// Retourne l'ItemSO récolté (null si échec).
+    /// Harvests and spawns the item as a WorldItem in the world.
+    /// Returns the harvested ItemSO (null on failure).
     /// </summary>
     public ItemSO Harvest(Character harvester)
     {
@@ -116,7 +116,7 @@ public class Harvestable : InteractableObject
             Deplete();
         }
 
-        Debug.Log($"<color=green>[Harvest]</color> {harvester.CharacterName} a récolté {harvestedItem.ItemName}.");
+        Debug.Log($"<color=green>[Harvest]</color> {harvester.CharacterName} harvested {harvestedItem.ItemName}.");
         return harvestedItem;
     }
 
@@ -134,7 +134,7 @@ public class Harvestable : InteractableObject
     }
 
     /// <summary>
-    /// Retourne un item aléatoire parmi les outputs.
+    /// Returns a random item from the outputs.
     /// </summary>
     private ItemSO GetRandomOutput()
     {
@@ -143,7 +143,7 @@ public class Harvestable : InteractableObject
     }
 
     /// <summary>
-    /// Épuise la ressource. Cache les visuels et s'abonne à l'événement de nouveau jour.
+    /// Depletes the resource. Hides the visuals and subscribes to the new-day event.
     /// </summary>
     private void Deplete()
     {
@@ -158,7 +158,7 @@ public class Harvestable : InteractableObject
         if (_visualRoot != null)
             _visualRoot.SetActive(false);
 
-        Debug.Log($"<color=orange>[Harvest]</color> {gameObject.name} est épuisé. Respawn prévu au jour {_targetRespawnDay}.");
+        Debug.Log($"<color=orange>[Harvest]</color> {gameObject.name} is depleted. Respawn scheduled for day {_targetRespawnDay}.");
     }
 
     private void HandleNewDay()
@@ -170,7 +170,7 @@ public class Harvestable : InteractableObject
     }
 
     /// <summary>
-    /// Respawn la ressource. Remet les visuels et le compteur à zéro.
+    /// Respawns the resource. Restores the visuals and resets the counter to zero.
     /// </summary>
     private void Respawn()
     {
@@ -183,7 +183,7 @@ public class Harvestable : InteractableObject
         if (_visualRoot != null)
             _visualRoot.SetActive(true);
 
-        Debug.Log($"<color=green>[Harvest]</color> {gameObject.name} a respawn !");
+        Debug.Log($"<color=green>[Harvest]</color> {gameObject.name} has respawned!");
         OnRespawned?.Invoke(this);
     }
 

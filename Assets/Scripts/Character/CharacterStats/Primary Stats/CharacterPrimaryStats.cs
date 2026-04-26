@@ -3,7 +3,7 @@ using UnityEngine;
 [System.Serializable]
 public abstract class CharacterPrimaryStats : CharacterBaseStats
 {
-    [SerializeField] protected float currentAmount; // Valeur actuelle de la stat (ex : PV restants)
+    [SerializeField] protected float currentAmount; // Current value of the stat (e.g.: remaining HP)
 
     protected CharacterBaseStats _linkedStat;
     protected float _multiplier;
@@ -34,7 +34,7 @@ public abstract class CharacterPrimaryStats : CharacterBaseStats
         _multiplier = multiplier;
         _baseOffset = baseOffset;
         
-        // Initialiser currentAmount à 100% du maxAVANT de recalculer quoi que ce soit
+        // Initialize currentAmount to 100% of max BEFORE recalculating anything
         currentAmount = CurrentValue;
 
         if (_linkedStat != null)
@@ -48,7 +48,7 @@ public abstract class CharacterPrimaryStats : CharacterBaseStats
     }
 
     /// <summary>
-    /// Met à jour le multiplicateur et l'offset, utilisés pour modifier les bases raciales de ce personnage.
+    /// Updates the multiplier and the offset, used to modify the racial bases of this character.
     /// </summary>
     public void UpdateScaling(float multiplier, float baseOffset)
     {
@@ -58,8 +58,8 @@ public abstract class CharacterPrimaryStats : CharacterBaseStats
     }
 
     /// <summary>
-    /// Recalcule la valeur maximale (BaseValue) de cette stat primaire en fonction de la stat secondaire liée et du multiplicateur.
-    /// La préservation du pourcentage est désormais gérée globalement par `RecalculateCurrentValue`.
+    /// Recalculates the maximum value (BaseValue) of this primary stat based on the linked secondary stat and the multiplier.
+    /// The preservation of the percentage is now handled globally by `RecalculateCurrentValue`.
     /// </summary>
     public void UpdateFromLinkedStat()
     {
@@ -77,11 +77,11 @@ public abstract class CharacterPrimaryStats : CharacterBaseStats
 
     protected override void RecalculateCurrentValue()
     {
-        // On retient l'ancien max et notre pourcentage actuel
+        // We remember the old max and our current percentage
         float oldMax = CurrentValue;
         float percentage = oldMax > 0.001f ? currentAmount / oldMax : 1f;
 
-        // Le parent s'occupe de changer le CurrentValue
+        // The parent takes care of changing the CurrentValue
         base.RecalculateCurrentValue();
 
         float newMax = CurrentValue;

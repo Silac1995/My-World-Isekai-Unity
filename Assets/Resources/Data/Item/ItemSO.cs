@@ -57,7 +57,7 @@ public abstract class ItemSO : ScriptableObject
     public float CraftingDuration => _craftingDuration;
     public System.Collections.Generic.List<CraftingIngredient> CraftingRecipe => _craftingRecipe;
 
-    // On change 'virtual' en 'abstract' et on retire le corps de la méthode
+    // Changed from 'virtual' to 'abstract' — body removed.
     public abstract ItemInstance CreateInstance();
 }
 

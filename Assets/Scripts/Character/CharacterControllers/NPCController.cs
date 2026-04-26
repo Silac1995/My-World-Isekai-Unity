@@ -30,7 +30,7 @@ public class NPCController : CharacterGameController
         base.Initialize();
         if (Agent != null) Agent.updateRotation = false;
 
-        // Chercher le BT sur le même GameObject si pas assigné dans l'inspecteur
+        // Look for the BT on the same GameObject if not assigned in the inspector
         if (_behaviourTree == null)
         {
             _behaviourTree = GetComponentInParent<NPCBehaviourTree>();
@@ -40,12 +40,12 @@ public class NPCController : CharacterGameController
 
         if (HasBehaviourTree)
         {
-            // Le BT gère tout : pas de HandleCharacterDetected ni de WanderBehaviour initial
-            Debug.Log($"<color=lime>[BT]</color> {_character.CharacterName} utilise le Behaviour Tree.");
+            // The BT handles everything: no HandleCharacterDetected nor initial WanderBehaviour
+            Debug.Log($"<color=lime>[BT]</color> {_character.CharacterName} uses the Behaviour Tree.");
         }
         else
         {
-            // Mode legacy : on garde l'ancien système
+            // Legacy mode: keep the old system
             if (_character.CharacterAwareness != null && IsServer)
             {
                 _character.CharacterAwareness.OnCharacterDetected += HandleCharacterDetected;
@@ -131,10 +131,10 @@ public class NPCController : CharacterGameController
 
     private void HandleCharacterDetected(Character target)
     {
-        // 1. DISPONIBILITÉ DU NPC : On n'initie rien si on est déjà occupé (combat, interaction, KO)
+        // 1. NPC AVAILABILITY: don't start anything if we're already busy (combat, interaction, KO)
         if (!_character.IsFree()) return;
-        
-        // On ne réagit qu'en mode Wander (balade) ou en Pause au travail
+
+        // We only react in Wander mode or while on a work break
         bool isWandering = GetCurrentBehaviour<WanderBehaviour>() != null || (HasBehaviourTree && _character.CharacterSchedule?.CurrentActivity == ScheduleActivity.Wander);
         bool isWorking = _character.CharacterSchedule?.CurrentActivity == ScheduleActivity.Work;
         bool isOnBreak = isWorking && _character.CharacterJob?.CurrentJob?.CurrentGoalName == "Idle";
@@ -152,16 +152,16 @@ public class NPCController : CharacterGameController
                             _character.CharacterJob.HasJob && target.CharacterJob.HasJob &&
                             _character.CharacterJob.Workplace == target.CharacterJob.Workplace;
 
-        // Restriction : En pause au travail, on ne parle qu'à ses collègues
+        // Restriction: while on a work break, we only talk to colleagues
         if (isOnBreak && (!areCoworkers || !isTargetOnBreak)) return;
 
-        // Restriction : Si la cible est en pause au travail, on ne peut pas lui parler sauf si on est son collègue (et aussi en pause)
+        // Restriction: if the target is on a work break, we can't talk to them unless we're their colleague (and also on break)
         if (isTargetOnBreak && (!areCoworkers || !isOnBreak)) return;
 
         if (_character.CharacterRelation == null) return;
-        
-        // --- 1. LOGIQUE D'ENTRAIDE (AMIS OU GROUPE EN COMBAT) ---
-        // Priorité : Si c'est un ami ou un membre du groupe en combat, on l'aide peu importe le reste
+
+        // --- 1. ASSISTANCE LOGIC (FRIENDS OR PARTY MEMBER IN COMBAT) ---
+        // Priority: if it's a friend or party member in combat, help them no matter what
         if (target.CharacterCombat.IsInBattle && target.IsAlive())
         {
             bool isFriend = _character.CharacterRelation != null && _character.CharacterRelation.IsFriend(target);
@@ -176,7 +176,7 @@ public class NPCController : CharacterGameController
             if (isFriend || sameParty || isLoyalHelp)
             {
                 string helpMsg = sameParty ? "Protect the group!" : "Hang on, my friend! I'm coming!";
-                Debug.Log($"<color=green>[Assistance]</color> {_character.CharacterName} voit son {(sameParty ? "coéquipier" : "ami")} {target.CharacterName} en combat et fonce l'aider !");
+                Debug.Log($"<color=green>[Assistance]</color> {_character.CharacterName} sees their {(sameParty ? "teammate" : "friend")} {target.CharacterName} in combat and rushes to help!");
                 
                 if (_character.CharacterSpeech != null)
                     _character.CharacterSpeech.Say(helpMsg);
@@ -188,8 +188,8 @@ public class NPCController : CharacterGameController
 
         var rel = _character.CharacterRelation.GetRelationshipWith(target);
 
-        // --- 2a. AGRESSION SPONTANÉE (trait-based, contre n'importe qui) ---
-        // Un personnage très agressif peut attaquer même un inconnu
+        // --- 2a. SPONTANEOUS AGGRESSION (trait-based, against anyone) ---
+        // A highly aggressive character can attack even a stranger
         if (target.IsAlive() && _character.CharacterTraits != null)
         {
             float aggressivity = _character.CharacterTraits.GetAggressivity();
@@ -198,12 +198,12 @@ public class NPCController : CharacterGameController
             // Must be highly aggressive (>= 0.7) to spontaneously attack a random stranger.
             if (aggressivity >= 0.7f)
             {
-                // Ex: à 1.0 -> 0.3^2 = 0.09 * 0.2 = ~1.8% de chance par cible
+                // E.g. at 1.0 -> 0.3^2 = 0.09 * 0.2 = ~1.8% chance per target
                 float aggroChance = Mathf.Pow(aggressivity - 0.7f, 2f) * 0.2f;
 
                 if (aggroChance > 0f && Random.value < aggroChance)
                 {
-                    Debug.Log($"<color=red>[Aggression]</color> {_character.CharacterName} attaque {target.CharacterName} de façon spontanée (Aggressivity: {aggressivity:P0})!");
+                    Debug.Log($"<color=red>[Aggression]</color> {_character.CharacterName} spontaneously attacks {target.CharacterName} (Aggressivity: {aggressivity:P0})!");
                     if (_character.CharacterSpeech != null)
                         _character.CharacterSpeech.Say("You're in my way!");
                     
@@ -216,8 +216,8 @@ public class NPCController : CharacterGameController
             }
         }
 
-        // --- 2b. LOGIQUE D'AGRESSION (ENNEMIS CONNUS) ---
-        // On attaque nos ennemis même s'ils sont en train de papoter !
+        // --- 2b. AGGRESSION LOGIC (KNOWN ENEMIES) ---
+        // We attack our enemies even if they're chatting!
         if (rel != null && target.IsAlive() && rel.RelationValue <= -10)
         {
             // Much gentler curve: Base 2% chance (+1% per 0.1 aggro).
@@ -229,7 +229,7 @@ public class NPCController : CharacterGameController
 
             if (Random.value < aggroChance)
             {
-                Debug.Log($"<color=red>[Aggression]</color> {_character.CharacterName} repère son ennemi {target.CharacterName} et attaque ! (Chance: {aggroChance:P0})");
+                Debug.Log($"<color=red>[Aggression]</color> {_character.CharacterName} spots their enemy {target.CharacterName} and attacks! (Chance: {aggroChance:P0})");
                 if (BehaviourTree != null)
                 {
                     BehaviourTree.Blackboard.Set(Blackboard.KEY_COMBAT_TARGET, target);
@@ -238,22 +238,22 @@ public class NPCController : CharacterGameController
             }
         }
 
-        // --- 3. SÉCURITÉ SOCIALE : Si la cible n'est pas libre (combat, busy), on s'arrête ici pour le social ---
+        // --- 3. SOCIAL SAFETY: if the target isn't free (combat, busy), we stop here for the social path ---
         if (!target.IsFree()) return;
-        
-        // --- WORK FOCUS : On ne dérange pas un travailleur (sauf s'il est techniquement en pause) ---
+
+        // --- WORK FOCUS: don't bother a worker (unless they're technically on a break) ---
         if (!isTargetOnBreak && target.Controller is NPCController targetNpc && targetNpc.CurrentBehaviour != null && targetNpc.CurrentBehaviour.GetType().Name == "WorkBehaviour") return;
-        
-        // --- 4. LOGIQUE D'INCOMPATIBILITÉ (PERSONNALITÉ) ---
-        // On teste ça même si on ne se connaît pas encore (d'instinct)
+
+        // --- 4. INCOMPATIBILITY LOGIC (PERSONALITY) ---
+        // We test this even if we don't know each other yet (gut feeling)
         if (_character.CharacterProfile != null && target.CharacterProfile != null)
         {
             if (_character.CharacterProfile.GetCompatibilityWith(target.CharacterProfile) < 0)
             {
-                // 20% de chance d'aller insulter spontanément
+                // 20% chance to spontaneously go insult them
                 if (Random.value < 0.2f)
                 {
-                    Debug.Log($"<color=orange>[Personality Clash]</color> {_character.CharacterName} déteste d'instinct {target.CharacterName} et va l'insulter !");
+                    Debug.Log($"<color=orange>[Personality Clash]</color> {_character.CharacterName} instinctively dislikes {target.CharacterName} and is going to insult them!");
                     
                     if (_character.CharacterSpeech != null)
                         _character.CharacterSpeech.Say("You! I don't like your face!");
@@ -268,13 +268,13 @@ public class NPCController : CharacterGameController
         // --- 5. LOGIQUE SOCIALE ---
         float sociability = _character.CharacterTraits != null ? _character.CharacterTraits.GetSociability() : 0.5f;
 
-        // --- EXCEPTION COLLÈGUES EN PAUSE ---
+        // --- COLLEAGUES-ON-BREAK EXCEPTION ---
         if (isOnBreak && isTargetOnBreak && areCoworkers)
         {
-            float breakChatChance = 0.5f + (sociability * 0.5f); // 50% à 100% chance de prendre un café
+            float breakChatChance = 0.5f + (sociability * 0.5f); // 50% to 100% chance of having a coffee chat
             if (Random.value < breakChatChance)
             {
-                Debug.Log($"<color=cyan>[Social - Break]</color> {_character.CharacterName} va discuter avec son collègue {target.CharacterName} pendant leur pause.");
+                Debug.Log($"<color=cyan>[Social - Break]</color> {_character.CharacterName} is going to chat with their colleague {target.CharacterName} during their break.");
                 if (_character.CharacterSpeech != null)
                     _character.CharacterSpeech.Say("Taking a break too, right? Need to stretch my hands.");
 
@@ -288,14 +288,14 @@ public class NPCController : CharacterGameController
             return;
         }
 
-        // Si on ne se connaît pas, on peut quand même aller parler à l'inconnu selon la sociabilité
+        // If we don't know each other, we can still go talk to the stranger depending on sociability
         if (rel == null)
         {
             // Only approach a stranger if sociable enough (e.g. sociability 0.5 = 15% base chance)
             float strangerChance = sociability * 0.3f;
             if (Random.value < strangerChance)
             {
-                Debug.Log($"<color=cyan>[Social - Stranger]</color> {_character.CharacterName} s'approche de l'inconnu {target.CharacterName} (Sociabilité: {sociability:P0})");
+                Debug.Log($"<color=cyan>[Social - Stranger]</color> {_character.CharacterName} approaches the stranger {target.CharacterName} (Sociability: {sociability:P0})");
                 if (target != null && target.IsAlive())
                 {
                     var invitation = new InteractionStartDialogue();
@@ -306,13 +306,13 @@ public class NPCController : CharacterGameController
             return;
         }
 
-        // Si on se connait: 70% de chance de préférer un ami proche à un inconnu
+        // If we already know each other: 70% chance of preferring a close friend over a stranger
         bool isFriendKnown = _character.CharacterRelation.IsFriend(target);
         bool preferFriend = isFriendKnown && (Random.value < 0.7f);
 
         float interactionChance = rel.GetInteractionChance();
-        
-        // Application de la sociabilité
+
+        // Apply sociability
         interactionChance += (sociability - 0.5f);
         
         // Boost si besoin social non satisfait
@@ -352,7 +352,7 @@ public class NPCController : CharacterGameController
     }
 
     /// <summary>
-    /// Détermine si le NPC accepte de répondre à une interaction.
+    /// Determines whether the NPC agrees to respond to an interaction.
     /// </summary>
     public bool ShouldRespondTo(Character source)
     {
@@ -364,7 +364,7 @@ public class NPCController : CharacterGameController
     }
 
     /// <summary>
-    /// Choisi une action sociale (Talk, Invite, ou Insult) basée sur la relation.
+    /// Picks a social action (Talk, Invite, or Insult) based on the relationship.
     /// </summary>
     public ICharacterInteractionAction GetRandomSocialAction(Character target)
     {
@@ -427,30 +427,30 @@ public class NPCController : CharacterGameController
 
     private void HandleBattleZoneEntry(BattleManager manager)
     {
-        // 1. Si on est déjà en combat, on est concerné
+        // 1. If we're already in combat, we're involved
         if (_character.CharacterCombat.IsInBattle) return;
 
-        // 2. Chercher un ami dans cette bataille
+        // 2. Look for a friend in this battle
         foreach (var team in manager.BattleTeams)
         {
             foreach (var participant in team.CharacterList)
             {
                 if (_character.CharacterRelation != null && _character.CharacterRelation.IsFriend(participant))
                 {
-                    Debug.Log($"<color=green>[Battle Sensor]</color> {_character.CharacterName} voit son ami {participant.CharacterName} dans la bataille et le rejoint !");
+                    Debug.Log($"<color=green>[Battle Sensor]</color> {_character.CharacterName} sees their friend {participant.CharacterName} in the battle and joins them!");
                     _character.CharacterCombat.JoinBattleAsAlly(participant);
                     return;
                 }
             }
         }
 
-        // 3. Sinon, on n'est pas concerné -> On dégage
+        // 3. Otherwise, we're not involved -> we leave
         if (BehaviourTree != null && BehaviourTree.Blackboard != null)
         {
-            // Eviter de spammer si on fuit déjà CETTE bataille
+            // Avoid spamming if we're already fleeing THIS battle
             if (BehaviourTree.Blackboard.Get<BattleManager>(Blackboard.KEY_FLEE_BATTLE_MANAGER) != manager)
             {
-                Debug.Log($"<color=white>[Battle Sensor]</color> {_character.CharacterName} n'a rien à faire ici, il s'éloigne.");
+                Debug.Log($"<color=white>[Battle Sensor]</color> {_character.CharacterName} has nothing to do here, walks away.");
                 BehaviourTree.Blackboard.Set(Blackboard.KEY_FLEE_BATTLE_MANAGER, manager);
             }
         }

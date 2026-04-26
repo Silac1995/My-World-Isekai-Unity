@@ -3,9 +3,9 @@ using System;
 namespace MWI.AI
 {
     /// <summary>
-    /// Decorator conditionnel : vérifie une condition avant d'exécuter l'enfant.
-    /// Si la condition est true → exécute l'enfant et retourne son status.
-    /// Si la condition est false → retourne Failure sans exécuter l'enfant.
+    /// Conditional decorator: checks a condition before executing the child.
+    /// If the condition is true -> executes the child and returns its status.
+    /// If the condition is false -> returns Failure without executing the child.
     /// </summary>
     public class BTCondition : BTNode
     {
@@ -25,7 +25,7 @@ namespace MWI.AI
                 return _child.Execute(bb);
             }
 
-            // La condition a échoué : si l'enfant était en cours, on l'abort
+            // The condition failed: if the child was running, abort it
             if (_child.IsRunning)
             {
                 _child.Abort(bb);

@@ -1,5 +1,5 @@
 /// <summary>
-/// Poids d'un item. Affecte la capacité de carry et potentiellement la vitesse.
+/// Weight of an item. Affects carry capacity and potentially speed.
 /// </summary>
 public enum ItemWeight
 {

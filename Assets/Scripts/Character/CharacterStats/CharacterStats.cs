@@ -161,7 +161,7 @@ public class CharacterStats : CharacterSystem, ICharacterSaveData<CharacterStats
         Strength.SetBaseValue(strength);
         Agility.SetBaseValue(agility);
 
-        // Recalcul des stats dérivées (primaires dynamiques et tertiaires)
+        // Recalculate the derived stats (dynamic primaries and tertiaries)
         RecalculateTertiaryStats();
     }
 
@@ -205,12 +205,12 @@ public class CharacterStats : CharacterSystem, ICharacterSaveData<CharacterStats
 
     public void RecalculateTertiaryStats()
     {
-        // Primaires dynamiques
+        // Dynamic primaries
         health.UpdateFromLinkedStat();
         mana.UpdateFromLinkedStat();
         stamina.UpdateFromLinkedStat();
 
-        // Tertiaires
+        // Tertiaries
         physicalPower.UpdateFromLinkedStat();
         speed.UpdateFromLinkedStat();
         dodgeChance.UpdateFromLinkedStat();
@@ -223,7 +223,7 @@ public class CharacterStats : CharacterSystem, ICharacterSaveData<CharacterStats
         criticalHitChance.UpdateFromLinkedStat();
         moveSpeed.UpdateFromLinkedStat();
 
-        Debug.Log("<color=green>[Stats]</color> Statistiques dynamiques (Primaires & Tertiaires) recalculées.");
+        Debug.Log("<color=green>[Stats]</color> Dynamic stats (Primaries & Tertiaries) recalculated.");
         
         OnStatsUpdated?.Invoke();
     }
