@@ -97,7 +97,7 @@ No edit to `DevModeManager` or `DevModePanel` is required to add a module.
 
 ## 7. Dev Spawn Module Details
 
-`DevSpawnModule` — the first shipping module. Lets the host click anywhere on the `Environment` layer to spawn fully configured NPCs.
+`DevSpawnModule` — the first shipping module. Lets the host click anywhere on the `Environment` layer to spawn fully configured NPCs, or — when the **Item override** dropdown is set — drop `ItemSO` instances instead.
 
 **Configuration UI**
 
@@ -107,6 +107,7 @@ No edit to `DevModeManager` or `DevModePanel` is required to add a module.
 | Prefab | TMP Dropdown (filtered by race) |
 | Personality | TMP Dropdown |
 | Behavioral Trait | TMP Dropdown |
+| Item override | TMP Dropdown (index 0 = `<None — spawn character>`, then every `ItemSO` under `Resources/Data/Item` sorted by `ItemName`) |
 | Combat Styles | Multi-entry row list (`DevSpawnRow` per entry — combat style dropdown + level input) |
 | Skills | Multi-entry row list (`DevSpawnRow` per entry — skill dropdown + level input) |
 | Count | TMP InputField (integer, default 1) |
@@ -115,12 +116,16 @@ No edit to `DevModeManager` or `DevModePanel` is required to add a module.
 **Click flow**
 
 1. Host clicks on an `Environment`-layer collider. Ray is cast from the mouse.
-2. For `N = count` characters: compute a scatter offset around the click point. **Scatter radius = `4 * sqrt(N)` Unity units** (per project rule 32, 11 units = 1.67 m, so ~0.6 m per unit of radius). Individual offsets are random within the disk.
-3. For each character, `SpawnManager.SpawnCharacter(...)` is invoked with the configured race/prefab/personality/trait/armed flag.
-4. Dev-mode extras (combat styles + levels, skills + levels) are passed to `SpawnManager` via a **server-only `Dictionary<ulong, PendingDevConfig>`** keyed on NetworkObjectId.
-5. `SpawnManager.ApplyDevExtras(...)` fires post-spawn on the server, applying combat styles via `CharacterCombat.UnlockCombatStyle(style, level)` and skills via the existing `CharacterSkills` API.
+2. **Dispatch:** `SpawnAt(anchor)` first checks the Item override dropdown. If `value > 0`, the click routes to `SpawnItemBatch(anchor, _items[value - 1])` and the character path is skipped entirely. Otherwise the character spawn block below runs.
+3. Both paths share the same scatter formula: for `N = count`, the scatter **radius = `4 * sqrt(N)` Unity units** (per project rule 32, 11 units = 1.67 m, so ~0.6 m per unit of radius). Individual offsets are random within the disk.
+4. **Character path:** `SpawnManager.SpawnCharacter(...)` is invoked with the configured race/prefab/personality/trait/armed flag.
+5. **Item path:** `SpawnManager.SpawnItem(item, pos)` is invoked per spawn. The dev-mode wrapper adds an explicit `NetworkManager.Singleton.IsServer` check before the loop (clearer error than SpawnManager's internal check) and wraps each per-spawn call in `try/catch` so one bad item doesn't abort the batch. No combat styles / skills / personality apply on the item path.
+6. Dev-mode extras (combat styles + levels, skills + levels) are passed to `SpawnManager` via a **server-only `Dictionary<ulong, PendingDevConfig>`** keyed on NetworkObjectId. Character path only.
+7. `SpawnManager.ApplyDevExtras(...)` fires post-spawn on the server, applying combat styles via `CharacterCombat.UnlockCombatStyle(style, level)` and skills via the existing `CharacterSkills` API.
 
 **Why a pending-config dict?** `SpawnCharacter` is an async network spawn — we don't have the instance yet when we configure it. The dict is populated on the main thread before spawn and drained in the spawn callback by NetworkObjectId.
+
+**Item catalog caching.** `_items` is loaded once in `LoadCatalogs` (called from `Start`) via `Resources.LoadAll<ItemSO>("Data/Item")`, sorted alphabetically by `ItemName`, and never mutated at click time. Adding new `ItemSO` assets requires re-entering play mode for them to appear in the dropdown.
 
 ## Select Tab
 
