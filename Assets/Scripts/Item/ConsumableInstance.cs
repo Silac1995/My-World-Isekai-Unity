@@ -4,18 +4,18 @@ using UnityEngine;
 [System.Serializable]
 public class ConsumableInstance : MiscInstance
 {
-    // Attribut privé pour stocker les effets à l'instance
+    // Attribut privï¿½ pour stocker les effets ï¿½ l'instance
     [SerializeField] private List<string> _effects = new List<string>();
 
-    // Raccourci vers les données SO
+    // Raccourci vers les donnï¿½es SO
     public ConsumableSO ConsumableData => _itemSO as ConsumableSO;
 
-    // Getter pour accéder aux effets de l'instance
+    // Getter pour accï¿½der aux effets de l'instance
     public List<string> Effects => _effects;
 
     public ConsumableInstance(ConsumableSO data) : base(data)
     {
-        // Initialisation de la liste en reprenant les données du SO
+        // Initialisation de la liste en reprenant les donnï¿½es du SO
         if (data != null && data.Effects != null)
         {
             _effects = new List<string>(data.Effects);
@@ -23,14 +23,24 @@ public class ConsumableInstance : MiscInstance
     }
 
     /// <summary>
-    /// Ajoute un effet supplémentaire à cette instance spécifique (ex: enchantement temporaire)
+    /// Ajoute un effet supplï¿½mentaire ï¿½ cette instance spï¿½cifique (ex: enchantement temporaire)
     /// </summary>
     public void AddEffect(string newEffect)
     {
         if (!string.IsNullOrWhiteSpace(newEffect))
         {
             _effects.Add(newEffect);
-            Debug.Log($"<color=orange>[Item]</color> Effet '{newEffect}' ajouté à {CustomizedName}");
+            Debug.Log($"<color=orange>[Item]</color> Effet '{newEffect}' ajoutï¿½ ï¿½ {CustomizedName}");
         }
+    }
+
+    /// <summary>
+    /// Applies this consumable's runtime effect to the given character.
+    /// Default no-op; subclasses (FoodInstance, PotionInstance, â€¦) override.
+    /// Called from <see cref="Character.UseConsumable"/> after the use animation completes.
+    /// </summary>
+    public virtual void ApplyEffect(Character character)
+    {
+        // No-op default. Specific consumable subtypes override.
     }
 }
