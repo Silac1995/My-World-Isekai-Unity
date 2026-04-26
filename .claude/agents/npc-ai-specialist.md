@@ -130,6 +130,7 @@ Needs are **read-only state sensors** — they DO NOT execute logic. They provid
 | `NeedJob` | !HasJob + not player + cooldown | 60 (fixed) | `FindJob` | `GoToBoss` → `AskForJob` |
 | `NeedToWearClothing` | Chest/groin exposed | 60-100 | `WearClothing` | `GoapAction_WearClothing` |
 | `NeedShopping` | Has desired item + not player | 55 (fixed) | `GoShopping` | `GoapAction_GoShopping` |
+| `NeedHunger` | `IsLow()` (≤30) + NPC + cooldown elapsed | `MaxValue - CurrentValue` | `{"isHungry": false}` | `GoapAction_GoToFood` → `GoapAction_Eat` |
 
 **Decay**: `NeedSocial` loses 45 points per day via `TimeManager.OnNewDay`. Offline decay formula in `MacroSimulator`.
 
@@ -287,6 +288,9 @@ Detection (OnWorkerPunchIn: IStockProvider → policy-driven BuyOrder)
   - `CraftingBuilding` now declares `_inputStockTargets`; the logistics worker at a forge will place `BuyOrder`s for iron/coal proactively on punch-in. If an NPC crafter isn't pulling materials, first check the building has an authored `_inputStockTargets` list.
   - Missing `TransporterBuilding` is now `Debug.LogError` — if an NPC transporter job exists but deliveries never happen, check the log for this error before assuming a GOAP bug.
   - The stocking strategy is a per-building `LogisticsPolicy` SO; `MinStockPolicy` matches pre-refactor behaviour exactly, so existing NPC expectations should not shift.
+
+- **2026-04-26 — Food & Hunger System:**
+  - GoapAction_GoToFood + GoapAction_Eat — NPC food acquisition from CommercialBuilding storage furniture (NeedHunger.GetGoapActions resolver scans CharacterJob.Workplace).
 
 ## Reference Documents
 

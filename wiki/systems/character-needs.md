@@ -3,7 +3,7 @@ type: system
 title: "Character Needs"
 tags: [character, needs, ai, tier-2]
 created: 2026-04-18
-updated: 2026-04-18
+updated: 2026-04-26
 sources: []
 related:
   - "[[character]]"
@@ -22,6 +22,7 @@ depends_on:
 depended_on_by:
   - "[[ai]]"
   - "[[world]]"
+  - "[[items]]"
 ---
 
 # Character Needs
@@ -60,6 +61,20 @@ Give every character a tractable set of drives that AI can plan against, without
 - `need.Satisfy(amount)` / `need.Set(value)`.
 - `need.OnNeedCritical`, `need.OnNeedSatisfied` events.
 - `CharacterNeeds.ComputeOfflineDecay(deltaDays)` — used by [[world]] macro-sim.
+
+### NeedHunger (added 2026-04-26)
+
+Phase-decay need (25 per `TimeManager.OnPhaseChanged`, 4× per in-game day → fully empty in 24 h).
+
+- `IsStarving` — true when `CurrentValue == 0`.
+- `OnStarvingChanged(bool)` — fired whenever the starving flag transitions.
+- `OnValueChanged(float)` — fired on every decay or restore step.
+- `IncreaseValue(float)` / `DecreaseValue(float)` — clamped to [0, MaxValue=100].
+- `IsLow()` — true at or below 30.
+- `TrySubscribeToPhase()` / `UnsubscribeFromPhase()` — defensive TimeManager subscription.
+- `SetCooldown()` — rearms the GOAP activation cooldown after eating.
+
+For procedural details (decay formula, GOAP resolver, macro-sim catch-up) see [.agent/skills/character_needs/SKILL.md](../../.agent/skills/character_needs/SKILL.md).
 
 ## Data flow
 
@@ -122,8 +137,14 @@ for each HibernatedNPCData:
 
 ## Change log
 - 2026-04-18 — Initial pass. — Claude / [[kevin]]
+- 2026-04-26 — added NeedHunger (phase-tick decay, IsStarving event) + FoodSO consumable subtype + GoapAction_GoToFood/Eat — claude
 
 ## Sources
 - [.agent/skills/character_needs/SKILL.md](../../.agent/skills/character_needs/SKILL.md)
 - [.agent/skills/character_needs/examples/need_patterns.md](../../.agent/skills/character_needs/examples/need_patterns.md)
+- [Assets/Scripts/Character/CharacterNeeds/NeedHunger.cs](../../Assets/Scripts/Character/CharacterNeeds/NeedHunger.cs)
+- [Assets/Scripts/Character/CharacterNeeds/Pure/NeedHungerMath.cs](../../Assets/Scripts/Character/CharacterNeeds/Pure/NeedHungerMath.cs)
+- [Assets/Scripts/Character/CharacterNeeds/Pure/HungerCatchUpMath.cs](../../Assets/Scripts/Character/CharacterNeeds/Pure/HungerCatchUpMath.cs)
+- [Assets/Resources/Data/Item/FoodSO.cs](../../Assets/Resources/Data/Item/FoodSO.cs)
+- [Assets/Scripts/Item/FoodInstance.cs](../../Assets/Scripts/Item/FoodInstance.cs)
 - [[ai]] and [[world]] (parents-of-interest).

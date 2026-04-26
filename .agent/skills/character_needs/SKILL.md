@@ -50,3 +50,44 @@ Because Needs are simply Data Providers, the resolution happens naturally in Pri
 - `NeedJob` -> `GoapGoal("FindJob")` -> `GoapAction_AskForJob`.
 - `NeedToWearClothing` -> `GoapGoal("WearClothing")` -> `GoapAction_WearClothing`.
 - `NeedShopping` -> `GoapGoal("GoShopping")` -> `GoapAction_GoShopping`.
+- `NeedHunger` -> `GoapGoal({"isHungry": false})` -> `[GoapAction_GoToFood, GoapAction_Eat]`.
+
+---
+
+## NeedHunger
+
+Phase-decay need that drains 25 per `TimeManager.OnPhaseChanged` tick (4× per in-game day, fully empty in 24 h).
+
+### Public API
+- `OnValueChanged(float)` — fired on every decay or restore step.
+- `OnStarvingChanged(bool)` — fired whenever the starving flag transitions.
+- `IncreaseValue(float)`, `DecreaseValue(float)` — clamped to [0, MaxValue=100].
+- `IsStarving` — true when `CurrentValue == 0`.
+- `IsLow()` — true at or below 30.
+- `TrySubscribeToPhase()` / `UnsubscribeFromPhase()` — defensive TimeManager subscription (re-attempted in `Start` if `Instance` was null in ctor).
+- `SetCooldown()` — rearms the GOAP activation cooldown after eating.
+
+### Lifecycle
+- Constructed in `CharacterNeeds.Start()` after `NeedJob`.
+- Subscribes to `MWI.Time.TimeManager.OnPhaseChanged` defensively (re-attempts in `Start` if `Instance` was null at construction time).
+- Unsubscribed in `CharacterNeeds.OnDestroy()`.
+
+### GOAP integration
+- `IsActive()` returns true when controller is `NPCController` AND `IsLow()` AND cooldown has elapsed.
+- `GetGoapGoal()` → `{"isHungry": false}` with urgency `MaxValue - CurrentValue`.
+- `GetGoapActions()` scans `CharacterJob.Workplace.GetItemsInStorageFurniture()` for any `FoodSO` item and returns `[GoapAction_GoToFood, GoapAction_Eat]`.
+
+### Persistence
+- Auto-handled by the existing `NeedsSaveData` serialization strategy (serializes by need-type-name + current value). No extra code required.
+
+### Macro-simulation catch-up
+- `MacroSimulator.SimulateNPCCatchUp` has a NeedHunger branch that calls `MWI.Needs.HungerCatchUpMath.ApplyDecay` at a rate of 100/24 per hour (matching the online decay of 25 per phase × 4 phases/day).
+
+### Key files
+- `Assets/Scripts/Character/CharacterNeeds/NeedHunger.cs` — need implementation.
+- `Assets/Scripts/Character/CharacterNeeds/Pure/NeedHungerMath.cs` — pure math helpers (no Unity dependencies).
+- `Assets/Scripts/Character/CharacterNeeds/Pure/HungerCatchUpMath.cs` — offline catch-up formula.
+- `Assets/Resources/Data/Item/FoodSO.cs` — `ConsumableSO` subtype with `_hungerRestored` + `FoodCategory`.
+- `Assets/Scripts/Item/FoodInstance.cs` — `ConsumableInstance` subtype; `ApplyEffect` overrides to call `NeedHunger.IncreaseValue`.
+- `Assets/Scripts/AI/GOAP/Actions/GoapAction_GoToFood.cs` — navigates to storage furniture with food.
+- `Assets/Scripts/AI/GOAP/Actions/GoapAction_Eat.cs` — executes the eat action and restores hunger.

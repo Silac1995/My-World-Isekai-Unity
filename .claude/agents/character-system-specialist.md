@@ -330,3 +330,7 @@ Every subsystem exposed on `Character.cs` (lines 202-244). Properties delegate t
 | `.agent/skills/character_core/SKILL.md` | Core facade docs |
 | `.agent/skills/character-archetype/SKILL.md` | Archetype system docs |
 | `.agent/skills/character-netcode/SKILL.md` | Network sync patterns |
+
+## Recent changes
+
+- NeedHunger (phase-decay + IsStarving event) and Character.UseConsumable wiring through ConsumableInstance.ApplyEffect virtual.

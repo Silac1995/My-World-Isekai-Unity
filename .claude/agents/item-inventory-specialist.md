@@ -33,7 +33,8 @@ ItemSO (abstract)
 │       │   └── BagSO → creates BagInstance
 │       └── (direct WearableSO)
 └── MiscSO → creates MiscInstance
-    ├── ConsumableSO
+    ├── ConsumableSO → creates ConsumableInstance
+    │   └── FoodSO → creates FoodInstance  (ApplyEffect restores NeedHunger)
     ├── FurnitureItemSO → creates FurnitureItemInstance
     ├── KeySO → creates KeyInstance
     └── BookSO → creates BookInstance
@@ -188,3 +189,7 @@ Flow: Owner triggers animation → `OnApplyEffect()` → server validates → sp
 - **Network Architecture**: `NETWORK_ARCHITECTURE.md`
 - **Multiplayer SKILL.md**: `.agent/skills/multiplayer/SKILL.md`
 - **Project Rules**: `CLAUDE.md`
+
+## Recent changes
+
+- FoodSO : ConsumableSO subtype — `_hungerRestored` + `FoodCategory` enum; FoodInstance.ApplyEffect overrides ConsumableInstance.ApplyEffect to restore NeedHunger.
