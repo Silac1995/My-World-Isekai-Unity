@@ -399,21 +399,35 @@ public class CharacterParty : CharacterSystem, ICharacterSaveData<PartySaveData>
         var myTracker = _character.GetComponent<CharacterMapTracker>();
         if (myTracker != null) myMap = myTracker.CurrentMapID.Value.ToString();
 
-        // Leader changed to a different map — find the door and go through it
+        // Leader changed to a different map — find the door and go through it.
+        // BuildingInteriorDoor → queue CharacterEnterBuildingAction (rule #22 player↔NPC parity).
+        // Other portals/gates → small inlined PortalFollowRoutine.
         if (!string.IsNullOrEmpty(leaderNewMap) && leaderNewMap != myMap)
         {
             MapTransitionDoor door = FindDoorToMap(_character, leaderNewMap);
             if (door != null)
             {
                 ClearFollowState();
-                StartDoorFollow(door);
+
+                if (door is BuildingInteriorDoor bd)
+                {
+                    Building building = bd.GetComponentInParent<Building>();
+                    if (building != null)
+                    {
+                        _character.CharacterActions.ExecuteAction(new CharacterEnterBuildingAction(_character, building));
+                    }
+                }
+                else
+                {
+                    StartPortalFollow(door);
+                }
             }
         }
 
         // Leader came back to our map — resume normal follow
         if (!string.IsNullOrEmpty(leaderNewMap) && leaderNewMap == myMap)
         {
-            StopDoorFollow();
+            StopPortalFollow();
             UpdateFollowState();
         }
     }
@@ -963,13 +977,13 @@ public class CharacterParty : CharacterSystem, ICharacterSaveData<PartySaveData>
     //  INTERIOR FOLLOW — NPCs follow leader through doors
     // =============================================
 
-    private Coroutine _doorFollowCoroutine;
+    private Coroutine _portalFollowCoroutine;
 
     /// <summary>
     /// Called when the party leader transitions to a different map.
-    /// Finds the door that connects the follower's current map to the leader's new map,
-    /// then tells NPC followers to pathfind to that door and go through it.
-    /// Works for both entering and exiting interiors.
+    /// For each NPC follower:
+    ///   - If the connecting door is a BuildingInteriorDoor → queue CharacterEnterBuildingAction.
+    ///   - Otherwise (portal / gate / outdoor↔outdoor) → run a small portal-follow coroutine.
     /// </summary>
     public void OrderFollowersThroughDoor(string leaderTargetMapId)
     {
@@ -984,14 +998,24 @@ public class CharacterParty : CharacterSystem, ICharacterSaveData<PartySaveData>
             if (member.IsPlayer()) continue;
             if (member.CharacterCombat != null && member.CharacterCombat.IsInBattle) continue;
 
-            // Find the door on the follower's current map that leads to the leader's map
             MapTransitionDoor door = FindDoorToMap(member, leaderTargetMapId);
             if (door == null) continue;
 
-            if (member.CharacterParty != null)
+            if (member.CharacterParty == null) continue;
+            member.CharacterParty.ClearFollowState();
+
+            if (door is BuildingInteriorDoor bd)
             {
-                member.CharacterParty.ClearFollowState();
-                member.CharacterParty.StartDoorFollow(door);
+                Building building = bd.GetComponentInParent<Building>();
+                if (building != null)
+                {
+                    member.CharacterActions.ExecuteAction(new CharacterEnterBuildingAction(member, building));
+                }
+            }
+            else
+            {
+                // Portal door (outdoor↔outdoor / gate / non-building map transition).
+                member.CharacterParty.StartPortalFollow(door);
             }
         }
     }
@@ -1004,11 +1028,6 @@ public class CharacterParty : CharacterSystem, ICharacterSaveData<PartySaveData>
     {
         if (string.IsNullOrEmpty(targetMapId)) return null;
 
-        // Get the follower's current map
-        var tracker = follower.GetComponent<CharacterMapTracker>();
-        string followerMapId = tracker != null ? tracker.CurrentMapID.Value.ToString() : "";
-
-        // Search all doors in the scene
         var allDoors = UnityEngine.Object.FindObjectsByType<MapTransitionDoor>(FindObjectsSortMode.None);
         MapTransitionDoor bestDoor = null;
         float bestDist = float.MaxValue;
@@ -1017,26 +1036,21 @@ public class CharacterParty : CharacterSystem, ICharacterSaveData<PartySaveData>
         {
             string doorTargetMapId = null;
 
-            // BuildingInteriorDoor: check if its interior map ID matches
             if (door is BuildingInteriorDoor buildingDoor)
             {
                 string interiorId = buildingDoor.GetInteriorMapId();
-
                 if (interiorId == targetMapId)
                 {
-                    // Follower is outside, leader went inside this building
                     doorTargetMapId = targetMapId;
                 }
                 else if (buildingDoor.ExteriorMapId == targetMapId)
                 {
-                    // Leader went to the exterior — but this is an entry door, not an exit.
-                    // Skip; the exit door inside the interior is a regular MapTransitionDoor.
+                    // Leader went to the exterior — but this is an entry door, not an exit. Skip.
                     continue;
                 }
             }
             else
             {
-                // Regular MapTransitionDoor: check TargetMapId
                 if (door.TargetMapId == targetMapId)
                 {
                     doorTargetMapId = targetMapId;
@@ -1045,7 +1059,6 @@ public class CharacterParty : CharacterSystem, ICharacterSaveData<PartySaveData>
 
             if (doorTargetMapId == null) continue;
 
-            // Make sure this door is on the follower's current map (roughly)
             float dist = Vector3.Distance(follower.transform.position, door.transform.position);
             if (dist < bestDist)
             {
@@ -1057,79 +1070,71 @@ public class CharacterParty : CharacterSystem, ICharacterSaveData<PartySaveData>
         return bestDoor;
     }
 
-    private void StartDoorFollow(MapTransitionDoor door)
+    private void StartPortalFollow(MapTransitionDoor door)
     {
-        StopDoorFollow();
-        _doorFollowCoroutine = StartCoroutine(DoorFollowRoutine(door));
+        StopPortalFollow();
+        _portalFollowCoroutine = StartCoroutine(PortalFollowRoutine(door));
     }
 
-    private void StopDoorFollow()
+    private void StopPortalFollow()
     {
-        if (_doorFollowCoroutine != null)
+        if (_portalFollowCoroutine != null)
         {
-            StopCoroutine(_doorFollowCoroutine);
-            _doorFollowCoroutine = null;
+            StopCoroutine(_portalFollowCoroutine);
+            _portalFollowCoroutine = null;
         }
     }
 
-    private System.Collections.IEnumerator DoorFollowRoutine(MapTransitionDoor door)
+    /// <summary>
+    /// Walks the follower to a non-building portal door and triggers it.
+    /// Mirrors <see cref="CharacterDoorTraversalAction"/>'s walk-loop, but inlined here
+    /// because Enter/Leave actions don't semantically cover outdoor↔outdoor portals.
+    /// IMPORTANT: every exit path must Unfreeze the controller — same discipline as
+    /// the action base class.
+    /// </summary>
+    private System.Collections.IEnumerator PortalFollowRoutine(MapTransitionDoor door)
     {
         if (door == null || _character == null) yield break;
 
-        // Freeze the controller so the BT doesn't override our pathfinding
         if (_character.Controller != null && !_character.IsPlayer())
             _character.Controller.Freeze();
-
-        // Resume movement (Freeze stops it) but under our control, not the BT's
         _character.CharacterMovement.Resume();
-
-        float interactRange = 2.5f;
-        if (door.TryGetComponent<InteractableObject>(out var interactable) && interactable.InteractionZone != null)
-        {
-            interactRange = interactable.InteractionZone.bounds.extents.magnitude;
-        }
-
         _character.CharacterMovement.SetDestination(door.transform.position);
 
-        float timeout = 15f;
+        const float Timeout = 15f;
+        const float Repath = 2f;
         float elapsed = 0f;
+        float sinceRepath = 0f;
 
-        while (elapsed < timeout)
+        while (elapsed < Timeout)
         {
-            if (_character == null || !_character.IsAlive()) break;
-            if (door == null) break;
+            if (_character == null || !_character.IsAlive() || door == null) break;
 
-            float dist = Vector3.Distance(_character.transform.position, door.transform.position);
-
-            if (dist <= interactRange)
+            if (door.IsCharacterInInteractionZone(_character))
             {
                 _character.CharacterMovement.Stop();
-
-                // Unfreeze before interacting so the door transition works normally
-                if (_character.Controller != null)
-                    _character.Controller.Unfreeze();
-
+                if (_character.Controller != null) _character.Controller.Unfreeze();
                 door.Interact(_character);
-                _doorFollowCoroutine = null;
+                _portalFollowCoroutine = null;
                 yield break;
             }
 
-            // Re-path every 2s in case the NPC got stuck
-            if (elapsed > 0f && Mathf.Repeat(elapsed, 2f) < UnityEngine.Time.deltaTime)
+            sinceRepath += UnityEngine.Time.deltaTime;
+            if (sinceRepath >= Repath)
             {
                 _character.CharacterMovement.SetDestination(door.transform.position);
+                sinceRepath = 0f;
             }
 
             elapsed += UnityEngine.Time.deltaTime;
             yield return null;
         }
 
-        // Timeout or error — unfreeze and resume normal behavior
+        // Timeout / error path — same Unfreeze discipline.
         _character.CharacterMovement.Stop();
-        if (_character.Controller != null)
-            _character.Controller.Unfreeze();
+        if (_character.Controller != null) _character.Controller.Unfreeze();
         UpdateFollowState();
-        _doorFollowCoroutine = null;
+        _portalFollowCoroutine = null;
     }
 
     private bool IsOnSameMapAs(Character a, Character b)
@@ -1147,7 +1152,7 @@ public class CharacterParty : CharacterSystem, ICharacterSaveData<PartySaveData>
     // CLEANUP
     protected override void OnDisable()
     {
-        StopDoorFollow();
+        StopPortalFollow();
         if (_gatherCoroutine != null)
         {
             StopCoroutine(_gatherCoroutine);
