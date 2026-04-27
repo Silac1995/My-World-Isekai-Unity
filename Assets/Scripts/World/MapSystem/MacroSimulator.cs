@@ -191,6 +191,162 @@ namespace MWI.Time
             TickZoneMotion(dayDelta);
         }
 
+        /// <summary>
+        /// Per-hour catch-up entry point used by TimeSkipController.
+        /// Runs hour-grained steps every call and day-grained steps only on hour-23→hour-0
+        /// rollover. Updates <c>data.LastHibernationTime</c> so a subsequent <c>WakeUp()</c>
+        /// does not double-process. Existing <see cref="SimulateCatchUp"/> remains the
+        /// single-pass wake-up path for hibernated maps.
+        /// </summary>
+        /// <param name="data">The active map's hibernation snapshot — typically <c>MapController.HibernationData</c>.</param>
+        /// <param name="currentDay">Post-advance day (after <c>TimeManager.AdvanceOneHour</c>).</param>
+        /// <param name="currentTime01">Post-advance time01.</param>
+        /// <param name="jobYields">Job yield registry passed through to inventory-yield helpers.</param>
+        /// <param name="previousHour">The hour value BEFORE this hour-advance (used for day-rollover detection).</param>
+        public static void SimulateOneHour(MapSaveData data, int currentDay, float currentTime01, JobYieldRegistry jobYields, int previousHour)
+        {
+            if (data == null || data.HibernatedNPCs == null) return;
+
+            int currentHour = Mathf.FloorToInt(currentTime01 * 24f);
+            bool crossedDayBoundary = (previousHour == 23 && currentHour == 0);
+
+            MapController map = null;
+            var activeMaps = UnityEngine.Object.FindObjectsByType<MapController>(FindObjectsSortMode.None);
+            foreach (var m in activeMaps)
+            {
+                if (m.MapId == data.MapId) { map = m; break; }
+            }
+
+            CommunityData community = null;
+            if (MapRegistry.Instance != null) community = MapRegistry.Instance.GetCommunity(data.MapId);
+
+            // ── Hour-grained: always run ──
+
+            // Needs decay + schedule snap (per-NPC)
+            foreach (var npc in data.HibernatedNPCs)
+            {
+                ApplyNeedsDecayHours(npc, hoursPassed: 1f);
+                SnapPositionFromSchedule(npc, data.MapId, currentHour);
+            }
+
+            // Terrain + vegetation
+            if (data.TerrainCells != null)
+            {
+                var climateProfile = map?.Biome?.ClimateProfile;
+                if (climateProfile != null)
+                {
+                    var transitionRules = Resources.LoadAll<MWI.Terrain.TerrainTransitionRule>("Data/Terrain/TransitionRules");
+                    SimulateTerrainCatchUp(data.TerrainCells, climateProfile, 1f, new List<MWI.Terrain.TerrainTransitionRule>(transitionRules));
+                    SimulateVegetationCatchUp(data.TerrainCells, climateProfile, 1f);
+                }
+            }
+
+            // ── Day-grained: only on day rollover ──
+            if (crossedDayBoundary)
+            {
+                // 1. Resource pool regen — port from existing SimulateCatchUp's "1. Resource Regeneration" block, with fullDays=1
+                if (map != null && map.Biome != null && community != null)
+                {
+                    foreach (var pool in community.ResourcePools)
+                    {
+                        var entry = map.Biome.Harvestables.Find(h => h.ResourceId == pool.ResourceId);
+                        if (entry == null) continue;
+                        pool.CurrentAmount = Mathf.Min(pool.CurrentAmount + Mathf.CeilToInt(entry.BaseYieldQuantity), pool.MaxAmount);
+                    }
+                }
+
+                // 2. Inventory yields per NPC — port from existing block with daysPassed=1
+                if (jobYields != null && community != null)
+                {
+                    foreach (var npc in data.HibernatedNPCs)
+                    {
+                        if (npc.SavedJobType == JobType.None) continue;
+                        var recipe = jobYields.GetYieldFor(npc.SavedJobType);
+                        if (recipe == null) continue;
+
+                        float fraction = ((npc.FreeTimeStarts - npc.WorkHourStarts + 24) % 24) / 24f;
+                        float workFraction = Mathf.Clamp(fraction == 0f ? 1f : fraction, 0.1f, 1f);
+
+                        foreach (var output in recipe.Outputs)
+                        {
+                            int yieldAmount = Mathf.FloorToInt(output.BaseAmountPerDay * workFraction * 1f);
+                            if (yieldAmount <= 0) continue;
+                            var pool = community.ResourcePools.Find(p => p.ResourceId == output.ResourceId);
+                            if (pool == null)
+                            {
+                                pool = new ResourcePoolEntry { ResourceId = output.ResourceId, CurrentAmount = 0, MaxAmount = 9999f, LastHarvestedDay = currentDay };
+                                community.ResourcePools.Add(pool);
+                            }
+                            pool.CurrentAmount += yieldAmount;
+                        }
+                    }
+                }
+
+                // 3. City growth — call existing SimulateCityGrowth helper with daysPassed=1.0
+                if (community != null) SimulateCityGrowth(community, daysPassed: 1.0, data);
+
+                // 4. Zone motion — daysSinceLastTick=1
+                TickZoneMotion(daysSinceLastTick: 1);
+            }
+
+            // Stamp the new hibernation time so a future WakeUp single-pass does not re-process this delta.
+            data.LastHibernationTime = (double)currentDay + currentTime01;
+        }
+
+        /// <summary>
+        /// Extracted from <see cref="SimulateCatchUp"/> step 3 (Needs Decay) so both per-hour and
+        /// per-day paths share one implementation.
+        /// </summary>
+        private static void ApplyNeedsDecayHours(HibernatedNPCData npcData, float hoursPassed)
+        {
+            foreach (var need in npcData.SavedNeeds)
+            {
+                if (need.NeedType == "NeedSocial")
+                {
+                    float drainRate = 45f / 24f;
+                    need.Value -= (hoursPassed * drainRate);
+                    if (need.Value < 0) need.Value = 0;
+                }
+                else if (need.NeedType == "NeedHunger")
+                {
+                    const float drainRatePerHour = 100f / 24f;
+                    need.Value = MWI.Needs.HungerCatchUpMath.ApplyDecay(need.Value, drainRatePerHour, hoursPassed);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Extracted from <see cref="SimulateCatchUp"/> step 4 (Schedule Snap).
+        /// </summary>
+        private static void SnapPositionFromSchedule(HibernatedNPCData npcData, string currentMapId, int currentHour)
+        {
+            if (!npcData.HasSchedule) return;
+
+            string targetMapId;
+            Vector3 targetPosition = npcData.Position;
+
+            if (IsHourInRange(currentHour, npcData.SleepHourStarts, npcData.WorkHourStarts))
+            {
+                targetMapId = npcData.HomeMapId;
+                targetPosition = npcData.HomePosition;
+            }
+            else if (IsHourInRange(currentHour, npcData.WorkHourStarts, npcData.FreeTimeStarts))
+            {
+                targetMapId = npcData.WorkMapId;
+                targetPosition = npcData.WorkPosition;
+            }
+            else
+            {
+                targetMapId = npcData.FreeTimeMapId;
+                targetPosition = npcData.FreeTimePosition;
+            }
+
+            if (string.IsNullOrEmpty(targetMapId) || targetMapId == currentMapId)
+            {
+                if (targetPosition != Vector3.zero) npcData.Position = targetPosition;
+            }
+        }
+
         private static void SimulateCityGrowth(CommunityData community, double daysPassed, MapSaveData mapData)
         {
             // Max 1 new building per 7 offline days to prevent massive lag spikes/runaway growth
@@ -271,52 +427,8 @@ namespace MWI.Time
 
         private static void SimulateNPCCatchUp(HibernatedNPCData npcData, string currentMapId, int currentHour, float hoursPassed)
         {
-            // Tier 2: Offline Needs Decay (Step 3)
-            foreach (var need in npcData.SavedNeeds)
-            {
-                if (need.NeedType == "NeedSocial")
-                {
-                    float drainRate = 45f / 24f;
-                    need.Value -= (hoursPassed * drainRate);
-                    if (need.Value < 0) need.Value = 0;
-                }
-                else if (need.NeedType == "NeedHunger")
-                {
-                    // 100 hunger per day = 100/24 per hour. Matches NeedHunger._decayPerPhase=25 x 4 phases.
-                    const float drainRatePerHour = 100f / 24f;
-                    need.Value = MWI.Needs.HungerCatchUpMath.ApplyDecay(need.Value, drainRatePerHour, hoursPassed);
-                }
-            }
-
-            // Tier 1: Snap Position based on Anchors (Step 4)
-            if (!npcData.HasSchedule) return;
-
-            string targetMapId = null;
-            Vector3 targetPosition = npcData.Position; // Default to wherever they were
-
-            if (IsHourInRange(currentHour, npcData.SleepHourStarts, npcData.WorkHourStarts))
-            {
-                targetMapId = npcData.HomeMapId;
-                targetPosition = npcData.HomePosition;
-            }
-            else if (IsHourInRange(currentHour, npcData.WorkHourStarts, npcData.FreeTimeStarts))
-            {
-                targetMapId = npcData.WorkMapId;
-                targetPosition = npcData.WorkPosition;
-            }
-            else // Free Time zone
-            {
-                targetMapId = npcData.FreeTimeMapId;
-                targetPosition = npcData.FreeTimePosition;
-            }
-
-            if (string.IsNullOrEmpty(targetMapId) || targetMapId == currentMapId)
-            {
-                if (targetPosition != Vector3.zero) 
-                {
-                    npcData.Position = targetPosition;
-                }
-            }
+            ApplyNeedsDecayHours(npcData, hoursPassed);
+            SnapPositionFromSchedule(npcData, currentMapId, currentHour);
         }
 
         private static bool IsHourInRange(int currentHour, int startHour, int endHour)
