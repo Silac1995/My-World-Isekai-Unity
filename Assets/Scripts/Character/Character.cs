@@ -1098,11 +1098,14 @@ public class Character : NetworkBehaviour, MWI.Orders.IOrderIssuer
         }
 
         transform.SetPositionAndRotation(anchor.position, anchor.rotation);
-        if (_cachedNavMeshAgent != null) _cachedNavMeshAgent.enabled = false;
-        CharacterMovement?.ResetPath();
+        // ConfigureNavMesh(false) zeroes isStopped, calls ResetPath(), then disables the agent
+        // and unlocks physics in the correct order. Mirrors HandleUnconsciousStatus.
+        ConfigureNavMesh(false);
         NetworkIsSleeping.Value = true;
 
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
         Debug.Log($"<color=cyan>[Character]</color> {CharacterName} EnterSleep at {anchor.name} ({anchor.position}).");
+#endif
     }
 
     /// <summary>
@@ -1123,9 +1126,14 @@ public class Character : NetworkBehaviour, MWI.Orders.IOrderIssuer
             return;
         }
 
-        if (_cachedNavMeshAgent != null) _cachedNavMeshAgent.enabled = true;
+        // ConfigureNavMesh(true) zeroes velocity / forces kinematic BEFORE enabling the agent
+        // and skips enable on non-server non-owner clients. Players don't drive a NavMeshAgent,
+        // so mirror the !IsPlayer() gate used by HandleUnconsciousStatus on wake.
+        ConfigureNavMesh(!IsPlayer());
         NetworkIsSleeping.Value = false;
 
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
         Debug.Log($"<color=cyan>[Character]</color> {CharacterName} ExitSleep.");
+#endif
     }
 }
