@@ -57,24 +57,47 @@ public class BedFurniture : Furniture
 
     public bool UseSlot(int slotIndex, Character c)
     {
-        // Wired to Character.EnterSleep in Task 3.
         if (c == null) return false;
         if (slotIndex < 0 || slotIndex >= _slots.Count) return false;
         var slot = _slots[slotIndex];
-        if (slot.Occupant != null) return false;
-        if (slot.ReservedBy != null && slot.ReservedBy != c) return false;
+        if (slot.Occupant != null)
+        {
+            Debug.LogWarning($"<color=orange>[BedFurniture]</color> Slot {slotIndex} on {FurnitureName} already occupied by {slot.Occupant.CharacterName}.");
+            return false;
+        }
+        if (slot.ReservedBy != null && slot.ReservedBy != c)
+        {
+            Debug.LogWarning($"<color=orange>[BedFurniture]</color> Slot {slotIndex} on {FurnitureName} reserved by {slot.ReservedBy.CharacterName}, not {c.CharacterName}.");
+            return false;
+        }
+        if (slot.Anchor == null)
+        {
+            Debug.LogError($"<color=red>[BedFurniture]</color> Slot {slotIndex} on {FurnitureName} has no Anchor authored. Cannot UseSlot.");
+            return false;
+        }
+
         slot.Occupant = c;
         slot.ReservedBy = null;
         c.SetOccupyingFurniture(this);
+        c.EnterSleep(slot.Anchor);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        Debug.Log($"<color=cyan>[BedFurniture]</color> {c.CharacterName} occupied slot {slotIndex} on {FurnitureName}.");
+#endif
         return true;
     }
 
     public void ReleaseSlot(int slotIndex)
     {
-        // Wired to Character.ExitSleep in Task 3.
         if (slotIndex < 0 || slotIndex >= _slots.Count) return;
         var slot = _slots[slotIndex];
-        if (slot.Occupant != null) slot.Occupant.SetOccupyingFurniture(null);
+        if (slot.Occupant != null)
+        {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            Debug.Log($"<color=cyan>[BedFurniture]</color> {slot.Occupant.CharacterName} released slot {slotIndex} on {FurnitureName}.");
+#endif
+            slot.Occupant.ExitSleep();
+            slot.Occupant.SetOccupyingFurniture(null);
+        }
         slot.Occupant = null;
         slot.ReservedBy = null;
     }
