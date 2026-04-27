@@ -40,6 +40,16 @@ The architecture uses a hub, `CharacterBodyPartsController`, which contains sub-
 - **A sprite does not appear / Visual bug**: Verify that the logic actually calls the basic API (`SetPose()`, `SetClosed()`). The fact that the underlying technology is temporary (SpriteResolver) does not excuse bypassing the modular architecture!
 - If you create a new GOAP/BT action (e.g., "Fall asleep"), don't forget to include the visual call for your actions: `Character.CharacterVisual.BodyPartsController.EyesController.SetClosed(true)`.
 
+## Carry persistence (HandsController)
+
+`HandsController` is a body-part controller, but it also owns gameplay state: the **carried in-hand item** (`CarriedItem` — distinct from the equipped weapon, which lives on `CharacterEquipment._weapon`). Because of this, it implements `ICharacterSaveData<HandsSaveData>`:
+- `SaveKey = "HandsController"`, `LoadPriority = 35` — runs **after** `CharacterEquipment` (priority 30) so the weapon slot is restored first.
+- `Serialize()` writes `ItemSO.ItemId` + `JsonUtility.ToJson(ItemInstance)`.
+- `Deserialize()` rebuilds the `ItemInstance` from `Resources.LoadAll<ItemSO>("Data/Item")`, then calls a private `ApplyRestoredCarry` that bypasses the `AreHandsFree()` check (the saved state is the source of truth at that point).
+- If `_hands.Count == 0` (the visual hierarchy hasn't been scanned yet — `Initialize()` not called), the rebuilt instance is parked in `_pendingRestoreItem` and consumed when `Initialize()` runs.
+
+When extending the visual hand system, **do not** drop `_carriedItem` into a non-saved field or a separate sibling component without porting the save contract — the in-hand item must round-trip through bed-save / portal-save / pause-save.
+
 ## Extensions beyond body parts
 
 The logical API documented here (eyes, hands, mouth, ears, hair) is **one layer** of the visual system. The broader visual architecture — clothing layers (underwear/clothing/armor), physics-enabled garments (skirts/capes), wound overlays (bruises/cuts), dismemberment (amputations + prosthetics), and cross-archetype equipment sockets (cap on a human vs a wolf) — is documented here:

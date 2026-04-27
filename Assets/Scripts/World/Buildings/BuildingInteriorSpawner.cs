@@ -139,20 +139,30 @@ public static class BuildingInteriorSpawner
             Debug.Log($"<color=cyan>[BuildingInteriorSpawner]</color> NavMesh rebaked for interior '{record.InteriorMapId}'.");
         }
 
-        // Restore persisted door lock/health state
-        DoorLock[] doorLocks = instance.GetComponentsInChildren<DoorLock>(true);
-        foreach (var dl in doorLocks)
+        // Defensive re-application of persisted door state for the interior's doors.
+        // Their `OnNetworkSpawn` already pulled from `DoorStateRegistry` (single source
+        // of truth for door state), but we re-apply here in case the door spawned before
+        // the registry's `RestoreState` ran (timing race on world load).
+        if (DoorStateRegistry.Instance != null)
         {
-            dl.IsLocked.Value = record.IsLocked;
-        }
-
-        DoorHealth[] doorHealths = instance.GetComponentsInChildren<DoorHealth>(true);
-        foreach (var dh in doorHealths)
-        {
-            if (record.DoorCurrentHealth >= 0f)
+            DoorLock[] doorLocks = instance.GetComponentsInChildren<DoorLock>(true);
+            foreach (var dl in doorLocks)
             {
-                dh.CurrentHealth.Value = record.DoorCurrentHealth;
-                dh.IsBroken.Value = record.DoorCurrentHealth <= 0f;
+                if (string.IsNullOrEmpty(dl.LockId)) continue;
+                var doorRecord = DoorStateRegistry.Instance.TryGet(dl.LockId);
+                if (doorRecord != null) dl.IsLocked.Value = doorRecord.IsLocked;
+            }
+
+            DoorHealth[] doorHealths = instance.GetComponentsInChildren<DoorHealth>(true);
+            foreach (var dh in doorHealths)
+            {
+                if (string.IsNullOrEmpty(dh.LockId)) continue;
+                var doorRecord = DoorStateRegistry.Instance.TryGet(dh.LockId);
+                if (doorRecord != null && doorRecord.CurrentHealth >= 0f)
+                {
+                    dh.CurrentHealth.Value = doorRecord.CurrentHealth;
+                    dh.IsBroken.Value = doorRecord.CurrentHealth <= 0f;
+                }
             }
         }
 

@@ -29,10 +29,13 @@ Portable character profiles that travel across worlds. Characters are independen
 | 15 | CharacterCombatLevel |
 | 20 | CharacterSkills, CharacterAbilities |
 | 30 | CharacterEquipment |
+| 35 | HandsController (carried-in-hand item — must run after CharacterEquipment so the weapon slot is restored first) |
 | 40 | CharacterNeeds, CharacterTraits |
 | 50 | CharacterRelation, CharacterBookKnowledge |
 | 60 | CharacterParty, CharacterCommunity, CharacterJob, CharacterSchedule |
 | 70 | CharacterMapTracker, CharacterCombat |
+
+**Note:** `HandsController` is a body-part visual controller (not a `CharacterSystem`), but it owns the in-hand `CarriedItem` gameplay state and therefore implements `ICharacterSaveData<HandsSaveData>`. Discovery is interface-based (`GetComponentsInChildren<ICharacterSaveData>(true)`), so subsystems do not need to inherit from `CharacterSystem` to be saved. If you add carry state to a different visual sibling in the future, port the contract.
 
 ## GUID-Based World Saves
 - World files stored as `Worlds/{worldGuid}.json` (replaces slot-based `world_0.json`)

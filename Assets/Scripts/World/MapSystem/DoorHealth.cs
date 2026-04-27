@@ -34,15 +34,141 @@ public class DoorHealth : NetworkBehaviour, IDamageable
     public float DamageResistance => _damageResistance;
     public List<CraftingIngredient> RepairMaterials => _repairMaterials;
 
+    // Cached at spawn — auto-derived from parent Building's BuildingId, mirrors DoorLock's
+    // lockId scheme so the same key reaches the same BuildingInteriorRegistry record.
+    private string _lockId;
+    public string LockId => _lockId;
+
+    // Static registry keyed by lockId, used by BuildingInteriorRegistry to apply persisted
+    // health on restore without scanning the whole scene.
+    private static readonly Dictionary<string, List<DoorHealth>> _registry = new();
+
     public override void OnNetworkSpawn()
     {
         base.OnNetworkSpawn();
 
+        // Auto-derive lockId from parent Building (same scheme as DoorLock).
+        if (string.IsNullOrEmpty(_lockId))
+        {
+            var building = GetComponentInParent<Building>();
+            if (building != null && !string.IsNullOrEmpty(building.BuildingId))
+            {
+                _lockId = building.BuildingId;
+            }
+        }
+
         if (IsServer)
         {
-            CurrentHealth.Value = _maxHealth;
-            IsBroken.Value = false;
+            // Prefer persisted health from DoorStateRegistry, else _maxHealth default.
+            float initialHealth = _maxHealth;
+            if (!string.IsNullOrEmpty(_lockId) && DoorStateRegistry.Instance != null)
+            {
+                var record = DoorStateRegistry.Instance.TryGet(_lockId);
+                if (record != null && record.CurrentHealth >= 0f)
+                    initialHealth = record.CurrentHealth;
+            }
+            CurrentHealth.Value = initialHealth;
+            IsBroken.Value = initialHealth <= 0f;
         }
+
+        CurrentHealth.OnValueChanged += OnCurrentHealthChanged;
+
+        if (!string.IsNullOrEmpty(_lockId))
+        {
+            if (!_registry.ContainsKey(_lockId))
+                _registry[_lockId] = new List<DoorHealth>();
+            _registry[_lockId].Add(this);
+        }
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        base.OnNetworkDespawn();
+        CurrentHealth.OnValueChanged -= OnCurrentHealthChanged;
+
+        if (!string.IsNullOrEmpty(_lockId) && _registry.TryGetValue(_lockId, out var list))
+        {
+            list.Remove(this);
+            if (list.Count == 0)
+                _registry.Remove(_lockId);
+        }
+    }
+
+    private void OnCurrentHealthChanged(float previousValue, float newValue)
+    {
+        if (!IsServer) return;
+        PersistHealthState(newValue);
+    }
+
+    private void PersistHealthState(float health)
+    {
+        // Defensive: re-derive lockId if it never got set at OnNetworkSpawn.
+        if (string.IsNullOrEmpty(_lockId))
+        {
+            var building = GetComponentInParent<Building>();
+            if (building != null && !string.IsNullOrEmpty(building.BuildingId))
+            {
+                _lockId = building.BuildingId;
+                if (!_registry.ContainsKey(_lockId))
+                    _registry[_lockId] = new List<DoorHealth>();
+                if (!_registry[_lockId].Contains(this))
+                    _registry[_lockId].Add(this);
+            }
+        }
+
+        if (string.IsNullOrEmpty(_lockId)) return;
+        DoorStateRegistry.Instance?.SetHealthState(_lockId, health);
+    }
+
+    /// <summary>
+    /// Server-only: applies a health value to every spawned DoorHealth with the given lockId.
+    /// Called by BuildingInteriorRegistry.RestoreState to retroactively fix doors that
+    /// spawned from the scene before the save was restored.
+    /// </summary>
+    public static void ApplyHealthState(string lockId, float health)
+    {
+        if (string.IsNullOrEmpty(lockId)) return;
+        if (!_registry.TryGetValue(lockId, out var doors)) return;
+        foreach (var door in doors)
+        {
+            if (door != null && door.IsServer && door.IsSpawned)
+            {
+                door.CurrentHealth.Value = health;
+                door.IsBroken.Value = health <= 0f;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Returns the current CurrentHealth of any spawned DoorHealth with the given lockId,
+    /// or null if none can be found. Falls back to a scene-wide scan when the static
+    /// `_registry` doesn't have the lockId (defensive — covers empty-lockId-at-spawn cases).
+    /// </summary>
+    public static float? GetCurrentHealth(string lockId)
+    {
+        if (string.IsNullOrEmpty(lockId)) return null;
+
+        if (_registry.TryGetValue(lockId, out var doors))
+        {
+            foreach (var door in doors)
+            {
+                if (door != null && door.IsSpawned) return door.CurrentHealth.Value;
+            }
+        }
+
+        foreach (var door in UnityEngine.Object.FindObjectsByType<DoorHealth>(FindObjectsSortMode.None))
+        {
+            if (door == null || !door.IsSpawned) continue;
+            string resolvedLockId = door._lockId;
+            if (string.IsNullOrEmpty(resolvedLockId))
+            {
+                var building = door.GetComponentInParent<Building>();
+                if (building != null) resolvedLockId = building.BuildingId;
+            }
+            if (resolvedLockId == lockId) return door.CurrentHealth.Value;
+        }
+
+        return null;
     }
 
     public bool CanBeDamaged()

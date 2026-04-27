@@ -34,13 +34,6 @@ public class CharacterMapTransitionAction : CharacterAction
     {
         Debug.Log($"<color=cyan>[MapTransition]</color> OnApplyEffect: IsOwner={_character.IsOwner}, IsLocalPlayer={_character.IsLocalPlayer}, IsServer={_character.IsServer}, targetMapId='{_targetMapId}', targetPos={_targetPosition}");
 
-        // Save character profile and world state before transitioning
-        if (_character.IsServer && _character.IsPlayer())
-        {
-            if (SaveManager.Instance != null)
-                SaveManager.Instance.RequestSave(_character);
-        }
-
         // Prediction: Client warps instantly for seamless feel
         if (IsLocalPlayerCharacter())
         {

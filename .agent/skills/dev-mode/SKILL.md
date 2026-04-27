@@ -97,9 +97,13 @@ No edit to `DevModeManager` or `DevModePanel` is required to add a module.
 
 ## 7. Dev Spawn Module Details
 
-`DevSpawnModule` — the first shipping module. Lets the host click anywhere on the `Environment` layer to spawn fully configured NPCs, or — when the **Item override** dropdown is set — drop `ItemSO` instances instead.
+`DevSpawnModule` — the first shipping module. Lets the host click anywhere on the `Environment` layer to spawn fully configured NPCs **or** drop `ItemSO` instances. Mode is selected by a **Character / Item sub-tab bar** at the top of the Spawn panel.
 
 **Configuration UI**
+
+The Spawn panel is a stack of: `SubTabBar` (Character / Item buttons) → active sub-panel (`CharacterSubPanel` or `ItemSubPanel`) → shared `Label_Count` + `CountField` + `ArmedToggle`. The two sub-panels are toggled via `SetActive`; only one is visible at a time. Count and Armed live OUTSIDE both sub-panels because they apply to both modes.
+
+**Character sub-tab fields** (`CharacterSubPanel`):
 
 | Field | Widget |
 |---|---|
@@ -107,16 +111,26 @@ No edit to `DevModeManager` or `DevModePanel` is required to add a module.
 | Prefab | TMP Dropdown (filtered by race) |
 | Personality | TMP Dropdown |
 | Behavioral Trait | TMP Dropdown |
-| Item override | TMP Dropdown (index 0 = `<None — spawn character>`, then every `ItemSO` under `Resources/Data/Item` sorted by `ItemName`) |
 | Combat Styles | Multi-entry row list (`DevSpawnRow` per entry — combat style dropdown + level input) |
 | Skills | Multi-entry row list (`DevSpawnRow` per entry — skill dropdown + level input) |
+
+**Item sub-tab fields** (`ItemSubPanel`):
+
+| Field | Widget |
+|---|---|
+| Item | TMP Dropdown — every `ItemSO` under `Resources/Data/Item` sorted by `ItemName`. No sentinel; the sub-tab itself selects mode, so index 0 is a real item. |
+
+**Shared (always visible regardless of sub-tab):**
+
+| Field | Widget |
+|---|---|
 | Count | TMP InputField (integer, default 1) |
 | Armed | Toggle |
 
 **Click flow**
 
 1. Host clicks on an `Environment`-layer collider. Ray is cast from the mouse.
-2. **Dispatch:** `SpawnAt(anchor)` first checks the Item override dropdown. If `value > 0`, the click routes to `SpawnItemBatch(anchor, _items[value - 1])` and the character path is skipped entirely. Otherwise the character spawn block below runs.
+2. **Dispatch:** `SpawnAt(anchor)` reads `_activeSubTab`. If `Item`, the click routes to `SpawnItemBatch(anchor, _items[_itemDropdown.value])`. Otherwise the character path runs.
 3. Both paths share the same scatter formula: for `N = count`, the scatter **radius = `4 * sqrt(N)` Unity units** (per project rule 32, 11 units = 1.67 m, so ~0.6 m per unit of radius). Individual offsets are random within the disk.
 4. **Character path:** `SpawnManager.SpawnCharacter(...)` is invoked with the configured race/prefab/personality/trait/armed flag.
 5. **Item path:** `SpawnManager.SpawnItem(item, pos)` is invoked per spawn. The dev-mode wrapper adds an explicit `NetworkManager.Singleton.IsServer` check before the loop (clearer error than SpawnManager's internal check) and wraps each per-spawn call in `try/catch` so one bad item doesn't abort the batch. No combat styles / skills / personality apply on the item path.
@@ -126,6 +140,13 @@ No edit to `DevModeManager` or `DevModePanel` is required to add a module.
 **Why a pending-config dict?** `SpawnCharacter` is an async network spawn — we don't have the instance yet when we configure it. The dict is populated on the main thread before spawn and drained in the spawn callback by NetworkObjectId.
 
 **Item catalog caching.** `_items` is loaded once in `LoadCatalogs` (called from `Start`) via `Resources.LoadAll<ItemSO>("Data/Item")`, sorted alphabetically by `ItemName`, and never mutated at click time. Adding new `ItemSO` assets requires re-entering play mode for them to appear in the dropdown.
+
+**Spawn panel layout contract — DO NOT REGRESS.** The Spawn panel uses Unity Auto Layout (nested VLG/HLG) end-to-end. Two contracts must hold or the layout collapses:
+
+1. **Every direct child of `ContentRoot` and of `SpawnTab` that hosts another `LayoutGroup` must carry a `LayoutElement`.** `LayoutGroup` itself reports `flexibleHeight=-1` and a preferred height derived from its own children — when those children also stretch via anchors, the chain returns 0 and the parent VLG redistributes the empty space unpredictably (in the original Spawn-tab regression, the top `TabBar` ended up consuming the whole panel). The fix shipped in the prefab: add a `LayoutElement` with explicit `MinHeight` / `PreferredHeight` and `FlexibleHeight=0` on `TabBar` (36) and `SubTabBar` (32) so they stay thin, and `FlexibleHeight=1` on `CharacterSubPanel` / `ItemSubPanel` so the active one takes the remaining vertical space.
+2. **`CharacterSubPanel` and `ItemSubPanel` must use top-stretch anchors `(0,1) → (1,1)` with pivot `(0.5, 1)`, NOT center-stretch `(0,0) → (1,1)`.** `SpawnTab`'s VLG runs with `ChildControlHeight=1` so it actively sets the children's heights. Center-stretch anchors with `SizeDelta (0,0)` make the panel report a rect height equal to the parent (chaos). Top-stretch with a real `SizeDelta.y` is what the VLG expects.
+
+Adding a third sub-tab (e.g., "Furniture") = create a sibling `*SubPanel` GameObject following the ItemSubPanel template (top-stretch anchors, VLG, LayoutElement with `FlexibleHeight=1`), add a button to `SubTabBar`, register it in `DevSpawnModule._*SubPanel` / `_*SubTabButton`, and extend the `SpawnSubTab` enum + `SpawnAt` dispatch.
 
 ## Select Tab
 

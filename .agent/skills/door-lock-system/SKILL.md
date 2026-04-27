@@ -161,7 +161,23 @@ Implements `IDamageable` interface. Makes doors attackable by the existing comba
 - `bool IsLocked` — persisted lock state.
 - `float DoorCurrentHealth` — persisted health (-1 = use prefab default).
 
-`BuildingInteriorSpawner` restores these values after `NetworkObject.Spawn()`.
+**Write path (server-authoritative):**
+- `DoorLock.SetLockedStateWithSync` calls `PersistLockState` after every lock/unlock — writes the new value into the matching record (keyed by `lockId == BuildingId`).
+- `DoorHealth.CurrentHealth.OnValueChanged` (gated on `IsServer`) calls `PersistHealthState` — writes new HP into the same record.
+- Both helpers are no-ops if the registry has no record yet for that lockId (e.g. before first interior entry).
+
+**Read path (server-authoritative):**
+- `DoorLock.OnNetworkSpawn` prefers `record.IsLocked` over the authored `_startsLocked` default when a record exists.
+- `DoorHealth.OnNetworkSpawn` prefers `record.DoorCurrentHealth` over `_maxHealth` when `>= 0`.
+- `BuildingInteriorSpawner` re-applies both values after `NetworkObject.Spawn()` for interior doors (defensive — `OnNetworkSpawn` already covers this for any door whose record exists at spawn time).
+
+**Restore-time race fix (exterior doors):**
+- Exterior building doors spawn from the scene **before** `BuildingInteriorRegistry.RestoreState` runs (ISaveable ordering), so `OnNetworkSpawn` finds an empty registry and falls back to defaults.
+- `BuildingInteriorRegistry.RestoreState` calls `DoorLock.ApplyLockState(lockId, isLocked)` + `DoorHealth.ApplyHealthState(lockId, health)` for each restored record to retroactively patch already-spawned doors.
+
+**Pre-record snapshot (unlock-before-first-entry):**
+- The registry record is lazy-created on first interior entry. If a player unlocks the exterior door before ever entering, the record doesn't exist yet — there's nothing to write to.
+- `RegisterInterior` snapshots the live exterior door state via `DoorLock.GetCurrentLockState(buildingId)` + `DoorHealth.GetCurrentHealth(buildingId)` so the new record inherits the live values rather than reverting to field defaults.
 
 ---
 

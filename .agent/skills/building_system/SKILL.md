@@ -71,7 +71,9 @@ The top-level structure in the world.
 - **Construction & States**: Buildings manage a native `CurrentState` (`BuildingState.UnderConstruction` or `Complete`). They can require `_constructionRequirements` (a list of `CraftingIngredient`s) to be placed. Players/NPCs populate this using `ContributeMaterial(ItemSO, amount)`, which triggers `OnConstructionComplete` when full. Alternatively, `BuildInstantly()` bypasses the requirements.
 - **Logistics Integration**: Holds a reference to a `_deliveryZone` which is essential for the Logistics cycle.
 - **Public access**: Has an outer `_buildingZone` (distinct from the main interior) for general traversal and random roaming around the property.
-- **Dynamic Identity**: In dynamic city environments, buildings generate a unique `NetworkBuildingId` (GUID) on `OnNetworkSpawn`. This UUID is used to link the building to its specific interior map instance.
+- **Dynamic Identity**: Buildings expose a unique `NetworkBuildingId` GUID used to link the building to its interior map record (`BuildingInteriorRegistry`) and any persisted state. **Generation strategy is split by origin:**
+  - **Scene-authored buildings** (no `PlacedByCharacterId`): `OnNetworkSpawn` derives a *deterministic* GUID from `MD5(scene name + world position rounded to mm)` so the same scene building keeps the same `BuildingId` across reloads — without this, every reload would generate a fresh ID and orphan the saved interior record.
+  - **Runtime-placed buildings** (`BuildingPlacementManager`): `BuildingPlacementManager.RequestPlacementServerRpc` sets `PrefabId` + `PlacedByCharacterId` **before** `netObj.Spawn()` so they ride in the initial NetworkVariable payload AND are observable inside `Building.OnNetworkSpawn`. With `PlacedByCharacterId` non-empty, `OnNetworkSpawn` rolls a fresh `Guid.NewGuid()` — that GUID then round-trips through `BuildingSaveData` on save.
 - **Prefab ID**: The `PrefabId` string is used for registry lookups in `WorldSettingsData` but is NOT unique per instance.
 
 ### 5. Commercial Building (`CommercialBuilding.cs`)
@@ -355,7 +357,11 @@ Every Interior Prefab root must contain:
 - `InteriorRecord`: `BuildingId`, `InteriorMapId`, `SlotIndex`, `ExteriorMapId`, `ExteriorDoorPosition`, `PrefabId`.
 - On `RestoreState()`, respawns all interior MapControllers via `BuildingInteriorSpawner`.
 - Allocates spatial slots via `WorldOffsetAllocator.AllocateSlotIndex()`.
-- **Door persistence fields**: `InteriorRecord` includes `bool IsLocked = true` and `float DoorCurrentHealth = -1f` (negative = use prefab default). `BuildingInteriorSpawner` restores these after `NetworkObject.Spawn()`.
+- **Door persistence fields**: `InteriorRecord` includes `bool IsLocked = true` and `float DoorCurrentHealth = -1f` (negative = use prefab default). Read AND write paths are wired:
+  - **Read**: `DoorLock`/`DoorHealth.OnNetworkSpawn` prefer the persisted record over field defaults. `BuildingInteriorSpawner` re-applies after `Spawn()` (defensive).
+  - **Write**: `DoorLock.SetLockedStateWithSync` and `DoorHealth.OnCurrentHealthChanged` (server) push state into the record on every change.
+  - **Restore-race fix**: `BuildingInteriorRegistry.RestoreState` calls `DoorLock.ApplyLockState` + `DoorHealth.ApplyHealthState` for each record so exterior doors (already spawned from the scene) get patched after restore.
+  - **Pre-record snapshot**: `RegisterInterior` snapshots live door state via `DoorLock.GetCurrentLockState` + `DoorHealth.GetCurrentHealth` when first creating a record so changes done before first entry persist.
 
 ### 8. Door Lock / Door Health on Building Doors
 

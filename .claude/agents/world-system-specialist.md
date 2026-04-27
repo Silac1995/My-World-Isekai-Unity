@@ -118,8 +118,12 @@ These public methods are called by `SaveManager` and `GameLauncher` during save/
 | `SpawnNPCsFromPendingSnapshot()` | Spawns NPCs from `PendingSnapshots` for maps that were active at save time | GameLauncher (after world load) |
 
 **Static collections:**
-- `ActiveControllers` — all currently active MapController instances
-- `PendingSnapshots` — `Dictionary<string, List<HibernatedNPCData>>` for maps that need NPC restoration
+- `ActiveControllers` — all currently active MapController instances (≥1 player present)
+- `AllControllers` — `IEnumerable<MapController>` over the full `_mapRegistry`, regardless of active/hibernating state. Used by `SaveManager` to snapshot maps the player isn't currently on (active maps source from `SnapshotActiveNPCs`, hibernated maps source from `HibernationData`). Without this iteration, NPCs/WorldItems on a map the player just left (e.g. exterior when they entered an interior) silently dropped on save.
+- `PendingSnapshots` — `Dictionary<string, MapSaveData>` for maps that need NPC restoration on load. Consumed by `OnNetworkSpawn` (via `SpawnNPCsFromSnapshot`) for the active map; for hibernated maps the snapshot rides a wake-up via `_hibernationData`.
+
+**`HibernationData`:**
+- `MapController._hibernationData` (read-only public via `HibernationData`) is the in-memory carrier set by `Hibernate()` (NPCs, WorldItems, terrain cells). It's now serialized to disk via `SaveManager`'s `MapSnapshot_{mapId}` pass — previously in-memory only, which is why maps that hibernated before save lost their NPCs.
 
 **Note:** `SpawnSavedBuildings()` is a separate path from `WakeUp()` — it handles both predefined maps that were never hibernated (via `GameLauncher`) and dynamic wild maps that didn't exist at world-load time (via the deferred pass in `MapRegistry.RespawnDynamicMapsDeferred`).
 

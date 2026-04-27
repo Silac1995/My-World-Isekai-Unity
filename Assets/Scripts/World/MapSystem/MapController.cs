@@ -86,6 +86,14 @@ namespace MWI.WorldSystem
         public static HashSet<MapController> ActiveControllers = new HashSet<MapController>();
 
         /// <summary>
+        /// Every MapController currently registered, regardless of active/hibernating state.
+        /// SaveManager uses this to snapshot maps the player is not currently on so their
+        /// NPCs/WorldItems survive save/load. Hibernated maps source from <see cref="HibernationData"/>;
+        /// non-hibernating but inactive maps source from a fresh <see cref="SnapshotActiveNPCs"/> call.
+        /// </summary>
+        public static IEnumerable<MapController> AllControllers => _mapRegistry.Values;
+
+        /// <summary>
         /// Pending NPC snapshots loaded from a save file, keyed by MapId.
         /// When a MapController initializes and finds a matching entry, it spawns those NPCs
         /// and removes the entry.

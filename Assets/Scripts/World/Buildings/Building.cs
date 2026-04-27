@@ -153,11 +153,47 @@ public class Building : ComplexRoom
 
         if (IsServer && NetworkBuildingId.Value.IsEmpty)
         {
-            NetworkBuildingId.Value = Guid.NewGuid().ToString("N");
-            Debug.Log($"<color=green>[Building]</color> Generated unique ID for {buildingName}: {BuildingId}");
+            // Scene-authored buildings (no PlacedByCharacterId) need a STABLE id derived from
+            // their world position so the same building keeps the same BuildingId across
+            // reloads. Otherwise BuildingInteriorRegistry.RestoreState restores interior
+            // records keyed by an obsolete GUID — re-entering the door spawns a fresh interior
+            // instead of the saved one.
+            //
+            // Runtime-placed buildings (BuildingPlacementManager sets PlacedByCharacterId
+            // before Spawn) round-trip their GUID through BuildingSaveData on save/load, so
+            // they keep using a fresh Guid.NewGuid() at first spawn.
+            if (PlacedByCharacterId.Value.IsEmpty)
+            {
+                NetworkBuildingId.Value = DeriveDeterministicSceneBuildingId(gameObject.scene.name, transform.position);
+                Debug.Log($"<color=green>[Building]</color> Derived deterministic ID for scene-authored '{buildingName}' at {transform.position}: {BuildingId}");
+            }
+            else
+            {
+                NetworkBuildingId.Value = Guid.NewGuid().ToString("N");
+                Debug.Log($"<color=green>[Building]</color> Generated unique ID for runtime-placed {buildingName}: {BuildingId}");
+            }
         }
 
         ConfigureNavMeshObstacles();
+    }
+
+    /// <summary>
+    /// Hashes scene name + world position (rounded to mm) into a stable 32-char hex GUID.
+    /// Two scene buildings cannot occupy the exact same authored position, so the seed is
+    /// unique per building and survives reloads (no Guid.NewGuid() drift).
+    /// </summary>
+    private static string DeriveDeterministicSceneBuildingId(string sceneName, Vector3 worldPos)
+    {
+        long x = (long)Mathf.RoundToInt(worldPos.x * 1000f);
+        long y = (long)Mathf.RoundToInt(worldPos.y * 1000f);
+        long z = (long)Mathf.RoundToInt(worldPos.z * 1000f);
+        string seed = $"{sceneName}|{x}|{y}|{z}";
+
+        using (var md5 = System.Security.Cryptography.MD5.Create())
+        {
+            byte[] hash = md5.ComputeHash(System.Text.Encoding.UTF8.GetBytes(seed));
+            return new Guid(hash).ToString("N");
+        }
     }
 
     /// <summary>

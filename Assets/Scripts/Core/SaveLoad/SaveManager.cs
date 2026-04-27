@@ -292,25 +292,33 @@ public class SaveManager : MonoBehaviour
             }
         }
 
-        // ── 5. Snapshot NPCs on active maps ──────────────────────────
+        // ── 5. Snapshot NPCs + WorldItems on EVERY map (active or hibernated) ──
+        // Active maps: source from a fresh SnapshotActiveNPCs (live OverlapBox capture).
+        // Hibernated maps: source from MapController.HibernationData (already serialized
+        // when the map hibernated). Without this hibernated pass, NPCs/WorldItems on the
+        // map a player just left (e.g. exterior when player walked into a building's
+        // interior) are silently dropped on save — _hibernationData is in-memory only.
         ScreenFadeManager.Instance?.UpdateStatus("Saving NPCs...");
         yield return _statusDelay;
-        foreach (var mc in MapController.ActiveControllers.ToArray())
+        foreach (var mc in MapController.AllControllers.ToArray())
         {
             if (mc == null || string.IsNullOrEmpty(mc.MapId)) continue;
             try
             {
-                var snapshot = mc.SnapshotActiveNPCs();
-                if (snapshot.HibernatedNPCs.Count > 0)
-                {
-                    data.worldStates[$"MapSnapshot_{mc.MapId}"] = JsonConvert.SerializeObject(snapshot, jsonSettings);
-                    Debug.Log($"<color=green>[SaveManager]</color> Captured NPC snapshot for active map '{mc.MapId}': {snapshot.HibernatedNPCs.Count} NPCs.");
-                }
+                MWI.WorldSystem.MapSaveData snapshot = mc.IsHibernating
+                    ? mc.HibernationData
+                    : mc.SnapshotActiveNPCs();
+
+                if (snapshot == null) continue;
+                if (snapshot.HibernatedNPCs.Count == 0 && snapshot.WorldItems.Count == 0) continue;
+
+                data.worldStates[$"MapSnapshot_{mc.MapId}"] = JsonConvert.SerializeObject(snapshot, jsonSettings);
+                Debug.Log($"<color=green>[SaveManager]</color> Captured snapshot for map '{mc.MapId}' (Hibernating={mc.IsHibernating}): {snapshot.HibernatedNPCs.Count} NPCs, {snapshot.WorldItems.Count} WorldItems.");
             }
             catch (Exception ex)
             {
-                Debug.LogError($"<color=red>[SaveManager]</color> NPC snapshot failed for map '{mc.MapId}': {ex.Message}\n{ex.StackTrace}");
-                ScreenFadeManager.Instance?.ShowWarning($"NPC snapshot failed: {mc.MapId}");
+                Debug.LogError($"<color=red>[SaveManager]</color> Snapshot failed for map '{mc.MapId}': {ex.Message}\n{ex.StackTrace}");
+                ScreenFadeManager.Instance?.ShowWarning($"Snapshot failed: {mc.MapId}");
             }
         }
 
@@ -396,18 +404,21 @@ public class SaveManager : MonoBehaviour
             }
         }
 
-        // Snapshot live NPCs on active maps so they persist through save/load.
-        // NPCs are serialized into MapSaveData snapshots WITHOUT despawning.
-        foreach (var mc in MapController.ActiveControllers.ToArray())
+        // Snapshot every map (active or hibernated). Mirrors the SaveWorldAsync path —
+        // hibernated maps source from HibernationData, others from a fresh OverlapBox capture.
+        foreach (var mc in MapController.AllControllers.ToArray())
         {
             if (mc == null || string.IsNullOrEmpty(mc.MapId)) continue;
 
-            var snapshot = mc.SnapshotActiveNPCs();
-            if (snapshot.HibernatedNPCs.Count > 0)
-            {
-                data.worldStates[$"MapSnapshot_{mc.MapId}"] = JsonConvert.SerializeObject(snapshot, jsonSettings);
-                Debug.Log($"<color=green>[SaveManager]</color> Captured NPC snapshot for active map '{mc.MapId}': {snapshot.HibernatedNPCs.Count} NPCs.");
-            }
+            MWI.WorldSystem.MapSaveData snapshot = mc.IsHibernating
+                ? mc.HibernationData
+                : mc.SnapshotActiveNPCs();
+
+            if (snapshot == null) continue;
+            if (snapshot.HibernatedNPCs.Count == 0 && snapshot.WorldItems.Count == 0) continue;
+
+            data.worldStates[$"MapSnapshot_{mc.MapId}"] = JsonConvert.SerializeObject(snapshot, jsonSettings);
+            Debug.Log($"<color=green>[SaveManager]</color> Captured snapshot for map '{mc.MapId}' (Hibernating={mc.IsHibernating}): {snapshot.HibernatedNPCs.Count} NPCs, {snapshot.WorldItems.Count} WorldItems.");
         }
 
         await SaveFileHandler.WriteWorldAsync(CurrentWorldGuid, data);

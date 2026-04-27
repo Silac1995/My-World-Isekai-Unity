@@ -81,15 +81,13 @@ public class BuildingInteriorDoor : MapTransitionDoor
             }
         }
 
-        // Auto-detect exterior map from interactor if not already set
-        if (string.IsNullOrEmpty(_exteriorMapId) && interactor.TryGetComponent(out CharacterMapTracker tracker))
-        {
-            string currentMap = tracker.CurrentMapID.Value.ToString();
-            if (!string.IsNullOrEmpty(currentMap))
-            {
-                _exteriorMapId = currentMap;
-            }
-        }
+        // Note: do NOT cache the interactor's `CurrentMapID` into `_exteriorMapId` —
+        // that path used to chain interior IDs (`Base_Interior_A_Interior_B_…`) when the
+        // player triggered the door from inside another interior, eventually overflowing
+        // FixedString128Bytes and silently breaking transitions. The `ExteriorMapId`
+        // property's lazy `ResolveExteriorMapId()` already finds the correct outer map
+        // via `GetComponentInParent<MapController>()` (the door is parented under its
+        // building's exterior MapController), with a bounds-overlap fallback.
 
         // Compute the deterministic interior map ID
         string interiorMapId = GetInteriorMapId();
@@ -123,19 +121,33 @@ public class BuildingInteriorDoor : MapTransitionDoor
     }
 
     /// <summary>
-    /// Finds the MapController this door sits inside of via physics overlap.
+    /// Finds the outermost exterior <see cref="MapController"/> this door sits inside of.
+    /// If the door's hierarchy parent is itself an interior MapController (shouldn't normally
+    /// happen but is possible with custom prefab nesting), unwinds via <c>ExteriorMapId.Value</c>
+    /// instead of returning the interior's MapId — otherwise <see cref="GetInteriorMapId"/>
+    /// would chain (`Base_Interior_X_Interior_Y_…`) and overflow the networked
+    /// FixedString128Bytes destination.
     /// </summary>
     private string ResolveExteriorMapId()
     {
         // Check parent MapController first
         var parentMap = GetComponentInParent<MapController>();
-        if (parentMap != null) return parentMap.MapId;
+        if (parentMap != null)
+        {
+            // Unwind one level if the parent is itself an interior — use its replicated exterior MapId.
+            if (parentMap.Type == MWI.WorldSystem.MapType.Interior)
+            {
+                string outer = parentMap.ExteriorMapId.Value.ToString();
+                if (!string.IsNullOrEmpty(outer)) return outer;
+            }
+            return parentMap.MapId;
+        }
 
-        // Fallback: find the MapController whose trigger contains this door's position
+        // Fallback: find the exterior MapController whose trigger contains this door's position
         var maps = Object.FindObjectsByType<MapController>(FindObjectsSortMode.None);
         foreach (var map in maps)
         {
-            if (map.IsInteriorOffset) continue;
+            if (map.Type == MWI.WorldSystem.MapType.Interior) continue;
             var col = map.GetComponent<Collider>();
             if (col != null && col.bounds.Contains(transform.position))
             {

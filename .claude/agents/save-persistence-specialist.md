@@ -70,11 +70,14 @@ For world systems (TimeManager, MapRegistry, WorldOffsetAllocator, BuildingInter
 | 0 | CharacterProfile | Identity first |
 | 10 | CharacterStats | Stats before gear |
 | 20 | CharacterSkills, CharacterAbilities | Capabilities before equipment |
-| 30 | CharacterEquipment (includes nested inventory) | Gear depends on stats/skills |
+| 30 | CharacterEquipment (includes nested bag inventory) | Gear depends on stats/skills |
+| 35 | HandsController (in-hand `CarriedItem`) | Must run after `CharacterEquipment` so the weapon socket is restored first; restore bypasses `AreHandsFree()` |
 | 40 | CharacterNeeds, CharacterTraits | May reference other systems |
 | 50 | CharacterRelation, CharacterBookKnowledge | Social data |
 | 60 | CharacterParty, CharacterCommunity, CharacterJob, CharacterSchedule | World-contextual |
 | 70 | CharacterMapTracker, CharacterCombat | Position and combat |
+
+**Note on non-`CharacterSystem` saveables:** `CharacterDataCoordinator` discovers via `GetComponentsInChildren<ICharacterSaveData>(true)` — anything implementing the interface qualifies, regardless of base class. `HandsController` (a `MonoBehaviour` on the visual hierarchy) is the canonical example: it owns the gameplay-relevant `CarriedItem`, so it implements `ICharacterSaveData<HandsSaveData>` even though it is not a `CharacterSystem`. When auditing "what persists" for a character, scan the full child tree for the interface, not just `CharacterSystem` subclasses.
 
 ---
 

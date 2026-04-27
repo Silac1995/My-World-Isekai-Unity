@@ -3,7 +3,7 @@ type: system
 title: "Visuals"
 tags: [visuals, sprites, spine, animation, clothing, wounds, tier-2]
 created: 2026-04-19
-updated: 2026-04-22
+updated: 2026-04-27
 sources: []
 related:
   - "[[character]]"
@@ -44,7 +44,7 @@ Keep gameplay logic blind to the rendering backend. Character subsystems call `I
 - Hiding dismembered body parts and showing prosthetic replacements (see [[character-dismemberment]]).
 
 **Non-responsibilities**:
-- Does **not** own character save data — visuals rebuild from the character profile on load.
+- Does **not** own character save data — visuals rebuild from the character profile on load. **Exception:** `HandsController` owns the in-hand `CarriedItem` (gameplay state, not visual state) and therefore implements `ICharacterSaveData<HandsSaveData>` itself. See [[character-equipment]] §State & persistence and [[save-load]].
 - Does **not** own combat damage calc — just visual feedback (target indicator, damage numbers).
 - Does **not** own dismemberment state — persisted by [[character-dismemberment]]; visuals only render it.
 - Does **not** own UI — see [[player-ui]].
@@ -601,6 +601,7 @@ Positions can be random (`Random.insideUnitCircle` mapped to UV space) or bone-d
 - 2026-04-22 — Expanded substantially. Added Spine skeleton architecture, clothing layer system, physics-enabled garments, cross-archetype socket mapping, wound visual system. Linked new [[character-dismemberment]] page. Confidence still medium — Spine implementation not yet written. — Claude / [[kevin]]
 - 2026-04-22 — Added §Skin Bones section (wings, optional body extensions). Decision rule: bake in master skeleton vs Skin Bones. Wings on Track 2 animation channel. — Claude / [[kevin]]
 - 2026-04-22 — Added §Archetype Families section. Multi-family architecture (humanoid / quadruped / bird / insect / aquatic / unique monster) with one shared `SpineCharacterVisual` class, data-driven via archetype SO. Added family-specific slot layouts and animation track conventions. — Claude / [[kevin]]
+- 2026-04-27 — Documented `HandsController` as the **exception** to "visuals don't own save data": it owns the in-hand `CarriedItem` (gameplay state, not visual state) and now implements `ICharacterSaveData<HandsSaveData>` directly. Cross-linked to [[character-equipment]] and [[save-load]]. — claude
 
 ## Sources
 - [ICharacterVisual.cs](../../Assets/Scripts/Character/Visual/ICharacterVisual.cs)

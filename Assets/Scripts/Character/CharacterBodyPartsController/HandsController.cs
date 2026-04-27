@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.U2D.Animation;
 
-public class HandsController : MonoBehaviour
+public class HandsController : MonoBehaviour, ICharacterSaveData<HandsSaveData>
 {
     [Header("References")]
     [SerializeField] private CharacterBodyPartsController _bodyPartsController;
@@ -17,6 +17,9 @@ public class HandsController : MonoBehaviour
     // --- Carry System ---
     private ItemInstance _carriedItem;
     private GameObject _carriedVisual;
+
+    // Held by Deserialize when hands aren't initialized yet; consumed by Initialize.
+    private ItemInstance _pendingRestoreItem;
 
     public List<CharacterHand> Hands => _hands;
 
@@ -47,6 +50,15 @@ public class HandsController : MonoBehaviour
         // Auto-find Character si non assigné
         if (_character == null)
             _character = GetComponentInParent<Character>();
+
+        // If Deserialize ran before the visual hierarchy was ready, finish the
+        // carry-restore now that the hand bones exist.
+        if (_pendingRestoreItem != null)
+        {
+            ItemInstance toRestore = _pendingRestoreItem;
+            _pendingRestoreItem = null;
+            ApplyRestoredCarry(toRestore);
+        }
     }
 
     private void RetrieveHandObjects()
@@ -343,4 +355,92 @@ public class HandsController : MonoBehaviour
 
         rightHand?.SetPose("fist");
     }
+
+    // ================================================================
+    // === ICharacterSaveData IMPLEMENTATION ===
+    // ================================================================
+
+    public string SaveKey => "HandsController";
+
+    // Runs after CharacterEquipment (priority 30) so the weapon slot is restored
+    // first. AreHandsFree() then reflects the post-equip state correctly.
+    public int LoadPriority => 35;
+
+    public HandsSaveData Serialize()
+    {
+        var data = new HandsSaveData();
+
+        if (_carriedItem != null && _carriedItem.ItemSO != null)
+        {
+            data.carriedItemId = _carriedItem.ItemSO.ItemId;
+            data.carriedItemJson = JsonUtility.ToJson(_carriedItem);
+        }
+
+        return data;
+    }
+
+    public void Deserialize(HandsSaveData data)
+    {
+        // Always start from a clean slate so a save with empty hands clears any
+        // pre-load carry state (e.g. a default item placed during prefab spawn).
+        ClearCarriedItem();
+        _pendingRestoreItem = null;
+
+        if (data == null || string.IsNullOrEmpty(data.carriedItemId))
+            return;
+
+        ItemInstance restored;
+        try
+        {
+            ItemSO[] allItems = Resources.LoadAll<ItemSO>("Data/Item");
+            ItemSO so = System.Array.Find(allItems, match => match.ItemId == data.carriedItemId);
+            if (so == null)
+            {
+                Debug.LogWarning($"<color=orange>[HandsController.Deserialize]</color> ItemSO not found for id '{data.carriedItemId}'. Carried item will be lost.");
+                return;
+            }
+
+            restored = so.CreateInstance();
+            if (!string.IsNullOrEmpty(data.carriedItemJson))
+            {
+                JsonUtility.FromJsonOverwrite(data.carriedItemJson, restored);
+                restored.ItemSO = so;
+            }
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogError($"<color=red>[HandsController.Deserialize]</color> Failed to rebuild carried item '{data.carriedItemId}': {ex.Message}");
+            return;
+        }
+
+        // If hands haven't been scanned yet, defer the visual attach until Initialize().
+        if (_hands == null || _hands.Count == 0)
+        {
+            _pendingRestoreItem = restored;
+            if (_debugMode)
+                Debug.Log($"<color=cyan>[HandsController.Deserialize]</color> Hands not yet initialized — deferring carry restore for {restored.ItemSO.ItemName}.");
+            return;
+        }
+
+        ApplyRestoredCarry(restored);
+    }
+
+    /// <summary>
+    /// Restore a saved carry item, bypassing the AreHandsFree() weapon check
+    /// (the saved state is the source of truth at this point).
+    /// </summary>
+    private void ApplyRestoredCarry(ItemInstance item)
+    {
+        if (item == null) return;
+
+        _carriedItem = item;
+        AttachVisualToHand(item);
+
+        if (_debugMode)
+            Debug.Log($"<color=green>[HandsController.Deserialize]</color> Restored carry: {_character?.CharacterName} is holding {item.ItemSO.ItemName}.");
+    }
+
+    // Non-generic bridge (explicit interface impl)
+    string ICharacterSaveData.SerializeToJson() => CharacterSaveDataHelper.SerializeToJson(this);
+    void ICharacterSaveData.DeserializeFromJson(string json) => CharacterSaveDataHelper.DeserializeFromJson(this, json);
 }

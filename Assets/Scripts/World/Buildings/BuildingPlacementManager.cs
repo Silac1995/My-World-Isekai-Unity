@@ -377,6 +377,20 @@ namespace MWI.WorldSystem
 
             GameObject buildingObj = Instantiate(entry.BuildingPrefab, position, rotation);
 
+            // Set PrefabId + PlacedByCharacterId BEFORE Spawn so the value is included in the
+            // initial NetworkVariable payload AND is observable inside Building.OnNetworkSpawn.
+            // Building.OnNetworkSpawn uses an empty PlacedByCharacterId to distinguish
+            // scene-authored buildings (which need a deterministic ID) from runtime-placed ones.
+            var placedBuilding = buildingObj.GetComponent<Building>();
+            if (placedBuilding != null)
+            {
+                placedBuilding.PrefabId = prefabId;
+                if (_character != null)
+                {
+                    placedBuilding.PlacedByCharacterId.Value = _character.CharacterId;
+                }
+            }
+
             // Spawn on the network
             var netObj = buildingObj.GetComponent<NetworkObject>();
             if (netObj != null)
@@ -389,13 +403,6 @@ namespace MWI.WorldSystem
                 // Destroy to prevent desync where host has a building that clients don't see
                 Destroy(buildingObj);
                 return;
-            }
-
-            // Set PrefabId so the building can be saved and restored from WorldSettingsData
-            var placedBuilding = buildingObj.GetComponent<Building>();
-            if (placedBuilding != null)
-            {
-                placedBuilding.PrefabId = prefabId;
             }
 
             // If instant mode, skip construction requirements
@@ -420,11 +427,8 @@ namespace MWI.WorldSystem
             Building building = buildingObj.GetComponent<Building>();
             if (building == null) return;
 
-            // Tag who placed this building
-            if (_character != null)
-            {
-                building.PlacedByCharacterId.Value = _character.CharacterId;
-            }
+            // PlacedByCharacterId is now set BEFORE Spawn (see RequestPlacementServerRpc) so
+            // Building.OnNetworkSpawn can observe it. No need to set it again here.
 
             Debug.Log($"<color=yellow>[BuildingPlacementManager:Register]</color> Trying to find MapController for building '{building.BuildingName}' at {worldPosition}.");
 

@@ -118,6 +118,13 @@ public class BuildingInteriorRegistry : MonoBehaviour, ISaveable
             return null;
         }
 
+        // Snapshot the live exterior door state so changes made BEFORE first entry are
+        // not lost when the record is created (the live door is the sole source of truth
+        // until this record exists). Falls back to field defaults if no door is spawned
+        // for this lockId yet.
+        bool? liveLockState = DoorLock.GetCurrentLockState(buildingId);
+        float? liveHealth = DoorHealth.GetCurrentHealth(buildingId);
+
         var record = new InteriorRecord
         {
             BuildingId = buildingId,
@@ -125,7 +132,9 @@ public class BuildingInteriorRegistry : MonoBehaviour, ISaveable
             SlotIndex = slotIndex,
             ExteriorMapId = exteriorMapId,
             ExteriorDoorPosition = exteriorDoorPosition,
-            PrefabId = prefabId
+            PrefabId = prefabId,
+            IsLocked = liveLockState ?? true,
+            DoorCurrentHealth = liveHealth ?? -1f
         };
 
         _interiors[buildingId] = record;
@@ -167,6 +176,10 @@ public class BuildingInteriorRegistry : MonoBehaviour, ISaveable
             }
 
             Debug.Log($"<color=green>[BuildingInteriorRegistry]</color> Restored {_interiors.Count} interior records.");
+
+            // Door lock/health state is handled by DoorStateRegistry (a separate ISaveable),
+            // not this registry. The legacy IsLocked / DoorCurrentHealth fields on
+            // InteriorRecord are unused now and remain only for save-file backward compat.
 
             // Respawn interior MapControllers at their allocated offsets
             RespawnInteriors();

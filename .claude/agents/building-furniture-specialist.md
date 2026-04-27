@@ -28,9 +28,11 @@ Zone (trigger-based area)
 ```
 
 **Building identity:**
-- `NetworkBuildingId` (GUID) — unique per instance, generated in `OnNetworkSpawn()`
+- `NetworkBuildingId` (GUID) — unique per instance. **Generation strategy split by origin:**
+  - Scene-authored buildings (no `PlacedByCharacterId`): `OnNetworkSpawn` derives a *deterministic* GUID from `MD5(scene name + world position rounded to mm)` so the ID survives reloads. Without this, `BuildingInteriorRegistry` records would be orphaned every reload.
+  - Runtime-placed buildings: `BuildingPlacementManager.RequestPlacementServerRpc` sets `PlacedByCharacterId` **before** `Spawn()`; `OnNetworkSpawn` rolls a fresh `Guid.NewGuid()` which then round-trips via `BuildingSaveData`.
 - `PrefabId` — registry lookup, NOT unique (same prefab = same PrefabId)
-- `PlacedByCharacterId` — who placed it (distinct from `CommercialBuilding.Owner`)
+- `PlacedByCharacterId` — who placed it (distinct from `CommercialBuilding.Owner`); also serves as the scene-vs-runtime discriminator at `OnNetworkSpawn`.
 
 ### 2. FurnitureGrid — Discrete Coordinate System
 
@@ -193,6 +195,13 @@ Interact with BuildingInteriorDoor
 BuildingId, InteriorMapId, SlotIndex, ExteriorMapId,
 ExteriorDoorPosition, PrefabId, IsLocked, DoorCurrentHealth
 ```
+
+**Door state persistence (lock + health) — full read/write path:**
+- *Read*: `DoorLock`/`DoorHealth.OnNetworkSpawn` look up the record via `BuildingInteriorRegistry.Instance.TryGetInterior(lockId, out record)` and prefer `record.IsLocked` / `record.DoorCurrentHealth` over field defaults (`_startsLocked` / `_maxHealth`).
+- *Write*: `DoorLock.SetLockedStateWithSync` and `DoorHealth.OnCurrentHealthChanged` (server-only) push state into the record on every change.
+- *Restore-race fix*: `BuildingInteriorRegistry.RestoreState` calls new `DoorLock.ApplyLockState(lockId, isLocked)` + `DoorHealth.ApplyHealthState(lockId, health)` to retroactively patch exterior doors that spawn from the scene before restore runs.
+- *Pre-record snapshot*: `RegisterInterior` (lazy on first interior entry) snapshots the live exterior door state via `DoorLock.GetCurrentLockState` + `DoorHealth.GetCurrentHealth` so unlock/damage done before first entry isn't reverted to field defaults.
+- Both `DoorLock` and `DoorHealth` keep static `Dictionary<lockId, List<…>>` registries for fast lookup by lockId.
 
 - **NPC interior entry / exit (programmatic)**: `CharacterEnterBuildingAction(actor, Building)` and `CharacterLeaveInteriorAction(actor)` (in `Assets/Scripts/Character/CharacterActions/`) wrap the existing `BuildingInteriorDoor.Interact` flow with NavMesh walking + 15 s timeout + locked-key retry. Both inherit `CharacterDoorTraversalAction` (abstract base, owns the walk-loop). Use these instead of hand-rolling a coroutine when an NPC needs to autonomously enter/leave a building. The door owns lock/key/rattle decisions; the actions are pure "navigate + tap".
 

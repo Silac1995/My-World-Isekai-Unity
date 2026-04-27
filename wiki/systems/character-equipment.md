@@ -3,7 +3,7 @@ type: system
 title: "Character Equipment"
 tags: [character, equipment, items, tier-2]
 created: 2026-04-19
-updated: 2026-04-26
+updated: 2026-04-27
 sources: []
 related:
   - "[[items]]"
@@ -105,7 +105,8 @@ character.CharacterEquipment.FindKeyForLock(door.LockId, door.RequiredTier)
 
 ## State & persistence
 
-- Current layer contents + bag contents serialize via character profile.
+- Current layer contents + bag contents serialize via character profile (`EquipmentSaveData`, `SaveKey = "CharacterEquipment"`, `LoadPriority = 30`).
+- The **carried in-hand item** (`HandsController.CarriedItem` — food, log, stone, key, …) is **distinct from the equipped weapon** and persists via its own contract: `HandsSaveData`, `SaveKey = "HandsController"`, `LoadPriority = 35` (deliberately runs after `CharacterEquipment` so the weapon slot is restored first and `AreHandsFree()` reflects the post-equip state). If the visual hand bones aren't initialized when `Deserialize` runs, the restore is deferred and consumed by `HandsController.Initialize()`.
 - Back-socket runtime visuals are rebuilt on load.
 
 ## Known gotchas
@@ -119,14 +120,15 @@ character.CharacterEquipment.FindKeyForLock(door.LockId, door.RequiredTier)
 
 ## Open questions
 
-- [ ] `HandsController` — exact location and API.
 - [ ] Layer sprite sorting rules — document when visuals children exist.
 - [ ] Prosthetics as a pseudo-equipment layer vs owned entirely by [[character-dismemberment]] — decide where the equip flow lives (current plan: dismemberment owns it, but UI may route through the equipment panel).
+- [ ] **Networking the carried item.** `HandsController._carriedItem` and its visual are local-only — remote clients never see another player carrying a log, key, or food. Picking up, save-loading, and dropping all work on the owner; observers see nothing. Scope of fix: a `NetworkVariable<NetworkItemRef>` on a networked component (or a new RPC pair) that mirrors the carry state to all observers, plus visual reattach on each client.
 
 ## Change log
 - 2026-04-19 — Initial pass. — Claude / [[kevin]]
 - 2026-04-22 — Added cross-refs to [[visuals]] (Spine skin composition + socket resolution) and [[character-dismemberment]] (prosthetics + amputated-slot guard). Bumped `depends_on` with [[visuals]]. — Claude / [[kevin]]
 - 2026-04-26 — `CharacterEquipmentUI` now exposes a "drop carried item" button (`_dropHandsItemButton`) for the `HandsController.CarriedItem` slot, alongside the existing inventory + unequip slots. The same drop is also bound to **G** in `PlayerController` (project rule #33 — input ownership). Both routes enqueue the existing `CharacterDropItem` action; no new gameplay path. — Claude / [[kevin]]
+- 2026-04-27 — `HandsController` now implements `ICharacterSaveData<HandsSaveData>` (`SaveKey = "HandsController"`, `LoadPriority = 35`). Fixes a save/load bug where the in-hand carried item silently disappeared on reload — `_carriedItem` was runtime-only and not covered by `EquipmentSaveData`. Restore is deferred to `Initialize()` if the hand visual isn't ready when `Deserialize` runs. Bag inventory persistence verified unchanged (already serialized via `EquipmentSaveData.bagInventoryItems`). Networking gap (carry state not replicated to observers) noted in Open questions. — Claude / [[kevin]]
 
 ## Sources
 - [.agent/skills/item_system/SKILL.md](../../.agent/skills/item_system/SKILL.md) §4, §6, §7.
