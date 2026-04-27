@@ -1422,6 +1422,16 @@ namespace MWI.WorldSystem
             Hibernate();
         }
 
+        /// <summary>
+        /// Public wake-up entry point paired with <see cref="HibernateForSkip"/>.
+        /// Forwards to the private <see cref="WakeUp"/>. Server-only; caller is
+        /// the TimeSkipController.
+        /// </summary>
+        public void WakeUpFromSkip()
+        {
+            WakeUp();
+        }
+
         private void WakeUp()
         {
             if (!IsHibernating) return;

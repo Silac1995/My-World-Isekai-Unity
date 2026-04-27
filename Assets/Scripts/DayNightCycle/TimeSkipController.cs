@@ -156,7 +156,7 @@ namespace MWI.Time
 
             // 4. ExitSkipMode — wake the map and unfreeze the player(s).
             //    The map's PendingSkipWake flag suppresses the redundant SimulateCatchUp.
-            activeMap.WakeUp();
+            activeMap.WakeUpFromSkip();
             foreach (var player in players)
             {
                 if (player != null && player.IsSleeping) player.ExitSleep();
