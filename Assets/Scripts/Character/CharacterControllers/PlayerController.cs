@@ -51,6 +51,10 @@ public class PlayerController : CharacterGameController
     {
         if (IsOwner)
         {
+            // Sleeping players accept no input — bed/skip lifecycle owns position+rotation,
+            // animator switches to sleep pose via Character.OnSleepStateChanged.
+            if (Character != null && Character.IsSleeping) return;
+
             // Block player movement/action input if typing in any UI text field
             if (UnityEngine.EventSystems.EventSystem.current != null &&
                 UnityEngine.EventSystems.EventSystem.current.currentSelectedGameObject != null &&
