@@ -26,6 +26,9 @@ public static class DevChatCommands
             case "devmode":
                 HandleDevmode(parts);
                 break;
+            case "timeskip":
+                HandleTimeSkip(parts);
+                break;
             default:
                 Debug.LogWarning($"<color=orange>[DevChat]</color> Unknown command: /{cmd}");
                 break;
@@ -67,5 +70,27 @@ public static class DevChatCommands
                 Debug.Log("<color=magenta>[DevChat]</color> Usage: /devmode on | off");
                 break;
         }
+    }
+
+    private static void HandleTimeSkip(string[] parts)
+    {
+        // Host check — same shape as devmode.
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && !NetworkManager.Singleton.IsServer)
+        {
+            Debug.LogWarning("<color=orange>[DevChat]</color> /timeskip is host-only.");
+            return;
+        }
+        if (parts.Length < 2 || !int.TryParse(parts[1], out int hours))
+        {
+            Debug.Log("<color=magenta>[DevChat]</color> Usage: /timeskip <hours>  (1-168)");
+            return;
+        }
+        if (MWI.Time.TimeSkipController.Instance == null)
+        {
+            Debug.LogError("<color=red>[DevChat]</color> TimeSkipController is not present in the scene.");
+            return;
+        }
+        bool ok = MWI.Time.TimeSkipController.Instance.RequestSkip(hours);
+        Debug.Log($"<color=magenta>[DevChat]</color> /timeskip {hours} → {(ok ? "started" : "rejected (see prior log)")}.");
     }
 }
