@@ -29,6 +29,17 @@ The `MacroSimulator` operates entirely off-screen when a Map wakes up.
 *   **Simulation vs Realtime:** Rather than simulating every frame of walking, the MacroSimulator just skips them to the end of their current scheduled task (e.g., if it's 8:00 AM, snap position to Blacksmith Forge).
 *   Once simulated, the Server reinstantiates the Prefab at the new position, assigns the updated stats and blueprint data, and calls `Spawn()` to sync with the entering client.
 
+## 3.1 Time Skip (player-initiated macro-sim loop)
+
+The Time Skip path advances the in-game clock by N hours without running the live simulation, by hibernating the active map and running `MacroSimulator.SimulateOneHour` per hour. Coexists with `GameSpeedController` — that one scales `Time.timeScale` so live NPCs tick faster; this one freezes them entirely. Architecture details live in [[world-time-skip]].
+
+*   **Triggers:** `/timeskip <hours>` chat command, `DevTimeSkipModule` dev-panel button, future `UI_BedSleepPrompt`. **All routes go through `TimeSkipController.Instance.RequestSkip(hours)`** — server-only, returns `bool`. Validation enforces `hours ∈ [1, 168]`, "not already skipping," and the v1 single-player gate (`NetworkManager.ConnectedClients.Count == 1`).
+*   **Per-hour loop (server coroutine):** `HibernateForSkip` → for each hour (`AdvanceOneHour` → `SimulateOneHour` → `OnSkipHourTick` → abort check) → `WakeUpFromSkip` → restore players → `SaveAll`. The `_pendingSkipWake` flag on the active `MapController` makes `WakeUp()` skip the redundant single-pass catch-up over the same delta we just simulated hour-by-hour.
+*   **Day-boundary gating:** any new step that integrates over `daysPassed` must run inside `if (crossedDayBoundary)` in `SimulateOneHour`, **not** the hour-grained block, or it will floor-to-0 every hour and silently no-op the entire skip. Hour-grained steps (`ApplyNeedsDecayHours`, `SnapPositionFromSchedule`) run every hour because they're already scaled per-hour internally.
+*   **Single-player only in v1.** v2 will replace the gate with auto-trigger when **all connected players are simultaneously occupying a `BedSlot`** — sleeping = consent. The single-player guard is intentionally placed at the `RequestSkip` entry point so v2 only swaps the validation block.
+*   **Bed lifecycle:** `BedFurniture.UseSlot(slot, character)` → `Character.EnterSleep(anchor)` (server-only; snaps position+rotation, toggles NavMeshAgent via `ConfigureNavMesh(bool)`) → `Character.NetworkIsSleeping = true` → `PlayerController.Update()` early-out. `_isSleeping` is **not** persisted; reload always wakes the player.
+*   **Manual setup required** — see [[world-time-skip]] §"Manual setup checklist" for the Editor wiring (TimeSkipController on the GameSpeedController GameObject, `Tab_TimeSkip` in `DevModePanel.prefab`, `UI_TimeSkipOverlay.prefab`, `UI_BedSleepPrompt.prefab`).
+
 ## 4. Map Transitions
 Transitions are standardized via `MapTransitionDoor` (exterior-to-exterior) and `BuildingInteriorDoor` (exterior-to-interior).
 *   Players interact with a door. `CharacterMapTransitionAction` fades screen via `ScreenFadeManager`, then warps.

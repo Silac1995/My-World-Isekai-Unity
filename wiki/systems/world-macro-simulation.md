@@ -3,13 +3,14 @@ type: system
 title: "World Macro Simulation"
 tags: [world, hibernation, macro-sim, tier-2]
 created: 2026-04-19
-updated: 2026-04-21
+updated: 2026-04-27
 sources: []
 related:
   - "[[world]]"
   - "[[character-needs]]"
   - "[[jobs-and-logistics]]"
   - "[[save-load]]"
+  - "[[world-time-skip]]"
   - "[[adr-0001-living-world-hierarchy-refactor]]"
   - "[[kevin]]"
 status: stable
@@ -23,6 +24,7 @@ depends_on:
   - "[[save-load]]"
 depended_on_by:
   - "[[world]]"
+  - "[[world-time-skip]]"
 ---
 
 # World Macro Simulation
@@ -75,6 +77,10 @@ deltaDays = (time.Current - data.LastHibernationTime)
 Map is ready — spawn real prefabs from updated state, NetworkSpawn
 ```
 
+### Per-hour entry point (SimulateOneHour)
+
+`MacroSimulator.SimulateOneHour(MapSaveData, currentDay, currentTime01, JobYieldRegistry, previousHour)` is a sibling entry point used by [[world-time-skip]]. It runs the same logical pipeline as `SimulateCatchUp` but at hour-grained resolution: hour-grained steps (`ApplyNeedsDecayHours`, `SnapPositionFromSchedule` — both extracted as helpers shared with `SimulateCatchUp`) run every call; cumulative steps that integrate over `daysPassed` (resource regen, biome yields, zone motion, city growth) are wrapped in a `crossedDayBoundary` branch that fires only when the previous hour was 23 and the current hour is 0. **24× `SimulateOneHour` is intended to be byte-equivalent to 1× `SimulateCatchUp(daysPassed=1.0)` for the same fixture** — any new step added to the macro-sim must be classified as hour-grained or day-grained and placed accordingly, or the equivalence breaks silently.
+
 ## Offline city growth
 
 Driven entirely by the community leader's `CharacterBlueprints`:
@@ -119,6 +125,7 @@ The actual physical scaffolds materialize when the map wakes — at wake time th
 - 2026-04-19 — Initial pass. — Claude / [[kevin]]
 - 2026-04-21 — Added pending-extension notice (Zone Motion catch-up step) pointing to [[adr-0001-living-world-hierarchy-refactor]]. — Claude / [[kevin]]
 - 2026-04-21 — Zone Motion step 6 implemented in `MacroSimulator.TickZoneMotion`, called from `SimulateCatchUp` on map wake-up. No-op in Phase 1 with default `StaticMotionStrategy`. — Claude / [[kevin]]
+- 2026-04-27 — Added SimulateOneHour entry point with day-boundary gating; extracted ApplyNeedsDecayHours and SnapPositionFromSchedule helpers shared with SimulateCatchUp. Used by [[world-time-skip]]. — Claude / [[kevin]]
 
 ## Sources
 - [.agent/skills/world-system/SKILL.md](../../.agent/skills/world-system/SKILL.md) §2–§3.
