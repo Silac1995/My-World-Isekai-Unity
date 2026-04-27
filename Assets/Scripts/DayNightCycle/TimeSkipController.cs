@@ -106,6 +106,15 @@ namespace MWI.Time
         {
             IsSkipping = true;
             _aborted = false;
+
+            // Freeze Unity time during the skip so TimeManager.ProgressTime cannot
+            // double-advance the clock on top of our per-hour AdvanceOneHour calls
+            // (and so live NPC AI / coroutines using scaled time pause cleanly).
+            // Capture and restore the previous timeScale so we don't fight
+            // GameSpeedController's own value.
+            float savedTimeScale = UnityEngine.Time.timeScale;
+            UnityEngine.Time.timeScale = 0f;
+
             OnSkipStarted?.Invoke(hours);
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             Debug.Log($"<color=cyan>[TimeSkip]</color> Skip starting: {hours} in-game hours.");
@@ -117,6 +126,7 @@ namespace MWI.Time
             if (activeMap == null)
             {
                 Debug.LogError("<color=red>[TimeSkip]</color> Could not resolve active player map. Aborting.");
+                UnityEngine.Time.timeScale = savedTimeScale;
                 IsSkipping = false;
                 OnSkipEnded?.Invoke();
                 yield break;
@@ -175,7 +185,10 @@ namespace MWI.Time
                 if (player != null && player.IsSleeping) player.ExitSleep();
             }
 
-            // 5. Save world + player profile (matches existing bed-sleep save).
+            // 5. Restore the captured timeScale before save so SaveManager doesn't
+            //    inherit a frozen Unity clock, then trigger the post-skip save.
+            UnityEngine.Time.timeScale = savedTimeScale;
+
             if (SaveManager.Instance != null && players.Length > 0 && players[0] != null)
             {
                 SaveManager.Instance.RequestSave(players[0]);

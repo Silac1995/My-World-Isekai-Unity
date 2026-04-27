@@ -144,9 +144,8 @@ namespace MWI.Time
                 var climateProfile = map?.Biome?.ClimateProfile;
                 if (climateProfile != null)
                 {
-                    var transitionRules = Resources.LoadAll<TerrainTransitionRule>("Data/Terrain/TransitionRules");
                     SimulateTerrainCatchUp(savedData.TerrainCells, climateProfile, hoursPassed,
-                        new List<TerrainTransitionRule>(transitionRules));
+                        GetTransitionRulesCached());
                     SimulateVegetationCatchUp(savedData.TerrainCells, climateProfile, hoursPassed);
                 }
             }

@@ -168,10 +168,15 @@ public class SleepBehaviour : IAIBehaviour
 
         character.CharacterMovement?.ResetPath();
 
-        // Save player profile and world state to disk after sleeping
+        // Save player profile and world state to disk after sleeping.
+        // Skip if a TimeSkipController-driven skip is in flight — that path owns
+        // its own post-skip save and would otherwise race with this one against
+        // a half-state hibernated map.
         if (character.IsServer && character.IsPlayer())
         {
-            if (SaveManager.Instance != null)
+            bool skipInFlight = MWI.Time.TimeSkipController.Instance != null
+                                && MWI.Time.TimeSkipController.Instance.IsSkipping;
+            if (!skipInFlight && SaveManager.Instance != null)
                 SaveManager.Instance.RequestSave(character);
         }
     }
