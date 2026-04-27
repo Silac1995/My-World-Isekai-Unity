@@ -121,8 +121,28 @@ public class SleepBehaviour : IAIBehaviour
 
         if (!movement.PathPending && (!movement.HasPath || movement.RemainingDistance <= movement.StoppingDistance + 0.5f))
         {
-            _bed.Use(character);
-            Debug.Log($"<color=cyan>[Sleep]</color> {character.CharacterName} is now sleeping in {_bed.FurnitureName}.");
+            bool ok;
+            if (_bed is BedFurniture bedFurniture)
+            {
+                int slotIdx = bedFurniture.GetSlotIndexFor(character);
+                if (slotIdx < 0) slotIdx = bedFurniture.FindFreeSlotIndex();
+                ok = slotIdx >= 0 && bedFurniture.UseSlot(slotIdx, character);
+            }
+            else
+            {
+                ok = _bed.Use(character);  // legacy plain-Furniture fallback
+            }
+
+            if (ok)
+            {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                Debug.Log($"<color=cyan>[Sleep]</color> {character.CharacterName} is now sleeping in {_bed.FurnitureName}.");
+#endif
+            }
+            else
+            {
+                Debug.LogWarning($"<color=orange>[Sleep]</color> {character.CharacterName} failed to occupy {_bed.FurnitureName}. Sleeping standing.");
+            }
             movement.ResetPath();
             _phase = SleepPhase.Sleeping;
         }
@@ -130,10 +150,20 @@ public class SleepBehaviour : IAIBehaviour
 
     public void Exit(Character character)
     {
-        if (_bed != null && (_bed.Occupant == character || _bed.ReservedBy == character))
+        if (_bed != null)
         {
-            _bed.Release();
+            if (_bed is BedFurniture bedFurniture)
+            {
+                int slotIdx = bedFurniture.GetSlotIndexFor(character);
+                if (slotIdx >= 0) bedFurniture.ReleaseSlot(slotIdx);
+            }
+            else if (_bed.Occupant == character || _bed.ReservedBy == character)
+            {
+                _bed.Release();
+            }
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
             Debug.Log($"<color=cyan>[Sleep]</color> {character.CharacterName} woke up and left {_bed.FurnitureName}.");
+#endif
         }
 
         character.CharacterMovement?.ResetPath();
