@@ -31,7 +31,6 @@ namespace MWI.Time
         public event System.Action<int> OnSkipStarted;
 
         private bool _aborted;
-        private Coroutine _runCoroutine;
 
         private void Awake()
         {
@@ -42,6 +41,20 @@ namespace MWI.Time
         public override void OnNetworkDespawn()
         {
             if (Instance == this) Instance = null;
+        }
+
+        /// <summary>
+        /// Defensive cleanup if the controller is destroyed mid-skip (scene unload,
+        /// portal transition, etc.). Unity stops the coroutine automatically; we
+        /// just need to fire OnSkipEnded so subscribers (UI overlay) can hide.
+        /// </summary>
+        protected virtual void OnDestroy()
+        {
+            if (IsSkipping)
+            {
+                IsSkipping = false;
+                OnSkipEnded?.Invoke();
+            }
         }
 
         /// <summary>
@@ -76,7 +89,7 @@ namespace MWI.Time
                 return false;
             }
 
-            _runCoroutine = StartCoroutine(RunSkip(hours));
+            StartCoroutine(RunSkip(hours));
             return true;
         }
 
