@@ -168,6 +168,33 @@ namespace MWI.Time
             UpdatePhase(true);
         }
 
+        /// <summary>
+        /// Advance the in-game clock by exactly one hour. Fires <see cref="OnHourChanged"/>,
+        /// <see cref="OnNewDay"/> on rollover, and <see cref="OnPhaseChanged"/> on phase
+        /// boundary — same event semantics as the live <c>ProgressTime()</c> path. Called
+        /// by the TimeSkipController per loop iteration. Subscribers cannot tell the
+        /// difference between a real hour and a skip hour.
+        /// </summary>
+        public void AdvanceOneHour()
+        {
+            _currentTime += 1f / 24f;
+            if (_currentTime >= 1f)
+            {
+                _currentTime -= 1f;
+                CurrentDay++;
+                OnNewDay?.Invoke();
+            }
+
+            int newHour = CurrentHour;
+            if (newHour != _lastHour)
+            {
+                _lastHour = newHour;
+                OnHourChanged?.Invoke(newHour);
+            }
+
+            UpdatePhase(false);
+        }
+
         #region ISaveable Implementation
 
         public string SaveKey => "TimeManager_Data";
