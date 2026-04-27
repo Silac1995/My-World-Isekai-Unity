@@ -49,6 +49,10 @@ namespace MWI.WorldSystem
         public bool IsHibernating = false;
         [SerializeField] private int _activePlayerCount = 0;
 
+        [Tooltip("Set by HibernateForSkip; tells WakeUp() to skip SimulateCatchUp (the per-hour loop already advanced the data).")]
+        [SerializeField] private bool _pendingSkipWake = false;
+        public bool PendingSkipWake => _pendingSkipWake;
+
         [Header("Hibernation")]
         [Tooltip("Master switch for NPC/Building hibernation. When disabled, NPCs stay alive regardless of player presence.")]
         [SerializeField] private bool _hibernationEnabled = false;
@@ -1398,6 +1402,26 @@ namespace MWI.WorldSystem
             Debug.Log($"<color=orange>[MapController]</color> Map '{MapId}' Hibernated. {_hibernationData.HibernatedNPCs.Count} NPCs, {processedBuildings.Count} buildings, and {_hibernationData.WorldItems.Count} WorldItems serialized and despawned.");
         }
 
+        /// <summary>
+        /// Force-hibernate this map for a time-skip. Identical to <see cref="Hibernate"/>
+        /// except it bypasses the "no players nearby" guard and sets <see cref="PendingSkipWake"/>
+        /// so the next <c>WakeUp()</c> skips the single-pass <c>SimulateCatchUp</c>
+        /// (the time-skip loop already ran <c>SimulateOneHour</c> per hour).
+        ///
+        /// Server-only. Caller is the TimeSkipController.
+        /// </summary>
+        public void HibernateForSkip()
+        {
+            if (IsHibernating)
+            {
+                Debug.LogWarning($"<color=orange>[MapController:HibernateForSkip]</color> Map '{MapId}' is already hibernating. Setting PendingSkipWake anyway.");
+                _pendingSkipWake = true;
+                return;
+            }
+            _pendingSkipWake = true;
+            Hibernate();
+        }
+
         private void WakeUp()
         {
             if (!IsHibernating) return;
@@ -1524,8 +1548,18 @@ namespace MWI.WorldSystem
             if (_hibernationData != null &&
                 (_hibernationData.HibernatedNPCs.Count > 0 || _hibernationData.WorldItems.Count > 0))
             {
-                // 4. Run MacroSimulator catch-up on NPCs
-                MacroSimulator.SimulateCatchUp(_hibernationData, _timeManager.CurrentDay, _timeManager.CurrentTime01, JobYields);
+                if (_pendingSkipWake)
+                {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                    Debug.Log($"<color=cyan>[MapController:WakeUp]</color> Map '{MapId}' has PendingSkipWake — skipping SimulateCatchUp (per-hour loop already ran).");
+#endif
+                    _pendingSkipWake = false;  // consume the flag
+                }
+                else
+                {
+                    // 4. Run MacroSimulator catch-up on NPCs
+                    MacroSimulator.SimulateCatchUp(_hibernationData, _timeManager.CurrentDay, _timeManager.CurrentTime01, JobYields);
+                }
 
                 // 4b. Restore terrain cells after macro-simulation has updated them
                 var terrainGrid = GetComponent<TerrainCellGrid>();
