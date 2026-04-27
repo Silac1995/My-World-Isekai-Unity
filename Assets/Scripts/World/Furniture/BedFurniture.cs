@@ -29,7 +29,7 @@ public class BedFurniture : Furniture
         }
     }
 
-    public bool HasFreeSlot => FreeSlotCount > 0;
+    public bool HasFreeSlot => FindFreeSlotIndex() >= 0;
 
     public int FindFreeSlotIndex()
     {
@@ -62,6 +62,7 @@ public class BedFurniture : Furniture
         if (slotIndex < 0 || slotIndex >= _slots.Count) return false;
         var slot = _slots[slotIndex];
         if (slot.Occupant != null) return false;
+        if (slot.ReservedBy != null && slot.ReservedBy != c) return false;
         slot.Occupant = c;
         slot.ReservedBy = null;
         c.SetOccupyingFurniture(this);
@@ -93,7 +94,7 @@ public class BedFurniture : Furniture
         return ReserveSlot(idx, c);
     }
 
-    public new bool Use(Character c)
+    public override bool Use(Character c)
     {
         int idx = GetSlotIndexFor(c);
         if (idx < 0) idx = FindFreeSlotIndex();
@@ -105,7 +106,7 @@ public class BedFurniture : Furniture
         return UseSlot(idx, c);
     }
 
-    public new void Release()
+    public override void Release()
     {
         // Release every slot that has an occupant or reservation.
         for (int i = 0; i < _slots.Count; i++)

@@ -46,7 +46,7 @@ public class Furniture : MonoBehaviour
     /// <summary>
     /// Un personnage utilise physiquement ce meuble.
     /// </summary>
-    public bool Use(Character character)
+    public virtual bool Use(Character character)
     {
         if (character == null) return false;
         if (IsOccupied)
@@ -65,7 +65,7 @@ public class Furniture : MonoBehaviour
     /// <summary>
     /// Libère l'utilisation ou la réservation du meuble.
     /// </summary>
-    public void Release()
+    public virtual void Release()
     {
         if (_occupant != null)
         {
