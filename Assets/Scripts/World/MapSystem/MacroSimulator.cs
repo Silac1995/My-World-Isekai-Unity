@@ -10,6 +10,23 @@ namespace MWI.Time
 {
     public static class MacroSimulator
     {
+        // ── Cached resources ──
+        // Transition rules are SOs that never change at runtime. SimulateOneHour can be called
+        // up to 168x for a week-long skip — caching avoids redundant Resources.LoadAll allocations.
+        // Canonical pattern from CLAUDE.md rule #34.
+        private static TerrainTransitionRule[] _cachedTransitionRules;
+        private static List<TerrainTransitionRule> _transitionRuleList;
+
+        private static List<TerrainTransitionRule> GetTransitionRulesCached()
+        {
+            if (_cachedTransitionRules == null)
+            {
+                _cachedTransitionRules = Resources.LoadAll<TerrainTransitionRule>("Data/Terrain/TransitionRules");
+                _transitionRuleList = new List<TerrainTransitionRule>(_cachedTransitionRules);
+            }
+            return _transitionRuleList;
+        }
+
         /// <summary>
         /// Step 5 of the catch-up loop (Phase 1). Iterates all WildernessZones and applies
         /// accumulated daily deltas from their IZoneMotionStrategy lists. Clamps each
@@ -235,8 +252,7 @@ namespace MWI.Time
                 var climateProfile = map?.Biome?.ClimateProfile;
                 if (climateProfile != null)
                 {
-                    var transitionRules = Resources.LoadAll<MWI.Terrain.TerrainTransitionRule>("Data/Terrain/TransitionRules");
-                    SimulateTerrainCatchUp(data.TerrainCells, climateProfile, 1f, new List<MWI.Terrain.TerrainTransitionRule>(transitionRules));
+                    SimulateTerrainCatchUp(data.TerrainCells, climateProfile, 1f, GetTransitionRulesCached());
                     SimulateVegetationCatchUp(data.TerrainCells, climateProfile, 1f);
                 }
             }
@@ -269,7 +285,7 @@ namespace MWI.Time
 
                         foreach (var output in recipe.Outputs)
                         {
-                            int yieldAmount = Mathf.FloorToInt(output.BaseAmountPerDay * workFraction * 1f);
+                            int yieldAmount = Mathf.FloorToInt(output.BaseAmountPerDay * workFraction);
                             if (yieldAmount <= 0) continue;
                             var pool = community.ResourcePools.Find(p => p.ResourceId == output.ResourceId);
                             if (pool == null)
@@ -309,6 +325,7 @@ namespace MWI.Time
                 }
                 else if (need.NeedType == "NeedHunger")
                 {
+                    // 100 hunger per day = 100/24 per hour. Matches NeedHunger._decayPerPhase=25 x 4 phases.
                     const float drainRatePerHour = 100f / 24f;
                     need.Value = MWI.Needs.HungerCatchUpMath.ApplyDecay(need.Value, drainRatePerHour, hoursPassed);
                 }
