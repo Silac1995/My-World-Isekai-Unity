@@ -175,6 +175,18 @@ public class Character : NetworkBehaviour, MWI.Orders.IOrderIssuer
         NetworkVariableReadPermission.Everyone,
         NetworkVariableWritePermission.Server
     );
+
+    /// <summary>
+    /// Server-authoritative flag. True while the character is occupying a bed slot.
+    /// Replicates to all peers so client visuals can switch to sleep pose; gates
+    /// PlayerController.Update on the owning player. Not in ICharacterSaveData —
+    /// sleeping characters wake up out-of-bed on save/load.
+    /// </summary>
+    public NetworkVariable<bool> NetworkIsSleeping = new NetworkVariable<bool>(
+        false,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server
+    );
     #endregion
 
     #region Private Fields
@@ -207,6 +219,7 @@ public class Character : NetworkBehaviour, MWI.Orders.IOrderIssuer
     public event Action<Character> OnIncapacitated;
     public event Action<Character> OnWakeUp;
     public event Action<bool> OnUnconsciousChanged;
+    public event System.Action<bool> OnSleepStateChanged;
     public event Action<bool> OnCombatStateChanged;
     public event Action<bool> OnBuildingStateChanged;
     #endregion
@@ -269,6 +282,7 @@ public class Character : NetworkBehaviour, MWI.Orders.IOrderIssuer
     public Furniture OccupyingFurniture { get; private set; }
 
     public bool IsUnconscious => _isUnconscious;
+    public bool IsSleeping => NetworkIsSleeping.Value;
     public bool IsIncapacitated => _isDead || _isUnconscious;
     public Transform VisualRoot => _visualRoot;
     public GameObject CurrentVisualInstance => _currentVisualInstance;
@@ -404,6 +418,7 @@ public class Character : NetworkBehaviour, MWI.Orders.IOrderIssuer
         // moment OnNetworkSpawn fires, so this callback ensures the name is applied
         // as soon as the server's value arrives (or on any subsequent rename).
         NetworkCharacterName.OnValueChanged += OnNetworkNameChanged;
+        NetworkIsSleeping.OnValueChanged += HandleSleepStateChanged;
 
         // Apply the current value immediately if already available (normal case)
         if (!NetworkCharacterName.Value.IsEmpty)
@@ -440,6 +455,7 @@ public class Character : NetworkBehaviour, MWI.Orders.IOrderIssuer
     {
         base.OnNetworkDespawn();
         NetworkCharacterName.OnValueChanged -= OnNetworkNameChanged;
+        NetworkIsSleeping.OnValueChanged -= HandleSleepStateChanged;
     }
 
     private void OnNetworkNameChanged(Unity.Collections.FixedString64Bytes previous, Unity.Collections.FixedString64Bytes current)
@@ -450,6 +466,11 @@ public class Character : NetworkBehaviour, MWI.Orders.IOrderIssuer
             gameObject.name = _characterName;
             Debug.Log($"[Character] Name synced from network: {_characterName}");
         }
+    }
+
+    private void HandleSleepStateChanged(bool previous, bool current)
+    {
+        OnSleepStateChanged?.Invoke(current);
     }
 
     private System.Collections.IEnumerator DelayedHostTeleport()
@@ -1050,5 +1071,61 @@ public class Character : NetworkBehaviour, MWI.Orders.IOrderIssuer
     public void SetOccupyingFurniture(Furniture furniture)
     {
         OccupyingFurniture = furniture;
+    }
+
+    /// <summary>
+    /// Server-only. Snap the character to the given anchor, disable navigation,
+    /// and flip <see cref="NetworkIsSleeping"/> to true. Called by
+    /// <see cref="BedFurniture.UseSlot"/>. Position is server-driven — clients
+    /// receive the snap via NetworkTransform, not via this method.
+    /// </summary>
+    public void EnterSleep(Transform anchor)
+    {
+        if (!IsServer)
+        {
+            Debug.LogWarning($"<color=orange>[Character]</color> EnterSleep called on non-server peer for {CharacterName}. Ignored.");
+            return;
+        }
+        if (anchor == null)
+        {
+            Debug.LogError($"<color=red>[Character]</color> EnterSleep called with null anchor for {CharacterName}.");
+            return;
+        }
+        if (NetworkIsSleeping.Value)
+        {
+            Debug.LogWarning($"<color=orange>[Character]</color> EnterSleep on {CharacterName} but already sleeping. Ignored.");
+            return;
+        }
+
+        transform.SetPositionAndRotation(anchor.position, anchor.rotation);
+        if (_cachedNavMeshAgent != null) _cachedNavMeshAgent.enabled = false;
+        CharacterMovement?.ResetPath();
+        NetworkIsSleeping.Value = true;
+
+        Debug.Log($"<color=cyan>[Character]</color> {CharacterName} EnterSleep at {anchor.name} ({anchor.position}).");
+    }
+
+    /// <summary>
+    /// Server-only. Re-enable navigation and flip <see cref="NetworkIsSleeping"/> to false.
+    /// The character stays at the anchor's last position; the next AI tick or player input
+    /// drives them away. Called by <see cref="BedFurniture.ReleaseSlot"/>.
+    /// </summary>
+    public void ExitSleep()
+    {
+        if (!IsServer)
+        {
+            Debug.LogWarning($"<color=orange>[Character]</color> ExitSleep called on non-server peer for {CharacterName}. Ignored.");
+            return;
+        }
+        if (!NetworkIsSleeping.Value)
+        {
+            // No-op on idempotent call; common during shutdown.
+            return;
+        }
+
+        if (_cachedNavMeshAgent != null) _cachedNavMeshAgent.enabled = true;
+        NetworkIsSleeping.Value = false;
+
+        Debug.Log($"<color=cyan>[Character]</color> {CharacterName} ExitSleep.");
     }
 }
