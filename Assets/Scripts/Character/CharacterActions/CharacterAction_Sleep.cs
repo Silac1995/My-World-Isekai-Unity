@@ -94,7 +94,7 @@ public class CharacterAction_Sleep : CharacterAction
 
         // IncreaseCurrentAmountPercent takes 0.0–1.0; LIVE_GROUND_RESTORE_PER_TICK is on a
         // 0–100 NeedSleep scale, so dividing by 100 gives the equivalent stamina fraction.
-        var stamina = character.CharacterStats?.Stamina;
+        var stamina = character.Stats?.Stamina;
         stamina?.IncreaseCurrentAmountPercent(NeedSleepMath.LIVE_GROUND_RESTORE_PER_TICK * 0.01f);
     }
 }
