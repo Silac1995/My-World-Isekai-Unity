@@ -147,6 +147,7 @@ namespace MWI.Time
                     SimulateTerrainCatchUp(savedData.TerrainCells, climateProfile, hoursPassed,
                         GetTransitionRulesCached());
                     SimulateVegetationCatchUp(savedData.TerrainCells, climateProfile, hoursPassed);
+                    SimulateCropCatchUp(savedData.TerrainCells, climateProfile, hoursPassed);
                 }
             }
 
@@ -254,6 +255,7 @@ namespace MWI.Time
                 {
                     SimulateTerrainCatchUp(data.TerrainCells, climateProfile, 1f, GetTransitionRulesCached());
                     SimulateVegetationCatchUp(data.TerrainCells, climateProfile, 1f);
+                    SimulateCropCatchUp(data.TerrainCells, climateProfile, 1f);
                 }
             }
 
@@ -585,6 +587,31 @@ namespace MWI.Time
                         cells[i].PlantedCropId = null;
                     }
                 }
+            }
+        }
+
+        /// <summary>
+        /// Offline catch-up for plowed farming cells. Server-only, called from the orchestration
+        /// after SimulateVegetationCatchUp (which intentionally skips IsPlowed cells). Mutates
+        /// the SaveData array in place; FarmGrowthSystem.PostWakeSweep then spawns harvestables
+        /// based on the resulting state. See farming spec §9.4.
+        /// </summary>
+        public static void SimulateCropCatchUp(TerrainCellSaveData[] cells, BiomeClimateProfile climate, float hoursPassed)
+        {
+            if (cells == null) return;
+            int daysPassed = (int)(hoursPassed / 24f);
+            if (daysPassed <= 0) return;
+
+            float avgMoisture = climate != null
+                ? climate.BaselineMoisture + climate.RainProbability * 0.5f
+                : 0.5f;
+
+            for (int i = 0; i < cells.Length; i++)
+            {
+                // SaveData → mutable cell → SaveData round-trip (cells is the persistence carrier).
+                var cell = cells[i].ToCell();
+                MWI.WorldSystem.Simulation.MacroSimulatorCropMath.AdvanceCellOffline(ref cell, daysPassed, avgMoisture);
+                cells[i] = TerrainCellSaveData.FromCell(cell);
             }
         }
     }
