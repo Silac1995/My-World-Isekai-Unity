@@ -103,9 +103,17 @@ public class SleepBehaviour : IAIBehaviour
         }
         else
         {
-            // No bed available — just sleep standing at home
+            // No bed available — sleep standing at home. Route through CharacterAction
+            // so player parity holds (rule #22).
             Debug.Log($"<color=orange>[Sleep]</color> {character.CharacterName} found no available bed. Sleeping at home anyway.");
             movement.ResetPath();
+
+            var action = new CharacterAction_Sleep(character);
+            if (character.CharacterActions != null)
+            {
+                character.CharacterActions.ExecuteAction(action);
+            }
+
             _phase = SleepPhase.Sleeping;
         }
     }
@@ -121,28 +129,46 @@ public class SleepBehaviour : IAIBehaviour
 
         if (!movement.PathPending && (!movement.HasPath || movement.RemainingDistance <= movement.StoppingDistance + 0.5f))
         {
-            bool ok;
+            // Per rule #22: enqueue the CharacterAction wrapper instead of mutating
+            // bed/character state directly. The action calls bed.UseSlot internally,
+            // which chains to Character.EnterSleep.
+            CharacterAction action = null;
             if (_bed is BedFurniture bedFurniture)
             {
                 int slotIdx = bedFurniture.GetSlotIndexFor(character);
                 if (slotIdx < 0) slotIdx = bedFurniture.FindFreeSlotIndex();
-                ok = slotIdx >= 0 && bedFurniture.UseSlot(slotIdx, character);
+                if (slotIdx >= 0)
+                {
+                    action = new CharacterAction_SleepOnFurniture(character, bedFurniture, slotIdx);
+                }
             }
             else
             {
-                ok = _bed.Use(character);  // legacy plain-Furniture fallback
+                // Legacy plain-Furniture fallback: direct Use as before. No CharacterAction
+                // wrapper exists for non-BedFurniture beds; existing scenes that haven't
+                // been migrated keep working.
+                if (_bed.Use(character))
+                {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                    Debug.Log($"<color=cyan>[Sleep]</color> {character.CharacterName} legacy-occupied {_bed.FurnitureName}.");
+#endif
+                }
             }
 
-            if (ok)
+            if (action != null)
             {
+                if (character.CharacterActions != null && character.CharacterActions.ExecuteAction(action))
+                {
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-                Debug.Log($"<color=cyan>[Sleep]</color> {character.CharacterName} is now sleeping in {_bed.FurnitureName}.");
+                    Debug.Log($"<color=cyan>[Sleep]</color> {character.CharacterName} enqueued sleep on {_bed.FurnitureName}.");
 #endif
+                }
+                else
+                {
+                    Debug.LogWarning($"<color=orange>[Sleep]</color> {character.CharacterName} failed to enqueue CharacterAction_SleepOnFurniture on {_bed.FurnitureName}. Falling back to standing.");
+                }
             }
-            else
-            {
-                Debug.LogWarning($"<color=orange>[Sleep]</color> {character.CharacterName} failed to occupy {_bed.FurnitureName}. Sleeping standing.");
-            }
+
             movement.ResetPath();
             _phase = SleepPhase.Sleeping;
         }
@@ -168,17 +194,10 @@ public class SleepBehaviour : IAIBehaviour
 
         character.CharacterMovement?.ResetPath();
 
-        // Save player profile and world state to disk after sleeping.
-        // Skip if a TimeSkipController-driven skip is in flight — that path owns
-        // its own post-skip save and would otherwise race with this one against
-        // a half-state hibernated map.
-        if (character.IsServer && character.IsPlayer())
-        {
-            bool skipInFlight = MWI.Time.TimeSkipController.Instance != null
-                                && MWI.Time.TimeSkipController.Instance.IsSkipping;
-            if (!skipInFlight && SaveManager.Instance != null)
-                SaveManager.Instance.RequestSave(character);
-        }
+        // No SaveManager call here. Per the new design, only the time-skip end
+        // path triggers a save (avoids churn on accidental wakes). Player sleep
+        // saves are owned by TimeSkipController.RunSkip's post-skip loop.
+        // NPCs don't trigger save anyway (player-only gate).
     }
 
     public void Terminate()
