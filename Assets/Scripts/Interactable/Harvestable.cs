@@ -164,9 +164,6 @@ public class Harvestable : InteractableObject
                 actionFactory: ch => new CharacterHarvestAction(ch, this)));
         }
 
-        /*
-        // Destruction row activated once CharacterAction_DestroyHarvestable type exists
-        // (it lives in Assembly-CSharp / no Pure asmdef boundary).
         if (_allowDestruction && _destructionOutputs.Count > 0)
         {
             bool destroyOk = CanDestroyWith(held);
@@ -182,7 +179,6 @@ public class Harvestable : InteractableObject
                 unavailableReason: destroyReason,
                 actionFactory: ch => new CharacterAction_DestroyHarvestable(ch, this)));
         }
-        */
 
         return list;
     }
@@ -311,7 +307,7 @@ public class Harvestable : InteractableObject
     /// CharacterEquipment exposes the carried item via the HandsController on the
     /// character's visual rig — there is no flat 'GetActiveHandItem' helper.
     /// </summary>
-    private static ItemSO GetHeldItemSO(Character actor)
+    internal static ItemSO GetHeldItemSO(Character actor)
     {
         if (actor == null) return null;
         var hands = actor.CharacterVisual != null && actor.CharacterVisual.BodyPartsController != null
@@ -401,5 +397,21 @@ public class Harvestable : InteractableObject
     public void SetRequiredHarvestToolForTests(ItemSO tool) => _requiredHarvestTool = tool;
     public void SetAllowDestructionForTests(bool b) => _allowDestruction = b;
     public void SetRequiredDestructionToolForTests(ItemSO tool) => _requiredDestructionTool = tool;
+
+    [ContextMenu("DEV: Destroy via local player")]
+    private void Dev_DestroyViaLocalPlayer()
+    {
+        var player = FindObjectOfType<PlayerController>();
+        if (player == null) { Debug.LogError("[Harvestable] No PlayerController in scene."); return; }
+        var character = player.GetComponent<Character>();
+        var held = GetHeldItemSO(character);
+        if (!CanDestroyWith(held))
+        {
+            Debug.LogWarning("[Harvestable] Player can't destroy this — wrong tool or _allowDestruction is false.");
+            return;
+        }
+        character.CharacterActions.ExecuteAction(
+            new CharacterAction_DestroyHarvestable(character, this));
+    }
 #endif
 }

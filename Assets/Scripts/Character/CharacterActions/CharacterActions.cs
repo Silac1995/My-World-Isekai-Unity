@@ -223,6 +223,24 @@ public class CharacterActions : CharacterSystem
     }
 
     /// <summary>
+    /// Client requests the server to run the destruction effect on a Harvestable
+    /// (axe → tree drops wood, etc.). Mirrors RequestHarvestServerRpc — target is
+    /// resolved by world position because Harvestable is a scene-authored MonoBehaviour
+    /// whose transform is identical on server and client.
+    /// </summary>
+    [Rpc(SendTo.Server)]
+    public void RequestDestroyHarvestableServerRpc(Vector3 harvestablePosition)
+    {
+        Harvestable target = FindHarvestableNear(harvestablePosition);
+        if (target == null)
+        {
+            Debug.LogWarning($"[CharacterActions] Server: Could not find Harvestable to destroy near {harvestablePosition}");
+            return;
+        }
+        target.DestroyForOutputs();
+    }
+
+    /// <summary>
     /// Client requests the server to spawn a dropped item in the world.
     /// Clients cannot spawn NetworkObjects — they send the item data to the server.
     /// </summary>
