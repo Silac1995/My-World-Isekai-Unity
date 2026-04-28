@@ -313,6 +313,50 @@ public class CharacterActions : CharacterSystem
         Debug.Log($"<color=green>[CharacterActions]</color> Server despawned furniture '{furniture.FurnitureName}'.");
     }
 
+    /// <summary>
+    /// Client → Server: enqueue CharacterAction_SleepOnFurniture for the local
+    /// player Character. Server resolves the bed by NetworkObjectReference
+    /// (the parent building's NetworkObject — beds have no NO of their own per
+    /// the no-nested-NO rule), validates the slot, sets PendingSkipHours, and
+    /// queues the action. The auto-trigger watcher in TimeSkipController will
+    /// then fire RequestSkip once all connected players are sleeping with
+    /// PendingSkipHours > 0.
+    /// </summary>
+    [Rpc(SendTo.Server)]
+    public void RequestSleepOnFurnitureServerRpc(NetworkObjectReference parentRef, int slotIndex, int desiredHours)
+    {
+        if (!parentRef.TryGet(out NetworkObject parentNetObj))
+        {
+            Debug.LogWarning("[CharacterActions] RequestSleepOnFurnitureServerRpc: parentRef did not resolve to a NetworkObject.");
+            return;
+        }
+
+        BedFurniture bed = parentNetObj.GetComponentInChildren<BedFurniture>();
+        if (bed == null)
+        {
+            Debug.LogWarning("[CharacterActions] RequestSleepOnFurnitureServerRpc: no BedFurniture found under the resolved NetworkObject.");
+            return;
+        }
+
+        if (slotIndex < 0 || slotIndex >= bed.SlotCount)
+        {
+            Debug.LogWarning($"[CharacterActions] RequestSleepOnFurnitureServerRpc: slotIndex {slotIndex} out of range for {bed.FurnitureName}.");
+            return;
+        }
+
+        // Set the per-skip target so the auto-trigger watcher can fire.
+        if (desiredHours > 0)
+        {
+            _character.SetPendingSkipHours(desiredHours);
+        }
+
+        var action = new CharacterAction_SleepOnFurniture(_character, bed, slotIndex);
+        if (!ExecuteAction(action))
+        {
+            Debug.LogWarning($"[CharacterActions] RequestSleepOnFurnitureServerRpc: ExecuteAction rejected for {_character.CharacterName} on {bed.FurnitureName}.");
+        }
+    }
+
     private static Room FindRoomAtPosition(Vector3 position)
     {
         Room[] allRooms = UnityEngine.Object.FindObjectsByType<Room>(FindObjectsSortMode.None);
