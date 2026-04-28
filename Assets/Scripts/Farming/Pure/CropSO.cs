@@ -66,6 +66,10 @@ namespace MWI.Farming
 
 #if UNITY_EDITOR
         public void SetIdForTests(string id) => _id = id;
+        public void SetDaysToMatureForTests(int days) => _daysToMature = days;
+        public void SetMinMoistureForTests(float m) => _minMoistureForGrowth = m;
+        public void SetIsPerennialForTests(bool p) => _isPerennial = p;
+        public void SetRegrowDaysForTests(int d) => _regrowDays = d;
 
         private void OnValidate()
         {
