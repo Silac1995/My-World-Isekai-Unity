@@ -1592,6 +1592,15 @@ namespace MWI.WorldSystem
                 if (terrainGrid != null && _hibernationData?.TerrainCells != null)
                     terrainGrid.RestoreFromSaveData(_hibernationData.TerrainCells);
 
+                // 4c. Reconstruct CropHarvestables from cell state (post-wake sweep covers both
+                // hibernation-wake and save-load — single code path per farming spec §9.2).
+                var farmGrowth = GetComponent<MWI.Farming.FarmGrowthSystem>();
+                if (farmGrowth != null && terrainGrid != null)
+                {
+                    farmGrowth.Initialize(terrainGrid, this);
+                    farmGrowth.PostWakeSweep();
+                }
+
                 // 5. Spawn NPCs and WorldItems at their simulated positions (shared with snapshot restore)
                 SpawnNPCsFromSnapshot(_hibernationData);
             }
@@ -1615,6 +1624,53 @@ namespace MWI.WorldSystem
             var grid = GetComponent<TerrainCellGrid>();
             if (grid != null)
                 grid.RestoreFromSaveData(cells);
+        }
+
+        /// <summary>
+        /// Server entry point for dirty-cell deltas (e.g. farming growth tick, plant/water/destroy
+        /// actions). Builds the matching <see cref="TerrainCellSaveData"/> payload from current
+        /// cell state and fires the ClientRpc so clients can update their local mirror BEFORE
+        /// any visual processors run. Callers pass index arrays only, never the raw ClientRpc —
+        /// that way they can't forget the payload.
+        /// </summary>
+        public void NotifyDirtyCells(int[] indices)
+        {
+            if (!IsServer || indices == null || indices.Length == 0) return;
+            var grid = GetComponent<TerrainCellGrid>();
+            if (grid == null) return;
+
+            var payload = new TerrainCellSaveData[indices.Length];
+            for (int i = 0; i < indices.Length; i++)
+            {
+                int idx = indices[i];
+                int x = idx % grid.Width;
+                int z = idx / grid.Width;
+                payload[i] = TerrainCellSaveData.FromCell(grid.GetCellRef(x, z));
+            }
+            SendDirtyCellsClientRpc(indices, payload);
+        }
+
+        /// <summary>
+        /// Updates a sparse set of cells on every client. The server has already mutated its
+        /// own grid before dispatch, so the IsServer check below skips the redundant write
+        /// on the host.
+        /// </summary>
+        [ClientRpc]
+        private void SendDirtyCellsClientRpc(int[] indices, TerrainCellSaveData[] payload)
+        {
+            if (IsServer) return;   // server already mutated its grid before NotifyDirtyCells fired
+            var grid = GetComponent<TerrainCellGrid>();
+            if (grid == null || indices == null || payload == null) return;
+
+            for (int i = 0; i < indices.Length; i++)
+            {
+                int idx = indices[i];
+                int x = idx % grid.Width;
+                int z = idx / grid.Width;
+                ref TerrainCell cell = ref grid.GetCellRef(x, z);
+                cell = payload[i].ToCell();
+            }
+            // Future: subscribers (CropVisualSpawner, terrain transition processors) can react here.
         }
 
         /// <summary>
