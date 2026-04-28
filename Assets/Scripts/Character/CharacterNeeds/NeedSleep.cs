@@ -23,6 +23,7 @@ public class NeedSleep : CharacterNeed
 
     private readonly CharacterNeeds _owner;
 
+    private float _decayPerPhase = NeedSleepMath.DEFAULT_DECAY_PER_PHASE;
     private bool _phaseSubscribed;
     private bool _bridgeBound;
     private bool _isExhausted;
@@ -155,7 +156,7 @@ public class NeedSleep : CharacterNeed
 
         try
         {
-            DecreaseValue(NeedSleepMath.DEFAULT_DECAY_PER_PHASE);
+            DecreaseValue(_decayPerPhase);
         }
         catch (Exception e)
         {
