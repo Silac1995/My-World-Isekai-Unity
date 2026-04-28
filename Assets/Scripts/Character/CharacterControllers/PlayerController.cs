@@ -51,6 +51,68 @@ public class PlayerController : CharacterGameController
     {
         if (IsOwner)
         {
+            // --- Step 1: Sleep toggle (Z key) ---
+            // Z is "lay down" when awake and "wake up" when asleep.
+            // Must come BEFORE the IsSleeping early-out so it fires in both states.
+            if (Input.GetKeyDown(KeyCode.Z))
+            {
+                if (_character.IsSleeping)
+                {
+                    _character.CharacterActions?.ClearCurrentAction();
+                }
+                else if (_character.CharacterActions != null
+                         && _character.CharacterActions.CurrentAction == null
+                         && _character.IsAlive())
+                {
+                    var action = new CharacterAction_Sleep(_character);
+                    _character.CharacterActions.ExecuteAction(action);
+                }
+                return;  // consume the input; don't fall through to other handlers
+            }
+
+            // --- Step 2: Wake-on-movement ---
+            // Any WASD or mouse click while asleep wakes the character.
+            // We clear the sleep action here; the movement command routes through naturally next frame.
+            if (_character.IsSleeping
+                && (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.A)
+                    || Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.D)
+                    || Input.GetMouseButtonDown(0) || Input.GetMouseButtonDown(1)))
+            {
+                _character.CharacterActions?.ClearCurrentAction();
+                return;  // skip the IsSleeping early-out so the movement registers next frame
+            }
+
+            // --- Step 3: Sleep re-enqueue ---
+            // While asleep but no action is live (action finished its tick via Finish()),
+            // re-enqueue the appropriate sleep CharacterAction so live restoration keeps firing.
+            // Bed vs ground chosen via Character.OccupyingFurniture.
+            if (_character.IsSleeping
+                && _character.CharacterActions != null
+                && _character.CharacterActions.CurrentAction == null)
+            {
+                CharacterAction next;
+                var occupying = _character.OccupyingFurniture;
+                if (occupying is BedFurniture bedFurniture)
+                {
+                    int slotIdx = bedFurniture.GetSlotIndexFor(_character);
+                    if (slotIdx < 0)
+                    {
+                        // Lost the slot somehow — fall back to ground sleep.
+                        next = new CharacterAction_Sleep(_character);
+                    }
+                    else
+                    {
+                        next = new CharacterAction_SleepOnFurniture(_character, bedFurniture, slotIdx);
+                    }
+                }
+                else
+                {
+                    next = new CharacterAction_Sleep(_character);
+                }
+                _character.CharacterActions.ExecuteAction(next);
+                // No early-return here — let the IsSleeping early-out below freeze other input.
+            }
+
             // Sleeping players accept no input — bed/skip lifecycle owns position+rotation,
             // animator switches to sleep pose via Character.OnSleepStateChanged.
             if (Character != null && Character.IsSleeping) return;
