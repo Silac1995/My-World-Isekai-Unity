@@ -1325,6 +1325,18 @@ namespace MWI.WorldSystem
                 Building building = col.GetComponent<Building>() ?? col.GetComponentInParent<Building>();
                 if (building == null || !processedBuildings.Add(building)) continue;
 
+                // Skip "virtual" buildings whose NetworkObject is shared with the MapController.
+                // These are placeholders (e.g., Virtual Node from SpawnVirtualBuildings) that
+                // don't carry their own network identity. The inherited NetworkBehaviour.NetworkObject
+                // getter walks up via GetComponentInParent and returns the MapController's NetworkObject.
+                // Despawning that here would destroy the MapController itself, causing WakeUp to fail
+                // (and breaking the time-skip path which calls Hibernate→WakeUp synchronously).
+                if (building.NetworkObject != null && building.NetworkObject == this.NetworkObject)
+                {
+                    Debug.Log($"<color=orange>[MapController:Hibernate]</color> Skipping virtual building '{building.BuildingName}' (shares NetworkObject with map — no despawn or auto-register).");
+                    continue;
+                }
+
                 Debug.Log($"<color=orange>[MapController:Hibernate]</color> Found building '{building.BuildingName}' (ID={building.BuildingId}, PrefabId={building.PrefabId}) at {building.transform.position}");
 
                 // Sync state to save data (auto-register if not yet tracked)
