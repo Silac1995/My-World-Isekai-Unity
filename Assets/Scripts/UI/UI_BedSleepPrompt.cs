@@ -48,6 +48,15 @@ public class UI_BedSleepPrompt : MonoBehaviour
     /// </summary>
     public void Show(Action<int> onConfirm)
     {
+        // Reject re-entry — a second Show() while one is pending would silently
+        // drop the first caller's lambda on the floor (the original player who
+        // opened the prompt would never see their action enqueue).
+        if (_onConfirm != null || gameObject.activeSelf)
+        {
+            Debug.LogWarning("<color=orange>[UI_BedSleepPrompt]</color> Show called while a prompt was already open. Ignoring the second request.");
+            return;
+        }
+
         _onConfirm = onConfirm;
         gameObject.SetActive(true);
         if (_hoursSlider != null)
