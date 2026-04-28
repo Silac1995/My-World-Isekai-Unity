@@ -70,7 +70,7 @@ public class SleepBehaviour : IAIBehaviour
                 break;
 
             case SleepPhase.Sleeping:
-                // Stay idle — schedule system will switch activity when sleep time ends
+                HandleSleeping(character);
                 break;
         }
     }
@@ -172,6 +172,33 @@ public class SleepBehaviour : IAIBehaviour
             movement.ResetPath();
             _phase = SleepPhase.Sleeping;
         }
+    }
+
+    /// <summary>
+    /// Re-enqueue the sleep CharacterAction every time the previous tick's 5s
+    /// finishes naturally (Finish → CleanupAction sets CurrentAction=null but does
+    /// NOT invoke OnCancel, so re-enqueue here keeps the live restoration ticks
+    /// firing while the schedule still says sleep). The action's CanExecute also
+    /// rejects if a TimeSkip is in progress, so we do not need to gate that here.
+    /// </summary>
+    private void HandleSleeping(Character character)
+    {
+        var actions = character.CharacterActions;
+        if (actions == null || actions.CurrentAction != null) return;
+
+        CharacterAction next;
+        if (_bed is BedFurniture bedFurniture)
+        {
+            int slotIdx = bedFurniture.GetSlotIndexFor(character);
+            if (slotIdx < 0) return;  // we lost the slot somehow — let schedule transition handle it
+            next = new CharacterAction_SleepOnFurniture(character, bedFurniture, slotIdx);
+        }
+        else
+        {
+            next = new CharacterAction_Sleep(character);
+        }
+
+        actions.ExecuteAction(next);
     }
 
     public void Exit(Character character)
