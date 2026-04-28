@@ -764,6 +764,22 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
         // ONLY the Server executes the raw physical damage calculation and EXP
         if (!IsServer) return;
 
+        // Wake-on-attack: if asleep, force a wake. Character.ExitSleep is idempotent
+        // (it early-outs if !IsSleeping), so this is safe to fire on every damage event.
+        // The current sleep CharacterAction's OnCancel chain runs via the standard
+        // HandleCombatStateChanged → ClearCurrentAction path, releasing the bed slot.
+        try
+        {
+            if (_character != null && _character.IsSleeping)
+            {
+                _character.ExitSleep();
+            }
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogException(e);
+        }
+
         bool wasAlive = _character.IsAlive();
         float hpBefore = _character.Stats.Health.CurrentAmount;
         
