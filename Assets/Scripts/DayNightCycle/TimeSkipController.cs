@@ -179,19 +179,48 @@ namespace MWI.Time
 
             // 4. ExitSkipMode — wake the map and unfreeze the player(s).
             //    The map's PendingSkipWake flag suppresses the redundant SimulateCatchUp.
-            activeMap.WakeUpFromSkip();
-            foreach (var player in players)
+            //    Wrapped in try/catch/finally so a WakeUp exception (e.g., the map
+            //    GameObject being destroyed by some side effect of Hibernate) cannot
+            //    permanently strand IsSkipping = true and block future skips.
+            try
             {
-                if (player != null && player.IsSleeping) player.ExitSleep();
+                if (activeMap != null) activeMap.WakeUpFromSkip();
+                else Debug.LogWarning("<color=orange>[TimeSkip]</color> activeMap was destroyed during the skip; WakeUpFromSkip skipped. Map will wake naturally on next player approach.");
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError("<color=red>[TimeSkip]</color> Exception during WakeUpFromSkip — falling through to cleanup so future skips remain unblocked.");
+                Debug.LogException(e);
+            }
+
+            try
+            {
+                foreach (var player in players)
+                {
+                    if (player != null && player.IsSleeping) player.ExitSleep();
+                }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError("<color=red>[TimeSkip]</color> Exception during ExitSleep — falling through.");
+                Debug.LogException(e);
             }
 
             // 5. Restore the captured timeScale before save so SaveManager doesn't
             //    inherit a frozen Unity clock, then trigger the post-skip save.
             UnityEngine.Time.timeScale = savedTimeScale;
 
-            if (SaveManager.Instance != null && players.Length > 0 && players[0] != null)
+            try
             {
-                SaveManager.Instance.RequestSave(players[0]);
+                if (SaveManager.Instance != null && players.Length > 0 && players[0] != null)
+                {
+                    SaveManager.Instance.RequestSave(players[0]);
+                }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError("<color=red>[TimeSkip]</color> Exception during RequestSave — falling through.");
+                Debug.LogException(e);
             }
 
             IsSkipping = false;
