@@ -177,11 +177,11 @@ public class PlayerController : CharacterGameController
                     HandleDropCarriedItem();
                 }
 
-                // --- E: Consume the item currently carried in hands if it's a ConsumableInstance. ---
-                // Routed through CharacterUseConsumableAction (rule #22 player-NPC parity).
+                // --- E key dispatch (placement-active item / consumable / interact-nearest). ---
+                // Single owner-gated dispatcher per rule #33. Hold-E menu lands with UI_InteractionMenu.
                 if (Input.GetKeyDown(KeyCode.E))
                 {
-                    HandleConsumeCarriedItem();
+                    HandleEKey();
                 }
 
                 // Auto-Trigger Combat Command when in battle. The command handles pacing and action execution.
@@ -268,24 +268,57 @@ public class PlayerController : CharacterGameController
     }
 
     /// <summary>
-    /// Consumes the item currently carried in hands if it's a ConsumableInstance.
-    /// No-op if hands are empty, item is not consumable, or another action is already running.
+    /// Owner-gated E-key dispatcher (rule #33). Priority order:
+    ///   1. Seed in hand → start crop placement (CropPlacementManager).
+    ///   2. WateringCan in hand → start watering mode.
+    ///   3. Already in placement mode → no-op (CropPlacementManager handles its own LMB/RMB/ESC).
+    ///   4. Consumable in hand → consume.
+    ///   5. Otherwise → Interact() on the nearest visible interactable (yield-path harvest, etc.).
     /// </summary>
-    private void HandleConsumeCarriedItem()
+    private void HandleEKey()
     {
         var hands = _character?.CharacterVisual?.BodyPartsController?.HandsController;
-        if (hands == null || !hands.IsCarrying) return;
+        var heldItemSO = hands != null && hands.CarriedItem != null ? hands.CarriedItem.ItemSO : null;
 
-        if (hands.CarriedItem is not ConsumableInstance consumable)
+        // Priority 1 + 2: placement-active item.
+        if (heldItemSO is MWI.Farming.SeedSO)
         {
-            Debug.Log($"<color=yellow>[PlayerCtrl]</color> Carried item is not a consumable — E ignored.");
+            if (_character.CropPlacement != null) _character.CropPlacement.StartPlacement(hands.CarriedItem);
+            return;
+        }
+        if (heldItemSO is MWI.Farming.WateringCanSO)
+        {
+            if (_character.CropPlacement != null) _character.CropPlacement.StartWatering();
             return;
         }
 
-        if (_character.CharacterActions == null) return;
-        if (_character.CharacterActions.CurrentAction != null) return;
+        // Priority 3: if placement is already active, the manager owns LMB/RMB/ESC. E is a no-op.
+        if (_character.CropPlacement != null && _character.CropPlacement.IsActive) return;
 
-        _character.CharacterActions.ExecuteAction(new CharacterUseConsumableAction(_character, consumable));
+        // Priority 4: consumable in hand.
+        if (hands != null && hands.IsCarrying && hands.CarriedItem is ConsumableInstance consumable)
+        {
+            if (_character.CharacterActions == null || _character.CharacterActions.CurrentAction != null) return;
+            _character.CharacterActions.ExecuteAction(new CharacterUseConsumableAction(_character, consumable));
+            return;
+        }
+
+        // Priority 5: Interact on nearest visible interactable (yield-path harvest, NPC talk, etc.).
+        var awareness = _character.CharacterAwareness;
+        if (awareness == null) return;
+        var visible = awareness.GetVisibleInteractables();
+        if (visible == null || visible.Count == 0) return;
+
+        InteractableObject closest = null;
+        float closestDist = float.MaxValue;
+        for (int i = 0; i < visible.Count; i++)
+        {
+            var obj = visible[i];
+            if (obj == null) continue;
+            float d = Vector3.Distance(_character.transform.position, obj.transform.position);
+            if (d < closestDist) { closestDist = d; closest = obj; }
+        }
+        if (closest != null) closest.Interact(_character);
     }
 
     /// <summary>
