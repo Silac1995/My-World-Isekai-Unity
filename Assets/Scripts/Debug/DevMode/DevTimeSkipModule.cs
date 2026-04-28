@@ -42,7 +42,7 @@ public class DevTimeSkipModule : MonoBehaviour
             SetStatus("TimeSkipController not in scene.");
             return;
         }
-        bool ok = MWI.Time.TimeSkipController.Instance.RequestSkip(hours);
+        bool ok = MWI.Time.TimeSkipController.Instance.RequestSkip(hours, force: true);
         SetStatus(ok ? $"Skipping {hours}h…" : "Skip rejected — see Console for reason.");
     }
 

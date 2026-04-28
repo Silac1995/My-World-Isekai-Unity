@@ -3,7 +3,7 @@ type: system
 title: "World Time Skip"
 tags: [world, time-skip, macro-sim, bed-furniture, hibernation]
 created: 2026-04-27
-updated: 2026-04-27
+updated: 2026-04-28
 sources: []
 related:
   - "[[world]]"
@@ -169,23 +169,41 @@ The implementation lands as scripts only — the Editor wiring is manual. Withou
 
 Procedural how-to for invoking the skip, abort semantics, and integration tests lives in [.agent/skills/world-system/SKILL.md](../../.agent/skills/world-system/SKILL.md) §Time Skip.
 
-## v1 → v2 multiplayer roadmap
+## Multiplayer model — consent + auto-trigger
 
-v1 is **single-player only.** `RequestSkip` checks `NetworkManager.Singleton.ConnectedClients.Count == 1` and rejects otherwise. The gate is one `if` and trivial to remove.
+The skip is multiplayer-aware. Two paths:
 
-v2 will replace the gate with **auto-trigger when all connected players are simultaneously occupying a `BedSlot`.** Sleeping = consent. The shape:
-- `BedFurniture.UseSlot(slot, character)` increments a server-side counter of "players currently in a bed."
-- When `playersInBed == ConnectedClients.Count`, the server auto-fires `RequestSkip(hours)` with the shortest pending duration across all bed prompts.
-- Any player using `ExitSleep()` before the trigger fires resets the auto-trigger.
-- No UI confirmation step in v2 — the act of choosing a duration on `UI_BedSleepPrompt` and walking to the bed is the consent.
+### Bed / UI flow (default — `force: false`)
 
-The single-player guard is intentionally placed at the `RequestSkip` entry point (not deeper in the coroutine) so v2 only needs to swap the validation block.
+1. Each player walks to a bed and chooses a target hour count via `UI_BedSleepPrompt`.
+2. The bed's `UseSlot` path raises `Character.IsSleeping = true` and the UI sets `Character.PendingSkipHours` to the chosen value (server-authoritative `NetworkVariable`s — both replicate to all peers).
+3. Server's `TimeSkipController.Update` polls every connected player's Character. When **all** have `IsSleeping == true` AND at least one has `PendingSkipHours > 0`, the watcher auto-fires `RequestSkip(hours, force: false)` with `hours = MIN(every player's PendingSkipHours)` — the **closest target wins**, so nobody is forced to skip beyond what they asked for.
+4. `RequestSkip` re-validates the all-sleeping gate; the per-hour loop runs.
+5. After WakeUp, every player's `PendingSkipHours` is reset to 0 inside `Character.ExitSleep` so a stale value can't auto-trigger the next session.
+
+### Host force-override (`force: true`)
+
+The dev paths (`/timeskip <hours>` chat command + `DevTimeSkipModule` panel button) call `RequestSkip(hours, force: true)`. This:
+- Bypasses the all-sleeping gate.
+- Auto-EnterSleeps every connected player at the start of the coroutine (admin override — players see themselves snap into the sleep pose without going to a bed).
+- Otherwise behaves identically to the consent path.
+
+This lets the host time-skip without all players cooperating — useful for dev iteration, story beats, and diagnostics.
+
+### Why "closest target wins"
+
+A 4-player party where targets are `2h / 6h / 8h / 12h` skips **2h**. The 12h player still gets their nap, just not the full duration; they can re-trigger the bed flow afterward. The 2h player isn't dragged 10 hours into a future they didn't consent to. Sleep duration is a "minimum-of-cohort" social negotiation, not a vote.
+
+### Pre-skip checkpoint save
+
+Step 2 of `RunSkip` writes a save **before** the hibernate-skip-wake cycle (waiting for `SaveManager.CurrentState == Idle` before continuing). If anything goes wrong mid-skip — exception, abort, crash, scene unload — the player reverts to the pre-skip world on next load. The post-skip save fires naturally via the existing `SleepBehaviour.Exit` save hook on the bed flow; the dev paths rely solely on the pre-skip checkpoint.
 
 ## Known gotchas / edge cases
 
 - **Day-boundary gating is not optional.** If a future contributor adds a step to `SimulateOneHour` that integrates over `daysPassed` and forgets to wrap it in the boundary-crossing branch, the step silently no-ops every hour — a 168 h skip will produce 0 of that effect.
 - **`_pendingSkipWake` must be cleared inside `WakeUp()`.** If the flag leaks, the *next* normal player-approach wake-up will skip the per-day catch-up it actually needs and the map will resume with stale state.
-- **Single-player gate is a hard reject in v1.** A multiplayer host trying `/timeskip` gets a logged warning. This is intentional — v1 has no consent mechanism for the other peers.
+- **`force: true` bypasses ALL consent.** The dev panel + `/timeskip` chat command are admin tools — they auto-EnterSleep every connected player at the start of the coroutine without asking. Don't expose `force: true` to non-host gameplay paths or any player can override every other player's autonomy.
+- **`PendingSkipHours = 0` means "no target set"** — a player who's sleeping but never picked an hour count via the bed UI doesn't block other players, but they don't *contribute* a target either. The auto-trigger fires when all are sleeping AND ≥1 has set hours. If everyone goes to bed with 0 hours, the watcher never fires (intentional — somebody needs to actually request the skip).
 - **`BedSlot.Occupant` is runtime-only.** A save mid-sleep will deserialize with the slot empty; the bed is functionally vacant on load even if a character ended their session in it. NPCs land back in idle on map respawn.
 - **`Character.NetworkIsSleeping` does not persist.** Saving while asleep, then loading, wakes the player. Documented; not a bug.
 - **`MapController.WakeUp()` has ungated `Debug.Log` calls** that are now reachable via the `WakeUpFromSkip` flow. Tracked in [[optimisation-backlog]].
@@ -201,6 +219,8 @@ The single-player guard is intentionally placed at the `RequestSkip` entry point
 
 ## Change log
 - 2026-04-27 — Initial v1 implementation (TimeSkipController, BedFurniture, EnterSleep/ExitSleep, MacroSimulator.SimulateOneHour). — Claude / [[kevin]]
+- 2026-04-28 — Multiplayer model shipped. RequestSkip gained `force: bool` (admin override). Removed single-player gate. Added auto-trigger watcher (TimeSkipController.Update) firing when all players are sleeping with `Character.PendingSkipHours` set; uses MIN of targets. Added `Character.NetworkPendingSkipHours` NetworkVariable + `SetPendingSkipHours` server method. Reset to 0 inside `ExitSleep`. Save moved to BEFORE the hibernate-skip-wake cycle (waits for SaveManager.Idle). Dev paths pass `force: true`. — Claude / [[kevin]]
+- 2026-04-28 — `MapController.Hibernate` now skips "virtual" buildings whose `NetworkObject` is shared with the MapController (root cause of the WakeUp MissingReferenceException found via the Virtual Node placeholder). — Claude / [[kevin]]
 
 ## Sources
 - [Assets/Scripts/DayNightCycle/TimeSkipController.cs](../../Assets/Scripts/DayNightCycle/TimeSkipController.cs) — server-authoritative entry point.

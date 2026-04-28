@@ -12,8 +12,12 @@ namespace MWI.Time
     /// that one runs live simulation faster; this one freezes the active map
     /// and runs <see cref="MacroSimulator.SimulateOneHour"/> per hour.
     ///
-    /// v1: single-player only (gated on ConnectedClients.Count == 1).
-    /// v2: replace gate with "all connected players are simultaneously in a bed slot."
+    /// Multiplayer gate: by default, RequestSkip requires every connected
+    /// player's Character to have <c>IsSleeping == true</c> (consent flag,
+    /// raised when a player enters a bed slot). The dev paths (/timeskip
+    /// chat command + dev panel) pass <c>force: true</c> as an admin override
+    /// that auto-puts every player into the sleeping state before the skip
+    /// runs. Bed / UI flows leave <c>force: false</c> (default).
     /// </summary>
     public class TimeSkipController : NetworkBehaviour
     {
@@ -60,7 +64,13 @@ namespace MWI.Time
         /// <summary>
         /// Main entry point. Server-only. Returns true if the skip was successfully started.
         /// </summary>
-        public bool RequestSkip(int hours)
+        /// <param name="hours">Number of in-game hours to skip. Must be in [1, MaxHours].</param>
+        /// <param name="force">When true, skips the all-players-sleeping gate (admin
+        /// override used by the dev panel + /timeskip chat command). The coroutine
+        /// will auto-EnterSleep any non-sleeping players before running. When false
+        /// (default), every connected player's Character must already have
+        /// <c>IsSleeping == true</c> — otherwise the skip is rejected.</param>
+        public bool RequestSkip(int hours, bool force = false)
         {
             if (!IsServer)
             {
@@ -77,19 +87,35 @@ namespace MWI.Time
                 Debug.LogWarning($"<color=orange>[TimeSkip]</color> RequestSkip rejected — hours={hours} outside [1, {MaxHours}].");
                 return false;
             }
-            int connectedCount = NetworkManager.Singleton != null ? NetworkManager.Singleton.ConnectedClients.Count : 1;
-            if (connectedCount > 1)
-            {
-                Debug.LogWarning($"<color=orange>[TimeSkip]</color> RequestSkip rejected — multiplayer not supported in v1 (connected={connectedCount}).");
-                return false;
-            }
             if (TimeManager.Instance == null)
             {
                 Debug.LogError("<color=red>[TimeSkip]</color> RequestSkip rejected — TimeManager.Instance is null.");
                 return false;
             }
 
-            StartCoroutine(RunSkip(hours));
+            // Multiplayer consent gate: every connected player must be sleeping.
+            // The bed UseSlot path raises Character.IsSleeping = true; the
+            // auto-trigger watcher in Update() then auto-fires this method with
+            // force=false. Dev paths pass force=true to override.
+            if (!force)
+            {
+                var players = ResolveAllPlayers();
+                if (players.Length == 0)
+                {
+                    Debug.LogWarning("<color=orange>[TimeSkip]</color> RequestSkip rejected — no connected players.");
+                    return false;
+                }
+                foreach (var p in players)
+                {
+                    if (p == null || !p.IsSleeping)
+                    {
+                        Debug.LogWarning($"<color=orange>[TimeSkip]</color> RequestSkip rejected — player '{(p != null ? p.CharacterName : "null")}' is not asleep. All connected players must have IsSleeping=true.");
+                        return false;
+                    }
+                }
+            }
+
+            StartCoroutine(RunSkip(hours, force));
             return true;
         }
 
@@ -102,7 +128,7 @@ namespace MWI.Time
 #endif
         }
 
-        private IEnumerator RunSkip(int hours)
+        private IEnumerator RunSkip(int hours, bool force)
         {
             IsSkipping = true;
             _aborted = false;
@@ -117,11 +143,11 @@ namespace MWI.Time
 
             OnSkipStarted?.Invoke(hours);
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-            Debug.Log($"<color=cyan>[TimeSkip]</color> Skip starting: {hours} in-game hours.");
+            Debug.Log($"<color=cyan>[TimeSkip]</color> Skip starting: {hours} in-game hours (force={force}).");
 #endif
 
-            // 1. Snapshot the active map(s) the player(s) are on.
-            //    v1 single-player: there is exactly one player and one active map.
+            // 1. Resolve players and the active map.
+            Character[] players = ResolveAllPlayers();
             MapController activeMap = ResolveActivePlayerMap();
             if (activeMap == null)
             {
@@ -132,15 +158,30 @@ namespace MWI.Time
                 yield break;
             }
 
-            // 2. EnterSkipMode — hibernate the active map and freeze player(s).
-            //    Player.EnterSleep is called by the bed BEFORE RequestSkip in the bed flow.
-            //    For dev / chat commands the player is NOT in a bed; we still freeze them
-            //    in place by calling EnterSleep with their own current transform.
-            Character[] players = ResolveLocalPlayers();
-            foreach (var player in players)
+            // 2. Pre-skip checkpoint save — captures the WORLD STATE BEFORE the skip
+            //    so a crash, abort, or reload reverts the player to where they were.
+            //    Wait until the SaveManager goes Idle before continuing so the snapshot
+            //    isn't racing with HibernateForSkip's NPC/building despawns.
+            if (SaveManager.Instance != null && players.Length > 0 && players[0] != null)
             {
-                if (player != null && !player.IsSleeping)
-                    player.EnterSleep(player.transform);  // freeze in place; no anchor snap
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                Debug.Log("<color=cyan>[TimeSkip]</color> Pre-skip checkpoint save…");
+#endif
+                SaveManager.Instance.RequestSave(players[0]);
+                while (SaveManager.Instance.CurrentState != SaveManager.SaveLoadState.Idle)
+                    yield return null;
+            }
+
+            // 3. EnterSkipMode — auto-EnterSleep when force=true (admin override),
+            //    otherwise the all-sleeping gate has already been checked in
+            //    RequestSkip and every player should already be IsSleeping=true.
+            if (force)
+            {
+                foreach (var player in players)
+                {
+                    if (player != null && !player.IsSleeping)
+                        player.EnterSleep(player.transform);  // freeze in place; no anchor snap
+                }
             }
             activeMap.HibernateForSkip();
 
@@ -177,7 +218,7 @@ namespace MWI.Time
                 yield return null;  // one frame per hour — lets cancel UI tick + abort flag flip
             }
 
-            // 4. ExitSkipMode — wake the map and unfreeze the player(s).
+            // 5. ExitSkipMode — wake the map and unfreeze the player(s).
             //    The map's PendingSkipWake flag suppresses the redundant SimulateCatchUp.
             //    Wrapped in try/catch/finally so a WakeUp exception (e.g., the map
             //    GameObject being destroyed by some side effect of Hibernate) cannot
@@ -206,22 +247,8 @@ namespace MWI.Time
                 Debug.LogException(e);
             }
 
-            // 5. Restore the captured timeScale before save so SaveManager doesn't
-            //    inherit a frozen Unity clock, then trigger the post-skip save.
+            // 6. Restore the captured timeScale.
             UnityEngine.Time.timeScale = savedTimeScale;
-
-            try
-            {
-                if (SaveManager.Instance != null && players.Length > 0 && players[0] != null)
-                {
-                    SaveManager.Instance.RequestSave(players[0]);
-                }
-            }
-            catch (System.Exception e)
-            {
-                Debug.LogError("<color=red>[TimeSkip]</color> Exception during RequestSave — falling through.");
-                Debug.LogException(e);
-            }
 
             IsSkipping = false;
             OnSkipEnded?.Invoke();
@@ -230,9 +257,44 @@ namespace MWI.Time
 #endif
         }
 
+        /// <summary>
+        /// Server-only watcher: when every connected player's <c>Character.IsSleeping</c>
+        /// flips to true and at least one of them has set <c>PendingSkipHours &gt; 0</c>,
+        /// auto-fire <see cref="RequestSkip"/> with hours = MIN(each player's target).
+        /// "Closest one that the player decided" — whichever player wants the shortest
+        /// skip wins; the others are guaranteed at least their requested duration.
+        /// </summary>
+        private void Update()
+        {
+            if (!IsServer || IsSkipping) return;
+            if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsListening) return;
+
+            var players = ResolveAllPlayers();
+            if (players.Length == 0) return;
+
+            int minHours = int.MaxValue;
+            foreach (var p in players)
+            {
+                if (p == null || !p.IsSleeping) return;  // not all sleeping — skip the auto-trigger
+                int h = p.PendingSkipHours;
+                if (h > 0 && h < minHours) minHours = h;
+            }
+
+            if (minHours == int.MaxValue) return;  // all sleeping but nobody set a target hour yet
+            if (minHours < 1 || minHours > MaxHours) return;  // out of range — bed UI should clamp; defensive guard
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            Debug.Log($"<color=cyan>[TimeSkip]</color> All {players.Length} player(s) sleeping. Auto-firing skip with {minHours}h (closest player target).");
+#endif
+            RequestSkip(minHours, force: false);
+        }
+
         private MapController ResolveActivePlayerMap()
         {
-            // v1: pick the first MapController whose ActivePlayers list is non-empty.
+            // Pick the first non-hibernating MapController. v1 single-player has
+            // exactly one; in MP this is the host's "current" map. Future improvement
+            // (tracked in optimisation-backlog): route through the local player's
+            // CharacterMapTracker.CurrentMapId for the multi-active-map case.
             var maps = UnityEngine.Object.FindObjectsByType<MapController>(FindObjectsSortMode.None);
             foreach (var m in maps)
             {
@@ -241,9 +303,13 @@ namespace MWI.Time
             return null;
         }
 
-        private Character[] ResolveLocalPlayers()
+        /// <summary>
+        /// Returns the Character on every connected client's PlayerObject. Server-only
+        /// callers; clients see an empty array because they don't drive the skip.
+        /// </summary>
+        private Character[] ResolveAllPlayers()
         {
-            if (NetworkManager.Singleton == null) return new Character[0];
+            if (NetworkManager.Singleton == null) return System.Array.Empty<Character>();
             var list = new System.Collections.Generic.List<Character>();
             foreach (var kvp in NetworkManager.Singleton.ConnectedClients)
             {

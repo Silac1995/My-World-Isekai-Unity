@@ -187,6 +187,22 @@ public class Character : NetworkBehaviour, MWI.Orders.IOrderIssuer
         NetworkVariableReadPermission.Everyone,
         NetworkVariableWritePermission.Server
     );
+
+    /// <summary>
+    /// Per-character target hours the player chose when entering the bed (1..168).
+    /// Server-authoritative. The bed UseSlot path / UI_BedSleepPrompt sets this
+    /// alongside <see cref="NetworkIsSleeping"/> = true. The TimeSkipController
+    /// auto-trigger watcher reads this from every connected player and fires
+    /// RequestSkip with hours = MIN(of all valid pending values) once every
+    /// player is asleep. 0 = "no target chosen yet" (skip auto-trigger).
+    /// Reset to 0 when the character ExitsSleep so a half-set state from a
+    /// previous bed session can't accidentally re-trigger.
+    /// </summary>
+    public NetworkVariable<int> NetworkPendingSkipHours = new NetworkVariable<int>(
+        0,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server
+    );
     #endregion
 
     #region Private Fields
@@ -283,6 +299,13 @@ public class Character : NetworkBehaviour, MWI.Orders.IOrderIssuer
 
     public bool IsUnconscious => _isUnconscious;
     public bool IsSleeping => NetworkIsSleeping.Value;
+
+    /// <summary>
+    /// Hours of sleep this player has chosen for the next time-skip cycle.
+    /// 0 = no target set. Read by TimeSkipController's auto-trigger watcher
+    /// to compute the closest target across all sleeping players.
+    /// </summary>
+    public int PendingSkipHours => NetworkPendingSkipHours.Value;
     public bool IsIncapacitated => _isDead || _isUnconscious;
     public Transform VisualRoot => _visualRoot;
     public GameObject CurrentVisualInstance => _currentVisualInstance;
@@ -1131,9 +1154,32 @@ public class Character : NetworkBehaviour, MWI.Orders.IOrderIssuer
         // so mirror the !IsPlayer() gate used by HandleUnconsciousStatus on wake.
         ConfigureNavMesh(!IsPlayer());
         NetworkIsSleeping.Value = false;
+        // Reset the per-skip target so a stale value from this sleep session
+        // can't auto-fire the next skip when the player returns to bed.
+        NetworkPendingSkipHours.Value = 0;
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         Debug.Log($"<color=cyan>[Character]</color> {CharacterName} ExitSleep.");
 #endif
+    }
+
+    /// <summary>
+    /// Server-only. Sets the player's chosen skip duration for the upcoming
+    /// time-skip cycle. Called by the bed UseSlot path / UI_BedSleepPrompt
+    /// alongside (or just before) <see cref="EnterSleep"/>. Clamped to
+    /// [1, MWI.Time.TimeSkipController.MaxHours]. Replicates to all peers via
+    /// <see cref="NetworkPendingSkipHours"/> so the auto-trigger watcher can
+    /// read it from any server-side iteration of player Characters.
+    /// </summary>
+    public void SetPendingSkipHours(int hours)
+    {
+        if (!IsServer)
+        {
+            Debug.LogWarning($"<color=orange>[Character]</color> SetPendingSkipHours called on non-server peer for {CharacterName}. Ignored.");
+            return;
+        }
+        if (hours < 1) hours = 0;  // 0 = "no target set" (auto-trigger ignores)
+        else if (hours > MWI.Time.TimeSkipController.MaxHours) hours = MWI.Time.TimeSkipController.MaxHours;
+        NetworkPendingSkipHours.Value = hours;
     }
 }

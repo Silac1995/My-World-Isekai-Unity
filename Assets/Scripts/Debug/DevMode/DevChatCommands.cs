@@ -90,7 +90,7 @@ public static class DevChatCommands
             Debug.LogError("<color=red>[DevChat]</color> TimeSkipController is not present in the scene.");
             return;
         }
-        bool ok = MWI.Time.TimeSkipController.Instance.RequestSkip(hours);
+        bool ok = MWI.Time.TimeSkipController.Instance.RequestSkip(hours, force: true);
         Debug.Log($"<color=magenta>[DevChat]</color> /timeskip {hours} → {(ok ? "started" : "rejected (see prior log)")}.");
     }
 }
