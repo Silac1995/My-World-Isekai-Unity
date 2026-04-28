@@ -315,46 +315,83 @@ public class CharacterActions : CharacterSystem
 
     /// <summary>
     /// Client → Server: enqueue CharacterAction_SleepOnFurniture for the local
-    /// player Character. Server resolves the bed by NetworkObjectReference
-    /// (the parent building's NetworkObject — beds have no NO of their own per
-    /// the no-nested-NO rule), validates the slot, sets PendingSkipHours, and
-    /// queues the action. The auto-trigger watcher in TimeSkipController will
-    /// then fire RequestSkip once all connected players are sleeping with
-    /// PendingSkipHours > 0.
+    /// player Character. Server resolves the specific bed by parent
+    /// NetworkObject + world position (beds have no NO of their own per the
+    /// no-nested-NO rule; multi-bed buildings need the position to disambiguate).
+    /// Validates server-side proximity (anti-cheat / race), sets PendingSkipHours
+    /// only after ExecuteAction succeeds, then queues the action. The auto-trigger
+    /// watcher in TimeSkipController will fire RequestSkip once all connected
+    /// players are sleeping with PendingSkipHours > 0.
     /// </summary>
     [Rpc(SendTo.Server)]
-    public void RequestSleepOnFurnitureServerRpc(NetworkObjectReference parentRef, int slotIndex, int desiredHours)
+    public void RequestSleepOnFurnitureServerRpc(NetworkObjectReference parentRef, Vector3 bedWorldPosition, int slotIndex, int desiredHours)
     {
         if (!parentRef.TryGet(out NetworkObject parentNetObj))
         {
-            Debug.LogWarning("[CharacterActions] RequestSleepOnFurnitureServerRpc: parentRef did not resolve to a NetworkObject.");
+            Debug.LogWarning("[CharacterActions] Server: RequestSleepOnFurniture: parentRef did not resolve to a NetworkObject.");
             return;
         }
 
-        BedFurniture bed = parentNetObj.GetComponentInChildren<BedFurniture>();
+        // Multi-bed disambiguation: pick the BedFurniture under the parent whose
+        // transform.position is closest to the position the client clicked.
+        BedFurniture bed = FindClosestBedUnder(parentNetObj, bedWorldPosition);
         if (bed == null)
         {
-            Debug.LogWarning("[CharacterActions] RequestSleepOnFurnitureServerRpc: no BedFurniture found under the resolved NetworkObject.");
+            Debug.LogWarning("[CharacterActions] Server: RequestSleepOnFurniture: no BedFurniture found under the resolved NetworkObject.");
             return;
         }
 
         if (slotIndex < 0 || slotIndex >= bed.SlotCount)
         {
-            Debug.LogWarning($"[CharacterActions] RequestSleepOnFurnitureServerRpc: slotIndex {slotIndex} out of range for {bed.FurnitureName}.");
+            Debug.LogWarning($"[CharacterActions] Server: RequestSleepOnFurniture: slotIndex {slotIndex} out of range for {bed.FurnitureName}.");
             return;
         }
 
-        // Set the per-skip target so the auto-trigger watcher can fire.
+        // Anti-cheat / race: require the player to actually be at the bed.
+        // Mirrors the canonical proximity gate used by other action paths.
+        var bedInteractable = bed.GetComponent<InteractableObject>();
+        if (bedInteractable != null && !bedInteractable.IsCharacterInInteractionZone(_character))
+        {
+            Debug.LogWarning($"[CharacterActions] Server: RequestSleepOnFurniture: {_character.CharacterName} not in interaction zone of {bed.FurnitureName}.");
+            return;
+        }
+
+        // Atomicity: only commit PendingSkipHours after ExecuteAction succeeds, so
+        // a rejection (e.g. _currentAction != null) doesn't leak a stale target value
+        // that the auto-trigger watcher would later read.
+        var action = new CharacterAction_SleepOnFurniture(_character, bed, slotIndex);
+        if (!ExecuteAction(action))
+        {
+            Debug.LogWarning($"[CharacterActions] Server: RequestSleepOnFurniture: ExecuteAction rejected for {_character.CharacterName} on {bed.FurnitureName}.");
+            return;
+        }
+
         if (desiredHours > 0)
         {
             _character.SetPendingSkipHours(desiredHours);
         }
 
-        var action = new CharacterAction_SleepOnFurniture(_character, bed, slotIndex);
-        if (!ExecuteAction(action))
+        Debug.Log($"<color=green>[CharacterActions]</color> Server: RequestSleepOnFurniture: enqueued for {_character.CharacterName} on {bed.FurnitureName} slot {slotIndex} (desiredHours={desiredHours}).");
+    }
+
+    private static BedFurniture FindClosestBedUnder(NetworkObject parent, Vector3 worldPosition)
+    {
+        var beds = parent.GetComponentsInChildren<BedFurniture>();
+        if (beds == null || beds.Length == 0) return null;
+        if (beds.Length == 1) return beds[0];
+
+        BedFurniture best = null;
+        float bestDistSq = float.MaxValue;
+        for (int i = 0; i < beds.Length; i++)
         {
-            Debug.LogWarning($"[CharacterActions] RequestSleepOnFurnitureServerRpc: ExecuteAction rejected for {_character.CharacterName} on {bed.FurnitureName}.");
+            float distSq = (beds[i].transform.position - worldPosition).sqrMagnitude;
+            if (distSq < bestDistSq)
+            {
+                bestDistSq = distSq;
+                best = beds[i];
+            }
         }
+        return best;
     }
 
     private static Room FindRoomAtPosition(Vector3 position)
