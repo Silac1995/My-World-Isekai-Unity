@@ -29,8 +29,11 @@ public class CharacterAction_Sleep : CharacterAction
 
     public override void OnStart()
     {
-        // Server-only state mutation. Idempotent — Character.EnterSleep guards re-entry.
-        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer)
+        // Server-only state mutation. Re-enqueue (every 5s tick) skips the call so
+        // EnterSleep doesn't emit its "already sleeping" warning every tick — the
+        // first-tick call is the one that flips IsSleeping.
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer
+            && !character.IsSleeping)
         {
             character.EnterSleep(character.transform);
         }
@@ -46,9 +49,19 @@ public class CharacterAction_Sleep : CharacterAction
     {
         // Server applies the restoration chunk. Live action ticks complement
         // (don't replace) the per-hour macro-sim restoration.
-        if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsServer) return;
+        if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsServer)
+        {
+            // Still unsubscribe on natural completion to avoid a handler leak
+            // — Finish() flows through CleanupAction, NOT OnCancel.
+            Unsubscribe();
+            return;
+        }
 
         ApplyRestore();
+        // Critical: natural Finish() does NOT invoke OnCancel, so the
+        // OnSkipStarted subscription must be cleaned up here every tick.
+        // Re-enqueue resubscribes on the next OnStart.
+        Unsubscribe();
     }
 
     public override void OnCancel()
