@@ -1,0 +1,77 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 41d76192e21655d478d1643661be5f4f, type: 3}
+  m_Name: Item_Axe
+  m_EditorClassIdentifier: Assembly-CSharp::WeaponSO
+  category_name: Misc
+  _spriteLibrary: {fileID: 7108339969198208228, guid: 6bc524ae5449aff4086f41bf3fcecafa, type: 3}
+  itemId: axe
+  itemName: Axe
+  description: Placeholder Axe for farming spec.
+  icon: {fileID: 10905, guid: 0000000000000000f000000000000000, type: 0}
+  item_prefab: {fileID: 7827050173259622472, guid: b4484bb9cf3b23f4ca51ec8121aa286e, type: 3}
+  worldItem_prefab: {fileID: 718778511601405242, guid: d05bd27244da29941a5703671cff1688, type: 3}
+  _weight: 1
+  _material: 0
+  _tier: 0
+  _castsShadow: 1
+  _blocksPathing: 1
+  _requiredCraftingSkill: {fileID: 0}
+  _requiredCraftingLevel: 1
+  _craftingDuration: 3
+  _craftingRecipe: []
+  armor:
+    baseValue: 0
+    currentValue: 0
+    currentAmount: 0
+  health:
+    baseValue: 0
+    currentValue: 0
+    currentAmount: 0
+  stamina:
+    baseValue: 0
+    currentValue: 0
+    currentAmount: 0
+  mana:
+    baseValue: 0
+    currentValue: 0
+    currentAmount: 0
+  initiative:
+    baseValue: 0
+    currentValue: 0
+    currentAmount: 0
+  strength:
+    baseValue: 0
+    currentValue: 0
+    maxValue: 0
+  agility:
+    baseValue: 0
+    currentValue: 0
+    maxValue: 0
+  dexterity:
+    baseValue: 0
+    currentValue: 0
+    maxValue: 0
+  intelligence:
+    baseValue: 0
+    currentValue: 0
+    maxValue: 0
+  endurance:
+    baseValue: 0
+    currentValue: 0
+    maxValue: 0
+  _weaponType: 0
+  _weaponCategory: 0
+  _damageType: 0
+  _maxDurability: 100
+  _maxSharpness: 1
+  _magazineSize: 6

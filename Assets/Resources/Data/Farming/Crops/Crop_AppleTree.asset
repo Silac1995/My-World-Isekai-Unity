@@ -1,0 +1,32 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b25827143d5fd7a4ca4940de17bfdb24, type: 3}
+  m_Name: Crop_AppleTree
+  m_EditorClassIdentifier: MWI.Farming.Pure::MWI.Farming.CropSO
+  _id: apple_tree
+  _displayName: Apple Tree
+  _daysToMature: 4
+  _minMoistureForGrowth: 0.3
+  _plantDuration: 2
+  _produceItem: {fileID: 11400000, guid: 6eadabb584f662d49bea83caa241bdba, type: 2}
+  _produceCount: 4
+  _requiredHarvestTool: {fileID: 0}
+  _stageSprites: []
+  _harvestablePrefab: {fileID: 1940802961597370109, guid: 2961fd87a06e60745a51a62a4fdcf81f, type: 3}
+  _isPerennial: 1
+  _regrowDays: 2
+  _allowDestruction: 1
+  _requiredDestructionTool: {fileID: 11400000, guid: d352d2dfa638b4f4b8d77ed55703ddfa, type: 2}
+  _destructionOutputs:
+  - {fileID: 11400000, guid: a3f0471c4178efd4b9b5efdb38aea516, type: 2}
+  _destructionOutputCount: 4
+  _destructionDuration: 3
