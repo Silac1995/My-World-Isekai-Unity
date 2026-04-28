@@ -3,6 +3,7 @@ using System.Collections;
 using Unity.Netcode;
 using UnityEngine;
 using MWI.WorldSystem;
+using MWI.Needs;
 
 namespace MWI.Time
 {
@@ -24,6 +25,10 @@ namespace MWI.Time
         public static TimeSkipController Instance { get; private set; }
 
         public const int MaxHours = 168;
+
+        [Header("Pacing")]
+        [Tooltip("Real-time seconds to wait after OnSkipStarted before the per-hour loop begins. Lets UI_TimeSkipOverlay fade to black.")]
+        [SerializeField] private float _preSkipFadeSeconds = 1.5f;
 
         public bool IsSkipping { get; private set; }
 
@@ -172,6 +177,14 @@ namespace MWI.Time
                     yield return null;
             }
 
+            // Pre-skip fade window — UI_TimeSkipOverlay subscribes to OnSkipStarted
+            // and fades to black during this real-time window before time math begins.
+            // Uses Realtime since we just set Time.timeScale = 0.
+            if (_preSkipFadeSeconds > 0f)
+            {
+                yield return new WaitForSecondsRealtime(_preSkipFadeSeconds);
+            }
+
             // 3. EnterSkipMode — auto-EnterSleep when force=true (admin override),
             //    otherwise the all-sleeping gate has already been checked in
             //    RequestSkip and every player should already be IsSleeping=true.
@@ -249,6 +262,49 @@ namespace MWI.Time
 
             // 6. Restore the captured timeScale.
             UnityEngine.Time.timeScale = savedTimeScale;
+
+            // Post-skip save fan-out — single source of truth for save-on-wake.
+            // Only fires when a real skip completed (not on cancel/abort would also be
+            // saved, since aborts still went through hibernate/wake — v1 saves on
+            // every completed RunSkip pass regardless of abort).
+            try
+            {
+                foreach (var player in players)
+                {
+                    if (player == null || !player.IsPlayer()) continue;
+                    if (SaveManager.Instance != null)
+                        SaveManager.Instance.RequestSave(player);
+                }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError("<color=red>[TimeSkip]</color> Exception during post-skip save fan-out — falling through.");
+                Debug.LogException(e);
+            }
+
+            // Post-skip player stamina restore — covers the gap left by Task 10
+            // (HibernatedNPCData has no flat stat field, so macro-sim cannot restore
+            // stamina offline). Live player Characters never hibernate, so we can
+            // mutate their Stamina directly here. NPCs sleeping during the skip do
+            // NOT get stamina restored; tracked as an open question for v2.
+            try
+            {
+                foreach (var player in players)
+                {
+                    if (player == null || !player.IsPlayer()) continue;
+                    var stamina = player.Stats?.Stamina;
+                    if (stamina == null) continue;
+                    // Per-hour percent-of-max restore matches macro-sim's NeedSleep rate.
+                    // For a 7h sleep this fully refills stamina (7 * 50% = 350% capped).
+                    float fraction = (NeedSleepMath.OFFLINE_BED_RESTORE_PER_HOUR * 0.01f) * hoursElapsed;
+                    stamina.IncreaseCurrentAmountPercent(fraction);
+                }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError("<color=red>[TimeSkip]</color> Exception during post-skip stamina restore — falling through.");
+                Debug.LogException(e);
+            }
 
             IsSkipping = false;
             OnSkipEnded?.Invoke();
