@@ -9,12 +9,14 @@ namespace MWI.Needs
     {
         public const float DEFAULT_MAX = 100f;
         public const float DEFAULT_START = 80f;
+        // Informational threshold — NeedSleep is passive (no GOAP urgency), so this is HUD-only.
         public const float DEFAULT_LOW_THRESHOLD = 25f;
 
         // Decay per TimeManager phase (4 phases/day → fully drained in ~1 day awake).
         public const float DEFAULT_DECAY_PER_PHASE = 25f;
 
         // Live action restoration chunks (per 5s tick).
+        // Bed = full restore in 4 ticks (~20s real-time). Ground = 10 ticks (~50s).
         public const float LIVE_GROUND_RESTORE_PER_TICK = 10f;
         public const float LIVE_BED_RESTORE_PER_TICK = 25f;
 
