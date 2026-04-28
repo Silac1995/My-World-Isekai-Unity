@@ -92,6 +92,49 @@ public class CharacterNeeds : CharacterSystem, ICharacterSaveData<NeedsSaveData>
         ServerSetHunger(current + amount);
     }
 
+    // ── Server-authoritative sleep ──────────────────────────────────────────
+    // The single source of truth for NeedSleep.CurrentValue across all peers.
+    // Server writes (phase decay, sleep restore); clients read via OnValueChanged bridge.
+    private NetworkVariable<float> _networkedSleep = new NetworkVariable<float>(
+        NeedSleepMath.DEFAULT_MAX,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server);
+
+    public float NetworkedSleepValue => _networkedSleep.Value;
+
+    public void SubscribeNetworkedSleepChanged(NetworkVariable<float>.OnValueChangedDelegate handler)
+    {
+        _networkedSleep.OnValueChanged += handler;
+    }
+
+    public void UnsubscribeNetworkedSleepChanged(NetworkVariable<float>.OnValueChangedDelegate handler)
+    {
+        _networkedSleep.OnValueChanged -= handler;
+    }
+
+    public void ServerSetSleep(float value)
+    {
+        if (!IsSpawned)
+        {
+            if (NetworkManager.Singleton != null && !NetworkManager.Singleton.IsServer) return;
+        }
+        else if (!IsServer)
+        {
+            Debug.LogWarning($"<color=orange>[CharacterNeeds]</color> ServerSetSleep called on non-server peer for {gameObject.name}. Ignored.");
+            return;
+        }
+
+        float clamped = Mathf.Clamp(value, 0f, NeedSleepMath.DEFAULT_MAX);
+        _networkedSleep.Value = clamped;
+    }
+
+    [Rpc(SendTo.Server)]
+    public void RequestAdjustSleepRpc(float amount)
+    {
+        if (!IsServer) return;
+        ServerSetSleep(_networkedSleep.Value + amount);
+    }
+
     protected override void Awake()
     {
         base.Awake();
@@ -117,6 +160,9 @@ public class CharacterNeeds : CharacterSystem, ICharacterSaveData<NeedsSaveData>
             // NeedHunger needs a back-reference to CharacterNeeds so it can read/write the NetworkVariable.
             var hunger = new NeedHunger(_character, this);
             _allNeeds.Add(hunger);
+
+            var sleep = new NeedSleep(_character, this);
+            _allNeeds.Add(sleep);
         }
     }
 
@@ -132,6 +178,7 @@ public class CharacterNeeds : CharacterSystem, ICharacterSaveData<NeedsSaveData>
         if (networkManager != null && networkManager.IsServer)
         {
             _networkedHunger.Value = NeedHunger.DEFAULT_START;
+            _networkedSleep.Value = NeedSleep.DEFAULT_START;
         }
     }
 
@@ -149,6 +196,13 @@ public class CharacterNeeds : CharacterSystem, ICharacterSaveData<NeedsSaveData>
             hunger.BindNetworkBridge();
         }
 
+        var sleep = GetNeed<NeedSleep>();
+        if (sleep != null)
+        {
+            sleep.TrySubscribeToPhase();
+            sleep.BindNetworkBridge();
+        }
+
         if (IsServer && MWI.Time.TimeManager.Instance != null)
         {
             MWI.Time.TimeManager.Instance.OnNewDay += HandleNewDay;
@@ -164,6 +218,13 @@ public class CharacterNeeds : CharacterSystem, ICharacterSaveData<NeedsSaveData>
         {
             hunger.UnsubscribeFromPhase();
             hunger.UnbindNetworkBridge();
+        }
+
+        var sleep = GetNeed<NeedSleep>();
+        if (sleep != null)
+        {
+            sleep.UnsubscribeFromPhase();
+            sleep.UnbindNetworkBridge();
         }
 
         if (IsServer && MWI.Time.TimeManager.Instance != null)
@@ -195,6 +256,13 @@ public class CharacterNeeds : CharacterSystem, ICharacterSaveData<NeedsSaveData>
         {
             hungerNeed.UnsubscribeFromPhase();
             hungerNeed.UnbindNetworkBridge();
+        }
+
+        var sleepNeed = GetNeed<NeedSleep>();
+        if (sleepNeed != null)
+        {
+            sleepNeed.UnsubscribeFromPhase();
+            sleepNeed.UnbindNetworkBridge();
         }
 
         if (MWI.Time.TimeManager.Instance != null)
