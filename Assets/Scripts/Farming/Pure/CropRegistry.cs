@@ -46,7 +46,8 @@ namespace MWI.Farming
             if (crop == null || string.IsNullOrEmpty(crop.Id)) return;
             if (_byId.ContainsKey(crop.Id))
             {
-                Debug.LogError($"[CropRegistry] Duplicate Id '{crop.Id}' on {crop.name}; overwriting.");
+                Debug.LogError($"[CropRegistry] Duplicate Id '{crop.Id}' on {crop.name}; ignoring (first-loaded wins).");
+                return;
             }
             _byId[crop.Id] = crop;
         }
