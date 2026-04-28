@@ -1601,6 +1601,14 @@ namespace MWI.WorldSystem
                     farmGrowth.PostWakeSweep();
                 }
 
+                // 4d. Client-side stage-sprite renderer (rebuilds local visuals from cell state on every wake).
+                var cropVisualSpawner = GetComponent<MWI.Farming.CropVisualSpawner>();
+                if (cropVisualSpawner != null && terrainGrid != null)
+                {
+                    cropVisualSpawner.Initialize(terrainGrid, this);
+                    cropVisualSpawner.RebuildAll();
+                }
+
                 // 5. Spawn NPCs and WorldItems at their simulated positions (shared with snapshot restore)
                 SpawnNPCsFromSnapshot(_hibernationData);
             }
@@ -1670,7 +1678,9 @@ namespace MWI.WorldSystem
                 ref TerrainCell cell = ref grid.GetCellRef(x, z);
                 cell = payload[i].ToCell();
             }
-            // Future: subscribers (CropVisualSpawner, terrain transition processors) can react here.
+            var cropVisualSpawner = GetComponent<MWI.Farming.CropVisualSpawner>();
+            if (cropVisualSpawner != null) cropVisualSpawner.OnDirtyCells(indices);
+            // Future: terrain transition processors can also subscribe here.
         }
 
         /// <summary>

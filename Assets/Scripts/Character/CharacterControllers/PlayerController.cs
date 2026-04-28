@@ -177,11 +177,19 @@ public class PlayerController : CharacterGameController
                     HandleDropCarriedItem();
                 }
 
-                // --- E key dispatch (placement-active item / consumable / interact-nearest). ---
-                // Single owner-gated dispatcher per rule #33. Hold-E menu lands with UI_InteractionMenu.
+                // --- E key dispatch (placement-active item / consumable / tap-interact / hold-menu). ---
+                // Single owner-gated dispatcher per rule #33.
                 if (Input.GetKeyDown(KeyCode.E))
                 {
-                    HandleEKey();
+                    HandleEKeyDown();
+                }
+                else if (Input.GetKey(KeyCode.E))
+                {
+                    HandleEKeyHeld();
+                }
+                else if (Input.GetKeyUp(KeyCode.E))
+                {
+                    HandleEKeyUp();
                 }
 
                 // Auto-Trigger Combat Command when in battle. The command handles pacing and action execution.
@@ -267,48 +275,104 @@ public class PlayerController : CharacterGameController
         _character.CharacterActions.ExecuteAction(new CharacterDropItem(_character, hands.CarriedItem));
     }
 
+    private const float E_HOLD_THRESHOLD = 0.4f;
+    private float _eHeldStartTime;
+    private bool _eMenuOpened;
+
     /// <summary>
-    /// Owner-gated E-key dispatcher (rule #33). Priority order:
-    ///   1. Seed in hand → start crop placement (CropPlacementManager).
-    ///   2. WateringCan in hand → start watering mode.
-    ///   3. Already in placement mode → no-op (CropPlacementManager handles its own LMB/RMB/ESC).
-    ///   4. Consumable in hand → consume.
-    ///   5. Otherwise → Interact() on the nearest visible interactable (yield-path harvest, etc.).
+    /// Owner-gated E-key down handler (rule #33). Resolves the immediate intent that doesn't
+    /// need hold-tracking: placement-active items take E unconditionally; consumables consume.
+    /// Anything else starts the hold timer for the harvestable tap-vs-hold dispatch.
     /// </summary>
-    private void HandleEKey()
+    private void HandleEKeyDown()
     {
+        _eHeldStartTime = UnityEngine.Time.unscaledTime;
+        _eMenuOpened = false;
+
         var hands = _character?.CharacterVisual?.BodyPartsController?.HandsController;
         var heldItemSO = hands != null && hands.CarriedItem != null ? hands.CarriedItem.ItemSO : null;
 
-        // Priority 1 + 2: placement-active item.
+        // Priority 1 + 2: placement-active item — E starts placement, no tap/hold distinction.
         if (heldItemSO is MWI.Farming.SeedSO)
         {
             if (_character.CropPlacement != null) _character.CropPlacement.StartPlacement(hands.CarriedItem);
+            _eMenuOpened = true;   // suppress hold-menu while placement-active item handles E.
             return;
         }
         if (heldItemSO is MWI.Farming.WateringCanSO)
         {
             if (_character.CropPlacement != null) _character.CropPlacement.StartWatering();
+            _eMenuOpened = true;
             return;
         }
 
         // Priority 3: if placement is already active, the manager owns LMB/RMB/ESC. E is a no-op.
-        if (_character.CropPlacement != null && _character.CropPlacement.IsActive) return;
+        if (_character.CropPlacement != null && _character.CropPlacement.IsActive)
+        {
+            _eMenuOpened = true;
+            return;
+        }
 
-        // Priority 4: consumable in hand.
+        // Priority 4: consumable in hand. Existing behaviour preserved.
         if (hands != null && hands.IsCarrying && hands.CarriedItem is ConsumableInstance consumable)
         {
             if (_character.CharacterActions == null || _character.CharacterActions.CurrentAction != null) return;
             _character.CharacterActions.ExecuteAction(new CharacterUseConsumableAction(_character, consumable));
+            _eMenuOpened = true;
             return;
         }
+        // Else: defer to KeyHeld / KeyUp for tap-vs-hold harvestable dispatch.
+    }
 
-        // Priority 5: Interact on nearest visible interactable (yield-path harvest, NPC talk, etc.).
+    /// <summary>While E is held, open the interaction menu once the hold threshold is crossed.</summary>
+    private void HandleEKeyHeld()
+    {
+        if (_eMenuOpened) return;
+        if (UnityEngine.Time.unscaledTime - _eHeldStartTime < E_HOLD_THRESHOLD) return;
+
+        var nearest = GetNearestVisibleHarvestable();
+        if (nearest != null)
+        {
+            MWI.UI.Interaction.UI_InteractionMenu.Open(_character, nearest, OnInteractionMenuClosed);
+            _eMenuOpened = true;
+        }
+    }
+
+    /// <summary>On E release, if the menu wasn't opened (tap), run the immediate Interact path.</summary>
+    private void HandleEKeyUp()
+    {
+        if (_eMenuOpened) return;
+
+        var nearest = GetNearestVisibleInteractable();
+        if (nearest != null) nearest.Interact(_character);
+    }
+
+    private void OnInteractionMenuClosed() => _eMenuOpened = false;
+
+    private Harvestable GetNearestVisibleHarvestable()
+    {
         var awareness = _character.CharacterAwareness;
-        if (awareness == null) return;
-        var visible = awareness.GetVisibleInteractables();
-        if (visible == null || visible.Count == 0) return;
+        if (awareness == null) return null;
+        var visible = awareness.GetVisibleInteractables<Harvestable>();
+        if (visible == null || visible.Count == 0) return null;
+        Harvestable best = null;
+        float bestDist = float.MaxValue;
+        for (int i = 0; i < visible.Count; i++)
+        {
+            var h = visible[i];
+            if (h == null) continue;
+            float d = Vector3.Distance(_character.transform.position, h.transform.position);
+            if (d < bestDist) { bestDist = d; best = h; }
+        }
+        return best;
+    }
 
+    private InteractableObject GetNearestVisibleInteractable()
+    {
+        var awareness = _character.CharacterAwareness;
+        if (awareness == null) return null;
+        var visible = awareness.GetVisibleInteractables();
+        if (visible == null || visible.Count == 0) return null;
         InteractableObject closest = null;
         float closestDist = float.MaxValue;
         for (int i = 0; i < visible.Count; i++)
@@ -318,7 +382,7 @@ public class PlayerController : CharacterGameController
             float d = Vector3.Distance(_character.transform.position, obj.transform.position);
             if (d < closestDist) { closestDist = d; closest = obj; }
         }
-        if (closest != null) closest.Interact(_character);
+        return closest;
     }
 
     /// <summary>
