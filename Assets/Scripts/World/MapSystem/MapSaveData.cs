@@ -96,5 +96,9 @@ namespace MWI.WorldSystem
         // captured via CharacterDataCoordinator.ExportProfile and replayed via ImportProfile
         // on respawn. Null on legacy saves; consumers must fall back to the flat fields above.
         public CharacterProfileSaveData ProfileData;
+
+        // Sleep state at the moment of hibernation — set from Character.IsSleeping.
+        // Used by MacroSimulator.ApplySleepRestoreHours to restore NeedSleep during a TimeSkip.
+        public bool IsSleeping;
     }
 }

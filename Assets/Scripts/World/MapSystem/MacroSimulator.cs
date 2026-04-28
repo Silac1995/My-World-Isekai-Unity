@@ -238,10 +238,11 @@ namespace MWI.Time
 
             // ── Hour-grained: always run ──
 
-            // Needs decay + schedule snap (per-NPC)
+            // Needs decay + sleep restoration + schedule snap (per-NPC)
             foreach (var npc in data.HibernatedNPCs)
             {
                 ApplyNeedsDecayHours(npc, hoursPassed: 1f);
+                ApplySleepRestoreHours(npc, hoursPassed: 1f);
                 SnapPositionFromSchedule(npc, data.MapId, currentHour);
             }
 
@@ -328,7 +329,49 @@ namespace MWI.Time
                     const float drainRatePerHour = 100f / 24f;
                     need.Value = MWI.Needs.HungerCatchUpMath.ApplyDecay(need.Value, drainRatePerHour, hoursPassed);
                 }
+                // NeedSleep: no offline decay. Awake characters simply stay at whatever value they had when
+                // they hibernated. Sleeping characters are handled by ApplySleepRestoreHours below.
             }
+        }
+
+        /// <summary>
+        /// Per-hour sleep restoration for <see cref="HibernatedNPCData.IsSleeping"/> characters
+        /// during a TimeSkip. Sibling to <see cref="ApplyNeedsDecayHours"/> — while the character
+        /// is in a sleep pose, NeedSleep restores at the offline bed-rate from
+        /// <see cref="MWI.Needs.NeedSleepMath"/>.
+        ///
+        /// Stamina restoration is intentionally omitted in v1: stamina lives in
+        /// ProfileData (CharacterProfileSaveData.componentStates) as serialized JSON,
+        /// and mutating it without deserializing the full stat component graph is not
+        /// safe here. Track as: "Task 10 open — offline stamina restore during sleep
+        /// requires ProfileData round-trip or a dedicated flat field on HibernatedNPCData."
+        ///
+        /// v1 defaults to bed-rate for all sleeping NPCs. NPCs can only set IsSleeping = true
+        /// via BedFurniture.UseSlot or EnterSleep, but we don't currently persist which path
+        /// was taken. Future: add SleepingOnBedFurniture bool to HibernatedNPCData for
+        /// ground-vs-bed rate selection.
+        /// </summary>
+        private static void ApplySleepRestoreHours(HibernatedNPCData npcData, float hoursPassed)
+        {
+            if (npcData == null || hoursPassed <= 0f) return;
+            if (!npcData.IsSleeping) return;
+
+            float restoreAmount = MWI.Needs.NeedSleepMath.OFFLINE_BED_RESTORE_PER_HOUR * hoursPassed;
+
+            for (int i = 0; i < npcData.SavedNeeds.Count; i++)
+            {
+                if (npcData.SavedNeeds[i].NeedType == "NeedSleep")
+                {
+                    npcData.SavedNeeds[i].Value = Mathf.Clamp(
+                        npcData.SavedNeeds[i].Value + restoreAmount,
+                        0f,
+                        MWI.Needs.NeedSleepMath.DEFAULT_MAX);
+                    return;
+                }
+            }
+            // NeedSleep entry not found in SavedNeeds — NPC was hibernated before sleep-need was
+            // added, or CharacterNeeds had no NeedSleep component. No-op; do not inject a new entry
+            // (we don't know the correct starting value).
         }
 
         /// <summary>

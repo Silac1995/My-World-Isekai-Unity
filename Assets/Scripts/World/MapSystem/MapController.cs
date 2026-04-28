@@ -669,7 +669,9 @@ namespace MWI.WorldSystem
                         // Abandoned NPC tracking
                         IsAbandoned = npc.IsAbandoned,
                         FormerPartyLeaderId = npc.FormerPartyLeaderId,
-                        FormerPartyLeaderWorldGuid = npc.FormerPartyLeaderWorldGuid
+                        FormerPartyLeaderWorldGuid = npc.FormerPartyLeaderWorldGuid,
+                        // Sleep state — used by MacroSimulator to restore NeedSleep during TimeSkip
+                        IsSleeping = npc.IsSleeping
                     };
 
                     // Extract Tier 1 V2 GOAP Anchors
@@ -1231,7 +1233,9 @@ namespace MWI.WorldSystem
                         // Abandoned NPC tracking
                         IsAbandoned = npc.IsAbandoned,
                         FormerPartyLeaderId = npc.FormerPartyLeaderId,
-                        FormerPartyLeaderWorldGuid = npc.FormerPartyLeaderWorldGuid
+                        FormerPartyLeaderWorldGuid = npc.FormerPartyLeaderWorldGuid,
+                        // Sleep state — used by MacroSimulator to restore NeedSleep during TimeSkip
+                        IsSleeping = npc.IsSleeping
                     };
 
                     // Extract Tier 1 V2 GOAP Anchors
