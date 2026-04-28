@@ -134,6 +134,7 @@ public class SaveManager : MonoBehaviour
 
         Region.ClearRegistry();
         TerrainTypeRegistry.Clear();
+        MWI.Farming.CropRegistry.Clear();
 
         Debug.Log("<color=green>[SaveManager]</color> Reset for new session — world singletons destroyed.");
     }

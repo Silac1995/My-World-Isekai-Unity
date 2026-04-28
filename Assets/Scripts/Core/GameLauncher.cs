@@ -138,6 +138,7 @@ public class GameLauncher : MonoBehaviour
 
         // ── Step 3b: Initialize terrain type registry ───────────────
         MWI.Terrain.TerrainTypeRegistry.Initialize();
+        MWI.Farming.CropRegistry.Initialize();
 
         // ── Step 4: Wait for network to start and player to spawn ───
         // On first load, GameSessionManager.Start() auto-starts the network.
