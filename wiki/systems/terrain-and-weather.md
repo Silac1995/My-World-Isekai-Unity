@@ -3,7 +3,7 @@ type: system
 title: "Terrain & Weather"
 tags: [terrain, weather, vegetation, biome, footsteps, tier-1]
 created: 2026-04-18
-updated: 2026-04-19
+updated: 2026-04-28
 sources: []
 related:
   - "[[world]]"
@@ -31,6 +31,7 @@ depended_on_by:
   - "[[world]]"
   - "[[ai]]"
   - "[[character-terrain]]"
+  - "[[farming]]"
 ---
 
 # Terrain & Weather
@@ -261,13 +262,15 @@ Terrain offline math is intentionally simple: estimated rain hours = `hoursPasse
 - [ ] `TerrainWeatherProcessor` caches `GetComponent<BoxCollider>()` per tick — move to `Initialize()` for zero per-tick allocations.
 - [ ] Snow / Ice terrain types, Lava terrain, full footstep audio clip assignment — deferred to Phase 2.
 - [ ] WeatherFront shadow projectors — `GetShadowOpacity()` returns per-type opacity but the actual visual projector is not yet built. Needs a shadow decal/projector child object on the prefab.
-- [ ] Dirty-cell incremental `SendDirtyCellsClientRpc` — currently only full-grid sync is implemented. For low-bandwidth incremental updates, add a second ClientRpc that sends only changed cell indices per tick.
+- [x] ~~Dirty-cell incremental `SendDirtyCellsClientRpc`~~ — landed 2026-04-28 alongside the [[farming]] system. `MapController.NotifyDirtyCells(int[])` builds the payload + fires the ClientRpc, which updates client cell mirrors then fans out to subscribers (`CropVisualSpawner` today; future terrain transition processors).
+- [x] ~~Farming consumer for `IsPlowed` / `PlantedCropId` / `GrowthTimer` / `TimeSinceLastWatered` cell fields~~ — implemented 2026-04-28 by the [[farming]] system. See [[farming]] for the consumer.
 - [ ] BiomeRegion ownership split — `BiomeRegion.cs` is under `Assets/Scripts/Weather/` on this branch while [[world-biome-region]] historically described biome data as part of World. Reconcile naming in the next pass.
 
 ## Change log
 
 - 2026-04-18 — Stub created during wiki bootstrap. Confidence **low** because code was on a feature branch not yet merged. — Claude / [[kevin]]
 - 2026-04-19 — Full pass against implemented code on `feature/character-archetype-system`. Populated Purpose, Responsibilities, Key classes (5 layers), Public API, Data flow, Dependencies, State/persistence, Gotchas, and open post-Phase-1 items. Confidence raised to **medium**. — Claude / [[kevin]]
+- 2026-04-28 — Cell farming fields (`IsPlowed`, `PlantedCropId`, `GrowthTimer`, `TimeSinceLastWatered`) now consumed by [[farming]]. `SendDirtyCellsClientRpc` landed via `MapController.NotifyDirtyCells`. — Claude / [[kevin]]
 
 ## Sources
 - [Assets/Scripts/Terrain/](../../Assets/Scripts/Terrain/) — Layer 1, 3, 4 code.
