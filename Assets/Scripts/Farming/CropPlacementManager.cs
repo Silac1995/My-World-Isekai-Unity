@@ -59,6 +59,8 @@ namespace MWI.Farming
             ApplyGhostMaterials(_ghostMaterialValid);
 
             _mode = Mode.Placing;
+            ResetWarnFlags();
+            Debug.Log($"[CropPlacement] StartPlacement crop='{_activeCrop.Id}', map='{_activeMap.name}', ghost spawned at {_ghostInstance.transform.position}.");
             if (!_character.IsBuilding) _character.SetBuildingState(true);
         }
 
@@ -80,7 +82,13 @@ namespace MWI.Farming
             ApplyGhostMaterials(_ghostMaterialValid);
 
             _mode = Mode.Watering;
+            ResetWarnFlags();
             if (!_character.IsBuilding) _character.SetBuildingState(true);
+        }
+
+        private void ResetWarnFlags()
+        {
+            _warnedNoCamera = _warnedNoGrid = _warnedRayMiss = _warnedOutOfGrid = false;
         }
 
         public void CancelPlacement()
@@ -129,16 +137,36 @@ namespace MWI.Farming
 
         private void UpdateGhostPosition()
         {
-            if (Camera.main == null) return;
+            if (Camera.main == null)
+            {
+                if (!_warnedNoCamera) { Debug.LogWarning("[CropPlacement] Camera.main is null — no MainCamera tag in scene."); _warnedNoCamera = true; }
+                return;
+            }
             var grid = _activeMap.GetComponent<TerrainCellGrid>();
-            if (grid == null) return;
+            if (grid == null)
+            {
+                if (!_warnedNoGrid) { Debug.LogWarning("[CropPlacement] No TerrainCellGrid on the active MapController."); _warnedNoGrid = true; }
+                return;
+            }
 
             Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-            if (!Physics.Raycast(ray, out RaycastHit hit, 100f, _groundLayer, QueryTriggerInteraction.Ignore))
-                return;   // Mouse off-ground: leave ghost at its last position rather than disabling.
+            if (!Physics.Raycast(ray, out RaycastHit hit, 200f, _groundLayer, QueryTriggerInteraction.Ignore))
+            {
+                if (!_warnedRayMiss) { Debug.LogWarning($"[CropPlacement] Raycast missed ground. Cursor={Input.mousePosition}, ray.dir={ray.direction}, _groundLayer.value={_groundLayer.value}. Check that ground colliders are on a layer in _groundLayer."); _warnedRayMiss = true; }
+                return;   // Leave ghost at last position.
+            }
+
+            // Always position ghost at hit.point first — so the player sees it follow even when
+            // the cell snap fails. Then refine to snapped pos if grid lookup succeeds.
+            _ghostInstance.transform.position = hit.point;
 
             if (!grid.WorldToGrid(hit.point, out int x, out int z))
-                return;   // Outside the cell grid: same — leave ghost in place.
+            {
+                if (!_warnedOutOfGrid) { Debug.LogWarning($"[CropPlacement] Hit point {hit.point} is outside terrain grid bounds. Width={grid.Width}, Depth={grid.Depth}."); _warnedOutOfGrid = true; }
+                _lastValid = false;
+                ApplyGhostMaterials(_ghostMaterialInvalid);
+                return;
+            }
 
             _lastCellX = x; _lastCellZ = z;
             _lastSnappedPosition = grid.GridToWorld(x, z);
@@ -148,6 +176,12 @@ namespace MWI.Farming
             _lastValid = ValidateCell(in cell, _lastSnappedPosition);
             ApplyGhostMaterials(_lastValid ? _ghostMaterialValid : _ghostMaterialInvalid);
         }
+
+        // Diagnostic toggles — first-time-warn-once per placement session.
+        private bool _warnedNoCamera;
+        private bool _warnedNoGrid;
+        private bool _warnedRayMiss;
+        private bool _warnedOutOfGrid;
 
         private bool ValidateCell(in TerrainCell cell, Vector3 cellWorldPos)
         {
