@@ -34,6 +34,7 @@ namespace MWI.Farming
                 _root.SetParent(transform);
                 _root.localPosition = Vector3.zero;
             }
+            Debug.Log($"[CropVisualSpawner] Initialize on {map.name} (grid={grid.Width}x{grid.Depth}). Visual root: {_root.name}.");
         }
 
         /// <summary>
@@ -91,12 +92,17 @@ namespace MWI.Farming
             }
             else
             {
-                // Procedural fallback so the system works without a designer-set prefab in V1.
-                go = new GameObject("CropStageSprite");
+                // Procedural fallback so the system shows SOMETHING without a designer-set
+                // prefab. A primitive cube is visible in 2D AND 3D scenes; designers replace
+                // _stageSpritePrefab with their authored visual when art is ready.
+                go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                go.name = "CropStageVisual";
                 go.transform.SetParent(_root, false);
                 go.transform.position = pos;
-                go.transform.rotation = Quaternion.Euler(_spriteRotationEuler);
-                go.AddComponent<SpriteRenderer>();
+                go.transform.localScale = new Vector3(1f, 0.5f, 1f);
+                // Strip the auto-added collider — visuals must not block raycasts or physics.
+                var col = go.GetComponent<Collider>();
+                if (col != null) Destroy(col);
             }
             return go;
         }

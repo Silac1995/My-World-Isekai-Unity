@@ -1587,38 +1587,47 @@ namespace MWI.WorldSystem
                     MacroSimulator.SimulateCatchUp(_hibernationData, _timeManager.CurrentDay, _timeManager.CurrentTime01, JobYields);
                 }
 
-                // 4b. Restore terrain cells after macro-simulation has updated them.
-                // Bootstrap the grid from BoxCollider bounds first if no caller has initialized it
-                // (the terrain pipeline doesn't currently auto-init for live maps — see [[farming]]
-                // gotcha. RestoreFromSaveData needs the grid sized first to fit the saved cells).
+                // 4b. Restore terrain cells from hibernation snapshot.
+                if (_hibernationData?.TerrainCells != null)
+                {
+                    var grid = GetComponent<TerrainCellGrid>();
+                    if (grid != null && grid.Width == 0)
+                    {
+                        var box = GetComponent<BoxCollider>();
+                        if (box != null) grid.Initialize(box.bounds);
+                    }
+                    if (grid != null) grid.RestoreFromSaveData(_hibernationData.TerrainCells);
+                }
+
+                // 5. Spawn NPCs and WorldItems at their simulated positions (shared with snapshot restore)
+                SpawnNPCsFromSnapshot(_hibernationData);
+            }
+
+            // ── Farming init runs UNCONDITIONALLY on every wake — fresh maps and
+            //    hibernation-restored maps both need the grid bootstrapped and the
+            //    visual/tick systems wired up. Previously gated inside the hibernation
+            //    branch, which left fresh maps without farming infrastructure.
+            {
                 var terrainGrid = GetComponent<TerrainCellGrid>();
                 if (terrainGrid != null && terrainGrid.Width == 0)
                 {
                     var box = GetComponent<BoxCollider>();
                     if (box != null) terrainGrid.Initialize(box.bounds);
                 }
-                if (terrainGrid != null && _hibernationData?.TerrainCells != null)
-                    terrainGrid.RestoreFromSaveData(_hibernationData.TerrainCells);
 
-                // 4c. Reconstruct CropHarvestables from cell state (post-wake sweep covers both
-                // hibernation-wake and save-load — single code path per farming spec §9.2).
                 var farmGrowth = GetComponent<MWI.Farming.FarmGrowthSystem>();
-                if (farmGrowth != null && terrainGrid != null)
+                if (farmGrowth != null && terrainGrid != null && terrainGrid.Width > 0)
                 {
                     farmGrowth.Initialize(terrainGrid, this);
                     farmGrowth.PostWakeSweep();
                 }
 
-                // 4d. Client-side stage-sprite renderer (rebuilds local visuals from cell state on every wake).
                 var cropVisualSpawner = GetComponent<MWI.Farming.CropVisualSpawner>();
-                if (cropVisualSpawner != null && terrainGrid != null)
+                if (cropVisualSpawner != null && terrainGrid != null && terrainGrid.Width > 0)
                 {
                     cropVisualSpawner.Initialize(terrainGrid, this);
                     cropVisualSpawner.RebuildAll();
                 }
-
-                // 5. Spawn NPCs and WorldItems at their simulated positions (shared with snapshot restore)
-                SpawnNPCsFromSnapshot(_hibernationData);
             }
 
             // Safety: Only clear hibernation data AFTER a successful full spawn loop.
