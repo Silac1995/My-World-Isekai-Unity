@@ -42,6 +42,7 @@ namespace MWI.Farming
                 Debug.LogWarning("[CropPlacement] Cannot start placement — no MapController at character position.");
                 return;
             }
+            EnsureGridInitialized(_activeMap);
 
             // Spawn the actual CropHarvestable prefab as the ghost; disable everything that would interfere.
             if (_activeCrop.HarvestablePrefab != null)
@@ -73,6 +74,7 @@ namespace MWI.Farming
                 Debug.LogWarning("[CropPlacement] Cannot start watering — no MapController at character position.");
                 return;
             }
+            EnsureGridInitialized(_activeMap);
 
             // Watering uses a generic semi-transparent quad (no prefab).
             _ghostInstance = new GameObject("CropPlacementGhost_Water");
@@ -89,6 +91,26 @@ namespace MWI.Farming
         private void ResetWarnFlags()
         {
             _warnedNoCamera = _warnedNoGrid = _warnedRayMiss = _warnedOutOfGrid = false;
+        }
+
+        // Defensive bootstrap. The TerrainCellGrid has Initialize(Bounds) but no caller in the
+        // existing terrain pipeline ever invokes it for a live (non-hibernated) map — pre-existing
+        // gap that farming exposes first. If the grid is empty (Width=0) when we need it, we
+        // initialize it from the MapController's own BoxCollider bounds.
+        private static void EnsureGridInitialized(MapController map)
+        {
+            var grid = map.GetComponent<TerrainCellGrid>();
+            if (grid == null) return;
+            if (grid.Width > 0 && grid.Depth > 0) return;
+
+            var box = map.GetComponent<BoxCollider>();
+            if (box == null)
+            {
+                Debug.LogError($"[CropPlacement] {map.name} has no BoxCollider — cannot bootstrap TerrainCellGrid.");
+                return;
+            }
+            grid.Initialize(box.bounds);
+            Debug.Log($"[CropPlacement] Bootstrapped TerrainCellGrid on {map.name} from BoxCollider bounds (Width={grid.Width}, Depth={grid.Depth}).");
         }
 
         public void CancelPlacement()

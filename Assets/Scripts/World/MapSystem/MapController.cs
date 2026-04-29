@@ -1587,8 +1587,16 @@ namespace MWI.WorldSystem
                     MacroSimulator.SimulateCatchUp(_hibernationData, _timeManager.CurrentDay, _timeManager.CurrentTime01, JobYields);
                 }
 
-                // 4b. Restore terrain cells after macro-simulation has updated them
+                // 4b. Restore terrain cells after macro-simulation has updated them.
+                // Bootstrap the grid from BoxCollider bounds first if no caller has initialized it
+                // (the terrain pipeline doesn't currently auto-init for live maps — see [[farming]]
+                // gotcha. RestoreFromSaveData needs the grid sized first to fit the saved cells).
                 var terrainGrid = GetComponent<TerrainCellGrid>();
+                if (terrainGrid != null && terrainGrid.Width == 0)
+                {
+                    var box = GetComponent<BoxCollider>();
+                    if (box != null) terrainGrid.Initialize(box.bounds);
+                }
                 if (terrainGrid != null && _hibernationData?.TerrainCells != null)
                     terrainGrid.RestoreFromSaveData(_hibernationData.TerrainCells);
 
