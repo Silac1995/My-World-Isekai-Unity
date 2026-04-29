@@ -11,6 +11,22 @@ public abstract class ItemInstance
     [SerializeField] private Color _primaryColor = new Color(0, 0, 0, 0);
     [SerializeField] private Color _secondaryColor = new Color(0, 0, 0, 0);
 
+    [SerializeField] private string _ownerBuildingId = "";
+
+    /// <summary>
+    /// Stable BuildingId of the CommercialBuilding whose tool storage owns this item. Stamped by
+    /// GoapAction_FetchToolFromStorage on pickup; cleared by GoapAction_ReturnToolToStorage on
+    /// return (or by StorageFurniture.AddItem when the item lands back in its origin storage,
+    /// covering the player path). Used by CharacterJob.CanPunchOut to gate shift end.
+    /// Empty string = item is not owned by any tool storage.
+    /// DO NOT introduce a parallel ID scheme — always use Building.BuildingId as the value.
+    /// </summary>
+    public string OwnerBuildingId
+    {
+        get => _ownerBuildingId ?? "";
+        set => _ownerBuildingId = value ?? "";
+    }
+
     protected ItemInstance(ItemSO data)
     {
         _itemSO = data;
