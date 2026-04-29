@@ -21,7 +21,7 @@ MonoBehaviour:
   _produceCount: 4
   _requiredHarvestTool: {fileID: 0}
   _stageSprites: []
-  _harvestablePrefab: {fileID: 1940802961597370109, guid: 2961fd87a06e60745a51a62a4fdcf81f, type: 3}
+  _harvestablePrefab: {fileID: 8874080723789279744, guid: b8fb13f2f1ea6534cb428a3bc7bd0e3d, type: 3}
   _isPerennial: 1
   _regrowDays: 2
   _allowDestruction: 1
