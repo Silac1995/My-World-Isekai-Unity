@@ -98,7 +98,16 @@ namespace MWI.Farming
             // Spawn over the network FIRST so OnNetworkSpawn wires up the NetVar callbacks
             // before InitializeFromCell sets the values.
             if (go.TryGetComponent<NetworkObject>(out var netObj) && !netObj.IsSpawned)
+            {
                 netObj.Spawn(true);
+                // Parent under the MapController. NGO requires both parent and child to be
+                // NetworkObjects — MapController qualifies (it inherits NetworkBehaviour).
+                // TrySetParent runs server-only and replicates the parent-relationship to all
+                // peers so the harvestable nests under the correct map in every Hierarchy.
+                var mapNetObj = _map.GetComponent<NetworkObject>();
+                if (mapNetObj != null && !netObj.TrySetParent(mapNetObj, worldPositionStays: true))
+                    Debug.LogWarning($"[FarmGrowthSystem] TrySetParent failed for crop at ({x},{z}) under map '{_map.name}'.");
+            }
             h.InitializeFromCell(_grid, _map, x, z, crop, startStage, startDepleted);
             RegisterHarvestable(x, z, h);
             return h;
