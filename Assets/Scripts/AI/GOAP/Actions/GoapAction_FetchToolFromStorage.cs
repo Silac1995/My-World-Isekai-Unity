@@ -19,19 +19,23 @@ using UnityEngine;
 /// IsValid:
 ///   - building.ToolStorage != null
 ///   - storage contains at least 1 instance whose ItemSO == toolItem
+///   - worker's hands are free (otherwise the planner picks a different prelude —
+///     drop / deposit / etc. — before re-evaluating this action)
 ///
 /// Notes:
 ///   - Movement gating uses <see cref="InteractableObject.IsCharacterInInteractionZone(Character)"/>
 ///     when available (per project convention), with a fallback to a flat-XZ proximity test for
 ///     storage furniture that doesn't expose an InteractionZone collider.
-///   - <see cref="ItemInstance.OwnerBuildingId"/> is stamped BEFORE the equip attempt so the
-///     ownership marker is set even if the equip call fails for some reason (race with another
-///     worker, hand already occupied with an unrecoverable item, etc.).
+///   - <see cref="ItemInstance.OwnerBuildingId"/> is stamped BEFORE the equip call so that if a
+///     future change introduces a new failure mode in equip, the ownership marker is still set
+///     on the instance and the punch-out gate will catch it. Today the equip is guaranteed to
+///     succeed because IsValid ensures hands are free.
 /// </summary>
 public class GoapAction_FetchToolFromStorage : GoapAction
 {
     private readonly CommercialBuilding _building;
     private readonly ItemSO _toolItem;
+    private readonly InteractableObject _storageInteractable;
 
     private readonly Dictionary<string, bool> _preconditions;
     private readonly Dictionary<string, bool> _effects;
@@ -50,6 +54,12 @@ public class GoapAction_FetchToolFromStorage : GoapAction
     {
         _building = building;
         _toolItem = toolItem;
+        // Cache the storage's InteractableObject once. _toolStorageFurniture on
+        // CommercialBuilding is a serialized prefab field — set at design time, never
+        // swapped at runtime — so the lookup is safe to memoize for the action's lifetime.
+        _storageInteractable = building?.ToolStorage != null
+            ? building.ToolStorage.GetComponent<InteractableObject>()
+            : null;
 
         string key = ToolKey();
         _preconditions = new Dictionary<string, bool>
@@ -70,6 +80,14 @@ public class GoapAction_FetchToolFromStorage : GoapAction
     {
         if (worker == null || _building == null || _toolItem == null) return false;
         if (_building.ToolStorage == null) return false;
+
+        // Hands must be free at IsValid time. If they're not, the planner picks a different
+        // prelude (drop / deposit / etc.) before re-evaluating this action. This keeps the
+        // Execute path simple — no in-action drop/repickup dance, no silent-fail risk when
+        // PickUpItem falls back to CarryItemInHand on a full bag.
+        var hands = worker.CharacterVisual?.BodyPartsController?.HandsController;
+        if (hands == null || !hands.AreHandsFree()) return false;
+
         return StorageContainsTool(_building.ToolStorage, _toolItem);
     }
 
@@ -100,8 +118,9 @@ public class GoapAction_FetchToolFromStorage : GoapAction
 
         // Movement gate: prefer InteractableObject.IsCharacterInInteractionZone
         // (canonical proximity API). Fall back to a flat-XZ distance check when the
-        // storage doesn't expose an InteractionZone collider.
-        var interactable = storage.GetComponent<InteractableObject>();
+        // storage doesn't expose an InteractionZone collider. The InteractableObject
+        // reference is cached once in the constructor (see _storageInteractable).
+        var interactable = _storageInteractable;
         bool inZone;
         if (interactable != null && interactable.InteractionZone != null)
         {
@@ -137,17 +156,13 @@ public class GoapAction_FetchToolFromStorage : GoapAction
             return;
         }
 
-        // Stamp ownership BEFORE equip so the marker survives even if the equip fails.
+        // Stamp ownership BEFORE equip so that if a future change introduces a new failure
+        // mode in equip, the ownership marker is still set on the instance and the punch-out
+        // gate will catch it. Today the equip is guaranteed to succeed because IsValid
+        // ensures hands are free.
         instance.OwnerBuildingId = _building.BuildingId;
 
-        // Equip in hand. If hands are already occupied, store whatever was there back
-        // into the worker's bag inventory so the equip can succeed.
-        var hands = worker.CharacterVisual?.BodyPartsController?.HandsController;
-        if (hands != null && hands.IsCarrying)
-        {
-            ItemInstance prev = hands.DropCarriedItem();
-            if (prev != null) worker.CharacterEquipment?.PickUpItem(prev);
-        }
+        // Hands are guaranteed free by IsValid — equip directly.
         worker.CharacterEquipment?.CarryItemInHand(instance);
 
         if (NPCDebug.VerboseJobs)
