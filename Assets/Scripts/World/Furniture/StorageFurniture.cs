@@ -112,6 +112,24 @@ public class StorageFurniture : Furniture
     {
         if (item == null || _itemSlots == null || _isLocked) return false;
 
+        // Tool-storage hook: if this storage IS the tool storage of the parent CommercialBuilding,
+        // and the incoming item is stamped with that same building's BuildingId on its
+        // OwnerBuildingId field, clear the stamp. Covers BOTH the GOAP-driven return path
+        // (GoapAction_ReturnToolToStorage stamps on fetch, returns here) AND the player-driven
+        // drop-in path (player walks to the chest and drops a tool via the existing player UI —
+        // no GOAP involved). The clear MUST happen before the slot iteration so the cleared
+        // field is what gets persisted into the slot's ItemInstance.
+        if (!string.IsNullOrEmpty(item.OwnerBuildingId))
+        {
+            var owningBuilding = GetComponentInParent<CommercialBuilding>();
+            if (owningBuilding != null
+                && owningBuilding.ToolStorage == this
+                && item.OwnerBuildingId == owningBuilding.BuildingId)
+            {
+                item.OwnerBuildingId = "";
+            }
+        }
+
         Type[] priority;
         if (item is WeaponInstance) priority = _weaponPriority;
         else if (item is WearableInstance) priority = _wearablePriority;
