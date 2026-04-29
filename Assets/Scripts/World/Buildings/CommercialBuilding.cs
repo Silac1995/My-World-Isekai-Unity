@@ -67,6 +67,10 @@ public abstract class CommercialBuilding : Building
              "exterior door — authored, not networked, so no NetworkVariable cost.")]
     [SerializeField] protected Zone _pickupZone;
 
+    [Header("Tool Storage")]
+    [Tooltip("Designer reference to a StorageFurniture inside this building that workers fetch tools from / return tools to. Null = building has no tool storage; tool-needing GOAP actions will fail-cleanly.")]
+    [SerializeField] private StorageFurniture _toolStorageFurniture;
+
     protected List<Job> _jobs = new List<Job>();
     protected List<ItemInstance> _inventory = new List<ItemInstance>();
 
@@ -155,6 +159,13 @@ public abstract class CommercialBuilding : Building
     }
     public Zone StorageZone => _storageZone;
     public Zone PickupZone => _pickupZone;
+
+    /// <summary>The StorageFurniture acting as this building's tool storage, or null if none assigned.</summary>
+    public StorageFurniture ToolStorage => _toolStorageFurniture;
+
+    /// <summary>True if the building has a tool storage furniture assigned.</summary>
+    public bool HasToolStorage => _toolStorageFurniture != null;
+
     public IReadOnlyList<ItemInstance> Inventory => _inventory;
 
     public BuildingTaskManager TaskManager => _taskManager;
@@ -1182,6 +1193,52 @@ public abstract class CommercialBuilding : Building
             if (_activeWorkerIds[i].ToString() == id) return true;
         }
         return false;
+    }
+
+    /// <summary>
+    /// Server-authoritative scan of a worker's hand + inventory for ItemInstances stamped with
+    /// this building's BuildingId on their OwnerBuildingId field. Used by CharacterJob.CanPunchOut
+    /// (Task 5) to gate shift end.
+    /// </summary>
+    /// <param name="worker">The character to scan.</param>
+    /// <param name="unreturned">Output list of unreturned tool instances. Always non-null
+    /// (cleared on entry); empty on return-false.</param>
+    /// <returns>true if the worker carries one or more items owned by this building.</returns>
+    public bool WorkerCarriesUnreturnedTools(Character worker, out System.Collections.Generic.List<ItemInstance> unreturned)
+    {
+        unreturned = new System.Collections.Generic.List<ItemInstance>(2);
+        if (worker == null) return false;
+
+        string myId = BuildingId;
+        if (string.IsNullOrEmpty(myId)) return false;
+
+        // Scan the active hand.
+        var hands = worker.CharacterVisual?.BodyPartsController?.HandsController;
+        if (hands != null && hands.IsCarrying && hands.CarriedItem != null)
+        {
+            if (hands.CarriedItem.OwnerBuildingId == myId)
+                unreturned.Add(hands.CarriedItem);
+        }
+
+        // Scan the inventory.
+        var equipment = worker.CharacterEquipment;
+        if (equipment != null && equipment.HaveInventory())
+        {
+            var inv = equipment.GetInventory();
+            if (inv != null && inv.ItemSlots != null)
+            {
+                for (int i = 0; i < inv.ItemSlots.Count; i++)
+                {
+                    var slot = inv.ItemSlots[i];
+                    if (slot == null || slot.IsEmpty()) continue;
+                    var instance = slot.ItemInstance;
+                    if (instance != null && instance.OwnerBuildingId == myId)
+                        unreturned.Add(instance);
+                }
+            }
+        }
+
+        return unreturned.Count > 0;
     }
 
     /// <summary>
