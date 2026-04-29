@@ -208,13 +208,14 @@ public class CharacterSchedule : CharacterSystem, ICharacterSaveData<ScheduleSav
     {
         if (_character == null) return;
 
+        // NPCs replan via GOAP — no toast needed. Early-return BEFORE consuming the cooldown
+        // (rule #34: avoid dead-state mutations).
+        if (!_character.IsPlayer()) return;
+
         // Real-time rate limit (rule #26).
         float now = Time.unscaledTime;
         if (now - _lastPunchOutToastUnscaledTime < PunchOutToastCooldownSeconds) return;
         _lastPunchOutToastUnscaledTime = now;
-
-        // NPCs replan via GOAP — no toast needed.
-        if (!_character.IsPlayer()) return;
 
         // Pick any active workplace; the toast is purely informational and any one workplace
         // can fire the targeted RPC. CanPunchOut already aggregated tool names across all
