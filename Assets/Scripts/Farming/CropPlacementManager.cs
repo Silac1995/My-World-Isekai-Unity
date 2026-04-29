@@ -6,51 +6,99 @@ using MWI.WorldSystem;
 namespace MWI.Farming
 {
     /// <summary>
-    /// Per-character crop placement + watering system. Mirrors BuildingPlacementManager in
-    /// shape (CharacterSystem with ghost lifecycle, ServerRpc to commit) but snaps to the
-    /// terrain cell grid and validates farm-cell rules. See farming spec §5.2 + §7.
+    /// Per-character crop placement + watering system. Mirrors FurniturePlacementManager —
+    /// ghost is the actual CropHarvestable prefab with physics/network disabled, snapped to
+    /// the TerrainCellGrid. See farming spec §5.2 + §7.
     /// </summary>
     public class CropPlacementManager : CharacterSystem
     {
         [Header("Settings")]
         [SerializeField] private LayerMask _groundLayer = ~0;
         [SerializeField] private float _maxRange = 5f;
-        [SerializeField] private GameObject _ghostPrefab;     // optional; falls back to a procedural marker
+        [SerializeField] private Material _ghostMaterialValid;
+        [SerializeField] private Material _ghostMaterialInvalid;
 
-        private GameObject _ghost;
-        private SpriteRenderer _ghostSprite;
+        private GameObject _ghostInstance;
         private CropSO _activeCrop;
         private MapController _activeMap;
+        private Vector3 _lastSnappedPosition;
+        private int _lastCellX, _lastCellZ;
+        private bool _lastValid;
         private Mode _mode = Mode.Off;
 
         private enum Mode { Off, Placing, Watering }
         public bool IsActive => _mode != Mode.Off;
 
+        // ────────────────────── Entry Points ──────────────────────
+
         public void StartPlacement(ItemInstance seedInstance)
         {
             if (!(seedInstance?.ItemSO is SeedSO seedSO) || seedSO.CropToPlant == null) return;
-            CancelPlacement();
+            ClearGhost();
             _activeCrop = seedSO.CropToPlant;
             _activeMap = MapController.GetMapAtPosition(_character.transform.position);
-            EnsureGhost();
-            if (_ghostSprite != null) _ghostSprite.sprite = _activeCrop.GetStageSprite(0);
+            if (_activeMap == null)
+            {
+                Debug.LogWarning("[CropPlacement] Cannot start placement — no MapController at character position.");
+                return;
+            }
+
+            // Spawn the actual CropHarvestable prefab as the ghost; disable everything that would interfere.
+            if (_activeCrop.HarvestablePrefab != null)
+            {
+                _ghostInstance = Instantiate(_activeCrop.HarvestablePrefab);
+                _ghostInstance.name = "CropPlacementGhost_" + _activeCrop.Id;
+            }
+            else
+            {
+                // Fallback: simple sprite quad if the crop has no prefab.
+                _ghostInstance = new GameObject("CropPlacementGhost_" + _activeCrop.Id);
+                _ghostInstance.AddComponent<SpriteRenderer>();
+            }
+            DisableGhostInterference(_ghostInstance);
+            ApplyGhostMaterials(_ghostMaterialValid);
+
             _mode = Mode.Placing;
+            if (!_character.IsBuilding) _character.SetBuildingState(true);
         }
 
         public void StartWatering()
         {
-            CancelPlacement();
+            ClearGhost();
             _activeMap = MapController.GetMapAtPosition(_character.transform.position);
-            EnsureGhost();
-            if (_ghostSprite != null) _ghostSprite.sprite = null;
+            if (_activeMap == null)
+            {
+                Debug.LogWarning("[CropPlacement] Cannot start watering — no MapController at character position.");
+                return;
+            }
+
+            // Watering uses a generic semi-transparent quad (no prefab).
+            _ghostInstance = new GameObject("CropPlacementGhost_Water");
+            var sr = _ghostInstance.AddComponent<SpriteRenderer>();
+            sr.color = new Color(0.4f, 0.6f, 1f, 0.6f);
+            DisableGhostInterference(_ghostInstance);
+            ApplyGhostMaterials(_ghostMaterialValid);
+
             _mode = Mode.Watering;
+            if (!_character.IsBuilding) _character.SetBuildingState(true);
         }
 
         public void CancelPlacement()
         {
-            if (_ghost != null) Destroy(_ghost);
-            _ghost = null; _ghostSprite = null;
-            _activeCrop = null; _activeMap = null;
+            ClearGhost();
+            if (_character != null) _character.SetBuildingState(false);
+        }
+
+        private void ClearGhost()
+        {
+            if (_ghostInstance != null)
+            {
+                Destroy(_ghostInstance);
+                _ghostInstance = null;
+            }
+            _activeCrop = null;
+            _activeMap = null;
+            _lastValid = false;
             _mode = Mode.Off;
         }
 
@@ -66,44 +114,39 @@ namespace MWI.Farming
             if (inCombat) CancelPlacement();
         }
 
+        private void OnDestroy() => CancelPlacement();
+
+        // ────────────────────── Frame Update (Player only) ──────────────────────
+
         private void Update()
         {
             if (_mode == Mode.Off || !IsOwner) return;
-            if (_activeMap == null || _ghost == null) return;
+            if (_activeMap == null || _ghostInstance == null) return;
 
+            UpdateGhostPosition();
+            HandlePlacementInput();
+        }
+
+        private void UpdateGhostPosition()
+        {
+            if (Camera.main == null) return;
             var grid = _activeMap.GetComponent<TerrainCellGrid>();
             if (grid == null) return;
 
-            // Raycast mouse to ground.
-            if (Camera.main == null) return;
-            var ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-            if (!Physics.Raycast(ray, out var hit, 100f, _groundLayer)) return;
+            Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+            if (!Physics.Raycast(ray, out RaycastHit hit, 100f, _groundLayer, QueryTriggerInteraction.Ignore))
+                return;   // Mouse off-ground: leave ghost at its last position rather than disabling.
 
             if (!grid.WorldToGrid(hit.point, out int x, out int z))
-            {
-                _ghost.SetActive(false);
-                return;
-            }
-            _ghost.SetActive(true);
-            _ghost.transform.position = grid.GridToWorld(x, z);
+                return;   // Outside the cell grid: same — leave ghost in place.
+
+            _lastCellX = x; _lastCellZ = z;
+            _lastSnappedPosition = grid.GridToWorld(x, z);
+            _ghostInstance.transform.position = _lastSnappedPosition;
 
             ref var cell = ref grid.GetCellRef(x, z);
-            bool valid = ValidateCell(in cell, _ghost.transform.position);
-            ApplyGhostTint(valid);
-
-            if (Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.Escape))
-            {
-                CancelPlacement();
-                return;
-            }
-            if (valid && Input.GetMouseButtonDown(0))
-            {
-                if (_mode == Mode.Placing)
-                    RequestPlaceCropServerRpc(x, z, _activeCrop.Id);
-                else
-                    RequestWaterCellServerRpc(x, z, GetActiveCanMoistureValue());
-                CancelPlacement();
-            }
+            _lastValid = ValidateCell(in cell, _lastSnappedPosition);
+            ApplyGhostMaterials(_lastValid ? _ghostMaterialValid : _ghostMaterialInvalid);
         }
 
         private bool ValidateCell(in TerrainCell cell, Vector3 cellWorldPos)
@@ -117,44 +160,79 @@ namespace MWI.Farming
                 if (type != null && !type.CanGrowVegetation) return false;
                 return string.IsNullOrEmpty(cell.PlantedCropId);
             }
-            // Watering: any cell in range is valid.
             return true;
         }
+
+        private void HandlePlacementInput()
+        {
+            // Left-click: confirm placement.
+            if (_lastValid && Input.GetMouseButtonDown(0))
+            {
+                if (_mode == Mode.Placing)
+                    RequestPlaceCropServerRpc(_lastCellX, _lastCellZ, _activeCrop.Id);
+                else
+                    RequestWaterCellServerRpc(_lastCellX, _lastCellZ, GetActiveCanMoistureValue());
+                CancelPlacement();
+                return;
+            }
+            // Right-click: clear ghost (could re-pick another seed).
+            if (Input.GetMouseButtonDown(1))
+            {
+                ClearGhost();
+                return;
+            }
+            // Escape: exit placement entirely (release building state).
+            if (Input.GetKeyDown(KeyCode.Escape))
+            {
+                CancelPlacement();
+            }
+        }
+
+        // ────────────────────── Helpers ──────────────────────
 
         private float GetActiveCanMoistureValue()
         {
             var hands = _character.CharacterVisual != null && _character.CharacterVisual.BodyPartsController != null
                 ? _character.CharacterVisual.BodyPartsController.HandsController
                 : null;
-            var carried = hands?.CarriedItem?.ItemSO as WateringCanSO;
-            return carried != null ? carried.MoistureSetTo : 1f;
+            return hands?.CarriedItem?.ItemSO is WateringCanSO can ? can.MoistureSetTo : 1f;
         }
 
-        private void EnsureGhost()
+        // Strip everything that would interfere with the ghost being a passive cursor:
+        // network identity (clients shouldn't see it), colliders (don't block raycast or push),
+        // rigidbodies (don't fall), and put it on Ignore Raycast.
+        private static void DisableGhostInterference(GameObject ghost)
         {
-            if (_ghost != null) return;
-            if (_ghostPrefab != null)
-            {
-                _ghost = Instantiate(_ghostPrefab);
-            }
-            else
-            {
-                // Procedural fallback: a small semi-transparent quad with a SpriteRenderer.
-                _ghost = new GameObject("CropPlacementGhost");
-                _ghostSprite = _ghost.AddComponent<SpriteRenderer>();
-                _ghostSprite.color = new Color(1f, 1f, 1f, 0.5f);
-                _ghost.transform.localScale = Vector3.one * 1.5f;
-                return;
-            }
-            if (_ghostSprite == null) _ghostSprite = _ghost.GetComponentInChildren<SpriteRenderer>();
+            if (ghost.TryGetComponent(out NetworkObject netObj)) netObj.enabled = false;
+            if (ghost.TryGetComponent(out Rigidbody rb)) rb.isKinematic = true;
+            foreach (var col in ghost.GetComponentsInChildren<Collider>()) col.enabled = false;
+            int ignoreLayer = LayerMask.NameToLayer("Ignore Raycast");
+            if (ignoreLayer >= 0) SetLayerRecursive(ghost, ignoreLayer);
         }
 
-        private void ApplyGhostTint(bool valid)
+        private static void SetLayerRecursive(GameObject go, int layer)
         {
-            if (_ghostSprite == null) return;
-            _ghostSprite.color = valid
-                ? new Color(1f, 1f, 1f, 0.7f)
-                : new Color(1f, 0.4f, 0.4f, 0.7f);
+            go.layer = layer;
+            foreach (Transform child in go.transform) SetLayerRecursive(child.gameObject, layer);
+        }
+
+        private void ApplyGhostMaterials(Material mat)
+        {
+            if (_ghostInstance == null) return;
+            // Materials only apply to MeshRenderers. For SpriteRenderer-based ghosts (crops), tint instead.
+            bool tintedAny = false;
+            foreach (var sr in _ghostInstance.GetComponentsInChildren<SpriteRenderer>())
+            {
+                sr.color = (mat == _ghostMaterialInvalid)
+                    ? new Color(1f, 0.4f, 0.4f, 0.7f)
+                    : new Color(1f, 1f, 1f, 0.7f);
+                tintedAny = true;
+            }
+            if (!tintedAny && mat != null)
+            {
+                foreach (var r in _ghostInstance.GetComponentsInChildren<Renderer>())
+                    r.sharedMaterial = mat;
+            }
         }
 
         // ────────────────────── Server RPCs ──────────────────────

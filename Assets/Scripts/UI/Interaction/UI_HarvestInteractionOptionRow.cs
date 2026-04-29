@@ -5,10 +5,10 @@ using UnityEngine.UI;
 namespace MWI.UI.Interaction
 {
     /// <summary>
-    /// One row inside <see cref="UI_InteractionMenu"/>. Bound from a HarvestInteractionOption.
-    /// See farming spec §6.2.
+    /// One row inside <see cref="UI_HarvestInteractionMenu"/>. Bound from a
+    /// HarvestInteractionOption. See farming spec §6.2.
     /// </summary>
-    public class UI_InteractionOptionRow : MonoBehaviour
+    public class UI_HarvestInteractionOptionRow : MonoBehaviour
     {
         [SerializeField] private Button _button;
         [SerializeField] private Image _icon;

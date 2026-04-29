@@ -8,27 +8,29 @@ namespace MWI.UI.Interaction
     /// option from <see cref="Harvestable.GetInteractionOptions(Character)"/>; greyed-out
     /// rows show the missing-tool reason. See farming spec §6.2.
     ///
-    /// Singleton-on-demand: lazy-spawned from Resources/UI/UI_InteractionMenu.
+    /// Singleton-on-demand: lazy-spawned from Resources/UI/UI_HarvestInteractionMenu.
+    /// Renamed from UI_InteractionMenu to avoid collision with the pre-existing
+    /// global-namespace UI_InteractionMenu (button-bar UI under Assets/Scripts/UI/WorldUI/).
     /// </summary>
-    public class UI_InteractionMenu : MonoBehaviour
+    public class UI_HarvestInteractionMenu : MonoBehaviour
     {
-        [SerializeField] private UI_InteractionOptionRow _rowPrefab;
+        [SerializeField] private UI_HarvestInteractionOptionRow _rowPrefab;
         [SerializeField] private Transform _rowParent;
 
-        private static UI_InteractionMenu _instance;
+        private static UI_HarvestInteractionMenu _instance;
         private Character _actor;
         private Harvestable _target;
         private System.Action _onClosed;
-        private readonly List<UI_InteractionOptionRow> _rows = new List<UI_InteractionOptionRow>();
+        private readonly List<UI_HarvestInteractionOptionRow> _rows = new List<UI_HarvestInteractionOptionRow>();
 
-        public static UI_InteractionMenu EnsureInstance()
+        public static UI_HarvestInteractionMenu EnsureInstance()
         {
             if (_instance == null)
             {
-                var prefab = Resources.Load<UI_InteractionMenu>("UI/UI_InteractionMenu");
+                var prefab = Resources.Load<UI_HarvestInteractionMenu>("UI/UI_HarvestInteractionMenu");
                 if (prefab == null)
                 {
-                    Debug.LogError("[UI_InteractionMenu] Prefab not found at Resources/UI/UI_InteractionMenu.");
+                    Debug.LogError("[UI_HarvestInteractionMenu] Prefab not found at Resources/UI/UI_HarvestInteractionMenu.");
                     return null;
                 }
                 _instance = Instantiate(prefab);

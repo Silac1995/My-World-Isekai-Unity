@@ -333,7 +333,7 @@ public class PlayerController : CharacterGameController
         var nearest = GetNearestVisibleHarvestable();
         if (nearest != null)
         {
-            MWI.UI.Interaction.UI_InteractionMenu.Open(_character, nearest, OnInteractionMenuClosed);
+            MWI.UI.Interaction.UI_HarvestInteractionMenu.Open(_character, nearest, OnInteractionMenuClosed);
             _eMenuOpened = true;
         }
     }
