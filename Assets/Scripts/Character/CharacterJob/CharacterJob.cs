@@ -86,6 +86,53 @@ public class CharacterJob : CharacterSystem, ICharacterSaveData<JobSaveData>, II
 
     public bool IsWorking => HasJob && _activeJobs.Any(j => j.AssignedJob.IsAssigned);
 
+    /// <summary>
+    /// Read-only check: is this worker allowed to punch out of their current shift right now?
+    /// Returns (false, reason) if the worker still carries any item stamped with one of their
+    /// active workplaces' BuildingId (unreturned tool from that building's tool storage). Called
+    /// by CharacterSchedule on the transition out of a Work slot, and by QuitJob before final
+    /// removal.
+    ///
+    /// Server-authoritative outcome: the gameplay decision (delaying schedule transition,
+    /// firing UI toast, etc.) must run server-side. The check itself is idempotent and
+    /// side-effect-free.
+    ///
+    /// Multi-workplace handling: a character may hold several JobAssignments (different shops,
+    /// non-overlapping shifts). The gate scans EVERY active workplace — if any one of them owns
+    /// an unreturned tool the worker is gated and the reason text lists every offending tool
+    /// alongside its owning building so the player UI can disambiguate.
+    /// </summary>
+    public (bool canPunchOut, string reasonIfBlocked) CanPunchOut()
+    {
+        if (_activeJobs == null || _activeJobs.Count == 0) return (true, null);
+
+        // Aggregate any unreturned tools across ALL active workplaces. We can't early-out on the
+        // first hit because the reason text wants to list every offender for the toast.
+        System.Text.StringBuilder names = null;
+        for (int i = 0; i < _activeJobs.Count; i++)
+        {
+            var assn = _activeJobs[i];
+            var workplace = assn?.Workplace;
+            if (workplace == null) continue;
+
+            if (!workplace.WorkerCarriesUnreturnedTools(_character, out var unreturned)) continue;
+
+            for (int u = 0; u < unreturned.Count; u++)
+            {
+                var inst = unreturned[u];
+                if (inst == null) continue;
+                if (names == null) names = new System.Text.StringBuilder();
+                if (names.Length > 0) names.Append(", ");
+                string itemName = inst.ItemSO != null ? inst.ItemSO.ItemName : "(unknown)";
+                string buildingName = !string.IsNullOrEmpty(workplace.BuildingName) ? workplace.BuildingName : "workplace";
+                names.Append(itemName).Append(" (").Append(buildingName).Append(")");
+            }
+        }
+
+        if (names == null) return (true, null);
+        return (false, $"Return tools to the tool storage before punching out: {names}.");
+    }
+
     private void Awake()
     {
         if (_character == null) _character = GetComponent<Character>();
@@ -162,6 +209,19 @@ public class CharacterJob : CharacterSystem, ICharacterSaveData<JobSaveData>, II
 
         Debug.Log($"<color=yellow>[CharacterJob]</color> {_character.CharacterName} quitte son poste de {job.JobTitle} à {assignment.Workplace?.BuildingName}.");
 
+        // Auto-return any tools the worker holds that are owned by THIS specific workplace
+        // BEFORE we clear the workplace reference / remove the assignment. We deliberately
+        // scope to the leaving workplace only — concurrent assignments at OTHER buildings
+        // keep their stamped tools, since CanPunchOut handles those independently.
+        // If auto-return fails (storage full / unreachable / destroyed), the OwnerBuildingId
+        // stamp is cleared manually inside TryAutoReturnTools so the worker isn't permanently
+        // gated by CanPunchOut on a building they no longer have any contractual link to.
+        if (assignment.Workplace != null
+            && assignment.Workplace.WorkerCarriesUnreturnedTools(_character, out var unreturned))
+        {
+            TryAutoReturnTools(assignment.Workplace, unreturned);
+        }
+
         RemoveWorkSchedule(assignment.WorkScheduleEntries);
 
         if (assignment.Workplace != null)
@@ -170,6 +230,67 @@ public class CharacterJob : CharacterSystem, ICharacterSaveData<JobSaveData>, II
         }
 
         _activeJobs.Remove(assignment);
+    }
+
+    /// <summary>
+    /// Best-effort auto-return of unreturned tools to a specific workplace's tool storage.
+    /// Called on QuitJob before the workplace reference is cleared. Each instance is removed
+    /// from the worker's hand or inventory, then placed back in storage; on storage failure
+    /// (null / full / locked) the OwnerBuildingId stamp is cleared and the tool is re-equipped
+    /// to the worker's inventory ("salvaged" — designer can repossess via dev tools if needed).
+    /// </summary>
+    private void TryAutoReturnTools(CommercialBuilding workplace, List<ItemInstance> unreturned)
+    {
+        if (workplace == null || unreturned == null || _character == null) return;
+
+        var storage = workplace.ToolStorage;
+        var hands = _character.CharacterVisual?.BodyPartsController?.HandsController;
+        var equipment = _character.CharacterEquipment;
+        var inventory = equipment != null && equipment.HaveInventory() ? equipment.GetInventory() : null;
+
+        for (int i = 0; i < unreturned.Count; i++)
+        {
+            var inst = unreturned[i];
+            if (inst == null) continue;
+
+            // Detach from the worker: prefer DropCarriedItem if it's the active hand item,
+            // otherwise pull it out of the inventory slot. ItemInstance is reference-equal
+            // across the system so direct == comparison is correct.
+            bool detached = false;
+            if (hands != null && hands.IsCarrying && hands.CarriedItem == inst)
+            {
+                hands.DropCarriedItem();
+                detached = true;
+            }
+            else if (inventory != null)
+            {
+                detached = inventory.RemoveItem(inst, _character);
+            }
+
+            if (!detached)
+            {
+                // Couldn't find it on the worker anymore (race with another system).
+                // Clear the stamp so the residual reference doesn't gate punch-out forever.
+                inst.OwnerBuildingId = "";
+                Debug.LogWarning($"<color=orange>[CharacterJob]</color> Auto-return: {inst.ItemSO?.ItemName} no longer found on {_character.CharacterName} during QuitJob — stamp cleared defensively.");
+                continue;
+            }
+
+            // Try to place back in storage. StorageFurniture.AddItem auto-clears
+            // OwnerBuildingId via the origin-match hook (Task 4) when the destination
+            // is the origin building's ToolStorage.
+            if (storage != null && storage.AddItem(inst))
+            {
+                continue; // returned successfully
+            }
+
+            // Fallback: storage destroyed / full / null. Clear the stamp manually so the
+            // worker isn't permanently gated, and put the item back in their inventory
+            // (treated as "salvaged"; designer can repossess via dev tools if needed).
+            inst.OwnerBuildingId = "";
+            equipment?.PickUpItem(inst);
+            Debug.LogWarning($"[CharacterJob] Auto-return failed for {inst.ItemSO?.ItemName} at {_character.CharacterName}'s QuitJob — storage unreachable. OwnerBuildingId cleared; item kept by worker.");
+        }
     }
 
     /// <summary>
