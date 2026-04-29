@@ -1196,17 +1196,23 @@ public abstract class CommercialBuilding : Building
     }
 
     /// <summary>
-    /// Server-authoritative scan of a worker's hand + inventory for ItemInstances stamped with
-    /// this building's BuildingId on their OwnerBuildingId field. Used by CharacterJob.CanPunchOut
-    /// (Task 5) to gate shift end.
+    /// Read-only scan of a worker's hand + inventory for ItemInstances stamped with this
+    /// building's BuildingId on their OwnerBuildingId field. Idempotent and side-effect-free;
+    /// safe to call on either server or client, but the *authoritative* answer comes from
+    /// server-side state — callers gating gameplay decisions (e.g. CharacterJob.CanPunchOut)
+    /// must themselves be server-authoritative.
+    ///
+    /// Not hot-path: called only on schedule transitions (~10 Hz max per worker) and on
+    /// CharacterJob.Unassign (rare). Per-call List allocation is fine; do NOT promote this
+    /// to a reused buffer without first checking the call sites.
     /// </summary>
     /// <param name="worker">The character to scan.</param>
-    /// <param name="unreturned">Output list of unreturned tool instances. Always non-null
-    /// (cleared on entry); empty on return-false.</param>
+    /// <param name="unreturned">Output list of unreturned tool instances. Always non-null;
+    /// empty on return-false.</param>
     /// <returns>true if the worker carries one or more items owned by this building.</returns>
-    public bool WorkerCarriesUnreturnedTools(Character worker, out System.Collections.Generic.List<ItemInstance> unreturned)
+    public bool WorkerCarriesUnreturnedTools(Character worker, out List<ItemInstance> unreturned)
     {
-        unreturned = new System.Collections.Generic.List<ItemInstance>(2);
+        unreturned = new List<ItemInstance>(2);
         if (worker == null) return false;
 
         string myId = BuildingId;
