@@ -703,6 +703,7 @@ Following the pattern in `BuildingInspectorView`:
 7. **Help Wanted system (§15):**
    - `DisplayTextFurniture` + `DisplayTextFurnitureSaveData`.
    - `CommercialBuilding._isHiring` NetworkVariable + `_helpWantedFurniture` reference + hiring API surface (`TryOpenHiring`, `TryCloseHiring`, `CanRequesterControlHiring`, `GetVacantJobs`, `GetHelpWantedDisplayText`, `GetClosedHiringDisplayText`).
+   - **Wire `HandleVacancyChanged`** into the existing `Job.OnWorkerAssigned` / `Job.OnWorkerUnassigned` events (or whichever existing hire/quit hook fires) so the Help Wanted sign auto-refreshes whenever a position fills or opens up while `IsHiring` is true. Without this, the sign text only updates on toggle, not on hire churn.
    - `InteractionAskForJob` + `NeedJob.GetActions` gate updates to read `IsHiring`.
    - Authoring: `DisplayTextFurniture_Placard.prefab`. Designer wires one as `_helpWantedFurniture` on the v1 `FarmingBuilding` prefab.
    - Player UI: `UI_DisplayTextReader` + `UI_OwnerHiringPanel` (with multi-line text-input for custom sign text).
@@ -930,7 +931,7 @@ NPC `NeedJob.GetActions` ([NeedJob.cs:50](../../Assets/Scripts/Character/Charact
   - Title: building name + "Currently Hiring: Yes/No"
   - Scroll list of `_jobs` rows: each row shows "JobTitle — vacant" or "JobTitle — filled by NPCName"
   - Toggle button: "Open Hiring" / "Close Hiring" → calls `building.TryOpenHiring(localPlayer.Character)` / `TryCloseHiring(...)`
-  - **Edit Sign Text button** (only enabled if `_helpWantedFurniture != null`): opens a multi-line text-input field; on Submit calls `_helpWantedFurniture.TrySetDisplayText(localPlayer.Character, typedText)`. Empty input reverts the sign to the auto-formatted `GetHelpWantedDisplayText()`.
+  - **Edit Sign Text button** (only enabled if `_helpWantedFurniture != null`): opens a multi-line text-input field; on Submit calls `_helpWantedFurniture.TrySetDisplayText(localPlayer.Character, typedText)`. Empty input reverts the sign to the auto-formatted `GetHelpWantedDisplayText()`. **A subtle hint label below the field reads "Custom text resets when hiring is reopened."** — matches the Q15.1 invariant so the owner is not surprised by their custom message vanishing on the next toggle cycle.
 
 **C. NPC owner path:** API is identical, exercised in Phase 2 by future GOAP actions. No UI in v1.
 
@@ -998,7 +999,7 @@ All four scenarios validated per rule #19:
 
 Captured here so the design intent is preserved across PRs.
 
-### 15.1 Shift-long pickup pattern
+### 16.1 Shift-long pickup pattern
 
 Add lifecycle hooks on `Job`:
 ```csharp
@@ -1012,15 +1013,15 @@ public abstract class Job
 
 `JobLogisticsManager` (transporter), `JobHarvester` (woodcutter / miner / forager) override `RequiredToolsForShift` and inject a one-time `FetchToolFromStorage` plan at shift start. The `CanPunchOut` gate already covers the symmetrical end.
 
-### 15.2 Bag → carry-capacity bonus
+### 16.2 Bag → carry-capacity bonus
 
 `CharacterEquipment` adds a "bonus inventory slot count" hook driven by an active Bag item. When a `Bag` ItemInstance is equipped (via the same ToolStorage primitive), `_inventory.MaxSlots` increases by `BagSO.SlotsBonus`. Returning the bag at shift end reverts.
 
-### 15.3 Tool durability (optional)
+### 16.3 Tool durability (optional)
 
 `ItemInstance` adds `int Durability`. Each tool use decrements; at 0, the tool breaks (despawns). Triggers a `BuyOrder` for a replacement. Repair is a Phase 3 concern.
 
-### 15.4 Retrofit list
+### 16.4 Retrofit list
 
 | Job | Tool needed | Pattern |
 |---|---|---|
@@ -1030,7 +1031,7 @@ public abstract class Job
 | `JobTransporter` | Bag | shift-long |
 | `JobBlacksmith` | Hammer (already implicit in station, possibly redundant) | TBD — may stay station-implicit |
 
-### 15.5 NPC owner AI for hiring
+### 16.5 NPC owner AI for hiring
 
 Phase 1 ships the API (`TryOpenHiring`, `TryCloseHiring`, `CanRequesterControlHiring`) but no NPC AI uses it — NPC owners stay in `_initialHiringOpen` state forever. Phase 2 adds:
 - `GoapAction_OwnerOpenHiring` / `GoapAction_OwnerCloseHiring` — NPC owners decide based on workload (vacant positions + pending tasks) and finances (treasury threshold).
