@@ -11,6 +11,10 @@ public abstract class ItemInstance
     [SerializeField] private Color _primaryColor = new Color(0, 0, 0, 0);
     [SerializeField] private Color _secondaryColor = new Color(0, 0, 0, 0);
 
+    // NOTE: must stay [SerializeField] — JsonUtility.ToJson / FromJsonOverwrite skip plain
+    // private fields, and the existing CharacterEquipment + StorageFurniture save paths rely
+    // on ItemInstance round-tripping through JsonUtility. Removing the attribute would silently
+    // drop OwnerBuildingId across every save/load cycle.
     [SerializeField] private string _ownerBuildingId = "";
 
     /// <summary>
