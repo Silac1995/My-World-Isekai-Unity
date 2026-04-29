@@ -260,16 +260,11 @@ These were spotted in the same profiler session AFTER the debug overlay was disa
 - **Status:** **deferred / not started.**
 - **Owner:** [[world-system-specialist]].
 
-### 8. Farming visual layers — collapse to single-GameObject-per-crop
-- **Where:** [Assets/Scripts/Farming/CropVisualSpawner.cs](../../Assets/Scripts/Farming/CropVisualSpawner.cs) + the `CropHarvestable` spawn at maturity in [Assets/Scripts/Farming/FarmGrowthSystem.cs](../../Assets/Scripts/Farming/FarmGrowthSystem.cs) + the visual handoff via `MapController.NotifyDirtyCells` ClientRpc.
-- **Why it's deferred:** the existing two-layer design (local stage cube during growth → networked `CropHarvestable` at maturity) was a speculative network-footprint optimization. In practice the simpler **single-GameObject-per-crop** model is architecturally cleaner — Kevin's intuition during 2026-04-29 playmode integration: "a crop is local to its own". One `CropHarvestable` per cell from plant-time, visual driven by `NetworkVariable<int> CurrentStage` (or by reading `cell.GrowthTimer` on tick). `CanHarvest()` returns false while growing.
-- **Cost vs. benefit:** the saving from the current split is "no `NetworkObject` for growing cells". For typical scenes (dozens of crops per player, players spread across the world) that saving is negligible. The complexity cost of the handoff (visual race condition, two visual systems to debug, two paths to maintain) is real and recurring.
-- **Reasonable fix shape:** spawn `CropHarvestable` from `CharacterAction_PlaceCrop.OnApplyEffect` instead of from `FarmGrowthSystem.HandleNewDay` on JustMatured. Add `CropHarvestable._stageSprites[]` (or per-stage prefab swap if 3D) + `NetworkVariable<int> CurrentStage`. Delete `CropVisualSpawner.cs` + the spawner fan-out from `MapController.SendDirtyCellsClientRpc`. Update farming spec §6 + `wiki/systems/farming.md` "Visual handoff" section accordingly.
-- **Same critique applies to [[terrain-and-weather|VegetationGrowthSystem]]** (wild-vegetation cell timer). Whatever pattern wins here should be mirrored there.
-- **Risk:** moderate. Touches the visual + persistence path on every plant. Existing 16 acceptance criteria from the [farming spec](../../docs/superpowers/specs/2026-04-28-farming-plot-system-design.md) need re-running.
-- **Threshold for action:** before adding NPC farming AI (the simpler model is far easier to reason about for GOAP/BT planners). OR before shipping the system to a designer audience (the current two-layer model surprises them). Whichever comes first.
-- **Status:** **deferred / not started.**
-- **Owner:** [[kevin]].
+### 8. Farming visual layers — collapse to single-GameObject-per-crop ✅ SHIPPED 2026-04-29
+- **Status:** **shipped same-day.** Commit `ff62d2d1`.
+- **What landed:** `CropVisualSpawner.cs` deleted. `CropHarvestable` now spawned at plant-time via `FarmGrowthSystem.SpawnCropHarvestableAt` (called from `CharacterAction_PlaceCrop`). Three NetworkVariables on `CropHarvestableNetSync` drive synced state: `CurrentStage` (0..DaysToMature, gates `CanHarvest`), `IsDepleted` (perennial post-harvest), `CropIdNet` (lets clients resolve `CropSO` without a networked reference). Visual scale lerps 0.25→1.0 across growth. `Harvestable.CanHarvest` made virtual so `CropHarvestable` can add the maturity gate.
+- **Same critique still applies to [[terrain-and-weather|VegetationGrowthSystem]]** (wild-vegetation cell timer). Out of scope; flagged in [[farming]] Open Questions for a future pass.
+- **Tests:** 58/58 EditMode green — pipeline + catch-up math untouched, predicate tests still pass.
 
 ## Milestones
 - [ ] StorageVisualDisplay per-peer culling — no fixed date; pick up when shelf-count perf becomes measurable, OR when player-count testing shows the always-on cost hurts.
@@ -283,7 +278,7 @@ These were spotted in the same profiler session AFTER the debug overlay was disa
 - [ ] **Tier 4 — `MacroSimulator.SimulateOneHour` 24×=1×CatchUp EditMode test.** Threshold: before any third contributor adds a new step to `MacroSimulator`. Requires extracting pure-math helpers into `MWI.MacroSim.Pure` asmdef.
 - [ ] **Tier 4 — `MacroSimulator.SimulateOneHour` per-hour `FindObjectsByType<MapController>`.** Threshold: when measured GC pressure during a skip becomes visible. Pass `MapController` through from `TimeSkipController` instead.
 - [ ] **Tier 4 — `MapController.WakeUp()` ungated `Debug.Log` calls.** Drive-by. Gate the 9 logs behind `Verbose*` / `#if UNITY_EDITOR`. Newly reachable via `WakeUpFromSkip` from [[world-time-skip]].
-- [ ] **Tier 4 — Farming visual layers collapse.** Single `CropHarvestable` per cell from plant-time; remove `CropVisualSpawner`. Threshold: before NPC AI farming OR before designer-facing rollout, whichever first. See [[farming]].
+- [x] **Tier 4 — Farming visual layers collapse.** ✅ Shipped 2026-04-29 (commit `ff62d2d1`) — `CropVisualSpawner` deleted, `CropHarvestable` now spawned at plant-time, `CurrentStage` NetVar drives growth visual + maturity gate.
 
 ## Stakeholders
 - [[kevin]] — decides when to invest.
@@ -309,6 +304,7 @@ These were spotted in the same profiler session AFTER the debug overlay was disa
 - 2026-04-27 — Profiler session: identified `UI_CommercialBuildingDebugScript` (28% of frame, 633 GC.Allocs/frame) as remaining bottleneck. Disabling it reached the 60 FPS target. Entry #2 closed for current budget; Tier 4 deferrals captured (UI debug refactor, `CharacterActions.ActionTimerRoutine` Instantiate pooling, `PreLateUpdate.ScriptRunBehaviourLateUpdate` 391 KB drill-down, EyesController/SpriteSkin → defer to Spine migration). — claude
 - 2026-04-27 — Added three Tier 4 deferrals from the Time Skip & Bed Furniture v1 implementation: (#5) `SimulateOneHour` 24×=1×CatchUp EditMode test pending asmdef extraction; (#6) `SimulateOneHour` per-hour `FindObjectsByType<MapController>` allocation; (#7) `MapController.WakeUp` ungated `Debug.Log` calls newly reachable via `WakeUpFromSkip`. — claude
 - 2026-04-29 — Added Tier 4 deferral #8: collapse farming's two-layer visual model into a single `CropHarvestable`-per-cell after Kevin flagged "a crop is local to its own" during the [[farming]] integration playtest. Same critique echoed back to [[terrain-and-weather|VegetationGrowthSystem]]. — claude
+- 2026-04-29 — **#8 shipped same-day** (commit `ff62d2d1`). `CropVisualSpawner` deleted; `CropHarvestable` now spawned at plant-time with `CurrentStage` NetVar driving growth visual + maturity gate. Tests still 58/58 green. The wild-vegetation echo critique stays open in [[farming]] Open Questions. — claude
 
 ## Sources
 - 2026-04-25 conversation with Kevin — original deferral.
