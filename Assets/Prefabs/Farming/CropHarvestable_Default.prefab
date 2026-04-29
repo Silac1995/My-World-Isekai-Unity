@@ -295,13 +295,14 @@ MonoBehaviour:
   m_GameObject: {fileID: 6677736407613813226}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f43d0d2478ccac24e820eefa58fa47ea, type: 3}
+  m_Script: {fileID: 11500000, guid: 180182d8794223f419ebc9608bbefb03, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::MWI.Farming.CropHarvestable
+  m_EditorClassIdentifier: Assembly-CSharp::Harvestable
   interactionPrompt: Press E to interact
   _interactionZone: {fileID: 7101521526056136452}
   _rootgameObject: {fileID: 6677736407613813226}
   _rigidbody: {fileID: 3993987223584796808}
+  _so: {fileID: 0}
   _category: 1
   _harvestOutputs: []
   _harvestDuration: 3
@@ -310,6 +311,7 @@ MonoBehaviour:
   _respawnDelayDays: 1
   _requiredHarvestTool: {fileID: 0}
   _allowDestruction: 0
+  _allowNpcDestruction: 1
   _requiredDestructionTool: {fileID: 0}
   _destructionOutputs: []
   _destructionDuration: 3

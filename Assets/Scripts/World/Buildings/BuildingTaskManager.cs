@@ -220,6 +220,29 @@ public class BuildingTaskManager : MonoBehaviour
     }
 
     /// <summary>
+    /// Returns the in-progress task of type T already claimed by <paramref name="worker"/>, if any.
+    /// Used by GOAP actions whose worker had a task pre-claimed by the quest-system auto-claim path
+    /// (<see cref="CommercialBuilding.TryAutoClaimExistingQuests"/> on <c>WorkerStartingShift</c>) —
+    /// without this lookup, the GoapAction's <c>ClaimBestTask</c> only walks <c>_availableTasks</c>
+    /// and returns null even though the worker DOES have a valid claim sitting in
+    /// <c>_inProgressTasks</c>, causing an Idle/Action ping-pong loop. Mirrors the InProgress branch
+    /// of <see cref="HasAvailableOrClaimedTask{T}"/> so the two stay in sync semantically.
+    /// </summary>
+    public T FindClaimedTaskByWorker<T>(Character worker, System.Predicate<T> predicate = null) where T : BuildingTask
+    {
+        if (worker == null) return null;
+        for (int i = 0; i < _inProgressTasks.Count; i++)
+        {
+            if (!(_inProgressTasks[i] is T task)) continue;
+            if (!task.ClaimedByWorkers.Contains(worker)) continue;
+            if (!task.IsValid()) continue;
+            if (predicate != null && !predicate(task)) continue;
+            return task;
+        }
+        return null;
+    }
+
+    /// <summary>
     /// Checks if there is any available or currently claimed (by this worker) task of the specified type.
     /// Manual loops replace `.OfType<T>().Any(...)` which allocates an enumerator + predicate closure per call.
     /// </summary>

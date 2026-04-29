@@ -14,23 +14,29 @@ MonoBehaviour:
   m_EditorClassIdentifier: MWI.Farming.Pure::MWI.Farming.CropSO
   _id: apple_tree
   _displayName: Apple Tree
-  _daysToMature: 3
-  _minMoistureForGrowth: 0.3
-  _plantDuration: 2
   _harvestOutputs:
   - Item: {fileID: 11400000, guid: 6eadabb584f662d49bea83caa241bdba, type: 2}
     Count: 4
   _requiredHarvestTool: {fileID: 0}
-  _stageSprites: []
-  _harvestablePrefab: {fileID: 8874080723789279744, guid: b8fb13f2f1ea6534cb428a3bc7bd0e3d, type: 3}
-  _isPerennial: 1
-  _regrowDays: 2
+  _harvestDuration: 3
+  _isDepletable: 1
+  _maxHarvestCount: 5
+  _respawnDelayDays: 1
   _allowDestruction: 1
-  _requiredDestructionTool: {fileID: 11400000, guid: d352d2dfa638b4f4b8d77ed55703ddfa, type: 2}
+  _requiredDestructionTool: {fileID: 0}
   _destructionEntries:
   - Item: {fileID: 11400000, guid: a3f0471c4178efd4b9b5efdb38aea516, type: 2}
     Count: 4
   _destructionDuration: 3
+  _readySprite: {fileID: 0}
+  _depletedSprite: {fileID: 0}
+  _harvestablePrefab: {fileID: 8874080723789279744, guid: b8fb13f2f1ea6534cb428a3bc7bd0e3d, type: 3}
+  _daysToMature: 3
+  _minMoistureForGrowth: 0.3
+  _plantDuration: 2
+  _stageSprites: []
+  _isPerennial: 1
+  _regrowDays: 2
   _produceItem: {fileID: 0}
   _produceCount: 1
   _destructionOutputs: []

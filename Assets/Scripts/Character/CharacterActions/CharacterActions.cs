@@ -226,6 +226,45 @@ public class CharacterActions : CharacterSystem
         return firstSpawned;
     }
 
+    /// <summary>
+    /// Server-side (or offline) destruction execution. Calls <see cref="Harvestable.DestroyForOutputs"/>
+    /// (which spawns the destruction WorldItems and despawns the harvestable), then registers a
+    /// <see cref="PickupLooseItemTask"/> on the worker's harvesting workplace for each spawned item.
+    /// Mirrors <see cref="ApplyHarvestOnServer"/> — without the task-registration pass, the worker's
+    /// planner sees <c>looseItemExists=false</c>, never enters the Pickup→Deposit chain, and the
+    /// dropped wood/etc. stays orphaned on the ground.
+    /// Called from:
+    ///   - <see cref="RequestDestroyHarvestableServerRpc"/> (networked client-owner path)
+    ///   - <see cref="CharacterAction_DestroyHarvestable.OnApplyEffect"/> (host / NPC / offline)
+    /// Blocks only the networked-client case: IsSpawned &amp;&amp; !IsServer.
+    /// </summary>
+    public void ApplyDestroyOnServer(Harvestable target)
+    {
+        if (IsSpawned && !IsServer) return;
+        if (target == null || _character == null) return;
+
+        var spawned = target.DestroyForOutputs(_character);
+
+        // Resolve the worker's harvesting workplace once. DestroyForOutputs has already despawned
+        // the harvestable, but the spawned WorldItems are server-authoritative and still live —
+        // we only need a TaskManager reference to register pickups against.
+        CommercialBuilding harvesterWorkplace = null;
+        if (_character.CharacterJob != null)
+        {
+            var workAssignment = _character.CharacterJob.ActiveJobs.FirstOrDefault(j => j.AssignedJob is JobHarvester);
+            if (workAssignment != null) harvesterWorkplace = workAssignment.Workplace;
+        }
+
+        if (harvesterWorkplace != null && harvesterWorkplace.TaskManager != null && spawned != null)
+        {
+            for (int i = 0; i < spawned.Count; i++)
+            {
+                if (spawned[i] != null)
+                    harvesterWorkplace.TaskManager.RegisterTask(new PickupLooseItemTask(spawned[i]));
+            }
+        }
+    }
+
     private Harvestable FindHarvestableNear(Vector3 position, float maxDistance = 2.5f)
     {
         Harvestable[] all = UnityEngine.Object.FindObjectsByType<Harvestable>(FindObjectsSortMode.None);
@@ -258,7 +297,7 @@ public class CharacterActions : CharacterSystem
             Debug.LogWarning($"[CharacterActions] Server: Could not find Harvestable to destroy near {harvestablePosition}");
             return;
         }
-        target.DestroyForOutputs();
+        ApplyDestroyOnServer(target);
     }
 
     /// <summary>
@@ -489,7 +528,12 @@ public class CharacterActions : CharacterSystem
         }
         catch (Exception e)
         {
-            Debug.LogError($"[CharacterActions] Erreur durant l'exécution de l'action: {e.Message}");
+            // Log the full exception (including stack trace) — project rule #31. Logging only
+            // e.Message hides which subscriber/iteration actually threw, which made a recurring
+            // "Collection was modified" loop in the destroy-harvestable chain take much longer
+            // to diagnose than necessary.
+            Debug.LogError($"[CharacterActions] Erreur durant l'exécution de l'action '{action?.ActionName}' on '{_character?.CharacterName}':");
+            Debug.LogException(e);
             CleanupAction();
         }
     }

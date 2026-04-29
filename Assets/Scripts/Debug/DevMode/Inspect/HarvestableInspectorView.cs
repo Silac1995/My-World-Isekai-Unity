@@ -90,10 +90,13 @@ public class HarvestableInspectorView : MonoBehaviour, IInspectorView
             AppendDestruction(sb, h);
         }
 
-        if (h is CropHarvestable crop)
+        // Crop section: gated on the Harvestable carrying a CropSO data root (post-2026-04-29
+        // unification — there is no `CropHarvestable` type any more, just Harvestable + a
+        // CropSO `_so`).
+        if (h.SO is MWI.Farming.CropSO)
         {
             sb.AppendLine();
-            AppendCropSection(sb, crop);
+            AppendCropSection(sb, h);
         }
 
         return sb.ToString();
@@ -165,11 +168,11 @@ public class HarvestableInspectorView : MonoBehaviour, IInspectorView
         }
     }
 
-    private static void AppendCropSection(StringBuilder sb, CropHarvestable crop)
+    private static void AppendCropSection(StringBuilder sb, Harvestable crop)
     {
         sb.AppendLine("<b><color=#FFFFFF>Crop</color></b>");
 
-        var netSync = crop.GetComponent<CropHarvestableNetSync>();
+        var netSync = crop.GetComponent<HarvestableNetSync>();
         string cropId = netSync != null ? netSync.CropIdNet.Value.ToString() : "<color=grey>?</color>";
         int currentStage = netSync != null ? netSync.CurrentStage.Value : -1;
         bool cropDepleted = netSync != null && netSync.IsDepleted.Value;
@@ -222,7 +225,7 @@ public class HarvestableInspectorView : MonoBehaviour, IInspectorView
         AppendCropCellSection(sb, crop);
     }
 
-    private static void AppendCropCellSection(StringBuilder sb, CropHarvestable crop)
+    private static void AppendCropCellSection(StringBuilder sb, Harvestable crop)
     {
         sb.AppendLine("<b><color=#FFFFFF>Terrain Cell</color></b>");
         sb.Append("  Cell: (").Append(crop.CellX).Append(", ").Append(crop.CellZ).AppendLine(")");

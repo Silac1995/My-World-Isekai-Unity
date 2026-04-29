@@ -10,16 +10,16 @@ namespace MWI.Farming
     /// Server-only daily tick for farming cells. One instance per active MapController.
     /// See farming spec §4 + §9.2 + the 2026-04-29 single-GameObject-per-crop rework.
     ///
-    /// In the post-rework model, the CropHarvestable spawn happens at plant-time
-    /// (CharacterAction_PlaceCrop calls <see cref="SpawnCropHarvestableAt"/>), NOT at
-    /// maturity. The daily tick advances <see cref="CropHarvestable.AdvanceStage"/> on
+    /// In the post-rework model, the Harvestable spawn happens at plant-time
+    /// (CharacterAction_PlaceCrop calls <see cref="SpawnHarvestableAt"/>), NOT at
+    /// maturity. The daily tick advances <see cref="Harvestable.AdvanceStage"/> on
     /// existing instances; nothing new is spawned mid-growth.
     /// </summary>
     public class FarmGrowthSystem : MonoBehaviour
     {
         private TerrainCellGrid _grid;
         private MapController _map;
-        private readonly Dictionary<int, CropHarvestable> _activeHarvestables = new Dictionary<int, CropHarvestable>(64);
+        private readonly Dictionary<int, Harvestable> _activeHarvestables = new Dictionary<int, Harvestable>(64);
         private readonly List<int> _dirtyIndices = new List<int>(64);
         private bool _subscribed;
 
@@ -76,7 +76,7 @@ namespace MWI.Farming
             }
         }
 
-        public void RegisterHarvestable(int x, int z, CropHarvestable h)
+        public void RegisterHarvestable(int x, int z, Harvestable h)
         {
             if (_grid == null) return;
             _activeHarvestables[LinearIndex(x, z)] = h;
@@ -91,11 +91,11 @@ namespace MWI.Farming
         // ────────────────────── Server: spawn at plant-time ──────────────────────
 
         /// <summary>
-        /// Server-only. Spawns the CropHarvestable for a freshly-planted cell. Called by
+        /// Server-only. Spawns the Harvestable for a freshly-planted cell. Called by
         /// CharacterAction_PlaceCrop.OnApplyEffect. Idempotent — no-op if a harvestable is
         /// already registered for the cell.
         /// </summary>
-        public CropHarvestable SpawnCropHarvestableAt(int x, int z, CropSO crop, int startStage, bool startDepleted)
+        public Harvestable SpawnHarvestableAt(int x, int z, CropSO crop, int startStage, bool startDepleted)
         {
             if (_grid == null || crop == null || crop.HarvestablePrefab == null) return null;
             int idx = LinearIndex(x, z);
@@ -103,10 +103,10 @@ namespace MWI.Farming
 
             var pos = _grid.GridToWorld(x, z);
             var go = Instantiate(crop.HarvestablePrefab, pos, Quaternion.identity);
-            var h = go.GetComponent<CropHarvestable>();
+            var h = go.GetComponent<Harvestable>();
             if (h == null)
             {
-                Debug.LogError($"[FarmGrowthSystem] HarvestablePrefab on {crop.name} has no CropHarvestable component.");
+                Debug.LogError($"[FarmGrowthSystem] HarvestablePrefab on {crop.name} has no Harvestable component.");
                 Destroy(go);
                 return null;
             }
@@ -115,27 +115,26 @@ namespace MWI.Farming
             // very first OnNetSyncChanged tick instead of waiting for separate change-
             // replication messages. NGO supports pre-spawn NetworkVariable mutation: the local
             // value is captured as the initial sync; no callbacks fire (no subscribers yet),
-            // which is fine because InitializeFromCell also calls ApplyVisual itself for the
+            // which is fine because InitializeAtStage also calls ApplyVisual itself for the
             // server-side visual.
-            h.InitializeFromCell(_grid, _map, x, z, crop, startStage, startDepleted);
+            h.InitializeAtStage(crop, startStage, startDepleted, _map, x, z, _grid);
 
             if (go.TryGetComponent<NetworkObject>(out var netObj) && !netObj.IsSpawned)
             {
                 netObj.Spawn(true);
-                // INTENTIONALLY NOT parenting under MapController. We previously called
-                // netObj.TrySetParent(mapNetObj, worldPositionStays: true) here, but that
-                // triggered an NGO bug where late-joining clients NRE inside
-                // NetworkObject.Serialize (line 3182, accessing NetworkManagerOwner.DistributedAuthorityMode)
-                // during the initial-sync of parented runtime-spawned NetworkObjects:
-                // NGO's SceneEventData.SortParentedNetworkObjects walks every root NO's
-                // GetComponentsInChildren<NetworkObject>() and pulls those children into the
-                // sync list — and the sync code path differs subtly from the direct
-                // Serialize() probe (PurgeBrokenSpawnedNetworkObjects), so the NRE only
-                // surfaces during real client-join. Symptom: "host plants crop → client
-                // tries to join → join fails with NetworkObject.Serialize NRE in loop."
-                // CropHarvestables live at scene root; the back-reference to their map lives
-                // in CropHarvestable._map for all server-side logic, and no code does
-                // GetComponentsInChildren<CropHarvestable> on MapController so nothing breaks.
+                // Parent under MapController for hierarchy organisation. This was previously
+                // skipped because of an NGO late-joiner NRE inside NetworkObject.Serialize
+                // (NGO's SceneEventData.SortParentedNetworkObjects walks GetComponentsInChildren
+                // and Serialize'd a NetworkManagerOwner-null entry). The 2026-04-29 unification
+                // (lazy registry init, save/load completeness, snapshot path) closed the
+                // related bug surface; if the NRE returns under "host plants crop → late
+                // client joins" testing, revert this block to a no-op and crops live at
+                // scene root again — back-reference to the map still works via Harvestable._map.
+                if (_map != null && _map.TryGetComponent<NetworkObject>(out var mapNetObj))
+                {
+                    if (!netObj.TrySetParent(mapNetObj, worldPositionStays: true))
+                        Debug.LogWarning($"[FarmGrowthSystem] TrySetParent failed for crop at ({x},{z}) under map '{_map.name}' — falling back to scene root.");
+                }
             }
             RegisterHarvestable(x, z, h);
             return h;
@@ -202,7 +201,7 @@ namespace MWI.Farming
         // ────────────────────── Server: post-wake reconstruction ──────────────────────
 
         /// <summary>
-        /// Reconstructs CropHarvestables from cell state on map wake / save-load. Spawns one
+        /// Reconstructs Harvestables from cell state on map wake / save-load. Spawns one
         /// for every cell with PlantedCropId set, regardless of growth stage.
         /// </summary>
         public void PostWakeSweep()
@@ -221,7 +220,7 @@ namespace MWI.Farming
 
                 int startStage = Mathf.Clamp((int)cell.GrowthTimer, 0, crop.DaysToMature);
                 bool startDepleted = crop.IsPerennial && cell.TimeSinceLastWatered >= 0f;
-                SpawnCropHarvestableAt(x, z, crop, startStage, startDepleted);
+                SpawnHarvestableAt(x, z, crop, startStage, startDepleted);
             }
         }
 

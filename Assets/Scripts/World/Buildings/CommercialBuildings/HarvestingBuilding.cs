@@ -50,9 +50,20 @@ public class HarvestingBuilding : CommercialBuilding
     public IReadOnlyList<HarvestingResourceEntry> WantedResources => _wantedResources;
     public Zone DepositZone => _depositZone;
     public Zone HarvestableZone => _harvestableZone;
+    public Zone HarvestingAreaZone => _harvestingAreaZone;
     public IReadOnlyList<Character> Employees => _employees;
     public bool HasHarvestableZone => _harvestableZone != null;
     public int HarvesterCount => _harvesterCount;
+
+    /// <summary>
+    /// Live read-only view of the harvestables this building has scanned in its
+    /// <see cref="HarvestableZone"/> and is tracking for respawn / depletion events.
+    /// Populated by <see cref="ScanAndRegisterZone"/> via
+    /// <see cref="AddToTrackedHarvestables"/>; cleared by <see cref="ClearTrackedHarvestables"/>.
+    /// Used by debug surfaces (the Dev-Mode Building inspector) to surface the actual
+    /// nodes a worker can reach.
+    /// </summary>
+    public IReadOnlyList<Harvestable> TrackedHarvestables => _trackedHarvestables;
 
     // === Initialisation ===
 
@@ -133,8 +144,11 @@ public class HarvestingBuilding : CommercialBuilding
         foreach (var col in colliders)
         {
             Harvestable harvestable = col.GetComponent<Harvestable>() ?? col.GetComponentInParent<Harvestable>();
-            // Permet de considérer la zone comme valide même si la ressource est épuisée (pour écouter son respawn dynamique)
-            if (harvestable != null && harvestable.HasAnyOutput(wantedItems))
+            // Discovery uses the UNION predicate so harvestables that yield wanted items via
+            // EITHER the pick path OR the destruction path count as valid sources. The
+            // dispatch logic in AddToTrackedHarvestables filters destruction-only nodes by
+            // AllowNpcDestruction so workers don't strip-mine the world.
+            if (harvestable != null && harvestable.HasAnyProducibleOutput(wantedItems))
             {
                 foundValidResource = true;
                 break;
@@ -144,13 +158,13 @@ public class HarvestingBuilding : CommercialBuilding
         if (foundValidResource)
         {
             SetHarvestableZone(zone);
-            
+
             // On ne clear PLUS les anciens abonnements. La liste s'accumule !
-            
+
             foreach (var col in colliders)
             {
                 Harvestable harvestable = col.GetComponent<Harvestable>() ?? col.GetComponentInParent<Harvestable>();
-                if (harvestable != null && harvestable.HasAnyOutput(wantedItems))
+                if (harvestable != null && harvestable.HasAnyProducibleOutput(wantedItems))
                 {
                     AddToTrackedHarvestables(harvestable);
                 }
@@ -168,31 +182,66 @@ public class HarvestingBuilding : CommercialBuilding
     public void AddToTrackedHarvestables(Harvestable harvestable)
     {
         if (harvestable == null) return;
-        
+
         if (!_trackedHarvestables.Contains(harvestable))
         {
-            harvestable.OnRespawned += HandleHarvestableRespawned;
+            // Subscribe to the unified state-changed event. Fires on Deplete + Respawn (auto-
+            // respawn-after-N-days for wild scenery) AND on perennial refill cycle (crop-aware
+            // SetReady / SetDepleted). Single subscription covers both event sources so wild
+            // trees AND CropSO-driven harvestables (apple trees, ore veins, mines) are tracked
+            // identically. Replaces the legacy OnRespawned-only subscription that silently
+            // dropped crop refill events. See [[wiki/systems/farming]] change log 2026-04-29.
+            harvestable.OnStateChanged += HandleHarvestableStateChanged;
             _trackedHarvestables.Add(harvestable);
         }
 
-        if (harvestable.CanHarvest() && TaskManager != null)
+        TryRegisterTaskFor(harvestable);
+    }
+
+    /// <summary>
+    /// Decides which task type (if any) to register for the given harvestable based on which
+    /// path produces the building's wanted items. Yield path takes precedence — if the
+    /// harvestable yields a wanted item directly, register a <see cref="HarvestResourceTask"/>.
+    /// Otherwise, if the harvestable's destruction path produces a wanted item AND the node
+    /// opts in to NPC destruction (<see cref="Harvestable.AllowNpcDestruction"/>), register a
+    /// <see cref="DestroyHarvestableTask"/>. If neither path matches or the node disallows NPC
+    /// destruction, no task is registered (the harvestable stays tracked for state-change
+    /// re-evaluation).
+    /// </summary>
+    private void TryRegisterTaskFor(Harvestable harvestable)
+    {
+        if (harvestable == null || TaskManager == null) return;
+
+        var wantedItems = GetWantedItems();
+        if (wantedItems == null || wantedItems.Count == 0) return;
+
+        // Prefer the yield path — non-destructive, repeatable, doesn't despawn the node.
+        if (harvestable.CanHarvest() && harvestable.HasAnyYieldOutput(wantedItems))
         {
             TaskManager.RegisterTask(new HarvestResourceTask(harvestable));
+            return;
+        }
+
+        // Fallback: destruction path. Gated on AllowNpcDestruction so designers explicitly
+        // control which nodes NPCs may consume. Players' Hold-E → Destroy menu is unaffected
+        // by this flag (player intent overrides).
+        if (!harvestable.IsDepleted
+            && harvestable.AllowDestruction
+            && harvestable.AllowNpcDestruction
+            && harvestable.HasAnyDestructionOutput(wantedItems))
+        {
+            TaskManager.RegisterTask(new DestroyHarvestableTask(harvestable));
         }
     }
 
-    private void HandleHarvestableRespawned(Harvestable harvestable)
+    private void HandleHarvestableStateChanged(Harvestable harvestable)
     {
-        if (harvestable != null && TaskManager != null)
-        {
-            // Only register if we still want this item type
-            var wantedItems = GetWantedItems();
-            if (wantedItems.Count > 0 && harvestable.HasAnyOutput(wantedItems))
-            {
-                Debug.Log($"<color=green>[HarvestingBuilding]</color> {buildingName} noticed {harvestable.name} respawned! Re-registering task.");
-                TaskManager.RegisterTask(new HarvestResourceTask(harvestable));
-            }
-        }
+        if (harvestable == null || TaskManager == null) return;
+        // Only re-register on flips INTO a ready state. Deplete events also fire
+        // OnStateChanged but CanHarvest returns false there — the existing task on the worker
+        // auto-cancels on next IsValid check, no work needed here.
+        if (!harvestable.CanHarvest()) return;
+        TryRegisterTaskFor(harvestable);
     }
 
     private void ClearTrackedHarvestables()
@@ -201,7 +250,7 @@ public class HarvestingBuilding : CommercialBuilding
         {
             if (harvestable != null)
             {
-                harvestable.OnRespawned -= HandleHarvestableRespawned;
+                harvestable.OnStateChanged -= HandleHarvestableStateChanged;
             }
         }
         _trackedHarvestables.Clear();

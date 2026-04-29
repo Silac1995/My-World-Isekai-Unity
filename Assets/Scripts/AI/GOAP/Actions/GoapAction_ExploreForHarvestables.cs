@@ -47,8 +47,14 @@ public class GoapAction_ExploreForHarvestables : GoapAction
     {
         if (_isComplete) return;
 
-        // Terminer l'exploration immédiatement si des tâches sont disponibles
-        if (_building.TaskManager != null && _building.TaskManager.HasAnyTaskOfType<HarvestResourceTask>())
+        // Terminer l'exploration immédiatement si des tâches sont disponibles. Couvre les
+        // deux types de tâches résultant d'un Harvestable trouvé dans la zone : récolte
+        // (HarvestResourceTask) ou destruction (DestroyHarvestableTask, ex. abattre un
+        // pommier pour son bois). Sans le second check, l'explorer reboucle à l'infini
+        // tant que la zone ne contient que des cibles à détruire.
+        if (_building.TaskManager != null
+            && (_building.TaskManager.HasAnyTaskOfType<HarvestResourceTask>()
+                || _building.TaskManager.HasAnyTaskOfType<DestroyHarvestableTask>()))
         {
             _isComplete = true;
             return;
@@ -112,25 +118,35 @@ public class GoapAction_ExploreForHarvestables : GoapAction
 
         foreach (var harvestable in visibleHarvestables)
         {
-            if (!harvestable.CanHarvest()) continue;
+            // A wanted item can be reachable via two paths on a Harvestable: the yield path
+            // (CanHarvest + HasAnyYieldOutput, e.g. apples on an apple tree) OR the destruction
+            // path (AllowDestruction + AllowNpcDestruction + HasAnyDestructionOutput, e.g. wood
+            // when chopping the tree down). The previous filter only checked the yield path
+            // (HasAnyOutput → HasAnyYieldOutput) AND gated on CanHarvest, so a wood-via-chop
+            // apple tree planted in the building's zone was never discovered, and pure
+            // destruction-only nodes (ore veins, scenery) were skipped entirely. Mirrors the
+            // union check in HarvestingBuilding.ScanAndRegisterZone (HasAnyProducibleOutput).
+            bool canYieldForWanted = harvestable.CanHarvest() && harvestable.HasAnyYieldOutput(wantedItems);
+            bool canDestroyForWanted = harvestable.AllowDestruction
+                && harvestable.AllowNpcDestruction
+                && !harvestable.IsDepleted
+                && harvestable.HasAnyDestructionOutput(wantedItems);
+            if (!canYieldForWanted && !canDestroyForWanted) continue;
 
-            if (harvestable.HasAnyOutput(wantedItems))
+            Debug.Log($"<color=green>[GOAP Explore]</color> {worker.CharacterName} a trouvé et ajouté un nouveau harvestable à la liste du bâtiment: {harvestable.gameObject.name} (yield={canYieldForWanted}, destroy={canDestroyForWanted}) !");
+            _building.AddToTrackedHarvestables(harvestable);
+
+            // On essaie quand même d'ajouter toute la zone autour si elle existe
+            Zone zone = harvestable.GetComponentInParent<Zone>();
+            if (zone == null) zone = FindZoneContaining(harvestable.transform.position);
+            if (zone == null) zone = FindNearestZone(harvestable.transform.position);
+
+            if (zone != null && _building.HarvestableZone != zone)
             {
-                Debug.Log($"<color=green>[GOAP Explore]</color> {worker.CharacterName} a trouvé et ajouté un nouveau harvestable à la liste du bâtiment: {harvestable.gameObject.name} !");
-                _building.AddToTrackedHarvestables(harvestable);
-
-                // On essaie quand même d'ajouter toute la zone autour si elle existe
-                Zone zone = harvestable.GetComponentInParent<Zone>();
-                if (zone == null) zone = FindZoneContaining(harvestable.transform.position);
-                if (zone == null) zone = FindNearestZone(harvestable.transform.position);
-
-                if (zone != null && _building.HarvestableZone != zone)
-                {
-                    _building.ScanAndRegisterZone(zone);
-                }
-
-                return true;
+                _building.ScanAndRegisterZone(zone);
             }
+
+            return true;
         }
 
         return false;

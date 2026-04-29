@@ -70,7 +70,22 @@ public class GoapAction_HarvestResources : GoapAction
             if (!handsFree && !bagHasSpace) return false;
         }
 
-        return true;
+        // Reject the action up front when no matching HarvestResourceTask is reachable for
+        // this worker. Without this check, the planner picks Harvest (cost 1) over Destroy
+        // (cost 5) whenever it's "valid", the action fails to claim anything in Execute,
+        // _isComplete = true, planner replans, picks Harvest again — workers loop between
+        // Idle (when stuckWaitingForTrees flips on) and HarvestResources without ever
+        // running. Mirrors the symmetric guard in GoapAction_DestroyHarvestable.IsValid.
+        var taskMgr = _building.TaskManager;
+        if (taskMgr == null) return false;
+        var wanted = _building.GetWantedItems();
+        if (wanted == null || wanted.Count == 0) return false;
+        return taskMgr.HasAvailableOrClaimedTask<HarvestResourceTask>(worker, task =>
+        {
+            var h = task.Target as Harvestable;
+            if (h == null || worker.PathingMemory.IsBlacklisted(h.gameObject.GetInstanceID())) return false;
+            return h.HasAnyYieldOutput(wanted);
+        });
     }
 
     public override void Execute(Character worker)
@@ -95,15 +110,19 @@ public class GoapAction_HarvestResources : GoapAction
         // Phase 1 : Trouver un objet à récolter (Arbre, etc.)
         if (_currentTarget == null && _assignedTask == null)
         {
-            _assignedTask = _building.TaskManager?.ClaimBestTask<HarvestResourceTask>(worker, task => 
+            // Pre-existing claim from quest-system auto-claim (CommercialBuilding.WorkerStartingShift)
+            // takes precedence — see GoapAction_DestroyHarvestable for the full reasoning.
+            System.Predicate<HarvestResourceTask> filter = task =>
             {
                 var interactable = task.Target as Harvestable;
-                if (interactable == null || worker.PathingMemory.IsBlacklisted(interactable.gameObject.GetInstanceID())) 
+                if (interactable == null || worker.PathingMemory.IsBlacklisted(interactable.gameObject.GetInstanceID()))
                     return false;
-                
                 return interactable.HasAnyOutput(_building.GetWantedItems());
-            });
-            
+            };
+            _assignedTask = _building.TaskManager?.FindClaimedTaskByWorker<HarvestResourceTask>(worker, filter);
+            if (_assignedTask == null)
+                _assignedTask = _building.TaskManager?.ClaimBestTask<HarvestResourceTask>(worker, filter);
+
             if (_assignedTask != null)
             {
                 _currentTarget = _assignedTask.Target as Harvestable;
@@ -153,9 +172,12 @@ public class GoapAction_HarvestResources : GoapAction
                     }
                     else
                     {
-                        // Fallback : On vérifie si on est assez proche du centre (1.5f)
+                        // Fallback distance must match the underlying CharacterHarvestAction range
+                        // tolerance so GOAP and Action agree on "close enough". Was 1.5f, bumped to
+                        // 2.5f after a tolerance-mismatch loop on small InteractionZone bounds —
+                        // see GoapAction_DestroyHarvestable for the full reasoning.
                         float dist = Vector3.Distance(worker.transform.position, _currentTarget.InteractionZone.bounds.ClosestPoint(worker.transform.position));
-                        if (dist <= 1.5f)
+                        if (dist <= 2.5f)
                         {
                             isAtTarget = true;
                         }

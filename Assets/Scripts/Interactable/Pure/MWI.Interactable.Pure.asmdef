@@ -1,7 +1,7 @@
 {
-    "name": "MWI.Farming.Pure",
-    "rootNamespace": "MWI.Farming",
-    "references": ["MWI.Interactable.Pure"],
+    "name": "MWI.Interactable.Pure",
+    "rootNamespace": "MWI.Interactables",
+    "references": [],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,

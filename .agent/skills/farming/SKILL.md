@@ -2,6 +2,8 @@
 
 > **Architecture lives in [wiki/systems/farming.md](../../../wiki/systems/farming.md).** This file is for HOW-TO only — adding crops, debugging growth, configuring destructible Harvestables. Do not duplicate architectural notes here.
 
+> **Post-2026-04-29 unification:** there is one resource-node primitive in this project — `Harvestable`. There is no longer a separate `CropHarvestable` class. Crops are `Harvestable`s whose `_so` field references a `CropSO` (which inherits from `HarvestableSO`). Wild trees and ore nodes are `Harvestable`s with either inline serialised fields or an `_so` referencing a plain `HarvestableSO`. The recipes below cover each case. Owner agent: `harvestable-resource-node-specialist`.
+
 ## Add a new crop
 
 1. **Create the `CropSO` asset.** `Project → Create → Game → Farming → Crop`. Save in `Assets/Resources/Data/Farming/Crops/`. Required Inspector fields:
@@ -38,6 +40,31 @@
    - `DestructionDuration` — seconds for the destroy action.
 
 5. **Create the seed item.** `Project → Create → Game → Items → Seed`. Save in `Assets/Resources/Data/Items/`. Set `_cropToPlant` to the `CropSO`. The seed item works automatically when the player holds it and presses E.
+
+## Add a non-crop resource node (ore vein, mine, dynamic stone outcropping, …)
+
+Use this recipe when the node has **no growth/maturity semantics** — it's "always ready" until depleted, then regrows after N days. No seasons, no moisture gating, no plant action. The unified system (post-2026-04-29) handles this through a plain `HarvestableSO` (no `CropSO` subclass).
+
+1. **Create the SO.** `Project → Create → Game → ...` (no menu yet — author manually in Project, or use the `HarvestableSO_OreNode.asset` sample as a template via Duplicate). Save in `Assets/Resources/Data/HarvestableNodes/HarvestableSO_<NodeName>.asset`. Required Inspector fields:
+   - `Id` — string used as a registry key. Lowercase, no spaces (e.g. `ore_iron_node`).
+   - `DisplayName` — natural-language name shown in the UI ("Iron Ore Vein").
+   - `HarvestOutputs` — `(Item, Count)` entries. The Inspector picker accepts any `ScriptableObject`; pick `ItemSO` subclasses (MiscSO for raw materials, etc.).
+   - `RequiredHarvestTool` — `ItemSO` reference (the pickaxe / axe / mining drill). Null = bare hands work.
+   - `IsDepletable = true`, `MaxHarvestCount = N` — the node yields N times, then despawns / refills.
+   - `RespawnDelayDays = N` — auto-regenerate after N in-game days. The base auto-respawn flow (`Harvestable.Respawn`) re-enables the visual via `_visualRoot.SetActive(true)` and resets the harvest counter. (Cell-coupled crops bypass this and use FarmGrowthSystem's RegrowDays instead — non-crop nodes just use the base flow.)
+   - `AllowDestruction` + `RequiredDestructionTool` + `DestructionOutputs` — same shape as crops if the node should be destroyable (ore vein → 1 cracked-rock fragment + 1 dust on destruction).
+   - `ReadySprite` / `DepletedSprite` — optional 2D sprites for the ready / post-harvest visual.
+   - `HarvestablePrefab` — optional. For purely scene-authored ore deposits this is unused (designer drops the prefab in the scene manually). For runtime-spawned dynamic nodes, set this and call `Instantiate(so.HarvestablePrefab)` from your spawner.
+
+2. **Build the prefab.** Either:
+   - **Free-positioned scenery** (most common for ore nodes): Duplicate `Assets/Prefabs/Harvestable/Tree.prefab` (or build from scratch). Add a `Harvestable` component, drag your `HarvestableSO` into the `_so` field. Set the layer to `Harvestable` (index 15) so Dev Mode's HarvestableInspectorView can Ctrl+Click select it. Add a SpriteRenderer + InteractionZone collider as usual. **Do NOT** add a NetworkObject unless multi-player visibility of harvest state is required — wild scenery harvestables are server-only state and clients see a static visual.
+   - **Networked dynamic node** (e.g. ore that respawns visibly across clients): Add `NetworkObject` + `HarvestableNetSync` siblings. Now `IsDepleted` flips replicate to all clients via the same NetVar mechanism crops use.
+
+3. **Place in the world.** Drop the prefab into the scene. No `FarmGrowthSystem.SpawnHarvestableAt` call needed — that's for cell-coupled crops only. The node is "live" from the moment the scene loads.
+
+4. **Hook into a HarvestingBuilding** (optional). If you want NPCs to autonomously harvest from this node, register the harvestable's collider into a `Zone`, then add that zone to the `HarvestingBuilding._harvestingAreaZone` field. The building's daily `ScanHarvestingArea` discovers the node and registers a `HarvestResourceTask`. The post-Phase-5 unified `OnStateChanged` event means the building correctly tracks both the auto-respawn refill (this node's path) AND perennial crop refill (CropSO path) without code changes.
+
+The sample `HarvestableSO_OreNode.asset` (Phase 7 of the unification) is a working example: 5 swings × 2 wood (placeholder for stone), requires `Item_Axe`, regrows after 3 days. Designer can use it as a template until proper stone/iron/pickaxe items are authored.
 
 ## Configure a destructible wild Harvestable
 

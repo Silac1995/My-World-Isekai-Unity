@@ -78,7 +78,7 @@ namespace MWI.Farming
             var farmSystem = _map.GetComponent<FarmGrowthSystem>();
             if (farmSystem != null)
             {
-                farmSystem.SpawnCropHarvestableAt(_cellX, _cellZ, _crop, startStage: 0, startDepleted: false);
+                farmSystem.SpawnHarvestableAt(_cellX, _cellZ, _crop, startStage: 0, startDepleted: false);
                 Debug.Log("[PlantAction] CropHarvestable spawned.");
             }
             else

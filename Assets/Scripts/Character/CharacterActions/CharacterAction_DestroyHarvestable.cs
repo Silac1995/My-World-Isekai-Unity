@@ -65,7 +65,10 @@ public class CharacterAction_DestroyHarvestable : CharacterAction
         var actions = character.CharacterActions;
         if (actions == null) return;
 
-        // Networked clients route to the server; host/NPC/offline runs directly.
+        // Networked clients route to the server; host/NPC/offline runs directly. Both paths go
+        // through ApplyDestroyOnServer so the PickupLooseItemTask registration for each spawned
+        // WorldItem fires identically — without it the harvester's planner has no looseItemExists
+        // trigger after the chop and the wood sits orphaned on the ground.
         bool isNetworkedClient = actions.IsSpawned && !actions.IsServer;
         if (isNetworkedClient)
         {
@@ -73,7 +76,7 @@ public class CharacterAction_DestroyHarvestable : CharacterAction
         }
         else
         {
-            _target.DestroyForOutputs();
+            actions.ApplyDestroyOnServer(_target);
         }
     }
 }

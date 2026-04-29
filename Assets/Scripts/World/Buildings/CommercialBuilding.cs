@@ -464,19 +464,31 @@ public abstract class CommercialBuilding : Building
         return null;
     }
 
-    /// <summary>Enumerate every IQuest this building currently publishes (TaskManager + OrderBook).</summary>
+    /// <summary>Enumerate every IQuest this building currently publishes (TaskManager + OrderBook).
+    /// Returns a materialized snapshot — the underlying lists are mutated mid-iteration in many
+    /// real-world consumers (e.g. <c>TryAutoClaimExistingQuests</c> calls <c>TryClaim</c> which
+    /// removes the task from <c>_availableTasks</c>; spawn-time pickup-task registration during a
+    /// destroy chain mutates the same list). Yield-return over the live <c>IReadOnlyList</c> wrapper
+    /// would throw "Collection was modified" on the next <c>MoveNext</c>. Cost is one List allocation
+    /// per call which is acceptable for a non-hot-path query API.</summary>
     public System.Collections.Generic.IEnumerable<MWI.Quests.IQuest> GetAvailableQuests()
     {
+        var snapshot = new System.Collections.Generic.List<MWI.Quests.IQuest>(8);
         if (_taskManager != null)
         {
-            foreach (var task in _taskManager.AvailableTasks) yield return task;
+            for (int i = 0; i < _taskManager.AvailableTasks.Count; i++)
+                snapshot.Add(_taskManager.AvailableTasks[i]);
         }
         if (_logisticsManager != null && _logisticsManager.OrderBook != null)
         {
-            foreach (var bo in _logisticsManager.OrderBook.PlacedBuyOrders) yield return bo;
-            foreach (var to in _logisticsManager.OrderBook.PlacedTransportOrders) yield return to;
-            foreach (var co in _logisticsManager.OrderBook.ActiveCraftingOrders) yield return co;
+            for (int i = 0; i < _logisticsManager.OrderBook.PlacedBuyOrders.Count; i++)
+                snapshot.Add(_logisticsManager.OrderBook.PlacedBuyOrders[i]);
+            for (int i = 0; i < _logisticsManager.OrderBook.PlacedTransportOrders.Count; i++)
+                snapshot.Add(_logisticsManager.OrderBook.PlacedTransportOrders[i]);
+            for (int i = 0; i < _logisticsManager.OrderBook.ActiveCraftingOrders.Count; i++)
+                snapshot.Add(_logisticsManager.OrderBook.ActiveCraftingOrders[i]);
         }
+        return snapshot;
     }
 
     /// <summary>Find a tracked IQuest by id (used by save/load reconciliation on CharacterQuestLog).</summary>
@@ -1379,8 +1391,12 @@ public abstract class CommercialBuilding : Building
     {
         // v1 mapping — harvest tasks to harvester family, pickup/buy to logistics manager,
         // transport to transporter, craft to crafter family. Refine as new jobs land.
-        if (quest is HarvestResourceTask)
+        if (quest is HarvestResourceTask || quest is DestroyHarvestableTask)
         {
+            // Both yield-path harvest tasks AND destruction-path destroy tasks (e.g. chop
+            // an apple tree for wood, mine an ore vein for iron) accept the same harvester
+            // job family. The destination tool differs but the assignment-eligibility
+            // rule is the same — these jobs work resource nodes.
             return jobType == MWI.WorldSystem.JobType.Woodcutter
                 || jobType == MWI.WorldSystem.JobType.Miner
                 || jobType == MWI.WorldSystem.JobType.Forager

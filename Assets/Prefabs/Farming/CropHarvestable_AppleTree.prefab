@@ -421,6 +421,10 @@ PrefabInstance:
       value: 
       objectReference: {fileID: 4973848333740666094}
     - target: {fileID: 6181745738654557682, guid: 817de3ecbf26d984b8a527678271ce4a, type: 3}
+      propertyPath: _allowNpcDestruction
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6181745738654557682, guid: 817de3ecbf26d984b8a527678271ce4a, type: 3}
       propertyPath: _outputItems.Array.size
       value: 0
       objectReference: {fileID: 0}
