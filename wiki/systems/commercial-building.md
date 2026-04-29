@@ -3,9 +3,9 @@ type: system
 title: "Commercial Building"
 tags: [building, commercial, jobs, tier-2]
 created: 2026-04-19
-updated: 2026-04-25
+updated: 2026-04-29
 sources: []
-related: ["[[building]]", "[[building-logistics-manager]]", "[[building-task-manager]]", "[[jobs-and-logistics]]", "[[shops]]", "[[crafting-loop]]", "[[worker-wages-and-performance]]", "[[quest-system]]", "[[dev-mode]]", "[[kevin]]"]
+related: ["[[building]]", "[[building-logistics-manager]]", "[[building-task-manager]]", "[[jobs-and-logistics]]", "[[shops]]", "[[crafting-loop]]", "[[worker-wages-and-performance]]", "[[quest-system]]", "[[tool-storage]]", "[[dev-mode]]", "[[kevin]]"]
 status: stable
 confidence: high
 primary_agent: building-furniture-specialist
@@ -91,6 +91,7 @@ Force-assignment bypasses consent: `CommunityTracker.ImposeJobOnCitizen()` → `
 - If a subclass wants autonomous restock, **implementing `IStockProvider` is mandatory** — declaring `_itemsToSell` or `_inputStockTargets` alone does nothing until the contract is wired.
 
 ## Change log
+- 2026-04-29 — Added `_toolStorageFurniture` designer reference + `WorkerCarriesUnreturnedTools(Character, out List<ItemInstance>)` server-side scan + `NotifyPunchOutBlockedClientRpc` (targeted ClientRpc to player workers, raises `UI_ToolReturnReminderToast`) + `NotifyPunchOutBlockedToClient` server-side wrapper. Foundation for the [[tool-storage]] primitive (Plan 1 of Farmer rollout). — claude
 - 2026-04-25 — Fixed `_defaultFurnitureLayout` registrations being silently wiped by `Room.Start` / `Room.OnNetworkSpawn`. `FurnitureManager.LoadExistingFurniture` is now additive: it prunes fake-null entries and merges any new transform child into `_furnitures` instead of replacing the list with `GetComponentsInChildren<Furniture>(true)`. Previous replace-style rescan would clobber `RegisterSpawnedFurnitureUnchecked` writes (the spawned furniture lives on the building root, not under the target room's transform — so the rescan saw an empty room and reset the list). Symptom on the Forge: `Room_Main.FurnitureManager.Furnitures` empty after placement; crafting only worked through `CraftingBuilding.GetCraftableItems`'s transform-tree fallback, which logged a one-shot warning. — claude
 - 2026-04-25 — Added `_defaultFurnitureLayout` (`List<DefaultFurnitureSlot>`) + `TrySpawnDefaultFurniture()` server-side runtime-spawn path. Replaces the previous nested-furniture-with-NetworkObject pattern that was half-spawning during NGO sync and silently aborting client connection-approval. New `FurnitureManager.RegisterSpawnedFurnitureUnchecked(furniture, worldPos)` helper bypasses `CanPlaceFurniture` validation (server-authored content is trusted) and skips the SetParent step (caller must already have parented under a valid NetworkObject ancestor — Room_Main is a non-NO so SetParent under it would throw `InvalidParentException`). Forge prefab updated as the canonical example. — claude
 - 2026-04-24 — Shift roster now single-sourced from the replicated `_activeWorkerIds` `NetworkList<FixedString64Bytes>`. Removed the parallel server-only `_activeWorkersOnShift : List<Character>` — it made `ActiveWorkersOnShift` return empty on remote clients, which silently broke the Time Clock UI / `UI_CommercialBuildingDebugScript` / `BTCond_NeedsToPunchOut` across peers. `ActiveWorkersOnShift` is now a materialiser that walks `_activeWorkerIds` via `Character.FindByUUID`; `IsWorkerOnShift` is the allocation-free containment check. `BTAction_Work`, `BTAction_PunchOut`, `BTCond_NeedsToPunchOut`, and `UI_CommercialBuildingDebugScript` were migrated to `IsWorkerOnShift` for both correctness on clients and fewer per-tick allocations. — claude
