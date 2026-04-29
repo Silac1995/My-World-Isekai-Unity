@@ -78,8 +78,9 @@ public class Harvestable : InteractableObject
     /// <summary>Duration of the destruction action.</summary>
     public float DestructionDuration => _destructionDuration;
 
-    /// <summary>Can this object be harvested?</summary>
-    public bool CanHarvest() => !_isDepleted && _outputItems.Count > 0;
+    /// <summary>Can this object be harvested? Virtual so CropHarvestable can add the
+    /// "must be mature" check on top of the base `!depleted && has-output` rule.</summary>
+    public virtual bool CanHarvest() => !_isDepleted && _outputItems.Count > 0;
 
     /// <summary>Yield-path predicate that takes the held tool into account.</summary>
     public bool CanHarvestWith(ItemSO heldItem)

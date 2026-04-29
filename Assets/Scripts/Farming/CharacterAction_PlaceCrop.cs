@@ -74,6 +74,18 @@ namespace MWI.Farming
                 Debug.Log("[PlantAction] Seed consumed from hand.");
             }
 
+            // Spawn the CropHarvestable at plant-time (single-GameObject-per-crop model).
+            var farmSystem = _map.GetComponent<FarmGrowthSystem>();
+            if (farmSystem != null)
+            {
+                farmSystem.SpawnCropHarvestableAt(_cellX, _cellZ, _crop, startStage: 0, startDepleted: false);
+                Debug.Log("[PlantAction] CropHarvestable spawned.");
+            }
+            else
+            {
+                Debug.LogWarning("[PlantAction] No FarmGrowthSystem on map — harvestable not spawned.");
+            }
+
             int idx = _cellZ * grid.Width + _cellX;
             _map.NotifyDirtyCells(new[] { idx });
             Debug.Log($"[PlantAction] NotifyDirtyCells fired for index {idx}.");

@@ -8,10 +8,12 @@ namespace MWI.Farming
 {
     /// <summary>
     /// Server-only daily tick for farming cells. One instance per active MapController.
-    /// See farming spec §4 + §9.2.
+    /// See farming spec §4 + §9.2 + the 2026-04-29 single-GameObject-per-crop rework.
     ///
-    /// Sits next to TerrainCellGrid + VegetationGrowthSystem on the MapController GameObject.
-    /// MapController.WakeUp() calls Initialize() then PostWakeSweep() after restoring cells.
+    /// In the post-rework model, the CropHarvestable spawn happens at plant-time
+    /// (CharacterAction_PlaceCrop calls <see cref="SpawnCropHarvestableAt"/>), NOT at
+    /// maturity. The daily tick advances <see cref="CropHarvestable.AdvanceStage"/> on
+    /// existing instances; nothing new is spawned mid-growth.
     /// </summary>
     public class FarmGrowthSystem : MonoBehaviour
     {
@@ -25,7 +27,6 @@ namespace MWI.Farming
         {
             _grid = grid;
             _map = map;
-            // Subscribe server-only — hibernated maps don't tick (MacroSimulator handles offline catch-up).
             if (!_subscribed && NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer && MWI.Time.TimeManager.Instance != null)
             {
                 MWI.Time.TimeManager.Instance.OnNewDay += HandleNewDay;
@@ -33,9 +34,14 @@ namespace MWI.Farming
             }
         }
 
-        // Self-init for scene-authored MapControllers whose WakeUp never fires. Mirrors the
-        // pattern in CropVisualSpawner. PostWakeSweep is safe to run twice (idempotent —
-        // re-spawning happens only for cells whose harvestable isn't already registered).
+        private void OnDestroy()
+        {
+            if (_subscribed && MWI.Time.TimeManager.Instance != null)
+                MWI.Time.TimeManager.Instance.OnNewDay -= HandleNewDay;
+            _subscribed = false;
+        }
+
+        // Self-init for scene-authored MapControllers whose WakeUp never fires.
         private void Start()
         {
             if (_grid != null) return;
@@ -55,13 +61,6 @@ namespace MWI.Farming
             }
         }
 
-        private void OnDestroy()
-        {
-            if (_subscribed && MWI.Time.TimeManager.Instance != null)
-                MWI.Time.TimeManager.Instance.OnNewDay -= HandleNewDay;
-            _subscribed = false;
-        }
-
         public void RegisterHarvestable(int x, int z, CropHarvestable h)
         {
             if (_grid == null) return;
@@ -73,6 +72,39 @@ namespace MWI.Farming
             if (_grid == null) return;
             _activeHarvestables.Remove(LinearIndex(x, z));
         }
+
+        // ────────────────────── Server: spawn at plant-time ──────────────────────
+
+        /// <summary>
+        /// Server-only. Spawns the CropHarvestable for a freshly-planted cell. Called by
+        /// CharacterAction_PlaceCrop.OnApplyEffect. Idempotent — no-op if a harvestable is
+        /// already registered for the cell.
+        /// </summary>
+        public CropHarvestable SpawnCropHarvestableAt(int x, int z, CropSO crop, int startStage, bool startDepleted)
+        {
+            if (_grid == null || crop == null || crop.HarvestablePrefab == null) return null;
+            int idx = LinearIndex(x, z);
+            if (_activeHarvestables.TryGetValue(idx, out var existing) && existing != null) return existing;
+
+            var pos = _grid.GridToWorld(x, z);
+            var go = Instantiate(crop.HarvestablePrefab, pos, Quaternion.identity);
+            var h = go.GetComponent<CropHarvestable>();
+            if (h == null)
+            {
+                Debug.LogError($"[FarmGrowthSystem] HarvestablePrefab on {crop.name} has no CropHarvestable component.");
+                Destroy(go);
+                return null;
+            }
+            // Spawn over the network FIRST so OnNetworkSpawn wires up the NetVar callbacks
+            // before InitializeFromCell sets the values.
+            if (go.TryGetComponent<NetworkObject>(out var netObj) && !netObj.IsSpawned)
+                netObj.Spawn(true);
+            h.InitializeFromCell(_grid, _map, x, z, crop, startStage, startDepleted);
+            RegisterHarvestable(x, z, h);
+            return h;
+        }
+
+        // ────────────────────── Server: daily tick ──────────────────────
 
         private void HandleNewDay()
         {
@@ -91,14 +123,16 @@ namespace MWI.Farming
                 switch (outcome)
                 {
                     case FarmGrowthPipeline.Outcome.JustMatured:
-                        SpawnCropHarvestable(x, z, CropRegistry.Get(cell.PlantedCropId), startDepleted: false);
+                    case FarmGrowthPipeline.Outcome.Grew:
+                        if (_activeHarvestables.TryGetValue(idx, out var h) && h != null)
+                            h.AdvanceStage();
                         _dirtyIndices.Add(idx);
                         break;
                     case FarmGrowthPipeline.Outcome.JustRefilled:
-                        if (_activeHarvestables.TryGetValue(idx, out var h)) h.Refill();
+                        if (_activeHarvestables.TryGetValue(idx, out var hr) && hr != null)
+                            hr.Refill();
                         _dirtyIndices.Add(idx);
                         break;
-                    case FarmGrowthPipeline.Outcome.Grew:
                     case FarmGrowthPipeline.Outcome.Refilling:
                         _dirtyIndices.Add(idx);
                         break;
@@ -109,9 +143,11 @@ namespace MWI.Farming
                 _map.NotifyDirtyCells(_dirtyIndices.ToArray());
         }
 
+        // ────────────────────── Server: post-wake reconstruction ──────────────────────
+
         /// <summary>
-        /// Reconstructs harvestables from cell state. Called once after MapController.WakeUp()
-        /// (covers both hibernation-wake AND save-load — same code path, see spec §9.2).
+        /// Reconstructs CropHarvestables from cell state on map wake / save-load. Spawns one
+        /// for every cell with PlantedCropId set, regardless of growth stage.
         /// </summary>
         public void PostWakeSweep()
         {
@@ -121,37 +157,16 @@ namespace MWI.Farming
             {
                 ref TerrainCell cell = ref _grid.GetCellRef(x, z);
                 if (!cell.IsPlowed || string.IsNullOrEmpty(cell.PlantedCropId)) continue;
+                int idx = LinearIndex(x, z);
+                if (_activeHarvestables.ContainsKey(idx)) continue;
+
                 var crop = CropRegistry.Get(cell.PlantedCropId);
                 if (crop == null) continue;
-                if (cell.GrowthTimer < crop.DaysToMature) continue;
 
+                int startStage = Mathf.Clamp((int)cell.GrowthTimer, 0, crop.DaysToMature);
                 bool startDepleted = crop.IsPerennial && cell.TimeSinceLastWatered >= 0f;
-                SpawnCropHarvestable(x, z, crop, startDepleted);
+                SpawnCropHarvestableAt(x, z, crop, startStage, startDepleted);
             }
-        }
-
-        private void SpawnCropHarvestable(int x, int z, CropSO crop, bool startDepleted)
-        {
-            if (crop == null || crop.HarvestablePrefab == null)
-            {
-                Debug.LogError($"[FarmGrowthSystem] Cannot spawn harvestable at ({x},{z}) — crop or prefab is null.");
-                return;
-            }
-            var pos = _grid.GridToWorld(x, z);
-            var go = Instantiate(crop.HarvestablePrefab, pos, Quaternion.identity);
-            var h = go.GetComponent<CropHarvestable>();
-            if (h == null)
-            {
-                Debug.LogError($"[FarmGrowthSystem] HarvestablePrefab on {crop.name} has no CropHarvestable component.");
-                Destroy(go);
-                return;
-            }
-            // Spawn over the network FIRST so OnNetworkSpawn runs and IsDepleted's value-changed callback wires up
-            // BEFORE InitializeFromCell sets the value.
-            if (go.TryGetComponent<NetworkObject>(out var netObj) && !netObj.IsSpawned)
-                netObj.Spawn(true);
-            h.InitializeFromCell(_grid, _map, x, z, crop, startDepleted);
-            RegisterHarvestable(x, z, h);
         }
 
         private int LinearIndex(int x, int z) => z * _grid.Width + x;

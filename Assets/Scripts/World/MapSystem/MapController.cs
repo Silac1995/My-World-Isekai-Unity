@@ -1621,13 +1621,6 @@ namespace MWI.WorldSystem
                     farmGrowth.Initialize(terrainGrid, this);
                     farmGrowth.PostWakeSweep();
                 }
-
-                var cropVisualSpawner = GetComponent<MWI.Farming.CropVisualSpawner>();
-                if (cropVisualSpawner != null && terrainGrid != null && terrainGrid.Width > 0)
-                {
-                    cropVisualSpawner.Initialize(terrainGrid, this);
-                    cropVisualSpawner.RebuildAll();
-                }
             }
 
             // Safety: Only clear hibernation data AFTER a successful full spawn loop.
@@ -1700,11 +1693,9 @@ namespace MWI.WorldSystem
                 }
             }
 
-            // Notify visual processors on EVERY peer including the host. Host's spawner
-            // needs this to render the local visual just like a remote client's does.
-            var cropVisualSpawner = GetComponent<MWI.Farming.CropVisualSpawner>();
-            if (cropVisualSpawner != null) cropVisualSpawner.OnDirtyCells(indices);
-            // Future: terrain transition processors can also subscribe here.
+            // Future: terrain transition processors can subscribe here. The farming visual
+            // layer was removed in the 2026-04-29 single-GameObject-per-crop rework — the
+            // CropHarvestable now drives its own visual via NetworkVariable callbacks.
         }
 
         /// <summary>
