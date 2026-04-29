@@ -121,7 +121,7 @@ public class FarmingBuilding : HarvestingBuilding
 
 | Stock target type | Source | Min | Max |
 |---|---|---|---|
-| Produce item (e.g. Wheat) | each `CropSO.HarvestOutputs[*].Item` that is the **first** (primary) output | 0 | inherited `maxQuantity` from `_wantedResources` (or default 50) |
+| Produce item (e.g. Wheat) | every `CropSO.HarvestOutputs[*].Item` whose ItemSO is **not** a `SeedSO`. Multiple non-seed outputs per crop all become OUTPUT targets (e.g. an apple tree that yields both `Apple` and `Sap` registers two output targets). | 0 | inherited `maxQuantity` from `_wantedResources` (or default 50, designer-overridable per-item) |
 | Seed item (e.g. WheatSeed) | each `CropSO.HarvestOutputs[*].Item` whose ItemSO is a `SeedSO` AND `seed.CropToPlant == thisCrop` | `_seedMinStock` | `_seedMaxStock` |
 | WateringCan | `_wateringCanItem` | 1 | `_wateringCanMaxStock` |
 
@@ -160,6 +160,7 @@ Goal selection (priority order, planner picks the highest with an achievable pla
 
 | Priority | Goal name | Desired state | Triggers when |
 |---|---|---|---|
+| **0 (forced override)** | `ReturnAllTools` | `hasNoUnreturnedTools=true` | `CharacterJob.CanPunchOut() == false` AND schedule transitioning out of `Work` (see §5.3). Pre-empts every other goal until satisfied. |
 | 1 (top) | `HarvestMatureCells` | `hasDepositedResources=true` | `HarvestResourceTask` available AND has free space OR carrying mature produce |
 | 2 | `WaterDryCells` | `hasWateredCell=true` | `WaterCropTask` available AND `WateringCan` available in tool storage OR in hand |
 | 3 | `PlantEmptyCells` | `hasPlantedCrop=true` | `PlantCropTask` available AND a matching `SeedSO` exists in storage |
@@ -222,11 +223,14 @@ public class ItemInstance
     // … existing fields …
 
     /// <summary>
-    /// GUID of the CommercialBuilding whose tool storage owns this item. Set by
-    /// GoapAction_FetchToolFromStorage on pickup, cleared by GoapAction_ReturnToolToStorage on
-    /// return. Persisted across save/load. Used by CharacterJob.CanPunchOut to gate shift end.
-    /// Empty / null = item is not owned by any tool storage (player-bought tools, dropped loot,
-    /// etc.).
+    /// GUID of the CommercialBuilding whose tool storage owns this item. Stores the value of
+    /// <c>Building.NetworkBuildingId</c> (accessed via the existing <c>Building.BuildingId</c>
+    /// property — same field already used by `CommercialBuilding.GetBuildingIdForWorklog` etc.).
+    /// Set by GoapAction_FetchToolFromStorage on pickup, cleared by
+    /// GoapAction_ReturnToolToStorage on return. Persisted across save/load. Used by
+    /// CharacterJob.CanPunchOut to gate shift end. Empty / null = item is not owned by any
+    /// tool storage (player-bought tools, dropped loot, etc.). DO NOT introduce a parallel
+    /// ID scheme — reuse `Building.BuildingId` exclusively.
     /// </summary>
     public string OwnerBuildingId { get; set; }
 }
@@ -248,17 +252,20 @@ All new actions follow the existing pattern: subclass `GoapAction` (or `GoapActi
 Cost: 1
 Preconditions:
   hasSeedInHand = false
-  hasEmptyCellWithSeedAvailable = true
+  hasUnfilledPlantTask = true
+  hasMatchingSeedInStorage = true
 Effects:
   hasSeedInHand = true
 IsValid:
-  - building has at least 1 SeedSO matching any unfilled PlantCropTask in storage
+  - at least one PlantCropTask is unclaimed AND its CropSO has at least 1 matching SeedSO in any of the building's storage furniture
 Body:
   - claim the matching PlantCropTask (so two farmers don't fetch for the same cell)
   - walk to the building's seed source storage (uses existing FindStorageFurnitureForItem helper)
   - take 1 SeedSO matching the claimed task's CropSO
   - equip in HandsController
 ```
+
+The two preconditions are split intentionally — `hasUnfilledPlantTask` is a property of the task blackboard; `hasMatchingSeedInStorage` is a property of building inventory. Splitting them lets the planner correctly fall through to a `BuyOrder`-trigger goal when only one of the two is missing (e.g. there ARE empty cells but seed stock is empty → planner picks Plant goal cannot be solved, falls to Water/Harvest).
 
 ### 4.2 `GoapAction_PlantCrop` (wraps `CharacterAction_PlaceCrop`)
 
@@ -487,7 +494,7 @@ foreach cell in zone:
         _taskManager.RegisterTask(new PlantCropTask(cell.X, cell.Z, crop));
 ```
 
-**Quota-driven crop selection.** `SelectCropForCell` returns the `CropSO` whose produce stock is **most under target** (max - current is largest), tie-broken by ascending `CropSO._id`. This means a farm with `[Wheat, Flower]` configured naturally biases planting toward whichever produce is currently most deficient.
+**Quota-driven crop selection.** `SelectCropForCell` returns the `CropSO` whose produce stock is **most under target** (max - current is largest), tie-broken by ascending `CropSO.Id` (the existing public string property on `HarvestableSO` — same field used as the persistence key in `TerrainCell.PlantedCropId`). This means a farm with `[Wheat, Flower]` configured naturally biases planting toward whichever produce is currently most deficient.
 
 ### 7.2 `WaterScan`
 
@@ -595,7 +602,7 @@ Per rule #19, all relationship scenarios validated:
 
 ### 11.1 Punch-out blocked toast (player workers)
 
-A new minimal UI element: `UI_ToolReturnReminderToast`. Triggered by the `Server_NotifyPunchOutBlocked` ClientRpc. Shows a single line at the top of the screen for ~3 seconds, with the reason string. Rate-limited to one toast per 30s real-time (the message auto-suppresses if the player is mid-action).
+A new minimal UI element: `UI_ToolReturnReminderToast`. Triggered by the `Server_NotifyPunchOutBlocked` ClientRpc. Shows a single line at the top of the screen for ~3 seconds, with the reason string. Rate-limited to one toast per 30s **real-time** — measured via `Time.unscaledTime` per rule #26 (UI is non-simulation, must remain functional during pause / Giga Speed).
 
 Priority decision: **no menu, no actionable buttons** — the player already has an interaction model (walk to chest, drop tool). The toast is a hint, not a workflow.
 
@@ -681,6 +688,7 @@ Following the pattern in `BuildingInspectorView`:
 4. **Crop self-seeding asset config:**
    - Update `Crop_Wheat`, `Crop_Flower`, `Crop_AppleTree` `.asset` files to include their respective `SeedSO` in `_harvestOutputs`.
    - Verify `RegisterHarvestedItem` correctly populates seed stock on harvest.
+   - **Save-compat note:** existing save files reference these CropSO assets by `Id`, not by output schema, so adding entries to `_harvestOutputs` is forward-compatible — pre-existing saves load and resume normally. Backward compat (rolling back this change) is not a goal: an edited asset that's then reverted would just stop yielding seeds going forward.
 
 5. **Quest eligibility + logging:**
    - Extend `CommercialBuilding.DoesJobTypeAcceptQuest` to map `PlantCropTask` / `WaterCropTask` → `JobType.Farmer`.
