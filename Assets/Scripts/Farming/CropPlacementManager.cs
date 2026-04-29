@@ -14,7 +14,7 @@ namespace MWI.Farming
     {
         [Header("Settings")]
         [SerializeField] private LayerMask _groundLayer = ~0;
-        [SerializeField] private float _maxRange = 5f;
+        [SerializeField] private float _maxRange = 25f;
         [SerializeField] private Material _ghostMaterialValid;
         [SerializeField] private Material _ghostMaterialInvalid;
 
@@ -208,28 +208,56 @@ namespace MWI.Farming
         private bool ValidateCell(in TerrainCell cell, Vector3 cellWorldPos)
         {
             float dist = Vector3.Distance(_character.transform.position, cellWorldPos);
-            if (dist > _maxRange) return false;
+            if (dist > _maxRange)
+            {
+                _invalidReason = $"out of range (dist={dist:F1} > maxRange={_maxRange:F1})";
+                return false;
+            }
 
             if (_mode == Mode.Placing)
             {
                 var type = cell.GetCurrentType();
-                if (type != null && !type.CanGrowVegetation) return false;
-                return string.IsNullOrEmpty(cell.PlantedCropId);
+                if (type != null && !type.CanGrowVegetation)
+                {
+                    _invalidReason = $"terrain type '{cell.CurrentTypeId}' does not allow vegetation";
+                    return false;
+                }
+                if (!string.IsNullOrEmpty(cell.PlantedCropId))
+                {
+                    _invalidReason = $"cell already has crop '{cell.PlantedCropId}'";
+                    return false;
+                }
             }
+            _invalidReason = null;
             return true;
         }
+
+        private string _invalidReason;
 
         private void HandlePlacementInput()
         {
             // Left-click: confirm placement.
-            if (_lastValid && Input.GetMouseButtonDown(0))
+            if (Input.GetMouseButtonDown(0))
             {
-                if (_mode == Mode.Placing)
-                    RequestPlaceCropServerRpc(_lastCellX, _lastCellZ, _activeCrop.Id);
+                if (!_lastValid)
+                {
+                    Debug.Log($"[CropPlacement] Click rejected — {_invalidReason ?? "cell invalid (no specific reason recorded)"}.");
+                }
                 else
-                    RequestWaterCellServerRpc(_lastCellX, _lastCellZ, GetActiveCanMoistureValue());
-                CancelPlacement();
-                return;
+                {
+                    if (_mode == Mode.Placing)
+                    {
+                        Debug.Log($"[CropPlacement] Click accepted at cell ({_lastCellX},{_lastCellZ}) → RequestPlaceCropServerRpc(crop={_activeCrop.Id}).");
+                        RequestPlaceCropServerRpc(_lastCellX, _lastCellZ, _activeCrop.Id);
+                    }
+                    else
+                    {
+                        Debug.Log($"[CropPlacement] Click accepted at cell ({_lastCellX},{_lastCellZ}) → RequestWaterCellServerRpc.");
+                        RequestWaterCellServerRpc(_lastCellX, _lastCellZ, GetActiveCanMoistureValue());
+                    }
+                    CancelPlacement();
+                    return;
+                }
             }
             // Right-click: clear ghost (could re-pick another seed).
             if (Input.GetMouseButtonDown(1))
@@ -296,23 +324,33 @@ namespace MWI.Farming
         [Rpc(SendTo.Server)]
         private void RequestPlaceCropServerRpc(int x, int z, string cropId, RpcParams rpcParams = default)
         {
+            Debug.Log($"[CropPlacement.Server] RequestPlaceCropServerRpc cell=({x},{z}) crop='{cropId}'.");
             var crop = CropRegistry.Get(cropId);
-            if (crop == null) return;
+            if (crop == null) { Debug.LogWarning($"[CropPlacement.Server] Bail — crop '{cropId}' not in registry."); return; }
             var map = MapController.GetMapAtPosition(_character.transform.position);
-            if (map == null) return;
+            if (map == null) { Debug.LogWarning("[CropPlacement.Server] Bail — no map at character position."); return; }
+            EnsureGridInitialized(map);
             var grid = map.GetComponent<TerrainCellGrid>();
-            if (grid == null) return;
+            if (grid == null) { Debug.LogWarning("[CropPlacement.Server] Bail — no TerrainCellGrid on map."); return; }
 
             ref var cell = ref grid.GetCellRef(x, z);
-            if (!string.IsNullOrEmpty(cell.PlantedCropId)) return;   // race: someone else planted
+            if (!string.IsNullOrEmpty(cell.PlantedCropId))
+            {
+                Debug.LogWarning($"[CropPlacement.Server] Bail — cell ({x},{z}) already has crop '{cell.PlantedCropId}' (race lost).");
+                return;
+            }
 
-            // Re-verify the caller still holds a SeedSO whose CropToPlant matches cropId.
             var hands = _character.CharacterVisual != null && _character.CharacterVisual.BodyPartsController != null
                 ? _character.CharacterVisual.BodyPartsController.HandsController
                 : null;
-            if (!(hands?.CarriedItem?.ItemSO is SeedSO seedSO) || seedSO.CropToPlant == null || seedSO.CropToPlant.Id != cropId)
+            var heldSO = hands?.CarriedItem?.ItemSO;
+            if (!(heldSO is SeedSO seedSO) || seedSO.CropToPlant == null || seedSO.CropToPlant.Id != cropId)
+            {
+                Debug.LogWarning($"[CropPlacement.Server] Bail — seed mismatch. Held='{heldSO?.name}', expected SeedSO with CropToPlant.Id='{cropId}'.");
                 return;
+            }
 
+            Debug.Log($"[CropPlacement.Server] Queuing CharacterAction_PlaceCrop for {_character.name} at cell ({x},{z}).");
             _character.CharacterActions.ExecuteAction(
                 new CharacterAction_PlaceCrop(_character, map, x, z, crop));
         }
