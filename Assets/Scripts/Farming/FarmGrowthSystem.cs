@@ -33,6 +33,28 @@ namespace MWI.Farming
             }
         }
 
+        // Self-init for scene-authored MapControllers whose WakeUp never fires. Mirrors the
+        // pattern in CropVisualSpawner. PostWakeSweep is safe to run twice (idempotent —
+        // re-spawning happens only for cells whose harvestable isn't already registered).
+        private void Start()
+        {
+            if (_grid != null) return;
+            var map = GetComponent<MapController>();
+            if (map == null) return;
+            var grid = map.GetComponent<TerrainCellGrid>();
+            if (grid == null) return;
+            if (grid.Width == 0)
+            {
+                var box = map.GetComponent<BoxCollider>();
+                if (box != null) grid.Initialize(box.bounds);
+            }
+            if (grid.Width > 0)
+            {
+                Initialize(grid, map);
+                PostWakeSweep();
+            }
+        }
+
         private void OnDestroy()
         {
             if (_subscribed && MWI.Time.TimeManager.Instance != null)

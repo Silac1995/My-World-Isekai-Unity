@@ -37,6 +37,28 @@ namespace MWI.Farming
             Debug.Log($"[CropVisualSpawner] Initialize on {map.name} (grid={grid.Width}x{grid.Depth}). Visual root: {_root.name}.");
         }
 
+        // Self-initialize when sitting on a scene-authored MapController whose WakeUp lifecycle
+        // never fires (no hibernation cycle on the player's spawn map). Bootstraps the grid from
+        // the BoxCollider bounds if no other system has done so. Safe no-op if already initialized.
+        private void Start()
+        {
+            if (_grid != null) return;
+            var map = GetComponent<MapController>();
+            if (map == null) return;
+            var grid = map.GetComponent<TerrainCellGrid>();
+            if (grid == null) return;
+            if (grid.Width == 0)
+            {
+                var box = map.GetComponent<BoxCollider>();
+                if (box != null) grid.Initialize(box.bounds);
+            }
+            if (grid.Width > 0)
+            {
+                Initialize(grid, map);
+                RebuildAll();
+            }
+        }
+
         /// <summary>
         /// Called from MapController.SendDirtyCellsClientRpc with the list of mutated cell indices.
         /// Iterates the indices and updates each visual based on the current grid state.
