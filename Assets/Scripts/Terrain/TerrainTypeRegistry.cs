@@ -22,6 +22,7 @@ namespace MWI.Terrain
                 Debug.LogError("[TerrainTypeRegistry] Not initialized. Call Initialize() first.");
                 return null;
             }
+            if (string.IsNullOrEmpty(typeId)) return null;
             return _types.TryGetValue(typeId, out var t) ? t : null;
         }
 
