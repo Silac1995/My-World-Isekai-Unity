@@ -88,6 +88,33 @@ This smoketest validates the Tool Storage primitive end-to-end on an existing `H
 - [ ] **Assert**: the worker still has the tool in their inventory / hand, but `OwnerBuildingId == ""` (cleared by the fallback path in `TryAutoReturnTools`). A LogWarning should appear in the console.
 - [ ] **Assert**: `CanPunchOut` returns `(true, null)` immediately — the worker is not permanently gated.
 
+### Smoke H — Storage full at return falls back gracefully
+
+This validates the `GoapAction_ReturnToolToStorage` storage-full fallback (the action is at `Assets/Scripts/AI/GOAP/Actions/GoapAction_ReturnToolToStorage.cs` lines ~169-185).
+
+- [ ] Pre-fill the building's tool storage with N items so it's exactly at capacity (`storage.IsFull == true`). Easiest: stack the chest with junk items via dev-mode spawn.
+- [ ] With a worker carrying a stamped tool from THIS building (run Smoke A first), add ONE more junk item to the storage so capacity is reached.
+- [ ] Trigger `GoapAction_ReturnToolToStorage` on the worker.
+- [ ] **Assert**: `IsValid` returns `false` (storage is full → planner won't pick this action). The action SHOULD NOT execute.
+- [ ] **Assert**: the worker still has the tool in their inventory / hand with `OwnerBuildingId` still set to the building.
+- [ ] **Assert**: `CanPunchOut` correctly still returns `(false, ...)` because the tool is still stamped.
+- [ ] Now empty one slot in the storage and re-run the action.
+- [ ] **Assert**: `IsValid` now returns `true`, and the return executes normally — tool lands in storage with `OwnerBuildingId == ""`.
+
+### Smoke I — Multi-peer (Host↔Client / Client↔Client) replication
+
+Per [NETWORK_ARCHITECTURE.md](../../NETWORK_ARCHITECTURE.md) and rule #19, every networked feature must work across all relationship scenarios. This smoke validates that `OwnerBuildingId` mutation by the server replicates to clients, and that the punch-out toast reaches the correct player only.
+
+- [ ] Start a multiplayer session: 1 Host (you) + 1 dedicated Client (second machine OR Editor + Standalone via parrelsync).
+- [ ] On the Host, run Smoke A (NPC fetches a stamped tool from the Host's HarvestingBuilding).
+- [ ] On the Client, inspect the same NPC via the Dev-Mode Inspect tab → Inventory tab.
+- [ ] **Assert**: the Client sees the same `OwnerBuildingId` value on the carried `ItemInstance` as the Host. (This validates `StorageFurnitureNetworkSync` replicates the field through the existing inventory sync path — no extra plumbing needed.)
+- [ ] On the Host, hire the **Client's player character** as a worker. Wait for shift end with a stamped tool in their inventory.
+- [ ] **Assert**: ONLY the Client's UI shows the "Return tools" toast. The Host should NOT see it.
+- [ ] **Assert**: The Client's character stays in `Work` until they manually return the tool.
+- [ ] On the Host, run Smoke A again with the SAME stamped tool, then have the Client (different player) try to drop the tool into their *own* hands → return to a *different* building's storage.
+- [ ] **Assert**: the `AddItem` origin-clear hook does NOT clear `OwnerBuildingId` (the destination building's `BuildingId` does not match the item's `OwnerBuildingId`). The tool stays stamped — meaning the Client cannot "launder" stolen tools through another building.
+
 ## Notes
 
 Capture observations, screenshots, or unexpected behaviour here:
