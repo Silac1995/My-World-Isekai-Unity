@@ -2,32 +2,32 @@ using UnityEngine;
 using MWI.UI.Notifications;
 
 /// <summary>
-/// STUB created in Task 6 of the tool-storage-primitive plan.
+/// Player-facing toast surfaced when <see cref="CharacterJob.CanPunchOut"/> blocks a Work→
+/// non-Work schedule transition because the worker still carries items stamped with their
+/// workplace's BuildingId (unreturned tools from the building's tool storage).
 ///
-/// Real implementation lands in Task 7 — at that point this becomes a thin wrapper that
-/// hands off to a dedicated toast prefab with a wrench icon, "Return tools" header, and
-/// per-item lines parsed from the reason string.
+/// Implementation: thin wrapper that routes through the existing global
+/// <see cref="UI_Toast"/> channel (initialised by PlayerUI). The plan originally specified a
+/// dedicated singleton-on-demand prefab, but the existing toast system already handles
+/// queueing, fade-in/out, on-screen positioning, and unscaled-time playback — building a
+/// parallel prefab would duplicate that infrastructure for no UX gain.
 ///
-/// For now we just route through the existing global <see cref="UI_Toast"/> channel so
-/// the punch-out gate is end-to-end testable: a player who tries to leave Work while
-/// holding tools will see a generic toast displaying the reason text built by
-/// <c>CharacterJob.CanPunchOut</c> ("Return tools to the tool storage before punching
-/// out: Pickaxe (Mine), Hammer (Forge).").
+/// Rate-limiting is upstream in <see cref="CharacterSchedule.NotifyPunchOutBlocked"/>
+/// (one toast per 30 seconds real-time per worker, measured via <c>Time.unscaledTime</c>
+/// per rule #26).
 /// </summary>
 public static class UI_ToolReturnReminderToast
 {
+    /// <summary>Display duration in seconds (real-time / unscaled).</summary>
+    private const float DisplayDurationSeconds = 4f;
+
+    /// <summary>Toast title shown above the tool-list message.</summary>
+    private const string ToastTitle = "Return tools";
+
     public static void Show(string reason)
     {
-        if (string.IsNullOrEmpty(reason))
-        {
-            Debug.LogWarning("[ToolReturnReminderToast] Show called with empty reason; ignoring.");
-            return;
-        }
+        if (string.IsNullOrEmpty(reason)) return;
 
-        // Route through the existing global toast channel (initialised by PlayerUI). Falls
-        // back to a Debug.Log in headless / pre-PlayerUI scenarios — UI_Toast.Show already
-        // logs a warning if the channel isn't wired up.
-        Debug.Log($"[ToolReturnReminderToast STUB] {reason}");
-        UI_Toast.Show(reason, ToastType.Warning, duration: 4f, title: "Return tools");
+        UI_Toast.Show(reason, ToastType.Warning, DisplayDurationSeconds, ToastTitle);
     }
 }
