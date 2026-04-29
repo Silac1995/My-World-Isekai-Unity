@@ -149,6 +149,26 @@ public class CharacterSchedule : CharacterSystem, ICharacterSaveData<ScheduleSav
 
         if (!forceApply && newActivity == _currentActivity) return;
 
+        // --- TOOL-STORAGE PUNCH-OUT GATE (Task 6) ---
+        // When leaving a Work slot, ask CharacterJob whether the worker still carries any
+        // unreturned tools stamped with one of their workplaces' BuildingId. If so, stay in
+        // Work — the next OnHourChanged tick (or HandleBusyStateEnded re-evaluation) will
+        // re-check. Player workers get a rate-limited toast so they know what's blocking them.
+        // NPCs replan via GOAP (FetchToolFromStorage / ReturnToolToStorage), no toast needed.
+        if (_currentActivity == ScheduleActivity.Work && newActivity != ScheduleActivity.Work)
+        {
+            var characterJob = _character != null ? _character.CharacterJob : null;
+            if (characterJob != null)
+            {
+                var (canPunchOut, reasonIfBlocked) = characterJob.CanPunchOut();
+                if (!canPunchOut)
+                {
+                    NotifyPunchOutBlocked(reasonIfBlocked);
+                    return; // stay in Work — re-checked on next schedule tick / busy-state-ended event
+                }
+            }
+        }
+
         ScheduleActivity previousActivity = _currentActivity;
         _currentActivity = newActivity;
 
@@ -162,6 +182,59 @@ public class CharacterSchedule : CharacterSystem, ICharacterSaveData<ScheduleSav
         }
 
         ApplyActivity(_currentActivity);
+    }
+
+    // ──────────────────────────────────────────────
+    //  PUNCH-OUT GATE — TOOL STORAGE PRIMITIVE (Task 6)
+    // ──────────────────────────────────────────────
+
+    /// <summary>
+    /// Real-time (unscaled) timestamp of the last punch-out toast we fired for this worker.
+    /// Per rule #26: UI must remain functional during pause / Giga Speed, so we use
+    /// <c>Time.unscaledTime</c> rather than the GameSpeedController-affected <c>Time.time</c>.
+    /// One field per CharacterSchedule instance — schedules tick independently per character,
+    /// so each player's rate-limit window is isolated.
+    /// </summary>
+    private float _lastPunchOutToastUnscaledTime = -999f;
+    private const float PunchOutToastCooldownSeconds = 30f;
+
+    /// <summary>
+    /// Called from <see cref="EvaluateSchedule"/> when a Work→non-Work transition was
+    /// blocked by <see cref="CharacterJob.CanPunchOut"/>. For player-owned workers, fires a
+    /// targeted ClientRpc raising the tool-return toast on the owning client. NPCs are skipped
+    /// — they replan via GOAP without UI feedback.
+    /// </summary>
+    private void NotifyPunchOutBlocked(string reason)
+    {
+        if (_character == null) return;
+
+        // Real-time rate limit (rule #26).
+        float now = Time.unscaledTime;
+        if (now - _lastPunchOutToastUnscaledTime < PunchOutToastCooldownSeconds) return;
+        _lastPunchOutToastUnscaledTime = now;
+
+        // NPCs replan via GOAP — no toast needed.
+        if (!_character.IsPlayer()) return;
+
+        // Pick any active workplace; the toast is purely informational and any one workplace
+        // can fire the targeted RPC. CanPunchOut already aggregated tool names across all
+        // workplaces in the reason string.
+        var jobs = _character.CharacterJob;
+        if (jobs == null) return;
+
+        CommercialBuilding workplace = null;
+        for (int i = 0; i < jobs.ActiveJobs.Count; i++)
+        {
+            var assn = jobs.ActiveJobs[i];
+            if (assn != null && assn.Workplace != null)
+            {
+                workplace = assn.Workplace;
+                break;
+            }
+        }
+        if (workplace == null) return;
+
+        workplace.NotifyPunchOutBlockedToClient(reason, _character.OwnerClientId);
     }
 
     /// <summary>

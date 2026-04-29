@@ -2291,4 +2291,49 @@ public abstract class CommercialBuilding : Building
             : punchInHours;
         return Mathf.Max(0f, nowHours - punchInHours);
     }
+
+    // =========================================================================
+    // TOOL STORAGE PRIMITIVE — Punch-out blocked toast (Task 6)
+    // =========================================================================
+
+    /// <summary>
+    /// Server fires this targeted ClientRpc when a player worker's Work→non-Work schedule
+    /// transition is blocked by unreturned tools (see <see cref="CharacterJob.CanPunchOut"/>
+    /// and <c>CharacterSchedule.NotifyPunchOutBlocked</c>). The receiving client raises the
+    /// tool-return reminder toast.
+    ///
+    /// Rate-limiting (30s real-time, unscaled per rule #26) is upstream in
+    /// <c>CharacterSchedule.NotifyPunchOutBlocked</c> — this RPC is fired at most once per
+    /// cooldown window per worker.
+    ///
+    /// Targeted via <see cref="ClientRpcParams"/> at the worker's <c>OwnerClientId</c> so
+    /// only that player sees the toast. NPCs are filtered out upstream (no toast for non-
+    /// player-controlled workers — they replan via GOAP).
+    /// </summary>
+    [ClientRpc]
+    public void NotifyPunchOutBlockedClientRpc(string reason, ulong targetClientId, ClientRpcParams rpcParams = default)
+    {
+        // Manual filter on receiver side: NGO's targeted ClientRpc replays the params from the
+        // caller, but we also pass targetClientId explicitly so any client receiving it (e.g. host
+        // sees its own dispatched RPC) can confirm the message was meant for them.
+        if (NetworkManager.Singleton != null
+            && NetworkManager.Singleton.LocalClientId != targetClientId) return;
+
+        UI_ToolReturnReminderToast.Show(reason);
+    }
+
+    /// <summary>
+    /// Server-side helper used by <c>CharacterSchedule</c>: build the <see cref="ClientRpcParams"/>
+    /// targeting a specific client and forward to the ClientRpc. Centralised here so the
+    /// schedule subsystem doesn't have to know NGO's RPC param shape.
+    /// </summary>
+    public void NotifyPunchOutBlockedToClient(string reason, ulong targetClientId)
+    {
+        if (!IsServer) return;
+        var target = new ClientRpcParams
+        {
+            Send = new ClientRpcSendParams { TargetClientIds = new[] { targetClientId } }
+        };
+        NotifyPunchOutBlockedClientRpc(reason, targetClientId, target);
+    }
 }
