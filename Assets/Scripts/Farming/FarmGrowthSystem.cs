@@ -27,11 +27,26 @@ namespace MWI.Farming
         {
             _grid = grid;
             _map = map;
-            if (!_subscribed && NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer && MWI.Time.TimeManager.Instance != null)
-            {
-                MWI.Time.TimeManager.Instance.OnNewDay += HandleNewDay;
-                _subscribed = true;
-            }
+            TrySubscribeToOnNewDay();
+        }
+
+        // Subscribe to TimeManager.OnNewDay. Safe to call multiple times — re-attempts each
+        // frame from Update if TimeManager wasn't ready at Start time (script-execution-order
+        // race between TimeManager.Awake and FarmGrowthSystem.Start).
+        private void TrySubscribeToOnNewDay()
+        {
+            if (_subscribed) return;
+            if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsServer) return;
+            if (MWI.Time.TimeManager.Instance == null) return;
+            MWI.Time.TimeManager.Instance.OnNewDay += HandleNewDay;
+            _subscribed = true;
+            Debug.Log($"[FarmGrowthSystem] Subscribed to TimeManager.OnNewDay (current Day={MWI.Time.TimeManager.Instance.CurrentDay}).");
+        }
+
+        private void Update()
+        {
+            // Idempotent until the first successful subscribe.
+            if (!_subscribed) TrySubscribeToOnNewDay();
         }
 
         private void OnDestroy()
@@ -120,6 +135,8 @@ namespace MWI.Farming
             if (_grid == null || _map == null) return;
             _dirtyIndices.Clear();
 
+            int grew = 0, stalled = 0, justMatured = 0, refilled = 0, refilling = 0, orphan = 0;
+
             for (int z = 0; z < _grid.Depth; z++)
             for (int x = 0; x < _grid.Width; x++)
             {
@@ -132,21 +149,38 @@ namespace MWI.Farming
                 switch (outcome)
                 {
                     case FarmGrowthPipeline.Outcome.JustMatured:
+                        justMatured++;
+                        if (_activeHarvestables.TryGetValue(idx, out var hm) && hm != null)
+                            hm.AdvanceStage();
+                        _dirtyIndices.Add(idx);
+                        break;
                     case FarmGrowthPipeline.Outcome.Grew:
+                        grew++;
                         if (_activeHarvestables.TryGetValue(idx, out var h) && h != null)
                             h.AdvanceStage();
                         _dirtyIndices.Add(idx);
                         break;
                     case FarmGrowthPipeline.Outcome.JustRefilled:
+                        refilled++;
                         if (_activeHarvestables.TryGetValue(idx, out var hr) && hr != null)
                             hr.Refill();
                         _dirtyIndices.Add(idx);
                         break;
                     case FarmGrowthPipeline.Outcome.Refilling:
+                        refilling++;
                         _dirtyIndices.Add(idx);
+                        break;
+                    case FarmGrowthPipeline.Outcome.Stalled:
+                        stalled++;
+                        break;
+                    case FarmGrowthPipeline.Outcome.OrphanCrop:
+                        orphan++;
                         break;
                 }
             }
+
+            int total = grew + stalled + justMatured + refilled + refilling + orphan;
+            Debug.Log($"[FarmGrowthSystem] HandleNewDay (Day={MWI.Time.TimeManager.Instance?.CurrentDay}): {total} planted cells — Grew={grew}, JustMatured={justMatured}, Stalled={stalled}, JustRefilled={refilled}, Refilling={refilling}, Orphan={orphan}.");
 
             if (_dirtyIndices.Count > 0)
                 _map.NotifyDirtyCells(_dirtyIndices.ToArray());
