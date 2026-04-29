@@ -19,6 +19,7 @@ This spec defines the **Farmer** job + **FarmingBuilding** workplace, and along 
 - The "logistic cycle" loop for crops — seeds flow IN via existing `BuyOrder` chain, produce flows OUT via existing harvest deposit chain.
 - Crop self-seeding via `CropSO._harvestOutputs` extension — every harvest yields produce + a small seed amount, making the loop self-sustaining at steady state.
 - A new management-gameplay layer: tool storage stocking determines worker throughput. More watering cans = more parallel watering; an empty tool storage stalls work and triggers a `BuyOrder` to resupply.
+- A player path into the Farmer role: player walks up to the farm's Help Wanted sign (a new `DisplayTextFurniture` instance), reads what's open, applies via the existing `InteractionAskForJob` flow. Once hired, the player auto-claims quests *only from `BuildingTaskManager`* — no hand-authored or starter quests are introduced. Owner (player or NPC) explicitly controls hiring state via the same API. See §15.
 
 **Explicitly out of scope (deferred to Phase 2):**
 - Retrofitting `JobHarvester` / `JobTransporter` / `JobBlacksmith` onto the Tool Storage primitive (shift-long pickup pattern with `Job.OnShiftStart` / `OnShiftEnd` hooks).
@@ -695,20 +696,33 @@ Following the pattern in `BuildingInspectorView`:
    - `JobYieldRegistry` entries for crops (macro-sim catch-up).
 
 6. **Dev-mode + UI:**
-   - `BuildingInspectorView` "Tool Storage" line.
+   - `BuildingInspectorView` "Tool Storage" + "Hiring" lines.
    - `CharacterInspectorView` `[Tool: <Building>]` annotation.
    - `UI_ToolReturnReminderToast`.
 
-7. **Tests:**
-   - EditMode unit tests (§12.1).
+7. **Help Wanted system (§15):**
+   - `DisplayTextFurniture` + `DisplayTextFurnitureSaveData`.
+   - `CommercialBuilding._isHiring` NetworkVariable + `_helpWantedFurniture` reference + hiring API surface (`TryOpenHiring`, `TryCloseHiring`, `CanRequesterControlHiring`, `GetVacantJobs`, `GetHelpWantedDisplayText`, `GetClosedHiringDisplayText`).
+   - `InteractionAskForJob` + `NeedJob.GetActions` gate updates to read `IsHiring`.
+   - Authoring: `DisplayTextFurniture_Placard.prefab`. Designer wires one as `_helpWantedFurniture` on the v1 `FarmingBuilding` prefab.
+   - Player UI: `UI_DisplayTextReader` + `UI_OwnerHiringPanel` (with multi-line text-input for custom sign text).
+   - `BuildingInspectorView` "Hiring" line: shows `IsHiring`, vacant-job count, and a dev-mode "Force Open / Close Hiring" button.
+
+8. **Tests:**
+   - EditMode unit tests (§12.1) + Help Wanted unit tests (§15.9).
    - PlayMode integration tests (§12.2).
 
-8. **Documentation:**
+9. **Documentation:**
    - SKILL.md: `.agent/skills/job-farmer/SKILL.md` (new).
    - SKILL.md: `.agent/skills/tool-storage/SKILL.md` (new).
+   - SKILL.md: `.agent/skills/display-text-furniture/SKILL.md` (new).
+   - SKILL.md: `.agent/skills/owner-controlled-hiring/SKILL.md` (new).
    - Wiki page: `wiki/systems/job-farmer.md` (new).
+   - Wiki page: `wiki/systems/display-text-furniture.md` (new).
+   - Wiki page: `wiki/systems/owner-controlled-hiring.md` (new).
    - Wiki update: `wiki/systems/jobs-and-logistics.md` change-log entry.
    - Wiki update: `wiki/systems/farming.md` change-log entry.
+   - Wiki update: `wiki/systems/commercial-building.md` change-log entry (hiring API).
    - Specialist-agent updates: `npc-ai-specialist`, `building-furniture-specialist`, `harvestable-resource-node-specialist` agent definitions.
 
 ---
@@ -732,7 +746,255 @@ Following the pattern in `BuildingInspectorView`:
 
 ---
 
-## 15. Phase 2 Outline (deferred)
+## 15. Help Wanted Furniture + Owner-Controlled Hiring
+
+**Why this is in Phase 1.** With Farmer rolled out and the existing quest pipeline auto-publishing every `BuildingTask`, the only remaining gap for a player to "take the Farmer job" is **discovery in-world**. The mechanical path (`InteractionAskForJob` → become employee → `WorkerStartingShift` auto-claims published quests) already works; what's missing is the in-world affordance pointing the player at it.
+
+This section adds **two coupled primitives**, both of which are reusable beyond Farmer:
+
+1. **`DisplayTextFurniture`** — a generic placard / signboard / notice-board furniture. Holds server-authoritative text. Any player or NPC can interact with it → reads the text. Owner of the parent building can edit the text.
+
+2. **Owner-controlled hiring state** on `CommercialBuilding` — explicit `IsHiring` bool, gated by Owner authority, mutated through methods that work identically for player and NPC owners (rule #22 parity). When `_helpWantedFurniture` is set, the building auto-writes formatted vacancy text to it; when hiring closes, the sign reverts to a neutral default.
+
+The two primitives are independent — `DisplayTextFurniture` is useful on its own (welcome signs, lore plates, room labels) and `IsHiring` is useful even without a sign reference (it still gates `AskForJob`). They compose cleanly when the designer wires them together.
+
+**Critical invariant (per user direction):** quests are still produced **exclusively** by `BuildingTaskManager` (daily PlantScan / WaterScan / HarvestResourceTask). The Help Wanted sign and owner-hiring controls are pure **discovery + access-control** layers — they surface existing quests and gate hiring. Nothing in §15 generates quests directly.
+
+### 15.1 `DisplayTextFurniture : Furniture`
+
+```csharp
+public class DisplayTextFurniture : Furniture
+{
+    [SerializeField, TextArea(2, 8)] private string _initialText = "";
+
+    private NetworkVariable<FixedString512Bytes> _displayText = new(
+        new FixedString512Bytes(),
+        readPerm: NetworkVariableReadPermission.Everyone,
+        writePerm: NetworkVariableWritePermission.Server);
+
+    public string DisplayText => _displayText.Value.ToString();
+    public event Action<string> OnDisplayTextChanged;
+
+    public override void OnNetworkSpawn()
+    {
+        base.OnNetworkSpawn();
+        if (IsServer && string.IsNullOrEmpty(_displayText.Value.ToString()) && !string.IsNullOrEmpty(_initialText))
+            _displayText.Value = SanitiseAndClamp(_initialText);
+        _displayText.OnValueChanged += (_, newVal) => OnDisplayTextChanged?.Invoke(newVal.ToString());
+    }
+
+    /// <summary>Owner-gated text mutation. Validates the requester has authority over the parent
+    /// building (Owner / community leader / dev mode). Routes via ServerRpc when called from a
+    /// client. Returns true on success.</summary>
+    public bool TrySetDisplayText(Character requester, string newText);
+
+    /// <summary>Unrestricted server-only setter — used internally by the parent CommercialBuilding
+    /// when its hiring state changes. Not exposed to client RPC.</summary>
+    internal void ServerSetDisplayText(string newText);
+
+    public override void Interact(Character actor)
+    {
+        // Player path: open UI_DisplayTextReader. NPC path: no-op (NPC has no need to "read" yet).
+        if (actor.IsPlayerOwned) UI_DisplayTextReader.Show(actor, this);
+    }
+
+    private static FixedString512Bytes SanitiseAndClamp(string raw);
+}
+```
+
+**Authoring.** One prefab `DisplayTextFurniture_Placard.prefab` ships in `Assets/Prefabs/Furniture/` with a generic wooden-board mesh and a `_initialText` of `""`. Designers drop instances anywhere; for a hiring sign, the building also references it as `_helpWantedFurniture`.
+
+**Persistence.** Adds one string field to `FurnitureSaveData` (or the `DisplayTextFurniture`-specific saveable extension, mirroring how `StorageFurniture` adds slot data).
+
+**Network.** Server-authoritative `_displayText` NetworkVariable. Late-joining clients receive the value at spawn (existing NGO behavior). Mutations from clients go through `TrySetDisplayText` ServerRpc.
+
+### 15.2 `CommercialBuilding` hiring extension
+
+```csharp
+public abstract class CommercialBuilding : Building, ...
+{
+    // ... existing fields ...
+
+    [Header("Hiring")]
+    [SerializeField] private DisplayTextFurniture _helpWantedFurniture; // designer reference; null = no auto-managed sign
+    [SerializeField] private bool _initialHiringOpen = true;            // initial state
+
+    private NetworkVariable<bool> _isHiring = new(
+        true,
+        readPerm: NetworkVariableReadPermission.Everyone,
+        writePerm: NetworkVariableWritePermission.Server);
+
+    public bool IsHiring => _isHiring.Value;
+    public DisplayTextFurniture HelpWantedSign => _helpWantedFurniture;
+    public event Action<bool> OnHiringStateChanged;
+}
+```
+
+The default `_initialHiringOpen = true` keeps existing buildings backward-compatible — no save migration, every existing building loads as "currently hiring" exactly like today.
+
+### 15.3 Owner-controlled hiring API surface
+
+This is the "adequate methods for easy implementation" the user asked for. Every gameplay path — player UI button, NPC owner GOAP action (Phase 2), dev-tool toggle, save/load reconciliation — calls the same methods. All are server-authoritative; client wrappers route via ServerRpc. No path duplicates the validation logic.
+
+```csharp
+// On CommercialBuilding (Phase 1):
+
+/// <summary>Returns true if the requester has authority to control this building's hiring state.
+/// Currently: Owner == requester, OR requester is the community leader of the building's
+/// community, OR requester is in dev mode. Centralised here so all hiring/sign mutations share
+/// one gate. Returns true when called server-side with requester=null (internal calls).</summary>
+public bool CanRequesterControlHiring(Character requester);
+
+/// <summary>Returns the list of jobs in _jobs whose Worker == null (unfilled slots). Reused by
+/// the Help Wanted sign formatter and by the player's job-application UI.</summary>
+public IReadOnlyList<Job> GetVacantJobs();
+
+/// <summary>Server-authoritative attempt to open hiring. Validates Owner authority +
+/// at least one vacant position. On success: flips _isHiring, fires OnHiringStateChanged,
+/// auto-refreshes _helpWantedFurniture text via ServerSetDisplayText. Returns true on success.
+/// </summary>
+public bool TryOpenHiring(Character requester);
+
+/// <summary>Server-authoritative attempt to close hiring. Same authority gate. Existing
+/// employees are NOT fired — only future applications are blocked. Auto-resets the sign text
+/// to GetClosedHiringDisplayText() (default: empty / "Not hiring."). Returns true on success.
+/// </summary>
+public bool TryCloseHiring(Character requester);
+
+/// <summary>Format the Help Wanted text from current vacant positions + building name. Override
+/// per CommercialBuilding subclass to customise wording. Default:
+///   "Hiring at {buildingName}:
+///    - 2 Farmer positions
+///    - 1 Logistics Manager
+///   Approach the owner to apply."
+/// </summary>
+public virtual string GetHelpWantedDisplayText();
+
+/// <summary>Text written to the sign when hiring closes. Default: "" (sign goes blank). Override
+/// per subclass for flavor (e.g. "Currently fully staffed — check back another day.").</summary>
+public virtual string GetClosedHiringDisplayText();
+
+// Internal hooks (server-side only):
+private void HandleHiringStateChanged(bool oldVal, bool newVal);   // refresh sign + fire event
+private void HandleVacancyChanged(Job job);                        // re-format sign on hire/quit while IsHiring
+```
+
+**Usage examples:**
+
+```csharp
+// Player owner UI — "Open Hiring" button click in UI_OwnerHiringPanel:
+building.TryOpenHiring(localPlayer.Character);
+// On host: succeeds inline. On client: routed via ServerRpc, returns false locally; the
+// resulting NetworkVariable change propagates the new state back. UI listens to
+// OnHiringStateChanged for the visual refresh.
+
+// NPC owner AI (Phase 2 placeholder):
+public class GoapAction_OwnerOpenHiring : GoapAction { /* eventually calls owner.TryOpenHiring(owner) */ }
+
+// Save/load reconciliation:
+// _isHiring NetworkVariable persists via existing CommercialBuildingSaveData. On map wake the
+// building's OnNetworkSpawn re-fires HandleHiringStateChanged so the sign is rebuilt from
+// post-load state. Zero new save code beyond one bool field.
+
+// Dev tool:
+DevModeOwnerControls.ForceOpenHiring(building);   // delegates to building.TryOpenHiring(devModeProxy)
+```
+
+### 15.4 `InteractionAskForJob` gate update
+
+Existing flow ([InteractionAskForJob.cs](../../Assets/Scripts/Character/CharacterInteraction/InteractionAskForJob.cs)) has a `_building.AskForJob(source, _job)` call. Add a single up-front check:
+
+```csharp
+// In InteractionAskForJob.OnInteractionConfirmed (or equivalent gate):
+if (!_building.IsHiring)
+{
+    OnRejected("This place is not currently hiring.");
+    return;
+}
+// existing checks (job slot vacant, schedule overlap, owner consent) ...
+```
+
+NPC `NeedJob.GetActions` ([NeedJob.cs:50](../../Assets/Scripts/Character/CharacterNeeds/NeedJob.cs#L50)) also early-exits when `building.IsHiring == false` — prevents NPC AI from queueing applications at closed buildings (no thrash, no rejected-application reputation hits).
+
+### 15.5 Player UI
+
+**A. Reading a sign (any player walking up to a `DisplayTextFurniture`):**
+- Walk to the sign, press E → standard `Interactable.Interact()` → `UI_DisplayTextReader.Show(actor, sign)`.
+- Panel layout: title (parent building name if applicable, else "Sign") + multi-line scrollable text + Close button + outside-click dismiss + ESC dismiss.
+- **If the sign is the parent building's `_helpWantedFurniture` AND `_building.IsHiring == true`:** an extra **"Apply for a job"** button appears at the bottom of the panel. Clicking queues the existing `InteractionAskForJob` against the building's owner (or system-issued if no owner). Result feedback (accepted / rejected) flows through the existing interaction-result toast.
+- **If the sign is referenced as `_helpWantedFurniture` AND `_building.IsHiring == false`:** the Apply button is hidden. The sign text comes from `GetClosedHiringDisplayText()`.
+
+**B. Owner controls (player who owns the building):**
+- New entry on the building's interaction menu (Owner-only via `CanRequesterControlHiring` check): **"Manage Hiring..."**. Opens `UI_OwnerHiringPanel`.
+- Panel content:
+  - Title: building name + "Currently Hiring: Yes/No"
+  - Scroll list of `_jobs` rows: each row shows "JobTitle — vacant" or "JobTitle — filled by NPCName"
+  - Toggle button: "Open Hiring" / "Close Hiring" → calls `building.TryOpenHiring(localPlayer.Character)` / `TryCloseHiring(...)`
+  - **Edit Sign Text button** (only enabled if `_helpWantedFurniture != null`): opens a multi-line text-input field; on Submit calls `_helpWantedFurniture.TrySetDisplayText(localPlayer.Character, typedText)`. Empty input reverts the sign to the auto-formatted `GetHelpWantedDisplayText()`.
+
+**C. NPC owner path:** API is identical, exercised in Phase 2 by future GOAP actions. No UI in v1.
+
+### 15.6 Persistence
+
+| Field | Owner | Save format |
+|---|---|---|
+| `DisplayTextFurniture._displayText` | Furniture | string in `DisplayTextFurnitureSaveData` (extends existing `FurnitureSaveData`) |
+| `CommercialBuilding._isHiring` | Building | bool in `CommercialBuildingSaveData` (one new field) |
+
+Backward compat: pre-existing saves with neither field load with `_displayText = _initialText` (designer authoring) and `_isHiring = _initialHiringOpen` (designer authoring, defaults to `true`). No migration script needed.
+
+### 15.7 Network rules
+
+| Mutation | Authority | RPC pattern |
+|---|---|---|
+| `_displayText` write | Server-only | client `TrySetDisplayText` → ServerRpc → `CanRequesterControlHiring` check → `_displayText.Value = sanitised` |
+| `_isHiring` write | Server-only | client `TryOpenHiring` / `TryCloseHiring` → ServerRpc → owner check → flip + sign refresh |
+| `_displayText` read | Everyone | NetworkVariable replication |
+| `_isHiring` read | Everyone | NetworkVariable replication |
+| Sign refresh on hiring change | Server-only side-effect | `HandleHiringStateChanged` calls `_helpWantedFurniture.ServerSetDisplayText(...)` directly — no extra RPC |
+
+All four scenarios validated per rule #19:
+- **Host owner ↔ Client applicant:** host runs gate, sign + IsHiring replicate to client, client reads sign and applies via existing `InteractionAskForJob` ServerRpc.
+- **Client owner ↔ Client applicant (host is third party):** client owner sends `TryOpenHiring` ServerRpc to host (server) → host validates owner identity → mutates → both clients see replication.
+- **Host/Client ↔ NPC:** server-authoritative checks; NPC `NeedJob` reads `IsHiring` directly server-side.
+- **Late joiner:** NetworkVariable spawn payload carries current `_displayText` and `_isHiring`. Sign and gate are correct on first frame.
+
+### 15.8 Risks & open questions
+
+| Risk | Mitigation |
+|---|---|
+| Player owner closes hiring while applicant is mid-`InteractionAskForJob` | The gate check happens at apply-time, not at interaction-start. If hiring closes between starting the interaction and confirming, the apply rejects gracefully with a "no longer hiring" message. |
+| Multiple help-wanted signs for one building | Designer error — only `_helpWantedFurniture` is auto-managed. Other `DisplayTextFurniture` instances in the same building remain independent (the building doesn't know about them). |
+| Text injection / formatting attack on player names or sign text | `TrySetDisplayText` strips control characters + clamps to 512 bytes. UI uses TextMeshPro with rich-text parsing **disabled** (no `<color>` / `<size>` exploits). |
+| Building destroyed while sign is open in another player's UI | `UI_DisplayTextReader` listens for `OnDestroyed` on its target and auto-closes. Standard pattern. |
+| Sign placed in a different building than the one referencing it | Authoring-time warning in `OnValidate`: `_helpWantedFurniture.transform.IsChildOf(transform) == false` → log a designer warning. Runtime still works (the building drives the sign regardless of physical placement). |
+| Owner sets blank text while sign is acting as Help Wanted, then closes hiring → both auto-text and blank text are blank | Acceptable. The sign stays blank. Owner can later open hiring → auto-text reapplied; or type new text → manual override. |
+
+**Open questions:**
+
+- **Q15.1.** Should `TrySetDisplayText` with a custom text "stick" past the next `TryOpenHiring` call, or should opening hiring always overwrite with auto-formatted text? **Decision:** opening hiring always overwrites to auto-formatted (predictable). Owner who wants custom text writes it AFTER opening hiring; closing then reopening will overwrite again. v2 may add a "manual mode" lock if this proves annoying.
+- **Q15.2.** Should non-Owner players see a "(read-only)" badge on the sign UI? **Decision:** no. The sign is read-only for non-owners by default; no UI indicator needed (nobody expects to edit a sign in the world).
+- **Q15.3.** Should the Help Wanted sign be limited to one per building, or can multiple be designated for buildings with multiple entrances? **Decision:** one in v1 — `_helpWantedFurniture` is a single-reference field. Multi-sign coordination is Phase 2 if needed.
+
+### 15.9 Tests
+
+| Test | Validates |
+|---|---|
+| `DisplayTextFurniture_TextReplicatesToClients` | Server sets text → all clients see it after sync; late joiner sees it on spawn |
+| `DisplayTextFurniture_NonOwnerCannotEdit` | `TrySetDisplayText` from non-owner → returns false, text unchanged |
+| `DisplayTextFurniture_OwnerCanEdit` | `TrySetDisplayText` from owner → returns true, text replicates |
+| `CommercialBuilding_IsHiring_GateBlocksApplication` | `IsHiring=false` → `InteractionAskForJob` rejects with reason |
+| `CommercialBuilding_OpenHiring_RefreshesSign` | `TryOpenHiring` writes formatted vacancy text to `_helpWantedFurniture` |
+| `CommercialBuilding_CloseHiring_DoesNotFireExisting` | Existing employees retain their job after `TryCloseHiring` |
+| `CommercialBuilding_OnlyAuthorisedCanToggleHiring` | `TryOpenHiring`/`TryCloseHiring` from non-owner → returns false |
+| `Player_ReadHelpWantedSign_ShowsApplyButton` | Sign with `IsHiring=true` parent → "Apply" button visible. `IsHiring=false` → button hidden |
+| `Player_ApplyButton_TriggersAskForJob` | Clicking Apply queues `InteractionAskForJob`; on success, player gets the job + auto-claims `BuildingTaskManager` quests |
+| `Save_LoadPreservesHiringStateAndSignText` | Save → load round-trip preserves `IsHiring` + `_displayText` |
+| `LateJoiner_SeesCorrectHiringStateAndSign` | Joining mid-session: NetworkVariable spawn payload carries correct values, sign UI renders correctly first frame |
+
+---
+
+## 16. Phase 2 Outline (deferred)
 
 Captured here so the design intent is preserved across PRs.
 
@@ -768,6 +1030,15 @@ public abstract class Job
 | `JobTransporter` | Bag | shift-long |
 | `JobBlacksmith` | Hammer (already implicit in station, possibly redundant) | TBD — may stay station-implicit |
 
+### 15.5 NPC owner AI for hiring
+
+Phase 1 ships the API (`TryOpenHiring`, `TryCloseHiring`, `CanRequesterControlHiring`) but no NPC AI uses it — NPC owners stay in `_initialHiringOpen` state forever. Phase 2 adds:
+- `GoapAction_OwnerOpenHiring` / `GoapAction_OwnerCloseHiring` — NPC owners decide based on workload (vacant positions + pending tasks) and finances (treasury threshold).
+- A `NeedHireWorkers` need on building owners that fires the actions when threshold met.
+- `GoapAction_OwnerEditSign` — owner periodically updates the sign with seasonal flavor / promotional text.
+
+These reuse the same Phase 1 methods directly — no new server-side code, only new GOAP actions wrapping existing API.
+
 ---
 
 ## Sources
@@ -778,6 +1049,11 @@ public abstract class Job
 - [Assets/Scripts/World/Jobs/HarvestingJobs/JobHarvester.cs](../../Assets/Scripts/World/Jobs/HarvestingJobs/JobHarvester.cs) — reference for `JobFarmer` GOAP shape.
 - [Assets/Scripts/World/Buildings/CommercialBuildings/HarvestingBuilding.cs](../../Assets/Scripts/World/Buildings/CommercialBuildings/HarvestingBuilding.cs) — base class for `FarmingBuilding`.
 - [Assets/Scripts/Farming/CharacterAction_PlaceCrop.cs](../../Assets/Scripts/Farming/CharacterAction_PlaceCrop.cs) + [CharacterAction_WaterCrop.cs](../../Assets/Scripts/Farming/CharacterAction_WaterCrop.cs) — reused as-is for NPC path.
+- [Assets/Scripts/Character/CharacterInteraction/InteractionAskForJob.cs](../../Assets/Scripts/Character/CharacterInteraction/InteractionAskForJob.cs) — existing player-applicable hiring interaction; gate updated in §15.4.
+- [Assets/Scripts/Character/CharacterJob/CharacterJob.cs](../../Assets/Scripts/Character/CharacterJob/CharacterJob.cs) — `AskForJob` host method.
+- [Assets/Scripts/Character/CharacterNeeds/NeedJob.cs](../../Assets/Scripts/Character/CharacterNeeds/NeedJob.cs) — NPC AI gate updated in §15.4.
+- [Assets/Scripts/World/Buildings/CommercialBuilding.cs](../../Assets/Scripts/World/Buildings/CommercialBuilding.cs) — quest publishing (`PublishQuest` line 398) + `WorkerStartingShift` auto-claim path; receives `_isHiring`, `_helpWantedFurniture`, hiring API.
+- [wiki/systems/quest-system.md](../../wiki/systems/quest-system.md) — already-shipped quest unification (Hybrid C); BuildingTask auto-publish path that the player worker consumes for free.
 - [wiki/systems/jobs-and-logistics.md](../../wiki/systems/jobs-and-logistics.md) — system architecture overview.
 - [wiki/systems/farming.md](../../wiki/systems/farming.md) — farming substrate overview.
-- 2026-04-29 conversation with [[kevin]] — scope, self-seeding insight, tool storage primitive, punch-out gate.
+- 2026-04-29 conversation with [[kevin]] — scope, self-seeding insight, tool storage primitive, punch-out gate, generic `DisplayTextFurniture` + owner-controlled hiring.
