@@ -110,20 +110,33 @@ namespace MWI.Farming
                 Destroy(go);
                 return null;
             }
-            // Spawn over the network FIRST so OnNetworkSpawn wires up the NetVar callbacks
-            // before InitializeFromCell sets the values.
+            // Initialize BEFORE Spawn so the NetworkVariable values (CropIdNet, CurrentStage,
+            // IsDepleted) land in the spawn payload — clients then resolve the CropSO on the
+            // very first OnNetSyncChanged tick instead of waiting for separate change-
+            // replication messages. NGO supports pre-spawn NetworkVariable mutation: the local
+            // value is captured as the initial sync; no callbacks fire (no subscribers yet),
+            // which is fine because InitializeFromCell also calls ApplyVisual itself for the
+            // server-side visual.
+            h.InitializeFromCell(_grid, _map, x, z, crop, startStage, startDepleted);
+
             if (go.TryGetComponent<NetworkObject>(out var netObj) && !netObj.IsSpawned)
             {
                 netObj.Spawn(true);
-                // Parent under the MapController. NGO requires both parent and child to be
-                // NetworkObjects — MapController qualifies (it inherits NetworkBehaviour).
-                // TrySetParent runs server-only and replicates the parent-relationship to all
-                // peers so the harvestable nests under the correct map in every Hierarchy.
-                var mapNetObj = _map.GetComponent<NetworkObject>();
-                if (mapNetObj != null && !netObj.TrySetParent(mapNetObj, worldPositionStays: true))
-                    Debug.LogWarning($"[FarmGrowthSystem] TrySetParent failed for crop at ({x},{z}) under map '{_map.name}'.");
+                // INTENTIONALLY NOT parenting under MapController. We previously called
+                // netObj.TrySetParent(mapNetObj, worldPositionStays: true) here, but that
+                // triggered an NGO bug where late-joining clients NRE inside
+                // NetworkObject.Serialize (line 3182, accessing NetworkManagerOwner.DistributedAuthorityMode)
+                // during the initial-sync of parented runtime-spawned NetworkObjects:
+                // NGO's SceneEventData.SortParentedNetworkObjects walks every root NO's
+                // GetComponentsInChildren<NetworkObject>() and pulls those children into the
+                // sync list — and the sync code path differs subtly from the direct
+                // Serialize() probe (PurgeBrokenSpawnedNetworkObjects), so the NRE only
+                // surfaces during real client-join. Symptom: "host plants crop → client
+                // tries to join → join fails with NetworkObject.Serialize NRE in loop."
+                // CropHarvestables live at scene root; the back-reference to their map lives
+                // in CropHarvestable._map for all server-side logic, and no code does
+                // GetComponentsInChildren<CropHarvestable> on MapController so nothing breaks.
             }
-            h.InitializeFromCell(_grid, _map, x, z, crop, startStage, startDepleted);
             RegisterHarvestable(x, z, h);
             return h;
         }

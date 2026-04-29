@@ -74,6 +74,9 @@ public class Building : ComplexRoom
 
     /// <summary>
     /// True if a spawned interior MapController exists for this building.
+    /// Distinct from <see cref="SupportsInterior"/> — interiors lazy-spawn on first
+    /// entry through a <c>BuildingInteriorDoor</c>, so a building authored with an
+    /// interior prefab still reports <c>HasInterior == false</c> until someone walks in.
     /// </summary>
     public bool HasInterior
     {
@@ -82,6 +85,41 @@ public class Building : ComplexRoom
             if (BuildingInteriorRegistry.Instance == null) return false;
             return BuildingInteriorRegistry.Instance.TryGetInterior(BuildingId, out _);
         }
+    }
+
+    /// <summary>
+    /// True if this building's <see cref="PrefabId"/> has a non-null InteriorPrefab
+    /// registered in <c>WorldSettingsData.BuildingRegistry</c> — i.e. the building was
+    /// *designed* to have an interior, regardless of whether one is currently spawned.
+    /// Returns false when <see cref="PrefabId"/> is empty (legacy / scene-static-only
+    /// buildings) or when no <see cref="WorldSettingsData"/> is reachable. Pair with
+    /// <see cref="HasInterior"/> to disambiguate "authored to have one" vs "spawned".
+    /// </summary>
+    public bool SupportsInterior
+    {
+        get
+        {
+            if (string.IsNullOrEmpty(_prefabId)) return false;
+            var settings = GetCachedWorldSettings();
+            if (settings == null) return false;
+            return settings.GetInteriorPrefab(_prefabId) != null;
+        }
+    }
+
+    // Cached one-shot lookup of WorldSettingsData. Resources.Load is internally cached but
+    // a static field skips the call entirely on hot paths (debug overlays / per-frame
+    // inspector refresh). Falsy load attempts are remembered so we don't re-probe every
+    // frame when the asset is genuinely missing.
+    private static WorldSettingsData _cachedWorldSettings;
+    private static bool _worldSettingsLoadAttempted;
+
+    private static WorldSettingsData GetCachedWorldSettings()
+    {
+        if (_cachedWorldSettings != null) return _cachedWorldSettings;
+        if (_worldSettingsLoadAttempted) return null;
+        _worldSettingsLoadAttempted = true;
+        _cachedWorldSettings = Resources.Load<WorldSettingsData>("Data/World/WorldSettingsData");
+        return _cachedWorldSettings;
     }
 
     /// <summary>
@@ -113,6 +151,20 @@ public class Building : ComplexRoom
     public MWI.WorldSystem.BuildingState CurrentState => _currentState.Value;
     public bool IsUnderConstruction => _currentState.Value == MWI.WorldSystem.BuildingState.UnderConstruction;
     public System.Action OnConstructionComplete;
+
+    /// <summary>
+    /// Read-only view of the authored material requirements for construction. Empty when the
+    /// building was authored without a build phase.
+    /// </summary>
+    public IReadOnlyList<CraftingIngredient> ConstructionRequirements => _constructionRequirements;
+
+    /// <summary>
+    /// Read-only view of the materials contributed so far. Server-authoritative; clients see the
+    /// last replicated snapshot via <see cref="GetPendingMaterials"/>'s callers — note this dict
+    /// itself is not networked, so client peers will see an empty contributed set. Inspector
+    /// surfaces should fall back to <see cref="GetPendingMaterials"/> when running client-side.
+    /// </summary>
+    public IReadOnlyDictionary<ItemSO, int> ContributedMaterials => _contributedMaterials;
 
     public ComplexRoom MainRoom => this;
 

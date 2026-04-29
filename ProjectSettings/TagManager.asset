@@ -10,6 +10,7 @@ TagManager:
   - Gatherable
   - Deposit
   - Debug_World
+  - Crop
   layers:
   - Default
   - TransparentFX
@@ -26,7 +27,7 @@ TagManager:
   - Building
   - Furniture
   - SpeechZone
-  - 
+  - Harvestable
   - 
   - 
   - 

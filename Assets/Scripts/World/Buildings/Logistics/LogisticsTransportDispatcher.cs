@@ -59,9 +59,16 @@ public class LogisticsTransportDispatcher
     /// active BuyOrder, either dispatch a <see cref="TransportOrder"/> (if we
     /// have physical stock) or escalate to a <see cref="CraftingOrder"/>
     /// (if this is a crafting building and there's no craft yet in progress).
+    ///
+    /// Early-exits when <see cref="LogisticsOrderBook.IsDispatchDirty"/> is false —
+    /// nothing has changed since the last pass, so re-running would do zero useful
+    /// work and pay the full BuildGloballyReservedSet + LINQ cost. See
+    /// wiki/projects/optimisation-backlog.md entry #2 / B for the perf rationale.
     /// </summary>
     public void ProcessActiveBuyOrders()
     {
+        if (!_orderBook.IsDispatchDirty) return;
+
         var globallyReservedItems = _orderBook.BuildGloballyReservedSet();
 
         var activeOrders = _orderBook.ActiveOrdersForIteration();
@@ -116,6 +123,14 @@ public class LogisticsTransportDispatcher
                 HandleInsufficientStock(buyOrder, remainingToDispatch, physicallyAvailableInstances, globallyReservedItems);
             }
         }
+
+        // Clear the dirty flag so the next tick can early-exit if nothing changes.
+        // Dispatches above DO mark the book dirty again (AddPlacedTransportOrder /
+        // EnqueuePending), but those state changes have already been processed this
+        // same call — clearing the flag here is correct. Any caller mutation that
+        // happens AFTER this method returns will mark dirty afresh and trigger the
+        // next pass.
+        _orderBook.ClearDispatchDirty();
     }
 
     private void HandleInsufficientStock(BuyOrder buyOrder, int remainingToDispatch, List<ItemInstance> physicallyAvailableInstances, HashSet<ItemInstance> globallyReservedItems)
@@ -235,9 +250,18 @@ public class LogisticsTransportDispatcher
     /// Re-queue any un-placed BuyOrders and TransportOrders that failed to
     /// reach a recipient (e.g. courier was busy). Called once per tick by
     /// <see cref="JobLogisticsManager.Execute"/>.
+    ///
+    /// Early-exits when <see cref="LogisticsOrderBook.IsDispatchDirty"/> is false —
+    /// retry is idempotent on a stable state, so re-running adds nothing. Shares
+    /// the dirty flag with <see cref="ProcessActiveBuyOrders"/>; a state change
+    /// triggers both methods together. The actual ClearDispatchDirty happens at
+    /// the end of <see cref="ProcessActiveBuyOrders"/> (called immediately after
+    /// us in <see cref="JobLogisticsManager.Execute"/>).
     /// </summary>
     public void RetryUnplacedOrders(Character worker)
     {
+        if (!_orderBook.IsDispatchDirty) return;
+
         string workerName = worker != null ? worker.CharacterName : "LogisticsManager";
 
         foreach (var order in _orderBook.PlacedBuyOrdersForIteration())

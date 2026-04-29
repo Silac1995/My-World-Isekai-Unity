@@ -3,7 +3,7 @@ type: system
 title: "Jobs & Logistics"
 tags: [jobs, logistics, economy, tier-1]
 created: 2026-04-18
-updated: 2026-04-25
+updated: 2026-04-27
 sources: []
 related:
   - "[[world]]"
@@ -246,6 +246,7 @@ VirtualResourceSupplier.TryFulfillOrder fills pending orders from virtual pools
 - [[crafting-loop]] — `CraftingBuilding`, `CraftingStation`, `JobCrafter` demand-driven flow.
 
 ## Change log
+- 2026-04-27 — **Logistics + NPC AI performance pass shipped (Tier 1+2+3, 60 FPS target hit on the 12-worker audited mix).** Touched: `LogisticsOrderBook` (added `_dispatchDirty` flag set by every `Add*`/`Remove*`), `LogisticsTransportDispatcher` (`ProcessActiveBuyOrders` + `RetryUnplacedOrders` early-exit when clean, clears flag at end of pass), `BuildingLogisticsManager` (`MarkDispatchDirty` pass-through), `CommercialBuilding` (inventory mutations mark dispatch dirty; 2 s TTL `StorageFurniture` cache; `Physics.OverlapBoxNonAlloc` swap on 3 zone-scan sites; `TrySpawnDefaultFurniture` invalidates caches at end of layout pass), `CraftingBuilding` (2 s TTL HashSet+List craftable cache, O(1) `ProducesItem`, preserves transform-tree fallback), `ShopBuilding` (lazy `ItemsToSell` cache), `FurnitureManager` (centralised `InvalidateOwnerBuildingCaches` from every register/unregister method), `LogisticsStockEvaluator` (reused scratch list), `Job` (`ExecuteIntervalSeconds = 0.1f` default; `JobLogisticsManager` + `JobHarvester` override to `0.3f`), `BTAction_Work.HandleWorking` (cadence gate). Profiler session post-bundle revealed `UI_CommercialBuildingDebugScript` as the 28%-of-frame bottleneck — disabling it pushed FPS to 60. C and Dₐ permanently parked. Tier 4 deferrals captured in [[optimisation-backlog]] (UI debug refactor, `CharacterActions.ActionTimerRoutine` Instantiate pooling, LateUpdate 391 KB drill-down, EyesController/SpriteSkin → Spine migration). All patterns canonicalised in [[performance-conventions]]. — claude
 - 2026-04-25 — Diagnosed and documented two regressions on `JobLogisticsManager` + the crafting chain: (a) caching `_availableActions` with stateful `GoapAction` instances across plans caused the boss to only place the first queued `BuyOrder` and stall on the rest — reverted to fresh-per-plan instances, kept worldState dict + goal pooling. (b) `JobBlacksmith.HandleSearchOrder` iterated `cb.Rooms` directly to find a `CraftingStation`, missing stations spawned via `_defaultFurnitureLayout` that didn't register into a `Room.FurnitureManager._furnitures` list — switched to new `CraftingBuilding.GetAllStations()`. (c) `JobBlacksmith.HandleMovementToStation` and `CharacterCraftAction` now use `InteractableObject.IsCharacterInInteractionZone(character)` for the proximity gate (was a Y-sensitive 3D-distance check that never converged when the InteractionPoint Transform was elevated). New gotchas added in this section. — claude
 - 2026-04-23 — Quest integration: `BuildingTask` + `BuyOrder` + `TransportOrder` + `CraftingOrder` now implement `MWI.Quests.IQuest` (Hybrid C unification). `BuildingTaskManager` + `LogisticsOrderBook` fire Add/Remove events; `CommercialBuilding` aggregates them into `OnQuestPublished` and auto-claims eligible quests for on-shift workers. Player-side HUD + save/load via `CharacterQuestLog`. Zero behavior change for NPC GOAP (`ClaimBestTask<T>` still works). See [[quest-system]]. — claude
 - 2026-04-22 — Wage and worklog hooks added: punch-in/out wage payment via [[worker-wages-and-performance]], per-job credit hooks (deposit / craft / delivery), JobAssignment now carries wage fields seeded at hire-time — claude
@@ -253,6 +254,8 @@ VirtualResourceSupplier.TryFulfillOrder fills pending orders from virtual pools
 - 2026-04-18 — Initial documentation pass. — Claude / [[kevin]]
 
 ## Sources
+- [[performance-conventions]] — canonical patterns (dirty-flag gating, TTL cache, NonAlloc, cadence stagger) extracted from this system's perf pass.
+- [[optimisation-backlog]] — Tier 4 deferrals (UI debug, ActionTimerRoutine pooling, LateUpdate, EyesController).
 - [.agent/skills/job_system/SKILL.md](../../.agent/skills/job_system/SKILL.md)
 - [.agent/skills/logistics_cycle/SKILL.md](../../.agent/skills/logistics_cycle/SKILL.md)
 - [.agent/skills/wage-system/SKILL.md](../../.agent/skills/wage-system/SKILL.md)

@@ -35,15 +35,26 @@ public class LogisticsStockEvaluator
     /// <see cref="ILogisticsPolicy"/>, and places a BuyOrder for the quantity
     /// the policy asks for.
     /// </summary>
+    // Reused scratch list for stock targets — avoids the per-call `ToList` allocation
+    // documented in the audit (E). CheckStockTargets is only called on punch-in / OnNewDay
+    // (not per tick), so the win here is small but free. See
+    // wiki/projects/optimisation-backlog.md entry #2 / E.
+    private readonly List<StockTarget> _scratchStockTargets = new List<StockTarget>(8);
+
     public void CheckStockTargets(IStockProvider provider, Character worker)
     {
         if (provider == null) return;
 
         string workerName = worker != null ? worker.CharacterName : "?";
-        List<StockTarget> targets;
+        _scratchStockTargets.Clear();
         try
         {
-            targets = provider.GetStockTargets().ToList();
+            // Materialize into the reused scratch list so the iteration below can know
+            // total count + index for diagnostic strings without paying a fresh List alloc.
+            foreach (var target in provider.GetStockTargets())
+            {
+                _scratchStockTargets.Add(target);
+            }
         }
         catch (System.Exception e)
         {
@@ -52,9 +63,11 @@ public class LogisticsStockEvaluator
             return;
         }
 
+        int totalTargets = _scratchStockTargets.Count;
+
         if (_facade.LogLogisticsFlow)
         {
-            Debug.Log($"<color=#66ccff>[LogisticsDBG]</color> CheckStockTargets → {_building.BuildingName} has {targets.Count} stock target(s). Inspector '_logLogisticsFlow' is ON.");
+            Debug.Log($"<color=#66ccff>[LogisticsDBG]</color> CheckStockTargets → {_building.BuildingName} has {totalTargets} stock target(s). Inspector '_logLogisticsFlow' is ON.");
         }
 
         Debug.Log($"<color=cyan>[BuildingLogisticsManager]</color> {workerName} vérifie le stock cible de {_building.BuildingName}.");
@@ -66,12 +79,12 @@ public class LogisticsStockEvaluator
         // silently skip every subsequent item in the list. Without this wrapper, a NullRef on
         // _itemsToSell[1] would prevent _itemsToSell[2] from ever being checked, exactly matching
         // the "only orders the first item" symptom.
-        for (int i = 0; i < targets.Count; i++)
+        for (int i = 0; i < totalTargets; i++)
         {
-            var target = targets[i];
+            var target = _scratchStockTargets[i];
             try
             {
-                ProcessOneStockTarget(target, policy, i, targets.Count);
+                ProcessOneStockTarget(target, policy, i, totalTargets);
             }
             catch (System.Exception e)
             {
@@ -79,6 +92,8 @@ public class LogisticsStockEvaluator
                 Debug.LogError($"[LogisticsStockEvaluator] {_building?.BuildingName}: ProcessOneStockTarget threw for target index {i} (item='{target.ItemToStock?.ItemName}'). Continuing with next target.");
             }
         }
+
+        _scratchStockTargets.Clear();
     }
 
     private void ProcessOneStockTarget(StockTarget target, ILogisticsPolicy policy, int index, int totalTargets)

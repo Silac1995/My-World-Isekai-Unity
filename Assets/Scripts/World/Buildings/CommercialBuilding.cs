@@ -308,6 +308,17 @@ public abstract class CommercialBuilding : Building
                 Debug.LogException(e, this);
             }
         }
+
+        // Tier 2 cache invalidation: the just-spawned default furniture is now logically
+        // owned by this building. Force the StorageFurniture / Craftable caches to refresh
+        // on next access so suppliers can see new CraftingStations and storage drops can
+        // see new chests within the 2 s TTL window — without waiting for it to expire.
+        // See wiki/projects/optimisation-backlog.md entry #2 / D + A.
+        InvalidateStorageFurnitureCache();
+        if (this is CraftingBuilding crafting)
+        {
+            crafting.InvalidateCraftableCache();
+        }
     }
 
     /// <summary>
@@ -1524,6 +1535,9 @@ public abstract class CommercialBuilding : Building
         }
         _inventory.Add(item);
         MirrorInventoryAdd(item.ItemSO);
+        // Inventory mutation can enable a previously-insufficient dispatch — wake the dispatcher.
+        // See wiki/projects/optimisation-backlog.md entry #2 / B.
+        if (LogisticsManager != null) LogisticsManager.MarkDispatchDirty();
         // Per-tick reachable from JobTransporter.NotifyDeliveryProgress / crafting completion / harvest deposit.
         // Gated to avoid the Windows console-buffer progressive-freeze documented in
         // wiki/gotchas/host-progressive-freeze-debug-log-spam.md.
@@ -1538,6 +1552,7 @@ public abstract class CommercialBuilding : Building
         {
             _inventory.Remove(item);
             MirrorInventoryRemove(item.ItemSO);
+            if (LogisticsManager != null) LogisticsManager.MarkDispatchDirty();
             return item;
         }
         return null;
@@ -1549,6 +1564,7 @@ public abstract class CommercialBuilding : Building
         {
             _inventory.Remove(exactItem);
             MirrorInventoryRemove(exactItem.ItemSO);
+            if (LogisticsManager != null) LogisticsManager.MarkDispatchDirty();
             return true;
         }
         return false;

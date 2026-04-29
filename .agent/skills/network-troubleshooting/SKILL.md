@@ -43,3 +43,27 @@ If a Server-side `NavMeshAgent` moves an NPC across a flat or near-flat surface,
 **Solution:** Dynamically disable `SyncPositionY` for NPCs.
 Because shared prefabs (like humanoid characters) need Y-sync for actual Players jumping or climbing stairs, you cannot disable it globally in the Inspector. Instead, toggle it at runtime during initialization:
 `if (TryGetComponent<ClientNetworkTransform>(out var netTransform)) netTransform.SyncPositionY = false;`
+
+### 4. Static Registry Uninitialised on Joining Client (LaunchSequence is host-only)
+**Symptom:** Joining client console floods with errors like `[TerrainTypeRegistry] Not initialized. Call Initialize() first.` per-frame, OR a client-side query (like `CropRegistry.Get(id)`) silently returns null and the calling code degrades broken (empty hold-E menu on a `CropHarvestable`, can't harvest, no growth visual).
+
+**Root cause:** `GameLauncher.LaunchSequence` is the **host/solo path only**. Joining clients enter the game via `GameSessionManager.JoinMultiplayer() → StartClient()` and never run `LaunchSequence`. Any `static class XRegistry { Initialize(); Get(...); }` whose `Initialize()` is called only from `LaunchSequence` will be empty on every joining client. Even if you add an explicit `Initialize()` call in `GameSessionManager.HandleClientConnected`, NGO can replicate spawned NetworkObjects (host's player Character with `CharacterTerrainEffects.Update`, pre-existing crops, …) into the client's scene before `OnClientConnectedCallback` fires — a multi-frame error window opens before the eager-init runs.
+
+**Rule: Every static registry must lazy-init on first access.**
+```csharp
+public static T Get(string id)
+{
+    if (_byId == null) Initialize();          // ← lazy auto-init
+    if (string.IsNullOrEmpty(id)) return null;
+    return _byId.TryGetValue(id, out var v) ? v : null;
+}
+
+public static void Initialize()
+{
+    if (_byId != null) return;                // ← idempotent
+    _byId = Resources.LoadAll<T>("Data/X").ToDictionary(x => x.Id);
+}
+```
+Keep the explicit `Initialize()` in `GameLauncher.LaunchSequence` AND `GameSessionManager.HandleClientConnected` for telemetry, but rely on the lazy guard for correctness.
+
+*(See [wiki/gotchas/static-registry-late-joiner-race.md](../../wiki/gotchas/static-registry-late-joiner-race.md) for the full case study including the [[farming]] symptoms that surfaced this bug class.)*

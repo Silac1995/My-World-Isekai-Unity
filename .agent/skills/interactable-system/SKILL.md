@@ -137,7 +137,7 @@ Used for interactions between two Characters (conversations, specific actions).
 ### 3. Harvestable (`Harvestable.cs`)
 Used for resource nodes (trees, rocks, ore veins).
 - **Behavior**: Triggers a `CharacterHarvestAction` to perform the harvesting over a specified `_harvestDuration`.
-- **Outputs**: Produces items from a predefined `_outputItems` list (as `ItemSO`).
+- **Outputs**: Produces items from a predefined `_harvestOutputs` list of `(ItemSO Item, int Count)` entries. Each harvest pass spawns every entry × its count as separate `WorldItem`s. Same shape applies to `_destructionOutputs` for the chop/mine path.
 - **Depletion**: Tracks `_currentHarvestCount`. Once it hits `_maxHarvestCount`, the object becomes depleted (`_isDepleted = true`), hides its visuals, and waits for a `_respawnTime` before it can be harvested again.
 
 ## Player Input & Interaction Menus

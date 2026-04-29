@@ -247,6 +247,19 @@ public class BuildingLogisticsManager : MonoBehaviour
 
     public int GetReservedItemCount(ItemSO itemSO) => _orderBook?.GetReservedItemCount(itemSO) ?? 0;
 
+    /// <summary>
+    /// Pass-through to <see cref="LogisticsOrderBook.MarkDispatchDirty"/>. Called by
+    /// <see cref="CommercialBuilding"/> on inventory mutations (AddToInventory,
+    /// RemoveExactItemFromInventory, TakeFromInventory) so the dispatcher knows it
+    /// needs to re-evaluate. Safe to call before <see cref="Awake"/> wires the
+    /// order book — silently no-op until the book is constructed.
+    /// </summary>
+    public void MarkDispatchDirty()
+    {
+        if (_orderBook == null) return;
+        _orderBook.MarkDispatchDirty();
+    }
+
     // =========================================================================
     // PUBLIC API — ORDER PLACEMENT (server-authoritative)
     // =========================================================================

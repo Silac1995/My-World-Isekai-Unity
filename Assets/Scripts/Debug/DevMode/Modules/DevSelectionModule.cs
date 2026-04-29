@@ -29,14 +29,31 @@ public class DevSelectionModule : MonoBehaviour
 
     // Default layer names per pick kind. Missing layers are tolerated — BuildMask skips any name
     // not present in Tags & Layers, so the project can drop a layer without breaking dev-mode selection.
-    private static readonly string[] _defaultInteriorLayers = { "RigidBody", "Furniture" };
+    // "Harvestable" is included so Ctrl+Click also hits any Harvestable (wilderness harvestables and
+    // crop harvestables alike — they share layer index 15, named "Harvestable" in the Tags & Layers list).
+    // Future harvestables authored on a different layer must either share the "Harvestable" layer or be
+    // added here to be selectable in dev mode.
+    private static readonly string[] _defaultInteriorLayers = { "RigidBody", "Furniture", "Harvestable" };
     private static readonly string[] _defaultBuildingLayers = { "Building" };
 
     public InteractableObject SelectedInteractable { get; private set; }
     public Character SelectedCharacter { get; private set; }
 
+    /// <summary>
+    /// The Building selected via Alt+Click (or programmatically via <see cref="SetSelectedBuilding"/>).
+    /// Buildings have no <see cref="InteractableObject"/> in the parent chain of their shell collider —
+    /// the chain is <c>Building : ComplexRoom : Room : Zone : NetworkBehaviour</c> — so building
+    /// inspection lives on its own selection slot rather than piggybacking on
+    /// <see cref="SelectedInteractable"/>. Mutually exclusive with <see cref="SelectedInteractable"/>:
+    /// selecting one clears the other.
+    /// </summary>
+    public Building SelectedBuilding { get; private set; }
+
     /// <summary>Fires whenever <see cref="SelectedInteractable"/> changes (including to/from null).</summary>
     public event Action<InteractableObject> OnInteractableSelectionChanged;
+
+    /// <summary>Fires whenever <see cref="SelectedBuilding"/> changes (including to/from null).</summary>
+    public event Action<Building> OnBuildingSelectionChanged;
 
     /// <summary>Fires whenever <see cref="SelectedCharacter"/> changes. Kept for back-compat with existing IDevActions.</summary>
     public event Action OnSelectionChanged;
@@ -123,6 +140,13 @@ public class DevSelectionModule : MonoBehaviour
     {
         if (SelectedInteractable == interactable) return;
 
+        // Interactable and building selection are mutually exclusive — clear the other slot first.
+        if (interactable != null && SelectedBuilding != null)
+        {
+            SelectedBuilding = null;
+            OnBuildingSelectionChanged?.Invoke(null);
+        }
+
         SelectedInteractable = interactable;
         Character derived = null;
         if (interactable is CharacterInteractable ci)
@@ -132,6 +156,29 @@ public class DevSelectionModule : MonoBehaviour
         UpdateDerivedCharacter(derived);
         RefreshLabel();
         OnInteractableSelectionChanged?.Invoke(SelectedInteractable);
+    }
+
+    /// <summary>
+    /// Direct entry point for Building selection. Used by Alt+Click in
+    /// <see cref="TryRaycastAndSelect"/> and by inspector views that want to navigate from a
+    /// child (e.g. a furniture inspector → its parent building). Mutually exclusive with
+    /// <see cref="SelectedInteractable"/>; selecting a Building clears the interactable slot.
+    /// </summary>
+    public void SetSelectedBuilding(Building building)
+    {
+        if (SelectedBuilding == building) return;
+
+        // Building and interactable selection are mutually exclusive — clear the other slot first.
+        if (building != null && SelectedInteractable != null)
+        {
+            SelectedInteractable = null;
+            UpdateDerivedCharacter(null);
+            OnInteractableSelectionChanged?.Invoke(null);
+        }
+
+        SelectedBuilding = building;
+        RefreshLabel();
+        OnBuildingSelectionChanged?.Invoke(SelectedBuilding);
     }
 
     /// <summary>Back-compat convenience. Prefer <see cref="SetSelectedInteractable"/>.</summary>
@@ -155,11 +202,16 @@ public class DevSelectionModule : MonoBehaviour
 
     public void ClearSelection()
     {
-        bool hadSomething = SelectedInteractable != null || SelectedCharacter != null;
+        bool hadInteractable = SelectedInteractable != null || SelectedCharacter != null;
+        bool hadBuilding = SelectedBuilding != null;
+
         SelectedInteractable = null;
+        SelectedBuilding = null;
         UpdateDerivedCharacter(null);
         RefreshLabel();
-        if (hadSomething) OnInteractableSelectionChanged?.Invoke(null);
+
+        if (hadInteractable) OnInteractableSelectionChanged?.Invoke(null);
+        if (hadBuilding) OnBuildingSelectionChanged?.Invoke(null);
     }
 
     private void UpdateDerivedCharacter(Character c)
@@ -179,6 +231,13 @@ public class DevSelectionModule : MonoBehaviour
         else if (SelectedInteractable != null)
         {
             _selectedLabel.text = $"Selected: {SelectedInteractable.gameObject.name}";
+        }
+        else if (SelectedBuilding != null)
+        {
+            string label = !string.IsNullOrEmpty(SelectedBuilding.BuildingName)
+                ? SelectedBuilding.BuildingName
+                : SelectedBuilding.gameObject.name;
+            _selectedLabel.text = $"Selected: {label} (building)";
         }
         else
         {
@@ -298,6 +357,18 @@ public class DevSelectionModule : MonoBehaviour
         {
             SetSelectedCharacter(c);
             label = c.CharacterName;
+            return true;
+        }
+
+        // Building shells have no InteractableObject (Building : ComplexRoom : Room : Zone) and
+        // no Character; the raycast hit is on a child mesh of the building. Walk up to the Building
+        // to feed the Alt+Click building-pick path. Without this fallback, Alt+Click on a building
+        // shell would silently no-op even though the cursor is on a valid building.
+        Building b = hit.collider.GetComponentInParent<Building>();
+        if (b != null)
+        {
+            SetSelectedBuilding(b);
+            label = !string.IsNullOrEmpty(b.BuildingName) ? b.BuildingName : b.gameObject.name;
             return true;
         }
 

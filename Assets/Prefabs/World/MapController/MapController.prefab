@@ -46,6 +46,9 @@ GameObject:
   - component: {fileID: 4887475367487696576}
   - component: {fileID: 6058460527841351557}
   - component: {fileID: 6291281785602581745}
+  - component: {fileID: 7882571087384691619}
+  - component: {fileID: 6877008218881918677}
+  - component: {fileID: 3148250032461230196}
   m_Layer: 0
   m_Name: MapController
   m_TagString: Untagged
@@ -285,6 +288,7 @@ MonoBehaviour:
   ConnectedPlayersCount: 0
   IsHibernating: 0
   _activePlayerCount: 0
+  _pendingSkipWake: 0
   _hibernationEnabled: 0
   IsActive:
     UpdateTraits:
@@ -346,6 +350,45 @@ MonoBehaviour:
   _bushPrefab: {fileID: 0}
   _saplingPrefab: {fileID: 0}
   _treePrefab: {fileID: 0}
+--- !u!114 &7882571087384691619
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1364089202766551707}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bc36d00c14f4e664ab499162d132299b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MWI.Farming.FarmGrowthSystem
+--- !u!114 &6877008218881918677
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1364089202766551707}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a52d75cb3976d6c4fb29b766a7e61e43, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MWI.Farming.CropVisualSpawner
+  _stageSpritePrefab: {fileID: 0}
+  _spriteRotationEuler: {x: 60, y: 0, z: 0}
+--- !u!114 &3148250032461230196
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1364089202766551707}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6edc7438eb6715140b9a26b4d840aaed, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MWI.Terrain.TerrainCellGrid
+  _cellSize: 4
 --- !u!1 &3023920411817021948
 GameObject:
   m_ObjectHideFlags: 0

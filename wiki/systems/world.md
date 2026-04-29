@@ -3,7 +3,7 @@ type: system
 title: "World & Community"
 tags: [world, map, community, macro-simulation, tier-1]
 created: 2026-04-18
-updated: 2026-04-18
+updated: 2026-04-27
 sources: []
 related:
   - "[[character]]"
@@ -13,6 +13,7 @@ related:
   - "[[save-load]]"
   - "[[network]]"
   - "[[terrain-and-weather]]"
+  - "[[world-time-skip]]"
   - "[[kevin]]"
 status: stable
 confidence: high

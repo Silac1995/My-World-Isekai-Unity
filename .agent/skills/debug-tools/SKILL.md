@@ -99,6 +99,24 @@ Sub-tab content is displayed in a TMP_Text component inside a ScrollRect. Only t
 
 The view GameObject is added to the prefab by the **`DevStorageFurnitureInspectorBuilder`** Editor utility (menu `Tools/DevMode/Build Storage Furniture Inspector`, with destructive rebuild variant). It places the new GO under `DevModePanel/ContentRoot/InspectContent/Views`, sibling to `CharacterInspectorView`, and wires the `_headerLabel` + `_content` serialized fields. `DevInspectModule` auto-discovers it at `Awake` via `GetComponentsInChildren<IInspectorView>(true)` — no further wiring required.
 
+### 4c. Harvestable Inspector — `HarvestableInspectorView`
+
+`HarvestableInspectorView : MonoBehaviour, IInspectorView` (`Assets/Scripts/Debug/DevMode/Inspect/HarvestableInspectorView.cs`).
+
+- `CanInspect(target)` returns `target is Harvestable`. `Harvestable` itself **is** an `InteractableObject`, so the raycast walk-up in `DevSelectionModule` resolves a clicked harvestable directly without needing a separate interactable wrapper.
+- `SetTarget` caches the `Harvestable` reference; the GO name is used as the header label.
+- `Update()` re-renders every frame (cheap — only the active view is enabled).
+- Renders four sections, top to bottom:
+  1. **Identity** — concrete type (`Harvestable` vs `CropHarvestable`), GO name, layer + index, world position, `NetworkObject.NetworkObjectId` + spawned flag (or `none` for offline).
+  2. **Harvestable** — `Category`, `CanHarvest()`, `IsDepleted`, `RemainingYield` (∞ when non-depletable), `HarvestDuration`, `RequiredHarvestTool`, full `HarvestOutputs` list rendered as `Count × Item` per entry.
+  3. **Destruction** (only when `AllowDestruction == true`) — `RequiredDestructionTool`, `DestructionDuration`, `DestructionOutputs` list rendered as `Count × Item` per entry.
+  4. **Crop** (only when target is a `CropHarvestable`) — pulls live network state from the sibling `CropHarvestableNetSync` (`CurrentStage`, `IsDepleted`, `CropIdNet`), resolves the `CropSO` via `CropRegistry.Get(cropId)`, and renders display name, stage / `DaysToMature` (with mature/growing tag), perennial + `RegrowDays`, `MinMoistureForGrowth`, `PlantDuration`, and the `HarvestOutputs` list (`Count × Item` per entry). Followed by a **Terrain Cell** subsection that dereferences `crop.Grid.GetCellRef(cellX, cellZ)` and dumps `BaseTypeId / CurrentTypeId / IsPlowed / PlantedCropId / Moisture / Temperature / SnowDepth / Fertility / GrowthTimer / TimeSinceLastWatered`. Clients see "Grid unavailable on this peer" because `CropHarvestable.Grid` is set on the server only.
+- Read-only by design — never mutates harvestable, cell, or crop state.
+
+The view GameObject is added to the prefab by the **`DevHarvestableInspectorBuilder`** Editor utility (menu `Tools/DevMode/Build Harvestable Inspector`, with destructive rebuild variant). It places the new GO under `DevModePanel/ContentRoot/InspectContent/Views`, sibling to the storage / character views, and wires the `_headerLabel` + `_content` serialized fields. `DevInspectModule` auto-discovers it at `Awake` — no further wiring required.
+
+**Selectability gotcha:** `CropHarvestable_Default.prefab` sits on the **`Harvestable`** layer (index 15 in `ProjectSettings/TagManager.asset` — renamed from `Crop` on 2026-04-29 to reflect that crop harvestables and wilderness harvestables share the layer). `_defaultInteriorLayers` was extended to `RigidBody + Furniture + Harvestable` so Ctrl+Click hits any harvestable. Wilderness prefabs (`Tree.prefab`, `Gatherable.prefab`) currently sit on `Default` and are **not** selectable until their root layer is changed to `Harvestable` (or another layer in the mask).
+
 ### 5. `CharacterAIDebugFormatter` — Shared AI Debug Strings
 
 Static class with helpers:
@@ -163,7 +181,7 @@ The field `_characterLayerMask` was renamed `_selectableLayerMask` with `[Former
 
 **Default layer masks:** when the serialized fields are left at zero (the prefab default), `ResolveLayerMask` ORs:
 
-- `_selectableLayerMask` ← `RigidBody + Furniture` — the **interior** mask used by Ctrl+Click. **Building is intentionally excluded** so a building's shell collider doesn't block selection of the chest, bed, or NPC inside it.
+- `_selectableLayerMask` ← `RigidBody + Furniture + Harvestable` — the **interior** mask used by Ctrl+Click. **Building is intentionally excluded** so a building's shell collider doesn't block selection of the chest, bed, or NPC inside it. `Harvestable` (layer index 15, named `Harvestable` in the Tags & Layers list) is included so any `Harvestable` — crop or wilderness — is pickable.
 - `_buildingLayerMask` ← `Building` — used by Alt+Click to explicitly pick a building.
 
 Missing layer names are tolerated (skipped) so the project can drop a layer without breaking dev-mode selection. Override either field on the prefab to narrow the mask, or keep them at zero to use the runtime defaults.

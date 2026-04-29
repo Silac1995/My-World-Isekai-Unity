@@ -741,8 +741,18 @@ namespace MWI.WorldSystem
             // unless it's currently being carried (in which case it belongs to a Character's inventory).
             SnapshotActiveWorldItems(colliders, snapshot);
 
+            // Also snapshot the terrain cell grid — IsPlowed / PlantedCropId / GrowthTimer /
+            // Moisture / TimeSinceLastWatered / etc. Without this, planted crops on an active
+            // map are silently dropped on save/load (the WakeUp path restores cells from
+            // _hibernationData.TerrainCells, but a fresh load goes through the snapshot path
+            // and that field would be null). Mirrors what Hibernate() writes.
+            var terrainGrid = GetComponent<TerrainCellGrid>();
+            if (terrainGrid != null && terrainGrid.Width > 0)
+                snapshot.TerrainCells = terrainGrid.SerializeCells();
+
+            int cellCount = snapshot.TerrainCells != null ? snapshot.TerrainCells.Length : 0;
             Debug.Log($"<color=cyan>[MapController:SnapshotActiveNPCs]</color> Map '{MapId}' snapshot complete. " +
-                      $"{snapshot.HibernatedNPCs.Count} NPCs, {snapshot.WorldItems.Count} WorldItems serialized, {characterTagCount} Character-tagged colliders found, {playerSkipCount} players skipped.");
+                      $"{snapshot.HibernatedNPCs.Count} NPCs, {snapshot.WorldItems.Count} WorldItems, {cellCount} TerrainCells serialized, {characterTagCount} Character-tagged colliders found, {playerSkipCount} players skipped.");
             return snapshot;
         }
 
@@ -1025,7 +1035,23 @@ namespace MWI.WorldSystem
         /// </summary>
         private void SpawnNPCsFromSnapshot(MapSaveData snapshotData)
         {
-            if (snapshotData == null || snapshotData.HibernatedNPCs.Count == 0) return;
+            if (snapshotData == null) return;
+
+            // Restore terrain cells BEFORE WorldItems / NPCs / farming sweep so PostWakeSweep
+            // sees the planted crops. WakeUp() does this restore inline (lines 1591-1600 path)
+            // because it owns the staging; the snapshot-load path also routes through here so
+            // the restore is duplicated guarded by an idempotence check (RestoreFromSaveData
+            // overwrites cells unconditionally, so calling it twice is safe).
+            if (snapshotData.TerrainCells != null && snapshotData.TerrainCells.Length > 0)
+            {
+                var grid = GetComponent<TerrainCellGrid>();
+                if (grid != null && grid.Width == 0)
+                {
+                    var box = GetComponent<BoxCollider>();
+                    if (box != null) grid.Initialize(box.bounds);
+                }
+                if (grid != null) grid.RestoreFromSaveData(snapshotData.TerrainCells);
+            }
 
             foreach (var npcData in snapshotData.HibernatedNPCs)
             {
@@ -1132,7 +1158,19 @@ namespace MWI.WorldSystem
             // Also respawn any saved WorldItems for this map.
             SpawnWorldItemsFromSnapshot(snapshotData);
 
-            Debug.Log($"<color=green>[MapController:SpawnNPCsFromSnapshot]</color> Spawned {snapshotData.HibernatedNPCs.Count} NPCs and {snapshotData.WorldItems.Count} WorldItems from snapshot on map '{MapId}'.");
+            // Reconstruct CropHarvestables from the freshly-restored cell state. PostWakeSweep
+            // walks each cell with PlantedCropId set and spawns the matching CropHarvestable
+            // GameObject. Idempotent (skips cells whose harvestable is already registered),
+            // so calling it both here and in WakeUp's unconditional block below is safe.
+            var farmGrowthSnap = GetComponent<MWI.Farming.FarmGrowthSystem>();
+            var terrainGridSnap = GetComponent<TerrainCellGrid>();
+            if (farmGrowthSnap != null && terrainGridSnap != null && terrainGridSnap.Width > 0)
+            {
+                farmGrowthSnap.Initialize(terrainGridSnap, this);
+                farmGrowthSnap.PostWakeSweep();
+            }
+
+            Debug.Log($"<color=green>[MapController:SpawnNPCsFromSnapshot]</color> Spawned {snapshotData.HibernatedNPCs.Count} NPCs and {snapshotData.WorldItems.Count} WorldItems from snapshot on map '{MapId}' (cells restored: {(snapshotData.TerrainCells != null ? snapshotData.TerrainCells.Length : 0)}).");
         }
 
         /// <summary>

@@ -248,6 +248,14 @@ namespace MWI.Farming
                     if (_mode == Mode.Placing)
                     {
                         Debug.Log($"[CropPlacement] Click accepted at cell ({_lastCellX},{_lastCellZ}) → RequestPlaceCropServerRpc(crop={_activeCrop.Id}).");
+                        // HandsController is a non-networked MonoBehaviour — the server can't see
+                        // the client's CarriedItem. Consume the seed locally on the OWNING peer
+                        // before issuing the RPC; the server's seed-consume in
+                        // CharacterAction_PlaceCrop.OnApplyEffect is then a no-op for dedicated
+                        // clients (server hands empty) and a redundant clear for host (same
+                        // HandsController instance). On host this means the seed is cleared on
+                        // click rather than after the plant duration — acceptable trade-off.
+                        ConsumeHeldSeedLocally(_activeCrop.Id);
                         RequestPlaceCropServerRpc(_lastCellX, _lastCellZ, _activeCrop.Id);
                     }
                     else
@@ -280,6 +288,24 @@ namespace MWI.Farming
                 ? _character.CharacterVisual.BodyPartsController.HandsController
                 : null;
             return hands?.CarriedItem?.ItemSO is WateringCanSO can ? can.MoistureSetTo : 1f;
+        }
+
+        /// <summary>
+        /// Local-only seed consumption on the owning peer. Called immediately before the
+        /// place-crop ServerRpc because HandsController.CarriedItem is not a NetworkVariable —
+        /// clearing it on the server would have no effect on the dedicated client whose hand
+        /// actually holds the seed. Verifies the held item still matches the requested crop;
+        /// if it doesn't (e.g. the player swapped while in placement mode), no-op so we don't
+        /// destroy an unrelated item.
+        /// </summary>
+        private void ConsumeHeldSeedLocally(string expectedCropId)
+        {
+            var hands = _character?.CharacterVisual?.BodyPartsController?.HandsController;
+            if (hands == null || hands.CarriedItem == null) return;
+            if (!(hands.CarriedItem.ItemSO is SeedSO seedSO)) return;
+            if (seedSO.CropToPlant == null || seedSO.CropToPlant.Id != expectedCropId) return;
+            hands.ClearCarriedItem();
+            Debug.Log($"[CropPlacement] Seed '{seedSO.name}' consumed locally on owning peer for crop '{expectedCropId}'.");
         }
 
         // Strip everything that would interfere with the ghost being a passive cursor:
@@ -340,15 +366,12 @@ namespace MWI.Farming
                 return;
             }
 
-            var hands = _character.CharacterVisual != null && _character.CharacterVisual.BodyPartsController != null
-                ? _character.CharacterVisual.BodyPartsController.HandsController
-                : null;
-            var heldSO = hands?.CarriedItem?.ItemSO;
-            if (!(heldSO is SeedSO seedSO) || seedSO.CropToPlant == null || seedSO.CropToPlant.Id != cropId)
-            {
-                Debug.LogWarning($"[CropPlacement.Server] Bail — seed mismatch. Held='{heldSO?.name}', expected SeedSO with CropToPlant.Id='{cropId}'.");
-                return;
-            }
+            // Note: no held-seed check here. HandsController.CarriedItem is a non-networked
+            // MonoBehaviour field — the server's view of a dedicated-client player's hand is
+            // always empty. The owning client validates locally before issuing this RPC and
+            // consumes the seed via ConsumeHeldSeedLocally. For a malicious client this trusts
+            // them to have the seed; acceptable for co-op. Add a server-side inventory model
+            // later if anti-cheat is required.
 
             Debug.Log($"[CropPlacement.Server] Queuing CharacterAction_PlaceCrop for {_character.name} at cell ({x},{z}).");
             _character.CharacterActions.ExecuteAction(

@@ -48,6 +48,29 @@ public class LogisticsOrderBook
     public event System.Action<CraftingOrder> OnCraftingOrderAdded;
     public event System.Action<MWI.Quests.IQuest> OnAnyOrderRemoved;
 
+    // --- Dispatcher dirty flag (perf, see wiki/projects/optimisation-backlog.md entry #2 / B).
+    // LogisticsTransportDispatcher.ProcessActiveBuyOrders and RetryUnplacedOrders run at 10 Hz
+    // per logistics manager (40 calls/sec across the audited 4-manager mix). On a stable order
+    // book + stable inventory, those calls do zero useful work but pay the full
+    // BuildGloballyReservedSet + per-order LINQ cost every time. The dirty flag lets the
+    // dispatcher early-exit when nothing changed since the last pass.
+    //
+    // Sources of dirty:
+    //  - Every Add*/Remove* method on this book.
+    //  - Inventory mutations on the owning CommercialBuilding (AddToInventory, RemoveExact*,
+    //    TakeFromInventory). Building hooks call MarkDispatchDirty on its order book.
+    //  - Reachability state changes on a BuyOrder (rare — currently expires via OnNewDay
+    //    so the dirty flag flips only when the order itself flips IsPlaced or RemainingDays).
+    //
+    // Initial state: dirty=true so the first dispatcher tick after Awake processes once
+    // (covers warm-start cases like load from save where orders pre-exist).
+    private bool _dispatchDirty = true;
+    public bool IsDispatchDirty => _dispatchDirty;
+    /// <summary>Mark the dispatcher as dirty so the next ProcessActiveBuyOrders / RetryUnplacedOrders runs.</summary>
+    public void MarkDispatchDirty() => _dispatchDirty = true;
+    /// <summary>Called by the dispatcher at the end of a successful pass.</summary>
+    public void ClearDispatchDirty() => _dispatchDirty = false;
+
     // =========================================================================
     // ACTIVE ORDERS (supplier-side)
     // =========================================================================
@@ -56,10 +79,17 @@ public class LogisticsOrderBook
     {
         if (order == null || order.Quantity <= 0) return false;
         _activeOrders.Add(order);
+        _dispatchDirty = true;
         return true;
     }
 
-    public bool RemoveActiveOrder(BuyOrder order) => order != null && _activeOrders.Remove(order);
+    public bool RemoveActiveOrder(BuyOrder order)
+    {
+        if (order == null) return false;
+        bool removed = _activeOrders.Remove(order);
+        if (removed) _dispatchDirty = true;
+        return removed;
+    }
 
     // =========================================================================
     // PLACED BUY ORDERS (client-side)
@@ -69,6 +99,7 @@ public class LogisticsOrderBook
     {
         if (order == null) return;
         _placedBuyOrders.Add(order);
+        _dispatchDirty = true;
         OnBuyOrderAdded?.Invoke(order);
     }
 
@@ -76,7 +107,11 @@ public class LogisticsOrderBook
     {
         if (order == null) return false;
         bool removed = _placedBuyOrders.Remove(order);
-        if (removed) OnAnyOrderRemoved?.Invoke(order);
+        if (removed)
+        {
+            _dispatchDirty = true;
+            OnAnyOrderRemoved?.Invoke(order);
+        }
         return removed;
     }
 
@@ -102,6 +137,7 @@ public class LogisticsOrderBook
     {
         if (order == null) return;
         _placedTransportOrders.Add(order);
+        _dispatchDirty = true;
         OnTransportOrderAdded?.Invoke(order);
     }
 
@@ -109,7 +145,11 @@ public class LogisticsOrderBook
     {
         if (order == null) return false;
         bool removed = _placedTransportOrders.Remove(order);
-        if (removed) OnAnyOrderRemoved?.Invoke(order);
+        if (removed)
+        {
+            _dispatchDirty = true;
+            OnAnyOrderRemoved?.Invoke(order);
+        }
         return removed;
     }
 
@@ -117,10 +157,17 @@ public class LogisticsOrderBook
     {
         if (order == null || order.Quantity <= 0) return false;
         _activeTransportOrders.Add(order);
+        _dispatchDirty = true;
         return true;
     }
 
-    public bool RemoveActiveTransportOrder(TransportOrder order) => order != null && _activeTransportOrders.Remove(order);
+    public bool RemoveActiveTransportOrder(TransportOrder order)
+    {
+        if (order == null) return false;
+        bool removed = _activeTransportOrders.Remove(order);
+        if (removed) _dispatchDirty = true;
+        return removed;
+    }
 
     public TransportOrder GetNextAvailableTransportOrder()
     {
@@ -141,6 +188,7 @@ public class LogisticsOrderBook
     {
         if (order == null || order.Quantity <= 0) return false;
         _activeCraftingOrders.Add(order);
+        _dispatchDirty = true;
         OnCraftingOrderAdded?.Invoke(order);
         return true;
     }
@@ -149,7 +197,11 @@ public class LogisticsOrderBook
     {
         if (order == null) return false;
         bool removed = _activeCraftingOrders.Remove(order);
-        if (removed) OnAnyOrderRemoved?.Invoke(order);
+        if (removed)
+        {
+            _dispatchDirty = true;
+            OnAnyOrderRemoved?.Invoke(order);
+        }
         return removed;
     }
 
@@ -171,11 +223,19 @@ public class LogisticsOrderBook
 
     public BuildingLogisticsManager.PendingOrder PeekPending() => _pendingOrders.Peek();
 
-    public void EnqueuePending(BuildingLogisticsManager.PendingOrder order) => _pendingOrders.Enqueue(order);
+    public void EnqueuePending(BuildingLogisticsManager.PendingOrder order)
+    {
+        _pendingOrders.Enqueue(order);
+        _dispatchDirty = true;
+    }
 
     public void DequeuePending()
     {
-        if (_pendingOrders.Count > 0) _pendingOrders.Dequeue();
+        if (_pendingOrders.Count > 0)
+        {
+            _pendingOrders.Dequeue();
+            _dispatchDirty = true;
+        }
     }
 
     /// <summary>
@@ -187,6 +247,7 @@ public class LogisticsOrderBook
     {
         if (keepPredicate == null) return;
         _pendingOrders = new Queue<BuildingLogisticsManager.PendingOrder>(_pendingOrders.Where(keepPredicate));
+        _dispatchDirty = true;
     }
 
     public bool PendingContains(System.Func<BuildingLogisticsManager.PendingOrder, bool> predicate)

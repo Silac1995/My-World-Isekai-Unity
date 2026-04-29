@@ -10,6 +10,7 @@ related:
   - "[[ai]]"
   - "[[world]]"
   - "[[shops]]"
+  - "[[world-time-skip]]"
   - "[[kevin]]"
 status: stable
 confidence: high

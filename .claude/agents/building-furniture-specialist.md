@@ -377,6 +377,22 @@ Detection (OnWorkerPunchIn: IStockProvider → BuyOrder, policy-driven)
   - New `CommercialBuilding.CountUnabsorbedItemsInBuildingZone(ItemSO)` counts loose WorldItems in `BuildingZone` **plus** items carried by this building's own workers (inventory + `HandsController.CarriedItem`).
   - `LogisticsTransportDispatcher.HandleInsufficientStock` gates the "🚨 VOL DETECTÉ" branch on the above count — prevents false-theft detection during the craft-output-to-storage transit window (fixes over-production: 10 spawned for a Quantity=3 order, and the "crafter crafts every Manager pickup" symptom).
 
+- **2026-04-25 → 2026-04-27 — Logistics performance pass (Tier 1 + Tier 2 + Tier 3, hit 60 FPS target):**
+  Patterns now canonical for any building/logistics work — see [[performance-conventions]] for the full catalogue. Active TODOs in [[optimisation-backlog]].
+  - **Dirty-flag dispatcher gating** ([`LogisticsOrderBook._dispatchDirty`](../../Assets/Scripts/World/Buildings/Logistics/LogisticsOrderBook.cs)): every `Add*` / `Remove*` mutation marks dirty. `LogisticsTransportDispatcher.ProcessActiveBuyOrders` and `RetryUnplacedOrders` early-exit when clean. `BuildingLogisticsManager.MarkDispatchDirty()` is the public pass-through — call it from any new state mutation that should wake the dispatcher (inventory mutations, reservation changes, etc.). Initial state = dirty so warm-start (load-from-save) processes once. Clear at end of successful pass.
+  - **TTL caches with explicit invalidation** on `CommercialBuilding`:
+    - [`GetStorageFurnitureCached`](../../Assets/Scripts/World/Buildings/CommercialBuilding.cs) — 2 s TTL list of `StorageFurniture` across all rooms; consumers are `FindStorageFurnitureForItem`, `GetItemsInStorageFurniture`. Public `InvalidateStorageFurnitureCache()`.
+    - [`CraftingBuilding.RebuildCraftableCacheIfStale`](../../Assets/Scripts/World/Buildings/CommercialBuildings/CraftingBuilding.cs) — 2 s TTL `HashSet<ItemSO>` (O(1) `ProducesItem`) + `List<ItemSO>` (`GetCraftableItems`). **Preserves the intentional `GetComponentsInChildren<CraftingStation>(true)` fallback** — paid once per refresh, not once per query. Public `InvalidateCraftableCache()`.
+  - **Centralised invalidation hook** in [`FurnitureManager.InvalidateOwnerBuildingCaches`](../../Assets/Scripts/World/Buildings/FurnitureManager.cs) — called from every `AddFurniture` / `RemoveFurniture` / `RegisterSpawnedFurniture` / `RegisterSpawnedFurnitureUnchecked` / `UnregisterAndRemove` / `LoadExistingFurniture` (when items added). `CommercialBuilding.TrySpawnDefaultFurniture` also explicitly invalidates at end of the layout pass. Lazy-resolves the parent `CommercialBuilding` once, then O(1) per call. **Any new furniture mutation method must call this hook.**
+  - **`Physics.OverlapBoxNonAlloc` swap** on the 3 `CommercialBuilding` zone-scan sites (`GetWorldItemsInStorage`, `CountUnabsorbedItemsInBuildingZone`, `RefreshStorageInventory` PickupZone). Shared `Collider[128]` buffer. Saturation warning if buffer fills (rule #31).
+  - **Reused scratch list** in [`LogisticsStockEvaluator.CheckStockTargets`](../../Assets/Scripts/World/Buildings/Logistics/LogisticsStockEvaluator.cs) — replaces `provider.GetStockTargets().ToList()` with iteration into a member `_scratchStockTargets`.
+  - **Lazy-built inspector cache** on [`ShopBuilding.ItemsToSell`](../../Assets/Scripts/World/Buildings/CommercialBuildings/ShopBuilding.cs) — was `Select(...).ToList()` per access, now built once on first access. `_itemsToSell` is inspector-authored / immutable at runtime.
+  - **Network safety:** every cache and dirty flag is server-only state. Never replicated, never on `NetworkVariable`. Clients reach the same answer via existing replicated `_inventoryItemIds` `NetworkList`.
+  - **Tier 4 deferred (NOT yet shipped, capture in [[optimisation-backlog]] before any new perf work):**
+    - `UI_CommercialBuildingDebugScript` proper fix before re-enable (was 28 % of frame in 2026-04-27 profiler — disable it in production scenes for now).
+    - `CharacterActions.ActionTimerRoutine` `Instantiate` pooling (~0.8 MB / frame at 12-worker steady state). Network-aware `WorldItem` pool needed.
+    - `PreLateUpdate.ScriptRunBehaviourLateUpdate` 391 KB / frame still unexplored.
+
 - **2026-04-21 — Logistics refactor (Layers A + B + C):**
   - `IStockProvider` contract introduced; `ShopBuilding` + `CraftingBuilding` implement it.
   - `CraftingBuilding._inputStockTargets` fix — forges now proactively request input materials on every worker punch-in (was commission-only → idle).
@@ -396,4 +412,6 @@ Detection (OnWorkerPunchIn: IStockProvider → BuyOrder, policy-driven)
 - **Wage System SKILL.md**: `.agent/skills/wage-system/SKILL.md` (formulas, payer architecture, hire-time seeding)
 - **Worker Wages & Performance wiki**: `wiki/systems/worker-wages-and-performance.md` (architecture overview)
 - **Network Architecture**: `NETWORK_ARCHITECTURE.md`
-- **Project Rules**: `CLAUDE.md`
+- **Project Rules**: `CLAUDE.md` (rule #34 = performance, mandatory)
+- **Performance Conventions**: [`wiki/concepts/performance-conventions.md`](../../wiki/concepts/performance-conventions.md) — pattern catalogue (dirty flag, TTL cache, NonAlloc, centralised invalidation). Read before any per-frame / per-tick / per-NPC work.
+- **Optimisation Backlog**: [`wiki/projects/optimisation-backlog.md`](../../wiki/projects/optimisation-backlog.md) — active deferrals + Tier 4 todos with profiler-measured costs.

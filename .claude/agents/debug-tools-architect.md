@@ -1,6 +1,6 @@
 ---
 name: debug-tools-architect
-description: "Expert in debug/dev tools infrastructure — the Dev-Mode god tool (DevModeManager owning global shortcuts Ctrl+Click interior-select / Alt+Click building-select / Space+LMB spawn / ESC cancel, DevModePanel, DevSpawnModule Spawn tab, DevSelectionModule + IDevAction Select tab generalized to InteractableObject with dual interior + building masks, Inspect tab with DevInspectModule + IInspectorView + CharacterInspectorView + 10 CharacterSubTab categories + StorageFurnitureInspectorView for chest/shelf/barrel/wardrobe slot listings, CharacterAIDebugFormatter, DevInspectTabBuilder + DevStorageFurnitureInspectorBuilder Editor scripts, /devmode chat command), DebugScript spawning UI, MapControllerDebugUI hibernation diagnostics, UI_CharacterDebugScript NPC state visualization, UI_CommercialBuildingDebugScript logistics display, and creating new debug panels, cheat commands, diagnostic overlays, and inspection views. Use when creating, extending, or improving debug tools."
+description: "Expert in debug/dev tools infrastructure — the Dev-Mode god tool (DevModeManager owning global shortcuts Ctrl+Click interior-select / Alt+Click building-select / Space+LMB spawn / ESC cancel, DevModePanel, DevSpawnModule Spawn tab, DevSelectionModule + IDevAction Select tab generalized to InteractableObject with dual interior + building masks AND a separate SelectedBuilding slot for raw Building targets, Inspect tab with DevInspectModule routing both IInspectorView + IBuildingInspectorView, CharacterInspectorView + 10 CharacterSubTab categories, StorageFurnitureInspectorView for chest/shelf/barrel/wardrobe slot listings with 'Inspect Parent Building' navigation hook, BuildingInspectorView for whole-building readout (identity / construction state with required+contributed+pending materials / owners / commercial section with jobs+shift+community / rooms / furniture / interior), HarvestableInspectorView for any Harvestable (wilderness or crop) — Identity / Harvestable state / Destruction / Crop sections with live CropHarvestableNetSync NetVars + full TerrainCell readout, CharacterAIDebugFormatter, DevInspectTabBuilder + DevStorageFurnitureInspectorBuilder + DevHarvestableInspectorBuilder Editor scripts, /devmode chat command), DebugScript spawning UI, MapControllerDebugUI hibernation diagnostics, UI_CharacterDebugScript NPC state visualization, UI_CommercialBuildingDebugScript logistics display, and creating new debug panels, cheat commands, diagnostic overlays, and inspection views. Use when creating, extending, or improving debug tools."
 model: opus
 memory: project
 tools: Read, Edit, Write, Glob, Grep, Bash, Agent
@@ -26,8 +26,12 @@ You design and implement debug tools, dev-mode features, and diagnostic systems 
 | `MapControllerDebugUI` | Per-map diagnostics — map state (Active/Hibernating), player tracking, hibernation data, NPC counts | `Assets/Scripts/World/MapSystem/MapControllerDebugUI.cs` |
 | `UI_CharacterDebugScript` | Per-character state viz — current action, behaviour stack, needs urgency, NavMesh state, GOAP goals, phase | `Assets/Scripts/UI/WorldUI/UI_CharacterDebugScript.cs` |
 | `UI_CommercialBuildingDebugScript` | Building diagnostics — owner, jobs, task manager, logistics orders, storage inventory | `Assets/Scripts/UI/WorldUI/UI_CommercialBuildingDebugScript.cs` |
-| `StorageFurnitureInspectorView` | `IInspectorView` for `StorageFurniture` (chests, shelves, barrels, wardrobes) — header + capacity / locked / full + per-slot listing (`[index] <SlotType> — <item>`). Selected via Ctrl+Click or the Select tab on the underlying `FurnitureInteractable`. | `Assets/Scripts/Debug/DevMode/Inspect/StorageFurnitureInspectorView.cs` |
+| `StorageFurnitureInspectorView` | `IInspectorView` for `StorageFurniture` (chests, shelves, barrels, wardrobes) — header + capacity / locked / full + per-slot listing (`[index] <SlotType> — <item>`). Selected via Ctrl+Click or the Select tab on the underlying `FurnitureInteractable`. Now also exposes an "Inspect Parent Building" button that resolves `GetComponentInParent<Building>()` and forwards it to `DevSelectionModule.SetSelectedBuilding(...)`, flipping the inspector to the building view. | `Assets/Scripts/Debug/DevMode/Inspect/StorageFurnitureInspectorView.cs` |
+| `IBuildingInspectorView` | Parallel of `IInspectorView` typed to `Building` because building shells have no `InteractableObject` in their parent chain (`Building : ComplexRoom : Room : Zone`). `DevInspectModule` discovers implementations via `GetComponentsInChildren<IBuildingInspectorView>(true)`. | `Assets/Scripts/Debug/DevMode/Inspect/IBuildingInspectorView.cs` |
+| `BuildingInspectorView` | `IBuildingInspectorView` for any `Building` subtype. Single-view runtime polymorphism — renders Identity (concrete type, BuildingName, BuildingId, PrefabId, IsPublicLocation, PlacedByCharacterId) → State (CurrentState + per-material `required / contributed / pending` from `Building.ConstructionRequirements` / `ContributedMaterials` / `GetPendingMaterials()`) → Owners (resolved from inherited `Room.OwnerIds`) → Commercial-only (Operational, OwnerCommunity, InventoryTotalCount, Jobs with Worker, ActiveWorkersOnShift roster, TimeClock present/absent) → Rooms (per-room furniture count) → Furniture (flat list with `[Room] FurnitureName (Type)`) → Interior (HasInterior + GetInteriorMapId). Refresh-every-frame; cheap because `DevInspectModule` keeps non-active views disabled. | `Assets/Scripts/Debug/DevMode/Inspect/BuildingInspectorView.cs` |
 | `DevStorageFurnitureInspectorBuilder` | Editor-only one-shot. `[MenuItem("Tools/DevMode/Build Storage Furniture Inspector")]` adds the storage view GO to the DevModePanel prefab under `InspectContent/Views` and wires its serialized fields. Idempotent + destructive variants. | `Assets/Editor/DevMode/DevStorageFurnitureInspectorBuilder.cs` |
+| `HarvestableInspectorView` | `IInspectorView` for any `Harvestable` (wilderness or crop). Renders Identity (type / GO / layer / position / NetworkObjectId), Harvestable state (category / depleted / remaining yield / harvest tool / outputs), Destruction (when `AllowDestruction`), and a Crop section when the target is a `CropHarvestable` — pulls `CropHarvestableNetSync` NetVars (`CurrentStage`, `IsDepleted`, `CropIdNet`), resolves `CropSO` via `CropRegistry`, and dumps the full `TerrainCell` from `crop.Grid.GetCellRef(x, z)` (server-side only — clients see "Grid unavailable on this peer"). Read-only. Selectability requires `Harvestable` to be in `DevSelectionModule._defaultInteriorLayers` (default since 2026-04-29 — `RigidBody + Furniture + Harvestable`). | `Assets/Scripts/Debug/DevMode/Inspect/HarvestableInspectorView.cs` |
+| `DevHarvestableInspectorBuilder` | Editor-only one-shot. `[MenuItem("Tools/DevMode/Build Harvestable Inspector")]` adds the harvestable view GO to the DevModePanel prefab under `InspectContent/Views` and wires its serialized fields. Idempotent + destructive variants. | `Assets/Editor/DevMode/DevHarvestableInspectorBuilder.cs` |
 
 ### 2. Current Patterns (Match These)
 
@@ -100,15 +104,20 @@ See `.agent/skills/dev-mode/SKILL.md` for the full IDevAction recipe.
 | `event Action<InteractableObject> OnInteractableSelectionChanged` | Fires on any interactable change. `DevInspectModule` subscribes here. |
 | `void SetSelectedInteractable(InteractableObject io)` | Replaces the interactable selection. |
 | `bool TrySelectAtCursor(out string label)` | Interior raycast (`_selectableLayerMask`, default `RigidBody + Furniture`). Backs Ctrl+Click and the armed Select toggle. |
-| `bool TrySelectBuildingAtCursor(out string label)` | Building raycast (`_buildingLayerMask`, default `Building`). Backs Alt+Click. Bypasses interior contents when the user explicitly wants the building shell. |
+| `bool TrySelectBuildingAtCursor(out string label)` | Building raycast (`_buildingLayerMask`, default `Building`). Backs Alt+Click. Falls back to `GetComponentInParent<Building>()` since building shells have no `InteractableObject` in their parent chain. |
+| `Building SelectedBuilding { get; }` | Independent selection slot for Building targets. Mutually exclusive with `SelectedInteractable` — selecting one clears the other. |
+| `event Action<Building> OnBuildingSelectionChanged` | Fires on any building change. `DevInspectModule` subscribes here in parallel with `OnInteractableSelectionChanged`. |
+| `void SetSelectedBuilding(Building b)` | Direct entry. Used by Alt+Click and by inspector views that navigate from a child (e.g. `StorageFurnitureInspectorView`'s "Inspect Parent Building" button). |
 
 Back-compat: `SelectedCharacter`, `OnSelectionChanged`, and `SetSelectedCharacter` are preserved so existing `IDevAction` consumers require zero changes. Field renamed `_characterLayerMask` → `_selectableLayerMask` with `[FormerlySerializedAs]`. New companion field `_buildingLayerMask` was added for the Alt+Click path; both auto-default at runtime when left at zero.
 
+**Why a separate Building slot?** `Building : ComplexRoom : Room : Zone : NetworkBehaviour` — buildings are *not* `InteractableObject`s, so `GetComponentInParent<InteractableObject>()` from a shell hit returns null. Rather than wrap every building prefab in a synthetic `BuildingInteractable`, the selection module carries two parallel slots and `DevInspectModule` discovers two parallel view contracts (`IInspectorView` for interactables, `IBuildingInspectorView` for buildings). Selecting one clears the other automatically.
+
 ### Inspect Tab (3rd module)
 
-Read-only runtime inspection of the currently selected `InteractableObject`. Host-only. No RPCs, no mutation.
+Read-only runtime inspection of the currently selected `InteractableObject` **or** the currently selected `Building`. Host-only. No RPCs, no mutation.
 
-**Dispatch contract — `IInspectorView`:**
+**Dispatch contracts — `IInspectorView` + `IBuildingInspectorView`:**
 
 ```csharp
 public interface IInspectorView
@@ -117,9 +126,16 @@ public interface IInspectorView
     void SetTarget(InteractableObject target);
     void Clear();
 }
+
+public interface IBuildingInspectorView
+{
+    bool CanInspect(Building target);
+    void SetTarget(Building target);
+    void Clear();
+}
 ```
 
-`DevInspectModule` auto-discovers all `IInspectorView` children via `GetComponentsInChildren<IInspectorView>(true)` at `Awake` — no manual registration. On each selection change it activates the first matching view, deactivates the rest, and shows a placeholder GO when nothing matches. All dispatch calls are wrapped in `try/catch`.
+`DevInspectModule` auto-discovers both contract families via `GetComponentsInChildren<…>(true)` at `Awake` — no manual registration. It subscribes to both `OnInteractableSelectionChanged` and `OnBuildingSelectionChanged`. On each selection change it activates the first matching view (interactable or building), deactivates the rest, and shows a placeholder GO when nothing matches. The two selection slots are mutually exclusive on `DevSelectionModule`, so at most one view is active. Cross-event clears are guarded so a `null` interactable event doesn't clobber an active building view (and vice versa). All dispatch calls are wrapped in `try/catch`.
 
 **Character inspector — `CharacterInspectorView`:**
 
@@ -157,7 +173,16 @@ public abstract class CharacterSubTab : MonoBehaviour
 
 **Adding a new `IInspectorView`** (e.g., for WorldItem): implement the 3-method interface, add a child GO under `DevInspectModule`'s hierarchy — no code changes to the dispatcher.
 
-**Reference example** — `StorageFurnitureInspectorView` (`CanInspect` matches `FurnitureInteractable.Furniture is StorageFurniture`, renders capacity / locked / full + per-slot listing) and its prefab builder `DevStorageFurnitureInspectorBuilder` (one-shot Editor menu). Mirror this pattern for new view types.
+**Adding a new `IBuildingInspectorView`** (e.g., for a residence-only or quest-building specialised view): implement the 3-method interface typed to `Building`, add a child GO under the Inspect tab, drop a header TMP_Text + a scroll-rect content TMP_Text and wire them. The dispatcher discovers it automatically.
+
+**Reference examples** —
+- `StorageFurnitureInspectorView` (`CanInspect` matches `FurnitureInteractable.Furniture is StorageFurniture`, renders capacity / locked / full + per-slot listing, plus an "Inspect Parent Building" Button that calls `DevSelectionModule.SetSelectedBuilding(_furniture.GetComponentInParent<Building>())`).
+- `BuildingInspectorView` (`CanInspect(b) => b != null` — single view for every Building subclass via runtime polymorphism, mirroring the storage-view approach). Renders Identity → State (with `required / contributed / pending` per material) → Owners → Commercial-only block → Rooms → Furniture → Interior. Cast pattern: `if (target is CommercialBuilding cb) { … }`.
+
+`Building.cs` exposes the read-only accessors the building view needs:
+- `IReadOnlyList<CraftingIngredient> ConstructionRequirements`
+- `IReadOnlyDictionary<ItemSO, int> ContributedMaterials` (server-authoritative; clients see empty until/unless this is networked later)
+- pre-existing `GetPendingMaterials()` for the "left to contribute" delta.
 
 **Adding a new `CharacterSubTab`**: subclass `CharacterSubTab`, override `RenderContent`, add a GO with ScrollRect + TMP_Text to the prefab, wire the new `SubTabEntry` in `CharacterInspectorView._subTabs` via Inspector.
 
@@ -166,9 +191,11 @@ public abstract class CharacterSubTab : MonoBehaviour
 ```
 Assets/Scripts/Debug/DevMode/Inspect/
   IInspectorView.cs
-  DevInspectModule.cs
+  IBuildingInspectorView.cs          ← parallel contract for raw Building targets
+  DevInspectModule.cs                ← routes both contract families
   CharacterInspectorView.cs
-  StorageFurnitureInspectorView.cs   ← chest / shelf / barrel / wardrobe slot listing
+  StorageFurnitureInspectorView.cs   ← chest / shelf / barrel / wardrobe slot listing + parent-building nav button
+  BuildingInspectorView.cs           ← whole-building readout
   CharacterAIDebugFormatter.cs
   SubTabs/
     CharacterSubTab.cs
@@ -254,6 +281,15 @@ Project uses legacy `Input.GetKey(KeyCode.*)` — not the new InputSystem. Match
 7. **SKILL.md**: If you create or modify a debug system, update its SKILL.md in `.agent/skills/`.
 8. **Multiplayer labels**: Always show whether displaying Host or Client state.
 9. **Shader preference**: For visual debug overlays, prefer shader-based solutions + Material Property Blocks.
+10. **Performance budget — debug UI is NOT free.** Always-on per-frame debug overlays are the single most common cause of unexpected frame-budget loss in this project — `UI_CommercialBuildingDebugScript` measured 28% of frame and 633 GC.Allocs/frame in our 2026-04-27 profiler session. Any new debug overlay MUST do at least one of:
+    - **Gate behind dev-mode** (`if (DevMode.Active)` or `#if UNITY_EDITOR || DEVELOPMENT_BUILD`).
+    - **Stagger updates** (one instance per frame, or 1 Hz refresh, not every frame on every instance).
+    - **Cull off-screen** instances and minimised panels.
+    - **Use a single shared overlay** bound to the current Selection / dev-mode target, not one per entity.
+    - **Cache string builders** and projections; never `string.Format` / interpolate per-frame.
+    - **Profile-verify** the overlay shows up at < 1% of frame self time on the audited worker mix BEFORE shipping.
+
+    Read [`wiki/concepts/performance-conventions.md`](../../wiki/concepts/performance-conventions.md) and [CLAUDE.md rule #34](../../CLAUDE.md) before adding any new always-on debug visualization.
 
 ## Working Style
 
@@ -265,9 +301,13 @@ Project uses legacy `Input.GetKey(KeyCode.*)` — not the new InputSystem. Match
 
 ## Recent changes
 
+- **2026-04-27 — `UI_CommercialBuildingDebugScript` was identified as the dominant frame cost.** Profiler session with Kevin showed `UI_CommercialBuildingDebugScript.Update` at **28.9% of frame / 9.98 ms self / 4 instances / 633 GC.Allocs per frame / 59 KB / frame**. Disabling the script pushed FPS from ~33 → 60. **The script is currently disabled in production scenes.** This is a Tier 4 todo on [[optimisation-backlog]] under your ownership — properly fix before any future re-enable. Suggested fix shape (per the backlog entry): (a) gate behind `DevMode.Active`; (b) stagger updates (1 building per frame, or only the dev-mode-selected building); (c) cache string builders, never reuse `Select(…).ToList()`; (d) cull off-screen / minimised panels; (e) collapse 4 per-building instances into 1 shared overlay bound to a Selection. Profile before re-shipping. **Same pattern applies to any future per-entity debug overlay** — see Mandatory Rule #10.
+
 - **2026-04-26 — Spawn tab gained Character/Item sub-tabs.** The `DevSpawnModule` Spawn tab now hosts a `SubTabBar` with two buttons (`SubTab_Character`, `SubTab_Item`) above two sibling content panels (`CharacterSubPanel`, `ItemSubPanel`). The active sub-tab is tracked in `_activeSubTab` (`enum SpawnSubTab { Character, Item }`) and drives `SpawnAt`'s branching — clicking the armed environment routes to `SpawnItemBatch` when in Item mode (calls `SpawnManager.Instance.SpawnItem`), or the existing NPC-spawn pipeline when in Character mode. Count + ArmedToggle stay shared at the bottom and apply to whichever mode is active. Visual cue for the active sub-tab uses `Button.interactable = false` on the active button (no extra style asset needed). The `_itemDropdown` (under the Item sub-panel) lists every `ItemSO` from `Resources.LoadAll<ItemSO>("Data/Item")` alphabetised by `ItemName` — no `<None>` sentinel since the sub-tab itself signals the mode. See `.agent/skills/dev-mode/SKILL.md` for the full recipe.
 
-- **Project Rules**: `CLAUDE.md`
+- **Project Rules**: `CLAUDE.md` (rule #34 = performance, Mandatory Rule #10 above is its instantiation for debug tools)
+- **Performance Conventions**: [`wiki/concepts/performance-conventions.md`](../../wiki/concepts/performance-conventions.md) — pattern catalogue + anti-patterns for debug overlays
+- **Optimisation Backlog**: [`wiki/projects/optimisation-backlog.md`](../../wiki/projects/optimisation-backlog.md) — Tier 4 owns the `UI_CommercialBuildingDebugScript` proper-fix todo
 - **Network Architecture**: `NETWORK_ARCHITECTURE.md` (for network debug tools)
 - **Debug Tools SKILL.md**: `.agent/skills/debug-tools/SKILL.md` (Inspect tab, IInspectorView, CharacterSubTab, CharacterAIDebugFormatter — full extension recipes)
 - **Dev Mode SKILL.md**: `.agent/skills/dev-mode/SKILL.md` (activation, chat commands, Spawn + Select modules, IDevAction recipe)

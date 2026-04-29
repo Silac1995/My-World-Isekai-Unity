@@ -311,10 +311,11 @@ public class SaveManager : MonoBehaviour
                     : mc.SnapshotActiveNPCs();
 
                 if (snapshot == null) continue;
-                if (snapshot.HibernatedNPCs.Count == 0 && snapshot.WorldItems.Count == 0) continue;
+                int cellCount = snapshot.TerrainCells != null ? snapshot.TerrainCells.Length : 0;
+                if (snapshot.HibernatedNPCs.Count == 0 && snapshot.WorldItems.Count == 0 && cellCount == 0) continue;
 
                 data.worldStates[$"MapSnapshot_{mc.MapId}"] = JsonConvert.SerializeObject(snapshot, jsonSettings);
-                Debug.Log($"<color=green>[SaveManager]</color> Captured snapshot for map '{mc.MapId}' (Hibernating={mc.IsHibernating}): {snapshot.HibernatedNPCs.Count} NPCs, {snapshot.WorldItems.Count} WorldItems.");
+                Debug.Log($"<color=green>[SaveManager]</color> Captured snapshot for map '{mc.MapId}' (Hibernating={mc.IsHibernating}): {snapshot.HibernatedNPCs.Count} NPCs, {snapshot.WorldItems.Count} WorldItems, {cellCount} TerrainCells.");
             }
             catch (Exception ex)
             {

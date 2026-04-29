@@ -3,7 +3,7 @@ type: system
 title: "AI GOAP"
 tags: [ai, goap, planning, npc, tier-2]
 created: 2026-04-19
-updated: 2026-04-25
+updated: 2026-04-27
 sources: []
 related:
   - "[[ai]]"
@@ -125,6 +125,7 @@ currentAction = plan[index]
 - Macro-sim: does **not** replay GOAP frame-by-frame. Snaps NPC to the end of their current scheduled task (see [[world]] macro-sim).
 
 ## Change log
+- 2026-04-27 — **Performance pass: per-action TTL cache + `OverlapBoxNonAlloc` (Tier 3 Bₐ)**. `GoapAction_GatherStorageItems.FindLooseWorldItem` was running 3 `Physics.OverlapBox` calls per `IsValid()` tick (BuildingZone + DepositZone + DeliveryZone) and allocating fresh `List<Collider>` + `Collider[]` every call. Replaced with `Physics.OverlapBoxNonAlloc` against a static shared `Collider[128]` buffer + reused scratch `List<Collider>` member. Added per-action 0.5 s TTL cache on the result — cleared in `Exit()` so a new action invocation always starts cold; cache invalidated if cached item was picked up by another worker. Saturation warning if buffer fills (rule #31). Pattern now canonical for any GOAP action whose `IsValid` does heavy `Physics.Overlap*` work — see [[performance-conventions]] Pattern 6 + Pattern 4. **`GoapAction` instance pooling (Tier 4 Dₐ) explicitly NOT shipped** — the `JobLogisticsManager.cs:173-178` comment block memorializes a prior regression where this exact change broke shop ordering (`_isComplete=true` leaked across plans, only first BuyOrder placed); revisit only with profiler evidence. — claude
 - 2026-04-19 — Initial pass. — Claude / [[kevin]]
 - 2026-04-24 — Host-only perf fix: `Replan()` now honours `_planReevaluationInterval` (was dead code); `GoapPlanner` recursion uses a shared `HashSet<GoapAction>` with backtracking instead of per-level `.Where().ToList()`; Debug logs gated behind `GoapPlanner.VerboseLogging`; `BuildingManager.FindAvailableJob` replaces `OrderBy(Random.value)` shuffle with random-start iteration; `UpdateWorldState()` caches `FindAvailableJob` result across the two sensor calls in a single Replan. — claude
 - 2026-04-24 — Regression fix: `CancelPlan()` no longer resets `_lastReplanAttemptTime` (was defeating the throttle because `BTAction_ExecuteGoapPlan.OnExit` calls Cancel every failed tick); added explicit `ForceReplanNextTick()` for intent-driven transitions. Restored `AddComponent` fallback in `BTAction_ExecuteGoapPlan.OnEnter` (removing it caused `Debug.LogError` spam every 0.1s per NPC on prefabs without a `GOAPController` child — `Character_Default_Humanoid/Quadruped`, `Character_Animal` — which refilled the Windows console and re-created the original progressive-freeze symptom). — claude
@@ -132,6 +133,8 @@ currentAction = plan[index]
 - 2026-04-25 — Residual progressive-lag hunt (second pass). Symptom report: lag only kicked in when a boss + workers were assigned to commercial buildings — confirming the accumulator was on the worker Job-tick path. Fixes: (a) `BuildingTaskManager` rewritten to eliminate LINQ on hot paths — `.OfType<T>()`, `.Any(...)`, `.RemoveAll(predicate)` all replaced by manual indexed loops in `ClaimBestTask`, `HasAvailableOrClaimedTask`, `HasAnyTaskOfType`, `RegisterTask`, `UnregisterTaskByTarget`, `ClearAvailableTasksOfType` (each call previously allocated 1–3 closures + enumerator wrappers; `ClaimBestTask` runs per worker per GOAP plan cycle). Also gated all five per-event `Debug.Log` calls (task registered / claimed / unclaimed / invalid-unclaim / completed) behind `NPCDebug.VerboseJobs`. (b) `JobLogisticsManager.PlanNextActions`, `JobHarvester.PlanNextActions`, `JobTransporter.PlanNextActions` now reuse `_scratchWorldState` dict + cached `GoapGoal` instances (DesiredState dicts are constant) + a persistent `_availableActions` list that's `Clear()`ed + repopulated each call. Eliminates per-tick allocation of a world-state dict, 2 goals with their own dicts, a list wrapper, plus `.Where().ToList()` in the LogisticsManager case. Action instances themselves still get recreated each plan (they're stateful — `_currentTarget`, `_isComplete`, phase fields). (c) Gated the remaining state-transition `Debug.Log` calls in `GoapAction_DepositResources` and `GoapAction_HarvestResources` behind `NPCDebug.VerboseActions`. (d) `CommercialBuilding.HandleQuestStateChanged` now auto-unsubscribes from `quest.OnStateChanged` once the quest reaches a terminal state (Completed / Abandoned / Expired). Without this, each published task/order left a delegate reference pointing back at the building, anchoring the quest object against GC; over a long worker shift with hundreds of quests published, this was a slow-but-steady memory+iteration accumulator that compounded with the hot-path allocations. — claude
 
 ## Sources
+- [[performance-conventions]] — Pattern 4 (NonAlloc) + Pattern 6 (per-action TTL cache) extracted from this system.
+- [[optimisation-backlog]] — Tier 3 Bₐ measurements + Tier 4 Dₐ rationale (GoapAction pooling NOT shipped).
 - [.agent/skills/goap/SKILL.md](../../.agent/skills/goap/SKILL.md)
 - [CharacterGoapController.cs](../../Assets/Scripts/Character/CharacterGoapController.cs).
 - [[ai]] parent.

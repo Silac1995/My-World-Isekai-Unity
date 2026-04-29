@@ -3,7 +3,7 @@ type: system
 title: "Terrain & Weather"
 tags: [terrain, weather, vegetation, biome, footsteps, tier-1]
 created: 2026-04-18
-updated: 2026-04-28
+updated: 2026-04-29
 sources: []
 related:
   - "[[world]]"
@@ -32,6 +32,7 @@ depended_on_by:
   - "[[ai]]"
   - "[[character-terrain]]"
   - "[[farming]]"
+  - "[[dev-mode]]"
 ---
 
 # Terrain & Weather

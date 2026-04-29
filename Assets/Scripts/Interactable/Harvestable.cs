@@ -13,7 +13,7 @@ public class Harvestable : InteractableObject
 {
     [Header("Harvestable")]
     [SerializeField] private HarvestableCategory _category = HarvestableCategory.Wood;
-    [SerializeField] private List<ItemSO> _outputItems = new List<ItemSO>();
+    [SerializeField] private List<HarvestOutputEntry> _harvestOutputs = new List<HarvestOutputEntry>();
     [SerializeField] private float _harvestDuration = 3f;
     [SerializeField] private bool _isDepletable = true;
     [SerializeField] private int _maxHarvestCount = 5;
@@ -27,8 +27,7 @@ public class Harvestable : InteractableObject
     [Header("Destruction (axe / pickaxe etc.)")]
     [SerializeField] private bool _allowDestruction;
     [SerializeField] private ItemSO _requiredDestructionTool;
-    [SerializeField] private List<ItemSO> _destructionOutputs = new List<ItemSO>();
-    [SerializeField] private int _destructionOutputCount = 1;
+    [SerializeField] private List<HarvestOutputEntry> _destructionOutputs = new List<HarvestOutputEntry>();
     [SerializeField] private float _destructionDuration = 3f;
 
     private int _currentHarvestCount = 0;
@@ -41,8 +40,8 @@ public class Harvestable : InteractableObject
     [Header("Visuals")]
     [SerializeField] private GameObject _visualRoot;
 
-    /// <summary>Items this object can produce</summary>
-    public IReadOnlyList<ItemSO> OutputItems => _outputItems;
+    /// <summary>Items this object can produce, with per-item drop counts.</summary>
+    public IReadOnlyList<HarvestOutputEntry> HarvestOutputs => _harvestOutputs;
 
     /// <summary>Resource category used for filtering</summary>
     public HarvestableCategory Category => _category;
@@ -63,24 +62,33 @@ public class Harvestable : InteractableObject
     /// <summary>Tool required for the yield (Pick) path; null = no tool requirement.</summary>
     public ItemSO RequiredHarvestTool => _requiredHarvestTool;
 
-    /// <summary>True if this harvestable opts in to destruction (chop / mine to remove).</summary>
-    public bool AllowDestruction => _allowDestruction;
+    /// <summary>True if this harvestable opts in to destruction (chop / mine to remove).
+    /// Virtual so subclasses (e.g. CropHarvestable) can derive the value from a replicated
+    /// source — `_allowDestruction` is a server-only runtime mutation for crops, so a client
+    /// reading the base field would always see false.</summary>
+    public virtual bool AllowDestruction => _allowDestruction;
 
-    /// <summary>Tool required for the destruction path; null = any tool (when destruction is allowed).</summary>
-    public ItemSO RequiredDestructionTool => _requiredDestructionTool;
+    /// <summary>Tool required for the destruction path; null = any tool (when destruction is allowed).
+    /// Virtual for the same reason as <see cref="AllowDestruction"/>.</summary>
+    public virtual ItemSO RequiredDestructionTool => _requiredDestructionTool;
 
-    /// <summary>Items spawned when this harvestable is destroyed.</summary>
-    public IReadOnlyList<ItemSO> DestructionOutputs => _destructionOutputs;
-
-    /// <summary>How many times each destruction output is spawned.</summary>
-    public int DestructionOutputCount => _destructionOutputCount;
+    /// <summary>Items spawned when this harvestable is destroyed, with per-item counts.</summary>
+    public IReadOnlyList<HarvestOutputEntry> DestructionOutputs => _destructionOutputs;
 
     /// <summary>Duration of the destruction action.</summary>
     public float DestructionDuration => _destructionDuration;
 
     /// <summary>Can this object be harvested? Virtual so CropHarvestable can add the
     /// "must be mature" check on top of the base `!depleted && has-output` rule.</summary>
-    public virtual bool CanHarvest() => !_isDepleted && _outputItems.Count > 0;
+    public virtual bool CanHarvest() => !_isDepleted && HasAnyEntryWithItem(_harvestOutputs);
+
+    private static bool HasAnyEntryWithItem(List<HarvestOutputEntry> entries)
+    {
+        if (entries == null) return false;
+        for (int i = 0; i < entries.Count; i++)
+            if (entries[i].Item != null && entries[i].Count > 0) return true;
+        return false;
+    }
 
     /// <summary>Yield-path predicate that takes the held tool into account.</summary>
     public bool CanHarvestWith(ItemSO heldItem)
@@ -89,11 +97,14 @@ public class Harvestable : InteractableObject
         return _requiredHarvestTool == null || heldItem == _requiredHarvestTool;
     }
 
-    /// <summary>Destruction-path predicate. Always false unless AllowDestruction is set.</summary>
+    /// <summary>Destruction-path predicate. Always false unless AllowDestruction is set.
+    /// Reads via the virtual properties so subclasses overriding <see cref="AllowDestruction"/>
+    /// or <see cref="RequiredDestructionTool"/> are honored on every peer.</summary>
     public bool CanDestroyWith(ItemSO heldItem)
     {
-        if (!_allowDestruction) return false;
-        return _requiredDestructionTool == null || heldItem == _requiredDestructionTool;
+        if (!AllowDestruction) return false;
+        var tool = RequiredDestructionTool;
+        return tool == null || heldItem == tool;
     }
 
     /// <summary>
@@ -103,7 +114,9 @@ public class Harvestable : InteractableObject
     public bool HasOutput(ItemSO item)
     {
         if (item == null) return false;
-        return _outputItems.Contains(item);
+        for (int i = 0; i < _harvestOutputs.Count; i++)
+            if (_harvestOutputs[i].Item == item) return true;
+        return false;
     }
 
     /// <summary>
@@ -146,7 +159,8 @@ public class Harvestable : InteractableObject
         var held = GetHeldItemSO(actor);
 
         // --- Yield row (always present if there are output items) ---
-        if (_outputItems != null && _outputItems.Count > 0)
+        var firstHarvest = FirstNonEmptyEntry(_harvestOutputs);
+        if (firstHarvest.Item != null)
         {
             bool yieldOk = CanHarvestWith(held);
             string yieldReason = null;
@@ -157,15 +171,16 @@ public class Harvestable : InteractableObject
                 else yieldReason = "Cannot harvest";
             }
             list.Add(new HarvestInteractionOption(
-                label: $"Pick {_outputItems[0].ItemName}",
-                icon: _outputItems[0].Icon,
-                outputPreview: $"{_maxHarvestCount}× {_outputItems[0].ItemName}",
+                label: $"Pick {firstHarvest.Item.ItemName}",
+                icon: firstHarvest.Item.Icon,
+                outputPreview: BuildOutputPreview(_harvestOutputs),
                 isAvailable: yieldOk,
                 unavailableReason: yieldReason,
                 actionFactory: ch => new CharacterHarvestAction(ch, this)));
         }
 
-        if (_allowDestruction && _destructionOutputs.Count > 0)
+        var firstDestruction = FirstNonEmptyEntry(_destructionOutputs);
+        if (_allowDestruction && firstDestruction.Item != null)
         {
             bool destroyOk = CanDestroyWith(held);
             string destroyReason = destroyOk ? null
@@ -174,8 +189,8 @@ public class Harvestable : InteractableObject
                     : "Cannot destroy");
             list.Add(new HarvestInteractionOption(
                 label: "Destroy",
-                icon: _destructionOutputs[0].Icon,
-                outputPreview: $"{_destructionOutputCount}× {_destructionOutputs[0].ItemName}",
+                icon: firstDestruction.Item.Icon,
+                outputPreview: BuildOutputPreview(_destructionOutputs),
                 isAvailable: destroyOk,
                 unavailableReason: destroyReason,
                 actionFactory: ch => new CharacterAction_DestroyHarvestable(ch, this)));
@@ -184,29 +199,42 @@ public class Harvestable : InteractableObject
         return list;
     }
 
+    private static HarvestOutputEntry FirstNonEmptyEntry(List<HarvestOutputEntry> entries)
+    {
+        if (entries == null) return default;
+        for (int i = 0; i < entries.Count; i++)
+            if (entries[i].Item != null && entries[i].Count > 0) return entries[i];
+        return default;
+    }
+
+    private static string BuildOutputPreview(List<HarvestOutputEntry> entries)
+    {
+        if (entries == null || entries.Count == 0) return string.Empty;
+        var sb = new System.Text.StringBuilder();
+        bool first = true;
+        for (int i = 0; i < entries.Count; i++)
+        {
+            var e = entries[i];
+            if (e.Item == null || e.Count <= 0) continue;
+            if (!first) sb.Append(", ");
+            sb.Append(e.Count).Append("× ").Append(e.Item.ItemName);
+            first = false;
+        }
+        return sb.ToString();
+    }
+
     /// <summary>
-    /// Harvests and spawns the item as a WorldItem in the world.
-    /// Returns the harvested ItemSO (null on failure).
+    /// Server-only. Commits one harvest pass: increments the harvest counter, calls Deplete
+    /// when it hits the max, and returns the entries the caller should drop as WorldItems
+    /// (each entry's Item × Count). Returns null on failure (depleted, no outputs, null harvester).
     /// </summary>
-    public ItemSO Harvest(Character harvester)
+    public IReadOnlyList<HarvestOutputEntry> Harvest(Character harvester)
     {
         if (harvester == null || !CanHarvest()) return null;
-
-        ItemSO harvestedItem = GetRandomOutput();
-        if (harvestedItem == null) return null;
+        if (_harvestOutputs == null || _harvestOutputs.Count == 0) return null;
 
         _currentHarvestCount++;
 
-        // Quest progress: if the harvester has an active HarvestResourceTask whose
-        // target IS this harvestable, record one unit of progress so the HUD updates
-        // live (and the quest auto-completes when TotalProgress >= Required). Server-only
-        // because Harvest itself is server-only (CharacterActions.ApplyHarvestOnServer
-        // gates this with `if (IsSpawned && !IsServer) return null;`).
-        //
-        // Recorded BEFORE Deplete so the final harvest goes through the "Completed" state
-        // path (TotalProgress >= Required while IsValid still true) instead of "Expired"
-        // (IsValid flips false the moment we Deplete). End-user impact is the same — the
-        // quest disappears from the log either way — but Completed is the natural state.
         NotifyHarvesterQuestProgress(harvester);
 
         if (_isDepletable && _currentHarvestCount >= _maxHarvestCount)
@@ -214,8 +242,8 @@ public class Harvestable : InteractableObject
             Deplete();
         }
 
-        Debug.Log($"<color=green>[Harvest]</color> {harvester.CharacterName} harvested {harvestedItem.ItemName}.");
-        return harvestedItem;
+        Debug.Log($"<color=green>[Harvest]</color> {harvester.CharacterName} harvested from {gameObject.name} ({_harvestOutputs.Count} entry types). _isDepleted={_isDepleted}.");
+        return _harvestOutputs;
     }
 
     /// <summary>
@@ -226,12 +254,12 @@ public class Harvestable : InteractableObject
     {
         if (NetworkManager.Singleton != null && !NetworkManager.Singleton.IsServer) return;
 
-        for (int i = 0; i < _destructionOutputCount; i++)
+        for (int i = 0; i < _destructionOutputs.Count; i++)
         {
-            for (int j = 0; j < _destructionOutputs.Count; j++)
-            {
-                SpawnDestructionItem(_destructionOutputs[j]);
-            }
+            var entry = _destructionOutputs[i];
+            if (entry.Item == null || entry.Count <= 0) continue;
+            for (int n = 0; n < entry.Count; n++)
+                SpawnDestructionItem(entry.Item);
         }
 
         OnDestroyed();
@@ -295,15 +323,6 @@ public class Harvestable : InteractableObject
     }
 
     /// <summary>
-    /// Returns a random item from the outputs.
-    /// </summary>
-    private ItemSO GetRandomOutput()
-    {
-        if (_outputItems.Count == 0) return null;
-        return _outputItems[Random.Range(0, _outputItems.Count)];
-    }
-
-    /// <summary>
     /// Resolves the item the actor is currently holding in their hands.
     /// CharacterEquipment exposes the carried item via the HandsController on the
     /// character's visual rig — there is no flat 'GetActiveHandItem' helper.
@@ -332,11 +351,7 @@ public class Harvestable : InteractableObject
     {
         _isDepleted = true;
 
-        if (MWI.Time.TimeManager.Instance != null)
-        {
-            _targetRespawnDay = MWI.Time.TimeManager.Instance.CurrentDay + _respawnDelayDays;
-            MWI.Time.TimeManager.Instance.OnNewDay += HandleNewDay;
-        }
+        ScheduleRespawnAfterDeplete();
 
         if (_visualRoot != null)
             _visualRoot.SetActive(false);
@@ -344,6 +359,21 @@ public class Harvestable : InteractableObject
         Debug.Log($"<color=orange>[Harvest]</color> {gameObject.name} is depleted. Respawn scheduled for day {_targetRespawnDay}.");
 
         OnDepleted();
+    }
+
+    /// <summary>
+    /// Hook for subclasses that own their own refill cycle (e.g. CropHarvestable, where
+    /// FarmGrowthSystem owns the perennial regrow timing). Default: subscribe to OnNewDay
+    /// so the resource auto-respawns after _respawnDelayDays. Override to no-op when the
+    /// subclass drives respawn externally.
+    /// </summary>
+    protected virtual void ScheduleRespawnAfterDeplete()
+    {
+        if (MWI.Time.TimeManager.Instance != null)
+        {
+            _targetRespawnDay = MWI.Time.TimeManager.Instance.CurrentDay + _respawnDelayDays;
+            MWI.Time.TimeManager.Instance.OnNewDay += HandleNewDay;
+        }
     }
 
     private void HandleNewDay()
@@ -382,19 +412,23 @@ public class Harvestable : InteractableObject
 
     // Runtime configuration helpers — used by subclasses (e.g. CropHarvestable) to drive
     // a procedurally-spawned Harvestable from data without poking serialized fields directly.
-    public void SetOutputItemsRuntime(List<ItemSO> items) => _outputItems = items;
+    public void SetHarvestOutputsRuntime(List<HarvestOutputEntry> entries) => _harvestOutputs = entries ?? new List<HarvestOutputEntry>();
     public void SetMaxHarvestCountRuntime(int n) => _maxHarvestCount = n;
     public void SetIsDepletableRuntime(bool b) => _isDepletable = b;
     public void SetRespawnDelayDaysRuntime(int d) => _respawnDelayDays = d;
-    public void SetDestructionFieldsRuntime(IReadOnlyList<ItemSO> outputs, int count, float duration)
+    public void SetDestructionFieldsRuntime(List<HarvestOutputEntry> entries, float duration)
     {
-        _destructionOutputs = new List<ItemSO>(outputs);
-        _destructionOutputCount = count;
+        _destructionOutputs = entries ?? new List<HarvestOutputEntry>();
         _destructionDuration = duration;
     }
 
 #if UNITY_EDITOR
-    public void SetOutputItemsForTests(List<ItemSO> items) => _outputItems = items;
+    public void SetOutputItemsForTests(List<ItemSO> items)
+    {
+        _harvestOutputs = new List<HarvestOutputEntry>(items != null ? items.Count : 0);
+        if (items == null) return;
+        for (int i = 0; i < items.Count; i++) _harvestOutputs.Add(new HarvestOutputEntry(items[i], 1));
+    }
     public void SetRequiredHarvestToolForTests(ItemSO tool) => _requiredHarvestTool = tool;
     public void SetAllowDestructionForTests(bool b) => _allowDestruction = b;
     public void SetRequiredDestructionToolForTests(ItemSO tool) => _requiredDestructionTool = tool;

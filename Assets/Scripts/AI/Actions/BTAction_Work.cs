@@ -27,11 +27,18 @@ namespace MWI.AI
         private bool _warnedNoTimeClock = false;
         private bool _warnedNoInteractable = false;
 
+        // Per-job execute cadence (perf, see wiki/projects/optimisation-backlog.md entry #2 / Cₐ).
+        // BT ticks at ~10 Hz; default Job.ExecuteIntervalSeconds is 0.1 s so default behaviour
+        // is unchanged. Heavy-planning jobs (LogisticsManager, Harvester) override to a longer
+        // interval. _lastExecuteTime is per-NPC because each NPC has its own BT instance.
+        private float _lastExecuteTime = -1f;
+
         protected override void OnEnter(Blackboard bb)
         {
             _currentPhase = WorkPhase.MovingToBuilding;
             _warnedNoTimeClock = false;
             _warnedNoInteractable = false;
+            _lastExecuteTime = -1f; // First HandleWorking call after entering Work always fires.
         }
 
         protected override BTNodeStatus OnExecute(Blackboard bb)
@@ -177,8 +184,20 @@ namespace MWI.AI
 
         private BTNodeStatus HandleWorking(Character self, CharacterJob jobInfo)
         {
-            // It is up to the specific Job to handle its own GOAP or states.
-            jobInfo.Work();
+            // Per-job cadence: only call Job.Execute when the configured interval has elapsed.
+            // The BT itself still ticks at ~10 Hz; this just throttles the heavy-planning job
+            // logic (LogisticsManager, Harvester) without slowing the BT (combat reaction,
+            // schedule transitions, etc.). See wiki/projects/optimisation-backlog.md
+            // entry #2 / Cₐ. Action lifecycle (move/interact/etc) runs on its own per-frame
+            // path inside CharacterMovement / CharacterActions and is NOT throttled here.
+            var currentJob = jobInfo.CurrentJob;
+            float interval = currentJob != null ? currentJob.ExecuteIntervalSeconds : 0.1f;
+            // Fully qualified to avoid clash with the project's MWI.Time namespace.
+            if (UnityEngine.Time.time - _lastExecuteTime >= interval)
+            {
+                jobInfo.Work();
+                _lastExecuteTime = UnityEngine.Time.time;
+            }
             return BTNodeStatus.Running; // This Node stays active as long as the Schedule hour is true.
         }
 

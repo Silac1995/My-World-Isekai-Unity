@@ -17,8 +17,9 @@ MonoBehaviour:
   _daysToMature: 2
   _minMoistureForGrowth: 0.3
   _plantDuration: 1
-  _produceItem: {fileID: 11400000, guid: 6eadabb584f662d49bea83caa241bdba, type: 2}
-  _produceCount: 1
+  _harvestOutputs:
+  - Item: {fileID: 11400000, guid: 6eadabb584f662d49bea83caa241bdba, type: 2}
+    Count: 1
   _requiredHarvestTool: {fileID: 0}
   _stageSprites: []
   _harvestablePrefab: {fileID: 4200984683044534046, guid: 005085e76c8faa446bc8e2dbbd54c248, type: 3}
@@ -26,6 +27,9 @@ MonoBehaviour:
   _regrowDays: 0
   _allowDestruction: 0
   _requiredDestructionTool: {fileID: 0}
+  _destructionEntries: []
+  _destructionDuration: 3
+  _produceItem: {fileID: 0}
+  _produceCount: 1
   _destructionOutputs: []
   _destructionOutputCount: 0
-  _destructionDuration: 3

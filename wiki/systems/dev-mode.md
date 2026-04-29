@@ -3,7 +3,7 @@ type: system
 title: "Dev Mode"
 tags: [debug, host-only, dev-tools, tier-2]
 created: 2026-04-21
-updated: 2026-04-26
+updated: 2026-04-29
 sources: []
 related:
   - "[[engine-plumbing]]"
@@ -17,6 +17,8 @@ related:
   - "[[character-work-log]]"
   - "[[player-ui]]"
   - "[[network]]"
+  - "[[farming]]"
+  - "[[terrain-and-weather]]"
   - "[[kevin]]"
 status: stable
 confidence: high
@@ -34,6 +36,8 @@ depends_on:
   - "[[character-wallet]]"
   - "[[character-work-log]]"
   - "[[network]]"
+  - "[[farming]]"
+  - "[[terrain-and-weather]]"
 depended_on_by: []
 ---
 
@@ -93,6 +97,8 @@ Release safety is explicit: the whole system is locked behind `#if UNITY_EDITOR 
 | [InventorySubTab.cs](../../Assets/Scripts/Debug/DevMode/Inspect/SubTabs/InventorySubTab.cs) | CharacterEquipment (ToString() placeholder; follow-up). |
 | [StorageFurnitureInspectorView.cs](../../Assets/Scripts/Debug/DevMode/Inspect/StorageFurnitureInspectorView.cs) | `IInspectorView` for `FurnitureInteractable` whose `Furniture` is a `StorageFurniture`. Renders a header + per-frame slot listing (capacity / locked / full + `[index] <SlotType> — <item>` lines). Read-only, no inventory mutation. |
 | [DevStorageFurnitureInspectorBuilder.cs](../../Assets/Editor/DevMode/DevStorageFurnitureInspectorBuilder.cs) | Editor-only one-shot. `[MenuItem("Tools/DevMode/Build Storage Furniture Inspector")]` adds the storage view GO under `InspectContent/Views`, sibling to `CharacterInspectorView`, and wires `_headerLabel` + `_content`. Idempotent + destructive-rebuild variants. |
+| [HarvestableInspectorView.cs](../../Assets/Scripts/Debug/DevMode/Inspect/HarvestableInspectorView.cs) | `IInspectorView` for any `Harvestable` (wilderness trees / rocks / ore + farmed crops). Renders Identity (type / GO name / layer / position / NetworkObjectId), Harvestable state (category / depleted / remaining yield / harvest tool / outputs), Destruction (when allowed), and a Crop section when the target is a `CropHarvestable` (CropSO id + display name, stage / mature flag, perennial / regrow days, full `TerrainCell` readout — moisture / fertility / plowed / growth timer / time-since-watered). Read-only. Pulls the live network state from the sibling `CropHarvestableNetSync` so values stay in sync with what the host writes. |
+| [DevHarvestableInspectorBuilder.cs](../../Assets/Editor/DevMode/DevHarvestableInspectorBuilder.cs) | Editor-only one-shot. `[MenuItem("Tools/DevMode/Build Harvestable Inspector")]` adds the harvestable view GO under `InspectContent/Views`, sibling to the existing inspector views, and wires `_headerLabel` + `_content`. Idempotent + destructive-rebuild variants. |
 | [UI_CharacterDebugScript.cs](../../Assets/Scripts/UI/WorldUI/UI_CharacterDebugScript.cs) | Legacy per-entity overlay. Formatting logic replaced with `CharacterAIDebugFormatter` calls (zero behaviour change). |
 | `Assets/Resources/UI/DevModePanel.prefab` | Panel prefab (tab buttons + `ContentRoot` + module children). |
 | `Assets/Resources/UI/DevSpawnRow.prefab` | Row prefab for combat-style / skill entries. |
@@ -240,7 +246,7 @@ No gameplay system declares a hard dependency on dev mode — it is strictly add
 - **Personality bug (fixed).** Earlier in development the networked path dropped dev-picked personality because `PendingDevConfig` didn't include it. Fixed in commit `18ae654` by adding a `Personality` field to `PendingDevConfig` and promoting it at the top of `InitializeSpawnedCharacter`.
 - **`PendingDevConfig` keying.** Keyed on `character.GetInstanceID()`, NOT `NetworkObject.NetworkObjectId`. Rationale: `NetworkObjectId` is 0 until `Spawn(true)` is called, so a dict keyed on it would miss the drain in the spawn callback. Fixed in commit `2dbbc54`.
 - **Click target layers for selection (dual mask).** `DevSelectionModule` raycasts against two named masks resolved at `Start` when the serialized fields are left at zero:
-  - `_selectableLayerMask` (Ctrl+Click — interior) defaults to `RigidBody + Furniture`. Building is intentionally absent so a building shell collider doesn't block selection of the chest or NPC inside.
+  - `_selectableLayerMask` (Ctrl+Click — interior) defaults to `RigidBody + Furniture + Harvestable`. Building is intentionally absent so a building shell collider doesn't block selection of the chest or NPC inside. `Harvestable` is included so any `Harvestable` (crop or wilderness) sitting on layer index 15 — named `Harvestable` in the Tags & Layers list — is pickable. Prefabs authored on a different layer (e.g. `Tree.prefab` / `Gatherable.prefab` on `Default`) will not be selectable until they're moved onto a layer in the mask.
   - `_buildingLayerMask` (Alt+Click — building) defaults to `Building`.
   Renaming or deleting any of those layers in **Tags & Layers** silently degrades selection (the resolver tolerates missing names — `BuildMask` skips them and only logs an error when **both** masks resolve to zero). Override either field on the `DevModePanel` prefab to narrow the mask if a project ever needs to exclude one of those layers.
 - **Click target layer for building ownership.** `DevActionAssignBuilding` raycasts against `LayerMask.GetMask("Building")` directly. Same fragility — changing the Building layer breaks this action silently. Fail loud by logging a warning if the raycast misses.
@@ -261,6 +267,7 @@ No gameplay system declares a hard dependency on dev mode — it is strictly add
 - [x] ~~Wire the Inspect tab prefab (Task 17) — `DevInspectModule`, `CharacterInspectorView`, 10 sub-tab GOs.~~ Shipped 2026-04-23 via `Assets/Editor/DevMode/DevInspectTabBuilder.cs`.
 - [ ] Refine `KnowledgeSubTab` (BookKnowledge portion) and `InventorySubTab` once their public APIs are stabilized. Schedule portion of Knowledge is fully rendered as of 2026-04-23.
 - [ ] Add `IInspectorView` implementations for WorldItem and Building entity types.
+- [ ] Move wilderness `Harvestable` prefabs (`Tree.prefab`, `Gatherable.prefab`) onto the `Harvestable` layer (currently they sit on `Default`) so Ctrl+Click selects them too. Currently only `CropHarvestable` is selectable because it's the only harvestable family on the `Harvestable` layer.
 
 ## Change log
 - 2026-04-21 — Initial page. Documents F3/chat activation, input gating, click arbitration, Spawn + Select modules, `IDevAction` contract, `DevActionAssignBuilding`, god-mode WASD speed + unbounded zoom. — Claude / [[kevin]]
@@ -268,6 +275,7 @@ No gameplay system declares a hard dependency on dev mode — it is strictly add
 - 2026-04-23 — Inspect tab prefab wired via DevInspectTabBuilder Editor utility. Global shortcuts (Ctrl+Click, Space+LMB, ESC) relocated to DevModeManager so they work on any tab. Social / SkillsTraits / Economy / Knowledge sub-tab rendering polished: relationship details with HasMet flag, behavioural profile name + personality description + compatibility lists, per-CurrencyId and per-JobType enumeration + flat Workplaces list sorted by score, full Schedule rendering with active-now highlight. — claude
 - 2026-04-25 — Added `StorageFurnitureInspectorView` so storage furniture (chests, shelves, barrels, wardrobes — anything inheriting `StorageFurniture`) can be selected via Ctrl+Click and inspected in the Inspect tab (capacity / locked / full + per-slot listing). View is added to the prefab by the new `DevStorageFurnitureInspectorBuilder` Editor utility (`Tools/DevMode/Build Storage Furniture Inspector`). No changes to selection or `DevInspectModule` — the view is auto-discovered. — claude
 - 2026-04-25 — Split selection raycast into two masks. `DevSelectionModule._selectableLayerMask` (Ctrl+Click "interior") auto-defaults to `RigidBody + Furniture` — Building is intentionally excluded so a building's shell collider doesn't block selection of the chest, bed, or NPC inside it. New `_buildingLayerMask` field auto-defaults to `Building` and is consumed by the new **Alt + Left-Click** global shortcut (`TrySelectBuildingAtCursor`). Mutex extended: Ctrl / Alt / Space are mutually exclusive on the same click. Authored prefab masks still override the runtime defaults; the armed click loop now also short-circuits on Alt. — claude
+- 2026-04-29 — Added `HarvestableInspectorView` so any `Harvestable` (wilderness or farmed crop) can be Ctrl+Click-selected and inspected in the Inspect tab. Identity / Harvestable state / Destruction sections are common; a Crop section pulls live `CropHarvestableNetSync` state and the full `TerrainCell` readout when the target is a `CropHarvestable`. View is added to the prefab by the new `DevHarvestableInspectorBuilder` Editor utility (`Tools/DevMode/Build Harvestable Inspector`); auto-discovered at runtime by `DevInspectModule`. `DevSelectionModule._defaultInteriorLayers` extended from `RigidBody + Furniture` to `RigidBody + Furniture + Harvestable` so any prefab on the `Harvestable` layer (index 15) is pickable. Layer 15 was renamed `Crop → Harvestable` in `ProjectSettings/TagManager.asset` to reflect that crop harvestables and wilderness harvestables share the layer. Wilderness harvestables (`Tree.prefab`, `Gatherable.prefab`) currently sit on `Default` and are tracked as a follow-up. — claude
 - 2026-04-26 — Fixed Spawn-tab layout regression introduced when the Character/Item sub-tabs were added (commits 78e9a8d + a6d8396). Two prefab-side root causes: (1) the top `TabBar` and Spawn `SubTabBar` had no `LayoutElement`, so the parent VLG queried their `LayoutGroup` for a flexible height it couldn't compute and one of them ate most of the panel height. (2) `CharacterSubPanel` and `ItemSubPanel` were authored with center-stretch anchors `(0,0) → (1,1)` and `SizeDelta(0,0)`, which makes them report a rect height equal to the parent — when `SpawnTab.VLG.ChildControlHeight` was 0, the VLG positioned siblings using that bogus height and `Label_Count` collided with `Label_Item`. Fix: added `LayoutElement` (PreferredHeight 36 / 32, FlexibleHeight 0) on `TabBar` / `SubTabBar`; switched the two sub-panels to top-stretch anchors `(0,1) → (1,1)` with pivot `(0.5,1)`, gave them `LayoutElement` (FlexibleHeight 1) so the active one fills the remaining vertical space; flipped `SpawnTab.VLG.ChildControlHeight` to 1 so the VLG honours those preferred heights. Renamed the Item-tab label from "Item Override:" to "Item:" — the sub-tab itself selects mode, the dropdown is no longer an "override". The new layout contract is documented in [.agent/skills/dev-mode/SKILL.md](../../.agent/skills/dev-mode/SKILL.md) §7. — claude
 
 ## Sources
@@ -286,6 +294,12 @@ No gameplay system declares a hard dependency on dev mode — it is strictly add
 - `Assets/Scripts/Debug/DevMode/Inspect/SubTabs/` — IdentitySubTab, StatsSubTab, SkillsTraitsSubTab, NeedsSubTab, AISubTab, CombatSubTab, SocialSubTab, EconomySubTab, KnowledgeSubTab, InventorySubTab.
 - [StorageFurnitureInspectorView.cs](../../Assets/Scripts/Debug/DevMode/Inspect/StorageFurnitureInspectorView.cs) — `IInspectorView` for `StorageFurniture` (chests, shelves, barrels, wardrobes).
 - [DevStorageFurnitureInspectorBuilder.cs](../../Assets/Editor/DevMode/DevStorageFurnitureInspectorBuilder.cs) — Editor-only one-shot prefab builder for the storage view.
+- [HarvestableInspectorView.cs](../../Assets/Scripts/Debug/DevMode/Inspect/HarvestableInspectorView.cs) — `IInspectorView` for `Harvestable` (wilderness harvestables + crop harvestables); pulls extra crop-specific state from `CropHarvestableNetSync` + `TerrainCellGrid` when applicable.
+- [DevHarvestableInspectorBuilder.cs](../../Assets/Editor/DevMode/DevHarvestableInspectorBuilder.cs) — Editor-only one-shot prefab builder for the harvestable view.
+- [Harvestable.cs](../../Assets/Scripts/Interactable/Harvestable.cs) — `InteractableObject`-derived base for harvestables; the inspected target.
+- [CropHarvestable.cs](../../Assets/Scripts/Farming/CropHarvestable.cs) — `Harvestable` subclass for farmed crops; surfaces `CellX` / `CellZ` / `Grid`.
+- [CropHarvestableNetSync.cs](../../Assets/Scripts/Farming/CropHarvestableNetSync.cs) — sibling NetworkBehaviour hosting `CurrentStage` / `IsDepleted` / `CropIdNet` NetVars consumed by the inspector.
+- [CropSO.cs](../../Assets/Scripts/Farming/Pure/CropSO.cs) — crop content definition; resolved from `CropIdNet` via `CropRegistry`.
 - [StorageFurniture.cs](../../Assets/Scripts/World/Furniture/StorageFurniture.cs) — slot-based container; the inspected target.
 - [FurnitureInteractable.cs](../../Assets/Scripts/Interactable/FurnitureInteractable.cs) — `InteractableObject` wrapper that exposes the underlying `Furniture` (used by `CanInspect`).
 - [UI_CharacterDebugScript.cs](../../Assets/Scripts/UI/WorldUI/UI_CharacterDebugScript.cs) — legacy overlay; now delegates AI strings to `CharacterAIDebugFormatter`.

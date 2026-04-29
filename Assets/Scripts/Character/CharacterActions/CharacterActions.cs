@@ -187,22 +187,43 @@ public class CharacterActions : CharacterSystem
         if (target == null || !target.CanHarvest()) return null;
         if (_character == null) return null;
 
-        ItemSO harvestedItem = target.Harvest(_character);
-        if (harvestedItem == null) return null;
+        var entries = target.Harvest(_character);
+        if (entries == null || entries.Count == 0) return null;
 
-        Vector3 spawnPos = _character.transform.position + _character.transform.forward * 0.5f + Vector3.up * 0.3f;
-        WorldItem spawnedItem = WorldItem.SpawnWorldItem(harvestedItem, spawnPos);
+        Vector3 baseSpawn = _character.transform.position + _character.transform.forward * 0.5f + Vector3.up * 0.3f;
 
-        if (spawnedItem != null && _character.CharacterJob != null)
+        // Resolve the worker's harvesting workplace once. Harvest() may have already despawned
+        // the target (one-shot crops in OnDepleted), but the WorldItem spawns still happen
+        // at baseSpawn in world space and pickup tasks still need registering.
+        CommercialBuilding harvesterWorkplace = null;
+        if (_character.CharacterJob != null)
         {
             var workAssignment = _character.CharacterJob.ActiveJobs.FirstOrDefault(j => j.AssignedJob is JobHarvester);
-            if (workAssignment != null && workAssignment.Workplace != null)
+            if (workAssignment != null) harvesterWorkplace = workAssignment.Workplace;
+        }
+
+        ItemSO firstSpawned = null;
+        for (int i = 0; i < entries.Count; i++)
+        {
+            var entry = entries[i];
+            if (entry.Item == null || entry.Count <= 0) continue;
+            for (int n = 0; n < entry.Count; n++)
             {
-                workAssignment.Workplace.TaskManager?.RegisterTask(new PickupLooseItemTask(spawnedItem));
+                Vector3 jitter = baseSpawn;
+                Vector2 j2 = UnityEngine.Random.insideUnitCircle * 0.25f;
+                jitter.x += j2.x;
+                jitter.z += j2.y;
+                WorldItem spawned = WorldItem.SpawnWorldItem(entry.Item, jitter);
+                if (spawned != null)
+                {
+                    if (firstSpawned == null) firstSpawned = entry.Item;
+                    if (harvesterWorkplace != null)
+                        harvesterWorkplace.TaskManager?.RegisterTask(new PickupLooseItemTask(spawned));
+                }
             }
         }
 
-        return harvestedItem;
+        return firstSpawned;
     }
 
     private Harvestable FindHarvestableNear(Vector3 position, float maxDistance = 2.5f)

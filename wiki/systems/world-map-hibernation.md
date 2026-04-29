@@ -5,7 +5,7 @@ tags: [world, hibernation, save-load, tier-2, stub]
 created: 2026-04-19
 updated: 2026-04-27
 sources: []
-related: ["[[world]]", "[[world-macro-simulation]]", "[[save-load]]", "[[kevin]]"]
+related: ["[[world]]", "[[world-macro-simulation]]", "[[world-time-skip]]", "[[save-load]]", "[[kevin]]"]
 status: stable
 confidence: high
 primary_agent: world-system-specialist

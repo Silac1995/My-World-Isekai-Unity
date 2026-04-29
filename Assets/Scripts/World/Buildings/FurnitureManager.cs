@@ -13,10 +13,38 @@ public class FurnitureManager : MonoBehaviour
     public IReadOnlyList<Furniture> Furnitures => _furnitures;
     public FurnitureGrid Grid => _grid;
 
+    // Cached resolution of the owning CommercialBuilding so cache invalidation hooks
+    // (Tier 2 D + A) don't pay GetComponentInParent on every register/unregister.
+    // Resolved lazily on first mutation; the building hierarchy may not be fully wired
+    // at Awake time on some spawn paths.
+    private CommercialBuilding _ownerBuilding;
+    private bool _ownerBuildingResolved;
+
     private void Awake()
     {
         _grid = GetComponent<FurnitureGrid>();
         _room = GetComponent<Room>();
+    }
+
+    /// <summary>
+    /// Invalidate Tier 2 furniture-related caches on the owning CommercialBuilding
+    /// when this room's furniture set changes. See wiki/projects/optimisation-backlog.md
+    /// entry #2 / D + A. Safe to call before the building is spawned — silently no-op
+    /// when no CommercialBuilding ancestor exists (rooms in non-commercial buildings).
+    /// </summary>
+    private void InvalidateOwnerBuildingCaches()
+    {
+        if (!_ownerBuildingResolved)
+        {
+            _ownerBuilding = GetComponentInParent<CommercialBuilding>();
+            _ownerBuildingResolved = true;
+        }
+        if (_ownerBuilding == null) return;
+        _ownerBuilding.InvalidateStorageFurnitureCache();
+        if (_ownerBuilding is CraftingBuilding crafting)
+        {
+            crafting.InvalidateCraftableCache();
+        }
     }
 
     /// <summary>
@@ -72,7 +100,8 @@ public class FurnitureManager : MonoBehaviour
 
             _furnitures.Add(newFurniture);
             _grid.RegisterFurniture(newFurniture, targetPosition, newFurniture.SizeInCells);
-            
+            InvalidateOwnerBuildingCaches();
+
             string roomName = _room != null ? _room.RoomName : gameObject.name;
             Debug.Log($"<color=green>[FurnitureManager]</color> Instantiation SUCCESSFUL: {furniturePrefab.name} at {newFurniture.transform.position} in {roomName}!");
             return true;
@@ -95,6 +124,7 @@ public class FurnitureManager : MonoBehaviour
             {
                 _grid.UnregisterFurniture(furnitureToRemove);
             }
+            InvalidateOwnerBuildingCaches();
             Destroy(furnitureToRemove.gameObject);
         }
     }
@@ -112,6 +142,7 @@ public class FurnitureManager : MonoBehaviour
         _grid.RegisterFurniture(furniture, targetPosition, furniture.SizeInCells);
         _furnitures.Add(furniture);
         furniture.transform.SetParent(transform);
+        InvalidateOwnerBuildingCaches();
 
         string roomName = _room != null ? _room.RoomName : gameObject.name;
         Debug.Log($"<color=green>[FurnitureManager]</color> Registered spawned {furniture.FurnitureName} at {targetPosition} in {roomName}.");
@@ -141,6 +172,7 @@ public class FurnitureManager : MonoBehaviour
 
         _grid.RegisterFurniture(furniture, targetPosition, furniture.SizeInCells);
         _furnitures.Add(furniture);
+        InvalidateOwnerBuildingCaches();
 
         string roomName = _room != null ? _room.RoomName : gameObject.name;
         Debug.Log($"<color=green>[FurnitureManager]</color> Registered (unchecked, no reparent) spawned {furniture.FurnitureName} at {targetPosition} in {roomName}.");
@@ -157,6 +189,7 @@ public class FurnitureManager : MonoBehaviour
         if (furniture == null) return;
         if (_grid != null) _grid.UnregisterFurniture(furniture);
         _furnitures.Remove(furniture);
+        InvalidateOwnerBuildingCaches();
 
         string roomName = _room != null ? _room.RoomName : gameObject.name;
         Debug.Log($"<color=cyan>[FurnitureManager]</color> Unregistered {furniture.FurnitureName} from {roomName}.");
@@ -204,15 +237,18 @@ public class FurnitureManager : MonoBehaviour
         _furnitures.RemoveAll(f => f == null);
 
         Furniture[] childFurniture = GetComponentsInChildren<Furniture>(true);
+        bool anyAdded = false;
         foreach (var f in childFurniture)
         {
             if (f == null) continue;
             if (!_furnitures.Contains(f))
             {
                 _furnitures.Add(f);
+                anyAdded = true;
             }
             _grid.RegisterFurniture(f, f.transform.position, f.SizeInCells);
         }
+        if (anyAdded) InvalidateOwnerBuildingCaches();
     }
 
 #if UNITY_EDITOR

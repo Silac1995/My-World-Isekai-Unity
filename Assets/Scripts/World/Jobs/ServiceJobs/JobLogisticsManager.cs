@@ -13,6 +13,11 @@ public class JobLogisticsManager : Job
     public override string JobTitle => _customTitle;
     public override JobCategory Category => JobCategory.Service;
 
+    // Heavy-planning job: GOAP planning + dispatcher per Execute. With B's dirty-flag
+    // gating making the dispatcher early-exit on stable state, 3.3 Hz is plenty.
+    // See wiki/projects/optimisation-backlog.md entry #2 / Cₐ.
+    public override float ExecuteIntervalSeconds => 0.3f;
+
     // GOAP
     private GoapGoal _logisticsGoal;
     private List<GoapAction> _availableActions;

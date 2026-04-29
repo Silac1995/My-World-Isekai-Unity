@@ -54,6 +54,25 @@ public class GoapAction_GatherStorageItems : GoapAction
     // FindStorageFurnitureForItem doesn't consult PathingMemory.
     private HashSet<StorageFurniture> _excludedFurniture;
 
+    // ── FindLooseWorldItem cache (perf, see wiki/projects/optimisation-backlog.md entry #2 / Bₐ).
+    // FindLooseWorldItem runs 3 Physics.OverlapBox + per-collider component scans + List
+    // alloc + AddRange on every IsValid() call. With 4 logistics managers + 2 harvesters
+    // each running this per Job.Execute tick, that's hundreds of redundant PhysX scans/sec.
+    // Cache the result per-action-instance for 0.5 s — long enough to absorb the Cₐ-throttled
+    // 0.3 s job tick. If another worker grabs our target before we get there, the action's
+    // existing failure-handling (target null, retry next tick) catches it.
+    private const float FindLooseCacheTTLSeconds = 0.5f;
+    private float _lastFindLooseTime = -1f;
+    private WorldItem _lastFindLooseResult;
+    private int _lastFindLooseFrame = -1;
+
+    // Reused PhysX overlap buffer + scratch list, shared across action instances (PhysX
+    // queries are main-thread, so a static is safe and avoids per-instance allocations).
+    // 128 covers typical zone clutter; saturation falls back to truncated scan with warning.
+    private const int OverlapBufferSize = 128;
+    private static readonly Collider[] s_overlapBuffer = new Collider[OverlapBufferSize];
+    private static readonly List<Collider> s_scratchCollidersList = new List<Collider>(OverlapBufferSize * 3);
+
     private enum GatherState
     {
         FindingItem,
@@ -544,28 +563,37 @@ public class GoapAction_GatherStorageItems : GoapAction
     private WorldItem FindLooseWorldItem(Character worker)
     {
         if (_building.BuildingZone == null) return null;
-        
+
+        // Cache hit: re-use the previous result if it's still fresh AND the cached item
+        // hasn't been picked up since (validate the WorldItem still exists and is loose).
+        // Cleared on Exit() so a new action invocation always starts cold.
+        if (UnityEngine.Time.time - _lastFindLooseTime < FindLooseCacheTTLSeconds)
+        {
+            if (_lastFindLooseResult == null) return null;
+            // Cached item still valid — same WorldItem might have been picked up by
+            // another worker; skip the cache if so to force a refresh.
+            if (_lastFindLooseResult.gameObject != null && !_lastFindLooseResult.IsBeingCarried)
+            {
+                return _lastFindLooseResult;
+            }
+        }
+
         BoxCollider boxCol = _building.BuildingZone.GetComponent<BoxCollider>();
         if (boxCol == null) return null;
-
-        Vector3 center = boxCol.transform.TransformPoint(boxCol.center);
-        Vector3 halfExtents = Vector3.Scale(boxCol.size, boxCol.transform.lossyScale) * 0.5f;
-
-        Collider[] colliders = Physics.OverlapBox(center, halfExtents, boxCol.transform.rotation, Physics.AllLayers, QueryTriggerInteraction.Collide);
 
         WorldItem nearest = null;
         float nearestDist = float.MaxValue;
 
         Zone storageZone = _building.StorageZone;
         BoxCollider storageCol = storageZone != null ? storageZone.GetComponent<BoxCollider>() : null;
-        
+
         Zone depositZone = null;
         if (_building is HarvestingBuilding harvestingBuilding)
         {
             depositZone = harvestingBuilding.DepositZone;
         }
         BoxCollider depositCol = depositZone != null ? depositZone.GetComponent<BoxCollider>() : null;
-        
+
         Zone deliveryZone = _building.DeliveryZone;
         BoxCollider deliveryCol = deliveryZone != null ? deliveryZone.GetComponent<BoxCollider>() : null;
 
@@ -575,26 +603,20 @@ public class GoapAction_GatherStorageItems : GoapAction
         Zone pickupZone = _building.PickupZone;
         BoxCollider pickupCol = pickupZone != null ? pickupZone.GetComponent<BoxCollider>() : null;
 
-        List<Collider> allCols = new List<Collider>(colliders);
+        // Reused scratch list across all 3 zone scans (NOT static-only; cleared each call).
+        // OverlapBoxNonAlloc against the shared buffer to avoid per-call Collider[] allocations.
+        // See wiki/projects/optimisation-backlog.md entry #2 / Bₐ.
+        s_scratchCollidersList.Clear();
 
-        if (depositCol != null)
-        {
-            Vector3 dCenter = depositCol.transform.TransformPoint(depositCol.center);
-            Vector3 dHalfExtents = Vector3.Scale(depositCol.size, depositCol.transform.lossyScale) * 0.5f;
-            var dCols = Physics.OverlapBox(dCenter, dHalfExtents, depositCol.transform.rotation, Physics.AllLayers, QueryTriggerInteraction.Collide);
-            allCols.AddRange(dCols);
-        }
-        
-        if (deliveryCol != null)
-        {
-            Vector3 delCenter = deliveryCol.transform.TransformPoint(deliveryCol.center);
-            Vector3 delHalfExtents = Vector3.Scale(deliveryCol.size, deliveryCol.transform.lossyScale) * 0.5f;
-            var delCols = Physics.OverlapBox(delCenter, delHalfExtents, deliveryCol.transform.rotation, Physics.AllLayers, QueryTriggerInteraction.Collide);
-            allCols.AddRange(delCols);
-        }
+        AppendOverlapBoxColliders(boxCol, s_scratchCollidersList, "BuildingZone");
+        if (depositCol != null) AppendOverlapBoxColliders(depositCol, s_scratchCollidersList, "DepositZone");
+        if (deliveryCol != null) AppendOverlapBoxColliders(deliveryCol, s_scratchCollidersList, "DeliveryZone");
 
-        foreach (var col in allCols)
+        for (int i = 0; i < s_scratchCollidersList.Count; i++)
         {
+            var col = s_scratchCollidersList[i];
+            if (col == null) continue;
+
             var worldItem = col.GetComponent<WorldItem>() ?? col.GetComponentInParent<WorldItem>();
             if (worldItem == null || worldItem.ItemInstance == null || worldItem.IsBeingCarried) continue;
 
@@ -615,7 +637,7 @@ public class GoapAction_GatherStorageItems : GoapAction
                 if (pickupCol.bounds.Contains(flatPickup)) continue;
             }
 
-            // Optional: check if it belongs to crafting output. 
+            // Optional: check if it belongs to crafting output.
             // Currently, any loose item in building zone gets stashed.
             float dist = Vector3.Distance(worker.transform.position, worldItem.transform.position);
             if (dist < nearestDist)
@@ -624,7 +646,34 @@ public class GoapAction_GatherStorageItems : GoapAction
                 nearestDist = dist;
             }
         }
+
+        s_scratchCollidersList.Clear();
+        _lastFindLooseTime = UnityEngine.Time.time;
+        _lastFindLooseResult = nearest;
         return nearest;
+    }
+
+    /// <summary>
+    /// Runs <see cref="Physics.OverlapBoxNonAlloc"/> against the shared static buffer
+    /// and appends the results into <paramref name="dest"/>. Logs a saturation warning
+    /// (rule #31) if the buffer fills exactly, signalling that <see cref="OverlapBufferSize"/>
+    /// should be bumped.
+    /// </summary>
+    private static void AppendOverlapBoxColliders(BoxCollider boxCol, List<Collider> dest, string zoneTag)
+    {
+        Vector3 center = boxCol.transform.TransformPoint(boxCol.center);
+        Vector3 halfExtents = Vector3.Scale(boxCol.size, boxCol.transform.lossyScale) * 0.5f;
+
+        int hitCount = Physics.OverlapBoxNonAlloc(center, halfExtents, s_overlapBuffer, boxCol.transform.rotation, Physics.AllLayers, QueryTriggerInteraction.Collide);
+        if (hitCount == OverlapBufferSize)
+        {
+            Debug.LogWarning($"[GoapAction_GatherStorageItems] {zoneTag} on '{boxCol.name}' saturated the OverlapBox buffer ({OverlapBufferSize}) — bump OverlapBufferSize. Items beyond #{OverlapBufferSize} truncated this scan.", boxCol);
+        }
+        for (int i = 0; i < hitCount; i++)
+        {
+            var col = s_overlapBuffer[i];
+            if (col != null) dest.Add(col);
+        }
     }
 
     public override void Exit(Character worker)
@@ -637,5 +686,8 @@ public class GoapAction_GatherStorageItems : GoapAction
         _furnitureMoveStartedAt = -1f;
         _excludedFurniture?.Clear();
         _lastLoggedState = (GatherState)(-1);
+        // Reset the FindLooseWorldItem cache so the next invocation starts cold.
+        _lastFindLooseTime = -1f;
+        _lastFindLooseResult = null;
     }
 }

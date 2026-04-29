@@ -37,6 +37,13 @@ namespace MWI.Farming
 
         public static CropSO Get(string id)
         {
+            // Lazy auto-init mirrors TerrainTypeRegistry.Get — joining clients can call this
+            // from CropHarvestable.ResolveCropFromNet during the brief window between NGO
+            // replicating an existing CropHarvestable and GameSessionManager.HandleClientConnected
+            // running our explicit Initialize. Without lazy init, the client's _crop never
+            // resolves, the menu stays empty, and CanHarvest returns false. Initialize is
+            // idempotent so paying it on first lookup is safe and order-independent.
+            if (!_initialised) Initialize();
             if (string.IsNullOrEmpty(id)) return null;
             return _byId.TryGetValue(id, out var crop) ? crop : null;
         }

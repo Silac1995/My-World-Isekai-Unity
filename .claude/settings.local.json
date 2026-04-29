@@ -94,7 +94,8 @@
       "Bash(git config *)",
       "Bash(git ls-files *)",
       "Bash(git -C \"c:/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity\" add \"Assets/Scripts/Character/CharacterJob/CharacterJob.cs\")",
-      "Bash(git -C 'c:/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity' commit -m 'feat\\(jobs\\): seed default wages at hire time via WageSystemService *)"
+      "Bash(git -C 'c:/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity' commit -m 'feat\\(jobs\\): seed default wages at hire time via WageSystemService *)",
+      "Bash(claude:*)"
     ],
     "additionalDirectories": [
       "\\tmp"

@@ -21,6 +21,13 @@ public class JobHarvester : Job
     public override JobCategory Category => JobCategory.Harvester;
     public override JobType Type => _jobType;
 
+    // Heavy-planning job: GOAP plan + per-tick task scans against the building's
+    // BuildingTaskManager. Reactivity comes from the GOAP plan itself (which still
+    // ticks per-frame inside CharacterMovement / CharacterActions); 3.3 Hz here is
+    // plenty for the planning layer. See wiki/projects/optimisation-backlog.md
+    // entry #2 / Cₐ.
+    public override float ExecuteIntervalSeconds => 0.3f;
+
     // GOAP
     private GoapGoal _harvestGoal;
     private List<GoapAction> _availableActions;

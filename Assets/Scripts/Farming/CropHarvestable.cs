@@ -33,10 +33,44 @@ namespace MWI.Farming
         private FarmGrowthSystem _farmGrowthSystem;
         private Vector3 _baseScale;
 
+        // Last NetVar values seen by the polling fallback in Update. Tracks change so we
+        // only re-run ApplyVisual when something actually flipped, not every frame.
+        private int _lastSeenStage = -1;
+        private bool _lastSeenDepleted;
+        private string _lastSeenCropId = "";
+
         private void Awake()
         {
             _netSync = GetComponent<CropHarvestableNetSync>();
             _baseScale = transform.localScale;
+        }
+
+        /// <summary>
+        /// Polls the three replicated NetVars every frame and triggers ApplyVisual on any
+        /// change. Defensive fallback to the OnValueChanged subscriptions in
+        /// CropHarvestableNetSync — those callbacks reliably fire on the host (server-side)
+        /// but have shown intermittent behaviour on remote clients (initial-sync replicates
+        /// correctly, post-spawn CurrentStage / IsDepleted updates sometimes don't trigger
+        /// the registered callback). This poll is cheap (three NetVar reads + three compares
+        /// + a string compare per frame per active crop) and idempotent — host pays it too,
+        /// but ApplyVisual is a no-op when the visual is already correct because the
+        /// detection short-circuits via _lastSeen* equality.
+        /// </summary>
+        private void Update()
+        {
+            if (_netSync == null) return;
+
+            int currStage = _netSync.CurrentStage.Value;
+            bool currDepleted = _netSync.IsDepleted.Value;
+            string currCropId = _netSync.CropIdNet.Value.ToString();
+
+            if (currStage == _lastSeenStage && currDepleted == _lastSeenDepleted && currCropId == _lastSeenCropId)
+                return;
+
+            _lastSeenStage = currStage;
+            _lastSeenDepleted = currDepleted;
+            _lastSeenCropId = currCropId;
+            ApplyVisual();
         }
 
         // ────────────────────── Server-only setup ──────────────────────
@@ -58,11 +92,11 @@ namespace MWI.Farming
             if (_netSync == null) _netSync = GetComponent<CropHarvestableNetSync>();
 
             // Configure base Harvestable from CropSO content (server-side).
-            SetOutputItemsRuntime(new List<ItemSO> { (ItemSO)crop.ProduceItem });
+            SetHarvestOutputsRuntime(CastEntryList(crop.HarvestOutputs));
             SetMaxHarvestCountRuntime(1);
             SetIsDepletableRuntime(true);
             SetRespawnDelayDaysRuntime(0);
-            SetDestructionFieldsRuntime(CastItemList(crop.DestructionOutputs), crop.DestructionOutputCount, crop.DestructionDuration);
+            SetDestructionFieldsRuntime(CastEntryList(crop.DestructionOutputs), crop.DestructionDuration);
             SetAllowDestructionForTests(crop.AllowDestruction);
             SetRequiredDestructionToolForTests((ItemSO)crop.RequiredDestructionTool);
 
@@ -106,19 +140,177 @@ namespace MWI.Farming
 
         // ────────────────────── Interaction ──────────────────────
 
-        /// <summary>Override base: a still-growing crop is never harvestable.</summary>
+        /// <summary>
+        /// Replaces the base `_harvestOutputs`-based check with one that reads only
+        /// network-replicated state (`_netSync` NetVars + `CropRegistry` lookup), so the
+        /// owning client of a player character can decide whether to fire a harvest action.
+        /// `_harvestOutputs` and `_crop` are populated by `InitializeFromCell` on the server
+        /// only — non-host clients see them empty/null and must not be consulted here.
+        /// </summary>
         public override bool CanHarvest()
         {
             if (!IsMature()) return false;
-            return base.CanHarvest();
+            if (_netSync != null && _netSync.IsDepleted.Value) return false;
+            var crop = ResolveCropFromNet();
+            if (crop == null) return false;
+            return crop.HarvestOutputs != null && crop.HarvestOutputs.Count > 0;
         }
 
         private bool IsMature()
         {
-            int stage = _netSync != null ? _netSync.CurrentStage.Value : 0;
-            int days = _crop != null ? _crop.DaysToMature : int.MaxValue;
-            return stage >= days;
+            if (_netSync == null) return false;
+            var crop = ResolveCropFromNet();
+            if (crop == null) return false;
+            return _netSync.CurrentStage.Value >= crop.DaysToMature;
         }
+
+        /// <summary>
+        /// Override so non-host clients can see the destruction setting — base reads
+        /// `_allowDestruction` which is a server-only runtime mutation. Resolved from the
+        /// replicated CropSO instead.
+        /// </summary>
+        public override bool AllowDestruction
+        {
+            get
+            {
+                var crop = ResolveCropFromNet();
+                return crop != null && crop.AllowDestruction;
+            }
+        }
+
+        /// <summary>
+        /// Override so non-host clients see the destruction-tool requirement — base reads
+        /// `_requiredDestructionTool` which is a server-only runtime mutation.
+        /// </summary>
+        public override ItemSO RequiredDestructionTool
+        {
+            get
+            {
+                var crop = ResolveCropFromNet();
+                return crop != null ? crop.RequiredDestructionTool as ItemSO : null;
+            }
+        }
+
+        /// <summary>
+        /// Resolves the CropSO from the replicated NetVar so client-side code paths work
+        /// even before/without `InitializeFromCell` running locally. Caches into _crop on
+        /// success so subsequent calls are O(1).
+        /// </summary>
+        private CropSO ResolveCropFromNet()
+        {
+            if (_crop != null) return _crop;
+            if (_netSync == null) return null;
+            string id = _netSync.CropIdNet.Value.ToString();
+            if (string.IsNullOrEmpty(id)) return null;
+            _crop = CropRegistry.Get(id);
+            return _crop;
+        }
+
+        /// <summary>
+        /// Client-readable replacement for the base method. Reads outputs/destruction lists
+        /// from the registry-resolved CropSO instead of the server-only `_harvestOutputs` /
+        /// `_destructionOutputs` runtime fields. Allows the Hold-E menu to render correct
+        /// rows on every peer, not just the server/host.
+        /// </summary>
+        public override System.Collections.Generic.IList<HarvestInteractionOption> GetInteractionOptions(Character actor)
+        {
+            var list = new System.Collections.Generic.List<HarvestInteractionOption>(2);
+            var crop = ResolveCropFromNet();
+            if (crop == null) return list;
+
+            var held = Harvestable.GetHeldItemSO(actor);
+
+            // ── Yield row ──
+            ItemSO firstYield = null;
+            if (crop.HarvestOutputs != null)
+            {
+                for (int i = 0; i < crop.HarvestOutputs.Count; i++)
+                {
+                    var e = crop.HarvestOutputs[i];
+                    if (e.Item is ItemSO it && it != null && e.Count > 0)
+                    {
+                        firstYield = it;
+                        break;
+                    }
+                }
+            }
+            if (firstYield != null)
+            {
+                bool yieldOk = CanHarvest()
+                    && (RequiredHarvestTool == null || held == RequiredHarvestTool);
+                string yieldReason = null;
+                if (!yieldOk)
+                {
+                    if (!IsMature()) yieldReason = "Not yet ripe";
+                    else if (_netSync != null && _netSync.IsDepleted.Value) yieldReason = "Already harvested";
+                    else if (RequiredHarvestTool != null) yieldReason = $"Requires {RequiredHarvestTool.ItemName}";
+                    else yieldReason = "Cannot harvest";
+                }
+                list.Add(new HarvestInteractionOption(
+                    label: $"Pick {firstYield.ItemName}",
+                    icon: firstYield.Icon,
+                    outputPreview: BuildOutputPreviewFromCropSO(crop.HarvestOutputs),
+                    isAvailable: yieldOk,
+                    unavailableReason: yieldReason,
+                    actionFactory: ch => new CharacterHarvestAction(ch, this)));
+            }
+
+            // ── Destruction row ──
+            if (crop.AllowDestruction)
+            {
+                ItemSO firstDestroy = null;
+                if (crop.DestructionOutputs != null)
+                {
+                    for (int i = 0; i < crop.DestructionOutputs.Count; i++)
+                    {
+                        var e = crop.DestructionOutputs[i];
+                        if (e.Item is ItemSO it && it != null && e.Count > 0) { firstDestroy = it; break; }
+                    }
+                }
+                if (firstDestroy != null)
+                {
+                    var requiredTool = crop.RequiredDestructionTool as ItemSO;
+                    bool destroyOk = requiredTool == null || held == requiredTool;
+                    string destroyReason = destroyOk ? null
+                        : (requiredTool != null ? $"Requires {requiredTool.ItemName}" : "Cannot destroy");
+                    list.Add(new HarvestInteractionOption(
+                        label: "Destroy",
+                        icon: firstDestroy.Icon,
+                        outputPreview: BuildOutputPreviewFromCropSO(crop.DestructionOutputs),
+                        isAvailable: destroyOk,
+                        unavailableReason: destroyReason,
+                        actionFactory: ch => new CharacterAction_DestroyHarvestable(ch, this)));
+                }
+            }
+
+            return list;
+        }
+
+        private static string BuildOutputPreviewFromCropSO(System.Collections.Generic.IReadOnlyList<CropHarvestOutput> entries)
+        {
+            if (entries == null || entries.Count == 0) return string.Empty;
+            var sb = new System.Text.StringBuilder();
+            bool first = true;
+            for (int i = 0; i < entries.Count; i++)
+            {
+                var e = entries[i];
+                if (!(e.Item is ItemSO it) || it == null || e.Count <= 0) continue;
+                if (!first) sb.Append(", ");
+                sb.Append(e.Count).Append("× ").Append(it.ItemName);
+                first = false;
+            }
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// Crops own their own refill cycle: perennials regrow via FarmGrowthSystem +
+        /// FarmGrowthPipeline (PHASE C, gated on RegrowDays AND moisture); one-shots get
+        /// despawned in OnDepleted. The base Harvestable's auto-respawn-after-N-days path
+        /// must NOT fire — otherwise it would un-deplete the crop on the next OnNewDay
+        /// independent of the FarmGrowthPipeline state, letting the player harvest a
+        /// perennial every single day regardless of regrow timing.
+        /// </summary>
+        protected override void ScheduleRespawnAfterDeplete() { }
 
         protected override void OnDepleted()
         {
@@ -204,12 +396,15 @@ namespace MWI.Farming
 
         // ────────────────────── Helpers ──────────────────────
 
-        private static List<ItemSO> CastItemList(IReadOnlyList<ScriptableObject> sos)
+        private static List<HarvestOutputEntry> CastEntryList(IReadOnlyList<CropHarvestOutput> entries)
         {
-            var list = new List<ItemSO>(sos != null ? sos.Count : 0);
-            if (sos == null) return list;
-            for (int i = 0; i < sos.Count; i++)
-                if (sos[i] is ItemSO item) list.Add(item);
+            var list = new List<HarvestOutputEntry>(entries != null ? entries.Count : 0);
+            if (entries == null) return list;
+            for (int i = 0; i < entries.Count; i++)
+            {
+                if (entries[i].Item is ItemSO item && item != null && entries[i].Count > 0)
+                    list.Add(new HarvestOutputEntry(item, entries[i].Count));
+            }
             return list;
         }
     }

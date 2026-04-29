@@ -10,6 +10,7 @@ namespace MWI.Terrain
 
         public static void Initialize()
         {
+            if (_types != null) return;
             _types = Resources.LoadAll<TerrainType>("Data/Terrain/TerrainTypes")
                 .ToDictionary(t => t.TypeId);
             Debug.Log($"[TerrainTypeRegistry] Initialized with {_types.Count} terrain types.");
@@ -17,11 +18,14 @@ namespace MWI.Terrain
 
         public static TerrainType Get(string typeId)
         {
-            if (_types == null)
-            {
-                Debug.LogError("[TerrainTypeRegistry] Not initialized. Call Initialize() first.");
-                return null;
-            }
+            // Lazy auto-initialise on first access. Joining clients (especially the 2nd+
+            // peer) hit this from CharacterTerrainEffects.Update during the brief window
+            // between NGO spawning the replicated host Character and our explicit
+            // GameSessionManager.HandleClientConnected → TerrainTypeRegistry.Initialize()
+            // call. Without lazy init, that window produces a per-frame "Not initialized"
+            // error spam loop. Initialize is idempotent (early-return if _types != null),
+            // so paying it once on first Get() is cheap and order-independent.
+            if (_types == null) Initialize();
             if (string.IsNullOrEmpty(typeId)) return null;
             return _types.TryGetValue(typeId, out var t) ? t : null;
         }

@@ -106,6 +106,17 @@ public class GameSessionManager : MonoBehaviour
         if (clientId == NetworkManager.Singleton.LocalClientId && !IsHost)
         {
             Debug.Log("<color=cyan>[GameSession]</color> Connected to Server");
+
+            // Joining clients skip GameLauncher.LaunchSequence (that's the host/solo path),
+            // so they never hit the registry-init block at line 140-141. Without these
+            // registries, TerrainTypeRegistry.Get / CropRegistry.Get always return null on
+            // the client, breaking CharacterTerrainEffects.UpdateTerrainDetection (spammy
+            // "Not initialized" errors every frame) and CropHarvestable.ResolveCropFromNet
+            // (empty hold-E menu, no growth visual, can't harvest). Both registries are
+            // static + idempotent — Initialize early-returns if already populated, so
+            // calling here is safe even if some other code path has already run them.
+            MWI.Terrain.TerrainTypeRegistry.Initialize();
+            MWI.Farming.CropRegistry.Initialize();
         }
 
         if (NetworkManager.Singleton.IsServer)
