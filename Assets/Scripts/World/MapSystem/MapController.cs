@@ -1683,18 +1683,25 @@ namespace MWI.WorldSystem
         [ClientRpc]
         private void SendDirtyCellsClientRpc(int[] indices, TerrainCellSaveData[] payload)
         {
-            if (IsServer) return;   // server already mutated its grid before NotifyDirtyCells fired
             var grid = GetComponent<TerrainCellGrid>();
             if (grid == null || indices == null || payload == null) return;
 
-            for (int i = 0; i < indices.Length; i++)
+            // Apply cell mutations to local grid mirror — but skip on host (the server-side
+            // caller already wrote the same cells before the RPC fired).
+            if (!IsServer)
             {
-                int idx = indices[i];
-                int x = idx % grid.Width;
-                int z = idx / grid.Width;
-                ref TerrainCell cell = ref grid.GetCellRef(x, z);
-                cell = payload[i].ToCell();
+                for (int i = 0; i < indices.Length; i++)
+                {
+                    int idx = indices[i];
+                    int x = idx % grid.Width;
+                    int z = idx / grid.Width;
+                    ref TerrainCell cell = ref grid.GetCellRef(x, z);
+                    cell = payload[i].ToCell();
+                }
             }
+
+            // Notify visual processors on EVERY peer including the host. Host's spawner
+            // needs this to render the local visual just like a remote client's does.
             var cropVisualSpawner = GetComponent<MWI.Farming.CropVisualSpawner>();
             if (cropVisualSpawner != null) cropVisualSpawner.OnDirtyCells(indices);
             // Future: terrain transition processors can also subscribe here.
