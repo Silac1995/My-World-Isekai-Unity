@@ -3,7 +3,7 @@ type: system
 title: "Farming / Plot System"
 tags: [farming, crops, harvestable, plot, perennial, tier-1]
 created: 2026-04-28
-updated: 2026-04-28
+updated: 2026-04-29
 sources: []
 related:
   - "[[terrain-and-weather]]"
@@ -239,10 +239,13 @@ MacroSimulator (server, hibernation only)
 - [ ] **Multi-pick across hibernation for perennials.** Deferred until NPC harvesting AI exists.
 - [ ] **Tighten `CropSO` Inspector typing.** Item-typed fields are `ScriptableObject` due to the Pure asmdef boundary; an `OnValidate` runtime check could reject non-`ItemSO` assignments.
 - [ ] **Specialist agent.** No `farming-specialist` agent yet. Likely worth one when NPC AI farming lands.
+- [ ] **Collapse `CropVisualSpawner` into `CropHarvestable` (single-GameObject-per-crop model).** Current design has two visual layers: `CropVisualSpawner` (local-only stage cube/sprite during growth) and `CropHarvestable` (`NetworkObject`, spawned at maturity). The handoff is the §6 "spawn-order race" — robust but conceptually heavier than needed. Cleaner alternative: spawn one `CropHarvestable` per cell at **plant-time** instead of maturity-time; drive its visual from a `NetworkVariable<int> CurrentStage` (or by reading `cell.GrowthTimer` on tick). Existing `_readySprite`/`_depletedSprite` extend to a `_stageSprites[]` array on the prefab. `CanHarvest()` returns false while growing. Removes `CropVisualSpawner.cs`, the `MapController.NotifyDirtyCells` → spawner fan-out, and the visual handoff logic in `Refresh`. Cost: one `NetworkObject` per crop (vs. one per mature crop today) — a perf concern for huge farm scenes; defer until profiling shows it. **Reason for current design:** speculative network-footprint optimization; in practice the simpler model is more likely to be the right pick for the "crops are individual" mental model and tractable scenes. Kevin flagged this 2026-04-29 as the architecturally cleaner direction.
+- [ ] **`VegetationGrowthSystem` per-tree GameObject rework.** Same critique as above but for wild vegetation. Currently the terrain layer tracks growth purely as cell state and would spawn separate prefabs at each stage — a designer pain point. Per-tree GameObject (or just per-mature-tree) would mirror the per-crop approach, sharing whatever final pattern wins for farming. Out of scope for the farming spec; flagged here for continuity.
 
 ## Change log
 
 - 2026-04-28 — System designed and implemented (10 commits). Pure-logic + math fully tested (15 EditMode tests; 58/58 green). Pending: sample assets (`Crop_Wheat`/`Crop_Flower`/`Crop_AppleTree`), `UI_InteractionMenu` prefab, manual playmode acceptance pass. — claude
+- 2026-04-29 — Playmode integration session. Sample assets committed (3 crops + 4 prefabs + 6 items). UI prefab created and renamed to `UI_HarvestInteractionMenu` to avoid name collision with the pre-existing global `UI_InteractionMenu`. Several runtime bugs surfaced + fixed: prefab variant fileID/guid breakage on `_harvestablePrefab`, missing `TerrainCellGrid.Initialize` call (pre-existing terrain gap; bootstrap added from `BoxCollider`), `TerrainTypeRegistry.Get` null-key crash, `MapController.WakeUp` farming init gated to hibernation-only path (moved out, plus self-init in `Start()` for scene-authored maps that never WakeUp), `SendDirtyCellsClientRpc` host-bug (`if (IsServer) return` skipped local visual notification on the host). Crops now plant + grow + display on host. Two architectural deferrals captured: collapse `CropVisualSpawner` into `CropHarvestable` (single-GameObject-per-crop) and same critique for `VegetationGrowthSystem`. — claude / [[kevin]]
 
 ## Sources
 
