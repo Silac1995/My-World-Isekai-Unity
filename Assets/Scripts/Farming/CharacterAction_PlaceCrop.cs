@@ -29,36 +29,59 @@ namespace MWI.Farming
 
         public override bool CanExecute()
         {
-            if (_crop == null || _map == null) return false;
+            if (_crop == null || _map == null)
+            {
+                Debug.LogWarning("[PlantAction] CanExecute=false — _crop or _map null.");
+                return false;
+            }
             var grid = _map.GetComponent<TerrainCellGrid>();
-            if (grid == null) return false;
+            if (grid == null)
+            {
+                Debug.LogWarning("[PlantAction] CanExecute=false — no TerrainCellGrid on map.");
+                return false;
+            }
             ref var cell = ref grid.GetCellRef(_cellX, _cellZ);
-            return string.IsNullOrEmpty(cell.PlantedCropId);
+            bool canExec = string.IsNullOrEmpty(cell.PlantedCropId);
+            if (!canExec) Debug.LogWarning($"[PlantAction] CanExecute=false — cell ({_cellX},{_cellZ}) already has crop '{cell.PlantedCropId}'.");
+            return canExec;
         }
 
-        public override void OnStart() { }
+        public override void OnStart()
+        {
+            Debug.Log($"[PlantAction] OnStart — {character.name} starts planting '{_crop.Id}' at ({_cellX},{_cellZ}), Duration={Duration}s.");
+        }
 
         public override void OnApplyEffect()
         {
-            if (_map == null || _crop == null) return;
+            Debug.Log($"[PlantAction] OnApplyEffect — {character.name} applying plant of '{_crop?.Id}' at ({_cellX},{_cellZ}).");
+            if (_map == null || _crop == null) { Debug.LogWarning("[PlantAction] Bail — _map or _crop null."); return; }
             var grid = _map.GetComponent<TerrainCellGrid>();
-            if (grid == null) return;
+            if (grid == null) { Debug.LogWarning("[PlantAction] Bail — no TerrainCellGrid."); return; }
 
             ref var cell = ref grid.GetCellRef(_cellX, _cellZ);
             cell.IsPlowed = true;
             cell.PlantedCropId = _crop.Id;
             cell.GrowthTimer = 0f;
-            cell.TimeSinceLastWatered = -1f;   // sentinel "not depleted"; ignored during growing-crop phase
+            cell.TimeSinceLastWatered = -1f;
+            Debug.Log($"[PlantAction] Cell mutated. PlantedCropId='{cell.PlantedCropId}', IsPlowed={cell.IsPlowed}.");
 
-            // Consume one seed from the carry slot.
             var hands = character.CharacterVisual != null && character.CharacterVisual.BodyPartsController != null
                 ? character.CharacterVisual.BodyPartsController.HandsController
                 : null;
             if (hands != null && hands.CarriedItem != null && hands.CarriedItem.ItemSO is SeedSO)
+            {
                 hands.ClearCarriedItem();
+                Debug.Log("[PlantAction] Seed consumed from hand.");
+            }
 
             int idx = _cellZ * grid.Width + _cellX;
             _map.NotifyDirtyCells(new[] { idx });
+            Debug.Log($"[PlantAction] NotifyDirtyCells fired for index {idx}.");
+        }
+
+        public override void OnCancel()
+        {
+            Debug.LogWarning($"[PlantAction] OnCancel — plant of '{_crop?.Id}' at ({_cellX},{_cellZ}) cancelled.");
         }
     }
 }

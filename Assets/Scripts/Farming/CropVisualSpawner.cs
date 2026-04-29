@@ -42,7 +42,9 @@ namespace MWI.Farming
         /// </summary>
         public void OnDirtyCells(int[] indices)
         {
-            if (_grid == null || indices == null) return;
+            if (_grid == null) { Debug.LogWarning("[CropVisualSpawner] OnDirtyCells called but _grid is null. Was Initialize() invoked?"); return; }
+            if (indices == null) return;
+            Debug.Log($"[CropVisualSpawner] OnDirtyCells — {indices.Length} cell(s) updated.");
             for (int i = 0; i < indices.Length; i++)
                 Refresh(indices[i]);
         }
@@ -54,29 +56,27 @@ namespace MWI.Farming
             int z = idx / _grid.Width;
             ref TerrainCell cell = ref _grid.GetCellRef(x, z);
 
-            // No crop on this cell? Remove any visual.
             if (string.IsNullOrEmpty(cell.PlantedCropId)) { Remove(idx); return; }
 
             var crop = CropRegistry.Get(cell.PlantedCropId);
-            if (crop == null) { Remove(idx); return; }
+            if (crop == null) { Debug.LogWarning($"[CropVisualSpawner] Cell ({x},{z}) PlantedCropId='{cell.PlantedCropId}' not in CropRegistry."); Remove(idx); return; }
 
             // Mature → CropHarvestable owns the visual. Always remove our own sprite.
-            // This is the load-bearing line for the §6 visual handoff: regardless of which
-            // arrival order (cell delta vs CropHarvestable.Spawn) the client sees first, the
-            // cell's growthTimer says "mature" so we step out and let the harvestable own it.
             if (cell.GrowthTimer >= crop.DaysToMature) { Remove(idx); return; }
 
             int stage = (int)cell.GrowthTimer;
             var sprite = crop.GetStageSprite(stage);
 
+            Vector3 pos = _grid.GridToWorld(x, z);
             if (!_activeVisuals.TryGetValue(idx, out var go) || go == null)
             {
-                go = SpawnVisualAt(_grid.GridToWorld(x, z));
+                go = SpawnVisualAt(pos);
                 _activeVisuals[idx] = go;
+                Debug.Log($"[CropVisualSpawner] Spawned stage-sprite GameObject for cell ({x},{z}) at {pos}, sprite={(sprite != null ? sprite.name : "<null — _stageSprites not assigned>")}.");
             }
             else
             {
-                go.transform.position = _grid.GridToWorld(x, z);
+                go.transform.position = pos;
             }
             var sr = go.GetComponentInChildren<SpriteRenderer>();
             if (sr != null) sr.sprite = sprite;
