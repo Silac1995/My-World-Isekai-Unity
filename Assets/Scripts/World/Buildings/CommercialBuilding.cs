@@ -2518,7 +2518,7 @@ public abstract class CommercialBuilding : Building
     ///     "Hiring at {buildingName}:
     ///      • 2 Farmer positions
     ///      • 1 Logistics Manager
-    ///     Approach the owner to apply."
+    ///     For application, see the owner in person."
     /// </summary>
     protected virtual string GetHelpWantedDisplayText()
     {
@@ -2543,7 +2543,7 @@ public abstract class CommercialBuilding : Building
             if (pair.Value > 1) sb.Append(" positions");
             sb.Append('\n');
         }
-        sb.Append("Approach the owner to apply.");
+        sb.Append("For application, see the owner in person.");
         return sb.ToString();
     }
 

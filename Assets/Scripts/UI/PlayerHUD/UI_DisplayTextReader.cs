@@ -1,5 +1,4 @@
 using TMPro;
-using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -10,12 +9,11 @@ using UnityEngine.UI;
 /// instance for every subsequent open. Closes via Close button, outside-click overlay, or
 /// the ESC key.
 ///
-/// If the displayed sign is the parent building's <see cref="CommercialBuilding.HelpWantedSign"/>
-/// AND <see cref="CommercialBuilding.IsHiring"/> == true, the "Apply for a job" button is
-/// shown. Clicking it routes through <see cref="CharacterJob.RequestJobApplicationServerRpc"/>
-/// — the same client→server path used by the hold-E hiring menu (see CharacterJob change-log
-/// 2026-04-24, wiki/systems/character-job.md). The ServerRpc re-validates ownership, index
-/// range, !job.IsAssigned, and runs the Task 5 IsHiring gate inside InteractionAskForJob.
+/// The reader is purely informative — it displays the sign's title (parent building name)
+/// and body text. Job applications are not initiated from the sign: both player and NPC
+/// applicants must walk to the boss in person and use the canonical
+/// <see cref="InteractionAskForJob"/> path (see CharacterJob and the hold-E hiring menu).
+/// This design was confirmed in the 2026-04-30 Help Wanted refinement.
 ///
 /// Rule #26: All UI timing (none here at the moment) MUST use unscaled time so the reader is
 /// usable when the GameSpeedController is paused or at Giga Speed.
@@ -28,12 +26,6 @@ public class UI_DisplayTextReader : MonoBehaviour
     [Header("Layout")]
     [SerializeField] private TextMeshProUGUI _titleLabel;
     [SerializeField] private TextMeshProUGUI _bodyLabel;
-
-    [Header("Apply button")]
-    [Tooltip("Root GameObject toggled active/inactive based on the help-wanted condition.")]
-    [SerializeField] private GameObject _applyButton;
-    [Tooltip("Button component on _applyButton — used to register the click listener.")]
-    [SerializeField] private Button _applyButtonComponent;
 
     [Header("Dismiss")]
     [SerializeField] private Button _closeButton;
@@ -80,14 +72,12 @@ public class UI_DisplayTextReader : MonoBehaviour
     {
         if (_closeButton != null) _closeButton.onClick.AddListener(Close);
         if (_dismissOverlay != null) _dismissOverlay.onClick.AddListener(Close);
-        if (_applyButtonComponent != null) _applyButtonComponent.onClick.AddListener(OnApplyClicked);
     }
 
     private void OnDestroy()
     {
         if (_closeButton != null) _closeButton.onClick.RemoveListener(Close);
         if (_dismissOverlay != null) _dismissOverlay.onClick.RemoveListener(Close);
-        if (_applyButtonComponent != null) _applyButtonComponent.onClick.RemoveListener(OnApplyClicked);
 
         // Drop the static instance reference so a fresh-loaded scene gets a clean re-spawn
         // on the next Show() call.
@@ -97,18 +87,11 @@ public class UI_DisplayTextReader : MonoBehaviour
     private void ShowInternal(DisplayTextFurniture sign)
     {
         _currentSign = sign;
-        _currentBuilding = sign != null ? sign.GetComponentInParent<CommercialBuilding>() : null;
-
-        bool isHelpWanted = _currentBuilding != null
-            && _currentBuilding.HelpWantedSign == sign
-            && _currentBuilding.IsHiring;
+        _currentBuilding = sign.GetComponentInParent<CommercialBuilding>();
 
         string title = _currentBuilding != null ? _currentBuilding.BuildingName : "Sign";
-        if (string.IsNullOrEmpty(title)) title = "Sign";
-
         if (_titleLabel != null) _titleLabel.text = title;
-        if (_bodyLabel != null) _bodyLabel.text = sign != null ? sign.DisplayText : string.Empty;
-        if (_applyButton != null) _applyButton.SetActive(isHelpWanted);
+        if (_bodyLabel != null) _bodyLabel.text = sign.DisplayText;
 
         gameObject.SetActive(true);
     }
@@ -126,102 +109,5 @@ public class UI_DisplayTextReader : MonoBehaviour
         gameObject.SetActive(false);
         _currentSign = null;
         _currentBuilding = null;
-    }
-
-    private void OnApplyClicked()
-    {
-        ApplyForJobAtCurrentBuilding();
-    }
-
-    /// <summary>
-    /// Validates the application is legal client-side (owner present, player has no job,
-    /// vacancies remain), picks the first vacancy as a V1 default (multi-vacancy sub-menu is
-    /// a Phase 2 follow-up), then routes the application through the canonical
-    /// <see cref="CharacterJob.RequestJobApplicationServerRpc"/> path. Server re-validates
-    /// every gate (ownership, index range, !IsAssigned, IsHiring via the Task 5 gate inside
-    /// <see cref="InteractionAskForJob.CanExecute"/>).
-    /// </summary>
-    private void ApplyForJobAtCurrentBuilding()
-    {
-        if (_currentBuilding == null || !_currentBuilding.IsHiring) return;
-
-        if (!_currentBuilding.HasOwner)
-        {
-            Debug.LogWarning("[UI_DisplayTextReader] Apply rejected — building has no Owner.");
-            return;
-        }
-
-        Character localPlayer = ResolveLocalPlayerCharacter();
-        if (localPlayer == null)
-        {
-            Debug.LogWarning("[UI_DisplayTextReader] Apply rejected — could not resolve local player Character.");
-            return;
-        }
-
-        if (localPlayer.CharacterJob != null && localPlayer.CharacterJob.HasJob)
-        {
-            Debug.Log("[UI_DisplayTextReader] Apply rejected — player already has a job.");
-            return;
-        }
-
-        var vacancies = _currentBuilding.GetVacantJobs();
-        if (vacancies == null || vacancies.Count == 0)
-        {
-            Debug.Log("[UI_DisplayTextReader] Apply rejected — no vacancies remain.");
-            return;
-        }
-
-        // V1: auto-pick the first vacancy. Multi-vacancy sub-menu is a Phase 2 follow-up.
-        var job = vacancies[0];
-        int stableIdx = _currentBuilding.GetJobStableIndex(job);
-        if (stableIdx < 0)
-        {
-            Debug.LogWarning("[UI_DisplayTextReader] Apply rejected — picked job is not in the building's stable Jobs list.");
-            return;
-        }
-
-        var owner = _currentBuilding.Owner;
-        ulong ownerNetId = owner != null && owner.NetworkObject != null
-            ? owner.NetworkObject.NetworkObjectId
-            : 0;
-        if (ownerNetId == 0)
-        {
-            Debug.LogWarning("[UI_DisplayTextReader] Apply rejected — owner has no NetworkObject id.");
-            return;
-        }
-
-        if (localPlayer.CharacterJob == null)
-        {
-            Debug.LogWarning("[UI_DisplayTextReader] Apply rejected — local player has no CharacterJob component.");
-            return;
-        }
-
-        // Same client→server path used by CharacterJob.OnJobEntryClicked for the hold-E
-        // hiring menu (2026-04-24 work). The ServerRpc validates everything authoritatively.
-        localPlayer.CharacterJob.RequestJobApplicationServerRpc(ownerNetId, stableIdx);
-        Close();
-    }
-
-    /// <summary>
-    /// Canonical local-player Character resolver — same pattern used by
-    /// <c>UI_CharacterMapTrackerOverlay.FindLocalPlayerMapTracker</c> and
-    /// <c>HUDSpeechBubbleLayer.LocalPlayerAnchor</c>. Returns null if NetworkManager isn't
-    /// up yet (early-init), no LocalClient is bound, or the player NetworkObject hasn't
-    /// spawned.
-    /// </summary>
-    private static Character ResolveLocalPlayerCharacter()
-    {
-        try
-        {
-            if (NetworkManager.Singleton == null) return null;
-            var localClient = NetworkManager.Singleton.LocalClient;
-            if (localClient == null || localClient.PlayerObject == null) return null;
-            return localClient.PlayerObject.GetComponent<Character>();
-        }
-        catch (System.Exception e)
-        {
-            Debug.LogException(e);
-            return null;
-        }
     }
 }
