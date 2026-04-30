@@ -31,7 +31,7 @@ You own the **Cinematic / Scripted Scene system** — Fire Emblem / Persona / Va
 3. **`CinematicWorldState`** — `ISaveable` (Phase 2). World-scoped played-state (`OncePerWorld` bucket) in `Worlds/{worldGuid}.json`. New world = fresh history per rule #20.
 4. **`CharacterCinematicState`** — `CharacterSystem` subsystem on every `Character` (player + NPC). Owns `IsCinematicActor` (Phase 1 local bool → Phase 2 `NetworkVariable<bool>`), `_activeRoleId`, `_activeSceneId`, `_playedSceneIds : HashSet<string>`, `_pendingSceneIds : HashSet<string>`. Phase 2 implements `ICharacterSaveData<CinematicHistorySaveData>`.
 5. **Polymorphic SO catalogues** — five extension surfaces, all `ScriptableObject`-based:
-   - `CinematicStep` (8 step types in v1: Speak/Move/Wait/Camera/Trigger/Choice/Parallel/ExecuteAction; Phase 1 ships 4 + a `DialogueScriptStep` reuse-helper that wraps a legacy `DialogueSO` into a single step.)
+   - `CinematicStep` (8 step types in v1: Speak/Move/Wait/Camera/Trigger/Choice/Parallel/ExecuteAction; Phase 1 ships 5 — `WaitStep`, `SpeakStep` (one line), `DialogueStep` (multi-line conversation, inline `List<CinematicDialogueLine>`, role-id-based — same authoring shape as legacy `DialogueSO._lines` but native to the cinematic, no external asset wrapper), `MoveActorStep`, `TriggerStep`.)
    - `RoleSelectorSO` (Phase 1 ships 5: `TriggeringPlayer`, `OtherParticipant`, `CharacterByName`, `CharacterById` (persistent UUID lookup), `PartyMember`. Phase 2 adds archetype-based: `SpecificCharacter`, `NearestArchetype`, `RandomInRadius`.)
    - `CharacterActionRecipeSO` (5 recipes, Phase 3)
    - `CinematicEffectSO` (7 effects v1 incl. Effect_GiveQuest/RemoveQuest; Phase 1 ships 1)

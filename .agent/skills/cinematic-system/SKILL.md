@@ -36,8 +36,8 @@ Server-side runtime for Fire Emblem / Persona / Vandal Hearts style scripted sce
 | Step | What it does | Key fields |
 |------|--------------|------------|
 | `WaitStep` | Sim-time delay. | `_durationSec` |
-| `SpeakStep` | Speaker role says ONE line. Phase 1 auto-advances 1.5s after typing finishes. Length-aware safety timeout. Supports `[role:X].getName` placeholders. | `_speakerRoleId`, `_lineText`, `_typingSpeedOverride` |
-| `DialogueScriptStep` | Plays an EXISTING legacy `DialogueSO` (multi-line conversation) as a single step. Maps `DialogueLine.CharacterIndex` (1-based) to roles via a designer-authored list. Supports both `[indexN].getName` (legacy) and `[role:X].getName` (new) placeholder syntax. Auto-advances per line with the same 1.5s dwell as `SpeakStep`. | `_dialogue : DialogueSO`, `_roleIdByIndex : List<string>` |
+| `SpeakStep` | Speaker role says ONE line. Phase 1 auto-advances 1.5s after typing finishes. Length-aware safety timeout. Supports `[role:X].getName` placeholders. Use for one-off beats. | `_speakerRoleId`, `_lineText`, `_typingSpeedOverride` |
+| `DialogueStep` | Multi-line conversation authored INLINE in the cinematic. Holds its own `List<CinematicDialogueLine>`. Each line names its speaker by Role Id, has a TextArea for content, and a per-line typing-speed override. Same authoring shape as the legacy `DialogueSO._lines` but role-id-based instead of 1-indexed — no external asset, no mapping list. Per-line auto-advance, length-aware safety timeout, `[role:X].getName` placeholders. Use for back-and-forth conversations. | `_lines : List<CinematicDialogueLine>` |
 | `MoveActorStep` | Actor walks to a target (role / world position). Routes through `CharacterAction_CinematicMoveTo`. Blocking by default. | `_actorRoleId`, `_targetMode`, `_targetRoleId` / `_targetPos`, `_stoppingDist`, `_blocking`, `_timeoutSec` |
 | `TriggerStep` | Fires a `CinematicEffectSO` and/or a `UnityEvent`. Fire-and-forget. | `_effect`, `_eventHook` |
 
@@ -148,7 +148,7 @@ Scenario: two villagers (Wilfred and Aria) gossip in the town square. The cinema
 Cinematics.TryPlay(scene_VillageGossip, wilfred, aria);
 ```
 
-**Timeline**: a `DialogueScriptStep` wrapping an existing `DialogueSO_VillageGossip` (multi-line back-and-forth), with `_roleIdByIndex = ["Speaker1", "Speaker2"]`. Plays the whole conversation; players nearby see/hear it organically via `CharacterSpeech` replication.
+**Timeline**: a single `DialogueStep` whose `_lines` list holds the back-and-forth — entries alternate between `Speaker Role Id = "Speaker1"` and `"Speaker2"`. Plays the whole conversation as one step; players nearby see/hear it organically via `CharacterSpeech` replication.
 
 ### Worked example: a 5-actor party cinematic
 
@@ -194,7 +194,7 @@ Optional-flagged followers (Bjorn, Cara) silently skip if missing — their `Spe
      - `Is Primary Actor` — Phase 2 `OncePerNpc` keying. Set to true on the role that "owns" the scene (typically the talked-to NPC).
    - **Timeline**: click `+` on Steps → use the **type-picker dropdown on the right side of each new element** to select Speak / Wait / Move / Trigger. The custom property drawer (`Assets/Scripts/Cinematics/Editor/CinematicStepDrawer.cs`) makes the picker visible inline so you don't need to right-click into Unity's hidden managed-reference menu.
      - `SpeakStep`: speakerRoleId, lineText (supports `[role:X].getName` placeholders), typingSpeedOverride (0 = default). One line per step.
-     - `DialogueScriptStep`: drag an existing `DialogueSO` into `_dialogue`, fill `_roleIdByIndex` with role IDs in `CharacterIndex` order (entry 0 = CharacterIndex 1, entry 1 = CharacterIndex 2, etc.). The whole multi-line conversation plays as one step. Use this when you have legacy `DialogueSO` content to reuse, or when you just prefer the multi-line authoring UX over many individual SpeakSteps.
+     - `DialogueStep`: a multi-line conversation in one step. Click `+` on `_lines` and fill each entry: `Speaker Role Id` (string matching a Cast role), `Line Text` (TextArea), `Typing Speed Override` (0 = default). Same authoring shape as legacy `DialogueSO._lines` but role-id-based — no external asset to drag in, no 1-indexed mapping. Use this for back-and-forth conversations.
      - `WaitStep`: durationSec.
      - `MoveActorStep`: actorRoleId, targetMode (Role / WorldPos), target ref, stoppingDist (default 1.5 Unity units ≈ 0.23m), blocking, timeoutSec.
      - `TriggerStep`: effect (drag a `CinematicEffectSO` asset, e.g. `Effect_RaiseEvent`), eventHook (UnityEvent in the inspector).
