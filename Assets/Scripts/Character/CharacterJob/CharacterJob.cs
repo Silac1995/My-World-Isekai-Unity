@@ -230,6 +230,11 @@ public class CharacterJob : CharacterSystem, ICharacterSaveData<JobSaveData>, II
         }
 
         _activeJobs.Remove(assignment);
+
+        // Refresh the leaving workplace's Help Wanted sign if hiring is open. Tools-returned
+        // → vacancy-now-open → sign-refresh. NotifyVacancyChanged is server-only-effective
+        // via the IsServer guard inside HandleVacancyChanged.
+        assignment.Workplace?.NotifyVacancyChanged();
     }
 
     /// <summary>

@@ -576,6 +576,10 @@ public abstract class CommercialBuilding : Building
             _jobWorkerIds.Add(new FixedString64Bytes(""));
         }
         _jobWorkerIds[idx] = new FixedString64Bytes(worker.CharacterId ?? "");
+
+        // Refresh the Help Wanted sign — the vacancy count just dropped. Single chokepoint
+        // (TakeJob, ForceAssignJob, save-restore all funnel through here).
+        HandleVacancyChanged();
         return true;
     }
 
@@ -2540,11 +2544,37 @@ public abstract class CommercialBuilding : Building
 
     /// <summary>
     /// Server-side: refresh the Help Wanted sign text whenever hiring state flips. Called
-    /// from HandleIsHiringChanged. Implementation lands in Plan 2 Task 4; for Task 2 this
-    /// is a stub — no sign refresh yet.
+    /// from HandleIsHiringChanged (which already guards `if (IsServer)` before invoking us).
+    /// No-op when no _helpWantedFurniture is referenced (building has no sign authored).
     /// </summary>
     private void HandleHiringStateChanged(bool isHiring)
     {
-        // Implemented in Plan 2 Task 4.
+        if (_helpWantedFurniture == null) return;
+        if (_helpWantedFurniture.NetSync == null) return;
+        string text = isHiring ? GetHelpWantedDisplayText() : GetClosedHiringDisplayText();
+        _helpWantedFurniture.NetSync.ServerSetDisplayText(text);
+    }
+
+    /// <summary>
+    /// Server-side: refresh the Help Wanted sign text when a worker is hired or quits while
+    /// hiring is open. Without this, the sign's "• N JobTitle" count would lie until the
+    /// next hiring toggle. No-op when hiring is closed (the sign already shows the closed-
+    /// state text) or when no _helpWantedFurniture is referenced.
+    /// </summary>
+    private void HandleVacancyChanged()
+    {
+        if (!IsServer) return;
+        if (!_isHiring.Value) return;
+        if (_helpWantedFurniture == null || _helpWantedFurniture.NetSync == null) return;
+        _helpWantedFurniture.NetSync.ServerSetDisplayText(GetHelpWantedDisplayText());
+    }
+
+    /// <summary>
+    /// Called by CharacterJob.QuitJob when a worker leaves. Refreshes the sign if hiring
+    /// is open. Safe to call from any peer (HandleVacancyChanged early-returns on client).
+    /// </summary>
+    public void NotifyVacancyChanged()
+    {
+        HandleVacancyChanged();
     }
 }
