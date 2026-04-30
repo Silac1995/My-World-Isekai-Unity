@@ -111,14 +111,31 @@ namespace MWI.Cinematics
                 _advanceTimerEnd = UTime.time;
             }
 
-            // Idempotent post-typing arm: first tick after typing-done schedules the dwell.
             if (_typingDone && !_advanceRequested)
             {
-                _advanceRequested = true;
-                _advanceTimerEnd = UTime.time + POST_TYPING_DWELL_SEC;
+                bool hasParticipatingPlayers = ctx?.ParticipatingPlayers != null
+                    && ctx.ParticipatingPlayers.Count > 0;
+
+                if (hasParticipatingPlayers)
+                {
+                    // Player-driven mode: wait for an advance-press from any participating
+                    // player. Mirrors DialogueManager's wait-for-input behaviour. The press
+                    // is forwarded via PlayerController → CinematicAdvance.
+                    if (CinematicAdvance.WasAdvanceRequestedThisFrame())
+                    {
+                        _advanceRequested = true;
+                        _advanceTimerEnd = UTime.time;     // advance immediately on next check
+                    }
+                }
+                else
+                {
+                    // NPC-only mode: auto-advance 1.5s after typing finishes.
+                    _advanceRequested = true;
+                    _advanceTimerEnd = UTime.time + POST_TYPING_DWELL_SEC;
+                }
             }
 
-            // Advance to next line when the dwell is done.
+            // Advance to next line when the dwell / press condition is satisfied.
             if (_advanceRequested && UTime.time >= _advanceTimerEnd)
             {
                 _currentLineIndex++;

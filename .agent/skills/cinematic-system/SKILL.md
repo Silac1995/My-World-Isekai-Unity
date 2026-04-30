@@ -36,8 +36,8 @@ Server-side runtime for Fire Emblem / Persona / Vandal Hearts style scripted sce
 | Step | What it does | Key fields |
 |------|--------------|------------|
 | `WaitStep` | Sim-time delay. | `_durationSec` |
-| `SpeakStep` | Speaker role says ONE line. Phase 1 auto-advances 1.5s after typing finishes. Length-aware safety timeout. Supports `[role:X].getName` placeholders. Use for one-off beats. | `_speakerRoleId`, `_lineText`, `_typingSpeedOverride` |
-| `DialogueStep` | Multi-line conversation authored INLINE in the cinematic. Holds its own `List<CinematicDialogueLine>`. Each line names its speaker by Role Id, has a TextArea for content, and a per-line typing-speed override. Same authoring shape as the legacy `DialogueSO._lines` but role-id-based instead of 1-indexed — no external asset, no mapping list. Per-line auto-advance, length-aware safety timeout, `[role:X].getName` placeholders. Use for back-and-forth conversations. | `_lines : List<CinematicDialogueLine>` |
+| `SpeakStep` | Speaker role says ONE line. **Advance behaviour mirrors `DialogueManager`**: if any player is bound as an actor → waits for that player to press Space / Left-Click. If no players (NPC-only scene) → auto-advances 1.5s after typing finishes. Length-aware safety timeout. Supports `[role:X].getName` placeholders. Use for one-off beats. | `_speakerRoleId`, `_lineText`, `_typingSpeedOverride` |
+| `DialogueStep` | Multi-line conversation authored INLINE in the cinematic. Holds its own `List<CinematicDialogueLine>`. Each line names its speaker by Role Id, has a TextArea for content, and a per-line typing-speed override. Same authoring shape as the legacy `DialogueSO._lines` but role-id-based instead of 1-indexed — no external asset, no mapping list. **Per-line advance behaviour same as `SpeakStep`**: player-bound → wait for press; NPC-only → auto-advance after dwell. `[role:X].getName` placeholders. Use for back-and-forth conversations. | `_lines : List<CinematicDialogueLine>` |
 | `MoveActorStep` | Actor walks to a target (role / world position). Routes through `CharacterAction_CinematicMoveTo`. Blocking by default. | `_actorRoleId`, `_targetMode`, `_targetRoleId` / `_targetPos`, `_stoppingDist`, `_blocking`, `_timeoutSec` |
 | `TriggerStep` | Fires a `CinematicEffectSO` and/or a `UnityEvent`. Fire-and-forget. | `_effect`, `_eventHook` |
 
@@ -243,6 +243,21 @@ public class MyStep : CinematicStep
 - **`PlayerController.Update`** — early-returns when `self.IsCinematicActor`, blocking movement / combat / sleep / hotkey input. UI input lives in other components and is unaffected.
 - **`CharacterActions.ExecuteAction`** — the standard action lane. `MoveActorStep` enqueues through this per rule #22; future Phase 3 `ExecuteActionStep` will use the same lane.
 - **Existing `DialogueManager` / `DialogueSO`** — untouched in Phase 1. Phase 4 migration wraps `DialogueManager.StartDialogue` to delegate through the cinematic system, but legacy assets keep working.
+
+## Advance behaviour (Phase 1)
+
+Mirrors `DialogueManager`'s pattern intentionally:
+
+| Scene composition | Speak / Dialogue step advances when |
+|-------------------|-------------------------------------|
+| ≥ 1 bound player | The player presses **Space** or **Left-Click**. Held until pressed. |
+| NPC-only (no players bound) | **1.5s after typing finishes** (auto). |
+
+Wiring: `PlayerController.Update()` checks `IsCinematicActor` → if true, blocks normal input but forwards Space / Left-Click to `CinematicAdvance.NotifyAdvanceRequested()`. Steps poll `CinematicAdvance.WasAdvanceRequestedThisFrame()` once per tick.
+
+The press is consumed once per frame regardless of how many actors are bound — pressing Space once advances one line, not N.
+
+Phase 2 replaces this with the full `AllMustPress` protocol: each participating client sends a ServerRpc on press, the server tallies per-line, and a configurable grace timer kicks in when the first press lands. Phase 1's single-frame static-flag approach is enough for server-only / single-player demos.
 
 ## Common gotchas
 

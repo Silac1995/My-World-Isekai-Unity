@@ -93,12 +93,31 @@ namespace MWI.Cinematics
                 return;
             }
 
-            // Idempotent state transition: first tick after typing-done arms the
-            // 1.5s post-typing dwell. Subsequent ticks no-op until IsComplete fires.
-            if (_typingDone && !_advanceRequested)
+            if (!_typingDone) return;
+
+            bool hasParticipatingPlayers = ctx?.ParticipatingPlayers != null
+                && ctx.ParticipatingPlayers.Count > 0;
+
+            if (hasParticipatingPlayers)
             {
-                _advanceRequested = true;
-                _advanceTimerEnd = UTime.time + PHASE1_AUTO_ADVANCE_DELAY_SEC;
+                // Player-driven mode: wait for an advance-press from any participating
+                // player. Mirrors DialogueManager's wait-for-input behaviour. The press
+                // is forwarded via PlayerController → CinematicAdvance.
+                if (CinematicAdvance.WasAdvanceRequestedThisFrame())
+                {
+                    _advanceRequested = true;
+                    _advanceTimerEnd = UTime.time;     // IsComplete returns true next poll
+                }
+            }
+            else
+            {
+                // NPC-only mode: auto-advance 1.5s after typing finishes (mirrors
+                // DialogueManager's _hasPlayer == false branch).
+                if (!_advanceRequested)
+                {
+                    _advanceRequested = true;
+                    _advanceTimerEnd = UTime.time + PHASE1_AUTO_ADVANCE_DELAY_SEC;
+                }
             }
         }
 

@@ -53,12 +53,18 @@ public class PlayerController : CharacterGameController
         {
             // --- Cinematic gate (Phase 1) ---
             // Block all character-control input (movement, combat, sleep toggle, hotkeys)
-            // while this player is bound as a cinematic actor. UI input (menus, dialogue
-            // advance) lives in other components and is unaffected. Phase 2 will route the
-            // advance-press input here as a separate command path before this gate.
+            // while this player is bound as a cinematic actor. EXCEPT: forward Space /
+            // Left-Click as an advance-press to the cinematic system, mirroring
+            // DialogueManager's "click to advance the line" behaviour. Steps with at least
+            // one bound player wait for this press; NPC-only steps auto-advance after dwell.
+            // Phase 2 will replace this with a per-client ServerRpc + AllMustPress tally.
             if (_character?.CharacterCinematicState != null
                 && _character.CharacterCinematicState.IsCinematicActor)
             {
+                if (Input.GetKeyDown(KeyCode.Space) || Input.GetMouseButtonDown(0))
+                {
+                    MWI.Cinematics.CinematicAdvance.NotifyAdvanceRequested();
+                }
                 return;
             }
 
