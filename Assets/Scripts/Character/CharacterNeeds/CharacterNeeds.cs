@@ -207,6 +207,15 @@ public class CharacterNeeds : CharacterSystem, ICharacterSaveData<NeedsSaveData>
         {
             MWI.Time.TimeManager.Instance.OnNewDay += HandleNewDay;
         }
+
+        // NeedJob runs an OnNewDay-driven candidate scan on the server. Wire it through the
+        // same lifecycle hook as the rest of the needs — TrySubscribeToOnNewDay is idempotent
+        // and IsServer-gated internally, so this is safe on every peer.
+        var job = GetNeed<NeedJob>();
+        if (job != null)
+        {
+            job.TrySubscribeToOnNewDay();
+        }
     }
 
     public override void OnNetworkDespawn()
@@ -225,6 +234,12 @@ public class CharacterNeeds : CharacterSystem, ICharacterSaveData<NeedsSaveData>
         {
             sleep.UnsubscribeFromPhase();
             sleep.UnbindNetworkBridge();
+        }
+
+        var job = GetNeed<NeedJob>();
+        if (job != null)
+        {
+            job.UnsubscribeFromOnNewDay();
         }
 
         if (IsServer && MWI.Time.TimeManager.Instance != null)
@@ -263,6 +278,12 @@ public class CharacterNeeds : CharacterSystem, ICharacterSaveData<NeedsSaveData>
         {
             sleepNeed.UnsubscribeFromPhase();
             sleepNeed.UnbindNetworkBridge();
+        }
+
+        var jobNeed = GetNeed<NeedJob>();
+        if (jobNeed != null)
+        {
+            jobNeed.UnsubscribeFromOnNewDay();
         }
 
         if (MWI.Time.TimeManager.Instance != null)
