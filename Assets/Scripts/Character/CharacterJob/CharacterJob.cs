@@ -624,39 +624,61 @@ public class CharacterJob : CharacterSystem, ICharacterSaveData<JobSaveData>, II
         if (interactor == null || interactor == _character) return null;
         if (interactor.CharacterJob == null) return null; // source can't hold jobs
 
-        var building = OwnedBuilding;
-        if (building == null) return null; // not an owner of any CommercialBuilding
-
-        // Iterate the full Jobs list once with a natural stable index; skip assigned.
-        // Avoids computing index via GetAvailableJobs + IndexOf (O(N²) + IReadOnlyList.IndexOf unavailable).
         var options = new List<InteractionOption>();
-        for (int idx = 0; idx < building.Jobs.Count; idx++)
+
+        // ── A. "Apply for {JobTitle}" entries — interactor wants a job, this character is the boss ──
+        var building = OwnedBuilding;
+        if (building != null)
         {
-            var job = building.Jobs[idx];
-            if (job == null || job.IsAssigned) continue;
-
-            bool disabled = false;
-            string reason = null;
-            if (interactor.CharacterJob.HasJob)
+            // Iterate the full Jobs list once with a natural stable index; skip assigned.
+            // Avoids computing index via GetAvailableJobs + IndexOf (O(N²) + IReadOnlyList.IndexOf unavailable).
+            for (int idx = 0; idx < building.Jobs.Count; idx++)
             {
-                disabled = true;
-                reason = "you already have a job";
+                var job = building.Jobs[idx];
+                if (job == null || job.IsAssigned) continue;
+
+                bool disabled = false;
+                string reason = null;
+                if (interactor.CharacterJob.HasJob)
+                {
+                    disabled = true;
+                    reason = "you already have a job";
+                }
+
+                string title = string.IsNullOrEmpty(job.JobTitle) ? "Worker" : job.JobTitle;
+                string label = disabled
+                    ? $"Apply for {title} ({reason})"
+                    : $"Apply for {title}";
+
+                var capturedInteractor = interactor;
+                var capturedBuilding = building;
+                var capturedJob = job;
+                var capturedIdx = idx;
+                options.Add(new InteractionOption
+                {
+                    Name = label,
+                    IsDisabled = disabled,
+                    Action = () => OnJobEntryClicked(capturedInteractor, capturedBuilding, capturedJob, capturedIdx, disabled)
+                });
             }
+        }
 
-            string title = string.IsNullOrEmpty(job.JobTitle) ? "Worker" : job.JobTitle;
-            string label = disabled
-                ? $"Apply for {title} ({reason})"
-                : $"Apply for {title}";
-
-            var capturedInteractor = interactor;
-            var capturedBuilding = building;
-            var capturedJob = job;
-            var capturedIdx = idx;
+        // ── B. "Manage Hiring..." entry — interactor IS the boss of some CommercialBuilding ──
+        // Emitted on any character menu the local owner-player walks up to. Owner-only by gate
+        // (interactor.CharacterJob.OwnedBuilding != null), and the panel itself re-validates
+        // ownership server-side via TryOpenHiring/TryCloseHiring/TrySetDisplayText. Multiple
+        // building ownership is rare in V1 — when it happens, only the first OwnedBuilding is
+        // surfaced here (owner can iterate by approaching a different employee or via a future
+        // multi-building selector).
+        var interactorOwned = interactor.CharacterJob.OwnedBuilding;
+        if (interactorOwned != null)
+        {
+            var capturedOwned = interactorOwned;
             options.Add(new InteractionOption
             {
-                Name = label,
-                IsDisabled = disabled,
-                Action = () => OnJobEntryClicked(capturedInteractor, capturedBuilding, capturedJob, capturedIdx, disabled)
+                Name = "Manage Hiring...",
+                IsDisabled = false,
+                Action = () => UI_OwnerHiringPanel.Show(capturedOwned)
             });
         }
 
