@@ -3,7 +3,7 @@ type: system
 title: "Farming / Plot System"
 tags: [farming, crops, harvestable, plot, perennial, tier-1]
 created: 2026-04-28
-updated: 2026-04-29
+updated: 2026-04-30
 sources: []
 related:
   - "[[terrain-and-weather]]"
@@ -14,6 +14,7 @@ related:
   - "[[character-equipment]]"
   - "[[items]]"
   - "[[save-load]]"
+  - "[[job-farmer]]"
   - "[[kevin]]"
 status: wip
 confidence: medium
@@ -248,6 +249,7 @@ MacroSimulator (server, hibernation only)
 
 ## Change log
 
+- 2026-04-30 — JobFarmer + FarmingBuilding integration shipped (Plan 3 of farmer rollout). FarmingBuilding extends HarvestingBuilding with multi-zone field designation (`List<Zone> _farmingAreaZones`), daily PlantScan + WaterScan, auto-derived IStockProvider seed/can targets, per-task WateringCan pickup via Plan 1 ToolStorage primitive. JobFarmer GOAP-driven Plant/Water/Harvest cycle. CropSO `_harvestOutputs` extended on the 3 existing crops (Wheat, Flower, AppleTree) with matching SeedSO entries — crops now self-seed via the existing RegisterHarvestedItem deposit cycle (zero new code). See [[job-farmer]]. — claude
 - 2026-04-28 — System designed and implemented (10 commits). Pure-logic + math fully tested (15 EditMode tests; 58/58 green). Pending: sample assets (`Crop_Wheat`/`Crop_Flower`/`Crop_AppleTree`), `UI_InteractionMenu` prefab, manual playmode acceptance pass. — claude
 - 2026-04-29 — Playmode integration session. Sample assets committed (3 crops + 4 prefabs + 6 items). UI prefab created and renamed to `UI_HarvestInteractionMenu` to avoid name collision with the pre-existing global `UI_InteractionMenu`. Several runtime bugs surfaced + fixed: prefab variant fileID/guid breakage on `_harvestablePrefab`, missing `TerrainCellGrid.Initialize` call (pre-existing terrain gap; bootstrap added from `BoxCollider`), `TerrainTypeRegistry.Get` null-key crash, `MapController.WakeUp` farming init gated to hibernation-only path (moved out, plus self-init in `Start()` for scene-authored maps that never WakeUp), `SendDirtyCellsClientRpc` host-bug (`if (IsServer) return` skipped local visual notification on the host). Crops now plant + grow + display on host. Two architectural deferrals captured: collapse `CropVisualSpawner` into `CropHarvestable` (single-GameObject-per-crop) and same critique for `VegetationGrowthSystem`. — claude / [[kevin]]
 - 2026-04-29 — Tooling — `HarvestableInspectorView` ([[dev-mode]]) added so any `Harvestable` (crop or wilderness) can be Ctrl+Click-selected and inspected at runtime. The Crop section dumps `CropHarvestableNetSync` NetVars (`CurrentStage` / `IsDepleted` / `CropIdNet`), the resolved `CropSO`, and the full `TerrainCell` state — replacing the manual `Debug.Log(cell)` recipe in `.agent/skills/farming/SKILL.md`. Selectability piggybacks on the layer rename in this same change-log entry. Layer index 15 was renamed `Crop → Harvestable` in `ProjectSettings/TagManager.asset` (prefabs reference the layer by index, no prefab edits needed). No farming code changes. — claude
