@@ -37,7 +37,11 @@ namespace MWI.Cinematics
         public IReadOnlyList<RoleSlot>  Roles => _roles;
         public IReadOnlyList<CinematicStep> Steps => _steps;
 
-        // Editor-only safety: re-seed sceneId if duplicated via Ctrl+D
+        // Re-seeds sceneId only when the field is empty (e.g., a designer accidentally
+        // cleared it). Does NOT detect Ctrl+D duplicates — the duplicate inherits the
+        // original GUID. Phase 2's CinematicRegistry detects and warns on duplicate
+        // SceneIds at registry boot (fail-fast); designers should Ctrl+D + manually
+        // clear the sceneId field, OR the registry-side check catches it.
         private void OnValidate()
         {
             if (string.IsNullOrEmpty(_sceneId))

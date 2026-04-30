@@ -23,8 +23,15 @@ namespace MWI.Cinematics
 
         /// <summary>
         /// Resolve a role to its bound Character.
-        /// Throws if the role is required and missing; returns null if optional and missing.
+        /// Returns null if missing. Logs an error when the role is required (declared on the
+        /// scene with <c>IsOptional=false</c>); silent when optional. Steps null-check the
+        /// result. (CLAUDE.md rule #31 — log-and-degrade over throw.)
         /// </summary>
+        /// <remarks>
+        /// Phase 1 implementation iterates <c>Scene.Roles</c> linearly per call. Acceptable
+        /// while callers are once-per-OnEnter; if any future step polls this per-frame,
+        /// cache <c>Scene.Roles</c> into a <c>Dictionary&lt;ActorRoleId, RoleSlot&gt;</c> on first use.
+        /// </remarks>
         public Character GetActor(ActorRoleId id)
         {
             if (BoundRoles.TryGetValue(id, out var c)) return c;
