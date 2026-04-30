@@ -20,7 +20,7 @@ using MWI.Farming;
 /// Consumes Plan 1 (Tool Storage primitive — watering can fetch/return), Plan 2 (Help Wanted
 /// + IsHiring gates), and Plan 2.5 (ManagementFurniture + NeedJob OnNewDay throttle).
 /// </summary>
-public class FarmingBuilding : HarvestingBuilding
+public class FarmingBuilding : HarvestingBuilding, IStockProvider
 {
     public override BuildingType BuildingType => BuildingType.Farm;
 
@@ -86,5 +86,70 @@ public class FarmingBuilding : HarvestingBuilding
         _jobs.Add(new JobLogisticsManager("Logistics Manager"));
 
         Debug.Log($"<color=green>[FarmingBuilding]</color> {buildingName} initialised with {_farmerCount} farmer(s) + 1 Logistics Manager.");
+    }
+
+    // ── IStockProvider ──────────────────────────────────────────────
+
+    /// <summary>
+    /// Auto-derived from <see cref="_cropsToGrow"/>:
+    /// <list type="bullet">
+    /// <item>For each crop, every Seed <see cref="MWI.Interactables.HarvestableOutputEntry"/>
+    ///   whose <c>CropToPlant</c> matches the crop becomes an INPUT target with
+    ///   <c>MinStock = _seedMaxStock</c> (StockTarget's single-field 'refill UP TO this'
+    ///   semantic — see <see cref="MinStockPolicy"/>).</item>
+    /// <item>If <see cref="_wateringCanItem"/> is non-null: an INPUT target for the can
+    ///   with <c>MinStock = _wateringCanMaxStock</c>.</item>
+    /// </list>
+    /// <para>
+    /// <b>Produce outputs are NOT emitted as stock targets.</b> The current
+    /// <see cref="StockTarget"/> contract models a single 'refill up to MinStock'
+    /// floor — appropriate for inputs that flow IN via BuyOrders, but semantically
+    /// wrong for outputs the building generates itself. Output throttling for produce
+    /// is already handled by the inherited <see cref="HarvestingBuilding._wantedResources"/>
+    /// / <c>IsResourceAtLimit</c> path which gates <c>GetWantedItems</c> and stops
+    /// harvesters when full. Emitting produce here would (a) loop the building into
+    /// placing BuyOrders for items it produces itself and (b) duplicate the output-cap
+    /// logic that already lives one level up.
+    /// </para>
+    /// <para>
+    /// Existing <see cref="LogisticsStockEvaluator"/> picks up these targets and fires
+    /// BuyOrders for any deficit. Seeds + watering can flow IN via the existing
+    /// logistics chain (TransporterJob delivers from supplier buildings); produce
+    /// flows OUT via the existing harvest-deposit path (no change).
+    /// </para>
+    /// </summary>
+    public IEnumerable<StockTarget> GetStockTargets()
+    {
+        for (int i = 0; i < _cropsToGrow.Count; i++)
+        {
+            var crop = _cropsToGrow[i];
+            if (crop == null) continue;
+
+            var outputs = crop.HarvestOutputs;
+            if (outputs == null) continue;
+
+            for (int j = 0; j < outputs.Count; j++)
+            {
+                var entry = outputs[j];
+                if (entry.Item == null) continue;
+
+                // Item is typed as ScriptableObject on HarvestableOutputEntry (Pure-asmdef
+                // constraint). SeedSO inherits ScriptableObject, so the type-test is direct.
+                // Non-seed entries are skipped — see the method-level note about why produce
+                // outputs are not emitted as stock targets.
+                if (entry.Item is SeedSO seedSO && seedSO.CropToPlant == crop)
+                {
+                    if (_seedMaxStock > 0)
+                    {
+                        yield return new StockTarget(seedSO, _seedMaxStock);
+                    }
+                }
+            }
+        }
+
+        if (_wateringCanItem != null && _wateringCanMaxStock > 0)
+        {
+            yield return new StockTarget(_wateringCanItem, _wateringCanMaxStock);
+        }
     }
 }
