@@ -764,6 +764,16 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
         // ONLY the Server executes the raw physical damage calculation and EXP
         if (!IsServer) return;
 
+        // Cinematic actor invincibility — bound actors take no damage during a scene.
+        // Phase 1: IsCinematicActor is a server-side bool (works on host). Phase 2 promotes
+        // to NetworkVariable<bool> so all clients respect it via existing replication.
+        // Null-safe: legacy characters without the subsystem fall through normally.
+        if (_character?.CharacterCinematicState != null && _character.CharacterCinematicState.IsCinematicActor)
+        {
+            Debug.Log($"<color=cyan>[Cinematic]</color> Damage skipped on '{_character.CharacterName}' — IsCinematicActor=true (scene={_character.CharacterCinematicState.ActiveSceneId}).");
+            return;
+        }
+
         // Wake-on-attack: if asleep, force a wake. Character.ExitSleep is idempotent
         // (it early-outs if !IsSleeping), so this is safe to fire on every damage event.
         // The current sleep CharacterAction's OnCancel chain runs via the standard

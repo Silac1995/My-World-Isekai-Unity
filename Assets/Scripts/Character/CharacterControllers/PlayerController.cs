@@ -51,6 +51,17 @@ public class PlayerController : CharacterGameController
     {
         if (IsOwner)
         {
+            // --- Cinematic gate (Phase 1) ---
+            // Block all character-control input (movement, combat, sleep toggle, hotkeys)
+            // while this player is bound as a cinematic actor. UI input (menus, dialogue
+            // advance) lives in other components and is unaffected. Phase 2 will route the
+            // advance-press input here as a separate command path before this gate.
+            if (_character?.CharacterCinematicState != null
+                && _character.CharacterCinematicState.IsCinematicActor)
+            {
+                return;
+            }
+
             // --- Step 1: Sleep toggle (Z key) ---
             // Z is "lay down" when awake and "wake up" when asleep.
             // Must come BEFORE the IsSleeping early-out so it fires in both states.
