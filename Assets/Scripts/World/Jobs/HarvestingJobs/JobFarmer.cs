@@ -1,26 +1,63 @@
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
+using MWI.Farming;
 using MWI.WorldSystem;
 
 /// <summary>
-/// STUB — Plan 3 Task 9 will implement the real GOAP-driven JobFarmer.
-/// This stub exists so <see cref="FarmingBuilding"/> compiles standalone (Plan 3 Task 4).
+/// JobFarmer: plants, waters, and harvests crops in a <see cref="FarmingBuilding"/>. GOAP-driven;
+/// mirrors <see cref="JobHarvester"/>'s shape exactly (cached goals, scratch worldState dict,
+/// fresh action instances per plan, ExecuteIntervalSeconds=0.3f).
 ///
-/// Mirrors <see cref="JobHarvester"/>'s constructor + base contract so
-/// <c>FarmingBuilding.InitializeJobs</c> can instantiate it identically. The Execute body
-/// is intentionally empty: a Farmer assigned to this stub will sit idle at their building
-/// (the BT/Work scheduler still drives clock-in/clock-out via the schedule, but no GOAP
-/// plan is produced). Replace wholesale in Task 9.
+/// Goal priority (highest first):
+///   HarvestMatureCells   → HarvestResources → DepositResources
+///   WaterDryCells        → FetchTool(WateringCan) → WaterCrop → ReturnTool(WateringCan)
+///   PlantEmptyCells      → FetchSeed → PlantCrop
+///   DepositResources     → DepositResources (when bag full / carried produce)
+///   Idle                 → IdleInBuilding
+///
+/// Watering can chain reuses Plan 1's <see cref="GoapAction_FetchToolFromStorage"/> /
+/// <see cref="GoapAction_ReturnToolToStorage"/> with the building's inherited tool storage as
+/// source. Per-task pattern: fetch can on demand, return after each WaterCrop.
+///
+/// Schedule 6h-18h (slightly later than Harvester's 6-16h to allow evening watering passes).
 /// </summary>
 [System.Serializable]
 public class JobFarmer : Job
 {
-    [SerializeField] private string _jobTitle = "Farmer";
-    [SerializeField] private JobType _jobType = JobType.Farmer;
+    [SerializeField] private string _jobTitle;
+    [SerializeField] private JobType _jobType;
 
     public override string JobTitle => _jobTitle;
     public override JobCategory Category => JobCategory.Harvester;
     public override JobType Type => _jobType;
+
+    // Heavy-planning job: GOAP plan + per-tick task scans against the building's
+    // BuildingTaskManager. Mirrors JobHarvester's 3.3 Hz. See
+    // wiki/projects/optimisation-backlog.md entry #2.
+    public override float ExecuteIntervalSeconds => 0.3f;
+
+    // GOAP
+    private GoapGoal _currentGoal;
+    private List<GoapAction> _availableActions;
+    // Pre-filtered subset of _availableActions where IsValid(worker) is true at planning time.
+    // GoapPlanner.Plan does NOT call IsValid — see JobHarvester._scratchValidActions for the full
+    // rationale (without this filter, identical-prec/effect actions with different Cost cause
+    // infinite-replan loops).
+    private List<GoapAction> _scratchValidActions = new List<GoapAction>(8);
+    private Queue<GoapAction> _currentPlan;
+    private GoapAction _currentAction;
+
+    // Per-tick allocation pool — clear-and-reuse the worldState dict; cache the goals.
+    private readonly Dictionary<string, bool> _scratchWorldState = new Dictionary<string, bool>(16);
+    private GoapGoal _cachedHarvestGoal;
+    private GoapGoal _cachedWaterGoal;
+    private GoapGoal _cachedPlantGoal;
+    private GoapGoal _cachedDepositGoal;
+    private GoapGoal _cachedIdleGoal;
+
+    public override string CurrentActionName => _currentAction != null ? _currentAction.ActionName : "Planning / Idle";
+    public override string CurrentGoalName => _currentGoal != null ? _currentGoal.GoalName : "No Goal";
 
     public JobFarmer(string jobTitle = "Farmer", JobType jobType = JobType.Farmer)
     {
@@ -30,12 +67,229 @@ public class JobFarmer : Job
 
     public override void Execute()
     {
-        // STUB. Plan 3 Task 9 implements the real GOAP planning loop
-        // (PlantCrop / WaterCrop / Harvest / Deposit / FetchTool / ReturnTool).
+        if (_workplace == null || !(_workplace is FarmingBuilding farm)) return;
+
+        // Tick the in-flight action (validity → execute → completion check).
+        if (_currentAction != null)
+        {
+            if (!_currentAction.IsValid(_worker))
+            {
+                if (NPCDebug.VerboseJobs)
+                    Debug.Log($"<color=orange>[JobFarmer]</color> {_worker.CharacterName} : action {_currentAction.ActionName} invalid; replanning.");
+                _currentAction.Exit(_worker);
+                _currentAction = null;
+                _currentPlan = null;
+                return;
+            }
+
+            _currentAction.Execute(_worker);
+
+            if (_currentAction.IsComplete)
+            {
+                if (NPCDebug.VerboseJobs)
+                    Debug.Log($"<color=cyan>[JobFarmer]</color> {_worker.CharacterName} : action {_currentAction.ActionName} complete.");
+                _currentAction.Exit(_worker);
+                _currentAction = null;
+                // Force replan on every action completion — same rationale as JobHarvester:
+                // pop-the-plan would risk executing a stale next action (e.g. Deposit when we
+                // can still pick more up).
+                _currentPlan = null;
+            }
+            return;
+        }
+
+        // No action in flight → plan.
+        PlanNextActions(farm);
     }
 
     /// <summary>
-    /// Default farmer schedule: 6h–18h Work. Task 9 may refine by season / crop demand.
+    /// Builds the world-state dict, picks the highest-priority achievable goal, runs
+    /// <see cref="GoapPlanner.Plan"/>, and dequeues the first action.
+    /// </summary>
+    private void PlanNextActions(FarmingBuilding farm)
+    {
+        // ── Build worldState ──────────────────────────────────────────
+
+        bool hasUnfilledHarvestTask = HasAvailableTask<HarvestResourceTask>(farm);
+        bool hasUnfilledWaterTask = HasAvailableTask<WaterCropTask>(farm);
+        bool hasUnfilledPlantTask = HasAvailableTask<PlantCropTask>(farm);
+
+        var hands = _worker.CharacterVisual?.BodyPartsController?.HandsController;
+        var inventory = _worker.CharacterEquipment != null && _worker.CharacterEquipment.HaveInventory()
+            ? _worker.CharacterEquipment.GetInventory()
+            : null;
+
+        bool handsCarrying = hands != null && hands.IsCarrying && hands.CarriedItem != null;
+        bool hasSeedInHand = handsCarrying && hands.CarriedItem.ItemSO is SeedSO;
+        bool hasCanInHand = handsCarrying && farm.WateringCanItem != null
+                            && hands.CarriedItem.ItemSO == farm.WateringCanItem;
+
+        bool hasMatchingSeedInStorage = farm.HasAnySeedForUnclaimedPlantTask();
+        bool hasWateringCanAvailable = farm.WateringCanItem != null
+                                        && farm.HasToolStorage
+                                        && farm.ToolStorage != null
+                                        && StorageHasItem(farm.ToolStorage, farm.WateringCanItem);
+
+        // Anything in the bag counts as deposit-able. Hands-held items also count UNLESS they're
+        // a seed (still planting) or the watering can (still mid-water-cycle).
+        bool hasResourcesToDeposit = false;
+        if (inventory != null && inventory.ItemSlots != null)
+        {
+            for (int i = 0; i < inventory.ItemSlots.Count; i++)
+            {
+                var slot = inventory.ItemSlots[i];
+                if (slot != null && !slot.IsEmpty()) { hasResourcesToDeposit = true; break; }
+            }
+        }
+        if (!hasResourcesToDeposit && handsCarrying && !hasSeedInHand && !hasCanInHand)
+            hasResourcesToDeposit = true;
+
+        _scratchWorldState.Clear();
+        _scratchWorldState["hasUnfilledHarvestTask"] = hasUnfilledHarvestTask;
+        _scratchWorldState["hasUnfilledWaterTask"] = hasUnfilledWaterTask;
+        _scratchWorldState["hasUnfilledPlantTask"] = hasUnfilledPlantTask;
+        _scratchWorldState["hasSeedInHand"] = hasSeedInHand;
+        _scratchWorldState["hasMatchingSeedInStorage"] = hasMatchingSeedInStorage;
+        _scratchWorldState["hasResources"] = hasResourcesToDeposit;
+        _scratchWorldState["hasDepositedResources"] = false;
+        _scratchWorldState["hasPlantedCrop"] = false;
+        _scratchWorldState["hasWateredCell"] = false;
+        _scratchWorldState["isIdling"] = false;
+
+        // Tool keys use the WateringCan ItemSO's name (Plan 1 convention — see
+        // GoapAction_FetchToolFromStorage / ReturnToolToStorage for the matching reads).
+        string canKey = farm.WateringCanItem != null ? farm.WateringCanItem.name : "null";
+        _scratchWorldState[$"hasToolInHand_{canKey}"] = hasCanInHand;
+        _scratchWorldState[$"toolNeededForTask_{canKey}"] = hasUnfilledWaterTask;
+        _scratchWorldState[$"taskCompleteForTool_{canKey}"] = hasCanInHand && !hasUnfilledWaterTask;
+        _scratchWorldState[$"toolReturned_{canKey}"] = false;
+
+        // ── Build action library (fresh instances per plan — actions are stateful) ──
+
+        if (_availableActions == null) _availableActions = new List<GoapAction>(10);
+        _availableActions.Clear();
+        _availableActions.Add(new GoapAction_HarvestResources(farm));
+        _availableActions.Add(new GoapAction_DepositResources(farm));
+        _availableActions.Add(new GoapAction_FetchSeed(farm));
+        _availableActions.Add(new GoapAction_PlantCrop(farm));
+        if (farm.WateringCanItem != null && farm.HasToolStorage)
+        {
+            _availableActions.Add(new GoapAction_FetchToolFromStorage(farm, farm.WateringCanItem));
+            _availableActions.Add(new GoapAction_WaterCrop(farm));
+            _availableActions.Add(new GoapAction_ReturnToolToStorage(farm, farm.WateringCanItem));
+        }
+        _availableActions.Add(new GoapAction_IdleInBuilding(farm));
+
+        // ── Cache goals (their DesiredState dicts are constant across ticks). ──
+
+        if (_cachedHarvestGoal == null)
+            _cachedHarvestGoal = new GoapGoal("HarvestMatureCells",
+                new Dictionary<string, bool> { { "hasDepositedResources", true } }, priority: 5);
+        if (_cachedWaterGoal == null)
+            _cachedWaterGoal = new GoapGoal("WaterDryCells",
+                new Dictionary<string, bool> { { $"toolReturned_{canKey}", true } }, priority: 4);
+        if (_cachedPlantGoal == null)
+            _cachedPlantGoal = new GoapGoal("PlantEmptyCells",
+                new Dictionary<string, bool> { { "hasPlantedCrop", true } }, priority: 3);
+        if (_cachedDepositGoal == null)
+            _cachedDepositGoal = new GoapGoal("DepositResources",
+                new Dictionary<string, bool> { { "hasDepositedResources", true } }, priority: 2);
+        if (_cachedIdleGoal == null)
+            _cachedIdleGoal = new GoapGoal("Idle",
+                new Dictionary<string, bool> { { "isIdling", true } }, priority: 1);
+
+        // ── Pick highest-priority goal whose plan is achievable ──
+        // Note: Deposit moves above Water/Plant when bag is full so the farmer always offloads
+        // before chaining another fetch (avoids carrying 5 items + a watering can for 30s).
+
+        GoapGoal targetGoal;
+        if (hasUnfilledHarvestTask) targetGoal = _cachedHarvestGoal;
+        else if (hasResourcesToDeposit) targetGoal = _cachedDepositGoal;
+        else if (hasUnfilledWaterTask && (hasCanInHand || hasWateringCanAvailable)) targetGoal = _cachedWaterGoal;
+        else if (hasUnfilledPlantTask && (hasSeedInHand || hasMatchingSeedInStorage)) targetGoal = _cachedPlantGoal;
+        else targetGoal = _cachedIdleGoal;
+
+        _currentGoal = targetGoal;
+
+        // ── Pre-filter actions by IsValid (planner does NOT call IsValid) ──
+        _scratchValidActions.Clear();
+        for (int i = 0; i < _availableActions.Count; i++)
+        {
+            var a = _availableActions[i];
+            if (a.IsValid(_worker)) _scratchValidActions.Add(a);
+        }
+
+        // ── Plan ──
+        _currentPlan = GoapPlanner.Plan(_scratchWorldState, _scratchValidActions, targetGoal);
+
+        if (_currentPlan != null && _currentPlan.Count > 0)
+        {
+            _currentAction = _currentPlan.Dequeue();
+            if (NPCDebug.VerboseJobs)
+                Debug.Log($"<color=green>[JobFarmer]</color> {_worker.CharacterName} : new plan ({_currentGoal.GoalName}); first action → {_currentAction.ActionName}");
+        }
+        else if (NPCDebug.VerboseJobs)
+        {
+            Debug.Log($"<color=orange>[JobFarmer]</color> {_worker.CharacterName} : no plan for goal {_currentGoal?.GoalName ?? "?"}.");
+        }
+    }
+
+    /// <summary>True if the building's TaskManager has at least one unclaimed task of type T.</summary>
+    private static bool HasAvailableTask<T>(FarmingBuilding farm) where T : BuildingTask
+    {
+        if (farm == null || farm.TaskManager == null) return false;
+        var tasks = farm.TaskManager.AvailableTasks;
+        for (int i = 0; i < tasks.Count; i++)
+        {
+            if (tasks[i] is T) return true;
+        }
+        return false;
+    }
+
+    /// <summary>True if any non-empty slot in <paramref name="storage"/> holds <paramref name="item"/>.</summary>
+    private static bool StorageHasItem(StorageFurniture storage, ItemSO item)
+    {
+        if (storage == null || item == null) return false;
+        var slots = storage.ItemSlots;
+        if (slots == null) return false;
+        for (int i = 0; i < slots.Count; i++)
+        {
+            var slot = slots[i];
+            if (slot == null || slot.IsEmpty()) continue;
+            if (slot.ItemInstance != null && slot.ItemInstance.ItemSO == item) return true;
+        }
+        return false;
+    }
+
+    public override bool CanExecute() => base.CanExecute() && _workplace is FarmingBuilding;
+
+    public override bool HasWorkToDo()
+    {
+        if (_workplace is not FarmingBuilding farm) return false;
+
+        // Carried produce / inventory still pending deposit also counts as work-to-do —
+        // otherwise a farmer who clocked off mid-cycle with goods in their bag would skip
+        // their final deposit pass.
+        bool hasAtLeastOneResource = false;
+        if (_worker != null && _worker.CharacterEquipment != null && _worker.CharacterEquipment.HaveInventory())
+        {
+            hasAtLeastOneResource = _worker.CharacterEquipment.GetInventory().ItemSlots.Any(slot => !slot.IsEmpty());
+        }
+        if (!hasAtLeastOneResource && _worker?.CharacterVisual?.BodyPartsController?.HandsController != null)
+        {
+            if (_worker.CharacterVisual.BodyPartsController.HandsController.IsCarrying)
+                hasAtLeastOneResource = true;
+        }
+
+        return hasAtLeastOneResource
+            || HasAvailableTask<HarvestResourceTask>(farm)
+            || HasAvailableTask<WaterCropTask>(farm)
+            || HasAvailableTask<PlantCropTask>(farm);
+    }
+
+    /// <summary>
+    /// Default farmer schedule: 6h–18h Work. Slightly later than Harvester's 6–16h so farmers can
+    /// run evening watering passes after the harvesters have packed up.
     /// </summary>
     public override List<ScheduleEntry> GetWorkSchedule()
     {
@@ -43,5 +297,28 @@ public class JobFarmer : Job
         {
             new ScheduleEntry(6, 18, ScheduleActivity.Work, 10)
         };
+    }
+
+    /// <summary>Override Assign so the farmer is registered as an employee of the FarmingBuilding.</summary>
+    public override void Assign(Character worker, CommercialBuilding workplace)
+    {
+        base.Assign(worker, workplace);
+        if (workplace is FarmingBuilding farm) farm.AddEmployee(worker);
+    }
+
+    /// <summary>Override Unassign so the farmer is removed from the FarmingBuilding's employee list.</summary>
+    public override void Unassign()
+    {
+        if (_workplace is FarmingBuilding farm && _worker != null) farm.RemoveEmployee(_worker);
+
+        // Cleanup GOAP
+        if (_currentAction != null)
+        {
+            _currentAction.Exit(_worker);
+            _currentAction = null;
+        }
+        _currentPlan = null;
+
+        base.Unassign();
     }
 }

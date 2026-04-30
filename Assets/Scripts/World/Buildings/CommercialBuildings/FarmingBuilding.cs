@@ -322,6 +322,37 @@ public class FarmingBuilding : HarvestingBuilding, IStockProvider
         return false;
     }
 
+    /// <summary>
+    /// True if at least one unclaimed <see cref="PlantCropTask"/> in this building's
+    /// <see cref="BuildingTaskManager"/> has its matching <see cref="SeedSO"/> physically
+    /// available in the building's inventory. Drives <see cref="JobFarmer"/>'s
+    /// <c>hasMatchingSeedInStorage</c> worldState flag (so the planner only commits to a
+    /// plant goal when a seed actually exists to fetch).
+    /// </summary>
+    public bool HasAnySeedForUnclaimedPlantTask()
+    {
+        if (TaskManager == null) return false;
+        var tasks = TaskManager.AvailableTasks;
+        for (int i = 0; i < tasks.Count; i++)
+        {
+            if (tasks[i] is PlantCropTask pct && pct.Crop != null)
+            {
+                for (int j = 0; j < pct.Crop.HarvestOutputs.Count; j++)
+                {
+                    var entry = pct.Crop.HarvestOutputs[j];
+                    // HarvestableOutputEntry.Item is typed as ScriptableObject (Pure-asmdef
+                    // constraint — see HarvestableOutputEntry.cs / Task 5 finding). The
+                    // type-test here also handles the cast.
+                    if (entry.Item is SeedSO seedSO && seedSO.CropToPlant == pct.Crop)
+                    {
+                        if (GetItemCount(seedSO) > 0) return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
     private bool HasExistingPlantTaskForCell(int cellX, int cellZ)
     {
         if (TaskManager == null) return false;
