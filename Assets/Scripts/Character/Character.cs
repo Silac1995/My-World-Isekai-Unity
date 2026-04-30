@@ -82,6 +82,7 @@ public class Character : NetworkBehaviour, MWI.Orders.IOrderIssuer
     [SerializeField] private MWI.Orders.CharacterOrders _characterOrders;
     [SerializeField] private FurniturePlacementManager _furniturePlacementManager;
     [SerializeField] private MWI.Farming.CropPlacementManager _cropPlacement;
+    [SerializeField] private MWI.Cinematics.CharacterCinematicState _cinematicState;
     #endregion
 
     #region Capability Registry
@@ -291,6 +292,7 @@ public class Character : NetworkBehaviour, MWI.Orders.IOrderIssuer
     public BuildingPlacementManager PlacementManager { get { var blueprints = TryGet<CharacterBlueprints>(out var reg) ? reg : _characterBlueprints; return blueprints != null ? blueprints.PlacementManager : null; } }
     public FurniturePlacementManager FurniturePlacementManager => TryGet<FurniturePlacementManager>(out var s31) ? s31 : _furniturePlacementManager;
     public MWI.Farming.CropPlacementManager CropPlacement => TryGet<MWI.Farming.CropPlacementManager>(out var s32) ? s32 : _cropPlacement;
+    public MWI.Cinematics.CharacterCinematicState CharacterCinematicState => TryGet<MWI.Cinematics.CharacterCinematicState>(out var sCinema) ? sCinema : _cinematicState;
     public bool IsBuilding => _isBuilding;
 
     public NavMeshAgent NavMesh => _cachedNavMeshAgent;
