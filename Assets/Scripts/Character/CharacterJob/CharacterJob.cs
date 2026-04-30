@@ -665,14 +665,10 @@ public class CharacterJob : CharacterSystem, ICharacterSaveData<JobSaveData>, II
         }
 
         // ── B. "Manage Hiring..." entry — interactor IS the boss of some CommercialBuilding ──
-        // Emitted on any character menu the local owner-player walks up to. Owner-only by gate
-        // (interactor.CharacterJob.OwnedBuilding != null), and the panel itself re-validates
-        // ownership server-side via TryOpenHiring/TryCloseHiring/TrySetDisplayText. Multiple
-        // building ownership is rare in V1 — when it happens, only the first OwnedBuilding is
-        // surfaced here (owner can iterate by approaching a different employee or via a future
-        // multi-building selector).
+        // Fallback path only: shown when the owned building has no ManagementFurniture wired.
+        // When _managementFurniture is set, the owner uses the in-world desk instead (Plan 2.5).
         var interactorOwned = interactor.CharacterJob.OwnedBuilding;
-        if (interactorOwned != null)
+        if (interactorOwned != null && !interactorOwned.HasManagementFurniture)
         {
             var capturedOwned = interactorOwned;
             options.Add(new InteractionOption
