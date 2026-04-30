@@ -1511,6 +1511,10 @@ public abstract class CommercialBuilding : Building
                 || jobType == MWI.WorldSystem.JobType.Forager
                 || jobType == MWI.WorldSystem.JobType.Farmer;
         }
+        if (quest is PlantCropTask || quest is WaterCropTask)
+        {
+            return jobType == MWI.WorldSystem.JobType.Farmer;
+        }
         if (quest is PickupLooseItemTask)
             return jobType == MWI.WorldSystem.JobType.LogisticsManager
                 || jobType == MWI.WorldSystem.JobType.Transporter;
