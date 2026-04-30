@@ -53,13 +53,23 @@ bool started = Cinematics.TryPlay(scene, playerCharacter);
 
 `TryPlay` resolves all roles (hard-fails on required + unbound, silently skips optional + unbound), marks every bound actor as `IsCinematicActor=true`, spawns a `CinematicDirector` GameObject under `CinematicDirectors/`, and starts the step loop.
 
-## How to author a scene asset (Phase 1, no editor window yet)
+## How to author a scene asset (Phase 1, no full editor window yet)
 
 1. Project window → right-click in `Assets/Resources/Data/Cinematics/` → `Create → MWI → Cinematics → Scene`.
 2. Inspector:
-   - **Identity**: leave `_sceneId` GUID, set `_displayName`.
-   - **Cast**: add `RoleSlot` entries — pick `_roleId`, drop a `RoleSelectorSO` asset (e.g. `Selector_TriggeringPlayer.asset`) into `_selector`.
-   - **Timeline**: `_steps` uses `[SerializeReference]` — click "+" then pick a step type from the dropdown. Configure inline.
+   - **Identity**: leave `_sceneId` GUID untouched, set `_displayName` for editor labelling.
+   - **Triggering / Lifecycle headers** (Phase 2): leave defaults (`AnyPlayer` / `OncePerWorld` / `AllMustPress` / 5s grace / priority 50). The runtime ignores these in Phase 1.
+   - **Cast**: click `+` on Roles. For each entry:
+     - `Role Id` — short identifier referenced by steps (e.g. `Hero`, `Wilfred`, `Witness`).
+     - `Display Name` — editor / debug label. **Falls back to `Role Id` if empty** (NOT to the character's name; the character is resolved at runtime).
+     - `Selector` — drop a `RoleSelectorSO` asset (Phase 1 ships `Selector_TriggeringPlayer.asset` only; create one via `Create → MWI → Cinematics → Selectors → Triggering Player`).
+     - `Is Optional` — required (default) hard-fails the cinematic if unbound; optional silently skips.
+     - `Is Primary Actor` — Phase 2 `OncePerNpc` keying. Set to true on the role that "owns" the scene (typically the talked-to NPC).
+   - **Timeline**: click `+` on Steps → use the **type-picker dropdown on the right side of each new element** to select Speak / Wait / Move / Trigger. The custom property drawer (`Assets/Scripts/Cinematics/Editor/CinematicStepDrawer.cs`) makes the picker visible inline so you don't need to right-click into Unity's hidden managed-reference menu.
+     - `SpeakStep`: speakerRoleId, lineText (supports `[role:X].getName` placeholders), typingSpeedOverride (0 = default).
+     - `WaitStep`: durationSec.
+     - `MoveActorStep`: actorRoleId, targetMode (Role / WorldPos), target ref, stoppingDist (default 1.5 Unity units ≈ 0.23m), blocking, timeoutSec.
+     - `TriggerStep`: effect (drag a `CinematicEffectSO` asset, e.g. `Effect_RaiseEvent`), eventHook (UnityEvent in the inspector).
 
 ## How to add a new step type
 
@@ -108,11 +118,15 @@ public class MyStep : CinematicStep
 
 ## Common gotchas
 
+- **`Time.time` / `Time.deltaTime` won't compile inside `namespace MWI.Cinematics`.** The C# resolver walks the enclosing namespace tree (`MWI.Cinematics → MWI → global`) before applying `using` directives, and the sibling `MWI.Time` namespace shadows `UnityEngine.Time`. Workaround: every cinematic file that touches Unity's clock has `using UTime = UnityEngine.Time;` at the top and uses `UTime.time` / `UTime.deltaTime`. Match this convention in any new file. (Or fully qualify `UnityEngine.Time.time`.)
+- **Empty timeline elements when adding steps.** Unity's default `[SerializeReference]` UX hides the type-picker dropdown. The custom drawer at `Assets/Scripts/Cinematics/Editor/CinematicStepDrawer.cs` adds a visible dropdown next to each entry's foldout. If you see only "Element 0 (no step type set)" with nothing else, check that `CinematicStepDrawer.cs` exists and Unity has compiled the Editor folder.
 - **Cinematic stalls forever.** `SpeakStep` has a length-aware safety timeout (`PHASE1_TYPING_TIMEOUT_BASE_SEC + char_count * PHASE1_TYPING_TIMEOUT_PER_CHAR`). If you see the timeout warning, the speaker's `CharacterSpeech._speechBubbleStack` is probably unwired on the prefab.
 - **`ExecuteAction` returns false.** The actor is already running another action. `MoveActorStep` logs a warning and instant-completes (skips the move) rather than hanging the cinematic. Sequence steps so actors are free at the moment a `MoveActorStep` runs.
 - **`IsCinematicActor` not visible to clients.** Phase 1 limitation — the flag is a server-side bool. Phase 2 promotes to `NetworkVariable<bool>`. Until then, MP scenes work because all combat/input authority is on the server, but client-side visuals (animator, UI) cannot react to the flag.
 - **Required role unbindable → scene aborts.** Set `RoleSlot._isOptional = true` for "skip-if-missing" roles. The Phase 1 plan only ships `Selector_TriggeringPlayer`; multi-actor scenes need `Selector_OtherParticipant` (Phase 2).
+- **`Display Name` vs character name.** `RoleSlot._displayName` is the editor / debug label for the *role*. If empty, it falls back to `Role Id` — NOT the resolved Character's name. The character's real name only appears in placeholder substitution (`[role:Hero].getName` → `Character.CharacterName`).
 - **Rule #22 violation risk.** Never call `CharacterMovement.SetDestination` directly from a step. Always go through a `CharacterAction` subclass enqueued via `CharacterActions.ExecuteAction`.
+- **Non-blocking `MoveActorStep` orphans the action on step exit.** Intentional (background-walk semantics). Phase 2 will register orphans on `CinematicContext` for scene-level abort. For Phase 1, accept that an aborted scene with a non-blocking move in flight will let the actor walk to arrival or `_timeoutSec` (default 30s).
 
 ## Phase 1 deferred to later phases
 

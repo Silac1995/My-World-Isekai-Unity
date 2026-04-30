@@ -67,6 +67,7 @@ Author story moments, cutscenes, quest handoffs, tutorial sequences, and fully-N
 | [Roles/](../../Assets/Scripts/Cinematics/Roles/) | `RoleSlot`, `RoleSelectorSO`, `Selector_TriggeringPlayer` (Phase 1 set). |
 | [Effects/](../../Assets/Scripts/Cinematics/Effects/) | `CinematicEffectSO`, `Effect_RaiseEvent` (Phase 1 set). |
 | [Actions/CharacterAction_CinematicMoveTo.cs](../../Assets/Scripts/Cinematics/Actions/CharacterAction_CinematicMoveTo.cs) | `CharacterAction` subclass for `MoveActorStep`. |
+| [Editor/CinematicStepDrawer.cs](../../Assets/Scripts/Cinematics/Editor/CinematicStepDrawer.cs) | Editor-only `CustomPropertyDrawer` for `[SerializeReference] CinematicStep` lists. Renders an inline type-picker dropdown so designers can pick step types when authoring scenes. Phase 4 replaces with full Cinematic Scene Editor. |
 | [CharacterCinematicState.cs](../../Assets/Scripts/Character/CharacterCinematicState/CharacterCinematicState.cs) | Per-Character subsystem. `IsCinematicActor`, `_playedSceneIds`, `_pendingSceneIds`. |
 
 ## Public API / entry points
@@ -146,6 +147,9 @@ MoveActorStep.OnEnter
 
 ## Known gotchas / edge cases
 
+- **`Time` namespace clash inside `MWI.Cinematics`.** The C# resolver searches the enclosing namespace tree before applied `using` directives, and the sibling `MWI.Time` namespace shadows `UnityEngine.Time`. Cinematic files alias via `using UTime = UnityEngine.Time;` and reference `UTime.time` / `UTime.deltaTime`. Match this convention in any new file, or fully-qualify `UnityEngine.Time`. (Affected files: `WaitStep`, `SpeakStep`, `CharacterAction_CinematicMoveTo`, `CinematicDirector`.)
+- **Empty timeline elements.** Adding entries with `+` produces null `[SerializeReference]` slots in Unity's default Inspector. The custom drawer at `Assets/Scripts/Cinematics/Editor/CinematicStepDrawer.cs` adds a visible type-picker dropdown next to each entry. If the dropdown is missing, verify the Editor folder is compiled (Unity should pick up the `Editor` folder convention automatically).
+- **`Display Name` on a RoleSlot is the *role's* label, not the character's name.** Falls back to `Role Id` if empty. The character's actual name is read from `Character.CharacterName` at runtime via placeholder substitution.
 - **`IsCinematicActor` not networked in Phase 1.** Server-only bool. Combat/input gates work because authority lives server-side. Client-side visuals (animator state, HUD) cannot react. Phase 2 fix.
 - **`Cinematics.TryPlay` from a client** is blocked via `NetworkManager.IsServer` guard. Solo / non-networked builds (`!IsListening`) bypass the check.
 - **Step instances are SHARED across simultaneous plays of the same `CinematicSceneSO`.** Phase 1 has no guard. Phase 2's registry adds PlayMode check; for Phase 1 don't double-trigger the same scene.
@@ -169,6 +173,8 @@ MoveActorStep.OnEnter
 ## Change log
 
 - 2026-04-30 — Phase 1 foundation shipped: 4 step types (Wait/Speak/Move/Trigger), 1 selector (TriggeringPlayer), 1 effect (RaiseEvent), `CharacterCinematicState` subsystem, `Cinematics.TryPlay` facade, combat + input gates on `IsCinematicActor`. — Claude / [[kevin]]
+- 2026-04-30 — Time namespace clash fix: aliased `UnityEngine.Time` as `UTime` in 4 files to avoid shadowing by sibling `MWI.Time` namespace. — Claude / [[kevin]]
+- 2026-04-30 — Added `CinematicStepDrawer` Editor `CustomPropertyDrawer` so designers can pick concrete step types inline when authoring `[SerializeReference]` step lists. Phase 4 will replace with full Cinematic Scene Editor window. — Claude / [[kevin]]
 
 ## Sources
 
