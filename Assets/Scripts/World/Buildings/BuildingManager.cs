@@ -121,6 +121,7 @@ public class BuildingManager : MonoBehaviour
             if (building is CommercialBuilding commercial)
             {
                 if (requireBoss && !commercial.HasOwner) continue;
+                if (!commercial.IsHiring) continue;       // NEW: skip closed buildings.
 
                 T availableJob = commercial.FindAvailableJob<T>();
                 if (availableJob != null)

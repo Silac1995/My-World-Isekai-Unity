@@ -17,12 +17,14 @@ public class InteractionAskForJob : InteractionInvitation
 
     public override bool CanExecute(Character source, Character target)
     {
-        // Must not already have a job
-        if (source.CharacterJob != null && source.CharacterJob.HasJob)
-            return false;
+        // Must not already have a job.
+        if (source.CharacterJob != null && source.CharacterJob.HasJob) return false;
 
-        // The interaction can only run if the building has a boss and the job is still available.
-        return _building != null && _job != null && _building.HasOwner && !_job.IsAssigned;
+        if (_building == null || _job == null) return false;
+        if (!_building.HasOwner) return false;
+        if (!_building.IsHiring) return false;        // NEW: closed buildings reject applications.
+        if (_job.IsAssigned) return false;
+        return true;
     }
 
     public override string GetInvitationMessage(Character source, Character target)
