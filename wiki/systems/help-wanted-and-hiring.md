@@ -155,12 +155,17 @@ Player owner manages hiring:
 
 ## State & persistence
 
-- `_isHiring: NetworkVariable<bool>` — server-write / everyone-read. Default `true`. NetworkVariable values persist via NGO's standard NetworkObject save path; existing `CommercialBuildingSaveData` requires NO new fields beyond what NetworkVariable replication already provides.
-- `_displayText: NetworkVariable<FixedString512Bytes>` on `DisplayTextFurnitureNetSync` — same model. Default empty (seeded from `_initialText` on first server spawn).
+- `_isHiring: NetworkVariable<bool>` — server-write / everyone-read. Default `true`. **NOT persisted across save/load in v1** — see persistence gap below.
+- `_displayText: NetworkVariable<FixedString512Bytes>` on `DisplayTextFurnitureNetSync` — same model. Default empty (seeded from `_initialText` on first server spawn). **NOT persisted** — same gap.
 - `_helpWantedFurniture: DisplayTextFurniture` — designer reference, scene-authored. No runtime mutation, no save needed.
 - `_initialHiringOpen: bool` — designer reference, scene-authored. No runtime mutation.
 
-Backward compat: pre-existing saves load with `_isHiring.Value = true` (default), `_displayText.Value = ""` (default). Existing buildings remain "currently hiring" — exactly the behaviour they had before this system landed.
+**Persistence gap (v1 trade-off, accepted):** `BuildingSaveData` (in [MapRegistry.cs](../../Assets/Scripts/World/MapSystem/MapRegistry.cs)) does NOT contain `IsHiring` or `DisplayText` fields, so:
+- An owner who closes hiring + saves + reloads will see hiring re-open to `_initialHiringOpen` (defaults to `true`).
+- An owner who writes custom sign text + saves + reloads will lose the custom text — sign reverts to authoring `_initialText` (or auto-formatted vacancy text if hiring is open).
+- A standalone `DisplayTextFurniture` (welcome plate, lore text — not wired to a building) loses any owner-written customisations on reload.
+
+Backward compat: pre-existing saves load with `_isHiring.Value = true` (default), `_displayText.Value = ""` (default). Existing buildings remain "currently hiring" — exactly the behaviour they had before this system landed. **This trade-off was accepted for v1 to keep the implementation surface small;** Phase 2 follow-up: add `bool IsHiring` + `string DisplayTextOverride` (or per-sign keyed list) to `BuildingSaveData`, mirroring how `StorageFurnitures` is currently handled.
 
 ## Network rules
 
@@ -188,11 +193,14 @@ All four player-relationship scenarios validated:
 
 ## Open questions / TODO
 
+- **Phase 2: Persist `IsHiring` + `DisplayText` across save/load.** Add fields to `BuildingSaveData` (in [MapRegistry.cs](../../Assets/Scripts/World/MapSystem/MapRegistry.cs)) — currently the building reverts to `_initialHiringOpen` and signs revert to `_initialText` on every reload. See "Persistence gap" in State & persistence above.
 - **Phase 2: NPC owner GOAP for hiring decisions.** Add `GoapAction_OwnerOpenHiring` / `GoapAction_OwnerCloseHiring` driven by a new `NeedHireWorkers` need. Trigger on vacancy + treasury threshold.
 - **Phase 2: Multi-vacancy Apply sub-menu** when multiple distinct JobTitles are open at once.
 - **Phase 2: Community-leader authority** in `CanRequesterControlHiring` — currently only checks `Owner == requester`.
-- **Phase 2: Move "Manage Hiring..." to building-scoped menu** for cleaner UX.
+- **Phase 2: Move "Manage Hiring..." to building-scoped menu** for cleaner UX (currently appears on any character menu the owner-player approaches; multi-building owners can't pick which building to manage).
 - **Phase 2: Multi-sign support** per building.
+- **Phase 2: Pool `UI_OwnerHiringPanel` job rows** instead of destroy + re-instantiate on every refresh (cosmetic for small lists; matters for buildings with many jobs).
+- **Phase 2: Centralised `Character.LocalPlayer` accessor** — `ResolveLocalPlayerCharacter` is currently duplicated in `UI_DisplayTextReader` and `UI_OwnerHiringPanel` (and likely other UI scripts).
 
 ## Change log
 

@@ -33,6 +33,12 @@ public class DisplayTextFurnitureNetSync : NetworkBehaviour
         _furniture = GetComponent<DisplayTextFurniture>();
     }
 
+    // Pending text written by ServerSetDisplayText before this NetworkBehaviour spawned.
+    // Applied in OnNetworkSpawn so a parent CommercialBuilding's first-frame sign refresh
+    // (which fires from CommercialBuilding.OnNetworkSpawn — possibly BEFORE this sibling's
+    // OnNetworkSpawn — and writes via ServerSetDisplayText) doesn't get silently dropped.
+    private string _pendingPreSpawnText;
+
     public override void OnNetworkSpawn()
     {
         base.OnNetworkSpawn();
@@ -43,6 +49,13 @@ public class DisplayTextFurnitureNetSync : NetworkBehaviour
             string seed = _furniture != null ? _furniture.InitialText : "";
             if (!string.IsNullOrEmpty(seed))
                 _displayText.Value = SanitiseAndClamp(seed);
+        }
+
+        // Apply any pre-spawn ServerSetDisplayText write that was deferred.
+        if (IsServer && _pendingPreSpawnText != null)
+        {
+            _displayText.Value = SanitiseAndClamp(_pendingPreSpawnText);
+            _pendingPreSpawnText = null;
         }
 
         _displayText.OnValueChanged += HandleNetVarChanged;
@@ -111,6 +124,11 @@ public class DisplayTextFurnitureNetSync : NetworkBehaviour
     /// <summary>
     /// Unrestricted server-only setter — used internally by the parent CommercialBuilding
     /// when its hiring state changes (Plan 2 Task 4). NOT callable from client RPCs.
+    ///
+    /// Spawn-order safety: if invoked before this NetworkBehaviour has spawned (e.g. when
+    /// CommercialBuilding.OnNetworkSpawn fires its initial sign refresh BEFORE this sibling's
+    /// OnNetworkSpawn — NGO's child-spawn order isn't strictly deterministic), defer the
+    /// write to <see cref="_pendingPreSpawnText"/>. OnNetworkSpawn applies it when ready.
     /// </summary>
     internal void ServerSetDisplayText(string newText)
     {
@@ -119,6 +137,14 @@ public class DisplayTextFurnitureNetSync : NetworkBehaviour
             Debug.LogError("[DisplayTextFurniture] ServerSetDisplayText called from client — ignored.");
             return;
         }
+
+        if (!IsSpawned)
+        {
+            // NetworkVariable mutations before OnNetworkSpawn are unsafe. Defer.
+            _pendingPreSpawnText = newText;
+            return;
+        }
+
         _displayText.Value = SanitiseAndClamp(newText);
     }
 

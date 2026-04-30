@@ -388,6 +388,7 @@ public class CharacterJob : CharacterSystem, ICharacterSaveData<JobSaveData>, II
     public bool AskForJob(CommercialBuilding building, Job job)
     {
         if (building == null || job == null) return false;
+        if (!building.IsHiring) return false;   // Consistent with InteractionAskForJob.CanExecute + BuildingManager.FindAvailableJob (Plan 2 Task 5).
 
         // Demande au building (qui check le boss)
         if (building.AskForJob(_character, job))
