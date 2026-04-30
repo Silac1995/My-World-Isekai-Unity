@@ -71,6 +71,22 @@ public abstract class CommercialBuilding : Building
     [Tooltip("Designer reference to a StorageFurniture inside this building that workers fetch tools from / return tools to. Null = building has no tool storage; tool-needing GOAP actions will fail-cleanly.")]
     [SerializeField] private StorageFurniture _toolStorageFurniture;
 
+    [Header("Hiring")]
+    [Tooltip("Designer reference to a DisplayTextFurniture inside this building. When set, opening hiring auto-writes formatted vacancy text; closing hiring reverts to the closed-state text. Null = no auto-managed sign (hiring still works, just no in-world sign).")]
+    [SerializeField] private DisplayTextFurniture _helpWantedFurniture;
+
+    [Tooltip("Initial hiring state at scene start / fresh save. true = open by default (existing buildings remain backward compatible — they all auto-load as 'currently hiring'). false = start closed; owner must open hiring before applications are accepted.")]
+    [SerializeField] private bool _initialHiringOpen = true;
+
+    private NetworkVariable<bool> _isHiring = new(
+        true,
+        readPerm: NetworkVariableReadPermission.Everyone,
+        writePerm: NetworkVariableWritePermission.Server);
+
+    public bool IsHiring => _isHiring.Value;
+    public DisplayTextFurniture HelpWantedSign => _helpWantedFurniture;
+    public event System.Action<bool> OnHiringStateChanged;
+
     protected List<Job> _jobs = new List<Job>();
     protected List<ItemInstance> _inventory = new List<ItemInstance>();
 
@@ -246,6 +262,26 @@ public abstract class CommercialBuilding : Building
         if (!IsServer)
         {
             SyncAllJobWorkersFromList();
+        }
+
+        // Hiring state.
+        if (IsServer)
+        {
+            // Seed _isHiring from authoring on first spawn / fresh save. NetworkVariable's
+            // current value is the default (true). If _initialHiringOpen authoring disagrees,
+            // overwrite. This is idempotent across re-spawns: replicated values from save/load
+            // already match _isHiring.Value before this method runs.
+            if (_isHiring.Value != _initialHiringOpen)
+                _isHiring.Value = _initialHiringOpen;
+        }
+
+        _isHiring.OnValueChanged += HandleIsHiringChanged;
+
+        // Initial sign refresh on the server so authoring's _initialHiringOpen state is
+        // reflected in the sign text from the very first frame.
+        if (IsServer && _helpWantedFurniture != null)
+        {
+            HandleHiringStateChanged(_isHiring.Value);
         }
     }
 
@@ -932,6 +968,7 @@ public abstract class CommercialBuilding : Building
         }
         UnsubscribeJobWorkerBindListener();
         UnsubscribeRestoreListener();
+        _isHiring.OnValueChanged -= HandleIsHiringChanged;
         base.OnNetworkDespawn();
     }
 
@@ -2346,5 +2383,22 @@ public abstract class CommercialBuilding : Building
     {
         // TODO Plan 2 Task 3: validate requester == Owner (or community leader / dev mode).
         return true;
+    }
+
+    private void HandleIsHiringChanged(bool oldVal, bool newVal)
+    {
+        OnHiringStateChanged?.Invoke(newVal);
+        if (IsServer)
+            HandleHiringStateChanged(newVal);
+    }
+
+    /// <summary>
+    /// Server-side: refresh the Help Wanted sign text whenever hiring state flips. Called
+    /// from HandleIsHiringChanged. Implementation lands in Plan 2 Task 4; for Task 2 this
+    /// is a stub — no sign refresh yet.
+    /// </summary>
+    private void HandleHiringStateChanged(bool isHiring)
+    {
+        // Implemented in Plan 2 Task 4.
     }
 }
