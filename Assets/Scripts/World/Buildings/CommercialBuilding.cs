@@ -2336,4 +2336,15 @@ public abstract class CommercialBuilding : Building
         };
         NotifyPunchOutBlockedClientRpc(reason, targetClientId, target);
     }
+
+    /// <summary>
+    /// STUB — Plan 2 Task 3 implements the real authority gate (validates that the
+    /// requester is the building Owner / community leader / dev mode). For now, returns
+    /// true so DisplayTextFurniture's mutation paths compile and ship standalone in Task 1.
+    /// </summary>
+    public bool CanRequesterControlHiring(Character requester)
+    {
+        // TODO Plan 2 Task 3: validate requester == Owner (or community leader / dev mode).
+        return true;
+    }
 }
