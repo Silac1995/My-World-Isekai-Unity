@@ -2375,15 +2375,161 @@ public abstract class CommercialBuilding : Building
     }
 
     /// <summary>
-    /// STUB — Plan 2 Task 3 implements the real authority gate (validates that the
-    /// requester is the building Owner / community leader / dev mode). For now, returns
-    /// true so DisplayTextFurniture's mutation paths compile and ship standalone in Task 1.
+    /// Server-authoritative: returns true if <paramref name="requester"/> has authority to
+    /// toggle this building's hiring state OR edit its Help Wanted sign text.
+    /// Currently: requester is the building's Owner. Future (Plan 3 / Phase 2): community
+    /// leader of the building's community + dev mode override. Returns true when called
+    /// server-side with requester == null (internal calls only — DO NOT pass null from
+    /// client paths; the ServerRpc wrappers always resolve a requester from netId).
     /// </summary>
     public bool CanRequesterControlHiring(Character requester)
     {
-        // TODO Plan 2 Task 3: validate requester == Owner (or community leader / dev mode).
+        if (requester == null) return true; // internal server-side call
+        if (HasOwner && Owner == requester) return true;
+        // TODO Plan 3 / future: community-leader check via CommunityTracker.
+        return false;
+    }
+
+    /// <summary>
+    /// Returns the list of jobs in <see cref="_jobs"/> whose Worker is unassigned. Reused by
+    /// the Help Wanted sign formatter (Task 4) and by the player's job-application UI (Task 7).
+    /// Allocates a fresh List per call — not hot-path (called only on UI refresh / sign update).
+    /// </summary>
+    public IReadOnlyList<Job> GetVacantJobs()
+    {
+        var vacant = new List<Job>(_jobs.Count);
+        for (int i = 0; i < _jobs.Count; i++)
+        {
+            var job = _jobs[i];
+            if (job != null && !job.IsAssigned) vacant.Add(job);
+        }
+        return vacant;
+    }
+
+    /// <summary>
+    /// Server-authoritative: open hiring. Validates Owner authority + at least one vacant
+    /// position. On success: flips _isHiring → true (HandleIsHiringChanged auto-fires the
+    /// OnHiringStateChanged event AND server-side HandleHiringStateChanged → sign refresh
+    /// in Task 4). Returns true if the mutation succeeded (idempotent on already-open).
+    /// Client callers route via ServerRpc; the local return is optimistic.
+    /// </summary>
+    public bool TryOpenHiring(Character requester)
+    {
+        if (!IsServer)
+        {
+            ulong reqId = requester != null && requester.NetworkObject != null
+                ? requester.NetworkObject.NetworkObjectId
+                : 0;
+            TryOpenHiringServerRpc(reqId);
+            return true; // optimistic; real validation runs server-side
+        }
+        return ServerTryOpenHiring(requester);
+    }
+
+    private bool ServerTryOpenHiring(Character requester)
+    {
+        if (!CanRequesterControlHiring(requester)) return false;
+        if (GetVacantJobs().Count == 0) return false;
+        if (_isHiring.Value) return true; // already open — idempotent
+        _isHiring.Value = true;
         return true;
     }
+
+    [Rpc(SendTo.Server)]
+    private void TryOpenHiringServerRpc(ulong requesterNetId, RpcParams rpcParams = default)
+    {
+        Character requester = ResolveCharacterByNetId(requesterNetId);
+        ServerTryOpenHiring(requester);
+    }
+
+    /// <summary>
+    /// Server-authoritative: close hiring. Existing employees are NOT fired — only future
+    /// applications are blocked. Auto-resets sign text via HandleHiringStateChanged (Task 4).
+    /// Idempotent on already-closed.
+    /// </summary>
+    public bool TryCloseHiring(Character requester)
+    {
+        if (!IsServer)
+        {
+            ulong reqId = requester != null && requester.NetworkObject != null
+                ? requester.NetworkObject.NetworkObjectId
+                : 0;
+            TryCloseHiringServerRpc(reqId);
+            return true;
+        }
+        return ServerTryCloseHiring(requester);
+    }
+
+    private bool ServerTryCloseHiring(Character requester)
+    {
+        if (!CanRequesterControlHiring(requester)) return false;
+        if (!_isHiring.Value) return true; // already closed — idempotent
+        _isHiring.Value = false;
+        return true;
+    }
+
+    [Rpc(SendTo.Server)]
+    private void TryCloseHiringServerRpc(ulong requesterNetId, RpcParams rpcParams = default)
+    {
+        Character requester = ResolveCharacterByNetId(requesterNetId);
+        ServerTryCloseHiring(requester);
+    }
+
+    /// <summary>
+    /// Helper: resolve a <see cref="Character"/> from a NetworkObjectId payload sent by a
+    /// ServerRpc. Returns null if the id is 0 (sentinel for "no requester"), the
+    /// NetworkManager is gone, the spawn map doesn't contain the id, or the spawned object
+    /// has no Character component. Reused by every hiring-related ServerRpc entry point.
+    /// </summary>
+    private static Character ResolveCharacterByNetId(ulong netId)
+    {
+        if (netId == 0) return null;
+        if (NetworkManager.Singleton == null) return null;
+        if (!NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(netId, out var netObj)) return null;
+        return netObj != null ? netObj.GetComponent<Character>() : null;
+    }
+
+    /// <summary>
+    /// Format the Help Wanted sign text from current vacant positions + building name.
+    /// Override per CommercialBuilding subclass to customise wording (e.g. ShopBuilding,
+    /// FarmingBuilding in Plan 3).
+    ///
+    /// Default format:
+    ///     "Hiring at {buildingName}:
+    ///      • 2 Farmer positions
+    ///      • 1 Logistics Manager
+    ///     Approach the owner to apply."
+    /// </summary>
+    protected virtual string GetHelpWantedDisplayText()
+    {
+        var vacant = GetVacantJobs();
+        if (vacant.Count == 0) return GetClosedHiringDisplayText();
+
+        // Group by JobTitle and count.
+        var byTitle = new Dictionary<string, int>(vacant.Count);
+        for (int i = 0; i < vacant.Count; i++)
+        {
+            string title = vacant[i].JobTitle;
+            if (string.IsNullOrEmpty(title)) title = "Worker";
+            byTitle.TryGetValue(title, out int n);
+            byTitle[title] = n + 1;
+        }
+
+        var sb = new System.Text.StringBuilder(128);
+        sb.Append("Hiring at ").Append(BuildingName).Append(":\n");
+        foreach (var pair in byTitle)
+        {
+            sb.Append("• ").Append(pair.Value).Append(' ').Append(pair.Key);
+            if (pair.Value > 1) sb.Append(" positions");
+            sb.Append('\n');
+        }
+        sb.Append("Approach the owner to apply.");
+        return sb.ToString();
+    }
+
+    /// <summary>Text written to the sign when hiring closes. Default: empty (sign goes blank).
+    /// Override for flavor (e.g. "Currently fully staffed — check back another day.").</summary>
+    protected virtual string GetClosedHiringDisplayText() => "";
 
     private void HandleIsHiringChanged(bool oldVal, bool newVal)
     {
