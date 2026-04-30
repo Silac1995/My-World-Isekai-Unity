@@ -15,15 +15,19 @@ namespace MWI.Cinematics
         [SerializeField] private bool  _blocking = true;
         [SerializeField] private float _timeoutSec = 30f;
 
+        // Cached on OnEnter so OnExit can ClearCurrentAction without re-resolving roles
+        // (the role binding may have shifted by abort time).
+        private Character _actor;
         private CharacterAction_CinematicMoveTo _action;
         private bool _actionFinished;
         private bool _instantComplete;
 
         public override void OnEnter(CinematicContext ctx)
         {
+            _actor = null;
+            _action = null;
             _actionFinished = false;
             _instantComplete = false;
-            _action = null;
 
             var actor = ctx.GetActor(new ActorRoleId(_actorRoleId));
             if (actor == null)
@@ -57,22 +61,23 @@ namespace MWI.Cinematics
                     return;
             }
 
+            _actor = actor;
             _action = new CharacterAction_CinematicMoveTo(
                 actor, target, _stoppingDist, _timeoutSec);
 
             _action.OnActionFinished += OnActionFinishedHandler;
 
-            // ExecuteAction (NOT Enqueue — that was a plan inaccuracy). Returns false if
-            // actor is already in another action. We treat that as instant-complete + warning
-            // so a busy actor doesn't hang the cinematic; designers should sequence steps
-            // such that actors are free at the moment a MoveActorStep runs for them.
-            bool started = actor.CharacterActions != null
-                        && actor.CharacterActions.ExecuteAction(_action);
+            // CharacterActions.ExecuteAction returns false if the actor is already running
+            // another action. We treat that as instant-complete + warning so a busy actor
+            // doesn't hang the cinematic; designers should sequence steps such that actors
+            // are free at the moment a MoveActorStep runs for them.
+            bool started = actor.CharacterActions.ExecuteAction(_action);
             if (!started)
             {
                 Debug.LogWarning($"<color=yellow>[Cinematic]</color> MoveActorStep: ExecuteAction returned false for '{actor.CharacterName}' (busy or rejected). Skipping move.");
                 _action.OnActionFinished -= OnActionFinishedHandler;
                 _action = null;
+                _actor = null;
                 _instantComplete = true;
                 return;
             }
@@ -82,14 +87,44 @@ namespace MWI.Cinematics
 
         public override void OnExit(CinematicContext ctx)
         {
-            // If the step is aborted (or non-blocking + step torn down later), cancel the action so
-            // the actor stops walking. Unsubscribe before calling OnCancel to prevent double-fire.
+            // Non-blocking semantics: the whole point is to let the move run in the
+            // background while later steps execute. Do NOT cancel on natural OnExit.
+            // Phase 2: register orphaned actions on CinematicContext so scene-abort
+            // can mass-cancel them. For Phase 1, we accept the orphan: the action
+            // completes itself via WatchArrival arrival OR ActionTimerRoutine timeout.
+            if (!_blocking)
+            {
+                if (_action != null) _action.OnActionFinished -= OnActionFinishedHandler;
+                _action = null;
+                _actor = null;
+                return;
+            }
+
+            // Blocking case: if we're here with an action still running, the cinematic
+            // is aborting (or the step somehow exited without _actionFinished firing).
+            // Use CharacterActions.ClearCurrentAction() — the canonical full cleanup
+            // path that stops ActionTimerRoutine, calls OnCancel, broadcasts the cancel
+            // ClientRpc, resets animator triggers, and clears _currentAction. Calling
+            // _action.OnCancel() directly would leave the actor stuck with CurrentAction
+            // until ActionTimerRoutine eventually fired (up to _timeoutSec seconds).
             if (_action != null && !_actionFinished)
             {
                 _action.OnActionFinished -= OnActionFinishedHandler;
-                _action.OnCancel();
+                if (_actor != null && _actor.CharacterActions != null)
+                {
+                    _actor.CharacterActions.ClearCurrentAction();
+                }
+                else
+                {
+                    // Fallback: actor or CharacterActions destroyed — call OnCancel directly
+                    // so at least our local cleanup runs. Stale CurrentAction is the
+                    // CharacterActions instance's problem at that point (it's gone).
+                    _action.OnCancel();
+                }
             }
+
             _action = null;
+            _actor = null;
         }
 
         public override bool IsComplete(CinematicContext ctx) =>
