@@ -17,6 +17,8 @@ MonoBehaviour:
   _harvestOutputs:
   - Item: {fileID: 11400000, guid: 6eadabb584f662d49bea83caa241bdba, type: 2}
     Count: 4
+  - Item: {fileID: 11400000, guid: f6b04bb5c96c35d4d8c4cb7bc34515b5, type: 2}
+    Count: 1
   _requiredHarvestTool: {fileID: 0}
   _harvestDuration: 3
   _isDepletable: 1

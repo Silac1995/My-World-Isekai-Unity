@@ -20,6 +20,8 @@ MonoBehaviour:
   _harvestOutputs:
   - Item: {fileID: 11400000, guid: 6eadabb584f662d49bea83caa241bdba, type: 2}
     Count: 1
+  - Item: {fileID: 11400000, guid: 1d28ee63e97db7b4faaa24ca00ead13f, type: 2}
+    Count: 1
   _requiredHarvestTool: {fileID: 0}
   _stageSprites: []
   _harvestablePrefab: {fileID: 4949819544793646418, guid: daa5b8b83df255b458ce757a63c8d5e9, type: 3}
