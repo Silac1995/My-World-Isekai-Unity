@@ -8,6 +8,7 @@ sources: []
 related:
   - "[[commercial-building]]"
   - "[[character-job]]"
+  - "[[character-needs]]"
   - "[[storage-furniture]]"
   - "[[tool-storage]]"
   - "[[player-ui]]"
@@ -197,14 +198,19 @@ All four player-relationship scenarios validated:
 - **Phase 2: NPC owner GOAP for hiring decisions.** Add `GoapAction_OwnerOpenHiring` / `GoapAction_OwnerCloseHiring` driven by a new `NeedHireWorkers` need. Trigger on vacancy + treasury threshold.
 - **Phase 2: Multi-vacancy Apply sub-menu** when multiple distinct JobTitles are open at once.
 - **Phase 2: Community-leader authority** in `CanRequesterControlHiring` — currently only checks `Owner == requester`.
-- **Phase 2: Move "Manage Hiring..." to building-scoped menu** for cleaner UX (currently appears on any character menu the owner-player approaches; multi-building owners can't pick which building to manage).
+- ~~**Phase 2: Move "Manage Hiring..." to building-scoped menu**~~ — **DONE** by Plan 2.5 (`ManagementFurniture`). Owner walks to the in-world desk; menu entry stays as fallback when no desk is wired.
 - **Phase 2: Multi-sign support** per building.
 - **Phase 2: Pool `UI_OwnerHiringPanel` job rows** instead of destroy + re-instantiate on every refresh (cosmetic for small lists; matters for buildings with many jobs).
 - **Phase 2: Centralised `Character.LocalPlayer` accessor** — `ResolveLocalPlayerCharacter` is currently duplicated in `UI_DisplayTextReader` and `UI_OwnerHiringPanel` (and likely other UI scripts).
 
 ## Change log
 
-- 2026-04-30 — Initial implementation, Plan 2 of 3 in the Farmer rollout. Tasks 1-10 committed across `d9099024` … `[Task 10 SHA pending]`. — claude
+- 2026-04-30 — **Plan 2.5 refinements:**
+  - Added `ManagementFurniture` (`Assets/Scripts/World/Furniture/ManagementFurniture.cs`) — owner's hiring desk. Owner walks up + presses E → `UI_OwnerHiringPanel` opens. Non-owners get a "Only the owner can use this management desk" toast. Designer-set `_managementFurniture` reference on `CommercialBuilding`.
+  - `CharacterJob.GetInteractionOptions` Section B "Manage Hiring..." entry now gated on `!HasManagementFurniture` — appears only as fallback when no in-world management desk is wired.
+  - **Removed Apply-for-Job button from `UI_DisplayTextReader`.** Sign is now informative-only. Both player and NPC applicants must walk to the boss in person and use the existing `InteractionAskForJob` path. Sign wording tightened to "For application, see the owner in person." (Plan 2's button + handler + `ResolveLocalPlayerCharacter` helper deleted; prefab cleaned.)
+  - **NPC `NeedJob` throttled to event-driven `TimeManager.OnNewDay` cache.** Per-tick `BuildingManager.FindAvailableJob` polling replaced with once-per-day server-side scan; cached `(building, job)` pair feeds `GetUrgency` (returns 0 when empty → Need is dormant). Substantial perf win at scale (100 NPCs × 1 query/day vs. 100 × N-ticks/day). `GetGoapActions` re-validates the cached pair (`IsAssigned`/`IsHiring`/`HasOwner`) before emitting actions. Mid-day staleness handled with one-frame replan returning empty actions; NPC idles until next day's re-scan. Subscribe pattern mirrors `NeedHunger.TrySubscribeToPhase` (POCO `CharacterNeed` driven by parent `CharacterNeeds` MonoBehaviour, not Unity lifecycle hooks). — claude
+- 2026-04-30 — Initial implementation, Plan 2 of 3 in the Farmer rollout. Tasks 1-10 committed across `d9099024` … `692bfd02`. — claude
 
 ## Sources
 

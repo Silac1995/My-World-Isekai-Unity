@@ -24,6 +24,8 @@ internal void ServerSetDisplayText(string newText)   // unrestricted server-side
 ### `CommercialBuilding` (hiring extension)
 ```csharp
 DisplayTextFurniture HelpWantedSign { get; }         // designer reference (may be null)
+ManagementFurniture ManagementFurniture { get; }     // designer reference (may be null) — Plan 2.5
+bool HasManagementFurniture { get; }                 // Plan 2.5
 bool IsHiring { get; }                               // NetworkVariable<bool>, replicated
 event Action<bool> OnHiringStateChanged
 
@@ -40,6 +42,18 @@ protected virtual string GetHelpWantedDisplayText()  // override per subclass fo
 protected virtual string GetClosedHiringDisplayText()
 ```
 
+### `ManagementFurniture` (Plan 2.5 — owner's hiring desk)
+```csharp
+// Owner-only Use override. Designer-placed inside a CommercialBuilding.
+// - Player owner: opens UI_OwnerHiringPanel for the parent building.
+// - Player non-owner: toast "Only the owner can use this management desk."
+// - NPC: silent success (no AI uses it in v1; Phase 2 NPC-owner GOAP can call TryOpenHiring directly).
+// - Remote-client gate: only the local player's machine pops the UI.
+public override bool Use(Character character)
+```
+
+No NetworkBehaviour sibling — owns no replicated state. Future driveable-entity migration replaces `Use` internals; public API stable.
+
 ### Existing systems extended
 - `InteractionAskForJob.CanExecute` — added `if (!_building.IsHiring) return false;` gate.
 - `BuildingManager.FindAvailableJob<T>` — added `if (!commercial.IsHiring) continue;` filter (skips closed buildings for NPC `NeedJob` discovery).
@@ -49,11 +63,10 @@ protected virtual string GetClosedHiringDisplayText()
 
 ## Player UI
 
-### `UI_DisplayTextReader` (singleton-on-demand)
+### `UI_DisplayTextReader` (singleton-on-demand) — informative-only as of Plan 2.5
 - Opens on `DisplayTextFurniture.Use(Character)` when interactor is the local player.
 - Title = parent `BuildingName` (or "Sign" if not building-parented), body = `DisplayText`.
-- Apply for Job button visible only when sign IS the parent's `_helpWantedFurniture` AND `IsHiring == true`.
-- Apply click routes via `CharacterJob.RequestJobApplicationServerRpc(ownerNetId, stableIdx)` — same path as the existing hold-E hiring menu.
+- **No Apply button** (removed in Plan 2.5). Sign is purely informative — the auto-formatted Help Wanted text ends with "For application, see the owner in person." Both player and NPC applicants must walk to the boss in person and use the existing `InteractionAskForJob` path (the hold-E menu on the boss).
 - ESC / Close button / outside-click overlay all dismiss.
 
 ### `UI_OwnerHiringPanel` (singleton-on-demand)
