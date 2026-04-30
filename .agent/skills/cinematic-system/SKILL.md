@@ -80,16 +80,41 @@ Why named roles over indices:
 - Self-documenting: `_speakerRoleId = "Wilfred"` reads better than `_characterIndex = 2`.
 - Runtime binding lets the same scene fire from multiple trigger contexts (any player, any matching NPC).
 
-Phase 1 ships four selectors:
+Phase 1 ships five selectors:
 
 | Selector | Resolves to | Authoring inputs | Use case |
 |----------|-------------|------------------|----------|
 | `Selector_TriggeringPlayer` | `ctx.TriggeringPlayer` (the player who fired the cinematic) | none | The "Hero" / player avatar role. |
 | `Selector_OtherParticipant` | `ctx.OtherParticipant` (passed as 2nd arg to `TryPlay`) | none | The NPC the player is interacting with — typically the Talk target. Caller supplies via `Cinematics.TryPlay(scene, player, npc)`. |
-| `Selector_CharacterByName` | First `Character` in the scene whose `CharacterName == _characterName` | `_characterName : string` | Named NPC ("Wilfred", "Tavern Keeper") — the closest analogue to dragging a specific character into `_testParticipants`. |
+| `Selector_CharacterByName` | First `Character` in the scene whose `CharacterName == _characterName` | `_characterName : string` | Named NPC ("Wilfred", "Tavern Keeper") — the closest analogue to dragging a specific character into `_testParticipants`. Best for casual/named NPCs where the name is stable. |
+| `Selector_CharacterById` | `Character.FindByUUID(_characterId)` — the **persistent** UUID from `Profiles/{guid}.json` | `_characterId : string`, `_displayHint : string` | **Predefined / main / story-critical characters** with stable UUIDs. Survives renames / localization / duplicate names. Worse authoring UX (paste a 32-char hex) but unambiguous. |
 | `Selector_PartyMember` | The Nth member of the triggering player's (or other participant's) party | `_partyOf : PartyOf`, `_memberIndex : int` | Companion roles in a multi-actor scene. Index 0 = leader (the player), 1 = first follower, 2 = second follower, etc. |
 
 Phase 2 adds archetype-based selectors (`Selector_NearestArchetype`, `Selector_RandomInRadius`, `Selector_SpecificCharacter` with full archetype reference) for procedural / generic-NPC scenes.
+
+### Picking by name vs by UUID — when to use which
+
+| Concern | `Selector_CharacterByName` | `Selector_CharacterById` |
+|---------|----------------------------|--------------------------|
+| Authoring UX | Type a name ("Wilfred"). Easy. | Paste a UUID (32-char hex). Painful. |
+| Rename-resilient | ❌ — breaks if the character's `CharacterName` is changed. | ✅ — UUID is stable forever. |
+| Localization-safe | ❌ — `CharacterName` may be a localized string. | ✅ — UUID is non-localized. |
+| Multiple characters with the same name | ❌ — picks first found, non-deterministic. | ✅ — UUID is unique by definition. |
+| Persists across save/load | Depends on whether the name is stable. | ✅ — UUID is the save-file key. |
+
+**Use `Selector_CharacterByName` for**: casual / generic NPCs, prototyping, scenes where the name is also the canonical identifier (and won't change).
+
+**Use `Selector_CharacterById` for**: main characters, story-critical NPCs, anything you'd hate to break by renaming, anything where two characters might share a name (twins, generic guards, identical clones).
+
+### Where to find a character's UUID
+
+The `Character.CharacterId` is generated on first spawn and persists from then on. To copy it for a `Selector_CharacterById`:
+
+1. **Profile filename**: `Profiles/{the-uuid-here}.json` — the filename IS the UUID.
+2. **Runtime inspection**: in Play mode, select the Character GameObject and read `CharacterId` from the inspector (or via the dev panel's character inspector if implemented).
+3. **Debug log**: every cinematic logs `'CharacterName' is now cinematic actor (scene=X, role=Y)` — but the CharacterId isn't logged by default. Phase 4's editor will add a "Copy UUID" button on the Character inspector.
+
+For a brand-new character that hasn't been spawned yet (and therefore doesn't have a UUID), you can't reference them by ID — fall back to `Selector_CharacterByName` or wait for Phase 2's archetype-based selectors.
 
 ### Worked example: a 5-actor party cinematic
 

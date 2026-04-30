@@ -64,7 +64,7 @@ Author story moments, cutscenes, quest handoffs, tutorial sequences, and fully-N
 | [CinematicDirector.cs](../../Assets/Scripts/Cinematics/Core/CinematicDirector.cs) | Per-scene coroutine runner. Phase 1 plain MonoBehaviour. |
 | [Cinematics.cs](../../Assets/Scripts/Cinematics/Core/Cinematics.cs) | Public static facade. `TryPlay(scene, player, otherParticipant?)`. |
 | [Steps/](../../Assets/Scripts/Cinematics/Steps/) | `WaitStep`, `SpeakStep`, `MoveActorStep`, `TriggerStep` (Phase 1 set). |
-| [Roles/](../../Assets/Scripts/Cinematics/Roles/) | `RoleSlot`, `RoleSelectorSO`, plus 4 Phase 1 selectors: `Selector_TriggeringPlayer`, `Selector_OtherParticipant`, `Selector_CharacterByName`, `Selector_PartyMember`. |
+| [Roles/](../../Assets/Scripts/Cinematics/Roles/) | `RoleSlot`, `RoleSelectorSO`, plus 5 Phase 1 selectors: `Selector_TriggeringPlayer`, `Selector_OtherParticipant`, `Selector_CharacterByName`, `Selector_CharacterById`, `Selector_PartyMember`. |
 | [Effects/](../../Assets/Scripts/Cinematics/Effects/) | `CinematicEffectSO`, `Effect_RaiseEvent` (Phase 1 set). |
 | [Actions/CharacterAction_CinematicMoveTo.cs](../../Assets/Scripts/Cinematics/Actions/CharacterAction_CinematicMoveTo.cs) | `CharacterAction` subclass for `MoveActorStep`. |
 | [Editor/CinematicStepDrawer.cs](../../Assets/Scripts/Cinematics/Editor/CinematicStepDrawer.cs) | Editor-only `CustomPropertyDrawer` for `[SerializeReference] CinematicStep` lists. Renders an inline type-picker dropdown so designers can pick step types when authoring scenes. Phase 4 replaces with full Cinematic Scene Editor. |
@@ -177,6 +177,7 @@ MoveActorStep.OnEnter
 - 2026-04-30 — Added `CinematicStepDrawer` Editor `CustomPropertyDrawer` so designers can pick concrete step types inline when authoring `[SerializeReference]` step lists. Phase 4 will replace with full Cinematic Scene Editor window. — Claude / [[kevin]]
 - 2026-04-30 — Added two more Phase 1 selectors (`Selector_OtherParticipant`, `Selector_CharacterByName`) to close the multi-actor authoring gap. The legacy `DialogueManager._testParticipants` 1-indexed pattern is now expressible via named roles + selectors (see SKILL.md mapping table). Added `[ContextMenu("Play in Active Scene")]` on `CinematicSceneSO` so designers trigger test cinematics directly from the Inspector — no DebugScript or DevModeManager hookup required for Phase 1 verification. `DebugScript` marked `[Obsolete]`; new debug features should extend `DevModeManager` modules. — Claude / [[kevin]]
 - 2026-04-30 — Added `Selector_PartyMember` so multi-actor cinematics can bind a player's party companions by index. Index 0 = party leader (the player), 1+ = followers. Pairs with `Selector_OtherParticipant` to fill all 5 roles in a "player + 3 companions + NPC" scene without manual scene refs. Worked example added to SKILL.md. — Claude / [[kevin]]
+- 2026-04-30 — Added `Selector_CharacterById` so designers can reference predefined / main / story-critical characters by their persistent UUID (the `Profiles/{guid}.json` filename). Rename-resilient + localization-safe + unambiguous when multiple characters share a name. SKILL.md adds a name-vs-UUID comparison table and "where to find a UUID" guidance. — Claude / [[kevin]]
 
 ## Sources
 
