@@ -1,3 +1,4 @@
+using Unity.Netcode;
 using UnityEngine;
 
 namespace MWI.Cinematics
@@ -32,6 +33,17 @@ namespace MWI.Cinematics
             if (triggeringPlayer == null)
             {
                 Debug.LogError($"<color=red>[Cinematic]</color> Cinematics.TryPlay: triggeringPlayer is null (scene='{scene.SceneId}').");
+                return false;
+            }
+
+            // Server-only authority. In a networked session, only the server/host may start
+            // a cinematic — clients calling this would fork local state from the authoritative
+            // simulation. In a non-networked / pre-launch context (NetworkManager not listening),
+            // we allow the call so solo / editor-test scenarios still work.
+            var nm = NetworkManager.Singleton;
+            if (nm != null && nm.IsListening && !nm.IsServer)
+            {
+                Debug.LogError($"<color=red>[Cinematic]</color> Cinematics.TryPlay: must be called on the server/host. Client-initiated trigger blocked (scene='{scene.SceneId}').");
                 return false;
             }
 

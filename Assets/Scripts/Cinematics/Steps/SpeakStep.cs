@@ -19,11 +19,12 @@ namespace MWI.Cinematics
         [SerializeField] private float _typingSpeedOverride = 0f;     // 0 = use default
 
         // PHASE-1-ONLY: state for auto-advance. Phase 2 rewrites IsComplete around the
-        // server-driven AllMustPress press tally; these three fields go away.
+        // server-driven AllMustPress press tally; these fields go away.
         private bool _typingDone;
         private bool _advanceRequested;
         private float _advanceTimerEnd;
         private float _typingTimeoutAt;
+        private float _typingTimeoutSpan;   // configured timeout (sec) — cached for accurate logging
 
         public ActorRoleId SpeakerRoleId => new ActorRoleId(_speakerRoleId);
         public string      LineText      => _lineText;
@@ -60,9 +61,8 @@ namespace MWI.Cinematics
             // Compute the safety-net timeout: if the callback never fires we still
             // un-stick the cinematic. Length-aware so longer lines get more headroom.
             int charCount = string.IsNullOrEmpty(processedText) ? 0 : processedText.Length;
-            _typingTimeoutAt = Time.time
-                + PHASE1_TYPING_TIMEOUT_BASE_SEC
-                + (charCount * PHASE1_TYPING_TIMEOUT_PER_CHAR);
+            _typingTimeoutSpan = PHASE1_TYPING_TIMEOUT_BASE_SEC + (charCount * PHASE1_TYPING_TIMEOUT_PER_CHAR);
+            _typingTimeoutAt = Time.time + _typingTimeoutSpan;
 
             Debug.Log($"<color=cyan>[Cinematic]</color> SpeakStep: '{speaker.CharacterName}' says \"{processedText}\".");
 
@@ -84,7 +84,7 @@ namespace MWI.Cinematics
             // Safety-net: if typing callback never fires, force-advance after timeout.
             if (!_typingDone && Time.time >= _typingTimeoutAt)
             {
-                Debug.LogWarning($"<color=yellow>[Cinematic]</color> SpeakStep: typing-finished callback timed out (>{_typingTimeoutAt - ctx.StartTimeSim:F1}s). Force-advancing.");
+                Debug.LogWarning($"<color=yellow>[Cinematic]</color> SpeakStep: typing-finished callback timed out after {_typingTimeoutSpan:F1}s. Force-advancing.");
                 MarkSkippedAndAdvance();
                 return;
             }
