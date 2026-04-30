@@ -3,9 +3,9 @@ type: system
 title: "Commercial Building"
 tags: [building, commercial, jobs, tier-2]
 created: 2026-04-19
-updated: 2026-04-29
+updated: 2026-04-30
 sources: []
-related: ["[[building]]", "[[building-logistics-manager]]", "[[building-task-manager]]", "[[jobs-and-logistics]]", "[[shops]]", "[[crafting-loop]]", "[[worker-wages-and-performance]]", "[[quest-system]]", "[[tool-storage]]", "[[dev-mode]]", "[[kevin]]"]
+related: ["[[building]]", "[[building-logistics-manager]]", "[[building-task-manager]]", "[[jobs-and-logistics]]", "[[shops]]", "[[crafting-loop]]", "[[worker-wages-and-performance]]", "[[quest-system]]", "[[tool-storage]]", "[[help-wanted-and-hiring]]", "[[dev-mode]]", "[[kevin]]"]
 status: stable
 confidence: high
 primary_agent: building-furniture-specialist
@@ -91,6 +91,7 @@ Force-assignment bypasses consent: `CommunityTracker.ImposeJobOnCitizen()` → `
 - If a subclass wants autonomous restock, **implementing `IStockProvider` is mandatory** — declaring `_itemsToSell` or `_inputStockTargets` alone does nothing until the contract is wired.
 
 ## Change log
+- 2026-04-30 — Hiring API: `_isHiring` NetworkVariable + `_helpWantedFurniture` reference + `TryOpenHiring` / `TryCloseHiring` / `CanRequesterControlHiring` / `GetVacantJobs` / `GetHelpWantedDisplayText` (virtual). `InteractionAskForJob.CanExecute` and `BuildingManager.FindAvailableJob` gate on `IsHiring` so closed buildings reject applications. `AssignWorker` + `CharacterJob.QuitJob` call `HandleVacancyChanged` to refresh the Help Wanted sign on hire/quit churn. `GetJobStableIndex(Job)` exposes stable indices for ServerRpc round-trip. See [[help-wanted-and-hiring]]. — claude
 - 2026-04-29 — Added `_toolStorageFurniture` designer reference + `WorkerCarriesUnreturnedTools(Character, out List<ItemInstance>)` server-side scan + `NotifyPunchOutBlockedClientRpc` (targeted ClientRpc to player workers, raises `UI_ToolReturnReminderToast`) + `NotifyPunchOutBlockedToClient` server-side wrapper. Foundation for the [[tool-storage]] primitive (Plan 1 of Farmer rollout). — claude
 - 2026-04-25 — Fixed `_defaultFurnitureLayout` registrations being silently wiped by `Room.Start` / `Room.OnNetworkSpawn`. `FurnitureManager.LoadExistingFurniture` is now additive: it prunes fake-null entries and merges any new transform child into `_furnitures` instead of replacing the list with `GetComponentsInChildren<Furniture>(true)`. Previous replace-style rescan would clobber `RegisterSpawnedFurnitureUnchecked` writes (the spawned furniture lives on the building root, not under the target room's transform — so the rescan saw an empty room and reset the list). Symptom on the Forge: `Room_Main.FurnitureManager.Furnitures` empty after placement; crafting only worked through `CraftingBuilding.GetCraftableItems`'s transform-tree fallback, which logged a one-shot warning. — claude
 - 2026-04-25 — Added `_defaultFurnitureLayout` (`List<DefaultFurnitureSlot>`) + `TrySpawnDefaultFurniture()` server-side runtime-spawn path. Replaces the previous nested-furniture-with-NetworkObject pattern that was half-spawning during NGO sync and silently aborting client connection-approval. New `FurnitureManager.RegisterSpawnedFurnitureUnchecked(furniture, worldPos)` helper bypasses `CanPlaceFurniture` validation (server-authored content is trusted) and skips the SetParent step (caller must already have parented under a valid NetworkObject ancestor — Room_Main is a non-NO so SetParent under it would throw `InvalidParentException`). Forge prefab updated as the canonical example. — claude
