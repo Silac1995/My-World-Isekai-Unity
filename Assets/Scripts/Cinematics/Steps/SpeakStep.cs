@@ -1,5 +1,9 @@
 using UnityEngine;
 
+// We're inside namespace MWI.Cinematics, so `Time` resolves to the sibling MWI.Time
+// namespace before reaching UnityEngine.Time. Aliasing avoids fully-qualifying every call.
+using UTime = UnityEngine.Time;
+
 namespace MWI.Cinematics
 {
     [System.Serializable]
@@ -62,7 +66,7 @@ namespace MWI.Cinematics
             // un-stick the cinematic. Length-aware so longer lines get more headroom.
             int charCount = string.IsNullOrEmpty(processedText) ? 0 : processedText.Length;
             _typingTimeoutSpan = PHASE1_TYPING_TIMEOUT_BASE_SEC + (charCount * PHASE1_TYPING_TIMEOUT_PER_CHAR);
-            _typingTimeoutAt = Time.time + _typingTimeoutSpan;
+            _typingTimeoutAt = UTime.time + _typingTimeoutSpan;
 
             Debug.Log($"<color=cyan>[Cinematic]</color> SpeakStep: '{speaker.CharacterName}' says \"{processedText}\".");
 
@@ -82,7 +86,7 @@ namespace MWI.Cinematics
         public override void OnTick(CinematicContext ctx, float dt)
         {
             // Safety-net: if typing callback never fires, force-advance after timeout.
-            if (!_typingDone && Time.time >= _typingTimeoutAt)
+            if (!_typingDone && UTime.time >= _typingTimeoutAt)
             {
                 Debug.LogWarning($"<color=yellow>[Cinematic]</color> SpeakStep: typing-finished callback timed out after {_typingTimeoutSpan:F1}s. Force-advancing.");
                 MarkSkippedAndAdvance();
@@ -94,7 +98,7 @@ namespace MWI.Cinematics
             if (_typingDone && !_advanceRequested)
             {
                 _advanceRequested = true;
-                _advanceTimerEnd = Time.time + PHASE1_AUTO_ADVANCE_DELAY_SEC;
+                _advanceTimerEnd = UTime.time + PHASE1_AUTO_ADVANCE_DELAY_SEC;
             }
         }
 
@@ -111,13 +115,13 @@ namespace MWI.Cinematics
 
         public override bool IsComplete(CinematicContext ctx) =>
             // PHASE-1-ONLY: auto-advance after typing + 1.5s dwell. Phase 2 replaces with press tally.
-            _advanceRequested && Time.time >= _advanceTimerEnd;
+            _advanceRequested && UTime.time >= _advanceTimerEnd;
 
         private void MarkSkippedAndAdvance()
         {
             _typingDone = true;
             _advanceRequested = true;
-            _advanceTimerEnd = Time.time;     // IsComplete true on next read
+            _advanceTimerEnd = UTime.time;     // IsComplete true on next read
         }
 
         private string ResolvePlaceholders(string text, CinematicContext ctx)

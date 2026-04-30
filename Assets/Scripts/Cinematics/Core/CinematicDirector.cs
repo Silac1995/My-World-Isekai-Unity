@@ -2,6 +2,10 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
+// We're inside namespace MWI.Cinematics, so `Time` resolves to the sibling MWI.Time
+// namespace before reaching UnityEngine.Time. Aliasing avoids fully-qualifying every call.
+using UTime = UnityEngine.Time;
+
 namespace MWI.Cinematics
 {
     /// <summary>
@@ -33,7 +37,7 @@ namespace MWI.Cinematics
             _ctx   = ctx;
             _ctx.Scene    = scene;
             _ctx.Director = this;
-            _ctx.StartTimeSim = Time.time;
+            _ctx.StartTimeSim = UTime.time;
 
             foreach (var step in scene.Steps)
             {
@@ -92,7 +96,7 @@ namespace MWI.Cinematics
                         bool tickThrew = false;
                         try
                         {
-                            currentStep.OnTick(_ctx, Time.deltaTime);
+                            currentStep.OnTick(_ctx, UTime.deltaTime);
                             isComplete = currentStep.IsComplete(_ctx);
                         }
                         catch (System.Exception e)

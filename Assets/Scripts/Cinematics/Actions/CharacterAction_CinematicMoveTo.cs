@@ -1,6 +1,10 @@
 using System.Collections;
 using UnityEngine;
 
+// We're inside namespace MWI.Cinematics, so `Time` resolves to the sibling MWI.Time
+// namespace before reaching UnityEngine.Time. Aliasing avoids fully-qualifying every call.
+using UTime = UnityEngine.Time;
+
 namespace MWI.Cinematics
 {
     /// <summary>
@@ -89,7 +93,7 @@ namespace MWI.Cinematics
                     yield break;
                 }
 
-                elapsed += Time.deltaTime;
+                elapsed += UTime.deltaTime;
                 yield return null;
             }
 
