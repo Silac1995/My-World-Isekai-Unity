@@ -18,21 +18,51 @@ namespace MWI.Cinematics
         /// <summary>
         /// Trigger a cinematic scene. Phase 1: server-side only (or solo / host).
         /// Phase 2's TryPlay will route through CinematicRegistry for eligibility + PlayMode checks.
+        ///
+        /// <para>
+        /// <c>triggeringPlayer</c> can be ANY <see cref="Character"/>, not just a player. For
+        /// NPC-to-NPC scenes (e.g. two villagers gossiping while distant players watch from
+        /// afar), pass the first NPC as <c>triggeringPlayer</c> and the second as
+        /// <c>otherParticipant</c>. The parameter name kept "Player" suffix for backwards
+        /// compatibility — internally the system just calls it "the triggering character".
+        /// </para>
+        /// <para>
+        /// At least one of <c>triggeringPlayer</c>, <c>otherParticipant</c>, or
+        /// <c>overrideOrigin</c> must be non-null so the director has a trigger origin.
+        /// </para>
         /// </summary>
-        /// <returns>true if the scene started; false on missing scene, missing player, or unbindable required roles.</returns>
+        /// <returns>true if the scene started; false on missing scene, no origin, or unbindable required roles.</returns>
         public static bool TryPlay(
             CinematicSceneSO scene,
-            Character triggeringPlayer,
-            Character otherParticipant = null)
+            Character triggeringPlayer = null,
+            Character otherParticipant = null,
+            Vector3? overrideOrigin = null)
         {
             if (scene == null)
             {
                 Debug.LogError("<color=red>[Cinematic]</color> Cinematics.TryPlay: scene is null.");
                 return false;
             }
-            if (triggeringPlayer == null)
+
+            // Need an origin from somewhere — for spatial selectors, future camera focus, and
+            // the trigger's own bookkeeping. Resolve precedence: explicit override > triggering
+            // character's position > other participant's position. None → reject.
+            Vector3 origin;
+            if (overrideOrigin.HasValue)
             {
-                Debug.LogError($"<color=red>[Cinematic]</color> Cinematics.TryPlay: triggeringPlayer is null (scene='{scene.SceneId}').");
+                origin = overrideOrigin.Value;
+            }
+            else if (triggeringPlayer != null)
+            {
+                origin = triggeringPlayer.transform.position;
+            }
+            else if (otherParticipant != null)
+            {
+                origin = otherParticipant.transform.position;
+            }
+            else
+            {
+                Debug.LogError($"<color=red>[Cinematic]</color> Cinematics.TryPlay: need at least one of triggeringPlayer, otherParticipant, or overrideOrigin (scene='{scene.SceneId}').");
                 return false;
             }
 
@@ -47,13 +77,16 @@ namespace MWI.Cinematics
                 return false;
             }
 
-            Debug.Log($"<color=cyan>[Cinematic]</color> Cinematics.TryPlay: starting scene '{scene.SceneId}' triggered by '{triggeringPlayer.CharacterName}'.");
+            string triggerLabel = triggeringPlayer != null ? $"'{triggeringPlayer.CharacterName}'"
+                : otherParticipant != null ? $"<via {otherParticipant.CharacterName}>"
+                : $"<position {origin}>";
+            Debug.Log($"<color=cyan>[Cinematic]</color> Cinematics.TryPlay: starting scene '{scene.SceneId}' triggered by {triggerLabel}.");
 
             var ctx = new CinematicContext
             {
                 TriggeringPlayer = triggeringPlayer,
                 OtherParticipant = otherParticipant,
-                TriggerOrigin    = triggeringPlayer.transform.position,
+                TriggerOrigin    = origin,
             };
 
             // Resolve roles. Required roles whose selectors return null hard-fail.

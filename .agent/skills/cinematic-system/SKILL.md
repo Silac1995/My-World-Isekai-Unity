@@ -36,24 +36,36 @@ Server-side runtime for Fire Emblem / Persona / Vandal Hearts style scripted sce
 | Step | What it does | Key fields |
 |------|--------------|------------|
 | `WaitStep` | Sim-time delay. | `_durationSec` |
-| `SpeakStep` | Speaker role says a line. Phase 1 auto-advances 1.5s after typing finishes. Length-aware safety timeout. Supports `[role:X].getName` placeholders. | `_speakerRoleId`, `_lineText`, `_typingSpeedOverride` |
+| `SpeakStep` | Speaker role says ONE line. Phase 1 auto-advances 1.5s after typing finishes. Length-aware safety timeout. Supports `[role:X].getName` placeholders. | `_speakerRoleId`, `_lineText`, `_typingSpeedOverride` |
+| `DialogueScriptStep` | Plays an EXISTING legacy `DialogueSO` (multi-line conversation) as a single step. Maps `DialogueLine.CharacterIndex` (1-based) to roles via a designer-authored list. Supports both `[indexN].getName` (legacy) and `[role:X].getName` (new) placeholder syntax. Auto-advances per line with the same 1.5s dwell as `SpeakStep`. | `_dialogue : DialogueSO`, `_roleIdByIndex : List<string>` |
 | `MoveActorStep` | Actor walks to a target (role / world position). Routes through `CharacterAction_CinematicMoveTo`. Blocking by default. | `_actorRoleId`, `_targetMode`, `_targetRoleId` / `_targetPos`, `_stoppingDist`, `_blocking`, `_timeoutSec` |
 | `TriggerStep` | Fires a `CinematicEffectSO` and/or a `UnityEvent`. Fire-and-forget. | `_effect`, `_eventHook` |
 
 ## How to trigger a cinematic
 
-### From code (any server-side hook — quest reward, BT action, scripted event)
+### From code (any server-side hook — quest reward, BT action, scripted event, NPC-to-NPC trigger)
 
 ```csharp
 using MWI.Cinematics;
 
-// Server-side only. Returns false if scene/player null, required role unbindable,
-// or called from a client in a networked session.
-var scene = Resources.Load<CinematicSceneSO>("Data/Cinematics/Test_FirstMeeting");
-bool started = Cinematics.TryPlay(scene, playerCharacter, otherParticipant: npcCharacter);
+// Player-driven (most common): triggering player + optional NPC participant.
+Cinematics.TryPlay(scene, triggeringPlayer: player, otherParticipant: wilfred);
+
+// NPC-to-NPC ("two villagers gossip while distant players watch from afar"). Pass
+// the first NPC as triggeringPlayer (the parameter name kept "Player" suffix for
+// backwards-compat — it accepts ANY Character).
+Cinematics.TryPlay(scene_NpcGossip, triggeringPlayer: npcA, otherParticipant: npcB);
+
+// Position-only (ambient world cinematic with no anchoring character). Pass an
+// explicit overrideOrigin Vector3.
+Cinematics.TryPlay(scene_AmbientShrine, overrideOrigin: shrineTransform.position);
 ```
 
-`TryPlay` resolves all roles (hard-fails on required + unbound, silently skips optional + unbound), marks every bound actor as `IsCinematicActor=true`, spawns a `CinematicDirector` GameObject under `CinematicDirectors/`, and starts the step loop. The `otherParticipant` argument feeds `CinematicContext.OtherParticipant` and resolves any role using `Selector_OtherParticipant` (typically the NPC the player is talking to).
+**`TryPlay` accepts any `Character` as the first argument** — the system never enforces that it's a player, so NPC-to-NPC scenes work via the same entry point. At least one of `triggeringPlayer`, `otherParticipant`, or `overrideOrigin` must be non-null so the director has a trigger origin (used for spatial selectors and future camera focus).
+
+The function resolves all roles (hard-fails on required + unbound, silently skips optional + unbound), marks every bound actor as `IsCinematicActor=true`, spawns a `CinematicDirector` GameObject under `CinematicDirectors/`, and starts the step loop. The `otherParticipant` argument feeds `CinematicContext.OtherParticipant` and resolves any role using `Selector_OtherParticipant`.
+
+**Players watching NPC-to-NPC scenes from afar**: nearby players are NOT added to `BoundRoles` and don't get `IsCinematicActor` set, but they see the actor NPCs animate / speak via existing `CharacterMovement` + `CharacterSpeech` network replication. No special bystander handling needed — the visuals come along for free.
 
 ### From the Inspector while in Play mode (Phase 1 quick test)
 
@@ -116,6 +128,28 @@ The `Character.CharacterId` is generated on first spawn and persists from then o
 
 For a brand-new character that hasn't been spawned yet (and therefore doesn't have a UUID), you can't reference them by ID — fall back to `Selector_CharacterByName` or wait for Phase 2's archetype-based selectors.
 
+### Worked example: NPC-to-NPC scene (players watch from afar)
+
+Scenario: two villagers (Wilfred and Aria) gossip in the town square. The cinematic plays automatically when the world clock hits a certain hour. Distant players see them gesture, hear the speech bubbles, but aren't bound as actors.
+
+**Roles**:
+
+| Role Id | Selector | Notes |
+|---------|----------|-------|
+| `Speaker1` | `Selector_OtherParticipant.asset` | (or `CharacterByName`/`CharacterById` — anything that resolves to an NPC) |
+| `Speaker2` | `Selector_CharacterByName.asset` (`_characterName = "Aria"`) | |
+
+**Trigger** from a server-side scheduler / event:
+
+```csharp
+// Two NPCs chosen — first goes as triggeringPlayer (becomes ctx.TriggeringPlayer),
+// second as otherParticipant (becomes ctx.OtherParticipant). The naming is legacy;
+// neither needs to be a player.
+Cinematics.TryPlay(scene_VillageGossip, wilfred, aria);
+```
+
+**Timeline**: a `DialogueScriptStep` wrapping an existing `DialogueSO_VillageGossip` (multi-line back-and-forth), with `_roleIdByIndex = ["Speaker1", "Speaker2"]`. Plays the whole conversation; players nearby see/hear it organically via `CharacterSpeech` replication.
+
 ### Worked example: a 5-actor party cinematic
 
 Scenario: the player approaches Wilfred with their party of 3 followers (Aria, Bjorn, Cara). The cinematic features all five characters.
@@ -159,7 +193,8 @@ Optional-flagged followers (Bjorn, Cara) silently skip if missing — their `Spe
      - `Is Optional` — required (default) hard-fails the cinematic if unbound; optional silently skips.
      - `Is Primary Actor` — Phase 2 `OncePerNpc` keying. Set to true on the role that "owns" the scene (typically the talked-to NPC).
    - **Timeline**: click `+` on Steps → use the **type-picker dropdown on the right side of each new element** to select Speak / Wait / Move / Trigger. The custom property drawer (`Assets/Scripts/Cinematics/Editor/CinematicStepDrawer.cs`) makes the picker visible inline so you don't need to right-click into Unity's hidden managed-reference menu.
-     - `SpeakStep`: speakerRoleId, lineText (supports `[role:X].getName` placeholders), typingSpeedOverride (0 = default).
+     - `SpeakStep`: speakerRoleId, lineText (supports `[role:X].getName` placeholders), typingSpeedOverride (0 = default). One line per step.
+     - `DialogueScriptStep`: drag an existing `DialogueSO` into `_dialogue`, fill `_roleIdByIndex` with role IDs in `CharacterIndex` order (entry 0 = CharacterIndex 1, entry 1 = CharacterIndex 2, etc.). The whole multi-line conversation plays as one step. Use this when you have legacy `DialogueSO` content to reuse, or when you just prefer the multi-line authoring UX over many individual SpeakSteps.
      - `WaitStep`: durationSec.
      - `MoveActorStep`: actorRoleId, targetMode (Role / WorldPos), target ref, stoppingDist (default 1.5 Unity units ≈ 0.23m), blocking, timeoutSec.
      - `TriggerStep`: effect (drag a `CinematicEffectSO` asset, e.g. `Effect_RaiseEvent`), eventHook (UnityEvent in the inspector).
