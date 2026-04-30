@@ -80,15 +80,46 @@ Why named roles over indices:
 - Self-documenting: `_speakerRoleId = "Wilfred"` reads better than `_characterIndex = 2`.
 - Runtime binding lets the same scene fire from multiple trigger contexts (any player, any matching NPC).
 
-Phase 1 ships three selectors:
+Phase 1 ships four selectors:
 
 | Selector | Resolves to | Authoring inputs | Use case |
 |----------|-------------|------------------|----------|
 | `Selector_TriggeringPlayer` | `ctx.TriggeringPlayer` (the player who fired the cinematic) | none | The "Hero" / player avatar role. |
 | `Selector_OtherParticipant` | `ctx.OtherParticipant` (passed as 2nd arg to `TryPlay`) | none | The NPC the player is interacting with — typically the Talk target. Caller supplies via `Cinematics.TryPlay(scene, player, npc)`. |
 | `Selector_CharacterByName` | First `Character` in the scene whose `CharacterName == _characterName` | `_characterName : string` | Named NPC ("Wilfred", "Tavern Keeper") — the closest analogue to dragging a specific character into `_testParticipants`. |
+| `Selector_PartyMember` | The Nth member of the triggering player's (or other participant's) party | `_partyOf : PartyOf`, `_memberIndex : int` | Companion roles in a multi-actor scene. Index 0 = leader (the player), 1 = first follower, 2 = second follower, etc. |
 
 Phase 2 adds archetype-based selectors (`Selector_NearestArchetype`, `Selector_RandomInRadius`, `Selector_SpecificCharacter` with full archetype reference) for procedural / generic-NPC scenes.
+
+### Worked example: a 5-actor party cinematic
+
+Scenario: the player approaches Wilfred with their party of 3 followers (Aria, Bjorn, Cara). The cinematic features all five characters.
+
+**Roles** (Cast section):
+
+| Role Id | Selector asset | Notes |
+|---------|----------------|-------|
+| `Hero` | `Selector_TriggeringPlayer.asset` | The player. |
+| `Aria` | `Selector_PartyMember.asset` (memberIndex = 1) | First follower. |
+| `Bjorn` | `Selector_PartyMember.asset` (memberIndex = 2) | Second follower. Mark `IsOptional` so the scene plays gracefully with a 2-follower party. |
+| `Cara` | `Selector_PartyMember.asset` (memberIndex = 3) | Third follower. Likewise optional. |
+| `Wilfred` | `Selector_OtherParticipant.asset` | The NPC the player Talked to. Caller passes the NPC as the 2nd arg of `Cinematics.TryPlay(scene, player, wilfred)`. |
+
+The selector assets are reusable — you only need ONE `Selector_PartyMember.asset` per index value (one for index 1, one for index 2, one for index 3), shared across all your party-cinematic scenes.
+
+**Timeline** (Steps section): each `SpeakStep` references a role by `Role Id`:
+
+```
+SpeakStep   speaker=Wilfred  text="So you've come, [role:Hero].getName."
+SpeakStep   speaker=Hero     text="Aye. My companions are with me."
+SpeakStep   speaker=Aria     text="Ready when you are."
+SpeakStep   speaker=Bjorn    text="By the gods, finally."
+SpeakStep   speaker=Cara     text="Let's not waste daylight."
+SpeakStep   speaker=Wilfred  text="Then follow me."
+MoveActorStep  actor=Wilfred  target=WorldPos(...)  blocking=true
+```
+
+Optional-flagged followers (Bjorn, Cara) silently skip if missing — their `SpeakStep`s log a warning ("speaker role 'Bjorn' could not be resolved") and the director moves to the next step. To make the dialog itself adapt to party size, Phase 3's `ConditionalStep` will let you skip whole branches when an optional role is unbound.
 
 ## How to author a scene asset (Phase 1, no full editor window yet)
 
