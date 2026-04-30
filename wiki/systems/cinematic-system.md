@@ -64,7 +64,7 @@ Author story moments, cutscenes, quest handoffs, tutorial sequences, and fully-N
 | [CinematicDirector.cs](../../Assets/Scripts/Cinematics/Core/CinematicDirector.cs) | Per-scene coroutine runner. Phase 1 plain MonoBehaviour. |
 | [Cinematics.cs](../../Assets/Scripts/Cinematics/Core/Cinematics.cs) | Public static facade. `TryPlay(scene, player, otherParticipant?)`. |
 | [Steps/](../../Assets/Scripts/Cinematics/Steps/) | `WaitStep`, `SpeakStep`, `MoveActorStep`, `TriggerStep` (Phase 1 set). |
-| [Roles/](../../Assets/Scripts/Cinematics/Roles/) | `RoleSlot`, `RoleSelectorSO`, `Selector_TriggeringPlayer` (Phase 1 set). |
+| [Roles/](../../Assets/Scripts/Cinematics/Roles/) | `RoleSlot`, `RoleSelectorSO`, plus 3 Phase 1 selectors: `Selector_TriggeringPlayer`, `Selector_OtherParticipant`, `Selector_CharacterByName`. |
 | [Effects/](../../Assets/Scripts/Cinematics/Effects/) | `CinematicEffectSO`, `Effect_RaiseEvent` (Phase 1 set). |
 | [Actions/CharacterAction_CinematicMoveTo.cs](../../Assets/Scripts/Cinematics/Actions/CharacterAction_CinematicMoveTo.cs) | `CharacterAction` subclass for `MoveActorStep`. |
 | [Editor/CinematicStepDrawer.cs](../../Assets/Scripts/Cinematics/Editor/CinematicStepDrawer.cs) | Editor-only `CustomPropertyDrawer` for `[SerializeReference] CinematicStep` lists. Renders an inline type-picker dropdown so designers can pick step types when authoring scenes. Phase 4 replaces with full Cinematic Scene Editor. |
@@ -175,6 +175,7 @@ MoveActorStep.OnEnter
 - 2026-04-30 — Phase 1 foundation shipped: 4 step types (Wait/Speak/Move/Trigger), 1 selector (TriggeringPlayer), 1 effect (RaiseEvent), `CharacterCinematicState` subsystem, `Cinematics.TryPlay` facade, combat + input gates on `IsCinematicActor`. — Claude / [[kevin]]
 - 2026-04-30 — Time namespace clash fix: aliased `UnityEngine.Time` as `UTime` in 4 files to avoid shadowing by sibling `MWI.Time` namespace. — Claude / [[kevin]]
 - 2026-04-30 — Added `CinematicStepDrawer` Editor `CustomPropertyDrawer` so designers can pick concrete step types inline when authoring `[SerializeReference]` step lists. Phase 4 will replace with full Cinematic Scene Editor window. — Claude / [[kevin]]
+- 2026-04-30 — Added two more Phase 1 selectors (`Selector_OtherParticipant`, `Selector_CharacterByName`) to close the multi-actor authoring gap. The legacy `DialogueManager._testParticipants` 1-indexed pattern is now expressible via named roles + selectors (see SKILL.md mapping table). Added `[ContextMenu("Play in Active Scene")]` on `CinematicSceneSO` so designers trigger test cinematics directly from the Inspector — no DebugScript or DevModeManager hookup required for Phase 1 verification. `DebugScript` marked `[Obsolete]`; new debug features should extend `DevModeManager` modules. — Claude / [[kevin]]
 
 ## Sources
 

@@ -47,5 +47,50 @@ namespace MWI.Cinematics
             if (string.IsNullOrEmpty(_sceneId))
                 _sceneId = System.Guid.NewGuid().ToString("N");
         }
+
+        /// <summary>
+        /// Inspector quick-test entry point. Right-click this asset's header in the
+        /// Inspector → "Play in Active Scene". Looks for a player Character in the
+        /// active scene to use as <c>TriggeringPlayer</c>; if not found, falls back to
+        /// the first Character available. No external scripts (DebugScript / DevModeManager
+        /// modules) needed for Phase 1 verification.
+        ///
+        /// Phase 4 will replace this with a "Test" button on the Cinematic Scene Editor
+        /// window plus a DevCinematicModule tab in the dev panel.
+        /// </summary>
+        [ContextMenu("Play in Active Scene")]
+        private void Editor_PlayInActiveScene()
+        {
+            if (!Application.isPlaying)
+            {
+                Debug.LogWarning($"<color=yellow>[Cinematic]</color> '{name}': enter Play mode first — cinematics need live Character instances.");
+                return;
+            }
+
+            // Prefer a player avatar so the gating semantics (IsCinematicActor blocks
+            // PlayerController input) are exercised end-to-end.
+            Character triggeringPlayer = null;
+            var all = FindObjectsByType<Character>(FindObjectsSortMode.None);
+            for (int i = 0; i < all.Length; i++)
+            {
+                if (all[i] != null && all[i].IsPlayer())
+                {
+                    triggeringPlayer = all[i];
+                    break;
+                }
+            }
+            // Fallback: first character of any kind.
+            if (triggeringPlayer == null && all.Length > 0)
+                triggeringPlayer = all[0];
+
+            if (triggeringPlayer == null)
+            {
+                Debug.LogError($"<color=red>[Cinematic]</color> '{name}': no Character found in active scene to use as TriggeringPlayer.");
+                return;
+            }
+
+            Debug.Log($"<color=cyan>[Cinematic]</color> '{name}': inspector-driven play. Triggering player = '{triggeringPlayer.CharacterName}'.");
+            Cinematics.TryPlay(this, triggeringPlayer);
+        }
     }
 }

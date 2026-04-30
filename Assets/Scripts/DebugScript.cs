@@ -3,6 +3,14 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
+/// <summary>
+/// LEGACY debug harness. Superseded by <see cref="DevModeManager"/> + module-based
+/// dev panel (DevSelectionModule, DevSpawnModule, future DevCinematicModule).
+/// Do not add new functionality here — extend DevMode instead.
+/// </summary>
+[System.Obsolete("Use DevModeManager + module-based dev panel instead. F3 toggles the panel; "
+                 + "/devmode on unlocks in release builds. New diagnostic features should be a "
+                 + "Dev*Module under Assets/Scripts/Debug/DevMode/Modules/, not added here.", error: false)]
 public class DebugScript : MonoBehaviour
 {
     [Header("UI References")]

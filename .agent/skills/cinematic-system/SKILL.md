@@ -27,7 +27,7 @@ Server-side runtime for Fire Emblem / Persona / Vandal Hearts style scripted sce
 | `CinematicContext` | `Assets/Scripts/Cinematics/Core/CinematicContext.cs` | Runtime context threaded through every step callback. `BoundRoles`, `TriggeringPlayer`, `OtherParticipant`, `GetActor(roleId)`. |
 | `CinematicDirector` | `Assets/Scripts/Cinematics/Core/CinematicDirector.cs` | Per-scene `MonoBehaviour` (Phase 2 promotes to `NetworkBehaviour`). `Initialize(scene, ctx)` + `RunScene()` start the step-loop coroutine. |
 | `Cinematics` | `Assets/Scripts/Cinematics/Core/Cinematics.cs` | Public static facade. `Cinematics.TryPlay(scene, triggeringPlayer, otherParticipant?) : bool`. |
-| `RoleSlot` + `RoleSelectorSO` | `Assets/Scripts/Cinematics/Roles/` | Role binding. `Selector_TriggeringPlayer` is the only Phase 1 selector; Phase 2 adds `Selector_OtherParticipant` and others. |
+| `RoleSlot` + `RoleSelectorSO` | `Assets/Scripts/Cinematics/Roles/` | Role binding. Phase 1 ships three selectors: `Selector_TriggeringPlayer`, `Selector_OtherParticipant`, `Selector_CharacterByName`. Phase 2 adds archetype + radius-based selectors. |
 | `CharacterCinematicState` | `Assets/Scripts/Character/CharacterCinematicState/CharacterCinematicState.cs` | Per-Character subsystem. `IsCinematicActor` flag (Phase 1 local bool; Phase 2 NetworkVariable), `_playedSceneIds` + `_pendingSceneIds` history. |
 | `CharacterAction_CinematicMoveTo` | `Assets/Scripts/Cinematics/Actions/CharacterAction_CinematicMoveTo.cs` | `CharacterAction` subclass for `MoveActorStep`. Routes through `CharacterActions.ExecuteAction` per rule #22. |
 
@@ -42,16 +42,53 @@ Server-side runtime for Fire Emblem / Persona / Vandal Hearts style scripted sce
 
 ## How to trigger a cinematic
 
+### From code (any server-side hook — quest reward, BT action, scripted event)
+
 ```csharp
 using MWI.Cinematics;
 
 // Server-side only. Returns false if scene/player null, required role unbindable,
 // or called from a client in a networked session.
 var scene = Resources.Load<CinematicSceneSO>("Data/Cinematics/Test_FirstMeeting");
-bool started = Cinematics.TryPlay(scene, playerCharacter);
+bool started = Cinematics.TryPlay(scene, playerCharacter, otherParticipant: npcCharacter);
 ```
 
-`TryPlay` resolves all roles (hard-fails on required + unbound, silently skips optional + unbound), marks every bound actor as `IsCinematicActor=true`, spawns a `CinematicDirector` GameObject under `CinematicDirectors/`, and starts the step loop.
+`TryPlay` resolves all roles (hard-fails on required + unbound, silently skips optional + unbound), marks every bound actor as `IsCinematicActor=true`, spawns a `CinematicDirector` GameObject under `CinematicDirectors/`, and starts the step loop. The `otherParticipant` argument feeds `CinematicContext.OtherParticipant` and resolves any role using `Selector_OtherParticipant` (typically the NPC the player is talking to).
+
+### From the Inspector while in Play mode (Phase 1 quick test)
+
+Right-click the `CinematicSceneSO` asset header in the Inspector → **`Play in Active Scene`**. The `[ContextMenu]` finds a player Character in the active scene to use as `TriggeringPlayer`, falls back to the first Character if no player is around, and calls `TryPlay`. No external scripts (DevModeManager modules, DebugScript, etc.) needed.
+
+> **Don't use `DebugScript`** for cinematic testing — it's marked `[Obsolete]`. The new debug surface is `DevModeManager` (F3 toggle, module-based panel). Phase 4 will add a proper `DevCinematicModule` tab; until then the in-Inspector ContextMenu is the supported quick-test path.
+
+## How character ↔ role binding works (vs. the legacy `DialogueManager` model)
+
+Legacy `DialogueManager._testParticipants` is a flat `List<Character>`. Lines reference participants by **1-based index**: `_characterIndex = 1` means "participant[0] speaks". Designer drags Characters into the list to assign.
+
+The cinematic system replaces this with **named roles + polymorphic selectors**:
+
+| Legacy `DialogueManager` | New cinematic system |
+|--------------------------|----------------------|
+| `_testParticipants[0]` (1-indexed) | `_roles[0].RoleId = "Hero"` |
+| `_testParticipants[1]` | `_roles[1].RoleId = "Wilfred"` |
+| Drag `Character` into list at design time | Pick a `RoleSelectorSO` asset that resolves the Character at runtime |
+| `DialogueLine._characterIndex = 1` | `SpeakStep._speakerRoleId = "Hero"` |
+| `[index1].getName` placeholder | `[role:Hero].getName` placeholder |
+
+Why named roles over indices:
+- A scene authored once works for any pair of (player, NPC) without editing the asset per-instance.
+- Self-documenting: `_speakerRoleId = "Wilfred"` reads better than `_characterIndex = 2`.
+- Runtime binding lets the same scene fire from multiple trigger contexts (any player, any matching NPC).
+
+Phase 1 ships three selectors:
+
+| Selector | Resolves to | Authoring inputs | Use case |
+|----------|-------------|------------------|----------|
+| `Selector_TriggeringPlayer` | `ctx.TriggeringPlayer` (the player who fired the cinematic) | none | The "Hero" / player avatar role. |
+| `Selector_OtherParticipant` | `ctx.OtherParticipant` (passed as 2nd arg to `TryPlay`) | none | The NPC the player is interacting with — typically the Talk target. Caller supplies via `Cinematics.TryPlay(scene, player, npc)`. |
+| `Selector_CharacterByName` | First `Character` in the scene whose `CharacterName == _characterName` | `_characterName : string` | Named NPC ("Wilfred", "Tavern Keeper") — the closest analogue to dragging a specific character into `_testParticipants`. |
+
+Phase 2 adds archetype-based selectors (`Selector_NearestArchetype`, `Selector_RandomInRadius`, `Selector_SpecificCharacter` with full archetype reference) for procedural / generic-NPC scenes.
 
 ## How to author a scene asset (Phase 1, no full editor window yet)
 

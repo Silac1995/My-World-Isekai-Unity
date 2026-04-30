@@ -32,7 +32,7 @@ You own the **Cinematic / Scripted Scene system** — Fire Emblem / Persona / Va
 4. **`CharacterCinematicState`** — `CharacterSystem` subsystem on every `Character` (player + NPC). Owns `IsCinematicActor` (Phase 1 local bool → Phase 2 `NetworkVariable<bool>`), `_activeRoleId`, `_activeSceneId`, `_playedSceneIds : HashSet<string>`, `_pendingSceneIds : HashSet<string>`. Phase 2 implements `ICharacterSaveData<CinematicHistorySaveData>`.
 5. **Polymorphic SO catalogues** — five extension surfaces, all `ScriptableObject`-based:
    - `CinematicStep` (8 step types in v1: Speak/Move/Wait/Camera/Trigger/Choice/Parallel/ExecuteAction; Phase 1 ships 4)
-   - `RoleSelectorSO` (5 selectors v1: TriggeringPlayer/OtherParticipant/SpecificCharacter/NearestArchetype/RandomInRadius; Phase 1 ships 1)
+   - `RoleSelectorSO` (5 selectors v1: TriggeringPlayer/OtherParticipant/SpecificCharacter/NearestArchetype/RandomInRadius; Phase 1 ships 3 — `TriggeringPlayer`, `OtherParticipant`, `CharacterByName`)
    - `CharacterActionRecipeSO` (5 recipes, Phase 3)
    - `CinematicEffectSO` (7 effects v1 incl. Effect_GiveQuest/RemoveQuest; Phase 1 ships 1)
    - `CinematicEligibilityRuleSO` (6 rules, Phase 2)
