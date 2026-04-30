@@ -20,6 +20,14 @@ public class PlantCropTask : BuildingTask
     public int CellZ { get; }
     public CropSO Crop { get; }
 
+    /// <summary>
+    /// Owning building reference. Used both as a stable world-position anchor for
+    /// <see cref="GetTaskWorldPosition"/> (the cell position needs a map resolve, and
+    /// the building is by definition inside one map per BuildingPlacementManager rules)
+    /// and as the IQuest <see cref="BuildingTarget"/> for the world-marker beacon.
+    /// </summary>
+    private readonly Building _building;
+
     public override int MaxWorkers => 1; // one farmer per cell at a time
 
     public override string Title => "Plant Crop";
@@ -32,15 +40,31 @@ public class PlantCropTask : BuildingTask
     /// <summary>
     /// Construct a plant task. <paramref name="buildingForMarker"/> is optional but
     /// recommended — when supplied, the IQuest world-marker beacon shows at the building
-    /// (so the player can find the farm). FarmingBuilding.PlantScan should pass `this`.
+    /// (so the player can find the farm) AND <see cref="GetTaskWorldPosition"/> can resolve
+    /// the cell's world position via the owning map's TerrainCellGrid. FarmingBuilding.PlantScan
+    /// should pass `this`.
     /// </summary>
     public PlantCropTask(int cellX, int cellZ, CropSO crop, Building buildingForMarker = null) : base(null)
     {
         CellX = cellX;
         CellZ = cellZ;
         Crop = crop;
+        _building = buildingForMarker;
         if (buildingForMarker != null)
             QuestTarget = new BuildingTarget(buildingForMarker);
+    }
+
+    /// <summary>
+    /// Resolves the cell's world position via the owning map's TerrainCellGrid. Falls back
+    /// to the building's own position (or <see cref="Vector3.zero"/> if no building was
+    /// supplied). Used by BuildingTaskManager.ClaimBestTask for distance-based selection.
+    /// </summary>
+    public override Vector3 GetTaskWorldPosition()
+    {
+        if (_building == null) return Vector3.zero;
+        var map = MWI.WorldSystem.MapController.GetMapAtPosition(_building.transform.position);
+        var grid = map != null ? map.GetComponent<MWI.Terrain.TerrainCellGrid>() : null;
+        return grid != null ? grid.GridToWorld(CellX, CellZ) : _building.transform.position;
     }
 
     public override bool IsValid()

@@ -48,15 +48,10 @@ public class FarmingBuilding : HarvestingBuilding, IStockProvider
     [SerializeField] private List<Zone> _farmingAreaZones = new List<Zone>();
 
     [Header("Tool / Seed Stock Targets")]
-    [Tooltip("Authoring-only floor for seed stock — surfaced for designer documentation. " +
-             "The actual StockTarget passed to LogisticsStockEvaluator uses _seedMaxStock " +
-             "as MinStock (StockTarget has a single-field 'refill UP TO this' semantic, not " +
-             "a separate min/max). Reorder fires when virtual stock < _seedMaxStock.")]
-    [SerializeField] private int _seedMinStock = 5;
-
     [Tooltip("Refill target for seed stock — the StockTarget.MinStock value passed to the " +
              "logistics evaluator. When virtual seed stock dips below this, a BuyOrder fires " +
-             "via the existing logistics chain.")]
+             "via the existing logistics chain. StockTarget has a single-field 'refill UP TO " +
+             "this' semantic, not a separate min/max — see MinStockPolicy.")]
     [SerializeField] private int _seedMaxStock = 20;
 
     [Tooltip("Reference to the WateringCan ItemSO (typically a MiscSO). Drives the input " +
@@ -74,7 +69,6 @@ public class FarmingBuilding : HarvestingBuilding, IStockProvider
     public int FarmerCount => _farmerCount;
     public IReadOnlyList<Zone> FarmingAreaZones => _farmingAreaZones;
     public ItemSO WateringCanItem => _wateringCanItem;
-    public int SeedMinStock => _seedMinStock;
     public int SeedMaxStock => _seedMaxStock;
     public int WateringCanMaxStock => _wateringCanMaxStock;
 
@@ -380,7 +374,10 @@ public class FarmingBuilding : HarvestingBuilding, IStockProvider
     /// <summary>
     /// Walks every cell whose world position falls inside the zone's BoxCollider bounds.
     /// Calls the callback with (map, grid, cellX, cellZ). Resolves the owning MapController
-    /// once per zone via the zone's transform position.
+    /// via the building's own transform position — the building is by definition placed
+    /// inside exactly one map (per BuildingPlacementManager rules), so this is the
+    /// canonical anchor. Using the zone's own position would risk picking a neighbouring
+    /// map for large or boundary-anchored zones.
     /// </summary>
     private void EnumerateCellsInZone(Zone zone, System.Action<MapController, TerrainCellGrid, int, int> callback)
     {
@@ -389,7 +386,7 @@ public class FarmingBuilding : HarvestingBuilding, IStockProvider
         var box = zone.GetComponent<BoxCollider>();
         if (box == null) return;
 
-        var map = MapController.GetMapAtPosition(zone.transform.position);
+        var map = MapController.GetMapAtPosition(transform.position);
         if (map == null) return;
 
         var grid = map.GetComponent<TerrainCellGrid>();

@@ -26,30 +26,48 @@ public class BuildingTaskManager : MonoBehaviour
     public event System.Action<BuildingTask> OnTaskCompleted;
 
     /// <summary>
-    /// Registers a new task if a task for the same target doesn't already exist.
+    /// Registers a new task. For tasks with a non-null <see cref="BuildingTask.Target"/>
+    /// (legacy MonoBehaviour-targeted tasks like HarvestResourceTask, PickupLooseItemTask),
+    /// duplicate registration is dedup'd by reference equality on Target. Cell-targeted
+    /// tasks (PlantCropTask, WaterCropTask) pass null Target — the building's own
+    /// HasExistingPlantTaskForCell / HasExistingWaterTaskForCell checks handle dedup
+    /// at the call site, and subclass IsValid() handles validity.
     /// </summary>
     public void RegisterTask(BuildingTask newTask)
     {
-        if (newTask == null || newTask.Target == null) return;
+        if (newTask == null) return;
 
         // Manual duplicate-target check — avoids two LINQ `.Any(...)` closure allocations per call.
-        if (ContainsTargetInList(_availableTasks, newTask.Target)) return;
-        if (ContainsTargetInList(_inProgressTasks, newTask.Target)) return;
+        // For null-target (cell-targeted) tasks, ContainsTargetInList returns false so registration
+        // proceeds — call sites must dedup themselves before calling RegisterTask.
+        if (ContainsTargetInList(_availableTasks, newTask)) return;
+        if (ContainsTargetInList(_inProgressTasks, newTask)) return;
 
         // Back-reference so BuildingTask.TryJoin/TryLeave (the IQuest path) can
         // notify us when a player claims/leaves outside the ClaimBestTask flow.
         newTask.Manager = this;
         _availableTasks.Add(newTask);
         if (NPCDebug.VerboseJobs)
-            Debug.Log($"<color=cyan>[TaskManager]</color> Task registered: {newTask.GetType().Name} for {newTask.Target.name}.");
+        {
+            string targetName = newTask.Target != null ? newTask.Target.name : newTask.GetType().Name;
+            Debug.Log($"<color=cyan>[TaskManager]</color> Task registered: {newTask.GetType().Name} for {targetName}.");
+        }
         OnTaskRegistered?.Invoke(newTask);
     }
 
-    private static bool ContainsTargetInList(List<BuildingTask> list, MonoBehaviour target)
+    /// <summary>
+    /// Walks the list looking for a task with the same legacy MonoBehaviour Target.
+    /// Cell-targeted tasks (null Target) are NOT considered duplicates by target —
+    /// their dedup is the caller's responsibility (see <see cref="RegisterTask"/> docs).
+    /// </summary>
+    private static bool ContainsTargetInList(List<BuildingTask> list, BuildingTask candidate)
     {
+        if (list == null || candidate == null) return false;
+        if (candidate.Target == null) return false;   // null-target tasks: no target-based dedup
         for (int i = 0; i < list.Count; i++)
         {
-            if (list[i].Target == target) return true;
+            var existing = list[i];
+            if (existing != null && existing.Target == candidate.Target) return true;
         }
         return false;
     }
@@ -127,7 +145,10 @@ public class BuildingTaskManager : MonoBehaviour
             if (!task.IsValid() || !task.CanBeClaimed()) continue;
             if (predicate != null && !predicate(task)) continue;
 
-            float dist = Vector3.Distance(workerPos, task.Target.transform.position);
+            // Cell-targeted tasks (null Target) resolve their world position via the
+            // virtual GetTaskWorldPosition() override — falls back to Target.transform.position
+            // for legacy MonoBehaviour-targeted tasks.
+            float dist = Vector3.Distance(workerPos, task.GetTaskWorldPosition());
             if (dist < bestDist)
             {
                 bestDist = dist;
@@ -149,7 +170,10 @@ public class BuildingTaskManager : MonoBehaviour
                 _inProgressTasks.Add(bestTask);
             }
             if (NPCDebug.VerboseJobs)
-                Debug.Log($"<color=green>[TaskManager]</color> {worker.CharacterName} claimed task {typeof(T).Name} for {bestTask.Target.name}.");
+            {
+                string targetName = bestTask.Target != null ? bestTask.Target.name : bestTask.GetType().Name;
+                Debug.Log($"<color=green>[TaskManager]</color> {worker.CharacterName} claimed task {typeof(T).Name} for {targetName}.");
+            }
             OnTaskClaimed?.Invoke(bestTask, worker);
         }
 
@@ -174,7 +198,10 @@ public class BuildingTaskManager : MonoBehaviour
             {
                 _availableTasks.Add(task);
                 if (NPCDebug.VerboseJobs)
-                    Debug.Log($"<color=orange>[TaskManager]</color> Task unclaimed and returned to pool: {task.GetType().Name} for {task.Target.name}.");
+                {
+                    string targetName = task.Target != null ? task.Target.name : task.GetType().Name;
+                    Debug.Log($"<color=orange>[TaskManager]</color> Task unclaimed and returned to pool: {task.GetType().Name} for {targetName}.");
+                }
             }
             else if (!task.IsValid())
             {

@@ -203,6 +203,7 @@ Per rule #19, validated scenarios:
 ## Change log
 
 - 2026-04-30 — Initial implementation. 10 tasks committed across [first SHA] → [Task 10 SHA]. Plans 1+2+2.5 already shipped; Plan 3 is the terminal Farmer rollout. — claude
+- 2026-04-30 — Plan 3 final-review fixes: `BuildingTaskManager` now accepts null-Target (cell-targeted) tasks via the new `BuildingTask.GetTaskWorldPosition()` virtual override on `PlantCropTask` + `WaterCropTask`. Critical bug: every plant/water task was being silently dropped on `RegisterTask` early-return. Also: `EnumerateCellsInZone` resolves owning map via `transform.position` (the building's own anchor); dead `_seedMinStock` field removed (StockTarget single-field semantic only uses `_seedMaxStock`); smoketest yield-count examples updated to match `Crop_Wheat.asset` `_harvestOutputs[0].Count = 1`. — claude
 
 ## Sources
 

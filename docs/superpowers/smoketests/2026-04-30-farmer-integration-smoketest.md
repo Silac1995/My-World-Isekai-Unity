@@ -12,7 +12,7 @@ Build a test scene with:
 - One `FarmingBuilding` prefab (subclass of HarvestingBuilding). Configure:
   - `_cropsToGrow = [Crop_Wheat]` (single crop for first pass).
   - `_farmerCount = 2`.
-  - `_seedMinStock = 5`, `_seedMaxStock = 20`.
+  - `_seedMaxStock = 20` (StockTarget single-field 'refill UP TO' semantic; no separate min field).
   - `_wateringCanItem` → reference the WateringCan ItemSO (`Item_WateringCan` or similar; create authoring asset if missing).
   - `_wateringCanMaxStock = 2`.
 - **Two** `Zone` GameObjects placed inside the building's footprint as children, each with a `BoxCollider` (trigger). One ~5×5 cells, one ~3×3 cells. Reference both in `_farmingAreaZones`.
@@ -74,7 +74,7 @@ Build a test scene with:
 - [ ] **Assert**: After watering, the WateringCan instance is back in `_toolStorageFurniture` slots, `OwnerBuildingId == ""` (cleared by the AddItem origin-clear hook from Plan 1).
 - [ ] Day N (= DaysToMature + 1): Crops mature → `CropHarvestable` spawns at each cell. `Harvestable.OnStateChanged` registers `HarvestResourceTask`.
 - [ ] Farmer plans `HarvestMatureCells`: walks to crop → harvests → walks to deposit zone → drops items.
-- [ ] **Assert**: Building's `_inventory` now contains Wheat (e.g. 30 instances if 10 cells × 3 yield) AND WheatSeed (10 instances if Count=1 self-seed; per Plan 3 Task 3).
+- [ ] **Assert**: Building's `_inventory` now contains Wheat (e.g. 10 instances if 10 cells × 1 yield — per `Crop_Wheat.asset` `_harvestOutputs[0].Count = 1`) AND WheatSeed (10 instances if Count=1 self-seed; per Plan 3 Task 3).
 
 ## Smoke G — Per-task watering can pickup + return
 
@@ -97,7 +97,7 @@ Build a test scene with:
 - [ ] Trigger another day's PlantScan.
 - [ ] **Assert**: New PlantCropTasks register only if `_seedStock >= 1` (Smoke F's harvest replenished seed stock).
 - [ ] Continue running for 2-3 more days.
-- [ ] **Assert**: Seed stock fluctuates between consumed-on-plant + replenished-on-harvest. Steady state: produce > seeds (since each harvest yields 3 wheat + 1 seed, 1 plant consumes 1 seed → surplus accumulates).
+- [ ] **Assert**: Seed stock fluctuates between consumed-on-plant + replenished-on-harvest. Steady state: produce ≈ seeds at the authored 1-wheat + 1-seed yield (each harvest yields 1 wheat + 1 seed per Crop_Wheat.asset; 1 plant consumes 1 seed → seeds are stable, produce accumulates over time as it's consumed elsewhere). Designer can rebalance via `_harvestOutputs[*].Count`.
 
 ## Smoke J — BuyOrder fallback when seed stock empty
 

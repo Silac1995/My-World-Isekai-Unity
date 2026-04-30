@@ -10,8 +10,7 @@ IReadOnlyList<CropSO> CropsToGrow { get; }       // designer authoring (List<Cro
 int FarmerCount { get; }
 IReadOnlyList<Zone> FarmingAreaZones { get; }    // multi-zone — union of cells
 ItemSO WateringCanItem { get; }                  // designer reference; null = no water loop
-int SeedMinStock { get; }
-int SeedMaxStock { get; }
+int SeedMaxStock { get; }                        // StockTarget.MinStock — single-field 'refill UP TO this' semantic
 int WateringCanMaxStock { get; }
 
 // Daily scan entry points (subscribe to TimeManager.OnNewDay):

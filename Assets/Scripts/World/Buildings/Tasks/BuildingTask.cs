@@ -41,6 +41,17 @@ public abstract class BuildingTask : IQuest
         Target = target;
     }
 
+    /// <summary>
+    /// World position of this task's target. Used by BuildingTaskManager.ClaimBestTask
+    /// for distance-based selection. Default: derives from the legacy MonoBehaviour
+    /// <see cref="Target"/>'s transform. Cell-targeted subclasses (PlantCropTask,
+    /// WaterCropTask) override to return the cell's world position via TerrainCellGrid.
+    /// </summary>
+    public virtual Vector3 GetTaskWorldPosition()
+    {
+        return Target != null ? Target.transform.position : Vector3.zero;
+    }
+
     // === IQuest implementation ===
 
     public string QuestId { get; private set; } = System.Guid.NewGuid().ToString("N");

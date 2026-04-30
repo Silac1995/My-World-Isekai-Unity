@@ -16,6 +16,14 @@ public class WaterCropTask : BuildingTask
     public int CellX { get; }
     public int CellZ { get; }
 
+    /// <summary>
+    /// Owning building reference. Used both as a stable world-position anchor for
+    /// <see cref="GetTaskWorldPosition"/> (the cell position needs a map resolve, and
+    /// the building is by definition inside one map per BuildingPlacementManager rules)
+    /// and as the IQuest <see cref="BuildingTarget"/> for the world-marker beacon.
+    /// </summary>
+    private readonly Building _building;
+
     public override int MaxWorkers => 1;
 
     public override string Title => "Water Crop";
@@ -27,8 +35,22 @@ public class WaterCropTask : BuildingTask
     {
         CellX = cellX;
         CellZ = cellZ;
+        _building = buildingForMarker;
         if (buildingForMarker != null)
             QuestTarget = new BuildingTarget(buildingForMarker);
+    }
+
+    /// <summary>
+    /// Resolves the cell's world position via the owning map's TerrainCellGrid. Falls back
+    /// to the building's own position (or <see cref="Vector3.zero"/> if no building was
+    /// supplied). Used by BuildingTaskManager.ClaimBestTask for distance-based selection.
+    /// </summary>
+    public override Vector3 GetTaskWorldPosition()
+    {
+        if (_building == null) return Vector3.zero;
+        var map = MWI.WorldSystem.MapController.GetMapAtPosition(_building.transform.position);
+        var grid = map != null ? map.GetComponent<MWI.Terrain.TerrainCellGrid>() : null;
+        return grid != null ? grid.GridToWorld(CellX, CellZ) : _building.transform.position;
     }
 
     public override bool IsValid()
