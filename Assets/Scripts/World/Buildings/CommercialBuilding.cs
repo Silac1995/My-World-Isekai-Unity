@@ -2395,6 +2395,17 @@ public abstract class CommercialBuilding : Building
     }
 
     /// <summary>
+    /// Stable index of <paramref name="job"/> in the full <see cref="Jobs"/> list. Used by
+    /// the hold-E hiring menu (<see cref="CharacterJob.OnJobEntryClicked"/> →
+    /// <see cref="CharacterJob.RequestJobApplicationServerRpc"/>) and by the Help Wanted
+    /// reader UI's Apply button to identify a specific vacancy across the client→server
+    /// RPC boundary. Stable across the building's lifetime — does NOT shift when other jobs
+    /// are filled/vacated, unlike the volatile index inside <see cref="GetVacantJobs"/>'s
+    /// returned subset. Returns -1 if not found.
+    /// </summary>
+    public int GetJobStableIndex(Job job) => job == null ? -1 : _jobs.IndexOf(job);
+
+    /// <summary>
     /// Returns the list of jobs in <see cref="_jobs"/> whose Worker is unassigned. Reused by
     /// the Help Wanted sign formatter (Task 4) and by the player's job-application UI (Task 7).
     /// Allocates a fresh List per call — not hot-path (called only on UI refresh / sign update).
