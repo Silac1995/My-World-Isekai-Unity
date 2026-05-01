@@ -696,7 +696,7 @@ public class Building : ComplexRoom
             converted++;
         }
 
-        if (converted > 0)
+        if (converted > 0 || skipped > 0)
         {
             Debug.Log(
                 $"<color=cyan>[Building]</color> {buildingName}: converted {converted} nested NetworkObject furniture child(ren) to _defaultFurnitureLayout (skipped {skipped} non-network furniture).",
