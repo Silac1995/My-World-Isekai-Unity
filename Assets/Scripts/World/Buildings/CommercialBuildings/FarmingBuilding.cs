@@ -345,7 +345,13 @@ public class FarmingBuilding : HarvestingBuilding, IStockProvider
                 sampleDaysToMature = crop.DaysToMature;
 
                 if (cell.GrowthTimer >= crop.DaysToMature) { alreadyMature++; return; }
-                if (cell.TimeSinceLastWatered < 1f) { recentlyWatered++; return; }
+                // "Recently watered" is the half-open range [0, 1) — i.e. less than a day has
+                // passed since the last application. Negative values are a "never watered"
+                // sentinel (a freshly-planted cell whose TimeSinceLastWatered was never
+                // initialised), and those MUST be eligible for a water task — otherwise the
+                // first-ever water cycle for any newly-planted crop is silently skipped
+                // forever and the plants never grow.
+                if (cell.TimeSinceLastWatered >= 0f && cell.TimeSinceLastWatered < 1f) { recentlyWatered++; return; }
                 if (cell.Moisture >= crop.MinMoistureForGrowth) { wetEnough++; return; }
 
                 if (HasExistingWaterTaskForCell(cellX, cellZ)) { alreadyTasked++; return; }
