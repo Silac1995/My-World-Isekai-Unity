@@ -760,6 +760,17 @@ BoxCollider:
   m_CorrespondingSourceObject: {fileID: 6121509161196564493, guid: 0266b0096947362429f7d224956a5096, type: 3}
   m_PrefabInstance: {fileID: 2834340834780121599}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &8382530325968722841 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 5981100348314096230, guid: 0266b0096947362429f7d224956a5096, type: 3}
+  m_PrefabInstance: {fileID: 2834340834780121599}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ed641fdf26c13544c81ec94f81667318, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ManagementFurniture
 --- !u!1 &9065137950495012345 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 6528054620988570630, guid: 0266b0096947362429f7d224956a5096, type: 3}
@@ -995,6 +1006,10 @@ MonoBehaviour:
   _storageZone: {fileID: 6942077358948493099}
   _defaultFurnitureLayout: []
   _pickupZone: {fileID: 0}
+  _toolStorageFurniture: {fileID: 0}
+  _helpWantedFurniture: {fileID: 0}
+  _managementFurniture: {fileID: 8382530325968722841}
+  _initialHiringOpen: 1
   _itemsToSell:
   - Item: {fileID: 0}
     MaxStock: 0

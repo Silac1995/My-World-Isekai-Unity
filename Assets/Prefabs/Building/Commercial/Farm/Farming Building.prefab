@@ -1,0 +1,390 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1001 &5214695994321944012
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: 2042257917715560045, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: GlobalObjectIdHash
+      value: 201955378
+      objectReference: {fileID: 0}
+    - target: {fileID: 6528054620988570630, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_Name
+      value: Farming Building
+      objectReference: {fileID: 0}
+    - target: {fileID: 8729890495040055940, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8729890495040055940, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8729890495040055940, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8729890495040055940, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 8729890495040055940, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8729890495040055940, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8729890495040055940, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8729890495040055940, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8729890495040055940, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8729890495040055940, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 6528054620988570630, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 6016301384324241289}
+    - targetCorrespondingSourceObject: {fileID: 6528054620988570630, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 4690541901387199577}
+    - targetCorrespondingSourceObject: {fileID: 6528054620988570630, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 6812237598739333191}
+    - targetCorrespondingSourceObject: {fileID: 6528054620988570630, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 6218087504859813128}
+    - targetCorrespondingSourceObject: {fileID: 6528054620988570630, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 2026271596686705076}
+    - targetCorrespondingSourceObject: {fileID: 6528054620988570630, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 2058514990271563893}
+  m_SourcePrefab: {fileID: 100100000, guid: 0266b0096947362429f7d224956a5096, type: 3}
+--- !u!114 &125485382864196602 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 5324242304186838582, guid: 0266b0096947362429f7d224956a5096, type: 3}
+  m_PrefabInstance: {fileID: 5214695994321944012}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 556ce41a973a5704fbfc8c807ad8ecd2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Zone
+--- !u!1 &1352801138892128714 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 6528054620988570630, guid: 0266b0096947362429f7d224956a5096, type: 3}
+  m_PrefabInstance: {fileID: 5214695994321944012}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &6016301384324241289
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1352801138892128714}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9f10052702582704cb2a410c1ef0af9b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BuildingTaskManager
+--- !u!114 &4690541901387199577
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1352801138892128714}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 93e04e1e8920d194498e4213da95ce30, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BuildingLogisticsManager
+  _logLogisticsFlow: 0
+  _logisticsPolicy: {fileID: 0}
+--- !u!114 &6812237598739333191
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1352801138892128714}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4b43482cfd5435e4da940cd87d30dcad, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FurnitureGrid
+  _cellSize: 1
+  _floorRenderers: []
+  _gridWidth: 1
+  _gridDepth: 1
+  _gridOrigin: {x: -0.5, y: 0, z: -0.5}
+  _cells:
+  - WorldPosition: {x: 0, y: -0.5, z: 0}
+    Occupant: {fileID: 0}
+    IsWall: 0
+--- !u!114 &6218087504859813128
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1352801138892128714}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f8991b0a5a5d6bd4fa27c3f81306cf5c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FurnitureManager
+  _furnitures:
+  - {fileID: 6613764600967206255}
+--- !u!114 &2026271596686705076
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1352801138892128714}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 35e95dc5ff2b64380880dd7ac5922847, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.AI.Navigation::Unity.AI.Navigation.NavMeshModifierVolume
+  m_SerializedVersion: 0
+  m_Size: {x: 4, y: 3, z: 4}
+  m_Center: {x: 0, y: 1, z: 0}
+  m_Area: 0
+  m_AffectedAgents: ffffffff
+--- !u!114 &2058514990271563893
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1352801138892128714}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d507ca63f68d85249a678a93539a1670, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FarmingBuilding
+  ShowTopMostFoldoutHeaderGroup: 1
+  zoneType: 0
+  zoneName: 
+  _boundsTarget: {fileID: 0}
+  _boundsTargets: []
+  _roomName: 
+  _floorTerrainType: {fileID: 0}
+  _isExposed: 0
+  _subRooms: []
+  buildingName: Farm building default
+  _isPublicLocation: 0
+  _buildingType: 0
+  _buildingZone: {fileID: 2066495025740352961}
+  _deliveryZone: {fileID: 125485382864196602}
+  _constructionRequirements: []
+  _prefabId: 
+  NetworkBuildingId:
+    UpdateTraits:
+      MinSecondsBetweenUpdates: 0
+      MaxSecondsBetweenUpdates: 0
+    m_InternalValue:
+      utf8LengthInBytes: 0
+      bytes:
+        offset0000:
+          byte0000: 0
+          byte0001: 0
+          byte0002: 0
+          byte0003: 0
+          byte0004: 0
+          byte0005: 0
+          byte0006: 0
+          byte0007: 0
+          byte0008: 0
+          byte0009: 0
+          byte0010: 0
+          byte0011: 0
+          byte0012: 0
+          byte0013: 0
+          byte0014: 0
+          byte0015: 0
+        offset0016:
+          byte0000: 0
+          byte0001: 0
+          byte0002: 0
+          byte0003: 0
+          byte0004: 0
+          byte0005: 0
+          byte0006: 0
+          byte0007: 0
+          byte0008: 0
+          byte0009: 0
+          byte0010: 0
+          byte0011: 0
+          byte0012: 0
+          byte0013: 0
+          byte0014: 0
+          byte0015: 0
+        offset0032:
+          byte0000: 0
+          byte0001: 0
+          byte0002: 0
+          byte0003: 0
+          byte0004: 0
+          byte0005: 0
+          byte0006: 0
+          byte0007: 0
+          byte0008: 0
+          byte0009: 0
+          byte0010: 0
+          byte0011: 0
+          byte0012: 0
+          byte0013: 0
+          byte0014: 0
+          byte0015: 0
+        byte0048: 0
+        byte0049: 0
+        byte0050: 0
+        byte0051: 0
+        byte0052: 0
+        byte0053: 0
+        byte0054: 0
+        byte0055: 0
+        byte0056: 0
+        byte0057: 0
+        byte0058: 0
+        byte0059: 0
+        byte0060: 0
+        byte0061: 0
+  PlacedByCharacterId:
+    UpdateTraits:
+      MinSecondsBetweenUpdates: 0
+      MaxSecondsBetweenUpdates: 0
+    m_InternalValue:
+      utf8LengthInBytes: 0
+      bytes:
+        offset0000:
+          byte0000: 0
+          byte0001: 0
+          byte0002: 0
+          byte0003: 0
+          byte0004: 0
+          byte0005: 0
+          byte0006: 0
+          byte0007: 0
+          byte0008: 0
+          byte0009: 0
+          byte0010: 0
+          byte0011: 0
+          byte0012: 0
+          byte0013: 0
+          byte0014: 0
+          byte0015: 0
+        offset0016:
+          byte0000: 0
+          byte0001: 0
+          byte0002: 0
+          byte0003: 0
+          byte0004: 0
+          byte0005: 0
+          byte0006: 0
+          byte0007: 0
+          byte0008: 0
+          byte0009: 0
+          byte0010: 0
+          byte0011: 0
+          byte0012: 0
+          byte0013: 0
+          byte0014: 0
+          byte0015: 0
+        offset0032:
+          byte0000: 0
+          byte0001: 0
+          byte0002: 0
+          byte0003: 0
+          byte0004: 0
+          byte0005: 0
+          byte0006: 0
+          byte0007: 0
+          byte0008: 0
+          byte0009: 0
+          byte0010: 0
+          byte0011: 0
+          byte0012: 0
+          byte0013: 0
+          byte0014: 0
+          byte0015: 0
+        byte0048: 0
+        byte0049: 0
+        byte0050: 0
+        byte0051: 0
+        byte0052: 0
+        byte0053: 0
+        byte0054: 0
+        byte0055: 0
+        byte0056: 0
+        byte0057: 0
+        byte0058: 0
+        byte0059: 0
+        byte0060: 0
+        byte0061: 0
+  _ownerCommunity:
+    communityName: 
+    level: 0
+    leader: {fileID: 0}
+    members: []
+    communityZones: []
+    ownedBuildings: []
+  _storageZone: {fileID: 0}
+  _defaultFurnitureLayout: []
+  _pickupZone: {fileID: 0}
+  _toolStorageFurniture: {fileID: 0}
+  _helpWantedFurniture: {fileID: 0}
+  _managementFurniture: {fileID: 0}
+  _initialHiringOpen: 1
+  _wantedResources: []
+  _harvesterCount: 2
+  _harvesterJobTitle: Harvester
+  _harvesterJobType: 0
+  _depositZone: {fileID: 0}
+  _harvestingAreaZone: {fileID: 0}
+  _cropsToGrow: []
+  _farmerCount: 2
+  _farmerJobTitle: Farmer
+  _farmingAreaZones: []
+  _seedMaxStock: 20
+  _wateringCanItem: {fileID: 0}
+  _wateringCanMaxStock: 2
+--- !u!65 &2066495025740352961 stripped
+BoxCollider:
+  m_CorrespondingSourceObject: {fileID: 6121509161196564493, guid: 0266b0096947362429f7d224956a5096, type: 3}
+  m_PrefabInstance: {fileID: 5214695994321944012}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &6613764600967206255 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 1411488971883686051, guid: 0266b0096947362429f7d224956a5096, type: 3}
+  m_PrefabInstance: {fileID: 5214695994321944012}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 29e2732b7a37ee045becc3206b7e6a75, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TimeClockFurniture

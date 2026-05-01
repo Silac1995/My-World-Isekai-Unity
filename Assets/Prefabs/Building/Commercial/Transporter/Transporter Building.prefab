@@ -1194,6 +1194,14 @@ PrefabInstance:
       propertyPath: m_LocalPosition.z
       value: -36
       objectReference: {fileID: 0}
+    - target: {fileID: 2871169940895605722, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: -8
+      objectReference: {fileID: 0}
+    - target: {fileID: 2871169940895605722, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: -20
+      objectReference: {fileID: 0}
     - target: {fileID: 3164724048811914063, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: m_AnchorMax.y
       value: 0
@@ -1662,7 +1670,12 @@ MonoBehaviour:
     communityZones: []
     ownedBuildings: []
   _storageZone: {fileID: 8762718603653025141}
+  _defaultFurnitureLayout: []
   _pickupZone: {fileID: 0}
+  _toolStorageFurniture: {fileID: 0}
+  _helpWantedFurniture: {fileID: 0}
+  _managementFurniture: {fileID: 7897310832908054983}
+  _initialHiringOpen: 1
   _transporterCount: 3
 --- !u!114 &1717850346848683089
 MonoBehaviour:
@@ -1695,6 +1708,17 @@ BoxCollider:
   m_CorrespondingSourceObject: {fileID: 6121509161196564493, guid: 0266b0096947362429f7d224956a5096, type: 3}
   m_PrefabInstance: {fileID: 4510849049106981793}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &7897310832908054983 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 5981100348314096230, guid: 0266b0096947362429f7d224956a5096, type: 3}
+  m_PrefabInstance: {fileID: 4510849049106981793}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ed641fdf26c13544c81ec94f81667318, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ManagementFurniture
 --- !u!114 &8609267739284458903 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 5324242304186838582, guid: 0266b0096947362429f7d224956a5096, type: 3}

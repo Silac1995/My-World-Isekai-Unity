@@ -89,6 +89,68 @@ MonoBehaviour:
   zoneName: Storage Zone
   _boundsTarget: {fileID: 0}
   _boundsTargets: []
+--- !u!1001 &1619458369279059825
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 8729890495040055940}
+    m_Modifications:
+    - target: {fileID: 3576149573996233899, guid: eacc444ee8489dd4bb33d1fb2ef638e8, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3576149573996233899, guid: eacc444ee8489dd4bb33d1fb2ef638e8, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3576149573996233899, guid: eacc444ee8489dd4bb33d1fb2ef638e8, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3576149573996233899, guid: eacc444ee8489dd4bb33d1fb2ef638e8, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 3576149573996233899, guid: eacc444ee8489dd4bb33d1fb2ef638e8, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3576149573996233899, guid: eacc444ee8489dd4bb33d1fb2ef638e8, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3576149573996233899, guid: eacc444ee8489dd4bb33d1fb2ef638e8, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3576149573996233899, guid: eacc444ee8489dd4bb33d1fb2ef638e8, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3576149573996233899, guid: eacc444ee8489dd4bb33d1fb2ef638e8, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3576149573996233899, guid: eacc444ee8489dd4bb33d1fb2ef638e8, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7516257467090999525, guid: eacc444ee8489dd4bb33d1fb2ef638e8, type: 3}
+      propertyPath: m_Name
+      value: Commercial Console
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: eacc444ee8489dd4bb33d1fb2ef638e8, type: 3}
+--- !u!4 &2871169940895605722 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 3576149573996233899, guid: eacc444ee8489dd4bb33d1fb2ef638e8, type: 3}
+  m_PrefabInstance: {fileID: 1619458369279059825}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1001 &2556902707163336854
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -461,6 +523,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 990144019250249914, guid: 3912e32b2a079d942b67533a34636010, type: 3}
       insertIndex: -1
       addedObject: {fileID: 5480565783836491993}
+    - targetCorrespondingSourceObject: {fileID: 990144019250249914, guid: 3912e32b2a079d942b67533a34636010, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 2871169940895605722}
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 3912e32b2a079d942b67533a34636010, type: 3}
 --- !u!4 &8729890495040055940 stripped

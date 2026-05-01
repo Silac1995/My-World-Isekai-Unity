@@ -762,6 +762,10 @@ PrefabInstance:
       propertyPath: m_LocalPosition.z
       value: -24
       objectReference: {fileID: 0}
+    - target: {fileID: 2871169940895605722, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: -3
+      objectReference: {fileID: 0}
     - target: {fileID: 3164724048811914063, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: m_AnchorMax.y
       value: 0
@@ -1928,7 +1932,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f8991b0a5a5d6bd4fa27c3f81306cf5c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FurnitureManager
-  _furnitures: []
+  _furnitures:
+  - {fileID: 8023935534103100732}
+  - {fileID: 3444409792592955385}
 --- !u!114 &7001359032268188454
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2132,6 +2138,10 @@ MonoBehaviour:
     LocalEulerAngles: {x: 0, y: 0, z: 0}
     TargetRoom: {fileID: 4782189456039868823}
   _pickupZone: {fileID: 0}
+  _toolStorageFurniture: {fileID: 0}
+  _helpWantedFurniture: {fileID: 0}
+  _managementFurniture: {fileID: 3444409792592955385}
+  _initialHiringOpen: 1
   _wantedResources:
   - targetItem: {fileID: 11400000, guid: a3f0471c4178efd4b9b5efdb38aea516, type: 2}
     maxQuantity: 10
@@ -2171,6 +2181,17 @@ BoxCollider:
   m_CorrespondingSourceObject: {fileID: 6121509161196564493, guid: 0266b0096947362429f7d224956a5096, type: 3}
   m_PrefabInstance: {fileID: 8992601480692979103}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &3444409792592955385 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 5981100348314096230, guid: 0266b0096947362429f7d224956a5096, type: 3}
+  m_PrefabInstance: {fileID: 8992601480692979103}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ed641fdf26c13544c81ec94f81667318, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ManagementFurniture
 --- !u!114 &3832459157725952937 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 5324242304186838582, guid: 0266b0096947362429f7d224956a5096, type: 3}
@@ -2193,3 +2214,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 556ce41a973a5704fbfc8c807ad8ecd2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Zone
+--- !u!114 &8023935534103100732 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 1411488971883686051, guid: 0266b0096947362429f7d224956a5096, type: 3}
+  m_PrefabInstance: {fileID: 8992601480692979103}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 29e2732b7a37ee045becc3206b7e6a75, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TimeClockFurniture

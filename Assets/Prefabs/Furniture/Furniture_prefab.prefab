@@ -54,7 +54,7 @@ MonoBehaviour:
   _rootgameObject: {fileID: 0}
   _rigidbody: {fileID: 3535583793416524095}
   _furniture: {fileID: 0}
-  _toastChannel: {fileID: 0}
+  _toastChannel: {fileID: 11400000, guid: ea961c82479cb974997317e89f3aa9b6, type: 2}
 --- !u!114 &6445648937218201084
 MonoBehaviour:
   m_ObjectHideFlags: 0
