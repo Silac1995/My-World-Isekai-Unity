@@ -1772,6 +1772,17 @@ public abstract class CommercialBuilding : Building
     }
 
     /// <summary>
+    /// Invalidate the StorageFurniture cache after the default furniture layout spawns,
+    /// so logistics/supplier queries pick up freshly-spawned chests within the 2 s TTL window.
+    /// See wiki/projects/optimisation-backlog.md entry #2 for the cache rationale.
+    /// </summary>
+    protected override void OnDefaultFurnitureSpawned()
+    {
+        base.OnDefaultFurnitureSpawned();
+        InvalidateStorageFurnitureCache();
+    }
+
+    /// <summary>
     /// Walks every <see cref="StorageFurniture"/> in this building (across all sub-rooms)
     /// and returns the first one that is unlocked and has a free slot compatible with
     /// <paramref name="item"/>. Used by the logistics cycle to prefer slot-based storage

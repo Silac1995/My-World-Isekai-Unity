@@ -54,6 +54,17 @@ public abstract class CraftingBuilding : CommercialBuilding, IStockProvider
         _craftableCacheValidUntil = -1f;
     }
 
+    /// <summary>
+    /// Chains <see cref="CommercialBuilding.OnDefaultFurnitureSpawned"/> (storage cache)
+    /// and adds the craftable cache invalidation so newly-spawned CraftingStations are
+    /// visible to FindSupplierFor / GetCraftableItems on the next access.
+    /// </summary>
+    protected override void OnDefaultFurnitureSpawned()
+    {
+        base.OnDefaultFurnitureSpawned();
+        InvalidateCraftableCache();
+    }
+
     private void RebuildCraftableCacheIfStale()
     {
         if (Time.time < _craftableCacheValidUntil) return;

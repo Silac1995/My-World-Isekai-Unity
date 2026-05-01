@@ -582,6 +582,17 @@ public class Building : ComplexRoom
     // =========================================================================
 
     /// <summary>
+    /// Subclass extension point fired after <see cref="TrySpawnDefaultFurniture"/> finishes a
+    /// fresh-world spawn pass. Default no-op. Override to invalidate any subclass-owned cache
+    /// that depends on the just-spawned furniture (storage furniture cache on
+    /// <see cref="CommercialBuilding"/>, craftable cache on <c>CraftingBuilding</c>, etc.).
+    ///
+    /// Always chain via <c>base.OnDefaultFurnitureSpawned()</c> in overrides so the parent
+    /// class's invalidations still run.
+    /// </summary>
+    protected virtual void OnDefaultFurnitureSpawned() { }
+
+    /// <summary>
     /// Server-only. Instantiates and Spawn()s entries in <see cref="_defaultFurnitureLayout"/>
     /// that don't already have a matching Furniture child on this building. The per-slot match
     /// (by FurnitureItemSO) replaces the earlier "any Furniture child present → skip all" guard,
@@ -635,19 +646,9 @@ public class Building : ComplexRoom
             }
         }
 
-        // Tier 2 cache invalidation: the just-spawned default furniture is now logically
-        // owned by this building. Force the StorageFurniture / Craftable caches to refresh
-        // on next access so suppliers can see new CraftingStations and storage drops can
-        // see new chests within the 2 s TTL window — without waiting for it to expire.
-        // See wiki/projects/optimisation-backlog.md entry #2 / D + A.
-        // TODO(Task 2): SOLID rule #14 violation — Building must not reference CraftingBuilding.
-        // Replace with virtual OnDefaultFurnitureSpawned() hook so subclasses invalidate their
-        // own caches without the downward cast.
-        (this as CommercialBuilding)?.InvalidateStorageFurnitureCache();
-        if (this is CraftingBuilding crafting)
-        {
-            crafting.InvalidateCraftableCache();
-        }
+        // Subclass cache invalidation hook. Default no-op; overridden by CommercialBuilding
+        // (storage furniture cache) and CraftingBuilding (+ craftable cache).
+        OnDefaultFurnitureSpawned();
     }
 
     /// <summary>
