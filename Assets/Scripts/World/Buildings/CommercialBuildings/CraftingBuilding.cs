@@ -149,7 +149,7 @@ public abstract class CraftingBuilding : CommercialBuilding, IStockProvider
     ///
     /// Robust to room-registration races: the canonical path walks <see cref="Building.Rooms"/>
     /// and queries each room's <c>FurnitureManager._furnitures</c> list. If that turns up empty
-    /// (which can happen when the recent <c>_defaultFurnitureLayout</c>/<see cref="CommercialBuilding.SpawnDefaultFurnitureSlot"/>
+    /// (which can happen when the recent <c>_defaultFurnitureLayout</c>/<see cref="Building.SpawnDefaultFurnitureSlot"/>
     /// flow spawns a CraftingStation but its <c>RegisterSpawnedFurnitureUnchecked</c> didn't land
     /// — slot.TargetRoom unset, FurnitureGrid null on the target room, OnNetworkSpawn race, etc.)
     /// we fall back to a transform-tree scan so the building's logical capability still reflects

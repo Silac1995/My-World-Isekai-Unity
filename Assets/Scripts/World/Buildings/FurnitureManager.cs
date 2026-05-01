@@ -152,7 +152,7 @@ public class FurnitureManager : MonoBehaviour
     /// <summary>
     /// Server-authored variant of <see cref="RegisterSpawnedFurniture"/> that bypasses the
     /// <c>CanPlaceFurniture</c> validation. Validation exists to gate runtime user input
-    /// (player placement); for furniture authored at design time — like <c>CommercialBuilding._defaultFurnitureLayout</c> —
+    /// (player placement); for furniture authored at design time — like <c>Building._defaultFurnitureLayout</c> —
     /// the level designer is the source of truth and the cell at the chosen position is trusted
     /// even if it lies on a wall-marked cell, partially out of bounds, or in any configuration the
     /// validator would otherwise reject. The grid still records the occupancy so subsequent
@@ -216,7 +216,7 @@ public class FurnitureManager : MonoBehaviour
     /// IMPORTANT: this method is **additive**, not replace-style. Earlier revisions did
     /// <c>_furnitures = new List&lt;Furniture&gt;(GetComponentsInChildren&lt;Furniture&gt;(true))</c>
     /// — which silently destroyed registrations made via <see cref="RegisterSpawnedFurnitureUnchecked"/>.
-    /// That path is the canonical channel for <c>CommercialBuilding._defaultFurnitureLayout</c>:
+    /// That path is the canonical channel for <c>Building._defaultFurnitureLayout</c>:
     /// the spawned furniture is parented under the **building root** (NGO requires a NetworkObject
     /// ancestor; the room sits on a non-NO GameObject so reparenting under it throws
     /// <c>InvalidParentException</c>). Logical room ownership lives in this <c>_furnitures</c>
