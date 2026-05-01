@@ -232,6 +232,12 @@ public class Building : ComplexRoom
             }
         }
 
+        // Strip nested-NetworkObject Furniture children → _defaultFurnitureLayout entries.
+        // Runs on every peer (server + clients); each peer destroys its own copy of the
+        // children so NGO never half-spawns them. See spec
+        // docs/superpowers/specs/2026-05-01-building-default-furniture-auto-conversion-design.md
+        ConvertNestedNetworkFurnitureToLayout();
+
         // Initialize state based on requirements (only on server)
         if (IsServer)
         {
