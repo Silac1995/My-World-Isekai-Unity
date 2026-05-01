@@ -94,13 +94,13 @@ public class GoapAction_ReturnToolToStorage : GoapAction
         // different return route (e.g. drop-on-ground fallback if/when one is added).
         if (_building.ToolStorage.IsFull) return false;
 
-        // Worker must hold the matching tool stamped with THIS building's id.
-        var hands = worker.CharacterVisual?.BodyPartsController?.HandsController;
-        if (hands == null || !hands.IsCarrying) return false;
-        var carried = hands.CarriedItem;
-        if (carried == null) return false;
-        if (carried.ItemSO != _toolItem) return false;
-        if (carried.OwnerBuildingId != _building.BuildingId) return false;
+        // Do NOT require tool-in-hand here. That state is a *precondition*
+        // (hasToolInHand_{toolKey}=true + taskCompleteForTool_{toolKey}=true) the planner
+        // uses to chain FetchTool → UseTool → ReturnTool. Pre-filtering by hand contents
+        // would knock ReturnTool out of _scratchValidActions at plan time (when hands are
+        // empty), so the planner could never build the FetchTool→WaterCrop→ReturnTool
+        // chain. Same anti-pattern fixed in GoapAction_PlantCrop + GoapAction_WaterCrop.
+        if (worker.CharacterVisual?.BodyPartsController?.HandsController == null) return false;
 
         return true;
     }

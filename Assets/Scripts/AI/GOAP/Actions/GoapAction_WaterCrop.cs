@@ -75,9 +75,14 @@ public class GoapAction_WaterCrop : GoapAction
         if (_building.WateringCanItem == null) return false;
         if (_building.TaskManager == null) return false;
 
-        var hands = worker.CharacterVisual?.BodyPartsController?.HandsController;
-        if (hands == null || !hands.IsCarrying || hands.CarriedItem == null) return false;
-        if (hands.CarriedItem.ItemSO != _building.WateringCanItem) return false;
+        // Do NOT require can-in-hand here. That state is a *precondition*
+        // (hasToolInHand_{canKey}=true) the planner uses to chain
+        // FetchToolFromStorage(WateringCan) → WaterCrop. Pre-filtering by hand-state
+        // would knock WaterCrop out of _scratchValidActions at plan time (when hands
+        // are empty), so the planner could never build the chain. Same anti-pattern
+        // fixed in GoapAction_PlantCrop.
+
+        if (worker.CharacterVisual?.BodyPartsController?.HandsController == null) return false;
 
         var available = _building.TaskManager.AvailableTasks;
         for (int i = 0; i < available.Count; i++)

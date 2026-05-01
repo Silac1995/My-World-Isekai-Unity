@@ -68,22 +68,34 @@ public class GoapAction_PlantCrop : GoapAction
         if (worker == null || _building == null) return false;
         if (_building.TaskManager == null) return false;
 
-        var hands = worker.CharacterVisual?.BodyPartsController?.HandsController;
-        if (hands == null || !hands.IsCarrying || hands.CarriedItem == null) return false;
-        if (!(hands.CarriedItem.ItemSO is SeedSO heldSeed) || heldSeed.CropToPlant == null) return false;
+        // Do NOT require seed-in-hand here. That state is a *precondition* used by the
+        // planner to chain FetchSeed → PlantCrop. JobFarmer pre-filters _availableActions
+        // by IsValid before calling GoapPlanner.Plan; if PlantCrop fails IsValid because
+        // the worker isn't yet carrying a seed (which is true at the START of every plan
+        // tick before FetchSeed has run), the planner never sees PlantCrop as a candidate
+        // and the FetchSeed→PlantCrop chain cannot be built. Result: no plan for the
+        // PlantEmptyCells goal → JobFarmer falls through to Idle even when seeds + tasks
+        // both exist. Same anti-pattern caught at GoapAction_FetchToolFromStorage which
+        // (correctly) only requires hands-free, not tool-in-hand.
+        //
+        // Just check that at least one actionable PlantCropTask exists (any crop).
+        // Crop-matching against the held seed is the *Execute*-time concern, not the
+        // plan-time validity gate — the runtime ClaimBestTask predicate already filters
+        // by held seed there.
 
-        // At least one available PlantCropTask whose crop matches the seed in hand
-        // (or one already claimed by this worker, e.g. via the IQuest auto-claim path).
+        if (worker.CharacterVisual?.BodyPartsController?.HandsController == null) return false;
+
         var available = _building.TaskManager.AvailableTasks;
         for (int i = 0; i < available.Count; i++)
         {
-            if (available[i] is PlantCropTask pct && pct.Crop == heldSeed.CropToPlant)
-                return true;
+            if (available[i] is PlantCropTask) return true;
         }
-        // Fall through to FindClaimedTaskByWorker — same pattern as other GOAP actions
-        // that pair with the quest-system auto-claim path on WorkerStartingShift.
-        return _building.TaskManager.FindClaimedTaskByWorker<PlantCropTask>(worker,
-            t => t.Crop == heldSeed.CropToPlant) != null;
+        var inProgress = _building.TaskManager.InProgressTasks;
+        for (int i = 0; i < inProgress.Count; i++)
+        {
+            if (inProgress[i] is PlantCropTask pct && pct.ClaimedByWorkers.Contains(worker)) return true;
+        }
+        return false;
     }
 
     public override void Execute(Character worker)
