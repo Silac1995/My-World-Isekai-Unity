@@ -66,7 +66,7 @@ public class Building : ComplexRoom
              "Skipped on save-restore — restored buildings reuse their persisted furniture state.\n" +
              "Use this for any furniture whose prefab carries a NetworkObject; nesting a network-bearing furniture\n" +
              "PrefabInstance directly inside the building prefab half-spawns the child and NRE's NGO sync.\n" +
-             "As of 2026-05-01: Furniture authored as nested children of the building prefab is auto-captured into this list at runtime by ConvertNestedNetworkFurnitureToLayout(); manual authoring of slots remains supported (and wins over auto-converted entries with the same ItemSO).")]
+             "As of 2026-05-01: Furniture authored as nested children of the building prefab is auto-captured into this list at runtime by ConvertNestedNetworkFurnitureToLayout(); manual authoring of slots is still supported. If both a manual slot AND a nested child target the same ItemSO, the nested child WINS (its pose replaces the manual slot's) and a log is emitted — remove the manual slot to silence it.")]
     [UnityEngine.Serialization.FormerlySerializedAs("_defaultFurnitureLayout")]
     [SerializeField] private List<DefaultFurnitureSlot> _defaultFurnitureLayout = new List<DefaultFurnitureSlot>();
 
@@ -634,8 +634,7 @@ public class Building : ComplexRoom
             if (furniture == null) continue;
             if (furniture.gameObject == gameObject) continue; // defensive: not on building root
 
-            var netObj = furniture.GetComponent<Unity.Netcode.NetworkObject>();
-            if (netObj == null)
+            if (furniture.GetComponent<Unity.Netcode.NetworkObject>() == null)
             {
                 // Plain-MonoBehaviour furniture is legal as a nested child. Leave it.
                 skipped++;
@@ -654,10 +653,12 @@ public class Building : ComplexRoom
             Vector3 localPos = transform.InverseTransformPoint(furniture.transform.position);
             Vector3 localEuler = (Quaternion.Inverse(transform.rotation) * furniture.transform.rotation).eulerAngles;
 
-            // Walk parent chain for the first Room ancestor. Stops at the building root
-            // (this transform) — anything above the building doesn't count as a target room.
+            // Walk parent chain for the first Room ancestor between the furniture and the building
+            // root (exclusive). Building inherits ComplexRoom→Room, so the building root itself has
+            // a Room component — but the spec wants TargetRoom = null when furniture is parented
+            // directly under the root, so we exclude the building root from the search.
             Room targetRoom = null;
-            for (Transform t = furniture.transform.parent; t != null && t != transform.parent; t = t.parent)
+            for (Transform t = furniture.transform.parent; t != null && t != transform; t = t.parent)
             {
                 var room = t.GetComponent<Room>();
                 if (room != null) { targetRoom = room; break; }
@@ -723,8 +724,6 @@ public class Building : ComplexRoom
         {
             if (f != null && f.FurnitureItemSO != null) existingItemSOs.Add(f.FurnitureItemSO);
         }
-
-        Debug.Log($"[Building] {buildingName}: TrySpawnDefaultFurniture — layout count={_defaultFurnitureLayout.Count}, existing Furniture children={existing.Length}.", this);
 
         for (int i = 0; i < _defaultFurnitureLayout.Count; i++)
         {
