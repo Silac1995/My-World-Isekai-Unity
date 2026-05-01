@@ -56,6 +56,9 @@ public class JobFarmer : Job
     private GoapGoal _cachedDepositGoal;
     private GoapGoal _cachedIdleGoal;
 
+    // Throttle for the on-shift-but-Idle diagnostic dump (1 Hz per worker).
+    private float _lastIdleDumpTime = -10f;
+
     public override string CurrentActionName => _currentAction != null ? _currentAction.ActionName : "Planning / Idle";
     public override string CurrentGoalName => _currentGoal != null ? _currentGoal.GoalName : "No Goal";
 
@@ -208,6 +211,26 @@ public class JobFarmer : Job
         else if (hasUnfilledWaterTask && (hasCanInHand || hasWateringCanAvailable)) targetGoal = _cachedWaterGoal;
         else if (hasUnfilledPlantTask && (hasSeedInHand || hasMatchingSeedInStorage)) targetGoal = _cachedPlantGoal;
         else targetGoal = _cachedIdleGoal;
+
+        // Diagnostic: when a Farmer who is on shift falls through to Idle, dump the worldState
+        // so we can see WHY (which precondition is false). Throttled to once per second per
+        // worker to avoid log spam at the BT tick rate.
+        if (targetGoal == _cachedIdleGoal && _workplace != null && _workplace.IsWorkerOnShift(_worker))
+        {
+            float now = UnityEngine.Time.unscaledTime;
+            if (now - _lastIdleDumpTime > 1f)
+            {
+                _lastIdleDumpTime = now;
+                Debug.Log(
+                    $"<color=orange>[JobFarmer]</color> {_worker.CharacterName} planning Idle at {farm.BuildingName}. worldState: " +
+                    $"hasUnfilledHarvestTask={hasUnfilledHarvestTask}, hasUnfilledWaterTask={hasUnfilledWaterTask}, hasUnfilledPlantTask={hasUnfilledPlantTask}, " +
+                    $"hasSeedInHand={hasSeedInHand}, hasMatchingSeedInStorage={hasMatchingSeedInStorage}, " +
+                    $"hasCanInHand={hasCanInHand}, hasWateringCanAvailable={hasWateringCanAvailable}, " +
+                    $"hasResourcesToDeposit={hasResourcesToDeposit}. " +
+                    $"If hasUnfilledPlantTask is false, PlantScan registered no tasks (check FarmingBuilding logs). " +
+                    $"If hasMatchingSeedInStorage is false, no seed for any unclaimed plant task is in any chest.");
+            }
+        }
 
         _currentGoal = targetGoal;
 

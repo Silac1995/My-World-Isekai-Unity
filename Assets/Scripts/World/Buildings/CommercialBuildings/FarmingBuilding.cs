@@ -210,9 +210,28 @@ public class FarmingBuilding : HarvestingBuilding, IStockProvider
     {
         if (Unity.Netcode.NetworkManager.Singleton == null) return;
         if (!Unity.Netcode.NetworkManager.Singleton.IsServer) return;
-        if (TaskManager == null) return;
-        if (_farmingAreaZones == null || _farmingAreaZones.Count == 0) return;
-        if (_cropsToGrow == null || _cropsToGrow.Count == 0) return;
+        if (TaskManager == null)
+        {
+            Debug.LogWarning($"<color=orange>[FarmingBuilding]</color> {buildingName} PlantScan: TaskManager is null — skipping.");
+            return;
+        }
+        if (_farmingAreaZones == null || _farmingAreaZones.Count == 0)
+        {
+            Debug.LogWarning($"<color=orange>[FarmingBuilding]</color> {buildingName} PlantScan: _farmingAreaZones is empty — no plant tasks will register. Authoring fix: assign at least one Zone to the FarmingBuilding's 'Farming Areas (multi-zone)' list.");
+            return;
+        }
+        if (_cropsToGrow == null || _cropsToGrow.Count == 0)
+        {
+            Debug.LogWarning($"<color=orange>[FarmingBuilding]</color> {buildingName} PlantScan: _cropsToGrow is empty — no plant tasks will register.");
+            return;
+        }
+
+        int registered = 0;
+        int alreadyPlanted = 0;
+        int noCropSelected = 0;
+        int noSeed = 0;
+        int alreadyTasked = 0;
+        int totalCellsScanned = 0;
 
         for (int zi = 0; zi < _farmingAreaZones.Count; zi++)
         {
@@ -222,18 +241,24 @@ public class FarmingBuilding : HarvestingBuilding, IStockProvider
             EnumerateCellsInZone(zone, (map, grid, cellX, cellZ) =>
             {
                 if (grid == null) return;
+                totalCellsScanned++;
                 ref var cell = ref grid.GetCellRef(cellX, cellZ);
-                if (!string.IsNullOrEmpty(cell.PlantedCropId)) return;   // already planted
+                if (!string.IsNullOrEmpty(cell.PlantedCropId)) { alreadyPlanted++; return; }
 
                 var crop = SelectCropForCell();
-                if (crop == null) return;
-                if (!HasSeedInInventory(crop)) return;
+                if (crop == null) { noCropSelected++; return; }
+                if (!HasSeedInInventory(crop)) { noSeed++; return; }
 
-                if (HasExistingPlantTaskForCell(cellX, cellZ)) return;
+                if (HasExistingPlantTaskForCell(cellX, cellZ)) { alreadyTasked++; return; }
 
                 TaskManager.RegisterTask(new PlantCropTask(cellX, cellZ, crop, this));
+                registered++;
             });
         }
+
+        Debug.Log(
+            $"<color=cyan>[FarmingBuilding]</color> {buildingName} PlantScan: zones={_farmingAreaZones.Count}, cells scanned={totalCellsScanned}, " +
+            $"registered={registered} (alreadyPlanted={alreadyPlanted}, noCropSelected={noCropSelected}, noSeed={noSeed}, alreadyTasked={alreadyTasked}).");
     }
 
     /// <summary>
@@ -441,13 +466,25 @@ public class FarmingBuilding : HarvestingBuilding, IStockProvider
         if (zone == null || callback == null) return;
 
         var box = zone.GetComponent<BoxCollider>();
-        if (box == null) return;
+        if (box == null)
+        {
+            Debug.LogWarning($"<color=orange>[FarmingBuilding]</color> {buildingName} EnumerateCellsInZone: zone '{zone.name}' has no BoxCollider — cannot enumerate cells.");
+            return;
+        }
 
         var map = MapController.GetMapAtPosition(transform.position);
-        if (map == null) return;
+        if (map == null)
+        {
+            Debug.LogWarning($"<color=orange>[FarmingBuilding]</color> {buildingName} EnumerateCellsInZone: MapController.GetMapAtPosition({transform.position}) returned null — building isn't inside any registered map. PlantScan/WaterScan will register no tasks.");
+            return;
+        }
 
         var grid = map.GetComponent<TerrainCellGrid>();
-        if (grid == null || grid.Width == 0) return;
+        if (grid == null || grid.Width == 0)
+        {
+            Debug.LogWarning($"<color=orange>[FarmingBuilding]</color> {buildingName} EnumerateCellsInZone: map '{map.name}' has no TerrainCellGrid (or grid.Width=0) — no cells available.");
+            return;
+        }
 
         Vector3 worldCenter = box.transform.TransformPoint(box.center);
         Vector3 worldHalf = Vector3.Scale(box.size, box.transform.lossyScale) * 0.5f;
@@ -474,7 +511,11 @@ public class FarmingBuilding : HarvestingBuilding, IStockProvider
         if (maxX >= grid.Width) maxX = grid.Width - 1;
         if (maxZ >= grid.Depth) maxZ = grid.Depth - 1;
 
-        if (minX > maxX || minZ > maxZ) return; // zone fully outside grid
+        if (minX > maxX || minZ > maxZ)
+        {
+            Debug.LogWarning($"<color=orange>[FarmingBuilding]</color> {buildingName} EnumerateCellsInZone: zone '{zone.name}' bounds fall fully OUTSIDE map '{map.name}' grid ({grid.Width}x{grid.Depth}). Worldmin={worldMin}, worldMax={worldMax}, gridOrigin0={origin0}, cellSize={grid.CellSize}. Reposition the zone over the building's terrain.");
+            return; // zone fully outside grid
+        }
 
         for (int z = minZ; z <= maxZ; z++)
         for (int x = minX; x <= maxX; x++)
