@@ -302,6 +302,25 @@ public class FarmingBuilding : HarvestingBuilding, IStockProvider
         if (TaskManager == null) return;
         if (_farmingAreaZones == null || _farmingAreaZones.Count == 0) return;
 
+        int totalCellsScanned = 0;
+        int notPlanted = 0;
+        int cropMissing = 0;
+        int alreadyMature = 0;
+        int recentlyWatered = 0;
+        int wetEnough = 0;
+        int alreadyTasked = 0;
+        int registered = 0;
+        // Capture the moisture / growth stats of the LAST "would-need-water-but-skipped" cell so
+        // the user can see why the gates are firing. Particularly important for the "wetEnough"
+        // and "recentlyWatered" cases — those depend on numeric thresholds that the user can
+        // tune via the CropSO inspector.
+        float sampleMoisture = -1f;
+        float sampleTimeSinceWater = -1f;
+        float sampleGrowthTimer = -1f;
+        string sampleCropId = null;
+        float sampleMinMoisture = -1f;
+        int sampleDaysToMature = -1;
+
         for (int zi = 0; zi < _farmingAreaZones.Count; zi++)
         {
             var zone = _farmingAreaZones[zi];
@@ -310,20 +329,38 @@ public class FarmingBuilding : HarvestingBuilding, IStockProvider
             EnumerateCellsInZone(zone, (map, grid, cellX, cellZ) =>
             {
                 if (grid == null) return;
+                totalCellsScanned++;
                 ref var cell = ref grid.GetCellRef(cellX, cellZ);
-                if (string.IsNullOrEmpty(cell.PlantedCropId)) return;   // not planted
+                if (string.IsNullOrEmpty(cell.PlantedCropId)) { notPlanted++; return; }
 
                 var crop = MWI.Farming.CropRegistry.Get(cell.PlantedCropId);
-                if (crop == null) return;
-                if (cell.GrowthTimer >= crop.DaysToMature) return;       // mature
-                if (cell.TimeSinceLastWatered < 1f) return;              // freshly watered / rain
-                if (cell.Moisture >= crop.MinMoistureForGrowth) return;  // wet enough
+                if (crop == null) { cropMissing++; return; }
 
-                if (HasExistingWaterTaskForCell(cellX, cellZ)) return;
+                // Snapshot one planted cell's stats for the summary log (most recent wins).
+                sampleMoisture = cell.Moisture;
+                sampleTimeSinceWater = cell.TimeSinceLastWatered;
+                sampleGrowthTimer = cell.GrowthTimer;
+                sampleCropId = cell.PlantedCropId;
+                sampleMinMoisture = crop.MinMoistureForGrowth;
+                sampleDaysToMature = crop.DaysToMature;
+
+                if (cell.GrowthTimer >= crop.DaysToMature) { alreadyMature++; return; }
+                if (cell.TimeSinceLastWatered < 1f) { recentlyWatered++; return; }
+                if (cell.Moisture >= crop.MinMoistureForGrowth) { wetEnough++; return; }
+
+                if (HasExistingWaterTaskForCell(cellX, cellZ)) { alreadyTasked++; return; }
 
                 TaskManager.RegisterTask(new WaterCropTask(cellX, cellZ, this));
+                registered++;
             });
         }
+
+        Debug.Log(
+            $"<color=cyan>[FarmingBuilding]</color> {buildingName} WaterScan: zones={_farmingAreaZones.Count}, cells scanned={totalCellsScanned}, " +
+            $"registered={registered} (notPlanted={notPlanted}, cropMissing={cropMissing}, alreadyMature={alreadyMature}, " +
+            $"recentlyWatered={recentlyWatered}, wetEnough={wetEnough}, alreadyTasked={alreadyTasked}). " +
+            $"Sample cell ({sampleCropId ?? "—"}): Moisture={sampleMoisture:F2} (need <{sampleMinMoisture:F2}), " +
+            $"TimeSinceLastWatered={sampleTimeSinceWater:F2} (need ≥1.0), GrowthTimer={sampleGrowthTimer:F2}/{sampleDaysToMature}.");
     }
 
     /// <summary>
