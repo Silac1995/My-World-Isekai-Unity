@@ -593,6 +593,111 @@ public class Building : ComplexRoom
     protected virtual void OnDefaultFurnitureSpawned() { }
 
     /// <summary>
+    /// Edit-time, the level designer authors furniture as nested children of this prefab
+    /// (visible, easy to position). At runtime — BEFORE NGO half-spawns the nested
+    /// NetworkObjects and corrupts <c>SpawnManager.SpawnedObjectsList</c> — this method:
+    ///
+    ///   1. Captures each network-bearing Furniture child's <see cref="FurnitureItemSO"/>
+    ///      + local pose + nearest <c>Room</c> ancestor into a runtime-only
+    ///      <see cref="DefaultFurnitureSlot"/> appended to <c>_defaultFurnitureLayout</c>.
+    ///   2. <see cref="UnityEngine.Object.Destroy(UnityEngine.Object)"/>'s the child
+    ///      GameObject so NGO never sees it as a nested NetworkObject.
+    ///
+    /// <see cref="TrySpawnDefaultFurniture"/> (server-only, in <see cref="OnNetworkSpawn"/>)
+    /// then re-spawns each appended entry as a top-level NetworkObject parented under the
+    /// building. End result: same visual layout as authored, no half-spawned NOs, clients
+    /// stay in sync.
+    ///
+    /// Runs on every peer (server + clients) because every peer's <c>Instantiate</c> of
+    /// this prefab brings the nested children along; without local destruction, clients
+    /// would keep broken half-registered NetworkObject children in their scene.
+    ///
+    /// Furniture children WITHOUT a NetworkObject (e.g. a plain-MonoBehaviour TimeClock
+    /// stripped of its NO) are LEFT IN PLACE — they're legal as nested non-network children,
+    /// and <see cref="TrySpawnDefaultFurniture"/>'s per-slot ItemSO dedup already handles them.
+    ///
+    /// All <c>_defaultFurnitureLayout</c> mutations are in-memory only on the live instance.
+    /// The <c>!Application.isPlaying</c> guard prevents any edit-mode invocation, so Unity's
+    /// serialization system never sees the runtime mutation — the prefab asset stays clean.
+    /// </summary>
+    private void ConvertNestedNetworkFurnitureToLayout()
+    {
+        if (!Application.isPlaying) return;
+
+        Furniture[] children = GetComponentsInChildren<Furniture>(includeInactive: true);
+        if (children == null || children.Length == 0) return;
+
+        int converted = 0;
+        int skipped = 0;
+        foreach (var furniture in children)
+        {
+            if (furniture == null) continue;
+            if (furniture.gameObject == gameObject) continue; // defensive: not on building root
+
+            var netObj = furniture.GetComponent<Unity.Netcode.NetworkObject>();
+            if (netObj == null)
+            {
+                // Plain-MonoBehaviour furniture is legal as a nested child. Leave it.
+                skipped++;
+                continue;
+            }
+
+            if (furniture.FurnitureItemSO == null)
+            {
+                Debug.LogWarning(
+                    $"<color=orange>[Building]</color> {buildingName}: nested furniture '{furniture.name}' has a NetworkObject but no FurnitureItemSO — destroying without conversion (would have half-spawned anyway).",
+                    this);
+                Destroy(furniture.gameObject);
+                continue;
+            }
+
+            Vector3 localPos = transform.InverseTransformPoint(furniture.transform.position);
+            Vector3 localEuler = (Quaternion.Inverse(transform.rotation) * furniture.transform.rotation).eulerAngles;
+
+            // Walk parent chain for the first Room ancestor. Stops at the building root
+            // (this transform) — anything above the building doesn't count as a target room.
+            Room targetRoom = null;
+            for (Transform t = furniture.transform.parent; t != null && t != transform.parent; t = t.parent)
+            {
+                var room = t.GetComponent<Room>();
+                if (room != null) { targetRoom = room; break; }
+            }
+
+            var slot = new DefaultFurnitureSlot
+            {
+                ItemSO = furniture.FurnitureItemSO,
+                LocalPosition = localPos,
+                LocalEulerAngles = localEuler,
+                TargetRoom = targetRoom,
+            };
+
+            // Dedup against existing serialized slots. Converted child wins.
+            int existingIndex = _defaultFurnitureLayout.FindIndex(s => s != null && s.ItemSO == slot.ItemSO);
+            if (existingIndex >= 0)
+            {
+                Debug.Log(
+                    $"<color=cyan>[Building]</color> {buildingName}: nested child '{furniture.name}' overrides existing manual _defaultFurnitureLayout entry [{existingIndex}] for ItemSO '{slot.ItemSO.name}'. Remove the manual slot to silence this log.",
+                    this);
+                _defaultFurnitureLayout[existingIndex] = slot;
+            }
+            else
+            {
+                _defaultFurnitureLayout.Add(slot);
+            }
+
+            Destroy(furniture.gameObject);
+            converted++;
+        }
+
+        if (converted > 0)
+        {
+            Debug.Log(
+                $"<color=cyan>[Building]</color> {buildingName}: converted {converted} nested NetworkObject furniture child(ren) to _defaultFurnitureLayout (skipped {skipped} non-network furniture).",
+                this);
+        }
+    }
+
+    /// <summary>
     /// Server-only. Instantiates and Spawn()s entries in <see cref="_defaultFurnitureLayout"/>
     /// that don't already have a matching Furniture child on this building. The per-slot match
     /// (by FurnitureItemSO) replaces the earlier "any Furniture child present → skip all" guard,
