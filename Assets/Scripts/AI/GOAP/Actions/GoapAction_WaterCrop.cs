@@ -63,9 +63,18 @@ public class GoapAction_WaterCrop : GoapAction
             { "hasUnfilledWaterTask", true }
         };
 
+        // taskCompleteForTool_{canKey}=true is REQUIRED so the planner can chain
+        // FetchTool → WaterCrop → ReturnTool. ReturnTool's preconditions are
+        // (hasToolInHand_{canKey}, taskCompleteForTool_{canKey}); without this effect
+        // the planner walks the worldState forward (FetchTool sets hasToolInHand=true,
+        // WaterCrop sets hasWateredCell=true) and then can't satisfy ReturnTool's second
+        // precondition — plan fails, _currentPlan stays null, JobFarmer falls back to
+        // Idle even though the goal is achievable in principle. Symptom seen by user:
+        // can in tool storage, 2 WaterCropTasks claimed, farmer just doesn't move.
         _effects = new Dictionary<string, bool>
         {
-            { "hasWateredCell", true }
+            { "hasWateredCell", true },
+            { $"taskCompleteForTool_{canKey}", true }
         };
     }
 
