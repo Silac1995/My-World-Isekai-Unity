@@ -46,9 +46,36 @@ public abstract class CommercialBuilding : Building
         writePerm: NetworkVariableWritePermission.Server);
 
     public bool IsHiring => _isHiring.Value;
-    public DisplayTextFurniture HelpWantedSign => _helpWantedFurniture;
-    public ManagementFurniture ManagementFurniture => _managementFurniture;
-    public bool HasManagementFurniture => _managementFurniture != null;
+
+    // ── Lazy furniture-ref resolution ──────────────────────────────
+    // Inspector refs (_toolStorageFurniture / _helpWantedFurniture / _managementFurniture)
+    // point at nested NO furniture children of the building prefab. base.Awake() runs
+    // ConvertNestedNetworkFurnitureToLayout which DESTROYS those originals; OnNetworkSpawn
+    // then re-spawns them as top-level NOs from _defaultFurnitureLayout. After destruction
+    // the serialized fields become Unity-fake-null and never auto-rebind to the new instances.
+    // Awake() snapshots each ref's (FurnitureItemSO + buildingLocalPosition) BEFORE base.Awake
+    // runs, and the public accessors lazily walk children to re-bind the cached field on first
+    // access. Position match disambiguates two children sharing the same FurnitureItemSO
+    // (e.g. two crates: one for tools, one for general storage).
+    private const float FurnitureRefMatchEpsilon = 0.05f;
+
+    private FurnitureItemSO _toolStorageRefSO;
+    private Vector3 _toolStorageRefLocalPos;
+    private bool _toolStorageRefSnapshotted;
+
+    private FurnitureItemSO _helpWantedRefSO;
+    private Vector3 _helpWantedRefLocalPos;
+    private bool _helpWantedRefSnapshotted;
+
+    private FurnitureItemSO _managementRefSO;
+    private Vector3 _managementRefLocalPos;
+    private bool _managementRefSnapshotted;
+
+    public DisplayTextFurniture HelpWantedSign
+        => ResolveLazyFurnitureRef(ref _helpWantedFurniture, _helpWantedRefSO, _helpWantedRefLocalPos, _helpWantedRefSnapshotted);
+    public ManagementFurniture ManagementFurniture
+        => ResolveLazyFurnitureRef(ref _managementFurniture, _managementRefSO, _managementRefLocalPos, _managementRefSnapshotted);
+    public bool HasManagementFurniture => ManagementFurniture != null;
     public event System.Action<bool> OnHiringStateChanged;
 
     protected List<Job> _jobs = new List<Job>();
@@ -141,10 +168,11 @@ public abstract class CommercialBuilding : Building
     public Zone PickupZone => _pickupZone;
 
     /// <summary>The StorageFurniture acting as this building's tool storage, or null if none assigned.</summary>
-    public StorageFurniture ToolStorage => _toolStorageFurniture;
+    public StorageFurniture ToolStorage
+        => ResolveLazyFurnitureRef(ref _toolStorageFurniture, _toolStorageRefSO, _toolStorageRefLocalPos, _toolStorageRefSnapshotted);
 
     /// <summary>True if the building has a tool storage furniture assigned.</summary>
-    public bool HasToolStorage => _toolStorageFurniture != null;
+    public bool HasToolStorage => ToolStorage != null;
 
     public IReadOnlyList<ItemInstance> Inventory => _inventory;
 
@@ -170,6 +198,65 @@ public abstract class CommercialBuilding : Building
     }
 
     /// <summary>
+    /// Capture a furniture inspector ref's identity (FurnitureItemSO + building-local position)
+    /// so the public lazy accessor can rebind to the re-spawned instance after Awake's nested-
+    /// child conversion. Idempotent and safe to call with a null ref. Local position is the
+    /// same encoding used by <c>Building.ConvertNestedNetworkFurnitureToLayout</c> + spawned by
+    /// <c>SpawnDefaultFurnitureSlot</c> (<c>transform.InverseTransformPoint(child.position)</c>),
+    /// so the snapshot value should match the spawned instance's local position to within float
+    /// precision.
+    /// </summary>
+    private void SnapshotFurnitureRef(Furniture f, out FurnitureItemSO so, out Vector3 localPos, out bool valid)
+    {
+        if (f == null || f.FurnitureItemSO == null)
+        {
+            so = null;
+            localPos = default;
+            valid = false;
+            return;
+        }
+        so = f.FurnitureItemSO;
+        localPos = transform.InverseTransformPoint(f.transform.position);
+        valid = true;
+    }
+
+    /// <summary>
+    /// Lazy resolver shared by <see cref="ToolStorage"/>, <see cref="HelpWantedSign"/>, and
+    /// <see cref="ManagementFurniture"/>. Returns the cached field if still valid; otherwise
+    /// scans children for the closest match by (FurnitureItemSO + local position) within
+    /// <see cref="FurnitureRefMatchEpsilon"/>, caches the resolved instance, and returns it.
+    /// Position match disambiguates two children sharing the same FurnitureItemSO. Returns
+    /// null if no snapshot was captured (no inspector ref) or no live instance matches.
+    /// </summary>
+    private T ResolveLazyFurnitureRef<T>(ref T cached, FurnitureItemSO so, Vector3 localPos, bool snapshotValid)
+        where T : Furniture
+    {
+        if (cached != null) return cached;
+        if (!snapshotValid || so == null) return null;
+
+        var children = GetComponentsInChildren<T>(includeInactive: true);
+        T best = null;
+        float bestDist = float.MaxValue;
+        for (int i = 0; i < children.Length; i++)
+        {
+            var child = children[i];
+            if (child == null || child.FurnitureItemSO != so) continue;
+            Vector3 childLocal = transform.InverseTransformPoint(child.transform.position);
+            float d = Vector3.Distance(childLocal, localPos);
+            if (d < bestDist)
+            {
+                bestDist = d;
+                best = child;
+            }
+        }
+        if (best != null && bestDist <= FurnitureRefMatchEpsilon)
+        {
+            cached = best;
+        }
+        return cached;
+    }
+
+    /// <summary>
     /// The building is operational once all jobs are filled by a worker and construction is finished.
     /// </summary>
     public bool IsOperational => !IsUnderConstruction && _jobs.Count > 0 && _jobs.TrueForAll(j => j.IsAssigned);
@@ -181,6 +268,15 @@ public abstract class CommercialBuilding : Building
         _jobWorkerIds = new NetworkList<FixedString64Bytes>();
         _activeWorkerIds = new NetworkList<FixedString64Bytes>();
         _inventoryItemIds = new NetworkList<FixedString64Bytes>();
+
+        // Snapshot inspector furniture refs BEFORE base.Awake runs
+        // ConvertNestedNetworkFurnitureToLayout (which destroys the original nested
+        // children). After destruction the serialized fields become Unity-fake-null
+        // and the public accessors need this snapshot to lazily rebind to the
+        // re-spawned instances by (FurnitureItemSO + localPosition) match.
+        SnapshotFurnitureRef(_toolStorageFurniture, out _toolStorageRefSO, out _toolStorageRefLocalPos, out _toolStorageRefSnapshotted);
+        SnapshotFurnitureRef(_helpWantedFurniture, out _helpWantedRefSO, out _helpWantedRefLocalPos, out _helpWantedRefSnapshotted);
+        SnapshotFurnitureRef(_managementFurniture, out _managementRefSO, out _managementRefLocalPos, out _managementRefSnapshotted);
 
         base.Awake();
 
@@ -240,8 +336,10 @@ public abstract class CommercialBuilding : Building
         _isHiring.OnValueChanged += HandleIsHiringChanged;
 
         // Initial sign refresh on the server so authoring's _initialHiringOpen state is
-        // reflected in the sign text from the very first frame.
-        if (IsServer && _helpWantedFurniture != null)
+        // reflected in the sign text from the very first frame. Routes through the lazy
+        // accessor so the post-respawn instance is resolved (the inspector field is
+        // Unity-fake-null after Awake destroyed the original nested child).
+        if (IsServer && HelpWantedSign != null)
         {
             HandleHiringStateChanged(_isHiring.Value);
         }
@@ -2420,10 +2518,11 @@ public abstract class CommercialBuilding : Building
     /// </summary>
     private void HandleHiringStateChanged(bool isHiring)
     {
-        if (_helpWantedFurniture == null) return;
-        if (_helpWantedFurniture.NetSync == null) return;
+        var sign = HelpWantedSign;
+        if (sign == null) return;
+        if (sign.NetSync == null) return;
         string text = isHiring ? GetHelpWantedDisplayText() : GetClosedHiringDisplayText();
-        _helpWantedFurniture.NetSync.ServerSetDisplayText(text);
+        sign.NetSync.ServerSetDisplayText(text);
     }
 
     /// <summary>
@@ -2436,8 +2535,9 @@ public abstract class CommercialBuilding : Building
     {
         if (!IsServer) return;
         if (!_isHiring.Value) return;
-        if (_helpWantedFurniture == null || _helpWantedFurniture.NetSync == null) return;
-        _helpWantedFurniture.NetSync.ServerSetDisplayText(GetHelpWantedDisplayText());
+        var sign = HelpWantedSign;
+        if (sign == null || sign.NetSync == null) return;
+        sign.NetSync.ServerSetDisplayText(GetHelpWantedDisplayText());
     }
 
     /// <summary>

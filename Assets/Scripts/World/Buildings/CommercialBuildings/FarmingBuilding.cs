@@ -326,7 +326,37 @@ public class FarmingBuilding : HarvestingBuilding, IStockProvider
             var entry = crop.HarvestOutputs[j];
             if (entry.Item is SeedSO seedSO && seedSO.CropToPlant == crop)
             {
-                return GetItemCount(seedSO) > 0;
+                return HasItemInBuildingOrStorage(seedSO);
+            }
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// True if the requested item exists either in the building's logical <c>_inventory</c>
+    /// (counted via <see cref="GetItemCount"/>) OR in any child <see cref="StorageFurniture"/>
+    /// slot. Designers commonly seed-in starting stock by manually placing seeds/cans inside
+    /// a chest furniture before play — those items don't enter the building's logical
+    /// inventory until a logistics action moves them, so checking only <c>_inventory</c>
+    /// would falsely report "no seeds" and PlantScan would register no tasks.
+    /// </summary>
+    private bool HasItemInBuildingOrStorage(ItemSO item)
+    {
+        if (item == null) return false;
+        if (GetItemCount(item) > 0) return true;
+
+        var storages = GetComponentsInChildren<StorageFurniture>(includeInactive: false);
+        for (int s = 0; s < storages.Length; s++)
+        {
+            var storage = storages[s];
+            if (storage == null) continue;
+            var slots = storage.ItemSlots;
+            if (slots == null) continue;
+            for (int i = 0; i < slots.Count; i++)
+            {
+                var slot = slots[i];
+                if (slot == null || slot.IsEmpty()) continue;
+                if (slot.ItemInstance != null && slot.ItemInstance.ItemSO == item) return true;
             }
         }
         return false;
@@ -355,7 +385,7 @@ public class FarmingBuilding : HarvestingBuilding, IStockProvider
                     // type-test here also handles the cast.
                     if (entry.Item is SeedSO seedSO && seedSO.CropToPlant == pct.Crop)
                     {
-                        if (GetItemCount(seedSO) > 0) return true;
+                        if (HasItemInBuildingOrStorage(seedSO)) return true;
                     }
                 }
             }
