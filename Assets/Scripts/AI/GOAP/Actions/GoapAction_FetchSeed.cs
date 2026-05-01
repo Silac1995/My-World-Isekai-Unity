@@ -96,7 +96,12 @@ public class GoapAction_FetchSeed : GoapAction
     {
         var seed = ResolveSeedFor(crop);
         if (seed == null) return false;
-        return _building.GetItemCount(seed) > 0;
+        // Reuse the same storage-walk used in Execute: a seed counts as available if any
+        // child StorageFurniture (excluding ToolStorage) holds at least one instance.
+        // Reading only the building's logical _inventory misses seeds the player or
+        // logistics chain dropped into a chest, so IsValid would falsely fail and the
+        // planner would filter this action out → JobFarmer picks Idle.
+        return FindStorageContaining(_building, seed) != null;
     }
 
     private static SeedSO ResolveSeedFor(CropSO crop)
