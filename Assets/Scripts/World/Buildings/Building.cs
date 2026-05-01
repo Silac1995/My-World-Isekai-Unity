@@ -582,13 +582,13 @@ public class Building : ComplexRoom
     // =========================================================================
 
     /// <summary>
-    /// Subclass extension point fired after <see cref="TrySpawnDefaultFurniture"/> finishes a
-    /// fresh-world spawn pass. Default no-op. Override to invalidate any subclass-owned cache
-    /// that depends on the just-spawned furniture (storage furniture cache on
-    /// <see cref="CommercialBuilding"/>, craftable cache on <c>CraftingBuilding</c>, etc.).
+    /// Subclass extension point fired at the tail of <see cref="TrySpawnDefaultFurniture"/>
+    /// when the building had a non-empty <c>_defaultFurnitureLayout</c> to process. Skipped
+    /// when the layout is empty (no furniture to invalidate caches for). Default no-op.
     ///
-    /// Always chain via <c>base.OnDefaultFurnitureSpawned()</c> in overrides so the parent
-    /// class's invalidations still run.
+    /// Override to invalidate any subclass-owned cache that depends on the just-spawned
+    /// furniture. Always chain via <c>base.OnDefaultFurnitureSpawned()</c> in overrides so
+    /// parent-class invalidations still run.
     /// </summary>
     protected virtual void OnDefaultFurnitureSpawned() { }
 
