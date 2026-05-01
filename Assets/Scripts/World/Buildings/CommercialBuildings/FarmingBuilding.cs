@@ -201,6 +201,32 @@ public class FarmingBuilding : HarvestingBuilding, IStockProvider
     }
 
     /// <summary>
+    /// Server-side throttled re-scan: runs <see cref="PlantScan"/> + <see cref="WaterScan"/>
+    /// at most once per second per building. Called from <see cref="JobFarmer.PlanNextActions"/>
+    /// so that seeds / planted cells added during a shift (manually or via the LogisticsManager
+    /// inbound flow) become visible to JobFarmer's worldState within ~1 second — without
+    /// having to wait for the next <see cref="MWI.Time.TimeManager.OnNewDay"/>.
+    ///
+    /// Throttle is per-building (not per-farmer), so two farmers calling concurrently don't
+    /// double-scan. PlantScan is idempotent (re-runs don't duplicate tasks for the same cell)
+    /// + cheap (walks a small zone of TerrainCells), so the steady-state cost is bounded.
+    /// </summary>
+    private float _lastReactiveScanTime = -10f;
+    private const float ReactiveScanIntervalSeconds = 1f;
+    public void RefreshScansThrottled()
+    {
+        if (Unity.Netcode.NetworkManager.Singleton == null) return;
+        if (!Unity.Netcode.NetworkManager.Singleton.IsServer) return;
+
+        float now = UnityEngine.Time.unscaledTime;
+        if (now - _lastReactiveScanTime < ReactiveScanIntervalSeconds) return;
+        _lastReactiveScanTime = now;
+
+        PlantScan();
+        WaterScan();
+    }
+
+    /// <summary>
     /// Server-only. For each cell in the union of <see cref="_farmingAreaZones"/> that is empty
     /// (no PlantedCropId): register a PlantCropTask on the building's BuildingTaskManager,
     /// for the crop most under its produce quota. Skips if the crop's seed isn't in storage.

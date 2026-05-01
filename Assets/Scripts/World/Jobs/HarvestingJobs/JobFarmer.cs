@@ -111,6 +111,13 @@ public class JobFarmer : Job
     /// </summary>
     private void PlanNextActions(FarmingBuilding farm)
     {
+        // Reactive re-scan (throttled to 1 Hz per building). PlantScan + WaterScan otherwise
+        // only run at Start + OnNewDay — so seeds dropped into a chest during a shift would
+        // stay invisible to the worldState below until next midnight. Calling here makes
+        // them visible within ~1s, regardless of who delivered them (player drop, NPC
+        // logistics inbound, debug spawn).
+        farm.RefreshScansThrottled();
+
         // ── Build worldState ──────────────────────────────────────────
 
         bool hasUnfilledHarvestTask = HasAvailableTask<HarvestResourceTask>(farm);
