@@ -385,6 +385,21 @@ public class Building : ComplexRoom
         {
             Debug.LogWarning($"<color=orange>[Building]</color> {buildingName} n'a pas pu s'enregistrer car BuildingManager n'est pas dans la scène.");
         }
+
+        // Re-scan FurnitureManager.Furnitures after every sibling's Awake/Start has finished.
+        // Room.Start runs LoadExistingFurniture for the same race (nested-prefab Furniture
+        // children sometimes spawn after the parent's Awake), but Room.Start is `private` and
+        // is HIDDEN by Building.Start (Unity calls only the most-derived Start) — so without
+        // this explicit call the Building's own MainRoom rescan never happens. Critical for
+        // _defaultFurnitureLayout: the spawned crates are parented under the building root
+        // (NGO requires a NetworkObject ancestor), and SpawnDefaultFurnitureSlot now defaults
+        // their FurnitureManager registration to MainRoom — but if any earlier authoring
+        // path skipped that, this rescan still catches them. LoadExistingFurniture is
+        // additive + idempotent so re-calling is safe.
+        if (FurnitureManager != null)
+        {
+            FurnitureManager.LoadExistingFurniture();
+        }
     }
 
     private void HandleStateChanged(MWI.WorldSystem.BuildingState previousValue, MWI.WorldSystem.BuildingState newValue)
@@ -819,22 +834,24 @@ public class Building : ComplexRoom
             // designer placed the slot), not runtime user input — CanPlaceFurniture validation is for
             // the player-place flow. Unchecked register adds to grid occupancy + the room's furniture
             // list WITHOUT touching transform.parent (we already parented above).
-            if (slot.TargetRoom != null && slot.TargetRoom.FurnitureManager != null)
+            //
+            // Default to the building's own MainRoom (Building inherits ComplexRoom→Room and IS its
+            // MainRoom) when slot.TargetRoom is null. Authoring convention previously demanded an
+            // explicit Room ancestor in the parent chain — but spawned furniture parented directly
+            // under the building root would silently miss FurnitureManager registration, breaking
+            // every consumer that goes through Room.GetFurnitureOfType / Building.GetFurnitureOfType
+            // (which the LogisticsManager + crafting pipeline rely on). Falling back to MainRoom
+            // makes registration the default; designers can still set slot.TargetRoom explicitly to
+            // route a slot into a specific sub-room.
+            Room registerInto = slot.TargetRoom != null ? slot.TargetRoom : (Room)MainRoom;
+            if (registerInto != null && registerInto.FurnitureManager != null)
             {
-                slot.TargetRoom.FurnitureManager.RegisterSpawnedFurnitureUnchecked(instance, worldPos);
-            }
-            else if (slot.TargetRoom == null)
-            {
-                Debug.LogWarning(
-                    $"[Building] {buildingName}: default furniture slot for '{slot.ItemSO.name}' has no TargetRoom. " +
-                    $"Set TargetRoom on the slot so it appears in the room's FurnitureManager list.",
-                    this);
+                registerInto.FurnitureManager.RegisterSpawnedFurnitureUnchecked(instance, worldPos);
             }
             else
             {
-                // TargetRoom != null but its FurnitureManager is null — misconfiguration.
                 Debug.LogWarning(
-                    $"[Building] {buildingName}: default furniture slot for '{slot.ItemSO.name}' targets Room '{slot.TargetRoom.name}' but that Room has no FurnitureManager — slot will spawn under the building root without grid registration.",
+                    $"[Building] {buildingName}: default furniture slot for '{slot.ItemSO.name}' has no TargetRoom and the MainRoom has no FurnitureManager — slot will spawn under the building root without grid registration.",
                     this);
             }
         }

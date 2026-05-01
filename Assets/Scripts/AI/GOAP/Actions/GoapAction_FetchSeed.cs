@@ -215,20 +215,23 @@ public class GoapAction_FetchSeed : GoapAction
 
     /// <summary>
     /// Walks every <see cref="StorageFurniture"/> in the building's transform tree and
-    /// returns the first one containing an instance of <paramref name="target"/>. Skips
-    /// the dedicated <see cref="CommercialBuilding.ToolStorage"/> — seeds live in general
-    /// inventory shelves, not the tool-loop drawer.
+    /// returns the first one containing an instance of <paramref name="target"/>. Walks
+    /// ALL chests including the one mapped to <see cref="CommercialBuilding.ToolStorage"/>:
+    /// the deposit-routing layer (CommercialBuilding.FindStorageFurnitureForItem +
+    /// GoapAction_GatherStorageItems.DetermineStoragePosition) is what reserves the tool
+    /// drawer for tools by SKIPPING it for non-tool deposits — the FETCH side does not
+    /// care, it just needs to find the seed wherever it physically is. Without this,
+    /// designs with a single crate (which becomes ToolStorage by the first-crate
+    /// fallback) had every seed silently invisible to the planner → JobFarmer Idle.
     /// </summary>
     private static StorageFurniture FindStorageContaining(CommercialBuilding building, ItemSO target)
     {
         if (building == null || target == null) return null;
         var storages = building.GetComponentsInChildren<StorageFurniture>();
-        var toolStorage = building.ToolStorage;
         for (int i = 0; i < storages.Length; i++)
         {
             var sf = storages[i];
             if (sf == null) continue;
-            if (sf == toolStorage) continue;   // Tool storage is reserved for the tool loop.
             var slots = sf.ItemSlots;
             if (slots == null) continue;
             for (int s = 0; s < slots.Count; s++)
