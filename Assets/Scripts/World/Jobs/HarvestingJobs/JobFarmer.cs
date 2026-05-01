@@ -120,9 +120,17 @@ public class JobFarmer : Job
 
         // ── Build worldState ──────────────────────────────────────────
 
-        bool hasUnfilledHarvestTask = HasAvailableTask<HarvestResourceTask>(farm);
-        bool hasUnfilledWaterTask = HasAvailableTask<WaterCropTask>(farm);
-        bool hasUnfilledPlantTask = HasAvailableTask<PlantCropTask>(farm);
+        // Use HasAvailableOrClaimedTask: tasks auto-claimed onto _worker by the
+        // quest-system auto-claim path (CommercialBuilding.TryAutoClaimExistingQuests on
+        // WorkerStartingShift + the OnQuestPublished subscriber for tasks registered
+        // mid-shift) move from _availableTasks → _inProgressTasks the moment they're
+        // registered. The plain HasAvailableTask helper only walked _availableTasks, so
+        // PlantScan registering 25 tasks → all 25 instantly auto-claimed → worldState
+        // saw 0 → planner picked Idle. Walking both buckets restores the intended
+        // semantic of "is there any plant work I can take or already own?".
+        bool hasUnfilledHarvestTask = farm.TaskManager != null && farm.TaskManager.HasAvailableOrClaimedTask<HarvestResourceTask>(_worker);
+        bool hasUnfilledWaterTask = farm.TaskManager != null && farm.TaskManager.HasAvailableOrClaimedTask<WaterCropTask>(_worker);
+        bool hasUnfilledPlantTask = farm.TaskManager != null && farm.TaskManager.HasAvailableOrClaimedTask<PlantCropTask>(_worker);
 
         var hands = _worker.CharacterVisual?.BodyPartsController?.HandsController;
         var inventory = _worker.CharacterEquipment != null && _worker.CharacterEquipment.HaveInventory()
@@ -134,7 +142,7 @@ public class JobFarmer : Job
         bool hasCanInHand = handsCarrying && farm.WateringCanItem != null
                             && hands.CarriedItem.ItemSO == farm.WateringCanItem;
 
-        bool hasMatchingSeedInStorage = farm.HasAnySeedForUnclaimedPlantTask();
+        bool hasMatchingSeedInStorage = farm.HasAnySeedForActionablePlantTask(_worker);
         bool hasWateringCanAvailable = farm.WateringCanItem != null
                                         && farm.HasToolStorage
                                         && farm.ToolStorage != null

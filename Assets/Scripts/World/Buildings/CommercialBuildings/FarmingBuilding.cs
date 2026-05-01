@@ -425,31 +425,53 @@ public class FarmingBuilding : HarvestingBuilding, IStockProvider
     }
 
     /// <summary>
-    /// True if at least one unclaimed <see cref="PlantCropTask"/> in this building's
-    /// <see cref="BuildingTaskManager"/> has its matching <see cref="SeedSO"/> physically
-    /// available in the building's inventory. Drives <see cref="JobFarmer"/>'s
-    /// <c>hasMatchingSeedInStorage</c> worldState flag (so the planner only commits to a
-    /// plant goal when a seed actually exists to fetch).
+    /// True if at least one actionable <see cref="PlantCropTask"/> for this worker has its
+    /// matching <see cref="SeedSO"/> physically available in the building's inventory or any
+    /// child <see cref="StorageFurniture"/>. Drives <see cref="JobFarmer"/>'s
+    /// <c>hasMatchingSeedInStorage</c> worldState flag.
+    ///
+    /// "Actionable" = unclaimed (in <see cref="BuildingTaskManager.AvailableTasks"/>) OR
+    /// already claimed by this worker (in <see cref="BuildingTaskManager.InProgressTasks"/>).
+    /// The auto-claim path on <c>WorkerStartingShift</c> + the per-quest-publish subscriber
+    /// move tasks straight from <c>_availableTasks</c> to <c>_inProgressTasks</c>, so checking
+    /// only the available bucket would always return false right after a fresh PlantScan.
     /// </summary>
-    public bool HasAnySeedForUnclaimedPlantTask()
+    public bool HasAnySeedForActionablePlantTask(Character worker)
     {
         if (TaskManager == null) return false;
-        var tasks = TaskManager.AvailableTasks;
-        for (int i = 0; i < tasks.Count; i++)
+
+        var available = TaskManager.AvailableTasks;
+        for (int i = 0; i < available.Count; i++)
         {
-            if (tasks[i] is PlantCropTask pct && pct.Crop != null)
+            if (available[i] is PlantCropTask pct && pct.Crop != null && SeedForCropExists(pct.Crop)) return true;
+        }
+
+        if (worker != null)
+        {
+            var inProgress = TaskManager.InProgressTasks;
+            for (int i = 0; i < inProgress.Count; i++)
             {
-                for (int j = 0; j < pct.Crop.HarvestOutputs.Count; j++)
+                if (inProgress[i] is PlantCropTask pct && pct.Crop != null
+                    && pct.ClaimedByWorkers.Contains(worker)
+                    && SeedForCropExists(pct.Crop))
                 {
-                    var entry = pct.Crop.HarvestOutputs[j];
-                    // HarvestableOutputEntry.Item is typed as ScriptableObject (Pure-asmdef
-                    // constraint — see HarvestableOutputEntry.cs / Task 5 finding). The
-                    // type-test here also handles the cast.
-                    if (entry.Item is SeedSO seedSO && seedSO.CropToPlant == pct.Crop)
-                    {
-                        if (HasItemInBuildingOrStorage(seedSO)) return true;
-                    }
+                    return true;
                 }
+            }
+        }
+        return false;
+    }
+
+    /// <summary>True if a SeedSO that grows <paramref name="crop"/> physically exists
+    /// in this building's inventory or any child StorageFurniture.</summary>
+    private bool SeedForCropExists(CropSO crop)
+    {
+        for (int j = 0; j < crop.HarvestOutputs.Count; j++)
+        {
+            var entry = crop.HarvestOutputs[j];
+            if (entry.Item is SeedSO seedSO && seedSO.CropToPlant == crop)
+            {
+                if (HasItemInBuildingOrStorage(seedSO)) return true;
             }
         }
         return false;

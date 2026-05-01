@@ -82,11 +82,24 @@ public class GoapAction_FetchSeed : GoapAction
         var hands = worker.CharacterVisual?.BodyPartsController?.HandsController;
         if (hands == null || !hands.AreHandsFree()) return false;
 
-        // At least one available PlantCropTask whose crop has a seed in storage.
-        var tasks = _building.TaskManager.AvailableTasks;
-        for (int i = 0; i < tasks.Count; i++)
+        // At least one actionable PlantCropTask whose crop has a seed in storage. "Actionable" =
+        // unclaimed (in AvailableTasks) OR already claimed by this worker via the auto-claim path
+        // (in InProgressTasks). Without the InProgressTasks branch, the planner sees nothing to
+        // do the moment WorkerStartingShift's TryAutoClaimExistingQuests sweeps every published
+        // PlantCropTask onto the worker's CharacterQuestLog (and therefore into _inProgressTasks).
+        var available = _building.TaskManager.AvailableTasks;
+        for (int i = 0; i < available.Count; i++)
         {
-            if (tasks[i] is PlantCropTask pct && pct.Crop != null && BuildingHasSeedFor(pct.Crop))
+            if (available[i] is PlantCropTask pct && pct.Crop != null && BuildingHasSeedFor(pct.Crop))
+                return true;
+        }
+        var inProgress = _building.TaskManager.InProgressTasks;
+        for (int i = 0; i < inProgress.Count; i++)
+        {
+            if (inProgress[i] is PlantCropTask pct
+                && pct.Crop != null
+                && pct.ClaimedByWorkers.Contains(worker)
+                && BuildingHasSeedFor(pct.Crop))
                 return true;
         }
         return false;
@@ -128,16 +141,33 @@ public class GoapAction_FetchSeed : GoapAction
         // Claim a target crop on first tick. We don't claim the PlantCropTask itself here —
         // GoapAction_PlantCrop does that once we arrive at the cell. This keeps
         // FetchSeed cheap (no quest churn) and lets the planner replan freely if the
-        // race is lost between fetch and plant.
+        // race is lost between fetch and plant. Walks BOTH _availableTasks AND the
+        // worker's already-claimed in-progress tasks (the auto-claim path moves them
+        // out of _availableTasks the moment they're published — same fix as IsValid).
         if (_claimedCrop == null)
         {
-            var tasks = _building.TaskManager.AvailableTasks;
-            for (int i = 0; i < tasks.Count; i++)
+            var available = _building.TaskManager.AvailableTasks;
+            for (int i = 0; i < available.Count; i++)
             {
-                if (tasks[i] is PlantCropTask pct && pct.Crop != null && BuildingHasSeedFor(pct.Crop))
+                if (available[i] is PlantCropTask pct && pct.Crop != null && BuildingHasSeedFor(pct.Crop))
                 {
                     _claimedCrop = pct.Crop;
                     break;
+                }
+            }
+            if (_claimedCrop == null)
+            {
+                var inProgress = _building.TaskManager.InProgressTasks;
+                for (int i = 0; i < inProgress.Count; i++)
+                {
+                    if (inProgress[i] is PlantCropTask pct
+                        && pct.Crop != null
+                        && pct.ClaimedByWorkers.Contains(worker)
+                        && BuildingHasSeedFor(pct.Crop))
+                    {
+                        _claimedCrop = pct.Crop;
+                        break;
+                    }
                 }
             }
             if (_claimedCrop == null)
