@@ -408,6 +408,11 @@ public class FarmingBuilding : HarvestingBuilding, IStockProvider
         if (GetItemCount(item) > 0) return true;
 
         var storages = GetComponentsInChildren<StorageFurniture>(includeInactive: false);
+        // Throttled diagnostic dump (1 Hz per building) — fires when the item lookup is
+        // about to return false despite chests existing. Lets us see whether the chest's
+        // slot ItemSO actually matches the seed reference we're hunting (or whether a
+        // duplicate-asset / different-instance situation is causing the equality miss).
+        bool anySlotChecked = false;
         for (int s = 0; s < storages.Length; s++)
         {
             var storage = storages[s];
@@ -419,10 +424,40 @@ public class FarmingBuilding : HarvestingBuilding, IStockProvider
                 var slot = slots[i];
                 if (slot == null || slot.IsEmpty()) continue;
                 if (slot.ItemInstance != null && slot.ItemInstance.ItemSO == item) return true;
+                anySlotChecked = true;
+            }
+        }
+        // Miss-path log (throttled). Print every non-empty slot's ItemSO + name vs. the wanted item.
+        if (anySlotChecked)
+        {
+            float now = UnityEngine.Time.unscaledTime;
+            if (now - _lastSeedLookupDumpTime > 1f)
+            {
+                _lastSeedLookupDumpTime = now;
+                var sb = new System.Text.StringBuilder();
+                sb.Append($"<color=orange>[FarmingBuilding]</color> {buildingName} HasItemInBuildingOrStorage MISS for '{item.ItemName}' (ItemSO instanceID={item.GetInstanceID()}). Chests inspected:");
+                for (int s = 0; s < storages.Length; s++)
+                {
+                    var storage = storages[s];
+                    if (storage == null) continue;
+                    var slots = storage.ItemSlots;
+                    if (slots == null) continue;
+                    sb.Append($"\n  - {storage.FurnitureName}:");
+                    for (int i = 0; i < slots.Count; i++)
+                    {
+                        var slot = slots[i];
+                        if (slot == null || slot.IsEmpty()) continue;
+                        var slotSO = slot.ItemInstance?.ItemSO;
+                        sb.Append($" [{i}]={(slotSO != null ? $"'{slotSO.ItemName}'(id={slotSO.GetInstanceID()})" : "null")} ");
+                    }
+                }
+                Debug.Log(sb.ToString());
             }
         }
         return false;
     }
+
+    private float _lastSeedLookupDumpTime = -10f;
 
     /// <summary>
     /// True if at least one actionable <see cref="PlantCropTask"/> for this worker has its
