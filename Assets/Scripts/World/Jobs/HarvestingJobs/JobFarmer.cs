@@ -236,14 +236,36 @@ public class JobFarmer : Job
             if (now - _lastIdleDumpTime > 1f)
             {
                 _lastIdleDumpTime = now;
+
+                // Deep task-state probe: does THIS farm's TaskManager actually hold any
+                // PlantCropTasks claimed by THIS worker? Mismatches here mean either (a) the
+                // building Nyx is hired at is NOT the same FarmingBuilding instance shown by
+                // the building debug UI, or (b) auto-claim added a different Character
+                // reference than _worker (save/load drift, NPC despawn-respawn, etc.).
+                int availPlant = 0, inProgressPlant = 0, inProgressClaimedByMe = 0;
+                if (farm.TaskManager != null)
+                {
+                    var av = farm.TaskManager.AvailableTasks;
+                    for (int i = 0; i < av.Count; i++) if (av[i] is PlantCropTask) availPlant++;
+                    var ip = farm.TaskManager.InProgressTasks;
+                    for (int i = 0; i < ip.Count; i++)
+                    {
+                        if (!(ip[i] is PlantCropTask pct)) continue;
+                        inProgressPlant++;
+                        if (pct.ClaimedByWorkers.Contains(_worker)) inProgressClaimedByMe++;
+                    }
+                }
+                int buildingInvCount = 0;
+                if (_workplace != null && _workplace.Inventory != null) buildingInvCount = _workplace.Inventory.Count;
+
                 Debug.Log(
-                    $"<color=orange>[JobFarmer]</color> {_worker.CharacterName} planning Idle at {farm.BuildingName}. worldState: " +
+                    $"<color=orange>[JobFarmer]</color> {_worker.CharacterName} (instanceID={_worker.GetInstanceID()}) planning Idle at " +
+                    $"{farm.BuildingName} (instanceID={farm.GetInstanceID()}, Tasks: avail.Plant={availPlant}, inProgress.Plant={inProgressPlant}, " +
+                    $"inProgress.Plant claimed-by-me={inProgressClaimedByMe}, building.Inventory.Count={buildingInvCount}). worldState: " +
                     $"hasUnfilledHarvestTask={hasUnfilledHarvestTask}, hasUnfilledWaterTask={hasUnfilledWaterTask}, hasUnfilledPlantTask={hasUnfilledPlantTask}, " +
                     $"hasSeedInHand={hasSeedInHand}, hasMatchingSeedInStorage={hasMatchingSeedInStorage}, " +
                     $"hasCanInHand={hasCanInHand}, hasWateringCanAvailable={hasWateringCanAvailable}, " +
-                    $"hasResourcesToDeposit={hasResourcesToDeposit}. " +
-                    $"If hasUnfilledPlantTask is false, PlantScan registered no tasks (check FarmingBuilding logs). " +
-                    $"If hasMatchingSeedInStorage is false, no seed for any unclaimed plant task is in any chest.");
+                    $"hasResourcesToDeposit={hasResourcesToDeposit}.");
             }
         }
 

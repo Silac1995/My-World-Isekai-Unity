@@ -515,10 +515,22 @@ public class FarmingBuilding : HarvestingBuilding, IStockProvider
     private bool HasExistingPlantTaskForCell(int cellX, int cellZ)
     {
         if (TaskManager == null) return false;
-        var tasks = TaskManager.AvailableTasks;
-        for (int i = 0; i < tasks.Count; i++)
+        // Walk BOTH _availableTasks and _inProgressTasks. The auto-claim path on
+        // WorkerStartingShift moves PlantCropTasks straight from available → in-progress,
+        // so checking only AvailableTasks would miss the existing claim and PlantScan
+        // would re-register a duplicate task for the same cell on every run. That's how
+        // a single 25-cell zone ends up with 50+ in-progress tasks accumulated over
+        // multiple PlantScan ticks.
+        var available = TaskManager.AvailableTasks;
+        for (int i = 0; i < available.Count; i++)
         {
-            if (tasks[i] is PlantCropTask pct && pct.CellX == cellX && pct.CellZ == cellZ)
+            if (available[i] is PlantCropTask pct && pct.CellX == cellX && pct.CellZ == cellZ)
+                return true;
+        }
+        var inProgress = TaskManager.InProgressTasks;
+        for (int i = 0; i < inProgress.Count; i++)
+        {
+            if (inProgress[i] is PlantCropTask pct && pct.CellX == cellX && pct.CellZ == cellZ)
                 return true;
         }
         return false;
@@ -527,10 +539,17 @@ public class FarmingBuilding : HarvestingBuilding, IStockProvider
     private bool HasExistingWaterTaskForCell(int cellX, int cellZ)
     {
         if (TaskManager == null) return false;
-        var tasks = TaskManager.AvailableTasks;
-        for (int i = 0; i < tasks.Count; i++)
+        // Same dual-bucket walk as HasExistingPlantTaskForCell — see comment there.
+        var available = TaskManager.AvailableTasks;
+        for (int i = 0; i < available.Count; i++)
         {
-            if (tasks[i] is WaterCropTask wct && wct.CellX == cellX && wct.CellZ == cellZ)
+            if (available[i] is WaterCropTask wct && wct.CellX == cellX && wct.CellZ == cellZ)
+                return true;
+        }
+        var inProgress = TaskManager.InProgressTasks;
+        for (int i = 0; i < inProgress.Count; i++)
+        {
+            if (inProgress[i] is WaterCropTask wct && wct.CellX == cellX && wct.CellZ == cellZ)
                 return true;
         }
         return false;
