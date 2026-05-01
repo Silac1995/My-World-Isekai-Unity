@@ -126,10 +126,14 @@ public class GoapAction_ExploreForHarvestables : GoapAction
             // apple tree planted in the building's zone was never discovered, and pure
             // destruction-only nodes (ore veins, scenery) were skipped entirely. Mirrors the
             // union check in HarvestingBuilding.ScanAndRegisterZone (HasAnyProducibleOutput).
+            //
+            // Destruction discovery is intentionally NOT gated on IsDepleted — destruction
+            // outputs are independent of yield depletion, so a depleted-perennial apple tree
+            // is still a valid wood source. Wild scenery that despawns on depletion fails the
+            // null/active check higher up (CharacterAwareness only returns active components).
             bool canYieldForWanted = harvestable.CanHarvest() && harvestable.HasAnyYieldOutput(wantedItems);
             bool canDestroyForWanted = harvestable.AllowDestruction
                 && harvestable.AllowNpcDestruction
-                && !harvestable.IsDepleted
                 && harvestable.HasAnyDestructionOutput(wantedItems);
             if (!canYieldForWanted && !canDestroyForWanted) continue;
 

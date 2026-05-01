@@ -45,13 +45,15 @@ public class DestroyHarvestableTask : BuildingTask
         QuestTarget = new HarvestableTarget(target);
     }
 
-    /// <summary>Valid while the target exists, opts in to destruction by NPCs, and hasn't
-    /// already been depleted via the yield path.</summary>
+    /// <summary>Valid while the target exists and opts in to destruction by NPCs.
+    /// Intentionally NOT gated on <see cref="Harvestable.IsDepleted"/> — yield depletion
+    /// (apples picked) and destruction outputs (wood from chopping) are independent: a
+    /// depleted-perennial apple tree is still a valid wood source. One-shot crops despawn on
+    /// depletion, so the null check at the top covers them.</summary>
     public override bool IsValid()
     {
         return _harvestableTarget != null
             && _harvestableTarget.AllowDestruction
-            && _harvestableTarget.AllowNpcDestruction
-            && !_harvestableTarget.IsDepleted;
+            && _harvestableTarget.AllowNpcDestruction;
     }
 }

@@ -353,7 +353,45 @@ public class HandsController : MonoBehaviour, ICharacterSaveData<HandsSaveData>
             col.enabled = false;
         }
 
+        // CRITICAL: strip the visual clone's NetworkObject + NetworkBehaviours.
+        //
+        // The WorldItem prefab carries a NetworkObject (used by real dropped instances).
+        // For the carried visual we never call Spawn() — but the clone is parented under
+        // the player's hand bone, which lives under the player's NetworkObject. NGO's
+        // SceneEventData.SortParentedNetworkObjects walks every spawned root NO's
+        // GetComponentsInChildren<NetworkObject>() during initial-sync to a late joiner,
+        // and Serialize NREs on this never-spawned NO at NetworkObject.cs:3172 because
+        // NetworkManagerOwner is null (never went through SpawnInternal). Symptom:
+        // host picks up a watering can → client cannot join until the host drops it.
+        //
+        // Order: NetworkBehaviours first, then NetworkObject (the latter has DisallowMultipleComponent
+        // editor metadata but DestroyImmediate at runtime is unconstrained). After this strip,
+        // _carriedVisual is a pure visual GameObject with no networking surface.
+        //
+        // See memory: feedback_no_networkobject_in_visual_clone.md
+        StripNetworkComponents(_carriedVisual);
+
         rightHand?.SetPose("fist");
+    }
+
+    /// <summary>
+    /// Removes every NetworkBehaviour (including the Initialize-completed WorldItem) and
+    /// the NetworkObject from a visual-only clone. Used by AttachVisualToHand so the
+    /// carried-visual WorldItem prefab clone never poisons NGO's scene-sync child walk.
+    /// </summary>
+    private static void StripNetworkComponents(GameObject root)
+    {
+        if (root == null) return;
+        var behaviours = root.GetComponentsInChildren<Unity.Netcode.NetworkBehaviour>(true);
+        for (int i = 0; i < behaviours.Length; i++)
+        {
+            if (behaviours[i] != null) DestroyImmediate(behaviours[i]);
+        }
+        var netObjects = root.GetComponentsInChildren<Unity.Netcode.NetworkObject>(true);
+        for (int i = 0; i < netObjects.Length; i++)
+        {
+            if (netObjects[i] != null) DestroyImmediate(netObjects[i]);
+        }
     }
 
     // ================================================================

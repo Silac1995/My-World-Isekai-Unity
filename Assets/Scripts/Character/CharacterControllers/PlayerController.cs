@@ -366,6 +366,11 @@ public class PlayerController : CharacterGameController
 
     private void OnInteractionMenuClosed() => _eMenuOpened = false;
 
+    // Awareness/sight is the candidate set, but only interactables whose InteractionZone
+    // currently contains the player are eligible — hold-E and tap-E are both proximity-gated
+    // actions, not "anything I can see". Without this filter the menu would happily open for
+    // a harvestable miles away as long as it survived in the awareness list. Uses the canonical
+    // proximity API on InteractableObject (rule: see InteractableObject.IsCharacterInInteractionZone).
     private Harvestable GetNearestVisibleHarvestable()
     {
         var awareness = _character.CharacterAwareness;
@@ -378,6 +383,7 @@ public class PlayerController : CharacterGameController
         {
             var h = visible[i];
             if (h == null) continue;
+            if (!h.IsCharacterInInteractionZone(_character)) continue;
             float d = Vector3.Distance(_character.transform.position, h.transform.position);
             if (d < bestDist) { bestDist = d; best = h; }
         }
@@ -396,6 +402,7 @@ public class PlayerController : CharacterGameController
         {
             var obj = visible[i];
             if (obj == null) continue;
+            if (!obj.IsCharacterInInteractionZone(_character)) continue;
             float d = Vector3.Distance(_character.transform.position, obj.transform.position);
             if (d < closestDist) { closestDist = d; closest = obj; }
         }

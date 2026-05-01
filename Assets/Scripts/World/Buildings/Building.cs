@@ -606,8 +606,20 @@ public class Building : ComplexRoom
     ///   1. Captures each network-bearing Furniture child's <see cref="FurnitureItemSO"/>
     ///      + local pose + nearest <c>Room</c> ancestor into a runtime-only
     ///      <see cref="DefaultFurnitureSlot"/> appended to <c>_defaultFurnitureLayout</c>.
-    ///   2. <see cref="UnityEngine.Object.Destroy(UnityEngine.Object)"/>'s the child
-    ///      GameObject so NGO never sees it as a nested NetworkObject.
+    ///   2. <see cref="UnityEngine.Object.DestroyImmediate(UnityEngine.Object)"/>'s the
+    ///      child GameObject so NGO never sees it as a nested NetworkObject.
+    ///
+    /// <b>DestroyImmediate is mandatory here</b> — async <c>Destroy()</c> queues for end-of-frame,
+    /// but every Building Instantiate→Spawn callsite (<c>MapController.SpawnSavedBuildings</c>,
+    /// <c>MapController.WakeUp</c>, <c>BuildingPlacementManager</c>) calls <c>NetworkObject.Spawn()</c>
+    /// in the SAME frame as <c>Instantiate</c>. With async Destroy the doomed children are still
+    /// physically alive in the hierarchy when Spawn runs, NGO walks them via
+    /// <c>GetComponentsInChildren&lt;NetworkObject&gt;()</c>, and <see cref="TrySpawnDefaultFurniture"/>'s
+    /// dedup snapshot at line 727 sees them as "already present" — so every default-furniture slot
+    /// is silently skipped and the building spawns empty. DestroyImmediate forces full synchronous
+    /// destruction before control returns to the caller. Safe here because the doomed children's
+    /// NetworkObjects have <c>IsSpawned == false</c>, are absent from <c>SpawnedObjects</c>, and
+    /// belong to a child GameObject (not the GameObject whose Awake we are inside).
     ///
     /// <see cref="TrySpawnDefaultFurniture"/> (server-only, in <see cref="OnNetworkSpawn"/>)
     /// then re-spawns each appended entry as a top-level NetworkObject parented under the
@@ -652,7 +664,7 @@ public class Building : ComplexRoom
                 Debug.LogWarning(
                     $"<color=orange>[Building]</color> {buildingName}: nested furniture '{furniture.name}' has a NetworkObject but no FurnitureItemSO — destroying without conversion (would have half-spawned anyway).",
                     this);
-                Destroy(furniture.gameObject);
+                DestroyImmediate(furniture.gameObject);
                 continue;
             }
 
@@ -692,7 +704,7 @@ public class Building : ComplexRoom
                 _defaultFurnitureLayout.Add(slot);
             }
 
-            Destroy(furniture.gameObject);
+            DestroyImmediate(furniture.gameObject);
             converted++;
         }
 
@@ -778,39 +790,61 @@ public class Building : ComplexRoom
         Furniture instance = Instantiate(prefab, worldPos, worldRot);
 
         var netObj = instance.GetComponent<NetworkObject>();
+        bool spawned = false;
         if (netObj != null && !netObj.IsSpawned)
         {
             netObj.Spawn();
+            spawned = true;
         }
 
-        // Parent under the building root — the only NetworkObject in this hierarchy. Parenting
-        // under Room_Main (a NetworkBehaviour on a non-NO) throws NGO's InvalidParentException;
-        // the building root is the closest valid NO ancestor. Visually the furniture lives
-        // inside the building at the correct world position; logical room membership is tracked
-        // in the FurnitureManager._furnitures list (see RegisterSpawnedFurnitureUnchecked notes).
-        instance.transform.SetParent(transform, worldPositionStays: true);
+        try
+        {
+            // Parent under the building root — the only NetworkObject in this hierarchy. Parenting
+            // under Room_Main (a NetworkBehaviour on a non-NO) throws NGO's InvalidParentException;
+            // the building root is the closest valid NO ancestor. Visually the furniture lives
+            // inside the building at the correct world position; logical room membership is tracked
+            // in the FurnitureManager._furnitures list (see RegisterSpawnedFurnitureUnchecked notes).
+            instance.transform.SetParent(transform, worldPositionStays: true);
 
-        // Use the UNCHECKED register path: default furniture is server-authored content (the level
-        // designer placed the slot), not runtime user input — CanPlaceFurniture validation is for
-        // the player-place flow. Unchecked register adds to grid occupancy + the room's furniture
-        // list WITHOUT touching transform.parent (we already parented above).
-        if (slot.TargetRoom != null && slot.TargetRoom.FurnitureManager != null)
-        {
-            slot.TargetRoom.FurnitureManager.RegisterSpawnedFurnitureUnchecked(instance, worldPos);
+            // Use the UNCHECKED register path: default furniture is server-authored content (the level
+            // designer placed the slot), not runtime user input — CanPlaceFurniture validation is for
+            // the player-place flow. Unchecked register adds to grid occupancy + the room's furniture
+            // list WITHOUT touching transform.parent (we already parented above).
+            if (slot.TargetRoom != null && slot.TargetRoom.FurnitureManager != null)
+            {
+                slot.TargetRoom.FurnitureManager.RegisterSpawnedFurnitureUnchecked(instance, worldPos);
+            }
+            else if (slot.TargetRoom == null)
+            {
+                Debug.LogWarning(
+                    $"[Building] {buildingName}: default furniture slot for '{slot.ItemSO.name}' has no TargetRoom. " +
+                    $"Set TargetRoom on the slot so it appears in the room's FurnitureManager list.",
+                    this);
+            }
+            else
+            {
+                // TargetRoom != null but its FurnitureManager is null — misconfiguration.
+                Debug.LogWarning(
+                    $"[Building] {buildingName}: default furniture slot for '{slot.ItemSO.name}' targets Room '{slot.TargetRoom.name}' but that Room has no FurnitureManager — slot will spawn under the building root without grid registration.",
+                    this);
+            }
         }
-        else if (slot.TargetRoom == null)
+        catch
         {
-            Debug.LogWarning(
-                $"[Building] {buildingName}: default furniture slot for '{slot.ItemSO.name}' has no TargetRoom. " +
-                $"Set TargetRoom on the slot so it appears in the room's FurnitureManager list.",
-                this);
-        }
-        else
-        {
-            // TargetRoom != null but its FurnitureManager is null — misconfiguration.
-            Debug.LogWarning(
-                $"[Building] {buildingName}: default furniture slot for '{slot.ItemSO.name}' targets Room '{slot.TargetRoom.name}' but that Room has no FurnitureManager — slot will spawn under the building root without grid registration.",
-                this);
+            // Critical: a half-registered NetworkObject left in SpawnManager.SpawnedObjectsList
+            // NRE's the next client-join scene-sync at NetworkObject.Serialize. Despawn + Destroy
+            // on failure so the outer catch in TrySpawnDefaultFurniture only logs the exception
+            // — it never leaves a corrupted entry in NGO's spawned list.
+            if (spawned && netObj != null && netObj.IsSpawned)
+            {
+                try { netObj.Despawn(destroy: true); }
+                catch (System.Exception cleanupEx) { Debug.LogException(cleanupEx, this); }
+            }
+            else if (instance != null)
+            {
+                Destroy(instance.gameObject);
+            }
+            throw;
         }
     }
 }

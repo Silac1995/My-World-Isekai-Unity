@@ -207,6 +207,12 @@ public class HarvestingBuilding : CommercialBuilding
     /// <see cref="DestroyHarvestableTask"/>. If neither path matches or the node disallows NPC
     /// destruction, no task is registered (the harvestable stays tracked for state-change
     /// re-evaluation).
+    ///
+    /// Destruction is intentionally NOT gated on <see cref="Harvestable.IsDepleted"/>: yield
+    /// depletion (apples picked) and destruction outputs (wood from chopping) are independent
+    /// concerns. A perennial apple tree in its refill cycle is still a valid wood source — the
+    /// tree is physically present, only the yield charges are exhausted. One-shot crops despawn
+    /// on depletion, so the harvestable becomes null and the null check at the top guards them.
     /// </summary>
     private void TryRegisterTaskFor(Harvestable harvestable)
     {
@@ -224,9 +230,8 @@ public class HarvestingBuilding : CommercialBuilding
 
         // Fallback: destruction path. Gated on AllowNpcDestruction so designers explicitly
         // control which nodes NPCs may consume. Players' Hold-E → Destroy menu is unaffected
-        // by this flag (player intent overrides).
-        if (!harvestable.IsDepleted
-            && harvestable.AllowDestruction
+        // by this flag (player intent overrides). NOT gated on IsDepleted (see method docs).
+        if (harvestable.AllowDestruction
             && harvestable.AllowNpcDestruction
             && harvestable.HasAnyDestructionOutput(wantedItems))
         {
@@ -237,10 +242,14 @@ public class HarvestingBuilding : CommercialBuilding
     private void HandleHarvestableStateChanged(Harvestable harvestable)
     {
         if (harvestable == null || TaskManager == null) return;
-        // Only re-register on flips INTO a ready state. Deplete events also fire
-        // OnStateChanged but CanHarvest returns false there — the existing task on the worker
-        // auto-cancels on next IsValid check, no work needed here.
-        if (!harvestable.CanHarvest()) return;
+        // Re-register on EVERY state flip, both directions:
+        //   - "ready" flip (Respawn / SetReady): yield path may have just opened
+        //   - "depleted" flip on a perennial: yield is gone but destruction is still valid
+        //     (chop a depleted-perennial apple tree for wood). Without re-registering on
+        //     this branch, a player picking the apples leaves no destroy task until the
+        //     next daily zone scan — buildings sit idle on a wood source they can see.
+        // TaskManager.RegisterTask is idempotent (dedup by target), so over-calling here
+        // is safe.
         TryRegisterTaskFor(harvestable);
     }
 

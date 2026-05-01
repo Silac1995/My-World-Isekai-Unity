@@ -3,7 +3,7 @@ type: system
 title: "Visuals"
 tags: [visuals, sprites, spine, animation, clothing, wounds, tier-2]
 created: 2026-04-19
-updated: 2026-04-27
+updated: 2026-05-01
 sources: []
 related:
   - "[[character]]"
@@ -586,6 +586,7 @@ Positions can be random (`Random.insideUnitCircle` mapped to UV space) or bone-d
 - **Batching break via `Graphic.color` / `SpriteRenderer.color`** — always use MPB. Project rule #25.
 - **Teleport oscillation** — after a character teleports, physics chains oscillate because the delta is huge. Call `visual.ResetPhysics()` after any position snap.
 - **Dismembered parts still rendering** — a skin swap that doesn't include an explicit `prosthetic/none` attachment can leak an old prosthetic. Always include base or prosthetic explicitly in `CombineSkins()`.
+- **Carry-visual NRE blocks late-joiners (host-only)** — `HandsController.AttachVisualToHand` instantiates `ItemSO.WorldItemPrefab` (which carries a `NetworkObject`) under the player's hand bone but never `Spawn()`s it. Without mitigation, NGO's `SortParentedNetworkObjects` walks the player's `GetComponentsInChildren<NetworkObject>()` during initial-sync to a late joiner, picks up the unspawned clone, and `NetworkObject.Serialize` (`NetworkObject.cs:3172`) NREs because `NetworkManagerOwner == null`. Symptom: while the host carries any item, late-joining clients can never connect. Mitigated 2026-05-01 by `HandsController.StripNetworkComponents`, which `DestroyImmediate`'s every NetworkBehaviour + NetworkObject from the carry visual after `Initialize`. Bug-class doc: [[dont-clone-prefabs-with-networkobject-for-visuals]].
 
 ## Open questions / TODO
 
@@ -602,6 +603,7 @@ Positions can be random (`Random.insideUnitCircle` mapped to UV space) or bone-d
 - 2026-04-22 — Added §Skin Bones section (wings, optional body extensions). Decision rule: bake in master skeleton vs Skin Bones. Wings on Track 2 animation channel. — Claude / [[kevin]]
 - 2026-04-22 — Added §Archetype Families section. Multi-family architecture (humanoid / quadruped / bird / insect / aquatic / unique monster) with one shared `SpineCharacterVisual` class, data-driven via archetype SO. Added family-specific slot layouts and animation track conventions. — Claude / [[kevin]]
 - 2026-04-27 — Documented `HandsController` as the **exception** to "visuals don't own save data": it owns the in-hand `CarriedItem` (gameplay state, not visual state) and now implements `ICharacterSaveData<HandsSaveData>` directly. Cross-linked to [[character-equipment]] and [[save-load]]. — claude
+- 2026-05-01 — Fixed `HandsController.AttachVisualToHand` carry-visual NRE blocking late-joiner clients while the host carries any item. Added private static `StripNetworkComponents` helper that `DestroyImmediate`'s every NetworkBehaviour + NetworkObject from the visual clone after `Initialize`. Cross-linked the gotcha [[dont-clone-prefabs-with-networkobject-for-visuals]] which now documents both failure modes (host scene-sync NRE / client rendering). — claude
 
 ## Sources
 - [ICharacterVisual.cs](../../Assets/Scripts/Character/Visual/ICharacterVisual.cs)

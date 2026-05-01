@@ -2707,6 +2707,15 @@ MonoBehaviour:
   _buildingZone: {fileID: 1543226207171321216}
   _deliveryZone: {fileID: 611044806541919163}
   _constructionRequirements: []
+  _defaultFurnitureLayout:
+  - ItemSO: {fileID: 11400000, guid: 6e287635ebd516b468a2eb5e2c1b456a, type: 2}
+    LocalPosition: {x: -7, y: 0, z: 4.9582}
+    LocalEulerAngles: {x: 0, y: 0, z: 0}
+    TargetRoom: {fileID: 175762224524579397}
+  - ItemSO: {fileID: 11400000, guid: c48f624b69e3054479bf2af6637b5355, type: 2}
+    LocalPosition: {x: 5, y: 0, z: -1}
+    LocalEulerAngles: {x: 0, y: 0, z: 0}
+    TargetRoom: {fileID: 175762224524579397}
   _prefabId: B001-Crafting
   NetworkBuildingId:
     UpdateTraits:
@@ -2860,15 +2869,6 @@ MonoBehaviour:
     communityZones: []
     ownedBuildings: []
   _storageZone: {fileID: 476241650930320217}
-  _defaultFurnitureLayout:
-  - ItemSO: {fileID: 11400000, guid: 6e287635ebd516b468a2eb5e2c1b456a, type: 2}
-    LocalPosition: {x: -7, y: 0, z: 4.9582}
-    LocalEulerAngles: {x: 0, y: 0, z: 0}
-    TargetRoom: {fileID: 175762224524579397}
-  - ItemSO: {fileID: 11400000, guid: c48f624b69e3054479bf2af6637b5355, type: 2}
-    LocalPosition: {x: 5, y: 0, z: -1}
-    LocalEulerAngles: {x: 0, y: 0, z: 0}
-    TargetRoom: {fileID: 175762224524579397}
   _pickupZone: {fileID: 476241650930320217}
   _toolStorageFurniture: {fileID: 0}
   _helpWantedFurniture: {fileID: 0}

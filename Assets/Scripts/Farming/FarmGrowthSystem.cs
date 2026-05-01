@@ -122,14 +122,14 @@ namespace MWI.Farming
             if (go.TryGetComponent<NetworkObject>(out var netObj) && !netObj.IsSpawned)
             {
                 netObj.Spawn(true);
-                // Parent under MapController for hierarchy organisation. This was previously
-                // skipped because of an NGO late-joiner NRE inside NetworkObject.Serialize
-                // (NGO's SceneEventData.SortParentedNetworkObjects walks GetComponentsInChildren
-                // and Serialize'd a NetworkManagerOwner-null entry). The 2026-04-29 unification
-                // (lazy registry init, save/load completeness, snapshot path) closed the
-                // related bug surface; if the NRE returns under "host plants crop → late
-                // client joins" testing, revert this block to a no-op and crops live at
-                // scene root again — back-reference to the map still works via Harvestable._map.
+                // Parent under MapController for hierarchy organisation. The 2026-04-29 wiki
+                // note attributing a late-joiner NRE to this parenting was a misdiagnosis: the
+                // 2026-05-01 user-pinned repro proved the actual NRE source was an unspawned
+                // NetworkObject inside HandsController.AttachVisualToHand's WorldItemPrefab
+                // clone (since stripped via HandsController.StripNetworkComponents). The previous
+                // "crop matures → client can't join" repro happened to coincide with the host
+                // also carrying a watering can. With that confounding cause removed, this
+                // TrySetParent is safe.
                 if (_map != null && _map.TryGetComponent<NetworkObject>(out var mapNetObj))
                 {
                     if (!netObj.TrySetParent(mapNetObj, worldPositionStays: true))

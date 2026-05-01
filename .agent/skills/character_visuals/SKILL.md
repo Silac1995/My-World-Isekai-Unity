@@ -50,6 +50,18 @@ The architecture uses a hub, `CharacterBodyPartsController`, which contains sub-
 
 When extending the visual hand system, **do not** drop `_carriedItem` into a non-saved field or a separate sibling component without porting the save contract — the in-hand item must round-trip through bed-save / portal-save / pause-save.
 
+## Carry visual — Network-component strip (CRITICAL)
+
+`HandsController.AttachVisualToHand` instantiates `ItemSO.WorldItemPrefab` as a transform-child of the player's hand bone (so the carried item visually follows hand animation). The `WorldItemPrefab` carries a `NetworkObject` (because real dropped instances need it), and that's a problem for this carry-clone path: the clone is **never** `Spawn()`'d, so its `NetworkObject` is "homeless" — but it's still a transform-child of the player's spawned `NetworkObject`.
+
+NGO's `SceneEventData.SortParentedNetworkObjects` walks every spawned root NO's `GetComponentsInChildren<NetworkObject>()` during initial-sync to a late joiner. With the carry visual still in the hierarchy, the unspawned clone is surfaced into the sync list, and `NetworkObject.Serialize` (`NetworkObject.cs:3172`) NREs because `NetworkManagerOwner == null`. **Symptom:** while the host is carrying any item, late-joining clients can never connect — host throws every `ProcessPendingApprovals` tick. Drop the item → next connection works.
+
+**Fix (in place since 2026-05-01):** `AttachVisualToHand` calls a private static `StripNetworkComponents(_carriedVisual)` after the visual setup completes. The helper recursively `DestroyImmediate`'s every `NetworkBehaviour` (including the just-`Initialize`'d `WorldItem`) and every `NetworkObject`. Order matters — NetworkBehaviours first, then NetworkObject. After this, the carry visual is a pure rendering hierarchy with no networking surface, and NGO's child walk finds nothing.
+
+**When extending the carry-visual flow** (e.g. swapping `WorldItemPrefab` for a different visual source, adding multi-hand carry, mirroring this for a backpack / shoulder visual): you MUST keep the strip in place, or switch to instantiating `ItemSO.ItemPrefab` directly (the visual sub-prefab without networking — same approach `StorageVisualDisplay` uses). See [[wiki/gotchas/dont-clone-prefabs-with-networkobject-for-visuals]] for the full rule and the alternative paths.
+
+**Test multiplayer end-to-end:** the bug is host-only (only host writes scene-sync to joiners; client-side carry visuals never propagate). Always test "host carries → second client tries to join" — host-only smoke testing hides this for hours.
+
 ## Extensions beyond body parts
 
 The logical API documented here (eyes, hands, mouth, ears, hair) is **one layer** of the visual system. The broader visual architecture — clothing layers (underwear/clothing/armor), physics-enabled garments (skirts/capes), wound overlays (bruises/cuts), dismemberment (amputations + prosthetics), and cross-archetype equipment sockets (cap on a human vs a wolf) — is documented here:

@@ -91,7 +91,9 @@ Harvest hits MaxHarvestCount → Deplete()
 
 ### 5. HarvestingBuilding event subscription (post-Phase 5 unification)
 
-`HarvestingBuilding.AddToTrackedHarvestables` subscribes to `Harvestable.OnStateChanged` (NOT the legacy `OnRespawned`). The unified event fires on Deplete + Respawn (auto-respawn-after-N-days for wild scenery) AND on perennial refill cycle (crop-aware `SetReady` / `SetDepleted`). Single subscription tracks every event source. `HandleHarvestableStateChanged` re-registers a `HarvestResourceTask` only when `harvestable.CanHarvest()` flips true (depletion fires `OnStateChanged` too but is ignored — the worker's existing task auto-cancels on its IsValid check).
+`HarvestingBuilding.AddToTrackedHarvestables` subscribes to `Harvestable.OnStateChanged` (NOT the legacy `OnRespawned`). The unified event fires on Deplete + Respawn (auto-respawn-after-N-days for wild scenery) AND on perennial refill cycle (crop-aware `SetReady` / `SetDepleted`). Single subscription tracks every event source. `HandleHarvestableStateChanged` re-evaluates via `TryRegisterTaskFor` on **every** flip — both directions. Re-registering on the depleted flip is required because destruction tasks remain valid through depletion (yield depletion ≠ destruction availability — a depleted-perennial apple tree still chops to wood). Without re-registering on this branch, a player picking the apples leaves a wood-seeking building with no destroy task until the next daily zone scan. `BuildingTaskManager.RegisterTask` dedups by target so over-calling is safe.
+
+**Yield vs destruction independence (2026-05-01):** `DestroyHarvestableTask.IsValid`, `HarvestingBuilding.TryRegisterTaskFor`, and `GoapAction_ExploreForHarvestables.ScanForHarvestables` are NOT gated on `IsDepleted` for the destruction path. The two paths are independent: yield charges (apples) deplete on harvest, destruction outputs (wood) come from chopping the physical node. One-shot crops despawn on depletion (covered by null check), so this only newly-allows perennials-in-refill and any wild scenery that opts in with `AllowDestruction` + `AllowNpcDestruction` + non-empty destruction outputs.
 
 The tracked node list is exposed read-only as `HarvestingBuilding.TrackedHarvestables` (`IReadOnlyList<Harvestable>`) — added 2026-04-29 so the Dev-Mode Building inspector (`BuildingInspectorView.AppendTrackedHarvestables`) can show every scanned node with its `IsDepleted` / `RemainingYield` / `Category` / `IsCellCoupled` / `CellX,CellZ` state. Don't write to the underlying `_trackedHarvestables` from outside the building — go through `AddToTrackedHarvestables` / `ClearTrackedHarvestables` so the `OnStateChanged` subscription stays correctly hooked.
 
@@ -99,9 +101,15 @@ The tracked node list is exposed read-only as `HarvestingBuilding.TrackedHarvest
 
 `CropRegistry` and `TerrainTypeRegistry` lazy-init on first `Get()` call. Joining clients skip `GameLauncher.LaunchSequence` and would otherwise hit empty registries. See [[wiki/gotchas/static-registry-late-joiner-race]] — the fix is permanent, but you must apply the same pattern to any new static registry (e.g. a future `HarvestableNodeRegistry` for non-crop SOs).
 
-### 7. NGO parenting bug (don't re-parent runtime-spawned NetworkObjects)
+### 7. NGO parenting — `TrySetParent` is fine; the prior wiki note was a misdiagnosis
 
-`FarmGrowthSystem.SpawnHarvestableAt` deliberately does NOT call `TrySetParent(MapController, …)` — that triggered an NGO bug where late-joining clients NRE inside `NetworkObject.Serialize` line 3182 during initial-sync. Crops live at scene root; the back-reference to their map lives in `Harvestable._map`. If a designer asks "why aren't crops nested under MapController in the Hierarchy panel?" — that's why.
+`FarmGrowthSystem.SpawnHarvestableAt` calls `NetworkObject.TrySetParent(mapNetObj, …)` after `Spawn(true)` to nest crops under MapController for editor-hierarchy organisation. This works.
+
+The 2026-04-29 wiki note (`farming.md:226`) and earlier commit history attributed a late-joiner `NetworkObject.Serialize` NRE to this parenting and reverted it. The 2026-05-01 deep-dive repro proved that diagnosis was incorrect: the actual NRE source was an unspawned NetworkObject inside `HandsController.AttachVisualToHand`'s `WorldItemPrefab` clone parented under the player's hand bone. Whoever observed the "crops break joining" symptom in 2026-04-29 was almost certainly also carrying a tool / item at the time — when both confounders are present together, the symptom is identical, but the root cause is the carry visual, not the crop parenting.
+
+The carry-visual issue is fixed permanently in `HandsController.StripNetworkComponents` (added 2026-05-01). With that confounder gone, crop `TrySetParent` is safe.
+
+If a future late-joiner NRE returns and matches the `NetworkObject.cs:3172` stack, **do not** revert this `TrySetParent` first — instead grep all callsites that `Instantiate` a NetworkObject-bearing prefab without subsequently `Spawn`-ing it (visual-only clones), and verify they strip network components. The carry-visual class of bug is the recurring threat, not the crop parenting.
 
 ### 8. HandsController is non-networked
 

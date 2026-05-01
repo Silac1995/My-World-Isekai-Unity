@@ -14,6 +14,37 @@ The implementation followed the design exactly, with two tightenings worth notin
 
 Both deviations are documented in the matching commit messages.
 
+## Post-ship hotfix — DestroyImmediate (2026-05-01)
+
+The shipped `ConvertNestedNetworkFurnitureToLayout` used plain async `Destroy()` to
+remove the doomed children. This created a same-frame race with every Building
+Instantiate→Spawn callsite (`MapController.SpawnSavedBuildings`,
+`MapController.WakeUp`, `BuildingPlacementManager`): `Destroy` queues for end-of-frame,
+but `NetworkObject.Spawn()` runs synchronously in the same frame, so the doomed
+children were still physically alive in the hierarchy when NGO walked them.
+
+Two symptoms:
+1. **Silent functional bug:** `TrySpawnDefaultFurniture`'s dedup snapshot at
+   `GetComponentsInChildren<Furniture>(includeInactive: true)` saw the doomed children
+   as "already present" — every default-furniture slot was skipped and the building
+   spawned empty.
+2. **Client-join NRE:** the half-walked NetworkObject children left enough stale state
+   in NGO's spawned-objects path to NRE at `NetworkObject.Serialize` (line 3172) the
+   next time a client joined the host.
+
+Fix: `Destroy(furniture.gameObject)` → `DestroyImmediate(furniture.gameObject)` at
+`Assets/Scripts/World/Buildings/Building.cs` lines 667 + 707. Safe in this exact
+context because (a) the child NOs have `IsSpawned == false` and are absent from
+`SpawnedObjects`, (b) the destroyed object is a child GameObject, not the GameObject
+whose Awake we're inside. The docstring at line 601-640 now explicitly documents why
+`DestroyImmediate` is mandatory, and a memory entry
+(`feedback_destroyimmediate_in_awake_strip.md`) captures the gotcha.
+
+Companion safety net: `SpawnDefaultFurnitureSlot` now wraps its post-Spawn parenting
++ registration in a try/catch that **despawns** the just-Spawned NetworkObject if any
+subsequent step throws — preventing a half-set-up NO from sitting in
+`SpawnedObjectsList` and NRE'ing the next scene-sync.
+
 ## Problem
 
 Authoring a building prefab today forces a painful split between **what

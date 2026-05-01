@@ -25,6 +25,7 @@
    - Wire `_readySprite` → the "fruited" sprite (e.g. tree with apples).
    - Wire `_depletedSprite` → the "fruitless" sprite (e.g. tree without apples). Required only for perennials.
    - The base `Harvestable` fields (`_harvestOutputs`, `_maxHarvestCount`, `_isDepletable`, `_respawnDelayDays`) can be left default — `CropHarvestable.InitializeFromCell` overwrites them at runtime from the `CropSO`.
+   - **`UnityEngine.AI.NavMeshObstacle`** with `Shape = Box`, `Center = (0, 0.25, 0)`, `Size = (0.5, 0.5, 0.5)`, `Carving = true`, `CarveOnlyStationary = true`. Crops are spawned at runtime *after* the `NavMeshSurface` is baked, so `NavMeshModifierVolume` (the wilderness-harvestable choice) wouldn't carve without an explicit rebake. `NavMeshObstacle.Carving` is the runtime-carve primitive — cheap and stable while the crop is stationary. `CropPlacementManager.DisableGhostInterference` already disables this on the placement ghost so the cursor sweep doesn't churn pathing for nearby NPCs.
    - Save the prefab in `Assets/Prefabs/Farming/`.
    - Drag the prefab back onto `CropSO._harvestablePrefab`.
 

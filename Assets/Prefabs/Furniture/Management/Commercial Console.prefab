@@ -464,7 +464,8 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
-    m_RemovedComponents: []
+    m_RemovedComponents:
+    - {fileID: 6445648937218201084, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
     m_RemovedGameObjects: []
     m_AddedGameObjects:
     - targetCorrespondingSourceObject: {fileID: 8021854465056481327, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
@@ -506,4 +507,4 @@ MonoBehaviour:
   _furnitureTag: 0
   _interactionPoint: {fileID: 0}
   _sizeInCells: {x: 0, y: 0}
-  _furnitureItemSO: {fileID: 11400000, guid: 6e287635ebd516b468a2eb5e2c1b456a, type: 2}
+  _furnitureItemSO: {fileID: 11400000, guid: 9b71bae917f91364d9e132a390a59af3, type: 2}

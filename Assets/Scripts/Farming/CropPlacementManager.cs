@@ -1,5 +1,6 @@
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.AI;
 using MWI.Terrain;
 using MWI.WorldSystem;
 
@@ -310,12 +311,15 @@ namespace MWI.Farming
 
         // Strip everything that would interfere with the ghost being a passive cursor:
         // network identity (clients shouldn't see it), colliders (don't block raycast or push),
-        // rigidbodies (don't fall), and put it on Ignore Raycast.
+        // rigidbodies (don't fall), NavMeshObstacles (don't carve the navmesh as the cursor
+        // sweeps over it — would cause pathing churn for every NPC during placement), and put
+        // it on Ignore Raycast.
         private static void DisableGhostInterference(GameObject ghost)
         {
             if (ghost.TryGetComponent(out NetworkObject netObj)) netObj.enabled = false;
             if (ghost.TryGetComponent(out Rigidbody rb)) rb.isKinematic = true;
             foreach (var col in ghost.GetComponentsInChildren<Collider>()) col.enabled = false;
+            foreach (var obs in ghost.GetComponentsInChildren<NavMeshObstacle>()) obs.enabled = false;
             int ignoreLayer = LayerMask.NameToLayer("Ignore Raycast");
             if (ignoreLayer >= 0) SetLayerRecursive(ghost, ignoreLayer);
         }
