@@ -99,7 +99,9 @@ public static class DevStorageFurnitureInspectorBuilder
             viewLayout.childControlWidth = true;
             viewLayout.childControlHeight = true;
             viewLayout.childForceExpandWidth = true;
-            viewLayout.childForceExpandHeight = true;
+            // feh=false so Header keeps its preferred 28 px and Slots' flexH=10 absorbs all leftover space
+            // — ensures the ScrollRect viewport gets a tight bound and content actually overflows + scrolls.
+            viewLayout.childForceExpandHeight = false;
 
             var viewComponent = viewRoot.AddComponent<StorageFurnitureInspectorView>();
 
@@ -222,6 +224,7 @@ public static class DevStorageFurnitureInspectorBuilder
         scrollRect.vertical = true;
         scrollRect.movementType = ScrollRect.MovementType.Clamped;
         scrollRect.scrollSensitivity = 20f;
+        scrollRect.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.Permanent;
 
         var viewport = new GameObject("Viewport", typeof(RectTransform));
         viewport.transform.SetParent(root.transform, worldPositionStays: false);

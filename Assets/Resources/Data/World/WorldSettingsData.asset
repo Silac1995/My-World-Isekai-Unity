@@ -59,3 +59,9 @@ MonoBehaviour:
     BuildingPrefab: {fileID: 7206197390350540711, guid: e77d7c4bb571b7844a1031c7a7e9a6d8, type: 3}
     InteriorPrefab: {fileID: 0}
     CommunityPriority: 3
+  - PrefabId: B007-FarmBuilding
+    BuildingName: Farm building
+    Icon: {fileID: 0}
+    BuildingPrefab: {fileID: 9115621722984573628, guid: 9b578bd502ab0614c8a54bd6ada9f5ac, type: 3}
+    InteriorPrefab: {fileID: 0}
+    CommunityPriority: 6

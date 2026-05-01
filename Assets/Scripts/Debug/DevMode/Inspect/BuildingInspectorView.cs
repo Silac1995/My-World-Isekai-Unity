@@ -17,6 +17,10 @@ using UnityEngine;
 ///   4.  Commercial — only when the target is a <see cref="CommercialBuilding"/>: jobs (with
 ///       per-worker live action / goal), on-shift roster, owning Community, inventory count,
 ///       operational flag.
+///   4b. Inventory — only commercial: full breakdown of the replicated central inventory
+///       (<see cref="CommercialBuilding.GetInventoryCountsByItemSO"/>), sorted by count desc.
+///       Does <i>not</i> include items inside child <see cref="StorageFurniture"/> — those are
+///       inspectable individually via Ctrl+Click on the chest/shelf/barrel.
 ///   5.  Wanted Resources — only when the target is a <see cref="HarvestingBuilding"/>: the
 ///       authored <c>WantedResources</c> config with current stock vs cap.
 ///   5b. Tracked Harvestables — only HarvestingBuilding: nodes scanned in the
@@ -101,6 +105,9 @@ public class BuildingInspectorView : MonoBehaviour, IBuildingInspectorView
         if (b is CommercialBuilding cb)
         {
             AppendCommercial(sb, cb);
+            sb.AppendLine();
+
+            AppendInventory(sb, cb);
             sb.AppendLine();
 
             // Harvesting-only "Wanted Resources" + "Tracked Harvestables" — only render when
@@ -316,6 +323,42 @@ public class BuildingInspectorView : MonoBehaviour, IBuildingInspectorView
         else
         {
             sb.AppendLine("  <b>Time clock:</b> <color=grey>none</color>");
+        }
+    }
+
+    private static void AppendInventory(StringBuilder sb, CommercialBuilding cb)
+    {
+        sb.AppendLine("<b><color=#FFFFFF>Inventory</color></b>");
+
+        // Server- and client-safe: pulls from the replicated _inventoryItemIds NetworkList,
+        // so this works on every peer (the raw _inventory is server-only).
+        var counts = cb.GetInventoryCountsByItemSO();
+        if (counts == null || counts.Count == 0)
+        {
+            sb.AppendLine("  <color=grey>(empty)</color>");
+            return;
+        }
+
+        int totalUnits = 0;
+        foreach (var v in counts.Values) totalUnits += v;
+
+        sb.Append("  <b>Total:</b> ").Append(totalUnits);
+        sb.Append(" <color=#888888>across ").Append(counts.Count).AppendLine(" item type(s)</color>");
+
+        // Sort by count desc so the most-stocked items surface first — matches what a designer
+        // typically wants to see ("what's piling up here?"). Per-frame allocation is acceptable;
+        // this view is debug-only and runs only while DevMode is open with a building selected.
+        var entries = new List<KeyValuePair<ItemSO, int>>(counts);
+        entries.Sort((a, b) => b.Value.CompareTo(a.Value));
+
+        for (int i = 0; i < entries.Count; i++)
+        {
+            var kvp = entries[i];
+            ItemSO item = kvp.Key;
+            if (item == null) continue;
+            string itemName = !string.IsNullOrEmpty(item.ItemName) ? item.ItemName : item.name;
+            sb.Append("  • ").Append(itemName);
+            sb.Append(" <color=#888888>x").Append(kvp.Value).AppendLine("</color>");
         }
     }
 

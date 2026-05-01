@@ -3052,7 +3052,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8824244859434443465, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       propertyPath: _unlockedBuildingIds.Array.size
-      value: 6
+      value: 7
       objectReference: {fileID: 0}
     - target: {fileID: 8824244859434443465, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       propertyPath: '_unlockedBuildingIds.Array.data[2]'
@@ -3069,6 +3069,10 @@ PrefabInstance:
     - target: {fileID: 8824244859434443465, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       propertyPath: '_unlockedBuildingIds.Array.data[5]'
       value: B003-MediumHouseA
+      objectReference: {fileID: 0}
+    - target: {fileID: 8824244859434443465, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
+      propertyPath: '_unlockedBuildingIds.Array.data[6]'
+      value: B007-FarmBuilding
       objectReference: {fileID: 0}
     - target: {fileID: 9197436005975429803, guid: 23ee0472a7b8e0b498c4eabb8c470943, type: 3}
       propertyPath: m_AnchorMax.y

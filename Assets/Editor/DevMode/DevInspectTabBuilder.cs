@@ -154,6 +154,15 @@ public static class DevInspectTabBuilder
             inspectLayout.childForceExpandWidth = true;
             inspectLayout.childForceExpandHeight = true;
 
+            // Cap the tab's preferred height so it fits inside ContentRoot (600x800 with feh=false on
+            // ContentRoot's VLG). Without this, InspectContent's preferred grows with whatever inspector
+            // view has the largest content and overflows the panel — breaking the inner ScrollRects'
+            // ability to clip and scroll. 720 ≈ 800 − padding(24) − TabBar(36) − spacing(8).
+            var inspectLE = inspectContent.AddComponent<LayoutElement>();
+            inspectLE.minHeight = 400;
+            inspectLE.preferredHeight = 720;
+            inspectLE.flexibleHeight = 0;
+
             // Placeholder ---------------------------------------------------------------
             GameObject placeholder = CreateTMPLabel(inspectContent.transform, "Placeholder",
                 "Select an InteractableObject to inspect it.", referenceFont, fontSize: 18,
@@ -183,7 +192,9 @@ public static class DevInspectTabBuilder
             inspectorViewLayout.childControlWidth = true;
             inspectorViewLayout.childControlHeight = true;
             inspectorViewLayout.childForceExpandWidth = true;
-            inspectorViewLayout.childForceExpandHeight = true;
+            // feh=false so Header / TabBar keep their preferred sizes (28 / 58) and SubTabContents'
+            // flexH=10 absorbs all leftover — keeps the per-sub-tab ScrollRects tight against the panel.
+            inspectorViewLayout.childForceExpandHeight = false;
 
             var characterInspectorView = inspectorViewGO.AddComponent<CharacterInspectorView>();
 
@@ -436,6 +447,9 @@ public static class DevInspectTabBuilder
         scrollRect.vertical = true;
         scrollRect.movementType = ScrollRect.MovementType.Clamped;
         scrollRect.scrollSensitivity = 20f;
+        // Permanent (not AutoHide) so the scrollbar track is always visible — clarifies that
+        // the panel is scrollable when content fits, and avoids "where did my scrollbar go" UX.
+        scrollRect.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.Permanent;
 
         // Viewport
         var viewport = new GameObject("Viewport", typeof(RectTransform));
