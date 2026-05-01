@@ -197,12 +197,32 @@ public class GoapAction_FetchSeed : GoapAction
 
         // Movement gate: prefer InteractableObject.IsCharacterInInteractionZone (canonical
         // proximity API per project rules), fall back to flat-XZ distance for storage that
-        // doesn't expose an InteractionZone collider.
+        // doesn't expose an InteractionZone collider. Plus an "arrived but barely outside
+        // the zone" softlock guard: the navmesh path target is computed from the zone's
+        // bounds.ClosestPoint and is not always inside the zone (the InteractionZone can be
+        // narrower than the path-target landing radius). Without the guard the worker
+        // arrives, !inZone keeps returning, _isMoving stays true so SetDestination is never
+        // re-issued → stuck in front of the chest forever.
         var interactable = storage.GetComponent<InteractableObject>();
         bool inZone;
         if (interactable != null && interactable.InteractionZone != null)
         {
             inZone = interactable.IsCharacterInInteractionZone(worker);
+            if (!inZone)
+            {
+                var movement = worker.CharacterMovement;
+                bool arrived = movement == null
+                    || !movement.HasPath
+                    || movement.RemainingDistance <= movement.StoppingDistance + 0.5f;
+                if (arrived)
+                {
+                    Vector3 ip = storage.GetInteractionPosition(worker.transform.position);
+                    Vector3 wp = worker.transform.position;
+                    Vector3 a = new Vector3(wp.x, 0f, wp.z);
+                    Vector3 b = new Vector3(ip.x, 0f, ip.z);
+                    if (Vector3.Distance(a, b) <= 2f) inZone = true;
+                }
+            }
         }
         else
         {

@@ -118,13 +118,28 @@ public class GoapAction_FetchToolFromStorage : GoapAction
 
         // Movement gate: prefer InteractableObject.IsCharacterInInteractionZone
         // (canonical proximity API). Fall back to a flat-XZ distance check when the
-        // storage doesn't expose an InteractionZone collider. The InteractableObject
-        // reference is cached once in the constructor (see _storageInteractable).
+        // storage doesn't expose an InteractionZone collider. Plus arrived-but-just-
+        // outside softlock guard (same fix as GoapAction_FetchSeed).
         var interactable = _storageInteractable;
         bool inZone;
         if (interactable != null && interactable.InteractionZone != null)
         {
             inZone = interactable.IsCharacterInInteractionZone(worker);
+            if (!inZone)
+            {
+                var movement = worker.CharacterMovement;
+                bool arrived = movement == null
+                    || !movement.HasPath
+                    || movement.RemainingDistance <= movement.StoppingDistance + 0.5f;
+                if (arrived)
+                {
+                    Vector3 ip = storage.GetInteractionPosition(worker.transform.position);
+                    Vector3 wp = worker.transform.position;
+                    Vector3 a = new Vector3(wp.x, 0f, wp.z);
+                    Vector3 b = new Vector3(ip.x, 0f, ip.z);
+                    if (Vector3.Distance(a, b) <= 2f) inZone = true;
+                }
+            }
         }
         else
         {
