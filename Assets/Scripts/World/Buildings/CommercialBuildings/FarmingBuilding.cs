@@ -151,6 +151,17 @@ public class FarmingBuilding : HarvestingBuilding, IStockProvider
         }
     }
 
+    /// <summary>
+    /// Watering cans are this farm's "tool stock" — when a JobLogisticsManager NPC drops
+    /// one off, <see cref="CommercialBuilding.FindStorageFurnitureForItem"/> routes it
+    /// directly into <see cref="CommercialBuilding.ToolStorage"/> instead of leaving it in
+    /// the loose <see cref="CommercialBuilding.StorageZone"/>.
+    /// </summary>
+    public override IEnumerable<ItemSO> GetToolStockItems()
+    {
+        if (_wateringCanItem != null) yield return _wateringCanItem;
+    }
+
     // ── Daily scans (Task 6) ────────────────────────────────────────
 
     protected override void OnEnable()

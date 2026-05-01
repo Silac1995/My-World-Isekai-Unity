@@ -395,11 +395,34 @@ public class GoapAction_GatherStorageItems : GoapAction
 
         if (carriedItem != null && _building != null)
         {
+            var toolStorage = _building.ToolStorage;
+            bool isTool = _building.IsBuildingToolItem(carriedItem.ItemSO);
+
+            // Tool-priority pre-pass: building tools (e.g. a watering can the LogisticsManager
+            // just hauled in from the StorageZone or BuildingZone) route to ToolStorage when
+            // available, so the tool drawer stays consolidated. Mirrors the same rule applied
+            // by CommercialBuilding.FindStorageFurnitureForItem at the building-API layer.
+            if (isTool
+                && toolStorage != null
+                && !toolStorage.IsLocked
+                && (_excludedFurniture == null || !_excludedFurniture.Contains(toolStorage))
+                && toolStorage.HasFreeSpaceForItem(carriedItem))
+            {
+                _targetFurniture = toolStorage;
+                _targetPos = worker != null
+                    ? toolStorage.GetInteractionPosition(worker.transform.position)
+                    : toolStorage.GetInteractionPosition();
+                return;
+            }
+
             // Walk furniture in declaration order, skipping any we've already failed to reach.
+            // Non-tool items skip the tool storage so general inventory can't fill the slot
+            // reserved for tools.
             foreach (var candidate in _building.GetFurnitureOfType<StorageFurniture>())
             {
                 if (candidate == null || candidate.IsLocked) continue;
                 if (_excludedFurniture != null && _excludedFurniture.Contains(candidate)) continue;
+                if (!isTool && candidate == toolStorage) continue;
                 if (!candidate.HasFreeSpaceForItem(carriedItem)) continue;
 
                 _targetFurniture = candidate;

@@ -167,12 +167,73 @@ public abstract class CommercialBuilding : Building
     public Zone StorageZone => _storageZone;
     public Zone PickupZone => _pickupZone;
 
-    /// <summary>The StorageFurniture acting as this building's tool storage, or null if none assigned.</summary>
+    /// <summary>
+    /// The StorageFurniture acting as this building's tool storage. Resolution order:
+    /// <list type="number">
+    /// <item>If <c>_toolStorageFurniture</c> is still alive, return it.</item>
+    /// <item>Snapshot-based rebind to the inspector-assigned crate (FurnitureItemSO + local
+    ///   position match), captured before <c>base.Awake</c> destroyed the original.</item>
+    /// <item>Convention fallback: the FIRST <see cref="StorageFurniture"/> child in the
+    ///   building. Designers don't have to assign anything — by default, the first crate in
+    ///   the prefab becomes the tool storage. Caching is automatic so subsequent accesses
+    ///   are O(1).</item>
+    /// </list>
+    /// Returns null only when the building has no <see cref="StorageFurniture"/> children at
+    /// all, in which case <see cref="HasToolStorage"/> is false and tool-needing GOAP actions
+    /// fail-cleanly.
+    /// </summary>
     public StorageFurniture ToolStorage
-        => ResolveLazyFurnitureRef(ref _toolStorageFurniture, _toolStorageRefSO, _toolStorageRefLocalPos, _toolStorageRefSnapshotted);
+    {
+        get
+        {
+            // Tier 1: cached field still alive.
+            if (_toolStorageFurniture != null) return _toolStorageFurniture;
 
-    /// <summary>True if the building has a tool storage furniture assigned.</summary>
+            // Tier 2: snapshot-based rebind to the inspector-assigned crate.
+            if (_toolStorageRefSnapshotted)
+            {
+                var rebound = ResolveLazyFurnitureRef(
+                    ref _toolStorageFurniture,
+                    _toolStorageRefSO,
+                    _toolStorageRefLocalPos,
+                    true);
+                if (rebound != null) return rebound;
+            }
+
+            // Tier 3: first-crate convention fallback.
+            var firstStorage = GetComponentInChildren<StorageFurniture>(includeInactive: false);
+            if (firstStorage != null) _toolStorageFurniture = firstStorage;
+            return _toolStorageFurniture;
+        }
+    }
+
+    /// <summary>True if the building has a tool storage furniture assigned (or any
+    /// <see cref="StorageFurniture"/> child for the convention fallback).</summary>
     public bool HasToolStorage => ToolStorage != null;
+
+    /// <summary>
+    /// Subclass extension point: the <see cref="ItemSO"/>s this building treats as "tools" for
+    /// logistics-routing purposes. When a <see cref="JobLogisticsManager"/> NPC drops off an
+    /// item matching one of these and <see cref="ToolStorage"/> is available, the deposit is
+    /// redirected from the loose <see cref="StorageZone"/> into the tool storage furniture.
+    /// Default: empty (no tools). Override on subclasses that own tools (e.g.
+    /// <see cref="FarmingBuilding"/> yields its watering can).
+    /// </summary>
+    public virtual IEnumerable<ItemSO> GetToolStockItems()
+    {
+        yield break;
+    }
+
+    /// <summary>True if <paramref name="item"/> appears in <see cref="GetToolStockItems"/>.</summary>
+    public bool IsBuildingToolItem(ItemSO item)
+    {
+        if (item == null) return false;
+        foreach (var t in GetToolStockItems())
+        {
+            if (t == item) return true;
+        }
+        return false;
+    }
 
     public IReadOnlyList<ItemInstance> Inventory => _inventory;
 
@@ -1897,11 +1958,26 @@ public abstract class CommercialBuilding : Building
     public StorageFurniture FindStorageFurnitureForItem(ItemInstance item)
     {
         if (item == null) return null;
+
+        var toolStorage = ToolStorage;
+        bool isTool = IsBuildingToolItem(item.ItemSO);
+
+        // Tool-priority pre-pass: building tools route to ToolStorage first when it has
+        // free space. Keeps watering cans / axes / etc. consolidated in the tool drawer
+        // instead of getting first-fit-scattered into general inventory chests.
+        if (isTool && toolStorage != null && !toolStorage.IsLocked && toolStorage.HasFreeSpaceForItem(item))
+        {
+            return toolStorage;
+        }
+
+        // First-fit by furniture order. Non-tool items SKIP the tool storage so general
+        // inventory (seeds, produce) can't fill the slot reserved for tools.
         var cached = GetStorageFurnitureCached();
         for (int i = 0; i < cached.Count; i++)
         {
             var furniture = cached[i];
             if (furniture == null || furniture.IsLocked) continue;
+            if (!isTool && furniture == toolStorage) continue;
             if (furniture.HasFreeSpaceForItem(item)) return furniture;
         }
         return null;
