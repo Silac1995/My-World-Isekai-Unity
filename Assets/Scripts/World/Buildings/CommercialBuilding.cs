@@ -14,50 +14,9 @@ using MWI.WorldSystem;
 [RequireComponent(typeof(BuildingLogisticsManager))]
 public abstract class CommercialBuilding : Building
 {
-    /// <summary>
-    /// One entry of <see cref="_defaultFurnitureLayout"/> — a furniture item the server spawns
-    /// as a child of the building when the building first comes into existence in a fresh world
-    /// (i.e. via <c>BuildingPlacementManager</c>, NOT via save-restore).
-    ///
-    /// Use this — NOT nested PrefabInstances inside the building prefab — for any furniture whose
-    /// prefab carries a NetworkObject. Nesting a network-bearing furniture instance inside a
-    /// runtime-spawned building prefab makes NGO half-register the child during the parent's
-    /// spawn, leaving a broken NetworkObject in <c>SpawnManager.SpawnedObjectsList</c> that
-    /// NRE's during the next client-sync (see wiki/gotchas/host-progressive-freeze-debug-log-spam.md
-    /// neighbouring entries on half-spawned NOs, and .agent/skills/multiplayer/SKILL.md §10).
-    /// </summary>
-    [System.Serializable]
-    public class DefaultFurnitureSlot
-    {
-        [Tooltip("FurnitureItemSO whose InstalledFurniturePrefab will be Instantiate+Spawn'd as a child of the building.")]
-        public FurnitureItemSO ItemSO;
-
-        [Tooltip("Position relative to the building root, in building-local space. Used to compute the world spawn position; the room's FurnitureGrid then snaps + occupies the matching cell.")]
-        public Vector3 LocalPosition;
-
-        [Tooltip("Rotation relative to the building root, in building-local space (Euler degrees).")]
-        public Vector3 LocalEulerAngles;
-
-        [Tooltip("Room whose FurnitureManager owns and grid-registers this furniture. Mirror of the legacy nested-prefab parenting (e.g. Forge/Room_Main/CraftingStation → set TargetRoom to Room_Main). Required for any furniture that should appear on a room's FurnitureGrid; if left null the furniture spawns parented directly under the building root and is NOT grid-registered.")]
-        public Room TargetRoom;
-    }
-
     [Header("Commercial")]
     [SerializeField] protected Community _ownerCommunity; // Collective owner
     [SerializeField] protected Zone _storageZone;
-
-    [Tooltip("Furniture spawned automatically by the server when this building first comes into existence in a fresh world.\n" +
-             "Skipped on save-restore — restored buildings reuse their persisted furniture state.\n" +
-             "Use this for any furniture whose prefab carries a NetworkObject; nesting a network-bearing furniture\n" +
-             "PrefabInstance directly inside the building prefab half-spawns the child and NRE's NGO sync.")]
-    [SerializeField] private List<DefaultFurnitureSlot> _defaultFurnitureLayout = new List<DefaultFurnitureSlot>();
-
-    /// <summary>
-    /// Set true after <see cref="TrySpawnDefaultFurniture"/> runs so multiple OnNetworkSpawn
-    /// invocations (rare, e.g. domain reload during a session) cannot duplicate the layout.
-    /// Not networked — clients never spawn furniture; this flag is server-only state.
-    /// </summary>
-    private bool _defaultFurnitureSpawned;
 
     [Tooltip("Optional outbound staging zone. When authored, the building's Logistics Manager " +
              "moves reserved ItemInstances from StorageZone into this zone before an incoming " +
@@ -254,8 +213,6 @@ public abstract class CommercialBuilding : Building
             {
                 _jobWorkerIds.Add(new FixedString64Bytes(""));
             }
-
-            TrySpawnDefaultFurniture();
         }
 
         _jobWorkerIds.OnListChanged += HandleJobWorkerIdChanged;
@@ -300,123 +257,6 @@ public abstract class CommercialBuilding : Building
         if (!DebugInventorySync) return;
         string role = IsServer ? "Server" : "Client";
         Debug.Log($"<color=#88ddff>[InventorySync:{role}-OnChanged]</color> {buildingName}: event={evt.Type} value='{evt.Value}' (NetworkList now {_inventoryItemIds.Count} entries).");
-    }
-
-    // =========================================================================
-    // DEFAULT FURNITURE SPAWN (server-only)
-    // =========================================================================
-
-    /// <summary>
-    /// Server-only. Instantiates and Spawn()s entries in <see cref="_defaultFurnitureLayout"/>
-    /// that don't already have a matching Furniture child on this building. The per-slot match
-    /// (by FurnitureItemSO) replaces the earlier "any Furniture child present → skip all" guard,
-    /// which was too aggressive: baked NetworkObject-FREE furniture (e.g. TimeClock on the Forge)
-    /// is a legitimate child and would have suppressed every slot. Survives the save-restore path
-    /// the same way: persisted furniture children block their corresponding slot from re-spawning,
-    /// while never-baked slots still spawn on first OnNetworkSpawn.
-    /// </summary>
-    private void TrySpawnDefaultFurniture()
-    {
-        if (_defaultFurnitureSpawned) return;
-        _defaultFurnitureSpawned = true;
-
-        if (_defaultFurnitureLayout == null || _defaultFurnitureLayout.Count == 0)
-        {
-            Debug.Log($"[CommercialBuilding] {buildingName}: TrySpawnDefaultFurniture — layout is empty, nothing to spawn.", this);
-            return;
-        }
-
-        // Snapshot existing Furniture children once. Per-slot match is by FurnitureItemSO ref.
-        var existing = GetComponentsInChildren<Furniture>(includeInactive: true);
-        var existingItemSOs = new System.Collections.Generic.HashSet<FurnitureItemSO>();
-        foreach (var f in existing)
-        {
-            if (f != null && f.FurnitureItemSO != null) existingItemSOs.Add(f.FurnitureItemSO);
-        }
-
-        Debug.Log($"[CommercialBuilding] {buildingName}: TrySpawnDefaultFurniture — layout count={_defaultFurnitureLayout.Count}, existing Furniture children={existing.Length}.", this);
-
-        for (int i = 0; i < _defaultFurnitureLayout.Count; i++)
-        {
-            var slot = _defaultFurnitureLayout[i];
-            if (slot == null || slot.ItemSO == null || slot.ItemSO.InstalledFurniturePrefab == null)
-            {
-                Debug.LogWarning($"[CommercialBuilding] {buildingName}: _defaultFurnitureLayout[{i}] is missing ItemSO or InstalledFurniturePrefab — slot skipped.", this);
-                continue;
-            }
-
-            if (existingItemSOs.Contains(slot.ItemSO))
-            {
-                Debug.Log($"[CommercialBuilding] {buildingName}: slot[{i}] '{slot.ItemSO.name}' already present as a baked or restored child — skipping spawn.", this);
-                continue;
-            }
-
-            try
-            {
-                SpawnDefaultFurnitureSlot(slot);
-            }
-            catch (System.Exception e)
-            {
-                Debug.LogException(e, this);
-            }
-        }
-
-        // Tier 2 cache invalidation: the just-spawned default furniture is now logically
-        // owned by this building. Force the StorageFurniture / Craftable caches to refresh
-        // on next access so suppliers can see new CraftingStations and storage drops can
-        // see new chests within the 2 s TTL window — without waiting for it to expire.
-        // See wiki/projects/optimisation-backlog.md entry #2 / D + A.
-        InvalidateStorageFurnitureCache();
-        if (this is CraftingBuilding crafting)
-        {
-            crafting.InvalidateCraftableCache();
-        }
-    }
-
-    /// <summary>
-    /// Server-only. Mirrors the player furniture-place flow at
-    /// <c>CharacterActions.RequestFurniturePlaceServerRpc</c>: Instantiate at world position,
-    /// <c>NetworkObject.Spawn()</c> as a top-level NO, then hand off to the target room's
-    /// <see cref="FurnitureManager.RegisterSpawnedFurniture"/> which re-parents the furniture
-    /// under the room and registers the cell occupancy on the room's <c>FurnitureGrid</c>.
-    /// NGO's <c>AutoObjectParentSync</c> replicates the post-spawn re-parent to clients.
-    /// </summary>
-    private void SpawnDefaultFurnitureSlot(DefaultFurnitureSlot slot)
-    {
-        Furniture prefab = slot.ItemSO.InstalledFurniturePrefab;
-        Vector3 worldPos = transform.TransformPoint(slot.LocalPosition);
-        Quaternion worldRot = transform.rotation * Quaternion.Euler(slot.LocalEulerAngles);
-
-        Furniture instance = Instantiate(prefab, worldPos, worldRot);
-
-        var netObj = instance.GetComponent<NetworkObject>();
-        if (netObj != null && !netObj.IsSpawned)
-        {
-            netObj.Spawn();
-        }
-
-        // Parent under the building root — the only NetworkObject in this hierarchy. Parenting
-        // under Room_Main (a NetworkBehaviour on a non-NO) throws NGO's InvalidParentException;
-        // the building root is the closest valid NO ancestor. Visually the furniture lives
-        // inside the building at the correct world position; logical room membership is tracked
-        // in the FurnitureManager._furnitures list (see RegisterSpawnedFurnitureUnchecked notes).
-        instance.transform.SetParent(transform, worldPositionStays: true);
-
-        // Use the UNCHECKED register path: default furniture is server-authored content (the level
-        // designer placed the slot), not runtime user input — CanPlaceFurniture validation is for
-        // the player-place flow. Unchecked register adds to grid occupancy + the room's furniture
-        // list WITHOUT touching transform.parent (we already parented above).
-        if (slot.TargetRoom != null && slot.TargetRoom.FurnitureManager != null)
-        {
-            slot.TargetRoom.FurnitureManager.RegisterSpawnedFurnitureUnchecked(instance, worldPos);
-        }
-        else if (slot.TargetRoom == null)
-        {
-            Debug.LogWarning(
-                $"[CommercialBuilding] {buildingName}: default furniture slot for '{slot.ItemSO.name}' has no TargetRoom. " +
-                $"Set TargetRoom on the slot so it appears in the room's FurnitureManager list.",
-                this);
-        }
     }
 
     // =========================================================================
