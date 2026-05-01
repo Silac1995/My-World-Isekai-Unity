@@ -105,6 +105,8 @@ Provides a discrete coordinate system over a room's `BoxCollider`.
 
 This bootstrap matters because `CraftingBuilding.GetCraftableItems()` walks `Rooms → FurnitureManager.Furnitures → station.CraftableItems`. If the list is empty, `ProducesItem(item)` returns false for every item and `LogisticsStockEvaluator.FindSupplierFor` can't route to the building. `GetCraftableItems` carries a transform-tree fallback (`GetComponentsInChildren<CraftingStation>` on the building) that recovers crafting capability when the room list is empty AND emits a one-shot warning — so a regression to replace-style would be caught loudly even if it didn't break crafting outright. Any other system that queries a room's furniture at runtime depends on the same `_furnitures`-list invariant.
 
+> **Note:** The additive note above refers to `Building._defaultFurnitureLayout` (hoisted from `CommercialBuilding` — now lives on the base `Building` class and applies to all subclasses).
+
 ### Furniture (`Furniture.cs`)
 The base class for interactable or static objects inside rooms.
 - **Space Occupation:** Holds a `_sizeInCells` (Vector2Int) dictating how many grid cells it consumes. This is often auto-calculated via renderer bounds.
@@ -213,24 +215,74 @@ Bidirectional link: `FurnitureItemSO._installedFurniturePrefab` → Furniture pr
 - Cells over void (no floor) are marked `IsWall = true` and rejected by `CanPlaceFurniture()`
 - Gizmo colors: green = free, red = occupied, gray = wall/no floor
 
-### Default furniture spawn for buildings (CommercialBuilding)
+### Default furniture authoring (Building-level system)
 
-`CommercialBuilding._defaultFurnitureLayout` is an authored `List<DefaultFurnitureSlot>` (each entry: `FurnitureItemSO ItemSO`, `Vector3 LocalPosition`, `Vector3 LocalEulerAngles`, `Room TargetRoom`). On the server-side branch of `OnNetworkSpawn` the building calls `TrySpawnDefaultFurniture()` once, then for each slot:
+Every `Building` (any subclass — Commercial, Residential, Harvesting, Transporter)
+has a `_defaultFurnitureLayout : List<DefaultFurnitureSlot>` SerializeField. Slots
+become live Furniture instances on first `OnNetworkSpawn` via
+`TrySpawnDefaultFurniture` (server-only).
+
+#### Mode A — Visual authoring (recommended)
+
+Drop the Furniture prefab as a nested child of the building prefab, in the room
+hierarchy you want it associated with (e.g. `Room_Main/CraftingStation`). At
+runtime, `Building.Awake()` calls `ConvertNestedNetworkFurnitureToLayout()` on
+every peer:
+
+- Each network-bearing Furniture child → captured into a fresh
+  `DefaultFurnitureSlot` (ItemSO + local pose + nearest Room ancestor) and
+  appended to `_defaultFurnitureLayout`.
+- The child GameObject is `Destroy()`d, so NGO never half-spawns it.
+- Server-only `TrySpawnDefaultFurniture` then re-spawns each entry as a
+  top-level NetworkObject parented under the building.
+
+Plain-MonoBehaviour Furniture (no NetworkObject — e.g. TimeClock variant with NO
+stripped) is LEFT IN PLACE and dedup'd by ItemSO inside `TrySpawnDefaultFurniture`.
+
+#### Mode B — Manual layout (legacy / opt-in)
+
+Author each slot directly in the Inspector list. Same runtime behavior post-spawn.
+Valid for cases where the slot has no canonical scene location yet, or for
+scripted spawns. If both Mode A and Mode B target the same `ItemSO`, the Mode A
+nested child wins (its pose replaces the manual slot's, with a log) — remove the
+manual slot to silence the log.
+
+#### Save schema gotcha
+
+`DefaultFurnitureSlot.LocalPosition` feeds `FurnitureKey =
+"{ItemId}@{x:F2},{y:F2},{z:F2}"` for `StorageFurniture` save/restore. Moving a
+slot's local position between save and load silently drops storage contents. With
+Mode A, this means **moving a Furniture child in the prefab** has the same
+effect — treat slot poses as part of the on-disk schema once a build ships with
+stocked storages.
+
+#### Subclass cache hook
+
+`OnDefaultFurnitureSpawned()` is the virtual hook fired at the tail of
+`TrySpawnDefaultFurniture` when the layout had entries to process. Override to
+invalidate subclass-owned caches that depend on the just-spawned furniture
+(storage cache on `CommercialBuilding`, craftable cache on `CraftingBuilding`).
+Always chain `base.OnDefaultFurnitureSpawned()`.
+
+#### Runtime spawn mechanics
+
+`TrySpawnDefaultFurniture` (server-only) runs once per building instance (gated
+by `_defaultFurnitureSpawned`). For each slot:
 
 1. `Instantiate(slot.ItemSO.InstalledFurniturePrefab, worldPos, worldRot)` where `worldPos = transform.TransformPoint(slot.LocalPosition)`.
 2. `NetworkObject.Spawn()` (instance is still at scene-root at this point).
 3. `instance.transform.SetParent(this.transform, worldPositionStays: true)` — parents under the **building root**, the only NetworkObject in this hierarchy. **Not** under `slot.TargetRoom` — see "Why parenting under the room throws" below.
 4. `slot.TargetRoom.FurnitureManager.RegisterSpawnedFurnitureUnchecked(instance, worldPos)` — records grid occupancy and adds to the room's `_furnitures` list. **No transform reparent**.
 
-The loop is gated by `_defaultFurnitureSpawned` (idempotent) and a per-slot match by `FurnitureItemSO` against existing children: a slot is skipped if any current Furniture child of the building has the same `FurnitureItemSO` reference. This handles three cases cleanly: (a) baked NO-free furniture like TimeClock is detected and doesn't block other slots from spawning; (b) save-restore that re-instantiates the same prefab finds no `BuildingSaveData`-tracked furniture and re-spawns the defaults; (c) future restore paths that pre-populate furniture children would block the matching slot from re-spawning.
+A per-slot match by `FurnitureItemSO` against existing children skips a slot if any current Furniture child of the building has the same `FurnitureItemSO` reference. This handles: (a) baked NO-free furniture like TimeClock is detected and doesn't block other slots; (b) save-restore finds no `BuildingSaveData`-tracked furniture and re-spawns the defaults; (c) future restore paths that pre-populate furniture children block the matching slot from re-spawning.
 
-**Why this exists:** baking a furniture instance whose prefab carries a `NetworkObject` directly into a runtime-spawned building prefab makes NGO half-register the child during the parent's spawn — the child ends up in `SpawnManager.SpawnedObjectsList` with a null `NetworkManagerOwner` and NRE's `NetworkObject.Serialize` during the next client-sync, breaking client approval. See `.agent/skills/multiplayer/SKILL.md` §10. The runtime-spawn path keeps the same end-state without the half-spawn class.
+**Why this exists:** baking a furniture instance whose prefab carries a `NetworkObject` directly into a runtime-spawned building prefab makes NGO half-register the child during the parent's spawn — the child ends up in `SpawnManager.SpawnedObjectsList` with a null `NetworkManagerOwner` and NRE's `NetworkObject.Serialize` during the next client-sync, breaking client approval. See `.agent/skills/multiplayer/SKILL.md` §10.
 
-**Why parenting under the room throws:** NGO's `OnTransformParentChanged` raises `InvalidParentException` when a NetworkObject is reparented under a GameObject without its own `NetworkObject` component. `Room_Main` is a `NetworkBehaviour` on a non-NO GameObject (only the building root carries the NO — promoting Room to a NO would recreate the half-spawn class). The building root is therefore the closest valid NO ancestor and what we parent under. Logical room-membership lives in `FurnitureManager._furnitures` (the list `Room.GetFurniture*` queries) rather than transform parenting.
+**Why parenting under the room throws:** NGO's `OnTransformParentChanged` raises `InvalidParentException` when a NetworkObject is reparented under a GameObject without its own `NetworkObject` component. `Room_Main` is a `NetworkBehaviour` on a non-NO GameObject (only the building root carries the NO). The building root is therefore the closest valid NO ancestor. Logical room-membership lives in `FurnitureManager._furnitures` rather than transform parenting.
 
-**`FurnitureManager.RegisterSpawnedFurnitureUnchecked(furniture, worldPos)`** is the server-authored counterpart to `RegisterSpawnedFurniture`. It bypasses `CanPlaceFurniture` (level-designer-authored slots are trusted; validation is for runtime user input) and deliberately does **not** call `SetParent` (the caller is responsible for parenting under a valid NO). Adds grid occupancy + appends to `_furnitures`.
+**`FurnitureManager.RegisterSpawnedFurnitureUnchecked(furniture, worldPos)`** bypasses `CanPlaceFurniture` (level-designer-authored slots are trusted) and deliberately does **not** call `SetParent`. Adds grid occupancy + appends to `_furnitures`.
 
-**Authoring rule:** only NetworkObject-FREE furniture (e.g. TimeClock, which strips its NO via the prefab's `m_RemovedComponents`) may be nested directly in a building prefab. Anything network-bearing — `CraftingStation`, `Bed` — must move to `_defaultFurnitureLayout` with `TargetRoom` set to the room it logically belongs in. The Forge prefab is the canonical example (one slot: CraftingStation in Room_Main, captured local position `(-7, 0, 4.9582)`). Furniture prefabs that should block NPC navigation should also carry a `NavMeshObstacle` (carve=true, carveOnlyStationary=true) so NPCs path around them on every peer without a navmesh rebuild.
+**Authoring rule:** only NetworkObject-FREE furniture (e.g. TimeClock, which strips its NO via the prefab's `m_RemovedComponents`) may be nested directly in a building prefab and left in place. Anything network-bearing — `CraftingStation`, `Bed` — must either use Mode A (drop as nested child, auto-converted in `Awake`) or Mode B (manual slot in Inspector). The Forge prefab is the canonical Mode B example (one slot: CraftingStation in Room_Main). Furniture prefabs that should block NPC navigation should also carry a `NavMeshObstacle` (carve=true, carveOnlyStationary=true).
 
 ## Best Practices
 - Always ensure `Zone` colliders have `isTrigger = true` and perfectly encapsulate their interior visual meshes, as their size dictates the generated `FurnitureGrid`.
