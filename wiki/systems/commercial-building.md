@@ -3,7 +3,7 @@ type: system
 title: "Commercial Building"
 tags: [building, commercial, jobs, tier-2]
 created: 2026-04-19
-updated: 2026-04-30
+updated: 2026-05-01
 sources: []
 related: ["[[building]]", "[[building-logistics-manager]]", "[[building-task-manager]]", "[[jobs-and-logistics]]", "[[shops]]", "[[crafting-loop]]", "[[worker-wages-and-performance]]", "[[quest-system]]", "[[tool-storage]]", "[[help-wanted-and-hiring]]", "[[dev-mode]]", "[[kevin]]"]
 status: stable
@@ -58,13 +58,9 @@ Force-assignment bypasses consent: `CommunityTracker.ImposeJobOnCitizen()` → `
 
 `GetWorkPosition(Character)` is virtual. Defaults to `GetRandomPointInBuildingZone()` with a per-`InstanceID` offset so multiple workers don't physically stack. `ShopBuilding` overrides for its vendor role to return the counter `VendorPoint`; all other roles wander.
 
-## Default furniture spawn (`_defaultFurnitureLayout`)
+## Default furniture spawn
 
-`CommercialBuilding` carries an authored `List<DefaultFurnitureSlot>` (each slot: `FurnitureItemSO`, `Vector3 LocalPosition` in building-local space, `Vector3 LocalEulerAngles`, `Room TargetRoom`). On the server-side branch of `OnNetworkSpawn`, `TrySpawnDefaultFurniture()` instantiates each slot's `InstalledFurniturePrefab`, calls `NetworkObject.Spawn()`, parents under the **building root** (the only NetworkObject in this hierarchy — see [[network]] §B and `.agent/skills/multiplayer/SKILL.md` §10), then calls `TargetRoom.FurnitureManager.RegisterSpawnedFurnitureUnchecked` to record grid + furniture-list membership without re-parenting.
-
-**Why this exists:** baking a furniture instance whose prefab carries a `NetworkObject` into a runtime-spawned building prefab makes NGO half-register the child during the parent's spawn — the child ends up in `SpawnManager.SpawnedObjectsList` with a null `NetworkManagerOwner` and NRE's `NetworkObject.Serialize` during the next client-sync, breaking client approval entirely. The runtime-spawn path produces the same end-state without the half-spawn class.
-
-**Authoring rule:** only NetworkObject-FREE furniture (e.g. `TimeClock`, which strips its NO via `m_RemovedComponents` in the prefab variant) may be nested directly in a building prefab. Anything network-bearing — `CraftingStation`, `Bed` — must move to `_defaultFurnitureLayout` with `TargetRoom` set. `Forge.prefab` is the canonical example: one slot pointing at the CraftingStation `FurnitureItemSO` at local position `(-7, 0, 4.9582)` with `TargetRoom = Room_Main`.
+See [[building#Default furniture layout]] for the system (it now lives at the `Building` level). `CommercialBuilding` overrides `OnDefaultFurnitureSpawned()` to invalidate the storage furniture cache after the layout spawns.
 
 ## Zones (authored Inspector fields)
 
@@ -91,6 +87,7 @@ Force-assignment bypasses consent: `CommunityTracker.ImposeJobOnCitizen()` → `
 - If a subclass wants autonomous restock, **implementing `IStockProvider` is mandatory** — declaring `_itemsToSell` or `_inputStockTargets` alone does nothing until the contract is wired.
 
 ## Change log
+- 2026-05-01 — `_defaultFurnitureLayout` system hoisted up to `[[building]]`. `CommercialBuilding` now only carries the `OnDefaultFurnitureSpawned` override (storage cache invalidation). See [[building#Default furniture layout]]. — claude
 - 2026-04-30 — Hiring API: `_isHiring` NetworkVariable + `_helpWantedFurniture` reference + `TryOpenHiring` / `TryCloseHiring` / `CanRequesterControlHiring` / `GetVacantJobs` / `GetHelpWantedDisplayText` (virtual). `InteractionAskForJob.CanExecute` and `BuildingManager.FindAvailableJob` gate on `IsHiring` so closed buildings reject applications. `AssignWorker` + `CharacterJob.QuitJob` call `HandleVacancyChanged` to refresh the Help Wanted sign on hire/quit churn. `GetJobStableIndex(Job)` exposes stable indices for ServerRpc round-trip. See [[help-wanted-and-hiring]]. — claude
 - 2026-04-29 — Added `_toolStorageFurniture` designer reference + `WorkerCarriesUnreturnedTools(Character, out List<ItemInstance>)` server-side scan + `NotifyPunchOutBlockedClientRpc` (targeted ClientRpc to player workers, raises `UI_ToolReturnReminderToast`) + `NotifyPunchOutBlockedToClient` server-side wrapper. Foundation for the [[tool-storage]] primitive (Plan 1 of Farmer rollout). — claude
 - 2026-04-25 — Fixed `_defaultFurnitureLayout` registrations being silently wiped by `Room.Start` / `Room.OnNetworkSpawn`. `FurnitureManager.LoadExistingFurniture` is now additive: it prunes fake-null entries and merges any new transform child into `_furnitures` instead of replacing the list with `GetComponentsInChildren<Furniture>(true)`. Previous replace-style rescan would clobber `RegisterSpawnedFurnitureUnchecked` writes (the spawned furniture lives on the building root, not under the target room's transform — so the rescan saw an empty room and reset the list). Symptom on the Forge: `Room_Main.FurnitureManager.Furnitures` empty after placement; crafting only worked through `CraftingBuilding.GetCraftableItems`'s transform-tree fallback, which logged a one-shot warning. — claude

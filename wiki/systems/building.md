@@ -3,7 +3,7 @@ type: system
 title: "Building & Furniture"
 tags: [building, furniture, world, tier-1]
 created: 2026-04-18
-updated: 2026-04-24
+updated: 2026-05-01
 sources: []
 related:
   - "[[world]]"
@@ -169,6 +169,38 @@ FurnitureManager.Place(instance) ──► serialize cell occupancy
 - **Permission gate on placement** — community-level permissions run through `BuildingPlacementManager`. Non-owners can't place in non-public rooms.
 - **Zone triggers fire on any collider** — characters enter/exit zones via `OnTriggerEnter/Exit`. Non-character triggers (like dropped items) must not pollute the `_charactersInside` set.
 
+## Default furniture layout
+
+`_defaultFurnitureLayout : List<DefaultFurnitureSlot>` is a `[SerializeField]` on
+`Building` that drives server-only spawning of authored furniture on first
+`OnNetworkSpawn`. The system was hoisted from `[[commercial-building]]` to `Building`
+on 2026-05-01 so any subclass benefits.
+
+**Two authoring modes:**
+
+- **Visual (recommended):** drop the Furniture prefab as a nested child of the
+  building prefab, in the room hierarchy you want. `Building.Awake()` calls
+  `ConvertNestedNetworkFurnitureToLayout()` on every peer — capturing each
+  network-bearing child's pose + nearest `Room` ancestor into a slot, then
+  destroying the child so NGO never half-spawns the nested NetworkObject.
+- **Manual (legacy / opt-in):** populate the Inspector list directly. If both
+  a manual slot and a nested child target the same `ItemSO`, the nested child
+  wins.
+
+**Subclass extension:** `OnDefaultFurnitureSpawned()` is a `protected virtual`
+hook fired at the tail of `TrySpawnDefaultFurniture` when the layout had entries
+to process. `CommercialBuilding` overrides to invalidate the storage furniture
+cache; `CraftingBuilding` chains base + `InvalidateCraftableCache()`.
+
+**Save schema gotcha:** slot `LocalPosition` feeds `FurnitureKey` for
+`StorageFurniture` save/restore. Repositioning a slot (or a nested Furniture
+child) between save and load silently drops storage contents — treat the layout
+poses as part of the on-disk schema once a build ships with stocked storages.
+See also [[building#Known gotchas / eg cases]].
+
+See [building_system SKILL.md](../../.agent/skills/building_system/SKILL.md)
+for procedural authoring details.
+
 ## Open questions / TODO
 
 - [ ] Exact list of `BuildingTask` subclasses — tracked in [[jobs-and-logistics]].
@@ -185,6 +217,7 @@ FurnitureManager.Place(instance) ──► serialize cell occupancy
 - [[building-placement-manager]] — community permission gate.
 
 ## Change log
+- 2026-05-01 — Hoisted `_defaultFurnitureLayout` system from `[[commercial-building]]` to `Building` (every subclass now benefits). Added `ConvertNestedNetworkFurnitureToLayout()` Awake-time stripper so designers can author Furniture as nested prefab children. Replaced `is CraftingBuilding` cast with `OnDefaultFurnitureSpawned()` virtual hook. New `## Default furniture layout` section added. — claude
 - 2026-04-24 — Known save-restore gotcha documented: `MapController.SpawnSavedBuildings` spawns the building's `NetworkObject` **before** reparenting it under the MapController transform, which can produce a half-spawned NO that later NRE's NGO's `NetworkObject.Serialize` during client-sync and silently breaks every join against a loaded save. Defensive purge in `GameSessionManager.PurgeBrokenSpawnedNetworkObjects` masks the symptom; real fix is parent-before-spawn. Full write-up in [[network]] and [[save-load]]. — claude
 - 2026-04-18 — Initial documentation pass. — Claude / [[kevin]]
 
