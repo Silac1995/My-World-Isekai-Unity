@@ -106,14 +106,26 @@ public class TimeClockFurnitureInteractable : FurnitureInteractable
     /// </summary>
     public void RunPunchCycleServerSide(Character worker)
     {
-        if (worker == null || _building == null || Furniture == null) return;
+        if (worker == null || _building == null || Furniture == null)
+        {
+            Debug.LogWarning($"<color=orange>[TimeClock]</color> RunPunchCycleServerSide aborted: worker={worker?.CharacterName ?? "null"}, building={_building?.BuildingName ?? "null"}, furniture={(Furniture != null ? Furniture.FurnitureName : "null")}.");
+            return;
+        }
 
         // If the clock is already in use (another worker is punching right now), let
         // Furniture's occupation gate reject quietly. The occupant flips back to null
         // when the previous worker's OnActionFinished fires.
-        if (Furniture.IsOccupied && Furniture.Occupant != worker) return;
+        if (Furniture.IsOccupied && Furniture.Occupant != worker)
+        {
+            Debug.LogWarning($"<color=orange>[TimeClock]</color> {worker.CharacterName} cannot punch at {_building.BuildingName}: time clock is already occupied by {Furniture.Occupant.CharacterName}. Did the previous worker's punch action get cancelled before OnActionFinished fired?");
+            return;
+        }
 
-        if (!Furniture.IsOccupied && !Furniture.Use(worker)) return;
+        if (!Furniture.IsOccupied && !Furniture.Use(worker))
+        {
+            Debug.LogWarning($"<color=orange>[TimeClock]</color> {worker.CharacterName} cannot punch at {_building.BuildingName}: Furniture.Use returned false (race?).");
+            return;
+        }
 
         // Read the replicated roster — same truth on server and clients, and
         // consistent with the UI prompt / hold-menu the client sees.
@@ -124,6 +136,8 @@ public class TimeClockFurnitureInteractable : FurnitureInteractable
 
         if (worker.CharacterActions == null || !worker.CharacterActions.ExecuteAction(action))
         {
+            string busyAction = worker.CharacterActions?.CurrentAction?.GetType().Name ?? "null";
+            Debug.LogWarning($"<color=orange>[TimeClock]</color> {worker.CharacterName} cannot punch at {_building.BuildingName}: CharacterActions.ExecuteAction rejected (already running '{busyAction}'). Releasing the time clock so it isn't stuck occupied.");
             Furniture.Release();
             return;
         }

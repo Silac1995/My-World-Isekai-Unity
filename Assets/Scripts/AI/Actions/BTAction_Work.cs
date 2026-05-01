@@ -68,7 +68,7 @@ namespace MWI.AI
                 case WorkPhase.MovingToTimeClock:
                     return HandleMovementToTimeClock(self, movement, workplace);
                 case WorkPhase.PunchingIn:
-                    return HandlePunchingIn(self);
+                    return HandlePunchingIn(self, workplace);
                 case WorkPhase.Working:
                     return HandleWorking(self, jobInfo);
             }
@@ -117,7 +117,11 @@ namespace MWI.AI
                 Action_PunchIn punchIn = new Action_PunchIn(self, workplace);
                 if (punchIn.CanExecute())
                 {
-                    self.CharacterActions.ExecuteAction(punchIn);
+                    if (!self.CharacterActions.ExecuteAction(punchIn))
+                    {
+                        Debug.LogWarning(
+                            $"<color=orange>[BTAction_Work]</color> {self.CharacterName}: Action_PunchIn rejected at {workplace.BuildingName} (zone-punch fallback path). HandlePunchingIn will retry next tick.");
+                    }
                 }
                 return BTNodeStatus.Running;
             }
@@ -138,7 +142,11 @@ namespace MWI.AI
                 Action_PunchIn fallback = new Action_PunchIn(self, workplace);
                 if (fallback.CanExecute())
                 {
-                    self.CharacterActions.ExecuteAction(fallback);
+                    if (!self.CharacterActions.ExecuteAction(fallback))
+                    {
+                        Debug.LogWarning(
+                            $"<color=orange>[BTAction_Work]</color> {self.CharacterName}: Action_PunchIn (no-interactable fallback) rejected at {workplace.BuildingName}. HandlePunchingIn will retry next tick.");
+                    }
                 }
                 return BTNodeStatus.Running;
             }
@@ -169,7 +177,7 @@ namespace MWI.AI
             return BTNodeStatus.Running;
         }
 
-        private BTNodeStatus HandlePunchingIn(Character self)
+        private BTNodeStatus HandlePunchingIn(Character self, CommercialBuilding workplace)
         {
             var currentAction = self.CharacterActions.CurrentAction;
             if (currentAction != null && currentAction is Action_PunchIn)
@@ -177,8 +185,27 @@ namespace MWI.AI
                 return BTNodeStatus.Running;
             }
 
-            // The action is complete; we should be in ActiveWorkersOnShift
-            _currentPhase = WorkPhase.Working;
+            // Action_PunchIn is no longer running. Two paths:
+            // (a) It completed normally → OnApplyEffect → WorkerStartingShift → IsWorkerOnShift is
+            //     true. Advance to Working so HandleWorking can call jobInfo.Work().
+            // (b) It never ran (CharacterActions.ExecuteAction returned false because the worker was
+            //     already busy with another action) OR was preempted before OnApplyEffect fired.
+            //     Without this gate, the BT used to advance to Working anyway → JobFarmer.Execute
+            //     ran → set _currentGoal to "PlantEmptyCells" → no _scratchValidActions → Idle
+            //     forever, with the worker physically NOT on the shift roster. Symptom: debug shows
+            //     "Job Goal: PlantEmptyCells, Action: Planning / Idle" but "On shift" doesn't include
+            //     this worker. Falling back to MovingToTimeClock retries Interact + ExecuteAction.
+            if (workplace.IsWorkerOnShift(self))
+            {
+                _currentPhase = WorkPhase.Working;
+            }
+            else
+            {
+                Debug.LogWarning(
+                    $"<color=orange>[BTAction_Work]</color> {self.CharacterName}: PunchIn action ended without registering on shift at {workplace.BuildingName}. " +
+                    $"Most likely CharacterActions.ExecuteAction was rejected (worker busy with another action). Retrying via MovingToTimeClock.");
+                _currentPhase = WorkPhase.MovingToTimeClock;
+            }
             return BTNodeStatus.Running;
         }
 
