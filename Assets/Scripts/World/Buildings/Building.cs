@@ -597,7 +597,6 @@ public class Building : ComplexRoom
 
         if (_defaultFurnitureLayout == null || _defaultFurnitureLayout.Count == 0)
         {
-            Debug.Log($"[Building] {buildingName}: TrySpawnDefaultFurniture — layout is empty, nothing to spawn.", this);
             return;
         }
 
@@ -641,8 +640,9 @@ public class Building : ComplexRoom
         // on next access so suppliers can see new CraftingStations and storage drops can
         // see new chests within the 2 s TTL window — without waiting for it to expire.
         // See wiki/projects/optimisation-backlog.md entry #2 / D + A.
-        // TODO(Task 2): replace with a virtual OnDefaultFurnitureSpawned() hook so subclasses
-        // can invalidate their own caches without the CommercialBuilding cast.
+        // TODO(Task 2): SOLID rule #14 violation — Building must not reference CraftingBuilding.
+        // Replace with virtual OnDefaultFurnitureSpawned() hook so subclasses invalidate their
+        // own caches without the downward cast.
         (this as CommercialBuilding)?.InvalidateStorageFurnitureCache();
         if (this is CraftingBuilding crafting)
         {
@@ -692,6 +692,13 @@ public class Building : ComplexRoom
             Debug.LogWarning(
                 $"[Building] {buildingName}: default furniture slot for '{slot.ItemSO.name}' has no TargetRoom. " +
                 $"Set TargetRoom on the slot so it appears in the room's FurnitureManager list.",
+                this);
+        }
+        else
+        {
+            // TargetRoom != null but its FurnitureManager is null — misconfiguration.
+            Debug.LogWarning(
+                $"[Building] {buildingName}: default furniture slot for '{slot.ItemSO.name}' targets Room '{slot.TargetRoom.name}' but that Room has no FurnitureManager — slot will spawn under the building root without grid registration.",
                 this);
         }
     }
