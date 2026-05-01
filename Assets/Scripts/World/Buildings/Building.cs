@@ -690,12 +690,21 @@ public class Building : ComplexRoom
                 TargetRoom = targetRoom,
             };
 
-            // Dedup against existing serialized slots. Converted child wins.
-            int existingIndex = _defaultFurnitureLayout.FindIndex(s => s != null && s.ItemSO == slot.ItemSO);
+            // Dedup against existing serialized slots — match by (ItemSO + LocalPosition).
+            // Two instances of the same FurnitureItemSO at different positions are legitimately
+            // separate authored slots (e.g. two crates: one for tool storage, one for seed
+            // storage). Only collapse when both ItemSO AND position match (within an epsilon),
+            // which only happens when a manual _defaultFurnitureLayout entry was authored AND
+            // the same nested-child sat at the same world position. Converted child wins.
+            const float positionEpsilon = 0.01f;
+            int existingIndex = _defaultFurnitureLayout.FindIndex(s =>
+                s != null
+                && s.ItemSO == slot.ItemSO
+                && Vector3.Distance(s.LocalPosition, slot.LocalPosition) < positionEpsilon);
             if (existingIndex >= 0)
             {
                 Debug.Log(
-                    $"<color=cyan>[Building]</color> {buildingName}: nested child '{furniture.name}' overrides existing manual _defaultFurnitureLayout entry [{existingIndex}] for ItemSO '{slot.ItemSO.name}'. Remove the manual slot to silence this log.",
+                    $"<color=cyan>[Building]</color> {buildingName}: nested child '{furniture.name}' overrides existing manual _defaultFurnitureLayout entry [{existingIndex}] for ItemSO '{slot.ItemSO.name}' at position {slot.LocalPosition}. Remove the manual slot to silence this log.",
                     this);
                 _defaultFurnitureLayout[existingIndex] = slot;
             }

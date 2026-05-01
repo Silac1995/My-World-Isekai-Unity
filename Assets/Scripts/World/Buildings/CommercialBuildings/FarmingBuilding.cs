@@ -174,6 +174,22 @@ public class FarmingBuilding : HarvestingBuilding, IStockProvider
     }
 
     /// <summary>
+    /// Initial scans on placement so a freshly-built farm has tasks ready immediately
+    /// without waiting for the next <see cref="TimeManager.OnNewDay"/>. Mirrors the
+    /// pattern in <see cref="HarvestingBuilding.Start"/> which calls
+    /// <c>ScanHarvestingArea()</c> for the same reason.
+    ///
+    /// Both scans are server-only (they early-return on clients via the IsServer guard
+    /// inside their bodies), so calling them here on every peer is safe.
+    /// </summary>
+    protected override void Start()
+    {
+        base.Start();
+        PlantScan();
+        WaterScan();
+    }
+
+    /// <summary>
     /// Server-only. For each cell in the union of <see cref="_farmingAreaZones"/> that is empty
     /// (no PlantedCropId): register a PlantCropTask on the building's BuildingTaskManager,
     /// for the crop most under its produce quota. Skips if the crop's seed isn't in storage.
