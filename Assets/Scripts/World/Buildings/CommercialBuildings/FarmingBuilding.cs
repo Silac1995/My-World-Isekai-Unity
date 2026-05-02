@@ -63,6 +63,17 @@ public class FarmingBuilding : HarvestingBuilding, IStockProvider
              "field semantic as _seedMaxStock.")]
     [SerializeField] private int _wateringCanMaxStock = 2;
 
+    [Header("Produce Cap")]
+    [Tooltip("Auto-registered cap (HarvestingResourceEntry.maxQuantity) for each crop's " +
+             "primary produce. Once the building's inventory holds this many of a given " +
+             "produce item, ScanAndRegisterZone excludes it from GetWantedItems and the " +
+             "farmers stop harvesting that crop until the LogisticsManager ships some out " +
+             "(or another consumer drains stock). Lower this to keep less buffer in storage; " +
+             "raise it to let farmers stockpile. Designer-authored entries in the inherited " +
+             "_wantedResources list win over this default — TryRegisterWantedResource is " +
+             "idempotent and skips already-authored items.")]
+    [SerializeField] private int _autoProduceCap = 50;
+
     // ── Public accessors ────────────────────────────────────────────
 
     public IReadOnlyList<CropSO> CropsToGrow => _cropsToGrow;
@@ -217,7 +228,9 @@ public class FarmingBuilding : HarvestingBuilding, IStockProvider
     private void AutoRegisterCropProduceAsWantedResources()
     {
         if (_cropsToGrow == null) return;
-        const int DefaultProduceMaxQuantity = 50;
+        // Sanity-clamp the cap. 0 would never trigger a harvest (always at-limit); negative
+        // is a designer typo — clamp to 1 so the farm at least produces something.
+        int cap = Mathf.Max(1, _autoProduceCap);
         for (int i = 0; i < _cropsToGrow.Count; i++)
         {
             var crop = _cropsToGrow[i];
@@ -229,7 +242,7 @@ public class FarmingBuilding : HarvestingBuilding, IStockProvider
                 if (entry.Item is SeedSO) continue;       // seeds are inputs, not produce
                 if (entry.Item is ItemSO produceItem)
                 {
-                    TryRegisterWantedResource(produceItem, DefaultProduceMaxQuantity);
+                    TryRegisterWantedResource(produceItem, cap);
                     break;   // first non-seed output is the primary produce
                 }
             }
