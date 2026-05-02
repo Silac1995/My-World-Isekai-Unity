@@ -258,36 +258,34 @@ public class JobFarmer : Job
         // before chaining another fetch (avoids carrying 5 items + a watering can for 30s).
 
         GoapGoal targetGoal;
-        // Single-goal funnel for everything that ends in hasDepositedResources=true:
-        //   (a) mature trees to harvest (Harvest → Pickup → Deposit),
-        //   (b) loose items dropped on the ground from a previous harvest (Pickup → Deposit),
-        //   (c) resources already in the worker's bag/hand (Deposit alone).
-        // All three converge on the HarvestMatureCells goal (terminal hasDeposited
-        // Resources=true). Previously the cascade gated this on hasUnfilledHarvestTask
-        // ALONE → after a worker depleted every tree and items lay on the ground, the
-        // cascade fell through to PlantEmptyCells (no path because no seed in hand) and
-        // the worker froze. Symptom: 'She harvested a crop, then as soon as her action
-        // ended, her goal went to PlantEmptyCells and she just stopped moving.' Adding
-        // looseItemExists + hasResourcesToDeposit to the trigger covers all three cases.
-        if (hasUnfilledHarvestTask || looseItemExists || hasResourcesToDeposit) targetGoal = _cachedHarvestGoal;
-        // "Use what you're already carrying" — when hands hold a seed and a plant task
-        // exists, plant FIRST regardless of water-task priority. Without this rule, a
-        // worker who fetched a seed on a previous tick can get the goal flipped to
-        // WaterDryCells the moment new water tasks register; FetchTool (needs hands
-        // free) is filtered out → no plan → Planning / Idle forever, frozen with the
-        // seed in hand. Symptom seen by user: 'NPCs want to water crop but they have a
-        // seed in their hands. They would move around the storage and not do anything.'
-        else if (hasSeedInHand && hasUnfilledPlantTask) targetGoal = _cachedPlantGoal;
-        // WaterDryCells (terminal state: toolReturned_{canKey}=true) fires when EITHER:
-        //   (a) there is at least one water task AND we have a path to a can (in-hand or in
-        //       tool storage), OR
-        //   (b) we are already carrying the can — no matter whether water tasks remain. This
-        //       is the "finished watering, now put the can back" case. Without this branch,
-        //       the cascade falls through Harvest/Deposit/Plant (all rejected because hands
-        //       are occupied with a non-deposit-able can) and lands on Idle, leaving the
-        //       worker holding the can forever.
-        else if ((hasUnfilledWaterTask && (hasCanInHand || hasWateringCanAvailable)) || hasCanInHand) targetGoal = _cachedWaterGoal;
-        else if (hasUnfilledPlantTask && (hasSeedInHand || hasMatchingSeedInStorage)) targetGoal = _cachedPlantGoal;
+        // PRIORITY 1 — "use what you're carrying". A seed in hand sets hasSeedInHand=true
+        // which intentionally excludes the carried-item-as-resource path in
+        // hasResourcesToDeposit (seeds are INPUTS not outputs). That makes
+        // DepositResources unreachable while the seed occupies the hand, AND
+        // PickupLooseItem / FetchSeed / FetchTool are all filtered out (hands not free).
+        // The only way to free the hand is PlantCrop. So when seed-in-hand AND a plant
+        // task exists, route to PlantGoal FIRST regardless of any pending harvest /
+        // pickup / deposit work. Symptom: 'She picked up a sapling, then froze with goal=
+        // HarvestMatureCells because the harvest chain needed a free hand.'
+        //
+        // Same logic for can-in-hand → WaterGoal: the can blocks Fetch chains so we have
+        // to either water-then-return or just return (the existing Water rule below
+        // covers both via the (hasCanInHand) branch). PlantGoal beats WaterGoal here on
+        // the assumption that finishing a started fetch is worth the cost — change the
+        // priority ordering if a different policy is wanted.
+        if (hasSeedInHand && hasUnfilledPlantTask) targetGoal = _cachedPlantGoal;
+        else if (hasCanInHand) targetGoal = _cachedWaterGoal;
+        // PRIORITY 2 — anything that ends in hasDepositedResources=true (the same goal
+        // funnel for Harvest → Pickup → Deposit, ground items → Pickup → Deposit, and
+        // bag/hand contents → Deposit alone). Empty hands by this point so the chains
+        // can form.
+        else if (hasUnfilledHarvestTask || looseItemExists || hasResourcesToDeposit) targetGoal = _cachedHarvestGoal;
+        // PRIORITY 3 — water cycle when there's water work and a path to a can. The
+        // (hasCanInHand) above already captured the carry-back case.
+        else if (hasUnfilledWaterTask && hasWateringCanAvailable) targetGoal = _cachedWaterGoal;
+        // PRIORITY 4 — fall-through plant goal when there's plant work and a seed exists
+        // somewhere (in storage, since hasSeedInHand was caught at priority 1).
+        else if (hasUnfilledPlantTask && hasMatchingSeedInStorage) targetGoal = _cachedPlantGoal;
         else targetGoal = _cachedIdleGoal;
 
         // Diagnostic: when a Farmer who is on shift falls through to Idle, dump the worldState
