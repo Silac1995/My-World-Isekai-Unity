@@ -139,15 +139,42 @@ public class GoapAction_WaterCrop : GoapAction
         var grid = map.GetComponent<TerrainCellGrid>();
         if (grid == null) { _isComplete = true; return; }
 
+        // Working radius: bigger than the planting/watering cell footprint so the
+        // NavMeshObstacle carve placed on the cropHarvestable doesn't strand the worker
+        // outside the strict radius. The agent's own stopping distance + the crop's
+        // carve radius together push the natural stopping point about 1.5–2u from the
+        // cell center; 2.5u gives a comfortable margin without letting the worker
+        // water from absurdly far away.
+        const float WorkRadius = 2.5f;
         Vector3 cellWorld = grid.GridToWorld(_claimedTask.CellX, _claimedTask.CellZ);
-        if (Vector3.Distance(worker.transform.position, cellWorld) > 1.5f)
+        float distXZ;
         {
-            if (!_isMoving)
+            Vector3 a = new Vector3(worker.transform.position.x, 0f, worker.transform.position.z);
+            Vector3 b = new Vector3(cellWorld.x, 0f, cellWorld.z);
+            distXZ = Vector3.Distance(a, b);
+        }
+
+        if (distXZ > WorkRadius)
+        {
+            // Arrived-but-stuck fallback: if the navmesh agent has stopped (no path or
+            // settled at the carve edge) but we're still outside the work radius, accept
+            // the action anyway as long as we're within a generous outer band. Same
+            // pattern used by the FetchSeed / FetchToolFromStorage / ReturnToolToStorage
+            // softlock guards. Without this, a worker whose path landed at exactly the
+            // carve edge (e.g. 2.6u out) would freeze in front of the crop forever.
+            var movement = worker.CharacterMovement;
+            bool arrived = movement == null
+                || !movement.HasPath
+                || movement.RemainingDistance <= movement.StoppingDistance + 0.5f;
+            if (!(arrived && distXZ <= 4f))
             {
-                worker.CharacterMovement?.SetDestination(cellWorld);
-                _isMoving = true;
+                if (!_isMoving)
+                {
+                    worker.CharacterMovement?.SetDestination(cellWorld);
+                    _isMoving = true;
+                }
+                return;
             }
-            return;
         }
 
         // Final cross-actor race check before queueing the water action. Player or

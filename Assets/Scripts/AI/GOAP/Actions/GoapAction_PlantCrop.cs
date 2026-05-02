@@ -143,15 +143,38 @@ public class GoapAction_PlantCrop : GoapAction
         var grid = map.GetComponent<TerrainCellGrid>();
         if (grid == null) { _isComplete = true; return; }
 
+        // Working radius: same rationale as GoapAction_WaterCrop — accommodate the
+        // NavMeshObstacle carve placed on already-planted neighbour cells (or any other
+        // obstacle that pushes the agent's natural stopping point outward). 2.5u radius
+        // for the strict accept, 4u outer band when the agent has stopped naturally.
+        const float WorkRadius = 2.5f;
         Vector3 cellWorld = grid.GridToWorld(_claimedTask.CellX, _claimedTask.CellZ);
-        if (Vector3.Distance(worker.transform.position, cellWorld) > 1.5f)
+        float distXZ;
         {
-            if (!_isMoving)
+            Vector3 a = new Vector3(worker.transform.position.x, 0f, worker.transform.position.z);
+            Vector3 b = new Vector3(cellWorld.x, 0f, cellWorld.z);
+            distXZ = Vector3.Distance(a, b);
+        }
+
+        if (distXZ > WorkRadius)
+        {
+            // Arrived-but-stuck fallback: if the navmesh agent has settled (no path, or
+            // RemainingDistance ≤ StoppingDistance + 0.5) but we're still outside the
+            // strict radius, accept anyway as long as we're within the outer band.
+            // Mirrors the softlock guard in WaterCrop and the storage actions.
+            var movement = worker.CharacterMovement;
+            bool arrived = movement == null
+                || !movement.HasPath
+                || movement.RemainingDistance <= movement.StoppingDistance + 0.5f;
+            if (!(arrived && distXZ <= 4f))
             {
-                worker.CharacterMovement?.SetDestination(cellWorld);
-                _isMoving = true;
+                if (!_isMoving)
+                {
+                    worker.CharacterMovement?.SetDestination(cellWorld);
+                    _isMoving = true;
+                }
+                return;
             }
-            return;
         }
 
         // Final cross-actor race check before queueing the action. Between the time we
