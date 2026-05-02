@@ -187,6 +187,12 @@ public class JobFarmer : Job
         if (_availableActions == null) _availableActions = new List<GoapAction>(10);
         _availableActions.Clear();
         _availableActions.Add(new GoapAction_HarvestResources(farm));
+        // Bridge between HarvestResources (effects: looseItemExists=true) and
+        // DepositResources (preconditions: hasResources=true). Without this action the
+        // planner cannot satisfy DepositResources's precondition because no other action
+        // sets hasResources=true. Mirrors JobHarvester's action library — same harvest →
+        // pickup → deposit chain.
+        _availableActions.Add(new GoapAction_PickupLooseItem(farm));
         _availableActions.Add(new GoapAction_DepositResources(farm));
         _availableActions.Add(new GoapAction_FetchSeed(farm));
         _availableActions.Add(new GoapAction_PlantCrop(farm));
