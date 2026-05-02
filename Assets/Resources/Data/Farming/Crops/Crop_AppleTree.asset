@@ -25,6 +25,7 @@ MonoBehaviour:
   _maxHarvestCount: 5
   _respawnDelayDays: 1
   _allowDestruction: 1
+  _allowNpcDestruction: 1
   _requiredDestructionTool: {fileID: 0}
   _destructionEntries:
   - Item: {fileID: 11400000, guid: a3f0471c4178efd4b9b5efdb38aea516, type: 2}

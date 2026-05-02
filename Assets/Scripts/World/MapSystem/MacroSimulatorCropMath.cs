@@ -21,6 +21,15 @@ namespace MWI.WorldSystem.Simulation
             if (cell.GrowthTimer < crop.DaysToMature)
             {
                 cell.GrowthTimer = System.Math.Min(cell.GrowthTimer + daysPassed, crop.DaysToMature);
+                // If the offline tick crossed the maturity threshold, mirror what the live
+                // FarmGrowthPipeline does on the JustMatured outcome: clear the watering
+                // marker (TimeSinceLastWatered ≥ 0 means "watered while growing" during
+                // PHASE A, but means "in refill cycle" during PHASE C). Without this flip,
+                // a perennial that matured offline would be reconstructed by
+                // FarmGrowthSystem.PostWakeSweep as startDepleted=true and never be
+                // harvestable. Live-tick parity (see FarmGrowthPipeline.AdvanceOneDay).
+                if (cell.GrowthTimer >= crop.DaysToMature)
+                    cell.TimeSinceLastWatered = -1f;
                 return;
             }
 

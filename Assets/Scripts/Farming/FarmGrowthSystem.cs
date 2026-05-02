@@ -203,10 +203,34 @@ namespace MWI.Farming
         /// <summary>
         /// Reconstructs Harvestables from cell state on map wake / save-load. Spawns one
         /// for every cell with PlantedCropId set, regardless of growth stage.
+        ///
+        /// <para><b>startDepleted heuristic.</b> A perennial cell is "depleted, in refill
+        /// cycle" only when BOTH (a) the crop is mature (<c>GrowthTimer &gt;= DaysToMature</c>)
+        /// AND (b) <c>TimeSinceLastWatered &gt;= 0f</c>. The <c>TimeSinceLastWatered</c>
+        /// field is overloaded across two phases:
+        /// <list type="bullet">
+        ///   <item>PHASE A (still growing): <c>0f</c> = "watered while growing" — set by
+        ///         <see cref="CharacterAction_WaterCrop"/> as a non-decay flag, NOT a
+        ///         depletion marker.</item>
+        ///   <item>PHASE C (mature, post-harvest): <c>0f</c> = "just harvested, refill
+        ///         counter at zero" — set by <see cref="Harvestable.OnDepleted"/> for
+        ///         perennials.</item>
+        ///   <item>Both phases: <c>-1f</c> is the "ready / not-in-refill" sentinel.</item>
+        /// </list>
+        /// Without the maturity gate, a saved mid-growth perennial (planted apple_tree on
+        /// day 1, watered, save) would reconstruct as <c>startDepleted=true</c> on load —
+        /// the harvestable would then mature normally on subsequent daily ticks but
+        /// <see cref="Harvestable.IsDepleted"/> would stay <c>true</c> forever
+        /// (<see cref="Harvestable.AdvanceStage"/> only flips <c>CurrentStage</c>, not
+        /// <c>IsDepleted</c>) and <see cref="Harvestable.CanHarvest"/> would always
+        /// return false. Bug repro: "Plant → Water → 1 day → Save → Load → wait days →
+        /// crop never harvestable." Same-session reproduction works because no
+        /// reconstruction happens. (Fixed 2026-05-02.)</para>
         /// </summary>
         public void PostWakeSweep()
         {
             if (_grid == null) return;
+            int reconstructed = 0, depletedReconstructed = 0;
             for (int z = 0; z < _grid.Depth; z++)
             for (int x = 0; x < _grid.Width; x++)
             {
@@ -216,12 +240,23 @@ namespace MWI.Farming
                 if (_activeHarvestables.ContainsKey(idx)) continue;
 
                 var crop = CropRegistry.Get(cell.PlantedCropId);
-                if (crop == null) continue;
+                if (crop == null)
+                {
+                    Debug.LogWarning($"[FarmGrowthSystem.PostWakeSweep] Orphan crop ID '{cell.PlantedCropId}' at cell ({x},{z}) — CropRegistry has no entry. Cell skipped (Harvestable not reconstructed).");
+                    continue;
+                }
 
                 int startStage = Mathf.Clamp((int)cell.GrowthTimer, 0, crop.DaysToMature);
-                bool startDepleted = crop.IsPerennial && cell.TimeSinceLastWatered >= 0f;
+                // Mature + non-sentinel TimeSinceLastWatered means "in refill cycle". A
+                // pre-maturity TimeSinceLastWatered = 0 is the watering marker, not a
+                // depletion marker — see XML doc above.
+                bool isMature = cell.GrowthTimer >= crop.DaysToMature;
+                bool startDepleted = crop.IsPerennial && isMature && cell.TimeSinceLastWatered >= 0f;
                 SpawnHarvestableAt(x, z, crop, startStage, startDepleted);
+                reconstructed++;
+                if (startDepleted) depletedReconstructed++;
             }
+            Debug.Log($"[FarmGrowthSystem.PostWakeSweep] Reconstructed {reconstructed} Harvestable(s) from cell state ({depletedReconstructed} as startDepleted=true).");
         }
 
         private int LinearIndex(int x, int z) => z * _grid.Width + x;

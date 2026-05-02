@@ -633,7 +633,7 @@ PrefabInstance:
     - target: {fileID: -7333590944410843724, guid: cf8746b58cfecc543880c4a7798357d6, type: 3}
       propertyPath: _itemsToSell.Array.data[1].Item
       value: 
-      objectReference: {fileID: 11400000, guid: a3f0471c4178efd4b9b5efdb38aea516, type: 2}
+      objectReference: {fileID: 11400000, guid: 6eadabb584f662d49bea83caa241bdba, type: 2}
     - target: {fileID: -7333590944410843724, guid: cf8746b58cfecc543880c4a7798357d6, type: 3}
       propertyPath: _itemsToSell.Array.data[2].Item
       value: 
@@ -644,7 +644,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -7333590944410843724, guid: cf8746b58cfecc543880c4a7798357d6, type: 3}
       propertyPath: _itemsToSell.Array.data[1].MaxStock
-      value: 3
+      value: 10
       objectReference: {fileID: 0}
     - target: {fileID: -7333590944410843724, guid: cf8746b58cfecc543880c4a7798357d6, type: 3}
       propertyPath: _itemsToSell.Array.data[2].MaxStock
@@ -1176,7 +1176,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4251986534328057746, guid: cf8746b58cfecc543880c4a7798357d6, type: 3}
       propertyPath: GlobalObjectIdHash
-      value: 2436150496
+      value: 3778537358
       objectReference: {fileID: 0}
     - target: {fileID: 4791227258870008693, guid: cf8746b58cfecc543880c4a7798357d6, type: 3}
       propertyPath: m_LocalPosition.x

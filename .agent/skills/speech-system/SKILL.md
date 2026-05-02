@@ -316,7 +316,18 @@ Use _speechBubbleStack.ClearAll() directly for death/despawn (no RPC needed — 
 
 ## Animation Details
 
-All animations use `Time.unscaledDeltaTime` to remain functional during game pause or at high `GameSpeedController` scales (CLAUDE.md rule 26).
+Time semantics are **split** between the simulation-event side of speech and the HUD-tracking side:
+
+| Phase | Time source | Reasoning |
+|---|---|---|
+| Typing (`TypeMessage`) | `Time.deltaTime` (scaled) | NPC actively speaking is a simulation event. At 5× game speed text types 5× faster; on pause the typing freezes mid-word. |
+| Expiration (`ExpirationTimer`) | `WaitForSeconds(_duration)` (scaled) | Bubble lifetime is part of the speech event. At 5× speed bubbles disappear 5× sooner; on pause bubbles persist indefinitely. |
+| Entrance fade-in (`EntranceAnimation`) | `Time.unscaledDeltaTime` | Quick visual transition — must complete reliably and never freeze mid-fade during pause. |
+| Exit fade-out (`ExitAnimation`) | `Time.unscaledDeltaTime` | Same reasoning as entrance — bubble dismissal must always finish. |
+| Position lerp (`SpeechBubbleInstance.Update`) | `Time.unscaledDeltaTime` | Pure HUD tracking of the speaker's screen-space position — should stay smooth regardless of game speed. |
+| Wrapper proximity-fade (`SpeechBubbleStack.Update`) | `Time.unscaledDeltaTime` | Pure HUD visibility gating — must stay responsive during pause. |
+
+This split is **the project-specific interpretation of CLAUDE.md rule 26** for this system: the rule says "UI elements should not be affected by GameSpeedController." Speech is HUD-rendered but its *content* (typing duration + bubble lifetime) is a simulation event being displayed on the HUD — those phases scale with game speed. Pure HUD transitions (fade in/out, position tracking, proximity alpha) stay unscaled so they remain reliable across pause / fast-forward.
 
 | Phase | Alpha | Y Position | Curve | Duration | Configurable |
 |---|---|---|---|---|---|

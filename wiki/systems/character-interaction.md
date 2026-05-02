@@ -3,7 +3,7 @@ type: system
 title: "Character Interaction"
 tags: [character, social, dialogue, tier-2]
 created: 2026-04-18
-updated: 2026-04-18
+updated: 2026-05-02
 sources: []
 related:
   - "[[character]]"
@@ -120,6 +120,7 @@ EndInteraction
 - **`IsFree` guard is load-bearing** — skipping it allows interactions to start during combat/dialogue/crafting, deadlocking characters.
 - **`SetLookTarget` always points at root Character** — never at the child `CharacterInteractable` transform (see [[combat]] gotcha).
 - **Player-in-dialogue pauses auto-advance** — dynamic exchanges with at least one player wait on input; pure NPC-vs-NPC auto-advances after bubble + pause.
+- **Dialogue beats are scaled by `GameSpeedController`.** All four `DialogueSequence` waits (invitation poll, post-invitation read pause, inter-exchange random delay, end-of-conversation linger) use `WaitForSeconds`, not `WaitForSecondsRealtime`. At 5× speed NPC banter is 5× snappier; on pause the sequence freezes. The same convention applies to `CharacterSpeech` typing + expiration. The player-turn timer (`PLAYER_WAIT_DELAY = 8s`) is also scaled — at high speeds the human player has correspondingly less real time to pick an action; if that becomes punishing, switch *only* the player-turn timer to unscaled. Full table: [.agent/skills/interaction-exchanges/SKILL.md § Time Scaling](../../.agent/skills/interaction-exchanges/SKILL.md).
 
 ## Open questions
 
@@ -127,6 +128,7 @@ EndInteraction
 - [ ] Can an interaction be interrupted by combat? Confirm behavior.
 
 ## Change log
+- 2026-05-02 — Switched all four `DialogueSequence` `WaitForSecondsRealtime` calls to `WaitForSeconds` so NPC dialogue pacing scales with `GameSpeedController` (matches the corresponding fix in `CharacterSpeech` for typing speed + bubble lifetime). Added a "Time Scaling" subsection to the SKILL with the per-wait reasoning. — Claude / [[kevin]]
 - 2026-04-18 — Initial pass. — Claude / [[kevin]]
 
 ## Sources

@@ -14,23 +14,30 @@ MonoBehaviour:
   m_EditorClassIdentifier: MWI.Farming.Pure::MWI.Farming.CropSO
   _id: wheat
   _displayName: Wheat
-  _daysToMature: 4
-  _minMoistureForGrowth: 0.3
-  _plantDuration: 1
   _harvestOutputs:
   - Item: {fileID: 11400000, guid: 6eadabb584f662d49bea83caa241bdba, type: 2}
     Count: 1
   - Item: {fileID: 11400000, guid: 1d28ee63e97db7b4faaa24ca00ead13f, type: 2}
     Count: 1
   _requiredHarvestTool: {fileID: 0}
-  _stageSprites: []
-  _harvestablePrefab: {fileID: 4949819544793646418, guid: daa5b8b83df255b458ce757a63c8d5e9, type: 3}
-  _isPerennial: 0
-  _regrowDays: 0
+  _harvestDuration: 3
+  _isDepletable: 1
+  _maxHarvestCount: 5
+  _respawnDelayDays: 1
   _allowDestruction: 0
+  _allowNpcDestruction: 1
   _requiredDestructionTool: {fileID: 0}
   _destructionEntries: []
   _destructionDuration: 3
+  _readySprite: {fileID: 0}
+  _depletedSprite: {fileID: 0}
+  _harvestablePrefab: {fileID: 4949819544793646418, guid: daa5b8b83df255b458ce757a63c8d5e9, type: 3}
+  _daysToMature: 4
+  _minMoistureForGrowth: 0.3
+  _plantDuration: 1
+  _stageSprites: []
+  _isPerennial: 0
+  _regrowDays: 0
   _produceItem: {fileID: 0}
   _produceCount: 1
   _destructionOutputs: []

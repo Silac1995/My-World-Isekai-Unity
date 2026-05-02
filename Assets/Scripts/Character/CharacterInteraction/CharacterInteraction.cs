@@ -616,7 +616,9 @@ public class CharacterInteraction : CharacterSystem
                 // If it was an invitation, we wait an extra bit for the response bubble to be readable
                 if (actionExecuted is InteractionInvitation)
                 {
-                    yield return new WaitForSecondsRealtime(2.0f);
+                    // Scaled time: NPC dialogue pacing reacts to GameSpeedController
+                    // (5x speed → response window 5x shorter; pause → freezes).
+                    yield return new WaitForSeconds(2.0f);
                 }
             }
 
@@ -631,7 +633,9 @@ public class CharacterInteraction : CharacterSystem
             }
 
             float randomDelay = UnityEngine.Random.Range(1.0f, 2.5f); // Délai réduit car on attend déjà la fin de la bulle
-            yield return new WaitForSecondsRealtime(randomDelay);
+            // Scaled time: inter-exchange beat is part of the NPC dialogue simulation,
+            // so it speeds up at high GameSpeedController scales.
+            yield return new WaitForSeconds(randomDelay);
 
             // 3. Inversion des rôles pour le tour suivant
             Character nextSpeaker = currentListener;
@@ -665,7 +669,8 @@ public class CharacterInteraction : CharacterSystem
 
         // --- DÉLAI DE FIN D'INTERACTION ---
         // Petit délai supplémentaire (ex: 2 secondes) pour que les personnages ne s'enfuient pas immédiatement
-        yield return new WaitForSecondsRealtime(2.0f);
+        // Scaled time: end-of-conversation lingering is part of the dialogue simulation.
+        yield return new WaitForSeconds(2.0f);
 
         Debug.Log($"<color=cyan>[Dialogue]</color> Fin de la séquence après {totalExchanges} échanges.");
         EndInteraction();

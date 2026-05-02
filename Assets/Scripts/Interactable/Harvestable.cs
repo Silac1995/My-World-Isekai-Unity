@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.AI;
 using MWI.Interactables;
 using MWI.Terrain;
 using MWI.WorldSystem;
@@ -93,6 +94,17 @@ public class Harvestable : InteractableObject
     private CropSO _crop;          // Cached cast of _so to CropSO (or registry-resolved on clients)
     private Vector3 _baseScale;    // Captured at Awake before any runtime scaling
 
+    // Captured prefab-time NavMeshObstacle dimensions. ApplyVisual scales the root
+    // transform for crop growth (0.25× at stage 0 → 1× at maturity), which would
+    // shrink the obstacle's world-space carve footprint to ~12% of authored size at
+    // planting time — below the typical NavMesh voxel resolution, so the obstacle
+    // ends up carving nothing. We counter-scale the obstacle every ApplyVisual pass
+    // so its world dimensions stay constant across all growth stages.
+    private NavMeshObstacle _navMeshObstacle;
+    private Vector3 _baseObstacleSize;
+    private Vector3 _baseObstacleCenter;
+    private bool _hasObstacle;
+
     // Last NetVar values seen by the polling fallback in Update. Tracks change so we only
     // re-run ApplyVisual when something actually flipped, not every frame. Defensive backup
     // for NGO OnValueChanged callbacks that have shown intermittent firing on remote clients.
@@ -123,6 +135,14 @@ public class Harvestable : InteractableObject
         _netSync = GetComponent<HarvestableNetSync>();
         _baseScale = transform.localScale;
         if (_so is CropSO c) _crop = c;
+
+        _navMeshObstacle = GetComponent<NavMeshObstacle>();
+        if (_navMeshObstacle != null)
+        {
+            _baseObstacleSize = _navMeshObstacle.size;
+            _baseObstacleCenter = _navMeshObstacle.center;
+            _hasObstacle = true;
+        }
     }
 
     /// <summary>
@@ -920,6 +940,17 @@ public class Harvestable : InteractableObject
         float t = crop.DaysToMature > 0 ? Mathf.Clamp01((float)stage / crop.DaysToMature) : 1f;
         float scaleFactor = Mathf.Lerp(0.25f, 1f, t);
         transform.localScale = _baseScale * scaleFactor;
+
+        // Counter-scale the NavMeshObstacle so its world-space carve footprint is
+        // independent of the visual growth scale. Without this, a fresh-planted crop
+        // (scaleFactor ≈ 0.25) shrinks the obstacle to a sub-voxel box that carves
+        // nothing — characters and NPC agents walk straight through the planted cell.
+        if (_hasObstacle && _navMeshObstacle != null && scaleFactor > 0.0001f)
+        {
+            float inv = 1f / scaleFactor;
+            _navMeshObstacle.size = _baseObstacleSize * inv;
+            _navMeshObstacle.center = _baseObstacleCenter * inv;
+        }
 
         if (_spriteRenderer != null)
         {

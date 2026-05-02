@@ -69,6 +69,34 @@ namespace MWI.Tests.Farming
         }
 
         [Test]
+        public void GrowingPerennial_WateredThenCrossesMaturity_ClearsTimeSinceLastWateredSentinel()
+        {
+            // Repro for the 2026-05-02 save/load bug: a perennial was planted, watered
+            // (TimeSinceLastWatered=0), saved at GrowthTimer=1, then offline ticks crossed
+            // the maturity threshold. Without clearing the sentinel here,
+            // FarmGrowthSystem.PostWakeSweep would see TimeSinceLastWatered=0 + IsPerennial
+            // and reconstruct the harvestable as startDepleted=true (stuck-IsDepleted),
+            // because TimeSinceLastWatered is overloaded — it's a "watered while growing"
+            // marker in PHASE A and a "refill counter" in PHASE C. Live tick (FarmGrowthPipeline.
+            // AdvanceOneDay's JustMatured branch) clears it; the offline path now mirrors that.
+            var cell = MakeCell("apple", growthTimer: 1f, timeSinceLastWatered: 0f);
+            MacroSimulatorCropMath.AdvanceCellOffline(ref cell, daysPassed: 5, estimatedAvgMoisture: 0.5f);
+            Assert.AreEqual(4f, cell.GrowthTimer, "GrowthTimer should clamp at DaysToMature.");
+            Assert.AreEqual(-1f, cell.TimeSinceLastWatered, "TimeSinceLastWatered should be reset to the 'ready' sentinel after crossing maturity, mirroring FarmGrowthPipeline.AdvanceOneDay's JustMatured branch.");
+        }
+
+        [Test]
+        public void GrowingPerennial_DoesNotCrossMaturity_LeavesTimeSinceLastWateredAsIs()
+        {
+            // Sanity check: if growth doesn't cross the maturity boundary, TimeSinceLastWatered
+            // should stay where it was (mirrors live tick PHASE A which never touches it).
+            var cell = MakeCell("apple", growthTimer: 0f, timeSinceLastWatered: 0f);
+            MacroSimulatorCropMath.AdvanceCellOffline(ref cell, daysPassed: 2, estimatedAvgMoisture: 0.5f);
+            Assert.AreEqual(2f, cell.GrowthTimer);
+            Assert.AreEqual(0f, cell.TimeSinceLastWatered, "Pre-maturity, TimeSinceLastWatered is the 'watered while growing' marker — should not be flipped.");
+        }
+
+        [Test]
         public void Orphan_NoMutation()
         {
             var cell = MakeCell("nonexistent", growthTimer: 1f);

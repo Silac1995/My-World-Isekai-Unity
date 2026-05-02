@@ -3,7 +3,7 @@ type: system
 title: "Character Speech"
 tags: [character, speech, dialogue, ui, hud, tier-2]
 created: 2026-04-19
-updated: 2026-04-20
+updated: 2026-05-02
 sources: []
 related: ["[[character]]", "[[dialogue]]", "[[social]]", "[[visuals]]", "[[kevin]]"]
 status: stable
@@ -91,8 +91,10 @@ Full behavioural contract and edge cases: [.agent/skills/speech-system/SKILL.md]
 - **Per-archetype proximity radius.** Currently one global `_proximityRadius = 25f`. NPCs with loud/quiet personalities might want overrides.
 - **Bubble pooling.** Instantiate/Destroy per bubble. Acceptable in practice; add a pool if GC pressure shows up in crowded towns.
 - **Humanoid prefab stale overrides.** `_maxCrossCharacterOffset` and the renamed `_separatorSpacing` still appear as variant overrides in `Character_Default_Humanoid.prefab`. Unity silently drops them (no `[FormerlySerializedAs]` bridge) but they're visual noise in the YAML.
+- **Time-scaling split (CLAUDE.md rule 26 interpretation).** Typing speed (`TypeMessage`) and bubble lifetime (`ExpirationTimer`) use *scaled* time — they are simulation events (NPC speaking) that happen to render on the HUD, so they react to `GameSpeedController` (5× speed → 5× faster typing + 5× shorter lifetime; pause → typing freezes mid-word + bubble persists). Entrance/exit fades, per-frame position lerp, and the wrapper proximity-fade use *unscaled* time — they are pure HUD transitions that must stay smooth and never freeze mid-fade. Full table in [.agent/skills/speech-system/SKILL.md § Animation Details](../../.agent/skills/speech-system/SKILL.md).
 
 ## Change log
+- 2026-05-02 — Time-scaling split applied to bubble coroutines. `TypeMessage` switched to `Time.deltaTime` and `ExpirationTimer` switched to `WaitForSeconds` so typing pace and bubble lifetime now react to `GameSpeedController`. Entrance/exit fades, per-frame position lerp, and the wrapper proximity-fade kept on unscaled time so HUD transitions never freeze mid-fade. — Claude / [[kevin]]
 - 2026-04-20 — HUD screen-space rewrite. World-space bubbles replaced by HUD-parented bubbles via `HUDSpeechBubbleLayer`. Added 25u proximity gate, `_animationBiasPx` separation (fix entrance-vs-push race), removed `HandleDeath` / `HandleIncapacitated` overrides, Billboard removed from speech anchor, SphereCollider radius 15→25, bubble prefab restructured (WorldSpace Canvas gone), black translucent background restored after prefab restructure lost it. — Claude / [[kevin]]
 - 2026-04-19 — Stub created. — Claude / [[kevin]]
 

@@ -289,7 +289,11 @@ public class SpeechBubbleInstance : MonoBehaviour
 
         while (charCount < characters.Length)
         {
-            timeAccumulator += Time.unscaledDeltaTime;
+            // Scaled time: typing is a simulation event (NPC actively speaking),
+            // so it speeds up at high GameSpeedController scales and freezes on pause.
+            // The bubble's entrance/exit fade and HUD position lerp stay unscaled
+            // so they remain smooth and never freeze mid-transition.
+            timeAccumulator += Time.deltaTime;
 
             int lettersToAdd = Mathf.FloorToInt(timeAccumulator / currentSpeed);
 
@@ -379,7 +383,9 @@ public class SpeechBubbleInstance : MonoBehaviour
 
     private IEnumerator ExpirationTimer()
     {
-        yield return new WaitForSecondsRealtime(_duration);
+        // Scaled time: bubble lifetime is part of the speech simulation event.
+        // At 5x speed bubbles disappear 5x sooner; on pause they persist indefinitely.
+        yield return new WaitForSeconds(_duration);
 
         _expirationRoutine = null;
 
