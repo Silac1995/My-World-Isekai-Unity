@@ -1,0 +1,14 @@
+{
+    "name": "MWI.Ambition.Pure",
+    "rootNamespace": "MWI.Ambition",
+    "references": [],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
