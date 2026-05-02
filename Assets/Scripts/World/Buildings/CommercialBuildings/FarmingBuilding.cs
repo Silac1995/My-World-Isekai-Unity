@@ -195,9 +195,45 @@ public class FarmingBuilding : HarvestingBuilding, IStockProvider
     /// </summary>
     protected override void Start()
     {
+        // Auto-register the primary produce of every authored crop as a wanted resource
+        // BEFORE base.Start runs ScanHarvestingArea — otherwise the very first scan sees
+        // _wantedResources empty (designers don't usually duplicate the apple/wheat/flower
+        // entry that's implicit in CropsToGrow), takes the early-return branch, and never
+        // registers HarvestResourceTasks even when crops mature. Symptom seen by user:
+        // 'when a crop reaches maturity, it stays not harvestable'.
+        AutoRegisterCropProduceAsWantedResources();
+
         base.Start();
         PlantScan();
         WaterScan();
+    }
+
+    /// <summary>
+    /// Walks <see cref="_cropsToGrow"/> and, for each crop's first non-Seed
+    /// <see cref="HarvestableOutputEntry"/>, calls
+    /// <see cref="HarvestingBuilding.TryRegisterWantedResource"/>. Idempotent — designers
+    /// can still author specific entries in the inspector to override the default cap.
+    /// </summary>
+    private void AutoRegisterCropProduceAsWantedResources()
+    {
+        if (_cropsToGrow == null) return;
+        const int DefaultProduceMaxQuantity = 50;
+        for (int i = 0; i < _cropsToGrow.Count; i++)
+        {
+            var crop = _cropsToGrow[i];
+            if (crop == null) continue;
+            for (int j = 0; j < crop.HarvestOutputs.Count; j++)
+            {
+                var entry = crop.HarvestOutputs[j];
+                if (entry.Item == null) continue;
+                if (entry.Item is SeedSO) continue;       // seeds are inputs, not produce
+                if (entry.Item is ItemSO produceItem)
+                {
+                    TryRegisterWantedResource(produceItem, DefaultProduceMaxQuantity);
+                    break;   // first non-seed output is the primary produce
+                }
+            }
+        }
     }
 
     /// <summary>

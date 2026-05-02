@@ -48,6 +48,24 @@ public class HarvestingBuilding : CommercialBuilding
     // === Accesseurs publics ===
 
     public IReadOnlyList<HarvestingResourceEntry> WantedResources => _wantedResources;
+
+    /// <summary>
+    /// Subclass hook for registering a wanted resource at runtime when the inspector list
+    /// would otherwise be empty (e.g. <see cref="FarmingBuilding"/> auto-derives produce
+    /// from <c>_cropsToGrow</c> so designers don't have to author the apple/wheat/flower
+    /// entry by hand). Idempotent — does nothing if the same <paramref name="item"/> is
+    /// already authored. Returns true when a new entry was added.
+    /// </summary>
+    protected bool TryRegisterWantedResource(ItemSO item, int maxQuantity)
+    {
+        if (item == null) return false;
+        for (int i = 0; i < _wantedResources.Count; i++)
+        {
+            if (_wantedResources[i] != null && _wantedResources[i].targetItem == item) return false;
+        }
+        _wantedResources.Add(new HarvestingResourceEntry { targetItem = item, maxQuantity = maxQuantity });
+        return true;
+    }
     public Zone DepositZone => _depositZone;
     public Zone HarvestableZone => _harvestableZone;
     public Zone HarvestingAreaZone => _harvestingAreaZone;

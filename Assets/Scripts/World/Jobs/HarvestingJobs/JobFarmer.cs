@@ -223,6 +223,14 @@ public class JobFarmer : Job
         GoapGoal targetGoal;
         if (hasUnfilledHarvestTask) targetGoal = _cachedHarvestGoal;
         else if (hasResourcesToDeposit) targetGoal = _cachedDepositGoal;
+        // "Use what you're already carrying" — when hands hold a seed and a plant task
+        // exists, plant FIRST regardless of water-task priority. Without this rule, a
+        // worker who fetched a seed on a previous tick can get the goal flipped to
+        // WaterDryCells the moment new water tasks register; FetchTool (needs hands
+        // free) is filtered out → no plan → Planning / Idle forever, frozen with the
+        // seed in hand. Symptom seen by user: 'NPCs want to water crop but they have a
+        // seed in their hands. They would move around the storage and not do anything.'
+        else if (hasSeedInHand && hasUnfilledPlantTask) targetGoal = _cachedPlantGoal;
         // WaterDryCells (terminal state: toolReturned_{canKey}=true) fires when EITHER:
         //   (a) there is at least one water task AND we have a path to a can (in-hand or in
         //       tool storage), OR
@@ -230,7 +238,7 @@ public class JobFarmer : Job
         //       is the "finished watering, now put the can back" case. Without this branch,
         //       the cascade falls through Harvest/Deposit/Plant (all rejected because hands
         //       are occupied with a non-deposit-able can) and lands on Idle, leaving the
-        //       worker holding the can forever — exactly the symptom the user reported.
+        //       worker holding the can forever.
         else if ((hasUnfilledWaterTask && (hasCanInHand || hasWateringCanAvailable)) || hasCanInHand) targetGoal = _cachedWaterGoal;
         else if (hasUnfilledPlantTask && (hasSeedInHand || hasMatchingSeedInStorage)) targetGoal = _cachedPlantGoal;
         else targetGoal = _cachedIdleGoal;
