@@ -223,7 +223,15 @@ public class JobFarmer : Job
         GoapGoal targetGoal;
         if (hasUnfilledHarvestTask) targetGoal = _cachedHarvestGoal;
         else if (hasResourcesToDeposit) targetGoal = _cachedDepositGoal;
-        else if (hasUnfilledWaterTask && (hasCanInHand || hasWateringCanAvailable)) targetGoal = _cachedWaterGoal;
+        // WaterDryCells (terminal state: toolReturned_{canKey}=true) fires when EITHER:
+        //   (a) there is at least one water task AND we have a path to a can (in-hand or in
+        //       tool storage), OR
+        //   (b) we are already carrying the can — no matter whether water tasks remain. This
+        //       is the "finished watering, now put the can back" case. Without this branch,
+        //       the cascade falls through Harvest/Deposit/Plant (all rejected because hands
+        //       are occupied with a non-deposit-able can) and lands on Idle, leaving the
+        //       worker holding the can forever — exactly the symptom the user reported.
+        else if ((hasUnfilledWaterTask && (hasCanInHand || hasWateringCanAvailable)) || hasCanInHand) targetGoal = _cachedWaterGoal;
         else if (hasUnfilledPlantTask && (hasSeedInHand || hasMatchingSeedInStorage)) targetGoal = _cachedPlantGoal;
         else targetGoal = _cachedIdleGoal;
 
