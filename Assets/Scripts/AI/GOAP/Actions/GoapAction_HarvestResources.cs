@@ -222,6 +222,30 @@ public class GoapAction_HarvestResources : GoapAction
                     isAtTarget = Vector3.Distance(worker.transform.position, _currentTarget.transform.position) <= 3f;
                 }
 
+                // Arrived-but-just-outside-zone softlock guard. The Harvestable's NavMesh
+                // Obstacle carve pushes the navmesh agent's natural stopping point a bit
+                // outside the strict 2.5u radius (carve perimeter + agent radius), so the
+                // strict checks above can fail repeatedly even though the worker has
+                // genuinely arrived. Without this guard, NavMeshUtility.HasPathFailed flips
+                // true on each retry and PathingMemory accumulates failures → after 3 the
+                // tree gets blacklisted and the worker abandons it forever (until OnNewDay
+                // / OnHourChanged clears it). Same pattern applied to FetchSeed +
+                // FetchToolFromStorage + ReturnToolToStorage.
+                if (!isAtTarget)
+                {
+                    bool agentArrived = !movement.HasPath
+                        || movement.RemainingDistance <= movement.StoppingDistance + 0.5f;
+                    if (agentArrived)
+                    {
+                        Vector3 a = new Vector3(worker.transform.position.x, 0f, worker.transform.position.z);
+                        Vector3 b = new Vector3(_currentTarget.transform.position.x, 0f, _currentTarget.transform.position.z);
+                        if (Vector3.Distance(a, b) <= 4f)
+                        {
+                            isAtTarget = true;
+                        }
+                    }
+                }
+
                 if (isAtTarget)
                 {
                     // S'assurer de faire face à la cible

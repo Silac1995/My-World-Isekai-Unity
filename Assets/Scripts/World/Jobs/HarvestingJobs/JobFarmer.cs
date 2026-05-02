@@ -128,7 +128,22 @@ public class JobFarmer : Job
         // PlantScan registering 25 tasks → all 25 instantly auto-claimed → worldState
         // saw 0 → planner picked Idle. Walking both buckets restores the intended
         // semantic of "is there any plant work I can take or already own?".
-        bool hasUnfilledHarvestTask = farm.TaskManager != null && farm.TaskManager.HasAvailableOrClaimedTask<HarvestResourceTask>(_worker);
+        //
+        // hasUnfilledHarvestTask MUST mirror GoapAction_HarvestResources.IsValid's
+        // predicate (blacklist + yield-match) — otherwise the cascade picks HarvestGoal
+        // when no actionable harvest task exists for this worker, the planner can't form
+        // a plan (HarvestResources is filtered out by its own IsValid), and the worker
+        // freezes on goal=HarvestMatureCells while a perfectly-good Plant or Water task
+        // sits idle. Symptom seen: 'blacklisted=1' in HarvestResources.IsValid REJECTED
+        // dump while worldState insisted hasUnfilledHarvestTask=True.
+        var farmWanted = farm.GetWantedItems();
+        bool hasUnfilledHarvestTask = farm.TaskManager != null && farm.TaskManager.HasAvailableOrClaimedTask<HarvestResourceTask>(_worker, task =>
+        {
+            var h = task.Target as Harvestable;
+            if (h == null) return false;
+            if (_worker.PathingMemory != null && _worker.PathingMemory.IsBlacklisted(h.gameObject.GetInstanceID())) return false;
+            return farmWanted != null && farmWanted.Count > 0 && h.HasAnyYieldOutput(farmWanted);
+        });
         bool hasUnfilledWaterTask = farm.TaskManager != null && farm.TaskManager.HasAvailableOrClaimedTask<WaterCropTask>(_worker);
         bool hasUnfilledPlantTask = farm.TaskManager != null && farm.TaskManager.HasAvailableOrClaimedTask<PlantCropTask>(_worker);
 
