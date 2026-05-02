@@ -1369,8 +1369,23 @@ public abstract class CommercialBuilding : Building
 
             // Quest system hook: auto-claim eligible already-published quests + subscribe for
             // future publications during this shift.
-            TryAutoClaimExistingQuests(worker);
-            SubscribeWorkerQuestAutoClaim(worker);
+            //
+            // PLAYERS ONLY. NPC workers must NOT auto-claim — the quest publish subscriber
+            // fires every handler in subscription order (multicast event), so the first NPC
+            // worker to punch in hoards every newly-published task and the second worker
+            // never sees anything. NPCs run GOAP plans that already claim tasks on demand
+            // via BuildingTaskManager.ClaimBestTask, so they don't need the player-style
+            // CharacterQuestLog pre-claim. With auto-claim disabled for NPCs, two farmers
+            // can split a 25-cell PlantScan into ~12 + ~13 tasks naturally as each plans
+            // FetchSeed → PlantCrop and ClaimBestTask picks the closest unclaimed cell.
+            //
+            // Players still get auto-claim so quests they accept by punching in show up
+            // in their CharacterQuestLog UI without an extra interaction step.
+            if (worker.IsPlayer())
+            {
+                TryAutoClaimExistingQuests(worker);
+                SubscribeWorkerQuestAutoClaim(worker);
+            }
         }
     }
 
