@@ -173,6 +173,18 @@ public class JobFarmer : Job
         _scratchWorldState["hasPlantedCrop"] = false;
         _scratchWorldState["hasWateredCell"] = false;
         _scratchWorldState["isIdling"] = false;
+        // hasHarvestZone is REQUIRED by GoapAction_HarvestResources's precondition. JobHarvester
+        // sets the same key from its own scan results; without it here, the planner sees the
+        // default-missing key as false (GoapAction.ArePreconditionsMet treats missing-as-false)
+        // and HarvestResources can never apply, so the HarvestMatureCells goal can't form a plan.
+        // Symptom: 'NPCs do not do anything, even though their goap says HarvestMatureCells.'
+        // Mirroring hasUnfilledHarvestTask is the right value: the zone is "harvestable" iff
+        // there's at least one valid HarvestResourceTask.
+        _scratchWorldState["hasHarvestZone"] = hasUnfilledHarvestTask;
+        // looseItemExists must START at false so HarvestResources's `looseItemExists=false`
+        // precondition is met. Default-missing would also be false but explicit is clearer
+        // (and matches JobHarvester's worldState shape so the two jobs use the same key set).
+        _scratchWorldState["looseItemExists"] = false;
 
         // Tool keys use the WateringCan ItemSO's name (Plan 1 convention — see
         // GoapAction_FetchToolFromStorage / ReturnToolToStorage for the matching reads).
