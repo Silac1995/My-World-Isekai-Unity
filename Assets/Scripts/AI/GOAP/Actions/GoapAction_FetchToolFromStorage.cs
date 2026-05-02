@@ -43,6 +43,10 @@ public class GoapAction_FetchToolFromStorage : GoapAction
     private bool _isMoving;
     private bool _isComplete;
 
+    // Throttled stuck-state log (1 Hz). Surfaces what's blocking the action when the user
+    // sees a worker frozen in front of (or away from) the tool storage.
+    private float _lastStuckLogTime = -10f;
+
     public override string ActionName => $"FetchTool({(_toolItem != null ? _toolItem.ItemName : "?")})";
     public override float Cost => 1f;
     public override bool IsComplete => _isComplete;
@@ -158,6 +162,28 @@ public class GoapAction_FetchToolFromStorage : GoapAction
                 worker.CharacterMovement?.SetDestination(target);
                 _isMoving = true;
             }
+
+            // Stuck-state diagnostic (throttled 1 Hz). Fires every tick the worker is still
+            // outside the in-zone gate. Prints carry/hand state + distance + agent path so a
+            // 'frozen in front of the storage' symptom can be triaged in one log line.
+            float now = UnityEngine.Time.unscaledTime;
+            if (now - _lastStuckLogTime > 1f)
+            {
+                _lastStuckLogTime = now;
+                var hands2 = worker.CharacterVisual?.BodyPartsController?.HandsController;
+                string carriedName = hands2?.CarriedItem?.ItemSO?.ItemName ?? "<none>";
+                bool handsFree = hands2 != null && hands2.AreHandsFree();
+                var movement = worker.CharacterMovement;
+                Vector3 ip = storage.GetInteractionPosition(worker.transform.position);
+                Vector3 a = new Vector3(worker.transform.position.x, 0f, worker.transform.position.z);
+                Vector3 b = new Vector3(ip.x, 0f, ip.z);
+                Debug.Log(
+                    $"<color=orange>[FetchTool]</color> {worker.CharacterName} not in zone yet. " +
+                    $"distXZ={Vector3.Distance(a, b):F2} HasPath={movement?.HasPath} " +
+                    $"RemDist={movement?.RemainingDistance:F2} StopDist={movement?.StoppingDistance:F2} " +
+                    $"handsFree={handsFree} carrying='{carriedName}' isMoving={_isMoving}");
+            }
+
             return;
         }
 
