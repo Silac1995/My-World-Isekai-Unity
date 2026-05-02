@@ -195,10 +195,17 @@ public class CharacterActions : CharacterSystem
         // Resolve the worker's harvesting workplace once. Harvest() may have already despawned
         // the target (one-shot crops in OnDepleted), but the WorldItem spawns still happen
         // at baseSpawn in world space and pickup tasks still need registering.
+        //
+        // Accept JobHarvester OR JobFarmer — both run the Harvest → PickupLooseItem →
+        // DepositResources cycle and need PickupLooseItemTask registered for the planner's
+        // looseItemExists query (JobFarmer mirrors JobHarvester's worldState query in
+        // 73aac877). Without this widening, a Farmer harvests an apple tree, no pickup task
+        // is registered, looseItemExists stays false on every replan, items stay orphaned
+        // on the ground forever and Wanted Resources Apple/current never increments.
         CommercialBuilding harvesterWorkplace = null;
         if (_character.CharacterJob != null)
         {
-            var workAssignment = _character.CharacterJob.ActiveJobs.FirstOrDefault(j => j.AssignedJob is JobHarvester);
+            var workAssignment = _character.CharacterJob.ActiveJobs.FirstOrDefault(j => j.AssignedJob is JobHarvester || j.AssignedJob is JobFarmer);
             if (workAssignment != null) harvesterWorkplace = workAssignment.Workplace;
         }
 
@@ -248,10 +255,11 @@ public class CharacterActions : CharacterSystem
         // Resolve the worker's harvesting workplace once. DestroyForOutputs has already despawned
         // the harvestable, but the spawned WorldItems are server-authoritative and still live —
         // we only need a TaskManager reference to register pickups against.
+        // Accept JobHarvester OR JobFarmer — same widening as ApplyHarvestOnServer (above).
         CommercialBuilding harvesterWorkplace = null;
         if (_character.CharacterJob != null)
         {
-            var workAssignment = _character.CharacterJob.ActiveJobs.FirstOrDefault(j => j.AssignedJob is JobHarvester);
+            var workAssignment = _character.CharacterJob.ActiveJobs.FirstOrDefault(j => j.AssignedJob is JobHarvester || j.AssignedJob is JobFarmer);
             if (workAssignment != null) harvesterWorkplace = workAssignment.Workplace;
         }
 
