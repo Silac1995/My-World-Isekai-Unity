@@ -265,10 +265,24 @@ public class JobFarmer : Job
                 // the building debug UI, or (b) auto-claim added a different Character
                 // reference than _worker (save/load drift, NPC despawn-respawn, etc.).
                 int availPlant = 0, inProgressPlant = 0, inProgressClaimedByMe = 0;
+                int availHarvest = 0, availHarvestCanHarvestNow = 0;
                 if (farm.TaskManager != null)
                 {
                     var av = farm.TaskManager.AvailableTasks;
-                    for (int i = 0; i < av.Count; i++) if (av[i] is PlantCropTask) availPlant++;
+                    for (int i = 0; i < av.Count; i++)
+                    {
+                        if (av[i] is PlantCropTask) availPlant++;
+                        if (av[i] is HarvestResourceTask hrt)
+                        {
+                            availHarvest++;
+                            // Mirror HarvestResourceTask.IsValid → target.CanHarvest. If 0 of N
+                            // can harvest, every task is filtered out by HasAvailableOrClaimed
+                            // Task and hasUnfilledHarvestTask=False even though there's a
+                            // long Available list — usually because crops aren't mature yet.
+                            var tgt = hrt.Target as Harvestable;
+                            if (tgt != null && tgt.CanHarvest()) availHarvestCanHarvestNow++;
+                        }
+                    }
                     var ip = farm.TaskManager.InProgressTasks;
                     for (int i = 0; i < ip.Count; i++)
                     {
@@ -283,7 +297,9 @@ public class JobFarmer : Job
                 Debug.Log(
                     $"<color=orange>[JobFarmer]</color> {_worker.CharacterName} (instanceID={_worker.GetInstanceID()}) planning Idle at " +
                     $"{farm.BuildingName} (instanceID={farm.GetInstanceID()}, Tasks: avail.Plant={availPlant}, inProgress.Plant={inProgressPlant}, " +
-                    $"inProgress.Plant claimed-by-me={inProgressClaimedByMe}, building.Inventory.Count={buildingInvCount}). worldState: " +
+                    $"inProgress.Plant claimed-by-me={inProgressClaimedByMe}, " +
+                    $"avail.Harvest={availHarvest} (canHarvestNow={availHarvestCanHarvestNow}), " +
+                    $"building.Inventory.Count={buildingInvCount}). worldState: " +
                     $"hasUnfilledHarvestTask={hasUnfilledHarvestTask}, hasUnfilledWaterTask={hasUnfilledWaterTask}, hasUnfilledPlantTask={hasUnfilledPlantTask}, " +
                     $"hasSeedInHand={hasSeedInHand}, hasMatchingSeedInStorage={hasMatchingSeedInStorage}, " +
                     $"hasCanInHand={hasCanInHand}, hasWateringCanAvailable={hasWateringCanAvailable}, " +
