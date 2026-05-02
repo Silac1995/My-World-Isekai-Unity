@@ -143,6 +143,23 @@ public class JobFarmer : Job
                             && hands.CarriedItem.ItemSO == farm.WateringCanItem;
 
         bool hasMatchingSeedInStorage = farm.HasAnySeedForActionablePlantTask(_worker);
+
+        // Loose item presence drives the PickupLooseItem step in the harvest chain. Mirrors
+        // JobHarvester's computation (line 174-184): a loose item "exists" iff there's a
+        // PickupLooseItemTask whose target WorldItem is reachable for this worker (filter
+        // blacklisted instance IDs the same way). Without this, JobFarmer's worldState had
+        // looseItemExists=false hard-coded → PickupLooseItem's precondition always failed
+        // post-Harvest → workers harvested but never picked up the dropped item, then the
+        // planner re-picked Harvest because hasUnfilledHarvestTask was still true.
+        bool looseItemExists = false;
+        if (farm.TaskManager != null)
+        {
+            looseItemExists = farm.TaskManager.HasAvailableOrClaimedTask<PickupLooseItemTask>(_worker, task =>
+            {
+                var interactable = task.Target as WorldItem;
+                return interactable != null && !_worker.PathingMemory.IsBlacklisted(interactable.gameObject.GetInstanceID());
+            });
+        }
         bool hasWateringCanAvailable = farm.WateringCanItem != null
                                         && farm.HasToolStorage
                                         && farm.ToolStorage != null
@@ -181,10 +198,12 @@ public class JobFarmer : Job
         // Mirroring hasUnfilledHarvestTask is the right value: the zone is "harvestable" iff
         // there's at least one valid HarvestResourceTask.
         _scratchWorldState["hasHarvestZone"] = hasUnfilledHarvestTask;
-        // looseItemExists must START at false so HarvestResources's `looseItemExists=false`
-        // precondition is met. Default-missing would also be false but explicit is clearer
-        // (and matches JobHarvester's worldState shape so the two jobs use the same key set).
-        _scratchWorldState["looseItemExists"] = false;
+        // looseItemExists is now a LIVE value (see computation above). When a loose
+        // PickupLooseItemTask exists for this worker, the planner picks PickupLooseItem
+        // BEFORE attempting another HarvestResources (PickupLooseItem.Cost=0.5 vs
+        // HarvestResources.Cost=1.0 also nudges this). Without the live value, workers
+        // harvested but never picked up the drop.
+        _scratchWorldState["looseItemExists"] = looseItemExists;
 
         // Tool keys use the WateringCan ItemSO's name (Plan 1 convention — see
         // GoapAction_FetchToolFromStorage / ReturnToolToStorage for the matching reads).
