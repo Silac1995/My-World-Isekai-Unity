@@ -30,5 +30,21 @@ namespace MWI.Tests.Ambition
             var binding = new ContextBinding<int> { Key = "Days" };
             Assert.IsTrue(binding.CanResolve(ctx));
         }
+
+        [Test]
+        public void CanResolve_FalseWhenContextIsNull()
+        {
+            var binding = new ContextBinding<int> { Key = "Days" };
+            Assert.IsFalse(binding.CanResolve(null));
+        }
+
+        [Test]
+        public void CanResolve_FalseWhenKeyIsEmpty()
+        {
+            var ctx = new AmbitionContext();
+            ctx.Set("Days", 7);
+            var binding = new ContextBinding<int> { Key = "" };
+            Assert.IsFalse(binding.CanResolve(ctx));
+        }
     }
 }
