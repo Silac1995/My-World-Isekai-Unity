@@ -357,9 +357,50 @@ public class JobFarmer : Job
             if (NPCDebug.VerboseJobs)
                 Debug.Log($"<color=green>[JobFarmer]</color> {_worker.CharacterName} : new plan ({_currentGoal.GoalName}); first action → {_currentAction.ActionName}");
         }
-        else if (NPCDebug.VerboseJobs)
+        else
         {
-            Debug.Log($"<color=orange>[JobFarmer]</color> {_worker.CharacterName} : no plan for goal {_currentGoal?.GoalName ?? "?"}.");
+            // Plan failed for a non-Idle goal — surface the same deep diagnostic dump used
+            // for the Idle path. Without this, a worker stuck on goal=HarvestMatureCells with
+            // action=Planning/Idle (because the planner couldn't chain the actions in
+            // _scratchValidActions) was invisible in the console.
+            if (targetGoal != _cachedIdleGoal && _workplace != null && _workplace.IsWorkerOnShift(_worker))
+            {
+                float now = UnityEngine.Time.unscaledTime;
+                if (now - _lastIdleDumpTime > 1f)
+                {
+                    _lastIdleDumpTime = now;
+
+                    // Inventory snapshot — what is the worker actually carrying?
+                    var hands3 = _worker.CharacterVisual?.BodyPartsController?.HandsController;
+                    string carriedName = hands3?.CarriedItem?.ItemSO?.ItemName ?? "<none>";
+                    int bagItems = 0;
+                    if (inventory != null && inventory.ItemSlots != null)
+                        for (int i = 0; i < inventory.ItemSlots.Count; i++)
+                            if (inventory.ItemSlots[i] != null && !inventory.ItemSlots[i].IsEmpty()) bagItems++;
+
+                    // Which actions made it through the IsValid pre-filter?
+                    var validActionNames = new System.Text.StringBuilder();
+                    for (int i = 0; i < _scratchValidActions.Count; i++)
+                    {
+                        if (i > 0) validActionNames.Append(",");
+                        validActionNames.Append(_scratchValidActions[i].ActionName);
+                    }
+
+                    Debug.Log(
+                        $"<color=red>[JobFarmer]</color> {_worker.CharacterName} (instanceID={_worker.GetInstanceID()}) " +
+                        $"NO-PLAN for goal '{targetGoal.GoalName}' at {farm.BuildingName}. " +
+                        $"Carrying='{carriedName}', bagItems={bagItems}, " +
+                        $"validActions=[{validActionNames}]. worldState: " +
+                        $"hasUnfilledHarvestTask={hasUnfilledHarvestTask}, hasUnfilledWaterTask={hasUnfilledWaterTask}, hasUnfilledPlantTask={hasUnfilledPlantTask}, " +
+                        $"hasSeedInHand={hasSeedInHand}, hasMatchingSeedInStorage={hasMatchingSeedInStorage}, " +
+                        $"hasCanInHand={hasCanInHand}, hasWateringCanAvailable={hasWateringCanAvailable}, " +
+                        $"hasResourcesToDeposit={hasResourcesToDeposit}, looseItemExists={looseItemExists}, hasHarvestZone={hasUnfilledHarvestTask}.");
+                }
+            }
+            else if (NPCDebug.VerboseJobs)
+            {
+                Debug.Log($"<color=orange>[JobFarmer]</color> {_worker.CharacterName} : no plan for goal {_currentGoal?.GoalName ?? "?"}.");
+            }
         }
     }
 
