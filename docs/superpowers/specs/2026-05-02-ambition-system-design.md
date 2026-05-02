@@ -245,7 +245,7 @@ public enum ControllerKind { Player, NPC }
 | `Task_TalkToCharacter` | `Target : Character` | dialogue completion via `CharacterInteraction` | A — `CharacterAction_StartInteraction` enqueue |
 | `Task_MoveToZone` | `Zone : IWorldZone` | NPC transform within zone radius | B — transient GOAP goal `inZone(Zone)` |
 | `Task_HarvestTarget` | `Target : Harvestable` | `Harvestable.IsDepleted == true`, depleted by this NPC | A — `CharacterAction_Harvest` enqueue |
-| `Task_DeliverItem` | `Item : ItemSO`, `Recipient : Character` | recipient inventory contains item, sourced from this NPC | B — transient GOAP goal `delivered(Item, Recipient)` |
+| `Task_DeliverItem` | `Item : ItemSO`, `Recipient : Character` | recipient inventory contains item, sourced from this NPC | B — transient GOAP goal `hasItem(Recipient, Item)` (GOAP plans gather + travel + hand-off via existing `CharacterAction_GiveItem`) |
 | `Task_GatherItem` | `Item : ItemSO`, `Count : int` | NPC inventory has count of item | B — transient GOAP goal `hasItem(Item, ≥Count)` |
 | `Task_WaitDays` | `Days : int` | calendar days advanced ≥ N | none — completion listener on `TimeManager.OnDayChanged` |
 
@@ -290,9 +290,12 @@ public sealed class AmbitionContext {
     public bool TryGet<T>(string key, out T value) { /* ... */ }
 
     public void Set<T>(string key, T value) {
-        if (!IsSerializableValueKind(typeof(T)))
+        // Check the runtime type of the value, not the generic parameter T,
+        // so that ctx.Set<object>("k", someCharacter) classifies as Character.
+        var runtimeType = value?.GetType() ?? typeof(T);
+        if (!IsSerializableValueKind(runtimeType))
             throw new InvalidOperationException(
-                $"Ambition context value of type {typeof(T)} is not serializable.");
+                $"Ambition context value of type {runtimeType} is not serializable.");
         _values[key] = value;
     }
 
@@ -370,6 +373,17 @@ Two real states only: **Inactive** (`Current == null`) and **Active** (`Current 
 | `Active → Inactive` (script, manual) | `ClearAmbition()` | Cancel `CurrentStepQuest` (removes from `CharacterQuestLog`), push `CompletedAmbition { Reason = ClearedByScript }`, fire `OnAmbitionCleared`, discard instance. |
 | `Active → Inactive → Active` (replacement) | `SetAmbition(otherSO, params)` while Active | Internally: `ClearAmbition()` then the normal `Set` flow. The replaced ambition is recorded in history with `Reason = ClearedByScript`. |
 
+#### Advancement source of truth
+
+Step advancement is driven **only** by `CharacterAmbition`'s subscription to `IAmbitionStepQuest.OnStateChanged`. The BT shim (`BTAction_PursueAmbitionStep`) is a *report*, not a driver — when `Task.Tick` returns `Completed`, the shim returns `BTNodeStatus.Success` to the BT but does **not** call back into `CharacterAmbition` to advance the chain. The actual advancement happens via:
+
+1. `Task.Tick` returns `Completed`.
+2. The hosting `AmbitionQuest` rolls forward — when *all* its tasks are `Completed` per the `Ordering` policy, it marks itself `Completed` via `IQuest.SetState(Completed)`.
+3. `IQuest.OnStateChanged` fires.
+4. `CharacterAmbition`'s subscriber (registered in `SetAmbition`) advances `CurrentStepIndex` or transitions to history.
+
+This guarantees the advance fires identically for NPC-driven completions (BT path) **and** player-driven completions (player kills the target manually — same `OnStateChanged` event, same advancement). One code path for both controllers.
+
 ### Quest / Task sub-states
 
 While the top-level is `Active`:
@@ -436,32 +450,35 @@ Thin shim — delegates the actual decision to the active step's task tick:
 
 ```csharp
 public override BTNodeStatus Execute(Character npc) {
-    var instance = npc.CharacterAmbition.Current;
-    if (instance?.CurrentStepQuest is not AmbitionQuest quest) return BTNodeStatus.Failure;
+    var step = npc.CharacterAmbition.Current?.CurrentStepQuest;
+    if (step == null) return BTNodeStatus.Failure;
 
-    var status = quest.TickActiveTasks(npc);
+    var status = step.TickActiveTasks(npc);             // calls through IAmbitionStepQuest
     return status switch {
         TaskStatus.Running   => BTNodeStatus.Running,
-        TaskStatus.Completed => BTNodeStatus.Success,   // CharacterAmbition's listener already advanced
+        TaskStatus.Completed => BTNodeStatus.Success,   // CharacterAmbition's OnStateChanged listener
+                                                        // advances the chain — see "Advancement source of truth"
         TaskStatus.Failed    => BTNodeStatus.Failure,   // v1: never returned
         _ => BTNodeStatus.Running,
     };
 }
 ```
 
-`AmbitionQuest.TickActiveTasks` follows the QuestSO's `Ordering` policy (sequential / parallel / any-of) and forwards to each `TaskBase.Tick`.
+`TickActiveTasks` is on `IAmbitionStepQuest` (no concrete cast). The default implementation on `AmbitionQuest` follows the `QuestSO.Ordering` policy (sequential / parallel / any-of) and forwards to each `TaskBase.Tick`.
 
 ### Task → behavior translation patterns
 
 Per rule #22, all gameplay flows through `CharacterAction`. Tasks have **two legitimate ways** to drive behavior:
 
+Each task uses **exactly one** of the two patterns. The driver-pattern column in the primitive table (data model) is authoritative.
+
 **Pattern A — direct `CharacterAction` enqueue** (preferred for one-shot tasks)
 
-The Task owns the lifecycle of one or more `CharacterAction`s and reports up. Used by `Task_KillCharacter`, `Task_TalkToCharacter`, `Task_HarvestTarget`, `Task_DeliverItem` — anything that maps to an existing action.
+The Task owns the lifecycle of one or more `CharacterAction`s and reports up. Used by `Task_KillCharacter`, `Task_TalkToCharacter`, `Task_HarvestTarget` — anything that maps to a single existing action.
 
-**Pattern B — transient GOAP goal injection** (for tasks needing planning, not a single action)
+**Pattern B — transient GOAP goal injection** (for tasks needing planning across multiple sub-actions)
 
-The Task pushes a transient `GoapGoal` into the planner (new method `CharacterGoap.RegisterTransientGoal(GoapGoal)`); the existing GOAP node at priority 6 picks it up next tick and plans the path. Used by `Task_GatherItem`, `Task_DeliverItem`, `Task_MoveToZone`. The new BT branch (5.5) sits *above* GOAP (6) but the Task it's running can drive GOAP to do the work — no conflict, the BT yields back, GOAP executes; when the goal is satisfied, the task completes on next tick.
+The Task pushes a transient `GoapGoal` into the planner (new method `CharacterGoap.RegisterTransientGoal(GoapGoal)`); the existing GOAP node at priority 6 picks it up next tick and plans the multi-action path. Used by `Task_GatherItem`, `Task_DeliverItem`, `Task_MoveToZone`. The new BT branch (5.5) sits *above* GOAP (6) but the Task it's running can drive GOAP to do the work — no conflict, the BT yields back, GOAP executes; when the goal is satisfied, the task completes on next tick.
 
 ### Controller-switch handoff
 
@@ -500,7 +517,7 @@ placed before the existing `SwitchController<>` invocation.
 
 ## Persistence
 
-`CharacterAmbition` implements `ICharacterSaveData<AmbitionSaveData>` (rule #20). Loaded **after** `CharacterQuestLog`, `CharacterRelation`, `CharacterCommunity` (so context references resolve), **before** any HUD listener.
+`CharacterAmbition` implements `ICharacterSaveData<AmbitionSaveData>` (rule #20). Loaded **after** `CharacterQuestLog`, `CharacterRelation`, `CharacterCommunity` (so context references resolve), **before** any HUD listener. `WorldZoneRegistry`, `AmbitionRegistry`, `QuestRegistry`, and any other SO registry consulted during reference resolution must be initialized **before** `CharacterAmbition.OnLoaded` runs — relies on the existing `GameLauncher.LaunchSequence` registry-init order plus the `feedback_lazy_static_registry_pattern.md` lazy `Get()` fallback for late-joining clients.
 
 ### Save DTO shape
 
@@ -642,6 +659,9 @@ Located in `Assets/Tests/EditMode/Ambition/`. Run via `tests-run` MCP tool.
 | `Ambition_Progress01` | Two-step ambition: 0.0 → 0.5 → 1.0 across step transitions. |
 | `Task_Idempotency` (one per `TaskBase` subclass) | `Tick` twice with met-condition returns `Completed` twice; with unmet-condition does not double-enqueue. |
 | `Task_SerializeRoundTrip` (one per stateful task) | `DeserializeState(SerializeState())` reproduces same `Tick` behavior. |
+| `Quest_Ordering_Sequential_AdvancesOnEachComplete` | Three sequential tasks; quest advances task-by-task; `Completed` only on the third. |
+| `Quest_Ordering_Parallel_CompletesWhenAllDone` | Three parallel tasks; all tick simultaneously; quest `Completed` only when all three are. |
+| `Quest_Ordering_AnyOf_CompletesOnFirst` | Three any-of tasks; quest `Completed` on the first task to finish; remaining tasks `Cancel`-led. |
 | `BTCond_CanPursueAmbition` | Truth table: 32 combinations of `(HasActive, HungerActive, SleepActive, ScheduleActive, OverridesSchedule)`. |
 
 ### PlayMode integration tests
