@@ -258,8 +258,18 @@ public class JobFarmer : Job
         // before chaining another fetch (avoids carrying 5 items + a watering can for 30s).
 
         GoapGoal targetGoal;
-        if (hasUnfilledHarvestTask) targetGoal = _cachedHarvestGoal;
-        else if (hasResourcesToDeposit) targetGoal = _cachedDepositGoal;
+        // Single-goal funnel for everything that ends in hasDepositedResources=true:
+        //   (a) mature trees to harvest (Harvest → Pickup → Deposit),
+        //   (b) loose items dropped on the ground from a previous harvest (Pickup → Deposit),
+        //   (c) resources already in the worker's bag/hand (Deposit alone).
+        // All three converge on the HarvestMatureCells goal (terminal hasDeposited
+        // Resources=true). Previously the cascade gated this on hasUnfilledHarvestTask
+        // ALONE → after a worker depleted every tree and items lay on the ground, the
+        // cascade fell through to PlantEmptyCells (no path because no seed in hand) and
+        // the worker froze. Symptom: 'She harvested a crop, then as soon as her action
+        // ended, her goal went to PlantEmptyCells and she just stopped moving.' Adding
+        // looseItemExists + hasResourcesToDeposit to the trigger covers all three cases.
+        if (hasUnfilledHarvestTask || looseItemExists || hasResourcesToDeposit) targetGoal = _cachedHarvestGoal;
         // "Use what you're already carrying" — when hands hold a seed and a plant task
         // exists, plant FIRST regardless of water-task priority. Without this rule, a
         // worker who fetched a seed on a previous tick can get the goal flipped to
