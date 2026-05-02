@@ -55,11 +55,13 @@ _(empty — Spine 2D migration should get its own project page; see memory `proj
 ## Decisions / ADRs (1)
 - [[adr-0001-living-world-hierarchy-refactor]] — Region → { MapController, WildernessZone, WeatherFront } (accepted 2026-04-21).
 
-## Gotchas (4)
+## Gotchas (6)
+- [[chain-action-isvalid-pre-filter]] — Chain-consumer GOAP actions (`PlantCrop`, `WaterCrop`, `ReturnToolToStorage`) must NOT re-check carry state in `IsValid` — Job-side pre-filter would drop them before the planner can chain `Fetch → Consume`.
 - [[dont-clone-prefabs-with-networkobject-for-visuals]] — Cloning a prefab with `NetworkObject` for visual-only purposes silently breaks on clients.
 - [[furnituremanager-replace-style-rescan]] — FurnitureManager rescan flow caveat.
 - [[host-progressive-freeze-debug-log-spam]] — Ungated `Debug.Log` calls in hot paths cause progressive host freeze on Windows.
 - [[static-registry-late-joiner-race]] — Static registries (`TerrainTypeRegistry`, `CropRegistry`, …) are uninitialised on joining clients because `LaunchSequence` is host-only — fix is lazy auto-init in `Get()`.
+- [[worldstate-predicate-action-isvalid-divergence]] — `Job._scratchWorldState` predicates (e.g. `hasUnfilledHarvestTask`) MUST mirror the consuming GOAP action's `IsValid` filter exactly — divergence freezes the worker on a goal whose plan can't form.
 
 ## Meetings (0)
 _(empty)_

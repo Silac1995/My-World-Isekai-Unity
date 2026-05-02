@@ -4,6 +4,15 @@
 
 > **Post-2026-04-29 unification:** there is one resource-node primitive in this project — `Harvestable`. There is no longer a separate `CropHarvestable` class. Crops are `Harvestable`s whose `_so` field references a `CropSO` (which inherits from `HarvestableSO`). Wild trees and ore nodes are `Harvestable`s with either inline serialised fields or an `_so` referencing a plain `HarvestableSO`. The recipes below cover each case. Owner agent: `harvestable-resource-node-specialist`.
 
+## What ships automatically with `FarmingBuilding._cropsToGrow` (2026-05-02)
+
+When a `FarmingBuilding` lists a `CropSO` in `_cropsToGrow`, two things happen automatically — designers do **not** have to author them:
+
+1. **Produce is auto-registered as a `WantedResource`** at default cap 50. `FarmingBuilding.AutoRegisterCropProduceAsWantedResources()` runs from `Start` BEFORE `base.Start`, walks `crop.HarvestOutputs`, and calls `TryRegisterWantedResource` on the first non-`SeedSO` entry. Without this, the very first `ScanHarvestingArea` finds `_wantedResources` empty and never registers `HarvestResourceTask`s — mature crops sit harvestable-but-not-tasked. Designers can still author specific entries in the inspector to override the default cap.
+2. **PlantScan + WaterScan re-run mid-shift** via `RefreshScansThrottled()` (1 Hz per building, server-only) called from `JobFarmer.PlanNextActions`. Catches inventory + cell mutations that previously waited until next `OnNewDay`: a player drops a seed in a chest, NPC logistics inbound delivers seeds, debug spawn — all visible to the farmer's GOAP within ~1 s.
+
+The crop's matching `SeedSO` should be added to `_harvestOutputs` for self-seeding (designer-only edit). `Apple_Tree` / `Wheat` / `Flower` already do this.
+
 ## Add a new crop
 
 1. **Create the `CropSO` asset.** `Project → Create → Game → Farming → Crop`. Save in `Assets/Resources/Data/Farming/Crops/`. Required Inspector fields:
@@ -26,6 +35,7 @@
    - Wire `_depletedSprite` → the "fruitless" sprite (e.g. tree without apples). Required only for perennials.
    - The base `Harvestable` fields (`_harvestOutputs`, `_maxHarvestCount`, `_isDepletable`, `_respawnDelayDays`) can be left default — `CropHarvestable.InitializeFromCell` overwrites them at runtime from the `CropSO`.
    - **`UnityEngine.AI.NavMeshObstacle`** with `Shape = Box`, `Center = (0, 0.25, 0)`, `Size = (0.5, 0.5, 0.5)`, `Carving = true`, `CarveOnlyStationary = true`. Crops are spawned at runtime *after* the `NavMeshSurface` is baked, so `NavMeshModifierVolume` (the wilderness-harvestable choice) wouldn't carve without an explicit rebake. `NavMeshObstacle.Carving` is the runtime-carve primitive — cheap and stable while the crop is stationary. `CropPlacementManager.DisableGhostInterference` already disables this on the placement ghost so the cursor sweep doesn't churn pathing for nearby NPCs.
+     - **Author the prefab values at the *world-space* size you want** — `Harvestable.ApplyVisual` automatically counter-scales `_navMeshObstacle.size` and `_navMeshObstacle.center` against the growth-stage `transform.localScale` lerp (0.25× at planting → 1× at maturity), so the obstacle's world footprint stays at the prefab values across all stages. Without this counter-scale, the obstacle would shrink to ~`0.125³` units at planting time and fall below the NavMesh voxel resolution — characters would walk straight through. Prefab values are captured once in `Awake` (`_baseObstacleSize`, `_baseObstacleCenter`).
    - Save the prefab in `Assets/Prefabs/Farming/`.
    - Drag the prefab back onto `CropSO._harvestablePrefab`.
 
@@ -116,6 +126,25 @@ Walk the chain in this order:
 2. **Conditions met?** Each day, refill needs `cell.Moisture >= crop.MinMoistureForGrowth`. Same as growth — water it or wait for rain.
 
 3. **Tap E with depleted apple tree picks nothing?** Yes, that's correct. `Harvestable.CanHarvest()` returns false when `_isDepleted`, so the yield path is unavailable. Hold E to see the menu — "Pick apples" should be greyed out with reason "Already harvested", and "Destroy" should be available if the right tool is held.
+
+## Debug a perennial that's stuck "depleted" right after maturing post-save/load
+
+Symptom: planted + watered + grew at least one day before saving; reloaded; let days pass until maturity; the crop visual matures but `CanHarvest()` returns false / hold-E shows "Already harvested" / no rows in the menu.
+
+Root cause class: `FarmGrowthSystem.PostWakeSweep` mis-classified `startDepleted` because `cell.TimeSinceLastWatered` is phase-overloaded — see the gotcha in `wiki/systems/farming.md`. Pre-maturity, `TimeSinceLastWatered = 0` means "watered while growing" (set by `CharacterAction_WaterCrop`); post-maturity, `0` means "depleted, refill counter at zero" (set by `Harvestable.OnDepleted`). The reconstruction must AND-gate on `cell.GrowthTimer >= crop.DaysToMature` to disambiguate. The fix landed 2026-05-02 in `FarmGrowthSystem.cs` + `MacroSimulatorCropMath.cs`. If you see this symptom returning:
+
+1. **Ctrl+Click the broken harvestable in Dev Mode → Inspect tab.** Check the live `HarvestableNetSync.IsDepleted` value and the cell's `TimeSinceLastWatered`.
+2. **Confirm the cell crossed maturity AFTER reconstruction.** If `cell.GrowthTimer >= DaysToMature` AND `IsDepleted=true` AND `TimeSinceLastWatered=-1`, reconstruction set `startDepleted=true` incorrectly. Re-read `PostWakeSweep` for the maturity gate.
+3. **Hibernation path.** If the bug only repros after a hibernation wake-up (not save/load), check `MacroSimulatorCropMath.AdvanceCellOffline` — its PHASE A branch must flip `cell.TimeSinceLastWatered = -1f` when crossing maturity to mirror the live tick. Without that flip, the same `PostWakeSweep` mis-classification fires.
+4. **Manual recovery on a stuck save.** In Play Mode, server-only:
+   ```csharp
+   var grid = mapController.GetComponent<TerrainCellGrid>();
+   ref var cell = ref grid.GetCellRef(x, z);
+   cell.TimeSinceLastWatered = -1f;
+   var farm = mapController.GetComponent<FarmGrowthSystem>();
+   // Force a refill by re-spawning the harvestable with correct startDepleted.
+   ```
+   Or simpler — if the cell is mature and `TimeSinceLastWatered = -1f`, the harvestable's `IsDepleted` NetVar can be flipped by calling `harvestable.SetReady()` from the server.
 
 ## Debug the Hold-E menu not opening
 

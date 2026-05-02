@@ -3,7 +3,7 @@ type: system
 title: "Commercial Building"
 tags: [building, commercial, jobs, tier-2]
 created: 2026-04-19
-updated: 2026-05-01
+updated: 2026-05-02
 sources: []
 related: ["[[building]]", "[[building-logistics-manager]]", "[[building-task-manager]]", "[[jobs-and-logistics]]", "[[shops]]", "[[crafting-loop]]", "[[worker-wages-and-performance]]", "[[quest-system]]", "[[tool-storage]]", "[[help-wanted-and-hiring]]", "[[dev-mode]]", "[[kevin]]"]
 status: stable
@@ -37,6 +37,18 @@ depended_on_by: ["[[jobs-and-logistics]]", "[[shops]]", "[[crafting-loop]]", "[[
 - `RefreshStorageInventory()` — two-pass physical ↔ logical sync (remove ghosts / absorb orphans). Pass 1 protects any `ItemInstance` currently held by a `TransportOrder.ReservedItems` in `LogisticsManager.PlacedTransportOrders` to avoid killing in-flight transports during a transient `OverlapBox` miss.
 - `CountUnabsorbedItemsInBuildingZone(ItemSO)` — counts matching WorldItems inside `BuildingZone` but not yet in `_inventory`, **plus** `ItemInstance`s currently held by this building's own assigned workers (equipment inventory + `HandsController.CarriedItem`). Used by `LogisticsTransportDispatcher.HandleInsufficientStock` to distinguish "items mid-transit to storage" from "items actually stolen" when a completed `CraftingOrder` exists without visible stock.
 
+## ToolStorage resolution (three-tier fallback)
+
+`CommercialBuilding.ToolStorage` is a virtual property with a three-tier resolver. Designers don't have to assign anything in the inspector — by default the building's first `StorageFurniture` child becomes the tool storage. Resolution order:
+
+1. **Cached field still alive** — return `_toolStorageFurniture` when the reference is non-null.
+2. **Snapshot-based rebind** — `Awake` snapshots the inspector-assigned crate's `(FurnitureItemSO + buildingLocalPosition)` before `base.Awake` destroys the original (the nested-furniture-with-NetworkObject conversion path). The lazy resolver scans children for the closest `(SO, localPos)` match within `FurnitureRefMatchEpsilon` and rebinds.
+3. **First-crate convention fallback** — `GetComponentInChildren<StorageFurniture>(includeInactive: false)`. The first storage child wins.
+
+Returns null only when the building has no `StorageFurniture` children at all, in which case `HasToolStorage` is false and tool-needing GOAP actions fail-cleanly. The same lazy snapshot-rebind pattern applies to `_helpWantedFurniture` and `_managementFurniture` — see `ResolveLazyFurnitureRef<T>` in `CommercialBuilding.cs`.
+
+`virtual IEnumerable<ItemSO> GetToolStockItems()` is the subclass extension point used by logistics routing. Default yields nothing (no tools). When a `JobLogisticsManager` worker drops off an item matching one of these and `ToolStorage` is available, the deposit is redirected from the loose `StorageZone` into the tool storage furniture — see `IsBuildingToolItem(ItemSO)` and the `FindStorageFurnitureForItem` / `GoapAction_GatherStorageItems.DetermineStoragePosition` routing in [[building-logistics-manager]]. `FarmingBuilding` overrides this and yields its `WateringCanItem`.
+
 ## IStockProvider contract
 
 Any `CommercialBuilding` that wants autonomous restock implements `IStockProvider.GetStockTargets()`, returning `(ItemSO ItemToStock, int MinStock)` pairs. The logistics manager reads these on every `OnWorkerPunchIn` and places `BuyOrder`s when virtual stock (physical + in-flight) falls below the policy's reorder threshold. Yielding zero targets is fine — the evaluator no-ops.
@@ -61,6 +73,12 @@ Force-assignment bypasses consent: `CommunityTracker.ImposeJobOnCitizen()` → `
 ## Default furniture spawn
 
 See [[building#Default furniture layout]] for the system (it now lives at the `Building` level). `CommercialBuilding` overrides `OnDefaultFurnitureSpawned()` to invalidate the storage furniture cache after the layout spawns.
+
+`Building.SpawnDefaultFurnitureSlot` defaults `slot.TargetRoom` to `MainRoom` when null — without this, late-authored slots silently spawned under the building root without grid registration, and the LogisticsManager + crafting pipeline relied on `_furnitures` registration for storage lookups. Designers can still set `slot.TargetRoom` explicitly. `Building.Start` also explicitly invokes `FurnitureManager.LoadExistingFurniture()` for the building's `MainRoom` because `Room.Start` runs the same defensive rescan but is `private` — without the explicit call the Building's own MainRoom rescan never happens (the Building class is itself the MainRoom via `ComplexRoom` inheritance).
+
+## Quest auto-claim — player-only path
+
+`WorkerStartingShift` calls `TryAutoClaimExistingQuests(worker)` and `SubscribeWorkerQuestAutoClaim(worker)` ONLY when `worker.IsPlayer()`. NPC workers use GOAP's `ClaimBestTask<T>` on demand instead. Without this gate, the first NPC to subscribe hoarded every newly-published `BuildingTask` via the multicast `OnQuestPublished` event order, leaving subsequent NPCs idle (a single `JobFarmer` would scoop every `PlantCropTask` and `HarvestResourceTask` the moment they were registered, and the second farmer's worldState would report zero work). Players still get auto-claim so quests they accept by punching in show up in their `CharacterQuestLog` UI without an extra interaction step.
 
 ## Zones (authored Inspector fields)
 
@@ -87,6 +105,7 @@ See [[building#Default furniture layout]] for the system (it now lives at the `B
 - If a subclass wants autonomous restock, **implementing `IStockProvider` is mandatory** — declaring `_itemsToSell` or `_inputStockTargets` alone does nothing until the contract is wired.
 
 ## Change log
+- 2026-05-02 — Farmer end-to-end rollout (cascade, IsValid corrections, softlock guards, race detection, etc.) — claude. Touchpoints with `CommercialBuilding`: (a) `ToolStorage` becomes a three-tier resolver — cached field → snapshot lazy-rebind → first-`StorageFurniture` child fallback. Designers no longer have to assign anything in the inspector. Same lazy-snapshot pattern formalised on `_helpWantedFurniture` and `_managementFurniture` via the new `ResolveLazyFurnitureRef<T>` helper. (b) New `virtual IEnumerable<ItemSO> GetToolStockItems()` extension point + `IsBuildingToolItem(ItemSO)` classifier — drives the tool-aware logistics routing in `FindStorageFurnitureForItem` and `GoapAction_GatherStorageItems.DetermineStoragePosition`. Default yields nothing; `FarmingBuilding` yields its `WateringCanItem`. (c) `WorkerStartingShift` quest auto-claim is now player-only (`worker.IsPlayer()` gate) — NPCs use GOAP's `ClaimBestTask` on demand, so the first NPC to subscribe no longer hoards every newly-published task. (d) `Building.SpawnDefaultFurnitureSlot` defaults `slot.TargetRoom` to `MainRoom` when null and `Building.Start` calls `FurnitureManager.LoadExistingFurniture()` explicitly — together they guarantee spawned default furniture is FurnitureManager-registered. — claude
 - 2026-05-01 — `_defaultFurnitureLayout` system hoisted up to `[[building]]`. `CommercialBuilding` now only carries the `OnDefaultFurnitureSpawned` override (storage cache invalidation). See [[building#Default furniture layout]]. — claude
 - 2026-04-30 — Hiring API: `_isHiring` NetworkVariable + `_helpWantedFurniture` reference + `TryOpenHiring` / `TryCloseHiring` / `CanRequesterControlHiring` / `GetVacantJobs` / `GetHelpWantedDisplayText` (virtual). `InteractionAskForJob.CanExecute` and `BuildingManager.FindAvailableJob` gate on `IsHiring` so closed buildings reject applications. `AssignWorker` + `CharacterJob.QuitJob` call `HandleVacancyChanged` to refresh the Help Wanted sign on hire/quit churn. `GetJobStableIndex(Job)` exposes stable indices for ServerRpc round-trip. See [[help-wanted-and-hiring]]. — claude
 - 2026-04-29 — Added `_toolStorageFurniture` designer reference + `WorkerCarriesUnreturnedTools(Character, out List<ItemInstance>)` server-side scan + `NotifyPunchOutBlockedClientRpc` (targeted ClientRpc to player workers, raises `UI_ToolReturnReminderToast`) + `NotifyPunchOutBlockedToClient` server-side wrapper. Foundation for the [[tool-storage]] primitive (Plan 1 of Farmer rollout). — claude

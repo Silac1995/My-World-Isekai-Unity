@@ -24,18 +24,57 @@ public override IEnumerable<StockTarget> GetStockTargets();
 public bool HasAnySeedForUnclaimedPlantTask();   // drives JobFarmer worldState
 ```
 
+### `FarmingBuilding` (additions, 2026-05-02)
+```csharp
+public void RefreshScansThrottled();
+// Server-only, 1 Hz per building. Re-runs PlantScan + WaterScan mid-shift.
+// Called from JobFarmer.PlanNextActions so seeds/cells changing during a shift
+// (player drop, NPC logistics inbound, debug spawn) become visible to GOAP within ~1s.
+
+public bool HasAnySeedForActionablePlantTask(Character worker);
+// Walks AvailableTasks AND InProgressTasks[claimed-by-worker]. Drives JobFarmer's
+// hasMatchingSeedInStorage worldState flag.
+
+private void AutoRegisterCropProduceAsWantedResources();
+// Called from FarmingBuilding.Start BEFORE base.Start runs ScanHarvestingArea.
+// For each crop in _cropsToGrow, registers the first non-SeedSO HarvestableOutputEntry.Item
+// as a WantedResource at default cap 50.
+```
+
 ### `JobFarmer : Job`
 ```csharp
 public override JobCategory Category => JobCategory.Harvester;
 public override JobType Type => JobType.Farmer;
 public override float ExecuteIntervalSeconds => 0.3f;   // heavy-planning cadence
 
-// GOAP planner: 5 goals (priority high→low):
-//   HarvestMatureCells   → HarvestResources → DepositResources
-//   WaterDryCells        → FetchTool(WateringCan) → WaterCrop → ReturnTool(WateringCan)
-//   PlantEmptyCells      → FetchSeed → PlantCrop
-//   DepositResources     → DepositResources (when bag full / produce in hand)
-//   Idle                 → IdleInBuilding
+// GOAP planner action library (fresh instance per plan):
+//   HarvestResources, PickupLooseItem, DepositResources,
+//   FetchSeed, PlantCrop,
+//   [if WateringCan + ToolStorage] FetchToolFromStorage(can), WaterCrop, ReturnToolToStorage(can),
+//   IdleInBuilding
+
+// worldState keys (built per-tick into _scratchWorldState):
+//   hasUnfilledHarvestTask  — mirrors GoapAction_HarvestResources.IsValid (blacklist + yield-match)
+//   hasUnfilledWaterTask    — HasAvailableOrClaimedTask<WaterCropTask>(worker)
+//   hasUnfilledPlantTask    — HasAvailableOrClaimedTask<PlantCropTask>(worker)
+//   hasSeedInHand, hasCanInHand, hasMatchingSeedInStorage, hasResources
+//   hasWateringCanAvailable
+//   looseItemExists         — live: HasAvailableOrClaimedTask<PickupLooseItemTask>(worker)
+//   hasHarvestZone          — mirror of hasUnfilledHarvestTask (precondition gate; missing-key=false)
+//   hasToolInHand_<canKey>, toolNeededForTask_<canKey>,
+//   taskCompleteForTool_<canKey>, toolReturned_<canKey>
+//
+// Goal cascade (priority high→low):
+//   1. seed-in-hand + plant work     → PlantGoal     (free the hand first)
+//   2. can-in-hand                    → WaterGoal    (use what you started)
+//   3. hasUnfilledHarvestTask
+//      OR looseItemExists
+//      OR hasResources                → HarvestGoal  (single goal hasDepositedResources=true;
+//                                                    planner picks Harvest→Pickup→Deposit
+//                                                    OR Pickup→Deposit OR Deposit alone)
+//   4. hasUnfilledWaterTask + hasWateringCanAvailable → WaterGoal
+//   5. hasUnfilledPlantTask + hasMatchingSeedInStorage → PlantGoal
+//   6. else → IdleGoal
 
 public override List<ScheduleEntry> GetWorkSchedule();   // 6h-18h
 ```
@@ -92,6 +131,40 @@ None — the system is fully event-driven via existing infrastructure:
 - [[help-wanted-and-hiring]] — Plan 2 hiring API + Plan 2.5 NeedJob throttle.
 - [[character-job]] — punch-out gate, schedule integration.
 - [[building-task-manager]] — task registration + claim API.
+
+## Softlock-guard pattern (six actions share it)
+
+`GoapAction_FetchSeed`, `GoapAction_FetchToolFromStorage`, `GoapAction_ReturnToolToStorage`, `GoapAction_PlantCrop`, `GoapAction_WaterCrop`, and `GoapAction_HarvestResources` share an "arrived-but-stuck" softlock guard:
+
+```csharp
+if (distXZ > WorkRadius)            // strict accept band — 2.5u for cell actions, 2u for clock
+{
+    var movement = worker.CharacterMovement;
+    bool arrived = movement == null
+        || !movement.HasPath
+        || movement.RemainingDistance <= movement.StoppingDistance + 0.5f;
+    if (!(arrived && distXZ <= OuterBand))   // 4u cells, 3u storage
+    {
+        if (!_isMoving) { worker.CharacterMovement?.SetDestination(target); _isMoving = true; }
+        return;
+    }
+    // Fell through: agent settled within outer band — accept.
+}
+```
+
+Without this, a `NavMeshObstacle.carve` edge from an adjacent just-planted crop pushes the worker's natural stopping point outside the strict zone — three retries → `PathingMemory.RecordFailure` → blacklist → worker pings between Idle and the action. **When adding any new "walk to X then interact" GOAP action, copy this pattern. Never blacklist on the first overshoot.**
+
+## Chain-action `IsValid` rule
+
+`PlantCrop`, `WaterCrop`, `ReturnToolToStorage` are chain *consumers* — the planner adds the matching Fetch action by walking preconditions. JobFarmer pre-filters `_availableActions` through `IsValid` before `GoapPlanner.Plan`, so a chain consumer that gates on hand-contents in `IsValid` gets filtered out at the start of every plan tick (worker hasn't run Fetch yet). **Rule: chain-action `IsValid` only checks invariants the planner cannot deduce from preconditions** — workplace, task availability, hands controller exists. NOT "seed in hand" / "can in hand". See [chain-action-isvalid-pre-filter](../../wiki/gotchas/chain-action-isvalid-pre-filter.md).
+
+## worldState predicate / action `IsValid` symmetry rule
+
+When you add a worldState key driving goal selection (e.g. `hasUnfilledHarvestTask`), the predicate computing it MUST mirror the consuming action's `IsValid` exactly — including blacklist filters, yield-match filters, and any other gate the action applies. Otherwise the cascade picks a goal whose plan can't form (the action is filtered out by its own `IsValid`), and the worker freezes on that goal forever. See [worldstate-predicate-action-isvalid-divergence](../../wiki/gotchas/worldstate-predicate-action-isvalid-divergence.md).
+
+## Cross-actor race detection on cell-targeted tasks
+
+Both `PlantCropTask.IsValid` and `WaterCropTask.IsValid` re-check cell state (PlantedCropId / GrowthTimer / Moisture) so a player or another NPC who plants/waters the cell while we're walking invalidates the task. **Both consumer GOAP actions ALSO re-check task.IsValid() inside Execute right before queueing the CharacterAction** — releases the claim cleanly via `task.UnclaimTask` if the cell got taken mid-walk. Mirror this two-step pattern when adding new cell-targeted task types.
 
 ## Gotchas
 

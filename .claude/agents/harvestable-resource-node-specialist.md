@@ -60,7 +60,11 @@ FarmGrowthSystem.SpawnHarvestableAt (cell-coupled crops)
     ▼
 Harvestable.InitializeAtStage(so, startStage, startDepleted, map?, cellX?, cellZ?, grid?)
     ├─ If so is CropSO: cache _crop, push CropIdNet/CurrentStage/IsDepleted to NetSync
-    ├─ ApplyVisual → scale lerp 0.25 → 1.0 across stages, sprite swap (mature ↔ depleted)
+    ├─ ApplyVisual → scale lerp 0.25 → 1.0 across stages, sprite swap (mature ↔ depleted),
+    │                NavMeshObstacle counter-scale (size/center inverse-scaled by scaleFactor
+    │                so world-space carve footprint stays at prefab values regardless of stage —
+    │                without it, fresh-planted crops shrink the obstacle below NavMesh voxel
+    │                resolution and carve nothing on every peer)
     └─ NetworkObject.Spawn AFTER InitializeAtStage so payload carries NetVar values
 
 TimeManager.OnNewDay (server, day rollover)
@@ -88,6 +92,8 @@ Harvest hits MaxHarvestCount → Deplete()
 - Cell-coupled harvestables: NOT persisted as separate save data. `cell.PlantedCropId` + `cell.GrowthTimer` + `cell.TimeSinceLastWatered` encode everything. `FarmGrowthSystem.PostWakeSweep` reconstructs `Harvestable` instances on map wake / save-load.
 - Free-positioned scenery (Tree.prefab): server-only state, lives across hibernation as scene-authored objects. Not separately persisted.
 - For dynamic free-positioned nodes (future ore deposits placed at runtime via debug tool): would need a `WorldItemSaveData`-like persistence path. Currently NOT supported — flag as open work if it comes up.
+
+**`TimeSinceLastWatered` is phase-overloaded — gate `startDepleted` on maturity (2026-05-02 fix).** The cell field has two meanings depending on `cell.GrowthTimer < crop.DaysToMature` (PHASE A: "watered while growing" set by `CharacterAction_WaterCrop`, NOT a depletion marker) vs `>= DaysToMature` (PHASE C: refill counter, 0 = "just depleted"). `FarmGrowthSystem.PostWakeSweep`'s `startDepleted` heuristic MUST AND-gate on maturity (`cell.GrowthTimer >= crop.DaysToMature`) AND `crop.IsPerennial` AND `TimeSinceLastWatered >= 0f`. Without the maturity gate, a saved mid-growth watered perennial reconstructs as `IsDepleted=true` and stays unharvestable forever (`AdvanceStage` only flips `CurrentStage`). The live tick `FarmGrowthPipeline.AdvanceOneDay` clears the sentinel on the `JustMatured` branch; `MacroSimulatorCropMath.AdvanceCellOffline` mirrors this on offline cross-of-maturity. Keep these in sync. Bug repro before fix: "Plant → Water → 1 day → Save → Load → wait days → crop never harvestable."
 
 ### 5. HarvestingBuilding event subscription (post-Phase 5 unification)
 
