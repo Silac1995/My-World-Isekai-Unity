@@ -28,6 +28,11 @@ public class GoapAction_DepositResources : GoapAction
     private bool _isDepositing = false;
     private float _lastRouteRequestTime;
 
+    // Throttled stuck-state log (1 Hz). Surfaces 'stopped moving while doing the harvest
+    // deposit resources' symptom — pinpoints whether the agent has no path, is being
+    // pushed off the navmesh, or arrived but ProcessSequentialDeposit can't drop.
+    private float _lastStuckLogTime = -10f;
+
     public override bool IsComplete => _isComplete;
 
     public GoapAction_DepositResources(HarvestingBuilding building)
@@ -87,6 +92,7 @@ public class GoapAction_DepositResources : GoapAction
                     bool blacklisted = worker.PathingMemory.RecordFailure(depositZone.gameObject.GetInstanceID());
                     if (blacklisted)
                     {
+                        Debug.LogWarning($"<color=red>[Deposit]</color> {worker.CharacterName} BLACKLISTED DepositZone after 3 failed pathing attempts. _isComplete=true. Worker will replan but the next plan will hit the same block.");
                         movement.Stop();
                         movement.ResetPath();
                         _isMoving = false;
@@ -101,9 +107,27 @@ public class GoapAction_DepositResources : GoapAction
             {
                 // Navigate to the center of the zone rather than the edge to ensure the item stays in
                 movement.SetDestination(targetCenter);
-                
+
                 _lastRouteRequestTime = UnityEngine.Time.unscaledTime;
                 _isMoving = true;
+            }
+
+            // Stuck-state diagnostic. 1 Hz per worker. Lets us see whether the agent has
+            // no path, is on a path but not advancing (RemainingDistance frozen), or
+            // RouteRequestTime is stale (path failure detection should have already kicked
+            // in). Surfaces the deposit-freeze without changing semantics.
+            float now = UnityEngine.Time.unscaledTime;
+            if (now - _lastStuckLogTime > 1f)
+            {
+                _lastStuckLogTime = now;
+                var hands = worker.CharacterVisual?.BodyPartsController?.HandsController;
+                string carriedName = hands?.CarriedItem?.ItemSO?.ItemName ?? "<none>";
+                int blacklistFails = worker.PathingMemory.GetFailCount(depositZone.gameObject.GetInstanceID());
+                Debug.Log(
+                    $"<color=orange>[Deposit]</color> {worker.CharacterName} not in zone yet. " +
+                    $"distXZ={Vector3.Distance(workerPosFlat, targetPosFlat):F2} HasPath={movement.HasPath} " +
+                    $"RemDist={movement.RemainingDistance:F2} StopDist={movement.StoppingDistance:F2} " +
+                    $"carrying='{carriedName}' isMoving={_isMoving} pathFails={blacklistFails}/3.");
             }
         }
         else
