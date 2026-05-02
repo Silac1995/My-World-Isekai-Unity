@@ -80,13 +80,47 @@ public class GoapAction_HarvestResources : GoapAction
         if (taskMgr == null) return false;
         var wanted = _building.GetWantedItems();
         if (wanted == null || wanted.Count == 0) return false;
-        return taskMgr.HasAvailableOrClaimedTask<HarvestResourceTask>(worker, task =>
+
+        bool found = taskMgr.HasAvailableOrClaimedTask<HarvestResourceTask>(worker, task =>
         {
             var h = task.Target as Harvestable;
-            if (h == null || worker.PathingMemory.IsBlacklisted(h.gameObject.GetInstanceID())) return false;
+            if (h == null) return false;
+            if (worker.PathingMemory.IsBlacklisted(h.gameObject.GetInstanceID())) return false;
             return h.HasAnyYieldOutput(wanted);
         });
+
+        // Throttled diagnostic: when worldState's hasUnfilledHarvestTask is true but the
+        // predicate-filtered version returns false, surface WHY each HarvestResourceTask
+        // failed (blacklisted, no yield match, or task target null/invalid). 1 Hz per worker.
+        if (!found)
+        {
+            float now = UnityEngine.Time.unscaledTime;
+            if (now - _lastIsValidDumpTime > 1f)
+            {
+                _lastIsValidDumpTime = now;
+                int total = 0, blacklisted = 0, noYieldMatch = 0, taskInvalid = 0, nullTarget = 0;
+                var av = taskMgr.AvailableTasks;
+                for (int i = 0; i < av.Count; i++)
+                {
+                    if (!(av[i] is HarvestResourceTask hrt)) continue;
+                    total++;
+                    if (!hrt.IsValid()) { taskInvalid++; continue; }
+                    var h = hrt.Target as Harvestable;
+                    if (h == null) { nullTarget++; continue; }
+                    if (worker.PathingMemory.IsBlacklisted(h.gameObject.GetInstanceID())) { blacklisted++; continue; }
+                    if (!h.HasAnyYieldOutput(wanted)) { noYieldMatch++; continue; }
+                }
+                Debug.Log(
+                    $"<color=red>[HarvestResources.IsValid]</color> {worker.CharacterName} REJECTED: " +
+                    $"total HarvestResourceTask in Available={total}, taskInvalid={taskInvalid}, " +
+                    $"nullTarget={nullTarget}, blacklisted={blacklisted}, noYieldMatch={noYieldMatch}. " +
+                    $"wanted=[{string.Join(",", System.Linq.Enumerable.Select(wanted, w => w?.ItemName ?? "null"))}].");
+            }
+        }
+        return found;
     }
+
+    private float _lastIsValidDumpTime = -10f;
 
     public override void Execute(Character worker)
     {
