@@ -69,9 +69,21 @@ public class PlantCropTask : BuildingTask
 
     public override bool IsValid()
     {
-        // V1: valid as long as Crop is set. JobFarmer.Execute re-validates the cell-empty
-        // precondition at claim time (race with another farmer or with rain mutating cell
-        // state is handled there).
-        return Crop != null;
+        if (Crop == null) return false;
+        if (_building == null) return true;   // can't validate without map ref; assume valid
+
+        // Cross-actor race detection: if anybody (player, another NPC, an external
+        // CharacterAction_PlaceCrop trigger) has already planted this cell since the task
+        // was registered, the task is obsolete. Returning false here cascades cleanly:
+        // BuildingTaskManager.ClaimBestTask drops invalid tasks from _availableTasks;
+        // HasAvailableOrClaimedTask + FindClaimedTaskByWorker filter by IsValid; the
+        // GoapAction's per-tick IsValid() check picks up the false return and JobFarmer
+        // replans.
+        var map = MWI.WorldSystem.MapController.GetMapAtPosition(_building.transform.position);
+        var grid = map != null ? map.GetComponent<MWI.Terrain.TerrainCellGrid>() : null;
+        if (grid == null) return true;        // can't validate; assume valid
+
+        ref var cell = ref grid.GetCellRef(CellX, CellZ);
+        return string.IsNullOrEmpty(cell.PlantedCropId);
     }
 }

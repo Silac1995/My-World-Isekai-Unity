@@ -85,15 +85,19 @@ public class GoapAction_PlantCrop : GoapAction
 
         if (worker.CharacterVisual?.BodyPartsController?.HandsController == null) return false;
 
+        // Filter by task.IsValid() so cross-actor races (player plants the cell first, etc.)
+        // get caught: an obsolete PlantCropTask returns IsValid=false from its cell-state
+        // check, ClaimBestTask drops it from _availableTasks, and we don't pretend the work
+        // is still pending here.
         var available = _building.TaskManager.AvailableTasks;
         for (int i = 0; i < available.Count; i++)
         {
-            if (available[i] is PlantCropTask) return true;
+            if (available[i] is PlantCropTask pctA && pctA.IsValid()) return true;
         }
         var inProgress = _building.TaskManager.InProgressTasks;
         for (int i = 0; i < inProgress.Count; i++)
         {
-            if (inProgress[i] is PlantCropTask pct && pct.ClaimedByWorkers.Contains(worker)) return true;
+            if (inProgress[i] is PlantCropTask pct && pct.ClaimedByWorkers.Contains(worker) && pct.IsValid()) return true;
         }
         return false;
     }
@@ -147,6 +151,20 @@ public class GoapAction_PlantCrop : GoapAction
                 worker.CharacterMovement?.SetDestination(cellWorld);
                 _isMoving = true;
             }
+            return;
+        }
+
+        // Final cross-actor race check before queueing the action. Between the time we
+        // claimed the task and now (worker walked to the cell), the player or another NPC
+        // may have planted this cell — re-checking task.IsValid() catches that and we
+        // abort cleanly without overwriting / no-oping. Mirror in GoapAction_WaterCrop.
+        if (!_claimedTask.IsValid())
+        {
+            // Release the claim so a (now hypothetical, since the cell is taken) future
+            // task on this cell isn't blocked by a stale claim, and let the planner pick
+            // another cell on the next replan.
+            _building.TaskManager.UnclaimTask(_claimedTask, worker);
+            _isComplete = true;
             return;
         }
 

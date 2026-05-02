@@ -93,13 +93,17 @@ public class GoapAction_WaterCrop : GoapAction
 
         if (worker.CharacterVisual?.BodyPartsController?.HandsController == null) return false;
 
+        // Filter by task.IsValid() so cross-actor races (player waters the cell first, the
+        // crop got harvested, etc.) get caught — the obsolete WaterCropTask returns
+        // IsValid=false from its cell-state check and ClaimBestTask drops it.
         var available = _building.TaskManager.AvailableTasks;
         for (int i = 0; i < available.Count; i++)
         {
-            if (available[i] is WaterCropTask) return true;
+            if (available[i] is WaterCropTask wctA && wctA.IsValid()) return true;
         }
         // Fall through: a pre-claimed WaterCropTask sitting on this worker (quest-system
-        // auto-claim path) — same pattern as GoapAction_PlantCrop.
+        // auto-claim path) — same pattern as GoapAction_PlantCrop. FindClaimedTaskByWorker
+        // already calls task.IsValid() so cell-state staleness is filtered there too.
         return _building.TaskManager.FindClaimedTaskByWorker<WaterCropTask>(worker) != null;
     }
 
@@ -143,6 +147,16 @@ public class GoapAction_WaterCrop : GoapAction
                 worker.CharacterMovement?.SetDestination(cellWorld);
                 _isMoving = true;
             }
+            return;
+        }
+
+        // Final cross-actor race check before queueing the water action. Player or
+        // another NPC (or rain) may have watered / harvested this cell while we were
+        // walking. Mirror in GoapAction_PlantCrop.
+        if (!_claimedTask.IsValid())
+        {
+            _building.TaskManager.UnclaimTask(_claimedTask, worker);
+            _isComplete = true;
             return;
         }
 

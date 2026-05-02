@@ -55,8 +55,24 @@ public class WaterCropTask : BuildingTask
 
     public override bool IsValid()
     {
-        // V1: always valid; JobFarmer.Execute re-validates cell state (still planted, still
-        // dry, not mature) at claim time.
+        if (_building == null) return true;   // can't validate without map ref; assume valid
+
+        // Cross-actor race detection: if anybody (player, rain, another farmer) has watered
+        // or harvested this cell since the task was registered, the task is obsolete. Mirror
+        // of PlantCropTask.IsValid — returning false here cascades cleanly through
+        // BuildingTaskManager + GoapAction validity gates and JobFarmer replans.
+        var map = MWI.WorldSystem.MapController.GetMapAtPosition(_building.transform.position);
+        var grid = map != null ? map.GetComponent<MWI.Terrain.TerrainCellGrid>() : null;
+        if (grid == null) return true;
+
+        ref var cell = ref grid.GetCellRef(CellX, CellZ);
+        if (string.IsNullOrEmpty(cell.PlantedCropId)) return false;   // crop gone (harvested/destroyed)
+
+        var crop = MWI.Farming.CropRegistry.Get(cell.PlantedCropId);
+        if (crop == null) return false;
+        if (cell.GrowthTimer >= crop.DaysToMature) return false;      // mature → no need to water
+        if (cell.Moisture >= crop.MinMoistureForGrowth) return false; // already wet enough
+
         return true;
     }
 }
