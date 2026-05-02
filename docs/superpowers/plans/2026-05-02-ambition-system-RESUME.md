@@ -6,9 +6,9 @@
 **Plan:** [docs/superpowers/plans/2026-05-02-ambition-system.md](2026-05-02-ambition-system.md) (58 tasks, 14 phases).
 **Spec:** [docs/superpowers/specs/2026-05-02-ambition-system-design.md](../specs/2026-05-02-ambition-system-design.md).
 
-## Current state — Phase 1 complete (Tasks 0–9 / 58)
+## Current state — Phase 2 complete (Tasks 0–12 / 58)
 
-**Last commit:** `d8661475` (Task 9 — full QuestSO body).
+**Last commit:** `74dca048` (Task 12 — RuntimeQueryBinding<T> in Assembly-CSharp).
 
 **Phase 1 commits:**
 
@@ -21,19 +21,62 @@
 | `6921acf8` | 4–7 | `AmbitionSO` body + `AmbitionInstance` + `CompletedAmbition` + `IAmbitionStepQuest` + `QuestSO` stub (bundle commit) |
 | `c04691bf` | 8 | `TaskOrderingMode` + `TaskBase` polymorphic base |
 | `d8661475` | 9 | full `QuestSO` body |
+| `d93b5199` | docs | resume note after Phase 1 |
 
-**Foundation state:** Compile-clean. NUnit `AmbitionContextTests` green (5/5).
+**Phase 2 commits:**
 
-## Architectural deviation locked in during Phase 1
+| SHA | Task | Summary |
+|---|---|---|
+| `6fa0b0b5` | chore | catch up 11 orphaned `.meta` files from Phase 1 commits |
+| `674bef2f` | 10 | `TaskParameterBinding<T>` + `StaticBinding<T>` (initially in Assembly-CSharp `Bindings/`) |
+| `16b9c324` | 11 | `ContextBinding<T>` + 3 NUnit tests; **bindings migrated to `Pure/`** (see deviation #2 below) |
+| `148a5c73` | chore | remove orphaned `Bindings/` folder after migration |
+| `3cc72b13` | 11+ | extra `ContextBinding` tests covering null-context and empty-key branches (5/5 pass) |
+| `74dca048` | 12 | `RuntimeQueryBinding<T>` re-creating `Bindings/` under Assembly-CSharp (per architectural rule below) |
 
-**`AmbitionContext` lives in a new `MWI.Ambition.Pure` assembly definition.**
+**Foundation state:** Compile-clean. NUnit `Ambition.Tests` green: 10/10 (5 `AmbitionContextTests` + 5 `ContextBindingTests`).
+
+## Architectural deviations locked in (Phase 1 + Phase 2)
+
+### Deviation #1 — `AmbitionContext` lives in a new `MWI.Ambition.Pure` assembly definition
 
 - Folder: `Assets/Scripts/Character/Ambition/Pure/` with its own `.asmdef`.
 - `MWI.Ambition.Pure.asmdef` has `autoReferenced: true`, so Assembly-CSharp picks it up automatically — callers don't need to know.
 - The plan's original `IsSerializableValueKind` used `typeof(MWI.WorldSystem.IWorldZone).IsAssignableFrom(t)` which would have compile-errored from a Pure assembly (no Assembly-CSharp reference allowed). The implementer (Task 3) replaced it with `t.GetInterfaces()` + string FullName check — same pattern already used for `Character`. Behavior identical.
-- Test asmdef `Ambition.Tests.asmdef` references `MWI.Ambition.Pure`.
+- Test asmdef `Ambition.Tests.asmdef` has `overrideReferences: true` + `autoReferenced: false` and references `MWI.Ambition.Pure` only. **Critical consequence:** Unity asmdefs cannot reference `Assembly-CSharp` by name (it is the no-asmdef catch-all), and the override + auto-ref-off configuration above means the Tests asmdef cannot see ANY Assembly-CSharp type. To unit-test a type, that type must live in `MWI.Ambition.Pure`.
 
-**Consequence for downstream tasks:** when adding new types, decide per-type whether they belong in Pure (no Unity dependency) or Assembly-CSharp (Unity / Character / IQuest / NetworkBehaviour). The plan doesn't anticipate this split — handle case-by-case. Most downstream types (CharacterAmbition, AmbitionQuest, all Tasks, BT nodes, save DTOs that reference SO assets) need to stay in Assembly-CSharp because they pull in Unity types. Pure should only grow if there's pure-logic worth isolating.
+### Deviation #2 — Binding hierarchy split across asmdefs (Phase 2 lock-in)
+
+The plan's original Tasks 10–12 placed all binding types in `Assets/Scripts/Character/Ambition/Bindings/` (Assembly-CSharp). That breaks unit testing for `ContextBinding<T>` (Task 11) per Deviation #1's test-asmdef constraint. **The locked-in split:**
+
+| Type | Asmdef | Folder |
+|---|---|---|
+| `TaskParameterBinding<T>` (abstract base) | `MWI.Ambition.Pure` | `Assets/Scripts/Character/Ambition/Pure/` |
+| `StaticBinding<T>` | `MWI.Ambition.Pure` | `Assets/Scripts/Character/Ambition/Pure/` |
+| `ContextBinding<T>` | `MWI.Ambition.Pure` | `Assets/Scripts/Character/Ambition/Pure/` |
+| `RuntimeQueryBinding<T>` (abstract, references `Character`) | Assembly-CSharp | `Assets/Scripts/Character/Ambition/Bindings/` |
+| `EligibleLoverQuery` (Task 49) and other concrete query subclasses | Assembly-CSharp | (next to the Task that uses them) |
+
+**Why it works:** `MWI.Ambition.Pure.asmdef` has `autoReferenced: true`, so Assembly-CSharp picks up its types. `RuntimeQueryBinding<T>` (Assembly-CSharp) inheriting from `TaskParameterBinding<T>` (Pure) is a valid one-way reference — no circular dependency.
+
+**Note on `Character` namespace:** `Character.cs` has no `namespace` declaration, so `Character` resolves from any Assembly-CSharp file with no `using`. Verified during Task 12.
+
+### The general rule going forward
+
+**When adding any new type, decide per-type whether it belongs in Pure or Assembly-CSharp:**
+
+- **Pure** — pure-logic types with no Unity, no `Character`, no SO references, no `MonoBehaviour`/`NetworkBehaviour`. They can be unit-tested directly from `Ambition.Tests`.
+- **Assembly-CSharp** — anything with Unity dependencies (Character, MonoBehaviour, ScriptableObject types, NetworkBehaviour, NavMesh, etc.). Cannot be unit-tested by `Ambition.Tests`; integration-test in PlayMode instead.
+
+**Most downstream types (CharacterAmbition, AmbitionQuest, all Tasks, BT nodes, save DTOs that reference SO assets, NetworkAmbitionSnapshot) belong in Assembly-CSharp.** Pure should only grow if there's pure-logic worth unit-isolating.
+
+### Important #2 from Task 12 code review — addressed and rejected
+
+The Task 12 code reviewer claimed `cached != null` and `picked != null` are "compile-time false for any `T : struct`", suggesting the cache would be re-queried every tick for value-type bindings. **Verified false via Roslyn execute on 2026-05-02:** for unconstrained generic `T`, `value != null` evaluates to `true` for both `int(7)` and `int(0)` (the runtime boxes the value-type and the box is non-null). The `!= null` check is a redundant no-op for value types but causes no bug. Cache lookup works correctly. No action needed.
+
+### Important #1 from Task 12 code review — deferred
+
+The Task 12 code reviewer flagged that `RuntimeQueryBinding.ResolveWithCharacter` silently no-ops the cache write when `WriteKey` is empty. This is plan-prescribed behavior — `WriteKey` is documented as optional. A `Debug.LogWarning` would either spam (fired every successful query when `WriteKey` is intentionally empty) or require per-instance state tracking. **Better path:** address in a future hardening pass with editor-time validation rather than runtime logging. Not blocking.
 
 ## How to resume
 
@@ -48,9 +91,9 @@ I'm resuming the Ambition System implementation. Read these in order:
 2. docs/superpowers/plans/2026-05-02-ambition-system.md         (the 58-task plan)
 3. docs/superpowers/specs/2026-05-02-ambition-system-design.md  (the design spec)
 
-Verify the branch is `multiplayyer` and HEAD is at `d8661475` (or later if I've made other commits since).
+Verify the branch is `multiplayyer` and HEAD is at `74dca048` (or later if I've made other commits since).
 
-Then invoke the `superpowers:subagent-driven-development` skill and continue from Task 10 (Phase 2 — parameter bindings).
+Then invoke the `superpowers:subagent-driven-development` skill and continue from Task 13 (Phase 3 — registries and settings).
 ```
 
 ### 2. Cadence the prior session settled on
@@ -73,21 +116,22 @@ Then invoke the `superpowers:subagent-driven-development` skill and continue fro
 - **`assets-create-folder` MCP tool** must be used before the first `script-update-or-create` writes into a new directory. Don't fall back to bash `mkdir` unless the MCP tool is genuinely unavailable.
 - **`tests-run` MCP tool** — use `mode: "EditMode"` and `class: "MWI.Tests.Ambition.<name>"` for targeted runs. The Ambition test assembly is `Ambition.Tests` (asmdef in `Assets/Tests/EditMode/Ambition/`).
 
-### 4. Next task — Task 10 (start of Phase 2)
+### 4. Next task — Task 13 (start of Phase 3)
 
-`TaskParameterBinding<T>` abstract + `StaticBinding<T>`. Files:
-- `Assets/Scripts/Character/Ambition/Bindings/TaskParameterBinding.cs`
-- `Assets/Scripts/Character/Ambition/Bindings/StaticBinding.cs`
+`AmbitionRegistry` (lazy-init). File:
+- `Assets/Scripts/Character/Ambition/AmbitionRegistry.cs`
 
-Full task text in [the plan](2026-05-02-ambition-system.md#task-10-taskparameterbindingt-abstract--staticbindingt).
+Full task text in [the plan](2026-05-02-ambition-system.md#task-13-ambitionregistry-lazy-init).
 
-**Decision for the resuming session:** decide whether the bindings folder also lives in Pure, or in Assembly-CSharp. Bindings reference `AmbitionContext` (Pure) only — they have no Unity dependency themselves — so they could live in Pure. **Recommendation:** put them in Assembly-CSharp anyway. The downstream `RuntimeQueryBinding<T>` subclasses (Task 12, Task 49 `EligibleLoverQuery`) reference `Character` and `MapController`, which are Assembly-CSharp. Splitting the binding hierarchy across two assemblies (Static/Context in Pure, Runtime in Assembly-CSharp) creates an awkward boundary inside one polymorphic family. Keep them all together in Assembly-CSharp.
+**Decision for the resuming session — registry asmdef placement:** `AmbitionRegistry` calls `Resources.LoadAll<AmbitionSO>("Data/Ambitions")` and stores `AmbitionSO` references. `AmbitionSO` is currently in Assembly-CSharp (Phase 1 deferred this). So `AmbitionRegistry` belongs in Assembly-CSharp at `Assets/Scripts/Character/Ambition/AmbitionRegistry.cs`. Same logic for `QuestRegistry` (Task 14) — it touches `QuestSO` (Assembly-CSharp). `AmbitionSettings` (Task 15) is a `ScriptableObject` referencing `NeedSO` — also Assembly-CSharp.
 
-## Phases remaining (49 tasks)
+**Phase 3 has no NUnit tests in the plan**, so the test-asmdef constraint doesn't bite here.
+
+## Phases remaining (46 tasks)
 
 | Phase | Tasks | Estimate (subagent dispatches) |
 |---|---|---|
-| Phase 2 — Parameter bindings | 10–12 | 3 |
+| ~~Phase 2 — Parameter bindings~~ | ~~10–12~~ | DONE |
 | Phase 3 — Registries + settings | 13–15 | 3 |
 | Phase 4 — Bridge + ordering tests | 16–17 | 2 (Task 16 needs `opus` — tricky IQuest bridge implementation) |
 | Phase 5 — `CharacterAmbition` core | 18–21 | 4 (Task 18 `opus`, Task 21 manual prefab edits) |
@@ -105,27 +149,44 @@ Full task text in [the plan](2026-05-02-ambition-system.md#task-10-taskparameter
 
 ## Open notes / things to watch
 
-- **Test assembly references** — `Ambition.Tests.asmdef` references `MWI.Ambition.Pure`. If a future test needs to exercise types that live in Assembly-CSharp (e.g. `AmbitionQuest` from Task 16), either move that test to a PlayMode test, or add an Assembly-CSharp reference to the Tests asmdef (the existing pattern in `Hunger`/`Farming`/`Orders` test folders varies — check those before deciding).
+- **Test assembly references** — `Ambition.Tests.asmdef` has `overrideReferences: true` + `autoReferenced: false`, so it can ONLY see types in `MWI.Ambition.Pure`. Unity asmdefs cannot reference `Assembly-CSharp` by name. If a future test (e.g. for `AmbitionQuest` in Task 16) needs an Assembly-CSharp type, the only options are: (a) move the test to PlayMode (which has reflection access via the play-mode runner), or (b) move the type-under-test into `MWI.Ambition.Pure` if it has no Unity dependency. Don't try to "add Assembly-CSharp to references[]" — Unity silently drops it.
+- **`Character` is in the global namespace** — `Character.cs` has no `namespace` declaration. Resolves with no `using` from any Assembly-CSharp file. Verified Task 12.
 - **`MWI.Quests.IQuest`** is the actual namespace (verified Task 6). Earlier Explore reports said `MWI.Quests` may differ — confirmed correct now.
 - **`feedback_lazy_static_registry_pattern.md`** governs Task 13/14 (`AmbitionRegistry`, `QuestRegistry`). Joining clients skip `GameLauncher.LaunchSequence`, so the registries must lazy-init in `Get()`. Plan already reflects this — just don't let subagents shortcut to eager init.
 - **`HibernatedNPCData`** location (Task 27) — grep first to find. Likely `Assets/Scripts/World/...`.
+- **Orphaned `.meta` files** — Phase 1 implementer subagents repeatedly forgot to add `.meta` files to commits, requiring a chore cleanup commit at start of Phase 2. **Mitigation already baked into Phase 2 prompts:** every dispatch now includes an explicit `git add` line listing both `.cs` and `.cs.meta` files. Continue this pattern in Phase 3+ prompts.
+- **Reviewer rigor** — Task 12's code quality reviewer made a confidently-stated but factually-wrong claim about C# generic null-checks behaving differently for value types. Always verify strong technical claims before accepting reviewer feedback. The Roslyn-execute approach via `mcp__ai-game-developer__script-execute` is a fast way to settle "what does C# actually do here" questions in 30 seconds.
 
-## Phase 1 milestone (verifiable)
+## Phase 1 + 2 milestone (verifiable)
 
 Run in the new session to confirm starting state:
 
 ```bash
-git log --oneline | head -10
-# Expect: d8661475 feat(ambition): flesh out QuestSO with task list and ordering
-#         c04691bf feat(ambition): add TaskOrderingMode and TaskBase polymorphic base
-#         6921acf8 feat(ambition): add AmbitionSO, AmbitionInstance, CompletedAmbition, IAmbitionStepQuest
-#         27803869 feat(ambition): add AmbitionContext with NUnit coverage
-#         76afaa33 feat(ambition): add CompletionReason, ControllerKind, TaskStatus enums
-#         10362092 feat(ambition): add ContextValueKind enum
-#         7a614674 test(ambition): scaffold test folder
-#         7c1300ca docs(ambition): implementation plan ...
-#         f53d5c32 docs(ambition): apply spec review recommendations
-#         d20784ec docs(ambition): design spec ...
+git log --oneline | head -16
+# Expect (HEAD = 74dca048):
+#   74dca048 feat(ambition): add RuntimeQueryBinding base in Assembly-CSharp
+#   3cc72b13 test(ambition): cover null-context and empty-key branches in ContextBinding
+#   148a5c73 chore(ambition): remove orphaned Bindings/ folder after migration to Pure asmdef
+#   16b9c324 feat(ambition): add ContextBinding<T> with tests; migrate bindings to Pure asmdef
+#   674bef2f feat(ambition): add TaskParameterBinding and StaticBinding
+#   6fa0b0b5 chore(ambition): add missing .meta files orphaned from Phase 1 commits
+#   d93b5199 docs(ambition): resume note after Phase 1 (Tasks 0-9)
+#   d8661475 feat(ambition): flesh out QuestSO with task list and ordering
+#   c04691bf feat(ambition): add TaskOrderingMode and TaskBase polymorphic base
+#   6921acf8 feat(ambition): add AmbitionSO, AmbitionInstance, CompletedAmbition, IAmbitionStepQuest
+#   27803869 feat(ambition): add AmbitionContext with NUnit coverage
+#   76afaa33 feat(ambition): add CompletionReason, ControllerKind, TaskStatus enums
+#   10362092 feat(ambition): add ContextValueKind enum
+#   7a614674 test(ambition): scaffold test folder
+#   7c1300ca docs(ambition): implementation plan ...
+#   f53d5c32 docs(ambition): apply spec review recommendations
 ```
 
-If those 7 ambition commits are present (plus the 3 docs commits), Phase 1 is intact and you're ready to start Task 10.
+Run all Ambition tests:
+
+```
+mcp__ai-game-developer__tests-run mode=EditMode testNamespace=MWI.Tests.Ambition
+# Expect: 10 passed, 0 failed
+```
+
+If those commits are present and the tests pass, Phase 1 + Phase 2 are intact and you're ready to start Task 13.
