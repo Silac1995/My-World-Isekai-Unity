@@ -28,6 +28,13 @@ namespace MWI.Ambition
         public event Action<CompletedAmbition> OnAmbitionCompleted;
         public event Action<CompletedAmbition> OnAmbitionCleared;
 
+        // Lifecycle
+        protected override void OnDisable()
+        {
+            CancelStepQuest();
+            base.OnDisable();
+        }
+
         // Public API
         public virtual void SetAmbition(AmbitionSO so, IReadOnlyDictionary<string, object> parameters = null)
         {
