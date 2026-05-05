@@ -121,7 +121,46 @@ If a future late-joiner NRE returns and matches the `NetworkObject.cs:3172` stac
 
 `HandsController.CarriedItem` is a plain MonoBehaviour field. Server can't see what a dedicated client is holding. Pattern: validate + consume held items locally on the owning client BEFORE issuing any ServerRpc. See `CropPlacementManager.ConsumeHeldSeedLocally` for the canonical example. Any new "Place X by holding Y" flow you add must follow this rule.
 
-### 9. `DestroyForOutputs` returns spawned drops; pickup-task registration is the caller's job
+### 9. Layered tree visual (2026-05-03)
+
+A new orthogonal visual subsystem for tree harvestables. Lives next to (not inside) the existing `ApplyVisual` growth-stage scale lerp — the two coexist because the tree root transform's localScale rides through to all 3 child layers naturally.
+
+**Authoring surface — `TreeHarvestableSO : HarvestableSO`** (in `MWI.Interactable.Pure`):
+- `TrunkSprite : Sprite` — static silhouette under the foliage, never tinted.
+- `FoliageSprite : Sprite` — single sprite, MPB-tinted.
+- `FoliageColorOverYear : Gradient` — sampled by `TimeManager.CurrentYearProgress01`.
+- `FruitSpriteVariants : Sprite[]` — random pick per spawned fruit.
+- `FruitSpawnArea : Rect` — local-space rect. `Rect.zero` falls back to foliage sprite bounds.
+- `FruitScale : Vector2` — per-fruit scale multiplier.
+
+**Runtime — `HarvestableLayeredVisual : NetworkBehaviour`** (sibling on tree prefab):
+- Hand-wired children: `_trunkRenderer`, `_foliageRenderer`, `_fruitContainer`.
+- On `OnNetworkSpawn`: reads `_harvestable.SO as TreeHarvestableSO`. If null (rock / plain crop), disables itself — zero overhead on non-trees.
+- Spawns `MaxHarvestCount` fruit `SpriteRenderer`s under `_fruitContainer` with deterministic positions seeded by `NetworkObject.NetworkObjectId`. **Spawn count = `MaxHarvestCount` (not current `RemainingYield`)** so late-joiners on a half-harvested tree create the full slot set; `RefreshFruitVisibility` then hides already-harvested ones.
+- Subscribes to `TimeManager.OnNewDay` (foliage tint), `Harvestable.OnStateChanged` (fruit visibility), `_netSync.RemainingYield.OnValueChanged` (per-fruit hide).
+- All updates event-driven. Reused `MaterialPropertyBlock` preserves SRP batching.
+
+**Cross-system additions you now own:**
+- `TimeManager.CurrentYearProgress01` + `ComputeYearProgress01` static helper (defensive against zero/negative `_daysPerYear`).
+- `HarvestableNetSync.RemainingYield : NetworkVariable<byte>` — server-write, byte-cap. Pushed by `Harvestable.Harvest` / `ResetHarvestState` / `InitializeAtStage`.
+
+**Determinism contract.** Fruit positions and per-anchor sprite picks are derived from `NetworkObjectId` via `Random.InitState`. Capture `Random.state` before, restore after. Every peer must see identical apple layout. If you change the spawn order or RNG calls, you break this — bump only with a deliberate "regenerate everywhere" plan.
+
+**Crop-aware maturity gate.** `ResolveVisibleFruitCount` returns 0 if the SO is a `CropSO` and `_netSync.CurrentStage.Value < crop.DaysToMature` — fruit hidden until mature. Fruits are still spawned at full count; they're just disabled until growth completes.
+
+**Scope.** Scene-authored trees only for v1. Runtime-spawned trees would need a `TreeRegistry` mirror of `CropRegistry` so clients can resolve the SO from a replicated id. Flagged in spec/plan as future work.
+
+**Networking matrix:**
+
+| State | Source | Replication |
+|---|---|---|
+| Trunk / foliage sprite | SO ref baked on prefab | None — SO identical on every peer |
+| Foliage color | `TimeManager.CurrentDay` | TimeManager already syncs day |
+| Fruit visibility | `HarvestableNetSync.RemainingYield` | New 1-byte NetVar |
+| Fruit count | `HarvestableSO.MaxHarvestCount` | None — same SO on every peer |
+| Fruit position + sprite per fruit | `NetworkObjectId`-seeded RNG | None — deterministic across peers |
+
+### 10. `DestroyForOutputs` returns spawned drops; pickup-task registration is the caller's job
 
 `Harvestable.DestroyForOutputs(destroyer)` returns `List<WorldItem>` of the spawned destruction items so the **caller** (typically `CharacterActions.ApplyDestroyOnServer`) can register a `PickupLooseItemTask` on the destroyer's harvesting workplace for each drop. Mirrors what `ApplyHarvestOnServer` already does on the harvest path. Without this follow-up the harvester's GOAP planner never sees `looseItemExists=true` after a chop and the wood sits orphaned. If you add a new code path that calls `DestroyForOutputs` directly from somewhere other than `ApplyDestroyOnServer`, you MUST replicate the task-registration pass — or just route through `CharacterActions.ApplyDestroyOnServer(target)` and inherit it for free.
 
@@ -145,10 +184,12 @@ When you make a meaningful change, update **all of these** in the same session:
 
 ```
 Assets/Scripts/Interactable/Pure/HarvestableSO.cs
+Assets/Scripts/Interactable/Pure/TreeHarvestableSO.cs
 Assets/Scripts/Interactable/Pure/HarvestableOutputEntry.cs
 Assets/Scripts/Interactable/Pure/MWI.Interactable.Pure.asmdef
 Assets/Scripts/Interactable/Harvestable.cs
 Assets/Scripts/Interactable/HarvestableNetSync.cs
+Assets/Scripts/Interactable/HarvestableLayeredVisual.cs
 Assets/Scripts/Interactable/HarvestOutputEntry.cs
 Assets/Scripts/Interactable/HarvestableCategory.cs
 Assets/Scripts/Interactable/HarvestInteractionOption.cs
