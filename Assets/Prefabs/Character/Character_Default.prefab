@@ -697,6 +697,52 @@ MonoBehaviour:
   _unconsciousEffect: {fileID: 11400000, guid: 8b53042cad11a914cb6d5847dc93f505, type: 2}
   _outOfCombatEffect: {fileID: 11400000, guid: 4bb0a5072ebeb5b4a9c039f3d6d8ef4c, type: 2}
   _outOfBreathEffect: {fileID: 0}
+--- !u!1 &2810820655330448632
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 394839290829140272}
+  - component: {fileID: 2010478587437791876}
+  m_Layer: 0
+  m_Name: Subsystem_Ambition
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &394839290829140272
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2810820655330448632}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 6179432398992828966}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &2010478587437791876
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2810820655330448632}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b787ca49f61d2a84f9ad18ddd7df1f9d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MWI.Ambition.CharacterAmbition
+  ShowTopMostFoldoutHeaderGroup: 1
+  _character: {fileID: 0}
 --- !u!1 &2907612232078344083
 GameObject:
   m_ObjectHideFlags: 0
@@ -1082,6 +1128,7 @@ Transform:
   - {fileID: 3520371595149480146}
   - {fileID: 964296916362943045}
   - {fileID: 1093834723204348468}
+  - {fileID: 394839290829140272}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!54 &3937668831498777898
@@ -1225,6 +1272,7 @@ MonoBehaviour:
   _furniturePlacementManager: {fileID: 6177199399255119807}
   _cropPlacement: {fileID: 8748390944474218358}
   _cinematicState: {fileID: 6099921675542201833}
+  _characterAmbition: {fileID: 0}
   NetworkRaceId:
     UpdateTraits:
       MinSecondsBetweenUpdates: 0
