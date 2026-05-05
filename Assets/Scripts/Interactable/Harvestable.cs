@@ -537,6 +537,8 @@ public class Harvestable : InteractableObject
 
         _currentHarvestCount++;
 
+        if (_netSync != null) _netSync.RemainingYield.Value = (byte)Mathf.Min(byte.MaxValue, RemainingYield);
+
         NotifyHarvesterQuestProgress(harvester);
 
         if (_isDepletable && _currentHarvestCount >= _maxHarvestCount)
@@ -660,6 +662,7 @@ public class Harvestable : InteractableObject
     {
         _currentHarvestCount = 0;
         _isDepleted = false;
+        if (_netSync != null) _netSync.RemainingYield.Value = (byte)Mathf.Min(byte.MaxValue, _maxHarvestCount);
         if (MWI.Time.TimeManager.Instance != null)
             MWI.Time.TimeManager.Instance.OnNewDay -= HandleNewDay;
         if (_visualRoot != null)
@@ -830,6 +833,9 @@ public class Harvestable : InteractableObject
             _netSync.CropIdNet.Value = new FixedString64Bytes(_crop.Id ?? string.Empty);
             _netSync.CurrentStage.Value = Mathf.Clamp(startStage, 0, _crop.DaysToMature);
             _netSync.IsDepleted.Value = startDepleted;
+            _netSync.RemainingYield.Value = startDepleted
+                ? (byte)0
+                : (byte)Mathf.Min(byte.MaxValue, _maxHarvestCount);
         }
 
         ApplyVisual();
