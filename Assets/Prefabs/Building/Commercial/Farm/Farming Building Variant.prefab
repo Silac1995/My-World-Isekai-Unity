@@ -935,7 +935,7 @@ PrefabInstance:
     - target: {fileID: 2058514990271563893, guid: d941949b730fb1843991b09d42aa29bf, type: 3}
       propertyPath: '_cropsToGrow.Array.data[0]'
       value: 
-      objectReference: {fileID: 11400000, guid: 0af22e661d08ace44b7a469753cf5d7b, type: 2}
+      objectReference: {fileID: 11400000, guid: b318882b2139a7544ac49c7aa6e7861b, type: 2}
     - target: {fileID: 2058514990271563893, guid: d941949b730fb1843991b09d42aa29bf, type: 3}
       propertyPath: _farmingAreaZones.Array.size
       value: 1

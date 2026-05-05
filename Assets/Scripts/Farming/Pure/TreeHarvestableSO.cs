@@ -1,10 +1,14 @@
 using UnityEngine;
+using MWI.Interactables;
 
-namespace MWI.Interactables
+namespace MWI.Farming
 {
     /// <summary>
-    /// Tree-flavoured <see cref="HarvestableSO"/>. Adds the authoring surface for the
-    /// 3-layer visual driven by <c>HarvestableLayeredVisual</c>:
+    /// Tree-flavoured <see cref="CropSO"/>. Inherits the full farming pipeline (DaysToMature,
+    /// MinMoistureForGrowth, IsPerennial, RegrowDays, PlantDuration, StageSprites) plus the
+    /// universal <see cref="HarvestableSO"/> surface (yield outputs, depletion, destruction,
+    /// tools, prefab) AND adds the authoring surface for the 3-layer visual driven by
+    /// <c>HarvestableLayeredVisual</c>:
     ///
     /// <list type="bullet">
     /// <item><see cref="TrunkSprite"/> — static silhouette under the foliage.</item>
@@ -16,10 +20,13 @@ namespace MWI.Interactables
     /// <item><see cref="FruitScale"/> — per-fruit scale multiplier.</item>
     /// </list>
     ///
-    /// Lives in the <c>MWI.Interactable.Pure</c> asmdef alongside <see cref="HarvestableSO"/>.
+    /// Lives in the <c>MWI.Farming.Pure</c> asmdef (next to <see cref="CropSO"/>) so it can
+    /// extend the farming inheritance chain. Use this SO whenever a tree-shaped crop or
+    /// scene-placed tree wants the layered visual treatment. For non-tree crops (wheat,
+    /// flowers) keep the plain <see cref="CropSO"/>.
     /// </summary>
-    [CreateAssetMenu(menuName = "Game/Harvestables/Tree")]
-    public class TreeHarvestableSO : HarvestableSO
+    [CreateAssetMenu(menuName = "Game/Farming/Tree Crop")]
+    public class TreeHarvestableSO : CropSO
     {
         [Header("Layered tree visual")]
         [SerializeField] private Sprite _trunkSprite;

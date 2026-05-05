@@ -12,24 +12,38 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0bd8a02df08463346959ce27140db60c, type: 3}
   m_Name: AppleTreeSO
   m_EditorClassIdentifier: MWI.Interactable.Pure::MWI.Interactables.TreeHarvestableSO
-  _id: tree_apple_layered
-  _displayName: Apple Tree (Layered)
+  _id: apple_tree
+  _displayName: Apple Tree
   _harvestOutputs:
   - Item: {fileID: 11400000, guid: 6eadabb584f662d49bea83caa241bdba, type: 2}
+    Count: 4
+  - Item: {fileID: 11400000, guid: f6b04bb5c96c35d4d8c4cb7bc34515b5, type: 2}
     Count: 1
   _requiredHarvestTool: {fileID: 0}
   _harvestDuration: 1.5
   _isDepletable: 1
   _maxHarvestCount: 5
   _respawnDelayDays: 1
-  _allowDestruction: 0
+  _allowDestruction: 1
   _allowNpcDestruction: 1
   _requiredDestructionTool: {fileID: 0}
-  _destructionEntries: []
+  _destructionEntries:
+  - Item: {fileID: 11400000, guid: a3f0471c4178efd4b9b5efdb38aea516, type: 2}
+    Count: 4
   _destructionDuration: 3
   _readySprite: {fileID: 0}
   _depletedSprite: {fileID: 0}
-  _harvestablePrefab: {fileID: 0}
+  _harvestablePrefab: {fileID: 8874080723789279744, guid: b8fb13f2f1ea6534cb428a3bc7bd0e3d, type: 3}
+  _daysToMature: 3
+  _minMoistureForGrowth: 0.3
+  _plantDuration: 2
+  _stageSprites: []
+  _isPerennial: 1
+  _regrowDays: 2
+  _produceItem: {fileID: 0}
+  _produceCount: 1
+  _destructionOutputs: []
+  _destructionOutputCount: 1
   _trunkSprite: {fileID: 10905, guid: 0000000000000000f000000000000000, type: 0}
   _foliageSprite: {fileID: 10905, guid: 0000000000000000f000000000000000, type: 0}
   _foliageColorOverYear:

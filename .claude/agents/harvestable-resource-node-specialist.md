@@ -125,7 +125,9 @@ If a future late-joiner NRE returns and matches the `NetworkObject.cs:3172` stac
 
 A new orthogonal visual subsystem for tree harvestables. Lives next to (not inside) the existing `ApplyVisual` growth-stage scale lerp — the two coexist because the tree root transform's localScale rides through to all 3 child layers naturally.
 
-**Authoring surface — `TreeHarvestableSO : HarvestableSO`** (in `MWI.Interactable.Pure`):
+**Authoring surface — `TreeHarvestableSO : CropSO`** (in `MWI.Farming.Pure`, alongside `CropSO`):
+
+This subclass inherits the full farming pipeline (DaysToMature, MinMoistureForGrowth, IsPerennial, RegrowDays, PlantDuration, StageSprites) from CropSO, plus the universal HarvestableSO surface, plus the layered visual fields below. Use `TreeHarvestableSO` whenever a tree-shaped crop or scene-placed tree wants the layered visual treatment. Non-tree crops (wheat, flowers) stay on plain `CropSO`. The 2026-05-03 refactor moved this from `MWI.Interactable.Pure / : HarvestableSO` to its current location so a single `AppleTreeSO.asset` can serve both the planting flow (replaces the old `Crop_AppleTree.asset`) and scene-placed tree fixtures.
 - `TrunkSprite : Sprite` — static silhouette under the foliage, never tinted.
 - `FoliageSprite : Sprite` — single sprite, MPB-tinted.
 - `FoliageColorOverYear : Gradient` — sampled by `TimeManager.CurrentYearProgress01`.
@@ -184,8 +186,8 @@ When you make a meaningful change, update **all of these** in the same session:
 
 ```
 Assets/Scripts/Interactable/Pure/HarvestableSO.cs
-Assets/Scripts/Interactable/Pure/TreeHarvestableSO.cs
 Assets/Scripts/Interactable/Pure/HarvestableOutputEntry.cs
+Assets/Scripts/Farming/Pure/TreeHarvestableSO.cs
 Assets/Scripts/Interactable/Pure/MWI.Interactable.Pure.asmdef
 Assets/Scripts/Interactable/Harvestable.cs
 Assets/Scripts/Interactable/HarvestableNetSync.cs

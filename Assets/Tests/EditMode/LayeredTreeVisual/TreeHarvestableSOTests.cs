@@ -1,6 +1,6 @@
 using NUnit.Framework;
 using UnityEngine;
-using MWI.Interactables;
+using MWI.Farming;
 
 namespace MWI.Tests.LayeredTreeVisual
 {

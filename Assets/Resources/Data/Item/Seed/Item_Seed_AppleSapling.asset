@@ -29,4 +29,4 @@ MonoBehaviour:
   _requiredCraftingLevel: 1
   _craftingDuration: 3
   _craftingRecipe: []
-  _cropToPlant: {fileID: 11400000, guid: 0af22e661d08ace44b7a469753cf5d7b, type: 2}
+  _cropToPlant: {fileID: 11400000, guid: b318882b2139a7544ac49c7aa6e7861b, type: 2}
