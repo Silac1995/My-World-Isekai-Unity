@@ -20,6 +20,10 @@ namespace MWI.Time
         [SerializeField] private int _eveningStart = 18;
         [SerializeField] private int _nightStart = 21;
 
+        [Header("Year Settings")]
+        [SerializeField, Tooltip("Number of in-game days per year. Drives CurrentYearProgress01 used by seasonal visuals (foliage color etc.).")]
+        private int _daysPerYear = 28;
+
         private float _currentTime; // 0 to 1
         private DayPhase _currentPhase;
         private int _lastHour;
@@ -33,6 +37,28 @@ namespace MWI.Time
         /// Current in-game day (starts at 1).
         /// </summary>
         public int CurrentDay { get; private set; } = 1;
+
+        /// <summary>Number of in-game days per year. Inspector-tunable.</summary>
+        public int DaysPerYear => _daysPerYear;
+
+        /// <summary>
+        /// Continuous [0..1) year-progress derived from <see cref="CurrentDay"/>. Day 1 = 0,
+        /// midyear = 0.5, end of year wraps back to 0. Used by foliage gradient sampling
+        /// and any other "where are we in the year" visual driven by day-resolution data.
+        /// </summary>
+        public float CurrentYearProgress01 => ComputeYearProgress01(CurrentDay, _daysPerYear);
+
+        /// <summary>
+        /// Pure helper exposed for unit-testing without instantiating a MonoBehaviour.
+        /// Defensive against zero / negative <paramref name="daysPerYear"/> (returns 0).
+        /// </summary>
+        public static float ComputeYearProgress01(int currentDay, int daysPerYear)
+        {
+            if (daysPerYear <= 0) return 0f;
+            int dayInYear = (currentDay - 1) % daysPerYear;
+            if (dayInYear < 0) dayInYear += daysPerYear;
+            return dayInYear / (float)daysPerYear;
+        }
 
         public event Action<DayPhase> OnPhaseChanged;
         public event Action OnNewDay;
