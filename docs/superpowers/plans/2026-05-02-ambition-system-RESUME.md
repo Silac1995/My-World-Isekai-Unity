@@ -6,9 +6,9 @@
 **Plan:** [docs/superpowers/plans/2026-05-02-ambition-system.md](2026-05-02-ambition-system.md) (58 tasks, 14 phases).
 **Spec:** [docs/superpowers/specs/2026-05-02-ambition-system-design.md](../specs/2026-05-02-ambition-system-design.md).
 
-## Current state — Phase 3 complete (Tasks 0–15 / 58)
+## Current state — Phase 4 complete (Tasks 0–17 / 58)
 
-**Last commit:** `712502ba` (Task 15 — AmbitionSettings).
+**Last commit:** `913e1ed4` (Task 17 — Quest ordering NUnit tests).
 
 **Phase 1 commits:**
 
@@ -42,8 +42,20 @@
 | `56d571e8` | 13 | `AmbitionRegistry` lazy-init (Assembly-CSharp) |
 | `f16854f5` | 14 | `QuestRegistry` lazy-init (Assembly-CSharp) |
 | `712502ba` | 15 | `AmbitionSettings` — **plan deviation:** `List<string>` of need type-names instead of `List<NeedSO>` (see deviation #3 below) |
+| `98644070` | docs | resume note update after Phase 3 |
 
-**Foundation state:** Compile-clean. NUnit `Ambition.Tests` green: 10/10 (5 `AmbitionContextTests` + 5 `ContextBindingTests`). Phase 3 added no NUnit tests (none specified by the plan).
+**Phase 4 commits:**
+
+| SHA | Task | Summary |
+|---|---|---|
+| `a5709ae8` | 16 | `AmbitionQuest` bridging `IAmbitionStepQuest` → `IQuest`. **Plan deviation:** plan's `IQuest` skeleton (Title/Description/Issuer/Receiver/State/IsAmbitionStep + OnStateChanged) was OUT OF DATE; the real interface has 19 members (no Receiver). Plan's `QuestState.NotStarted/Running/Cancelled` enum values don't exist — remapped to `Open / Completed / Abandoned`. See deviation #4. |
+| `913e1ed4` | 17 | Quest ordering NUnit tests in **new asmdef `AmbitionQuest.Tests`** at `Assets/Tests/EditMode/AmbitionQuest/`. Uses the project's IL-emission + reflection pattern (see deviation #5) — the only working pattern for testing Assembly-CSharp types from EditMode. 3/3 pass. |
+
+**Foundation state:** Compile-clean. Two test asmdefs now exist:
+- `Ambition.Tests` (Pure-only): 10/10 green (5 `AmbitionContextTests` + 5 `ContextBindingTests`).
+- `AmbitionQuest.Tests` (Assembly-CSharp via reflection): 3/3 green (`QuestOrderingTests`).
+
+Total: 13/13 green across all Ambition-related tests.
 
 ## Architectural deviations locked in (Phase 1 + Phase 2)
 
@@ -116,6 +128,57 @@ return true;
 
 The Task 12 code reviewer flagged that `RuntimeQueryBinding.ResolveWithCharacter` silently no-ops the cache write when `WriteKey` is empty. This is plan-prescribed behavior — `WriteKey` is documented as optional. A `Debug.LogWarning` would either spam (fired every successful query when `WriteKey` is intentionally empty) or require per-instance state tracking. **Better path:** address in a future hardening pass with editor-time validation rather than runtime logging. Not blocking.
 
+### Deviation #4 — `AmbitionQuest` had to remap to the real `IQuest` shape (Phase 4 lock-in)
+
+The plan's Task 16 code block (around line 1305 of `2026-05-02-ambition-system.md`) was based on `2026-04-23-quest-system-design.md`, but the **shipped** `MWI.Quests.IQuest` (at `Assets/Scripts/Quest/IQuest.cs`) is significantly larger. Lock-in adaptations:
+
+| Plan member | Actual interface | Resolution |
+|---|---|---|
+| `Receiver` | absent | dropped entirely |
+| `Title`, `Description`, `Issuer`, `State`, `OnStateChanged` | all present | kept as-is |
+| (none) | `QuestId`, `OriginWorldId`, `OriginMapId`, `Type`, `InstructionLine`, `IsExpired`, `RemainingDays`, `TotalProgress`, `Required`, `MaxContributors`, `Contributors`, `Contribution`, `TryJoin`, `TryLeave`, `RecordProgress`, `Target`, `OnProgressRecorded` | added with sensible ambition-quest defaults (see below) |
+| `QuestState.NotStarted / Running / Cancelled` | enum is `Open / Full / Completed / Abandoned / Expired` | `NotStarted/Running` → `Open` (collapses the `BindContext` `if (NotStarted) SetState(Running)` line into a no-op); `Cancelled` → `Abandoned` |
+| `IsAmbitionStep` flag on `IQuest` | not on the interface | kept as an `AmbitionQuest`-only public property (a marker for HUD/inspector code that already has a typed `AmbitionQuest` reference) |
+
+**Defaults committed for the missing members:**
+- `Type = QuestType.Custom`
+- `IsExpired = false`, `RemainingDays = -1` (sentinel — ambitions are patient/untimed per the spec)
+- `MaxContributors = 1`
+- `Contributors` = single-element list with `_self`, allocated once in ctor
+- `Contribution` = empty `Dictionary<string,int>`, allocated once
+- `TryJoin / TryLeave` return `false`; `RecordProgress` is a no-op (progress is task-driven, not contribution-driven)
+- `Target` returns `null` for v1 (Phase 11 Task 43 may revisit)
+- `OnProgressRecorded` declared but never fired (CS0067 expected; implementer noted, both reviewers approved)
+- `QuestId` generated once via `Guid.NewGuid().ToString("N")`
+- `OriginWorldId / OriginMapId` exposed with public setters (mirroring `BuyOrder.cs:122-123`) so the persistence layer in Phase 6 can populate
+
+**Reference implementation:** the implementer mirrored `BuyOrder.cs:119-198` for the boilerplate IQuest plumbing. Future ambition-related IQuest implementers should follow the same pattern.
+
+**Implementer's optimization choices ratified by both reviewers:**
+- `_completedCount` int caches "tasks already completed" so `TotalProgress` is allocation-free.
+- `TickSequential` indexes via `_completedCount` (only ticks the next-active task per call), not the plan's full-loop walk. Behavior is equivalent for canonical idempotent tasks; the IL test in Task 17 walks through call-by-call to verify.
+- `TickAnyOf` reports `Required` progress on win (sets `_completedCount = _tasks.Count`) for HUD parity.
+- Cloning uses a `[Serializable]` `TaskListWrapper` with `[SerializeReference] List<TaskBase>` field for the `JsonUtility` round-trip — preserves polymorphism without per-subclass overrides. Allocated once in the ctor.
+
+**Downstream impact:** Tasks 22-24 (persistence) must read `_state`, `_tasks`, `_completedCount`, `_ctx`, and `_so` (via SO GUID lookup) when exporting/importing. The current shape doesn't lock multiplayer — Phase 7 can either keep `AmbitionQuest` server-only with quest-log NetworkVariable diff or wrap it in a `NetworkBehaviour`.
+
+### Deviation #5 — Tests of Assembly-CSharp Ambition types require IL-emission scaffolding (Phase 4 lock-in)
+
+**Empirically verified during Task 17:** Unity silently drops `"Assembly-CSharp"` from EditMode asmdef `references[]`, even when `overrideReferences: true` is set and the reference is explicitly listed. A probe file using the simple `using MWI.Ambition;` + `private class CountTask : TaskBase {}` approach failed compilation with `error CS0234: The type or namespace name 'Ambition' does not exist in the namespace 'MWI'`.
+
+**Therefore, every future Ambition test that touches an Assembly-CSharp type (`AmbitionQuest`, `QuestSO`, `TaskBase`, `Character`, `CharacterAmbition`, …) must use the `Assets/Tests/EditMode/ToolStorage` precedent:**
+
+1. Create a new test asmdef (or reuse `AmbitionQuest.Tests` at `Assets/Tests/EditMode/AmbitionQuest/`) with `references: ["UnityEngine.TestRunner", "UnityEditor.TestRunner", "Assembly-CSharp"]`, `overrideReferences: true`, `autoReferenced: false`. The `"Assembly-CSharp"` entry is silently dropped but signals intent and is harmless.
+2. In `[OneTimeSetUp]`, resolve all required types via `AppDomain.CurrentDomain.GetAssemblies().FirstOrDefault(a => a.GetName().Name == "Assembly-CSharp").GetType("MWI.Ambition.AmbitionQuest")` etc. Cache `MethodInfo`, `FieldInfo`, enum values via `Enum.Parse`. Assert each lookup `Is.Not.Null` with descriptive failure messages.
+3. For tests that need to subclass an Assembly-CSharp abstract type (e.g., a `CountTask : TaskBase` stub), build the subclass dynamically via `System.Reflection.Emit.AssemblyBuilder` — see the canonical example at `Assets/Tests/EditMode/AmbitionQuest/QuestOrderingTests.cs:140-240` (`BuildCountTaskType`). The dynamic type has full subclass behavior but is invisible to `JsonUtility` — so any code path that JSON-clones the task must be bypassed (Task 17's `MakeQuest` writes `_tasks` directly via reflection).
+4. Per-test instance allocation goes through a `MakeQuest`-style helper that builds fresh `QuestSO` / `AmbitionContext` / `AmbitionQuest` and injects test stubs.
+
+**Tests that touch ONLY `MWI.Ambition.Pure` types (`AmbitionContext`, `ContextBinding`, `StaticBinding`, `TaskParameterBinding`, `TaskOrderingMode`, `TaskStatus`, `ControllerKind`, `CompletionReason`) can stay in the simpler `Ambition.Tests` asmdef** — that one references only `MWI.Ambition.Pure` and works without IL.
+
+**Decision rule for future tasks:** if the test target has any field or method signature that mentions `Character`, `CharacterAmbition`, `AmbitionQuest`, `QuestSO`, `TaskBase`, `IQuest`, etc. — write the test in `AmbitionQuest.Tests` (or a sibling Assembly-CSharp test asmdef) using the IL pattern. The OneTimeSetUp scaffolding (~120 lines) is heavy but amortizes across all tests in the file.
+
+**Why not refactor Pure to absorb these types?** Each of `AmbitionQuest`, `QuestSO`, `TaskBase`, `CharacterAmbition` references `Character` (Assembly-CSharp, global namespace) somewhere in its public surface. Moving them to Pure would require either (a) genericizing `Tick(Character, AmbitionContext)` into `Tick(object, AmbitionContext)` and downcasting at every call site, or (b) introducing an `ICharacter` abstraction in Pure that `Character` implements — both are larger refactors than the IL pattern's overhead justifies.
+
 ## How to resume
 
 ### 1. Bootstrap the new session
@@ -129,9 +192,9 @@ I'm resuming the Ambition System implementation. Read these in order:
 2. docs/superpowers/plans/2026-05-02-ambition-system.md         (the 58-task plan)
 3. docs/superpowers/specs/2026-05-02-ambition-system-design.md  (the design spec)
 
-Verify the branch is `multiplayyer` and HEAD is at `712502ba` (or later if I've made other commits since).
+Verify the branch is `multiplayyer` and HEAD is at `913e1ed4` (or later if I've made other commits since).
 
-Then invoke the `superpowers:subagent-driven-development` skill and continue from Task 16 (Phase 4 — `AmbitionQuest` skeleton + IQuest plumbing).
+Then invoke the `superpowers:subagent-driven-development` skill and continue from Task 18 (Phase 5 — `CharacterAmbition` skeleton with subsystem registration).
 ```
 
 ### 2. Cadence the prior session settled on
@@ -154,38 +217,37 @@ Then invoke the `superpowers:subagent-driven-development` skill and continue fro
 - **`assets-create-folder` MCP tool** must be used before the first `script-update-or-create` writes into a new directory. Don't fall back to bash `mkdir` unless the MCP tool is genuinely unavailable.
 - **`tests-run` MCP tool** — use `mode: "EditMode"` and `class: "MWI.Tests.Ambition.<name>"` for targeted runs. The Ambition test assembly is `Ambition.Tests` (asmdef in `Assets/Tests/EditMode/Ambition/`).
 
-### 4. Next task — Task 16 (start of Phase 4)
+### 4. Next task — Task 18 (start of Phase 5)
 
-`AmbitionQuest` skeleton + `IQuest` plumbing. File:
-- `Assets/Scripts/Character/Ambition/Quests/AmbitionQuest.cs`
+`CharacterAmbition` skeleton with subsystem registration. File:
+- `Assets/Scripts/Character/CharacterAmbition/CharacterAmbition.cs` (new folder; verify exact path against the plan at line 1593).
 
-Full task text in [the plan](2026-05-02-ambition-system.md#task-16-ambitionquest-skeleton--iquest-plumbing).
+Full task text in [the plan](2026-05-02-ambition-system.md#task-18-characterambition-skeleton-with-subsystem-registration).
 
-**Recommended model:** `opus` — this is the trickiest task in the system. `AmbitionQuest` must implement both `IAmbitionStepQuest` (which extends `IQuest`) AND own the BT-tickable `Tick(npc)` path that walks the `QuestSO.Tasks` list per the `Ordering` policy (Sequential / Parallel / AnyOf).
+**Recommended model:** `opus` — `CharacterAmbition` is the orchestration centerpiece. It owns the active `AmbitionInstance`, the `History` list, the public `Set / Clear / Replace` API, and the event surface (`OnAmbitionSet`, `OnStepAdvanced`, `OnAmbitionCompleted`, `OnAmbitionCleared`). It does NOT yet drive behavior (that's Phase 9 BT branch).
 
 **Pre-flight verification before dispatching the implementer:**
 
-1. Grep `interface IQuest` to find the actual member set (the plan-prescribed implementation may diverge from the real interface). The plan flags this in Step 16.1: "Run `grep -n "interface IQuest" Assets/Scripts -r` then read the file containing it. Note the exact properties/methods/events on `IQuest` and `IQuestTarget`. The plan below assumes the canonical shape from `2026-04-23-quest-system-design.md`; if the actual members differ, adjust the signatures during implementation."
-2. Confirm `MWI.Quests` is the actual namespace (Phase 1 verified yes).
-3. `AmbitionQuest` lives in **Assembly-CSharp** at `Assets/Scripts/Character/Ambition/Quests/AmbitionQuest.cs`. Don't try to put it in Pure — it touches `Character`, `MonoBehaviour`-typed fields, and the `IQuest` interface (which is Assembly-CSharp).
-4. The plan ships a fairly large code block (~190 lines per the plan TOC reference). Skim it before dispatching so you can spot whether the implementer made silent simplifications.
+1. **Read Task 18 in the plan in full** (around line 1593). Skim the entire ~210-line code block so you can spot silent simplifications.
+2. **Verify the existing CharacterSystem base-class shape.** Read `Assets/Scripts/Character/Character.cs` for the auto-assignment pattern (`GetComponentInChildren<>()` fallback in `Awake`). Read 1-2 existing subsystems (e.g. `Assets/Scripts/Character/CharacterCombat/CharacterCombat.cs`, `Assets/Scripts/Character/CharacterNeeds/CharacterNeeds.cs`) for the exact ctor / field / event idiom.
+3. **Verify the `Character.cs` auto-wire pattern.** Per CLAUDE.md "Character GameObject Hierarchy": every subsystem holds a reference to root `Character` (not other subsystems directly). Cross-system communication routes through `Character`.
+4. **Verify which assembly `CharacterAmbition` lives in.** It's a `MonoBehaviour` (or `NetworkBehaviour` after Phase 7), so it's Assembly-CSharp — not Pure.
+5. **Skim `AmbitionRegistry.cs`** (Task 13) to confirm the `Get(string id) → AmbitionSO` resolver shape — Task 18's `SetAmbition(string ambitionId, ...)` overload needs this.
 
-**Phase 4 also has Task 17 (Quest ordering NUnit tests).** Important — these tests will need to live in **Assembly-CSharp test assembly**, not the existing `Ambition.Tests` (which is Pure-only). Either:
-- (a) Create a new `AmbitionPlayMode.Tests.asmdef` in `Assets/Tests/PlayMode/Ambition/` — uses Unity's PlayMode runner which can reach Assembly-CSharp via the play-mode test assembly setup. Heavier but standard.
-- (b) Convert the existing test asmdef to non-Pure (remove `overrideReferences: true`) — risky, might break existing 10/10 tests.
-- (c) Create a brand-new EditMode asmdef without `overrideReferences: true` (so it can auto-reference Assembly-CSharp). Lighter than (a).
+**Phase 5 also has:**
+- **Task 19** — state-machine NUnit tests. **Note:** these tests will need the `AmbitionQuest.Tests` IL-emission pattern (deviation #5) since `CharacterAmbition` is Assembly-CSharp. Either reuse `AmbitionQuest.Tests` asmdef (rename if you want a less Quest-specific name later) or create a sibling. The setup cost is already paid — adding more `[Test]` methods is cheap.
+- **Task 20** — wire `CharacterAmbition` into `Character.cs` (a `[SerializeField]` field + `GetComponentInChildren<>()` fallback in `Awake`). Read `Character.cs:649` and surrounding subsystem-wire blocks for the exact pattern.
+- **Task 21** — manual prefab edits (add a `CharacterAmbition` child GameObject to all Character prefabs). Cannot be subagent-dispatched cleanly; do interactively in the editor or via `gameobject-create` + `assets-prefab-open` MCP tools.
 
-Recommendation: **(c)** — create `Ambition.AssemblyCSharp.Tests.asmdef` in `Assets/Tests/EditMode/AmbitionAssemblyCSharp/` with `autoReferenced: false`, `overrideReferences: false` (default), reference `MWI.Ambition.Pure` + Unity test runner. EditMode tests can hit Assembly-CSharp types if the asmdef doesn't override-reference. Verify by writing a one-liner test that constructs a `QuestSO` and asserts something trivial about it. If that compiles + runs, Task 17 lives there.
+**Reuse-vs-rename decision deferred to Phase 5:** the `AmbitionQuest.Tests` asmdef name is narrowly scoped. If many Phase 5+ tests pile up, consider renaming it to `Ambition.AssemblyCSharp.Tests` (rename the `.asmdef` and update its `name` field). For now (3 tests), the narrow name is fine.
 
-**Decision for the resuming session:** make the Task 17 asmdef call before dispatching Task 16. The implementer of Task 16 doesn't need to know — Task 17's reviewer will catch a wrong asmdef call if it happens.
-
-## Phases remaining (43 tasks)
+## Phases remaining (41 tasks)
 
 | Phase | Tasks | Estimate (subagent dispatches) |
 |---|---|---|
 | ~~Phase 2 — Parameter bindings~~ | ~~10–12~~ | DONE |
 | ~~Phase 3 — Registries + settings~~ | ~~13–15~~ | DONE |
-| Phase 4 — Bridge + ordering tests | 16–17 | 2 (Task 16 needs `opus` — tricky IQuest bridge implementation) |
+| ~~Phase 4 — Bridge + ordering tests~~ | ~~16–17~~ | DONE |
 | Phase 5 — `CharacterAmbition` core | 18–21 | 4 (Task 18 `opus`, Task 21 manual prefab edits) |
 | Phase 6 — Persistence | 22–27 | 6 (Tasks 23, 24 `opus` — save round-trip + deferred-bind) |
 | Phase 7 — Networking | 28–30 | 3 (Task 29 `opus` — NetworkBehaviour conversion) |
@@ -209,13 +271,16 @@ Recommendation: **(c)** — create `Ambition.AssemblyCSharp.Tests.asmdef` in `As
 - **Orphaned `.meta` files** — Phase 1 implementer subagents repeatedly forgot to add `.meta` files to commits, requiring a chore cleanup commit at start of Phase 2. **Mitigation already baked into Phase 2 prompts:** every dispatch now includes an explicit `git add` line listing both `.cs` and `.cs.meta` files. Continue this pattern in Phase 3+ prompts.
 - **Reviewer rigor** — Task 12's code quality reviewer made a confidently-stated but factually-wrong claim about C# generic null-checks behaving differently for value types. Always verify strong technical claims before accepting reviewer feedback. The Roslyn-execute approach via `mcp__ai-game-developer__script-execute` is a fast way to settle "what does C# actually do here" questions in 30 seconds.
 
-## Phase 1 + 2 + 3 milestone (verifiable)
+## Phase 1 + 2 + 3 + 4 milestone (verifiable)
 
 Run in the new session to confirm starting state:
 
 ```bash
-git log --oneline | head -20
-# Expect (HEAD = 712502ba):
+git log --oneline | head -22
+# Expect (HEAD = 913e1ed4 or one commit further if the resume-note doc was committed after):
+#   913e1ed4 test(ambition): cover Sequential/Parallel/AnyOf quest ordering
+#   a5709ae8 feat(ambition): add AmbitionQuest bridging IAmbitionStepQuest -> IQuest
+#   98644070 docs(ambition): update resume note after Phase 3 (Tasks 13-15)
 #   712502ba feat(ambition): add AmbitionSettings with gating-need type-name list
 #   f16854f5 feat(ambition): add QuestRegistry with lazy-init
 #   56d571e8 feat(ambition): add AmbitionRegistry with lazy-init
@@ -234,15 +299,14 @@ git log --oneline | head -20
 #   76afaa33 feat(ambition): add CompletionReason, ControllerKind, TaskStatus enums
 #   10362092 feat(ambition): add ContextValueKind enum
 #   7a614674 test(ambition): scaffold test folder
-#   7c1300ca docs(ambition): implementation plan ...
-#   f53d5c32 docs(ambition): apply spec review recommendations
 ```
 
 Run all Ambition tests:
 
 ```
-mcp__ai-game-developer__tests-run mode=EditMode testNamespace=MWI.Tests.Ambition
-# Expect: 10 passed, 0 failed
+mcp__ai-game-developer__tests-run mode=EditMode testNamespace=MWI.Tests.Ambition         # Expect: 10 passed (Pure)
+mcp__ai-game-developer__tests-run mode=EditMode testNamespace=MWI.Tests.AmbitionQuest    # Expect: 3 passed (Assembly-CSharp via reflection)
+# Total: 13/13 passing across both Ambition test asmdefs.
 ```
 
-If those commits are present and the tests pass, Phases 1–3 are intact and you're ready to start Task 16.
+If those commits are present and the tests pass, Phases 1–4 are intact and you're ready to start Task 18.
