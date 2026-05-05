@@ -4,8 +4,7 @@
     "references": [
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner",
-        "MWI.Interactable.Pure",
-        "Assembly-CSharp"
+        "MWI.Interactable.Pure"
     ],
     "includePlatforms": [
         "Editor"
