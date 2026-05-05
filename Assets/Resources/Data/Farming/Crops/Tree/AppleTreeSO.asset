@@ -1,0 +1,73 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0bd8a02df08463346959ce27140db60c, type: 3}
+  m_Name: AppleTreeSO
+  m_EditorClassIdentifier: MWI.Interactable.Pure::MWI.Interactables.TreeHarvestableSO
+  _id: tree_apple_layered
+  _displayName: Apple Tree (Layered)
+  _harvestOutputs:
+  - Item: {fileID: 11400000, guid: 6eadabb584f662d49bea83caa241bdba, type: 2}
+    Count: 1
+  _requiredHarvestTool: {fileID: 0}
+  _harvestDuration: 1.5
+  _isDepletable: 1
+  _maxHarvestCount: 5
+  _respawnDelayDays: 1
+  _allowDestruction: 0
+  _allowNpcDestruction: 1
+  _requiredDestructionTool: {fileID: 0}
+  _destructionEntries: []
+  _destructionDuration: 3
+  _readySprite: {fileID: 0}
+  _depletedSprite: {fileID: 0}
+  _harvestablePrefab: {fileID: 0}
+  _trunkSprite: {fileID: 10905, guid: 0000000000000000f000000000000000, type: 0}
+  _foliageSprite: {fileID: 10905, guid: 0000000000000000f000000000000000, type: 0}
+  _foliageColorOverYear:
+    serializedVersion: 2
+    key0: {r: 0.55, g: 0.85, b: 0.45, a: 1}
+    key1: {r: 0.2, g: 0.55, b: 0.2, a: 1}
+    key2: {r: 0.95, g: 0.55, b: 0.2, a: 0.05}
+    key3: {r: 0.65, g: 0.3, b: 0.1, a: 0.05}
+    key4: {r: 0.55, g: 0.85, b: 0.45, a: 1}
+    key5: {r: 0, g: 0, b: 0, a: 0}
+    key6: {r: 0, g: 0, b: 0, a: 0}
+    key7: {r: 0, g: 0, b: 0, a: 0}
+    ctime0: 0
+    ctime1: 19661
+    ctime2: 36044
+    ctime3: 49151
+    ctime4: 65535
+    ctime5: 0
+    ctime6: 0
+    ctime7: 0
+    atime0: 0
+    atime1: 51117
+    atime2: 55705
+    atime3: 62258
+    atime4: 65535
+    atime5: 0
+    atime6: 0
+    atime7: 0
+    m_Mode: 0
+    m_ColorSpace: -1
+    m_NumColorKeys: 5
+    m_NumAlphaKeys: 5
+  _fruitSpriteVariants:
+  - {fileID: 10905, guid: 0000000000000000f000000000000000, type: 0}
+  _fruitSpawnArea:
+    serializedVersion: 2
+    x: -0.4
+    y: -0.2
+    width: 0.8
+    height: 0.6
+  _fruitScale: {x: 0.4, y: 0.4}
