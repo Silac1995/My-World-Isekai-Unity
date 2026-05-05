@@ -83,6 +83,7 @@ public class Character : NetworkBehaviour, MWI.Orders.IOrderIssuer
     [SerializeField] private FurniturePlacementManager _furniturePlacementManager;
     [SerializeField] private MWI.Farming.CropPlacementManager _cropPlacement;
     [SerializeField] private MWI.Cinematics.CharacterCinematicState _cinematicState;
+    [SerializeField] private MWI.Ambition.CharacterAmbition _characterAmbition;
     #endregion
 
     #region Capability Registry
@@ -293,6 +294,8 @@ public class Character : NetworkBehaviour, MWI.Orders.IOrderIssuer
     public FurniturePlacementManager FurniturePlacementManager => TryGet<FurniturePlacementManager>(out var s31) ? s31 : _furniturePlacementManager;
     public MWI.Farming.CropPlacementManager CropPlacement => TryGet<MWI.Farming.CropPlacementManager>(out var s32) ? s32 : _cropPlacement;
     public MWI.Cinematics.CharacterCinematicState CharacterCinematicState => TryGet<MWI.Cinematics.CharacterCinematicState>(out var sCinema) ? sCinema : _cinematicState;
+    public MWI.Ambition.CharacterAmbition CharacterAmbition =>
+        TryGet<MWI.Ambition.CharacterAmbition>(out var sAmb) ? sAmb : _characterAmbition;
     public bool IsBuilding => _isBuilding;
 
     public NavMeshAgent NavMesh => _cachedNavMeshAgent;
@@ -570,6 +573,8 @@ public class Character : NetworkBehaviour, MWI.Orders.IOrderIssuer
         if (_furniturePlacementManager == null) _furniturePlacementManager = GetComponentInChildren<FurniturePlacementManager>();
         if (_characterOrders == null) _characterOrders = GetComponentInChildren<MWI.Orders.CharacterOrders>();
         if (_terrainEffects == null) _terrainEffects = GetComponentInChildren<CharacterTerrainEffects>();
+        if (_characterAmbition == null)
+            _characterAmbition = GetComponentInChildren<MWI.Ambition.CharacterAmbition>();
 
         _cachedNavMeshAgent = GetComponent<NavMeshAgent>();
         _isDead = false;
