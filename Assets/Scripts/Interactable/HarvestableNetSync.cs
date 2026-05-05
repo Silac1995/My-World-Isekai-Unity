@@ -34,6 +34,12 @@ public class HarvestableNetSync : NetworkBehaviour
     public NetworkVariable<bool> IsDepleted = new NetworkVariable<bool>(false);
     public NetworkVariable<FixedString64Bytes> CropIdNet = new NetworkVariable<FixedString64Bytes>(default);
 
+    /// <summary>Server-replicated remaining harvest count for the layered tree visual.
+    /// Drives the per-fruit visibility on every peer so harvesting an apple makes the
+    /// matching fruit sprite disappear. Capped at 255 — trees with MaxHarvestCount &gt; 255
+    /// would clip; revisit if that ever happens (no current designer wants > 255 fruits).</summary>
+    public NetworkVariable<byte> RemainingYield = new NetworkVariable<byte>(0);
+
     private Harvestable _harvestable;
 
     private void Awake()
@@ -46,6 +52,7 @@ public class HarvestableNetSync : NetworkBehaviour
         CurrentStage.OnValueChanged += HandleAnyChange;
         IsDepleted.OnValueChanged += HandleAnyChange;
         CropIdNet.OnValueChanged += HandleCropIdChange;
+        RemainingYield.OnValueChanged += HandleAnyChange;
 
         if (_harvestable != null) _harvestable.OnNetSyncChanged();
     }
@@ -55,6 +62,7 @@ public class HarvestableNetSync : NetworkBehaviour
         CurrentStage.OnValueChanged -= HandleAnyChange;
         IsDepleted.OnValueChanged -= HandleAnyChange;
         CropIdNet.OnValueChanged -= HandleCropIdChange;
+        RemainingYield.OnValueChanged -= HandleAnyChange;
     }
 
     private void HandleAnyChange<T>(T _, T __)
