@@ -355,9 +355,13 @@ MonoBehaviour:
   _buildingType: 0
   _buildingZone: {fileID: 0}
   _deliveryZone: {fileID: 7535744897896666680}
-  _constructionRequirements: []
+  _constructionRequirements:
+  - Item: {fileID: 11400000, guid: a3f0471c4178efd4b9b5efdb38aea516, type: 2}
+    Amount: 1
+    IsReferenceOnly: 0
   _constructionVisualRoot: {fileID: 7239333697559794867}
   _completedVisualRoot: {fileID: 8292559531673747325}
+  _constructionGhostMaterial: {fileID: 2100000, guid: 1492e3802f383504d9933cfbda4694aa, type: 2}
   ConstructionProgress:
     UpdateTraits:
       MinSecondsBetweenUpdates: 0
@@ -538,3 +542,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b17d8b701323d194488a8bd70d19c955, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BuildingInteractable
+  interactionPrompt: Press E to interact
+  _interactionZone: {fileID: 0}
+  _rootgameObject: {fileID: 0}
+  _rigidbody: {fileID: 0}

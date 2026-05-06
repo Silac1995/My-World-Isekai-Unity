@@ -389,6 +389,7 @@ MonoBehaviour:
   _constructionRequirements: []
   _constructionVisualRoot: {fileID: 3413248200251581147}
   _completedVisualRoot: {fileID: 6320067922551438232}
+  _constructionGhostMaterial: {fileID: 2100000, guid: 1492e3802f383504d9933cfbda4694aa, type: 2}
   ConstructionProgress:
     UpdateTraits:
       MinSecondsBetweenUpdates: 0
@@ -596,6 +597,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b17d8b701323d194488a8bd70d19c955, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BuildingInteractable
+  interactionPrompt: Press E to interact
+  _interactionZone: {fileID: 0}
+  _rootgameObject: {fileID: 0}
+  _rigidbody: {fileID: 0}
 --- !u!65 &2066495025740352961 stripped
 BoxCollider:
   m_CorrespondingSourceObject: {fileID: 6121509161196564493, guid: 0266b0096947362429f7d224956a5096, type: 3}

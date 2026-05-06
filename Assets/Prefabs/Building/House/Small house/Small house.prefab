@@ -468,6 +468,10 @@ PrefabInstance:
       propertyPath: _completedVisualRoot
       value: 
       objectReference: {fileID: 4621446989811446070}
+    - target: {fileID: 7957207800943456863, guid: 2e1494b4d52f43344be89b09545dbadf, type: 3}
+      propertyPath: _constructionGhostMaterial
+      value: 
+      objectReference: {fileID: 2100000, guid: 1492e3802f383504d9933cfbda4694aa, type: 2}
     - target: {fileID: 8467930593367525379, guid: 2e1494b4d52f43344be89b09545dbadf, type: 3}
       propertyPath: m_Size.x
       value: 20
