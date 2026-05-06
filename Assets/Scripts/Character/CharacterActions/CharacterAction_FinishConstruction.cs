@@ -132,9 +132,14 @@ public class CharacterAction_FinishConstruction : CharacterAction_Continuous
 
     private bool IsActorInsideBuildingZone()
     {
-        if (_target == null || _target.BuildingZone == null) return false;
-        var bounds = _target.BuildingZone.bounds;
-        return bounds.Contains(character.transform.position);
+        if (_target == null) { UnityEngine.Debug.LogWarning("[FinishConstruction.IsActorInside] _target null"); return false; }
+        if (_target.BuildingZone == null) { UnityEngine.Debug.LogWarning($"[FinishConstruction.IsActorInside] {_target.BuildingName} _target.BuildingZone null"); return false; }
+        var bz = _target.BuildingZone;
+        var bounds = bz.bounds;
+        var pos = character.transform.position;
+        bool contains = bounds.Contains(pos);
+        UnityEngine.Debug.Log($"[FinishConstruction.IsActorInside] {_target.BuildingName} bz={bz.name} bz.enabled={bz.enabled} isTrigger={bz.isTrigger} bounds={bounds} actorPos={pos} → contains={contains}");
+        return contains;
     }
 
     /// <summary>
