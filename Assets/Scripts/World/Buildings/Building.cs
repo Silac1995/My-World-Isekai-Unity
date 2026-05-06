@@ -345,7 +345,16 @@ public class Building : ComplexRoom
             }
         }
 
-        ConfigureNavMeshObstacles();
+        // NavMesh carving must NOT happen while UnderConstruction — otherwise the navmesh
+        // bakes the completed-building geometry as an obstacle even though the visuals/
+        // colliders are disabled by ApplyConstructionVisuals. Players couldn't path through
+        // a half-built building's footprint. Only carve once state hits Complete (initial
+        // spawn for instant-build prefabs, or HandleStateChanged for the construction-loop
+        // path).
+        if (_currentState.Value == MWI.WorldSystem.BuildingState.Complete)
+        {
+            ConfigureNavMeshObstacles();
+        }
 
         // Server-only: spawn default furniture *only* after Complete. Pre-Complete spawns
         // would put usable furniture inside an unfinished building (visually inside the
@@ -582,22 +591,25 @@ public class Building : ComplexRoom
         // shape/main on a fresh component, otherwise some sub-modules silently ignore writes).
         ps.Stop(withChildren: true, stopBehavior: ParticleSystemStopBehavior.StopEmittingAndClear);
 
-        // ── Main module: lifetime + start size + start color (white@1; gradient repaints later).
+        // ── Main module. CRITICAL: startSpeed = 0 — BoxEdge shape's startSpeed direction is
+        // RADIAL OUTWARD in the X-Z plane (i.e. away from the box centre, along the floor),
+        // which would push particles sideways instead of up. We zero it and rely entirely on
+        // velocityOverLifetime.y to drive vertical motion.
         var main = ps.main;
         main.duration = 5f;
         main.loop = true;
-        main.startLifetime = 2.5f;
-        main.startSpeed = 0.6f;          // slow drift upward (Unity units / sec; 11 units = 1.67m)
-        main.startSize = 0.6f;
+        main.startLifetime = 3f;
+        main.startSpeed = 0f;
+        main.startSize = 1.5f;           // bigger particles → continuous-curtain look
         main.startColor = new Color(0.5f, 0.9f, 1f, 1f);
-        main.maxParticles = 400;
+        main.maxParticles = 600;
         main.simulationSpace = ParticleSystemSimulationSpace.Local;
         main.scalingMode = ParticleSystemScalingMode.Local;
 
-        // ── Emission: steady rate.
+        // ── Emission: dense rate so particles overlap into a wall.
         var emission = ps.emission;
         emission.enabled = true;
-        emission.rateOverTime = 40f;
+        emission.rateOverTime = 80f;
 
         // ── Shape: BoxEdge, X×Z = footprint, Y collapsed → particles spawn around the
         // perimeter rectangle on the floor.
@@ -606,11 +618,12 @@ public class Building : ComplexRoom
         shape.shapeType = ParticleSystemShapeType.BoxEdge;
         shape.scale = new Vector3(box.size.x, 0.001f, box.size.z);
 
-        // ── Velocity over lifetime: pure upward Y drift (in addition to startSpeed).
+        // ── Velocity over lifetime: pure upward Y drift. Slower speed + longer lifetime
+        // so particles linger at multiple heights, giving the curtain its continuous look.
         var vel = ps.velocityOverLifetime;
         vel.enabled = true;
         vel.space = ParticleSystemSimulationSpace.Local;
-        vel.y = new ParticleSystem.MinMaxCurve(0.8f, 1.6f);
+        vel.y = new ParticleSystem.MinMaxCurve(0.6f, 1.0f);
         vel.x = new ParticleSystem.MinMaxCurve(0f);
         vel.z = new ParticleSystem.MinMaxCurve(0f);
 
@@ -632,13 +645,17 @@ public class Building : ComplexRoom
         );
         col.color = new ParticleSystem.MinMaxGradient(grad);
 
-        // ── Renderer: assign curtain material, billboard mode.
+        // ── Renderer: stretched billboard so particles elongate vertically along the
+        // direction of motion, blending into a continuous curtain wall instead of reading
+        // as discrete sprites. velocityScale=1 stretches by velocity magnitude, lengthScale
+        // adds extra height even if the particle is slow.
         var psr = psHost.GetComponent<ParticleSystemRenderer>();
         if (psr != null)
         {
             psr.material = _constructionCurtainMaterial;
-            psr.renderMode = ParticleSystemRenderMode.Billboard;
-            psr.alignment = ParticleSystemRenderSpace.View;
+            psr.renderMode = ParticleSystemRenderMode.Stretch;
+            psr.velocityScale = 1f;
+            psr.lengthScale = 2f;
         }
 
         ps.Play(withChildren: true);
@@ -700,6 +717,12 @@ public class Building : ComplexRoom
         if (newValue == MWI.WorldSystem.BuildingState.Complete)
         {
             OnConstructionComplete?.Invoke();
+
+            // NavMesh carving fires on EVERY peer when the building completes — peers all
+            // need to see the new obstacle. Skipped while UnderConstruction so the player
+            // can walk freely through the half-built footprint (see OnNetworkSpawn note).
+            try { ConfigureNavMeshObstacles(); }
+            catch (System.Exception e) { Debug.LogException(e, this); }
 
             // Server-only post-completion side effects.
             if (IsServer)
