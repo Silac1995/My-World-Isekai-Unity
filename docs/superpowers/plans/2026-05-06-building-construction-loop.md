@@ -25,12 +25,13 @@
 | `Assets/Scripts/World/Buildings/Construction/ConstructionSiteScanner.cs` | Server-only 2 Hz scanner — observational meter feeder. |
 | `Assets/Scripts/World/Buildings/Construction/BuildingInteractable.cs` | Player-facing interactable surface; Phase 1 hosts "Finish Construction". |
 | `Assets/Scripts/Character/Skills/SkillId.cs` | Enum used by the builder-skill stub on `Character`. |
-| `Assets/Tests/EditMode/Construction/Construction.Tests.asmdef` | Test assembly definition. |
-| `Assets/Tests/EditMode/Construction/DeliveredMaterialEntrySerializationTests.cs` | Network struct round-trip. |
-| `Assets/Tests/EditMode/Construction/ConstructionProgressMathTests.cs` | Progress formula (clamped sum). |
-| `Assets/Tests/EditMode/Construction/PerimeterMathTests.cs` | `NearestPerimeterPoint` geometry. |
-| `Assets/Tests/EditMode/Construction/ContinuousActionDispatchTests.cs` | `CharacterActions.ExecuteAction` dispatches to tick routine. |
-| `Assets/Tests/EditMode/Construction/BuildingSaveDataConstructionTests.cs` | Save-data round-trip with new fields. |
+| `Assets/Editor/Tests/Construction/DeliveredMaterialEntrySerializationTests.cs` | Network struct round-trip. |
+| `Assets/Editor/Tests/Construction/ConstructionProgressMathTests.cs` | Progress formula (clamped sum). |
+| `Assets/Editor/Tests/Construction/PerimeterMathTests.cs` | `NearestPerimeterPoint` geometry. |
+| `Assets/Editor/Tests/Construction/ContinuousActionDispatchTests.cs` | `CharacterActions.ExecuteAction` dispatches to tick routine. |
+| `Assets/Editor/Tests/Construction/BuildingSaveDataConstructionTests.cs` | Save-data round-trip with new fields. |
+
+> **Test location convention (locked in 2026-05-06):** Construction test files go under `Assets/Editor/Tests/Construction/` with **NO** asmdef. Unity does not allow asmdef-defined assemblies to reference the predefined `Assembly-CSharp` (the reference is silently dropped from the resolved references list — confirmed via `CompilationPipeline.GetAssemblies` diagnostic + the comment block in `Assets/Tests/EditMode/ToolStorage/ItemInstanceOwnerBuildingIdTests.cs`). Files placed under `Assets/Editor/...` automatically land in `Assembly-CSharp-Editor`, which already has `UNITY_INCLUDE_TESTS` defined and direct access to `Assembly-CSharp`. Mirrors the existing project pattern at `Assets/Editor/Tests/LayeredTreeVisual/`. **Filtering tip:** the MCP `tests-run` tool's `testClass` filter is unreliable for tests in `Assembly-CSharp-Editor` — use `testMethod: "ClassName.MethodName"` instead.
 
 ### Modified files
 
@@ -60,42 +61,13 @@ Prefabs are batch-edited as a separate task at the end so script-side changes ca
 
 **Files:**
 - Create: `Assets/Scripts/World/Buildings/Construction/DeliveredMaterialEntry.cs`
-- Create: `Assets/Tests/EditMode/Construction/Construction.Tests.asmdef`
-- Test: `Assets/Tests/EditMode/Construction/DeliveredMaterialEntrySerializationTests.cs`
+- Test: `Assets/Editor/Tests/Construction/DeliveredMaterialEntrySerializationTests.cs`
+
+> Test files for this plan live under `Assets/Editor/Tests/Construction/` with **no asmdef**. See the "Test location convention" callout at the top of this plan for the rationale (Unity drops `Assembly-CSharp` from asmdef references; `Assets/Editor/...` lands in `Assembly-CSharp-Editor` which has direct access).
 
 - [ ] **Step 1.1: Write the failing test**
 
-Create `Assets/Tests/EditMode/Construction/Construction.Tests.asmdef`:
-
-```json
-{
-    "name": "Construction.Tests",
-    "rootNamespace": "",
-    "references": [
-        "UnityEngine.TestRunner",
-        "UnityEditor.TestRunner",
-        "Unity.Netcode.Runtime",
-        "Unity.Netcode.Components"
-    ],
-    "includePlatforms": [ "Editor" ],
-    "excludePlatforms": [],
-    "allowUnsafeCode": false,
-    "overrideReferences": true,
-    "precompiledReferences": [
-        "nunit.framework.dll"
-    ],
-    "autoReferenced": false,
-    "defineConstraints": [
-        "UNITY_INCLUDE_TESTS"
-    ],
-    "versionDefines": [],
-    "noEngineReferences": false
-}
-```
-
-Note: needs to reference the runtime asmdef that contains `DeliveredMaterialEntry` once it exists — add that asmdef name to `references` after Step 1.3 if the project's runtime scripts live in a named asmdef. If runtime scripts use the default Assembly-CSharp, no extra reference is needed.
-
-Create `Assets/Tests/EditMode/Construction/DeliveredMaterialEntrySerializationTests.cs`:
+Create `Assets/Editor/Tests/Construction/DeliveredMaterialEntrySerializationTests.cs`:
 
 ```csharp
 using NUnit.Framework;
@@ -190,7 +162,7 @@ Expected: 2/2 PASS.
 - [ ] **Step 1.5: Commit**
 
 ```bash
-git add Assets/Scripts/World/Buildings/Construction/DeliveredMaterialEntry.cs Assets/Tests/EditMode/Construction/
+git add Assets/Scripts/World/Buildings/Construction/DeliveredMaterialEntry.cs Assets/Editor/Tests/Construction/
 git commit -m "feat(construction): add DeliveredMaterialEntry network struct + tests"
 ```
 
@@ -344,13 +316,13 @@ git commit -m "feat(character-actions): add CharacterAction_Continuous abstract 
 
 **Files:**
 - Modify: `Assets/Scripts/Character/CharacterActions/CharacterActions.cs`
-- Test: `Assets/Tests/EditMode/Construction/ContinuousActionDispatchTests.cs`
+- Test: `Assets/Editor/Tests/Construction/ContinuousActionDispatchTests.cs`
 
 The existing flow branches on `Duration <= 0` (instant) vs `Duration > 0` (timed coroutine). We add a third branch: `action is CharacterAction_Continuous c` → start `ActionContinuousTickRoutine(c)`.
 
 - [ ] **Step 5.1: Write the failing test**
 
-Continuous-action dispatch is hard to fully test without a Character + scene, so we test the *pure decision logic* via a trivial fake. Create `Assets/Tests/EditMode/Construction/ContinuousActionDispatchTests.cs`:
+Continuous-action dispatch is hard to fully test without a Character + scene, so we test the *pure decision logic* via a trivial fake. Create `Assets/Editor/Tests/Construction/ContinuousActionDispatchTests.cs`:
 
 ```csharp
 using NUnit.Framework;
@@ -496,7 +468,7 @@ Expected: 3/3 PASS.
 - [ ] **Step 5.5: Commit**
 
 ```bash
-git add Assets/Scripts/Character/CharacterActions/CharacterActions.cs Assets/Tests/EditMode/Construction/ContinuousActionDispatchTests.cs
+git add Assets/Scripts/Character/CharacterActions/CharacterActions.cs Assets/Editor/Tests/Construction/ContinuousActionDispatchTests.cs
 git commit -m "feat(character-actions): dispatch continuous actions through tick routine"
 ```
 
@@ -507,7 +479,7 @@ git commit -m "feat(character-actions): dispatch continuous actions through tick
 ### Task 6: Pure progress-formula tests + helper
 
 **Files:**
-- Test: `Assets/Tests/EditMode/Construction/ConstructionProgressMathTests.cs`
+- Test: `Assets/Editor/Tests/Construction/ConstructionProgressMathTests.cs`
 - Modify (later in Task 9): `Assets/Scripts/World/Buildings/Building.cs` — add `ComputeProgress` helper
 
 We test the formula in isolation before wiring it into Building. Since `CraftingIngredient` references `ItemSO` (a `ScriptableObject` — Unity-tied), we test against a plain int dictionary structure that mirrors the formula.
@@ -515,7 +487,7 @@ We test the formula in isolation before wiring it into Building. Since `Crafting
 - [ ] **Step 6.1: Write the failing test**
 
 ```csharp
-// Assets/Tests/EditMode/Construction/ConstructionProgressMathTests.cs
+// Assets/Editor/Tests/Construction/ConstructionProgressMathTests.cs
 using NUnit.Framework;
 using System.Collections.Generic;
 
@@ -576,7 +548,7 @@ Expected: 6/6 PASS.
 - [ ] **Step 6.3: Commit**
 
 ```bash
-git add Assets/Tests/EditMode/Construction/ConstructionProgressMathTests.cs
+git add Assets/Editor/Tests/Construction/ConstructionProgressMathTests.cs
 git commit -m "test(construction): pin progress formula in standalone test"
 ```
 
@@ -585,14 +557,14 @@ git commit -m "test(construction): pin progress formula in standalone test"
 ### Task 7: Pure perimeter-math tests
 
 **Files:**
-- Test: `Assets/Tests/EditMode/Construction/PerimeterMathTests.cs`
+- Test: `Assets/Editor/Tests/Construction/PerimeterMathTests.cs`
 
 `NearestPerimeterPoint` will be implemented on `Building` in Task 9. We pin the math in a test now using the same axis-aligned-bounds shape `BoxCollider.bounds` returns.
 
 - [ ] **Step 7.1: Write the failing test**
 
 ```csharp
-// Assets/Tests/EditMode/Construction/PerimeterMathTests.cs
+// Assets/Editor/Tests/Construction/PerimeterMathTests.cs
 using NUnit.Framework;
 using UnityEngine;
 
@@ -668,7 +640,7 @@ Expected: 4/4 PASS.
 - [ ] **Step 7.3: Commit**
 
 ```bash
-git add Assets/Tests/EditMode/Construction/PerimeterMathTests.cs
+git add Assets/Editor/Tests/Construction/PerimeterMathTests.cs
 git commit -m "test(construction): pin nearest-perimeter-point math"
 ```
 
@@ -1526,7 +1498,7 @@ git commit -m "feat(construction): BuildingInteractable + CharacterAction_Finish
 
 **Files:**
 - Modify: `Assets/Scripts/World/MapSystem/MapRegistry.cs` (where `BuildingSaveData` is defined)
-- Test: `Assets/Tests/EditMode/Construction/BuildingSaveDataConstructionTests.cs`
+- Test: `Assets/Editor/Tests/Construction/BuildingSaveDataConstructionTests.cs`
 
 - [ ] **Step 13.1: Locate `BuildingSaveData`**
 
@@ -1535,7 +1507,7 @@ Use Unity MCP `script-read` on `Assets/Scripts/World/MapSystem/MapRegistry.cs`. 
 - [ ] **Step 13.2: Write the failing round-trip test**
 
 ```csharp
-// Assets/Tests/EditMode/Construction/BuildingSaveDataConstructionTests.cs
+// Assets/Editor/Tests/Construction/BuildingSaveDataConstructionTests.cs
 using NUnit.Framework;
 using System.Collections.Generic;
 using UnityEngine;
@@ -1660,7 +1632,7 @@ Expected: 2/2 PASS.
 - [ ] **Step 13.6: Commit**
 
 ```bash
-git add Assets/Scripts/World/MapSystem/MapRegistry.cs Assets/Tests/EditMode/Construction/BuildingSaveDataConstructionTests.cs
+git add Assets/Scripts/World/MapSystem/MapRegistry.cs Assets/Editor/Tests/Construction/BuildingSaveDataConstructionTests.cs
 git commit -m "feat(building-save): persist ConstructionProgress + DeliveredMaterials snapshot"
 ```
 
