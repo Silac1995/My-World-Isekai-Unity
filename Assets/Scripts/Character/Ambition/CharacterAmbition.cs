@@ -452,6 +452,40 @@ namespace MWI.Ambition
             return list;
         }
 
+        // ── History on-demand RPC (Phase 7 / Task 30) ────────────────────────
+        // History is bigger than the snapshot and changes rarely. Don't push it
+        // on every change — clients (dev inspector, dialogue trigger) request it
+        // explicitly via RequestHistoryServerRpc; the server replies with a
+        // targeted DeliverHistoryClientRpc carrying the per-entry wire DTOs.
+        public event System.Action<HistoryEntryNet[]> OnHistoryDelivered;
+
+        [ServerRpc(RequireOwnership = false)]
+        public void RequestHistoryServerRpc(ServerRpcParams rpcParams = default)
+        {
+            var sender = rpcParams.Receive.SenderClientId;
+            var arr = new HistoryEntryNet[_history.Count];
+            for (int i = 0; i < _history.Count; i++)
+            {
+                arr[i] = new HistoryEntryNet
+                {
+                    AmbitionSOGuid = new FixedString64Bytes(AmbitionRegistry.GetGuid(_history[i].SO) ?? string.Empty),
+                    CompletedDay = _history[i].CompletedDay,
+                    Reason = (int)_history[i].Reason
+                };
+            }
+            var clientParams = new ClientRpcParams
+            {
+                Send = new ClientRpcSendParams { TargetClientIds = new[] { sender } }
+            };
+            DeliverHistoryClientRpc(arr, clientParams);
+        }
+
+        [ClientRpc]
+        private void DeliverHistoryClientRpc(HistoryEntryNet[] entries, ClientRpcParams rpcParams = default)
+        {
+            OnHistoryDelivered?.Invoke(entries);
+        }
+
         // Test seams
         // Allows EditMode tests to pump state without instantiating a real Character.
         internal void TEST_ForceState(AmbitionInstance instance) { _current = instance; }
