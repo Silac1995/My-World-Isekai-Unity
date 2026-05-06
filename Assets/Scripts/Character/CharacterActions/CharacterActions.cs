@@ -40,9 +40,15 @@ public class CharacterActions : CharacterSystem
 
         if (IsServer && !(action is CharacterVisualProxyAction) && !action.IsReplicatedInternally)
         {
-            // Server broadcasts the visual proxy to all clients
-            // MODIFICATION: Add ActionName to sync UI display
-            BroadcastActionVisualsClientRpc(action.ShouldPlayGenericActionAnimation, action.Duration, action.ActionName);
+            // Server broadcasts the visual proxy to all clients.
+            // Continuous actions have Duration=0 — broadcasting that would make the visual
+            // proxy fire-and-finish in one frame, leaving the client's character with no
+            // visible animation while the server-side action ticks. Use a long sentinel
+            // (600s = 10 min) so the proxy stays as _currentAction on every peer until
+            // either (a) the server-side action ends + ContinuousActionEndedClientRpc fires
+            // a cleanup, or (b) the timer naturally expires (failsafe).
+            float broadcastDuration = (action is CharacterAction_Continuous) ? 600f : action.Duration;
+            BroadcastActionVisualsClientRpc(action.ShouldPlayGenericActionAnimation, broadcastDuration, action.ActionName);
         }
 
         _currentAction = action;
@@ -576,6 +582,13 @@ public class CharacterActions : CharacterSystem
                     Debug.LogException(e);
                     CleanupAction();
                 }
+
+                // Tell every client to clear their visual proxy. The server broadcast at
+                // ExecuteAction time used a 600s sentinel duration so the proxy stayed
+                // active for the full server-side duration; without this, clients keep
+                // showing their character "doing the action" until the 600s timer expires.
+                if (IsServer) CancelActionVisualsClientRpc();
+
                 yield break;
             }
 
