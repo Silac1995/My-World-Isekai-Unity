@@ -70,6 +70,9 @@ public class Building : ComplexRoom
     [Tooltip("Optional translucent material applied to the auto-cloned ConstructionVisual. If null, the cloned mesh keeps the original CompletedVisual materials (the scaffold visual will look opaque, like the finished building). Author once on the base building prefab and all variants inherit.")]
     [SerializeField] protected Material _constructionGhostMaterial;
 
+    [Tooltip("Optional outline material applied to a SECOND silhouette clone of CompletedVisual under ConstructionVisual. The shader uses inverted-hull (cull front + vertex extrusion) so only the back faces render outside the original silhouette — produces a glowing outline. Leave null to skip the outline pass.")]
+    [SerializeField] protected Material _constructionOutlineMaterial;
+
     /// <summary>
     /// Set after <see cref="EnsureConstructionGhostVisual"/> populates _constructionVisualRoot
     /// from a clone of _completedVisualRoot. Per-instance so re-entering / re-spawning a
@@ -486,48 +489,64 @@ public class Building : ComplexRoom
         for (int i = 0; i < _completedVisualRoot.transform.childCount; i++)
         {
             var src = _completedVisualRoot.transform.GetChild(i);
-            GameObject clone;
-            try
-            {
-                clone = Instantiate(src.gameObject, _constructionVisualRoot.transform);
-            }
-            catch (System.Exception e)
-            {
-                Debug.LogException(e, this);
-                continue;
-            }
-            clone.name = src.name + "_Ghost";
 
-            // Strip any colliders so the ghost-clone doesn't double-up physics with the real
-            // CompletedVisual (which is the active collider source).
-            foreach (var col in clone.GetComponentsInChildren<Collider>(includeInactive: true))
-            {
-                if (col == null) continue;
-                if (Application.isPlaying) Destroy(col); else DestroyImmediate(col);
-            }
+            // Pass 1 — translucent ghost FILL clone.
+            CloneAndRepaint(src, "_Ghost", _constructionGhostMaterial);
 
-            // Strip any NetworkObject — visual-only clones must never spawn on the network.
-            foreach (var no in clone.GetComponentsInChildren<Unity.Netcode.NetworkObject>(includeInactive: true))
+            // Pass 2 — inverted-hull OUTLINE clone (rendered behind / around the fill).
+            // The shader's Cull Front + vertex extrusion produces the silhouette;
+            // we don't scale the GameObject — that's the shader's job.
+            if (_constructionOutlineMaterial != null)
             {
-                if (no == null) continue;
-                if (Application.isPlaying) Destroy(no); else DestroyImmediate(no);
-            }
-
-            // Apply the ghost material to all renderers if authored. Otherwise leave originals.
-            if (_constructionGhostMaterial != null)
-            {
-                foreach (var r in clone.GetComponentsInChildren<Renderer>(includeInactive: true))
-                {
-                    if (r == null) continue;
-                    int matCount = r.sharedMaterials != null ? r.sharedMaterials.Length : 1;
-                    var mats = new Material[matCount];
-                    for (int m = 0; m < matCount; m++) mats[m] = _constructionGhostMaterial;
-                    r.materials = mats;
-                }
+                CloneAndRepaint(src, "_Outline", _constructionOutlineMaterial);
             }
         }
 
         _ghostVisualPopulated = true;
+    }
+
+    /// <summary>
+    /// Helper used by <see cref="EnsureConstructionGhostVisual"/>: clones a CompletedVisual child
+    /// under ConstructionVisual, strips colliders + NetworkObjects (visual-only), and (optionally)
+    /// repaints all renderers with <paramref name="repaintMaterial"/> if non-null.
+    /// </summary>
+    private void CloneAndRepaint(Transform src, string nameSuffix, Material repaintMaterial)
+    {
+        GameObject clone;
+        try
+        {
+            clone = Instantiate(src.gameObject, _constructionVisualRoot.transform);
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogException(e, this);
+            return;
+        }
+        clone.name = src.name + nameSuffix;
+
+        // Strip any colliders so clone doesn't double-up physics.
+        foreach (var col in clone.GetComponentsInChildren<Collider>(includeInactive: true))
+        {
+            if (col == null) continue;
+            if (Application.isPlaying) Destroy(col); else DestroyImmediate(col);
+        }
+
+        // Strip any NetworkObject — visual-only clones must never spawn on the network.
+        foreach (var no in clone.GetComponentsInChildren<Unity.Netcode.NetworkObject>(includeInactive: true))
+        {
+            if (no == null) continue;
+            if (Application.isPlaying) Destroy(no); else DestroyImmediate(no);
+        }
+
+        if (repaintMaterial == null) return;
+        foreach (var r in clone.GetComponentsInChildren<Renderer>(includeInactive: true))
+        {
+            if (r == null) continue;
+            int matCount = r.sharedMaterials != null ? r.sharedMaterials.Length : 1;
+            var mats = new Material[matCount];
+            for (int m = 0; m < matCount; m++) mats[m] = repaintMaterial;
+            r.materials = mats;
+        }
     }
 
     private void HandleStateChanged(MWI.WorldSystem.BuildingState previousValue, MWI.WorldSystem.BuildingState newValue)
