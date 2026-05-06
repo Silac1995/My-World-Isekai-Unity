@@ -68,7 +68,7 @@ A room that contains smaller nested sub-rooms.
 The top-level structure in the world.
 - **Inheritance**: Inherits from `ComplexRoom`. Sub-rooms typically act as the specific floors or separated areas of the building.
 - **Management**: Registers itself globally with the `BuildingManager` on `Start()`.
-- **Construction & States**: Buildings manage a native `CurrentState` (`BuildingState.UnderConstruction` or `Complete`). They can require `_constructionRequirements` (a list of `CraftingIngredient`s) to be placed. Players/NPCs populate this using `ContributeMaterial(ItemSO, amount)`, which triggers `OnConstructionComplete` when full. Alternatively, `BuildInstantly()` bypasses the requirements.
+- **Construction & States**: Buildings manage a native `CurrentState` (`BuildingState.UnderConstruction` or `Complete`). They can require `_constructionRequirements` (a list of `CraftingIngredient`s) to be placed. The **Construction Loop** (see dedicated section below) drives gameplay-side completion: a server-only `ConstructionSiteScanner` watches items dropped in `_buildingZone` and updates `ConstructionProgress` + `DeliveredMaterials` NetworkVariables; the owner queues `CharacterAction_FinishConstruction` via `BuildingInteractable`, which consumes items per tick and calls `Building.Finalize()` when progress hits 1. `ContributeMaterial(ItemSO, amount)` is the underlying server-side ledger increment used by the action. `BuildInstantly()` bypasses the loop for debug. Empty `_constructionRequirements` skips construction entirely (spawns directly as `Complete`).
 - **Logistics Integration**: Holds a reference to a `_deliveryZone` which is essential for the Logistics cycle.
 - **Public access**: Has an outer `_buildingZone` (distinct from the main interior) for general traversal and random roaming around the property.
 - **Dynamic Identity**: Buildings expose a unique `NetworkBuildingId` GUID used to link the building to its interior map record (`BuildingInteriorRegistry`) and any persisted state. **Generation strategy is split by origin:**
@@ -359,6 +359,148 @@ The camera system reacts to building state changes for improved UX:
 - The ghost is client-local only (NetworkObject disabled on the ghost prefab).
 - Actual building spawn happens exclusively on the Server via `RequestPlacementServerRpc`.
 - The Server re-validates the prefab ID against `WorldSettingsData.BuildingRegistry` before instantiation.
+
+---
+
+## Construction Loop (Phase 1)
+
+Authoritative spec: [docs/superpowers/specs/2026-05-06-building-construction-loop-design.md](../../docs/superpowers/specs/2026-05-06-building-construction-loop-design.md). This section is the procedural how-to for authoring the loop into a building prefab and reasoning about its lifecycle.
+
+### Lifecycle (state machine)
+
+```
+Placement (BuildingPlacementManager)
+  → Building.Awake: _constructionRequirements.Count > 0 ?
+                      → _currentState.Value = UnderConstruction
+                      → _constructionVisualRoot.SetActive(true)
+                      → _completedVisualRoot.SetActive(false)
+                      → TrySpawnDefaultFurniture DEFERRED
+                    else
+                      → state = Complete (instant — preserves legacy behaviour)
+
+UnderConstruction (server-only)
+  ConstructionSiteScanner ticks 2 Hz:
+    items = building.GetPhysicalItemsInCollider(building.BuildingZone)
+    bucket by ItemSO; clamp delivered[i] = min(bucket[req.Item], req.Amount)
+    write Building.ConstructionProgress + DeliveredMaterials NetworkList
+    NEVER consumes items (purely observational)
+
+  Owner clicks site → BuildingInteractable.TryQueueInteraction(FinishConstruction, actor)
+    → CharacterAction_FinishConstruction (extends CharacterAction_Continuous)
+    → CharacterActions.ExecuteAction → ActionContinuousTickRoutine (1 Hz default)
+    → OnTick: per pending requirement, consume up to (1 + builderSkill/N) WorldItems
+              by despawning matching NetworkObjects in BuildingZone, then call
+              Building.ContributeMaterial(itemSO, count). Stalls 5 ticks on no-progress.
+
+  Building.ComputeProgress() >= 1f:
+    → Building.Finalize() (server) — STATE FLIP FIRST then side-effects:
+        1. _currentState.Value = Complete            (atomic, replicates via NV)
+        2. ConstructionProgress.Value = 1f
+        3. HandleStateChanged on every peer:
+             - _constructionVisualRoot.SetActive(false)
+             - _completedVisualRoot.SetActive(true)
+        4. TrySpawnDefaultFurniture (server-only, gated on Complete)
+        5. EvictLeftoversToPerimeter (server-only) — repositions remaining
+           WorldItems to NavMesh-valid points just outside _buildingZone
+        6. OnConstructionComplete?.Invoke()
+
+  Crash safety: state-flip is the FIRST line of Finalize. Crashing between (1) and
+  (5) leaves Complete + a few items still on the footprint — never "paid but no
+  building."
+```
+
+### Authoring a building prefab for the construction loop
+
+Required prefab structure:
+
+```
+Building (root — Building.cs + NetworkObject)
+├─ ConstructionSiteScanner          (server-only [RequireComponent(Building)])
+├─ BuildingInteractable             ([RequireComponent(Building)])
+├─ ConstructionVisual               ← assigned to Building._constructionVisualRoot
+│  └─ scaffolding renderers, NO NavMeshObstacle on footprint (so owner can walk in to drop items)
+├─ CompletedVisual                  ← assigned to Building._completedVisualRoot
+│  └─ final renderers, full collider/NavMeshObstacle setup
+├─ BuildingZone (BoxCollider, isTrigger=false)   ← Building._buildingZone (footprint = drop area)
+├─ DeliveryZone (Zone child)        ← Building._deliveryZone (post-build logistics — unchanged)
+└─ Rooms / sub-rooms with FurnitureGrid (unchanged)
+```
+
+Wiring checklist:
+1. `[SerializeField] _constructionVisualRoot` and `_completedVisualRoot` on Building — assign in the Inspector.
+2. `[SerializeField] _constructionRequirements` (list of `CraftingIngredient` — each `(ItemSO Item, int Amount)`). Empty list = spawns Complete instantly.
+3. Add `ConstructionSiteScanner` and `BuildingInteractable` as siblings on the building root. Both `[RequireComponent(typeof(Building))]`.
+4. `_buildingZone` is the **footprint drop area** — `WorldItem`s that land inside it count toward delivery. Make it large enough to cover the entire scaffolded outline.
+5. The construction visual must NOT block pedestrian traffic onto the footprint — designers should use scaffold sprites without a `NavMeshObstacle` carve.
+
+### Public API surface added to `Building`
+
+| Member | Authority | Purpose |
+|---|---|---|
+| `NetworkVariable<float> ConstructionProgress` | Read=Everyone, Write=Server | UI meter, persistence pre-warm. Updates only when delta > 0.001f. |
+| `NetworkList<DeliveredMaterialEntry> DeliveredMaterials` | Read=Everyone, Write=Server | Per-requirement-index delivered counts. Replicates incrementally. |
+| `IReadOnlyList<CraftingIngredient> ConstructionRequirements` | All peers | Read-only view of the prefab's `_constructionRequirements`. |
+| `Dictionary<ItemSO, int> ContributedMaterials` | Server-only | Server-side ledger; never replicated (clients use `DeliveredMaterials`). |
+| `bool IsUnderConstruction` | All peers | `_currentState.Value == UnderConstruction`. |
+| `Collider BuildingZone` | All peers | Public accessor for the footprint collider. |
+| `float ComputeProgress()` | Server-only | Recomputes progress from `ContributedMaterials` against requirements. |
+| `void Finalize()` | Server-only | State-flip-first finalization. **Note: shadows `object.Finalize` (the GC finalizer hook) — Building's `new void Finalize()` returns void; the GC slot is unaffected.** |
+| `void EvictLeftoversToPerimeter()` | Server-only | Moves leftover `WorldItem`s to NavMesh-valid points outside `_buildingZone`. |
+| `List<WorldItem> GetPhysicalItemsInCollider(Collider, List<WorldItem>)` | Any | Refactored sibling of `GetPhysicalItemsInZone`. Caller passes a reused buffer to satisfy Rule #34 (zero per-tick alloc). |
+| `void ContributeMaterial(ItemSO, int)` | Server-only | Existing — bumps `_contributedMaterials` ledger. Now called from `CharacterAction_FinishConstruction.OnTick`. |
+
+### Persistence (`BuildingSaveData` extension)
+
+```
+BuildingSaveData
+├─ ConstructionProgress : float                          [NEW]
+└─ DeliveredMaterials   : List<DeliveredMaterialEntryDTO> [NEW]
+                          { string ItemAssetGuid, int Delivered }
+```
+
+- DTO references `ItemSO` by **AssetGuid** so the snapshot survives a designer-time edit to `_constructionRequirements` ordering.
+- AssetGuid resolution is editor-only (`AssetDatabase.AssetPathToGUID` is `UNITY_EDITOR`-gated). Runtime saves on a built player will write empty GUIDs — Phase 1 hibernation pre-warm only matters in-editor; the next scanner tick after wake authoritatively recomputes the meter from actual physical `WorldItem`s in the zone.
+- The snapshot is a UX pre-warm (so the meter doesn't blink to 0 between map-wake and the next scanner tick). The next scanner tick is the source of truth and overwrites it.
+
+### Networking & multiplayer matrix (Rule #18 / #19)
+
+| Path | Behaviour |
+|---|---|
+| Host places building | Scanner runs locally on host. NetworkVariables replicate to clients. |
+| Client places building | `BuildingPlacementManager.RequestPlacementServerRpc` → server spawns; same loop. |
+| Host drops item / Client drops item | Existing `CharacterAction_DropItem` — `WorldItem` spawns server-side, replicates. |
+| Owner clicks Finish (any peer) | ServerRpc routed via `CharacterActions`; server validates ownership + state every tick; `Finalize` runs server-side. |
+| Non-owner clicks Finish | `BuildingInteractable.IsOwner` returns false → silent no-op. `CharacterAction_FinishConstruction.CanExecute` re-checks server-side every tick. |
+| Late-join | NGO spawn payload carries `_currentState`, `ConstructionProgress`, `DeliveredMaterials` — meter renders correctly on first frame. |
+| Crash mid-Finalize | State flip is FIRST. Worst case: Complete building with a few un-evicted items. Never "paid but no building." |
+| Two clients race Finish | Server processes serially via `_currentAction` gate in `CharacterActions`. Second is silent no-op. |
+
+### Gotchas
+
+- **`CraftingIngredient` is a struct** — only its `Item` field can be null. `req == null` does not compile. Always check `req.Item == null`.
+- **`WorldItem` is non-stacking** — each `WorldItem` instance counts as 1 unit toward a requirement. Bucketing in the scanner increments by 1 per item, and `CharacterAction_FinishConstruction.ConsumeFromZone` despawns `take` items.
+- **Scanner tick rate is 2 Hz; action tick rate is 1 Hz.** They are independent. Owner sees pre-action meter movement at 2 Hz; once they trigger Finish, consumption updates appear at 1 Hz (driven by `ContributeMaterial` writing `ContributedMaterials` and `OnTick` writing `ConstructionProgress`).
+- **The 2 Hz scanner is purely observational** — never consumes. Item consumption only happens inside `CharacterAction_FinishConstruction.OnTick`.
+- **Theft remains possible** — `WorldItem`s in `_buildingZone` are normal interactable items. A thief can steal items the owner has not yet consumed (each tick the owner converts items into permanent progress, so the thief race shrinks per tick).
+- **Phase 1 owner-only finalize** — the action is gated on `actor.CharacterId == building.PlacedByCharacterId`. Phase 2 broadens this for community manager / co-owner flows.
+- **`Building.Finalize()` shadows `object.Finalize`** — declared as `public new void Finalize()`. The GC finalizer slot is untouched (Building has no `~Building()`). Don't add one without renaming this.
+- **Default furniture is deferred until `Complete`** — `TrySpawnDefaultFurniture` early-exits during `UnderConstruction`. The state-change handler invokes it once on the transition; subsequent state changes (Damaged, Demolished, future) must not re-spawn.
+- **Rule #34: zero per-tick allocation.** The scanner reuses `_scratchItems` (`List<WorldItem>`) and `_bucketCache` (`Dictionary<ItemSO, int>`); the action reuses `_scratch` (`List<WorldItem>`). `GetPhysicalItemsInCollider` accepts a caller-supplied buffer.
+
+### Skill hook (seated for Phase 2)
+
+`CharacterAction_FinishConstruction.OnTick` computes consume budget as:
+```
+int budget = 1 + (actor.GetSkillLevelOrZero(SkillId.Builder) / SkillBudgetDivisor);
+```
+`SkillId` enum lives at `Assets/Scripts/Character/Skills/SkillId.cs`. `Character.GetSkillLevelOrZero(SkillId)` is a Phase 1 stub returning 0 (so `budget = 1` for everyone). When the actual `BuilderSkill` system lands, this method becomes the integration point — no action signature change.
+
+### Dev tools
+
+- `BuildingInspectorView` (in `Assets/Scripts/Debug/DevMode/Inspect/`) surfaces live `ConstructionProgress`, per-requirement `DeliveredMaterials` breakdown, owner display name, and a **Force Finish** dev button that calls `Building.Finalize()` directly (bypasses the action).
+- `BuildingPlacementManager._isInstantMode` (debug toggle) preserves the existing one-click instant-build path — bypasses scaffolding visual entirely.
+
+---
 
 ## Building Interiors
 

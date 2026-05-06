@@ -3,7 +3,7 @@ type: system
 title: "Building & Furniture"
 tags: [building, furniture, world, tier-1]
 created: 2026-04-18
-updated: 2026-05-01
+updated: 2026-05-06
 sources: []
 related:
   - "[[world]]"
@@ -12,6 +12,7 @@ related:
   - "[[shops]]"
   - "[[ai]]"
   - "[[save-load]]"
+  - "[[construction]]"
   - "[[kevin]]"
 status: stable
 confidence: high
@@ -28,6 +29,7 @@ depended_on_by:
   - "[[jobs-and-logistics]]"
   - "[[shops]]"
   - "[[ai]]"
+  - "[[construction]]"
 ---
 
 # Building & Furniture
@@ -92,10 +94,21 @@ Room:
 
 Building:
 - `Building.CurrentState` (`BuildingState` enum).
-- `Building.ContributeMaterial(ItemInstance, Character)` — gradual construction.
+- `Building.ContributeMaterial(ItemSO, int)` — server-side ledger increment for construction (called from `CharacterAction_FinishConstruction.OnTick`).
 - `Building.BuildInstantly()` — debug/cheat/admin path.
 - `Building.AttemptInstallFurniture(furniturePrefab, gridPosition)` — placement entry.
 - `Building.BuildingId` — per-instance GUID.
+
+**Construction loop API (added 2026-05-06 — see [[construction]]):**
+- `Building.ConstructionProgress` — `NetworkVariable<float>` (Read=Everyone, Write=Server). UI meter; updates only when delta > 0.001f.
+- `Building.DeliveredMaterials` — `NetworkList<DeliveredMaterialEntry>`. Per-requirement-index delivered counts.
+- `Building.IsUnderConstruction` — `_currentState.Value == UnderConstruction`.
+- `Building.BuildingZone` — public accessor for the footprint collider (also the construction drop zone).
+- `Building.ComputeProgress()` — server-only progress recompute from `ContributedMaterials` against requirements.
+- `Building.Finalize()` — server-only state-flip-first finalization (state → `Complete`, visual swap, default-furniture spawn, leftover eviction). **Note:** shadows `object.Finalize` (the GC finalizer hook); declared `public new void Finalize()`. The GC slot is unaffected — Building has no `~Building()` destructor.
+- `Building.EvictLeftoversToPerimeter()` — server-only, repositions leftover `WorldItem`s outside `_buildingZone` after completion.
+- `Building.GetPhysicalItemsInCollider(Collider, List<WorldItem>)` — refactored sibling of `GetPhysicalItemsInZone`. Caller-supplied buffer for Rule #34 (zero per-tick alloc).
+- `_constructionVisualRoot` / `_completedVisualRoot` — `[SerializeField] GameObject` toggled by `HandleStateChanged`.
 
 Commercial:
 - `CommercialBuilding.TaskManager.ClaimBestTask<T>()` — GOAP workers pull tasks.
@@ -217,6 +230,7 @@ for procedural authoring details.
 - [[building-placement-manager]] — community permission gate.
 
 ## Change log
+- 2026-05-06 — added construction loop (visual swap via `_constructionVisualRoot` / `_completedVisualRoot`, server-only `ConstructionSiteScanner` 2 Hz observational scan, `ConstructionProgress` + `DeliveredMaterials` NetworkVariables, `Building.Finalize()` state-flip-first method, `EvictLeftoversToPerimeter()`, `GetPhysicalItemsInCollider` refactor, `BuildingSaveData` extension with `ConstructionProgress` + `DeliveredMaterials` round-trip). Owner-only finalize via `BuildingInteractable` + `CharacterAction_FinishConstruction`. Default furniture spawn now deferred until `Complete`. See new [[construction]] page for the full architecture. — claude
 - 2026-05-01 — Hoisted `_defaultFurnitureLayout` system from `[[commercial-building]]` to `Building` (every subclass now benefits). Added `ConvertNestedNetworkFurnitureToLayout()` Awake-time stripper so designers can author Furniture as nested prefab children. Replaced `is CraftingBuilding` cast with `OnDefaultFurnitureSpawned()` virtual hook. New `## Default furniture layout` section added. — claude
 - 2026-04-24 — Known save-restore gotcha documented: `MapController.SpawnSavedBuildings` spawns the building's `NetworkObject` **before** reparenting it under the MapController transform, which can produce a half-spawned NO that later NRE's NGO's `NetworkObject.Serialize` during client-sync and silently breaks every join against a loaded save. Defensive purge in `GameSessionManager.PurgeBrokenSpawnedNetworkObjects` masks the symptom; real fix is parent-before-spawn. Full write-up in [[network]] and [[save-load]]. — claude
 - 2026-04-18 — Initial documentation pass. — Claude / [[kevin]]
@@ -224,7 +238,8 @@ for procedural authoring details.
 ## Sources
 - [.agent/skills/building_system/SKILL.md](../../.agent/skills/building_system/SKILL.md)
 - [.claude/agents/building-furniture-specialist.md](../../.claude/agents/building-furniture-specialist.md)
-- `Assets/Scripts/World/Buildings/` (29 files).
+- `Assets/Scripts/World/Buildings/` (29 files + `Construction/` subfolder for the loop).
 - `Assets/Scripts/World/Furniture/` (5 files).
+- [docs/superpowers/specs/2026-05-06-building-construction-loop-design.md](../../docs/superpowers/specs/2026-05-06-building-construction-loop-design.md) — Phase 1 construction-loop design spec.
 - Root [CLAUDE.md](../../CLAUDE.md) — World Scale Reference (11 Unity units = 1.67m).
 - 2026-04-18 conversation with [[kevin]].

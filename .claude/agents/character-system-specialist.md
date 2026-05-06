@@ -1,6 +1,6 @@
 ---
 name: character-system-specialist
-description: "Expert in the full Character system — the Character.cs facade, capability registry, CharacterArchetype SO blueprints, CharacterSystem base class, visual abstraction (ICharacterVisual, IAnimationLayering, ICharacterPartCustomization, IBoneAttachment), CharacterActions lifecycle, PlayerController/NPCController switching, IsFree availability, CharacterNeeds, CharacterStats, interaction providers, save/load contracts, and adding new archetypes or capabilities. Use when implementing, debugging, or designing anything related to character architecture, archetypes, capabilities, visuals, controllers, or actions."
+description: "Expert in the full Character system — the Character.cs facade, capability registry, CharacterArchetype SO blueprints, CharacterSystem base class, visual abstraction (ICharacterVisual, IAnimationLayering, ICharacterPartCustomization, IBoneAttachment), CharacterActions lifecycle (timed CharacterAction + new CharacterAction_Continuous condition-terminated base added 2026-05-06 with OnTick contract and ActionContinuousTickRoutine dispatcher), PlayerController/NPCController switching, IsFree availability, CharacterNeeds, CharacterStats, SkillId enum + Character.GetSkillLevelOrZero stub, interaction providers, save/load contracts, and adding new archetypes or capabilities. Use when implementing, debugging, or designing anything related to character architecture, archetypes, capabilities, visuals, controllers, or actions (including continuous condition-terminated actions like CharacterAction_FinishConstruction)."
 model: opus
 color: green
 memory: project
@@ -166,6 +166,66 @@ All sprites are white, colored via shaders + MPB. **Never use `sr.color` directl
 - `CharacterEnterBuildingAction(actor, Building)` — autonomous walk-to-door + interact for entering a specific building.
 - `CharacterLeaveInteriorAction(actor)` — autonomous walk-to-door + interact for leaving the current interior.
 - `CharacterDoorTraversalAction` — abstract base for both; owns the shared walk-loop, locked-with-key two-step retry, timeout. Sets `AllowsMovementDuringAction = true` and `ShouldPlayGenericActionAnimation = false`. The NPC always walks up to the door regardless of lock state — `door.Interact(actor)` decides what happens at arrival (rattle / unlock / transition). Subclasses override `ResolveDoor()` and `IsActionRedundant()`.
+- **`CharacterAction_FinishConstruction(actor, Building)`** (Phase 1, 2026-05-06) — concrete `CharacterAction_Continuous` for the construction loop. Owner-gated, server-only. 1 Hz default. Per tick consumes up to (1 + builderSkill/N) `WorldItem`s per pending requirement from `Building.BuildingZone`, calls `Building.ContributeMaterial`. On `progress >= 1f` → `Building.Finalize()`. See `wiki/systems/construction.md`.
+
+### CharacterAction_Continuous — condition-terminated base (added 2026-05-06)
+
+Sibling of `CharacterAction` for actions that **terminate on a condition** rather than a fixed timer. Authored for the construction loop (spec: `docs/superpowers/specs/2026-05-06-building-construction-loop-design.md`).
+
+**When to inherit:**
+- The action progresses until a goal is met (construction, smelting, healing-to-full, escort-to-destination).
+- Duration is data-driven, unknown up-front, or open-ended.
+- You want native cancel-on-movement (default `AllowsMovementDuringAction = false`).
+
+**Contract:**
+```csharp
+public abstract class CharacterAction_Continuous : CharacterAction
+{
+    public float TickIntervalSeconds { get; protected set; } = 1f;
+    public abstract bool OnTick();                          // return true → done
+    public sealed override void OnApplyEffect() { }         // no-op
+    protected CharacterAction_Continuous(Character c) : base(c, duration: 0f) { }
+}
+```
+
+**Critical dispatcher contract in `CharacterActions.ExecuteAction`:**
+
+The continuous-action branch must come **BEFORE** the `Duration <= 0` instant-action branch — the base ctor passes `duration: 0f`, so order matters:
+
+```csharp
+_currentAction.OnStart();
+
+if (action is CharacterAction_Continuous continuous)
+{
+    _actionRoutine = StartCoroutine(ActionContinuousTickRoutine(continuous));
+}
+else if (action.Duration <= 0)        // instant
+{
+    action.OnApplyEffect();
+    Finish(action);
+}
+else                                  // timed
+{
+    _actionRoutine = StartCoroutine(ActionRoutine(action));
+}
+```
+
+`ActionContinuousTickRoutine` waits `WaitForSeconds(TickIntervalSeconds)`, calls `OnTick()`, finishes when `OnTick` returns `true`. Never touches `OnApplyEffect`.
+
+**Authoring rules:**
+- Implement `OnTick()` for all per-tick work. Return `true` when done.
+- `OnStart()` for per-action state init (counters, scratch buffers, target captures).
+- `OnCancel()` for any per-action holds — runner already handles routine teardown.
+- `CanExecute()` for entry-time validation (state, ownership, range).
+- **Re-validate inside `OnTick()`** for any condition that can change mid-action — the runner does NOT re-call `CanExecute`.
+- Default `AllowsMovementDuringAction = false` (inherited) — override to `true` only when the action drives its own movement.
+- Server-authoritative effects (Spawn/Despawn) follow the same `IsSpawned && !IsServer` routing pattern, but the routing happens inside `OnTick` (not `OnApplyEffect`, which is sealed to no-op).
+
+**Reference implementation:** `CharacterAction_FinishConstruction` (`Assets/Scripts/Character/CharacterActions/CharacterAction_FinishConstruction.cs`). Owner-gated, server-only consumption of `WorldItem`s in a `Building`'s footprint until `Building.ComputeProgress() >= 1f`. Re-validates state/owner/position every tick. 5-tick stall timeout. Uses reused `_scratch` (`List<WorldItem>`) buffer (Rule #34).
+
+### `Character.GetSkillLevelOrZero(SkillId)` — Phase 1 stub (added 2026-05-06)
+
+Stub returning 0 in Phase 1 — the integration point for the future `BuilderSkill` system. Keeps `CharacterAction_FinishConstruction.OnTick` signature stable (`budget = 1 + actor.GetSkillLevelOrZero(SkillId.Builder) / SkillBudgetDivisor`). When the actual skill system lands, this method becomes the entry; `SkillBudgetDivisor` becomes a tunable. `SkillId` enum lives at `Assets/Scripts/Character/Skills/SkillId.cs`; currently only `Builder` is used.
 
 ---
 
@@ -314,8 +374,11 @@ Every subsystem exposed on `Character.cs` (lines 202-244). Properties delegate t
 | `Assets/Scripts/Character/Visual/AnimationKey.cs` | Universal animation enum |
 | `Assets/Scripts/Character/Visual/AnimationProfile.cs` | Key-to-clip mapping SO |
 | `Assets/Scripts/Character/CharacterVisual.cs` | Current sprite impl |
-| `Assets/Scripts/Character/CharacterActions/CharacterActions.cs` | Action lifecycle + ServerRpcs |
-| `Assets/Scripts/Character/CharacterActions/CharacterAction.cs` | Abstract action base |
+| `Assets/Scripts/Character/CharacterActions/CharacterActions.cs` | Action lifecycle + ServerRpcs + `ActionContinuousTickRoutine` |
+| `Assets/Scripts/Character/CharacterActions/CharacterAction.cs` | Abstract action base (timed) |
+| `Assets/Scripts/Character/CharacterActions/CharacterAction_Continuous.cs` | Abstract base for condition-terminated actions (added 2026-05-06) |
+| `Assets/Scripts/Character/CharacterActions/CharacterAction_FinishConstruction.cs` | Concrete continuous action — construction loop |
+| `Assets/Scripts/Character/Skills/SkillId.cs` | Skill enum (Phase 1: only `Builder`) |
 | `Assets/Scripts/Character/CharacterControllers/PlayerController.cs` | Player input |
 | `Assets/Scripts/Character/CharacterControllers/NPCController.cs` | AI controller |
 | `Assets/Scripts/Character/CharacterControllers/CharacterGameController.cs` | Shared controller base |
@@ -333,6 +396,15 @@ Every subsystem exposed on `Character.cs` (lines 202-244). Properties delegate t
 | `.agent/skills/character-netcode/SKILL.md` | Network sync patterns |
 
 ## Recent changes
+
+- **2026-05-06 — `CharacterAction_Continuous` abstract base added** (spec: `docs/superpowers/specs/2026-05-06-building-construction-loop-design.md`, wiki: `wiki/systems/construction.md`):
+  - Sibling of `CharacterAction` for **condition-terminated** rather than timer-terminated actions. `OnTick()` returns true to finish; `TickIntervalSeconds` (default 1 Hz) configurable per subclass; `OnApplyEffect` sealed to no-op.
+  - Default `AllowsMovementDuringAction = false` (inherited) — any movement intent (player WASD, NPC re-route) cancels via the existing `CharacterGameController` path.
+  - **`CharacterActions.ExecuteAction` dispatcher modification**: new branch `if (action is CharacterAction_Continuous continuous) → ActionContinuousTickRoutine(continuous)`. **MUST come BEFORE** the `Duration <= 0` instant-action branch — the base ctor passes `duration: 0f`, so a Continuous would be misidentified as instantaneous if the order flipped.
+  - Authoring rules: implement `OnTick()` for per-tick work, override `OnStart()` for init, `OnCancel()` for holds. **Re-validate inside `OnTick()`** for any condition that can change mid-action — the runner does NOT re-call `CanExecute`.
+  - First concrete subclass: `CharacterAction_FinishConstruction` — owner-gated, server-only consumption of `WorldItem`s in a Building's footprint. See `building-furniture-specialist` for the building-side specifics.
+  - **`Character.GetSkillLevelOrZero(SkillId)` Phase 1 stub** added — returns 0 in Phase 1 so `budget = 1 + skill/N` reduces to 1. Plug-in point for the future `BuilderSkill` system. `SkillId` enum at `Assets/Scripts/Character/Skills/SkillId.cs` (currently only `Builder` is used).
+  - **`PlayerController` adds click-on-`BuildingInteractable` routing** per Rule #33 — UI widget queues the action via `actor.CharacterActions.ExecuteAction`, never calls gameplay logic directly.
 
 - **2026-04-26 — Food & Hunger System.**
   - `NeedHunger` (phase-decay + `IsStarving` event) wired through `Character.UseConsumable` → `ConsumableInstance.ApplyEffect(Character)` virtual. `FoodInstance.ApplyEffect` calls `character.CharacterNeeds.GetNeed<NeedHunger>().IncreaseValue(...)`.

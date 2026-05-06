@@ -91,6 +91,71 @@ The `CharacterActions` component manages distinct, timed actions (Harvesting, Cr
 - **`OnActionFinished`**: Triggered when an action ends or is cancelled. This initiates a short **Action Cooldown** (default: 0.5s) before the character can resume navigation.
 - **`ShouldPlayGenericActionAnimation`**: Each `CharacterAction` can opt-out of the generic "busy" animation to prevent flickering or overriding specific animations (like Combat).
 
+### CharacterAction_Continuous — condition-terminated actions
+
+A sibling of `CharacterAction` for actions that **terminate on a condition rather than a fixed timer**. Authored 2026-05-06 for the construction loop ([spec](../../docs/superpowers/specs/2026-05-06-building-construction-loop-design.md)).
+
+**When to inherit `CharacterAction_Continuous`:**
+- The action consumes/produces resources progressively until a goal is met (construction, smelting in a furnace, healing a target until full HP, escorting until destination reached).
+- The duration is data-driven, unknown up-front, or open-ended.
+- You want native cancel-on-movement (default `AllowsMovementDuringAction = false` cancels via `CharacterGameController` the moment the controller detects movement intent).
+- You want the action to outlive the cooldown of a normal timed action without polluting the duration model.
+
+**Contract:**
+
+```csharp
+public abstract class CharacterAction_Continuous : CharacterAction
+{
+    // Server tick cadence. Default 1 Hz; subclasses may override in their constructor.
+    public float TickIntervalSeconds { get; protected set; } = 1f;
+
+    // Server-ticked. Return true when the terminating condition has been met.
+    public abstract bool OnTick();
+
+    // Sealed to prevent accidental subclass overrides re-introducing duration semantics.
+    public sealed override void OnApplyEffect() { /* no-op */ }
+
+    // Base ctor passes Duration = 0 — the dispatcher must check Continuous BEFORE the
+    // Duration <= 0 branch, otherwise these would be treated as instantaneous actions.
+    protected CharacterAction_Continuous(Character c) : base(c, duration: 0f) { }
+}
+```
+
+**Dispatcher contract in `CharacterActions.ExecuteAction`:**
+
+The continuous-action branch must come **before** the `Duration <= 0` instant-action branch. Order matters because the base constructor passes `duration: 0f`:
+
+```csharp
+// CharacterActions.ExecuteAction (excerpt)
+_currentAction.OnStart();
+
+if (action is CharacterAction_Continuous continuous)
+{
+    _actionRoutine = StartCoroutine(ActionContinuousTickRoutine(continuous));
+}
+else if (action.Duration <= 0)        // instant
+{
+    action.OnApplyEffect();
+    Finish(action);
+}
+else                                  // timed
+{
+    _actionRoutine = StartCoroutine(ActionRoutine(action));
+}
+```
+
+`ActionContinuousTickRoutine` waits `WaitForSeconds(action.TickIntervalSeconds)`, calls `OnTick()`, and finishes the action if `OnTick` returns `true`. It does NOT touch `OnApplyEffect`.
+
+**Authoring rules:**
+- Implement `OnTick()` to do all per-tick work and return `true` when done.
+- Use `OnStart()` to initialize per-action state (counters, scratch buffers, target captures).
+- Use `OnCancel()` to release any per-action holds — the runner already handles routine teardown.
+- Override `CanExecute()` for entry-time validation (state, ownership, range). Re-validate inside `OnTick()` for any condition that can change mid-action — the runner will not re-call `CanExecute`.
+- Default `AllowsMovementDuringAction = false` (inherited from `CharacterAction`). Override to `true` only if your action drives its own movement (chase, follow, escort).
+- For server-authoritative effects (spawning/despawning `NetworkObject`s, mutating scene-shared state), follow the same `IsSpawned && !IsServer` pattern as regular actions — see "Client-vs-server routing pattern for OnApplyEffect" below. **For continuous actions, the routing happens inside `OnTick`, not `OnApplyEffect` (which is sealed to no-op).**
+
+**Reference implementation:** `CharacterAction_FinishConstruction` (`Assets/Scripts/Character/CharacterActions/CharacterAction_FinishConstruction.cs`) — owner-gated, server-only consumption of `WorldItem`s in a `Building`'s footprint until `Building.ComputeProgress() >= 1f`, then calls `Building.Finalize()`. See the `building_system` SKILL ("Construction Loop (Phase 1)" section) for the full lifecycle.
+
 ### Server RPCs on CharacterActions
 
 `CharacterActions` hosts ServerRpcs for operations that require server authority but are triggered from client-owned actions:

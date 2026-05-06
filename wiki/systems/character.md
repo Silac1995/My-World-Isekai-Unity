@@ -3,7 +3,7 @@ type: system
 title: "Character"
 tags: [character, facade, gameplay, tier-1]
 created: 2026-04-18
-updated: 2026-04-27
+updated: 2026-05-06
 sources: []
 related:
   - "[[combat]]"
@@ -15,6 +15,7 @@ related:
   - "[[network]]"
   - "[[visuals]]"
   - "[[building-interior]]"
+  - "[[construction]]"
   - "[[kevin]]"
 status: stable
 confidence: high
@@ -137,6 +138,26 @@ Actions:
 - The base sets `AllowsMovementDuringAction = true` (so the NavMeshAgent keeps path-following while the action is current — see "CharacterAction movement opt-in" below) and `ShouldPlayGenericActionAnimation = false` (so the actor plays locomotion, not the idle "doing action" pose). No `Controller.Freeze()` is needed — `NPCBehaviourTree.Tick` already early-outs on `CurrentAction != null`.
 - Used by [[character-party]]'s building-door follow path. Intended consumers also include the upcoming order system, BT decisions ("go home to sleep"), and GOAP plans that need to deposit/pick up from interior storage.
 
+### CharacterAction_Continuous — condition-terminated actions (added 2026-05-06)
+
+Sibling base for actions that terminate on a **condition** rather than a **timer**. Authored for the construction loop ([[construction]]). The runner ticks `OnTick()` at `TickIntervalSeconds` (default 1 Hz); when `OnTick` returns `true`, the action finishes. `OnApplyEffect` is sealed to a no-op — continuous actions implement everything in `OnTick`.
+
+```csharp
+public abstract class CharacterAction_Continuous : CharacterAction
+{
+    public float TickIntervalSeconds { get; protected set; } = 1f;
+    public abstract bool OnTick();                          // return true → done
+    public sealed override void OnApplyEffect() { }         // no-op
+    protected CharacterAction_Continuous(Character c) : base(c, duration: 0f) { }
+}
+```
+
+**Dispatcher contract** in `CharacterActions.ExecuteAction`: the continuous-action branch must come **before** the `Duration <= 0` instant-action branch, because the base ctor passes `duration: 0f` and a Continuous action would otherwise be treated as instantaneous. The new `ActionContinuousTickRoutine` coroutine waits `TickIntervalSeconds`, calls `OnTick`, and finishes the action when it returns true.
+
+**Default `AllowsMovementDuringAction = false`** (inherited from `CharacterAction`) — any movement intent (player WASD, NPC re-route) cancels via the existing `CharacterGameController` path. Override to `true` only for actions that drive their own movement.
+
+**Reference implementation:** `CharacterAction_FinishConstruction` (`Assets/Scripts/Character/CharacterActions/CharacterAction_FinishConstruction.cs`) — owner-gated, server-only consumption of `WorldItem`s in a `Building.BuildingZone` until `Building.ComputeProgress() >= 1f`, then calls `Building.Finalize()`. See [[construction]] for the full lifecycle.
+
 ### CharacterAction movement opt-in
 
 `CharacterGameController.Update` historically hard-stopped the NavMeshAgent every frame whenever `CurrentAction != null`, on the assumption that actions are stationary (harvest, craft, pickup). Walking actions like the door-traversal pair need movement to keep flowing while they are the current action. The contract:
@@ -214,6 +235,7 @@ Input (player) or AI tick (NPC)
 - [ ] `CharacterAnimator.cs` / `CharacterAwareness.cs` / `CharacterBlink.cs` sit on the root — should they migrate to child GameObjects for consistency with the subsystem pattern?
 
 ## Change log
+- 2026-05-06 — added `CharacterAction_Continuous` abstract base for condition-terminated (vs timer-terminated) actions. New dispatcher branch in `CharacterActions.ExecuteAction` (`ActionContinuousTickRoutine`) — must come BEFORE the `Duration <= 0` branch since base ctor passes `duration: 0f`. First concrete subclass: `CharacterAction_FinishConstruction` (see [[construction]]). Added `Character.GetSkillLevelOrZero(SkillId)` Phase 1 stub for future builder-skill plug-in. — claude
 - 2026-04-18 — Initial documentation pass (wiki bootstrap). — Claude / [[kevin]]
 - 2026-04-24 — Added `RequestHarvestServerRpc` + `ApplyHarvestOnServer` helper on `CharacterActions`; documented the `IsSpawned && !IsServer` client-routing pattern for server-authoritative `OnApplyEffect`. Fixes client-triggered `WorldItem.SpawnWorldItem` error from `CharacterHarvestAction`. — Claude
 - 2026-04-26 — added Enter / Leave building actions (CharacterDoorTraversalAction base) — claude
