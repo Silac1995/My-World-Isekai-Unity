@@ -362,9 +362,11 @@ The camera system reacts to building state changes for improved UX:
 
 ---
 
-## Construction Loop (Phase 1)
+## Construction Loop (Phase 1 — Cooperative)
 
-Authoritative spec: [docs/superpowers/specs/2026-05-06-building-construction-loop-design.md](../../docs/superpowers/specs/2026-05-06-building-construction-loop-design.md). This section is the procedural how-to for authoring the loop into a building prefab and reasoning about its lifecycle.
+Authoritative spec: [docs/superpowers/specs/2026-05-06-building-construction-loop-design.md](../../docs/superpowers/specs/2026-05-06-building-construction-loop-design.md). Architecture wiki: [wiki/systems/construction.md](../../wiki/systems/construction.md). This section is the procedural how-to for authoring the loop into a building prefab and reasoning about its lifecycle.
+
+**Phase 1 is cooperative finalize — no owner gate.** The placer-only gate proposed in the original 2026-05-06 design spec was dropped 2026-05-06/07 during PlayMode-MP testing because it blocked co-op partners from helping. Any character standing inside the building's `BuildingZone` can drive the Construct action. `BuildingInteractable.IsOwner` survives but is reserved for Phase 2 hold-menu options (Abandon, Sell). Spatial gate (Core Rule #1) stays on every tick.
 
 ### Lifecycle (state machine)
 
@@ -469,20 +471,27 @@ BuildingSaveData
 | Host places building | Scanner runs locally on host. NetworkVariables replicate to clients. |
 | Client places building | `BuildingPlacementManager.RequestPlacementServerRpc` → server spawns; same loop. |
 | Host drops item / Client drops item | Existing `CharacterAction_DropItem` — `WorldItem` spawns server-side, replicates. |
-| Owner clicks Finish (any peer) | ServerRpc routed via `CharacterActions`; server validates ownership + state every tick; `Finalize` runs server-side. |
-| Non-owner clicks Finish | `BuildingInteractable.IsOwner` returns false → silent no-op. `CharacterAction_FinishConstruction.CanExecute` re-checks server-side every tick. |
+| Any character clicks Finish from inside `BuildingZone` | `BuildingInteractable.Interact` → `Building.RequestStartFinishConstructionServerRpc` (legacy `[ServerRpc(RequireOwnership=false)]`); server queues `CharacterAction_FinishConstruction`; per-tick re-validates state + position (no ownership check); `Finalize` runs server-side. |
+| Character clicks Finish from outside the zone | `BuildingInteractable.IsCharacterInInteractionZone` (2D X-Z) returns false → silent no-op. Server never sees the RPC. |
 | Late-join | NGO spawn payload carries `_currentState`, `ConstructionProgress`, `DeliveredMaterials` — meter renders correctly on first frame. |
 | Crash mid-Finalize | State flip is FIRST. Worst case: Complete building with a few un-evicted items. Never "paid but no building." |
 | Two clients race Finish | Server processes serially via `_currentAction` gate in `CharacterActions`. Second is silent no-op. |
+| Save/load mid-construction | `MapController.SnapshotActiveBuildings` + `Hibernate` refresh paths copy `ConstructionProgress` + `DeliveredMaterials` so progress survives. `WorldItem`s on the footprint persist via the existing world-item save pipeline. The action itself does not persist — re-engages on reload. |
 
 ### Gotchas
 
 - **`CraftingIngredient` is a struct** — only its `Item` field can be null. `req == null` does not compile. Always check `req.Item == null`.
 - **`WorldItem` is non-stacking** — each `WorldItem` instance counts as 1 unit toward a requirement. Bucketing in the scanner increments by 1 per item, and `CharacterAction_FinishConstruction.ConsumeFromZone` despawns `take` items.
-- **Scanner tick rate is 2 Hz; action tick rate is 1 Hz.** They are independent. Owner sees pre-action meter movement at 2 Hz; once they trigger Finish, consumption updates appear at 1 Hz (driven by `ContributeMaterial` writing `ContributedMaterials` and `OnTick` writing `ConstructionProgress`).
+- **Scanner tick rate is 2 Hz; action tick rate is 1 Hz.** They are independent. All peers see pre-action meter movement at 2 Hz; once any character triggers Finish, consumption updates appear at 1 Hz (driven by `ContributeMaterial` writing `ContributedMaterials` and `OnTick` writing `ConstructionProgress`).
 - **The 2 Hz scanner is purely observational** — never consumes. Item consumption only happens inside `CharacterAction_FinishConstruction.OnTick`.
 - **Theft remains possible** — `WorldItem`s in `_buildingZone` are normal interactable items. A thief can steal items the owner has not yet consumed (each tick the owner converts items into permanent progress, so the thief race shrinks per tick).
-- **Phase 1 owner-only finalize** — the action is gated on `actor.CharacterId == building.PlacedByCharacterId`. Phase 2 broadens this for community manager / co-owner flows.
+- **Phase 1 cooperative finalize — no owner gate.** Any character in `BuildingZone` can drive the Construct action. `BuildingInteractable.IsOwner` is kept for Phase 2 hold-menu options (Abandon, Sell), but the finalize path itself never calls it. **Spatial gate stays** (Core Rule #1) — actor must be inside `BuildingZone` every tick.
+- **2D X-Z proximity check** — `BuildingInteractable.IsCharacterInInteractionZone` (override) and `CharacterAction_FinishConstruction.IsActorInsideBuildingZone` both drop the Y axis. 3D `Bounds.Contains` was false-negativing on `NetworkTransform`-replicated Y precision (NavMesh agent height / floor offset noise) — character standing on the footprint, but Y rounded just below `bounds.min.y`. Both client and server use the same 2D check so they stay in sync. **Don't reintroduce `bounds.Contains(charPos)` for construction zone tests.**
+- **`[ServerRpc(RequireOwnership=false)]` legacy attribute** — `Building.RequestStartFinishConstructionServerRpc` uses the old `[ServerRpc]` form. Attempting `[Rpc(SendTo.Server)]` failed to dispatch in our NGO version. Building NetworkObject is server-owned, so any client invoking the RPC is by definition not the owner — `RequireOwnership=false` is the standard escape. Method name MUST end in `ServerRpc` for the legacy attribute to dispatch.
+- **Continuous action visual proxy uses a 600s sentinel** — `CharacterActions.ExecuteAction` calls `BroadcastActionVisualsClientRpc(duration=600f)` for `CharacterAction_Continuous`, because continuous actions don't have a real duration. On finish (Finalize, stall timeout, manual cancel) the server **must** call `CancelActionVisualsClientRpc` so peers tear down the proxy immediately — without it the proxy lingers 600s.
+- **HUD progress bar reads `Progress`, not `Duration`** — `CharacterAction_Continuous.Progress` is a virtual getter (default 0). Override on `CharacterAction_FinishConstruction` returns `Building.ConstructionProgress.Value`. `CharacterActions.GetActionProgress` checks the override BEFORE falling back to `elapsed/duration` (which would div-by-0 or read the 600s sentinel — both wrong).
+- **Save/load progress restoration through refresh paths** — `MapController.SnapshotActiveBuildings` (manual save) and `MapController.Hibernate` (player-leaves wake-cycle) both walk the registered building list and refresh existing `BuildingSaveData` entries from the live `Building`. Both paths must copy `ConstructionProgress` AND `DeliveredMaterials` from the refreshed entry. Without this (the 2026-05-07 fix `ff98c2b7`), mid-build progress reset to 0 on every save/load cycle.
+- **`_spawnAsComplete` designer checkbox** — `[SerializeField] bool _spawnAsComplete` on Building. When true, `OnNetworkSpawn` flips state directly to `Complete` regardless of `_constructionRequirements` content. Use for scene-authored buildings that should ship as already-built environment (player home, NPC shops, tutorial structures). Empty `_constructionRequirements` already auto-promotes to Complete; the checkbox is for prefabs that DO have requirements but don't want to load as scaffolds.
 - **`Building.Finalize()` shadows `object.Finalize`** — declared as `public new void Finalize()`. The GC finalizer slot is untouched (Building has no `~Building()`). Don't add one without renaming this.
 - **Default furniture is deferred until `Complete`** — `TrySpawnDefaultFurniture` early-exits during `UnderConstruction`. The state-change handler invokes it once on the transition; subsequent state changes (Damaged, Demolished, future) must not re-spawn.
 - **Rule #34: zero per-tick allocation.** The scanner reuses `_scratchItems` (`List<WorldItem>`) and `_bucketCache` (`Dictionary<ItemSO, int>`); the action reuses `_scratch` (`List<WorldItem>`). `GetPhysicalItemsInCollider` accepts a caller-supplied buffer.

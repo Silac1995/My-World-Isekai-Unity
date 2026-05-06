@@ -3,7 +3,7 @@ type: system
 title: "Building State"
 tags: [building, construction, tier-2, stub]
 created: 2026-04-19
-updated: 2026-05-06
+updated: 2026-05-07
 sources: []
 related: ["[[building]]", "[[items]]", "[[construction]]", "[[kevin]]"]
 status: stable
@@ -20,6 +20,7 @@ depended_on_by: ["[[building]]", "[[construction]]"]
 Construction state machine: `Scaffold` → `UnderConstruction` → `Complete` → `Damaged` → `Demolished`. `ContributeMaterial(ItemSO, int)` progresses the server-side ledger; `BuildInstantly()` short-circuits for debug/admin. The actual gameplay loop driving `UnderConstruction → Complete` lives in [[construction]]: a continuous-tick `CharacterAction_FinishConstruction` consumes items from `Building.BuildingZone` and calls `Building.Finalize()` on completion. Transitioning to `Complete` opens the interior via `BuildingInteriorDoor` (lazy-spawn) and registers in [[world]] `MapController` + `CommunityManager`.
 
 ## Change log
+- 2026-05-07 — Phase 1 polish: cooperative finalize (placer-only gate dropped), 2D X-Z proximity check, save/load progress restoration through hibernation/snapshot refresh, `_spawnAsComplete` designer checkbox for scene-authored already-built buildings. Full details in [[construction]]. — claude
 - 2026-05-06 — clarified that the gameplay loop driving `UnderConstruction → Complete` lives in [[construction]]; `Building.Finalize()` is the state-flip-first server method that runs on completion. — claude
 - 2026-04-19 — Stub. — Claude / [[kevin]]
 

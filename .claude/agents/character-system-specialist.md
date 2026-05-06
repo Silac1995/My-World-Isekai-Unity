@@ -166,7 +166,7 @@ All sprites are white, colored via shaders + MPB. **Never use `sr.color` directl
 - `CharacterEnterBuildingAction(actor, Building)` — autonomous walk-to-door + interact for entering a specific building.
 - `CharacterLeaveInteriorAction(actor)` — autonomous walk-to-door + interact for leaving the current interior.
 - `CharacterDoorTraversalAction` — abstract base for both; owns the shared walk-loop, locked-with-key two-step retry, timeout. Sets `AllowsMovementDuringAction = true` and `ShouldPlayGenericActionAnimation = false`. The NPC always walks up to the door regardless of lock state — `door.Interact(actor)` decides what happens at arrival (rattle / unlock / transition). Subclasses override `ResolveDoor()` and `IsActionRedundant()`.
-- **`CharacterAction_FinishConstruction(actor, Building)`** (Phase 1, 2026-05-06) — concrete `CharacterAction_Continuous` for the construction loop. Owner-gated, server-only. 1 Hz default. Per tick consumes up to (1 + builderSkill/N) `WorldItem`s per pending requirement from `Building.BuildingZone`, calls `Building.ContributeMaterial`. On `progress >= 1f` → `Building.Finalize()`. See `wiki/systems/construction.md`.
+- **`CharacterAction_FinishConstruction(actor, Building)`** (Phase 1, 2026-05-06; cooperative model 2026-05-07) — concrete `CharacterAction_Continuous` for the construction loop. **No owner gate** — any character standing inside `Building.BuildingZone` can drive the action. Server-only. 1 Hz default. Per tick: re-validate state + 2D X-Z position-inside-zone (drops Y because `Bounds.Contains` false-negatives on `NetworkTransform`-replicated Y precision); consume up to (1 + builderSkill/N) `WorldItem`s per pending requirement; call `Building.ContributeMaterial`. On `progress >= 1f` → `Building.Finalize()`. **Override `Progress`** to return `Building.ConstructionProgress.Value` so the HUD bar fills correctly (the base virtual returns 0). See `wiki/systems/construction.md`.
 
 ### CharacterAction_Continuous — condition-terminated base (added 2026-05-06)
 
@@ -184,9 +184,14 @@ public abstract class CharacterAction_Continuous : CharacterAction
     public float TickIntervalSeconds { get; protected set; } = 1f;
     public abstract bool OnTick();                          // return true → done
     public sealed override void OnApplyEffect() { }         // no-op
+    public virtual float Progress => 0f;                    // HUD bar reads this
     protected CharacterAction_Continuous(Character c) : base(c, duration: 0f) { }
 }
 ```
+
+**`Progress` virtual** (added 2026-05-07): `CharacterActions.GetActionProgress` checks this BEFORE falling back to `elapsed/duration`. For continuous actions the duration math is meaningless — base ctor passes 0, and `ExecuteAction` broadcasts a 600s sentinel duration to peers (see "visual proxy" below). Override `Progress` to return whatever drives the HUD bar (e.g. `Building.ConstructionProgress.Value`). Default 0 means "no bar movement until you override."
+
+**Visual proxy 600s sentinel** (added 2026-05-07): `CharacterActions.ExecuteAction` calls `BroadcastActionVisualsClientRpc(duration=600f)` for `CharacterAction_Continuous` because continuous actions don't have a real duration. On every peer the proxy ticks until cancellation. **Server MUST broadcast `CancelActionVisualsClientRpc` on action finish** (`OnTick` returned true, manual cancel, etc.) so peers tear down the proxy immediately — without it the proxy lingers 600s after the server-side action ends.
 
 **Critical dispatcher contract in `CharacterActions.ExecuteAction`:**
 
@@ -221,7 +226,7 @@ else                                  // timed
 - Default `AllowsMovementDuringAction = false` (inherited) — override to `true` only when the action drives its own movement.
 - Server-authoritative effects (Spawn/Despawn) follow the same `IsSpawned && !IsServer` routing pattern, but the routing happens inside `OnTick` (not `OnApplyEffect`, which is sealed to no-op).
 
-**Reference implementation:** `CharacterAction_FinishConstruction` (`Assets/Scripts/Character/CharacterActions/CharacterAction_FinishConstruction.cs`). Owner-gated, server-only consumption of `WorldItem`s in a `Building`'s footprint until `Building.ComputeProgress() >= 1f`. Re-validates state/owner/position every tick. 5-tick stall timeout. Uses reused `_scratch` (`List<WorldItem>`) buffer (Rule #34).
+**Reference implementation:** `CharacterAction_FinishConstruction` (`Assets/Scripts/Character/CharacterActions/CharacterAction_FinishConstruction.cs`). Cooperative (no owner gate; spatial gate only), server-only consumption of `WorldItem`s in a `Building`'s footprint until `Building.ComputeProgress() >= 1f`. Re-validates state + 2D X-Z position-in-zone every tick (drops Y because `Bounds.Contains` false-negatives on replicated transforms). 5-tick stall timeout. Overrides `Progress` to return `Building.ConstructionProgress.Value`. Uses reused `_scratch` (`List<WorldItem>`) buffer (Rule #34).
 
 ### `Character.GetSkillLevelOrZero(SkillId)` — Phase 1 stub (added 2026-05-06)
 

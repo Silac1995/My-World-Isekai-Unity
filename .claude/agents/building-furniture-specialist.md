@@ -1,6 +1,6 @@
 ---
 name: building-furniture-specialist
-description: "Expert in building and furniture systems — Building/ComplexRoom/Room hierarchy, FurnitureGrid discrete placement, furniture occupancy state machine, BuildingPlacementManager with community permissions, CommercialBuilding jobs/logistics/tasks, IStockProvider contract, pluggable LogisticsPolicy SOs, BuildingLogisticsManager facade + sub-components, StorageFurniture slot-based containers + StorageVisualDisplay renderer, FindStorageFurnitureForItem / GetItemsInStorageFurniture logistics hooks, building interiors with spatial offsets, BuildingInteriorRegistry lazy-spawn, the Phase 1 Construction Loop (ConstructionSiteScanner 2 Hz observational scan, BuildingInteractable + CharacterAction_FinishConstruction continuous-tick consumption, Building.Finalize state-flip-first ordering, EvictLeftoversToPerimeter, _constructionVisualRoot vs _completedVisualRoot visual swap, ConstructionProgress / DeliveredMaterials NetworkVariables, BuildingSaveData persistence). Use when implementing, debugging, or designing anything related to buildings, furniture, rooms, grids, placement, interiors, storage containers, commercial logistics, or the construction loop."
+description: "Expert in building and furniture systems — Building/ComplexRoom/Room hierarchy, FurnitureGrid discrete placement, furniture occupancy state machine, BuildingPlacementManager with community permissions, CommercialBuilding jobs/logistics/tasks, IStockProvider contract, pluggable LogisticsPolicy SOs, BuildingLogisticsManager facade + sub-components, StorageFurniture slot-based containers + StorageVisualDisplay renderer, FindStorageFurnitureForItem / GetItemsInStorageFurniture logistics hooks, building interiors with spatial offsets, BuildingInteriorRegistry lazy-spawn, the Phase 1 Cooperative Construction Loop (ConstructionSiteScanner 2 Hz observational scan, BuildingInteractable.Interact tap-E entry + 2D X-Z proximity check, [ServerRpc(RequireOwnership=false)] Building.RequestStartFinishConstructionServerRpc, CharacterAction_FinishConstruction continuous-tick consumption with no owner gate, Building.Finalize state-flip-first ordering, EvictLeftoversToPerimeter, _constructionVisualRoot vs _completedVisualRoot visual swap, _spawnAsComplete designer checkbox, ConstructionProgress / DeliveredMaterials NetworkVariables, 600s sentinel + CancelActionVisualsClientRpc visual proxy, BuildingSaveData persistence with refresh-path copy of progress fields, CharacterAction_Continuous.Progress override for HUD bar). Use when implementing, debugging, or designing anything related to buildings, furniture, rooms, grids, placement, interiors, storage containers, commercial logistics, or the construction loop."
 model: opus
 color: orange
 memory: project
@@ -265,7 +265,7 @@ Detection (OnWorkerPunchIn: IStockProvider → BuyOrder, policy-driven)
 - `FindSupplierFor` / `FindTransporterBuilding` are first-match, no ranking or load balancing.
 - Capability report doesn't see hibernated buildings.
 
-### 8. Construction System (Phase 1 — owner-only finalize)
+### 8. Construction System (Phase 1 — cooperative finalize)
 
 Authoritative spec: `docs/superpowers/specs/2026-05-06-building-construction-loop-design.md`. Architecture wiki page: `wiki/systems/construction.md`. Procedural how-to: `building_system` SKILL → "Construction Loop (Phase 1)" section.
 
@@ -281,14 +281,16 @@ Authoritative spec: `docs/superpowers/specs/2026-05-06-building-construction-loo
 
 **Server-only sub-components:**
 - `ConstructionSiteScanner` — `[RequireComponent(Building)]`, 2 Hz, observational only. Scans `Building.GetPhysicalItemsInCollider(_buildingZone, _scratchItems)`, buckets by `ItemSO`, writes `Building.ConstructionProgress` + `Building.DeliveredMaterials` NetworkList. **Never consumes items** — purely a UX feed for the meter. Reuses `_scratchItems` (List) + `_bucketCache` (Dict) for zero-alloc per tick (Rule #34).
-- `BuildingInteractable` — `[RequireComponent(Building)]`, MonoBehaviour. Phase 1 surface exposes only `FinishConstruction` (owner-gated). API: `GetAvailableInteractions(actor, result)`, `IsOwner(actor)`, `TryQueueInteraction(InteractionId, actor)`. Phase 2 stubs: `Abandon`, `Sell`, `OpenInterior`.
+- `BuildingInteractable` — `[RequireComponent(Building)]`, extends `InteractableObject`. Phase 1 surface: tap-E `Interact(actor)` and hold-E `GetHoldInteractionOptions(actor)` both target `Finish Construction` while `UnderConstruction`. **No owner gate** — any character with the building in their interaction zone can drive the action. Overrides `IsCharacterInInteractionZone` with a **2D X-Z footprint test** (drops Y axis — 3D `Bounds.Contains` was false-negativing on `NetworkTransform`-replicated Y precision). `IsOwner(actor)` is kept for Phase 2 hold-menu options (Abandon, Sell, OpenInterior) but the finalize path never calls it.
 
 **Client → server route:**
-- Player click on a `BuildingInteractable` is wired in `PlayerController` (Rule #33) and routed through `actor.CharacterActions.ExecuteAction(new CharacterAction_FinishConstruction(actor, building))`.
-- The action is a `CharacterAction_Continuous` (1 Hz default `TickIntervalSeconds`), runs server-side via `ActionContinuousTickRoutine` in `CharacterActions`.
+- Player click on a `BuildingInteractable` is wired through the existing `InteractableObject.Interact` path (Rule #33).
+- `BuildingInteractable.Interact` calls `Building.RequestStartFinishConstructionServerRpc(NetworkBehaviourReference(actor))` — legacy `[ServerRpc(RequireOwnership=false)]` form because the Building NetworkObject is server-owned and clients are by definition not the owner. Method name MUST end in `ServerRpc` for the legacy attribute to dispatch. `[Rpc(SendTo.Server)]` did not dispatch in our NGO version.
+- Server-side, `RequestStartFinishConstructionServerRpc` queues `CharacterAction_FinishConstruction` via `actor.CharacterActions.ExecuteAction`. The action is a `CharacterAction_Continuous` (1 Hz default `TickIntervalSeconds`), runs server-side via `ActionContinuousTickRoutine` in `CharacterActions`.
+- `CharacterActions.ExecuteAction` broadcasts the visual proxy to all peers with **`Duration=600f` sentinel** (continuous actions don't have a real duration). On finish (Finalize, stall, manual cancel) the server **must** call `CancelActionVisualsClientRpc` so peers tear down the proxy immediately — without it the proxy lingers 600s.
 
 **Per-tick consumption (server-only):**
-- Re-validate state, ownership, position-inside-`BuildingZone` every tick (mid-action cancel-safe).
+- Re-validate state + position-inside-`BuildingZone` every tick (mid-action cancel-safe). **No ownership check.** Cooperative model.
 - `budget = 1 + actor.GetSkillLevelOrZero(SkillId.Builder) / SkillBudgetDivisor` (Phase 1 stub returns 0 → budget=1).
 - For each pending requirement: `ConsumeFromZone` despawns matching `WorldItem`s by `NetworkObject.Despawn(true)`; `ConsumeFromActorInventory` is Phase 1 stub returning 0.
 - Each consumed item bumps `Building.ContributeMaterial(req.Item, count)` (server-only ledger).
@@ -317,15 +319,19 @@ Authoritative spec: `docs/superpowers/specs/2026-05-06-building-construction-loo
 - Late-join self-heals via NGO spawn payload (`_currentState`, `ConstructionProgress`, `DeliveredMaterials` all part of initial sync).
 - Two clients race Finish → server's `_currentAction` gate serializes; second is silent no-op.
 
-**Phase 1 owner-only gate:**
-- `BuildingInteractable.IsOwner(actor) ⇔ actor.CharacterId == building.PlacedByCharacterId.Value.ToString()`.
-- `CharacterAction_FinishConstruction.CanExecute()` re-checks — server-side per tick — actor is the placer, state is `UnderConstruction`, actor inside `BuildingZone.bounds`.
+**Phase 1 cooperative gate (replaces the originally-proposed owner gate):**
+- **Spatial gate is the only gate** — any character with the building inside their interaction zone (2D X-Z footprint test on `Building.BuildingZone.bounds`) can drive the action. Tested every tick on the server.
+- `BuildingInteractable.IsOwner(actor) ⇔ actor.CharacterId == building.PlacedByCharacterId.Value.ToString()` — survives but **the finalize path never calls it**. Reserved for Phase 2 hold-menu options (Abandon, Sell, OpenInterior).
+- `CharacterAction_FinishConstruction.CanExecute()` re-checks `state == UnderConstruction` + `IsActorInsideBuildingZone()` (also 2D X-Z). No owner check.
+
+**Save/load progress restoration through refresh paths:**
+- `MapController.SnapshotActiveBuildings` (manual save) and `MapController.Hibernate` (player-leaves wake-cycle) both walk the registered building list and refresh existing `BuildingSaveData` entries from the live `Building`. Both paths must copy `ConstructionProgress` AND `DeliveredMaterials` from the refreshed entry. Without this (the 2026-05-07 fix `ff98c2b7`), mid-build progress reset to 0 on every save/load cycle even though `BuildingSaveData.FromBuilding` populated them correctly on first capture.
 
 **Phase 2 (out of scope, seated for):**
-- NPC owner autonomous delivery (free-time GOAP, perception "find harvestable producing item X", shop search).
+- NPC owner autonomous delivery (free-time GOAP, perception "find harvestable producing item X", shop search). Cooperative model means JobBuilder / NPC delivery needs no owner-bypass — same `BuildingInteractable.Interact` path, same spatial gate.
 - Community-manager city-management console.
 - `JobBuilder` GOAP job class.
-- Multi-owner / co-owner support (broaden `IsOwner` and the owner gate).
+- Hold-menu owner-only options (Abandon, Sell, OpenInterior) — gate on `BuildingInteractable.IsOwner`.
 - Auto-eviction policy for orphaned construction sites whose owner deleted their profile.
 
 **MacroSimulator** entry point still exists for offline progression hooks but Phase 1 does **not** model offline construction progress (intentionally — construction needs a live map). The legacy "+20%/day construction progress" line is deprecated under the live-loop model; verify before relying on it.
@@ -339,13 +345,18 @@ Authoritative spec: `docs/superpowers/specs/2026-05-06-building-construction-loo
 2. Populate `_constructionRequirements` (empty → instant Complete).
 3. Add `ConstructionSiteScanner` and `BuildingInteractable` siblings on the building root.
 4. `_buildingZone` (footprint BoxCollider) is the drop zone — sized to cover the entire scaffolded outline.
-5. Construction visual: scaffold sprites, NO `NavMeshObstacle` carve (so the owner can walk in to drop items).
+5. Construction visual: scaffold sprites, NO `NavMeshObstacle` carve (so any character can walk in to drop items).
 6. Completed visual: full collider + `NavMeshObstacle` setup as before.
+7. `_spawnAsComplete` checkbox: ON for scene-authored buildings that should ship as already-built environment (player home, NPC shops, tutorial structures). When ON, `OnNetworkSpawn` flips state directly to `Complete` regardless of `_constructionRequirements` content. OFF (default) for buildings that go through the Phase 1 loop. Empty `_constructionRequirements` already auto-promotes to Complete; the checkbox is for prefabs that DO have requirements but don't want to load as scaffolds.
 
 **New gotchas:**
 - `CraftingIngredient` is a struct — `req == null` does not compile. Always check `req.Item == null`.
 - `WorldItem` is non-stacking — every instance counts as 1 unit. Bucketing increments by 1 per instance.
 - Continuous-action dispatch must come BEFORE `Duration <= 0` branch in `CharacterActions.ExecuteAction` (base ctor passes `duration: 0f`).
+- **2D X-Z proximity check** — never reintroduce 3D `Bounds.Contains(charPos)` for construction zone tests. Y precision on `NetworkTransform`-replicated transforms false-negatives even when the character visually stands inside the footprint.
+- **Continuous action visual proxy 600s sentinel** — server must broadcast `CancelActionVisualsClientRpc` on action finish or the proxy lingers 600s.
+- **HUD progress bar reads `Progress` virtual** — `CharacterAction_Continuous.Progress` (default 0) is overridden by `CharacterAction_FinishConstruction.Progress` returning `Building.ConstructionProgress.Value`. `CharacterActions.GetActionProgress` checks the override BEFORE the `elapsed/duration` fallback (which would div-by-0 for continuous actions).
+- **Save/load through refresh paths** — `MapController.SnapshotActiveBuildings` + `Hibernate` both must copy `ConstructionProgress` + `DeliveredMaterials` into the refreshed `BuildingSaveData` entry. The first-capture path (`BuildingSaveData.FromBuilding`) is correct; the refresh path was the bug.
 
 ## Key Scripts
 
@@ -409,17 +420,27 @@ Authoritative spec: `docs/superpowers/specs/2026-05-06-building-construction-loo
 
 ## Recent changes
 
+- **2026-05-07 — Phase 1 PlayMode-MP polish landed** (post-shipping fixes on top of the 2026-05-06 base; wiki: `wiki/systems/construction.md` Change log entry has the commit-hash detail):
+  - **Cooperative finalize model** (`0f3337ce`) — placer-only gate dropped. Any character standing inside `BuildingZone` can drive the action. `BuildingInteractable.IsOwner` survives but is reserved for Phase 2 hold-menu options (Abandon, Sell, OpenInterior); the finalize path no longer calls it. NPC parity (Rule #22) becomes free — JobBuilder needs no owner-bypass code, just navigate to the zone.
+  - **2D X-Z proximity check** (`9fadc3bd`) — `BuildingInteractable.IsCharacterInInteractionZone` (override of base `InteractableObject` AABB check) and `CharacterAction_FinishConstruction.IsActorInsideBuildingZone` both drop the Y axis. 3D `Bounds.Contains` was false-negativing on `NetworkTransform`-replicated Y precision (NavMesh agent height / floor offset noise). Both client and server use the same 2D check so they stay in sync. **Don't reintroduce 3D Bounds.Contains for construction zone tests.**
+  - **`[ServerRpc(RequireOwnership=false)]` legacy attribute** (`14e54d1c`) — `Building.RequestStartFinishConstructionServerRpc` uses the old form. `[Rpc(SendTo.Server)]` did not dispatch in our NGO version. Building NetworkObject is server-owned, so any client invoking it is by definition not the owner; `RequireOwnership=false` is the standard escape. Method name MUST end in `ServerRpc` for the legacy attribute to dispatch.
+  - **Continuous-action visual proxy 600s sentinel + cancel broadcast** (`5d1594e6`) — `CharacterActions.ExecuteAction` calls `BroadcastActionVisualsClientRpc(duration=600f)` for `CharacterAction_Continuous` (continuous actions don't have a real duration). Server **must** call `CancelActionVisualsClientRpc` on action finish (Finalize, stall timeout, manual cancel) so peers tear down the proxy immediately — without it the proxy lingers 600s.
+  - **`CharacterAction_Continuous.Progress` virtual + HUD bar fix** (`5d1594e6`) — base virtual returns 0; `CharacterAction_FinishConstruction.Progress` returns `Building.ConstructionProgress.Value`. `CharacterActions.GetActionProgress` checks the override BEFORE the `elapsed/duration` fallback (which would div-by-0 or read the 600s sentinel — both wrong).
+  - **Save/load progress restoration through refresh paths** (`ff98c2b7`) — `MapController.SnapshotActiveBuildings` (manual save) and `MapController.Hibernate` (player-leaves wake-cycle) walk the registered building list and refresh existing `BuildingSaveData` entries from the live `Building`. Both paths now copy `ConstructionProgress` AND `DeliveredMaterials` from the refreshed entry. The first-capture path (`BuildingSaveData.FromBuilding`) was already correct — the bug was the refresh path overwriting with selective fields. Without this fix, mid-build progress reset to 0 on every save/load cycle.
+  - **`_spawnAsComplete` designer checkbox** (`d0ced22d`) — `[SerializeField] bool _spawnAsComplete` on Building. ON for scene-authored buildings that should ship as already-built environment (player home, NPC shops, tutorial structures). When ON, `OnNetworkSpawn` flips state directly to `Complete` regardless of `_constructionRequirements` content. OFF (default) for buildings going through the Phase 1 loop. Empty `_constructionRequirements` already auto-promotes to Complete; the checkbox is for prefabs that DO have requirements but don't want to load as scaffolds.
+  - **Diag-log cleanup** (`d9b602f6`) — magenta info logs from `BuildingInteractable.Interact` / `Building.RequestStartFinishConstructionServerRpc` / `CharacterAction_FinishConstruction.IsActorInsideBuildingZone` stripped. Last one was the real Rule #34 hit — fired every tick per active builder. Defensive `LogWarning` guards on bad-state paths kept (fire only on genuinely-bad state).
+
 - **2026-05-06 — Construction Loop Phase 1 shipped** (spec: `docs/superpowers/specs/2026-05-06-building-construction-loop-design.md`, plan: `docs/superpowers/plans/2026-05-06-building-construction-loop.md`, wiki: `wiki/systems/construction.md`):
   - Single-prefab visual swap via `_constructionVisualRoot` / `_completedVisualRoot` SerializeFields on Building. `Building.HandleStateChanged` toggles `SetActive` on every peer (subscribed to `_currentState.OnValueChanged`). Single `NetworkObject`, no respawn churn, persistent `BuildingId`.
   - Server-only `ConstructionSiteScanner` ([RequireComponent(Building)]) — 2 Hz observational scan of `Building.GetPhysicalItemsInCollider(_buildingZone, _scratchItems)`. Buckets by `ItemSO`, writes `Building.ConstructionProgress` (NetworkVariable<float>) + `Building.DeliveredMaterials` (NetworkList<DeliveredMaterialEntry>). Reuses `_scratchItems` (List) + `_bucketCache` (Dict) for zero-alloc per tick (Rule #34). **Never consumes — purely observational.**
-  - `BuildingInteractable` ([RequireComponent(Building)]) — player-facing interaction surface. Phase 1 exposes only `FinishConstruction` (owner-only via `IsOwner(actor) ⇔ actor.CharacterId == building.PlacedByCharacterId`). API: `GetAvailableInteractions(actor, result)`, `IsOwner(actor)`, `TryQueueInteraction(InteractionId, actor)`. Phase 2 stubs seated for `Abandon` / `Sell` / `OpenInterior`.
-  - `CharacterAction_FinishConstruction : CharacterAction_Continuous` — owner-gated, server-only consumption. 1 Hz default. Per tick: re-validate state/owner/position; budget = 1 + `actor.GetSkillLevelOrZero(SkillId.Builder) / SkillBudgetDivisor` (Phase 1 stub returns 0 → budget=1); `ConsumeFromZone` despawns matching `WorldItem`s by `NetworkObject.Despawn(true)`; bumps `Building.ContributeMaterial`; recomputes progress. 5-tick stall timeout. On `progress >= 1f` calls `Building.Finalize()`.
+  - `BuildingInteractable` ([RequireComponent(Building)]) — player-facing interaction surface, extends `InteractableObject`. Phase 1 exposes `Finish Construction` via tap-E `Interact` and hold-E `GetHoldInteractionOptions`. **No owner gate** (cooperative model — see 2026-05-07 polish entry above). `IsOwner(actor)` is reserved for Phase 2 hold-menu options (Abandon, Sell, OpenInterior).
+  - `CharacterAction_FinishConstruction : CharacterAction_Continuous` — server-only consumption. 1 Hz default. Per tick: re-validate state + position-inside-`BuildingZone` (no ownership check); budget = 1 + `actor.GetSkillLevelOrZero(SkillId.Builder) / SkillBudgetDivisor` (Phase 1 stub returns 0 → budget=1); `ConsumeFromZone` despawns matching `WorldItem`s by `NetworkObject.Despawn(true)`; bumps `Building.ContributeMaterial`; recomputes progress. 5-tick stall timeout. On `progress >= 1f` calls `Building.Finalize()`.
   - **`Building.Finalize()` is state-flip-FIRST** for crash safety. Order: `_currentState.Value = Complete` → `ConstructionProgress.Value = 1f` → `HandleStateChanged` (visual swap) → `TrySpawnDefaultFurniture` (server-only, gated on Complete) → `EvictLeftoversToPerimeter` → `OnConstructionComplete?.Invoke()`. Server crash mid-finalize = Complete + a few un-evicted items, never "paid but no building." Note: shadows `object.Finalize` (the GC finalizer hook); declared `public new void Finalize()`. The GC slot is untouched (Building has no `~Building()`).
   - **`Building.EvictLeftoversToPerimeter()`** — repositions remaining `WorldItem`s to NavMesh-valid points just outside `_buildingZone`. Uses `NavMesh.SamplePosition` with 2f radius; falls back to free-fall on miss. Each eject in `try/catch` (Rule #31).
   - **`Building.GetPhysicalItemsInCollider(Collider, List<WorldItem>)`** — refactor of `GetPhysicalItemsInZone(Zone)`. Caller passes a reused buffer. Used by both the scanner and the action.
   - **Default furniture deferred until Complete** — `TrySpawnDefaultFurniture` early-exits while `UnderConstruction`. The state-change handler invokes it once on the transition.
   - **`BuildingSaveData` extension** — `ConstructionProgress : float` + `DeliveredMaterials : List<DeliveredMaterialEntryDTO>` ({ItemAssetGuid, Delivered}) for hibernation pre-warm. AssetGuid resolution is `UNITY_EDITOR`-gated; production-build save needs a follow-up using `ItemSO.ItemId`.
-  - **Multiplayer-safe** (Rule #18 / #19): server-authoritative writes for state, progress, delivered counts, item despawns, side-effects. Late-join self-heals via NGO spawn payload. Two clients race Finish → server's `_currentAction` gate serializes; second is silent no-op. NPC parity (Rule #22) is Phase 2 — same `CharacterAction` path, same `BuildingInteractable.IsOwner` check.
+  - **Multiplayer-safe** (Rule #18 / #19): server-authoritative writes for state, progress, delivered counts, item despawns, side-effects. Late-join self-heals via NGO spawn payload. Two clients race Finish → server's `_currentAction` gate serializes; second is silent no-op. NPC parity (Rule #22) is Phase 2 — same `CharacterAction` path, same spatial gate (zone containment); the cooperative model means JobBuilder needs no owner-bypass.
   - **Rule #34 perf** — scanner reuses buffers; profiler-checked at 10 simultaneous sites < 0.1 ms/frame.
   - **Gotchas**: `CraftingIngredient` is a struct (`req == null` does not compile — check `req.Item == null`); `WorldItem` is non-stacking (each instance = 1 unit); construction visual must NOT block pedestrian traffic onto the footprint (no `NavMeshObstacle` carve).
   - **Out of scope (Phase 2)**: NPC owner autonomous delivery, community-manager city-management console, `JobBuilder` GOAP class, multi-owner / co-owner, auto-eviction of orphaned sites.

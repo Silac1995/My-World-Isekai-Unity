@@ -115,11 +115,19 @@ public abstract class CharacterAction_Continuous : CharacterAction
     // Sealed to prevent accidental subclass overrides re-introducing duration semantics.
     public sealed override void OnApplyEffect() { /* no-op */ }
 
+    // HUD progress bar reads this. Default 0 (no bar fill). Override to drive the bar
+    // from your own state (e.g. Building.ConstructionProgress.Value). Added 2026-05-07.
+    // CharacterActions.GetActionProgress checks this BEFORE falling back to elapsed/duration
+    // — that fallback would div-by-0 (or read the 600s sentinel, see below) for continuous actions.
+    public virtual float Progress => 0f;
+
     // Base ctor passes Duration = 0 — the dispatcher must check Continuous BEFORE the
     // Duration <= 0 branch, otherwise these would be treated as instantaneous actions.
     protected CharacterAction_Continuous(Character c) : base(c, duration: 0f) { }
 }
 ```
+
+**Visual proxy 600s sentinel + cancel broadcast** (added 2026-05-07): `CharacterActions.ExecuteAction` calls `BroadcastActionVisualsClientRpc(duration=600f)` for `CharacterAction_Continuous` because continuous actions don't have a real duration. The proxy on every peer ticks until cancellation. **Server MUST broadcast `CancelActionVisualsClientRpc` when `OnTick` returns true** (or on any other action-ending path: stall timeout, manual cancel) so peers tear down the proxy immediately — without it the proxy lingers 600s after the server-side action ends. `CharacterActions.Finish` already does this; if you wire a custom termination path, make sure the cancel broadcast still fires.
 
 **Dispatcher contract in `CharacterActions.ExecuteAction`:**
 
@@ -154,7 +162,7 @@ else                                  // timed
 - Default `AllowsMovementDuringAction = false` (inherited from `CharacterAction`). Override to `true` only if your action drives its own movement (chase, follow, escort).
 - For server-authoritative effects (spawning/despawning `NetworkObject`s, mutating scene-shared state), follow the same `IsSpawned && !IsServer` pattern as regular actions — see "Client-vs-server routing pattern for OnApplyEffect" below. **For continuous actions, the routing happens inside `OnTick`, not `OnApplyEffect` (which is sealed to no-op).**
 
-**Reference implementation:** `CharacterAction_FinishConstruction` (`Assets/Scripts/Character/CharacterActions/CharacterAction_FinishConstruction.cs`) — owner-gated, server-only consumption of `WorldItem`s in a `Building`'s footprint until `Building.ComputeProgress() >= 1f`, then calls `Building.Finalize()`. See the `building_system` SKILL ("Construction Loop (Phase 1)" section) for the full lifecycle.
+**Reference implementation:** `CharacterAction_FinishConstruction` (`Assets/Scripts/Character/CharacterActions/CharacterAction_FinishConstruction.cs`) — cooperative (no owner gate; spatial gate only — actor must be inside `Building.BuildingZone` per a 2D X-Z check), server-only consumption of `WorldItem`s in a `Building`'s footprint until `Building.ComputeProgress() >= 1f`, then calls `Building.Finalize()`. Overrides `Progress` to return `Building.ConstructionProgress.Value` (replicated NetworkVariable read by HUD). See the `building_system` SKILL ("Construction Loop (Phase 1 — Cooperative)" section) for the full lifecycle.
 
 ### Server RPCs on CharacterActions
 
