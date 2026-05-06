@@ -61,6 +61,9 @@ public class Building : ComplexRoom
     [SerializeField] protected List<CraftingIngredient> _constructionRequirements = new List<CraftingIngredient>();
     protected Dictionary<ItemSO, int> _contributedMaterials = new Dictionary<ItemSO, int>();
 
+    [Tooltip("Tick on scene-authored / pre-placed buildings that should spawn already Complete (skip the construction loop). Has no effect on runtime placements via BuildingPlacementManager — those always go through UnderConstruction → Complete unless InstantMode is on. Save/load takes precedence over this flag — restored buildings keep whatever state they had when saved.")]
+    [SerializeField] protected bool _spawnAsComplete = false;
+
     [Tooltip("Child GameObject holding the scaffolding renderers/colliders shown while UnderConstruction. Active iff CurrentState == UnderConstruction.")]
     [SerializeField] protected GameObject _constructionVisualRoot;
 
@@ -312,14 +315,25 @@ public class Building : ComplexRoom
         // Initialize construction state based on requirements. MUST live here, not in Awake —
         // NGO does not set IsServer reliably until after the NetworkObject spawns. On server,
         // this writes through the NetworkVariable and replicates to clients. (2026-05-06.)
+        // _spawnAsComplete overrides the auto-derivation for scene-authored buildings that
+        // should skip the construction loop. RestoreFromSaveData runs AFTER OnNetworkSpawn
+        // and overrides this for saved buildings.
         if (IsServer)
         {
             int reqCount = _constructionRequirements?.Count ?? 0;
-            var newState = (reqCount > 0)
-                ? MWI.WorldSystem.BuildingState.UnderConstruction
-                : MWI.WorldSystem.BuildingState.Complete;
+            MWI.WorldSystem.BuildingState newState;
+            if (_spawnAsComplete)
+            {
+                newState = MWI.WorldSystem.BuildingState.Complete;
+            }
+            else
+            {
+                newState = (reqCount > 0)
+                    ? MWI.WorldSystem.BuildingState.UnderConstruction
+                    : MWI.WorldSystem.BuildingState.Complete;
+            }
             if (_currentState.Value != newState) _currentState.Value = newState;
-            Debug.Log($"<color=cyan>[Building.OnNetworkSpawn]</color> {buildingName} reqs={reqCount} → state={_currentState.Value}");
+            Debug.Log($"<color=cyan>[Building.OnNetworkSpawn]</color> {buildingName} reqs={reqCount} spawnAsComplete={_spawnAsComplete} → state={_currentState.Value}");
         }
 
         if (IsServer && NetworkBuildingId.Value.IsEmpty)
