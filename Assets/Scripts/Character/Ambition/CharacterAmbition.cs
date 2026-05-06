@@ -22,6 +22,10 @@ namespace MWI.Ambition
         private readonly List<CompletedAmbition> _history = new();
         public IReadOnlyList<CompletedAmbition> History => _history;
 
+        // Queue of (key, kind, serializedValue, targetCtx) tuples whose Character refs couldn't resolve at load.
+        // Retried whenever Character.OnCharacterSpawned fires for any character.
+        private readonly List<(string key, ContextValueKind kind, string serializedValue, AmbitionContext targetCtx)> _deferredBindings = new();
+
         // Events
         public event Action<AmbitionInstance> OnAmbitionSet;
         public event Action<AmbitionInstance, int> OnStepAdvanced; // (instance, newStepIndex)
@@ -29,10 +33,30 @@ namespace MWI.Ambition
         public event Action<CompletedAmbition> OnAmbitionCleared;
 
         // Lifecycle
+        protected override void OnEnable()
+        {
+            base.OnEnable();
+            Character.OnCharacterSpawned += HandleCharacterSpawned;
+        }
+
         protected override void OnDisable()
         {
+            Character.OnCharacterSpawned -= HandleCharacterSpawned;
             CancelStepQuest();
             base.OnDisable();
+        }
+
+        private void HandleCharacterSpawned(Character c)
+        {
+            if (_deferredBindings.Count == 0 || c == null) return;
+            for (int i = _deferredBindings.Count - 1; i >= 0; i--)
+            {
+                var d = _deferredBindings[i];
+                if (d.kind != ContextValueKind.Character) continue;
+                if (d.serializedValue != c.CharacterId) continue;
+                d.targetCtx?.Set(d.key, c);
+                _deferredBindings.RemoveAt(i);
+            }
         }
 
         // Public API
@@ -181,7 +205,128 @@ namespace MWI.Ambition
 
         public void Deserialize(AmbitionSaveData data)
         {
-            // TODO Task 24: Implement Import + deferred-bind queue.
+            if (data == null) return;
+            _history.Clear();
+            foreach (var dtoH in data.History)
+                _history.Add(DeserializeCompleted(dtoH));
+
+            if (string.IsNullOrEmpty(data.ActiveAmbitionSOGuid))
+            {
+                _current = null;
+                return;
+            }
+
+            var so = AmbitionRegistry.Get(data.ActiveAmbitionSOGuid);
+            if (so == null)
+            {
+                Debug.LogError($"[CharacterAmbition] Saved AmbitionSO '{data.ActiveAmbitionSOGuid}' not found in registry. Clearing.");
+                _current = null;
+                return;
+            }
+
+            var ctx = DeserializeContext(data.Context, target: null);
+            // Guard: empty Quests list would underflow Mathf.Clamp(x, 0, -1).
+            int clampMax = Mathf.Max(0, so.Quests.Count - 1);
+            _current = new AmbitionInstance
+            {
+                SO = so,
+                CurrentStepIndex = Mathf.Clamp(data.CurrentStepIndex, 0, clampMax),
+                Context = ctx,
+                AssignedDay = data.AssignedDay
+            };
+            // Wire deferred-binding targets to the live context now that it exists.
+            for (int i = 0; i < _deferredBindings.Count; i++)
+            {
+                var d = _deferredBindings[i];
+                if (d.targetCtx == null) _deferredBindings[i] = (d.key, d.kind, d.serializedValue, ctx);
+            }
+
+            IssueStepQuest(_current.CurrentStepIndex);
+
+            // Restore mid-task state on the freshly issued AmbitionQuest.
+            if (_current.CurrentStepQuest is AmbitionQuest aq && data.TaskStates != null)
+            {
+                foreach (var ts in data.TaskStates)
+                {
+                    if (ts.TaskIndexInQuest < 0 || ts.TaskIndexInQuest >= aq.Tasks.Count) continue;
+                    aq.Tasks[ts.TaskIndexInQuest]?.DeserializeState(ts.SerializedState);
+                }
+            }
+
+            SafetyCheckOnLoaded();
+        }
+
+        private CompletedAmbition DeserializeCompleted(CompletedAmbitionDTO dto)
+        {
+            var so = AmbitionRegistry.Get(dto.AmbitionSOGuid);
+            var ctx = DeserializeContext(dto.FinalContext, target: null);
+            return new CompletedAmbition(so, ctx, dto.CompletedDay, dto.Reason);
+        }
+
+        private AmbitionContext DeserializeContext(List<ContextEntryDTO> entries, AmbitionContext target)
+        {
+            var ctx = target ?? new AmbitionContext();
+            if (entries == null) return ctx;
+            foreach (var e in entries)
+            {
+                switch (e.Kind)
+                {
+                    case ContextValueKind.Character:
+                        var c = Character.FindByUUID(e.SerializedValue);
+                        if (c != null) ctx.Set(e.Key, c);
+                        else _deferredBindings.Add((e.Key, e.Kind, e.SerializedValue, ctx));
+                        break;
+                    case ContextValueKind.Zone:
+                        // No unified zone-by-id registry in v1 — see Task 24 deviation. Wire when WorldZoneRegistry lands.
+                        Debug.LogWarning($"[CharacterAmbition] Zone context resolution not yet wired for key '{e.Key}'.");
+                        break;
+                    case ContextValueKind.AmbitionSO:
+                        var amb = AmbitionRegistry.Get(e.SerializedValue);
+                        if (amb != null) ctx.Set(e.Key, amb);
+                        break;
+                    case ContextValueKind.QuestSO:
+                        var qs = QuestRegistry.Get(e.SerializedValue);
+                        if (qs != null) ctx.Set(e.Key, qs);
+                        break;
+                    case ContextValueKind.ItemSO:
+                        Debug.LogWarning($"[CharacterAmbition] ItemSO context resolution not yet wired for key '{e.Key}'.");
+                        break;
+                    case ContextValueKind.NeedSO:
+                        Debug.LogWarning($"[CharacterAmbition] NeedSO context resolution not yet wired for key '{e.Key}'.");
+                        break;
+                    case ContextValueKind.Enum:
+                        if (!string.IsNullOrEmpty(e.SerializedValue))
+                        {
+                            var parts = e.SerializedValue.Split('|');
+                            if (parts.Length == 2)
+                            {
+                                var t = System.Type.GetType(parts[0]);
+                                if (t != null && System.Enum.TryParse(t, parts[1], out var ev))
+                                    ctx.Set(e.Key, ev);
+                            }
+                        }
+                        break;
+                    case ContextValueKind.Primitive:
+                        if (e.SerializedValue == null) break;
+                        if (int.TryParse(e.SerializedValue, out var iVal)) ctx.Set(e.Key, iVal);
+                        else if (float.TryParse(e.SerializedValue, out var fVal)) ctx.Set(e.Key, fVal);
+                        else if (bool.TryParse(e.SerializedValue, out var bVal)) ctx.Set(e.Key, bVal);
+                        else ctx.Set(e.Key, e.SerializedValue);
+                        break;
+                }
+            }
+            return ctx;
+        }
+
+        private void SafetyCheckOnLoaded()
+        {
+            if (_current == null) return;
+
+            if (!_current.SO.ValidateParameters(_current.Context.AsReadOnly()))
+            {
+                Debug.LogError($"[CharacterAmbition] Saved ambition {_current.SO.name} failed parameter validation on load. Clearing.");
+                DoClearAmbition(CompletionReason.ClearedByScript);
+            }
         }
 
         string ICharacterSaveData.SerializeToJson() => CharacterSaveDataHelper.SerializeToJson(this);
