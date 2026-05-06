@@ -473,6 +473,10 @@ PrefabInstance:
       value: 
       objectReference: {fileID: 2100000, guid: 1492e3802f383504d9933cfbda4694aa, type: 2}
     - target: {fileID: 7957207800943456863, guid: 2e1494b4d52f43344be89b09545dbadf, type: 3}
+      propertyPath: _constructionCurtainMaterial
+      value: 
+      objectReference: {fileID: 2100000, guid: 2a00b5213d0b17246ba6b63cf9cec23b, type: 2}
+    - target: {fileID: 7957207800943456863, guid: 2e1494b4d52f43344be89b09545dbadf, type: 3}
       propertyPath: _constructionOutlineMaterial
       value: 
       objectReference: {fileID: 2100000, guid: acbe55ddac5d03b43abd2cc52ca742e0, type: 2}

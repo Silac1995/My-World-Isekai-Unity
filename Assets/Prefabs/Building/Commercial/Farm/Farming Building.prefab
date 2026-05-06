@@ -389,9 +389,8 @@ MonoBehaviour:
   _constructionRequirements: []
   _constructionVisualRoot: {fileID: 3413248200251581147}
   _completedVisualRoot: {fileID: 6320067922551438232}
-  _constructionGhostMaterial: {fileID: 2100000, guid: 1492e3802f383504d9933cfbda4694aa, type: 2}
-  _constructionOutlineMaterial: {fileID: 2100000, guid: acbe55ddac5d03b43abd2cc52ca742e0, type: 2}
   _constructionFootprintMaterial: {fileID: 2100000, guid: b31318f4e14d2614fbd7f82168f4e968, type: 2}
+  _constructionCurtainMaterial: {fileID: 2100000, guid: 2a00b5213d0b17246ba6b63cf9cec23b, type: 2}
   ConstructionProgress:
     UpdateTraits:
       MinSecondsBetweenUpdates: 0

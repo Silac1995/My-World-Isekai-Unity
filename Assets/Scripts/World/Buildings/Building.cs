@@ -70,6 +70,9 @@ public class Building : ComplexRoom
     [Tooltip("Translucent material applied to a flat footprint quad on the ground at the BuildingZone bounds. The ONLY visible element under ConstructionVisual while UnderConstruction — gives players a clear drop-zone marker. Leave null to skip the marker entirely.")]
     [SerializeField] protected Material _constructionFootprintMaterial;
 
+    [Tooltip("Particle material (URP/Particles/Unlit recommended) applied to the upward-rising 'curtain' barrier ParticleSystem auto-spawned at the footprint perimeter. Particles fade alpha bottom→top over their lifetime to simulate a translucent barrier wall. Leave null to skip the curtain effect.")]
+    [SerializeField] protected Material _constructionCurtainMaterial;
+
     /// <summary>
     /// Set after <see cref="EnsureConstructionGhostVisual"/> populates _constructionVisualRoot
     /// from a clone of _completedVisualRoot. Per-instance so re-entering / re-spawning a
@@ -532,11 +535,113 @@ public class Building : ComplexRoom
             }
         }
 
-        // Drop-zone footprint marker — the SOLE visible element under ConstructionVisual.
-        // Child of ConstructionVisual so it auto-toggles with state.
+        // Drop-zone footprint marker — flat ground rectangle.
         EnsureConstructionFootprintMarker();
 
+        // Vertical "curtain" barrier particles rising from the footprint perimeter,
+        // fading alpha bottom → top over lifetime. Auto-toggles with ConstructionVisual.
+        EnsureConstructionCurtainParticles();
+
         _ghostVisualPopulated = true;
+    }
+
+    /// <summary>
+    /// Spawns a single ParticleSystem child of <see cref="_constructionVisualRoot"/> that
+    /// emits upward-rising particles from the BuildingZone footprint perimeter (BoxEdge
+    /// shape, Y collapsed to 0). Color-over-lifetime fades alpha bottom → top so the
+    /// effect reads as a translucent barrier wall.
+    ///
+    /// No-op if BuildingZone is not a BoxCollider or _constructionCurtainMaterial is null.
+    /// </summary>
+    private void EnsureConstructionCurtainParticles()
+    {
+        if (_constructionVisualRoot == null) return;
+        if (_constructionCurtainMaterial == null) return;
+        if (!(_buildingZone is BoxCollider box)) return;
+
+        GameObject psHost;
+        try
+        {
+            psHost = new GameObject("ConstructionCurtainParticles");
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogException(e, this);
+            return;
+        }
+        psHost.transform.SetParent(_constructionVisualRoot.transform, worldPositionStays: false);
+
+        // Position at the BOTTOM face of BuildingZone, lifted 0.02 to avoid Z-fight.
+        float bottomY = box.center.y - (box.size.y * 0.5f) + 0.02f;
+        psHost.transform.localPosition = new Vector3(box.center.x, bottomY, box.center.z);
+        psHost.transform.localRotation = Quaternion.identity;
+
+        var ps = psHost.AddComponent<ParticleSystem>();
+
+        // Stop the system before configuring (Unity quirk: must call Stop before changing
+        // shape/main on a fresh component, otherwise some sub-modules silently ignore writes).
+        ps.Stop(withChildren: true, stopBehavior: ParticleSystemStopBehavior.StopEmittingAndClear);
+
+        // ── Main module: lifetime + start size + start color (white@1; gradient repaints later).
+        var main = ps.main;
+        main.duration = 5f;
+        main.loop = true;
+        main.startLifetime = 2.5f;
+        main.startSpeed = 0.6f;          // slow drift upward (Unity units / sec; 11 units = 1.67m)
+        main.startSize = 0.6f;
+        main.startColor = new Color(0.5f, 0.9f, 1f, 1f);
+        main.maxParticles = 400;
+        main.simulationSpace = ParticleSystemSimulationSpace.Local;
+        main.scalingMode = ParticleSystemScalingMode.Local;
+
+        // ── Emission: steady rate.
+        var emission = ps.emission;
+        emission.enabled = true;
+        emission.rateOverTime = 40f;
+
+        // ── Shape: BoxEdge, X×Z = footprint, Y collapsed → particles spawn around the
+        // perimeter rectangle on the floor.
+        var shape = ps.shape;
+        shape.enabled = true;
+        shape.shapeType = ParticleSystemShapeType.BoxEdge;
+        shape.scale = new Vector3(box.size.x, 0.001f, box.size.z);
+
+        // ── Velocity over lifetime: pure upward Y drift (in addition to startSpeed).
+        var vel = ps.velocityOverLifetime;
+        vel.enabled = true;
+        vel.space = ParticleSystemSimulationSpace.Local;
+        vel.y = new ParticleSystem.MinMaxCurve(0.8f, 1.6f);
+        vel.x = new ParticleSystem.MinMaxCurve(0f);
+        vel.z = new ParticleSystem.MinMaxCurve(0f);
+
+        // ── Color over lifetime: full alpha at spawn (bottom), fades to 0 at end (top).
+        var col = ps.colorOverLifetime;
+        col.enabled = true;
+        var grad = new Gradient();
+        grad.SetKeys(
+            new GradientColorKey[]
+            {
+                new GradientColorKey(new Color(0.5f, 0.9f, 1f), 0f),
+                new GradientColorKey(new Color(0.5f, 0.9f, 1f), 1f),
+            },
+            new GradientAlphaKey[]
+            {
+                new GradientAlphaKey(0.7f, 0f),
+                new GradientAlphaKey(0.0f, 1f),
+            }
+        );
+        col.color = new ParticleSystem.MinMaxGradient(grad);
+
+        // ── Renderer: assign curtain material, billboard mode.
+        var psr = psHost.GetComponent<ParticleSystemRenderer>();
+        if (psr != null)
+        {
+            psr.material = _constructionCurtainMaterial;
+            psr.renderMode = ParticleSystemRenderMode.Billboard;
+            psr.alignment = ParticleSystemRenderSpace.View;
+        }
+
+        ps.Play(withChildren: true);
     }
 
     /// <summary>
