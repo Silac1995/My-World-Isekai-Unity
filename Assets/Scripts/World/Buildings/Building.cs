@@ -77,17 +77,17 @@ public class Building : ComplexRoom
     [SerializeField] protected Material _constructionCurtainMaterial;
 
     [Header("Construction Curtain Tuning")]
-    [Tooltip("Particles emitted per second by the curtain ParticleSystem. Lower = fewer particles. Default 60.")]
-    [SerializeField, Min(0f)] protected float _curtainEmissionRate = 60f;
+    [Tooltip("Particles emitted per second by the curtain ParticleSystem. Lower = fewer particles. Default 6.")]
+    [SerializeField, Min(0f)] protected float _curtainEmissionRate = 6f;
 
-    [Tooltip("Hard cap on simultaneously alive curtain particles. Should be ≥ EmissionRate × StartLifetime. Default 400.")]
-    [SerializeField, Min(0)] protected int _curtainMaxParticles = 400;
+    [Tooltip("Hard cap on simultaneously alive curtain particles. Should be ≥ EmissionRate × StartLifetime. Default 40.")]
+    [SerializeField, Min(0)] protected int _curtainMaxParticles = 40;
 
     [Tooltip("How long each curtain particle lives, in seconds. Combined with rise speed determines column height (height ≈ speed × lifetime).")]
     [SerializeField, Min(0.01f)] protected float _curtainStartLifetime = 5f;
 
     [Tooltip("World-space start size of each curtain particle quad. Larger = thicker 'wall'.")]
-    [SerializeField, Min(0f)] protected float _curtainStartSize = 1f;
+    [SerializeField, Min(0f)] protected float _curtainStartSize = 0.1f;
 
     [Tooltip("Min upward rise speed (Unity units / second). Project scale: 11 u = 1.67 m. Default 1.5.")]
     [SerializeField, Min(0f)] protected float _curtainRiseSpeedMin = 1.5f;
@@ -1407,15 +1407,17 @@ public class Building : ComplexRoom
     [Unity.Netcode.Rpc(Unity.Netcode.SendTo.Server)]
     public void RequestStartFinishConstructionRpc(Unity.Netcode.NetworkBehaviourReference actorRef)
     {
-        if (!IsServer) return; // defensive — RPC dispatch already gates this
-        if (!IsUnderConstruction) return;
-        if (!actorRef.TryGet(out Character actor) || actor == null) return;
-        if (actor.CharacterActions == null) return;
+        Debug.Log($"<color=magenta>[Building.SRpc]</color> {buildingName} arrived. IsServer={IsServer} IsUnderConstruction={IsUnderConstruction}");
+        if (!IsServer) { Debug.LogWarning($"[Building.SRpc] {buildingName} aborted — !IsServer"); return; }
+        if (!IsUnderConstruction) { Debug.LogWarning($"[Building.SRpc] {buildingName} aborted — !IsUnderConstruction"); return; }
+        if (!actorRef.TryGet(out Character actor) || actor == null) { Debug.LogWarning($"[Building.SRpc] {buildingName} aborted — actorRef.TryGet failed"); return; }
+        if (actor.CharacterActions == null) { Debug.LogWarning($"[Building.SRpc] {buildingName} aborted — actor.CharacterActions null"); return; }
 
-        // Cooperative model: any character can finalize. The Phase 1 owner-check was
-        // removed 2026-05-06 per user direction — both placer + helpers contribute.
+        // Cooperative model: any character can finalize. Phase 1 owner-check removed.
+        Debug.Log($"<color=magenta>[Building.SRpc]</color> {buildingName} queuing FinishConstruction action for {actor.CharacterName}");
         var action = new CharacterAction_FinishConstruction(actor, this);
-        actor.CharacterActions.ExecuteAction(action);
+        bool queued = actor.CharacterActions.ExecuteAction(action);
+        Debug.Log($"<color=magenta>[Building.SRpc]</color> {buildingName} ExecuteAction returned {queued}");
     }
 
     /// <summary>

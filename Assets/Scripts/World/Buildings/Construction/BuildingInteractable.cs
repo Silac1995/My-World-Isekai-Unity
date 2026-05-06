@@ -54,14 +54,25 @@ public class BuildingInteractable : InteractableObject
     /// </summary>
     public override void Interact(Character interactor)
     {
-        if (interactor == null || _building == null) return;
+        if (interactor == null || _building == null)
+        {
+            Debug.Log($"<color=magenta>[BuildingInteractable.Interact]</color> aborted — interactor or building null");
+            return;
+        }
 
-        // Core Rule #1 (interactable-system): proximity gate. Always required, every code path.
-        if (!IsCharacterInInteractionZone(interactor)) return;
-        if (!_building.IsUnderConstruction) return;
+        bool inZone = IsCharacterInInteractionZone(interactor);
+        bool isUC = _building.IsUnderConstruction;
+        bool localIsServer = _building.IsServer;
+        var charPos = interactor.transform.position;
+        var zoneBounds = InteractionZone != null ? InteractionZone.bounds.ToString() : "NULL";
 
-        // Cooperative model (post-2026-05-06 user pivot): anyone in the zone can finalize.
-        // The owner check is gone — both placer + helpers contribute.
+        Debug.Log($"<color=magenta>[BuildingInteractable.Interact]</color> {_building.BuildingName} actor={interactor.CharacterId} actorPos={charPos} zoneBounds={zoneBounds} inZone={inZone} isUnderConstruction={isUC} | localIsServer={localIsServer}");
+
+        if (!inZone) return;
+        if (!isUC) return;
+
+        // Cooperative model: anyone in the zone can finalize. Server-relay via RPC.
+        Debug.Log($"<color=magenta>[BuildingInteractable.Interact]</color> dispatching RequestStartFinishConstructionRpc");
         _building.RequestStartFinishConstructionRpc(new Unity.Netcode.NetworkBehaviourReference(interactor));
     }
 
