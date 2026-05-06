@@ -50,16 +50,21 @@ public class CharacterActions : CharacterSystem
         // 1. On lance l'initialisation de l'action
         _currentAction.OnStart();
 
-        // 2. GESTION DU FLUX (Instantané vs Temporisé)
-        if (action.Duration <= 0)
+        // 2. GESTION DU FLUX (Instantané vs Temporisé vs Continu)
+        if (action is CharacterAction_Continuous continuous)
+        {
+            // Continuous actions tick until OnTick() returns true. No fixed duration.
+            _actionRoutine = StartCoroutine(ActionContinuousTickRoutine(continuous));
+        }
+        else if (action.Duration <= 0)
         {
             try
             {
                 if (IsServer || action is CharacterVisualProxyAction)
-                    action.OnApplyEffect(); 
-                else 
-                    action.OnApplyEffect(); 
-                
+                    action.OnApplyEffect();
+                else
+                    action.OnApplyEffect();
+
                 action.Finish();
             }
             catch (Exception e)
@@ -516,6 +521,49 @@ public class CharacterActions : CharacterSystem
 
         var proxy = new CharacterVisualProxyAction(_character, duration, shouldPlayGeneric, actionName);
         ExecuteAction(proxy);
+    }
+
+    private IEnumerator ActionContinuousTickRoutine(CharacterAction_Continuous action)
+    {
+        if (action == null) yield break;
+
+        var wait = new WaitForSeconds(action.TickIntervalSeconds);
+
+        while (true)
+        {
+            // External cancellation safeguard — if CleanupAction nulled out _currentAction
+            // (combat, incapacitation, movement cancel), exit cleanly.
+            if (_currentAction != action) yield break;
+
+            bool finished;
+            try
+            {
+                // Per Rule #18: only the server runs OnTick. Clients see the effects via
+                // NetworkVariable/NetworkList replication from inside OnTick.
+                finished = IsServer ? action.OnTick() : false;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[CharacterActions] Erreur OnTick action continue '{action?.ActionName}' on '{_character?.CharacterName}':");
+                Debug.LogException(e);
+                CleanupAction();
+                yield break;
+            }
+
+            if (finished)
+            {
+                try { action.Finish(); }
+                catch (Exception e)
+                {
+                    Debug.LogError($"[CharacterActions] Erreur Finish action continue '{action?.ActionName}':");
+                    Debug.LogException(e);
+                    CleanupAction();
+                }
+                yield break;
+            }
+
+            yield return wait;
+        }
     }
 
     private IEnumerator ActionTimerRoutine(CharacterAction action)
