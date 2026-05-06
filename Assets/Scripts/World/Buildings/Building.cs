@@ -497,6 +497,11 @@ public class Building : ComplexRoom
         {
             BuildingManager.Instance.UnregisterBuilding(this);
         }
+
+        // Rule #16: unsubscribe from NetworkVariable callbacks to prevent leaks.
+        // _currentState lives on this Building NetworkBehaviour, so the lifecycles couple,
+        // but we keep the explicit -= anyway for defense in depth and to match the rule.
+        _currentState.OnValueChanged -= HandleStateChanged;
     }
 
     /// <summary>
@@ -1010,6 +1015,83 @@ public class Building : ComplexRoom
         _currentState.Value = MWI.WorldSystem.BuildingState.Complete;
         if (ConstructionProgress.Value < 1f) ConstructionProgress.Value = 1f;
         Debug.Log($"<color=green>[Building.Construction]</color> {buildingName} completed by Finalize().");
+    }
+
+    /// <summary>
+    /// Owner/Client → Server relay. Asks the server to start
+    /// <see cref="CharacterAction_FinishConstruction"/> against this building.
+    ///
+    /// Why an RPC: <see cref="CharacterAction_Continuous.OnTick"/> is server-authoritative
+    /// (only the server runs OnTick; clients see effects via NetworkVariable replication).
+    /// If a non-host client called <c>actor.CharacterActions.ExecuteAction(...)</c> locally,
+    /// the resulting coroutine would tick forever without ever advancing — server has no
+    /// idea the action exists. So clients dispatch through here; the server resolves the
+    /// actor + validates ownership/state, then queues the action on the server-side
+    /// <see cref="CharacterActions"/>. Visual proxy then replicates back to all peers via
+    /// the existing <c>BroadcastActionVisualsClientRpc</c> path inside ExecuteAction.
+    ///
+    /// On host the RPC short-circuits to a direct method call in the same frame
+    /// (no extra latency, NGO dispatch optimisation).
+    ///
+    /// Server-side validation mirrors <see cref="BuildingInteractable.IsOwner"/>:
+    /// PlacedByCharacterId must match the resolved actor's CharacterId.
+    /// </summary>
+    [Unity.Netcode.Rpc(Unity.Netcode.SendTo.Server)]
+    public void RequestStartFinishConstructionRpc(Unity.Netcode.NetworkBehaviourReference actorRef)
+    {
+        if (!IsServer) return; // defensive — RPC dispatch already gates this
+        if (!IsUnderConstruction) return;
+        if (!actorRef.TryGet(out Character actor) || actor == null) return;
+
+        var placedBy = PlacedByCharacterId.Value.ToString();
+        if (string.IsNullOrEmpty(placedBy) || placedBy != actor.CharacterId) return;
+        if (actor.CharacterActions == null) return;
+
+        var action = new CharacterAction_FinishConstruction(actor, this);
+        actor.CharacterActions.ExecuteAction(action);
+    }
+
+    /// <summary>
+    /// Server-only. Restores construction state from a <see cref="MWI.WorldSystem.BuildingSaveData"/>
+    /// snapshot. Called by <c>MapController.SpawnSavedBuildings</c> / <c>MapController.WakeUp</c>
+    /// after the building's NetworkObject has been spawned and <see cref="OnNetworkSpawn"/> has run.
+    ///
+    /// Standalone runtime builds: the save path's <c>DeliveredMaterials</c> list is empty
+    /// (AssetGuid resolution requires <c>AssetDatabase</c>, which is editor-only), so the
+    /// restore is a UX hint — the next <c>ConstructionSiteScanner</c> tick reconciles against
+    /// actual physical items on the footprint and rebuilds the meter from there.
+    ///
+    /// Editor builds: resolves each ItemSO by AssetGuid and replays
+    /// <see cref="ContributeMaterial"/> so <c>_contributedMaterials</c> matches the saved
+    /// snapshot.
+    /// </summary>
+    public void RestoreFromSaveData(MWI.WorldSystem.BuildingSaveData data)
+    {
+        if (!IsServer) return;
+        if (data == null) return;
+
+        // Always restore the meter, even if DeliveredMaterials is empty — UX pre-warm.
+        ConstructionProgress.Value = Mathf.Clamp01(data.ConstructionProgress);
+
+#if UNITY_EDITOR
+        if (data.DeliveredMaterials == null || data.DeliveredMaterials.Count == 0) return;
+
+        // Resolve each ItemSO by AssetGuid and rebuild _contributedMaterials.
+        foreach (var entry in data.DeliveredMaterials)
+        {
+            if (entry == null || string.IsNullOrEmpty(entry.ItemAssetGuid) || entry.Delivered <= 0) continue;
+            try
+            {
+                string path = UnityEditor.AssetDatabase.GUIDToAssetPath(entry.ItemAssetGuid);
+                if (string.IsNullOrEmpty(path)) continue;
+                var so = UnityEditor.AssetDatabase.LoadAssetAtPath<ItemSO>(path);
+                if (so == null) continue;
+                // ContributeMaterial bumps _contributedMaterials atomically.
+                ContributeMaterial(so, entry.Delivered);
+            }
+            catch (System.Exception e) { Debug.LogException(e, this); }
+        }
+#endif
     }
 
     /// <summary>

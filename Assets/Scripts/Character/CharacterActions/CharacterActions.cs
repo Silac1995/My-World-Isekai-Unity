@@ -53,7 +53,16 @@ public class CharacterActions : CharacterSystem
         // 2. GESTION DU FLUX (Instantané vs Temporisé vs Continu)
         if (action is CharacterAction_Continuous continuous)
         {
-            // Continuous actions tick until OnTick() returns true. No fixed duration.
+            if (!IsServer)
+            {
+                // Continuous actions are server-only. Clients should not start them locally —
+                // the canonical path is a ServerRpc that has the server queue the action
+                // (e.g. Building.RequestStartFinishConstructionRpc). If we let the client
+                // start the coroutine, OnTick is server-gated → it never advances → the
+                // action is stuck in _currentAction forever (zombie).
+                CleanupAction(); // _currentAction was just assigned at line 44 — release it.
+                return false;
+            }
             _actionRoutine = StartCoroutine(ActionContinuousTickRoutine(continuous));
         }
         else if (action.Duration <= 0)
@@ -526,6 +535,11 @@ public class CharacterActions : CharacterSystem
     private IEnumerator ActionContinuousTickRoutine(CharacterAction_Continuous action)
     {
         if (action == null) yield break;
+        // Continuous actions are server-authoritative (Rule #18). If the local peer is not
+        // the server, bail immediately — the action will replicate back via NetworkVariable
+        // changes. Defense in depth: ExecuteAction's continuous-branch entry now also
+        // short-circuits clients before reaching this routine, so this is belt-and-suspenders.
+        if (!IsServer) yield break;
 
         var wait = new WaitForSeconds(action.TickIntervalSeconds);
 
@@ -538,9 +552,8 @@ public class CharacterActions : CharacterSystem
             bool finished;
             try
             {
-                // Per Rule #18: only the server runs OnTick. Clients see the effects via
-                // NetworkVariable/NetworkList replication from inside OnTick.
-                finished = IsServer ? action.OnTick() : false;
+                // Server-only: OnTick mutates NetworkVariables; clients see replicated state.
+                finished = action.OnTick();
             }
             catch (Exception e)
             {

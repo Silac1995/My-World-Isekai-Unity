@@ -920,6 +920,12 @@ namespace MWI.WorldSystem
                             // ran synchronously inside the building's OnNetworkSpawn above,
                             // so live StorageFurniture instances are present and addressable.
                             RestoreStorageFurnitureContents(restoredBuilding, bSave);
+
+                            // Restore construction progress + delivered-material snapshot.
+                            // Editor builds replay ContributeMaterial via AssetGuid resolution;
+                            // standalone runtime restores only the meter value (UX pre-warm) and
+                            // lets the next ConstructionSiteScanner tick reconcile from physical items.
+                            restoredBuilding.RestoreFromSaveData(bSave);
                         }
                     }
                     spawnedCount++;
@@ -1585,6 +1591,11 @@ namespace MWI.WorldSystem
 
                                     // Restore storage furniture contents (mirrors SpawnSavedBuildings).
                                     RestoreStorageFurnitureContents(restoredBuilding, bSave);
+
+                                    // Restore construction progress + delivered-material snapshot.
+                                    // Editor builds replay ContributeMaterial via AssetGuid resolution;
+                                    // standalone runtime restores only the meter value (UX pre-warm).
+                                    restoredBuilding.RestoreFromSaveData(bSave);
 
                                     Debug.Log($"<color=green>[MapController:WakeUp]</color> Building '{bSave.PrefabId}' restored with ID={bSave.BuildingId} at {worldPos}.");
                                 }

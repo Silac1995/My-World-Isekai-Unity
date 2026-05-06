@@ -57,9 +57,10 @@ public class BuildingInteractable : MonoBehaviour
     }
 
     /// <summary>
-    /// Player-input entry point. Looks up the action class for the InteractionId,
-    /// instantiates it, and queues via the actor's CharacterActions.ExecuteAction.
-    /// Server-RPC dispatch happens inside the action itself when needed.
+    /// Player-input entry point. Dispatches via a Building ServerRpc so the server is the
+    /// single peer that queues the action — required for <see cref="CharacterAction_Continuous"/>
+    /// which OnTick's server-authoritatively (clients see effects via NetworkVariable replication).
+    /// On host the RPC short-circuits to a direct call in the same frame.
     /// </summary>
     public bool TryQueueInteraction(InteractionId id, Character actor)
     {
@@ -70,8 +71,10 @@ public class BuildingInteractable : MonoBehaviour
             case InteractionId.FinishConstruction:
                 if (!_building.IsUnderConstruction) return false;
                 if (!IsOwner(actor)) return false;
-                var action = new CharacterAction_FinishConstruction(actor, _building);
-                return actor.CharacterActions != null && actor.CharacterActions.ExecuteAction(action);
+                // Server-relay: send RPC; server resolves the actor and queues the action.
+                // The Rpc lives on Building (NetworkBehaviour); BuildingInteractable is a plain MonoBehaviour.
+                _building.RequestStartFinishConstructionRpc(new Unity.Netcode.NetworkBehaviourReference(actor));
+                return true;
 
             default:
                 return false;
