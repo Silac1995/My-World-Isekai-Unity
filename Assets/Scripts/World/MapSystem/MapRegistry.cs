@@ -79,7 +79,20 @@ namespace MWI.WorldSystem
         /// OwnerNpcId field. For CommercialBuilding the boss is OwnerCharacterIds[0] by convention.</summary>
         public List<string> OwnerCharacterIds = new List<string>();
         public BuildingState State;      // UnderConstruction, Complete, Ruined
-        public float ConstructionProgress; // 0-1, only relevant if UnderConstruction
+        /// <summary>
+        /// Persisted progress meter snapshot (0–1). Pre-warms the UI on map wake-up so the meter
+        /// doesn't blink to 0 between MapController.WakeUp and the next ConstructionSiteScanner
+        /// tick. The next scanner tick is the source of truth — this is a UX hint only.
+        /// </summary>
+        public float ConstructionProgress;
+
+        /// <summary>
+        /// Per-requirement delivered counts (keyed by ItemSO AssetGuid for ordering-resilience).
+        /// Round-tripped on save/load; used to pre-warm Building._contributedMaterials.
+        /// Editor-only resolution (AssetDatabase) — runtime standalone builds save an empty list
+        /// and rely on WorldItem-on-ground persistence to rebuild the meter on first scanner tick.
+        /// </summary>
+        public List<DeliveredMaterialEntryDTO> DeliveredMaterials = new List<DeliveredMaterialEntryDTO>();
 
         // Interior map data (null/-1 if no interior has been spawned yet)
         public string InteriorMapId;
@@ -112,9 +125,40 @@ namespace MWI.WorldSystem
                 Position = building.transform.position - mapCenter,
                 Rotation = building.transform.rotation,
                 State = building.CurrentState,
-                ConstructionProgress = building.CurrentState == BuildingState.Complete ? 1f : 0f,
+                // Snapshot the live progress meter (0–1). Used as a UX pre-warm only — the next
+                // ConstructionSiteScanner tick reconciles against actual physical items present.
+                ConstructionProgress = building.ConstructionProgress.Value,
                 PlacedByCharacterId = building.PlacedByCharacterId.Value.ToString()
             };
+
+            // Persist delivered-material snapshot (editor-only — AssetGuid is resolvable through
+            // AssetDatabase, which doesn't ship in standalone runtime builds). For Phase 1 we
+            // serialize an empty list at runtime; meter is rebuilt on first scanner tick from
+            // items physically on the footprint via the standard WorldItem save pipeline.
+            data.DeliveredMaterials = new List<DeliveredMaterialEntryDTO>();
+#if UNITY_EDITOR
+            try
+            {
+                foreach (var kv in building.ContributedMaterials)
+                {
+                    if (kv.Key == null) continue;
+                    string assetPath = UnityEditor.AssetDatabase.GetAssetPath(kv.Key);
+                    if (string.IsNullOrEmpty(assetPath)) continue;
+                    string guid = UnityEditor.AssetDatabase.AssetPathToGUID(assetPath);
+                    if (string.IsNullOrEmpty(guid)) continue;
+                    data.DeliveredMaterials.Add(new DeliveredMaterialEntryDTO
+                    {
+                        ItemAssetGuid = guid,
+                        Delivered = kv.Value
+                    });
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+                Debug.LogError($"<color=red>[BuildingSaveData:FromBuilding]</color> Failed to snapshot DeliveredMaterials for '{building.PrefabId}' (ID={building.BuildingId}). Snapshot left empty.");
+            }
+#endif
 
             // Owner UUIDs (works for both Residential and Commercial).
             // We read raw IDs (NOT Owners getter) so hibernated owners are preserved.
