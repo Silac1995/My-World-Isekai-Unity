@@ -88,6 +88,15 @@ public class Building : ComplexRoom
         new System.Collections.Generic.List<Renderer>();
 
     /// <summary>
+    /// Colliders on the same extra children. While UnderConstruction we disable them
+    /// alongside the renderers so the player can walk freely through the footprint
+    /// (e.g., the Interior Door's wall doesn't block the character before the building
+    /// is built). Toggled to <c>!underConstruction</c> in ApplyConstructionVisuals.
+    /// </summary>
+    private readonly System.Collections.Generic.List<Collider> _extraOriginalCollidersToToggle =
+        new System.Collections.Generic.List<Collider>();
+
+    /// <summary>
     /// 0..1 progress towards completion. Server-write, everyone-read. Updated by
     /// ConstructionSiteScanner (observational, between deliveries) and by
     /// CharacterAction_FinishConstruction.OnTick (authoritative, during the action).
@@ -508,6 +517,19 @@ public class Building : ComplexRoom
             var rs = childGO.GetComponentsInChildren<Renderer>(includeInactive: true);
             if (rs == null || rs.Length == 0) continue;
             foreach (var r in rs) if (r != null) _extraOriginalRenderersToToggle.Add(r);
+
+            // Colliders too — so the player can walk through the footprint while
+            // UnderConstruction (e.g. Interior Door wall doesn't block movement).
+            var cs = childGO.GetComponentsInChildren<Collider>(includeInactive: true);
+            if (cs != null)
+            {
+                foreach (var c in cs)
+                {
+                    if (c == null) continue;
+                    if (c.isTrigger) continue; // leave triggers (interaction zones) intact
+                    _extraOriginalCollidersToToggle.Add(c);
+                }
+            }
         }
 
         // Drop-zone footprint marker — the SOLE visible element under ConstructionVisual.
@@ -622,16 +644,23 @@ public class Building : ComplexRoom
         if (_completedVisualRoot != null && _completedVisualRoot.activeSelf == underConstruction)
             _completedVisualRoot.SetActive(!underConstruction);
 
-        // Hide originals of any extra-cloned children (e.g., InteriorDoor's wall) while
-        // UnderConstruction so the opaque originals don't render over our ghost clones.
-        // We disable Renderer.enabled rather than the host GameObject so scripts/NetworkObjects
-        // on the original keep running.
+        // Hide originals of any extra-tracked children (e.g., InteriorDoor's wall) while
+        // UnderConstruction so the opaque originals don't render over our footprint marker
+        // AND don't block character movement on the construction site.
+        // We disable Renderer.enabled / Collider.enabled rather than the host GameObject so
+        // scripts/NetworkObjects on the original keep running.
         bool showOriginals = !underConstruction;
         for (int i = 0; i < _extraOriginalRenderersToToggle.Count; i++)
         {
             var r = _extraOriginalRenderersToToggle[i];
             if (r == null) continue;
             if (r.enabled != showOriginals) r.enabled = showOriginals;
+        }
+        for (int i = 0; i < _extraOriginalCollidersToToggle.Count; i++)
+        {
+            var c = _extraOriginalCollidersToToggle[i];
+            if (c == null) continue;
+            if (c.enabled != showOriginals) c.enabled = showOriginals;
         }
 
         Debug.Log($"<color=cyan>[Building.ApplyVisuals]</color> {buildingName} state={state} (under={underConstruction}) | conRoot={(_constructionVisualRoot != null ? _constructionVisualRoot.name : "NULL")} was={conActive} now={(_constructionVisualRoot != null && _constructionVisualRoot.activeSelf)} | cmpRoot={(_completedVisualRoot != null ? _completedVisualRoot.name : "NULL")} was={cmpActive} now={(_completedVisualRoot != null && _completedVisualRoot.activeSelf)} | extraToggled={_extraOriginalRenderersToToggle.Count} | IsServer={IsServer} IsClient={IsClient}");
