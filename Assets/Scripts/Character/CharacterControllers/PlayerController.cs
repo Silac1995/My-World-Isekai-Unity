@@ -15,6 +15,10 @@ public class PlayerController : CharacterGameController
     // --- TAB Targeting ---
     private UI_PlayerTargeting _targeting;
 
+    // Reused buffer for BuildingInteractable.GetAvailableInteractions to avoid per-click allocation (Rule #34).
+    private readonly System.Collections.Generic.List<BuildingInteractable.InteractionId> _scratchInteractions =
+        new System.Collections.Generic.List<BuildingInteractable.InteractionId>(4);
+
     public void SetOrder(IPlayerCommand newOrder)
     {
         if (_currentOrder != null) _currentOrder.OnCancelled(this);
@@ -45,6 +49,17 @@ public class PlayerController : CharacterGameController
     {
         if (_targeting == null)
             _targeting = UnityEngine.Object.FindAnyObjectByType<UI_PlayerTargeting>(FindObjectsInactive.Include);
+    }
+
+    /// <summary>
+    /// True when the mouse pointer is over a UI element. Used to suppress
+    /// world-click handlers (e.g. BuildingInteractable left-click) while the
+    /// player is interacting with HUD/menus.
+    /// </summary>
+    private static bool IsPointerOverUI()
+    {
+        return UnityEngine.EventSystems.EventSystem.current != null
+            && UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject();
     }
 
     protected override void Update()
@@ -171,6 +186,29 @@ public class PlayerController : CharacterGameController
             // movement (at GodModeMovementSpeed, see Move()).
             if (!devMode)
             {
+                // --- Left-click on a BuildingInteractable (Rule #33: player input lives here). ---
+                // Phase 1 only exposes FinishConstruction. If exactly one interaction is available,
+                // queue it directly. Phase 2 will open a context menu when 2+ entries are returned.
+                if (Input.GetMouseButtonDown(0) && !IsPointerOverUI())
+                {
+                    var cam = Camera.main;
+                    if (cam != null && Physics.Raycast(cam.ScreenPointToRay(Input.mousePosition),
+                                                       out RaycastHit interactHit, 100f))
+                    {
+                        var interactable = interactHit.collider.GetComponentInParent<BuildingInteractable>();
+                        if (interactable != null && interactable.IsOwner(_character))
+                        {
+                            _scratchInteractions.Clear();
+                            interactable.GetAvailableInteractions(_character, _scratchInteractions);
+                            if (_scratchInteractions.Count == 1)
+                            {
+                                interactable.TryQueueInteraction(_scratchInteractions[0], _character);
+                                return; // input consumed
+                            }
+                        }
+                    }
+                }
+
                 // Right-click to move (standard RPG/MOBA)
                 if (Input.GetMouseButtonDown(1) && !_character.CharacterCombat.IsInBattle)
                 {
