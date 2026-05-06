@@ -530,15 +530,17 @@ public class Building : ComplexRoom
             if (rs == null || rs.Length == 0) continue;
             foreach (var r in rs) if (r != null) _extraOriginalRenderersToToggle.Add(r);
 
-            // Colliders too — so the player can walk through the footprint while
-            // UnderConstruction (e.g. Interior Door wall doesn't block movement).
+            // Colliders too — so the player can walk through the footprint AND can't
+            // interact with door E-prompts before the building is built. We disable
+            // BOTH solid colliders (movement blockers) AND trigger colliders
+            // (InteractionZone for E-prompt) on these extra children, since both should
+            // be inactive during construction.
             var cs = childGO.GetComponentsInChildren<Collider>(includeInactive: true);
             if (cs != null)
             {
                 foreach (var c in cs)
                 {
                     if (c == null) continue;
-                    if (c.isTrigger) continue; // leave triggers (interaction zones) intact
                     _extraOriginalCollidersToToggle.Add(c);
                 }
             }
@@ -595,24 +597,23 @@ public class Building : ComplexRoom
         // ── Main module. CRITICAL: startSpeed = 0 — BoxEdge shape's startSpeed direction is
         // RADIAL OUTWARD in the X-Z plane (along the floor). We zero it and rely entirely on
         // velocityOverLifetime.y to drive vertical motion.
-        // Project scale: 11 Unity units = 1.67m → ~6.6 u/m. Curtain target height ≈ 1.5m
-        // (a tall human head, ~10 units). With speed 3.5–5 and lifetime 3s, particles
-        // travel 10.5–15 units = clearly visible.
+        // Project scale: 11 Unity units = 1.67m → ~6.6 u/m. Each particle now travels
+        // 6 u/s × 4s lifetime = 24 units (≈ 3.6m) before fade-out. Plenty visible.
         var main = ps.main;
         main.duration = 5f;
         main.loop = true;
-        main.startLifetime = 3f;
+        main.startLifetime = 4f;
         main.startSpeed = 0f;
-        main.startSize = 1.2f;
+        main.startSize = 2.5f;
         main.startColor = new Color(0.5f, 0.9f, 1f, 1f);
-        main.maxParticles = 800;
+        main.maxParticles = 1200;
         main.simulationSpace = ParticleSystemSimulationSpace.Local;
         main.scalingMode = ParticleSystemScalingMode.Local;
 
         // ── Emission: dense rate so particles overlap into a wall.
         var emission = ps.emission;
         emission.enabled = true;
-        emission.rateOverTime = 120f;
+        emission.rateOverTime = 150f;
 
         // ── Shape: BoxEdge, X×Z = footprint, Y collapsed → particles spawn around the
         // perimeter rectangle on the floor.
@@ -621,16 +622,19 @@ public class Building : ComplexRoom
         shape.shapeType = ParticleSystemShapeType.BoxEdge;
         shape.scale = new Vector3(box.size.x, 0.001f, box.size.z);
 
-        // ── Velocity over lifetime: visible upward drift. With Y 3.5–5 over 3s lifetime,
-        // particles travel ~10–15 Unity units (≈ 1.5–2.3m at the 11u=1.67m project scale).
+        // ── Velocity over lifetime: visible upward drift. 5–7 u/s × 4s = 20–28 units of
+        // vertical travel — clearly above head height at the 11u=1.67m project scale.
         var vel = ps.velocityOverLifetime;
         vel.enabled = true;
         vel.space = ParticleSystemSimulationSpace.Local;
-        vel.y = new ParticleSystem.MinMaxCurve(3.5f, 5f);
+        vel.y = new ParticleSystem.MinMaxCurve(5f, 7f);
         vel.x = new ParticleSystem.MinMaxCurve(0f);
         vel.z = new ParticleSystem.MinMaxCurve(0f);
 
-        // ── Color over lifetime: full alpha at spawn (bottom), fades to 0 at end (top).
+        // ── Color over lifetime: alpha plateau then fade. Particles stay 0.9 alpha
+        // for the first 60% of life (so the column reads SOLID up to the curtain
+        // top), then ramp to 0 over the last 40%. Result: a visible vertical wall
+        // that wisps away at the top instead of fading the moment it spawns.
         var col = ps.colorOverLifetime;
         col.enabled = true;
         var grad = new Gradient();
@@ -642,8 +646,10 @@ public class Building : ComplexRoom
             },
             new GradientAlphaKey[]
             {
-                new GradientAlphaKey(0.7f, 0f),
-                new GradientAlphaKey(0.0f, 1f),
+                new GradientAlphaKey(0.0f, 0.0f),
+                new GradientAlphaKey(0.9f, 0.1f),
+                new GradientAlphaKey(0.9f, 0.6f),
+                new GradientAlphaKey(0.0f, 1.0f),
             }
         );
         col.color = new ParticleSystem.MinMaxGradient(grad);
