@@ -476,6 +476,10 @@ PrefabInstance:
       propertyPath: _constructionOutlineMaterial
       value: 
       objectReference: {fileID: 2100000, guid: acbe55ddac5d03b43abd2cc52ca742e0, type: 2}
+    - target: {fileID: 7957207800943456863, guid: 2e1494b4d52f43344be89b09545dbadf, type: 3}
+      propertyPath: _constructionFootprintMaterial
+      value: 
+      objectReference: {fileID: 2100000, guid: b31318f4e14d2614fbd7f82168f4e968, type: 2}
     - target: {fileID: 8467930593367525379, guid: 2e1494b4d52f43344be89b09545dbadf, type: 3}
       propertyPath: m_Size.x
       value: 20

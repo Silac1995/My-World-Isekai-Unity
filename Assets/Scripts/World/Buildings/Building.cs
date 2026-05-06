@@ -73,6 +73,9 @@ public class Building : ComplexRoom
     [Tooltip("Optional outline material applied to a SECOND silhouette clone of CompletedVisual under ConstructionVisual. The shader uses inverted-hull (cull front + vertex extrusion) so only the back faces render outside the original silhouette — produces a glowing outline. Leave null to skip the outline pass.")]
     [SerializeField] protected Material _constructionOutlineMaterial;
 
+    [Tooltip("Optional translucent material applied to a flat footprint quad on the ground at the BuildingZone bounds. Gives players a visible drop-zone marker while UnderConstruction. Leave null to skip the marker.")]
+    [SerializeField] protected Material _constructionFootprintMaterial;
+
     /// <summary>
     /// Set after <see cref="EnsureConstructionGhostVisual"/> populates _constructionVisualRoot
     /// from a clone of _completedVisualRoot. Per-instance so re-entering / re-spawning a
@@ -537,7 +540,57 @@ public class Building : ComplexRoom
             }
         }
 
+        // Drop-zone footprint marker on the ground — child of ConstructionVisual so it
+        // auto-toggles with state. Visualises where construction items are dropped.
+        EnsureConstructionFootprintMarker();
+
         _ghostVisualPopulated = true;
+    }
+
+    /// <summary>
+    /// Spawns a flat translucent quad child of <see cref="_constructionVisualRoot"/> sized
+    /// to <see cref="_buildingZone"/>'s BoxCollider. Players see this rectangle on the
+    /// ground while UnderConstruction — it marks the drop zone for construction items.
+    /// No-op if BuildingZone isn't a BoxCollider or _constructionFootprintMaterial isn't set.
+    /// </summary>
+    private void EnsureConstructionFootprintMarker()
+    {
+        if (_constructionVisualRoot == null) return;
+        if (_constructionFootprintMaterial == null) return;
+        if (!(_buildingZone is BoxCollider box)) return;
+
+        GameObject marker;
+        try
+        {
+            marker = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogException(e, this);
+            return;
+        }
+        marker.name = "ConstructionFootprintMarker";
+
+        // Strip the Collider Unity adds to primitives — purely visual.
+        var col = marker.GetComponent<Collider>();
+        if (col != null)
+        {
+            if (Application.isPlaying) Destroy(col); else DestroyImmediate(col);
+        }
+
+        marker.transform.SetParent(_constructionVisualRoot.transform, worldPositionStays: false);
+
+        // Place at the BOTTOM face of BuildingZone, lifted 0.02 to avoid Z-fight with ground.
+        // box values are in local space relative to the box's transform, which here is
+        // the same hierarchy as ConstructionVisual (both children of building root), so the
+        // bottom face Y in building-local space is box.center.y - size.y/2.
+        float bottomY = box.center.y - (box.size.y * 0.5f) + 0.02f;
+        marker.transform.localPosition = new Vector3(box.center.x, bottomY, box.center.z);
+        marker.transform.localRotation = Quaternion.Euler(90f, 0f, 0f); // lay flat (Quad faces +Z by default)
+        marker.transform.localScale = new Vector3(box.size.x, box.size.z, 1f);
+
+        var renderer = marker.GetComponent<Renderer>();
+        if (renderer != null) renderer.material = _constructionFootprintMaterial;
     }
 
     /// <summary>
