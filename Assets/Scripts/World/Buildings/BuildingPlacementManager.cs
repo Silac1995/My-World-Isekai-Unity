@@ -147,7 +147,10 @@ namespace MWI.WorldSystem
             var qCol = _footprintOutline.GetComponent<Collider>();
             if (qCol != null) Destroy(qCol);
             _footprintOutline.transform.SetParent(_ghostInstance.transform, worldPositionStays: false);
-            _footprintOutline.transform.localPosition = box.center + new Vector3(0f, 0.02f, 0f); // tiny lift to avoid Z-fight
+            // Place at the BOTTOM face of the BuildingZone, lifted 0.02 to avoid Z-fight with the
+            // ground. box.center is in local space; the bottom is center.y - size.y * 0.5.
+            float bottomY = box.center.y - (box.size.y * 0.5f) + 0.02f;
+            _footprintOutline.transform.localPosition = new Vector3(box.center.x, bottomY, box.center.z);
             _footprintOutline.transform.localRotation = Quaternion.Euler(90f, 0f, 0f); // lay flat (Quad faces +Z by default)
             _footprintOutline.transform.localScale = new Vector3(box.size.x, box.size.z, 1f);
             // Use the valid material as a tint hint; ApplyGhostMaterials below repaints both renderers.

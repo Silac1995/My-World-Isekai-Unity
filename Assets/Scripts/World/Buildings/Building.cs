@@ -267,25 +267,28 @@ public class Building : ComplexRoom
         // docs/superpowers/specs/2026-05-01-building-default-furniture-auto-conversion-design.md
         ConvertNestedNetworkFurnitureToLayout();
 
-        // Initialize state based on requirements (only on server)
-        if (IsServer)
-        {
-            int reqCount = _constructionRequirements?.Count ?? 0;
-            if (_constructionRequirements != null && _constructionRequirements.Count > 0)
-            {
-                _currentState.Value = MWI.WorldSystem.BuildingState.UnderConstruction;
-            }
-            else
-            {
-                _currentState.Value = MWI.WorldSystem.BuildingState.Complete;
-            }
-            Debug.Log($"<color=cyan>[Building.Awake]</color> {buildingName} reqs={reqCount} → state={_currentState.Value}");
-        }
+        // NOTE: Construction state init MUST live in OnNetworkSpawn, not here. NGO does
+        // not set IsServer reliably during Awake (it's gated on NetworkObject.IsSpawned),
+        // so the original IsServer check in Awake never fired and _currentState stayed at
+        // its field default (Complete). Moved to OnNetworkSpawn (2026-05-06).
     }
 
     public override void OnNetworkSpawn()
     {
         base.OnNetworkSpawn();
+
+        // Initialize construction state based on requirements. MUST live here, not in Awake —
+        // NGO does not set IsServer reliably until after the NetworkObject spawns. On server,
+        // this writes through the NetworkVariable and replicates to clients. (2026-05-06.)
+        if (IsServer)
+        {
+            int reqCount = _constructionRequirements?.Count ?? 0;
+            var newState = (reqCount > 0)
+                ? MWI.WorldSystem.BuildingState.UnderConstruction
+                : MWI.WorldSystem.BuildingState.Complete;
+            if (_currentState.Value != newState) _currentState.Value = newState;
+            Debug.Log($"<color=cyan>[Building.OnNetworkSpawn]</color> {buildingName} reqs={reqCount} → state={_currentState.Value}");
+        }
 
         if (IsServer && NetworkBuildingId.Value.IsEmpty)
         {
