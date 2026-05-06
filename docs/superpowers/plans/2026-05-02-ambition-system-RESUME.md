@@ -6,9 +6,9 @@
 **Plan:** [docs/superpowers/plans/2026-05-02-ambition-system.md](2026-05-02-ambition-system.md) (58 tasks, 14 phases).
 **Spec:** [docs/superpowers/specs/2026-05-02-ambition-system-design.md](../specs/2026-05-02-ambition-system-design.md).
 
-## Current state — Phase 6 complete (Tasks 0–27 / 58)
+## Current state — Phase 7 complete (Tasks 0–30 / 58)
 
-**Last commit:** `3e47e9f2` (Task 25 — DTO + context round-trip tests).
+**Last commit:** `5d0d0042` (Task 30 — History on-demand RPC).
 
 > **Worktree note (2026-05-06):** Two parallel sessions ran Phase 5 in parallel (`claude/youthful-ride-01b213` + `claude/goofy-haibt-bfcfbd`). They were reconciled onto `multiplayyer` via cherry-pick + a foundation cleanup pass. Both worktree branches now point at the same `multiplayyer` HEAD. See "Phase 5 reconciliation" below.
 
@@ -74,15 +74,23 @@
 | `66753927` | 24 | `CharacterAmbition.Deserialize` + deferred-bind queue. Drains `_deferredBindings` on `Character.OnCharacterSpawned`. `SafetyCheckOnLoaded` validates restored ambition via `AmbitionSO.ValidateParameters`. **Plan deviation:** Zone resolution dropped — no unified `WorldZoneRegistry` in v1 (deviation #8). |
 | `3e47e9f2` | 25 | DTO + context round-trip NUnit tests in `Ambition.Tests` asmdef (Pure-only). 2 tests covering `Context_Primitive_RoundTrip` + `CompletedAmbition_DTO_RoundTrip_PreservesDayAndReason`. |
 
+**Phase 7 commits:**
+
+| SHA | Task | Summary |
+|---|---|---|
+| `5318e0b9` | 28 | `NetworkAmbitionSnapshot` INetworkSerializable struct (6 fields: HasActive / AmbitionSOGuid / CurrentStepIndex / TotalSteps / Progress01 / OverridesSchedule). New file `Assets/Scripts/Character/Ambition/NetworkAmbitionSnapshot.cs`. |
+| `6dbdfb8a` | 29 | `NetworkVariable<NetworkAmbitionSnapshot> Snapshot` (Everyone-read, Server-write) on `CharacterAmbition`. **Plan deviation:** Step 29.2 (changing base class to `NetworkBehaviour`) was a NO-OP — `CharacterSystem` already extends `NetworkBehaviour` (line 10), so the type chain works as-is. Snapshot writes wired into 3 mutation sites: `DoSetAmbition`, `DoClearAmbition`, `HandleStepStateChanged`. Public `SetAmbition` / `ClearAmbition` now branch on `IsServer` — server callers go direct, non-server callers route through `SetAmbitionServerRpc(FixedString64Bytes)` / `ClearAmbitionServerRpc()`. SetAmbition over RPC ships only the SO's GUID — parameter binding for player UI (Phase 11) will need separate `SetContextValueServerRpc` calls. |
+| `5d0d0042` | 30 | History on-demand RPC. New `HistoryEntryNet` struct in Assembly-CSharp (NGO not in Pure). `RequestHistoryServerRpc` + `DeliverHistoryClientRpc` pair, plus `OnHistoryDelivered` event for client consumers. New file `Assets/Scripts/Character/Ambition/HistoryNetDTO.cs`. |
+
 **Tasks 26 + 27 — implicit no-ops, no commit needed.** Verified during Phase 6:
 - **Task 26** (Register in `CharacterDataCoordinator`) — the coordinator uses `GetComponentsInChildren<ICharacterSaveData>(true)` auto-discovery + `OrderBy(LoadPriority)`. There is no explicit registration list. Since Task 23 implements the interface and Task 21 already added the component to all Character prefabs, the discovery happens automatically.
 - **Task 27** (Add `Ambition` to `HibernatedNPCData`) — `HibernatedNPCData.ProfileData : CharacterProfileSaveData` is already populated via `coordinator.ExportProfile()` (`MapController.cs:722` + `:1325`) and consumed via `coordinator.ImportProfile()` (`MapController.cs:1143`). The auto-discovery design captures the ambition state under `componentStates["CharacterAmbition"]` automatically. The plan's prescribed explicit `Ambition` field is unnecessary.
 
-**Foundation state:** Compile-clean. Test asmdefs:
-- `Ambition.Tests` (Pure-only): 12/12 green (5 `AmbitionContextTests` + 5 `ContextBindingTests` + 2 `AmbitionSaveRoundTripTests`).
-- `AmbitionQuest.Tests` (Assembly-CSharp via reflection): 7/7 green (3 `QuestOrderingTests` + 4 `AmbitionStateMachineTests`).
+**Foundation state:** Compile-clean (verified via `assets-refresh` + `console-get-logs` after Phase 7 — only the pre-existing project-path-with-spaces warning surfaced). Test asmdefs:
+- `Ambition.Tests` (Pure-only): 12/12 expected green (5 `AmbitionContextTests` + 5 `ContextBindingTests` + 2 `AmbitionSaveRoundTripTests`).
+- `AmbitionQuest.Tests` (Assembly-CSharp via reflection): 7/7 expected green (3 `QuestOrderingTests` + 4 `AmbitionStateMachineTests`).
 
-Total: **19/19 green** across all Ambition-related tests (test-runner verification deferred — Unity Editor had unsaved scenes during Phase 6 dispatch; logical correctness verified via compile + diff review).
+Total: **19/19 expected green** (test-runner verification deferred — Unity Editor had unsaved scenes blocking the MCP `tests-run` call during Phases 6+7).
 
 ## Phase 5 reconciliation (2026-05-06 — informational)
 
@@ -296,9 +304,9 @@ I'm resuming the Ambition System implementation. Read these in order:
 2. docs/superpowers/plans/2026-05-02-ambition-system.md         (the 58-task plan)
 3. docs/superpowers/specs/2026-05-02-ambition-system-design.md  (the design spec)
 
-Verify the branch is `multiplayyer` and HEAD is at `3e47e9f2` (or later if I've made other commits since).
+Verify the branch is `multiplayyer` and HEAD is at `5d0d0042` (or later if I've made other commits since).
 
-Then invoke the `superpowers:subagent-driven-development` skill and continue from Task 28 (Phase 7 — `NetworkAmbitionSnapshot` INetworkSerializable).
+Then invoke the `superpowers:subagent-driven-development` skill and continue from Task 31 (Phase 8 — `CharacterGoap.RegisterTransientGoal`).
 ```
 
 ### 2. Cadence the prior session settled on
@@ -321,17 +329,17 @@ Then invoke the `superpowers:subagent-driven-development` skill and continue fro
 - **`assets-create-folder` MCP tool** must be used before the first `script-update-or-create` writes into a new directory. Don't fall back to bash `mkdir` unless the MCP tool is genuinely unavailable.
 - **`tests-run` MCP tool** — use `mode: "EditMode"` and `class: "MWI.Tests.Ambition.<name>"` for targeted runs. The Ambition test assembly is `Ambition.Tests` (asmdef in `Assets/Tests/EditMode/Ambition/`).
 
-### 4. Next task — Task 28 (start of Phase 7)
+### 4. Next task — Task 31 (start of Phase 8 — Task primitives)
 
-Phase 6 complete. Phase 7 is **Networking** — converting `CharacterAmbition` to `NetworkBehaviour`-aware with replicated state.
+Phases 6 + 7 complete. Phase 8 is **Task primitives** — implementing the concrete `TaskBase` subclasses that each step quest's tasks use (Pattern A vs Pattern B). Tasks 31-38 cover: GOAP transient-goal registration, the `MoveToTarget`, `WaitFor`, `KillTarget`, `WaitDays`, `HaveItem`, `Speak`, `Reach` primitives.
 
-**Recommended model for Task 28:** `haiku` — `NetworkAmbitionSnapshot` is a small INetworkSerializable struct (plan body in the plan file at `### Task 28`). Skip both reviewers (trivial struct).
+**Recommended models:**
+- **Task 31** (`opus`) — `CharacterGoap.RegisterTransientGoal` / `UnregisterTransientGoal`. Touches the GOAP planner. Run both reviewers.
+- **Tasks 32-38** (`sonnet` for most) — concrete `TaskBase` subclasses. Each is mechanical given a clear plan body. `opus` if member-name mismatches surface against `CharacterCombat.RequestAttack`, `CharacterInteraction.OnInteractionEnded`, `CharacterRelation.HasPartner`, `ScheduleActivity.None`.
 
-**Recommended model for Task 29:** `opus` — converts `CharacterAmbition` to fold in NetworkVariable-style snapshot replication. Touches networking + auth model. Run both reviewers.
+### 5. Operational lessons learned in Phases 6 + 7
 
-**Recommended model for Task 30:** `sonnet` — ServerRpc surface for SetAmbition / ClearAmbition.
-
-### Operational lessons learned in Phase 6
+### Operational lessons learned in Phases 6 + 7 (consolidated)
 
 - **Subagent commits land on `multiplayyer`, not on whatever worktree branch you're in.** This is the Worktree Quirk (the Agent tool's working directory is the main project path, not the worktree). For Phase 7+, just work on `multiplayyer` directly. The `claude/*` worktree branches are stale snapshots.
 - **DTOs in Pure asmdef can reference Pure types only.** When adding any Pure-asmdef type, double-check ALL its field types are also in Pure. Phase 6 surfaced the `ContextValueKind` + `CompletionReason` location bug because Task 22's DTOs in Pure referenced enums that lived in Assembly-CSharp.
@@ -364,7 +372,7 @@ Full task text in [the plan](2026-05-02-ambition-system.md#task-18-characterambi
 
 **Reuse-vs-rename decision deferred to Phase 5:** the `AmbitionQuest.Tests` asmdef name is narrowly scoped. If many Phase 5+ tests pile up, consider renaming it to `Ambition.AssemblyCSharp.Tests` (rename the `.asmdef` and update its `name` field). For now (3 tests), the narrow name is fine.
 
-## Phases remaining (31 tasks)
+## Phases remaining (28 tasks)
 
 | Phase | Tasks | Estimate (subagent dispatches) |
 |---|---|---|
@@ -373,7 +381,7 @@ Full task text in [the plan](2026-05-02-ambition-system.md#task-18-characterambi
 | ~~Phase 4 — Bridge + ordering tests~~ | ~~16–17~~ | DONE |
 | ~~Phase 5 — `CharacterAmbition` core~~ | ~~18–21~~ | DONE |
 | ~~Phase 6 — Persistence~~ | ~~22–27~~ | DONE (Tasks 26-27 were no-ops — auto-discovery + ProfileData) |
-| Phase 7 — Networking | 28–30 | 3 (Task 29 `opus` — NetworkBehaviour conversion) |
+| ~~Phase 7 — Networking~~ | ~~28–30~~ | DONE |
 | Phase 8 — Task primitives | 31–38 | 8 (`sonnet` for most; `opus` if member-name mismatches surface) |
 | Phase 9 — BT integration | 39–41 | 3 |
 | Phase 10 — Controller-switch handoff | 42 | 1 |
@@ -394,24 +402,28 @@ Full task text in [the plan](2026-05-02-ambition-system.md#task-18-characterambi
 - **Orphaned `.meta` files** — Phase 1 implementer subagents repeatedly forgot to add `.meta` files to commits, requiring a chore cleanup commit at start of Phase 2. **Mitigation already baked into Phase 2 prompts:** every dispatch now includes an explicit `git add` line listing both `.cs` and `.cs.meta` files. Continue this pattern in Phase 3+ prompts.
 - **Reviewer rigor** — Task 12's code quality reviewer made a confidently-stated but factually-wrong claim about C# generic null-checks behaving differently for value types. Always verify strong technical claims before accepting reviewer feedback. The Roslyn-execute approach via `mcp__ai-game-developer__script-execute` is a fast way to settle "what does C# actually do here" questions in 30 seconds.
 
-## Phases 1-6 milestone (verifiable)
+## Phases 1-7 milestone (verifiable)
 
 Run in the new session to confirm starting state:
 
 ```bash
-git log --oneline | head -32
-# Expect HEAD = 3e47e9f2 (or one commit further if more work landed). The full Phase 1-6 chain:
-#   3e47e9f2 test(ambition): cover DTO + context round-trip                              <- Task 25
+git log --oneline | head -35
+# Expect HEAD = 5d0d0042 (or one commit further if more work landed). Phase 7 chain:
+#   5d0d0042 feat(ambition): on-demand history RPC for dev inspector                      <- Task 30
+#   6dbdfb8a feat(ambition): replicate CharacterAmbition via NetworkVariable + ServerRpc  <- Task 29
+#   5318e0b9 feat(ambition): add NetworkAmbitionSnapshot INetworkSerializable             <- Task 28
+#   08d447ae docs(ambition): update resume note for Phase 6 completion                    <- end-of-Phase-6 doc
+#   3e47e9f2 test(ambition): cover DTO + context round-trip                               <- Task 25
 #   66753927 feat(ambition): add ICharacterSaveData import with deferred-bind queue       <- Task 24
-#   04134872 fix(ambition): rewrite AmbitionStateMachineTests with full reflection         <- Phase 5 follow-up
+#   04134872 fix(ambition): rewrite AmbitionStateMachineTests with full reflection        <- Phase 5 follow-up
 #   3d533f4a fix(ambition): move ContextValueKind + CompletionReason into Pure asmdef     <- Phase 1 cleanup (latent)
-#   5c6cfdc7 feat(ambition): add ICharacterSaveData export                                 <- Task 23
+#   5c6cfdc7 feat(ambition): add ICharacterSaveData export                                <- Task 23
 #   dc0b7977 test(ambition): cover CharacterAmbition initial state and Progress01 math    <- Task 19 (cherry-pick)
 #   2ae0b167 fix(ambition): add OnDisable to cancel step quest subscription on destroy    <- Task 18 fix (cherry-pick)
-#   b6dfcfcc feat(ambition): add CharacterAmbition state-machine skeleton                  <- Task 18 (cherry-pick)
-#   f3d37d36 feat(ambition): add save DTOs in Pure asmdef                                  <- Task 22
-#   fddaba00 feat(ambition): add CharacterAmbition child to Character prefabs              <- Task 21
-#   5bffe32b feat(ambition): wire CharacterAmbition into Character facade                  <- Task 20
+#   b6dfcfcc feat(ambition): add CharacterAmbition state-machine skeleton                 <- Task 18 (cherry-pick)
+#   f3d37d36 feat(ambition): add save DTOs in Pure asmdef                                 <- Task 22
+#   fddaba00 feat(ambition): add CharacterAmbition child to Character prefabs             <- Task 21
+#   5bffe32b feat(ambition): wire CharacterAmbition into Character facade                 <- Task 20
 #   ... (Phase 1-4 commits below — see git log)
 ```
 
@@ -425,4 +437,4 @@ mcp__ai-game-developer__tests-run mode=EditMode testNamespace=MWI.Tests.Ambition
 
 > **Note:** The end-of-Phase-6 session deferred running `tests-run` (Unity Editor had unsaved scenes blocking the MCP call). Logical correctness verified via compile-clean refresh + diff review of every commit. Run the test commands above in the next session to confirm 19/19 green before starting Phase 7.
 
-If those commits are present and the tests pass, Phases 1–6 are intact and you're ready to start Task 28.
+If those commits are present and the tests pass, Phases 1–7 are intact and you're ready to start Task 31.
