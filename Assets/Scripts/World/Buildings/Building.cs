@@ -1404,8 +1404,12 @@ public class Building : ComplexRoom
     /// Server-side validation mirrors <see cref="BuildingInteractable.IsOwner"/>:
     /// PlacedByCharacterId must match the resolved actor's CharacterId.
     /// </summary>
-    [Unity.Netcode.Rpc(Unity.Netcode.SendTo.Server)]
-    public void RequestStartFinishConstructionRpc(Unity.Netcode.NetworkBehaviourReference actorRef)
+    // [ServerRpc(RequireOwnership = false)] is the rock-solid client→server path used by
+    // the rest of the project. The Building NetworkObject is owned by the server, so any
+    // client invoking this is by definition not the owner — RequireOwnership=false lets
+    // them through. Method name MUST end in "ServerRpc" for the legacy attribute.
+    [Unity.Netcode.ServerRpc(RequireOwnership = false)]
+    public void RequestStartFinishConstructionServerRpc(Unity.Netcode.NetworkBehaviourReference actorRef)
     {
         Debug.Log($"<color=magenta>[Building.SRpc]</color> {buildingName} arrived. IsServer={IsServer} IsUnderConstruction={IsUnderConstruction}");
         if (!IsServer) { Debug.LogWarning($"[Building.SRpc] {buildingName} aborted — !IsServer"); return; }

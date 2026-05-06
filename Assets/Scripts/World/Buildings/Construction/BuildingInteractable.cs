@@ -72,8 +72,8 @@ public class BuildingInteractable : InteractableObject
         if (!isUC) return;
 
         // Cooperative model: anyone in the zone can finalize. Server-relay via RPC.
-        Debug.Log($"<color=magenta>[BuildingInteractable.Interact]</color> dispatching RequestStartFinishConstructionRpc");
-        _building.RequestStartFinishConstructionRpc(new Unity.Netcode.NetworkBehaviourReference(interactor));
+        Debug.Log($"<color=magenta>[BuildingInteractable.Interact]</color> dispatching RequestStartFinishConstructionServerRpc");
+        _building.RequestStartFinishConstructionServerRpc(new Unity.Netcode.NetworkBehaviourReference(interactor));
     }
 
     /// <summary>
