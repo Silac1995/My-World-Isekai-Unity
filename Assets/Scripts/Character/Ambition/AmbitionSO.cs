@@ -5,21 +5,6 @@ using UnityEngine;
 namespace MWI.Ambition
 {
     /// <summary>
-    /// Discriminator for AmbitionContext entries. See spec — drives save layer routing.
-    /// </summary>
-    public enum ContextValueKind
-    {
-        Character,
-        Primitive,
-        Enum,
-        ItemSO,
-        AmbitionSO,
-        QuestSO,
-        NeedSO,
-        Zone
-    }
-
-    /// <summary>
     /// Declares one input slot on an AmbitionSO that callers must fill via SetAmbition.
     /// Validation in AmbitionSO.ValidateParameters checks each Required key is present
     /// and matches the declared Kind.
