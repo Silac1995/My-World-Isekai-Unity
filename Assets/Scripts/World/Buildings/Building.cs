@@ -564,9 +564,10 @@ public class Building : ComplexRoom
     /// </summary>
     private void EnsureConstructionCurtainParticles()
     {
-        if (_constructionVisualRoot == null) return;
-        if (_constructionCurtainMaterial == null) return;
-        if (!(_buildingZone is BoxCollider box)) return;
+        if (_constructionVisualRoot == null) { Debug.LogWarning($"[Building.Curtain] {buildingName}: _constructionVisualRoot null — skip"); return; }
+        if (_constructionCurtainMaterial == null) { Debug.LogWarning($"[Building.Curtain] {buildingName}: _constructionCurtainMaterial null — skip"); return; }
+        if (!(_buildingZone is BoxCollider box)) { Debug.LogWarning($"[Building.Curtain] {buildingName}: _buildingZone not a BoxCollider — skip"); return; }
+        Debug.Log($"[Building.Curtain] {buildingName}: spawning curtain particles");
 
         GameObject psHost;
         try
@@ -645,17 +646,16 @@ public class Building : ComplexRoom
         );
         col.color = new ParticleSystem.MinMaxGradient(grad);
 
-        // ── Renderer: stretched billboard so particles elongate vertically along the
-        // direction of motion, blending into a continuous curtain wall instead of reading
-        // as discrete sprites. velocityScale=1 stretches by velocity magnitude, lengthScale
-        // adds extra height even if the particle is slow.
+        // ── Renderer: standard view-aligned billboard. We tried Stretch mode but URP/Particles/Unlit
+        // doesn't always honour the velocity stretching keywords, leaving particles invisible.
+        // Billboard guarantees visibility; the curtain feel comes from large startSize +
+        // dense emission overlapping vertically.
         var psr = psHost.GetComponent<ParticleSystemRenderer>();
         if (psr != null)
         {
             psr.material = _constructionCurtainMaterial;
-            psr.renderMode = ParticleSystemRenderMode.Stretch;
-            psr.velocityScale = 1f;
-            psr.lengthScale = 2f;
+            psr.renderMode = ParticleSystemRenderMode.Billboard;
+            psr.alignment = ParticleSystemRenderSpace.View;
         }
 
         ps.Play(withChildren: true);
@@ -669,9 +669,10 @@ public class Building : ComplexRoom
     /// </summary>
     private void EnsureConstructionFootprintMarker()
     {
-        if (_constructionVisualRoot == null) return;
-        if (_constructionFootprintMaterial == null) return;
-        if (!(_buildingZone is BoxCollider box)) return;
+        if (_constructionVisualRoot == null) { Debug.LogWarning($"[Building.Footprint] {buildingName}: _constructionVisualRoot null — skip"); return; }
+        if (_constructionFootprintMaterial == null) { Debug.LogWarning($"[Building.Footprint] {buildingName}: _constructionFootprintMaterial null — skip"); return; }
+        if (!(_buildingZone is BoxCollider box)) { Debug.LogWarning($"[Building.Footprint] {buildingName}: _buildingZone not a BoxCollider — skip"); return; }
+        Debug.Log($"[Building.Footprint] {buildingName}: creating marker — bzCenter={box.center} bzSize={box.size}");
 
         GameObject marker;
         try
