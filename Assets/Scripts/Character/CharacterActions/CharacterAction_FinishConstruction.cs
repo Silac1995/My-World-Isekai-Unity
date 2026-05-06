@@ -45,11 +45,8 @@ public class CharacterAction_FinishConstruction : CharacterAction_Continuous
     {
         if (_target == null || character == null) return false;
         if (!_target.IsUnderConstruction) return false;
-        // Owner gate (Phase 1: only the placer can finalize)
-        var placedBy = _target.PlacedByCharacterId.Value.ToString();
-        if (string.IsNullOrEmpty(placedBy)) return false;
-        if (placedBy != character.CharacterId) return false;
-        // Spatial gate
+        // Cooperative model: any character can finalize (owner-check removed 2026-05-06).
+        // Spatial gate stays — Core Rule #1.
         if (!IsActorInsideBuildingZone()) return false;
         return true;
     }
@@ -63,10 +60,9 @@ public class CharacterAction_FinishConstruction : CharacterAction_Continuous
     {
         if (_target == null || character == null) return true;
 
-        // Re-validate every tick (state, ownership, position).
+        // Re-validate every tick (state + position). Owner-check removed 2026-05-06 —
+        // any character in the zone can keep ticking the action.
         if (!_target.IsUnderConstruction) return true;
-        var placedBy = _target.PlacedByCharacterId.Value.ToString();
-        if (string.IsNullOrEmpty(placedBy) || placedBy != character.CharacterId) return true;
         if (!IsActorInsideBuildingZone()) return true;
 
         int budget = 1 + (character.GetSkillLevelOrZero(SkillId.Builder) / SkillBudgetDivisor);

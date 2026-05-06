@@ -54,27 +54,14 @@ public class BuildingInteractable : InteractableObject
     /// </summary>
     public override void Interact(Character interactor)
     {
-        if (interactor == null || _building == null)
-        {
-            Debug.Log($"<color=magenta>[BuildingInteractable.Interact]</color> aborted — interactor={(interactor != null ? interactor.name : "NULL")} building={(_building != null ? _building.name : "NULL")}");
-            return;
-        }
+        if (interactor == null || _building == null) return;
 
-        bool inZone = IsCharacterInInteractionZone(interactor);
-        bool isUC = _building.IsUnderConstruction;
-        bool ownerOk = IsOwner(interactor);
-        var placedBy = _building.PlacedByCharacterId.Value.ToString();
-        bool localIsServer = _building.IsServer;
-        Debug.Log($"<color=magenta>[BuildingInteractable.Interact]</color> {_building.BuildingName} actor={interactor.CharacterId} placedBy={placedBy} inZone={inZone} isUnderConstruction={isUC} ownerCheck={ownerOk} | localIsServer={localIsServer}");
+        // Core Rule #1 (interactable-system): proximity gate. Always required, every code path.
+        if (!IsCharacterInInteractionZone(interactor)) return;
+        if (!_building.IsUnderConstruction) return;
 
-        // Core Rule #1 (interactable-system): proximity gate is the canonical helper.
-        if (!inZone) return;
-        if (!isUC) return;
-        if (!ownerOk) return;
-
-        // Server resolves the actor + building, validates ownership, and queues the action.
-        // On host the RPC short-circuits to a direct call in the same frame.
-        Debug.Log($"<color=magenta>[BuildingInteractable.Interact]</color> dispatching RequestStartFinishConstructionRpc");
+        // Cooperative model (post-2026-05-06 user pivot): anyone in the zone can finalize.
+        // The owner check is gone — both placer + helpers contribute.
         _building.RequestStartFinishConstructionRpc(new Unity.Netcode.NetworkBehaviourReference(interactor));
     }
 
@@ -86,7 +73,6 @@ public class BuildingInteractable : InteractableObject
     public override List<InteractionOption> GetHoldInteractionOptions(Character interactor)
     {
         if (interactor == null || _building == null) return null;
-        if (!IsOwner(interactor)) return null;
 
         var opts = new List<InteractionOption>();
         if (_building.IsUnderConstruction)

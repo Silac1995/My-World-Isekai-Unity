@@ -76,6 +76,37 @@ public class Building : ComplexRoom
     [Tooltip("Particle material (URP/Particles/Unlit recommended) applied to the upward-rising 'curtain' barrier ParticleSystem auto-spawned at the footprint perimeter. Particles fade alpha bottom→top over their lifetime to simulate a translucent barrier wall. Leave null to skip the curtain effect.")]
     [SerializeField] protected Material _constructionCurtainMaterial;
 
+    [Header("Construction Curtain Tuning")]
+    [Tooltip("Particles emitted per second by the curtain ParticleSystem. Lower = fewer particles. Default 60.")]
+    [SerializeField, Min(0f)] protected float _curtainEmissionRate = 60f;
+
+    [Tooltip("Hard cap on simultaneously alive curtain particles. Should be ≥ EmissionRate × StartLifetime. Default 400.")]
+    [SerializeField, Min(0)] protected int _curtainMaxParticles = 400;
+
+    [Tooltip("How long each curtain particle lives, in seconds. Combined with rise speed determines column height (height ≈ speed × lifetime).")]
+    [SerializeField, Min(0.01f)] protected float _curtainStartLifetime = 5f;
+
+    [Tooltip("World-space start size of each curtain particle quad. Larger = thicker 'wall'.")]
+    [SerializeField, Min(0f)] protected float _curtainStartSize = 1f;
+
+    [Tooltip("Min upward rise speed (Unity units / second). Project scale: 11 u = 1.67 m. Default 1.5.")]
+    [SerializeField, Min(0f)] protected float _curtainRiseSpeedMin = 1.5f;
+
+    [Tooltip("Max upward rise speed. Each particle picks a value in [Min, Max] at spawn. Default 2.5.")]
+    [SerializeField, Min(0f)] protected float _curtainRiseSpeedMax = 2.5f;
+
+    [Tooltip("Peak alpha during the plateau phase of the alpha gradient. Lower = more translucent particles.")]
+    [SerializeField, Range(0f, 1f)] protected float _curtainAlphaMax = 0.2f;
+
+    [Tooltip("Lifetime fraction at which fade-IN completes (alpha reaches AlphaMax). 0..1.")]
+    [SerializeField, Range(0.001f, 0.999f)] protected float _curtainFadeInEnd = 0.1f;
+
+    [Tooltip("Lifetime fraction at which fade-OUT begins (alpha leaves AlphaMax → 0). Must be > FadeInEnd. Lower = particles begin fading earlier.")]
+    [SerializeField, Range(0.001f, 0.999f)] protected float _curtainFadeOutStart = 0.35f;
+
+    [Tooltip("RGB tint applied to the curtain particles. Multiplied with the material color. Alpha is ignored — fade is driven by the AlphaMax / FadeInEnd / FadeOutStart curve.")]
+    [SerializeField] protected Color _curtainTint = new Color(0.5f, 0.9f, 1f, 1f);
+
     /// <summary>
     /// Set after <see cref="EnsureConstructionGhostVisual"/> populates _constructionVisualRoot
     /// from a clone of _completedVisualRoot. Per-instance so re-entering / re-spawning a
@@ -611,23 +642,27 @@ public class Building : ComplexRoom
         // ── Main module. CRITICAL: startSpeed = 0 — BoxEdge shape's startSpeed direction is
         // RADIAL OUTWARD in the X-Z plane (along the floor). We zero it and rely entirely on
         // velocityOverLifetime.y to drive vertical motion.
-        // Project scale: 11 Unity units = 1.67m → ~6.6 u/m. Each particle now travels
-        // 6 u/s × 4s lifetime = 24 units (≈ 3.6m) before fade-out. Plenty visible.
+        // Tunable knobs live on the Building Inspector under "Construction Curtain Tuning".
+        // Column height ≈ RiseSpeed × StartLifetime (project scale: 11 u = 1.67 m).
+        float lifetime = Mathf.Max(0.01f, _curtainStartLifetime);
+        float startSize = Mathf.Max(0f, _curtainStartSize);
+        Color tintRGBA = new Color(_curtainTint.r, _curtainTint.g, _curtainTint.b, 1f);
+
         var main = ps.main;
         main.duration = 5f;
         main.loop = true;
-        main.startLifetime = 4f;
+        main.startLifetime = lifetime;
         main.startSpeed = 0f;
-        main.startSize = 2.5f;
-        main.startColor = new Color(0.5f, 0.9f, 1f, 1f);
-        main.maxParticles = 1200;
+        main.startSize = startSize;
+        main.startColor = tintRGBA;
+        main.maxParticles = Mathf.Max(0, _curtainMaxParticles);
         main.simulationSpace = ParticleSystemSimulationSpace.Local;
         main.scalingMode = ParticleSystemScalingMode.Local;
 
-        // ── Emission: dense rate so particles overlap into a wall.
+        // ── Emission: tunable rate. Lower → fewer particles → thinner wall.
         var emission = ps.emission;
         emission.enabled = true;
-        emission.rateOverTime = 150f;
+        emission.rateOverTime = Mathf.Max(0f, _curtainEmissionRate);
 
         // ── Shape: BoxEdge, X×Z = footprint, Y collapsed → particles spawn around the
         // perimeter rectangle on the floor.
@@ -636,36 +671,40 @@ public class Building : ComplexRoom
         shape.shapeType = ParticleSystemShapeType.BoxEdge;
         shape.scale = new Vector3(box.size.x, 0.001f, box.size.z);
 
-        // ── Velocity over lifetime: visible upward drift. 5–7 u/s × 4s = 20–28 units of
-        // vertical travel — clearly above head height at the 11u=1.67m project scale.
-        // All three axes MUST use the same MinMaxCurve mode (Unity warning otherwise) —
+        // ── Velocity over lifetime: visible upward drift driven by the tunable rise-speed
+        // range. All three axes MUST use the same MinMaxCurve mode (Unity warning otherwise) —
         // we use TwoConstants on all three; X/Z are constant 0 → 0 (no horizontal drift).
+        float vMin = Mathf.Max(0f, _curtainRiseSpeedMin);
+        float vMax = Mathf.Max(vMin, _curtainRiseSpeedMax);
         var vel = ps.velocityOverLifetime;
         vel.enabled = true;
         vel.space = ParticleSystemSimulationSpace.Local;
         vel.x = new ParticleSystem.MinMaxCurve(0f, 0f);
-        vel.y = new ParticleSystem.MinMaxCurve(5f, 7f);
+        vel.y = new ParticleSystem.MinMaxCurve(vMin, vMax);
         vel.z = new ParticleSystem.MinMaxCurve(0f, 0f);
 
-        // ── Color over lifetime: alpha plateau then fade. Particles stay 0.9 alpha
-        // for the first 60% of life (so the column reads SOLID up to the curtain
-        // top), then ramp to 0 over the last 40%. Result: a visible vertical wall
-        // that wisps away at the top instead of fading the moment it spawns.
+        // ── Color over lifetime: alpha 0 → AlphaMax (fade-in) → AlphaMax (plateau) → 0
+        // (fade-out). Tunable via _curtainAlphaMax / _curtainFadeInEnd / _curtainFadeOutStart.
+        // Strict ordering 0 < t1 < t2 < 1 enforced so Unity's gradient sampling stays defined.
+        float alphaMax = Mathf.Clamp01(_curtainAlphaMax);
+        float t1 = Mathf.Clamp(_curtainFadeInEnd, 0.001f, 0.998f);
+        float t2 = Mathf.Clamp(_curtainFadeOutStart, t1 + 0.001f, 0.999f);
+
         var col = ps.colorOverLifetime;
         col.enabled = true;
         var grad = new Gradient();
         grad.SetKeys(
             new GradientColorKey[]
             {
-                new GradientColorKey(new Color(0.5f, 0.9f, 1f), 0f),
-                new GradientColorKey(new Color(0.5f, 0.9f, 1f), 1f),
+                new GradientColorKey(tintRGBA, 0f),
+                new GradientColorKey(tintRGBA, 1f),
             },
             new GradientAlphaKey[]
             {
-                new GradientAlphaKey(0.0f, 0.0f),
-                new GradientAlphaKey(0.9f, 0.1f),
-                new GradientAlphaKey(0.9f, 0.6f),
-                new GradientAlphaKey(0.0f, 1.0f),
+                new GradientAlphaKey(0f, 0f),
+                new GradientAlphaKey(alphaMax, t1),
+                new GradientAlphaKey(alphaMax, t2),
+                new GradientAlphaKey(0f, 1f),
             }
         );
         col.color = new ParticleSystem.MinMaxGradient(grad);
@@ -1368,21 +1407,13 @@ public class Building : ComplexRoom
     [Unity.Netcode.Rpc(Unity.Netcode.SendTo.Server)]
     public void RequestStartFinishConstructionRpc(Unity.Netcode.NetworkBehaviourReference actorRef)
     {
-        Debug.Log($"<color=magenta>[Building.RequestStartFinishConstructionRpc]</color> {buildingName} IsServer={IsServer} IsUnderConstruction={IsUnderConstruction}");
         if (!IsServer) return; // defensive — RPC dispatch already gates this
-        if (!IsUnderConstruction) { Debug.LogWarning($"[Building.SRpc] {buildingName} aborted — not UnderConstruction"); return; }
+        if (!IsUnderConstruction) return;
+        if (!actorRef.TryGet(out Character actor) || actor == null) return;
+        if (actor.CharacterActions == null) return;
 
-        if (!actorRef.TryGet(out Character actor) || actor == null) { Debug.LogWarning($"[Building.SRpc] {buildingName} aborted — actorRef.TryGet failed"); return; }
-
-        var placedBy = PlacedByCharacterId.Value.ToString();
-        if (string.IsNullOrEmpty(placedBy) || placedBy != actor.CharacterId)
-        {
-            Debug.LogWarning($"[Building.SRpc] {buildingName} aborted — placedBy='{placedBy}' actor.CharacterId='{actor.CharacterId}' mismatch");
-            return;
-        }
-        if (actor.CharacterActions == null) { Debug.LogWarning($"[Building.SRpc] {buildingName} aborted — actor.CharacterActions null"); return; }
-
-        Debug.Log($"<color=magenta>[Building.SRpc]</color> {buildingName} queuing FinishConstruction action for {actor.CharacterName}");
+        // Cooperative model: any character can finalize. The Phase 1 owner-check was
+        // removed 2026-05-06 per user direction — both placer + helpers contribute.
         var action = new CharacterAction_FinishConstruction(actor, this);
         actor.CharacterActions.ExecuteAction(action);
     }
