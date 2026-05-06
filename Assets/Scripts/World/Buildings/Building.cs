@@ -310,10 +310,11 @@ public class Building : ComplexRoom
 
         ConfigureNavMeshObstacles();
 
-        // Server-only: spawn any _defaultFurnitureLayout entries (manual + auto-converted)
-        // that don't already have a matching restored Furniture child. Hoisted from
-        // CommercialBuilding 2026-05-01 so every Building subclass benefits.
-        if (IsServer)
+        // Server-only: spawn default furniture *only* after Complete. Pre-Complete spawns
+        // would put usable furniture inside an unfinished building (visually inside the
+        // scaffolding) and create operational gameplay before the construction loop
+        // finishes. The state-change handler kicks the spawn when state flips to Complete.
+        if (IsServer && _currentState.Value == MWI.WorldSystem.BuildingState.Complete)
         {
             TrySpawnDefaultFurniture();
         }
@@ -429,13 +430,33 @@ public class Building : ComplexRoom
         {
             FurnitureManager.LoadExistingFurniture();
         }
+
+        // Apply initial visual state — late-joiners need this; HandleStateChanged only fires
+        // on subsequent changes, not on the initial state replicated via NetworkVariable spawn payload.
+        ApplyConstructionVisuals(_currentState.Value);
     }
 
     private void HandleStateChanged(MWI.WorldSystem.BuildingState previousValue, MWI.WorldSystem.BuildingState newValue)
     {
+        // Visual swap runs on every peer (client + server), every state change.
+        ApplyConstructionVisuals(newValue);
+
         if (newValue == MWI.WorldSystem.BuildingState.Complete)
         {
             OnConstructionComplete?.Invoke();
+
+            // Server-only post-completion side effects.
+            if (IsServer)
+            {
+                // Default-furniture spawn was deferred from OnNetworkSpawn until completion —
+                // run it now (idempotent via _defaultFurnitureSpawned guard).
+                try { TrySpawnDefaultFurniture(); }
+                catch (System.Exception e) { Debug.LogException(e, this); }
+
+                // Eject any leftover items still on the footprint (over-delivered or wrong-type).
+                try { EvictLeftoversToPerimeter(); }
+                catch (System.Exception e) { Debug.LogException(e, this); }
+            }
 
             // Sync state to CommunityData so hibernation save data stays accurate
             if (IsServer && MWI.WorldSystem.MapRegistry.Instance != null)
@@ -452,6 +473,22 @@ public class Building : ComplexRoom
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// Toggles _constructionVisualRoot vs _completedVisualRoot based on the current state.
+    /// Idempotent — safe to call repeatedly. Each peer runs this locally on every
+    /// _currentState.OnValueChanged (registered in Start).
+    /// </summary>
+    private void ApplyConstructionVisuals(MWI.WorldSystem.BuildingState state)
+    {
+        bool underConstruction = (state == MWI.WorldSystem.BuildingState.UnderConstruction);
+
+        if (_constructionVisualRoot != null && _constructionVisualRoot.activeSelf != underConstruction)
+            _constructionVisualRoot.SetActive(underConstruction);
+
+        if (_completedVisualRoot != null && _completedVisualRoot.activeSelf == underConstruction)
+            _completedVisualRoot.SetActive(!underConstruction);
     }
 
     protected virtual void OnDestroy()
@@ -521,34 +558,55 @@ public class Building : ComplexRoom
         return base.GetRandomPointInZone();
     }
 
+    // Reused per Rule #34 — zero per-tick allocation. Static is safe here: scanner is
+    // server-only and runs sequentially across all buildings (one tick at a time, no
+    // concurrent OverlapBoxNonAlloc calls).
+    private static readonly Collider[] _itemOverlapBuffer = new Collider[64];
+
     /// <summary>
-    /// Retourne tous les WorldItem posés physiquement dans la zone spécifiée.
-    /// Utile pour inspecter les StorageZone, DepositZone, DeliveryZone.
+    /// Returns physical, uncarried WorldItems whose colliders overlap the BoxCollider
+    /// passed in. Allocation-light: uses a reused Collider[] buffer.
+    /// Server-side use: ConstructionSiteScanner passes _buildingZone, EvictLeftoversToPerimeter
+    /// passes _buildingZone, GetPhysicalItemsInZone delegates here with zone.GetComponent&lt;BoxCollider&gt;().
     /// </summary>
-    public List<WorldItem> GetPhysicalItemsInZone(Zone zone)
+    public List<WorldItem> GetPhysicalItemsInCollider(Collider collider, List<WorldItem> resultBuffer = null)
     {
-        List<WorldItem> items = new List<WorldItem>();
-        if (zone == null) return items;
+        var items = resultBuffer ?? new List<WorldItem>();
+        items.Clear();
+        if (collider == null) return items;
+        if (!(collider is BoxCollider boxCol)) return items; // only BoxCollider supported
 
-        BoxCollider boxCol = zone.GetComponent<BoxCollider>();
-        if (boxCol != null)
+        Vector3 center = boxCol.transform.TransformPoint(boxCol.center);
+        Vector3 halfExtents = Vector3.Scale(boxCol.size, boxCol.transform.lossyScale) * 0.5f;
+        Quaternion rot = boxCol.transform.rotation;
+
+        int count = Physics.OverlapBoxNonAlloc(center, halfExtents, _itemOverlapBuffer, rot, Physics.AllLayers, QueryTriggerInteraction.Collide);
+        for (int i = 0; i < count; i++)
         {
-            Vector3 center = boxCol.transform.TransformPoint(boxCol.center);
-            Vector3 halfExtents = Vector3.Scale(boxCol.size, boxCol.transform.lossyScale) * 0.5f;
+            var col = _itemOverlapBuffer[i];
+            if (col == null) continue;
 
-            Collider[] colliders = Physics.OverlapBox(center, halfExtents, boxCol.transform.rotation, Physics.AllLayers, QueryTriggerInteraction.Collide);
-            foreach (var col in colliders)
+            var worldItem = col.GetComponent<WorldItem>() ?? col.GetComponentInParent<WorldItem>();
+            if (worldItem != null && !worldItem.IsBeingCarried && !items.Contains(worldItem))
             {
-                var worldItem = col.GetComponent<WorldItem>() ?? col.GetComponentInParent<WorldItem>();
-                
-                // On s'assure que l'item n'est pas deja porte par quelqu'un d'autre
-                if (worldItem != null && !worldItem.IsBeingCarried && !items.Contains(worldItem))
-                {
-                    items.Add(worldItem);
-                }
+                items.Add(worldItem);
             }
         }
         return items;
+    }
+
+    /// <summary>
+    /// Retourne tous les WorldItem posés physiquement dans la zone spécifiée.
+    /// Utile pour inspecter les StorageZone, DepositZone, DeliveryZone.
+    /// Existing zone-shaped overload, retained for compatibility with delivery / storage
+    /// zone consumers. Delegates to GetPhysicalItemsInCollider via the zone's BoxCollider.
+    /// </summary>
+    public List<WorldItem> GetPhysicalItemsInZone(Zone zone)
+    {
+        var items = new List<WorldItem>();
+        if (zone == null) return items;
+        var boxCol = zone.GetComponent<BoxCollider>();
+        return GetPhysicalItemsInCollider(boxCol, items);
     }
 
     /// <summary>
@@ -900,6 +958,116 @@ public class Building : ComplexRoom
                 Destroy(instance.gameObject);
             }
             throw;
+        }
+    }
+
+    // =========================================================================
+    // CONSTRUCTION FINALIZATION (server-only)
+    // =========================================================================
+
+    /// <summary>
+    /// Server-only. Mirrors the formula tested in ConstructionProgressMathTests.
+    /// Reads _constructionRequirements + _contributedMaterials and returns
+    /// clamped sum(min(deliveredᵢ, requiredᵢ)) / sum(requiredᵢ).
+    /// </summary>
+    public float ComputeProgress()
+    {
+        if (_constructionRequirements == null || _constructionRequirements.Count == 0) return 1f;
+
+        int totalRequired = 0;
+        int totalSatisfied = 0;
+        for (int i = 0; i < _constructionRequirements.Count; i++)
+        {
+            var req = _constructionRequirements[i];
+            if (req.Item == null) continue;
+            int r = req.Amount;
+            int d = _contributedMaterials.TryGetValue(req.Item, out int v) ? v : 0;
+            totalRequired += r;
+            totalSatisfied += System.Math.Min(d, r);
+        }
+        if (totalRequired <= 0) return 1f;
+        return Mathf.Clamp01((float)totalSatisfied / totalRequired);
+    }
+
+    /// <summary>
+    /// Server-only. Atomic transition from UnderConstruction to Complete:
+    /// flips the state (which fires HandleStateChanged → visual swap +
+    /// TrySpawnDefaultFurniture + EvictLeftoversToPerimeter automatically).
+    ///
+    /// Idempotent: a second call when already Complete is a silent no-op.
+    ///
+    /// Called by CharacterAction_FinishConstruction.OnTick when progress hits 1.
+    ///
+    /// Note: shadows <see cref="object.Finalize"/> (the GC finalizer hook). Building
+    /// has no destructor so the shadowing is intentional and harmless. The `new`
+    /// keyword silences CS0114.
+    /// </summary>
+    public new void Finalize()
+    {
+        if (!IsServer) return;
+        if (_currentState.Value == MWI.WorldSystem.BuildingState.Complete) return;
+
+        _currentState.Value = MWI.WorldSystem.BuildingState.Complete;
+        if (ConstructionProgress.Value < 1f) ConstructionProgress.Value = 1f;
+        Debug.Log($"<color=green>[Building.Construction]</color> {buildingName} completed by Finalize().");
+    }
+
+    /// <summary>
+    /// Returns the point on the AABB perimeter (vertical faces only — Y is preserved)
+    /// nearest to `inside`, plus the outward face normal. Pure math; mirrors
+    /// PerimeterMathTests.
+    /// </summary>
+    private static (Vector3 point, Vector3 normal) NearestPerimeterPoint(Bounds bounds, Vector3 inside)
+    {
+        float dxMin = inside.x - bounds.min.x;
+        float dxMax = bounds.max.x - inside.x;
+        float dzMin = inside.z - bounds.min.z;
+        float dzMax = bounds.max.z - inside.z;
+
+        float minDist = dxMin;
+        Vector3 normal = Vector3.left;
+        Vector3 face = new Vector3(bounds.min.x, inside.y, inside.z);
+
+        if (dxMax < minDist) { minDist = dxMax; normal = Vector3.right;   face = new Vector3(bounds.max.x, inside.y, inside.z); }
+        if (dzMin < minDist) { minDist = dzMin; normal = Vector3.back;    face = new Vector3(inside.x, inside.y, bounds.min.z); }
+        if (dzMax < minDist) {                  normal = Vector3.forward; face = new Vector3(inside.x, inside.y, bounds.max.z); }
+
+        return (face, normal);
+    }
+
+    /// <summary>
+    /// Server-only. After Complete, evicts any remaining WorldItems on the footprint
+    /// to just outside its perimeter so they don't clip into the finished building's
+    /// interior. Snaps to NavMesh when possible, otherwise free-falls onto the eject
+    /// point.
+    /// </summary>
+    private void EvictLeftoversToPerimeter()
+    {
+        if (!IsServer) return;
+        if (_buildingZone == null) return;
+
+        var leftovers = GetPhysicalItemsInCollider(_buildingZone);
+        if (leftovers == null || leftovers.Count == 0) return;
+
+        Bounds bounds = _buildingZone.bounds;
+        foreach (var item in leftovers)
+        {
+            if (item == null || item.IsBeingCarried) continue;
+
+            try
+            {
+                var (point, normal) = NearestPerimeterPoint(bounds, item.transform.position);
+                Vector3 ejectPoint = point + normal * 0.5f;
+
+                if (UnityEngine.AI.NavMesh.SamplePosition(ejectPoint, out var hit, 2f, UnityEngine.AI.NavMesh.AllAreas))
+                    item.transform.position = hit.position;
+                else
+                    item.transform.position = ejectPoint;
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogException(e, this);
+            }
         }
     }
 }
