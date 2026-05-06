@@ -48,6 +48,23 @@ public class BuildingInteractable : InteractableObject
     }
 
     /// <summary>
+    /// Override the base proximity gate to use a 2D X-Z footprint check instead of full
+    /// 3D bounds.Contains. Y axis is ignored — the construction zone is conceptually a
+    /// ground rectangle, and 3D Contains can false-negative on the server-replicated
+    /// transform when the character's Y rounds to bounds.min.y but the actual float is
+    /// just below it (NavMesh agent height / floor offset / NetworkTransform precision).
+    /// Both client and server now use this 2D check, so they stay in sync.
+    /// </summary>
+    public override bool IsCharacterInInteractionZone(Character character)
+    {
+        if (character == null || InteractionZone == null) return false;
+        var bounds = InteractionZone.bounds;
+        var pos = character.transform.position;
+        return pos.x >= bounds.min.x && pos.x <= bounds.max.x
+            && pos.z >= bounds.min.z && pos.z <= bounds.max.z;
+    }
+
+    /// <summary>
     /// Tap-E entry point. Phase 1: only the placer can finalize a building under construction.
     /// Server-relay via Building.RequestStartFinishConstructionRpc — required for
     /// CharacterAction_Continuous which OnTick's server-authoritatively.

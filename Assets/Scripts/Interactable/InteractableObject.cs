@@ -40,7 +40,7 @@ public abstract class InteractableObject : MonoBehaviour
     /// that needs to decide whether a character is close enough to interact.
     /// If the interactable has no <see cref="InteractionZone"/> assigned, returns false.
     /// </summary>
-    public bool IsCharacterInInteractionZone(Character character)
+    public virtual bool IsCharacterInInteractionZone(Character character)
     {
         if (character == null || _interactionZone == null) return false;
         return _interactionZone.bounds.Contains(character.transform.position);

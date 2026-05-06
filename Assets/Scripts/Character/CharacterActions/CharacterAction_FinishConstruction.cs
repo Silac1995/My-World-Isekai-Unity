@@ -138,8 +138,18 @@ public class CharacterAction_FinishConstruction : CharacterAction_Continuous
         var bounds = bz.bounds;
         var pos = character.transform.position;
         bool contains = bounds.Contains(pos);
-        UnityEngine.Debug.Log($"[FinishConstruction.IsActorInside] {_target.BuildingName} bz={bz.name} bz.enabled={bz.enabled} isTrigger={bz.isTrigger} bounds={bounds} actorPos={pos} → contains={contains}");
-        return contains;
+        var min = bounds.min;
+        var max = bounds.max;
+        bool xOk = pos.x >= min.x && pos.x <= max.x;
+        bool yOk = pos.y >= min.y && pos.y <= max.y;
+        bool zOk = pos.z >= min.z && pos.z <= max.z;
+        // 2D footprint check — ignores Y because the construction zone is conceptually
+        // a ground rectangle. The character's exact Y (which can be 0 ± floating-point
+        // noise depending on collider/NavMesh agent position) shouldn't gate interaction
+        // when they're standing inside the X-Z footprint.
+        bool xzInside = xOk && zOk;
+        UnityEngine.Debug.Log($"[FinishConstruction.IsActorInside] {_target.BuildingName} pos={pos} min={min} max={max} | x:{xOk}({pos.x:F4} in [{min.x:F4},{max.x:F4}]) y:{yOk}({pos.y:F4} in [{min.y:F4},{max.y:F4}]) z:{zOk}({pos.z:F4} in [{min.z:F4},{max.z:F4}]) | bounds.Contains={contains} | xzInside={xzInside}");
+        return xzInside;
     }
 
     /// <summary>
