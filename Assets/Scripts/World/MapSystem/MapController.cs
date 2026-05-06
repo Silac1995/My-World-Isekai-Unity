@@ -890,9 +890,11 @@ namespace MWI.WorldSystem
                     continue;
                 }
 
+                // Always spawn the real prefab — the visual swap (Building._constructionVisualRoot
+                // ↔ _completedVisualRoot) handles UnderConstruction vs Complete on the same prefab.
+                // The legacy GenericScaffoldPrefab swap predates that design and would load a
+                // mismatched prefab on restore.
                 GameObject bPrefab = settings.GetBuildingPrefab(bSave.PrefabId);
-                if (bSave.State == BuildingState.UnderConstruction && settings.GenericScaffoldPrefab != null)
-                    bPrefab = settings.GenericScaffoldPrefab;
 
                 if (bPrefab != null)
                 {

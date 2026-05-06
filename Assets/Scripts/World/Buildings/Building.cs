@@ -1383,6 +1383,14 @@ public class Building : ComplexRoom
         if (!IsServer) return;
         if (data == null) return;
 
+        // Restore the construction state. OnNetworkSpawn unconditionally re-derives state
+        // from _constructionRequirements.Count and writes UnderConstruction for any prefab
+        // that has requirements — that override has to be reverted here so a saved Complete
+        // building doesn't load back as a scaffold. ContributeMaterial below also calls
+        // CheckConstructionCompletion which could flip state to Complete, so we set the
+        // state FIRST then let ContributeMaterial run on top.
+        if (_currentState.Value != data.State) _currentState.Value = data.State;
+
         // Always restore the meter, even if DeliveredMaterials is empty — UX pre-warm.
         ConstructionProgress.Value = Mathf.Clamp01(data.ConstructionProgress);
 

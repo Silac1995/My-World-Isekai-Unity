@@ -51,6 +51,10 @@ public class ConstructionSiteScanner : MonoBehaviour
         _building.GetPhysicalItemsInCollider(zone, _scratchItems);
 
         // Bucket by ItemSO. WorldItems are non-stacking — each instance counts as 1 unit.
+        // We add BOTH physical items in the zone AND already-consumed contributions
+        // (Building._contributedMaterials) — otherwise the scanner would write a lower
+        // physical-only progress over the action's already-consumed contributions and
+        // drag the meter backwards every tick.
         _bucketCache.Clear();
         foreach (var item in _scratchItems)
         {
@@ -61,6 +65,12 @@ public class ConstructionSiteScanner : MonoBehaviour
             if (so == null) continue;
             if (_bucketCache.TryGetValue(so, out int existing)) _bucketCache[so] = existing + 1;
             else _bucketCache[so] = 1;
+        }
+        foreach (var kv in _building.ContributedMaterials)
+        {
+            if (kv.Key == null) continue;
+            if (_bucketCache.TryGetValue(kv.Key, out int existing)) _bucketCache[kv.Key] = existing + kv.Value;
+            else _bucketCache[kv.Key] = kv.Value;
         }
 
         // Compare against requirements; update DeliveredMaterials NetworkList by index.
