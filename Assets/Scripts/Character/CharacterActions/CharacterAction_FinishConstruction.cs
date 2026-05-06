@@ -26,6 +26,15 @@ public class CharacterAction_FinishConstruction : CharacterAction_Continuous
 
     public override string ActionName => "Finish Construction";
 
+    /// <summary>
+    /// HUD progress bar reads this. Mirrors Building.ConstructionProgress, which is
+    /// updated server-side every OnTick by this action AND by ConstructionSiteScanner
+    /// (between actions). Replicated to all peers via NetworkVariable so clients see
+    /// the same fill level the server computes.
+    /// </summary>
+    public override float Progress =>
+        _target != null ? _target.ConstructionProgress.Value : 0f;
+
     public CharacterAction_FinishConstruction(Character character, Building target) : base(character)
     {
         _target = target;

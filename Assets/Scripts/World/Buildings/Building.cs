@@ -593,24 +593,26 @@ public class Building : ComplexRoom
         ps.Stop(withChildren: true, stopBehavior: ParticleSystemStopBehavior.StopEmittingAndClear);
 
         // ── Main module. CRITICAL: startSpeed = 0 — BoxEdge shape's startSpeed direction is
-        // RADIAL OUTWARD in the X-Z plane (i.e. away from the box centre, along the floor),
-        // which would push particles sideways instead of up. We zero it and rely entirely on
+        // RADIAL OUTWARD in the X-Z plane (along the floor). We zero it and rely entirely on
         // velocityOverLifetime.y to drive vertical motion.
+        // Project scale: 11 Unity units = 1.67m → ~6.6 u/m. Curtain target height ≈ 1.5m
+        // (a tall human head, ~10 units). With speed 3.5–5 and lifetime 3s, particles
+        // travel 10.5–15 units = clearly visible.
         var main = ps.main;
         main.duration = 5f;
         main.loop = true;
         main.startLifetime = 3f;
         main.startSpeed = 0f;
-        main.startSize = 1.5f;           // bigger particles → continuous-curtain look
+        main.startSize = 1.2f;
         main.startColor = new Color(0.5f, 0.9f, 1f, 1f);
-        main.maxParticles = 600;
+        main.maxParticles = 800;
         main.simulationSpace = ParticleSystemSimulationSpace.Local;
         main.scalingMode = ParticleSystemScalingMode.Local;
 
         // ── Emission: dense rate so particles overlap into a wall.
         var emission = ps.emission;
         emission.enabled = true;
-        emission.rateOverTime = 80f;
+        emission.rateOverTime = 120f;
 
         // ── Shape: BoxEdge, X×Z = footprint, Y collapsed → particles spawn around the
         // perimeter rectangle on the floor.
@@ -619,12 +621,12 @@ public class Building : ComplexRoom
         shape.shapeType = ParticleSystemShapeType.BoxEdge;
         shape.scale = new Vector3(box.size.x, 0.001f, box.size.z);
 
-        // ── Velocity over lifetime: pure upward Y drift. Slower speed + longer lifetime
-        // so particles linger at multiple heights, giving the curtain its continuous look.
+        // ── Velocity over lifetime: visible upward drift. With Y 3.5–5 over 3s lifetime,
+        // particles travel ~10–15 Unity units (≈ 1.5–2.3m at the 11u=1.67m project scale).
         var vel = ps.velocityOverLifetime;
         vel.enabled = true;
         vel.space = ParticleSystemSimulationSpace.Local;
-        vel.y = new ParticleSystem.MinMaxCurve(0.6f, 1.0f);
+        vel.y = new ParticleSystem.MinMaxCurve(3.5f, 5f);
         vel.x = new ParticleSystem.MinMaxCurve(0f);
         vel.z = new ParticleSystem.MinMaxCurve(0f);
 

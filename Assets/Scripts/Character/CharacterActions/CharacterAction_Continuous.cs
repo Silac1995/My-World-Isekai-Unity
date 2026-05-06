@@ -20,6 +20,14 @@ public abstract class CharacterAction_Continuous : CharacterAction
     public float TickIntervalSeconds { get; protected set; } = 1f;
 
     /// <summary>
+    /// 0..1 reported progress for HUD bars. Continuous actions have no fixed Duration so
+    /// CharacterActions.GetActionProgress's elapsed/Duration math returns 0 — subclasses
+    /// override this to expose meaningful progress (e.g., construction percent complete).
+    /// Default 0.
+    /// </summary>
+    public virtual float Progress => 0f;
+
+    /// <summary>
     /// Server-ticked. Return true when the terminating condition has been met
     /// (the runner will then call <see cref="CharacterAction.Finish"/>).
     /// </summary>

@@ -17,7 +17,11 @@ public class CharacterActions : CharacterSystem
 
     public float GetActionProgress()
     {
-        if (_currentAction == null || _currentAction.Duration <= 0) return 0f;
+        if (_currentAction == null) return 0f;
+        // Continuous actions have no fixed Duration — they expose their own Progress
+        // (e.g., CharacterAction_FinishConstruction returns Building.ConstructionProgress).
+        if (_currentAction is CharacterAction_Continuous c) return Mathf.Clamp01(c.Progress);
+        if (_currentAction.Duration <= 0) return 0f;
         float elapsed = Time.time - _actionStartTime;
         return Mathf.Clamp01(elapsed / _currentAction.Duration);
     }
