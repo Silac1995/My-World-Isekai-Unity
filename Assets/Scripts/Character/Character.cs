@@ -323,6 +323,15 @@ public class Character : NetworkBehaviour, MWI.Orders.IOrderIssuer
     /// </summary>
     public string CharacterId => NetworkCharacterId.Value.ToString();
 
+    // ── Skills (Phase 1 stub) ─────────────────────────────────────────
+    /// <summary>
+    /// Returns the actor's current level for a given skill, or 0 if the skill system is
+    /// not yet wired (Phase 1). Phase 2 wires this into the actual skill component.
+    /// Used by CharacterAction_FinishConstruction's per-tick consume-budget formula.
+    /// See docs/superpowers/specs/2026-05-06-building-construction-loop-design.md.
+    /// </summary>
+    public int GetSkillLevelOrZero(SkillId skill) => 0;
+
     // ── Origin World ──────────────────────────────────────────────────
     private string _originWorldGuid;
     public string OriginWorldGuid
