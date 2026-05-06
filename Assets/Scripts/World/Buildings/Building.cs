@@ -1418,8 +1418,13 @@ public class Building : ComplexRoom
         if (actor.CharacterActions == null) { Debug.LogWarning($"[Building.SRpc] {buildingName} aborted — actor.CharacterActions null"); return; }
 
         // Cooperative model: any character can finalize. Phase 1 owner-check removed.
-        Debug.Log($"<color=magenta>[Building.SRpc]</color> {buildingName} queuing FinishConstruction action for {actor.CharacterName}");
+        var existing = actor.CharacterActions.CurrentAction;
+        Debug.Log($"<color=magenta>[Building.SRpc]</color> {buildingName} pre-queue: actor={actor.CharacterName} _currentAction={(existing != null ? existing.ActionName : "NULL")} actorPos={actor.transform.position}");
+
         var action = new CharacterAction_FinishConstruction(actor, this);
+        bool canExec = action.CanExecute();
+        Debug.Log($"<color=magenta>[Building.SRpc]</color> {buildingName} action.CanExecute()={canExec}");
+
         bool queued = actor.CharacterActions.ExecuteAction(action);
         Debug.Log($"<color=magenta>[Building.SRpc]</color> {buildingName} ExecuteAction returned {queued}");
     }
