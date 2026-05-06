@@ -2,46 +2,91 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// Player-facing interactable surface on a Building. Phase 1 exposes only "Finish
-/// Construction" when the actor is the building's placer (PlacedByCharacterId match).
-/// Stub seats: Abandon, Sell, OpenInterior — wired in later phases.
+/// Player-facing interactable surface on a Building. Inherits InteractableObject so the
+/// existing E-key flow (PlayerInteractionDetector → Interact / hold-menu) drives it
+/// uniformly with all other interactables — no custom click-handling.
 ///
-/// Players queue actions via PlayerController routing (Rule #33). NPCs (Phase 2)
-/// reach the same actions through GOAP.
+/// Phase 1 exposes only "Finish Construction" when the actor is the building's placer
+/// (PlacedByCharacterId match). Stub seats: Abandon, Sell, OpenInterior — wired in
+/// later phases.
 ///
-/// Authored 2026-05-06 — see docs/superpowers/specs/2026-05-06-building-construction-loop-design.md.
+/// The InteractionZone defaults to <c>Building.BuildingZone</c> when not authored —
+/// the player walks into the building footprint and presses E. Authoring an explicit
+/// trigger collider on the prefab overrides that fallback.
+///
+/// Updated 2026-05-06 — refactored from plain MonoBehaviour to InteractableObject.
+/// See docs/superpowers/specs/2026-05-06-building-construction-loop-design.md.
 /// </summary>
 [RequireComponent(typeof(Building))]
-public class BuildingInteractable : MonoBehaviour
+public class BuildingInteractable : InteractableObject
 {
-    public enum InteractionId
-    {
-        None = 0,
-        FinishConstruction = 1,
-        // Phase 2 stubs:
-        // Abandon = 100,
-        // Sell = 101,
-        // OpenInterior = 102,
-    }
-
     private Building _building;
 
-    private void Awake() => _building = GetComponent<Building>();
+    protected void Awake()
+    {
+        _building = GetComponent<Building>();
+
+        // Default the InteractableObject's _interactionZone to Building.BuildingZone if
+        // the prefab didn't author a separate trigger. Use reflection because the base
+        // field is `private` — keeping the upstream API unchanged.
+        var fInteractionZone = typeof(InteractableObject).GetField("_interactionZone",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        if (fInteractionZone != null)
+        {
+            var current = fInteractionZone.GetValue(this) as Collider;
+            if (current == null && _building != null && _building.BuildingZone != null)
+            {
+                fInteractionZone.SetValue(this, _building.BuildingZone);
+            }
+        }
+
+        // Default prompt — designer can override on the prefab.
+        if (string.IsNullOrEmpty(interactionPrompt) || interactionPrompt == "Press E to interact")
+        {
+            interactionPrompt = "Press E to build";
+        }
+    }
 
     /// <summary>
-    /// Returns the InteractionIds available to the requesting actor right now.
-    /// Caller fills the result list (no per-call allocation; reuse a buffer).
+    /// Tap-E entry point. Phase 1: only the placer can finalize a building under construction.
+    /// Server-relay via Building.RequestStartFinishConstructionRpc — required for
+    /// CharacterAction_Continuous which OnTick's server-authoritatively.
     /// </summary>
-    public void GetAvailableInteractions(Character actor, List<InteractionId> result)
+    public override void Interact(Character interactor)
     {
-        if (result == null) return;
-        result.Clear();
-        if (_building == null || actor == null) return;
+        if (interactor == null || _building == null) return;
 
-        if (_building.IsUnderConstruction && IsOwner(actor))
+        // Core Rule #1 (interactable-system): proximity gate is the canonical helper.
+        if (!IsCharacterInInteractionZone(interactor)) return;
+
+        if (!_building.IsUnderConstruction) return;
+        if (!IsOwner(interactor)) return;
+
+        // Server resolves the actor + building, validates ownership, and queues the action.
+        // On host the RPC short-circuits to a direct call in the same frame.
+        _building.RequestStartFinishConstructionRpc(new Unity.Netcode.NetworkBehaviourReference(interactor));
+    }
+
+    /// <summary>
+    /// Hold-E menu options. Phase 1: returns "Finish Construction" while UnderConstruction
+    /// (same as tap-E target — provides discoverability). Phase 2 stubs (Abandon, Sell,
+    /// OpenInterior) plug in here.
+    /// </summary>
+    public override List<InteractionOption> GetHoldInteractionOptions(Character interactor)
+    {
+        if (interactor == null || _building == null) return null;
+        if (!IsOwner(interactor)) return null;
+
+        var opts = new List<InteractionOption>();
+        if (_building.IsUnderConstruction)
         {
-            result.Add(InteractionId.FinishConstruction);
+            opts.Add(new InteractionOption("Finish Construction", () => Interact(interactor)));
         }
+        // Phase 2:
+        // opts.Add(new InteractionOption("Abandon", () => ...));
+        // opts.Add(new InteractionOption("Sell",    () => ...));
+
+        return opts.Count > 0 ? opts : null;
     }
 
     /// <summary>
@@ -54,30 +99,5 @@ public class BuildingInteractable : MonoBehaviour
         var placedBy = _building.PlacedByCharacterId.Value.ToString();
         if (string.IsNullOrEmpty(placedBy)) return false;
         return placedBy == actor.CharacterId;
-    }
-
-    /// <summary>
-    /// Player-input entry point. Dispatches via a Building ServerRpc so the server is the
-    /// single peer that queues the action — required for <see cref="CharacterAction_Continuous"/>
-    /// which OnTick's server-authoritatively (clients see effects via NetworkVariable replication).
-    /// On host the RPC short-circuits to a direct call in the same frame.
-    /// </summary>
-    public bool TryQueueInteraction(InteractionId id, Character actor)
-    {
-        if (_building == null || actor == null) return false;
-
-        switch (id)
-        {
-            case InteractionId.FinishConstruction:
-                if (!_building.IsUnderConstruction) return false;
-                if (!IsOwner(actor)) return false;
-                // Server-relay: send RPC; server resolves the actor and queues the action.
-                // The Rpc lives on Building (NetworkBehaviour); BuildingInteractable is a plain MonoBehaviour.
-                _building.RequestStartFinishConstructionRpc(new Unity.Netcode.NetworkBehaviourReference(actor));
-                return true;
-
-            default:
-                return false;
-        }
     }
 }

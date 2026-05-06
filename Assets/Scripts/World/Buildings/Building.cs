@@ -67,6 +67,16 @@ public class Building : ComplexRoom
     [Tooltip("Child GameObject holding the finished-building renderers/colliders shown after Complete. Active iff CurrentState == Complete.")]
     [SerializeField] protected GameObject _completedVisualRoot;
 
+    [Tooltip("Optional translucent material applied to the auto-cloned ConstructionVisual. If null, the cloned mesh keeps the original CompletedVisual materials (the scaffold visual will look opaque, like the finished building). Author once on the base building prefab and all variants inherit.")]
+    [SerializeField] protected Material _constructionGhostMaterial;
+
+    /// <summary>
+    /// Set after <see cref="EnsureConstructionGhostVisual"/> populates _constructionVisualRoot
+    /// from a clone of _completedVisualRoot. Per-instance so re-entering / re-spawning a
+    /// building doesn't re-clone over the existing children.
+    /// </summary>
+    private bool _ghostVisualPopulated;
+
     /// <summary>
     /// 0..1 progress towards completion. Server-write, everyone-read. Updated by
     /// ConstructionSiteScanner (observational, between deliveries) and by
@@ -436,10 +446,88 @@ public class Building : ComplexRoom
             FurnitureManager.LoadExistingFurniture();
         }
 
+        // Build a ghost-clone of CompletedVisual into ConstructionVisual so the under-construction
+        // visual looks like a translucent silhouette of the finished building rather than a generic
+        // placeholder. Runs on every peer (visuals are per-peer; nothing replicates).
+        EnsureConstructionGhostVisual();
+
         // Apply initial visual state — late-joiners need this; HandleStateChanged only fires
         // on subsequent changes, not on the initial state replicated via NetworkVariable spawn payload.
         Debug.Log($"<color=cyan>[Building.Start]</color> {buildingName} _currentState.Value={_currentState.Value} → calling ApplyConstructionVisuals. IsServer={IsServer}");
         ApplyConstructionVisuals(_currentState.Value);
+    }
+
+    /// <summary>
+    /// Clones the children of <see cref="_completedVisualRoot"/> into <see cref="_constructionVisualRoot"/>,
+    /// strips colliders + network components, and (optionally) repaints all renderers with
+    /// <see cref="_constructionGhostMaterial"/>. Idempotent per-instance via <see cref="_ghostVisualPopulated"/>.
+    ///
+    /// Runs on every peer. Visuals are local — no replication. The ghost material is optional;
+    /// if null the clone uses the original materials (the scaffold visual will look like the
+    /// finished building, not translucent).
+    ///
+    /// Wipes any existing children of ConstructionVisual first (e.g. a Scaffold_Placeholder
+    /// authored at prefab time gets removed at runtime in favor of this auto-clone).
+    /// </summary>
+    private void EnsureConstructionGhostVisual()
+    {
+        if (_ghostVisualPopulated) return;
+        if (_constructionVisualRoot == null || _completedVisualRoot == null) return;
+        if (_completedVisualRoot.transform.childCount == 0) return;
+
+        // Wipe existing ConstructionVisual children (placeholder pillars, etc.).
+        for (int i = _constructionVisualRoot.transform.childCount - 1; i >= 0; i--)
+        {
+            var existing = _constructionVisualRoot.transform.GetChild(i).gameObject;
+            if (Application.isPlaying) Destroy(existing); else DestroyImmediate(existing);
+        }
+
+        // Clone each CompletedVisual child into ConstructionVisual.
+        for (int i = 0; i < _completedVisualRoot.transform.childCount; i++)
+        {
+            var src = _completedVisualRoot.transform.GetChild(i);
+            GameObject clone;
+            try
+            {
+                clone = Instantiate(src.gameObject, _constructionVisualRoot.transform);
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogException(e, this);
+                continue;
+            }
+            clone.name = src.name + "_Ghost";
+
+            // Strip any colliders so the ghost-clone doesn't double-up physics with the real
+            // CompletedVisual (which is the active collider source).
+            foreach (var col in clone.GetComponentsInChildren<Collider>(includeInactive: true))
+            {
+                if (col == null) continue;
+                if (Application.isPlaying) Destroy(col); else DestroyImmediate(col);
+            }
+
+            // Strip any NetworkObject — visual-only clones must never spawn on the network.
+            foreach (var no in clone.GetComponentsInChildren<Unity.Netcode.NetworkObject>(includeInactive: true))
+            {
+                if (no == null) continue;
+                if (Application.isPlaying) Destroy(no); else DestroyImmediate(no);
+            }
+
+            // Apply the ghost material to all renderers if authored. Otherwise leave originals.
+            if (_constructionGhostMaterial != null)
+            {
+                foreach (var r in clone.GetComponentsInChildren<Renderer>(includeInactive: true))
+                {
+                    if (r == null) continue;
+                    int matCount = r.sharedMaterials != null ? r.sharedMaterials.Length : 1;
+                    var mats = new Material[matCount];
+                    for (int m = 0; m < matCount; m++) mats[m] = _constructionGhostMaterial;
+                    r.materials = mats;
+                }
+            }
+        }
+
+        _ghostVisualPopulated = true;
     }
 
     private void HandleStateChanged(MWI.WorldSystem.BuildingState previousValue, MWI.WorldSystem.BuildingState newValue)
