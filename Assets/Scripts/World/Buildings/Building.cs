@@ -81,6 +81,16 @@ public class Building : ComplexRoom
     private bool _ghostVisualPopulated;
 
     /// <summary>
+    /// Renderers on top-level Building children OUTSIDE _completedVisualRoot (e.g.,
+    /// Interior Door wall meshes) that we cloned into the ghost set. We toggle their
+    /// `.enabled` flag in <see cref="ApplyConstructionVisuals"/> so the original
+    /// opaque mesh hides while UnderConstruction without disabling the host
+    /// GameObject's scripts/network components.
+    /// </summary>
+    private readonly System.Collections.Generic.List<Renderer> _extraOriginalRenderersToToggle =
+        new System.Collections.Generic.List<Renderer>();
+
+    /// <summary>
     /// 0..1 progress towards completion. Server-write, everyone-read. Updated by
     /// ConstructionSiteScanner (observational, between deliveries) and by
     /// CharacterAction_FinishConstruction.OnTick (authoritative, during the action).
@@ -502,6 +512,31 @@ public class Building : ComplexRoom
             }
         }
 
+        // Also clone any other top-level Building children that contain renderers
+        // (e.g. Interior Door's wall + archway). Excludes Construction/Completed visual
+        // roots themselves and Zone triggers which have no visual contribution.
+        for (int i = 0; i < transform.childCount; i++)
+        {
+            var child = transform.GetChild(i);
+            if (child == null) continue;
+            var childGO = child.gameObject;
+            if (childGO == _constructionVisualRoot) continue;
+            if (childGO == _completedVisualRoot) continue;
+            if (childGO.GetComponent<Zone>() != null) continue;
+
+            var rs = childGO.GetComponentsInChildren<Renderer>(includeInactive: true);
+            if (rs == null || rs.Length == 0) continue;
+
+            // Cache the original renderers so ApplyConstructionVisuals can toggle them.
+            foreach (var r in rs) if (r != null) _extraOriginalRenderersToToggle.Add(r);
+
+            CloneAndRepaint(child, "_Ghost", _constructionGhostMaterial);
+            if (_constructionOutlineMaterial != null)
+            {
+                CloneAndRepaint(child, "_Outline", _constructionOutlineMaterial);
+            }
+        }
+
         _ghostVisualPopulated = true;
     }
 
@@ -608,7 +643,19 @@ public class Building : ComplexRoom
         if (_completedVisualRoot != null && _completedVisualRoot.activeSelf == underConstruction)
             _completedVisualRoot.SetActive(!underConstruction);
 
-        Debug.Log($"<color=cyan>[Building.ApplyVisuals]</color> {buildingName} state={state} (under={underConstruction}) | conRoot={(_constructionVisualRoot != null ? _constructionVisualRoot.name : "NULL")} was={conActive} now={(_constructionVisualRoot != null && _constructionVisualRoot.activeSelf)} | cmpRoot={(_completedVisualRoot != null ? _completedVisualRoot.name : "NULL")} was={cmpActive} now={(_completedVisualRoot != null && _completedVisualRoot.activeSelf)} | IsServer={IsServer} IsClient={IsClient}");
+        // Hide originals of any extra-cloned children (e.g., InteriorDoor's wall) while
+        // UnderConstruction so the opaque originals don't render over our ghost clones.
+        // We disable Renderer.enabled rather than the host GameObject so scripts/NetworkObjects
+        // on the original keep running.
+        bool showOriginals = !underConstruction;
+        for (int i = 0; i < _extraOriginalRenderersToToggle.Count; i++)
+        {
+            var r = _extraOriginalRenderersToToggle[i];
+            if (r == null) continue;
+            if (r.enabled != showOriginals) r.enabled = showOriginals;
+        }
+
+        Debug.Log($"<color=cyan>[Building.ApplyVisuals]</color> {buildingName} state={state} (under={underConstruction}) | conRoot={(_constructionVisualRoot != null ? _constructionVisualRoot.name : "NULL")} was={conActive} now={(_constructionVisualRoot != null && _constructionVisualRoot.activeSelf)} | cmpRoot={(_completedVisualRoot != null ? _completedVisualRoot.name : "NULL")} was={cmpActive} now={(_completedVisualRoot != null && _completedVisualRoot.activeSelf)} | extraToggled={_extraOriginalRenderersToToggle.Count} | IsServer={IsServer} IsClient={IsClient}");
     }
 
     protected virtual void OnDestroy()
