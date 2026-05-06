@@ -1479,6 +1479,10 @@ PrefabInstance:
       propertyPath: _buildingZone
       value: 
       objectReference: {fileID: 7470663871733317378}
+    - target: {fileID: 7957207800943456863, guid: 2e1494b4d52f43344be89b09545dbadf, type: 3}
+      propertyPath: _constructionRequirements.Array.data[0].Amount
+      value: 4
+      objectReference: {fileID: 0}
     - target: {fileID: 8467930593367525379, guid: 2e1494b4d52f43344be89b09545dbadf, type: 3}
       propertyPath: m_Size.x
       value: 32.00006

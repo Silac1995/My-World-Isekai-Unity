@@ -944,6 +944,18 @@ PrefabInstance:
       propertyPath: '_farmingAreaZones.Array.data[0]'
       value: 
       objectReference: {fileID: 2114045596450270011}
+    - target: {fileID: 2058514990271563893, guid: d941949b730fb1843991b09d42aa29bf, type: 3}
+      propertyPath: _constructionRequirements.Array.size
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 2058514990271563893, guid: d941949b730fb1843991b09d42aa29bf, type: 3}
+      propertyPath: _constructionRequirements.Array.data[0].Item
+      value: 
+      objectReference: {fileID: 11400000, guid: a3f0471c4178efd4b9b5efdb38aea516, type: 2}
+    - target: {fileID: 2058514990271563893, guid: d941949b730fb1843991b09d42aa29bf, type: 3}
+      propertyPath: _constructionRequirements.Array.data[0].Amount
+      value: 2
+      objectReference: {fileID: 0}
     - target: {fileID: 2065972561981519857, guid: d941949b730fb1843991b09d42aa29bf, type: 3}
       propertyPath: m_Size.x
       value: 5

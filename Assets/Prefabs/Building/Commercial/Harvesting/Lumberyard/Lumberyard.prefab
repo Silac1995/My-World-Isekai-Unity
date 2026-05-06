@@ -2163,7 +2163,10 @@ MonoBehaviour:
   _buildingType: 6
   _buildingZone: {fileID: 2900277757222118802}
   _deliveryZone: {fileID: 3832459157725952937}
-  _constructionRequirements: []
+  _constructionRequirements:
+  - Item: {fileID: 11400000, guid: a3f0471c4178efd4b9b5efdb38aea516, type: 2}
+    Amount: 2
+    IsReferenceOnly: 0
   _constructionVisualRoot: {fileID: 7801831813967746626}
   _completedVisualRoot: {fileID: 7956832615276565182}
   _constructionFootprintMaterial: {fileID: 2100000, guid: b31318f4e14d2614fbd7f82168f4e968, type: 2}

@@ -76,37 +76,6 @@ public class Building : ComplexRoom
     [Tooltip("Particle material (URP/Particles/Unlit recommended) applied to the upward-rising 'curtain' barrier ParticleSystem auto-spawned at the footprint perimeter. Particles fade alpha bottom→top over their lifetime to simulate a translucent barrier wall. Leave null to skip the curtain effect.")]
     [SerializeField] protected Material _constructionCurtainMaterial;
 
-    [Header("Construction Curtain Tuning")]
-    [Tooltip("Particles emitted per second by the curtain ParticleSystem. Lower = fewer particles. Default 6.")]
-    [SerializeField, Min(0f)] protected float _curtainEmissionRate = 6f;
-
-    [Tooltip("Hard cap on simultaneously alive curtain particles. Should be ≥ EmissionRate × StartLifetime. Default 40.")]
-    [SerializeField, Min(0)] protected int _curtainMaxParticles = 40;
-
-    [Tooltip("How long each curtain particle lives, in seconds. Combined with rise speed determines column height (height ≈ speed × lifetime).")]
-    [SerializeField, Min(0.01f)] protected float _curtainStartLifetime = 5f;
-
-    [Tooltip("World-space start size of each curtain particle quad. Larger = thicker 'wall'.")]
-    [SerializeField, Min(0f)] protected float _curtainStartSize = 0.1f;
-
-    [Tooltip("Min upward rise speed (Unity units / second). Project scale: 11 u = 1.67 m. Default 1.5.")]
-    [SerializeField, Min(0f)] protected float _curtainRiseSpeedMin = 1.5f;
-
-    [Tooltip("Max upward rise speed. Each particle picks a value in [Min, Max] at spawn. Default 2.5.")]
-    [SerializeField, Min(0f)] protected float _curtainRiseSpeedMax = 2.5f;
-
-    [Tooltip("Peak alpha during the plateau phase of the alpha gradient. Lower = more translucent particles.")]
-    [SerializeField, Range(0f, 1f)] protected float _curtainAlphaMax = 0.2f;
-
-    [Tooltip("Lifetime fraction at which fade-IN completes (alpha reaches AlphaMax). 0..1.")]
-    [SerializeField, Range(0.001f, 0.999f)] protected float _curtainFadeInEnd = 0.1f;
-
-    [Tooltip("Lifetime fraction at which fade-OUT begins (alpha leaves AlphaMax → 0). Must be > FadeInEnd. Lower = particles begin fading earlier.")]
-    [SerializeField, Range(0.001f, 0.999f)] protected float _curtainFadeOutStart = 0.35f;
-
-    [Tooltip("RGB tint applied to the curtain particles. Multiplied with the material color. Alpha is ignored — fade is driven by the AlphaMax / FadeInEnd / FadeOutStart curve.")]
-    [SerializeField] protected Color _curtainTint = new Color(0.5f, 0.9f, 1f, 1f);
-
     /// <summary>
     /// Set after <see cref="EnsureConstructionGhostVisual"/> populates _constructionVisualRoot
     /// from a clone of _completedVisualRoot. Per-instance so re-entering / re-spawning a
@@ -598,6 +567,11 @@ public class Building : ComplexRoom
         // fading alpha bottom → top over lifetime. Auto-toggles with ConstructionVisual.
         EnsureConstructionCurtainParticles();
 
+        // Static translucent wall around the perimeter, alpha fades ground → top via
+        // vertex color. Reads WallMaterial / WallHeight / WallAlpha* from the same
+        // BuildingCurtainSettings asset as the particles. Auto-toggles with ConstructionVisual.
+        EnsureConstructionPerimeterWall();
+
         _ghostVisualPopulated = true;
     }
 
@@ -611,10 +585,35 @@ public class Building : ComplexRoom
     /// </summary>
     private void EnsureConstructionCurtainParticles()
     {
+        // ── Pre-spawn validation — fail fast WITHOUT creating any GameObject so the
+        // Console clearly shows which dependency is missing before we touch the scene.
         if (_constructionVisualRoot == null) { Debug.LogWarning($"[Building.Curtain] {buildingName}: _constructionVisualRoot null — skip"); return; }
         if (_constructionCurtainMaterial == null) { Debug.LogWarning($"[Building.Curtain] {buildingName}: _constructionCurtainMaterial null — skip"); return; }
         if (!(_buildingZone is BoxCollider box)) { Debug.LogWarning($"[Building.Curtain] {buildingName}: _buildingZone not a BoxCollider — skip"); return; }
-        Debug.Log($"[Building.Curtain] {buildingName}: spawning curtain particles");
+
+        // ── Resolve settings via the BuildingCurtainSettingsHolder component on this
+        // Building's root. The holder is authored once on Building_prefab.prefab and every
+        // building variant inherits it via Unity's prefab inheritance. Per-variant override
+        // is the standard prefab-override workflow on the holder's _settings field. If the
+        // component is missing or its asset is null, skip the curtain (with a warning) —
+        // preferred to hidden defaults so the missing config is visible.
+        var holder = GetComponent<BuildingCurtainSettingsHolder>();
+        if (holder == null)
+        {
+            Debug.LogWarning($"[Building.Curtain] {buildingName}: BuildingCurtainSettingsHolder component missing on this Building's root GameObject — skip. " +
+                             "Add the component to Building_prefab.prefab so every building variant inherits it.");
+            return;
+        }
+        var settings = holder.Settings;
+        if (settings == null)
+        {
+            Debug.LogWarning($"[Building.Curtain] {buildingName}: BuildingCurtainSettingsHolder is present but its Settings field is null — skip. " +
+                             "Drag a BuildingCurtainSettings asset onto the holder on Building_prefab.prefab.");
+            return;
+        }
+        Debug.Log($"[Building.Curtain] {buildingName}: spawning curtain — settings='{settings.name}' " +
+                  $"emission={settings.EmissionRate} max={settings.MaxParticles} size={settings.StartSize} " +
+                  $"speed=[{settings.RiseSpeedMin},{settings.RiseSpeedMax}] alphaMax={settings.AlphaMax}");
 
         GameObject psHost;
         try
@@ -642,11 +641,11 @@ public class Building : ComplexRoom
         // ── Main module. CRITICAL: startSpeed = 0 — BoxEdge shape's startSpeed direction is
         // RADIAL OUTWARD in the X-Z plane (along the floor). We zero it and rely entirely on
         // velocityOverLifetime.y to drive vertical motion.
-        // Tunable knobs live on the Building Inspector under "Construction Curtain Tuning".
+        // Tunable knobs live on the BuildingCurtainSettings asset (Resources/BuildingCurtainSettings.asset).
         // Column height ≈ RiseSpeed × StartLifetime (project scale: 11 u = 1.67 m).
-        float lifetime = Mathf.Max(0.01f, _curtainStartLifetime);
-        float startSize = Mathf.Max(0f, _curtainStartSize);
-        Color tintRGBA = new Color(_curtainTint.r, _curtainTint.g, _curtainTint.b, 1f);
+        float lifetime = Mathf.Max(0.01f, settings.StartLifetime);
+        float startSize = Mathf.Max(0f, settings.StartSize);
+        Color tintRGBA = new Color(settings.Tint.r, settings.Tint.g, settings.Tint.b, 1f);
 
         var main = ps.main;
         main.duration = 5f;
@@ -655,14 +654,14 @@ public class Building : ComplexRoom
         main.startSpeed = 0f;
         main.startSize = startSize;
         main.startColor = tintRGBA;
-        main.maxParticles = Mathf.Max(0, _curtainMaxParticles);
+        main.maxParticles = Mathf.Max(0, settings.MaxParticles);
         main.simulationSpace = ParticleSystemSimulationSpace.Local;
         main.scalingMode = ParticleSystemScalingMode.Local;
 
         // ── Emission: tunable rate. Lower → fewer particles → thinner wall.
         var emission = ps.emission;
         emission.enabled = true;
-        emission.rateOverTime = Mathf.Max(0f, _curtainEmissionRate);
+        emission.rateOverTime = Mathf.Max(0f, settings.EmissionRate);
 
         // ── Shape: BoxEdge, X×Z = footprint, Y collapsed → particles spawn around the
         // perimeter rectangle on the floor.
@@ -674,8 +673,8 @@ public class Building : ComplexRoom
         // ── Velocity over lifetime: visible upward drift driven by the tunable rise-speed
         // range. All three axes MUST use the same MinMaxCurve mode (Unity warning otherwise) —
         // we use TwoConstants on all three; X/Z are constant 0 → 0 (no horizontal drift).
-        float vMin = Mathf.Max(0f, _curtainRiseSpeedMin);
-        float vMax = Mathf.Max(vMin, _curtainRiseSpeedMax);
+        float vMin = Mathf.Max(0f, settings.RiseSpeedMin);
+        float vMax = Mathf.Max(vMin, settings.RiseSpeedMax);
         var vel = ps.velocityOverLifetime;
         vel.enabled = true;
         vel.space = ParticleSystemSimulationSpace.Local;
@@ -684,11 +683,11 @@ public class Building : ComplexRoom
         vel.z = new ParticleSystem.MinMaxCurve(0f, 0f);
 
         // ── Color over lifetime: alpha 0 → AlphaMax (fade-in) → AlphaMax (plateau) → 0
-        // (fade-out). Tunable via _curtainAlphaMax / _curtainFadeInEnd / _curtainFadeOutStart.
+        // (fade-out). Tunable via settings.AlphaMax / FadeInEnd / FadeOutStart.
         // Strict ordering 0 < t1 < t2 < 1 enforced so Unity's gradient sampling stays defined.
-        float alphaMax = Mathf.Clamp01(_curtainAlphaMax);
-        float t1 = Mathf.Clamp(_curtainFadeInEnd, 0.001f, 0.998f);
-        float t2 = Mathf.Clamp(_curtainFadeOutStart, t1 + 0.001f, 0.999f);
+        float alphaMax = Mathf.Clamp01(settings.AlphaMax);
+        float t1 = Mathf.Clamp(settings.FadeInEnd, 0.001f, 0.998f);
+        float t2 = Mathf.Clamp(settings.FadeOutStart, t1 + 0.001f, 0.999f);
 
         var col = ps.colorOverLifetime;
         col.enabled = true;
@@ -722,6 +721,113 @@ public class Building : ComplexRoom
         }
 
         ps.Play(withChildren: true);
+    }
+
+    /// <summary>
+    /// Spawns a procedurally-built 4-quad sleeve mesh around the BuildingZone perimeter
+    /// to delimit the construction zone with a translucent wall whose alpha fades from
+    /// opaque at the ground to transparent at the top. The fade is driven by per-vertex
+    /// color alpha (no custom shader needed — URP/Particles/Unlit's _ColorMode=Multiply
+    /// applies vertex color to the final pixel).
+    ///
+    /// No-op if the BuildingCurtainSettingsHolder is missing, its Settings is null, the
+    /// settings asset has no WallMaterial assigned, WallHeight ≤ 0, or BuildingZone is
+    /// not a BoxCollider.
+    /// </summary>
+    private void EnsureConstructionPerimeterWall()
+    {
+        if (_constructionVisualRoot == null) return; // already warned by curtain method
+        if (!(_buildingZone is BoxCollider box)) return;
+
+        var holder = GetComponent<BuildingCurtainSettingsHolder>();
+        if (holder == null || holder.Settings == null) return; // already warned by curtain method
+        var settings = holder.Settings;
+
+        if (settings.WallMaterial == null)
+        {
+            // Wall is optional — silent skip if no material is wired up.
+            return;
+        }
+        if (settings.WallHeight <= 0f) return;
+
+        GameObject host;
+        try
+        {
+            host = new GameObject("ConstructionPerimeterWall");
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogException(e, this);
+            return;
+        }
+        host.transform.SetParent(_constructionVisualRoot.transform, worldPositionStays: false);
+
+        // Origin sits at the BOTTOM face of BuildingZone (lifted 0.02 to avoid Z-fight
+        // with the footprint marker). Mesh verts are then in local Y from 0 to WallHeight.
+        float bottomY = box.center.y - (box.size.y * 0.5f) + 0.02f;
+        host.transform.localPosition = new Vector3(box.center.x, bottomY, box.center.z);
+        host.transform.localRotation = Quaternion.identity;
+
+        // ── Build the 4-quad sleeve mesh. Single mesh = single draw call.
+        // Vertex layout: 4 verts per side × 4 sides = 16 verts.
+        // Per side, vertex order is BL, BR, TR, TL with bottom verts at y=0 (alpha=Bottom)
+        // and top verts at y=h (alpha=Top). Two triangles per side: BL-TR-BR and BL-TL-TR.
+        float hx = box.size.x * 0.5f;
+        float hz = box.size.z * 0.5f;
+        float h = settings.WallHeight;
+
+        Color cBot = new Color(settings.WallColor.r, settings.WallColor.g, settings.WallColor.b, Mathf.Clamp01(settings.WallAlphaBottom));
+        Color cTop = new Color(settings.WallColor.r, settings.WallColor.g, settings.WallColor.b, Mathf.Clamp01(settings.WallAlphaTop));
+
+        var verts = new Vector3[16];
+        var cols = new Color[16];
+        var uvs = new Vector2[16];
+        var idx = new int[24];
+        int v = 0;
+        int t = 0;
+
+        void AddSide(Vector3 bl, Vector3 br)
+        {
+            // bl/br are BOTTOM-LEFT / BOTTOM-RIGHT corners. tr/tl are derived by raising y.
+            verts[v + 0] = bl;                                 cols[v + 0] = cBot; uvs[v + 0] = new Vector2(0f, 0f);
+            verts[v + 1] = br;                                 cols[v + 1] = cBot; uvs[v + 1] = new Vector2(1f, 0f);
+            verts[v + 2] = new Vector3(br.x, h, br.z);         cols[v + 2] = cTop; uvs[v + 2] = new Vector2(1f, 1f);
+            verts[v + 3] = new Vector3(bl.x, h, bl.z);         cols[v + 3] = cTop; uvs[v + 3] = new Vector2(0f, 1f);
+            idx[t + 0] = v + 0; idx[t + 1] = v + 2; idx[t + 2] = v + 1;
+            idx[t + 3] = v + 0; idx[t + 4] = v + 3; idx[t + 5] = v + 2;
+            v += 4;
+            t += 6;
+        }
+
+        // Walk the perimeter clockwise viewed from above. The four sides:
+        AddSide(new Vector3(-hx, 0f, -hz), new Vector3( hx, 0f, -hz)); // South (-Z face)
+        AddSide(new Vector3( hx, 0f, -hz), new Vector3( hx, 0f,  hz)); // East  (+X face)
+        AddSide(new Vector3( hx, 0f,  hz), new Vector3(-hx, 0f,  hz)); // North (+Z face)
+        AddSide(new Vector3(-hx, 0f,  hz), new Vector3(-hx, 0f, -hz)); // West  (-X face)
+
+        var mesh = new Mesh
+        {
+            name = $"ConstructionPerimeterWall_Mesh ({buildingName})",
+            hideFlags = HideFlags.DontSave,
+        };
+        mesh.vertices = verts;
+        mesh.colors = cols;
+        mesh.uv = uvs;
+        mesh.triangles = idx;
+        mesh.RecalculateNormals();
+        mesh.RecalculateBounds();
+
+        var mf = host.AddComponent<MeshFilter>();
+        mf.sharedMesh = mesh;
+        var mr = host.AddComponent<MeshRenderer>();
+        mr.sharedMaterial = settings.WallMaterial;
+        mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        mr.receiveShadows = false;
+        mr.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
+        mr.reflectionProbeUsage = UnityEngine.Rendering.ReflectionProbeUsage.Off;
+
+        Debug.Log($"[Building.Wall] {buildingName}: built perimeter wall — size={box.size.x:F2}×{box.size.z:F2}, " +
+                  $"height={h:F2}, alpha=[{settings.WallAlphaBottom:F2}→{settings.WallAlphaTop:F2}]");
     }
 
     /// <summary>

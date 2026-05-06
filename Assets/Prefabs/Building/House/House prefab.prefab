@@ -357,7 +357,7 @@ MonoBehaviour:
   _deliveryZone: {fileID: 7535744897896666680}
   _constructionRequirements:
   - Item: {fileID: 11400000, guid: a3f0471c4178efd4b9b5efdb38aea516, type: 2}
-    Amount: 1
+    Amount: 3
     IsReferenceOnly: 0
   _constructionVisualRoot: {fileID: 7239333697559794867}
   _completedVisualRoot: {fileID: 8292559531673747325}

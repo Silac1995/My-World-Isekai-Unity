@@ -101,6 +101,7 @@ GameObject:
   - component: {fileID: -6888106381805364685}
   - component: {fileID: 7551676047501188179}
   - component: {fileID: 1412560922656767116}
+  - component: {fileID: -5282540861618954625}
   m_Layer: 12
   m_Name: Building_prefab
   m_TagString: Untagged
@@ -186,3 +187,16 @@ NavMeshObstacle:
   m_CarveOnlyStationary: 1
   m_Center: {x: 0, y: 0, z: 0}
   m_TimeToStationary: 0.5
+--- !u!114 &-5282540861618954625
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3315547130765415992}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ca49c689a772f4c44a6a76b4e2e35adf, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BuildingCurtainSettingsHolder
+  _settings: {fileID: 11400000, guid: 2b60329a705e67c4298211c78e3b1f5e, type: 2}
