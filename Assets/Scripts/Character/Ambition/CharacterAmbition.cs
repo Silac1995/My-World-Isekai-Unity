@@ -10,7 +10,7 @@ namespace MWI.Ambition
     /// Server-authoritative — Set/Clear mutations gated by IsServer; replication
     /// via NetworkVariable + ClientRpc fan-out (lands in Phase 7).
     /// </summary>
-    public class CharacterAmbition : CharacterSystem
+    public class CharacterAmbition : CharacterSystem, ICharacterSaveData<AmbitionSaveData>
     {
         // Active state
         private AmbitionInstance _current;
@@ -158,6 +158,89 @@ namespace MWI.Ambition
                 catch (Exception e) { Debug.LogException(e); }
             }
             return ctx;
+        }
+
+        // ── ICharacterSaveData<AmbitionSaveData> ───────────────────────
+        public string SaveKey => "CharacterAmbition";
+        public int LoadPriority => 80;
+
+        public AmbitionSaveData Serialize()
+        {
+            var dto = new AmbitionSaveData();
+            foreach (var h in _history) dto.History.Add(SerializeCompleted(h));
+            if (_current != null && _current.SO != null)
+            {
+                dto.ActiveAmbitionSOGuid = AmbitionRegistry.GetGuid(_current.SO);
+                dto.Context = SerializeContext(_current.Context);
+                dto.CurrentStepIndex = _current.CurrentStepIndex;
+                dto.TaskStates = SerializeActiveTasks(_current.CurrentStepQuest);
+                dto.AssignedDay = _current.AssignedDay;
+            }
+            return dto;
+        }
+
+        public void Deserialize(AmbitionSaveData data)
+        {
+            // TODO Task 24: Implement Import + deferred-bind queue.
+        }
+
+        string ICharacterSaveData.SerializeToJson() => CharacterSaveDataHelper.SerializeToJson(this);
+        void ICharacterSaveData.DeserializeFromJson(string json) => CharacterSaveDataHelper.DeserializeFromJson(this, json);
+
+        private static List<ContextEntryDTO> SerializeContext(AmbitionContext ctx)
+        {
+            var list = new List<ContextEntryDTO>();
+            if (ctx == null) return list;
+            foreach (var kvp in ctx.AsReadOnly())
+            {
+                var entry = new ContextEntryDTO { Key = kvp.Key };
+                var v = kvp.Value;
+                if (v == null) { entry.Kind = ContextValueKind.Primitive; entry.SerializedValue = null; }
+                else if (v is Character c)
+                {
+                    entry.Kind = ContextValueKind.Character;
+                    entry.SerializedValue = c.CharacterId;
+                }
+                else if (v is MWI.WorldSystem.IWorldZone z)
+                {
+                    entry.Kind = ContextValueKind.Zone;
+                    entry.SerializedValue = z.ZoneId;
+                }
+                else if (v is AmbitionSO amb) { entry.Kind = ContextValueKind.AmbitionSO; entry.SerializedValue = AmbitionRegistry.GetGuid(amb); }
+                else if (v is QuestSO qs)     { entry.Kind = ContextValueKind.QuestSO; entry.SerializedValue = QuestRegistry.GetGuid(qs); }
+                else if (v is ItemSO it)      { entry.Kind = ContextValueKind.ItemSO; entry.SerializedValue = it.name; }
+                // NeedSO not in codebase — Phase 3 deviation #3; needs are tracked by type-name. ContextValueKind.NeedSO is reserved for future use.
+                else if (v.GetType().IsEnum)  { entry.Kind = ContextValueKind.Enum; entry.SerializedValue = $"{v.GetType().FullName}|{v}"; }
+                else                          { entry.Kind = ContextValueKind.Primitive; entry.SerializedValue = v.ToString(); }
+                list.Add(entry);
+            }
+            return list;
+        }
+
+        private CompletedAmbitionDTO SerializeCompleted(CompletedAmbition src)
+        {
+            return new CompletedAmbitionDTO
+            {
+                AmbitionSOGuid = AmbitionRegistry.GetGuid(src.SO),
+                FinalContext = SerializeContext(src.FinalContext),
+                CompletedDay = src.CompletedDay,
+                Reason = src.Reason
+            };
+        }
+
+        private static List<TaskStateDTO> SerializeActiveTasks(IAmbitionStepQuest stepQuest)
+        {
+            var list = new List<TaskStateDTO>();
+            if (stepQuest is not AmbitionQuest aq) return list;
+            for (int i = 0; i < aq.Tasks.Count; i++)
+            {
+                var t = aq.Tasks[i];
+                if (t == null) continue;
+                var s = t.SerializeState();
+                if (string.IsNullOrEmpty(s)) continue;
+                list.Add(new TaskStateDTO { TaskIndexInQuest = i, SerializedState = s });
+            }
+            return list;
         }
 
         // Test seams
