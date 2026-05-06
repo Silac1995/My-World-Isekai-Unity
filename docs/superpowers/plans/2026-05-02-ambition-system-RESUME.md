@@ -6,9 +6,11 @@
 **Plan:** [docs/superpowers/plans/2026-05-02-ambition-system.md](2026-05-02-ambition-system.md) (58 tasks, 14 phases).
 **Spec:** [docs/superpowers/specs/2026-05-02-ambition-system-design.md](../specs/2026-05-02-ambition-system-design.md).
 
-## Current state — Phase 4 complete (Tasks 0–17 / 58)
+## Current state — Phase 6 complete (Tasks 0–27 / 58)
 
-**Last commit:** `913e1ed4` (Task 17 — Quest ordering NUnit tests).
+**Last commit:** `3e47e9f2` (Task 25 — DTO + context round-trip tests).
+
+> **Worktree note (2026-05-06):** Two parallel sessions ran Phase 5 in parallel (`claude/youthful-ride-01b213` + `claude/goofy-haibt-bfcfbd`). They were reconciled onto `multiplayyer` via cherry-pick + a foundation cleanup pass. Both worktree branches now point at the same `multiplayyer` HEAD. See "Phase 5 reconciliation" below.
 
 **Phase 1 commits:**
 
@@ -51,11 +53,50 @@
 | `a5709ae8` | 16 | `AmbitionQuest` bridging `IAmbitionStepQuest` → `IQuest`. **Plan deviation:** plan's `IQuest` skeleton (Title/Description/Issuer/Receiver/State/IsAmbitionStep + OnStateChanged) was OUT OF DATE; the real interface has 19 members (no Receiver). Plan's `QuestState.NotStarted/Running/Cancelled` enum values don't exist — remapped to `Open / Completed / Abandoned`. See deviation #4. |
 | `913e1ed4` | 17 | Quest ordering NUnit tests in **new asmdef `AmbitionQuest.Tests`** at `Assets/Tests/EditMode/AmbitionQuest/`. Uses the project's IL-emission + reflection pattern (see deviation #5) — the only working pattern for testing Assembly-CSharp types from EditMode. 3/3 pass. |
 
-**Foundation state:** Compile-clean. Two test asmdefs now exist:
-- `Ambition.Tests` (Pure-only): 10/10 green (5 `AmbitionContextTests` + 5 `ContextBindingTests`).
-- `AmbitionQuest.Tests` (Assembly-CSharp via reflection): 3/3 green (`QuestOrderingTests`).
+**Phase 5 commits (`multiplayyer` canonical SHAs after reconciliation):**
 
-Total: 13/13 green across all Ambition-related tests.
+| SHA | Task | Summary |
+|---|---|---|
+| `5bffe32b` | 20 | Wired `CharacterAmbition` into `Character.cs` — `[SerializeField]` + `TryGet`-pattern property + `GetComponentInChildren` auto-assign. Committed directly on `multiplayyer`. |
+| `fddaba00` | 21 | Added `Subsystem_Ambition` child GameObject with `MWI.Ambition.CharacterAmbition` component to all 4 Character prefabs (`Character_Animal`, `Character_Default`, `Character_Default_Humanoid`, `Character_Default_Quadruped`). Committed directly on `multiplayyer`. |
+| `b6dfcfcc` | 18 | `CharacterAmbition` skeleton — `CharacterSystem` subclass with active state, history, 4 events, Set/Clear API, step-quest plumbing, test seams. **Plan deviations** — see deviation #6. **Cherry-picked** from parallel session (orig `2eaf48c1`). |
+| `2ae0b167` | 18 fix | Added `OnDisable` override calling `CancelStepQuest()`. Critical fix from Phase 5 code review — without it, `HandleStepStateChanged` stays subscribed to a destroyed quest. **Cherry-picked** from parallel session (orig `ded9b4fe`). |
+| `dc0b7977` | 19 | State-machine NUnit tests in `AmbitionQuest.Tests`. **Cherry-picked** from parallel session (orig `582ee948`). The cherry-picked file used direct type references that the asmdef cannot satisfy — see Phase 5 cleanup commit `04134872` below. |
+
+**Phase 6 commits:**
+
+| SHA | Task | Summary |
+|---|---|---|
+| `f3d37d36` | 22 | Save DTOs (`ContextEntryDTO`, `TaskStateDTO`, `CompletedAmbitionDTO`, `AmbitionSaveData`). **Plan deviation:** placed in `Pure/Save/` (Pure asmdef) instead of plan's Assembly-CSharp location, so Task 25 round-trip tests stay in the simpler `Ambition.Tests` asmdef. |
+| `3d533f4a` | foundation | Moved `ContextValueKind` + `CompletionReason` from Assembly-CSharp into Pure asmdef. **Latent Phase 1 bug** that surfaced when Task 22 added DTOs in Pure that referenced these enums — Pure cannot reference Assembly-CSharp. Editor was masking the issue with a stale Pure DLL until refresh. |
+| `5c6cfdc7` | 23 | `CharacterAmbition.ICharacterSaveData<AmbitionSaveData>` Export. **Plan deviations:** real interface uses `Serialize()`/`Deserialize()`, NOT `ExportSaveData()`/`ImportSaveData()` (deviation #7). `IWorldZone.ZoneId` not `ZoneGuid`. NeedSO branch dropped (Phase 3 deviation #3). LoadPriority = 80 (after CharacterQuestLog at 70). Bridge methods via `CharacterSaveDataHelper`. |
+| `04134872` | Phase 5 cleanup | Rewrote `AmbitionStateMachineTests.cs` using full reflection (mirroring `QuestOrderingTests.cs`). The version we cherry-picked from the parallel session in `dc0b7977` used `using MWI.Ambition;` + direct type references that the asmdef silently drops (deviation #5). All 4 tests now use `Assembly.GetType()` + `PropertyInfo`/`FieldInfo`/`MethodInfo` lookups. |
+| `66753927` | 24 | `CharacterAmbition.Deserialize` + deferred-bind queue. Drains `_deferredBindings` on `Character.OnCharacterSpawned`. `SafetyCheckOnLoaded` validates restored ambition via `AmbitionSO.ValidateParameters`. **Plan deviation:** Zone resolution dropped — no unified `WorldZoneRegistry` in v1 (deviation #8). |
+| `3e47e9f2` | 25 | DTO + context round-trip NUnit tests in `Ambition.Tests` asmdef (Pure-only). 2 tests covering `Context_Primitive_RoundTrip` + `CompletedAmbition_DTO_RoundTrip_PreservesDayAndReason`. |
+
+**Tasks 26 + 27 — implicit no-ops, no commit needed.** Verified during Phase 6:
+- **Task 26** (Register in `CharacterDataCoordinator`) — the coordinator uses `GetComponentsInChildren<ICharacterSaveData>(true)` auto-discovery + `OrderBy(LoadPriority)`. There is no explicit registration list. Since Task 23 implements the interface and Task 21 already added the component to all Character prefabs, the discovery happens automatically.
+- **Task 27** (Add `Ambition` to `HibernatedNPCData`) — `HibernatedNPCData.ProfileData : CharacterProfileSaveData` is already populated via `coordinator.ExportProfile()` (`MapController.cs:722` + `:1325`) and consumed via `coordinator.ImportProfile()` (`MapController.cs:1143`). The auto-discovery design captures the ambition state under `componentStates["CharacterAmbition"]` automatically. The plan's prescribed explicit `Ambition` field is unnecessary.
+
+**Foundation state:** Compile-clean. Test asmdefs:
+- `Ambition.Tests` (Pure-only): 12/12 green (5 `AmbitionContextTests` + 5 `ContextBindingTests` + 2 `AmbitionSaveRoundTripTests`).
+- `AmbitionQuest.Tests` (Assembly-CSharp via reflection): 7/7 green (3 `QuestOrderingTests` + 4 `AmbitionStateMachineTests`).
+
+Total: **19/19 green** across all Ambition-related tests (test-runner verification deferred — Unity Editor had unsaved scenes during Phase 6 dispatch; logical correctness verified via compile + diff review).
+
+## Phase 5 reconciliation (2026-05-06 — informational)
+
+Two parallel sessions ran Phase 5 commits with different SHAs. The reconciliation pulled both onto `multiplayyer`:
+
+| Logical commit | Original session SHA(s) | Canonical SHA on `multiplayyer` |
+|---|---|---|
+| Task 18 — `CharacterAmbition` skeleton | `2eaf48c1` (youthful-ride) | `b6dfcfcc` |
+| Task 18 fix — `OnDisable` override | `ded9b4fe` (youthful-ride) | `2ae0b167` |
+| Task 19 — state-machine tests | `582ee948` (youthful-ride) | `dc0b7977` |
+| Task 20 — wire into `Character.cs` | `5bffe32b` / `71ce9fbe` | `5bffe32b` (canonical) |
+| Task 21 — prefab edits | `fddaba00` / `f54b1831` | `fddaba00` (canonical) |
+
+The `claude/youthful-ride-01b213` and `claude/goofy-haibt-bfcfbd` branches no longer track active work — they're snapshots of the parallel-session state. All future work continues on `multiplayyer`.
 
 ## Architectural deviations locked in (Phase 1 + Phase 2)
 
@@ -179,6 +220,69 @@ The plan's Task 16 code block (around line 1305 of `2026-05-02-ambition-system.m
 
 **Why not refactor Pure to absorb these types?** Each of `AmbitionQuest`, `QuestSO`, `TaskBase`, `CharacterAmbition` references `Character` (Assembly-CSharp, global namespace) somewhere in its public surface. Moving them to Pure would require either (a) genericizing `Tick(Character, AmbitionContext)` into `Tick(object, AmbitionContext)` and downcasting at every call site, or (b) introducing an `ICharacter` abstraction in Pure that `Character` implements — both are larger refactors than the IL pattern's overhead justifies.
 
+### Deviation #6 — `CharacterQuestLog` API names differ from the plan (Phase 5 lock-in)
+
+The plan's Task 18 code uses `CharacterQuestLog.AddClaimedQuest(IQuest)` and `RemoveClaimedQuest(IQuest)`. The shipped API:
+
+| Plan name | Real API | Notes |
+|---|---|---|
+| `AddClaimedQuest(IQuest)` | `TryClaim(IQuest)` returning `bool` | Server-authoritative internally — falls through to `TryClaimServerRpc` if called from a client. |
+| `RemoveClaimedQuest(IQuest)` | `TryAbandon(IQuest)` returning `bool` | Same server-gate pattern. |
+
+`CharacterAmbition.IssueStepQuest` calls `_character?.CharacterQuestLog?.TryClaim(aq)`. `CancelStepQuest` and `HandleStepStateChanged` call `TryAbandon(aq)`. Both ignore the `bool` return (the call is fire-and-forget; the local `_current.CurrentStepQuest` field is the source of truth for the ambition state machine).
+
+### Deviation #7 — `CharacterAmbition.OnDisable` + `OnEnable` overrides (Phase 5 + Task 24)
+
+The plan did not show an `OnDisable` override. Phase 5 code review (commit `2ae0b167` on multiplayyer, originally `ded9b4fe` on the parallel session) added one to call `CancelStepQuest()` — without it, `HandleStepStateChanged` stays subscribed to a destroyed `AmbitionQuest`, throwing `MissingReferenceException` if the quest fires post-destroy.
+
+Task 24 (`66753927`) extended this: `OnEnable` subscribes `Character.OnCharacterSpawned += HandleCharacterSpawned` (drives the deferred-bind queue), and `OnDisable` unsubscribes. The static-event-on-Component pattern triggers Unity's `UDR0005` analyzer warning, but this is the codebase-accepted idiom (same warning fires on `CharacterOrders.cs:76`, `CharacterRelation.cs:55`, `CommercialBuilding.cs:662/869`, etc.). Not blocking.
+
+### Deviation #8 — Zone context resolution dropped (Phase 6 — Task 24)
+
+The plan's `Deserialize` body for `ContextValueKind.Zone` calls `MWI.WorldSystem.WorldZoneRegistry.Get(serializedValue)`. **No such registry exists in the project.** Each zone type (`Region`, `WildernessZone`, future `WeatherFront`) is registered with its own manager (`MapRegistry`, `WildernessZoneManager`), and there is no unified zone-by-id lookup.
+
+For Phase 6, the Zone case logs a warning and skips:
+
+```csharp
+case ContextValueKind.Zone:
+    Debug.LogWarning($"[CharacterAmbition] Zone context resolution not yet wired for key '{e.Key}'.");
+    break;
+```
+
+Wire when (a) a zone use-case lands, OR (b) a `WorldZoneRegistry` aggregator gets added. Track in the optimization backlog.
+
+### Deviation #9 — Tasks 26-27 are no-ops with the auto-discovery coordinator (Phase 6 lock-in)
+
+The plan's Task 26 prescribes adding `CharacterAmbition` to a manual priority list in `CharacterDataCoordinator`. The plan's Task 27 prescribes adding an explicit `Ambition` field to `HibernatedNPCData` plus manual export/restore code.
+
+**Both are obsolete.** Verified during Phase 6:
+- `CharacterDataCoordinator.DiscoverSaveDataSystems()` (`SaveLoad/CharacterDataCoordinator.cs:32`) uses `GetComponentsInChildren<ICharacterSaveData>(true)` + `OrderBy(LoadPriority)`. No registration list — implementing the interface is sufficient.
+- `HibernatedNPCData.ProfileData : CharacterProfileSaveData` is populated via `coordinator.ExportProfile()` (`MapController.cs:722` and `:1325`) and consumed via `coordinator.ImportProfile()` (`MapController.cs:1143`). The full character profile (including ambition state under `componentStates["CharacterAmbition"]`) is captured automatically.
+
+Future plans that prescribe explicit "register in coordinator" or "add HibernatedNPCData field" should be cross-checked against this auto-discovery pattern before manual work.
+
+### Deviation #10 — Save DTOs live in Pure, not Assembly-CSharp (Phase 6 — Task 22)
+
+The plan's Task 22 places save DTOs at `Assets/Scripts/Character/Ambition/Save/` (Assembly-CSharp namespace `MWI.Ambition`). The implementer placed them in `Assets/Scripts/Character/Ambition/Pure/Save/` instead. The DTOs (`ContextEntryDTO`, `TaskStateDTO`, `CompletedAmbitionDTO`, `AmbitionSaveData`) reference only Pure types (`ContextValueKind`, `CompletionReason`) — no Assembly-CSharp dependencies. Putting them in Pure means Task 25 round-trip tests stay in the simple `Ambition.Tests` asmdef instead of forcing the IL-emission pattern (deviation #5).
+
+Cascading consequence (caught by the Task 23 implementer): `ContextValueKind` and `CompletionReason` themselves had to be moved into Pure (commit `3d533f4a`) — Phase 1 placed them in Assembly-CSharp, which compiled fine until Pure DTOs needed them. Pure cannot reference Assembly-CSharp.
+
+### Deviation #11 — `ICharacterSaveData<T>` real method names are `Serialize`/`Deserialize`, not `ExportSaveData`/`ImportSaveData` (Phase 6 — Tasks 23-24)
+
+The plan's Task 23 uses `public AmbitionSaveData ExportSaveData()` and Task 24 uses `public void ImportSaveData(AmbitionSaveData dto)`. The shipped interface (`Assets/Scripts/Character/SaveLoad/ICharacterSaveData.cs`) declares:
+
+```csharp
+public interface ICharacterSaveData<T> : ICharacterSaveData
+{
+    T Serialize();
+    void Deserialize(T data);
+}
+```
+
+Plus inherited from `ICharacterSaveData`: `string SaveKey`, `int LoadPriority`, `string SerializeToJson()`, `void DeserializeFromJson(string json)`. The non-generic methods bridge through `CharacterSaveDataHelper.SerializeToJson(this)` / `CharacterSaveDataHelper.DeserializeFromJson(this, json)` — explicit interface implementations on `CharacterAmbition` route them.
+
+Future plans referencing "ExportSaveData" / "ImportSaveData" should remap to `Serialize` / `Deserialize`.
+
 ## How to resume
 
 ### 1. Bootstrap the new session
@@ -192,9 +296,9 @@ I'm resuming the Ambition System implementation. Read these in order:
 2. docs/superpowers/plans/2026-05-02-ambition-system.md         (the 58-task plan)
 3. docs/superpowers/specs/2026-05-02-ambition-system-design.md  (the design spec)
 
-Verify the branch is `multiplayyer` and HEAD is at `913e1ed4` (or later if I've made other commits since).
+Verify the branch is `multiplayyer` and HEAD is at `3e47e9f2` (or later if I've made other commits since).
 
-Then invoke the `superpowers:subagent-driven-development` skill and continue from Task 18 (Phase 5 — `CharacterAmbition` skeleton with subsystem registration).
+Then invoke the `superpowers:subagent-driven-development` skill and continue from Task 28 (Phase 7 — `NetworkAmbitionSnapshot` INetworkSerializable).
 ```
 
 ### 2. Cadence the prior session settled on
@@ -217,7 +321,26 @@ Then invoke the `superpowers:subagent-driven-development` skill and continue fro
 - **`assets-create-folder` MCP tool** must be used before the first `script-update-or-create` writes into a new directory. Don't fall back to bash `mkdir` unless the MCP tool is genuinely unavailable.
 - **`tests-run` MCP tool** — use `mode: "EditMode"` and `class: "MWI.Tests.Ambition.<name>"` for targeted runs. The Ambition test assembly is `Ambition.Tests` (asmdef in `Assets/Tests/EditMode/Ambition/`).
 
-### 4. Next task — Task 18 (start of Phase 5)
+### 4. Next task — Task 28 (start of Phase 7)
+
+Phase 6 complete. Phase 7 is **Networking** — converting `CharacterAmbition` to `NetworkBehaviour`-aware with replicated state.
+
+**Recommended model for Task 28:** `haiku` — `NetworkAmbitionSnapshot` is a small INetworkSerializable struct (plan body in the plan file at `### Task 28`). Skip both reviewers (trivial struct).
+
+**Recommended model for Task 29:** `opus` — converts `CharacterAmbition` to fold in NetworkVariable-style snapshot replication. Touches networking + auth model. Run both reviewers.
+
+**Recommended model for Task 30:** `sonnet` — ServerRpc surface for SetAmbition / ClearAmbition.
+
+### Operational lessons learned in Phase 6
+
+- **Subagent commits land on `multiplayyer`, not on whatever worktree branch you're in.** This is the Worktree Quirk (the Agent tool's working directory is the main project path, not the worktree). For Phase 7+, just work on `multiplayyer` directly. The `claude/*` worktree branches are stale snapshots.
+- **DTOs in Pure asmdef can reference Pure types only.** When adding any Pure-asmdef type, double-check ALL its field types are also in Pure. Phase 6 surfaced the `ContextValueKind` + `CompletionReason` location bug because Task 22's DTOs in Pure referenced enums that lived in Assembly-CSharp.
+- **The cherry-pick dance loses untracked working-tree files.** When reconciling parallel sessions, beware — untracked files in the main project's working tree will block cherry-picks; `rm`-ing them is destructive (the parallel session's later refinements were stored as untracked, not committed). Phase 6's `04134872` had to re-author `AmbitionStateMachineTests.cs` from scratch to recover from this.
+- **Tasks 26-27 — auto-discovery patterns.** The `CharacterDataCoordinator` and `HibernatedNPCData.ProfileData` chain auto-captures any `ICharacterSaveData` component on a Character prefab. Plans that prescribe "register in priority list" or "add explicit field" are obsolete — the modern infrastructure handles it transparently. Verify before doing manual registration work.
+
+### 5. Phase 5 implementer-style notes (still relevant for Phase 7)
+
+
 
 `CharacterAmbition` skeleton with subsystem registration. File:
 - `Assets/Scripts/Character/CharacterAmbition/CharacterAmbition.cs` (new folder; verify exact path against the plan at line 1593).
@@ -241,15 +364,15 @@ Full task text in [the plan](2026-05-02-ambition-system.md#task-18-characterambi
 
 **Reuse-vs-rename decision deferred to Phase 5:** the `AmbitionQuest.Tests` asmdef name is narrowly scoped. If many Phase 5+ tests pile up, consider renaming it to `Ambition.AssemblyCSharp.Tests` (rename the `.asmdef` and update its `name` field). For now (3 tests), the narrow name is fine.
 
-## Phases remaining (41 tasks)
+## Phases remaining (31 tasks)
 
 | Phase | Tasks | Estimate (subagent dispatches) |
 |---|---|---|
 | ~~Phase 2 — Parameter bindings~~ | ~~10–12~~ | DONE |
 | ~~Phase 3 — Registries + settings~~ | ~~13–15~~ | DONE |
 | ~~Phase 4 — Bridge + ordering tests~~ | ~~16–17~~ | DONE |
-| Phase 5 — `CharacterAmbition` core | 18–21 | 4 (Task 18 `opus`, Task 21 manual prefab edits) |
-| Phase 6 — Persistence | 22–27 | 6 (Tasks 23, 24 `opus` — save round-trip + deferred-bind) |
+| ~~Phase 5 — `CharacterAmbition` core~~ | ~~18–21~~ | DONE |
+| ~~Phase 6 — Persistence~~ | ~~22–27~~ | DONE (Tasks 26-27 were no-ops — auto-discovery + ProfileData) |
 | Phase 7 — Networking | 28–30 | 3 (Task 29 `opus` — NetworkBehaviour conversion) |
 | Phase 8 — Task primitives | 31–38 | 8 (`sonnet` for most; `opus` if member-name mismatches surface) |
 | Phase 9 — BT integration | 39–41 | 3 |
@@ -271,42 +394,35 @@ Full task text in [the plan](2026-05-02-ambition-system.md#task-18-characterambi
 - **Orphaned `.meta` files** — Phase 1 implementer subagents repeatedly forgot to add `.meta` files to commits, requiring a chore cleanup commit at start of Phase 2. **Mitigation already baked into Phase 2 prompts:** every dispatch now includes an explicit `git add` line listing both `.cs` and `.cs.meta` files. Continue this pattern in Phase 3+ prompts.
 - **Reviewer rigor** — Task 12's code quality reviewer made a confidently-stated but factually-wrong claim about C# generic null-checks behaving differently for value types. Always verify strong technical claims before accepting reviewer feedback. The Roslyn-execute approach via `mcp__ai-game-developer__script-execute` is a fast way to settle "what does C# actually do here" questions in 30 seconds.
 
-## Phase 1 + 2 + 3 + 4 milestone (verifiable)
+## Phases 1-6 milestone (verifiable)
 
 Run in the new session to confirm starting state:
 
 ```bash
-git log --oneline | head -22
-# Expect (HEAD = 913e1ed4 or one commit further if the resume-note doc was committed after):
-#   913e1ed4 test(ambition): cover Sequential/Parallel/AnyOf quest ordering
-#   a5709ae8 feat(ambition): add AmbitionQuest bridging IAmbitionStepQuest -> IQuest
-#   98644070 docs(ambition): update resume note after Phase 3 (Tasks 13-15)
-#   712502ba feat(ambition): add AmbitionSettings with gating-need type-name list
-#   f16854f5 feat(ambition): add QuestRegistry with lazy-init
-#   56d571e8 feat(ambition): add AmbitionRegistry with lazy-init
-#   5d9ca78a docs(ambition): update resume note after Phase 2 (Tasks 10-12)
-#   74dca048 feat(ambition): add RuntimeQueryBinding base in Assembly-CSharp
-#   3cc72b13 test(ambition): cover null-context and empty-key branches in ContextBinding
-#   148a5c73 chore(ambition): remove orphaned Bindings/ folder after migration to Pure asmdef
-#   16b9c324 feat(ambition): add ContextBinding<T> with tests; migrate bindings to Pure asmdef
-#   674bef2f feat(ambition): add TaskParameterBinding and StaticBinding
-#   6fa0b0b5 chore(ambition): add missing .meta files orphaned from Phase 1 commits
-#   d93b5199 docs(ambition): resume note after Phase 1 (Tasks 0-9)
-#   d8661475 feat(ambition): flesh out QuestSO with task list and ordering
-#   c04691bf feat(ambition): add TaskOrderingMode and TaskBase polymorphic base
-#   6921acf8 feat(ambition): add AmbitionSO, AmbitionInstance, CompletedAmbition, IAmbitionStepQuest
-#   27803869 feat(ambition): add AmbitionContext with NUnit coverage
-#   76afaa33 feat(ambition): add CompletionReason, ControllerKind, TaskStatus enums
-#   10362092 feat(ambition): add ContextValueKind enum
-#   7a614674 test(ambition): scaffold test folder
+git log --oneline | head -32
+# Expect HEAD = 3e47e9f2 (or one commit further if more work landed). The full Phase 1-6 chain:
+#   3e47e9f2 test(ambition): cover DTO + context round-trip                              <- Task 25
+#   66753927 feat(ambition): add ICharacterSaveData import with deferred-bind queue       <- Task 24
+#   04134872 fix(ambition): rewrite AmbitionStateMachineTests with full reflection         <- Phase 5 follow-up
+#   3d533f4a fix(ambition): move ContextValueKind + CompletionReason into Pure asmdef     <- Phase 1 cleanup (latent)
+#   5c6cfdc7 feat(ambition): add ICharacterSaveData export                                 <- Task 23
+#   dc0b7977 test(ambition): cover CharacterAmbition initial state and Progress01 math    <- Task 19 (cherry-pick)
+#   2ae0b167 fix(ambition): add OnDisable to cancel step quest subscription on destroy    <- Task 18 fix (cherry-pick)
+#   b6dfcfcc feat(ambition): add CharacterAmbition state-machine skeleton                  <- Task 18 (cherry-pick)
+#   f3d37d36 feat(ambition): add save DTOs in Pure asmdef                                  <- Task 22
+#   fddaba00 feat(ambition): add CharacterAmbition child to Character prefabs              <- Task 21
+#   5bffe32b feat(ambition): wire CharacterAmbition into Character facade                  <- Task 20
+#   ... (Phase 1-4 commits below — see git log)
 ```
 
 Run all Ambition tests:
 
 ```
-mcp__ai-game-developer__tests-run mode=EditMode testNamespace=MWI.Tests.Ambition         # Expect: 10 passed (Pure)
-mcp__ai-game-developer__tests-run mode=EditMode testNamespace=MWI.Tests.AmbitionQuest    # Expect: 3 passed (Assembly-CSharp via reflection)
-# Total: 13/13 passing across both Ambition test asmdefs.
+mcp__ai-game-developer__tests-run mode=EditMode testNamespace=MWI.Tests.Ambition         # Expect: 12 passed (Pure: 5 ContextTests + 5 ContextBindingTests + 2 SaveRoundTripTests)
+mcp__ai-game-developer__tests-run mode=EditMode testNamespace=MWI.Tests.AmbitionQuest    # Expect: 7 passed (Assembly-CSharp via reflection: 3 QuestOrderingTests + 4 AmbitionStateMachineTests)
+# Total: 19/19 passing across both Ambition test asmdefs.
 ```
 
-If those commits are present and the tests pass, Phases 1–4 are intact and you're ready to start Task 18.
+> **Note:** The end-of-Phase-6 session deferred running `tests-run` (Unity Editor had unsaved scenes blocking the MCP call). Logical correctness verified via compile-clean refresh + diff review of every commit. Run the test commands above in the next session to confirm 19/19 green before starting Phase 7.
+
+If those commits are present and the tests pass, Phases 1–6 are intact and you're ready to start Task 28.
