@@ -94,13 +94,67 @@ namespace MWI.WorldSystem
 
             _ghostInstance.name = "PlacementGhost_" + prefabId;
             _isPlacementActive = true;
-        
+
+            // Force the ghost to preview the SCAFFOLD visual (UnderConstruction). The user is
+            // about to place a construction site, so showing the completed visual misleads.
+            // Direct toggle on the ghost — ApplyConstructionVisuals is private + state-driven.
+            ApplyGhostScaffoldPreview();
+
+            // Spawn a translucent footprint outline so the player can see where the BuildingZone
+            // will land. Updated each frame from UpdateGhostPosition.
+            CreateFootprintOutline();
+
             // Ensure character state is set (in case it was started without the UI, though unlikely now)
             if (_character != null && !_character.IsBuilding)
                 _character.SetBuildingState(true);
-            
+
             ApplyGhostMaterials(_ghostMaterialValid);
         }
+
+        /// <summary>
+        /// Toggle the ghost's _constructionVisualRoot ON and _completedVisualRoot OFF so the
+        /// player previews the scaffolding (matches the actual UnderConstruction state the
+        /// building will spawn into). Falls back gracefully if the prefab doesn't author both
+        /// roots (older prefabs).
+        /// </summary>
+        private void ApplyGhostScaffoldPreview()
+        {
+            if (_ghostBuildingComponent == null) return;
+
+            // Use reflection so this stays decoupled from Building's protected SerializeFields.
+            var bType = typeof(Building);
+            var conField = bType.GetField("_constructionVisualRoot", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var cmpField = bType.GetField("_completedVisualRoot", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var conRoot = conField?.GetValue(_ghostBuildingComponent) as GameObject;
+            var cmpRoot = cmpField?.GetValue(_ghostBuildingComponent) as GameObject;
+
+            if (conRoot != null) conRoot.SetActive(true);
+            if (cmpRoot != null) cmpRoot.SetActive(false);
+        }
+
+        /// <summary>
+        /// Creates a translucent footprint outline child under the ghost matching the
+        /// BuildingZone BoxCollider's size. Visible only during placement.
+        /// </summary>
+        private void CreateFootprintOutline()
+        {
+            if (_ghostInstance == null || _ghostBuildingComponent == null) return;
+            if (!(_ghostBuildingComponent.BuildingZone is BoxCollider box)) return;
+
+            _footprintOutline = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            _footprintOutline.name = "PlacementFootprintOutline";
+            // Strip the box collider primitive Unity adds — purely visual.
+            var qCol = _footprintOutline.GetComponent<Collider>();
+            if (qCol != null) Destroy(qCol);
+            _footprintOutline.transform.SetParent(_ghostInstance.transform, worldPositionStays: false);
+            _footprintOutline.transform.localPosition = box.center + new Vector3(0f, 0.02f, 0f); // tiny lift to avoid Z-fight
+            _footprintOutline.transform.localRotation = Quaternion.Euler(90f, 0f, 0f); // lay flat (Quad faces +Z by default)
+            _footprintOutline.transform.localScale = new Vector3(box.size.x, box.size.z, 1f);
+            // Use the valid material as a tint hint; ApplyGhostMaterials below repaints both renderers.
+            // No new material asset required.
+        }
+
+        private GameObject _footprintOutline;
 
         public void CancelPlacement()
         {
@@ -207,6 +261,7 @@ namespace MWI.WorldSystem
             {
                 if (_ghostInstance != null && ValidatePlacement(_ghostInstance.transform.position))
                 {
+                    Debug.Log($"<color=magenta>[BuildingPlacementManager.Click]</color> sending placement RPC | _isInstantMode={_isInstantMode} prefab={_activePrefabId}");
                     RequestPlacementServerRpc(
                         _activePrefabId,
                         _ghostInstance.transform.position,
@@ -344,6 +399,8 @@ namespace MWI.WorldSystem
         [ServerRpc]
         private void RequestPlacementServerRpc(string prefabId, Vector3 position, Quaternion rotation, bool instant)
         {
+            Debug.Log($"<color=magenta>[BuildingPlacementManager.SRpc]</color> prefabId={prefabId} instant={instant} pos={position}");
+
             EnsureSettings();
             if (_settings == null) return;
 

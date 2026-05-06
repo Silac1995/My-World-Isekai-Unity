@@ -270,6 +270,7 @@ public class Building : ComplexRoom
         // Initialize state based on requirements (only on server)
         if (IsServer)
         {
+            int reqCount = _constructionRequirements?.Count ?? 0;
             if (_constructionRequirements != null && _constructionRequirements.Count > 0)
             {
                 _currentState.Value = MWI.WorldSystem.BuildingState.UnderConstruction;
@@ -278,6 +279,7 @@ public class Building : ComplexRoom
             {
                 _currentState.Value = MWI.WorldSystem.BuildingState.Complete;
             }
+            Debug.Log($"<color=cyan>[Building.Awake]</color> {buildingName} reqs={reqCount} → state={_currentState.Value}");
         }
     }
 
@@ -433,11 +435,14 @@ public class Building : ComplexRoom
 
         // Apply initial visual state — late-joiners need this; HandleStateChanged only fires
         // on subsequent changes, not on the initial state replicated via NetworkVariable spawn payload.
+        Debug.Log($"<color=cyan>[Building.Start]</color> {buildingName} _currentState.Value={_currentState.Value} → calling ApplyConstructionVisuals. IsServer={IsServer}");
         ApplyConstructionVisuals(_currentState.Value);
     }
 
     private void HandleStateChanged(MWI.WorldSystem.BuildingState previousValue, MWI.WorldSystem.BuildingState newValue)
     {
+        Debug.Log($"<color=cyan>[Building.HandleStateChanged]</color> {buildingName} {previousValue} → {newValue} | IsServer={IsServer}");
+
         // Visual swap runs on every peer (client + server), every state change.
         ApplyConstructionVisuals(newValue);
 
@@ -484,11 +489,16 @@ public class Building : ComplexRoom
     {
         bool underConstruction = (state == MWI.WorldSystem.BuildingState.UnderConstruction);
 
+        bool conActive = _constructionVisualRoot != null ? _constructionVisualRoot.activeSelf : false;
+        bool cmpActive = _completedVisualRoot != null ? _completedVisualRoot.activeSelf : false;
+
         if (_constructionVisualRoot != null && _constructionVisualRoot.activeSelf != underConstruction)
             _constructionVisualRoot.SetActive(underConstruction);
 
         if (_completedVisualRoot != null && _completedVisualRoot.activeSelf == underConstruction)
             _completedVisualRoot.SetActive(!underConstruction);
+
+        Debug.Log($"<color=cyan>[Building.ApplyVisuals]</color> {buildingName} state={state} (under={underConstruction}) | conRoot={(_constructionVisualRoot != null ? _constructionVisualRoot.name : "NULL")} was={conActive} now={(_constructionVisualRoot != null && _constructionVisualRoot.activeSelf)} | cmpRoot={(_completedVisualRoot != null ? _completedVisualRoot.name : "NULL")} was={cmpActive} now={(_completedVisualRoot != null && _completedVisualRoot.activeSelf)} | IsServer={IsServer} IsClient={IsClient}");
     }
 
     protected virtual void OnDestroy()
@@ -622,9 +632,10 @@ public class Building : ComplexRoom
         if (!IsServer) return; // Modification of state must happen on server
         if (_currentState.Value == MWI.WorldSystem.BuildingState.Complete) return;
 
+        Debug.Log($"<color=red>[Building.BuildInstantly]</color> {buildingName} BYPASSING construction loop — caller stack trace below:\n{System.Environment.StackTrace}");
+
         _currentState.Value = MWI.WorldSystem.BuildingState.Complete;
         _contributedMaterials.Clear();
-        Debug.Log($"<color=green>[Building]</color> {buildingName} has been built instantly.");
         // OnConstructionComplete will be triggered by state change callback
     }
 
