@@ -1,0 +1,109 @@
+---
+source_url: https://docs.unity3d.com/Packages/com.unity.entities@6.4/manual/systems-update-order.html
+fetched: 2026-05-05
+section: systems
+---
+
+# System groups
+
+A system group can have systems and other system groups as its children. A system group updates its children in a sorted order on the main thread.
+
+To create your own system group, create a class that inherits from `ComponentSystemGroup`. Use the `UpdateInGroup` attribute on the member systems to specify which systems need to be updated in a given group. Using the `UpdateInGroup` attribute ensures that Unity creates all systems in an order that respects the `CreateAfter` and `CreateBefore` attributes.
+
+## Creation order of systems
+
+By default, Unity creates systems in an order that doesn't respect system groups, but does respect `CreateAfter` and `CreateBefore` attributes.
+
+`OnCreate` methods are called in the same order as systems are created.
+
+It's best practice to use the `CreateAfter` and `CreateBefore` attributes, and either the default world creation or `ICustomBootstrap` for advanced use cases. This is the recommended way of creating systems over calling `World.GetOrCreateSystem`. This reduces the likelihood of errors such as if the system creation order changes to another one that also satisfies the attribute constraints.
+
+If you must refer to another system in your `OnCreate` method, you should use `CreateAfter` to ensure that your system is created after the other system you're referring to, and then use `World.GetExistingSystem` to retrieve it.
+
+More commonly, you might want to access a singleton component or other resource that another system creates in that system's `OnCreate` method. You can add `[CreateAfter(typeof(OtherSystem))]` to the system type to ensure that your `OnCreate` method runs after `OtherSystem.OnCreate`.
+
+## Destruction order of systems
+
+When you call `World.Dispose`, Unity destroys the systems in reverse order of their actual creation. Unity destroys them in this order even if their creation broke the `CreateAfter` or `CreateBefore` constraints (for example if you manually called `CreateSystem` out of order).
+
+## Update order of systems
+
+Every time you add a group to a system group, the group re-sorts the system update order for that group before updating again. To control the update order of a system group, add the `UpdateBefore` or `UpdateAfter` attribute to a system to specify which systems it should update before or after. These attributes only apply relative to direct children of the same system group.
+
+You can also use the `OrderFirst` or `OrderLast` parameters to customize the update order, and these take precedence over `UpdateBefore` and `UpdateAfter`. For example:
+
+```csharp
+// If PeachSystem and DaisySystem are children of the same group, then the
+// entity component system puts PeachSystem somewhere before DaisySystem in 
+// the sorted order.
+[UpdateBefore(typeof(DaisySystem))]
+public partial class PeachSystem : SystemBase { }
+```
+
+Because everything in a group's update list updates together, the global order of system updates represents a hierarchical ordering, where all direct children of a group are ordered first by `OrderFirst` and `OrderLast`, and then by `UpdateBefore` and `UpdateAfter` constraints. Because the children can also be system groups, these children groups might update many grandchild systems before returning to the current group's update list.
+
+In the Editor, you can use the Systems window (**Window > Entities > Systems**) to see the full list of system groups in your application, and their ordering.
+
+To view all the low-level methods that form part of the Unity player loop, including non entities-related methods:
+
+*   In the **Systems** window, in the More menu, enable the **Show Full Player Loop** setting.
+
+For more information, refer to the Systems window documentation.
+
+### ECS system execution order in the Unity Player loop
+
+Unity merges ECS system group updates into the Player update loop.
+
+The following diagram provides a high-level overview of where the default ECS system groups execute in the Player loop relative to regular MonoBehaviour functions. For readability, the scope of the chart is limited to key parts of the script lifecycle, with some extra internal subsystem updates provided for context.
+
+The three default injection points in the Player loop combined with the `UpdateBefore` and `UpdateAfter` events cover the majority of customization use cases. If your case requires further customization, you can use the following techniques:
+
+1.  Use the `ScriptBehaviourUpdateOrder` class to customize when ECS systems run relative to MonoBehaviour lifecycle events.
+    
+2.  Define custom update groups and dependencies in ECS to control the order of system execution.
+
+## Default system groups
+
+There is a set of default system groups that you can use to update systems in the correct phase of a frame. You can nest one system group inside another so that all systems in a group update in the correct phase and update according to the order within their group.
+
+The default world contains a hierarchy of `ComponentSystemGroup` instances. There are three root-level system groups in the Unity player loop:
+
+*   **InitializationSystemGroup**: Updates at the end of the `Initialization` phase of the player loop.
+*   **SimulationSystemGroup**: Updates at the end of the `Update` phase of the player loop.
+*   **PresentationSystemGroup**: Updates at the end of the `PreLateUpdate` phase of the player loop.
+
+## System ordering attributes
+
+You can use the following attributes on a system to determine its update order:
+
+| Attribute | Description |
+|-----------|-------------|
+| `UpdateInGroup` | Specify a `ComponentSystemGroup` that this system should be a member of. If you don't set this attribute, it's automatically added to the default world's `SimulationSystemGroup`. You can use the optional `OrderFirst` and `OrderLast` parameters to sort systems before or after all other systems in the group that don't have the same parameter set. |
+| `UpdateBefore`<br>`UpdateAfter` | Order systems relative to other systems within the same group. When you apply this attribute to groups, they implicitly constrain all member systems inside them. For example, if `CarSystem` is in `CarGroup`, and `TruckSystem` is in `TruckGroup`, and `CarGroup` and `TruckGroup` are both members of `VehicleGroup`, then the ordering of `CarGroup` and `TruckGroup` implicitly determines the relative ordering of `CarSystem` and `TruckSystem`. |
+| `CreateBefore`<br>`CreateAfter` | Order system creation relative to other systems. The same ordering rules for `UpdateBefore` and `UpdateAfter` apply here, except that there are no groups, and no `OrderFirst`/`OrderLast`. These attributes override the default behavior. System destruction order is defined as the reverse of creation order. |
+| `DisableAutoCreation` | Prevents Unity from creating the system during the default world initialization. |
+
+## Manual system creation
+
+If you need to create a system manually, mark the system in question with the `DisableAutoCreation` attribute, and then you can use `World.CreateSystem` to create a system. To add a system to a group, use the `AddSystemToUpdateList` method. You can add also other system groups to existing system groups.
+
+One problem with this approach is that it doesn't guarantee that systems get created in an order that respects the `CreateAfter` and `CreateBefore` attributes on each system.
+
+## Multiple worlds
+
+You can create multiple worlds and you can instantiate the same component system class in more than one world. You can also update each instance at different rates from different points in the update order. The Netcode package uses this to create separate worlds for client and server running in the same process.
+
+To do this, use the `ICustomBootstrap` interface to manage systems in multiple worlds. For more information, see the documentation on `ICustomBootstrap`.
+
+---
+
+## Outgoing Links
+
+- https://docs.unity3d.com/ - docs.unity3d.com
+- https://docs.unity3d.com/ScriptReference/LowLevel.PlayerLoop.html - Unity player loop
+- https://docs.unity3d.com/6000.2/Documentation/Manual/execution-order.html - Event function execution order
+- https://docs.unity3d.com/Packages/com.unity.netcode@latest - Netcode package
+- https://unity.com/legal - Legal
+- https://unity.com/legal/privacy-policy - Privacy Policy
+- https://unity.com/legal/cookie-policy - Cookie Policy
+- https://unity.com/legal/do-not-sell-my-personal-information - Do Not Sell or Share My Personal Information

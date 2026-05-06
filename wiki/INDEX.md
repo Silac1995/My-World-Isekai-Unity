@@ -46,8 +46,8 @@ See also: [[systems/README]] — grouped by category.
 ## People (1)
 - [[kevin]] — solo developer, project owner.
 
-## Concepts (0)
-_(empty — populate via `/ingest` as design discussions surface)_
+## Concepts (1)
+- [[unity-ecs]] — Unity ECS / DOTS architecture model; installed (`com.unity.feature.ecs@1.0.0`) but unused yet.
 
 ## Projects (0)
 _(empty — Spine 2D migration should get its own project page; see memory `project_spine2d_migration`)_
@@ -66,8 +66,8 @@ _(empty — Spine 2D migration should get its own project page; see memory `proj
 ## Meetings (0)
 _(empty)_
 
-## References (0)
-_(empty)_
+## References (1)
+- [[unity-ecs-manual]] — Unity Entities 6.4 official manual (mirrored locally at `raw/articles/unity-ecs-manual/`).
 
 ## Mechanics (0)
 _(empty — promote from wiki/systems/ when individual mechanics grow beyond architecture)_

@@ -16,7 +16,7 @@ MonoBehaviour:
   _displayName: Apple Tree
   _harvestOutputs:
   - Item: {fileID: 11400000, guid: 6eadabb584f662d49bea83caa241bdba, type: 2}
-    Count: 4
+    Count: 2
   - Item: {fileID: 11400000, guid: f6b04bb5c96c35d4d8c4cb7bc34515b5, type: 2}
     Count: 1
   _requiredHarvestTool: {fileID: 0}
@@ -29,7 +29,7 @@ MonoBehaviour:
   _requiredDestructionTool: {fileID: 0}
   _destructionEntries:
   - Item: {fileID: 11400000, guid: a3f0471c4178efd4b9b5efdb38aea516, type: 2}
-    Count: 4
+    Count: 2
   _destructionDuration: 3
   _readySprite: {fileID: 0}
   _depletedSprite: {fileID: 0}
