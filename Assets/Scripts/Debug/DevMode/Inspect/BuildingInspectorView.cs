@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Text;
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 
 /// <summary>
 /// IBuildingInspectorView for any <see cref="Building"/> target. A single view that handles every
@@ -42,6 +43,10 @@ public class BuildingInspectorView : MonoBehaviour, IBuildingInspectorView
     [SerializeField] private TMP_Text _headerLabel;
     [SerializeField] private TMP_Text _content;
 
+    [Header("Construction (DEV)")]
+    [Tooltip("Optional. When wired, this button atomically finalizes the building's construction (Server only). Hidden when the target is not under construction or when the local peer is not the server.")]
+    [SerializeField] private Button _forceFinishButton;
+
     private Building _target;
 
     public bool CanInspect(Building target) => target != null;
@@ -50,13 +55,32 @@ public class BuildingInspectorView : MonoBehaviour, IBuildingInspectorView
     {
         _target = target;
         UpdateHeader();
+        RefreshForceFinishButton();
     }
 
     public void Clear()
     {
         _target = null;
         UpdateHeader();
+        RefreshForceFinishButton();
         if (_content != null) _content.text = "<color=grey>No building selected.</color>";
+    }
+
+    private void Awake()
+    {
+        if (_forceFinishButton != null)
+        {
+            _forceFinishButton.onClick.AddListener(HandleForceFinishClicked);
+            _forceFinishButton.gameObject.SetActive(false);
+        }
+    }
+
+    private void OnDestroy()
+    {
+        if (_forceFinishButton != null)
+        {
+            _forceFinishButton.onClick.RemoveListener(HandleForceFinishClicked);
+        }
     }
 
     private void Update()
@@ -70,6 +94,38 @@ public class BuildingInspectorView : MonoBehaviour, IBuildingInspectorView
         {
             Debug.LogException(e, this);
             _content.text = $"<color=red>⚠ {GetType().Name} failed — {e.Message}</color>";
+        }
+
+        // Show the Force-Finish button only while a server peer has a building under construction
+        // selected. State can flip every frame (server completion, client→host promotion, etc.).
+        RefreshForceFinishButton();
+    }
+
+    private void RefreshForceFinishButton()
+    {
+        if (_forceFinishButton == null) return;
+        bool show = _target != null && _target.IsServer && _target.IsUnderConstruction;
+        if (_forceFinishButton.gameObject.activeSelf != show)
+        {
+            _forceFinishButton.gameObject.SetActive(show);
+        }
+    }
+
+    private void HandleForceFinishClicked()
+    {
+        if (_target == null) return;
+        if (!_target.IsServer)
+        {
+            Debug.LogWarning("[BuildingInspectorView] Force Finish ignored — caller is not the server.", this);
+            return;
+        }
+        try
+        {
+            _target.Finalize();
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogException(e, this);
         }
     }
 
@@ -182,22 +238,46 @@ public class BuildingInspectorView : MonoBehaviour, IBuildingInspectorView
             return;
         }
 
+        // Live construction progress as a percentage (0-100). Replicated NetworkVariable —
+        // visible to every peer. Always rendered when there are requirements (even on Complete
+        // it just reads 100%, which is informative).
+        float progress01 = Mathf.Clamp01(b.ConstructionProgress.Value);
+        string progressColor = progress01 >= 1f ? "#64FF64" : "#FFB060";
+        sb.Append("  <b>Progress:</b> <color=").Append(progressColor).Append(">")
+          .Append((progress01 * 100f).ToString("F1")).AppendLine("%</color>");
+
         var contributed = b.ContributedMaterials;
         var pending = b.GetPendingMaterials();
+        var delivered = b.DeliveredMaterials; // NetworkList<DeliveredMaterialEntry> — replicated.
 
         sb.AppendLine("  <b>Materials:</b>");
         for (int i = 0; i < requirements.Count; i++)
         {
             var req = requirements[i];
+            // CraftingIngredient is a STRUCT — only Item can be null, never the ingredient itself.
             ItemSO item = req.Item;
             int required = req.Amount;
             int got = (contributed != null && item != null && contributed.TryGetValue(item, out int c)) ? c : 0;
             int left = (pending != null && item != null && pending.TryGetValue(item, out int p)) ? p : 0;
 
+            // Lookup the replicated delivered count by RequirementIndex. Linear scan is fine —
+            // requirements lists are short (typically <10) and this view runs only while DevMode
+            // is open with a building selected (component is SetActive(false) otherwise).
+            int deliveredQty = 0;
+            if (delivered != null)
+            {
+                for (int j = 0; j < delivered.Count; j++)
+                {
+                    var entry = delivered[j];
+                    if (entry.RequirementIndex == i) { deliveredQty = entry.Delivered; break; }
+                }
+            }
+
             string itemName = item != null && !string.IsNullOrEmpty(item.ItemName) ? item.ItemName : (item != null ? item.name : "<null>");
             string color = left == 0 ? "#64FF64" : "#FFB060";
             sb.Append("    • <color=").Append(color).Append(">").Append(itemName).Append("</color> — ");
-            sb.Append(got).Append(" / ").Append(required);
+            sb.Append("contrib ").Append(got).Append(" / ").Append(required);
+            sb.Append(" <color=#888888>(replicated: ").Append(deliveredQty).Append(")</color>");
             if (left > 0) sb.Append(" <color=#FF6464>(").Append(left).Append(" left)</color>");
             sb.AppendLine();
         }
