@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using Unity.Collections;
+using Unity.Netcode;
 using UnityEngine;
 
 namespace MWI.Ambition
@@ -21,6 +23,14 @@ namespace MWI.Ambition
         // History
         private readonly List<CompletedAmbition> _history = new();
         public IReadOnlyList<CompletedAmbition> History => _history;
+
+        // Replicated snapshot — readable by all, writable only by the server.
+        // Read by HUD / dev inspector for any character. Full DTO (with context, task
+        // states, history) fans out via ClientRpc on demand (future task).
+        public readonly NetworkVariable<NetworkAmbitionSnapshot> Snapshot = new(
+            NetworkAmbitionSnapshot.Inactive,
+            NetworkVariableReadPermission.Everyone,
+            NetworkVariableWritePermission.Server);
 
         // Queue of (key, kind, serializedValue, targetCtx) tuples whose Character refs couldn't resolve at load.
         // Retried whenever Character.OnCharacterSpawned fires for any character.
@@ -62,11 +72,47 @@ namespace MWI.Ambition
         // Public API
         public virtual void SetAmbition(AmbitionSO so, IReadOnlyDictionary<string, object> parameters = null)
         {
-            // Server gate lands in Phase 7. For now allow direct call so EditMode tests work.
-            DoSetAmbition(so, parameters);
+            if (IsServer)
+            {
+                DoSetAmbition(so, parameters);
+                return;
+            }
+            var guid = AmbitionRegistry.GetGuid(so);
+            if (string.IsNullOrEmpty(guid))
+            {
+                Debug.LogError($"[CharacterAmbition] SetAmbition: SO {so?.name} has no registry GUID — cannot route via ServerRpc.");
+                return;
+            }
+            // ServerRpc cannot pass IReadOnlyDictionary<string, object>. Networked SetAmbition
+            // ships only the SO GUID; parameter binding for non-server callers is handled by
+            // separate context-set RPCs from player UI (Phase 11).
+            SetAmbitionServerRpc(new FixedString64Bytes(guid));
+        }
+
+        [ServerRpc(RequireOwnership = false)]
+        private void SetAmbitionServerRpc(FixedString64Bytes guid)
+        {
+            var so = AmbitionRegistry.Get(guid.ToString());
+            if (so == null)
+            {
+                Debug.LogError($"[CharacterAmbition] ServerRpc: unknown SO GUID {guid}.");
+                return;
+            }
+            DoSetAmbition(so, null);
         }
 
         public virtual void ClearAmbition()
+        {
+            if (IsServer)
+            {
+                DoClearAmbition(CompletionReason.ClearedByScript);
+                return;
+            }
+            ClearAmbitionServerRpc();
+        }
+
+        [ServerRpc(RequireOwnership = false)]
+        private void ClearAmbitionServerRpc()
         {
             DoClearAmbition(CompletionReason.ClearedByScript);
         }
@@ -97,6 +143,7 @@ namespace MWI.Ambition
             };
             IssueStepQuest(0);
             OnAmbitionSet?.Invoke(_current);
+            Snapshot.Value = BuildSnapshot();
         }
 
         protected void DoClearAmbition(CompletionReason reason)
@@ -108,6 +155,22 @@ namespace MWI.Ambition
             _history.Add(snap);
             if (reason == CompletionReason.Completed) OnAmbitionCompleted?.Invoke(snap);
             else OnAmbitionCleared?.Invoke(snap);
+            Snapshot.Value = NetworkAmbitionSnapshot.Inactive;
+        }
+
+        private NetworkAmbitionSnapshot BuildSnapshot()
+        {
+            if (_current == null || _current.SO == null) return NetworkAmbitionSnapshot.Inactive;
+            var guid = AmbitionRegistry.GetGuid(_current.SO);
+            return new NetworkAmbitionSnapshot
+            {
+                HasActive = true,
+                AmbitionSOGuid = new FixedString64Bytes(guid ?? string.Empty),
+                CurrentStepIndex = _current.CurrentStepIndex,
+                TotalSteps = _current.TotalSteps,
+                Progress01 = _current.Progress01,
+                OverridesSchedule = _current.SO.OverridesSchedule
+            };
         }
 
         protected void IssueStepQuest(int stepIndex)
@@ -160,6 +223,7 @@ namespace MWI.Ambition
                 int next = _current.CurrentStepIndex + 1;
                 IssueStepQuest(next);
                 OnStepAdvanced?.Invoke(_current, next);
+                Snapshot.Value = BuildSnapshot();
             }
         }
 
