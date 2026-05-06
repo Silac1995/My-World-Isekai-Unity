@@ -825,8 +825,8 @@ namespace MWI.WorldSystem
                 if (saveEntry != null)
                 {
                     // Update existing entry with current state. Replace dynamic fields
-                    // (owners, employees, storage contents) wholesale so changes since
-                    // last snapshot stick.
+                    // (owners, employees, storage contents, construction progress) wholesale
+                    // so changes since last snapshot stick.
                     var refreshed = BuildingSaveData.FromBuilding(building, transform.position);
                     saveEntry.State = refreshed.State;
                     saveEntry.Position = refreshed.Position;
@@ -834,6 +834,9 @@ namespace MWI.WorldSystem
                     saveEntry.OwnerCharacterIds = refreshed.OwnerCharacterIds;
                     saveEntry.Employees = refreshed.Employees;
                     saveEntry.StorageFurnitures = refreshed.StorageFurnitures;
+                    // Construction loop fields — without these the meter resets to 0 on reload.
+                    saveEntry.ConstructionProgress = refreshed.ConstructionProgress;
+                    saveEntry.DeliveredMaterials = refreshed.DeliveredMaterials;
                 }
                 else
                 {
@@ -1401,7 +1404,10 @@ namespace MWI.WorldSystem
                         saveEntry.OwnerCharacterIds = refreshed.OwnerCharacterIds;
                         saveEntry.Employees = refreshed.Employees;
                         saveEntry.StorageFurnitures = refreshed.StorageFurnitures;
-                        Debug.Log($"<color=orange>[MapController:Hibernate]</color> Updated existing save entry for '{building.BuildingName}'. State={saveEntry.State}, owners={saveEntry.OwnerCharacterIds.Count}, employees={saveEntry.Employees.Count}, storages={saveEntry.StorageFurnitures.Count}");
+                        // Construction loop fields — without these the meter resets to 0 on reload.
+                        saveEntry.ConstructionProgress = refreshed.ConstructionProgress;
+                        saveEntry.DeliveredMaterials = refreshed.DeliveredMaterials;
+                        Debug.Log($"<color=orange>[MapController:Hibernate]</color> Updated existing save entry for '{building.BuildingName}'. State={saveEntry.State}, progress={saveEntry.ConstructionProgress:F2}, owners={saveEntry.OwnerCharacterIds.Count}, employees={saveEntry.Employees.Count}, storages={saveEntry.StorageFurnitures.Count}");
                     }
                     else
                     {
