@@ -34,7 +34,7 @@ Transform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 6719286638165457982}
+  m_Father: {fileID: 1749596633331466633}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &3431047644747895331
 MonoBehaviour:
@@ -4296,9 +4296,6 @@ PrefabInstance:
       addedObject: {fileID: 4949496113570344805}
     - targetCorrespondingSourceObject: {fileID: 3564774228829787976, guid: d941949b730fb1843991b09d42aa29bf, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 4328732905972203992}
-    - targetCorrespondingSourceObject: {fileID: 3564774228829787976, guid: d941949b730fb1843991b09d42aa29bf, type: 3}
-      insertIndex: -1
       addedObject: {fileID: 9106007865038090919}
     - targetCorrespondingSourceObject: {fileID: 3564774228829787976, guid: d941949b730fb1843991b09d42aa29bf, type: 3}
       insertIndex: -1
@@ -4306,8 +4303,16 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 3564774228829787976, guid: d941949b730fb1843991b09d42aa29bf, type: 3}
       insertIndex: -1
       addedObject: {fileID: 8423605904792108181}
+    - targetCorrespondingSourceObject: {fileID: 8358957988346440447, guid: d941949b730fb1843991b09d42aa29bf, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 4328732905972203992}
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: d941949b730fb1843991b09d42aa29bf, type: 3}
+--- !u!4 &1749596633331466633 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 8358957988346440447, guid: d941949b730fb1843991b09d42aa29bf, type: 3}
+  m_PrefabInstance: {fileID: 7802254215568206710}
+  m_PrefabAsset: {fileID: 0}
 --- !u!4 &6719286638165457982 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 3564774228829787976, guid: d941949b730fb1843991b09d42aa29bf, type: 3}

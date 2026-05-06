@@ -34,7 +34,7 @@ Transform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 5366061174305744267}
+  m_Father: {fileID: 3210904283630688385}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &4006581743801128459
 MonoBehaviour:
@@ -390,7 +390,7 @@ Transform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 5366061174305744267}
+  m_Father: {fileID: 3210904283630688385}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &31368457775097070
 MonoBehaviour:
@@ -691,7 +691,7 @@ Transform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 5366061174305744267}
+  m_Father: {fileID: 3210904283630688385}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &4405733460396547746
 MonoBehaviour:
@@ -992,7 +992,7 @@ Transform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 5366061174305744267}
+  m_Father: {fileID: 3210904283630688385}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &3015498871960081770
 MonoBehaviour:
@@ -1402,6 +1402,7 @@ MonoBehaviour:
   zoneType: 0
   zoneName: 
   _boundsTarget: {fileID: 0}
+  _boundsTargets: []
 --- !u!1001 &1308580704696121089
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1515,20 +1516,25 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 6363893048607625866, guid: 2e1494b4d52f43344be89b09545dbadf, type: 3}
       insertIndex: 1
       addedObject: {fileID: 1486104194705585791}
-    - targetCorrespondingSourceObject: {fileID: 6363893048607625866, guid: 2e1494b4d52f43344be89b09545dbadf, type: 3}
-      insertIndex: 2
+    - targetCorrespondingSourceObject: {fileID: 4514418103165251456, guid: 2e1494b4d52f43344be89b09545dbadf, type: 3}
+      insertIndex: -1
       addedObject: {fileID: 2991815872744261188}
-    - targetCorrespondingSourceObject: {fileID: 6363893048607625866, guid: 2e1494b4d52f43344be89b09545dbadf, type: 3}
-      insertIndex: 3
+    - targetCorrespondingSourceObject: {fileID: 4514418103165251456, guid: 2e1494b4d52f43344be89b09545dbadf, type: 3}
+      insertIndex: -1
       addedObject: {fileID: 3966889791356115827}
-    - targetCorrespondingSourceObject: {fileID: 6363893048607625866, guid: 2e1494b4d52f43344be89b09545dbadf, type: 3}
-      insertIndex: 4
+    - targetCorrespondingSourceObject: {fileID: 4514418103165251456, guid: 2e1494b4d52f43344be89b09545dbadf, type: 3}
+      insertIndex: -1
       addedObject: {fileID: 5578624986799370477}
-    - targetCorrespondingSourceObject: {fileID: 6363893048607625866, guid: 2e1494b4d52f43344be89b09545dbadf, type: 3}
-      insertIndex: 5
+    - targetCorrespondingSourceObject: {fileID: 4514418103165251456, guid: 2e1494b4d52f43344be89b09545dbadf, type: 3}
+      insertIndex: -1
       addedObject: {fileID: 8270262472092689229}
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 2e1494b4d52f43344be89b09545dbadf, type: 3}
+--- !u!4 &3210904283630688385 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 4514418103165251456, guid: 2e1494b4d52f43344be89b09545dbadf, type: 3}
+  m_PrefabInstance: {fileID: 1308580704696121089}
+  m_PrefabAsset: {fileID: 0}
 --- !u!4 &5366061174305744267 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 6363893048607625866, guid: 2e1494b4d52f43344be89b09545dbadf, type: 3}
