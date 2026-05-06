@@ -61,6 +61,35 @@ public class Building : ComplexRoom
     [SerializeField] protected List<CraftingIngredient> _constructionRequirements = new List<CraftingIngredient>();
     protected Dictionary<ItemSO, int> _contributedMaterials = new Dictionary<ItemSO, int>();
 
+    [Tooltip("Child GameObject holding the scaffolding renderers/colliders shown while UnderConstruction. Active iff CurrentState == UnderConstruction.")]
+    [SerializeField] protected GameObject _constructionVisualRoot;
+
+    [Tooltip("Child GameObject holding the finished-building renderers/colliders shown after Complete. Active iff CurrentState == Complete.")]
+    [SerializeField] protected GameObject _completedVisualRoot;
+
+    /// <summary>
+    /// 0..1 progress towards completion. Server-write, everyone-read. Updated by
+    /// ConstructionSiteScanner (observational, between deliveries) and by
+    /// CharacterAction_FinishConstruction.OnTick (authoritative, during the action).
+    /// Reset to 0 at construction start; frozen at 1 after Complete.
+    /// </summary>
+    public NetworkVariable<float> ConstructionProgress = new NetworkVariable<float>(
+        0f,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server
+    );
+
+    /// <summary>
+    /// Per-requirement delivered counts, replicated to clients so UIs can show per-type
+    /// breakdown without server-side _contributedMaterials access. Indexed by position in
+    /// _constructionRequirements. Server-write only.
+    /// </summary>
+    public NetworkList<DeliveredMaterialEntry> DeliveredMaterials = new NetworkList<DeliveredMaterialEntry>(
+        new DeliveredMaterialEntry[0],
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server
+    );
+
     [Header("Default Furniture")]
     [Tooltip("Furniture spawned automatically by the server when this building first comes into existence in a fresh world.\n" +
              "Skipped on save-restore — restored buildings reuse their persisted furniture state.\n" +
