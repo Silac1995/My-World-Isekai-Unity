@@ -638,12 +638,14 @@ public class Building : ComplexRoom
 
         // ── Velocity over lifetime: visible upward drift. 5–7 u/s × 4s = 20–28 units of
         // vertical travel — clearly above head height at the 11u=1.67m project scale.
+        // All three axes MUST use the same MinMaxCurve mode (Unity warning otherwise) —
+        // we use TwoConstants on all three; X/Z are constant 0 → 0 (no horizontal drift).
         var vel = ps.velocityOverLifetime;
         vel.enabled = true;
         vel.space = ParticleSystemSimulationSpace.Local;
+        vel.x = new ParticleSystem.MinMaxCurve(0f, 0f);
         vel.y = new ParticleSystem.MinMaxCurve(5f, 7f);
-        vel.x = new ParticleSystem.MinMaxCurve(0f);
-        vel.z = new ParticleSystem.MinMaxCurve(0f);
+        vel.z = new ParticleSystem.MinMaxCurve(0f, 0f);
 
         // ── Color over lifetime: alpha plateau then fade. Particles stay 0.9 alpha
         // for the first 60% of life (so the column reads SOLID up to the curtain
@@ -1366,14 +1368,21 @@ public class Building : ComplexRoom
     [Unity.Netcode.Rpc(Unity.Netcode.SendTo.Server)]
     public void RequestStartFinishConstructionRpc(Unity.Netcode.NetworkBehaviourReference actorRef)
     {
+        Debug.Log($"<color=magenta>[Building.RequestStartFinishConstructionRpc]</color> {buildingName} IsServer={IsServer} IsUnderConstruction={IsUnderConstruction}");
         if (!IsServer) return; // defensive — RPC dispatch already gates this
-        if (!IsUnderConstruction) return;
-        if (!actorRef.TryGet(out Character actor) || actor == null) return;
+        if (!IsUnderConstruction) { Debug.LogWarning($"[Building.SRpc] {buildingName} aborted — not UnderConstruction"); return; }
+
+        if (!actorRef.TryGet(out Character actor) || actor == null) { Debug.LogWarning($"[Building.SRpc] {buildingName} aborted — actorRef.TryGet failed"); return; }
 
         var placedBy = PlacedByCharacterId.Value.ToString();
-        if (string.IsNullOrEmpty(placedBy) || placedBy != actor.CharacterId) return;
-        if (actor.CharacterActions == null) return;
+        if (string.IsNullOrEmpty(placedBy) || placedBy != actor.CharacterId)
+        {
+            Debug.LogWarning($"[Building.SRpc] {buildingName} aborted — placedBy='{placedBy}' actor.CharacterId='{actor.CharacterId}' mismatch");
+            return;
+        }
+        if (actor.CharacterActions == null) { Debug.LogWarning($"[Building.SRpc] {buildingName} aborted — actor.CharacterActions null"); return; }
 
+        Debug.Log($"<color=magenta>[Building.SRpc]</color> {buildingName} queuing FinishConstruction action for {actor.CharacterName}");
         var action = new CharacterAction_FinishConstruction(actor, this);
         actor.CharacterActions.ExecuteAction(action);
     }

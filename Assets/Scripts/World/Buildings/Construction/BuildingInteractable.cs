@@ -54,16 +54,27 @@ public class BuildingInteractable : InteractableObject
     /// </summary>
     public override void Interact(Character interactor)
     {
-        if (interactor == null || _building == null) return;
+        if (interactor == null || _building == null)
+        {
+            Debug.Log($"<color=magenta>[BuildingInteractable.Interact]</color> aborted — interactor={(interactor != null ? interactor.name : "NULL")} building={(_building != null ? _building.name : "NULL")}");
+            return;
+        }
+
+        bool inZone = IsCharacterInInteractionZone(interactor);
+        bool isUC = _building.IsUnderConstruction;
+        bool ownerOk = IsOwner(interactor);
+        var placedBy = _building.PlacedByCharacterId.Value.ToString();
+        bool localIsServer = _building.IsServer;
+        Debug.Log($"<color=magenta>[BuildingInteractable.Interact]</color> {_building.BuildingName} actor={interactor.CharacterId} placedBy={placedBy} inZone={inZone} isUnderConstruction={isUC} ownerCheck={ownerOk} | localIsServer={localIsServer}");
 
         // Core Rule #1 (interactable-system): proximity gate is the canonical helper.
-        if (!IsCharacterInInteractionZone(interactor)) return;
-
-        if (!_building.IsUnderConstruction) return;
-        if (!IsOwner(interactor)) return;
+        if (!inZone) return;
+        if (!isUC) return;
+        if (!ownerOk) return;
 
         // Server resolves the actor + building, validates ownership, and queues the action.
         // On host the RPC short-circuits to a direct call in the same frame.
+        Debug.Log($"<color=magenta>[BuildingInteractable.Interact]</color> dispatching RequestStartFinishConstructionRpc");
         _building.RequestStartFinishConstructionRpc(new Unity.Netcode.NetworkBehaviourReference(interactor));
     }
 
