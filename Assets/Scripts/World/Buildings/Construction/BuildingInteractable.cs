@@ -65,31 +65,19 @@ public class BuildingInteractable : InteractableObject
     }
 
     /// <summary>
-    /// Tap-E entry point. Phase 1: only the placer can finalize a building under construction.
-    /// Server-relay via Building.RequestStartFinishConstructionRpc — required for
-    /// CharacterAction_Continuous which OnTick's server-authoritatively.
+    /// Tap-E entry point. Phase 1 cooperative model — any character with the building
+    /// in their interaction zone can drive the action; the placer-only gate planned
+    /// originally was dropped so co-op players can finish each other's builds. Server-relay
+    /// via <see cref="Building.RequestStartFinishConstructionServerRpc"/> — required for
+    /// <see cref="CharacterAction_Continuous"/> which OnTicks server-authoritatively.
     /// </summary>
     public override void Interact(Character interactor)
     {
-        if (interactor == null || _building == null)
-        {
-            Debug.Log($"<color=magenta>[BuildingInteractable.Interact]</color> aborted — interactor or building null");
-            return;
-        }
-
-        bool inZone = IsCharacterInInteractionZone(interactor);
-        bool isUC = _building.IsUnderConstruction;
-        bool localIsServer = _building.IsServer;
-        var charPos = interactor.transform.position;
-        var zoneBounds = InteractionZone != null ? InteractionZone.bounds.ToString() : "NULL";
-
-        Debug.Log($"<color=magenta>[BuildingInteractable.Interact]</color> {_building.BuildingName} actor={interactor.CharacterId} actorPos={charPos} zoneBounds={zoneBounds} inZone={inZone} isUnderConstruction={isUC} | localIsServer={localIsServer}");
-
-        if (!inZone) return;
-        if (!isUC) return;
+        if (interactor == null || _building == null) return;
+        if (!IsCharacterInInteractionZone(interactor)) return;
+        if (!_building.IsUnderConstruction) return;
 
         // Cooperative model: anyone in the zone can finalize. Server-relay via RPC.
-        Debug.Log($"<color=magenta>[BuildingInteractable.Interact]</color> dispatching RequestStartFinishConstructionServerRpc");
         _building.RequestStartFinishConstructionServerRpc(new Unity.Netcode.NetworkBehaviourReference(interactor));
     }
 

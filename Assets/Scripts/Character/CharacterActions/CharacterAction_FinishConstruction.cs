@@ -134,22 +134,17 @@ public class CharacterAction_FinishConstruction : CharacterAction_Continuous
     {
         if (_target == null) { UnityEngine.Debug.LogWarning("[FinishConstruction.IsActorInside] _target null"); return false; }
         if (_target.BuildingZone == null) { UnityEngine.Debug.LogWarning($"[FinishConstruction.IsActorInside] {_target.BuildingName} _target.BuildingZone null"); return false; }
-        var bz = _target.BuildingZone;
-        var bounds = bz.bounds;
+        // 2D X-Z footprint check — ignores Y because the construction zone is
+        // conceptually a ground rectangle. The character's exact Y (which can be
+        // 0 ± floating-point noise depending on collider / NavMesh agent position)
+        // shouldn't gate interaction when they're standing inside the X-Z footprint.
+        // 3D Bounds.Contains can false-negative on the server-replicated transform
+        // when the character's Y rounds to bounds.min.y but the actual float is just
+        // below it — that bug ate a debugging cycle and is what drove the 2D check.
+        var bounds = _target.BuildingZone.bounds;
         var pos = character.transform.position;
-        bool contains = bounds.Contains(pos);
-        var min = bounds.min;
-        var max = bounds.max;
-        bool xOk = pos.x >= min.x && pos.x <= max.x;
-        bool yOk = pos.y >= min.y && pos.y <= max.y;
-        bool zOk = pos.z >= min.z && pos.z <= max.z;
-        // 2D footprint check — ignores Y because the construction zone is conceptually
-        // a ground rectangle. The character's exact Y (which can be 0 ± floating-point
-        // noise depending on collider/NavMesh agent position) shouldn't gate interaction
-        // when they're standing inside the X-Z footprint.
-        bool xzInside = xOk && zOk;
-        UnityEngine.Debug.Log($"[FinishConstruction.IsActorInside] {_target.BuildingName} pos={pos} min={min} max={max} | x:{xOk}({pos.x:F4} in [{min.x:F4},{max.x:F4}]) y:{yOk}({pos.y:F4} in [{min.y:F4},{max.y:F4}]) z:{zOk}({pos.z:F4} in [{min.z:F4},{max.z:F4}]) | bounds.Contains={contains} | xzInside={xzInside}");
-        return xzInside;
+        return pos.x >= bounds.min.x && pos.x <= bounds.max.x
+            && pos.z >= bounds.min.z && pos.z <= bounds.max.z;
     }
 
     /// <summary>

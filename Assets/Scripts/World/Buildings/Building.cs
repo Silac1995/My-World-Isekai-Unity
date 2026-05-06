@@ -1401,8 +1401,9 @@ public class Building : ComplexRoom
     /// On host the RPC short-circuits to a direct method call in the same frame
     /// (no extra latency, NGO dispatch optimisation).
     ///
-    /// Server-side validation mirrors <see cref="BuildingInteractable.IsOwner"/>:
-    /// PlacedByCharacterId must match the resolved actor's CharacterId.
+    /// Phase 1 cooperative model: no owner check — any character with the building
+    /// in their interaction zone can drive the action. <see cref="BuildingInteractable.IsOwner"/>
+    /// is reserved for Phase 2 (Abandon / Sell hold-menu options).
     /// </summary>
     // [ServerRpc(RequireOwnership = false)] is the rock-solid client→server path used by
     // the rest of the project. The Building NetworkObject is owned by the server, so any
@@ -1411,22 +1412,14 @@ public class Building : ComplexRoom
     [Unity.Netcode.ServerRpc(RequireOwnership = false)]
     public void RequestStartFinishConstructionServerRpc(Unity.Netcode.NetworkBehaviourReference actorRef)
     {
-        Debug.Log($"<color=magenta>[Building.SRpc]</color> {buildingName} arrived. IsServer={IsServer} IsUnderConstruction={IsUnderConstruction}");
         if (!IsServer) { Debug.LogWarning($"[Building.SRpc] {buildingName} aborted — !IsServer"); return; }
-        if (!IsUnderConstruction) { Debug.LogWarning($"[Building.SRpc] {buildingName} aborted — !IsUnderConstruction"); return; }
+        if (!IsUnderConstruction) return; // benign — zone-press race after Finalize.
         if (!actorRef.TryGet(out Character actor) || actor == null) { Debug.LogWarning($"[Building.SRpc] {buildingName} aborted — actorRef.TryGet failed"); return; }
         if (actor.CharacterActions == null) { Debug.LogWarning($"[Building.SRpc] {buildingName} aborted — actor.CharacterActions null"); return; }
 
         // Cooperative model: any character can finalize. Phase 1 owner-check removed.
-        var existing = actor.CharacterActions.CurrentAction;
-        Debug.Log($"<color=magenta>[Building.SRpc]</color> {buildingName} pre-queue: actor={actor.CharacterName} _currentAction={(existing != null ? existing.ActionName : "NULL")} actorPos={actor.transform.position}");
-
         var action = new CharacterAction_FinishConstruction(actor, this);
-        bool canExec = action.CanExecute();
-        Debug.Log($"<color=magenta>[Building.SRpc]</color> {buildingName} action.CanExecute()={canExec}");
-
-        bool queued = actor.CharacterActions.ExecuteAction(action);
-        Debug.Log($"<color=magenta>[Building.SRpc]</color> {buildingName} ExecuteAction returned {queued}");
+        actor.CharacterActions.ExecuteAction(action);
     }
 
     /// <summary>
