@@ -113,15 +113,15 @@ public class DeliveredMaterialEntrySerializationTests
             Delivered = 17
         };
 
-        // Use FastBufferWriter / FastBufferReader (NGO's primitive serialization API).
+        // BufferSerializer<T>'s constructor is internal to Unity.Netcode. External
+        // assemblies must drive the round-trip via the public WriteNetworkSerializable
+        // / ReadNetworkSerializable extension points (which themselves invoke the
+        // struct's NetworkSerialize override under the hood).
         using var writer = new FastBufferWriter(64, Allocator.Temp);
-        var serializer = new BufferSerializer<BufferSerializerWriter>(new BufferSerializerWriter(writer));
-        original.NetworkSerialize(serializer);
+        writer.WriteNetworkSerializable(original);
 
         using var reader = new FastBufferReader(writer, Allocator.Temp);
-        var rdSerializer = new BufferSerializer<BufferSerializerReader>(new BufferSerializerReader(reader));
-        var roundtripped = default(DeliveredMaterialEntry);
-        roundtripped.NetworkSerialize(rdSerializer);
+        reader.ReadNetworkSerializable(out DeliveredMaterialEntry roundtripped);
 
         Assert.AreEqual(original.RequirementIndex, roundtripped.RequirementIndex);
         Assert.AreEqual(original.Delivered, roundtripped.Delivered);
