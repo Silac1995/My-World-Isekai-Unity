@@ -45,10 +45,123 @@ public class Cashier : Furniture
     private CashierNetSync _netSync;
     public CashierNetSync NetSync => _netSync;
 
+    private float _autoSeatTimer;
+    private const float AUTO_SEAT_TICK_INTERVAL = 1f;
+    private static readonly Collider[] _scratchColliders = new Collider[16]; // server-only writes
+    private bool _registered;
+
     protected void Awake()
     {
         _linkedBuilding = GetComponentInParent<CommercialBuilding>();
         _netSync = GetComponent<CashierNetSync>();
+    }
+
+    protected void OnEnable()
+    {
+        // Server-only registration; the LinkedShop-side method's IsServer check is
+        // inside RegisterCashier so this is safe to call on every peer.
+        if (LinkedShop != null) { LinkedShop.RegisterCashier(this); _registered = true; }
+    }
+
+    protected void OnDisable()
+    {
+        if (_registered && LinkedShop != null) LinkedShop.UnregisterCashier(this);
+        _registered = false;
+
+        // Mid-transaction safety — abort any active customer action.
+        if (_currentCustomer != null && _netSync != null && _netSync.IsServer)
+        {
+            AbortActiveTransactionServerOnly("cashier removed");
+        }
+
+        // Drop till coins as WorldItems on the ground.
+        if (_netSync != null && _netSync.IsServer && _till.Count > 0)
+        {
+            DropTillCoinsAsWorldItems();
+        }
+    }
+
+    private void Update()
+    {
+        if (_netSync == null || !_netSync.IsServer) return;
+        _autoSeatTimer += Time.unscaledDeltaTime;
+        if (_autoSeatTimer >= AUTO_SEAT_TICK_INTERVAL)
+        {
+            _autoSeatTimer = 0f;
+            ServerTickAutoOccupy();
+        }
+    }
+
+    private void ServerTickAutoOccupy()
+    {
+        if (Occupant != null) return;
+        if (_currentCustomer != null) return;
+
+        // Find any character within InteractionPoint range whose CharacterJob is a
+        // JobVendor of this shop and who is currently on shift.
+        int n = Physics.OverlapSphereNonAlloc(GetInteractionPosition(), _autoSeatRadius, _scratchColliders);
+        for (int i = 0; i < n; i++)
+        {
+            var collider = _scratchColliders[i];
+            if (collider == null) continue;
+            var character = collider.GetComponentInParent<Character>();
+            if (character == null) continue;
+            if (character.CharacterJob == null) continue;
+            if (character.CharacterJob.CurrentJob is not JobVendor jv) continue;
+            if (jv.Workplace != _linkedBuilding) continue;
+            // On-shift check: project uses ScheduleActivity.Work as the on-shift signal
+            // (CharacterSchedule has no IsOnWorkShiftNow boolean).
+            if (character.CharacterSchedule == null
+                || character.CharacterSchedule.CurrentActivity != ScheduleActivity.Work) continue;
+            Use(character);
+            break;
+        }
+    }
+
+    /// <summary>
+    /// Internal — server-only — called when the cashier is being removed mid-transaction.
+    /// Cancels the active CharacterAction_BuyFromShop on the customer. The action's
+    /// OnCancel path releases the lock and closes any open Player UI.
+    /// </summary>
+    internal void AbortActiveTransactionServerOnly(string reason)
+    {
+        if (_currentCustomer == null) return;
+        // CharacterActions exposes ClearCurrentAction() (not CancelCurrentAction); it
+        // invokes OnCancel on the running action and broadcasts the cancellation RPC.
+        _currentCustomer.CharacterActions?.ClearCurrentAction();
+        Debug.Log($"[Cashier] Aborted active transaction: {reason}");
+    }
+
+    private void DropTillCoinsAsWorldItems()
+    {
+        // Phase 2b ships till-as-int — coin item drop is deferred until the future
+        // currency-as-item refactor (or treasury session). For now, log the lost
+        // coins so playtesters know.
+        foreach (var kv in _till)
+        {
+            Debug.LogWarning($"[Cashier] {FurnitureName} removed with {kv.Value} of currency {kv.Key.Id} in till. Coins are lost (TODO: drop as WorldItems once coin items exist).");
+        }
+        _till.Clear();
+    }
+
+    public override bool Use(Character vendor)
+    {
+        if (!base.Use(vendor)) return false;
+        if (_netSync != null && _netSync.IsServer)
+            _netSync.NotifyOccupiedClientRpc(vendor.NetworkObjectId);
+        return true;
+    }
+
+    public override void Release()
+    {
+        bool wasOccupied = IsOccupied;
+        base.Release();
+        if (wasOccupied && _netSync != null && _netSync.IsServer)
+        {
+            _netSync.NotifyReleasedClientRpc();
+            if (_currentCustomer != null)
+                AbortActiveTransactionServerOnly("vendor walked off");
+        }
     }
 
     /// <summary>
@@ -119,6 +232,4 @@ public class Cashier : Furniture
         return true;
     }
 
-    // Lifecycle hooks for register/unregister filled in Wave 3 (Task 11).
-    // Server-only logic (lock, till mutations, auto-occupy) filled in Wave 3.
 }
