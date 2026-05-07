@@ -94,14 +94,20 @@ public class CashierNetSync : NetworkBehaviour
     [ClientRpc]
     public void OpenBuyPanelClientRpc(ulong customerNetworkObjectId, ulong cashierNetworkObjectId, ClientRpcParams p = default)
     {
-        // Wire to UI_ShopBuyPanel in Wave 8 (Task 23). For now, no-op so the
-        // pre-Wave-8 manual smoke test doesn't NRE.
+        if (NetworkManager.Singleton == null) return;
+        if (!NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(customerNetworkObjectId, out var customerObj)) return;
+        if (!NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(cashierNetworkObjectId, out var cashierObj)) return;
+        var customer = customerObj.GetComponent<Character>();
+        var cashier = cashierObj.GetComponent<Cashier>();
+        if (customer == null || cashier == null) return;
+        if (!customer.IsOwner) return;     // only the owning client opens the UI (rule #19)
+        MWI.UI.Shop.UI_ShopBuyPanel.Open(cashier, customer);
     }
 
     [ClientRpc]
     public void CloseBuyPanelClientRpc(ulong customerNetworkObjectId, ClientRpcParams p = default)
     {
-        // Wire to UI_ShopBuyPanel in Wave 8.
+        MWI.UI.Shop.UI_ShopBuyPanel.Close();
     }
 
     [ClientRpc]
