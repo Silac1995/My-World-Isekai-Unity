@@ -21,6 +21,10 @@ public class CashierNetSync : NetworkBehaviour
 {
     private Cashier _cashier;
 
+    private CharacterAction_BuyFromShop _activeAction;
+    public CharacterAction_BuyFromShop ActiveAction => _activeAction;
+    public void SetActiveActionServer(CharacterAction_BuyFromShop action) { if (IsServer) _activeAction = action; }
+
     public NetworkVariable<ulong> CurrentCustomerNetworkObjectId = new(
         0,
         NetworkVariableReadPermission.Everyone,
@@ -120,22 +124,58 @@ public class CashierNetSync : NetworkBehaviour
     [ServerRpc(RequireOwnership = false)]
     public void RequestStartBuyServerRpc(NetworkBehaviourReference customerRef, ServerRpcParams p = default)
     {
-        // Implemented in Task 21 (after CharacterAction_BuyFromShop exists).
-        Debug.LogWarning($"[Cashier] RequestStartBuyServerRpc: not yet implemented (filled in Wave 6).");
+        if (!customerRef.TryGet(out Character customer)) return;
+        if (customer.OwnerClientId != p.Receive.SenderClientId)
+        {
+            Debug.LogWarning($"[Cashier] RequestStartBuy: sender {p.Receive.SenderClientId} does not own customer {customer.NetworkObjectId}.");
+            return;
+        }
+        if (!_cashier.IsAvailableForCustomer)
+        {
+            ClientRpcParams toCaller = new() { Send = new ClientRpcSendParams { TargetClientIds = new[] { p.Receive.SenderClientId } } };
+            SendBusyToastClientRpc(toCaller);
+            return;
+        }
+
+        var action = new CharacterAction_BuyFromShop(
+            customer, _cashier, new System.Collections.Generic.List<ItemSO>(), CharacterAction_BuyFromShop.BuyMode.Player);
+        SetActiveActionServer(action);
+        customer.CharacterActions.ExecuteAction(action);
     }
 
     [ServerRpc(RequireOwnership = false)]
     public void SubmitPlayerSelectionServerRpc(BuySelectionPayload payload, ServerRpcParams p = default)
     {
-        // Implemented in Task 21.
-        Debug.LogWarning($"[Cashier] SubmitPlayerSelectionServerRpc: not yet implemented (filled in Wave 6).");
+        if (_activeAction == null) return;
+        if (_activeAction.Mode != CharacterAction_BuyFromShop.BuyMode.Player) return;
+        if (_cashier.CurrentCustomer == null || _cashier.CurrentCustomer.OwnerClientId != p.Receive.SenderClientId) return;
+
+        var selections = new System.Collections.Generic.List<(ItemSO, int)>();
+        int len = payload.ItemIds?.Length ?? 0;
+        for (int i = 0; i < len; i++)
+        {
+            var so = ResolveItemSO(payload.ItemIds[i].ToString());
+            if (so == null) continue;
+            int qty = payload.Quantities[i];
+            if (qty <= 0) continue;
+            selections.Add((so, qty));
+        }
+        _activeAction.ApplyPlayerSelection(selections);
     }
 
     [ServerRpc(RequireOwnership = false)]
     public void CancelPlayerTransactionServerRpc(ServerRpcParams p = default)
     {
-        // Implemented in Task 21.
-        Debug.LogWarning($"[Cashier] CancelPlayerTransactionServerRpc: not yet implemented (filled in Wave 6).");
+        if (_cashier.CurrentCustomer == null || _cashier.CurrentCustomer.OwnerClientId != p.Receive.SenderClientId) return;
+        _cashier.CurrentCustomer.CharacterActions?.ClearCurrentAction();
+        _activeAction = null;
+    }
+
+    private static ItemSO ResolveItemSO(string itemId)
+    {
+        if (string.IsNullOrEmpty(itemId)) return null;
+        var all = Resources.LoadAll<ItemSO>("Data/Item");
+        return System.Array.Find(all, x => x.ItemId == itemId);
     }
 }
 
