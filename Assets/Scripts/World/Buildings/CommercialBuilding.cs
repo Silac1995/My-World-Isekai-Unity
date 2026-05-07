@@ -82,6 +82,15 @@ public abstract class CommercialBuilding : Building
     protected List<ItemInstance> _inventory = new List<ItemInstance>();
 
     /// <summary>
+    /// Fires when the <see cref="_jobs"/> roster mutates (slot added/removed). Used by
+    /// dynamic-roster subclasses (e.g. <see cref="ShopBuilding"/> add/remove JobVendor when
+    /// cashiers register/unregister) so any listening UI / system can refresh.
+    /// </summary>
+    public event System.Action OnJobsChanged;
+    /// <summary>Fires <see cref="OnJobsChanged"/> for subclasses that mutate <see cref="_jobs"/> dynamically.</summary>
+    protected void RaiseJobsChanged() => OnJobsChanged?.Invoke();
+
+    /// <summary>
     /// Server-authoritative replicated worker assignments, parallel to <see cref="_jobs"/> by index.
     /// Empty string = unassigned. Clients mirror each entry into their local Job._worker via
     /// <see cref="HandleJobWorkerIdChanged"/>, so Job.IsAssigned / Job.Worker evaluate consistently

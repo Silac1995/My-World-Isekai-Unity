@@ -138,6 +138,59 @@ public class ShopBuilding : CommercialBuilding, IStockProvider
 
 
 
+    // ==========================================
+    // CASHIER REGISTRATION (pool-model JobVendor)
+    // ==========================================
+
+    /// <summary>
+    /// Server-only — called by Cashier.OnEnable when a cashier becomes a child of this shop.
+    /// Adds a generic JobVendor slot to the pool if the cashier requires a vendor.
+    /// Pool model: the slot is unbound; any vendor worker fills any open slot.
+    /// </summary>
+    public void RegisterCashier(Cashier cashier)
+    {
+        if (!IsServer) return;
+        if (cashier == null || _cashiers.Contains(cashier)) return;
+
+        _cashiers.Add(cashier);
+        OnCashiersChanged?.Invoke();
+
+        if (cashier.RequiresVendor)
+        {
+            _jobs.Add(new JobVendor());   // Pool model — slot is generic, not bound to cashier.
+            RaiseJobsChanged();
+        }
+    }
+
+    /// <summary>
+    /// Server-only — called by Cashier.OnDisable. Removes the cashier from the list,
+    /// and if it was vendor-requiring, removes one generic JobVendor slot from the pool.
+    /// Existing fire flow handles any worker assigned to the removed slot (Unassign() before remove).
+    /// </summary>
+    public void UnregisterCashier(Cashier cashier)
+    {
+        if (!IsServer) return;
+        int idx = _cashiers.IndexOf(cashier);
+        if (idx < 0) return;
+
+        _cashiers.RemoveAt(idx);
+        OnCashiersChanged?.Invoke();
+
+        if (cashier.RequiresVendor)
+        {
+            for (int i = _jobs.Count - 1; i >= 0; i--)
+            {
+                if (_jobs[i] is JobVendor jv)
+                {
+                    jv.Unassign();
+                    _jobs.RemoveAt(i);
+                    break;
+                }
+            }
+            RaiseJobsChanged();
+        }
+    }
+
     /// <summary>
     /// Only the Vendor goes to their fixed station (_vendorPoint).
     /// Other employees (Manager, etc.) use the default behavior (building zone).
