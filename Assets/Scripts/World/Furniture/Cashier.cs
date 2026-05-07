@@ -51,6 +51,37 @@ public class Cashier : Furniture
         _netSync = GetComponent<CashierNetSync>();
     }
 
+    /// <summary>
+    /// Server-only — acquires the transaction lock for this customer. Returns false
+    /// if the cashier is already busy or has no vendor (when one is required).
+    /// </summary>
+    public bool TryAcquireCustomerLock(Character customer)
+    {
+        if (_netSync == null || !_netSync.IsServer) return false;
+        if (customer == null) return false;
+        if (!IsAvailableForCustomer) return false;
+
+        _currentCustomer = customer;
+        _netSync.SetCurrentCustomerServer(customer.NetworkObjectId);
+        return true;
+    }
+
+    /// <summary>
+    /// Server-only — releases the transaction lock. Logs a warning if the caller
+    /// is not the holder (defensive — should never happen).
+    /// </summary>
+    public void ReleaseCustomerLock(Character customer)
+    {
+        if (_netSync == null || !_netSync.IsServer) return;
+        if (_currentCustomer != customer)
+        {
+            Debug.LogWarning($"[Cashier] ReleaseCustomerLock: caller {customer?.CharacterName ?? "null"} is not the holder ({_currentCustomer?.CharacterName ?? "null"}). Ignored.");
+            return;
+        }
+        _currentCustomer = null;
+        _netSync.SetCurrentCustomerServer(0);
+    }
+
     // Lifecycle hooks for register/unregister filled in Wave 3 (Task 11).
     // Server-only logic (lock, till mutations, auto-occupy) filled in Wave 3.
 }
