@@ -673,9 +673,9 @@ public class CharacterJob : CharacterSystem, ICharacterSaveData<JobSaveData>, II
             var capturedOwned = interactorOwned;
             options.Add(new InteractionOption
             {
-                Name = "Manage Hiring...",
+                Name = "Manage...",
                 IsDisabled = false,
-                Action = () => UI_OwnerHiringPanel.Show(capturedOwned)
+                Action = () => MWI.UI.Management.UI_OwnerManagementPanel.Show(capturedOwned)
             });
         }
 
