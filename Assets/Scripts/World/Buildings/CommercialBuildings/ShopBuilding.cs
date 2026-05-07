@@ -39,12 +39,27 @@ public class ShopBuilding : CommercialBuilding, IStockProvider
     }
 
     [Header("Shop Settings")]
-    [SerializeField] private List<ShopItemEntry> _itemsToSell = new List<ShopItemEntry>();
+    [Tooltip("Inspector-authored seed catalog. At runtime this is copied into the mutable _catalog list (which the management UI edits).")]
+    [SerializeField] private List<ShopItemEntry> _seedCatalog = new List<ShopItemEntry>();
+
+    private List<ShopItemEntry> _catalog;
+    public IReadOnlyList<ShopItemEntry> Catalog => _catalog;
+
+    private List<StorageFurniture> _sellShelves = new List<StorageFurniture>();
+    public IReadOnlyList<StorageFurniture> SellShelves => _sellShelves;
+
+    private List<Cashier> _cashiers = new List<Cashier>();
+    public IReadOnlyList<Cashier> Cashiers => _cashiers;
+
+    public event System.Action OnCatalogChanged;
+    public event System.Action OnSellShelvesChanged;
+    public event System.Action OnCashiersChanged;
 
     /// <inheritdoc/>
     public IEnumerable<StockTarget> GetStockTargets()
     {
-        foreach (var entry in _itemsToSell)
+        if (_catalog == null) yield break;
+        foreach (var entry in _catalog)
         {
             if (entry.Item == null) continue;
             // Preserve the existing ShopBuilding default: treat zero/negative MaxStock as 5.
@@ -62,10 +77,12 @@ public class ShopBuilding : CommercialBuilding, IStockProvider
     private Queue<Character> _customerQueue = new Queue<Character>();
 
     /// <summary>List of catalog entries (ItemSO + MaxStock).</summary>
-    public IReadOnlyList<ShopItemEntry> ShopEntries => _itemsToSell;
+    public IReadOnlyList<ShopItemEntry> ShopEntries => _catalog;
 
-    // Cached projection of _itemsToSell → ItemSO list. _itemsToSell is inspector-authored
-    // and not mutated at runtime; the cache stays valid for the lifetime of the building.
+    // Cached projection of _catalog → ItemSO list. _catalog is mutable at runtime via the
+    // management UI; if/when that path lands, invalidate _cachedItemsToSell on every catalog
+    // mutation (and fire OnCatalogChanged). For now the cache stays valid for the lifetime
+    // of the building because no runtime mutation hook is wired yet.
     // Pre-refactor this allocated a fresh List on every property access (perf, see
     // wiki/projects/optimisation-backlog.md entry #2 / G).
     private List<ItemSO> _cachedItemsToSell;
@@ -77,10 +94,14 @@ public class ShopBuilding : CommercialBuilding, IStockProvider
         {
             if (_cachedItemsToSell == null)
             {
-                _cachedItemsToSell = new List<ItemSO>(_itemsToSell.Count);
-                foreach (var entry in _itemsToSell)
+                int seedCount = _catalog?.Count ?? 0;
+                _cachedItemsToSell = new List<ItemSO>(seedCount);
+                if (_catalog != null)
                 {
-                    if (entry.Item != null) _cachedItemsToSell.Add(entry.Item);
+                    foreach (var entry in _catalog)
+                    {
+                        if (entry.Item != null) _cachedItemsToSell.Add(entry.Item);
+                    }
                 }
             }
             return _cachedItemsToSell;
@@ -88,6 +109,21 @@ public class ShopBuilding : CommercialBuilding, IStockProvider
     }
 
     public int CustomersInQueue => _customerQueue.Count;
+
+    /// <summary>
+    /// Seeds the runtime mutable <see cref="_catalog"/> from the inspector-authored
+    /// <see cref="_seedCatalog"/> on first spawn. Guarded by null-check so re-spawning on
+    /// map change (or late client join) does not blow away runtime edits.
+    /// </summary>
+    public override void OnNetworkSpawn()
+    {
+        base.OnNetworkSpawn();
+        if (_catalog == null)
+        {
+            _catalog = new List<ShopItemEntry>(_seedCatalog?.Count ?? 0);
+            if (_seedCatalog != null) _catalog.AddRange(_seedCatalog);
+        }
+    }
 
     protected override void InitializeJobs()
     {
