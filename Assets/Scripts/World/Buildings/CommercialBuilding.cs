@@ -34,7 +34,7 @@ public abstract class CommercialBuilding : Building
     [Tooltip("Designer reference to a DisplayTextFurniture inside this building. When set, opening hiring auto-writes formatted vacancy text; closing hiring reverts to the closed-state text. Null = no auto-managed sign (hiring still works, just no in-world sign).")]
     [SerializeField] private DisplayTextFurniture _helpWantedFurniture;
 
-    [Tooltip("Designer reference to a ManagementFurniture inside this building. When set, the owner walks up + presses E to open UI_OwnerHiringPanel. Null = no in-world management desk; the 'Manage Hiring...' menu entry on CharacterJob stays as the fallback (Plan 2 Task 8).")]
+    [Tooltip("Designer reference to a ManagementFurniture inside this building. When set, the owner walks up + presses E to open UI_OwnerManagementPanel. Null = no in-world management desk; the 'Manage...' menu entry on CharacterJob stays as the fallback (Plan 2 Task 8).")]
     [SerializeField] private ManagementFurniture _managementFurniture;
 
     [Tooltip("Initial hiring state at scene start / fresh save. true = open by default (existing buildings remain backward compatible — they all auto-load as 'currently hiring'). false = start closed; owner must open hiring before applications are accepted.")]
