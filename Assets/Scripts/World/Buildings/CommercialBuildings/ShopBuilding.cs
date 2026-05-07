@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
@@ -50,6 +51,9 @@ public class ShopBuilding : CommercialBuilding, IStockProvider
 
     private List<Cashier> _cashiers = new List<Cashier>();
     public IReadOnlyList<Cashier> Cashiers => _cashiers;
+
+    private ShopBuildingNetSync _netSync;
+    public ShopBuildingNetSync NetSync => _netSync;
 
     public event System.Action OnCatalogChanged;
     public event System.Action OnSellShelvesChanged;
@@ -108,6 +112,7 @@ public class ShopBuilding : CommercialBuilding, IStockProvider
     public override void OnNetworkSpawn()
     {
         base.OnNetworkSpawn();
+        _netSync = GetComponent<ShopBuildingNetSync>();
         if (_catalog == null)
         {
             _catalog = new List<ShopItemEntry>(_seedCatalog?.Count ?? 0);
@@ -303,4 +308,135 @@ public class ShopBuilding : CommercialBuilding, IStockProvider
     // Customer-queue / vendor-point surfaces removed in Phase 2b Task 15.
     // Cashier-driven flow replaces them: customers route through CashierInteractable
     // and bind to a per-cashier customer lock instead of a shop-level queue.
+
+    // ============================================================================
+    // SERVER RPCs - owner-only mutations
+    // ============================================================================
+
+    [ServerRpc(RequireOwnership = false)]
+    public void AddCatalogEntryServerRpc(string itemId, int maxStock, int priceOverride, ServerRpcParams p = default)
+    {
+        if (!ValidateOwnerCaller(p)) { _netSync.SendUnauthorizedToastClientRpc(SingleClientRpcParams(p)); return; }
+        var so = ResolveItemSO(itemId);
+        if (so == null) { Debug.LogWarning($"[Shop] AddCatalogEntry: unknown itemId '{itemId}'"); return; }
+        if (maxStock < 0) maxStock = 0;
+        if (priceOverride < 0) priceOverride = 0;
+
+        if (GetCatalogEntry(so) != null) return; // duplicate - silently ignore
+        var entry = new ShopItemEntry { Item = so, MaxStock = maxStock, PriceOverride = priceOverride };
+        _catalog.Add(entry);
+        _netSync.PushCatalogEntryAddedServer(entry);
+        OnCatalogChanged?.Invoke();
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    public void RemoveCatalogEntryServerRpc(string itemId, ServerRpcParams p = default)
+    {
+        if (!ValidateOwnerCaller(p)) { _netSync.SendUnauthorizedToastClientRpc(SingleClientRpcParams(p)); return; }
+        for (int i = _catalog.Count - 1; i >= 0; i--)
+        {
+            if (_catalog[i].Item != null && _catalog[i].Item.ItemId == itemId)
+            {
+                _catalog.RemoveAt(i);
+                _netSync.PushCatalogEntryRemovedServer(itemId);
+                OnCatalogChanged?.Invoke();
+                return;
+            }
+        }
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    public void EditCatalogEntryServerRpc(string itemId, int newMaxStock, int newPriceOverride, ServerRpcParams p = default)
+    {
+        if (!ValidateOwnerCaller(p)) { _netSync.SendUnauthorizedToastClientRpc(SingleClientRpcParams(p)); return; }
+        if (newMaxStock < 0) newMaxStock = 0;
+        if (newPriceOverride < 0) newPriceOverride = 0;
+        for (int i = 0; i < _catalog.Count; i++)
+        {
+            if (_catalog[i].Item != null && _catalog[i].Item.ItemId == itemId)
+            {
+                var e = _catalog[i];
+                e.MaxStock = newMaxStock;
+                e.PriceOverride = newPriceOverride;
+                _catalog[i] = e;
+                _netSync.PushCatalogEntryEditedServer(e);
+                OnCatalogChanged?.Invoke();
+                return;
+            }
+        }
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    public void SetSellShelfFlagServerRpc(NetworkObjectReference shelfRef, bool isSellShelf, ServerRpcParams p = default)
+    {
+        if (!ValidateOwnerCaller(p)) { _netSync.SendUnauthorizedToastClientRpc(SingleClientRpcParams(p)); return; }
+        if (!shelfRef.TryGet(out NetworkObject shelfObj)) return;
+        var storage = shelfObj.GetComponent<StorageFurniture>();
+        if (storage == null) return;
+
+        bool currentlyListed = _sellShelves.Contains(storage);
+        if (isSellShelf && !currentlyListed)
+        {
+            _sellShelves.Add(storage);
+            _netSync.PushSellShelfAddedServer(shelfRef);
+            OnSellShelvesChanged?.Invoke();
+        }
+        else if (!isSellShelf && currentlyListed)
+        {
+            _sellShelves.Remove(storage);
+            _netSync.PushSellShelfRemovedServer(shelfRef);
+            OnSellShelvesChanged?.Invoke();
+        }
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    public void WithdrawCashierTillServerRpc(NetworkObjectReference cashierRef, ServerRpcParams p = default)
+    {
+        if (!ValidateOwnerCaller(p)) { _netSync.SendUnauthorizedToastClientRpc(SingleClientRpcParams(p)); return; }
+        if (!cashierRef.TryGet(out NetworkObject cashierObj)) return;
+        var cashier = cashierObj.GetComponent<Cashier>();
+        if (cashier == null) return;
+
+        var currency = MWI.Economy.CurrencyId.Default;
+        int balance = cashier.GetTillBalance(currency);
+        if (balance <= 0) return;
+        if (!cashier.DebitTill(currency, balance, "OwnerWithdraw")) return;
+
+        // For Phase 2b: deposit into owner wallet directly. Treasury redirect lands later.
+        var owner = ResolveCharacterFromClientId(p.Receive.SenderClientId);
+        owner?.CharacterWallet?.AddCoins(currency, balance, $"FromCashier_{cashier.FurnitureName}");
+    }
+
+    // ----- Helpers -----
+
+    private bool ValidateOwnerCaller(ServerRpcParams p)
+    {
+        var caller = ResolveCharacterFromClientId(p.Receive.SenderClientId);
+        if (caller == null) return false;
+        if (Owner == null || caller != Owner)
+        {
+            Debug.LogWarning($"[Shop] {buildingName}: rejected ServerRpc - caller {caller.CharacterName} is not owner ({Owner?.CharacterName ?? "null"}).");
+            return false;
+        }
+        return true;
+    }
+
+    private static ClientRpcParams SingleClientRpcParams(ServerRpcParams source) => new()
+    {
+        Send = new ClientRpcSendParams { TargetClientIds = new[] { source.Receive.SenderClientId } }
+    };
+
+    private Character ResolveCharacterFromClientId(ulong clientId)
+    {
+        if (NetworkManager.Singleton == null) return null;
+        if (!NetworkManager.Singleton.ConnectedClients.TryGetValue(clientId, out var nc)) return null;
+        return nc?.PlayerObject?.GetComponent<Character>();
+    }
+
+    private static ItemSO ResolveItemSO(string itemId)
+    {
+        if (string.IsNullOrEmpty(itemId)) return null;
+        var all = Resources.LoadAll<ItemSO>("Data/Item");
+        return System.Array.Find(all, x => x.ItemId == itemId);
+    }
 }
