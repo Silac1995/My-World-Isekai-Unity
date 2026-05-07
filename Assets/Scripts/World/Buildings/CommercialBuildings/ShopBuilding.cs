@@ -139,6 +139,39 @@ public class ShopBuilding : CommercialBuilding, IStockProvider
 
 
     // ==========================================
+    // CATALOG / CASHIER LOOKUP HELPERS
+    // ==========================================
+
+    /// <summary>
+    /// O(N) scan for the catalog entry matching the given ItemSO. Returns null if
+    /// not in the catalog. N is small (~50 max in practice), so a linear walk is
+    /// cheaper than maintaining a dictionary mirror.
+    /// </summary>
+    public ShopItemEntry? GetCatalogEntry(ItemSO item)
+    {
+        if (item == null || _catalog == null) return null;
+        for (int i = 0; i < _catalog.Count; i++)
+            if (_catalog[i].Item == item) return _catalog[i];
+        return null;
+    }
+
+    /// <summary>
+    /// Returns the first cashier in this shop that is currently
+    /// IsAvailableForCustomer (free + has a vendor if required). Order follows
+    /// _cashiers list (registration order). No tie-breaking rule beyond first match.
+    /// </summary>
+    public Cashier GetFirstAvailableCashier()
+    {
+        if (_cashiers == null) return null;
+        for (int i = 0; i < _cashiers.Count; i++)
+        {
+            var c = _cashiers[i];
+            if (c != null && c.IsAvailableForCustomer) return c;
+        }
+        return null;
+    }
+
+    // ==========================================
     // CASHIER REGISTRATION (pool-model JobVendor)
     // ==========================================
 
