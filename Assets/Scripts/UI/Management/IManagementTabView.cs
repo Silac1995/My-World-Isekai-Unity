@@ -18,7 +18,12 @@ namespace MWI.UI.Management
         /// <summary>The instantiated GameObject the panel re-parents under its body.</summary>
         GameObject Root { get; }
 
-        /// <summary>User clicked the header pill, OR the panel just opened on this tab.</summary>
+        /// <summary>
+        /// User clicked the header pill, OR the panel just opened on this tab, OR the panel
+        /// re-opened on the same building (warm-path re-Show). MAY be called more than once
+        /// on the same active tab — implementations MUST be idempotent (no per-call allocations,
+        /// no duplicate event subscriptions).
+        /// </summary>
         void OnTabActivated();
 
         /// <summary>User switched away — pause subscriptions if expensive (most views: no-op).</summary>
