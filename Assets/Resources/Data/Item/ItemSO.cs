@@ -20,6 +20,11 @@ public abstract class ItemSO : ScriptableObject
     [Tooltip("Item tier level. 0 = untiered. Higher tiers unlock progression-gated content.")]
     [SerializeField] private int _tier = 0;
 
+    [Header("Economy")]
+    [Tooltip("Default shop sell price. ShopItemEntry.PriceOverride wins when > 0.")]
+    [SerializeField] private int _basePrice = 0;
+    public int BasePrice => _basePrice;
+
     public string ItemId => itemId;
     public string ItemName => itemName;
     public string Description => description;
