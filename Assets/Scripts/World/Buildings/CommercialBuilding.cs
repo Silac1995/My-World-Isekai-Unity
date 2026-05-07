@@ -2548,6 +2548,33 @@ public abstract class CommercialBuilding : Building
         ServerTryCloseHiring(requester);
     }
 
+    // ============================================================================
+    // MANAGEMENT PANEL — polymorphic tab surface
+    // ============================================================================
+
+    /// <summary>
+    /// Returns the list of owner-only admin tabs surfaced in <c>UI_OwnerManagementPanel</c>.
+    /// Base returns just the <c>HiringTab</c>. Subtypes (e.g. ShopBuilding) append their own
+    /// tabs by calling <c>base.GetManagementTabs()</c> and adding to the result:
+    ///
+    /// <code>
+    /// public override IReadOnlyList&lt;IManagementTab&gt; GetManagementTabs()
+    /// {
+    ///     var tabs = new List&lt;IManagementTab&gt;(base.GetManagementTabs());
+    ///     tabs.Add(new ShopCatalogTab(this));
+    ///     return tabs;
+    /// }
+    /// </code>
+    ///
+    /// Open/Closed (rule #10): the panel never knows the concrete tab type. Allocations
+    /// are per-panel-open (not per-frame, rule #34) — single 1-element array on the base
+    /// path is acceptable.
+    /// </summary>
+    public virtual System.Collections.Generic.IReadOnlyList<MWI.UI.Management.IManagementTab> GetManagementTabs()
+    {
+        return new MWI.UI.Management.IManagementTab[] { new MWI.UI.Management.HiringTab(this) };
+    }
+
     /// <summary>
     /// Helper: resolve a <see cref="Character"/> from a NetworkObjectId payload sent by a
     /// ServerRpc. Returns null if the id is 0 (sentinel for "no requester"), the
