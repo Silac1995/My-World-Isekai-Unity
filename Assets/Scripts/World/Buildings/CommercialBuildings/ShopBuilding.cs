@@ -68,14 +68,6 @@ public class ShopBuilding : CommercialBuilding, IStockProvider
         }
     }
     
-    [Header("Work Positions")]
-    [SerializeField] private Transform _vendorPoint;
-    
-    public Transform VendorPoint => _vendorPoint;
-    
-    // Customer queue
-    private Queue<Character> _customerQueue = new Queue<Character>();
-
     /// <summary>List of catalog entries (ItemSO + MaxStock).</summary>
     public IReadOnlyList<ShopItemEntry> ShopEntries => _catalog;
 
@@ -108,8 +100,6 @@ public class ShopBuilding : CommercialBuilding, IStockProvider
         }
     }
 
-    public int CustomersInQueue => _customerQueue.Count;
-
     /// <summary>
     /// Seeds the runtime mutable <see cref="_catalog"/> from the inspector-authored
     /// <see cref="_seedCatalog"/> on first spawn. Guarded by null-check so re-spawning on
@@ -127,13 +117,13 @@ public class ShopBuilding : CommercialBuilding, IStockProvider
 
     protected override void InitializeJobs()
     {
-        // The shop needs a vendor at the counter.
-        _jobs.Add(new JobVendor());
+        // Vendor slots are now added dynamically by RegisterCashier (Task 13) when
+        // cashiers are placed. No static JobVendor is added here.
 
-        // And a logistics manager to place restocking orders.
+        // The shop still needs a logistics manager to place restocking orders.
         _jobs.Add(new JobLogisticsManager("Shop Manager"));
 
-        Debug.Log($"<color=magenta>[Shop]</color> {buildingName} initialized with 1 Vendor and 1 LogisticsManager.");
+        Debug.Log($"<color=magenta>[Shop]</color> {buildingName} initialized with 1 LogisticsManager. Vendor slots added dynamically per cashier.");
     }
 
 
@@ -225,23 +215,6 @@ public class ShopBuilding : CommercialBuilding, IStockProvider
     }
 
     /// <summary>
-    /// Only the Vendor goes to their fixed station (_vendorPoint).
-    /// Other employees (Manager, etc.) use the default behavior (building zone).
-    /// </summary>
-    public override Vector3 GetWorkPosition(Character worker)
-    {
-        if (worker.CharacterJob != null)
-        {
-            var currentJob = worker.CharacterJob.CurrentJob;
-
-            if (currentJob is JobVendor && _vendorPoint != null)
-                return _vendorPoint.position;
-        }
-
-        return base.GetWorkPosition(worker);
-    }
-
-    /// <summary>
     /// Gets the shop's logistics manager so BuyOrders can be deposited/created on it.
     /// </summary>
     public JobLogisticsManager GetLogisticsManager()
@@ -254,15 +227,17 @@ public class ShopBuilding : CommercialBuilding, IStockProvider
     }
 
     /// <summary>
-    /// Gets the vendor of this shop.
+    /// Snapshot of all currently-active JobVendor slots in this shop. NOT cached —
+    /// used only by debug UI / management panel; if it becomes hot, cache via
+    /// dirty flag (rule #34).
     /// </summary>
-    public JobVendor GetVendor()
+    public IEnumerable<JobVendor> Vendors
     {
-        foreach (var job in _jobs)
+        get
         {
-            if (job is JobVendor vendor) return vendor;
+            for (int i = 0; i < _jobs.Count; i++)
+                if (_jobs[i] is JobVendor jv) yield return jv;
         }
-        return null;
     }
 
     /// <summary>
@@ -325,47 +300,7 @@ public class ShopBuilding : CommercialBuilding, IStockProvider
         return GetStockCount(item) < maxStock;
     }
 
-    // ==========================================
-    // CUSTOMER QUEUE MANAGEMENT
-    // ==========================================
-
-    /// <summary>
-    /// A customer joins the shop's queue.
-    /// </summary>
-    public void JoinQueue(Character customer)
-    {
-        if (customer != null && !_customerQueue.Contains(customer))
-        {
-            _customerQueue.Enqueue(customer);
-            Debug.Log($"<color=magenta>[Shop]</color> {customer.CharacterName} joined the queue at {buildingName}. (Waiting: {_customerQueue.Count})");
-        }
-    }
-
-    /// <summary>
-    /// Called by a Vendor who is ready to serve the next customer.
-    /// </summary>
-    public Character GetNextCustomer()
-    {
-        if (_customerQueue.Count > 0)
-        {
-            return _customerQueue.Dequeue();
-        }
-        return null;
-    }
-
-    /// <summary>
-    /// Called when a Vendor ends their shift. If no other vendor is available,
-    /// the queue is fully cleared and customers go home.
-    /// </summary>
-    public void ClearQueue()
-    {
-        if (_customerQueue.Count > 0)
-        {
-            Debug.Log($"<color=magenta>[Shop]</color> Shop {buildingName} is closing. {_customerQueue.Count} customers are asked to go home.");
-
-            // For every customer in the queue we could fire an event or status change so they know
-            // they should stop waiting (WaitInQueueBehaviour will handle the eviction).
-            _customerQueue.Clear();
-        }
-    }
+    // Customer-queue / vendor-point surfaces removed in Phase 2b Task 15.
+    // Cashier-driven flow replaces them: customers route through CashierInteractable
+    // and bind to a per-cashier customer lock instead of a shop-level queue.
 }
