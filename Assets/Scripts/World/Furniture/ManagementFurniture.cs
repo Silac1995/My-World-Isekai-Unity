@@ -3,7 +3,7 @@ using MWI.UI.Notifications;
 
 /// <summary>
 /// Owner's management desk for a <see cref="CommercialBuilding"/>. Owner walks up, presses E,
-/// <see cref="UI_OwnerHiringPanel"/> opens for the parent building. Non-owners get a toast
+/// <see cref="MWI.UI.Management.UI_OwnerManagementPanel"/> opens for the parent building. Non-owners get a toast
 /// "Only the owner can use this management desk."
 ///
 /// Replaces the v1 "Manage Hiring..." menu entry on every NPC interaction (Plan 2 Task 8) —
@@ -51,7 +51,7 @@ public class ManagementFurniture : Furniture
             return true;
         }
 
-        UI_OwnerHiringPanel.Show(building);
+        MWI.UI.Management.UI_OwnerManagementPanel.Show(building);
         return true;
     }
 }
