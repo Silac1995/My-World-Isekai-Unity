@@ -129,6 +129,142 @@ public class CharacterAction_BuyFromShop : CharacterAction_Continuous
         if (_cashier != null && character != null) _cashier.ReleaseCustomerLock(character);
     }
 
-    // Commit + helpers filled in Task 20.
-    private bool Commit() { return false; }
+    private bool Commit()
+    {
+        if (_commitDone) return true;
+        var shop = _cashier.LinkedShop;
+        if (shop == null) { Abort("shop missing"); return true; }
+
+        // 1) Resolve total cost from the authoritative catalog.
+        int totalCost = 0;
+        foreach (var so in _quantities.Keys)
+        {
+            var entry = shop.GetCatalogEntry(so);
+            if (entry == null) { Abort($"item {so?.ItemName ?? "?"} not in catalog"); return true; }
+            totalCost += ShopBuilding.ResolvePrice(entry.Value) * _quantities[so];
+        }
+
+        // 2) Affordability gate (final server-side check; player UI also pre-gates).
+        if (totalCost > 0 && !character.CharacterWallet.CanAfford(CurrencyId.Default, totalCost))
+        {
+            Abort("insufficient funds");
+            return true;
+        }
+
+        // 3) Pull each ItemInstance from the sell-shelves; rollback on partial failure.
+        var pulled = new List<(StorageFurniture shelf, ItemInstance instance)>();
+        foreach (var pair in _quantities)
+        {
+            var so = pair.Key;
+            int qty = pair.Value;
+            for (int i = 0; i < qty; i++)
+            {
+                if (!TryPullFromAnyShelf(shop.SellShelves, so, out var shelf, out var instance))
+                {
+                    RollbackPulls(pulled);
+                    AbortWithToast($"{so.ItemName} is no longer available — purchase cancelled.");
+                    return true;
+                }
+                pulled.Add((shelf, instance));
+            }
+        }
+
+        // 4) Deliver each pulled ItemInstance to the customer.
+        for (int i = 0; i < pulled.Count; i++)
+            DeliverToCustomer(pulled[i].instance);
+
+        // 5) Money: customer wallet → cashier till.
+        if (totalCost > 0)
+        {
+            if (!character.CharacterWallet.RemoveCoins(CurrencyId.Default, totalCost, $"ShopPurchase_{shop.BuildingName}"))
+            {
+                // Should be impossible after the affordability gate; defensive rollback.
+                RollbackPulls(pulled);
+                Abort("wallet debit failed");
+                return true;
+            }
+            _cashier.CreditTill(CurrencyId.Default, totalCost, $"PurchaseBy_{character.CharacterName}");
+        }
+
+        _cashier.ReleaseCustomerLock(character);
+        _commitDone = true;
+        return true;
+    }
+
+    private static bool TryPullFromAnyShelf(IReadOnlyList<StorageFurniture> shelves, ItemSO target, out StorageFurniture pickedShelf, out ItemInstance pickedInstance)
+    {
+        pickedShelf = null;
+        pickedInstance = null;
+        if (shelves == null) return false;
+
+        for (int i = 0; i < shelves.Count; i++)
+        {
+            var shelf = shelves[i];
+            if (shelf == null) continue;
+            for (int s = 0; s < shelf.Capacity; s++)
+            {
+                var slot = shelf.GetItemSlot(s);
+                if (slot == null || slot.IsEmpty()) continue;
+                if (slot.ItemInstance.ItemSO == target)
+                {
+                    pickedInstance = slot.ItemInstance;
+                    if (!shelf.RemoveItem(pickedInstance)) continue;
+                    pickedShelf = shelf;
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static void RollbackPulls(List<(StorageFurniture shelf, ItemInstance instance)> pulled)
+    {
+        for (int i = 0; i < pulled.Count; i++)
+        {
+            var (shelf, instance) = pulled[i];
+            if (shelf == null || instance == null) continue;
+            if (!shelf.AddItem(instance))
+                Debug.LogError($"[BuyFromShop] Rollback failed: {instance.ItemSO.ItemName} could not be returned to {shelf.name}. Item lost.");
+        }
+    }
+
+    private void DeliverToCustomer(ItemInstance instance)
+    {
+        if (character.CharacterEquipment.PickUpItem(instance)) return;
+
+        SpawnAsWorldItemNextToCharacter(instance);
+        if (_mode == BuyMode.Player && _cashier?.NetSync != null)
+        {
+            ClientRpcParams p = new() { Send = new ClientRpcSendParams { TargetClientIds = new[] { character.OwnerClientId } } };
+            _cashier.NetSync.ToastClientRpc(
+                $"{instance.ItemSO.ItemName} dropped on the ground",
+                MWI.UI.Notifications.ToastType.Info,
+                p);
+        }
+    }
+
+    private void SpawnAsWorldItemNextToCharacter(ItemInstance instance)
+    {
+        // Reuse the existing physical-drop helper used by CharacterDropItem / DropItemFromHand.
+        CharacterDropItem.ExecutePhysicalDrop(character, instance);
+    }
+
+    private void Abort(string reason)
+    {
+        Debug.Log($"[BuyFromShop] Abort: {reason}");
+        _cashier?.ReleaseCustomerLock(character);
+        _commitDone = true; // suppress duplicate cleanup in OnCancel
+    }
+
+    private void AbortWithToast(string message)
+    {
+        Debug.Log($"[BuyFromShop] Abort: {message}");
+        if (_mode == BuyMode.Player && _cashier?.NetSync != null && character != null)
+        {
+            ClientRpcParams p = new() { Send = new ClientRpcSendParams { TargetClientIds = new[] { character.OwnerClientId } } };
+            _cashier.NetSync.ToastClientRpc(message, MWI.UI.Notifications.ToastType.Warning, p);
+        }
+        _cashier?.ReleaseCustomerLock(character);
+        _commitDone = true;
+    }
 }
