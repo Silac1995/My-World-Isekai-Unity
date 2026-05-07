@@ -9,6 +9,9 @@ public struct ShopItemEntry
 {
     public ItemSO Item;
     public int MaxStock;
+
+    [Tooltip("0 = use ItemSO.BasePrice")]
+    public int PriceOverride;
 }
 
 /// <summary>
@@ -23,6 +26,17 @@ public struct ShopItemEntry
 public class ShopBuilding : CommercialBuilding, IStockProvider
 {
     public override BuildingType BuildingType => BuildingType.Shop;
+
+    /// <summary>
+    /// Resolves the effective sell price for a catalog entry: override wins when
+    /// positive, otherwise the item's base price. Routes through the pure helper
+    /// in MWI.Shop.Pure so the same logic is unit-testable.
+    /// </summary>
+    public static int ResolvePrice(ShopItemEntry entry)
+    {
+        int basePrice = entry.Item != null ? entry.Item.BasePrice : 0;
+        return MWI.Shop.PriceResolver.Resolve(basePrice, entry.PriceOverride);
+    }
 
     [Header("Shop Settings")]
     [SerializeField] private List<ShopItemEntry> _itemsToSell = new List<ShopItemEntry>();
