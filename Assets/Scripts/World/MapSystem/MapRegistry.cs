@@ -68,6 +68,26 @@ namespace MWI.WorldSystem
         public List<StorageSlotSaveEntry> Slots = new List<StorageSlotSaveEntry>();
     }
 
+    /// <summary>
+    /// Saved state of one <see cref="Cashier"/> furniture instance inside a building.
+    /// <para>
+    /// <see cref="FurnitureKey"/> uses the same composite scheme as
+    /// <see cref="StorageFurnitureSaveEntry"/> (FurnitureItemSO.ItemId + building-local
+    /// position rounded to 2 decimals) so it survives <c>_defaultFurnitureLayout</c>
+    /// reorders and supports multiple same-typed cashiers per building.
+    /// </para>
+    /// <para>
+    /// <see cref="Data"/> carries the gameplay-relevant payload (till balances + linkage
+    /// metadata). The shape is documented on <see cref="CashierSaveData"/> itself.
+    /// </para>
+    /// </summary>
+    [Serializable]
+    public class CashierSaveEntry
+    {
+        public string FurnitureKey;
+        public CashierSaveData Data;
+    }
+
     [Serializable]
     public class BuildingSaveData
     {
@@ -111,6 +131,14 @@ namespace MWI.WorldSystem
         /// type for the keying scheme.
         /// </summary>
         public List<StorageFurnitureSaveEntry> StorageFurnitures = new List<StorageFurnitureSaveEntry>();
+
+        /// <summary>
+        /// Saved <see cref="Cashier"/> furniture state (till balances + linkage). Default-empty
+        /// so older save files (no field) deserialize cleanly. Each entry is keyed by
+        /// <see cref="CashierSaveEntry.FurnitureKey"/> using the shared
+        /// <see cref="ComputeFurnitureKey"/> scheme.
+        /// </summary>
+        public List<CashierSaveEntry> Cashiers = new List<CashierSaveEntry>();
 
         /// <summary>
         /// Creates a BuildingSaveData entry from a live Building, storing position
@@ -249,30 +277,69 @@ namespace MWI.WorldSystem
                 Debug.LogException(e);
             }
 
+            // Cashier furniture state (till balances + linkage) — same per-furniture try/catch
+            // policy as StorageFurnitures above (rule #31): one bad cashier never blocks the
+            // rest of the building's snapshot.
+            try
+            {
+                foreach (var cashier in building.GetFurnitureOfType<Cashier>())
+                {
+                    if (cashier == null) continue;
+                    try
+                    {
+                        var entry = new CashierSaveEntry
+                        {
+                            FurnitureKey = ComputeFurnitureKey(cashier, building.transform),
+                            Data = cashier.Serialize()
+                        };
+                        data.Cashiers.Add(entry);
+                    }
+                    catch (Exception eInner)
+                    {
+                        Debug.LogException(eInner);
+                        Debug.LogError($"<color=red>[BuildingSaveData:FromBuilding]</color> Failed to snapshot Cashier '{cashier.name}' on building '{building.BuildingName}' — entry skipped.");
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+            }
+
             return data;
         }
 
         /// <summary>
-        /// Composite key combining the storage's <c>FurnitureItemSO.ItemId</c> with its
-        /// building-local position rounded to 2 decimals. Stable across layout reorders
-        /// in <c>_defaultFurnitureLayout</c> and supports multiple same-typed storages
-        /// per building. Falls back to a name-based key when the FurnitureItemSO is
-        /// missing (e.g. test/debug furniture spawned outside the default-layout path).
+        /// <see cref="StorageFurniture"/>-typed back-compat wrapper. New call sites should use
+        /// <see cref="ComputeFurnitureKey(Furniture, Transform)"/> directly so any
+        /// <see cref="Furniture"/> subclass (Cashier, etc.) shares the same identity scheme.
         /// </summary>
         public static string ComputeStorageFurnitureKey(StorageFurniture storage, Transform buildingRoot)
-        {
-            if (storage == null) return string.Empty;
+            => ComputeFurnitureKey(storage, buildingRoot);
 
-            string idPart = storage.FurnitureItemSO != null && !string.IsNullOrEmpty(storage.FurnitureItemSO.ItemId)
-                ? storage.FurnitureItemSO.ItemId
-                : storage.name;
+        /// <summary>
+        /// Composite key combining the furniture's <c>FurnitureItemSO.ItemId</c> with its
+        /// building-local position rounded to 2 decimals. Stable across layout reorders in
+        /// <c>_defaultFurnitureLayout</c> and supports multiple same-typed instances per building
+        /// (two crates of the same kind at different spots, two cashier counters, etc.).
+        ///
+        /// Falls back to the GameObject name when <see cref="Furniture.FurnitureItemSO"/> is
+        /// missing — e.g. test furniture authored outside the default-layout path. Per-locale
+        /// invariance is enforced via <see cref="System.Globalization.CultureInfo.InvariantCulture"/>
+        /// so saves round-trip identically regardless of host machine's regional settings.
+        /// </summary>
+        public static string ComputeFurnitureKey(Furniture furniture, Transform buildingRoot)
+        {
+            if (furniture == null) return string.Empty;
+
+            string idPart = furniture.FurnitureItemSO != null && !string.IsNullOrEmpty(furniture.FurnitureItemSO.ItemId)
+                ? furniture.FurnitureItemSO.ItemId
+                : furniture.name;
 
             Vector3 local = buildingRoot != null
-                ? buildingRoot.InverseTransformPoint(storage.transform.position)
-                : storage.transform.localPosition;
+                ? buildingRoot.InverseTransformPoint(furniture.transform.position)
+                : furniture.transform.localPosition;
 
-            // InvariantCulture: avoid "1,23"/"1.23" mismatches between locales — saves must round-trip
-            // identically regardless of where the host machine is configured.
             var inv = System.Globalization.CultureInfo.InvariantCulture;
             return string.Format(inv, "{0}@{1:F2},{2:F2},{3:F2}", idPart, local.x, local.y, local.z);
         }

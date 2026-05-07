@@ -926,6 +926,10 @@ namespace MWI.WorldSystem
                             // so live StorageFurniture instances are present and addressable.
                             RestoreStorageFurnitureContents(restoredBuilding, bSave);
 
+                            // Restore cashier till + linkage on the same prerequisite footing
+                            // (default-furniture spawned, NetSync OnNetworkSpawn complete).
+                            RestoreCashierContents(restoredBuilding, bSave);
+
                             // Restore construction progress + delivered-material snapshot.
                             // Editor builds replay ContributeMaterial via AssetGuid resolution;
                             // standalone runtime restores only the meter value (UX pre-warm) and
@@ -1036,6 +1040,83 @@ namespace MWI.WorldSystem
             if (restoredFurniture > 0 || (bSave.StorageFurnitures != null && bSave.StorageFurnitures.Count > 0))
             {
                 Debug.Log($"<color=green>[MapController:RestoreStorage]</color> Building '{building.BuildingName}' on '{MapId}': restored {restoredItems} item(s) across {restoredFurniture} storage furniture(s).");
+            }
+        }
+
+        /// <summary>
+        /// Server-only. Restores saved <see cref="Cashier"/> state (till balances + linkage)
+        /// onto the live cashiers of a freshly-spawned <paramref name="building"/>. Mirrors
+        /// <see cref="RestoreStorageFurnitureContents"/>: walks every live <see cref="Cashier"/>
+        /// (using <see cref="ComplexRoom.GetFurnitureOfType{T}"/> so all sub-rooms are
+        /// recursed), looks up its persisted entry by composite key, then delegates the
+        /// payload restore to <see cref="Cashier.RestoreFromSaveData"/>.
+        ///
+        /// <para>
+        /// <b>Ordering:</b> must be called AFTER the building's default-furniture spawn has
+        /// finished (so live <c>Cashier</c> instances are addressable) AND after the sibling
+        /// <c>CashierNetSync</c> has run <c>OnNetworkSpawn</c> (so the replicated
+        /// <c>NetworkList&lt;CashierTillEntry&gt;</c> exists for <c>SetTillBalanceServer</c>
+        /// to write into). The default-furniture spawn happens inside
+        /// <c>Building.OnNetworkSpawn</c>; <c>NetworkObject.Spawn</c> on the parent triggers
+        /// <c>OnNetworkSpawn</c> on every <c>NetworkBehaviour</c> on the same object before
+        /// returning, so by the time we reach the <c>RestoreCashierContents</c> call below,
+        /// both prerequisites hold.
+        /// </para>
+        ///
+        /// <para>
+        /// Per rule #31: per-cashier <c>try/catch</c> ensures one bad entry never blocks
+        /// the rest of the building's restore. Linkage mismatches (<c>linkedBuildingId</c>)
+        /// are logged as warnings but do not block till restore — the live linkage comes
+        /// from <c>GetComponentInParent&lt;CommercialBuilding&gt;()</c> in
+        /// <see cref="Cashier.Awake"/> regardless of save data.
+        /// </para>
+        /// </summary>
+        private void RestoreCashierContents(Building building, BuildingSaveData bSave)
+        {
+            if (building == null || bSave == null || bSave.Cashiers == null || bSave.Cashiers.Count == 0)
+                return;
+
+            int restoredCount = 0;
+
+            foreach (var cashier in building.GetFurnitureOfType<Cashier>())
+            {
+                if (cashier == null) continue;
+                try
+                {
+                    string liveKey = BuildingSaveData.ComputeFurnitureKey(cashier, building.transform);
+                    var saved = bSave.Cashiers.Find(s => s != null && s.FurnitureKey == liveKey);
+                    if (saved == null || saved.Data == null)
+                    {
+                        // Newly-added cashier on a previously-saved building (added to
+                        // _defaultFurnitureLayout after the world was last saved). Silent OK —
+                        // till starts at zero, which matches the "fresh cashier" behaviour.
+                        continue;
+                    }
+
+                    cashier.RestoreFromSaveData(saved.Data);
+                    restoredCount++;
+
+                    // Diagnostic: warn if the saved linkage disagrees with the live parent.
+                    // Not blocking — Awake's GetComponentInParent has already wired the live
+                    // CommercialBuilding reference. This indicates the cashier was moved
+                    // between buildings between saves (would also break the FurnitureKey
+                    // resolution above so we'd never reach here in normal cases).
+                    if (!string.IsNullOrEmpty(saved.Data.linkedBuildingId)
+                        && saved.Data.linkedBuildingId != building.BuildingId)
+                    {
+                        Debug.LogWarning($"<color=orange>[MapController:RestoreCashier]</color> Cashier '{liveKey}' on building '{building.BuildingName}' had saved linkedBuildingId='{saved.Data.linkedBuildingId}' but is now under building id='{building.BuildingId}'. Live parent kept; till restored.");
+                    }
+                }
+                catch (System.Exception ex)
+                {
+                    Debug.LogException(ex);
+                    Debug.LogError($"<color=red>[MapController:RestoreCashier]</color> Failed to restore cashier on building '{building.BuildingName}'.");
+                }
+            }
+
+            if (restoredCount > 0)
+            {
+                Debug.Log($"<color=green>[MapController:RestoreCashier]</color> Building '{building.BuildingName}' on '{MapId}': restored {restoredCount} cashier(s) from save.");
             }
         }
 
@@ -1599,6 +1680,9 @@ namespace MWI.WorldSystem
 
                                     // Restore storage furniture contents (mirrors SpawnSavedBuildings).
                                     RestoreStorageFurnitureContents(restoredBuilding, bSave);
+
+                                    // Restore cashier till + linkage (mirrors SpawnSavedBuildings).
+                                    RestoreCashierContents(restoredBuilding, bSave);
 
                                     // Restore construction progress + delivered-material snapshot.
                                     // Editor builds replay ContributeMaterial via AssetGuid resolution;

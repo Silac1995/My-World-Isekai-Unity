@@ -232,4 +232,79 @@ public class Cashier : Furniture
         return true;
     }
 
+    // ============================================================================
+    // SAVE / LOAD
+    // ----------------------------------------------------------------------------
+    // Wired through BuildingSaveData.Cashiers (mirrors the StorageFurniture path).
+    // - Save: BuildingSaveData.FromBuilding walks every Cashier on the building and
+    //   captures its Serialize() output. The composite key
+    //   (BuildingSaveData.ComputeFurnitureKey) is the same scheme used for
+    //   StorageFurniture, stable across _defaultFurnitureLayout reorders.
+    // - Load: MapController.RestoreCashierContents calls RestoreFromSaveData after
+    //   the building's default furniture has spawned (so live cashiers exist) and
+    //   AFTER the sibling CashierNetSync has finished OnNetworkSpawn (so the
+    //   replicated NetworkList exists and SetTillBalanceServer can write to it).
+    //
+    // Per rule #31: every external surface is wrapped in try/catch upstream
+    // (FromBuilding + RestoreCashierContents). The methods below are intentionally
+    // small and side-effect-light; defensive guards live at the call sites.
+    // ============================================================================
+
+    /// <summary>
+    /// Server-only at the call-site (BuildingSaveData.FromBuilding runs only on the
+    /// authoritative peer). Returns a portable snapshot of this cashier's gameplay
+    /// state — till balances + linkage hint — for round-trip through the world save.
+    /// Idempotent and allocation-light: one new <see cref="CashierSaveData"/> per call.
+    /// </summary>
+    public CashierSaveData Serialize()
+    {
+        var data = new CashierSaveData
+        {
+            requiresVendor = _requiresVendor,
+            // _linkedBuilding is already typed as CommercialBuilding here; Building.BuildingId
+            // is a string getter (the NetworkBuildingId.Value.ToString() roundtrip is
+            // already done inside the property). No FixedString → string conversion needed.
+            linkedBuildingId = _linkedBuilding != null ? _linkedBuilding.BuildingId : null,
+        };
+        foreach (var kv in _till)
+        {
+            data.till.Add(new CurrencyBalanceEntry { currencyId = kv.Key.Id, amount = kv.Value });
+        }
+        return data;
+    }
+
+    /// <summary>
+    /// Server-only restore. Repopulates the in-memory till from <paramref name="data"/>
+    /// and re-mirrors each balance into the replicated NetworkList via
+    /// <see cref="CashierNetSync.SetTillBalanceServer"/> so late-joining clients see
+    /// the saved coins on connect.
+    ///
+    /// Skips zero-or-negative balances (defensive — saved data should already exclude
+    /// them; <see cref="DebitTill"/> deletes the entry on draw-down).
+    ///
+    /// <c>requiresVendor</c> from the save is intentionally ignored — the live value
+    /// always comes from the prefab's serialized field. The save's copy is kept only
+    /// for diagnostics if the authored value ever drifts between save/load.
+    /// </summary>
+    public void RestoreFromSaveData(CashierSaveData data)
+    {
+        if (data == null) return;
+        _till.Clear();
+        if (data.till != null)
+        {
+            foreach (var e in data.till)
+            {
+                if (e == null || e.amount <= 0) continue;
+                _till[new CurrencyId(e.currencyId)] = e.amount;
+            }
+        }
+        if (_netSync != null && _netSync.IsServer)
+        {
+            foreach (var kv in _till)
+            {
+                _netSync.SetTillBalanceServer(kv.Key, kv.Value);
+            }
+        }
+    }
+
 }
