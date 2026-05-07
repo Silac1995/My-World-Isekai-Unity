@@ -23,15 +23,15 @@ public class CashierNetSync : NetworkBehaviour
 
     public NetworkVariable<ulong> CurrentCustomerNetworkObjectId = new(
         0,
-        readPermission: NetworkVariableReadPermission.Everyone,
-        writePermission: NetworkVariableWritePermission.Server);
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server);
 
     public NetworkList<CashierTillEntry> TillBalances;
 
     public NetworkVariable<NetworkObjectReference> LinkedBuildingRef = new(
         default,
-        readPermission: NetworkVariableReadPermission.Everyone,
-        writePermission: NetworkVariableWritePermission.Server);
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server);
 
     protected void Awake()
     {
