@@ -1,128 +1,100 @@
 using UnityEngine;
 
 /// <summary>
-/// Job de Vendeur : gère les achats des clients dans un ShopBuilding.
-/// Se déplace vers son comptoir (VendorPoint) puis appelle les clients dans la file d'attente du magasin.
+/// Vendor job — pool model. The shop has N vendor slots (one per cashier
+/// with RequiresVendor=true). Each shift, every assigned worker
+/// independently picks any free cashier in the pool, races to claim it
+/// via Reserve+Use (loser falls through to the next free one), and idles
+/// while occupying. Customer interactions are customer-initiated through
+/// CashierInteractable / RequestStartBuyServerRpc — there is no "call next
+/// customer" loop here.
+///
+/// Player-vendor parity (rule #22): players aren't driven by Execute —
+/// they walk where they want, and Cashier.ServerTickAutoOccupy seats them
+/// when they happen to stand on the InteractionPoint during their work
+/// shift. Symmetrical race semantics apply.
 /// </summary>
 public class JobVendor : Job
 {
-    public override string JobTitle => "Vendeur";
+    public override string JobTitle => "Vendor";
     public override JobCategory Category => JobCategory.Service;
 
-    private Character _currentClient;
-    private bool _isAtCounter = false;
-    private bool _isMovingToCounter = false;
+    private Cashier _heldCashier;
+    private bool _hasReserved;
+    private bool _isMovingToCashier;
+
+    public Cashier HeldCashier => _heldCashier;
 
     public override string CurrentActionName
     {
         get
         {
-            if (!_isAtCounter) return "Moving to Counter";
-            if (_currentClient != null) return $"Serving {_currentClient.CharacterName}";
-            return "Waiting for Customers";
+            if (_heldCashier == null) return "Idle (no free cashier)";
+            if (_heldCashier.Occupant == _worker) return $"Manning {_heldCashier.FurnitureName}";
+            return $"Walking to {_heldCashier.FurnitureName}";
         }
     }
+
+    public override bool CanExecute() =>
+        base.CanExecute() && _workplace is ShopBuilding;
 
     public override void Execute()
     {
-        if (_worker == null || !(_workplace is ShopBuilding shop)) return;
+        if (_worker == null) return;
 
-        // Phase 1 : Se déplacer vers le comptoir (VendorPoint)
-        if (!_isAtCounter)
+        // 1) Already occupying — idle.
+        if (_heldCashier != null && _heldCashier.Occupant == _worker)
         {
-            MoveToCounter(_worker, shop);
+            _isMovingToCashier = false;
             return;
         }
 
-        // Phase 2 : Servir les clients
-
-        // Si on a déjà un client en cours de transaction, on attend
-        if (_currentClient != null)
+        // 2) Lost the seat (race / shift change / cashier removed) — drop and re-pick.
+        if (_heldCashier != null && _heldCashier.Occupant != _worker)
         {
-            // Vérifier si le client est parti ou a terminé l'interaction
-            if (!_currentClient.IsAlive() || Vector3.Distance(_worker.transform.position, _currentClient.transform.position) > 4f)
+            if (_heldCashier.ReservedBy == _worker) _heldCashier.Release();
+            _heldCashier = null;
+            _hasReserved = false;
+            _isMovingToCashier = false;
+        }
+
+        // 3) Pick a free cashier from the shop and walk to it.
+        var shop = _workplace as ShopBuilding;
+        if (shop == null) return;
+
+        for (int i = 0; i < shop.Cashiers.Count; i++)
+        {
+            var c = shop.Cashiers[i];
+            if (c == null) continue;
+            if (!c.RequiresVendor) continue;
+            if (c.Occupant != null) continue;
+            if (c.ReservedBy != null && c.ReservedBy != _worker) continue;
+            if (!c.Reserve(_worker)) continue;
+
+            _heldCashier = c;
+            _hasReserved = true;
+            var movement = _worker.CharacterMovement;
+            if (movement != null)
             {
-                _currentClient = null;
+                movement.SetDestination(c.GetInteractionPosition(_worker.transform.position));
+                _isMovingToCashier = true;
             }
             return;
         }
 
-        // Si on est libre, on vérifie la file d'attente du magasin
-        if (shop.CustomersInQueue > 0)
-        {
-            _currentClient = shop.GetNextCustomer();
-            
-            if (_currentClient != null)
-            {
-                Debug.Log($"<color=cyan>[VendorAI]</color> {_worker.CharacterName} appelle {_currentClient.CharacterName} ({shop.CustomersInQueue} restants dans la file).");
-                
-                // On déclenche l'interaction de vente
-                _worker.CharacterInteraction.StartInteractionWith(_currentClient, new InteractionBuyItem(shop));
-            }
-        }
-    }
-
-    private void MoveToCounter(Character character, ShopBuilding shop)
-    {
-        var movement = character.CharacterMovement;
-
-        if (shop.VendorPoint == null)
-        {
-            // Pas de point fixe assigné → le vendeur se déplace dans la zone du bâtiment
-            if (movement != null && !_isMovingToCounter)
-            {
-                Vector3 wanderTarget = shop.GetRandomPointInBuildingZone(character.transform.position.y);
-                movement.SetDestination(wanderTarget);
-                _isMovingToCounter = true;
-            }
-
-            // Vérifier si arrivé
-            if (movement != null && _isMovingToCounter 
-                && !movement.PathPending 
-                && (!movement.HasPath || movement.RemainingDistance <= movement.StoppingDistance + 0.5f))
-            {
-                _isAtCounter = true;
-                _isMovingToCounter = false;
-            }
-            return;
-        }
-
-        if (movement == null)
-        {
-            _isAtCounter = true;
-            return;
-        }
-
-        if (!_isMovingToCounter)
-        {
-            movement.SetDestination(shop.VendorPoint.position);
-            _isMovingToCounter = true;
-            return;
-        }
-
-        // Vérifier si on est arrivé
-        if (!movement.PathPending && (!movement.HasPath || movement.RemainingDistance <= movement.StoppingDistance + 0.5f))
-        {
-            _isAtCounter = true;
-            _isMovingToCounter = false;
-            Debug.Log($"<color=cyan>[VendorAI]</color> {character.CharacterName} est arrivé au comptoir.");
-        }
-    }
-
-    public override bool CanExecute()
-    {
-        return base.CanExecute() && _workplace is ShopBuilding;
+        // No free cashier — vendor stays idle in the shop zone (existing fallback behavior).
     }
 
     public override void Unassign()
     {
-        if (_workplace is ShopBuilding shop)
+        if (_heldCashier != null)
         {
-            shop.ClearQueue();
+            if (_heldCashier.Occupant == _worker) _heldCashier.Release();
+            else if (_heldCashier.ReservedBy == _worker) _heldCashier.Release();
         }
-        _isAtCounter = false;
-        _isMovingToCounter = false;
-        _currentClient = null;
+        _heldCashier = null;
+        _hasReserved = false;
+        _isMovingToCashier = false;
         base.Unassign();
     }
 }
