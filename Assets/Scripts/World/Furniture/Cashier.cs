@@ -82,6 +82,43 @@ public class Cashier : Furniture
         _netSync.SetCurrentCustomerServer(0);
     }
 
+    /// <summary>
+    /// Server-only — adds coins to the till. Logs and noops on non-positive amounts.
+    /// Mirrors the new balance into the replicated NetworkList.
+    /// </summary>
+    public void CreditTill(CurrencyId currency, int amount, string source)
+    {
+        if (_netSync == null || !_netSync.IsServer) return;
+        if (amount <= 0)
+        {
+            Debug.LogError($"[Cashier] CreditTill rejected: amount={amount} source={source} on {FurnitureName}");
+            return;
+        }
+        int next = GetTillBalance(currency) + amount;
+        _till[currency] = next;
+        _netSync.SetTillBalanceServer(currency, next);
+    }
+
+    /// <summary>
+    /// Server-only — removes coins from the till. Returns false if the till is short.
+    /// </summary>
+    public bool DebitTill(CurrencyId currency, int amount, string reason)
+    {
+        if (_netSync == null || !_netSync.IsServer) return false;
+        if (amount <= 0)
+        {
+            Debug.LogError($"[Cashier] DebitTill rejected: amount={amount} reason={reason} on {FurnitureName}");
+            return false;
+        }
+        int current = GetTillBalance(currency);
+        if (current < amount) return false;
+        int next = current - amount;
+        if (next == 0) _till.Remove(currency);
+        else _till[currency] = next;
+        _netSync.SetTillBalanceServer(currency, next);
+        return true;
+    }
+
     // Lifecycle hooks for register/unregister filled in Wave 3 (Task 11).
     // Server-only logic (lock, till mutations, auto-occupy) filled in Wave 3.
 }
