@@ -141,6 +141,24 @@ namespace MWI.WorldSystem
         public List<CashierSaveEntry> Cashiers = new List<CashierSaveEntry>();
 
         /// <summary>
+        /// <see cref="ShopBuilding"/>-only: snapshot of the runtime mutable
+        /// <c>ShopBuilding._catalog</c>. Empty for non-shop buildings. Lives on
+        /// <see cref="BuildingSaveData"/> rather than a derived class because the world JSON
+        /// pipeline does not preserve polymorphism (no <c>TypeNameHandling</c>); see
+        /// <see cref="ShopCatalogEntrySaveEntry"/>'s class doc for the rationale.
+        /// </summary>
+        public List<ShopCatalogEntrySaveEntry> ShopCatalog = new List<ShopCatalogEntrySaveEntry>();
+
+        /// <summary>
+        /// <see cref="ShopBuilding"/>-only: keys of every <see cref="StorageFurniture"/> the
+        /// shop owner has flagged as a customer-facing sell-shelf. Persisted as a list of
+        /// <see cref="ComputeFurnitureKey"/> strings — same scheme as <see cref="StorageFurnitures"/>
+        /// — so the load side resolves each saved key against the live storage instances spawned
+        /// inside the building's default-furniture pass.
+        /// </summary>
+        public List<string> SellShelfFurnitureKeys = new List<string>();
+
+        /// <summary>
         /// Creates a BuildingSaveData entry from a live Building, storing position
         /// relative to the given map center.
         /// </summary>
@@ -304,6 +322,52 @@ namespace MWI.WorldSystem
             catch (Exception e)
             {
                 Debug.LogException(e);
+            }
+
+            // ShopBuilding-only: snapshot the mutable catalog + sell-shelf flags. Lives on
+            // BuildingSaveData (not a subclass) because the world JSON serializer does not
+            // round-trip polymorphic types — see ShopCatalogEntrySaveEntry doc.
+            if (building is ShopBuilding shop)
+            {
+                try
+                {
+                    if (shop.Catalog != null)
+                    {
+                        foreach (var entry in shop.Catalog)
+                        {
+                            if (entry.Item == null) continue;
+                            data.ShopCatalog.Add(new ShopCatalogEntrySaveEntry
+                            {
+                                itemId = entry.Item.ItemId,
+                                maxStock = entry.MaxStock,
+                                priceOverride = entry.PriceOverride
+                            });
+                        }
+                    }
+                }
+                catch (Exception e)
+                {
+                    Debug.LogException(e);
+                    Debug.LogError($"<color=red>[BuildingSaveData:FromBuilding]</color> Failed to snapshot ShopCatalog for '{building.BuildingName}'.");
+                }
+
+                try
+                {
+                    if (shop.SellShelves != null)
+                    {
+                        foreach (var shelf in shop.SellShelves)
+                        {
+                            if (shelf == null) continue;
+                            string key = ComputeFurnitureKey(shelf, building.transform);
+                            if (!string.IsNullOrEmpty(key)) data.SellShelfFurnitureKeys.Add(key);
+                        }
+                    }
+                }
+                catch (Exception e)
+                {
+                    Debug.LogException(e);
+                    Debug.LogError($"<color=red>[BuildingSaveData:FromBuilding]</color> Failed to snapshot SellShelfFurnitureKeys for '{building.BuildingName}'.");
+                }
             }
 
             return data;

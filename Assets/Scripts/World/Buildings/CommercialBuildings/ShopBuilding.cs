@@ -439,4 +439,168 @@ public class ShopBuilding : CommercialBuilding, IStockProvider
         var all = Resources.LoadAll<ItemSO>("Data/Item");
         return System.Array.Find(all, x => x.ItemId == itemId);
     }
+
+    // ============================================================================
+    // SAVE / LOAD — Shop-specific restore
+    // ----------------------------------------------------------------------------
+    // The base Building / CommercialBuilding hierarchy already exposes two unrelated
+    // RestoreFromSaveData overloads (construction state, owner+employees). Adding a
+    // third overload here would shadow Building.RestoreFromSaveData(BuildingSaveData)
+    // and risk silent base-call drops. Distinct method names instead — MapController
+    // calls them explicitly in the documented order.
+    //
+    // Catalog restore is immediate (no live-furniture dependency).
+    // Sell-shelf restore is deferred via _pendingSellShelfKeys + OnFurnituresLoaded()
+    // because shelves are matched against live StorageFurniture instances which only
+    // exist after the building's default-furniture spawn pass has finished.
+    // ============================================================================
+
+    /// <summary>
+    /// Pending shelf keys captured during <see cref="RestoreShopFromSaveData"/>; consumed
+    /// by <see cref="OnFurnituresLoaded"/> once the live <see cref="StorageFurniture"/>
+    /// instances spawned by the building's default-furniture pass exist on the hierarchy.
+    /// Server-only state (clients never run the restore path).
+    /// </summary>
+    private System.Collections.Generic.List<string> _pendingSellShelfKeys;
+
+    /// <summary>
+    /// Server-only. Restores the runtime mutable <see cref="_catalog"/> from
+    /// <paramref name="rawData"/>, then stages the saved sell-shelf keys for deferred
+    /// resolution via <see cref="OnFurnituresLoaded"/>.
+    ///
+    /// <para>
+    /// Call AFTER <c>NetworkObject.Spawn</c> on the building (so <see cref="OnNetworkSpawn"/>
+    /// has seeded <see cref="_catalog"/> from the inspector seed) and AFTER the building's
+    /// default-furniture spawn (so live <see cref="StorageFurniture"/> children exist by
+    /// the time <see cref="OnFurnituresLoaded"/> runs).
+    /// </para>
+    ///
+    /// <para>
+    /// Catalog restore overwrites the in-memory list completely — the seed populated by
+    /// <see cref="OnNetworkSpawn"/> is intentionally discarded so saved owner edits win
+    /// over the prefab default. Resolves each <c>itemId</c> via the standard
+    /// <c>Resources.LoadAll&lt;ItemSO&gt;("Data/Item")</c> lookup; entries whose itemId
+    /// no longer resolves are dropped with a warning (rule #31 — graceful degradation).
+    /// </para>
+    /// </summary>
+    public void RestoreShopFromSaveData(MWI.WorldSystem.BuildingSaveData rawData)
+    {
+        if (!IsServer) return;
+        if (rawData == null) return;
+
+        // --- Catalog ---
+        try
+        {
+            if (_catalog == null) _catalog = new System.Collections.Generic.List<ShopItemEntry>(rawData.ShopCatalog?.Count ?? 0);
+            else _catalog.Clear();
+
+            // Invalidate the cached ItemSO projection — it is rebuilt lazily from _catalog.
+            _cachedItemsToSell = null;
+
+            if (rawData.ShopCatalog != null)
+            {
+                foreach (var saved in rawData.ShopCatalog)
+                {
+                    var so = ResolveItemSO(saved.itemId);
+                    if (so == null)
+                    {
+                        Debug.LogWarning($"<color=orange>[ShopBuilding:Restore]</color> {buildingName}: catalog entry itemId='{saved.itemId}' did not resolve to an ItemSO — entry dropped.");
+                        continue;
+                    }
+                    _catalog.Add(new ShopItemEntry
+                    {
+                        Item = so,
+                        MaxStock = saved.maxStock,
+                        PriceOverride = saved.priceOverride
+                    });
+                }
+            }
+
+            OnCatalogChanged?.Invoke();
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogException(e);
+            Debug.LogError($"<color=red>[ShopBuilding:Restore]</color> {buildingName}: catalog restore failed — leaving seeded catalog in place.");
+        }
+
+        // --- Sell-shelves: defer resolution until live StorageFurniture children exist ---
+        if (rawData.SellShelfFurnitureKeys != null && rawData.SellShelfFurnitureKeys.Count > 0)
+        {
+            _pendingSellShelfKeys = new System.Collections.Generic.List<string>(rawData.SellShelfFurnitureKeys);
+        }
+        else
+        {
+            _pendingSellShelfKeys = null;
+        }
+    }
+
+    /// <summary>
+    /// Server-only. Resolves the deferred sell-shelf keys from a prior
+    /// <see cref="RestoreShopFromSaveData"/> against the live <see cref="StorageFurniture"/>
+    /// children of this shop. Idempotent — safe to call when no pending keys exist.
+    ///
+    /// <para>
+    /// Call after the building's default-furniture spawn pass has finished (i.e. after
+    /// <see cref="MWI.WorldSystem.BuildingSaveData.ComputeFurnitureKey"/> on every live
+    /// <c>StorageFurniture</c> would yield a stable result). The MapController save/load
+    /// flow runs this AFTER <c>RestoreStorageFurnitureContents</c> + <c>RestoreCashierContents</c>
+    /// — at that point every authored storage on this building already exists.
+    /// </para>
+    ///
+    /// <para>
+    /// Per rule #31: per-key try/catch around the GetComponentsInChildren walk; one bad
+    /// match never blocks the rest. Saved keys that don't resolve to any live storage are
+    /// logged as warnings (the storage was renamed/removed since the save was written).
+    /// </para>
+    /// </summary>
+    public void OnFurnituresLoaded()
+    {
+        if (!IsServer) return;
+        if (_pendingSellShelfKeys == null) return;
+
+        try
+        {
+            var allStorages = GetComponentsInChildren<StorageFurniture>(includeInactive: true);
+            int resolved = 0;
+            foreach (var savedKey in _pendingSellShelfKeys)
+            {
+                if (string.IsNullOrEmpty(savedKey)) continue;
+                bool matched = false;
+                for (int i = 0; i < allStorages.Length; i++)
+                {
+                    var storage = allStorages[i];
+                    if (storage == null) continue;
+                    string liveKey = MWI.WorldSystem.BuildingSaveData.ComputeFurnitureKey(storage, transform);
+                    if (liveKey == savedKey)
+                    {
+                        if (!_sellShelves.Contains(storage))
+                        {
+                            _sellShelves.Add(storage);
+                            resolved++;
+                        }
+                        matched = true;
+                        break;
+                    }
+                }
+                if (!matched)
+                {
+                    Debug.LogWarning($"<color=orange>[ShopBuilding:Restore]</color> {buildingName}: saved sell-shelf key '{savedKey}' did not match any live StorageFurniture — entry dropped (storage likely renamed or removed since save).");
+                }
+            }
+
+            if (resolved > 0) OnSellShelvesChanged?.Invoke();
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogException(e);
+            Debug.LogError($"<color=red>[ShopBuilding:Restore]</color> {buildingName}: sell-shelf resolution failed.");
+        }
+        finally
+        {
+            // Always clear pending state so a second OnFurnituresLoaded call (idempotency)
+            // is a true no-op even if the inner loop threw.
+            _pendingSellShelfKeys = null;
+        }
+    }
 }

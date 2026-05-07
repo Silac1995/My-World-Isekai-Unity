@@ -930,6 +930,15 @@ namespace MWI.WorldSystem
                             // (default-furniture spawned, NetSync OnNetworkSpawn complete).
                             RestoreCashierContents(restoredBuilding, bSave);
 
+                            // ShopBuilding-only: catalog restore is immediate; sell-shelf
+                            // resolution is deferred via OnFurnituresLoaded() — same call
+                            // ordering also runs in WakeUp.
+                            if (restoredBuilding is ShopBuilding shopBuilding)
+                            {
+                                shopBuilding.RestoreShopFromSaveData(bSave);
+                                shopBuilding.OnFurnituresLoaded();
+                            }
+
                             // Restore construction progress + delivered-material snapshot.
                             // Editor builds replay ContributeMaterial via AssetGuid resolution;
                             // standalone runtime restores only the meter value (UX pre-warm) and
@@ -1683,6 +1692,14 @@ namespace MWI.WorldSystem
 
                                     // Restore cashier till + linkage (mirrors SpawnSavedBuildings).
                                     RestoreCashierContents(restoredBuilding, bSave);
+
+                                    // ShopBuilding-only: catalog restore + deferred sell-shelf
+                                    // resolution. Same ordering as SpawnSavedBuildings.
+                                    if (restoredBuilding is ShopBuilding shopBuilding)
+                                    {
+                                        shopBuilding.RestoreShopFromSaveData(bSave);
+                                        shopBuilding.OnFurnituresLoaded();
+                                    }
 
                                     // Restore construction progress + delivered-material snapshot.
                                     // Editor builds replay ContributeMaterial via AssetGuid resolution;
