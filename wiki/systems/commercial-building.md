@@ -3,9 +3,9 @@ type: system
 title: "Commercial Building"
 tags: [building, commercial, jobs, tier-2]
 created: 2026-04-19
-updated: 2026-05-02
+updated: 2026-05-08
 sources: []
-related: ["[[building]]", "[[building-logistics-manager]]", "[[building-task-manager]]", "[[jobs-and-logistics]]", "[[shops]]", "[[crafting-loop]]", "[[worker-wages-and-performance]]", "[[quest-system]]", "[[tool-storage]]", "[[help-wanted-and-hiring]]", "[[dev-mode]]", "[[kevin]]"]
+related: ["[[building]]", "[[building-logistics-manager]]", "[[building-task-manager]]", "[[jobs-and-logistics]]", "[[shops]]", "[[crafting-loop]]", "[[worker-wages-and-performance]]", "[[quest-system]]", "[[tool-storage]]", "[[help-wanted-and-hiring]]", "[[management-panel-architecture]]", "[[dev-mode]]", "[[kevin]]"]
 status: stable
 confidence: high
 primary_agent: building-furniture-specialist
@@ -80,6 +80,23 @@ See [[building#Default furniture layout]] for the system (it now lives at the `B
 
 `WorkerStartingShift` calls `TryAutoClaimExistingQuests(worker)` and `SubscribeWorkerQuestAutoClaim(worker)` ONLY when `worker.IsPlayer()`. NPC workers use GOAP's `ClaimBestTask<T>` on demand instead. Without this gate, the first NPC to subscribe hoarded every newly-published `BuildingTask` via the multicast `OnQuestPublished` event order, leaving subsequent NPCs idle (a single `JobFarmer` would scoop every `PlantCropTask` and `HarvestResourceTask` the moment they were registered, and the second farmer's worldState would report zero work). Players still get auto-claim so quests they accept by punching in show up in their `CharacterQuestLog` UI without an extra interaction step.
 
+## Owner management panel — polymorphic tabs
+
+- `building.GetManagementTabs()` → `IReadOnlyList<MWI.UI.Management.IManagementTab>` (virtual). Returns `[HiringTab]` on the base. Subtypes override to append more owner-only admin tabs (Open/Closed Principle, rule #10). Allocates per-panel-open only.
+
+Subtypes append tabs without modifying the [[management-panel-architecture|UI_OwnerManagementPanel]]:
+
+```csharp
+public override IReadOnlyList<IManagementTab> GetManagementTabs()
+{
+    var tabs = new List<IManagementTab>(base.GetManagementTabs());
+    tabs.Add(new MyFeatureTab(this));
+    return tabs;
+}
+```
+
+Always call `base.GetManagementTabs()` first so the Hiring tab is preserved. See [[management-panel-architecture]] for the full polymorphic contract; see [.agent/skills/management-panel/SKILL.md](../../.agent/skills/management-panel/SKILL.md) for procedural how-to.
+
 ## Zones (authored Inspector fields)
 
 | Zone | Role |
@@ -105,6 +122,7 @@ See [[building#Default furniture layout]] for the system (it now lives at the `B
 - If a subclass wants autonomous restock, **implementing `IStockProvider` is mandatory** — declaring `_itemsToSell` or `_inputStockTargets` alone does nothing until the contract is wired.
 
 ## Change log
+- 2026-05-07 — Added `GetManagementTabs()` virtual — polymorphic surface for the new owner management panel. Subtypes append tabs without modifying the panel. See [[management-panel-architecture]]. — claude
 - 2026-05-02 — Farmer end-to-end rollout (cascade, IsValid corrections, softlock guards, race detection, etc.) — claude. Touchpoints with `CommercialBuilding`: (a) `ToolStorage` becomes a three-tier resolver — cached field → snapshot lazy-rebind → first-`StorageFurniture` child fallback. Designers no longer have to assign anything in the inspector. Same lazy-snapshot pattern formalised on `_helpWantedFurniture` and `_managementFurniture` via the new `ResolveLazyFurnitureRef<T>` helper. (b) New `virtual IEnumerable<ItemSO> GetToolStockItems()` extension point + `IsBuildingToolItem(ItemSO)` classifier — drives the tool-aware logistics routing in `FindStorageFurnitureForItem` and `GoapAction_GatherStorageItems.DetermineStoragePosition`. Default yields nothing; `FarmingBuilding` yields its `WateringCanItem`. (c) `WorkerStartingShift` quest auto-claim is now player-only (`worker.IsPlayer()` gate) — NPCs use GOAP's `ClaimBestTask` on demand, so the first NPC to subscribe no longer hoards every newly-published task. (d) `Building.SpawnDefaultFurnitureSlot` defaults `slot.TargetRoom` to `MainRoom` when null and `Building.Start` calls `FurnitureManager.LoadExistingFurniture()` explicitly — together they guarantee spawned default furniture is FurnitureManager-registered. — claude
 - 2026-05-01 — `_defaultFurnitureLayout` system hoisted up to `[[building]]`. `CommercialBuilding` now only carries the `OnDefaultFurnitureSpawned` override (storage cache invalidation). See [[building#Default furniture layout]]. — claude
 - 2026-04-30 — Hiring API: `_isHiring` NetworkVariable + `_helpWantedFurniture` reference + `TryOpenHiring` / `TryCloseHiring` / `CanRequesterControlHiring` / `GetVacantJobs` / `GetHelpWantedDisplayText` (virtual). `InteractionAskForJob.CanExecute` and `BuildingManager.FindAvailableJob` gate on `IsHiring` so closed buildings reject applications. `AssignWorker` + `CharacterJob.QuitJob` call `HandleVacancyChanged` to refresh the Help Wanted sign on hire/quit churn. `GetJobStableIndex(Job)` exposes stable indices for ServerRpc round-trip. See [[help-wanted-and-hiring]]. — claude

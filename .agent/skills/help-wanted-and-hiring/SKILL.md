@@ -42,10 +42,10 @@ protected virtual string GetHelpWantedDisplayText()  // override per subclass fo
 protected virtual string GetClosedHiringDisplayText()
 ```
 
-### `ManagementFurniture` (Plan 2.5 — owner's hiring desk)
+### `ManagementFurniture` (Plan 2.5 — owner's management desk)
 ```csharp
 // Owner-only Use override. Designer-placed inside a CommercialBuilding.
-// - Player owner: opens UI_OwnerHiringPanel for the parent building.
+// - Player owner: opens UI_OwnerManagementPanel.Show(building) — generic polymorphic panel since 2026-05-07.
 // - Player non-owner: toast "Only the owner can use this management desk."
 // - NPC: silent success (no AI uses it in v1; Phase 2 NPC-owner GOAP can call TryOpenHiring directly).
 // - Remote-client gate: only the local player's machine pops the UI.
@@ -69,10 +69,13 @@ No NetworkBehaviour sibling — owns no replicated state. Future driveable-entit
 - **No Apply button** (removed in Plan 2.5). Sign is purely informative — the auto-formatted Help Wanted text ends with "For application, see the owner in person." Both player and NPC applicants must walk to the boss in person and use the existing `InteractionAskForJob` path (the hold-E menu on the boss).
 - ESC / Close button / outside-click overlay all dismiss.
 
-### `UI_OwnerHiringPanel` (singleton-on-demand)
-- Reachable via `CharacterJob.GetInteractionOptions` Section B "Manage Hiring..." entry when interactor has `OwnedBuilding != null`.
-- Status header (green Yes / red No), scrollable `Jobs` list ("JobTitle — vacant" or "JobTitle — Bob"), Open/Close hiring toggle, multi-line custom-text input + Submit button, hint label calling out the Q15.1 reopen-overwrites-custom-text invariant.
+### `UI_OwnerManagementPanel` → `HiringTab` (singleton-on-demand) — generic polymorphic shell as of 2026-05-07
+- Replaces the legacy `UI_OwnerHiringPanel` (deleted). Lives in `MWI.UI.Management`.
+- Reachable via `ManagementFurniture.Use` (in-world desk) or `CharacterJob.GetInteractionOptions` Section B "Manage..." entry when interactor has `OwnedBuilding != null`.
+- Tab list is supplied by `CommercialBuilding.GetManagementTabs()` (virtual). Base returns `[HiringTab(this)]`; subtypes append (e.g. future shop Catalog/Shelves/Cashiers tabs).
+- `HiringTab` body simplified to **toggle button + label** only. Sign editing removed (deferred to future sign-furniture rework — see help-wanted-and-hiring wiki Open questions). Job-list display removed.
 - Auto-refreshes on `OnHiringStateChanged` event.
+- Architecture: see [wiki/systems/management-panel-architecture.md](../../wiki/systems/management-panel-architecture.md). Procedural how-to for adding a tab: see [.agent/skills/management-panel/SKILL.md](../management-panel/SKILL.md).
 
 ## Integration points
 
@@ -106,9 +109,10 @@ No NetworkBehaviour sibling — owns no replicated state. Future driveable-entit
 
 - NPC owner GOAP for hiring: `GoapAction_OwnerOpenHiring` / `GoapAction_OwnerCloseHiring` reuse the same `TryOpenHiring` / `TryCloseHiring` API. Trigger: vacancy + treasury health.
 - Multi-vacancy Apply sub-menu when multiple distinct job titles are open at once.
-- Move "Manage Hiring..." entry to the building's own interactable so it's scoped correctly (currently appears on any character menu the owner-player approaches).
 - Multi-sign-per-building support (currently `_helpWantedFurniture` is a single reference; designer can place multiple `DisplayTextFurniture` instances but only the referenced one is auto-managed).
 - Community-leader authority in `CanRequesterControlHiring` — currently only checks `Owner == requester`; future addition would also accept community leaders.
+- Per-job hiring (replace `_isHiring` building-wide bool with per-`Job` flag). See [[management-panel-architecture]] §Open questions.
+- Sign-furniture rework — Help Wanted sign becomes its own readable+editable furniture type. Sign editing was removed from the management panel during the 2026-05-07 polymorphic refactor; owners can no longer customize text from the panel until this rework lands.
 
 ## See also
 

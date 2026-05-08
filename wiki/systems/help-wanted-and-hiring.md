@@ -3,7 +3,7 @@ type: system
 title: "Help Wanted + Owner-Controlled Hiring"
 tags: [building, character-job, ui, network, hiring, tier-2]
 created: 2026-04-30
-updated: 2026-04-30
+updated: 2026-05-08
 sources: []
 related:
   - "[[commercial-building]]"
@@ -12,6 +12,7 @@ related:
   - "[[storage-furniture]]"
   - "[[tool-storage]]"
   - "[[player-ui]]"
+  - "[[management-panel-architecture]]"
   - "[[kevin]]"
 status: stable
 confidence: high
@@ -31,7 +32,7 @@ depended_on_by: []
 
 ## Summary
 
-Two coupled-but-independent primitives. **`DisplayTextFurniture`** is a generic placard / signboard / notice-board (gameplay-data MonoBehaviour + sibling `DisplayTextFurnitureNetSync` NetworkBehaviour for the `NetworkVariable<FixedString512Bytes>` text — mirrors the `StorageFurniture` + `StorageFurnitureNetworkSync` pattern). **Owner-controlled hiring** adds an `_isHiring: NetworkVariable<bool>` to `CommercialBuilding`, a designer-set `_helpWantedFurniture` reference, and a clean Owner-only API (`TryOpenHiring`, `TryCloseHiring`, `CanRequesterControlHiring`, `GetVacantJobs`, virtual text builders). The two compose: when both are wired, opening hiring auto-writes formatted vacancy text to the sign; closing reverts to the closed-state text. Both player owners (via `UI_OwnerHiringPanel`) and future NPC owners (Phase 2 GOAP) call the same API.
+Two coupled-but-independent primitives. **`DisplayTextFurniture`** is a generic placard / signboard / notice-board (gameplay-data MonoBehaviour + sibling `DisplayTextFurnitureNetSync` NetworkBehaviour for the `NetworkVariable<FixedString512Bytes>` text — mirrors the `StorageFurniture` + `StorageFurnitureNetworkSync` pattern). **Owner-controlled hiring** adds an `_isHiring: NetworkVariable<bool>` to `CommercialBuilding`, a designer-set `_helpWantedFurniture` reference, and a clean Owner-only API (`TryOpenHiring`, `TryCloseHiring`, `CanRequesterControlHiring`, `GetVacantJobs`, virtual text builders). The two compose: when both are wired, opening hiring auto-writes formatted vacancy text to the sign; closing reverts to the closed-state text. Both player owners (via the polymorphic [[management-panel-architecture|UI_OwnerManagementPanel]] → `HiringTab`) and future NPC owners (Phase 2 GOAP) call the same API.
 
 ## Purpose
 
@@ -47,7 +48,7 @@ Plan 1 (Tool Storage primitive) shipped the management-gameplay foundation for t
 - Auto-formatting Help Wanted text on hiring open / close.
 - Auto-refreshing sign text on hire-or-quit churn while hiring is open.
 - Gating `InteractionAskForJob.CanExecute` and `BuildingManager.FindAvailableJob` on `IsHiring`.
-- Player UI: `UI_DisplayTextReader` (read sign + Apply for Job button) and `UI_OwnerHiringPanel` (owner toggles + custom text editing).
+- Player UI: `UI_DisplayTextReader` (read sign — informative-only since Plan 2.5) and `UI_OwnerManagementPanel` → `HiringTab` (owner toggles hiring; custom-text editing dropped in 2026-05-07 polymorphic refactor — deferred to future sign-furniture rework).
 
 ## Non-responsibilities
 
@@ -68,9 +69,12 @@ Plan 1 (Tool Storage primitive) shipped the management-gameplay foundation for t
 | [Assets/Scripts/Character/CharacterInteraction/InteractionAskForJob.cs](../../Assets/Scripts/Character/CharacterInteraction/InteractionAskForJob.cs) | `CanExecute` IsHiring gate |
 | [Assets/Scripts/Character/CharacterJob/CharacterJob.cs](../../Assets/Scripts/Character/CharacterJob/CharacterJob.cs) | `GetInteractionOptions` Section B (Manage Hiring entry); `QuitJob` calls `NotifyVacancyChanged` |
 | [Assets/Scripts/UI/PlayerHUD/UI_DisplayTextReader.cs](../../Assets/Scripts/UI/PlayerHUD/UI_DisplayTextReader.cs) | Player reader UI; routes Apply through existing `RequestJobApplicationServerRpc` |
-| [Assets/Scripts/UI/PlayerHUD/UI_OwnerHiringPanel.cs](../../Assets/Scripts/UI/PlayerHUD/UI_OwnerHiringPanel.cs) | Owner management panel |
+| [Assets/Scripts/UI/Management/UI_OwnerManagementPanel.cs](../../Assets/Scripts/UI/Management/UI_OwnerManagementPanel.cs) | Generic owner management panel — replaces UI_OwnerHiringPanel |
+| [Assets/Scripts/UI/Management/HiringTab.cs](../../Assets/Scripts/UI/Management/HiringTab.cs) | Built-in Hiring tab — IManagementTab spec class |
+| [Assets/Scripts/UI/Management/HiringTabView.cs](../../Assets/Scripts/UI/Management/HiringTabView.cs) | HiringTab view MonoBehaviour — toggle-only body |
 | [Assets/Resources/UI/UI_DisplayTextReader.prefab](../../Assets/Resources/UI/UI_DisplayTextReader.prefab) | Singleton-on-demand reader prefab |
-| [Assets/Resources/UI/UI_OwnerHiringPanel.prefab](../../Assets/Resources/UI/UI_OwnerHiringPanel.prefab) | Singleton-on-demand owner panel prefab |
+| [Assets/Resources/UI/UI_OwnerManagementPanel.prefab](../../Assets/Resources/UI/UI_OwnerManagementPanel.prefab) | Singleton-on-demand generic panel prefab |
+| [Assets/Resources/UI/Management/HiringTab.prefab](../../Assets/Resources/UI/Management/HiringTab.prefab) | Hiring tab body prefab — toggle button + label |
 
 ## Public API / entry points
 
@@ -79,7 +83,7 @@ See [help-wanted-and-hiring|SKILL.md] for full method signatures. Headline:
 - `building.TryOpenHiring(player.Character)` / `TryCloseHiring`.
 - `building.HelpWantedSign.TrySetDisplayText(player.Character, "...")`.
 - `UI_DisplayTextReader.Show(sign)` (player presses E on sign → calls this).
-- `UI_OwnerHiringPanel.Show(building)` (owner clicks "Manage Hiring..." menu entry → calls this).
+- `MWI.UI.Management.UI_OwnerManagementPanel.Show(building)` (owner clicks "Manage..." menu entry / interacts with `ManagementFurniture` → calls this).
 
 ## Data flow
 
@@ -136,10 +140,10 @@ Player owner manages hiring:
                    │
                    ▼
         Section A "Apply for {JobTitle}" entries (existing) +
-        Section B "Manage Hiring..." entry (NEW, when interactor.OwnedBuilding != null)
+        Section B "Manage..." entry (when interactor.OwnedBuilding != null; relabelled from "Manage Hiring..." in 2026-05-07 polymorphic refactor — generic across all admin tabs)
                    │
                    ▼
-        UI_OwnerHiringPanel.Show(OwnedBuilding) → toggle hiring + edit sign text
+        UI_OwnerManagementPanel.Show(OwnedBuilding) → HiringTab → toggle hiring
 ```
 
 ## Dependencies
@@ -200,11 +204,13 @@ All four player-relationship scenarios validated:
 - **Phase 2: Community-leader authority** in `CanRequesterControlHiring` — currently only checks `Owner == requester`.
 - ~~**Phase 2: Move "Manage Hiring..." to building-scoped menu**~~ — **DONE** by Plan 2.5 (`ManagementFurniture`). Owner walks to the in-world desk; menu entry stays as fallback when no desk is wired.
 - **Phase 2: Multi-sign support** per building.
-- **Phase 2: Pool `UI_OwnerHiringPanel` job rows** instead of destroy + re-instantiate on every refresh (cosmetic for small lists; matters for buildings with many jobs).
-- **Phase 2: Centralised `Character.LocalPlayer` accessor** — `ResolveLocalPlayerCharacter` is currently duplicated in `UI_DisplayTextReader` and `UI_OwnerHiringPanel` (and likely other UI scripts).
+- **Phase 2: Centralised `Character.LocalPlayer` accessor** — `ResolveLocalPlayerCharacter` is currently duplicated in `UI_DisplayTextReader` and `UI_OwnerManagementPanel` / `HiringTabView` (and likely other UI scripts).
+- **Phase 2: per-job hiring (replace building-wide `_isHiring` with per-Job flag).** See [[management-panel-architecture]] §Open questions for the deferred design surface.
+- **Phase 2: Help Wanted sign rework (its own readable+editable furniture type).** Sign editing was removed from the management panel during the 2026-05-07 polymorphic refactor; owners can no longer customize text from the panel until the sign-furniture rework lands.
 
 ## Change log
 
+- 2026-05-07 — **Polymorphic management panel refactor.** `UI_OwnerHiringPanel` replaced by the generic `UI_OwnerManagementPanel` driven by a virtual `CommercialBuilding.GetManagementTabs()` (returns `[HiringTab]` on the base; subtypes append). `HiringTab` body simplified to toggle-only — sign editing dropped (deferred to a future sign-furniture rework), job-list display dropped. `_isHiring` building-wide bool unchanged — per-job hiring deferred to a dedicated phase. See [[management-panel-architecture]]. — claude
 - 2026-04-30 — **Plan 2.5 refinements:**
   - Added `ManagementFurniture` (`Assets/Scripts/World/Furniture/ManagementFurniture.cs`) — owner's hiring desk. Owner walks up + presses E → `UI_OwnerHiringPanel` opens. Non-owners get a "Only the owner can use this management desk" toast. Designer-set `_managementFurniture` reference on `CommercialBuilding`.
   - `CharacterJob.GetInteractionOptions` Section B "Manage Hiring..." entry now gated on `!HasManagementFurniture` — appears only as fallback when no in-world management desk is wired.
