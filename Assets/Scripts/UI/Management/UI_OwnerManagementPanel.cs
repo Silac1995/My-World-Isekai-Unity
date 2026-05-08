@@ -81,8 +81,12 @@ namespace MWI.UI.Management
                         Debug.LogWarning($"[UI_OwnerManagementPanel] Prefab missing at Resources/{PrefabResourcePath}.");
                         return;
                     }
-                    var canvas = Object.FindFirstObjectByType<Canvas>();
-                    _instance = Instantiate(prefab, canvas != null ? canvas.transform : null);
+                    if (PlayerUI.Instance == null)
+                    {
+                        Debug.LogWarning("[UI_OwnerManagementPanel] PlayerUI.Instance not initialized — cannot parent panel.");
+                        return;
+                    }
+                    _instance = Instantiate(prefab, PlayerUI.Instance.transform);
                 }
                 catch (System.Exception e)
                 {
