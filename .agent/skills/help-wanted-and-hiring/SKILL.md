@@ -57,7 +57,7 @@ No NetworkBehaviour sibling — owns no replicated state. Future driveable-entit
 ### Existing systems extended
 - `InteractionAskForJob.CanExecute` — added `if (!_building.IsHiring) return false;` gate.
 - `BuildingManager.FindAvailableJob<T>` — added `if (!commercial.IsHiring) continue;` filter (skips closed buildings for NPC `NeedJob` discovery).
-- `CharacterJob.GetInteractionOptions` — added Section B emitting `Manage Hiring...` entry when `interactor.CharacterJob.OwnedBuilding != null`.
+- `CharacterJob.GetInteractionOptions` — added Section B emitting `Manage...` entry when `interactor.CharacterJob.OwnedBuilding != null` (renamed from "Manage Hiring..." in Plan 2.5 since the panel is now generic).
 - `CommercialBuilding.AssignWorker` — calls `HandleVacancyChanged()` after binding.
 - `CharacterJob.QuitJob` — calls `assignment.Workplace?.NotifyVacancyChanged()` after unbinding.
 
@@ -99,8 +99,8 @@ No NetworkBehaviour sibling — owns no replicated state. Future driveable-entit
 ## Gotchas
 
 - **`_displayText` MUST stay `[SerializeField]`-equivalent** via NetworkVariable — pure replication; no JsonUtility round-trip needed because the field lives on a NetworkBehaviour, not a serialised data class. Persistence relies on the NetworkObject save path (which captures NetworkVariable values).
-- **Custom sign text is overwritten on reopen** (Q15.1) — by design. Owner's custom message survives `TryOpenHiring` while hiring is already open (no overwrite triggered), but a `TryCloseHiring → TryOpenHiring` cycle resets to auto-formatted text. Documented in the OwnerHiringPanel hint label.
-- **Manage Hiring menu placement** — V1 emits the entry on every character interaction the owner-player walks into, not just on the building itself. Pragmatic but pollutes other menus. Future iteration can move to a building-specific interactable for cleaner UX scoping.
+- **Custom sign text is overwritten on reopen** (Q15.1) — by design. Owner's custom message survives `TryOpenHiring` while hiring is already open (no overwrite triggered), but a `TryCloseHiring → TryOpenHiring` cycle resets to auto-formatted text. Was surfaced via the legacy panel's hint label; not surfaced in the current `HiringTab` UI — see the wiki Open questions for the future sign-furniture rework.
+- **"Manage..." menu placement** — V1 emits the entry on every character interaction the owner-player walks into, not just on the building itself. Pragmatic but pollutes other menus. Future iteration can move to a building-specific interactable for cleaner UX scoping. (Renamed from "Manage Hiring..." in Plan 2.5.)
 - **Multi-vacancy Apply UI** — V1 auto-picks the FIRST vacant job from `GetVacantJobs()` when the player clicks Apply. If a building has multiple distinct JobTitles open (e.g. "Harvester" + "Logistics Manager"), the player can't choose which to apply for. Phase 2 follow-up: sub-menu when multiple distinct titles are vacant.
 - **Sanitisation** — `TrySetDisplayText` strips control chars (preserves `\n` / `\t`) and clamps to ~480 UTF-8 bytes to leave headroom inside the 512-byte FixedString. Long pastes get silently truncated.
 - **Closed-state default text** — `GetClosedHiringDisplayText()` returns empty string by default, so the sign goes blank when hiring closes. Subclasses can override for flavor (e.g. ShopBuilding might say "Shop is staffed; check back another day.").

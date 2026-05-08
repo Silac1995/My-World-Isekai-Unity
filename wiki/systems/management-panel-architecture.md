@@ -8,7 +8,6 @@ sources: []
 related:
   - "[[commercial-building]]"
   - "[[help-wanted-and-hiring]]"
-  - "[[management-furniture]]"
   - "[[character-job]]"
 status: stable
 confidence: high
@@ -127,9 +126,11 @@ ManagementFurniture.Use(character)
                 │     view.Root.transform.SetParent(_tabBodyRoot, false)
                 │     view.Root.SetActive(false)              // hide non-active by default
                 │     pill = Instantiate(_tabHeaderPillPrefab, _tabHeaderRoot)
-                │     pill.label.text = tab.Name
-                │     pill.button.onClick += () => SwitchTo(tabIndex)
-                │     _spawned.Add({pill, view})
+                │     pillLabel = pill.GetComponentInChildren<TextMeshProUGUI>()
+                │     pillLabel.text = tab.Name
+                │     pillButton = pill.GetComponent<Button>()
+                │     pillButton.onClick += () => SwitchTo(tabIndex)
+                │     _spawned.Add({ View = view, Pill = pill, PillButton = pillButton })
                 ├─ SwitchTo(0)                                // activate first tab
                 └─ gameObject.SetActive(true)
 ```
@@ -138,15 +139,18 @@ ManagementFurniture.Use(character)
 
 ```
 SwitchTo(targetIndex)
-        ├─ if (_activeEntry == _spawned[targetIndex]) return       // same tab — no-op
-        ├─ if (_activeEntry != null):
-        │     _activeEntry.View.OnTabDeactivated()
-        │     _activeEntry.View.Root.SetActive(false)
-        │     SetPillSelected(_activeEntry.Pill, false)
-        ├─ _activeEntry = _spawned[targetIndex]
-        ├─ _activeEntry.View.Root.SetActive(true)
-        ├─ _activeEntry.View.OnTabActivated()
-        └─ SetPillSelected(_activeEntry.Pill, true)
+        ├─ if (targetIndex out of range) return                    // bounds check
+        ├─ if (_activeIndex == targetIndex) return                 // same tab — no-op
+        ├─ if (_activeIndex >= 0 && _activeIndex < _spawned.Count):
+        │     prev = _spawned[_activeIndex]
+        │     prev.View.OnTabDeactivated()
+        │     prev.View.Root.SetActive(false)
+        │     SetPillSelected(prev.Pill, false)
+        ├─ _activeIndex = targetIndex
+        ├─ next = _spawned[targetIndex]
+        ├─ next.View.Root.SetActive(true)
+        ├─ next.View.OnTabActivated()
+        └─ SetPillSelected(next.Pill, true)
 ```
 
 ### Re-Show (warm)
@@ -185,8 +189,7 @@ OnDestroy → `_instance = null` (when applicable) → cascade `Dispose` to rema
 ### Upstream (this system needs)
 
 - [[commercial-building]] — owns `GetManagementTabs()` virtual + `Owner` reference for defense-in-depth gate.
-- [[help-wanted-and-hiring]] — provides `_isHiring` NetworkVariable + `OnHiringStateChanged` event consumed by `HiringTabView`.
-- [[management-furniture]] — primary entry point (in-world desk).
+- [[help-wanted-and-hiring]] — provides `_isHiring` NetworkVariable + `OnHiringStateChanged` event consumed by `HiringTabView`; also documents `ManagementFurniture` (the in-world desk that opens this panel).
 - [[character-job]] — fallback entry point (`GetInteractionOptions` Section B "Manage...").
 
 ### Downstream (systems that need this)
@@ -200,8 +203,9 @@ OnDestroy → `_instance = null` (when applicable) → cascade `Dispose` to rema
 - **No persisted state.** Pure UI shell.
 - **Runtime per-peer state:**
   - `_instance: UI_OwnerManagementPanel` — static lazy singleton.
-  - `_spawned: List<Entry>` — `(IManagementTabView View, Button Pill, TextMeshProUGUI PillLabel)` per active tab. Cleared on close-and-different-building re-Show.
-  - `_activeEntry: Entry?` — currently visible tab.
+  - `_spawned: List<Entry>` — runtime list of constructed tab entries (capacity 4). Cleared on close-and-different-building re-Show.
+  - `Entry { IManagementTabView View, GameObject Pill, Button PillButton }` — per-tab tuple. The pill's label is read inline via `GetComponentInChildren<TextMeshProUGUI>` during construction; not stored on `Entry`.
+  - `_activeIndex: int` — index into `_spawned`; `-1` means no active tab.
   - `_building: CommercialBuilding` — building this panel is currently bound to. Cleared on close.
 - **No NetworkVariable, no NetworkBehaviour.** Plain MonoBehaviour. The panel never replicates; everything authoritative is on the building.
 
@@ -211,7 +215,7 @@ OnDestroy → `_instance = null` (when applicable) → cascade `Dispose` to rema
 |----------|-----------|-------------|--------|
 | `_isHiring` write | Server | client `TryOpenHiring`/`TryCloseHiring` → existing `[ServerRpc]` → server validates `Owner` → flip | **Unchanged** from pre-refactor |
 | `_isHiring` read | Everyone | NetworkVariable replication + `OnHiringStateChanged` event | **Unchanged** |
-| Panel state (`_instance`, `_spawned`, `_activeEntry`) | Per-peer (client-only) | None — pure UI | New, no wire traffic |
+| Panel state (`_instance`, `_spawned`, `_activeIndex`) | Per-peer (client-only) | None — pure UI | New, no wire traffic |
 
 **No new ServerRpcs introduced. No new NetworkVariables.** The refactor is pure UI re-shaping (rule #18).
 

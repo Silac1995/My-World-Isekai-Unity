@@ -190,8 +190,8 @@ All four player-relationship scenarios validated:
 
 ## Known gotchas / edge cases
 
-- **Custom sign text resets on reopen** (Q15.1) — `HandleHiringStateChanged` always overwrites with auto-formatted text. Owners who want persistent custom text must avoid the close→open cycle. Documented in the OwnerHiringPanel hint label.
-- **Manage Hiring menu placement is suboptimal in v1** — appears on every character menu the owner walks into. Future iteration should scope to the building's own interactable.
+- **Custom sign text resets on reopen** (Q15.1) — `HandleHiringStateChanged` always overwrites with auto-formatted text. Owners who want persistent custom text must avoid the close→open cycle. Was surfaced via the legacy panel's hint label; not surfaced in the current `HiringTab` UI — see Open questions for the future sign-furniture rework.
+- **"Manage..." menu placement is suboptimal in v1** — appears on every character menu the owner walks into. Future iteration should scope to the building's own interactable. (Renamed from "Manage Hiring..." in Plan 2.5.)
 - **Auto-refresh on `_initialHiringOpen=false`** — server-side `OnNetworkSpawn` calls `HandleHiringStateChanged(_isHiring.Value)` once if `_helpWantedFurniture` is set, so authoring's closed default correctly triggers a closed-state sign refresh from the first frame.
 - **Sanitisation truncates long text silently** — `SanitiseAndClamp` clamps to ~480 UTF-8 bytes. No user-facing warning. Acceptable for v1; Phase 2 could add a length-counter to the input field.
 - **Local-owner gate on `DisplayTextFurniture.Use`** — opens the reader UI only on the local player's machine (not on remote clients when one player presses E). Important multiplayer detail; without it, every peer would pop a reader simultaneously.
