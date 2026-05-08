@@ -407,6 +407,15 @@ public class ShopBuilding : CommercialBuilding, IStockProvider
         owner?.CharacterWallet?.AddCoins(currency, balance, $"FromCashier_{cashier.FurnitureName}");
     }
 
+    public override System.Collections.Generic.IReadOnlyList<MWI.UI.Management.IManagementTab> GetManagementTabs()
+    {
+        var tabs = new System.Collections.Generic.List<MWI.UI.Management.IManagementTab>(base.GetManagementTabs());
+        tabs.Add(new MWI.UI.Management.ShopCatalogTab(this));
+        tabs.Add(new MWI.UI.Management.ShopShelvesTab(this));
+        tabs.Add(new MWI.UI.Management.ShopCashiersTab(this));
+        return tabs;
+    }
+
     // ----- Helpers -----
 
     private bool ValidateOwnerCaller(ServerRpcParams p)
