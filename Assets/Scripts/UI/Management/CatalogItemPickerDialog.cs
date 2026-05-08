@@ -95,7 +95,7 @@ namespace MWI.UI.Management
                 for (int i = 0; i < _availableItems.Count; i++)
                 {
                     var item = _availableItems[i];
-                    options.Add(new TMP_Dropdown.OptionData(item.ItemName, item.Icon));
+                    options.Add(new TMP_Dropdown.OptionData(item.ItemName, item.Icon, Color.white));
                 }
                 _itemDropdown.AddOptions(options);
                 _itemDropdown.value = 0;
