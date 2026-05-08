@@ -86,7 +86,7 @@ namespace MWI.UI.Management
                         Debug.LogWarning("[UI_OwnerManagementPanel] PlayerUI.Instance not initialized — cannot parent panel.");
                         return;
                     }
-                    _instance = Instantiate(prefab, PlayerUI.Instance.transform);
+                    _instance = Instantiate(prefab, PlayerUI.Instance.transform, false);
                 }
                 catch (System.Exception e)
                 {
