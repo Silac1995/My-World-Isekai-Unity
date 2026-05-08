@@ -25,7 +25,7 @@ public class ManagementFurniture : Furniture
 {
     /// <summary>
     /// Owner-only Use. Resolves parent CommercialBuilding via GetComponentInParent, validates
-    /// owner identity, opens the hiring panel. NPCs silent-success; remote clients filtered
+    /// owner identity, opens the management panel. NPCs silent-success; remote clients filtered
     /// by the IsOwner gate (mirrors DisplayTextFurniture.Use's pattern).
     /// </summary>
     public override bool Use(Character character)
