@@ -8,6 +8,11 @@ public class PlayerUI : MonoBehaviour
 {
     public static PlayerUI Instance { get; private set; }
 
+    [Header("HUD Canvas")]
+    [Tooltip("Screen-space-overlay canvas that all HUD elements live under. If unset, Awake auto-resolves it by looking for a direct child named \"Canvas\".")]
+    [SerializeField] private Canvas _hudCanvas;
+    public Canvas HudCanvas => _hudCanvas;
+
     [SerializeField] private GameObject character;
 
     [Header("UI Components")]
@@ -69,6 +74,14 @@ public class PlayerUI : MonoBehaviour
 
         if (_pauseMenu == null)
             _pauseMenu = GetComponentInChildren<MWI.UI.PauseMenuController>(true);
+
+        if (_hudCanvas == null)
+        {
+            var canvasChild = transform.Find("Canvas");
+            if (canvasChild != null) _hudCanvas = canvasChild.GetComponent<Canvas>();
+            if (_hudCanvas == null)
+                Debug.LogWarning("[PlayerUI] HUD canvas not found — wire _hudCanvas in Inspector or ensure a child named \"Canvas\" exists.");
+        }
     }
 
     public void Initialize(GameObject newCharacter)

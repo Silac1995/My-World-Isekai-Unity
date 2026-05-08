@@ -81,12 +81,12 @@ namespace MWI.UI.Management
                         Debug.LogWarning($"[UI_OwnerManagementPanel] Prefab missing at Resources/{PrefabResourcePath}.");
                         return;
                     }
-                    if (PlayerUI.Instance == null)
+                    if (PlayerUI.Instance == null || PlayerUI.Instance.HudCanvas == null)
                     {
-                        Debug.LogWarning("[UI_OwnerManagementPanel] PlayerUI.Instance not initialized — cannot parent panel.");
+                        Debug.LogWarning("[UI_OwnerManagementPanel] PlayerUI HUD canvas unavailable — cannot parent panel.");
                         return;
                     }
-                    _instance = Instantiate(prefab, PlayerUI.Instance.transform, false);
+                    _instance = Instantiate(prefab, PlayerUI.Instance.HudCanvas.transform, false);
                 }
                 catch (System.Exception e)
                 {
