@@ -26,6 +26,23 @@ namespace MWI.UI.Shop
         [SerializeField] private Transform _rowsParent;
         [SerializeField] private GameObject _rowPrefab;   // prefab carrying a UI_ShopBuyRow component
 
+        /// <summary>
+        /// Programmatically ensure the panel root has its own Canvas + GraphicRaycaster
+        /// so it renders and raycasts independently of whatever scene canvas it ends up
+        /// under — Resources.Load → Instantiate places the prefab at the scene root by
+        /// default. Mirrors the defensive guard in UI_StorageFurniturePanel.cs:58-71.
+        /// </summary>
+        private void Awake()
+        {
+            var canvas = GetComponent<UnityEngine.Canvas>();
+            if (canvas == null) canvas = gameObject.AddComponent<UnityEngine.Canvas>();
+            canvas.overrideSorting = true;
+            canvas.sortingOrder = 50;
+
+            if (GetComponent<UnityEngine.UI.GraphicRaycaster>() == null)
+                gameObject.AddComponent<UnityEngine.UI.GraphicRaycaster>();
+        }
+
         private static UI_ShopBuyPanel _instance;
         private Cashier _cashier;
         private Character _customer;
