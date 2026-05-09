@@ -1,6 +1,6 @@
 ---
 name: building-furniture-specialist
-description: "Expert in building and furniture systems — Building/ComplexRoom/Room hierarchy, FurnitureGrid discrete placement, furniture occupancy state machine, BuildingPlacementManager with community permissions, CommercialBuilding jobs/logistics/tasks, IStockProvider contract, pluggable LogisticsPolicy SOs, BuildingLogisticsManager facade + sub-components, StorageFurniture slot-based containers + StorageVisualDisplay renderer, FindStorageFurnitureForItem / GetItemsInStorageFurniture logistics hooks, building interiors with spatial offsets, BuildingInteriorRegistry lazy-spawn, the Phase 1 Cooperative Construction Loop (ConstructionSiteScanner 2 Hz observational scan, BuildingInteractable.Interact tap-E entry + 2D X-Z proximity check, [ServerRpc(RequireOwnership=false)] Building.RequestStartFinishConstructionServerRpc, CharacterAction_FinishConstruction continuous-tick consumption with no owner gate, Building.Finalize state-flip-first ordering, EvictLeftoversToPerimeter, _constructionVisualRoot vs _completedVisualRoot visual swap, _spawnAsComplete designer checkbox, ConstructionProgress / DeliveredMaterials NetworkVariables, 600s sentinel + CancelActionVisualsClientRpc visual proxy, BuildingSaveData persistence with refresh-path copy of progress fields, CharacterAction_Continuous.Progress override for HUD bar). Use when implementing, debugging, or designing anything related to buildings, furniture, rooms, grids, placement, interiors, storage containers, commercial logistics, or the construction loop."
+description: "Expert in building and furniture systems — Building/ComplexRoom/Room hierarchy, FurnitureGrid discrete placement, furniture occupancy state machine, BuildingPlacementManager with community permissions, CommercialBuilding jobs/logistics/tasks, IStockProvider contract, pluggable LogisticsPolicy SOs, BuildingLogisticsManager facade + sub-components, StorageFurniture slot-based containers + StorageVisualDisplay renderer + player UI surface (UI_StorageFurniturePanel + UI_StorageGrid), FindStorageFurnitureForItem / GetItemsInStorageFurniture logistics hooks, building interiors with spatial offsets, BuildingInteriorRegistry lazy-spawn, the Phase 1 Cooperative Construction Loop (ConstructionSiteScanner 2 Hz observational scan, BuildingInteractable.Interact tap-E entry + 2D X-Z proximity check, [ServerRpc(RequireOwnership=false)] Building.RequestStartFinishConstructionServerRpc, CharacterAction_FinishConstruction continuous-tick consumption with no owner gate, Building.Finalize state-flip-first ordering, EvictLeftoversToPerimeter, _constructionVisualRoot vs _completedVisualRoot visual swap, _spawnAsComplete designer checkbox, ConstructionProgress / DeliveredMaterials NetworkVariables, 600s sentinel + CancelActionVisualsClientRpc visual proxy, BuildingSaveData persistence with refresh-path copy of progress fields, CharacterAction_Continuous.Progress override for HUD bar). Use when implementing, debugging, or designing anything related to buildings, furniture, rooms, grids, placement, interiors, storage containers, storage UI, commercial logistics, or the construction loop."
 model: opus
 color: orange
 memory: project
@@ -112,6 +112,27 @@ Only one character can occupy. `Furniture.IsFree()` checks both occupant and res
 - Slot contents are server-only C# state (no `NetworkVariable` / `NetworkList` sync). Clients see empty containers; `StorageVisualDisplay` only renders on host.
 - `BuildingSaveData` does not include slot contents. Items vanish on map hibernation.
 - Both gaps are scheduled for a follow-up agent run on 2026-05-09.
+
+### 3c. StorageFurniture Player UI
+
+**`UI_StorageFurniturePanel` + `UI_StorageGrid`** (`Assets/Scripts/UI/WorldUI/`) — player-facing HUD opened when a player taps E on a `StorageFurniture`.
+
+**Layout:** split two-column panel — left column shows the player's bag inventory + held items; right column shows the chest's slots. Each column is rendered by a `UI_StorageGrid` instance.
+
+**Open path:**
+```
+StorageFurniture.OnInteract(actor)
+  → PlayerUI.Instance.OpenStoragePanel(storageFurniture, actor)
+    → UI_StorageFurniturePanel.Open(storageFurniture, character)
+```
+
+**Click-to-transfer:** clicking a slot in either grid routes through the **same** `CharacterStoreInFurnitureAction` / `CharacterTakeFromFurnitureAction` that NPC GOAP queues. No new RPCs — server authority is inherited from the existing action pair.
+
+**NPC / player parity (Rule #22):** the UI panel is a pure display + input-queuing layer. Gameplay effects live entirely in the two character actions. NPCs and players use the same transfer path.
+
+**No new RPCs:** the panel never talks to the server directly. All mutations go through `CharacterAction` → existing server-side validation in the action's `OnApplyEffect`.
+
+**Reference:** [[storage-furniture-ui]] → `wiki/systems/storage-furniture-ui.md`.
 
 ### 4. Furniture Placement Flow
 
@@ -392,6 +413,8 @@ Authoritative spec: `docs/superpowers/specs/2026-05-06-building-construction-loo
 | `CharacterAction_Continuous` | `Assets/Scripts/Character/CharacterActions/CharacterAction_Continuous.cs` |
 | `CharacterAction_FinishConstruction` | `Assets/Scripts/Character/CharacterActions/CharacterAction_FinishConstruction.cs` |
 | `SkillId` enum | `Assets/Scripts/Character/Skills/SkillId.cs` |
+| `UI_StorageFurniturePanel` | `Assets/Scripts/UI/WorldUI/UI_StorageFurniturePanel.cs` |
+| `UI_StorageGrid` | `Assets/Scripts/UI/WorldUI/UI_StorageGrid.cs` |
 
 ## Mandatory Rules
 
@@ -419,6 +442,8 @@ Authoritative spec: `docs/superpowers/specs/2026-05-06-building-construction-loo
 - Proactively flag: missing NavMesh rebuilds, incorrect grid origin calculations, door pairing issues, missing community permission checks.
 
 ## Recent changes
+
+- **2026-05-09 — StorageFurniture player UI shipped** (`UI_StorageFurniturePanel` + `UI_StorageGrid` under `Assets/Scripts/UI/WorldUI/`): tap-E on a `StorageFurniture` opens a HUD panel — player bag + hands on the left, chest slots on the right. Click-to-transfer routes through the existing `CharacterStoreInFurnitureAction` / `CharacterTakeFromFurnitureAction` (same actions NPC GOAP queues), no new RPCs. Open path: `StorageFurniture.OnInteract` → `PlayerUI.Instance.OpenStoragePanel`. Architecture wiki: `wiki/systems/storage-furniture-ui.md`.
 
 - **2026-05-07 — Phase 1 PlayMode-MP polish landed** (post-shipping fixes on top of the 2026-05-06 base; wiki: `wiki/systems/construction.md` Change log entry has the commit-hash detail):
   - **Cooperative finalize model** (`0f3337ce`) — placer-only gate dropped. Any character standing inside `BuildingZone` can drive the action. `BuildingInteractable.IsOwner` survives but is reserved for Phase 2 hold-menu options (Abandon, Sell, OpenInterior); the finalize path no longer calls it. NPC parity (Rule #22) becomes free — JobBuilder needs no owner-bypass code, just navigate to the zone.
