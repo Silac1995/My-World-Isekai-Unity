@@ -12,23 +12,27 @@ using MWI.UI.Notifications;
 ///
 /// **Future driveable-entity migration:** this furniture is a deliberate precursor to the
 /// parallel-session "driveable entities" system. v1 opens UI on E-press immediately; the
-/// future migration replaces <see cref="Use"/> with an "occupy this driveable entity" call
-/// (the player gets seated at the desk; the UI opens as a side-effect of being seated;
-/// exiting the desk closes the UI). Public API stays stable across the migration — only
-/// the internals of <see cref="Use"/> change.
+/// future migration will re-parent this class under <see cref="OccupiableFurniture"/> so
+/// the player gets seated at the desk and the UI opens as a side-effect of occupancy.
+/// Public API stays stable across the migration — only the internals of
+/// <see cref="OnInteract"/> change (and the parent type).
 ///
 /// No NetworkBehaviour sibling needed — this furniture owns no replicated state. The panel
 /// it opens reads <see cref="CommercialBuilding"/>'s already-replicated <c>_isHiring</c> +
 /// <c>_helpWantedFurniture</c> state.
+///
+/// Inherits plain <see cref="Furniture"/> (no occupancy) post 2026-05-08 ISP refactor —
+/// the management desk is interaction-only; no character "occupies" it today. Overrides
+/// <see cref="Furniture.OnInteract"/> instead of the legacy <c>Use</c> method.
 /// </summary>
 public class ManagementFurniture : Furniture
 {
     /// <summary>
-    /// Owner-only Use. Resolves parent CommercialBuilding via GetComponentInParent, validates
-    /// owner identity, opens the management panel. NPCs silent-success; remote clients filtered
-    /// by the IsOwner gate (mirrors DisplayTextFurniture.Use's pattern).
+    /// Owner-only OnInteract. Resolves parent CommercialBuilding via GetComponentInParent,
+    /// validates owner identity, opens the management panel. NPCs silent-success; remote
+    /// clients filtered by the IsOwner gate (mirrors DisplayTextFurniture's pattern).
     /// </summary>
-    public override bool Use(Character character)
+    public override bool OnInteract(Character character)
     {
         if (character == null) return false;
 

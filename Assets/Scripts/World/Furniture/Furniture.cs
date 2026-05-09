@@ -2,8 +2,25 @@ using UnityEngine;
 
 /// <summary>
 /// Classe de base pour tous les meubles placés dans les buildings.
-/// Un meuble a une position dans le monde, un occupant potentiel,
-/// et un point d'interaction où le personnage doit se placer pour l'utiliser.
+/// Un meuble a une position dans le monde, une taille en cellules de grille,
+/// un point d'interaction, et optionnellement un <see cref="FurnitureItemSO"/>
+/// qui le ramène en inventaire à la prise.
+///
+/// <para>
+/// <b>Occupancy is NOT here.</b> Refactored 2026-05-08 per ISP (rule #12) — the
+/// reservation / occupancy state (<c>_occupant</c>, <c>_reservedBy</c>, <c>Use</c>,
+/// <c>Release</c>, <c>Reserve</c>, <c>IsOccupied</c>, <c>IsFree</c>) lives on
+/// <see cref="OccupiableFurniture"/> + the <see cref="IOccupiable"/> interface.
+/// Pure-display or pure-storage furniture (<c>StorageFurniture</c>,
+/// <c>TimeClockFurniture</c>, <c>ManagementFurniture</c>, <c>DisplayTextFurniture</c>)
+/// inherit this class directly and carry no occupancy machinery.
+/// </para>
+///
+/// <para>
+/// Surfaces that DO get driven by a Character — Bed, Chair, Cashier, CraftingStation —
+/// extend <see cref="OccupiableFurniture"/> instead. Future non-Furniture occupiables
+/// (mounts, vehicles) implement <see cref="IOccupiable"/> directly.
+/// </para>
 /// </summary>
 public class Furniture : MonoBehaviour
 {
@@ -19,69 +36,33 @@ public class Furniture : MonoBehaviour
 
     public FurnitureItemSO FurnitureItemSO => _furnitureItemSO;
 
-    private Character _occupant;
-    private Character _reservedBy;
     private bool _sizeCalculated = false;
 
     public string FurnitureName => _furnitureName;
     public FurnitureTag FurnitureTag => _furnitureTag;
     public Transform InteractionPoint => _interactionPoint;
     public Vector2Int SizeInCells => _sizeInCells;
-    public Character Occupant => _occupant;
-    public Character ReservedBy => _reservedBy;
-    public bool IsOccupied => _occupant != null;
 
     /// <summary>
-    /// Réserve le meuble pour un personnage en approche.
+    /// Universal interaction entry point — called by <see cref="FurnitureInteractable.Interact"/>
+    /// when a character taps E. Default is a no-op success (<c>return true</c>).
+    ///
+    /// <list type="bullet">
+    ///   <item>Occupiable furniture overrides this in <see cref="OccupiableFurniture"/> to
+    ///         delegate to <see cref="OccupiableFurniture.Use"/>, so chairs/beds/cashiers/
+    ///         crafting stations still bind an occupant on E-press.</item>
+    ///   <item>One-shot interaction furniture (sign / management desk / future read-only
+    ///         surfaces) overrides this directly to open UI without binding occupancy —
+    ///         per ISP (rule #12) those types carry no <c>_occupant</c> state.</item>
+    /// </list>
+    ///
+    /// Returns true when the interaction was accepted (whether or not it produced a
+    /// visible side-effect). Returning false signals the interactable to skip its
+    /// post-use callback (<see cref="FurnitureInteractable.OnFurnitureUsed"/>).
     /// </summary>
-    public virtual bool Reserve(Character character)
+    public virtual bool OnInteract(Character interactor)
     {
-        if (character == null) return false;
-        if (IsOccupied || _reservedBy != null) return false;
-        
-        _reservedBy = character;
-        return true;
-    }
-
-    /// <summary>
-    /// Un personnage utilise physiquement ce meuble.
-    /// </summary>
-    public virtual bool Use(Character character)
-    {
-        if (character == null) return false;
-        if (IsOccupied)
-        {
-            Debug.Log($"<color=orange>[Furniture]</color> {_furnitureName} est déjà utilisé par {_occupant.CharacterName}.");
-            return false;
-        }
-
-        _occupant = character;
-        _reservedBy = null; // La réservation est convertie en occupation
-        _occupant.SetOccupyingFurniture(this);
-        Debug.Log($"<color=cyan>[Furniture]</color> {character.CharacterName} utilise {_furnitureName}.");
-        return true;
-    }
-
-    /// <summary>
-    /// Libère l'utilisation ou la réservation du meuble.
-    /// </summary>
-    public virtual void Release()
-    {
-        if (_occupant != null)
-        {
-            Debug.Log($"<color=cyan>[Furniture]</color> {_occupant.CharacterName} quitte {_furnitureName}.");
-            _occupant.SetOccupyingFurniture(null);
-        }
-        _occupant = null;
-        _reservedBy = null;
-    }
-
-    /// <summary>
-    /// Vérifie si le meuble est totalement libre (ni occupé, ni réservé).
-    /// </summary>
-    public virtual bool IsFree()
-    {
-        return _occupant == null && _reservedBy == null;
+        return interactor != null;
     }
 
     /// <summary>

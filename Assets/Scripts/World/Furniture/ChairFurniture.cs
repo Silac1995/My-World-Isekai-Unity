@@ -2,9 +2,11 @@ using UnityEngine;
 
 /// <summary>
 /// Seat-type furniture (chair, stool, bench, throne...).
-/// A character can sit on it.
+/// A character can sit on it. Single-occupant — inherits the base
+/// <see cref="OccupiableFurniture.Use"/> / <see cref="OccupiableFurniture.Release"/>
+/// directly (no per-slot list like <see cref="BedFurniture"/>).
 /// </summary>
-public class ChairFurniture : Furniture
+public class ChairFurniture : OccupiableFurniture
 {
     [Header("Chair")]
     [SerializeField] private Transform _seatPoint;

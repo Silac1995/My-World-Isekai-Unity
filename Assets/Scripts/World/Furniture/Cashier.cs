@@ -8,7 +8,7 @@ using UnityEngine;
 /// only ShopBuilding uses this; future BankBuilding etc. may too).
 ///
 /// Three orthogonal state slots:
-/// • Occupant (inherited from Furniture) — vendor currently driving the cashier.
+/// • Occupant (inherited from <see cref="OccupiableFurniture"/>) — vendor currently driving the cashier.
 /// • CurrentCustomer — customer mid-transaction (the lock).
 /// • Till — money held by this cashier (per-currency).
 ///
@@ -17,7 +17,7 @@ using UnityEngine;
 /// </summary>
 [RequireComponent(typeof(CashierInteractable))]
 [RequireComponent(typeof(CashierNetSync))]
-public class Cashier : Furniture
+public class Cashier : OccupiableFurniture
 {
     [Header("Cashier")]
     [Tooltip("If false, this is an automatic distributor — no vendor required to serve customers.")]
@@ -58,9 +58,39 @@ public class Cashier : Furniture
 
     protected void OnEnable()
     {
-        // Server-only registration; the LinkedShop-side method's IsServer check is
-        // inside RegisterCashier so this is safe to call on every peer.
-        if (LinkedShop != null) { LinkedShop.RegisterCashier(this); _registered = true; }
+        // Try to register immediately. If _linkedBuilding wasn't resolvable in Awake
+        // (Building._defaultFurnitureLayout spawn pipeline runs Instantiate then SetParent
+        // separately, so GetComponentInParent returns null here), the call is a no-op
+        // and the parent ShopBuilding.OnNetworkSpawn picks us up via the late-bind path.
+        TryRegisterWithShop();
+    }
+
+    /// <summary>
+    /// Idempotent: re-resolves <see cref="_linkedBuilding"/> if it was null at Awake time
+    /// (NGO-spawn race during <c>_defaultFurnitureLayout</c>) and registers with the parent
+    /// <see cref="ShopBuilding"/> if not already registered. Safe to call repeatedly —
+    /// the contains-check in <see cref="ShopBuilding.RegisterCashier"/> short-circuits
+    /// duplicate registration.
+    ///
+    /// Two callers:
+    /// - <see cref="OnEnable"/> — the happy path, fires immediately after Awake.
+    /// - <see cref="ShopBuilding.OnNetworkSpawn"/> late-bind — fires after the building's
+    ///   NetworkObject is server-spawned and walks every Cashier child to catch any that
+    ///   raced ahead during scene load.
+    /// </summary>
+    public void TryRegisterWithShop()
+    {
+        if (_registered) return;
+        if (_linkedBuilding == null)
+        {
+            _linkedBuilding = GetComponentInParent<CommercialBuilding>();
+        }
+        // LinkedShop-side method has its own IsServer check, so this is safe on every peer.
+        if (LinkedShop != null)
+        {
+            LinkedShop.RegisterCashier(this);
+            _registered = true;
+        }
     }
 
     protected void OnDisable()

@@ -7,11 +7,18 @@ using UnityEngine;
 /// the serialized <c>_slots</c> list — no per-prefab code.
 ///
 /// Slot-aware lifecycle is preferred (<see cref="ReserveSlot"/> / <see cref="UseSlot"/>
-/// / <see cref="ReleaseSlot"/>). Base <see cref="Furniture.Reserve"/> / <see cref="Furniture.Use"/>
-/// / <see cref="Furniture.Release"/> are overridden to pick the first free slot for
-/// backward-compat with legacy single-slot callers (e.g. existing SleepBehaviour fallback).
+/// / <see cref="ReleaseSlot"/>). Base <see cref="OccupiableFurniture.Reserve"/> /
+/// <see cref="OccupiableFurniture.Use"/> / <see cref="OccupiableFurniture.Release"/>
+/// are overridden to pick the first free slot for backward-compat with legacy single-slot
+/// callers (e.g. existing SleepBehaviour fallback).
+///
+/// Inherits <see cref="OccupiableFurniture"/> (post 2026-05-08 ISP refactor) — though
+/// note the inherited <c>_occupant</c>/<c>_reservedBy</c> base state is intentionally
+/// unused by this class: every override delegates to the slot-aware methods on
+/// <see cref="BedSlot"/>, so multi-occupancy works correctly. <see cref="IsFree"/> /
+/// <see cref="Occupant"/> from the base would otherwise lie when ≥2 slots are filled.
 /// </summary>
-public class BedFurniture : Furniture
+public class BedFurniture : OccupiableFurniture
 {
     [Header("Bed")]
     [SerializeField] private List<BedSlot> _slots = new List<BedSlot>();

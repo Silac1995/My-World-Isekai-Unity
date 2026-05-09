@@ -5,8 +5,12 @@ using UnityEngine;
 /// Station de craft (enclume, four, établi...).
 /// Utilisée par les artisans pour fabriquer des objets.
 /// Contient une liste d'items craftables et une méthode Craft pour les produire.
+///
+/// Inherits <see cref="OccupiableFurniture"/> (post 2026-05-08 ISP refactor) — the
+/// crafter occupies the station for the duration of the <c>CharacterCraftAction</c>
+/// so two artisans can't queue against the same anvil simultaneously.
 /// </summary>
-public class CraftingStation : Furniture
+public class CraftingStation : OccupiableFurniture
 {
     [Header("Crafting Station")]
     [SerializeField] private CraftingStationType _stationType;

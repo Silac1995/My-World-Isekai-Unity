@@ -64,15 +64,14 @@ public class DisplayTextFurniture : Furniture
     /// A sign is a "read-only" furniture — interacting with it opens the reader UI for the
     /// local player; for NPCs it's a silent success (they have no need to "read" text).
     ///
-    /// We deliberately bypass the base <see cref="Furniture.Use"/> occupant/reservation logic:
-    /// many players can read the same sign simultaneously, and the sign is never "occupied"
-    /// like a chair or workstation. The canonical entry path is
-    /// <see cref="FurnitureInteractable.Interact"/> → <c>_furniture.Use(interactor)</c>, which
-    /// is shared by every furniture type — overriding here keeps `DisplayTextFurniture` plug-
-    /// compatible with the existing PlayerInteractionDetector E-press flow without needing a
-    /// dedicated sibling InteractableObject subclass.
+    /// Many players can read the same sign simultaneously, and the sign is never "occupied"
+    /// like a chair or workstation — so this class doesn't extend <see cref="OccupiableFurniture"/>.
+    /// Post 2026-05-08 ISP refactor, the universal interaction surface is
+    /// <see cref="Furniture.OnInteract"/>; overriding it here keeps `DisplayTextFurniture`
+    /// plug-compatible with the <see cref="FurnitureInteractable.Interact"/> dispatch flow
+    /// without binding any occupancy state.
     /// </summary>
-    public override bool Use(Character character)
+    public override bool OnInteract(Character character)
     {
         if (character == null) return false;
         if (!character.IsPlayer()) return true; // NPCs: silent success, no UI need
