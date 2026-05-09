@@ -76,7 +76,12 @@ public class UI_StorageFurniturePanel : MonoBehaviour
         }
 
         _target.OnInventoryChanged += HandleStorageChanged;
-        _interactor.CharacterEquipment.OnEquipmentChanged += HandleEquipmentChanged;
+
+        var equipment = _interactor.CharacterEquipment;
+        if (equipment != null)
+        {
+            equipment.OnEquipmentChanged += HandleEquipmentChanged;
+        }
 
         gameObject.SetActive(true);
 
