@@ -83,6 +83,30 @@ public class StorageFurniture : Furniture
     private static readonly Type[] _weaponPriority = { typeof(WeaponSlot), typeof(AnySlot) };
     private static readonly Type[] _miscPriority = { typeof(MiscSlot), typeof(AnySlot) };
 
+    /// <summary>
+    /// Tap-E entry for storage furniture. For the local owner-player, opens the
+    /// <see cref="UI_StorageFurniturePanel"/>. For NPCs (which never reach this in
+    /// practice — <see cref="FurnitureInteractable.Interact"/> is only triggered by
+    /// <see cref="PlayerController.HandleEKeyUp"/> inside an <c>IsOwner</c> branch —
+    /// returning true keeps the existing no-op contract).
+    ///
+    /// Returns true to satisfy the Furniture.OnInteract contract that "interaction
+    /// was accepted" (the post-use callback fires either way).
+    /// </summary>
+    public override bool OnInteract(Character interactor)
+    {
+        if (interactor == null) return false;
+
+        // Defence in depth — non-owner peers should never reach here through tap-E,
+        // but if a future codepath does, we don't want a stray panel popping up.
+        if (!interactor.IsOwner || !interactor.IsPlayer()) return true;
+
+        if (PlayerUI.Instance == null) return true;
+
+        PlayerUI.Instance.OpenStoragePanel(this, interactor);
+        return true;
+    }
+
     protected virtual void Awake()
     {
         InitializeItemSlots();
