@@ -15,13 +15,6 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
     private PlayerUI _playerUI;
     private UI_PlayerTargeting _targeting;
 
-    /// <summary>
-    /// Closest in-range interactable currently tracked by the detector. Mirrors what the
-    /// prompt UI is rendering. Read by <see cref="PlayerController"/>'s E-key dispatch
-    /// (rule #33 — input owner reads detector data, never the reverse).
-    /// </summary>
-    public InteractableObject CurrentTarget => _currentInteractableObjectTarget;
-
     protected override void Awake()
     {
         base.Awake(); // Initialise le Character du parent
