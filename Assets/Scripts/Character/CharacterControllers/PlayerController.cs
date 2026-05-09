@@ -15,6 +15,9 @@ public class PlayerController : CharacterGameController
     // --- TAB Targeting ---
     private UI_PlayerTargeting _targeting;
 
+    // --- Interactable detection (proximity + prompt + helper API) ---
+    [SerializeField] private PlayerInteractionDetector _detector;
+
     public void SetOrder(IPlayerCommand newOrder)
     {
         if (_currentOrder != null) _currentOrder.OnCancelled(this);
@@ -36,6 +39,12 @@ public class PlayerController : CharacterGameController
             else
                 _character.Rigidbody.interpolation = RigidbodyInterpolation.None; // Let NetworkTransform handle it
         }
+
+        // Auto-resolve detector reference. PlayerInteractionDetector lives on a child
+        // GameObject of Character (per the existing CharacterInteractionDetector parent
+        // chain). _character is the Character root, so search its children.
+        if (_detector == null && _character != null)
+            _detector = _character.GetComponentInChildren<PlayerInteractionDetector>(true);
     }
 
     /// <summary>
@@ -355,18 +364,34 @@ public class PlayerController : CharacterGameController
         // Else: defer to KeyHeld / KeyUp for tap-vs-hold harvestable dispatch.
     }
 
-    /// <summary>While E is held, open the interaction menu once the hold threshold is crossed.</summary>
+    /// <summary>
+    /// While E is held: drive the prompt-fill bar via the detector, then once the
+    /// hold threshold is crossed dispatch a hold-menu. Two priorities:
+    /// (A) harvestable-specific menu (UI_HarvestInteractionMenu) — preserves existing UX,
+    /// (B) generic interactable hold-menu via _detector.TriggerHoldMenu — moved out of
+    /// PlayerInteractionDetector per rule #33 (input owner = PlayerController).
+    /// </summary>
     private void HandleEKeyHeld()
     {
         if (_eMenuOpened) return;
-        if (UnityEngine.Time.unscaledTime - _eHeldStartTime < E_HOLD_THRESHOLD) return;
 
-        var nearest = GetNearestVisibleHarvestable();
-        if (nearest != null)
+        float t01 = (UnityEngine.Time.unscaledTime - _eHeldStartTime) / E_HOLD_THRESHOLD;
+        _detector?.SetPromptHoldProgress(Mathf.Clamp01(t01));
+        if (t01 < 1f) return;
+
+        // Priority A: harvestable-specific menu.
+        var harvestable = GetNearestVisibleHarvestable();
+        if (harvestable != null)
         {
-            MWI.UI.Interaction.UI_HarvestInteractionMenu.Open(_character, nearest, OnInteractionMenuClosed);
+            MWI.UI.Interaction.UI_HarvestInteractionMenu.Open(_character, harvestable, OnInteractionMenuClosed);
             _eMenuOpened = true;
+            return;
         }
+
+        // Priority B: generic interactable hold-menu via detector helper.
+        var generic = _detector?.CurrentTarget;
+        if (generic != null && _detector.TriggerHoldMenu(generic))
+            _eMenuOpened = true;
     }
 
     /// <summary>On E release, if the menu wasn't opened (tap), run the immediate Interact path.</summary>
