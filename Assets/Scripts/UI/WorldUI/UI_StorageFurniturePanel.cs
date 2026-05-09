@@ -20,11 +20,10 @@ using UnityEngine.UI;
 /// Closes on: ESC, target despawn, character incapacitated, character entering combat, or the
 /// player walking out of the storage's interaction zone (polled in Update).
 /// </summary>
-public class UI_StorageFurniturePanel : MonoBehaviour
+public class UI_StorageFurniturePanel : UI_WindowBase
 {
     [Header("Wiring (assign in prefab)")]
     [SerializeField] private TextMeshProUGUI _chestNameLabel;
-    [SerializeField] private Button _closeButton;
 
     [Header("Left side — character")]
     [SerializeField] private Button _handsSlotButton;
@@ -64,11 +63,7 @@ public class UI_StorageFurniturePanel : MonoBehaviour
 
         if (_chestNameLabel != null) _chestNameLabel.text = target.FurnitureName;
 
-        if (_closeButton != null)
-        {
-            _closeButton.onClick.RemoveAllListeners();
-            _closeButton.onClick.AddListener(Close);
-        }
+        // Close button is wired by UI_WindowBase.Awake to call CloseWindow().
         if (_handsSlotButton != null)
         {
             _handsSlotButton.onClick.RemoveAllListeners();
@@ -83,12 +78,19 @@ public class UI_StorageFurniturePanel : MonoBehaviour
             equipment.OnEquipmentChanged += HandleEquipmentChanged;
         }
 
-        gameObject.SetActive(true);
+        OpenWindow();
 
         RepaintAll();
     }
 
-    public void Close()
+    /// <summary>
+    /// Closes the panel: unsubscribes events, unbinds grids, then defers to
+    /// <see cref="UI_WindowBase.CloseWindow"/> for the SetActive(false). Called by the
+    /// inherited close button (auto-wired in <see cref="UI_WindowBase.Awake"/>), the ESC
+    /// handler in <see cref="Update"/>, and external callers like
+    /// <see cref="PlayerUI.CloseStoragePanel"/>.
+    /// </summary>
+    public override void CloseWindow()
     {
         UnsubscribeAll();
         _target = null;
@@ -99,7 +101,7 @@ public class UI_StorageFurniturePanel : MonoBehaviour
         if (_chestGrid != null) _chestGrid.Unbind();
         if (_bagGrid != null) _bagGrid.Unbind();
 
-        gameObject.SetActive(false);
+        base.CloseWindow();
     }
 
     private void UnsubscribeAll()
@@ -130,16 +132,25 @@ public class UI_StorageFurniturePanel : MonoBehaviour
     }
 
     private void OnDisable() => UnsubscribeAll();
-    private void OnDestroy() => UnsubscribeAll();
+
+    /// <summary>
+    /// Override <see cref="UI_WindowBase.OnDestroy"/> to also tear down our event
+    /// subscriptions on top of the base's close-button cleanup.
+    /// </summary>
+    protected override void OnDestroy()
+    {
+        UnsubscribeAll();
+        base.OnDestroy();
+    }
 
     private void Update()
     {
-        if (_target == null || _interactor == null) { Close(); return; }
+        if (_target == null || _interactor == null) { CloseWindow(); return; }
 
         // ESC closes the panel (rule #33 carve-out: input that targets the UI itself stays in the UI).
         if (Input.GetKeyDown(KeyCode.Escape))
         {
-            Close();
+            CloseWindow();
             return;
         }
 
@@ -155,7 +166,7 @@ public class UI_StorageFurniturePanel : MonoBehaviour
         // Auto-close when player walks out of interaction zone.
         if (_targetInteractable != null && !_targetInteractable.IsCharacterInInteractionZone(_interactor))
         {
-            Close();
+            CloseWindow();
             return;
         }
 

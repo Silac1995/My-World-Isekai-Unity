@@ -356,7 +356,7 @@ public class PlayerUI : MonoBehaviour
     public void CloseStoragePanel()
     {
         if (_storagePanel == null) return;
-        if (_storagePanel.gameObject.activeSelf) _storagePanel.Close();
+        if (_storagePanel.gameObject.activeSelf) _storagePanel.CloseWindow();
     }
 
     /// <summary>
