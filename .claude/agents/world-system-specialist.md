@@ -113,8 +113,8 @@ These public methods are called by `SaveManager` and `GameLauncher` during save/
 | Method | Purpose | Called By |
 |--------|---------|----------|
 | `SnapshotActiveNPCs()` | Serializes live NPCs into `HibernatedNPCData` without despawning | SaveManager (before world save) |
-| `SnapshotActiveBuildings()` | Syncs live player-placed buildings into CommunityData (skips preplaced) | SaveManager (before world save) |
-| `SpawnSavedBuildings()` | Respawns player-placed buildings | GameLauncher (predefined maps) + `MapRegistry.RespawnDynamicMapsDeferred` (dynamic wild maps) |
+| `SnapshotActiveBuildings()` | Syncs ALL live buildings (player-placed AND preplaced) into CommunityData; preplaced match by deterministic BuildingId | SaveManager (before world save) |
+| `SpawnSavedBuildings()` | Respawns player-placed buildings AND overlays saved dynamic state onto matching preplaced scene buildings via `ApplyDynamicSaveDataToBuilding` | GameLauncher (predefined maps) + `MapRegistry.RespawnDynamicMapsDeferred` (dynamic wild maps) |
 | `SpawnNPCsFromPendingSnapshot()` | Spawns NPCs from `PendingSnapshots` for maps that were active at save time | GameLauncher (after world load) |
 
 **Static collections:**

@@ -153,9 +153,15 @@ public class CharacterDataCoordinator : NetworkBehaviour
         }
 
         // Override the NetworkCharacterId so the character keeps its persistent GUID
+        bool characterIdReassigned = false;
         if (IsServer && !string.IsNullOrEmpty(data.characterGuid))
         {
-            _character.NetworkCharacterId.Value = data.characterGuid;
+            string previousId = _character.NetworkCharacterId.Value.ToString();
+            if (previousId != data.characterGuid)
+            {
+                _character.NetworkCharacterId.Value = data.characterGuid;
+                characterIdReassigned = true;
+            }
         }
 
         // Discover and sort subsystems by LoadPriority (ascending — lower loads first)
@@ -207,6 +213,19 @@ public class CharacterDataCoordinator : NetworkBehaviour
         Debug.Log($"{LOG_TAG} Imported profile '{data.characterName}' ({data.characterGuid}) — " +
                   $"{consumedKeys.Count}/{data.componentStates.Count} keys restored, " +
                   $"{data.partyMembers.Count} party NPC(s) pending.");
+
+        // Fire the global "this character's persistent UUID is now stable" hook so
+        // server-side resolvers that key by CharacterId can re-evaluate their pending
+        // lists. Critical for the host's player Character: it spawned with a fresh
+        // GUID before the profile imported, so the OnCharacterSpawned pass found a
+        // mismatch and never re-fires. Without this re-trigger, anything restored
+        // BEFORE ImportProfile that needed to bind to the host's UUID (e.g.
+        // Building._pendingOwnerIds carrying the saved owner GUID) stays pending
+        // forever and the host appears un-owned for buildings they own.
+        if (characterIdReassigned)
+        {
+            Character.RaiseCharacterIdReassigned(_character);
+        }
 
         // NOTE: Party NPC member import is the responsibility of the spawning system
         // (e.g., CharacterSpawner or MapController) which must instantiate NPC prefabs

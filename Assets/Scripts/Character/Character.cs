@@ -234,6 +234,36 @@ public class Character : NetworkBehaviour, MWI.Orders.IOrderIssuer
     /// </summary>
     public static event Action<Character> OnCharacterSpawned;
 
+    /// <summary>
+    /// Fires on the server when a Character's persistent <see cref="CharacterId"/> is
+    /// (re)assigned via <see cref="CharacterDataCoordinator.ImportProfile"/>.
+    /// Distinct from <see cref="OnCharacterSpawned"/> — the spawn event fires once with
+    /// whatever GUID the Character had at spawn time, which for the host's player object
+    /// is a fresh <c>Guid.NewGuid()</c> assigned by SpawnManager. The persistent profile
+    /// GUID only lands later (GameLauncher Step 6), AFTER spawn handlers already ran.
+    ///
+    /// Without this hook, subscribers that key by <c>CharacterId</c> (e.g.
+    /// <c>Building._pendingOwnerIds</c> waiting for the host's saved owner UUID to
+    /// resolve) would never re-evaluate when the host's UUID changes from "spawn-time"
+    /// to "saved profile". NPC characters bypass this because their UUID is restored
+    /// via <c>SpawnNPCsFromSnapshot → ImportProfile</c> BEFORE OnNetworkSpawn fires.
+    ///
+    /// Subscribers that already keyed off OnCharacterSpawned should subscribe to BOTH
+    /// events when their key is the persistent UUID; the handler logic should be
+    /// idempotent (re-running it must be safe).
+    /// </summary>
+    public static event Action<Character> OnCharacterIdReassigned;
+
+    /// <summary>
+    /// Internal hook so <see cref="CharacterDataCoordinator.ImportProfile"/> can fire
+    /// the event without exposing the static event surface to public callers.
+    /// </summary>
+    internal static void RaiseCharacterIdReassigned(Character character)
+    {
+        if (character == null) return;
+        OnCharacterIdReassigned?.Invoke(character);
+    }
+
     public event Action<Character> OnDeath;
     public event Action<Character> OnIncapacitated;
     public event Action<Character> OnWakeUp;

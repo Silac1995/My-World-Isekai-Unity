@@ -176,4 +176,18 @@ public class ResidentialBuilding : Building
 
         return ContainsId(_residentIds, character.CharacterId);
     }
+
+    /// <summary>
+    /// Server-only. Override of base Building's owner-restore hook so a residential
+    /// building's saved owner gets the full <see cref="SetOwner"/> treatment on load —
+    /// i.e. residency mirroring, CharacterLocations registration, and old-owner
+    /// unregistration. Without this override the saved owner would be added to
+    /// <c>_ownerIds</c> but never get a Resident entry, so <see cref="Residents"/> would
+    /// silently miss them after a save round-trip.
+    /// </summary>
+    protected override void BindRestoredOwner(Character owner)
+    {
+        if (owner == null) return;
+        SetOwner(owner);
+    }
 }
