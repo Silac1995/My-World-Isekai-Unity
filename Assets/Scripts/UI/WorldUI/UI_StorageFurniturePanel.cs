@@ -99,9 +99,29 @@ public class UI_StorageFurniturePanel : MonoBehaviour
 
     private void UnsubscribeAll()
     {
-        if (_target != null) _target.OnInventoryChanged -= HandleStorageChanged;
-        if (_interactor != null && _interactor.CharacterEquipment != null)
-            _interactor.CharacterEquipment.OnEquipmentChanged -= HandleEquipmentChanged;
+        // Unity fake-null safety: a destroyed UnityEngine.Object reports `!= null` in C#
+        // but throws on member access. Use the Unity `==`-overloaded comparison (which
+        // checks the native object liveness) AND a member-access null-conditional `?.`
+        // chain so we never deref a destroyed Character/StorageFurniture/CharacterEquipment.
+
+        if (_target != null)
+        {
+            // _target is a StorageFurniture (Furniture : MonoBehaviour). The `!= null`
+            // check above goes through Unity's overloaded operator, so a destroyed
+            // GameObject correctly reports null and we skip safely.
+            _target.OnInventoryChanged -= HandleStorageChanged;
+        }
+
+        // Two separate null checks: the Character and its equipment subsystem. Both are
+        // UnityEngine.Object-derived; both need the Unity-aware `!= null` check.
+        if (_interactor != null)
+        {
+            var equipment = _interactor.CharacterEquipment;
+            if (equipment != null)
+            {
+                equipment.OnEquipmentChanged -= HandleEquipmentChanged;
+            }
+        }
     }
 
     private void OnDisable() => UnsubscribeAll();
