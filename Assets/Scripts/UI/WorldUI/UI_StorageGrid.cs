@@ -32,12 +32,13 @@ public class UI_StorageGrid : MonoBehaviour
     private Action<ItemInstance> _clickCallback;
     private Func<bool> _interactableGate;
 
-    private struct SlotInstance
+    private class SlotInstance
     {
         public GameObject Root;
         public Button Button;
         public TextMeshProUGUI Label;
         public Image Icon;
+        public bool IsPopulated;   // set in Bind, read in RefreshInteractable
     }
 
     /// <summary>
@@ -67,6 +68,7 @@ public class UI_StorageGrid : MonoBehaviour
         for (int i = 0; i < slots.Count; i++)
         {
             SlotInstance inst = i < _pool.Count ? _pool[i] : Grow();
+            if (inst == null) continue;   // Grow logged the misconfiguration; skip safely.
             inst.Root.SetActive(true);
 
             ItemSlot slot = slots[i];
@@ -91,9 +93,14 @@ public class UI_StorageGrid : MonoBehaviour
             }
 
             inst.Button.onClick.RemoveAllListeners();
-            int capturedIndex = i;  // capture for closure
-            inst.Button.onClick.AddListener(() => OnSlotClicked(capturedIndex, slots));
+            ItemInstance capturedItem = item;   // snapshot for closure — avoids list mutation race
+            inst.Button.onClick.AddListener(() =>
+            {
+                if (capturedItem != null) _clickCallback?.Invoke(capturedItem);
+            });
             inst.Button.interactable = !empty;
+
+            inst.IsPopulated = !empty;
 
             if (!empty) occupied++;
         }
@@ -112,16 +119,8 @@ public class UI_StorageGrid : MonoBehaviour
         for (int i = 0; i < _pool.Count; i++)
         {
             if (_pool[i].Root == null || !_pool[i].Root.activeSelf) continue;
-            // Don't override empty-slot disable; re-derive populated state from listener count.
-            if (_pool[i].Button.onClick.GetPersistentEventCount() == 0)
-            {
-                // Listener already removed; leave as-is. (Defensive — should not happen mid-frame.)
-            }
-            // Empty buttons keep interactable=false (set in Bind). For the populated buttons
-            // we OR with the gate.
-            // Heuristic: if Label.text starts with "(empty)" marker, treat as empty.
-            bool empty = _pool[i].Label != null && _pool[i].Label.text.StartsWith("<color=#666666>(empty)");
-            _pool[i].Button.interactable = !empty && gate;
+            // Empty slots stay non-interactable (set in Bind). Populated slots track the gate.
+            _pool[i].Button.interactable = _pool[i].IsPopulated && gate;
         }
     }
 
@@ -130,7 +129,7 @@ public class UI_StorageGrid : MonoBehaviour
         if (_slotPrefab == null || _slotContainer == null)
         {
             Debug.LogError($"<color=red>[UI_StorageGrid]</color> {name}: _slotPrefab or _slotContainer not assigned.");
-            return default;
+            return null;
         }
 
         GameObject go = Instantiate(_slotPrefab, _slotContainer);
@@ -145,18 +144,15 @@ public class UI_StorageGrid : MonoBehaviour
         return inst;
     }
 
-    private void OnSlotClicked(int index, IReadOnlyList<ItemSlot> slots)
-    {
-        if (slots == null || index < 0 || index >= slots.Count) return;
-        var slot = slots[index];
-        if (slot == null || slot.IsEmpty() || slot.ItemInstance == null) return;
-        _clickCallback?.Invoke(slot.ItemInstance);
-    }
-
     private void UpdateCapacityLabel(int occupied, int total)
     {
         if (_capacityLabel == null) return;
         _capacityLabel.text = $"{occupied} / {total}";
+    }
+
+    private void OnDestroy()
+    {
+        Unbind();
     }
 
     /// <summary>Clears the bound callback. Call before destroying the panel.</summary>
