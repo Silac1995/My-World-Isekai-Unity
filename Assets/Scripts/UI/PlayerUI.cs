@@ -37,6 +37,7 @@ public class PlayerUI : MonoBehaviour
 
     [Header("UI Windows")]
     [SerializeField] private CharacterEquipmentUI _equipmentUI;
+    [SerializeField] private UI_StorageFurniturePanel _storagePanel;
     [SerializeField] private UI_CharacterRelations _relationsUI;
     [SerializeField] private UI_CharacterStats _statsUI;
     [SerializeField] private MWI.UI.Building.UI_BuildingPlacementMenu _buildingUI;
@@ -330,6 +331,32 @@ public class PlayerUI : MonoBehaviour
             }
             _buildingUI.OpenWindow();
         }
+    }
+
+    /// <summary>
+    /// Open the storage furniture exchange panel for <paramref name="storage"/>, bound
+    /// to <paramref name="interactor"/>'s inventory + hands. Called from
+    /// <see cref="StorageFurniture.OnInteract"/> when the local owner-player taps E.
+    /// Re-binds cleanly if the panel is already open against a different target.
+    /// </summary>
+    public void OpenStoragePanel(StorageFurniture storage, Character interactor)
+    {
+        if (_storagePanel == null)
+        {
+            Debug.LogWarning("PlayerUI: UI_StorageFurniturePanel component not assigned!");
+            return;
+        }
+        _storagePanel.Initialize(storage, interactor);
+    }
+
+    /// <summary>
+    /// Close the storage furniture panel if it is currently open. Safe to call when the
+    /// panel is already closed.
+    /// </summary>
+    public void CloseStoragePanel()
+    {
+        if (_storagePanel == null) return;
+        if (_storagePanel.gameObject.activeSelf) _storagePanel.Close();
     }
 
     /// <summary>
