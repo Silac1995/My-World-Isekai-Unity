@@ -3,7 +3,7 @@ type: system
 title: "Character"
 tags: [character, facade, gameplay, tier-1]
 created: 2026-04-18
-updated: 2026-05-06
+updated: 2026-05-09
 sources: []
 related:
   - "[[combat]]"
@@ -120,6 +120,10 @@ Lifecycle:
 - `character.WakeUp()`
 - Events: `OnIncapacitated`, `OnDeath`, `OnWakeUp`, `OnCombatStateChanged`.
 
+Identity (static, server-only):
+- `Character.OnCharacterSpawned : Action<Character>` — fires once per Character at NGO spawn. Subscribers that resolve references to newly-available characters (relationships, orders, deferred party invitations) hook this.
+- `Character.OnCharacterIdReassigned : Action<Character>` (added 2026-05-09) — fires from `CharacterDataCoordinator.ImportProfile` when `NetworkCharacterId.Value` is overwritten with the saved profile GUID. **Required** alongside `OnCharacterSpawned` for any saved-data resolver that keys by `CharacterId`: NPCs have their UUID set BEFORE spawn (so `OnCharacterSpawned` fires with the correct id), but the host's player Character spawns with a fresh `Guid.NewGuid()` and only gets its persistent profile GUID later via `ImportProfile`. Without subscribing to both, server-side restore paths silently drop the host. See [[host-player-uuid-timing-on-load]] for the full timing trace.
+
 Control switch:
 - `character.SwitchToPlayer()` — swaps controllers, binds `UI_PlayerHUD`.
 - `character.SwitchToNPC()` — reverts to AI driver, re-enables NavMeshAgent.
@@ -235,6 +239,7 @@ Input (player) or AI tick (NPC)
 - [ ] `CharacterAnimator.cs` / `CharacterAwareness.cs` / `CharacterBlink.cs` sit on the root — should they migrate to child GameObjects for consistency with the subsystem pattern?
 
 ## Change log
+- 2026-05-09 — added `Character.OnCharacterIdReassigned` static event, fired from `CharacterDataCoordinator.ImportProfile` when `NetworkCharacterId.Value` actually changes. Closes the host-player UUID timing window where save-restore resolvers that keyed by `CharacterId` (`Building.RestoreOwnersFromSaveData`, `CommercialBuilding.RestoreEmployeesFromSaveData`) saw the host's spawn-time fresh GUID instead of the saved profile GUID and silently dropped the host. NPCs were unaffected because their UUID is set before NGO spawn fires `OnCharacterSpawned`. New event is gated by a previous-vs-new-id compare so re-importing a profile with the same GUID is a no-op. See [[host-player-uuid-timing-on-load]]. — claude
 - 2026-05-06 — added `CharacterAction_Continuous` abstract base for condition-terminated (vs timer-terminated) actions. New dispatcher branch in `CharacterActions.ExecuteAction` (`ActionContinuousTickRoutine`) — must come BEFORE the `Duration <= 0` branch since base ctor passes `duration: 0f`. First concrete subclass: `CharacterAction_FinishConstruction` (see [[construction]]). Added `Character.GetSkillLevelOrZero(SkillId)` Phase 1 stub for future builder-skill plug-in. — claude
 - 2026-04-18 — Initial documentation pass (wiki bootstrap). — Claude / [[kevin]]
 - 2026-04-24 — Added `RequestHarvestServerRpc` + `ApplyHarvestOnServer` helper on `CharacterActions`; documented the `IsSpawned && !IsServer` client-routing pattern for server-authoritative `OnApplyEffect`. Fixes client-triggered `WorldItem.SpawnWorldItem` error from `CharacterHarvestAction`. — Claude
