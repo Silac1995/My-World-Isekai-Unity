@@ -774,14 +774,37 @@ Two entry points keep both sides consistent:
 **Known gap:** `OwnedBuildings` is not networked. Remote clients see an empty list for their own character unless they are also the host. If a non-host client needs to query its own ownership, read `building.IsOwner(character)` (replicated via `_ownerIds`) instead. A future refactor could replace `OwnedBuildings` with a derived `BuildingManager.GetAllBuildings().Where(b => b.IsOwner(_character))` getter.
 
 ### Building Ownership/Employee Restoration
-`CommercialBuilding.RestoreFromSaveData(List<string> ownerIds, List<EmployeeSaveEntry> employees)` (server-only) is called by `MapController.SpawnSavedBuildings()` and `WakeUp()` immediately after `bNet.Spawn()` and `NetworkBuildingId` injection. It:
+Restoration is split across two layers so that **every** Building subclass — Residential, Commercial, Harvesting, plain Building — gets owner restoration on save/load. Pre-2026-05-09 only CommercialBuilding had a restoration path; ResidentialBuilding owners were silently dropped on load.
 
-1. Tries to bind owner + every employee via `Character.FindByUUID`.
-2. For unresolved entries, subscribes to `Character.OnCharacterSpawned` and retries on each spawn until empty (then unsubscribes).
-3. Owner is bound through `SetOwner(owner, ownerJob, autoAssignJob: false)` — the new `autoAssignJob` flag suppresses SetOwner's auto-LogisticsManager pick so it doesn't steal a slot earmarked for a saved employee. The owner's saved job (if any) is fed in explicitly from the `Employees` list.
-4. Employees go through `worker.CharacterJob.TakeJob(job, building)` so the bidirectional link (building.Jobs ↔ character._activeJobs) is consistent.
+**Owner restoration (base `Building`):**
+- `Building.RestoreOwnersFromSaveData(List<string> ownerIds)` — server-only, populates `_pendingOwnerIds`, tries `Character.FindByUUID` on each, and subscribes to **two** static events for unresolved IDs:
+  - `Character.OnCharacterSpawned` — catches NPC owners (their persistent UUID is set inside `SpawnNPCsFromSnapshot → ImportProfile` BEFORE `OnNetworkSpawn` fires).
+  - `Character.OnCharacterIdReassigned` — catches the **host's player Character** (it spawns with a fresh `Guid.NewGuid()` in GameLauncher Step 4, then has its persistent profile GUID overwritten by `CharacterDataCoordinator.ImportProfile` in Step 6 — AFTER the spawn event already fired with the wrong ID). Without this second hook, host-owned buildings come back un-owned on every load. Fired from `CharacterDataCoordinator.ImportProfile` only when `NetworkCharacterId.Value` actually changes.
+- The handler `HandleCharacterIdentityResolvedForOwnerRestore` is identical for both events: walk the pending list, bind anything that now resolves, unsubscribe both events when the list drains.
+- Per-owner binding goes through `protected virtual void BindRestoredOwner(Character owner)`:
+  - **Default** (plain `Building`) — `AddOwner(owner)` (Room) + `owner.CharacterLocations.RegisterOwnedBuilding(this)` for the character-side mirror.
+  - **`ResidentialBuilding`** — calls `SetOwner(owner)` so the residency mirror, CharacterLocations link, and old-owner unregister all run.
+  - **`CommercialBuilding`** — calls `SetOwner(owner, ownerJob, autoAssignJob: false)` AND looks up the matching saved `EmployeeSaveEntry` in `_pendingEmployees` to recover the boss's actual job slot (LogisticsManager / Cashier / etc.) instead of the auto-pick stealing a slot another saved employee owns.
+- Cleanup: `Building.OnNetworkDespawn` calls `UnsubscribeOwnerRestoreListener` (idempotent, safe across re-hibernation cycles).
 
-`OnNetworkDespawn` unsubscribes the listener — needed for re-hibernation cycles.
+**Employee restoration (`CommercialBuilding`-only):**
+- `CommercialBuilding.RestoreEmployeesFromSaveData(List<EmployeeSaveEntry>)` — populates `_pendingEmployees`, resolves via `Character.FindByUUID` + `worker.CharacterJob.TakeJob(job, building)` for the bidirectional link (building.Jobs ↔ character._activeJobs).
+- Same async pending+OnCharacterSpawned pattern; cleaned up in `CommercialBuilding.OnNetworkDespawn` → `UnsubscribeEmployeeRestoreListener`.
+
+**Call ordering (in `MapController.ApplyDynamicSaveDataToBuilding`):**
+1. `building.RestoreOwnersFromSaveData(bSave.OwnerCharacterIds)` — owners FIRST so the CommercialBuilding override of `BindRestoredOwner` can consume the boss's matching employee entry before the employee pass.
+2. `(building as CommercialBuilding)?.RestoreEmployeesFromSaveData(bSave.Employees)`.
+
+The split lives in `MapController.ApplyDynamicSaveDataToBuilding(Building, BuildingSaveData)` — the single helper used by both `SpawnSavedBuildings` (new spawn + preplaced overlay) and `WakeUp` (new spawn from hibernation).
+
+### Preplaced building dynamic-state overlay
+Pre-2026-05-09, `MapController.SnapshotActiveBuildings` filtered out scene-authored ("preplaced") buildings via `if (building.PlacedByCharacterId.Value.IsEmpty) continue;`, and `SpawnSavedBuildings` further skipped any building whose `BuildingId` already existed in the scene. The combined effect: **owners, employees, storage contents, cashier state, and shop catalog applied to a preplaced building at runtime were silently dropped on every save→load cycle.**
+
+Current behavior:
+- `SnapshotActiveBuildings` snapshots ALL buildings. Preplaced buildings have a deterministic BuildingId (from `Building.DeriveDeterministicSceneBuildingId(sceneName, position)` — MD5 of scene name + mm-rounded position) that round-trips reliably.
+- `SpawnSavedBuildings` keeps the "don't re-spawn what's already in scene" guard but routes the matched save entry through `ApplyDynamicSaveDataToBuilding(existing, bSave)` instead of a bare `continue`. Owners, employees, storage, cashier, shop, and construction state all overlay onto the live scene instance.
+
+Result: assigning an owner to a scene-authored Tavern via dev mode now persists across save/load.
 
 ### `Building.PlacedByCharacterId`
 `NetworkVariable<FixedString64Bytes>` tracking who originally placed the building. Distinct from `CommercialBuilding.Owner` (business operator). **Always restored** by `MapController.SpawnSavedBuildings()` / `WakeUp()` from `BuildingSaveData.PlacedByCharacterId` — early implementations dropped it on load.

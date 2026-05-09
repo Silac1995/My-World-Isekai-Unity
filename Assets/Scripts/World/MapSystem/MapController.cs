@@ -817,10 +817,12 @@ namespace MWI.WorldSystem
                 Building building = col.GetComponent<Building>() ?? col.GetComponentInParent<Building>();
                 if (building == null || !processedBuildings.Add(building)) continue;
 
-                // Skip preplaced buildings — they exist in the scene and don't need saving.
-                // Only player-placed buildings (via BuildingPlacementManager) have PlacedByCharacterId set.
-                if (building.PlacedByCharacterId.Value.IsEmpty) continue;
-
+                // We snapshot ALL buildings (preplaced and player-placed). Preplaced buildings
+                // were previously skipped, but that silently dropped owner/storage/employee
+                // mutations applied at runtime — e.g. assigning an owner to a scene-authored
+                // tavern via dev mode would never persist. Preplaced buildings have a
+                // deterministic BuildingId (see Building.DeriveDeterministicSceneBuildingId)
+                // so the saved entry round-trips reliably.
                 var saveEntry = community.ConstructedBuildings.Find(b => b.BuildingId == building.BuildingId);
                 if (saveEntry != null)
                 {
@@ -872,24 +874,32 @@ namespace MWI.WorldSystem
                 return;
             }
 
-            // Collect ALL existing building PrefabIds in the scene to avoid duplicating preplaced buildings.
-            // Preplaced buildings generate new BuildingIds each session, so we can't match by ID.
-            // Instead, match by PrefabId + approximate position to detect preplaced buildings.
+            // Collect existing building instances by BuildingId. Preplaced (scene-authored)
+            // buildings get a deterministic BuildingId derived from scene name + world
+            // position (Building.DeriveDeterministicSceneBuildingId), so they match the
+            // saved entry's BuildingId reliably across sessions.
             var existingBuildings = UnityEngine.Object.FindObjectsByType<Building>(FindObjectsSortMode.None);
-            var existingBuildingIds = new HashSet<string>();
+            var existingBuildingsById = new Dictionary<string, Building>();
             foreach (var building in existingBuildings)
             {
                 if (!string.IsNullOrEmpty(building.BuildingId))
-                    existingBuildingIds.Add(building.BuildingId);
+                    existingBuildingsById[building.BuildingId] = building;
             }
 
             int spawnedCount = 0;
+            int overlaidCount = 0;
             foreach (var bSave in community.ConstructedBuildings)
             {
-                // Skip if this building already exists in the scene (e.g., preplaced building)
-                if (existingBuildingIds.Contains(bSave.BuildingId))
+                // Already in scene (preplaced)? Don't re-spawn — overlay the saved dynamic
+                // state (owners, employees, storage contents, cashier state, shop catalog,
+                // construction progress) onto the existing instance. Without this overlay
+                // pass, owners/storage/employee mutations applied to scene-authored
+                // buildings at runtime were silently lost on every save→load cycle.
+                if (existingBuildingsById.TryGetValue(bSave.BuildingId, out var existing) && existing != null)
                 {
-                    Debug.Log($"<color=cyan>[MapController:SpawnSavedBuildings]</color> Skipping '{bSave.PrefabId}' (ID={bSave.BuildingId}) — already in scene.");
+                    Debug.Log($"<color=cyan>[MapController:SpawnSavedBuildings]</color> Overlay '{bSave.PrefabId}' (ID={bSave.BuildingId}) — already in scene, applying saved dynamic state.");
+                    ApplyDynamicSaveDataToBuilding(existing, bSave);
+                    overlaidCount++;
                     continue;
                 }
 
@@ -917,33 +927,11 @@ namespace MWI.WorldSystem
                             if (!string.IsNullOrEmpty(bSave.PlacedByCharacterId))
                                 restoredBuilding.PlacedByCharacterId.Value = new Unity.Collections.FixedString64Bytes(bSave.PlacedByCharacterId);
 
-                            // Restore boss + crew. Owner field also covers ResidentialBuilding via the Building.OwnerIds path.
-                            if (restoredBuilding is CommercialBuilding commercial)
-                                commercial.RestoreFromSaveData(bSave.OwnerCharacterIds, bSave.Employees);
-
-                            // Restore storage furniture contents. TrySpawnDefaultFurniture
-                            // ran synchronously inside the building's OnNetworkSpawn above,
-                            // so live StorageFurniture instances are present and addressable.
-                            RestoreStorageFurnitureContents(restoredBuilding, bSave);
-
-                            // Restore cashier till + linkage on the same prerequisite footing
-                            // (default-furniture spawned, NetSync OnNetworkSpawn complete).
-                            RestoreCashierContents(restoredBuilding, bSave);
-
-                            // ShopBuilding-only: catalog restore is immediate; sell-shelf
-                            // resolution is deferred via OnFurnituresLoaded() — same call
-                            // ordering also runs in WakeUp.
-                            if (restoredBuilding is ShopBuilding shopBuilding)
-                            {
-                                shopBuilding.RestoreShopFromSaveData(bSave);
-                                shopBuilding.OnFurnituresLoaded();
-                            }
-
-                            // Restore construction progress + delivered-material snapshot.
-                            // Editor builds replay ContributeMaterial via AssetGuid resolution;
-                            // standalone runtime restores only the meter value (UX pre-warm) and
-                            // lets the next ConstructionSiteScanner tick reconcile from physical items.
-                            restoredBuilding.RestoreFromSaveData(bSave);
+                            // Apply the saved dynamic state (owners, employees, storage,
+                            // cashier, shop catalog, construction progress). Same code path
+                            // as the preplaced-overlay branch above so behavior stays in
+                            // lockstep.
+                            ApplyDynamicSaveDataToBuilding(restoredBuilding, bSave);
                         }
                     }
                     spawnedCount++;
@@ -954,7 +942,53 @@ namespace MWI.WorldSystem
                 }
             }
 
-            Debug.Log($"<color=cyan>[MapController:SpawnSavedBuildings]</color> Map '{MapId}': spawned {spawnedCount} building(s) from save data.");
+            Debug.Log($"<color=cyan>[MapController:SpawnSavedBuildings]</color> Map '{MapId}': spawned {spawnedCount} new building(s), overlaid {overlaidCount} existing scene building(s) from save data.");
+        }
+
+        /// <summary>
+        /// Server-only. Applies the dynamic-state portion of a <see cref="BuildingSaveData"/>
+        /// (owners, employees, storage contents, cashier state, shop catalog, construction
+        /// progress) to a Building that has already been spawned and had its
+        /// <c>NetworkBuildingId</c> set. Used by both the new-spawn branch in
+        /// <see cref="SpawnSavedBuildings"/> / <see cref="WakeUp"/> and the
+        /// existing-scene-overlay branch in <see cref="SpawnSavedBuildings"/>.
+        ///
+        /// Order matters: owners FIRST so that <see cref="CommercialBuilding.BindRestoredOwner"/>
+        /// can consume the boss's matching employee entry before the employee pass runs.
+        /// </summary>
+        private void ApplyDynamicSaveDataToBuilding(Building building, BuildingSaveData bSave)
+        {
+            if (building == null || bSave == null) return;
+            if (!IsServer) return;
+
+            // Restore owners — works for every Building subclass (Residential, Commercial,
+            // plain Building). Characters from this map may not have spawned yet — the
+            // resolver queues them and binds via Character.OnCharacterSpawned.
+            building.RestoreOwnersFromSaveData(bSave.OwnerCharacterIds);
+            if (building is CommercialBuilding commercial)
+                commercial.RestoreEmployeesFromSaveData(bSave.Employees);
+
+            // Storage furniture contents. TrySpawnDefaultFurniture has run inside
+            // OnNetworkSpawn for new spawns; for preplaced overlays the scene-authored
+            // furniture is already live.
+            RestoreStorageFurnitureContents(building, bSave);
+
+            // Cashier till + linkage.
+            RestoreCashierContents(building, bSave);
+
+            // ShopBuilding-only: catalog restore is immediate; sell-shelf resolution is
+            // deferred via OnFurnituresLoaded().
+            if (building is ShopBuilding shopBuilding)
+            {
+                shopBuilding.RestoreShopFromSaveData(bSave);
+                shopBuilding.OnFurnituresLoaded();
+            }
+
+            // Construction progress + delivered-material snapshot. Editor builds replay
+            // ContributeMaterial via AssetGuid resolution; standalone runtime restores only
+            // the meter value (UX pre-warm) and lets the next ConstructionSiteScanner tick
+            // reconcile from physical items.
+            building.RestoreFromSaveData(bSave);
         }
 
         /// <summary>
@@ -1697,30 +1731,14 @@ namespace MWI.WorldSystem
                                     if (!string.IsNullOrEmpty(bSave.PlacedByCharacterId))
                                         restoredBuilding.PlacedByCharacterId.Value = new Unity.Collections.FixedString64Bytes(bSave.PlacedByCharacterId);
 
-                                    // Restore boss + crew. Characters from THIS map haven't spawned yet
-                                    // (SpawnNPCsFromSnapshot runs after this loop), so the resolver will
+                                    // Apply the saved dynamic state (owners, employees, storage,
+                                    // cashier, shop catalog, construction progress). Characters
+                                    // from THIS map haven't spawned yet (SpawnNPCsFromSnapshot
+                                    // runs after this loop), so the owner/employee resolvers
                                     // queue them and bind on Character.OnCharacterSpawned.
-                                    if (restoredBuilding is CommercialBuilding commercial)
-                                        commercial.RestoreFromSaveData(bSave.OwnerCharacterIds, bSave.Employees);
-
-                                    // Restore storage furniture contents (mirrors SpawnSavedBuildings).
-                                    RestoreStorageFurnitureContents(restoredBuilding, bSave);
-
-                                    // Restore cashier till + linkage (mirrors SpawnSavedBuildings).
-                                    RestoreCashierContents(restoredBuilding, bSave);
-
-                                    // ShopBuilding-only: catalog restore + deferred sell-shelf
-                                    // resolution. Same ordering as SpawnSavedBuildings.
-                                    if (restoredBuilding is ShopBuilding shopBuilding)
-                                    {
-                                        shopBuilding.RestoreShopFromSaveData(bSave);
-                                        shopBuilding.OnFurnituresLoaded();
-                                    }
-
-                                    // Restore construction progress + delivered-material snapshot.
-                                    // Editor builds replay ContributeMaterial via AssetGuid resolution;
-                                    // standalone runtime restores only the meter value (UX pre-warm).
-                                    restoredBuilding.RestoreFromSaveData(bSave);
+                                    // Same code path as SpawnSavedBuildings keeps the two flows
+                                    // in lockstep.
+                                    ApplyDynamicSaveDataToBuilding(restoredBuilding, bSave);
 
                                     Debug.Log($"<color=green>[MapController:WakeUp]</color> Building '{bSave.PrefabId}' restored with ID={bSave.BuildingId} at {worldPos}.");
                                 }

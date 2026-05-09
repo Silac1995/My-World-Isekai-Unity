@@ -82,11 +82,18 @@ In the future, if the AI Agent needs to create a "Blacksmith":
 Job assignments survive both **map hibernation** and **player profile import** via a two-sided resolver. The same `(workerCharacterId, jobType, workplaceBuildingId)` link is stored on both ends so whichever side spawns first can rebuild the binding.
 
 ### Building side (authoritative)
-`BuildingSaveData.Employees` (in `CommunityTracker`) holds the full crew per building. On load, `MapController.SpawnSavedBuildings()` / `WakeUp()` calls `CommercialBuilding.RestoreFromSaveData(ownerIds, employees)` immediately after `bNet.Spawn()`. The resolver:
-- Tries `Character.FindByUUID` for each entry.
-- Owner is bound via `SetOwner(owner, ownerJob, autoAssignJob: false)` — the new `autoAssignJob` flag bypasses the LogisticsManager auto-pick so the saved data is authoritative.
-- Workers are bound via `worker.CharacterJob.TakeJob(job, building)`.
-- Anything unresolved subscribes to `Character.OnCharacterSpawned` until empty (then unsubscribes). Cleanup in `OnNetworkDespawn` for re-hibernation.
+`BuildingSaveData.Employees` (in `CommunityTracker`) holds the full crew per building. On load, `MapController.SpawnSavedBuildings()` / `WakeUp()` route through `MapController.ApplyDynamicSaveDataToBuilding(Building, BuildingSaveData)` which calls (in this order):
+1. `building.RestoreOwnersFromSaveData(bSave.OwnerCharacterIds)` — base `Building` method, works for every subclass.
+2. `(building as CommercialBuilding)?.RestoreEmployeesFromSaveData(bSave.Employees)` — commercial-only.
+
+The owner pass uses the virtual `Building.BindRestoredOwner(Character)` hook:
+- Plain Building → `AddOwner` + `RegisterOwnedBuilding`.
+- ResidentialBuilding → `SetOwner(owner)` (residency mirror).
+- CommercialBuilding → `SetOwner(owner, ownerJob, autoAssignJob: false)` AND finds the matching saved `EmployeeSaveEntry` in `_pendingEmployees` so the boss's actual job slot (LogisticsManager / Cashier / etc.) is recovered instead of the auto-pick stealing a slot another saved employee owns. The `autoAssignJob:false` flag suppresses SetOwner's LogisticsManager auto-pick.
+
+The employee pass uses `worker.CharacterJob.TakeJob(job, building)` for the bidirectional link (building.Jobs ↔ character._activeJobs).
+
+Anything unresolved on either pass subscribes to `Character.OnCharacterSpawned` until its pending list empties. Owner-side subscription lives on base `Building` (`UnsubscribeOwnerRestoreListener` cleanup in `Building.OnNetworkDespawn`); employee-side subscription lives on `CommercialBuilding` (`UnsubscribeEmployeeRestoreListener` cleanup in `CommercialBuilding.OnNetworkDespawn`). Both are idempotent and safe across re-hibernation cycles.
 
 ### Character side
 `CharacterJob.Deserialize(JobSaveData)` parks unresolved entries in `_pendingJobData`, then:

@@ -62,9 +62,12 @@ Portable character profiles that travel across worlds. Characters are independen
 - Pre-existing follow-up: `SnapshotActiveNPCs` does not skip party NPCs whose leader is a player. Those NPCs are also stored in the leader profile's `partyMembers`. With full `ProfileData` blobs in both places this could cause double-spawn at load and needs to be addressed in a follow-up.
 
 ## Active Map Building Snapshots
-- `MapController.SnapshotActiveBuildings()` syncs live buildings into CommunityData without despawning
-- Skips preplaced buildings (those with empty `PlacedByCharacterId`)
-- `MapController.SpawnSavedBuildings()` respawns player-placed buildings on predefined maps during load
+- `MapController.SnapshotActiveBuildings()` syncs live buildings (BOTH player-placed AND preplaced/scene-authored) into CommunityData without despawning
+- Pre-2026-05-09 it filtered out preplaced via `if (PlacedByCharacterId.IsEmpty) continue;` — that filter was removed because it silently dropped owner / employee / storage / cashier mutations applied to scene-authored buildings (e.g. dev-mode "set owner" on a preplaced Tavern never persisted)
+- Preplaced buildings have a deterministic `BuildingId` (MD5 of scene name + mm-rounded position) so save entries round-trip reliably
+- `MapController.SpawnSavedBuildings()` respawns player-placed buildings AND overlays saved dynamic state onto already-in-scene buildings whose deterministic `BuildingId` matches a saved entry. Routed through `MapController.ApplyDynamicSaveDataToBuilding(Building, BuildingSaveData)` — the single helper used by both `SpawnSavedBuildings` (new spawn + preplaced overlay) and `WakeUp` (post-hibernation new spawn). Order inside the helper: owners → employees → storage → cashier → shop catalog → construction state.
+- Owner restoration is symmetric across every Building subclass since 2026-05-09. Lives on base `Building` (`RestoreOwnersFromSaveData(List<string> ownerIds)` + virtual `BindRestoredOwner(Character)` hook). `ResidentialBuilding` overrides → `SetOwner(owner)` (residency mirror). `CommercialBuilding` overrides → `SetOwner(owner, ownerJob, autoAssignJob:false)` + ties to matching saved `EmployeeSaveEntry` for the boss's actual job slot.
+- Employee restoration is `CommercialBuilding`-only via `RestoreEmployeesFromSaveData(List<EmployeeSaveEntry> employees)` — same pending+`OnCharacterSpawned` async pattern as the owner pass. Order in the helper: owners FIRST so the Commercial override can consume the boss's employee entry before the employee pass.
 - Both called by SaveManager/GameLauncher during save/load cycles
 
 ## Active Map WorldItem Snapshots

@@ -175,9 +175,9 @@ Used by SaveManager during `RequestSave()` and by GameLauncher during load seque
 
 ## 8. Active Map Building Snapshots
 
-- `MapController.SnapshotActiveBuildings()` syncs live buildings on active maps into CommunityData without despawning
-- Skips preplaced buildings (those with empty `PlacedByCharacterId`)
-- `MapController.SpawnSavedBuildings()` respawns player-placed buildings on predefined maps during load
+- `MapController.SnapshotActiveBuildings()` syncs live buildings (player-placed AND preplaced/scene-authored) on active maps into CommunityData without despawning. Pre-2026-05-09 it filtered out preplaced via `if (PlacedByCharacterId.IsEmpty) continue;` — that filter was removed because it silently dropped owner / employee / storage / cashier mutations on scene-authored buildings.
+- `MapController.SpawnSavedBuildings()` respawns player-placed buildings AND overlays saved dynamic state onto matching scene-authored buildings (same deterministic `BuildingId` from `Building.DeriveDeterministicSceneBuildingId`). Routed through `MapController.ApplyDynamicSaveDataToBuilding` — the single helper used by both `SpawnSavedBuildings` (new spawn + preplaced overlay) and `WakeUp` (post-hibernation new spawn).
+- Owner restoration is symmetric across every Building subclass since 2026-05-09: `Building.RestoreOwnersFromSaveData(List<string>)` + virtual `BindRestoredOwner(Character)` hook. `ResidentialBuilding` overrides → `SetOwner` (residency mirror). `CommercialBuilding` overrides → `SetOwner(autoAssignJob:false)` + ties to matching `EmployeeSaveEntry` for the boss's actual job slot. Employee restoration is `CommercialBuilding`-only via `RestoreEmployeesFromSaveData(List<EmployeeSaveEntry>)`. Order matters: owners FIRST so the commercial override can consume the boss's employee entry before the employee pass.
 - Both called by SaveManager/GameLauncher during save/load cycles
 
 ---

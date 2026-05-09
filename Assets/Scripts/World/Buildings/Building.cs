@@ -1614,6 +1614,151 @@ public class Building : ComplexRoom
         actor.CharacterActions.ExecuteAction(action);
     }
 
+    // ------------------------------------------------------------------------------------
+    //  Save / Load — Owner restoration (shared by Residential + Commercial + base Building)
+    // ------------------------------------------------------------------------------------
+
+    /// <summary>Owner UUIDs awaiting Character spawn (server-only).</summary>
+    private readonly List<string> _pendingOwnerIds = new List<string>();
+
+    /// <summary>True while subscribed to <see cref="Character.OnCharacterSpawned"/>
+    /// for owner restoration.</summary>
+    private bool _waitingForOwnerCharacters = false;
+
+    /// <summary>
+    /// Server-only. Re-binds saved owner UUIDs back to this freshly-spawned building.
+    /// Characters that aren't loaded yet (hibernated NPCs, characters whose maps haven't
+    /// woken yet) are queued — a <see cref="Character.OnCharacterSpawned"/> subscription
+    /// retries them until everyone is bound or the building despawns.
+    ///
+    /// Subclasses customize the per-owner binding via <see cref="BindRestoredOwner"/>:
+    /// <list type="bullet">
+    /// <item><c>Building</c> default — adds to <c>_ownerIds</c> + mirrors into the owner's
+    /// <c>CharacterLocations.OwnedBuildings</c>.</item>
+    /// <item><c>ResidentialBuilding</c> — calls its <c>SetOwner</c> (also adds resident).</item>
+    /// <item><c>CommercialBuilding</c> — calls its <c>SetOwner(autoAssignJob:false)</c> +
+    /// ties to the matching saved employee entry to recover the owner's actual job slot.</item>
+    /// </list>
+    ///
+    /// Call once, immediately after the building's NetworkObject has been spawned and its
+    /// <see cref="NetworkBuildingId"/> has been overwritten with the saved GUID.
+    /// </summary>
+    public void RestoreOwnersFromSaveData(List<string> ownerIds)
+    {
+        if (!IsServer) return;
+
+        _pendingOwnerIds.Clear();
+        if (ownerIds != null)
+        {
+            foreach (var id in ownerIds)
+            {
+                if (!string.IsNullOrEmpty(id)) _pendingOwnerIds.Add(id);
+            }
+        }
+        if (_pendingOwnerIds.Count == 0) return;
+
+        Debug.Log($"<color=cyan>[Building:RestoreOwners]</color> {buildingName}: pending owners={_pendingOwnerIds.Count}");
+
+        TryResolvePendingOwners();
+
+        if (_pendingOwnerIds.Count > 0 && !_waitingForOwnerCharacters)
+        {
+            // Two-event subscription required: OnCharacterSpawned catches NPC owners
+            // (their persistent UUID is set inside SpawnNPCsFromSnapshot's ImportProfile
+            // BEFORE OnNetworkSpawn fires), while OnCharacterIdReassigned catches the
+            // host's player Character (it spawns with a fresh Guid.NewGuid(), then has
+            // its persistent GUID overwritten by ImportProfile in GameLauncher Step 6,
+            // AFTER the spawn event already fired with the wrong ID). Without the
+            // second hook, host-owned buildings come back un-owned on every load.
+            Character.OnCharacterSpawned += HandleCharacterIdentityResolvedForOwnerRestore;
+            Character.OnCharacterIdReassigned += HandleCharacterIdentityResolvedForOwnerRestore;
+            _waitingForOwnerCharacters = true;
+            Debug.Log($"<color=cyan>[Building:RestoreOwners]</color> {buildingName}: subscribed to OnCharacterSpawned + OnCharacterIdReassigned for {_pendingOwnerIds.Count} owner(s).");
+        }
+    }
+
+    /// <summary>
+    /// Server-only. Single handler for both <see cref="Character.OnCharacterSpawned"/>
+    /// (NPC path — UUID is correct at spawn time) and
+    /// <see cref="Character.OnCharacterIdReassigned"/> (host player path — UUID
+    /// becomes correct only after profile import). The resolution logic is identical
+    /// in both cases: walk the pending list and bind anything that now resolves.
+    /// </summary>
+    private void HandleCharacterIdentityResolvedForOwnerRestore(Character resolved)
+    {
+        if (!IsServer || resolved == null) return;
+        TryResolvePendingOwners();
+
+        if (_pendingOwnerIds.Count == 0)
+        {
+            UnsubscribeOwnerRestoreListener();
+        }
+    }
+
+    private void TryResolvePendingOwners()
+    {
+        for (int i = _pendingOwnerIds.Count - 1; i >= 0; i--)
+        {
+            string id = _pendingOwnerIds[i];
+            Character owner = Character.FindByUUID(id);
+            if (owner == null) continue;
+
+            try
+            {
+                BindRestoredOwner(owner);
+                Debug.Log($"<color=green>[Building:RestoreOwners]</color> {buildingName}: bound owner '{owner.CharacterName}' (id={id}).");
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+                Debug.LogError($"<color=red>[Building:RestoreOwners]</color> {buildingName}: BindRestoredOwner threw for id={id} — entry skipped.");
+            }
+            finally
+            {
+                _pendingOwnerIds.RemoveAt(i);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Server-only. Subclass hook called once per resolved owner. Default implementation
+    /// adds the character to <c>_ownerIds</c> via <see cref="Room.AddOwner"/> and mirrors
+    /// the link into the owner's <c>CharacterLocations.OwnedBuildings</c>.
+    /// Override to use subclass-specific <c>SetOwner</c> semantics (residency mirroring,
+    /// job-slot tying, community registration, etc.).
+    /// </summary>
+    protected virtual void BindRestoredOwner(Character owner)
+    {
+        if (owner == null) return;
+        AddOwner(owner);
+        if (owner.CharacterLocations != null)
+        {
+            owner.CharacterLocations.RegisterOwnedBuilding(this);
+        }
+    }
+
+    /// <summary>
+    /// Server-only. Removes the <see cref="Character.OnCharacterSpawned"/> +
+    /// <see cref="Character.OnCharacterIdReassigned"/> subscriptions if they are still
+    /// active. Idempotent — safe to call from despawn paths even if all owners
+    /// already resolved synchronously.
+    /// </summary>
+    protected void UnsubscribeOwnerRestoreListener()
+    {
+        if (!_waitingForOwnerCharacters) return;
+        Character.OnCharacterSpawned -= HandleCharacterIdentityResolvedForOwnerRestore;
+        Character.OnCharacterIdReassigned -= HandleCharacterIdentityResolvedForOwnerRestore;
+        _waitingForOwnerCharacters = false;
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        // Drop any outstanding owner-restore subscription so a building that despawns
+        // before all owners resolve doesn't leak the static-event reference.
+        UnsubscribeOwnerRestoreListener();
+        base.OnNetworkDespawn();
+    }
+
     /// <summary>
     /// Server-only. Restores construction state from a <see cref="MWI.WorldSystem.BuildingSaveData"/>
     /// snapshot. Called by <c>MapController.SpawnSavedBuildings</c> / <c>MapController.WakeUp</c>
