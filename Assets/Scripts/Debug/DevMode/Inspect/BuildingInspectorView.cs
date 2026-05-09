@@ -131,12 +131,43 @@ public class BuildingInspectorView : MonoBehaviour, IBuildingInspectorView
 
         var parent = transform;
 
-        // Insert the tab bar BETWEEN existing prefab children (Header + Content).
-        // _headerLabel is sibling 0; we want bar at sibling 1, then OverviewContent at 2,
-        // ConsoleManagementContent at 3. _content gets re-parented under OverviewContent.
+        // Hide every legacy prefab child that isn't the header label. The prefab
+        // originally hosted the read-out inside a wrapper (e.g. "Slots" — a
+        // ScrollRect with min=200 flex=10) that would otherwise hog the parent VLG's
+        // vertical space and squeeze our content hosts down to ~30px. We pull
+        // _content (the serialized TMP_Text) up to the root first so it survives.
+        if (_content.transform.parent != parent)
+        {
+            _content.transform.SetParent(parent, worldPositionStays: false);
+        }
+        for (int i = parent.childCount - 1; i >= 0; i--)
+        {
+            var child = parent.GetChild(i);
+            if (child == null) continue;
+            if (_headerLabel != null && child == _headerLabel.transform) continue;
+            if (_content != null && child == _content.transform) continue;
+            child.gameObject.SetActive(false);
+        }
+
+        // Layout strategy: bypass the prefab's outer VerticalLayoutGroup with
+        // ignoreLayout + manual stretch anchors. The outer VLG cannot reliably size
+        // our sub-tab hosts (flex distribution doesn't kick in cleanly when sibling
+        // legacy children carry their own preferred heights), so we manually anchor
+        // SubTabBar at the top, then stretch-anchor the two content hosts to fill
+        // everything below it.
+        const float HeaderHeight = 36f;
+        const float TabBarHeight = 28f;
+        const float TopInset = HeaderHeight + TabBarHeight + 4f; // 4px gap
+
+        // SubTabBar — anchored top-stretch, just below the header.
         var tabBarGO = CreateUIChild(parent, "SubTabBar", siblingIndex: 1);
+        var tabBarRT = tabBarGO.GetComponent<RectTransform>();
+        tabBarRT.anchorMin = new Vector2(0, 1); tabBarRT.anchorMax = new Vector2(1, 1);
+        tabBarRT.pivot = new Vector2(0.5f, 1f);
+        tabBarRT.anchoredPosition = new Vector2(0, -HeaderHeight);
+        tabBarRT.sizeDelta = new Vector2(0, TabBarHeight);
         var tabBarLE = tabBarGO.AddComponent<LayoutElement>();
-        tabBarLE.minHeight = 28; tabBarLE.preferredHeight = 28; tabBarLE.flexibleHeight = 0;
+        tabBarLE.ignoreLayout = true;
         var tabBarHL = tabBarGO.AddComponent<HorizontalLayoutGroup>();
         tabBarHL.spacing = 2;
         tabBarHL.childForceExpandWidth = true;
@@ -144,10 +175,9 @@ public class BuildingInspectorView : MonoBehaviour, IBuildingInspectorView
         tabBarHL.childControlWidth = true;
         tabBarHL.childControlHeight = true;
 
-        // Wrap the existing _content under a new "OverviewContent" host so we can SetActive() it.
+        // OverviewContent — full-stretch, top inset = Header + TabBar + spacing.
         var overviewHost = CreateUIChild(parent, "OverviewContent", siblingIndex: 2);
-        var overviewLE = overviewHost.AddComponent<LayoutElement>();
-        overviewLE.flexibleHeight = 1;
+        ConfigureContentHostStretch(overviewHost, topInset: TopInset);
         var overviewVL = overviewHost.AddComponent<VerticalLayoutGroup>();
         overviewVL.childControlWidth = true; overviewVL.childControlHeight = true;
         overviewVL.childForceExpandWidth = true; overviewVL.childForceExpandHeight = true;
@@ -157,10 +187,9 @@ public class BuildingInspectorView : MonoBehaviour, IBuildingInspectorView
         var overviewTab = overviewHost.AddComponent<BuildingOverviewSubTab>();
         overviewTab.SetContentLabel(_content);
 
-        // Console Management host (with ScrollRect for the dynamic widget list).
+        // Console Management host — full-stretch, same top inset. ScrollRect inside.
         var consoleHost = CreateUIChild(parent, "ConsoleManagementContent", siblingIndex: 3);
-        var consoleLE = consoleHost.AddComponent<LayoutElement>();
-        consoleLE.flexibleHeight = 1;
+        ConfigureContentHostStretch(consoleHost, topInset: TopInset);
         AddScrollRect(consoleHost, out var consoleContent);
 
         // The console tab MonoBehaviour lives on the scrollable content (so it can
@@ -201,6 +230,26 @@ public class BuildingInspectorView : MonoBehaviour, IBuildingInspectorView
         rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
         rt.localScale = Vector3.one;
         return go;
+    }
+
+    /// <summary>
+    /// Configures a runtime-built sub-tab host GameObject to bypass the prefab's
+    /// outer VLG (which can't reliably size flex children when sibling legacy
+    /// elements have their own preferred heights). Sets <see cref="LayoutElement.ignoreLayout"/>
+    /// + full-stretch anchors with the given top inset (to clear Header + SubTabBar).
+    /// </summary>
+    private static void ConfigureContentHostStretch(GameObject host, float topInset)
+    {
+        var rt = host.GetComponent<RectTransform>();
+        rt.anchorMin = new Vector2(0, 0); rt.anchorMax = new Vector2(1, 1);
+        rt.pivot = new Vector2(0.5f, 0.5f);
+        rt.anchoredPosition = Vector2.zero;
+        rt.offsetMin = new Vector2(0, 0);
+        rt.offsetMax = new Vector2(0, -topInset);
+
+        var le = host.GetComponent<LayoutElement>();
+        if (le == null) le = host.AddComponent<LayoutElement>();
+        le.ignoreLayout = true;
     }
 
     private static Button CreateTabButton(Transform parent, string label)
