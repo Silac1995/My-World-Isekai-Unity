@@ -95,7 +95,13 @@
       "Bash(git ls-files *)",
       "Bash(git -C \"c:/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity\" add \"Assets/Scripts/Character/CharacterJob/CharacterJob.cs\")",
       "Bash(git -C 'c:/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity' commit -m 'feat\\(jobs\\): seed default wages at hire time via WageSystemService *)",
-      "Bash(claude:*)"
+      "Bash(claude:*)",
+      "mcp__plugin_context-mode_context-mode__ctx_batch_execute",
+      "Bash(git -C \"C:\\\\Users\\\\Kevin\\\\Unity\\\\Unity Projects\\\\Git\\\\MWI - Version Control\\\\My-World-Isekai-Unity\" log --oneline -3)",
+      "Bash(git -C \"C:\\\\Users\\\\Kevin\\\\Unity\\\\Unity Projects\\\\Git\\\\MWI - Version Control\\\\My-World-Isekai-Unity\" branch --show-current)",
+      "Bash(git -C \"C:\\\\Users\\\\Kevin\\\\Unity\\\\Unity Projects\\\\Git\\\\MWI - Version Control\\\\My-World-Isekai-Unity\" show --stat b590c2d0)",
+      "Bash(git -C \"c:\\\\Users\\\\Kevin\\\\Unity\\\\Unity Projects\\\\Git\\\\MWI - Version Control\\\\My-World-Isekai-Unity\" show --stat 98f0423f)",
+      "Bash(git -C \"c:\\\\Users\\\\Kevin\\\\Unity\\\\Unity Projects\\\\Git\\\\MWI - Version Control\\\\My-World-Isekai-Unity\" ls-files -- \"Assets/UI/Player HUD/UI_StorageFurniturePanel.prefab\" \"docs/superpowers/specs/2026-05-09-storage-furniture-player-ui-design.md\")"
     ],
     "additionalDirectories": [
       "\\tmp"

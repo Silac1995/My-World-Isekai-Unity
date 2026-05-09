@@ -176,13 +176,16 @@ public class BuildingInspectorView : MonoBehaviour, IBuildingInspectorView
         tabBarHL.childControlHeight = true;
 
         // OverviewContent — full-stretch, top inset = Header + TabBar + spacing.
+        // ScrollRect inside (mirrors ConsoleManagementContent) so growing
+        // building read-outs scroll instead of overflowing the panel.
         var overviewHost = CreateUIChild(parent, "OverviewContent", siblingIndex: 2);
         ConfigureContentHostStretch(overviewHost, topInset: TopInset);
-        var overviewVL = overviewHost.AddComponent<VerticalLayoutGroup>();
-        overviewVL.childControlWidth = true; overviewVL.childControlHeight = true;
-        overviewVL.childForceExpandWidth = true; overviewVL.childForceExpandHeight = true;
-        // Move _content under overviewHost.
-        _content.transform.SetParent(overviewHost.transform, worldPositionStays: false);
+        AddScrollRect(overviewHost, out var overviewContent);
+        // Suppress AddScrollRect's [DEV] red background tint on this non-dev tab.
+        var overviewBg = overviewHost.GetComponent<Image>();
+        if (overviewBg != null) overviewBg.color = new Color(0f, 0f, 0f, 0f);
+        // Move _content under the scrollable Content (so it scrolls with overflow).
+        _content.transform.SetParent(overviewContent.transform, worldPositionStays: false);
 
         var overviewTab = overviewHost.AddComponent<BuildingOverviewSubTab>();
         overviewTab.SetContentLabel(_content);
@@ -291,10 +294,43 @@ public class BuildingInspectorView : MonoBehaviour, IBuildingInspectorView
         viewport.transform.SetParent(root.transform, worldPositionStays: false);
         var vrt = viewport.GetComponent<RectTransform>();
         vrt.anchorMin = Vector2.zero; vrt.anchorMax = Vector2.one;
-        vrt.offsetMin = Vector2.zero; vrt.offsetMax = Vector2.zero;
+        // Right inset = scrollbar width so handle doesn't overlap content.
+        vrt.offsetMin = Vector2.zero; vrt.offsetMax = new Vector2(-16, 0);
         vrt.pivot = new Vector2(0, 1);
         viewport.AddComponent<RectMask2D>();
         var vimg = viewport.AddComponent<Image>(); vimg.color = new Color(1, 1, 1, 0.01f);
+
+        // Vertical Scrollbar — right edge, 16 px wide. Visibility honors
+        // sr.verticalScrollbarVisibility = AutoHide set above (hidden when
+        // content fits, shown when it overflows).
+        var scrollbarGO = new GameObject("Scrollbar Vertical", typeof(RectTransform));
+        scrollbarGO.transform.SetParent(root.transform, worldPositionStays: false);
+        var sbRT = scrollbarGO.GetComponent<RectTransform>();
+        sbRT.anchorMin = new Vector2(1, 0); sbRT.anchorMax = new Vector2(1, 1);
+        sbRT.pivot = new Vector2(1, 0.5f);
+        sbRT.sizeDelta = new Vector2(16, 0);
+        sbRT.anchoredPosition = Vector2.zero;
+        var sbBg = scrollbarGO.AddComponent<Image>();
+        sbBg.color = new Color(0.15f, 0.15f, 0.15f, 0.6f);
+        var scrollbar = scrollbarGO.AddComponent<Scrollbar>();
+        scrollbar.direction = Scrollbar.Direction.BottomToTop;
+
+        var slidingArea = new GameObject("Sliding Area", typeof(RectTransform));
+        slidingArea.transform.SetParent(scrollbarGO.transform, worldPositionStays: false);
+        var saRT = slidingArea.GetComponent<RectTransform>();
+        saRT.anchorMin = Vector2.zero; saRT.anchorMax = Vector2.one;
+        saRT.offsetMin = new Vector2(2, 2); saRT.offsetMax = new Vector2(-2, -2);
+
+        var handle = new GameObject("Handle", typeof(RectTransform));
+        handle.transform.SetParent(slidingArea.transform, worldPositionStays: false);
+        var hRT = handle.GetComponent<RectTransform>();
+        hRT.anchorMin = Vector2.zero; hRT.anchorMax = Vector2.one;
+        hRT.offsetMin = Vector2.zero; hRT.offsetMax = Vector2.zero;
+        var hImg = handle.AddComponent<Image>();
+        hImg.color = new Color(0.55f, 0.55f, 0.55f, 0.9f);
+
+        scrollbar.targetGraphic = hImg;
+        scrollbar.handleRect = hRT;
 
         var content = new GameObject("Content", typeof(RectTransform));
         content.transform.SetParent(viewport.transform, worldPositionStays: false);
@@ -315,7 +351,7 @@ public class BuildingInspectorView : MonoBehaviour, IBuildingInspectorView
         csf.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
         csf.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
-        sr.viewport = vrt; sr.content = crt;
+        sr.viewport = vrt; sr.content = crt; sr.verticalScrollbar = scrollbar;
         contentGO = content;
         return sr;
     }
