@@ -15,19 +15,28 @@ public class CharacterTakeFromFurnitureAction : CharacterAction
 {
     private readonly ItemInstance _item;
     private readonly StorageFurniture _furniture;
+    private readonly bool _preferInventory;
     private bool _taken;
 
-    /// <summary>True after the slot was successfully drained and the item placed in hands.</summary>
+    /// <summary>True after the slot was successfully drained and the item placed in hands or inventory.</summary>
     public bool Taken => _taken;
 
     public ItemInstance Item => _item;
     public StorageFurniture Furniture => _furniture;
 
-    public CharacterTakeFromFurnitureAction(Character character, ItemInstance item, StorageFurniture furniture)
+    /// <summary>
+    /// Construct a take action. Default <paramref name="preferInventory"/>=false matches
+    /// NPC GOAP transport semantics — items are placed in hands so the worker can carry
+    /// them somewhere else. The player UI passes <c>true</c> so chest clicks fill the
+    /// bag inventory first (mirrors <see cref="CharacterEquipment.PickUpItem"/>) and only
+    /// fall through to hands when the bag is full.
+    /// </summary>
+    public CharacterTakeFromFurnitureAction(Character character, ItemInstance item, StorageFurniture furniture, bool preferInventory = false)
         : base(character, 0.5f)
     {
         _item = item ?? throw new ArgumentNullException(nameof(item));
         _furniture = furniture ?? throw new ArgumentNullException(nameof(furniture));
+        _preferInventory = preferInventory;
     }
 
     public override bool CanExecute()
@@ -46,7 +55,18 @@ public class CharacterTakeFromFurnitureAction : CharacterAction
         }
         if (!itemPresent) return false;
 
-        // Hands must be free to receive the item.
+        // Inventory-first path: succeed if the bag has free space for this item.
+        if (_preferInventory)
+        {
+            var equipment = character.CharacterEquipment;
+            if (equipment != null && equipment.HaveInventory())
+            {
+                var inv = equipment.GetInventory();
+                if (inv != null && inv.HasFreeSpaceForItem(_item)) return true;
+            }
+        }
+
+        // Fallback (and default for NPC paths): hands must be free.
         var hands = character.CharacterVisual?.BodyPartsController?.HandsController;
         return hands != null && hands.AreHandsFree();
     }
@@ -71,16 +91,33 @@ public class CharacterTakeFromFurnitureAction : CharacterAction
             return;
         }
 
-        var hands = character.CharacterVisual?.BodyPartsController?.HandsController;
-        if (hands == null || !hands.CarryItem(_item))
+        // Inventory-first (player UI path).
+        if (_preferInventory)
         {
-            // Couldn't put in hands — return to furniture so the item isn't lost.
-            Debug.LogError($"<color=red>[TakeFromFurniture]</color> {character.CharacterName} could not place {_item.CustomizedName} in hands after extraction. Returning to {_furniture.FurnitureName}.");
-            _furniture.AddItem(_item);
+            var equipment = character.CharacterEquipment;
+            if (equipment != null && equipment.HaveInventory())
+            {
+                var inv = equipment.GetInventory();
+                if (inv != null && inv.AddItem(_item, character))
+                {
+                    _taken = true;
+                    Debug.Log($"<color=green>[TakeFromFurniture]</color> {character.CharacterName} took {_item.CustomizedName} from {_furniture.FurnitureName} into bag.");
+                    return;
+                }
+            }
+        }
+
+        // Default / fallback: hands.
+        var hands = character.CharacterVisual?.BodyPartsController?.HandsController;
+        if (hands != null && hands.CarryItem(_item))
+        {
+            _taken = true;
+            Debug.Log($"<color=green>[TakeFromFurniture]</color> {character.CharacterName} took {_item.CustomizedName} from {_furniture.FurnitureName} into hands.");
             return;
         }
 
-        _taken = true;
-        Debug.Log($"<color=green>[TakeFromFurniture]</color> {character.CharacterName} took {_item.CustomizedName} from {_furniture.FurnitureName}.");
+        // Both bag (when preferred) and hands failed — restore item to chest so it isn't lost.
+        Debug.LogError($"<color=red>[TakeFromFurniture]</color> {character.CharacterName} could not place {_item.CustomizedName} in inventory or hands after extraction. Returning to {_furniture.FurnitureName}.");
+        _furniture.AddItem(_item);
     }
 }

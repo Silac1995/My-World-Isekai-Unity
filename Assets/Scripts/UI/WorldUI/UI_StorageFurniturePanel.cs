@@ -37,9 +37,38 @@ public class UI_StorageFurniturePanel : UI_WindowBase
     [SerializeField] private UI_StorageGrid _chestGrid;
 
     private StorageFurniture _target;
+    private StorageFurnitureNetworkSync _targetSync;
     private Character _interactor;
     private FurnitureInteractable _targetInteractable;
     private ItemInstance _lastHandsItem;
+    /// <summary>
+    /// Tracks the bag <see cref="Inventory"/> we currently have an OnInventoryChanged
+    /// subscription on. Re-evaluated on bag swaps (via <see cref="HandleEquipmentChanged"/>)
+    /// so the bag side repaints when items are added/removed (e.g. after the player stores
+    /// a bag item — the action mutates the inventory but does NOT raise CharacterEquipment.OnEquipmentChanged).
+    /// </summary>
+    private Inventory _subscribedInventory;
+
+    /// <summary>
+    /// Programmatically ensure the panel root has its own Canvas + GraphicRaycaster so it
+    /// renders/raycasts independently of the parent HUD canvas — defends against prefab
+    /// override propagation quirks where the nested UI_PlayerHUD instance might not pick
+    /// up Canvas/sortingOrder values authored on this prefab.
+    /// </summary>
+    protected override void Awake()
+    {
+        base.Awake();
+
+        var canvas = GetComponent<UnityEngine.Canvas>();
+        if (canvas == null) canvas = gameObject.AddComponent<UnityEngine.Canvas>();
+        canvas.overrideSorting = true;
+        canvas.sortingOrder = 50;
+
+        if (GetComponent<UnityEngine.UI.GraphicRaycaster>() == null)
+        {
+            gameObject.AddComponent<UnityEngine.UI.GraphicRaycaster>();
+        }
+    }
 
     /// <summary>
     /// Called by <see cref="PlayerUI.OpenStoragePanel"/>. Activates the panel, wires up
@@ -57,6 +86,7 @@ public class UI_StorageFurniturePanel : UI_WindowBase
         UnsubscribeAll();
 
         _target = target;
+        _targetSync = target.GetComponent<StorageFurnitureNetworkSync>();
         _interactor = interactor;
         _targetInteractable = target.GetComponent<FurnitureInteractable>();
         _lastHandsItem = null;
@@ -76,12 +106,34 @@ public class UI_StorageFurniturePanel : UI_WindowBase
         if (equipment != null)
         {
             equipment.OnEquipmentChanged += HandleEquipmentChanged;
+            SubscribeToBagInventory(equipment.HaveInventory() ? equipment.GetInventory() : null);
         }
 
         OpenWindow();
 
         RepaintAll();
     }
+
+    /// <summary>
+    /// Hooks <see cref="Inventory.OnInventoryChanged"/> on the supplied inventory and
+    /// drops the subscription to the previously-tracked one. Idempotent — calling with
+    /// the same inventory twice is a no-op. Pass null to unsubscribe entirely.
+    /// </summary>
+    private void SubscribeToBagInventory(Inventory inv)
+    {
+        if (_subscribedInventory == inv) return;
+        if (_subscribedInventory != null)
+        {
+            _subscribedInventory.OnInventoryChanged -= HandleBagInventoryChanged;
+        }
+        _subscribedInventory = inv;
+        if (_subscribedInventory != null)
+        {
+            _subscribedInventory.OnInventoryChanged += HandleBagInventoryChanged;
+        }
+    }
+
+    private void HandleBagInventoryChanged() => RepaintBagSide();
 
     /// <summary>
     /// Closes the panel: unsubscribes events, unbinds grids, then defers to
@@ -94,6 +146,7 @@ public class UI_StorageFurniturePanel : UI_WindowBase
     {
         UnsubscribeAll();
         _target = null;
+        _targetSync = null;
         _interactor = null;
         _targetInteractable = null;
         _lastHandsItem = null;
@@ -129,6 +182,10 @@ public class UI_StorageFurniturePanel : UI_WindowBase
                 equipment.OnEquipmentChanged -= HandleEquipmentChanged;
             }
         }
+
+        // Drop the bag-inventory subscription too. Inventory is plain C# (not UnityObject)
+        // so no fake-null risk; SubscribeToBagInventory handles the null-out idempotently.
+        SubscribeToBagInventory(null);
     }
 
     private void OnDisable() => UnsubscribeAll();
@@ -184,6 +241,16 @@ public class UI_StorageFurniturePanel : UI_WindowBase
 
     private void HandleEquipmentChanged()
     {
+        // Bag may have been swapped — re-evaluate which Inventory we listen to so item
+        // add/remove on the new bag fires HandleBagInventoryChanged.
+        if (_interactor != null)
+        {
+            var equipment = _interactor.CharacterEquipment;
+            if (equipment != null)
+            {
+                SubscribeToBagInventory(equipment.HaveInventory() ? equipment.GetInventory() : null);
+            }
+        }
         RepaintBagSide();
     }
 
@@ -253,32 +320,39 @@ public class UI_StorageFurniturePanel : UI_WindowBase
             && _interactor.CharacterActions.CurrentAction == null;
     }
 
-    private void OnBagSlotClicked(ItemInstance item) => QueueStore(item);
+    // Click handlers receive (slotIndex, item). The slot index is forwarded to the
+    // ServerRpc so the server resolves the item against its authoritative slot copy
+    // — never trusts the client-passed ItemInstance directly.
+    private void OnBagSlotClicked(int slotIndex, ItemInstance item)
+    {
+        if (item == null || _interactor == null || _targetSync == null) return;
+        if (_interactor.CharacterActions == null) return;
+        if (_interactor.CharacterActions.CurrentAction != null) return;
+
+        _targetSync.RequestStoreFromBagServerRpc(
+            new Unity.Netcode.NetworkBehaviourReference(_interactor), slotIndex);
+    }
+
     private void OnHandsSlotClicked()
     {
-        if (_interactor == null) return;
+        if (_interactor == null || _targetSync == null) return;
         var hands = _interactor.CharacterVisual?.BodyPartsController?.HandsController;
-        ItemInstance carried = hands != null ? hands.CarriedItem : null;
-        QueueStore(carried);
-    }
-
-    private void QueueStore(ItemInstance item)
-    {
-        if (item == null || _target == null || _interactor == null) return;
+        if (hands == null || hands.CarriedItem == null) return;
         if (_interactor.CharacterActions == null) return;
         if (_interactor.CharacterActions.CurrentAction != null) return;
 
-        var action = new CharacterStoreInFurnitureAction(_interactor, item, _target);
-        _interactor.CharacterActions.ExecuteAction(action);
+        _targetSync.RequestStoreFromHandsServerRpc(
+            new Unity.Netcode.NetworkBehaviourReference(_interactor));
     }
 
-    private void OnChestSlotClicked(ItemInstance item)
+    private void OnChestSlotClicked(int slotIndex, ItemInstance item)
     {
-        if (item == null || _target == null || _interactor == null) return;
+        if (item == null || _interactor == null || _targetSync == null) return;
         if (_interactor.CharacterActions == null) return;
         if (_interactor.CharacterActions.CurrentAction != null) return;
 
-        var action = new CharacterTakeFromFurnitureAction(_interactor, item, _target);
-        _interactor.CharacterActions.ExecuteAction(action);
+        // preferInventory: true → bag fills first, hands as fallback (mirrors PickUpItem).
+        _targetSync.RequestTakeServerRpc(
+            new Unity.Netcode.NetworkBehaviourReference(_interactor), slotIndex, /*preferInventory*/ true);
     }
 }

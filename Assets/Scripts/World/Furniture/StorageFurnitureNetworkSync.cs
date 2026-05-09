@@ -183,6 +183,88 @@ public class StorageFurnitureNetworkSync : NetworkBehaviour
     }
 
     // =========================================================================
+    // Player UI dispatch — client→server routing for store/take actions
+    // =========================================================================
+    //
+    // Why these RPCs exist: CharacterStoreInFurnitureAction / CharacterTakeFromFurnitureAction
+    // mutate StorageFurniture._itemSlots, which is server-authoritative (replicated via the
+    // NetworkList in this component). CharacterActions.ExecuteAction runs the action's
+    // OnApplyEffect locally on the calling peer — fine when the caller is the server (host
+    // or NPC GOAP), but a non-server client just mutates its own local copy and the server
+    // never learns. The next NetworkList sync from server then overwrites the client's
+    // local change. These RPCs let the player UI hand the request to the server, where
+    // ExecuteAction can run authoritatively and the result replicates back normally.
+    //
+    // Source identification: items are referenced by SLOT INDEX in their source container,
+    // never by direct ItemInstance reference (ItemInstance is a plain C# object — not
+    // network-serializable). The server reads the slot index against its authoritative
+    // copy of the inventory or chest, so a stale client view can't trick the server into
+    // operating on a phantom item.
+
+    /// <summary>
+    /// Player UI: store the item the character is currently carrying in hands into this storage.
+    /// Server resolves the carried item via <see cref="HandsController.CarriedItem"/>.
+    /// </summary>
+    [Rpc(SendTo.Server)]
+    public void RequestStoreFromHandsServerRpc(NetworkBehaviourReference characterRef)
+    {
+        if (_storage == null) return;
+        if (!characterRef.TryGet(out Character character) || character == null) return;
+        var hands = character.CharacterVisual?.BodyPartsController?.HandsController;
+        if (hands == null) return;
+        ItemInstance carried = hands.CarriedItem;
+        if (carried == null) return;
+        if (character.CharacterActions == null) return;
+        if (character.CharacterActions.CurrentAction != null) return;
+
+        var action = new CharacterStoreInFurnitureAction(character, carried, _storage);
+        character.CharacterActions.ExecuteAction(action);
+    }
+
+    /// <summary>
+    /// Player UI: store an item from a specific bag inventory slot into this storage.
+    /// Server reads the slot from <see cref="CharacterEquipment.GetInventory"/> on its
+    /// authoritative inventory copy.
+    /// </summary>
+    [Rpc(SendTo.Server)]
+    public void RequestStoreFromBagServerRpc(NetworkBehaviourReference characterRef, int bagSlotIndex)
+    {
+        if (_storage == null) return;
+        if (!characterRef.TryGet(out Character character) || character == null) return;
+        var equip = character.CharacterEquipment;
+        if (equip == null || !equip.HaveInventory()) return;
+        var inv = equip.GetInventory();
+        if (inv == null) return;
+        if (bagSlotIndex < 0 || bagSlotIndex >= inv.ItemSlots.Count) return;
+        var slot = inv.ItemSlots[bagSlotIndex];
+        if (slot == null || slot.IsEmpty() || slot.ItemInstance == null) return;
+        if (character.CharacterActions == null) return;
+        if (character.CharacterActions.CurrentAction != null) return;
+
+        var action = new CharacterStoreInFurnitureAction(character, slot.ItemInstance, _storage);
+        character.CharacterActions.ExecuteAction(action);
+    }
+
+    /// <summary>
+    /// Player UI: take an item from the given chest slot into the character's bag (preferred)
+    /// or hands (fallback). Server reads the slot from this storage's authoritative ItemSlots.
+    /// </summary>
+    [Rpc(SendTo.Server)]
+    public void RequestTakeServerRpc(NetworkBehaviourReference characterRef, int chestSlotIndex, bool preferInventory)
+    {
+        if (_storage == null) return;
+        if (!characterRef.TryGet(out Character character) || character == null) return;
+        if (chestSlotIndex < 0 || chestSlotIndex >= _storage.Capacity) return;
+        var slot = _storage.GetItemSlot(chestSlotIndex);
+        if (slot == null || slot.IsEmpty() || slot.ItemInstance == null) return;
+        if (character.CharacterActions == null) return;
+        if (character.CharacterActions.CurrentAction != null) return;
+
+        var action = new CharacterTakeFromFurnitureAction(character, slot.ItemInstance, _storage, preferInventory);
+        character.CharacterActions.ExecuteAction(action);
+    }
+
+    // =========================================================================
     // Server side
     // =========================================================================
 

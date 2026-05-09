@@ -29,7 +29,7 @@ public class UI_StorageGrid : MonoBehaviour
     [SerializeField] private TextMeshProUGUI _capacityLabel;
 
     private readonly List<SlotInstance> _pool = new List<SlotInstance>();
-    private Action<ItemInstance> _clickCallback;
+    private Action<int, ItemInstance> _clickCallback;
     private Func<bool> _interactableGate;
 
     private class SlotInstance
@@ -43,11 +43,14 @@ public class UI_StorageGrid : MonoBehaviour
 
     /// <summary>
     /// Render <paramref name="slots"/>. <paramref name="onSlotLeftClicked"/> is invoked
-    /// with the slot's <see cref="ItemInstance"/> on left-click of a populated slot.
+    /// with <c>(slotIndex, ItemInstance)</c> on left-click of a populated slot — the
+    /// slot index is needed by callers that route through server RPCs (the server
+    /// resolves the item from its own authoritative slot copy, never trusting the
+    /// passed instance reference).
     /// <paramref name="interactableGate"/> is queried per-frame in <see cref="RefreshInteractable"/>
     /// to gray out clicks while an action is in flight; pass null to skip the gate.
     /// </summary>
-    public void Bind(IReadOnlyList<ItemSlot> slots, Action<ItemInstance> onSlotLeftClicked, Func<bool> interactableGate)
+    public void Bind(IReadOnlyList<ItemSlot> slots, Action<int, ItemInstance> onSlotLeftClicked, Func<bool> interactableGate)
     {
         _clickCallback = onSlotLeftClicked;
         _interactableGate = interactableGate;
@@ -94,9 +97,10 @@ public class UI_StorageGrid : MonoBehaviour
 
             inst.Button.onClick.RemoveAllListeners();
             ItemInstance capturedItem = item;   // snapshot for closure — avoids list mutation race
+            int capturedIndex = i;
             inst.Button.onClick.AddListener(() =>
             {
-                if (capturedItem != null) _clickCallback?.Invoke(capturedItem);
+                if (capturedItem != null) _clickCallback?.Invoke(capturedIndex, capturedItem);
             });
             inst.Button.interactable = !empty;
 
@@ -128,17 +132,25 @@ public class UI_StorageGrid : MonoBehaviour
     {
         if (_slotPrefab == null || _slotContainer == null)
         {
-            Debug.LogError($"<color=red>[UI_StorageGrid]</color> {name}: _slotPrefab or _slotContainer not assigned.");
+            Debug.LogError($"<color=red>[UI_StorageGrid]</color> {name}: _slotPrefab or _slotContainer not assigned. slotPrefab={(_slotPrefab != null ? "set" : "NULL")} slotContainer={(_slotContainer != null ? "set" : "NULL")}");
             return null;
         }
 
         GameObject go = Instantiate(_slotPrefab, _slotContainer);
+        // Resolve the Icon child specifically by name, NOT via GetComponentInChildren<Image>
+        // — the latter returns the slot root's background Image first, and Bind would then
+        // disable the BG when the item has no Icon, removing the slot from raycast hits and
+        // breaking clicks. Look only inside named "Icon" child.
+        Image iconImg = null;
+        var iconT = go.transform.Find("Icon");
+        if (iconT != null) iconImg = iconT.GetComponent<Image>();
+
         SlotInstance inst = new SlotInstance
         {
             Root = go,
             Button = go.GetComponent<Button>(),
             Label = go.GetComponentInChildren<TextMeshProUGUI>(true),
-            Icon = go.GetComponentInChildren<Image>(true),
+            Icon = iconImg,
         };
         _pool.Add(inst);
         return inst;
