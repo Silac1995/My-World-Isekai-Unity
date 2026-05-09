@@ -8,8 +8,9 @@ using MWI.Quests;
 /// GrowthTimer &lt; crop.DaysToMature (mature/perennial crops don't water).
 ///
 /// Claimed by JobFarmer's GoapAction_WaterCrop chain (FetchToolFromStorage(WateringCan)
-/// -> WaterCrop -> ReturnToolToStorage). The WateringCan is fetched from the building's
-/// _toolStorageFurniture (Plan 1 ToolStorage primitive).
+/// -> WaterCrop -> ReturnToolToStorage). The WateringCan is fetched from any of the
+/// building's tool storages (role-tagged via <see cref="StorageRoleType.ToolStorage"/>,
+/// or first-crate convention fallback).
 /// </summary>
 public class WaterCropTask : BuildingTask
 {

@@ -189,7 +189,7 @@ Logistics fallback:
 - [[help-wanted-and-hiring]] — Plan 2 hiring API + Plan 2.5 NeedJob OnNewDay throttle (NPC discovers vacant Farmer position).
 - [[character-job]] — `CanPunchOut` gate, schedule integration, `QuitJob` auto-return.
 - [[building-task-manager]] — `ClaimBestTask<T>`, `UnclaimTask`, `CompleteTask`, `AvailableTasks`.
-- [[commercial-building]] — `_toolStorageFurniture`, `_helpWantedFurniture`, `_managementFurniture` references; `_isHiring` NetworkVariable; quest aggregator.
+- [[commercial-building]] — `ToolStorages` list (role-driven; falls back to first-crate convention), `_helpWantedFurniture`, `_managementFurniture` references; `_isHiring` NetworkVariable; quest aggregator.
 
 ### Downstream
 None in v1. Phase 2 retrofitting (Woodcutter / Miner / Forager / Transporter onto Tool Storage shift-long pattern) will reference this as the proven first consumer of the per-task pickup pattern.

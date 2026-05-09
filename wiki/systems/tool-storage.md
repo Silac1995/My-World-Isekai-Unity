@@ -3,10 +3,11 @@ type: system
 title: "Tool Storage Primitive"
 tags: [building, character-job, item, ai, hud, network, save, tier-2]
 created: 2026-04-29
-updated: 2026-04-29
+updated: 2026-05-08
 sources: []
 related:
   - "[[commercial-building]]"
+  - "[[commercial-storage-roles]]"
   - "[[character-job]]"
   - "[[character-schedule]]"
   - "[[items]]"
@@ -34,7 +35,7 @@ depended_on_by:
 # Tool Storage Primitive
 
 ## Summary
-A generic role assigned to any existing `StorageFurniture` via the `_toolStorageFurniture` reference on `CommercialBuilding`. Workers fetch tools, use them for a task, return them. Items fetched from a tool storage are stamped with the building's stable `BuildingId` via `ItemInstance.OwnerBuildingId`. The punch-out gate prevents workers (player or NPC) from ending their shift while still carrying a stamped tool — player workers see a UI toast routed through the existing global notification channel.
+A generic role assigned to any existing `StorageFurniture`. As of the 2026-05-09 multi-storage refactor, **multiple storages can simultaneously hold the `ToolStorage` role** — workers iterate every tool storage when fetching / returning. The role is **owner-assignable at runtime** via the management panel's `StorageRolesTab` (per-storage dropdown → `ToolStorage`). `CommercialBuilding.ToolStorages` returns the live list; `ToolStorage` (singular) is preserved as a "first-found / convention" helper backed by a two-tier resolver: (Tier 0) any storage child whose runtime `Role == StorageRoleType.ToolStorage`, (Tier 1) first-storage convention fallback (`GetComponentInChildren<StorageFurniture>`). The legacy `_toolStorageFurniture` Inspector field + its snapshot/rebind machinery were removed 2026-05-09 (was dead code — every prefab had `fileID: 0`). Workers fetch tools, use them for a task, return them. Items fetched from a tool storage are stamped with the building's stable `BuildingId` via `ItemInstance.OwnerBuildingId`. The punch-out gate prevents workers (player or NPC) from ending their shift while still carrying a stamped tool — player workers see a UI toast routed through the existing global notification channel.
 
 The primitive is generic and reusable across all worker types. Phase 1 (this rollout) ships it; Plan 3 wires the **Farmer** as the first consumer with a per-task pickup pattern (fetch a watering can, water a cell, return it). Phase 2 (deferred) retrofits Woodcutter / Miner / Forager / Transporter with the **shift-long pickup pattern** (fetch on punch-in, return on punch-out) plus a bag → carry-capacity bonus model.
 
@@ -61,7 +62,7 @@ Adds management gameplay: tool stocking determines parallel work capacity. More 
 | File | Role |
 |---|---|
 | [Assets/Scripts/Item/ItemInstance.cs](../../Assets/Scripts/Item/ItemInstance.cs) | `OwnerBuildingId` field |
-| [Assets/Scripts/World/Buildings/CommercialBuilding.cs](../../Assets/Scripts/World/Buildings/CommercialBuilding.cs) | `_toolStorageFurniture`, `WorkerCarriesUnreturnedTools`, `NotifyPunchOutBlockedClientRpc` |
+| [Assets/Scripts/World/Buildings/CommercialBuilding.cs](../../Assets/Scripts/World/Buildings/CommercialBuilding.cs) | `ToolStorages` / `InventoryStorages` lists, `FindToolStorageContaining` / `FindToolStorageWithFreeSpace` / `HasToolInAnyToolStorage` / `IsToolStorage` helpers, `ToolStorage` two-tier accessor, `WorkerCarriesUnreturnedTools`, `NotifyPunchOutBlockedClientRpc` |
 | [Assets/Scripts/World/Furniture/StorageFurniture.cs](../../Assets/Scripts/World/Furniture/StorageFurniture.cs) | `AddItem` clears `OwnerBuildingId` on origin match |
 | [Assets/Scripts/Character/CharacterJob/CharacterJob.cs](../../Assets/Scripts/Character/CharacterJob/CharacterJob.cs) | `CanPunchOut`, `QuitJob` auto-return |
 | [Assets/Scripts/Character/CharacterSchedule/CharacterSchedule.cs](../../Assets/Scripts/Character/CharacterSchedule/CharacterSchedule.cs) | `EvaluateSchedule` Work→non-Work transition gate |
@@ -113,7 +114,7 @@ Player drop-in path (no GOAP):
 ## Dependencies
 
 ### Upstream
-- [[commercial-building]] — owns the `_toolStorageFurniture` reference + the `WorkerCarriesUnreturnedTools` helper + the `NotifyPunchOutBlockedClientRpc`.
+- [[commercial-building]] — owns the `ToolStorages` list / `ToolStorage` accessor / multi-storage helpers + the `WorkerCarriesUnreturnedTools` helper + the `NotifyPunchOutBlockedClientRpc`.
 - [[storage-furniture]] — the actual container; `AddItem` carries the origin-clear hook.
 - [[items]] — `ItemInstance.OwnerBuildingId` lives there.
 - [[character-job]] — `CanPunchOut` gate caller, `QuitJob` auto-return path.
@@ -127,7 +128,8 @@ Player drop-in path (no GOAP):
 ## State & persistence
 
 - `ItemInstance.OwnerBuildingId` — string GUID (`Building.BuildingId`), persisted via `JsonUtility` round-trip on the existing inventory + storage save paths. **No new save fields.** Default value on load for pre-existing items: empty string (treated as unowned).
-- `_toolStorageFurniture` — designer reference, no runtime mutation, no save.
+- **Owner-assigned tool storage** — runtime-mutable. The owner picks a `ToolStorage` role on any storage via the management panel; the per-storage `StorageRoleType` field replicates via `StorageFurnitureNetworkSync` and persists in `StorageFurnitureSaveEntry.Role`. See [[commercial-storage-roles]] for the full path. Multiple storages can hold the `ToolStorage` role simultaneously.
+- **Convention fallback** — when no storage child has `Role == ToolStorage`, the singleton `ToolStorage` accessor falls back to `GetComponentInChildren<StorageFurniture>()` (first-found). Pre-role-system buildings keep working unchanged. The `ToolStorages` list returns empty in this case; helpers like `FindToolStorageContaining` / `FindToolStorageWithFreeSpace` consult the convention fallback only when the list is empty.
 
 ## Known gotchas / edge cases
 
@@ -146,6 +148,9 @@ Player drop-in path (no GOAP):
 ## Change log
 
 - 2026-04-29 — Initial implementation, Plan 1 of 3 in the Farmer rollout. Tasks 1-9 committed across `506adce8` … `43c855a4`. — claude
+- 2026-05-08 — Tool storage now uses unified [[commercial-storage-roles]] system: owner-runtime-assignable via management panel `StorageRolesTab`; `_toolStorageFurniture` Inspector field demoted to Tier 1 fallback, owner-assigned `Role == ToolStorage` is Tier 0. Wiring: `CommercialBuilding.ToolStorage` getter checks `GetStoragesWithRole(StorageRoleType.ToolStorage)` first. — claude
+- 2026-05-09 — Multi-storage refactor: `ToolStorages` is now a list, multiple storages can hold the `ToolStorage` role simultaneously. Added `FindToolStorageContaining` / `FindToolStorageWithFreeSpace` / `HasToolInAnyToolStorage` / `IsToolStorage` helpers. All consumers iterate (`GoapAction_FetchToolFromStorage`, `GoapAction_ReturnToolToStorage`, `JobFarmer.ProvideWorldState`, `CharacterJob.TryAutoReturnTools`, `StorageFurniture.AddItem` stamp-clear hook, `FindStorageFurnitureForItem`, `GoapAction_GatherStorageItems.DetermineStoragePosition`). The two GOAP cycle actions dropped their `_storageInteractable` cache — silent runtime-rebind bug fix when the role flips mid-plan. — claude
+- 2026-05-09 — Removed dead `_toolStorageFurniture` Inspector SerializeField + snapshot/rebind machinery. `ToolStorage` resolver simplified from four tiers to two (role-tagged → first-crate convention). Audit showed every prefab had it as `fileID: 0` — was always-dead code. — claude
 
 ## Sources
 

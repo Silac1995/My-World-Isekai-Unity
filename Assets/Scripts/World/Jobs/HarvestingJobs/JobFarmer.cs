@@ -175,10 +175,11 @@ public class JobFarmer : Job
                 return interactable != null && !_worker.PathingMemory.IsBlacklisted(interactable.gameObject.GetInstanceID());
             });
         }
+        // Multi-tool-storage aware: any of the building's role-assigned tool storages (or the
+        // legacy singleton fallback) holding the watering can satisfies the worldState gate.
         bool hasWateringCanAvailable = farm.WateringCanItem != null
                                         && farm.HasToolStorage
-                                        && farm.ToolStorage != null
-                                        && StorageHasItem(farm.ToolStorage, farm.WateringCanItem);
+                                        && farm.HasToolInAnyToolStorage(farm.WateringCanItem);
 
         // Anything in the bag counts as deposit-able. Hands-held items also count UNLESS they're
         // a seed (still planting) or the watering can (still mid-water-cycle).

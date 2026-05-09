@@ -395,34 +395,55 @@ public class GoapAction_GatherStorageItems : GoapAction
 
         if (carriedItem != null && _building != null)
         {
-            var toolStorage = _building.ToolStorage;
             bool isTool = _building.IsBuildingToolItem(carriedItem.ItemSO);
+            var toolStorages = _building.ToolStorages;
 
-            // Tool-priority pre-pass: building tools (e.g. a watering can the LogisticsManager
-            // just hauled in from the StorageZone or BuildingZone) route to ToolStorage when
-            // available, so the tool drawer stays consolidated. Mirrors the same rule applied
-            // by CommercialBuilding.FindStorageFurnitureForItem at the building-API layer.
-            if (isTool
-                && toolStorage != null
-                && !toolStorage.IsLocked
-                && (_excludedFurniture == null || !_excludedFurniture.Contains(toolStorage))
-                && toolStorage.HasFreeSpaceForItem(carriedItem))
+            // Tool-priority pre-pass: iterate every role-assigned tool storage so building
+            // tools (e.g. a watering can the LogisticsManager just hauled in from the
+            // StorageZone or BuildingZone) consolidate in the tool drawer(s). Mirrors the
+            // same rule applied by CommercialBuilding.FindStorageFurnitureForItem.
+            if (isTool)
             {
-                _targetFurniture = toolStorage;
-                _targetPos = worker != null
-                    ? toolStorage.GetInteractionPosition(worker.transform.position)
-                    : toolStorage.GetInteractionPosition();
-                return;
+                for (int i = 0; i < toolStorages.Count; i++)
+                {
+                    var s = toolStorages[i];
+                    if (s == null || s.IsLocked) continue;
+                    if (_excludedFurniture != null && _excludedFurniture.Contains(s)) continue;
+                    if (!s.HasFreeSpaceForItem(carriedItem)) continue;
+
+                    _targetFurniture = s;
+                    _targetPos = worker != null
+                        ? s.GetInteractionPosition(worker.transform.position)
+                        : s.GetInteractionPosition();
+                    return;
+                }
+                // Legacy fallback singleton (only when no role assignment exists yet).
+                if (toolStorages.Count == 0)
+                {
+                    var legacy = _building.ToolStorage;
+                    if (legacy != null
+                        && !legacy.IsLocked
+                        && (_excludedFurniture == null || !_excludedFurniture.Contains(legacy))
+                        && legacy.HasFreeSpaceForItem(carriedItem))
+                    {
+                        _targetFurniture = legacy;
+                        _targetPos = worker != null
+                            ? legacy.GetInteractionPosition(worker.transform.position)
+                            : legacy.GetInteractionPosition();
+                        return;
+                    }
+                }
             }
 
             // Walk furniture in declaration order, skipping any we've already failed to reach.
-            // Non-tool items skip the tool storage so general inventory can't fill the slot
-            // reserved for tools.
+            // Non-tool items skip every tool storage so general inventory can't fill the
+            // slots reserved for tools. IsToolStorage handles role-tagged AND legacy fallback
+            // storages in a single predicate.
             foreach (var candidate in _building.GetFurnitureOfType<StorageFurniture>())
             {
                 if (candidate == null || candidate.IsLocked) continue;
                 if (_excludedFurniture != null && _excludedFurniture.Contains(candidate)) continue;
-                if (!isTool && candidate == toolStorage) continue;
+                if (!isTool && _building.IsToolStorage(candidate)) continue;
                 if (!candidate.HasFreeSpaceForItem(carriedItem)) continue;
 
                 _targetFurniture = candidate;

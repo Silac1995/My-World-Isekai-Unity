@@ -5,7 +5,7 @@ tags: [building, commercial, jobs, tier-2]
 created: 2026-04-19
 updated: 2026-05-08
 sources: []
-related: ["[[building]]", "[[building-logistics-manager]]", "[[building-task-manager]]", "[[jobs-and-logistics]]", "[[shops]]", "[[crafting-loop]]", "[[worker-wages-and-performance]]", "[[quest-system]]", "[[tool-storage]]", "[[help-wanted-and-hiring]]", "[[management-panel-architecture]]", "[[dev-mode]]", "[[kevin]]"]
+related: ["[[building]]", "[[building-logistics-manager]]", "[[building-task-manager]]", "[[jobs-and-logistics]]", "[[shops]]", "[[crafting-loop]]", "[[worker-wages-and-performance]]", "[[quest-system]]", "[[tool-storage]]", "[[commercial-storage-roles]]", "[[help-wanted-and-hiring]]", "[[management-panel-architecture]]", "[[dev-mode]]", "[[kevin]]"]
 status: stable
 confidence: high
 primary_agent: building-furniture-specialist
@@ -37,15 +37,29 @@ depended_on_by: ["[[jobs-and-logistics]]", "[[shops]]", "[[crafting-loop]]", "[[
 - `RefreshStorageInventory()` — two-pass physical ↔ logical sync (remove ghosts / absorb orphans). Pass 1 protects any `ItemInstance` currently held by a `TransportOrder.ReservedItems` in `LogisticsManager.PlacedTransportOrders` to avoid killing in-flight transports during a transient `OverlapBox` miss.
 - `CountUnabsorbedItemsInBuildingZone(ItemSO)` — counts matching WorldItems inside `BuildingZone` but not yet in `_inventory`, **plus** `ItemInstance`s currently held by this building's own assigned workers (equipment inventory + `HandsController.CarriedItem`). Used by `LogisticsTransportDispatcher.HandleInsufficientStock` to distinguish "items mid-transit to storage" from "items actually stolen" when a completed `CraftingOrder` exists without visible stock.
 
-## ToolStorage resolution (three-tier fallback)
+## Storage Roles (unified per-storage role system)
 
-`CommercialBuilding.ToolStorage` is a virtual property with a three-tier resolver. Designers don't have to assign anything in the inspector — by default the building's first `StorageFurniture` child becomes the tool storage. Resolution order:
+`CommercialBuilding` exposes a runtime, owner-driven storage-role system shared by every subtype (Forge, Shop, House, future workshops). Per-storage exclusivity: each `StorageFurniture` child carries one `StorageRoleType` (`None` / `ToolStorage` / `InventoryStorage` / optional subtype additions like `SellShelf`). Multiple storages can share the same role.
 
-1. **Cached field still alive** — return `_toolStorageFurniture` when the reference is non-null.
-2. **Snapshot-based rebind** — `Awake` snapshots the inspector-assigned crate's `(FurnitureItemSO + buildingLocalPosition)` before `base.Awake` destroys the original (the nested-furniture-with-NetworkObject conversion path). The lazy resolver scans children for the closest `(SO, localPos)` match within `FurnitureRefMatchEpsilon` and rebinds.
-3. **First-crate convention fallback** — `GetComponentInChildren<StorageFurniture>(includeInactive: false)`. The first storage child wins.
+- `virtual IReadOnlyList<StorageRoleDescriptor> SupportedStorageRoles` — defaults to `StorageRoleCatalog.Generic`. `ShopBuilding` overrides to `StorageRoleCatalog.Shop` (adds `SellShelf`).
+- `IReadOnlyList<StorageFurniture> GetStoragesWithRole(StorageRoleType type)` — walks every storage child (recursive, includes inactive).
+- `IReadOnlyList<StorageFurniture> ToolStorages` / `InventoryStorages` — list accessors. `ShopBuilding.SellShelves` is a parallel wrapper for `SellShelf`.
+- `FindToolStorageContaining(ItemSO)` / `FindToolStorageWithFreeSpace()` / `HasToolInAnyToolStorage(ItemSO)` / `IsToolStorage(StorageFurniture)` — multi-storage helpers used by logistics + GOAP.
+- `event Action OnStorageRolesChanged` — fires on **every peer** when any child storage's role changes (driven by per-storage `OnRoleChanged` fan-out, bound at `OnNetworkSpawn` and refreshed inside `GetStorageFurnitureCached`). UI subscribes for re-render.
+- `[ServerRpc(RequireOwnership=false)] TrySetStorageRoleServerRpc(NetworkObjectReference, StorageRoleType)` — owner-only mutator. Validates: caller is the building's `Owner`, role is in `SupportedStorageRoles`, target resolves to a `StorageFurniture` child with a sibling `StorageFurnitureNetworkSync`. Writes through `sync.SetRoleServer(newRole)`. Rejected calls log a warning; missing-sync rejection logs an error.
 
-Returns null only when the building has no `StorageFurniture` children at all, in which case `HasToolStorage` is false and tool-needing GOAP actions fail-cleanly. The same lazy snapshot-rebind pattern applies to `_helpWantedFurniture` and `_managementFurniture` — see `ResolveLazyFurnitureRef<T>` in `CommercialBuilding.cs`.
+See [[commercial-storage-roles]] for the full system page (data flow, persistence, UI tab).
+
+## ToolStorage resolution (two-tier resolver, post-2026-05-09)
+
+`CommercialBuilding.ToolStorage` is a singleton-shaped accessor backed by a two-tier resolver. Prefer the `ToolStorages` list / `FindToolStorage*` helpers in new code — `ToolStorage` exists for "first-found / convention" callers only.
+
+1. **Role-tagged (Tier 0)** — first `StorageFurniture` child whose `Role == StorageRoleType.ToolStorage`. Set per-storage at design time via `_initialRole` on the storage prefab, or at runtime via the management panel dropdown. Multiple matches → first-found in child-walk order.
+2. **First-crate convention fallback (Tier 1)** — `GetComponentInChildren<StorageFurniture>(includeInactive: false)`. The first storage child wins. Designers don't have to assign anything for buildings that just want "first crate" semantics — pre-role-system buildings keep working unchanged.
+
+Returns null only when the building has no `StorageFurniture` children at all, in which case `HasToolStorage` is false and tool-needing GOAP actions fail-cleanly.
+
+The legacy `_toolStorageFurniture` Inspector SerializeField + its snapshot/rebind machinery were removed 2026-05-09 (audit showed every prefab had it as `fileID: 0`). `HelpWantedSign` and `ManagementFurniture` still use the three-tier lazy-rebind pattern in `ResolveLazyFurnitureRef<T>` — only the tool-storage path was simplified.
 
 `virtual IEnumerable<ItemSO> GetToolStockItems()` is the subclass extension point used by logistics routing. Default yields nothing (no tools). When a `JobLogisticsManager` worker drops off an item matching one of these and `ToolStorage` is available, the deposit is redirected from the loose `StorageZone` into the tool storage furniture — see `IsBuildingToolItem(ItemSO)` and the `FindStorageFurnitureForItem` / `GoapAction_GatherStorageItems.DetermineStoragePosition` routing in [[building-logistics-manager]]. `FarmingBuilding` overrides this and yields its `WateringCanItem`.
 
@@ -122,6 +136,9 @@ Always call `base.GetManagementTabs()` first so the Hiring tab is preserved. See
 - If a subclass wants autonomous restock, **implementing `IStockProvider` is mandatory** — declaring `_itemsToSell` or `_inputStockTargets` alone does nothing until the contract is wired.
 
 ## Change log
+- 2026-05-09 — Removed dead `_toolStorageFurniture` Inspector SerializeField + its snapshot/rebind machinery (audit showed every prefab had it as `fileID: 0`). `ToolStorage` resolver simplified from four tiers to two (role-tagged → first-crate convention). `HelpWantedSign` and `ManagementFurniture` still use the three-tier lazy-rebind pattern. — claude
+- 2026-05-09 — Multi-tool-storage refactor: tool/inventory storages are now LISTS, not singletons. Added `ToolStorages` / `InventoryStorages` accessors + `FindToolStorageContaining` / `FindToolStorageWithFreeSpace` / `HasToolInAnyToolStorage` / `IsToolStorage` helpers. All consumers iterate the lists. `OnStorageRolesChanged` now fires on every peer via per-storage `OnRoleChanged` fan-out (`HandleChildStorageRoleChanged`), bound at `OnNetworkSpawn` and refreshed inside `GetStorageFurnitureCached`. — claude
+- 2026-05-08 — Added unified storage-role API: `SupportedStorageRoles` virtual + `GetStoragesWithRole` walker + `OnStorageRolesChanged` event + `[ServerRpc] TrySetStorageRoleServerRpc` (owner-only mutator). Base `GetManagementTabs()` now appends `StorageRolesTab` so every commercial subtype (Forge, Shop, House, …) gets the same per-storage role-assignment UI. `ToolStorage` getter promoted to a four-tier resolver — Tier 0 is now `GetStoragesWithRole(StorageRoleType.ToolStorage).FirstOrDefault()`, demoting the legacy `_toolStorageFurniture` Inspector field to Tier 1 fallback. See [[commercial-storage-roles]] for the full system page. — claude
 - 2026-05-07 — Added `GetManagementTabs()` virtual — polymorphic surface for the new owner management panel. Subtypes append tabs without modifying the panel. See [[management-panel-architecture]]. — claude
 - 2026-05-02 — Farmer end-to-end rollout (cascade, IsValid corrections, softlock guards, race detection, etc.) — claude. Touchpoints with `CommercialBuilding`: (a) `ToolStorage` becomes a three-tier resolver — cached field → snapshot lazy-rebind → first-`StorageFurniture` child fallback. Designers no longer have to assign anything in the inspector. Same lazy-snapshot pattern formalised on `_helpWantedFurniture` and `_managementFurniture` via the new `ResolveLazyFurnitureRef<T>` helper. (b) New `virtual IEnumerable<ItemSO> GetToolStockItems()` extension point + `IsBuildingToolItem(ItemSO)` classifier — drives the tool-aware logistics routing in `FindStorageFurnitureForItem` and `GoapAction_GatherStorageItems.DetermineStoragePosition`. Default yields nothing; `FarmingBuilding` yields its `WateringCanItem`. (c) `WorkerStartingShift` quest auto-claim is now player-only (`worker.IsPlayer()` gate) — NPCs use GOAP's `ClaimBestTask` on demand, so the first NPC to subscribe no longer hoards every newly-published task. (d) `Building.SpawnDefaultFurnitureSlot` defaults `slot.TargetRoom` to `MainRoom` when null and `Building.Start` calls `FurnitureManager.LoadExistingFurniture()` explicitly — together they guarantee spawned default furniture is FurnitureManager-registered. — claude
 - 2026-05-01 — `_defaultFurnitureLayout` system hoisted up to `[[building]]`. `CommercialBuilding` now only carries the `OnDefaultFurnitureSpawned` override (storage cache invalidation). See [[building#Default furniture layout]]. — claude

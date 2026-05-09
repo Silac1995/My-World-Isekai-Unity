@@ -248,7 +248,6 @@ public class CharacterJob : CharacterSystem, ICharacterSaveData<JobSaveData>, II
     {
         if (workplace == null || unreturned == null || _character == null) return;
 
-        var storage = workplace.ToolStorage;
         var hands = _character.CharacterVisual?.BodyPartsController?.HandsController;
         var equipment = _character.CharacterEquipment;
         var inventory = equipment != null && equipment.HaveInventory() ? equipment.GetInventory() : null;
@@ -281,20 +280,23 @@ public class CharacterJob : CharacterSystem, ICharacterSaveData<JobSaveData>, II
                 continue;
             }
 
-            // Try to place back in storage. StorageFurniture.AddItem auto-clears
-            // OwnerBuildingId via the origin-match hook (Task 4) when the destination
-            // is the origin building's ToolStorage.
-            if (storage != null && storage.AddItem(inst))
+            // Try to place back into ANY tool storage with free space. StorageFurniture.AddItem
+            // auto-clears OwnerBuildingId via the origin-match hook (Task 4) when the destination
+            // is acting as a tool storage for the origin building (CommercialBuilding.IsToolStorage
+            // covers role-tagged AND legacy fallback). Re-resolves per-iteration because each
+            // successful AddItem fills one slot in the chosen storage.
+            var target = workplace.FindToolStorageWithFreeSpace();
+            if (target != null && target.AddItem(inst))
             {
                 continue; // returned successfully
             }
 
-            // Fallback: storage destroyed / full / null. Clear the stamp manually so the
+            // Fallback: every tool storage is destroyed / full / null. Clear the stamp manually so the
             // worker isn't permanently gated, and put the item back in their inventory
             // (treated as "salvaged"; designer can repossess via dev tools if needed).
             inst.OwnerBuildingId = "";
             equipment?.PickUpItem(inst);
-            Debug.LogWarning($"[CharacterJob] Auto-return failed for {inst.ItemSO?.ItemName} at {_character.CharacterName}'s QuitJob — storage unreachable. OwnerBuildingId cleared; item kept by worker.");
+            Debug.LogWarning($"[CharacterJob] Auto-return failed for {inst.ItemSO?.ItemName} at {_character.CharacterName}'s QuitJob — no tool storage with free space. OwnerBuildingId cleared; item kept by worker.");
         }
     }
 

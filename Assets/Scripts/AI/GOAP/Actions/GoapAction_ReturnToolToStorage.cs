@@ -2,8 +2,8 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// Generic GOAP action: walk to the building's _toolStorageFurniture, drop the tool
-/// currently held in the worker's hands into the storage, and clear the building-
+/// Generic GOAP action: walk to ANY tool storage in the building that has free space, drop
+/// the tool currently held in the worker's hands into that storage, and clear the building-
 /// ownership stamp. Symmetric mirror of <see cref="GoapAction_FetchToolFromStorage"/>
 /// (Task 3 of the tool-storage plan); composable in any worker plan that completes a
 /// task involving a building-owned tool.
@@ -18,11 +18,10 @@ using UnityEngine;
 ///   - toolReturned_{itemSO.name} == true
 ///
 /// IsValid:
-///   - building.ToolStorage != null
-///   - storage is NOT full (an empty compatible slot exists for the tool)
-///   - worker carries (in their HANDS) an ItemInstance whose ItemSO == toolItem AND
-///     whose OwnerBuildingId == building.BuildingId. The owner-id check enforces the
-///     symmetric contract: this action only returns tools that came from THIS building.
+///   - <see cref="CommercialBuilding.FindToolStorageWithFreeSpace"/> returns non-null
+///     (any role-assigned tool storage has free space, or — when no role assignment exists
+///     — the legacy <see cref="CommercialBuilding.ToolStorage"/> singleton has free space)
+///   - worker has a HandsController (carry-state precondition lives in worldState, not here)
 ///
 /// Notes:
 ///   - Movement gating uses <see cref="InteractableObject.IsCharacterInInteractionZone(Character)"/>
@@ -30,19 +29,27 @@ using UnityEngine;
 ///     storage furniture that doesn't expose an InteractionZone collider — exactly mirroring the
 ///     fetch action.
 ///   - The OwnerBuildingId clear happens automatically inside <see cref="StorageFurniture.AddItem"/>
-///     (Part A of Task 4): when the destination storage matches the origin building, AddItem
-///     resets the stamp before the item lands in a slot. This single hook also covers the
-///     player drop-in path (no GOAP), so BOTH return routes converge on the same clearing logic.
+///     (Part A of Task 4): when the destination storage is acting as a tool storage for the
+///     origin building, AddItem resets the stamp before the item lands in a slot. The
+///     <see cref="CommercialBuilding.IsToolStorage"/> predicate handles role-tagged AND legacy
+///     fallback storages so both routes converge on the same clearing logic. The hook also
+///     covers the player drop-in path (no GOAP).
 ///   - Storage-full fallback: if AddItem returns false (storage was just filled by another worker
 ///     or the slot got locked), the worker re-equips the tool to their hands so they aren't
 ///     gated forever, and the OwnerBuildingId is cleared manually since the tool didn't actually
 ///     return to storage. The planner replans on next tick.
+///
+/// Multi-tool-storage semantics (2026-05-08):
+/// The previous implementation cached <c>building.ToolStorage.GetComponent&lt;InteractableObject&gt;()</c>
+/// at construction with the comment "set at design time, never swapped at runtime". That assumption
+/// no longer holds with the unified storage-role system — owners can flip a storage's role at
+/// runtime via the management panel. Both <c>IsValid</c> and <c>Execute</c> now resolve the
+/// concrete tool storage per call via <see cref="CommercialBuilding.FindToolStorageWithFreeSpace"/>.
 /// </summary>
 public class GoapAction_ReturnToolToStorage : GoapAction
 {
     private readonly CommercialBuilding _building;
     private readonly ItemSO _toolItem;
-    private readonly InteractableObject _storageInteractable;
 
     private readonly Dictionary<string, bool> _preconditions;
     private readonly Dictionary<string, bool> _effects;
@@ -61,12 +68,6 @@ public class GoapAction_ReturnToolToStorage : GoapAction
     {
         _building = building;
         _toolItem = toolItem;
-        // Cache the storage's InteractableObject once. _toolStorageFurniture on
-        // CommercialBuilding is a serialized prefab field — set at design time, never
-        // swapped at runtime — so the lookup is safe to memoize for the action's lifetime.
-        _storageInteractable = building?.ToolStorage != null
-            ? building.ToolStorage.GetComponent<InteractableObject>()
-            : null;
 
         string key = ToolKey();
         _preconditions = new Dictionary<string, bool>
@@ -87,12 +88,10 @@ public class GoapAction_ReturnToolToStorage : GoapAction
     public override bool IsValid(Character worker)
     {
         if (worker == null || _building == null || _toolItem == null) return false;
-        if (_building.ToolStorage == null) return false;
 
-        // Storage must have at least one empty compatible slot — otherwise the AddItem
-        // call inside Execute would silently bounce. Gating here lets the planner pick a
-        // different return route (e.g. drop-on-ground fallback if/when one is added).
-        if (_building.ToolStorage.IsFull) return false;
+        // At least one tool storage with free space must exist. Mirrors the IsFull guard from
+        // the previous singleton implementation but iterates the role-assigned list.
+        if (_building.FindToolStorageWithFreeSpace() == null) return false;
 
         // Do NOT require tool-in-hand here. That state is a *precondition*
         // (hasToolInHand_{toolKey}=true + taskCompleteForTool_{toolKey}=true) the planner
@@ -109,13 +108,22 @@ public class GoapAction_ReturnToolToStorage : GoapAction
     {
         if (_isComplete) return;
 
-        if (worker == null || _building == null || _building.ToolStorage == null || _toolItem == null)
+        if (worker == null || _building == null || _toolItem == null)
         {
             _isComplete = true;
             return;
         }
 
-        var storage = _building.ToolStorage;
+        // Resolve a tool storage with free space NOW. With multiple role-assigned tool
+        // storages, the first hit can change between IsValid and Execute (another worker
+        // filled one chest). Re-resolve per tick.
+        var storage = _building.FindToolStorageWithFreeSpace();
+        if (storage == null)
+        {
+            _isComplete = true;
+            return;
+        }
+        var interactable = storage.GetComponent<InteractableObject>();
 
         // Movement gate: prefer InteractableObject.IsCharacterInInteractionZone
         // (canonical proximity API). Fall back to a flat-XZ distance check when the
@@ -124,7 +132,6 @@ public class GoapAction_ReturnToolToStorage : GoapAction
         // GoapAction_FetchToolFromStorage. Without this the worker walks to the tool
         // crate to drop the can, ends up just outside the InteractionZone bounds, and
         // freezes there because _isMoving never resets.
-        var interactable = _storageInteractable;
         bool inZone;
         if (interactable != null && interactable.InteractionZone != null)
         {
@@ -204,7 +211,7 @@ public class GoapAction_ReturnToolToStorage : GoapAction
 
         if (NPCDebug.VerboseJobs)
         {
-            Debug.Log($"<color=cyan>[ReturnTool]</color> {worker.CharacterName} returned {_toolItem.ItemName} to {_building.name} tool storage. OwnerBuildingId cleared by AddItem hook.");
+            Debug.Log($"<color=cyan>[ReturnTool]</color> {worker.CharacterName} returned {_toolItem.ItemName} to {_building.name} ({storage.gameObject.name}). OwnerBuildingId cleared by AddItem hook.");
         }
 
         _isComplete = true;

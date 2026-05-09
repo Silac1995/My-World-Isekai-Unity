@@ -9,7 +9,8 @@ using MWI.Farming;
 ///
 /// Differs from <see cref="GoapAction_FetchToolFromStorage"/> (Plan 1):
 /// - Target storage is the building's general inventory (any <c>StorageFurniture</c> in the
-///   building's transform tree), NOT the dedicated <c>_toolStorageFurniture</c>. Seeds are
+///   building's transform tree), NOT the dedicated tool storage(s) (role-tagged via
+///   <see cref="StorageRoleType.ToolStorage"/>). Seeds are
 ///   ordinary stockable inputs that the logistics chain delivers into the building's
 ///   shelves; the tool storage primitive is reserved for tool-loop items (watering can,
 ///   axe, …).
