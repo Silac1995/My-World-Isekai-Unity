@@ -18,6 +18,20 @@ public class PlayerController : CharacterGameController
     // --- Interactable detection (proximity + prompt + helper API) ---
     [SerializeField] private PlayerInteractionDetector _detector;
 
+    /// <summary>
+    /// Auto-resolve the PlayerInteractionDetector reference. Called once per object
+    /// lifetime; mirrors the Character facade pattern (CLAUDE.md: subsystem references
+    /// auto-assign in Awake via GetComponentInChildren as a fallback). _character is
+    /// already populated by base.Awake() (CharacterSystem.Awake — sets _character via
+    /// GetComponentInParent<Character>).
+    /// </summary>
+    protected override void Awake()
+    {
+        base.Awake();
+        if (_detector == null && _character != null)
+            _detector = _character.GetComponentInChildren<PlayerInteractionDetector>(true);
+    }
+
     public void SetOrder(IPlayerCommand newOrder)
     {
         if (_currentOrder != null) _currentOrder.OnCancelled(this);
@@ -39,12 +53,6 @@ public class PlayerController : CharacterGameController
             else
                 _character.Rigidbody.interpolation = RigidbodyInterpolation.None; // Let NetworkTransform handle it
         }
-
-        // Auto-resolve detector reference. PlayerInteractionDetector lives on a child
-        // GameObject of Character (per the existing CharacterInteractionDetector parent
-        // chain). _character is the Character root, so search its children.
-        if (_detector == null && _character != null)
-            _detector = _character.GetComponentInChildren<PlayerInteractionDetector>(true);
     }
 
     /// <summary>
