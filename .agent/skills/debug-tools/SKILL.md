@@ -117,6 +117,54 @@ The view GameObject is added to the prefab by the **`DevHarvestableInspectorBuil
 
 **Selectability gotcha:** `CropHarvestable_Default.prefab` sits on the **`Harvestable`** layer (index 15 in `ProjectSettings/TagManager.asset` — renamed from `Crop` on 2026-04-29 to reflect that crop harvestables and wilderness harvestables share the layer). `_defaultInteriorLayers` was extended to `RigidBody + Furniture + Harvestable` so Ctrl+Click hits any harvestable. Wilderness prefabs (`Tree.prefab`, `Gatherable.prefab`) currently sit on `Default` and are **not** selectable until their root layer is changed to `Harvestable` (or another layer in the mask).
 
+### 4d. Building Inspector — `BuildingInspectorView` + `BuildingSubTab` + Console Management
+
+`BuildingInspectorView : MonoBehaviour, IBuildingInspectorView` (`Assets/Scripts/Debug/DevMode/Inspect/BuildingInspectorView.cs`).
+
+`BuildingSubTab : MonoBehaviour` is the abstract base mirror of `CharacterSubTab` for the Building inspector — concrete subclasses override `DoRefresh(Building)` + `DoClear()`; the base wraps both in try/catch.
+
+As of 2026-05-09 the view hosts a **2-sub-tab structure** (mirror of `CharacterInspectorView`):
+
+| Sub-tab | Class | Role |
+|---------|-------|------|
+| Overview | `BuildingOverviewSubTab` | Read-only — verbatim port of the prior 11-section dump (Identity / State / Owners / Commercial / Inventory / Wanted / Tracked / Needed / Logistics / Tasks / Rooms / Furniture / Interior). Reuses the existing `_content` TMP_Text the prefab serializes. Behavior unchanged from the pre-2026-05-09 view. |
+| [DEV] Console Management | `BuildingConsoleManagementSubTab` | **Mutator surface — host-only.** Builds widgets at runtime (programmatic UGUI). Exposes every owner-gated mutation on the building. |
+
+**Tab bar built at runtime — no prefab edits.** Unlike `CharacterInspectorView` (which has 10 sub-tabs and uses `DevInspectTabBuilder` to author the prefab), `BuildingInspectorView.Awake()` programmatically:
+- creates a `SubTabBar` GameObject as sibling 1 of the existing prefab children;
+- re-parents the existing `_content` TMP_Text under a runtime-built `OverviewContent` host (sibling 2) and adds a `BuildingOverviewSubTab` component there;
+- creates a `ConsoleManagementContent` host (sibling 3) with a ScrollRect + `BuildingConsoleManagementSubTab` on the scrollable content;
+- creates two tab buttons; the Console Management button is tinted red so it's impossible to confuse with a production surface.
+
+**Console Management actions** call either:
+- **server-only methods that already lack auth** — `Building.Finalize`, `CommercialBuilding.SetOwner`, `Room.AddOwner` / `RemoveOwner`, `CommercialBuilding.AssignWorker` / `RemoveWorker`, `CommercialBuilding.AddToInventory` / `TakeFromInventory`. Direct call — no extra wrapper needed.
+- **new host-only `DevForce*` server methods** that bypass owner / community-leader auth: `CommercialBuilding.DevForceSetHiring(bool)`, `CommercialBuilding.DevForceSetAssignmentWage(...)`, `CommercialBuilding.DevForceSetStorageRole(StorageFurniture, StorageRoleType)` (writes through `StorageFurnitureNetworkSync.SetRoleServer` — same NetworkVariable fan-out as the production `TrySetStorageRoleServerRpc`; honours `SupportedStorageRoles`), `ShopBuilding.DevForceAddCatalogEntry / DevForceRemoveCatalogEntry / DevForceEditCatalogEntry / DevForceWithdrawCashierTill(Cashier, recipient)`.
+
+**Why no RPC / `devOverride` parameter:** `DevModeManager.TryEnable` rejects every non-host caller. The dev panel therefore only ever runs on the server, so `DevForce*` can be a plain `public` server-only method called directly. No RPC = no client trust surface to defend.
+
+**Auth + audit pattern.** Every `DevForce*` calls a `protected` helper on `CommercialBuilding`:
+
+```csharp
+protected bool DevAssertHostAndDevMode(string action)
+{
+    if (!IsServer) { Debug.LogWarning($"[DevMode] {action} ignored — not on server."); return false; }
+    if (DevModeManager.Instance == null || !DevModeManager.Instance.IsEnabled)
+    {
+        Debug.LogWarning($"[DevMode] {action} ignored — DevMode not enabled.");
+        return false;
+    }
+    ulong sender = NetworkManager.Singleton != null ? NetworkManager.Singleton.LocalClientId : 0UL;
+    Debug.LogWarning($"[DevMode] {action} — buildingId={BuildingId} sender={sender}");
+    return true;
+}
+```
+
+The whole `DevForce*` block — including `DevAssertHostAndDevMode` — is wrapped in `#if UNITY_EDITOR || DEVELOPMENT_BUILD` so it is stripped from release builds.
+
+**Production-path-preservation refactor.** Each owner-gated `[ServerRpc(RequireOwnership=false)]` on `ShopBuilding` was refactored to `RPC → ValidateOwnerCaller → Do*Helper`. The new `Do*Helper` is a private method holding the original RPC body. Both the production RPC (with auth) and the new `DevForce*` (no auth) call the same `Do*Helper`, so production replication paths are bit-for-bit identical and the auth check stays exactly where it was. `CommercialBuilding`'s `[Rpc(SendTo.Server)]` hiring methods were not refactored — `ServerTryOpenHiring` enforces a vacancy precondition that the open-only path needs but the dev path intentionally skips, so `DevForceSetHiring` writes `_isHiring.Value` directly.
+
+**Inventory factory.** `BuildingConsoleManagementSubTab.BuildInventorySection` constructs items via `ItemSO.CreateInstance()` — that is the canonical factory used by `WorldItem` for the same purpose. `ItemInstance` is `abstract`; do not try `new ItemInstance(...)`.
+
 ### 5. `CharacterAIDebugFormatter` — Shared AI Debug Strings
 
 Static class with helpers:
@@ -286,5 +334,7 @@ Assets/Scripts/
   - `Assets/Editor/DevMode/DevStorageFurnitureInspectorBuilder.cs` — `[MenuItem("Tools/DevMode/Build Storage Furniture Inspector")]`. Adds the `StorageFurnitureInspectorView` GameObject under `InspectContent/Views`, sibling to `CharacterInspectorView`, and wires `_headerLabel` + `_content`. Same idempotent + destructive pair.
 
   Prefer extending these builders when you add a new view or sub-tab — it keeps prefab regeneration reproducible and source-controlled.
-- **Host-only.** `DevInspectModule`, like all Dev Mode modules, only runs on the host. Never add RPCs or server calls inside a sub-tab — read from local state only.
+- **Host-only.** `DevInspectModule`, like all Dev Mode modules, only runs on the host. Read-only sub-tabs (Overview, Storage, Harvestable, Character) must read from local state only. Mutator sub-tabs (`BuildingConsoleManagementSubTab`) may call server-only methods directly — but only because dev mode is host-only by hard policy (`DevModeManager.TryEnable` rejects non-host callers). Never add RPCs or `[Rpc(SendTo.Server)]` calls in a sub-tab; if you need a path that bypasses production auth, add a host-only `DevForce*` server method on the target class wrapped in `#if UNITY_EDITOR || DEVELOPMENT_BUILD`, gated by an `IsServer + DevModeManager.IsEnabled` assertion + audit log line, and call it directly.
+- **`ItemInstance` is abstract — use the factory.** `BuildingConsoleManagementSubTab.BuildInventorySection` constructs items via `ItemSO.CreateInstance()`. Trying `new ItemInstance(so)` does not compile and is the wrong pattern anyway — every concrete `ItemSO` subclass picks its own `ItemInstance` subclass (`MiscInstance`, `WeaponInstance`, `WearableInstance`, …) and `CreateInstance()` is the single source of truth. The same factory is used by `WorldItem` (`WorldItem.cs:107` / `:227`) for the production gather path.
+- **`CommercialBuilding.SetOwner(null)` is the canonical "clear all owners" path.** It iterates `_ownerIds` to unregister each old owner from `CharacterLocations`, clears the NetworkList, and skips the rest of the body when `newOwner == null`. The Console Management "Clear All Owners" button calls it directly. Do not roll your own loop.
 - **Legacy scripts are always compiled.** Only the Dev Mode family is behind `#if UNITY_EDITOR || DEVELOPMENT_BUILD` conditional-unlock (for the F3 auto-unlock path). The legacy scripts activate via `UI_SessionManager` checking `_isSolo`.
