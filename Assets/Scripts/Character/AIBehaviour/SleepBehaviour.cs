@@ -96,7 +96,10 @@ public class SleepBehaviour : IAIBehaviour
     {
         _bed = character.CharacterLocations.GetAssignedBed();
 
-        if (_bed != null && _bed.Reserve(character))
+        // Reservation only applies to occupiable beds — every bed prefab IS-A
+        // IOccupiable today (BedFurniture extends OccupiableFurniture), but the
+        // field is typed as Furniture so the cast keeps minimal blast radius.
+        if (_bed is IOccupiable bedOccupiable && bedOccupiable.Reserve(character))
         {
             _phase = SleepPhase.GoingToBed;
             _destinationSet = false;
@@ -142,12 +145,12 @@ public class SleepBehaviour : IAIBehaviour
                     action = new CharacterAction_SleepOnFurniture(character, bedFurniture, slotIdx);
                 }
             }
-            else
+            else if (_bed is IOccupiable legacyOccupiable)
             {
-                // Legacy plain-Furniture fallback: direct Use as before. No CharacterAction
-                // wrapper exists for non-BedFurniture beds; existing scenes that haven't
-                // been migrated keep working.
-                if (_bed.Use(character))
+                // Legacy plain-OccupiableFurniture fallback: direct Use as before. No
+                // CharacterAction wrapper exists for non-BedFurniture beds; existing
+                // scenes that haven't been migrated keep working.
+                if (legacyOccupiable.Use(character))
                 {
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
                     Debug.Log($"<color=cyan>[Sleep]</color> {character.CharacterName} legacy-occupied {_bed.FurnitureName}.");
@@ -210,9 +213,9 @@ public class SleepBehaviour : IAIBehaviour
                 int slotIdx = bedFurniture.GetSlotIndexFor(character);
                 if (slotIdx >= 0) bedFurniture.ReleaseSlot(slotIdx);
             }
-            else if (_bed.Occupant == character || _bed.ReservedBy == character)
+            else if (_bed is IOccupiable bedOcc && (bedOcc.Occupant == character || bedOcc.ReservedBy == character))
             {
-                _bed.Release();
+                bedOcc.Release();
             }
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             Debug.Log($"<color=cyan>[Sleep]</color> {character.CharacterName} woke up and left {_bed.FurnitureName}.");

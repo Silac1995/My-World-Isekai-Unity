@@ -70,6 +70,8 @@ public class CharacterLocations : CharacterSystem
     /// <summary>
     /// Finds a bed (FurnitureTag.Bed) in the character's home building.
     /// Prioritizes beds in rooms where the character is a resident.
+    /// Beds are <see cref="IOccupiable"/> post-2026-05-08 ISP refactor — bed candidates
+    /// that don't implement the interface (mis-tagged decorative beds, e.g.) are skipped.
     /// </summary>
     public Furniture GetAssignedBed()
     {
@@ -78,7 +80,7 @@ public class CharacterLocations : CharacterSystem
         {
             foreach (var bed in room.GetFurnitureByTag(FurnitureTag.Bed))
             {
-                if (bed.IsFree()) return bed;
+                if (bed is IOccupiable occ && occ.IsFree()) return bed;
             }
         }
 
@@ -88,7 +90,7 @@ public class CharacterLocations : CharacterSystem
         {
             foreach (var bed in home.GetFurnitureByTag(FurnitureTag.Bed))
             {
-                if (bed.IsFree()) return bed;
+                if (bed is IOccupiable occ && occ.IsFree()) return bed;
             }
         }
 

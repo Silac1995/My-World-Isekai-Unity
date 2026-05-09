@@ -196,9 +196,13 @@ public class FurnitureManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Trouve un meuble disponible de type T.
+    /// Trouve un meuble disponible de type T. T must be both <see cref="Furniture"/>
+    /// (so it lives in the per-room registry) AND <see cref="IOccupiable"/> (so the
+    /// "available" predicate has any meaning) post-2026-05-08 ISP refactor — pure
+    /// non-occupiable furniture (storage, signs, management desks) carries no
+    /// "available" notion.
     /// </summary>
-    public T FindAvailableFurniture<T>() where T : Furniture
+    public T FindAvailableFurniture<T>() where T : Furniture, IOccupiable
     {
         foreach (var f in _furnitures)
         {

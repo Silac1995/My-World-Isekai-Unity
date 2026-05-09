@@ -41,11 +41,14 @@ public class DevSelectionModule : MonoBehaviour
 
     /// <summary>
     /// The Building selected via Alt+Click (or programmatically via <see cref="SetSelectedBuilding"/>).
-    /// Buildings have no <see cref="InteractableObject"/> in the parent chain of their shell collider —
-    /// the chain is <c>Building : ComplexRoom : Room : Zone : NetworkBehaviour</c> — so building
-    /// inspection lives on its own selection slot rather than piggybacking on
-    /// <see cref="SelectedInteractable"/>. Mutually exclusive with <see cref="SelectedInteractable"/>:
-    /// selecting one clears the other.
+    /// The Building hierarchy itself is <c>Building : ComplexRoom : Room : Zone : NetworkBehaviour</c>
+    /// (no <see cref="InteractableObject"/>), but as of 2026-05-06 the cooperative construction loop
+    /// added <see cref="BuildingInteractable"/> on the Building's root GameObject — an
+    /// <see cref="InteractableObject"/> that would otherwise hijack the Alt+Click raycast and route the
+    /// pick through <see cref="SelectedInteractable"/>. <see cref="TryRaycastAndSelect"/> special-cases
+    /// it: a hit on a <see cref="BuildingInteractable"/> walks up to its <see cref="Building"/> and
+    /// routes here instead. Mutually exclusive with <see cref="SelectedInteractable"/>: selecting
+    /// one clears the other.
     /// </summary>
     public Building SelectedBuilding { get; private set; }
 
@@ -345,6 +348,25 @@ public class DevSelectionModule : MonoBehaviour
         }
 
         InteractableObject interactable = hit.collider.GetComponentInParent<InteractableObject>();
+
+        // Special case: BuildingInteractable lives on the Building's root GameObject
+        // (since the 2026-05-06 cooperative construction loop refactored it to inherit
+        // InteractableObject). Without this branch the Alt+Click raycast resolves the
+        // BuildingInteractable here, fills SelectedInteractable, and the Inspect tab
+        // can't find a matching IInspectorView — leaving the panel blank even though
+        // the Select tab label correctly reads the building name. Reroute to the
+        // building-pick path so BuildingInspectorView (an IBuildingInspectorView) handles it.
+        if (interactable is BuildingInteractable bi)
+        {
+            Building owner = bi.GetComponent<Building>();
+            if (owner != null)
+            {
+                SetSelectedBuilding(owner);
+                label = !string.IsNullOrEmpty(owner.BuildingName) ? owner.BuildingName : owner.gameObject.name;
+                return true;
+            }
+        }
+
         if (interactable != null)
         {
             SetSelectedInteractable(interactable);
@@ -360,10 +382,11 @@ public class DevSelectionModule : MonoBehaviour
             return true;
         }
 
-        // Building shells have no InteractableObject (Building : ComplexRoom : Room : Zone) and
-        // no Character; the raycast hit is on a child mesh of the building. Walk up to the Building
-        // to feed the Alt+Click building-pick path. Without this fallback, Alt+Click on a building
-        // shell would silently no-op even though the cursor is on a valid building.
+        // Plain Building (no BuildingInteractable component) — e.g. a finished building whose
+        // construction-loop component has been stripped, or a future building that opted out
+        // of the cooperative loop entirely. Walk up to the Building to feed the Alt+Click
+        // building-pick path. Without this fallback, Alt+Click on a bare building shell would
+        // silently no-op even though the cursor is on a valid building.
         Building b = hit.collider.GetComponentInParent<Building>();
         if (b != null)
         {

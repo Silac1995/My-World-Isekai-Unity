@@ -81,15 +81,32 @@ A specialized structural entity handling jobs and economic tasks.
 
 #### Furniture-reference resolution (three-tier lazy-rebind, 2026-05-02)
 
-`ToolStorage`, `HelpWantedSign`, and `ManagementFurniture` are virtual properties with a three-tier resolver. Designers don't have to assign anything in the inspector for `ToolStorage` — by default the building's first `StorageFurniture` child becomes the tool storage. Resolution order:
+**Multi-storage tool/inventory accessors (2026-05-09).** The role system supports multiple storages per role. `CommercialBuilding` exposes both list accessors and a singleton fallback:
+
+- `IReadOnlyList<StorageFurniture> ToolStorages` — every storage child whose `Role == StorageRoleType.ToolStorage`. Use this for any "iterate every tool storage" pattern (logistics, GOAP).
+- `IReadOnlyList<StorageFurniture> InventoryStorages` — every storage with `Role == InventoryStorage`.
+- `StorageFurniture FindToolStorageContaining(ItemSO tool)` — first tool storage holding the item; falls back to the convention singleton when no role-assigned tool storage matches.
+- `StorageFurniture FindToolStorageWithFreeSpace()` — first non-full + non-locked tool storage (used by return-tool flow).
+- `bool HasToolInAnyToolStorage(ItemSO tool)` — any-of predicate (used by `JobFarmer` worldState).
+- `bool IsToolStorage(StorageFurniture s)` — predicate that returns true if `s.Role == ToolStorage` OR (no role-tagged tool storages exist AND `s` is the convention-resolved first-crate). Used by `StorageFurniture.AddItem`'s tool-stamp clearing hook.
+- `StorageFurniture ToolStorage` (singleton, two-tier resolver) — returns first role-tagged tool storage, then falls back to first-crate convention. Prefer the list-based helpers in new code.
+
+**`ToolStorage` two-tier resolver (2026-05-09 — `_toolStorageFurniture` Inspector field + snapshot/rebind machinery removed):**
+
+1. **Role-tagged** — first `StorageFurniture` child whose `Role == StorageRoleType.ToolStorage`. Set per-storage at design time via `_initialRole` or at runtime via the management panel dropdown.
+2. **First-crate convention** — `GetComponentInChildren<StorageFurniture>(includeInactive: false)`. The first storage child wins. Designers don't have to assign anything for buildings that just want "the first crate" semantics — pre-role-system buildings keep working unchanged.
+
+`HelpWantedSign` and `ManagementFurniture` still use the three-tier lazy-rebind resolver below — they're not multi-instance and didn't need the role-system simplification.
+
+**Three-tier lazy-rebind resolver** (used by `HelpWantedSign` and `ManagementFurniture`):
 
 1. **Cached field still alive** — return the field directly when the reference is non-null.
 2. **Snapshot-based rebind** — `Awake` snapshots the inspector-assigned furniture's `(FurnitureItemSO + buildingLocalPosition)` BEFORE `base.Awake` runs `ConvertNestedNetworkFurnitureToLayout` (which destroys the original nested children). The lazy resolver then scans children for the closest `(SO, localPos)` match within `FurnitureRefMatchEpsilon` and rebinds. Pattern lives in `CommercialBuilding.ResolveLazyFurnitureRef<T>`.
-3. **First-crate convention fallback** (`ToolStorage` only) — `GetComponentInChildren<StorageFurniture>(includeInactive: false)`. The first storage child wins.
+3. **No third tier for these** — they fail-cleanly to null when the building has no help-wanted sign / management furniture. Workers + UI handle the null gracefully.
 
-`ToolStorage` returns null only when the building has no `StorageFurniture` children at all, in which case `HasToolStorage` is false and tool-needing GOAP actions (`GoapAction_FetchToolFromStorage`, `GoapAction_ReturnToolToStorage`) fail-cleanly.
+`ToolStorages.Count == 0 && ToolStorage == null` is the only "no tool storage" state (i.e. no `StorageFurniture` child at all), in which case `HasToolStorage` is false and tool-needing GOAP actions (`GoapAction_FetchToolFromStorage`, `GoapAction_ReturnToolToStorage`) fail-cleanly.
 
-**`virtual IEnumerable<ItemSO> GetToolStockItems()` extension point.** Default yields nothing. Override on subclasses that own tools — `FarmingBuilding` yields its `WateringCanItem`. When a `JobLogisticsManager` worker drops off an item matching one of these and `ToolStorage` is available, the deposit is redirected from the loose `StorageZone` into the tool storage furniture. `IsBuildingToolItem(ItemSO)` is the membership-check classifier wired into `FindStorageFurnitureForItem` and `GoapAction_GatherStorageItems.DetermineStoragePosition`.
+**`virtual IEnumerable<ItemSO> GetToolStockItems()` extension point.** Default yields nothing. Override on subclasses that own tools — `FarmingBuilding` yields its `WateringCanItem`. When a `JobLogisticsManager` worker drops off an item matching one of these, `FindStorageFurnitureForItem` iterates `ToolStorages` (and falls back to the legacy singleton) so the deposit consolidates in the tool drawer(s) instead of getting first-fit-scattered into general inventory chests. `IsBuildingToolItem(ItemSO)` is the membership-check classifier wired into `FindStorageFurnitureForItem` and `GoapAction_GatherStorageItems.DetermineStoragePosition`. **Don't cache `building.ToolStorage.GetComponent<InteractableObject>()` at action construction** — the role can flip at runtime via the management dropdown. The cycle actions (`GoapAction_FetchToolFromStorage` / `GoapAction_ReturnToolToStorage`) re-resolve via `FindToolStorageContaining` / `FindToolStorageWithFreeSpace` per call.
 - **Task Manager (`BuildingTaskManager`)**: Automatically attached module serving as a Blackboard. Manages a pool of `BuildingTask` objects. Instead of workers using expensive polling (raycasts/overlaps), tasks are registered here to be claimed sequentially using OCP-compliant logic (Open/Closed Principle) for dynamic behavior (e.g., Harvesters claiming trees).
 - **Logistics Manager (`BuildingLogisticsManager`)**: Automatically attached **facade** over three plain-C# collaborators (`LogisticsOrderBook`, `LogisticsTransportDispatcher`, `LogisticsStockEvaluator`, all under `Assets/Scripts/World/Buildings/Logistics/`). The public API on the facade is stable — external callers (`JobLogisticsManager`, `InteractionPlaceOrder`, `GoapAction_PlaceOrder`, etc.) do not know about the split. Sub-components are reachable via `OrderBook`, `Dispatcher`, `Evaluator` properties for tests/tooling. See [`logistics-cycle` SKILL](../logistics_cycle/SKILL.md) for the order lifecycle, policy SO, and diagnostics details.
 - **Stocking contract (`IStockProvider`)**: Any `CommercialBuilding` that wants autonomous restock implements `IStockProvider.GetStockTargets()`, returning `(ItemSO, MinStock)` pairs. The evaluator reads these on every `OnWorkerPunchIn` and places `BuyOrder`s when the virtual stock (physical + in-flight) falls below the pluggable `LogisticsPolicy`'s reorder threshold. Shipping implementers: `ShopBuilding` (projects `_itemsToSell`) and `CraftingBuilding` (`_inputStockTargets` — authored per-prefab in the Inspector, was added by the Layer A fix that stopped idle forges from sitting on empty input bins).
@@ -121,19 +138,56 @@ This bootstrap matters because `CraftingBuilding.GetCraftableItems()` walks `Roo
 
 > **Note:** The additive note above refers to `Building._defaultFurnitureLayout` (hoisted from `CommercialBuilding` — now lives on the base `Building` class and applies to all subclasses).
 
-### Furniture (`Furniture.cs`)
-The base class for interactable or static objects inside rooms.
+### Furniture inheritance hierarchy (post-2026-05-08 ISP refactor)
+
+```
+Furniture                       (base — placement, grid, interaction point, item ref)
+│   public virtual bool OnInteract(Character)   — universal E-press dispatch (default no-op)
+│
+├── OccupiableFurniture : Furniture, IOccupiable
+│   │   _occupant + _reservedBy state
+│   │   virtual Reserve / Use / Release / IsFree / IsOccupied
+│   │   override OnInteract → calls Use(c)
+│   ├── BedFurniture           (multi-slot — slot-aware overrides preferred)
+│   ├── ChairFurniture         (single-occupant)
+│   ├── Cashier                (vendor occupant + customer lock + till)
+│   ├── CraftingStation        (occupied during CharacterCraftAction)
+│   └── TimeClockFurniture     (occupied during Action_PunchIn / Action_PunchOut)
+│
+├── StorageFurniture           (no occupancy — slot-based container)
+├── ManagementFurniture        (no occupancy — opens UI on E-press)
+└── DisplayTextFurniture       (no occupancy — read-only sign)
+```
+
+**`IOccupiable`** is the contract for "this surface holds one Character at a time" — `Reserve`, `Use`, `Release`, `Occupant`, `ReservedBy`, `IsOccupied`, `IsFree`. Future non-Furniture occupiables (mounts, vehicles) implement the interface directly without inheriting `Furniture`.
+
+**Why interface AND abstract class:** the interface lets call-sites that hold a generic `Furniture` reference do `if (f is IOccupiable occ) occ.Reserve(c);` cleanly (Open/Closed friendly). The abstract base shares the actual `_occupant`/`_reservedBy` state + standard `Use`/`Release` body so the five subclasses don't each reimplement them. Pure-interface (no abstract base) would force five copies of the same field/methods; pure-abstract-class would block future mounts/vehicles that aren't furniture.
+
+### Furniture base (`Furniture.cs`)
+The base class for any object inside a room.
 - **Space Occupation:** Holds a `_sizeInCells` (Vector2Int) dictating how many grid cells it consumes. This is often auto-calculated via renderer bounds.
 - **Interaction Point:** Dictates where characters must stand to interact with it (`_interactionPoint`).
-- **Availability State:** 
+- **Universal interaction surface:** `virtual bool OnInteract(Character)` — called by `FurnitureInteractable.Interact` on every E-press, regardless of whether the furniture is occupiable. Default returns `true` (no-op). `OccupiableFurniture` overrides to delegate to `Use(c)`; bespoke types (sign / management desk) override directly.
+- **No occupancy state.** `_occupant`, `_reservedBy`, `Reserve`, `Use`, `Release`, `IsFree`, `IsOccupied`, `Occupant`, `ReservedBy` were extracted to `OccupiableFurniture` + the `IOccupiable` interface on 2026-05-08 per ISP (rule #12) — pure-display or pure-storage furniture no longer carries machinery it doesn't use.
+
+### OccupiableFurniture (`OccupiableFurniture.cs`)
+Abstract base for any furniture a Character can drive (sit / sleep / stand / craft / punch-clock).
+- **Availability State:**
   - `_reservedBy`: A character is walking to it.
   - `_occupant`: A character is currently using it physically.
   - Both prevent other characters from using the furniture simultaneously.
+- **Reservation is advisory** — `Use(c)` only checks `IsOccupied`, not `_reservedBy`. Whoever calls `Use` first wins; loser detects stale local state on next tick and re-picks. Canonical race-friendly pattern (used by `JobVendor` pool model — see `shop_system/SKILL.md`).
+- **Subclass override pattern:** override `Use` / `Release` to add side-effects (network broadcast, animation, slot-aware logic), call `base.Use` / `base.Release` to keep the lock state in sync. `BedFurniture` is the exception — its overrides delegate entirely to slot-aware methods (`UseSlot`/`ReleaseSlot`), so the inherited base `_occupant`/`_reservedBy` fields are intentionally unused (multi-occupant beds need per-slot tracking).
+- **Generic queries:** `FurnitureManager.FindAvailableFurniture<T>() where T : Furniture, IOccupiable` is the canonical "find a free X" lookup. Call-sites that hold a `Furniture` reference and need occupancy semantics use `if (furniture is IOccupiable occ) occ.Reserve(c);`.
 
-#### Typed subclasses
-- **`ChairFurniture` / `ChairFurnitureInteractable`** — sit-and-stay seating; Release() ends occupation.
-- **`CraftingStation` + `CraftingFurnitureInteractable`** — opens the crafting window for a worker.
-- **`TimeClockFurniture` + `TimeClockFurnitureInteractable`** — punch-in / punch-out station for the parent `CommercialBuilding`. Acts as a one-shot interaction: `Furniture.Use(...)` → `Action_PunchIn` / `Action_PunchOut` → `Furniture.Release()` fires in the action's `OnActionFinished`. Players hop through `CommercialBuilding.RequestPunchAtTimeClockServerRpc` (client-side `Interact` detects `!IsServer` and routes); NPCs target the clock from `BTAction_Work` / `BTAction_PunchOut` directly on the server. Eligibility: the interactor must have a `JobAssignment` where `Workplace == this building`. Missing clock → one-shot warning + legacy zone-punch fallback.
+#### Typed subclasses (occupiable)
+- **`ChairFurniture` / `ChairFurnitureInteractable`** — sit-and-stay seating; `Release()` ends occupation.
+- **`CraftingStation` + `CraftingFurnitureInteractable`** — opens the crafting window for a worker. Crafter occupies the station for the duration of `CharacterCraftAction` so two artisans can't queue against the same anvil simultaneously.
+- **`TimeClockFurniture` + `TimeClockFurnitureInteractable`** — punch-in / punch-out station for the parent `CommercialBuilding`. Acts as a one-shot interaction: `OccupiableFurniture.Use(...)` → `Action_PunchIn` / `Action_PunchOut` → `OccupiableFurniture.Release()` fires in the action's `OnActionFinished`. Players hop through `CommercialBuilding.RequestPunchAtTimeClockServerRpc` (client-side `Interact` detects `!IsServer` and routes); NPCs target the clock from `BTAction_Work` / `BTAction_PunchOut` directly on the server. Eligibility: the interactor must have a `JobAssignment` where `Workplace == this building`. Missing clock → one-shot warning + legacy zone-punch fallback.
+- **`BedFurniture`** — multi-slot occupant container. Single-bed prefab = 1 slot, double-bed = 2, family-bed = 4, etc. `ReserveSlot` / `UseSlot` / `ReleaseSlot` are preferred over the inherited single-slot API.
+- **`Cashier`** — vendor occupancy + customer lock + till. See `shop_system/SKILL.md`.
+
+#### Typed subclasses (non-occupiable)
 - **`StorageFurniture`** — slot-based container (chest, shelf, barrel, wardrobe). Mirrors the player `Inventory` pattern: a flat `List<ItemSlot>` initialized from four authored capacity ints (`_miscCapacity`, `_weaponCapacity`, `_wearableCapacity`, `_anyCapacity`). API: `AddItem(ItemInstance)`, `RemoveItem`, `RemoveItemFromSlot`, `GetItemSlot(int)`, `HasFreeSpaceFor*`, plus `Lock()` / `Unlock()` and `OnInventoryChanged` event. `AddItem` uses **strict-first slot priority** — wearables try `WearableSlot → MiscSlot → AnySlot`, weapons try `WeaponSlot → AnySlot`, everything else `MiscSlot → AnySlot` — so dedicated typed slots fill before generic ones. New slot types `WearableSlot` (wearables only) and `AnySlot` (any item) live alongside the existing `MiscSlot` / `WeaponSlot`. **Storage contents are now server-authoritative replicated** — see "Storage network sync" below. **Visual display is opt-in** via the optional `StorageVisualDisplay` component (see below) — chests don't add it, shelves do.
 
 #### Storage network sync (`StorageFurnitureNetworkSync`)
@@ -160,6 +214,47 @@ Slot contents survive `MapController.Hibernate` / `WakeUp` AND game-session relo
 **Adding a new storage subclass:** if you subclass `StorageFurniture` (e.g. `EncryptedChest` with a passcode field), the save/restore path picks it up automatically because the discovery is via `GetFurnitureOfType<StorageFurniture>()` and the serialization is per-slot. The **only** thing to add is subclass-specific state — for example, persisting a passcode would need a new field on `StorageFurnitureSaveEntry` plus subclass-aware capture/apply logic. Slot contents themselves require no change. Do NOT route subclass-specific state through `RestoreFromSaveData(IReadOnlyList<(int, ItemInstance)>)` — that contract is intentionally narrow ("clear and write slots, fire one event"); add a separate API on the subclass (mirroring how `IsLocked` will eventually be handled).
 
 **Authoring rule for storages with `_defaultFurnitureLayout`:** the FurnitureKey depends on the storage's building-local position. If you change `LocalPosition` on a `_defaultFurnitureLayout` slot **after** a world save was written, the saved entry's key won't match any live storage on next load — its contents will be silently dropped. This is the same brittleness as renaming a save field. Treat `_defaultFurnitureLayout` slot positions as part of the save schema once a build ships.
+
+#### Storage Roles (unified per-storage role system, 2026-05-08)
+Every `StorageFurniture` carries one runtime `StorageRoleType` value (`None` / `ToolStorage` / `InventoryStorage` / `SellShelf`). Per-storage exclusivity: a storage can hold **exactly one** role, but multiple storages can independently share the same role (e.g. three sell-shelves, one tool bin, two inventory bins). The role is owner-mutable at runtime through the management panel and persists in save data.
+
+**Type catalog (`Assets/Scripts/World/Furniture/StorageRoleType.cs`):**
+- `StorageRoleType` enum — `None = 0, ToolStorage = 1, InventoryStorage = 2, SellShelf = 3`.
+- `StorageRoleDescriptor` — `{ Type, DisplayName, Icon }` for UI rendering.
+- `StorageRoleCatalog` — static catalogs `Generic` (None / Tool / Inventory) and `Shop` (Generic + SellShelf). Subclasses pick the catalog they expose by overriding `CommercialBuilding.SupportedStorageRoles`.
+
+**Storage-side state (`StorageFurniture`):**
+- `_initialRole : StorageRoleType` — designer-authored seed (Inspector field). Used by the network sync layer on `OnNetworkSpawn` (server) when no save data has overwritten it.
+- `_runtimeRole : StorageRoleType` — server-authoritative state. Set only by `ApplyRoleFromNetwork` (called from `StorageFurnitureNetworkSync` on both server and client when the role NetVar value changes).
+- `Role : StorageRoleType` — public getter; returns `_runtimeRole`.
+- `event Action<StorageRoleType> OnRoleChanged` — fires on every peer when the role changes. UI listeners (the `StorageRolesTab` row) subscribe to this for live re-render.
+
+**Replication (`StorageFurnitureNetworkSync`):**
+- Adds a `NetworkVariable<StorageRoleType> _networkRole` (server write, everyone read). Default `None`.
+- Server seeds `_networkRole.Value = _storage.InitialRole` in `OnNetworkSpawn` if the value is currently default.
+- `OnValueChanged` callback calls `_storage.ApplyRoleFromNetwork(newValue)` on every peer — fires the local `OnRoleChanged` event.
+- `SetRoleServer(StorageRoleType newRole)` — server-only mutator; writes `_networkRole.Value`. Used by `CommercialBuilding.TrySetStorageRoleServerRpc`, `MapController.RestoreStorageFurnitureContents` (save-restore), and `ShopBuilding.OnFurnituresLoaded` (legacy sell-shelf migration).
+
+**Building-side API (`CommercialBuilding`):**
+- `virtual IReadOnlyList<StorageRoleDescriptor> SupportedStorageRoles` — defaults to `StorageRoleCatalog.Generic`. Override per subclass to widen (`ShopBuilding` returns `StorageRoleCatalog.Shop`).
+- `IReadOnlyList<StorageFurniture> GetStoragesWithRole(StorageRoleType type)` — walks every storage child (recursive, includes inactive) and returns those whose `Role` matches. Allocates a fresh list per call — not a hot path (called on UI refresh + logistics re-evaluation, both rare).
+- `event Action OnStorageRolesChanged` — fires on **every peer** when any child storage's role changes. Driven by per-storage `StorageFurniture.OnRoleChanged` subscriptions installed at `OnNetworkSpawn` and refreshed inside `GetStorageFurnitureCached` (so runtime-placed storages are picked up automatically). Old behavior — fire only from inside the ServerRpc body — was host-only and was replaced 2026-05-09.
+- `[ServerRpc(RequireOwnership=false)] TrySetStorageRoleServerRpc(NetworkObjectReference furnitureRef, StorageRoleType newRole)` — owner-only mutator. Validates: caller is the building's `Owner`, `newRole` appears in `SupportedStorageRoles`, target NetworkObject resolves to a `StorageFurniture` child with a sibling `StorageFurnitureNetworkSync`. Then calls `sync.SetRoleServer(newRole)`. The per-storage NetVar `OnValueChanged` fan-out then fires `OnStorageRolesChanged` on every peer — no manual invoke from the ServerRpc body. **Hard-fails with LogError when the sync sibling is missing** (was LogWarning pre-2026-05-09 — was masking a regression where dropdown changes silently dropped). Rejected owner / role-out-of-catalog calls still log a warning (no toast yet — that's a follow-up).
+- Multi-storage list helpers (above) — `ToolStorages`, `InventoryStorages`, `FindToolStorageContaining`, `FindToolStorageWithFreeSpace`, `HasToolInAnyToolStorage`, `IsToolStorage`. All consumers (logistics + GOAP + jobs) iterate the lists.
+
+**Save/restore:**
+- `StorageFurnitureSaveEntry.Role : StorageRoleType` field captures the role per-storage at save time (`BuildingSaveData.FromBuilding`).
+- `MapController.RestoreStorageFurnitureContents` writes the saved role onto each storage's `StorageFurnitureNetworkSync` after slot-content restore — guaranteed to happen after `OnNetworkSpawn` so `SetRoleServer` is safe.
+- Old saves: `Role` defaults to `None` for entries that predate the field, and `ShopBuilding._pendingSellShelfKeys` (legacy) is migrated by `ShopBuilding.OnFurnituresLoaded()` after restore to write `SellShelf` onto the matching storages.
+
+**Owner-driven UI (`StorageRolesTab` family):**
+- `StorageRolesTab` — `IManagementTab` impl on the base `CommercialBuilding`. Loaded from `Resources/UI/Management/StorageRolesTab.prefab`. Replaces the deleted `ShopShelvesTab`.
+- `StorageRolesTabView` — lists every `StorageFurniture` child, one row each. Subscribes to `building.OnStorageRolesChanged` for re-render. Empty state copy: "Place a storage furniture inside the building to assign roles."
+- `StorageRolesTabRow` — per-row label + TMP_Dropdown wired to `building.SupportedStorageRoles`. Selecting an option fires `building.TrySetStorageRoleServerRpc(...)`. Subscribes to `storage.OnRoleChanged` so save-restore / migration writes (which bypass the building's ServerRpc) still refresh the row's selection.
+
+**Wider impact / migration notes:**
+- `ShopBuilding.SellShelves` is now `GetStoragesWithRole(StorageRoleType.SellShelf)`. The dedicated `_sellShelves : NetworkList<NetworkObjectReference>`, `OnSellShelvesChanged` event, and `SetSellShelfFlagServerRpc` ServerRpc were deleted on 2026-05-08.
+- Subclassing `CommercialBuilding` with new role catalogs (e.g. `WorkshopBuilding` adding `MaterialBin`): extend `StorageRoleType` enum + `StorageRoleCatalog` + override `SupportedStorageRoles`. The dropdown UI auto-renders the new option.
 
 #### `StorageVisualDisplay` (optional renderer)
 Add this component next to `StorageFurniture` only when contents should be visible (shelves, open crates, weapon racks). Configure:

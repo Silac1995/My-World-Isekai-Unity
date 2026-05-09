@@ -149,7 +149,7 @@ Global shortcuts live on **`DevModeManager`** — not on the individual tab modu
 **Dispatch entry points on the modules (all public):**
 
 - `DevSelectionModule.TrySelectAtCursor(out string label)` — interior raycast (`_selectableLayerMask`, default `RigidBody + Furniture`) + sets selection. Returns `false` if raycast missed.
-- `DevSelectionModule.TrySelectBuildingAtCursor(out string label)` — building raycast (`_buildingLayerMask`, default `Building`) + sets selection. Returns `false` if raycast missed.
+- `DevSelectionModule.TrySelectBuildingAtCursor(out string label)` — building raycast (`_buildingLayerMask`, default `Building`) + sets selection. Returns `false` if raycast missed. **Special case (2026-05-08):** raycast hits that resolve to a `BuildingInteractable` (the cooperative construction loop's `InteractableObject` mounted on the Building root) are detected and rerouted to `SetSelectedBuilding(...)` instead of `SetSelectedInteractable(...)`. Otherwise the Inspect tab would never reach `BuildingInspectorView`.
 - `DevSelectionModule.ClearSelection()` — clears selection + fires change events.
 - `DevSelectionModule.DisarmToggle()` / `IsArmed` — armed-toggle control.
 - `DevSpawnModule.TrySpawnAtCursor()` — raycasts the Environment layer + spawns via existing `SpawnAt` path.

@@ -33,9 +33,9 @@ public class CharacterPickUpFurnitureAction : CharacterAction
             return false;
         }
 
-        if (_targetFurniture.IsOccupied)
+        if (_targetFurniture is IOccupiable occupiable && occupiable.IsOccupied)
         {
-            Debug.LogWarning($"<color=orange>[Action]</color> {_targetFurniture.FurnitureName} is occupied by {_targetFurniture.Occupant.CharacterName}.");
+            Debug.LogWarning($"<color=orange>[Action]</color> {_targetFurniture.FurnitureName} is occupied by {occupiable.Occupant.CharacterName}.");
             return false;
         }
 

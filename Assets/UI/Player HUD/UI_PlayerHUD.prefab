@@ -2345,6 +2345,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f65d7eec38b8e4e46993fc3e829b97b1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _hudCanvas: {fileID: 0}
   character: {fileID: 0}
   _playerInfo: {fileID: 5985654044373427690}
   _buttonEquipmentUI: {fileID: 1214737420693240702}

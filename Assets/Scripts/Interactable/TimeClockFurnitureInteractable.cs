@@ -112,16 +112,25 @@ public class TimeClockFurnitureInteractable : FurnitureInteractable
             return;
         }
 
-        // If the clock is already in use (another worker is punching right now), let
-        // Furniture's occupation gate reject quietly. The occupant flips back to null
-        // when the previous worker's OnActionFinished fires.
-        if (Furniture.IsOccupied && Furniture.Occupant != worker)
+        // TimeClockFurniture extends OccupiableFurniture (post-2026-05-08 ISP refactor),
+        // so the cast always succeeds for the live path. If a designer authors a clock
+        // on a non-occupiable Furniture, we abort cleanly with a one-shot warning.
+        if (Furniture is not IOccupiable clockOcc)
         {
-            Debug.LogWarning($"<color=orange>[TimeClock]</color> {worker.CharacterName} cannot punch at {_building.BuildingName}: time clock is already occupied by {Furniture.Occupant.CharacterName}. Did the previous worker's punch action get cancelled before OnActionFinished fired?");
+            Debug.LogError($"<color=red>[TimeClock]</color> {Furniture.FurnitureName} is not IOccupiable — TimeClockFurniture must extend OccupiableFurniture. Aborting punch.");
             return;
         }
 
-        if (!Furniture.IsOccupied && !Furniture.Use(worker))
+        // If the clock is already in use (another worker is punching right now), let
+        // Furniture's occupation gate reject quietly. The occupant flips back to null
+        // when the previous worker's OnActionFinished fires.
+        if (clockOcc.IsOccupied && clockOcc.Occupant != worker)
+        {
+            Debug.LogWarning($"<color=orange>[TimeClock]</color> {worker.CharacterName} cannot punch at {_building.BuildingName}: time clock is already occupied by {clockOcc.Occupant.CharacterName}. Did the previous worker's punch action get cancelled before OnActionFinished fired?");
+            return;
+        }
+
+        if (!clockOcc.IsOccupied && !clockOcc.Use(worker))
         {
             Debug.LogWarning($"<color=orange>[TimeClock]</color> {worker.CharacterName} cannot punch at {_building.BuildingName}: Furniture.Use returned false (race?).");
             return;
@@ -138,7 +147,7 @@ public class TimeClockFurnitureInteractable : FurnitureInteractable
         {
             string busyAction = worker.CharacterActions?.CurrentAction?.GetType().Name ?? "null";
             Debug.LogWarning($"<color=orange>[TimeClock]</color> {worker.CharacterName} cannot punch at {_building.BuildingName}: CharacterActions.ExecuteAction rejected (already running '{busyAction}'). Releasing the time clock so it isn't stuck occupied.");
-            Furniture.Release();
+            clockOcc.Release();
             return;
         }
 
@@ -149,7 +158,7 @@ public class TimeClockFurnitureInteractable : FurnitureInteractable
         releaseOnce = () =>
         {
             action.OnActionFinished -= releaseOnce;
-            if (Furniture != null && Furniture.Occupant == worker) Furniture.Release();
+            if (Furniture != null && clockOcc.Occupant == worker) clockOcc.Release();
         };
         action.OnActionFinished += releaseOnce;
     }

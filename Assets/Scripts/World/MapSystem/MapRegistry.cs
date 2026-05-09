@@ -66,6 +66,14 @@ namespace MWI.WorldSystem
     {
         public string FurnitureKey;
         public List<StorageSlotSaveEntry> Slots = new List<StorageSlotSaveEntry>();
+
+        /// <summary>
+        /// Owner-assigned <see cref="StorageRoleType"/> (Tool / Inventory / SellShelf / None).
+        /// Added 2026-05-08 with the unified storage-role system. Default
+        /// <see cref="StorageRoleType.None"/> for old saves that don't carry the field —
+        /// JSON deserialization fills enum defaults to 0, which maps to None.
+        /// </summary>
+        public StorageRoleType Role = StorageRoleType.None;
     }
 
     /// <summary>
@@ -250,7 +258,8 @@ namespace MWI.WorldSystem
 
                     var entry = new StorageFurnitureSaveEntry
                     {
-                        FurnitureKey = ComputeStorageFurnitureKey(storage, building.transform)
+                        FurnitureKey = ComputeStorageFurnitureKey(storage, building.transform),
+                        Role = storage.Role,
                     };
 
                     var slots = storage.ItemSlots;

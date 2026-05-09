@@ -70,10 +70,12 @@ public class CraftingFurnitureInteractable : FurnitureInteractable
 
     public override void Release()
     {
-        // Libérer le regard du personnage
-        if (Furniture != null && Furniture.Occupant != null)
+        // Libérer le regard du personnage. CraftingStation extends OccupiableFurniture,
+        // so the IOccupiable cast always succeeds for the live path; null-check covers
+        // a destroyed furniture race.
+        if (Furniture is IOccupiable occ && occ.Occupant != null)
         {
-            Furniture.Occupant.CharacterVisual?.ClearLookTarget();
+            occ.Occupant.CharacterVisual?.ClearLookTarget();
         }
 
         base.Release();

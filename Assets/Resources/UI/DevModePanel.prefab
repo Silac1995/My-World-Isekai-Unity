@@ -7101,6 +7101,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::BuildingInspectorView
   _headerLabel: {fileID: 4440351213837124948}
   _content: {fileID: 7578310252810307389}
+  _forceFinishButton: {fileID: 0}
 --- !u!1 &3597819027146237040
 GameObject:
   m_ObjectHideFlags: 0

@@ -1036,6 +1036,22 @@ namespace MWI.WorldSystem
                     }
 
                     storage.RestoreFromSaveData(entries);
+
+                    // 2026-05-08 unified storage-role restore: write the saved Role onto
+                    // the storage's network sync so it propagates to clients on next tick.
+                    // Old saves default to StorageRoleType.None — no behavioral change for
+                    // pre-refactor data; ShopBuilding's OnFurnituresLoaded then migrates the
+                    // legacy SellShelfFurnitureKeys list onto Role=SellShelf for any keys
+                    // that didn't get a role written here.
+                    if (saved.Role != StorageRoleType.None)
+                    {
+                        var sync = storage.GetComponent<StorageFurnitureNetworkSync>();
+                        if (sync != null)
+                        {
+                            sync.SetRoleServer(saved.Role);
+                        }
+                    }
+
                     restoredFurniture++;
                     restoredItems += entries.Count;
                 }

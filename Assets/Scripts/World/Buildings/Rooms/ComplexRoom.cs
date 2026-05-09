@@ -115,7 +115,7 @@ public class ComplexRoom : Room
         }
     }
 
-    public T FindAvailableFurniture<T>() where T : Furniture
+    public T FindAvailableFurniture<T>() where T : Furniture, IOccupiable
     {
         // Check own furniture first
         T result = FurnitureManager != null ? FurnitureManager.FindAvailableFurniture<T>() : null;
