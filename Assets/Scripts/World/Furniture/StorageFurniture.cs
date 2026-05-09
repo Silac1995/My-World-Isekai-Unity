@@ -67,6 +67,29 @@ public class StorageFurniture : Furniture
         OnRoleChanged?.Invoke(newRole);
     }
 
+    /// <summary>
+    /// Sets <see cref="_isLocked"/> directly and fires <see cref="OnInventoryChanged"/>
+    /// exactly once. Bypasses <see cref="Lock"/> / <see cref="Unlock"/> to avoid
+    /// re-triggering <see cref="StorageFurnitureNetworkSync"/>'s inventory handler
+    /// in a feedback loop.
+    ///
+    /// <para><b>Callers (two only):</b></para>
+    /// <list type="bullet">
+    ///   <item><see cref="StorageFurnitureNetworkSync"/> — client-side
+    ///   <c>_isLockedSync.OnValueChanged</c> handler mirrors server lock state here.</item>
+    ///   <item><c>MapController.RestoreStorageFurnitureContents</c> — applies the
+    ///   persisted <c>IsLocked</c> value after slot contents are restored; the subsequent
+    ///   <see cref="OnInventoryChanged"/> propagates the value through the sync component's
+    ///   server-side handler into the replicated <c>NetworkVariable</c>.</item>
+    /// </list>
+    /// </summary>
+    internal void ApplyLockStateFromNetwork(bool isLocked)
+    {
+        if (_isLocked == isLocked) return;
+        _isLocked = isLocked;
+        OnInventoryChanged?.Invoke();
+    }
+
     public bool IsFull
     {
         get
@@ -253,10 +276,11 @@ public class StorageFurniture : Furniture
     /// and therefore passing the same gate the server passed.
     ///
     /// **Locked storage:** unlike <see cref="AddItem"/>, this method ignores
-    /// <see cref="_isLocked"/> — clients always mirror server state regardless
-    /// of lock. Lock state itself is intentionally NOT yet replicated; if/when
-    /// it becomes a network-visible concern, extend the sync component, not
-    /// this method.
+    /// <see cref="_isLocked"/> — clients always mirror server slot contents
+    /// regardless of lock. Lock state is replicated separately via
+    /// <see cref="StorageFurnitureNetworkSync"/>'s <c>_isLockedSync</c>
+    /// <c>NetworkVariable</c> and applied through
+    /// <see cref="ApplyLockStateFromNetwork"/>.
     /// </summary>
     /// <param name="entries">Sparse list of (slotIndex, instance) pairs. Slot
     /// indices not present in the list are treated as empty.</param>

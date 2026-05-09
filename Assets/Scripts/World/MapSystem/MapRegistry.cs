@@ -56,10 +56,6 @@ namespace MWI.WorldSystem
     /// list reorders in <c>_defaultFurnitureLayout</c> and supports multiple same-
     /// typed storages per building (two crates of the same kind at different spots).
     /// </para>
-    /// <para>
-    /// We do NOT persist <c>IsLocked</c> yet — it isn't replicated either, both gaps
-    /// will be addressed together when lock state becomes a network-visible concern.
-    /// </para>
     /// </summary>
     [Serializable]
     public class StorageFurnitureSaveEntry
@@ -74,6 +70,14 @@ namespace MWI.WorldSystem
         /// JSON deserialization fills enum defaults to 0, which maps to None.
         /// </summary>
         public StorageRoleType Role = StorageRoleType.None;
+
+        /// <summary>
+        /// Whether the storage was locked at save time. Default <c>false</c> for old
+        /// saves that don't carry the field — JSON deserialization fills bool defaults to
+        /// false, preserving backward-compat (unlocked = normal operational state).
+        /// Added 2026-05-09 alongside <c>_isLockedSync</c> NetworkVariable replication.
+        /// </summary>
+        public bool IsLocked = false;
     }
 
     /// <summary>
@@ -260,6 +264,7 @@ namespace MWI.WorldSystem
                     {
                         FurnitureKey = ComputeStorageFurnitureKey(storage, building.transform),
                         Role = storage.Role,
+                        IsLocked = storage.IsLocked,
                     };
 
                     var slots = storage.ItemSlots;

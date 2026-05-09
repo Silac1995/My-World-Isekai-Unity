@@ -62,6 +62,18 @@ public class StorageFurnitureNetworkSync : NetworkBehaviour
     private NetworkVariable<StorageRoleType> _networkRole;
 
     /// <summary>
+    /// Replicated lock state. Default <c>false</c> at construction; on first
+    /// server spawn we seed it from <see cref="StorageFurniture.IsLocked"/>.
+    /// Mutations reach this variable via the extended
+    /// <see cref="HandleServerInventoryChanged"/> handler — <c>Lock()</c> /
+    /// <c>Unlock()</c> fire <c>OnInventoryChanged</c> which that handler already
+    /// subscribes to, so no separate event is needed. Clients mirror the value
+    /// into <see cref="StorageFurniture.ApplyLockStateFromNetwork"/> via
+    /// <see cref="HandleLockChanged"/> on every change.
+    /// </summary>
+    private NetworkVariable<bool> _isLockedSync;
+
+    /// <summary>
     /// Reusable buffer for rewriting client-side slots in
     /// <see cref="ApplyFullStateOnClient"/> — avoids one allocation per change.
     /// </summary>
@@ -91,6 +103,16 @@ public class StorageFurnitureNetworkSync : NetworkBehaviour
         // overwrites it from StorageFurniture.InitialRole in OnNetworkSpawn.
         _networkRole = new NetworkVariable<StorageRoleType>(
             StorageRoleType.None,
+            NetworkVariableReadPermission.Everyone,
+            NetworkVariableWritePermission.Server
+        );
+
+        // Lock-state NetworkVariable — same lifecycle constraint as above.
+        // Default false; the server seeds from StorageFurniture.IsLocked in
+        // OnNetworkSpawn (which accounts for the inspector-authored seed and
+        // any save-restore call that may have already applied a non-default value).
+        _isLockedSync = new NetworkVariable<bool>(
+            false,
             NetworkVariableReadPermission.Everyone,
             NetworkVariableWritePermission.Server
         );
@@ -129,6 +151,16 @@ public class StorageFurnitureNetworkSync : NetworkBehaviour
             // Subscribe to value changes so server-side mutations (via SetRoleServer)
             // also fire OnRoleChanged on the host's StorageFurniture.
             _networkRole.OnValueChanged += HandleRoleChanged;
+
+            // Seed lock state from the authoritative storage value. Save-restore
+            // calls StorageFurniture.ApplyLockStateFromNetwork AFTER OnNetworkSpawn,
+            // which fires OnInventoryChanged, which triggers HandleServerInventoryChanged
+            // below — that handler then pushes the restored value, overwriting this seed.
+            _isLockedSync.Value = _storage.IsLocked;
+            // Subscribe so writes to _isLockedSync from HandleServerInventoryChanged
+            // mirror back into the host's StorageFurniture via HandleLockChanged.
+            // The early-return in ApplyLockStateFromNetwork prevents feedback loops.
+            _isLockedSync.OnValueChanged += HandleLockChanged;
         }
         else
         {
@@ -140,6 +172,10 @@ public class StorageFurnitureNetworkSync : NetworkBehaviour
             // Subscribe to role changes + apply current value once for late-join parity.
             _networkRole.OnValueChanged += HandleRoleChanged;
             _storage.ApplyRoleFromNetwork(_networkRole.Value);
+
+            // Subscribe to lock-state changes + apply current value for late-join parity.
+            _isLockedSync.OnValueChanged += HandleLockChanged;
+            _storage.ApplyLockStateFromNetwork(_isLockedSync.Value);
         }
     }
 
@@ -159,6 +195,11 @@ public class StorageFurnitureNetworkSync : NetworkBehaviour
             _networkRole.OnValueChanged -= HandleRoleChanged;
         }
 
+        if (_isLockedSync != null)
+        {
+            _isLockedSync.OnValueChanged -= HandleLockChanged;
+        }
+
         base.OnNetworkDespawn();
     }
 
@@ -166,6 +207,12 @@ public class StorageFurnitureNetworkSync : NetworkBehaviour
     {
         if (_storage == null) return;
         _storage.ApplyRoleFromNetwork(next);
+    }
+
+    private void HandleLockChanged(bool prev, bool next)
+    {
+        if (_storage == null) return;
+        _storage.ApplyLockStateFromNetwork(next);
     }
 
     /// <summary>
@@ -190,6 +237,12 @@ public class StorageFurnitureNetworkSync : NetworkBehaviour
     {
         if (!IsServer) return;
         RebuildNetworkListFromStorage();
+        // Lock() / Unlock() both fire OnInventoryChanged, so this is the single
+        // chokepoint for propagating lock state to clients. Differ-check avoids
+        // a spurious NetworkVariable write (and the resulting OnValueChanged on
+        // the host) when only slot contents changed.
+        if (_isLockedSync != null && _isLockedSync.Value != _storage.IsLocked)
+            _isLockedSync.Value = _storage.IsLocked;
     }
 
     /// <summary>
