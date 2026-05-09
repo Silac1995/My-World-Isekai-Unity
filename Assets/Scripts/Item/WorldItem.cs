@@ -203,64 +203,26 @@ public class WorldItem : NetworkBehaviour
     }
 
     /// <summary>
-    /// Instantiates the WorldItem prefab from the ItemSO and initializes it in the world.
-    /// Used when an item should be dropped on the ground (e.g. deposit).
+    /// Canonical server-side WorldItem spawn path. Every spawn in the project routes here.
+    ///
+    /// Prefab resolution: instance.ItemSO.WorldItemPrefab first (per-item authored shell);
+    /// falls back to SpawnManager.Instance.DefaultItemPrefab (generic shell) when null.
+    /// This lets debug/crafting spawns work without requiring every ItemSO to author a prefab,
+    /// while authored items still use their own visuals.
+    ///
+    /// NGO order (mandatory): Instantiate → Initialize(instance) → netObj.Spawn(true) →
+    /// ParentToContainingMap → SetNetworkData. SetNetworkData must come AFTER Spawn so
+    /// the NetworkVariable write triggers OnValueChanged for already-connected clients.
+    ///
+    /// ejectImpulse/ejectTorque: optional Rigidbody impulse applied post-spawn (crafting,
+    /// debug scatter). Only applied when the prefab has a Rigidbody component.
     /// </summary>
-    public static WorldItem SpawnWorldItem(ItemSO itemSO, Vector3 position, Quaternion? rotation = null)
-    {
-        if (NetworkManager.Singleton != null && !NetworkManager.Singleton.IsServer)
-        {
-            Debug.LogError($"<color=red>[WorldItem]</color> SpawnWorldItem can only be called by the Server!");
-            return null;
-        }
-
-        GameObject prefab = itemSO.WorldItemPrefab;
-        if (prefab == null)
-        {
-            Debug.LogWarning($"<color=orange>[Gather]</color> No WorldItemPrefab on {itemSO.ItemName}, item not spawned.");
-            return null;
-        }
-
-        GameObject worldItemGo = Object.Instantiate(prefab, position, rotation ?? Quaternion.identity);
-        worldItemGo.name = $"WorldItem_{itemSO.ItemName}";
-
-        ItemInstance instance = itemSO.CreateInstance();
-
-        if (worldItemGo.TryGetComponent(out WorldItem worldItem))
-        {
-            worldItem.Initialize(instance);
-
-            if (worldItemGo.TryGetComponent(out NetworkObject netObj))
-            {
-                netObj.Spawn(true);
-                ParentToContainingMap(worldItemGo);
-            }
-            else
-            {
-                Debug.LogWarning($"<color=orange>[Gather]</color> WorldItemPrefab for {itemSO.ItemName} missing NetworkObject component!");
-            }
-
-            // Setup Network Data after Spawn so OnValueChanged fires on connected clients
-            worldItem._networkItemData.Value = new NetworkItemData
-            {
-                ItemId = new FixedString64Bytes(itemSO.ItemId),
-                JsonData = new FixedString4096Bytes(JsonUtility.ToJson(instance))
-            };
-
-            return worldItem;
-        }
-        else
-        {
-            Debug.LogError($"<color=red>[Gather]</color> The prefab of {itemSO.ItemName} has no WorldItem component!");
-            Object.Destroy(worldItemGo);
-            return null;
-        }
-    }
-
-    /// <summary>
-    /// Instantiates the WorldItem prefab using an existing instance (to preserve durability, colors, etc.).
-    /// </summary>
-    public static WorldItem SpawnWorldItem(ItemInstance instance, Vector3 position, Quaternion? rotation = null)
+    public static WorldItem SpawnWorldItem(
+        ItemInstance instance,
+        Vector3 position,
+        Quaternion? rotation = null,
+        Vector3? ejectImpulse = null,
+        Vector3? ejectTorque = null)
     {
         if (NetworkManager.Singleton != null && !NetworkManager.Singleton.IsServer)
         {
@@ -271,44 +233,63 @@ public class WorldItem : NetworkBehaviour
         if (instance == null || instance.ItemSO == null) return null;
 
         GameObject prefab = instance.ItemSO.WorldItemPrefab;
+        if (prefab == null && SpawnManager.Instance != null)
+            prefab = SpawnManager.Instance.DefaultItemPrefab;
+
         if (prefab == null)
         {
-            Debug.LogWarning($"<color=orange>[Gather]</color> No WorldItemPrefab on {instance.ItemSO.ItemName}, item not spawned.");
+            Debug.LogWarning($"<color=orange>[WorldItem]</color> No WorldItemPrefab on '{instance.ItemSO.ItemName}' and no DefaultItemPrefab on SpawnManager — item not spawned.");
             return null;
         }
 
         GameObject worldItemGo = Object.Instantiate(prefab, position, rotation ?? Quaternion.identity);
         worldItemGo.name = $"WorldItem_{instance.ItemSO.ItemName}";
 
-        if (worldItemGo.TryGetComponent(out WorldItem worldItem))
+        if (!worldItemGo.TryGetComponent(out WorldItem worldItem))
         {
-            worldItem.Initialize(instance);
-
-            if (worldItemGo.TryGetComponent(out NetworkObject netObj))
-            {
-                netObj.Spawn(true);
-                ParentToContainingMap(worldItemGo);
-            }
-            else
-            {
-                Debug.LogWarning($"<color=orange>[Gather]</color> WorldItemPrefab for {instance.ItemSO.ItemName} missing NetworkObject component!");
-            }
-
-            // Setup Network Data after Spawn so OnValueChanged fires on connected clients
-            worldItem._networkItemData.Value = new NetworkItemData
-            {
-                ItemId = new FixedString64Bytes(instance.ItemSO.ItemId),
-                JsonData = new FixedString4096Bytes(JsonUtility.ToJson(instance))
-            };
-
-            return worldItem;
-        }
-        else
-        {
-            Debug.LogError($"<color=red>[Gather]</color> The prefab of {instance.ItemSO.ItemName} has no WorldItem component!");
+            Debug.LogError($"<color=red>[WorldItem]</color> Prefab for '{instance.ItemSO.ItemName}' has no WorldItem component!");
             Object.Destroy(worldItemGo);
             return null;
         }
+
+        worldItem.Initialize(instance);
+
+        if (worldItemGo.TryGetComponent(out NetworkObject netObj))
+        {
+            netObj.Spawn(true);
+            ParentToContainingMap(worldItemGo);
+        }
+        else
+        {
+            Debug.LogWarning($"<color=orange>[WorldItem]</color> Prefab for '{instance.ItemSO.ItemName}' missing NetworkObject component!");
+        }
+
+        // Set NetworkData AFTER Spawn so OnValueChanged fires for already-connected clients.
+        worldItem._networkItemData.Value = new NetworkItemData
+        {
+            ItemId = new FixedString64Bytes(instance.ItemSO.ItemId),
+            JsonData = new FixedString4096Bytes(JsonUtility.ToJson(instance))
+        };
+
+        if (ejectImpulse.HasValue && worldItemGo.TryGetComponent(out Rigidbody rb))
+        {
+            rb.AddForce(ejectImpulse.Value, ForceMode.Impulse);
+            if (ejectTorque.HasValue)
+                rb.AddTorque(ejectTorque.Value);
+        }
+
+        return worldItem;
+    }
+
+    /// <summary>
+    /// Convenience overload — creates a default instance from the SO and delegates to the
+    /// canonical ItemInstance path. Use the ItemInstance overload directly when you need to
+    /// set colors, durability, or other per-instance state before spawning.
+    /// </summary>
+    public static WorldItem SpawnWorldItem(ItemSO itemSO, Vector3 position, Quaternion? rotation = null)
+    {
+        if (itemSO == null) return null;
+        return SpawnWorldItem(itemSO.CreateInstance(), position, rotation);
     }
 
     /// <summary>
@@ -316,8 +297,8 @@ public class WorldItem : NetworkBehaviour
     /// whose trigger bounds contain its current world position. Looked up via
     /// MapController.GetAnyMapAtPosition so interiors and exteriors both qualify. Falls back
     /// silently to scene root if the spawn happens outside any registered map (open world).
-    /// Must be called AFTER NetworkObject.Spawn so the parent is replicated to clients.
-    /// Public so other spawn paths (e.g. SpawnManager.SpawnCopyOfItem for crafting) can use the same helper.
+    /// Must be called AFTER NetworkObject.Spawn so the parent change is replicated to clients.
+    /// Called by SpawnWorldItem — exposed public for any future external spawn path.
     /// </summary>
     public static void ParentToContainingMap(GameObject worldItemGo)
     {

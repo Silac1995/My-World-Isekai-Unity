@@ -3,7 +3,7 @@ type: system
 title: "World Items"
 tags: [items, world, pickup, network, tier-2]
 created: 2026-04-19
-updated: 2026-04-22
+updated: 2026-05-09
 sources: []
 related:
   - "[[items]]"
@@ -56,7 +56,8 @@ Let items exist in the world with spatial, physical, and network presence — wh
 
 ## Public API
 
-- `WorldItem.SpawnFromInstance(ItemInstance, Vector3)` — materialize.
+- `WorldItem.SpawnWorldItem(ItemInstance, Vector3, Quaternion?, ejectImpulse, ejectTorque)` — **canonical server-side spawn**. All paths route here. Prefab: `ItemSO.WorldItemPrefab` → `SpawnManager.DefaultItemPrefab` fallback. NGO order: Instantiate → Initialize → Spawn → ParentToContainingMap → SetNetworkData.
+- `WorldItem.SpawnWorldItem(ItemSO, Vector3, Quaternion?)` — convenience overload; creates a default instance and delegates to the canonical path.
 - `WorldItem.ItemInstance` — the live data.
 - `WorldItem.ItemInteractable` — the interaction target (serialized property, no GetComponent).
 - `WorldItem.TryCollect(character)` — reserve for pickup; returns true if available.
@@ -136,6 +137,7 @@ Never `GetComponentInChildren<ItemInteractable>()` in AI navigation / interactio
 ## Change log
 - 2026-04-19 — Initial pass. — Claude / [[kevin]]
 - 2026-04-22 — Removed FreezeOnGround. Items are now permanent non-kinematic physics objects. Added NavMeshObstacle (carve=true) enabled on first ground contact, replicated via `_obstacleActive` NetworkVariable. New `ItemSO.BlocksPathing` flag (default true) for opt-out. Re-tuned base prefab Rigidbody (mass 30→2, drag 0→3, angular drag 0.05→4). — claude
+- 2026-05-09 — Consolidated two parallel spawn APIs (`WorldItem.SpawnWorldItem` × 2 + `SpawnManager.SpawnItem` + `SpawnManager.SpawnCopyOfItem`) into a single canonical `WorldItem.SpawnWorldItem(ItemInstance, Vector3, Quaternion?, ejectImpulse, ejectTorque)`. All callers migrated. `SpawnManager.DefaultItemPrefab` property added as the generic-shell fallback. — claude
 
 ## Sources
 - [.agent/skills/item_system/SKILL.md](../../.agent/skills/item_system/SKILL.md) §3.

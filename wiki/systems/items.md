@@ -3,7 +3,7 @@ type: system
 title: "Items, Inventory & Equipment"
 tags: [items, inventory, equipment, gameplay, tier-1]
 created: 2026-04-18
-updated: 2026-04-19
+updated: 2026-05-09
 sources: []
 related:
   - "[[character]]"
@@ -88,7 +88,8 @@ Separate immutable item definitions from per-instance runtime state so one `Weap
 
 Spawning:
 - `ItemSO.CreateInstance(...)` — create a brand-new instance with per-item colors/parameters.
-- `WorldItem.SpawnFromInstance(instance, position)` — materialize on ground.
+- `WorldItem.SpawnWorldItem(instance, position, rotation?, ejectImpulse?, ejectTorque?)` — **canonical server-side spawn**. All callers route here. Prefab: `ItemSO.WorldItemPrefab` → `SpawnManager.DefaultItemPrefab` fallback. Accepts optional eject impulse for debug/crafting scatter.
+- `WorldItem.SpawnWorldItem(itemSO, position, rotation?)` — convenience overload; creates a plain instance and delegates to the canonical path.
 
 Pickup / drop:
 - `CharacterPickUpItem` action — **the only path** to remove a `WorldItem` from the world.
@@ -178,6 +179,7 @@ ItemInstance.Color_Primary ──► InitializePrefab searches child nodes tagge
 ## Change log
 - 2026-04-18 — Initial documentation pass. — Claude / [[kevin]]
 - 2026-04-19 — `ItemMaterial` now covered by [[terrain-and-weather]] / [[character-terrain]]. Updated open questions to reflect coverage. — Claude / [[kevin]]
+- 2026-05-09 — Spawning API consolidated into single canonical `WorldItem.SpawnWorldItem(ItemInstance, ...)`. `SpawnManager.SpawnItem` and `SpawnManager.SpawnCopyOfItem` removed. Updated Public API section. — claude
 
 ## Sources
 - [.agent/skills/item_system/SKILL.md](../../.agent/skills/item_system/SKILL.md)

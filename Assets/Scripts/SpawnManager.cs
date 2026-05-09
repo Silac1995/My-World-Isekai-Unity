@@ -22,6 +22,11 @@ public class SpawnManager : MonoBehaviour
 
     public Vector3 DefaultSpawnPosition => spawnGameObject != null ? spawnGameObject.transform.position : Vector3.zero;
     public Quaternion DefaultSpawnRotation => spawnGameObject != null ? spawnGameObject.transform.rotation : Quaternion.identity;
+    /// <summary>
+    /// Generic WorldItem shell prefab used as the fallback by WorldItem.SpawnWorldItem when
+    /// an ItemSO has no per-item WorldItemPrefab assigned.
+    /// </summary>
+    public GameObject DefaultItemPrefab => _defaultItemPrefab;
 
     private CharacterPersonalitySO[] _availablePersonalities;
     private CharacterBehavioralTraitsSO[] _availableTraits;
@@ -61,125 +66,6 @@ public class SpawnManager : MonoBehaviour
         else
         {
             Debug.Log($"Position de spawnGameObject : {spawnGameObject.transform.position}", this);
-        }
-    }
-
-    // --- Logique de Spawn d'Items ---
-
-    public ItemInstance SpawnItem(ItemSO data, Vector3 pos)
-    {
-        if (Unity.Netcode.NetworkManager.Singleton != null && !Unity.Netcode.NetworkManager.Singleton.IsServer)
-        {
-            Debug.LogError($"<color=red>[SpawnManager]</color> SpawnItem can only be called by the Server!");
-            return null;
-        }
-
-        if (pos == Vector3.zero && spawnGameObject != null)
-            pos = spawnGameObject.transform.position;
-
-        // 1. On instancie TOUJOURS le prefab par défaut (la "coquille" WorldItem)
-        if (_defaultItemPrefab == null)
-        {
-            Debug.LogError("[SpawnManager] Le _defaultItemPrefab n'est pas assigné !");
-            return null;
-        }
-
-        GameObject worldItemGo = Instantiate(_defaultItemPrefab, pos, Quaternion.identity);
-
-        // 2. On renomme l'objet pour la hiérarchie
-        worldItemGo.name = $"WorldItem_{data.ItemName}";
-
-        // 3. Création de la donnée (Instance)
-        ItemInstance instance = data.CreateInstance();
-
-        // 4. Gestion des couleurs aléatoires pour les équipements
-        if (instance is EquipmentInstance equipment)
-        {
-            equipment.SetPrimaryColor(Random.ColorHSV(0f, 1f, 0.5f, 1f, 0.5f, 1f));
-            if (equipment is WearableInstance wearable)
-            {
-                wearable.SetSecondaryColor(Random.ColorHSV(0f, 1f, 0.3f, 0.8f, 0.3f, 0.8f));
-            }
-        }
-
-        // 5. Liaison avec le script WorldItem
-        if (worldItemGo.TryGetComponent(out WorldItem worldItemComponent))
-        {
-            worldItemComponent.Initialize(instance);
-
-            if (worldItemGo.TryGetComponent(out Unity.Netcode.NetworkObject netObj))
-            {
-                worldItemComponent.SetNetworkData(new NetworkItemData
-                {
-                    ItemId = new Unity.Collections.FixedString64Bytes(data.ItemId),
-                    JsonData = new Unity.Collections.FixedString4096Bytes(JsonUtility.ToJson(instance))
-                });
-
-                netObj.Spawn(true);
-                WorldItem.ParentToContainingMap(worldItemGo);
-            }
-            else
-            {
-                Debug.LogWarning($"<color=orange>[SpawnManager]</color> _defaultItemPrefab missing NetworkObject component!");
-            }
-
-            // --- NOUVELLE LOGIQUE D'ÉJECTION ---
-            if (worldItemGo.TryGetComponent(out Rigidbody rb))
-            {
-                // On calcule une direction aléatoire sur le plan horizontal (X, Z)
-                float randomX = Random.Range(-1f, 1f);
-                float randomZ = Random.Range(-1f, 1f);
-
-                // On définit la force : une poussée vers le haut (Y) et un peu sur les côtés
-                // Ajuste le 5f (hauteur) et le 2f (dispersion) selon tes besoins
-                Vector3 ejectForce = new Vector3(randomX * 2f, 5f, randomZ * 2f);
-
-                // On applique l'impulsion
-                rb.AddForce(ejectForce, ForceMode.Impulse);
-
-                // Optionnel : Ajoute un petit torque (rotation) pour que l'objet tourne sur lui-même en tombant
-                rb.AddTorque(new Vector3(Random.Range(-10, 10), Random.Range(-10, 10), Random.Range(-10, 10)));
-            }
-            // ------------------------------------
-
-            Debug.Log($"<color=green>[Spawn]</color> {instance.ItemSO.ItemName} éjecté !");
-        }
-
-        return instance;
-    }
-
-    public void SpawnCopyOfItem(ItemInstance existingInstance, Vector3 pos)
-    {
-        if (Unity.Netcode.NetworkManager.Singleton != null && !Unity.Netcode.NetworkManager.Singleton.IsServer)
-        {
-            Debug.LogError($"<color=red>[SpawnManager]</color> SpawnCopyOfItem can only be called by the Server!");
-            return;
-        }
-
-        if (existingInstance == null) return;
-
-        GameObject go = Instantiate(_defaultItemPrefab, pos, Quaternion.identity);
-        go.name = $"WorldItem_{existingInstance.CustomizedName}_Copy";
-
-        // On applique les propriétés sauvegardées (couleurs, library)
-        existingInstance.InitializeWorldPrefab(go);
-
-        if (go.TryGetComponent(out WorldItem worldItem) || go.GetComponentInChildren<WorldItem>() != null)
-        {
-            if (worldItem == null) worldItem = go.GetComponentInChildren<WorldItem>();
-            worldItem.Initialize(existingInstance);
-
-            if (go.TryGetComponent(out Unity.Netcode.NetworkObject netObj))
-            {
-                netObj.Spawn(true);
-                WorldItem.ParentToContainingMap(go);
-            }
-
-            worldItem.SetNetworkData(new NetworkItemData
-            {
-                ItemId = new Unity.Collections.FixedString64Bytes(existingInstance.ItemSO.ItemId),
-                JsonData = new Unity.Collections.FixedString4096Bytes(JsonUtility.ToJson(existingInstance))
-            });
         }
     }
 

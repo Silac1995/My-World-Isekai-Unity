@@ -492,13 +492,7 @@ public class DevSpawnModule : MonoBehaviour
             return;
         }
 
-        if (SpawnManager.Instance == null)
-        {
-            Debug.LogError("<color=red>[DevSpawn]</color> SpawnManager.Instance is null — cannot spawn item.");
-            return;
-        }
-
-        // Clearer error than SpawnManager's internal check — surfaces the dev-mode origin.
+        // WorldItem.SpawnWorldItem enforces server authority internally; surface the origin early.
         if (Unity.Netcode.NetworkManager.Singleton != null && !Unity.Netcode.NetworkManager.Singleton.IsServer)
         {
             Debug.LogWarning("<color=orange>[DevSpawn]</color> Item spawn requested on a client — host-only operation, ignoring.");
@@ -522,9 +516,22 @@ public class DevSpawnModule : MonoBehaviour
 
             try
             {
-                var instance = SpawnManager.Instance.SpawnItem(item, pos);
-                if (instance != null) spawned++;
-                else Debug.LogWarning($"<color=orange>[DevSpawn]</color> SpawnItem {i} returned null for '{item.ItemName}'.");
+                ItemInstance instance = item.CreateInstance();
+                if (instance is EquipmentInstance equipment)
+                {
+                    equipment.SetPrimaryColor(Random.ColorHSV(0f, 1f, 0.5f, 1f, 0.5f, 1f));
+                    if (equipment is WearableInstance wearable)
+                        wearable.SetSecondaryColor(Random.ColorHSV(0f, 1f, 0.3f, 0.8f, 0.3f, 0.8f));
+                }
+
+                float rx = Random.Range(-1f, 1f);
+                float rz = Random.Range(-1f, 1f);
+                Vector3 ejectForce = new Vector3(rx * 2f, 5f, rz * 2f);
+                Vector3 ejectTorque = new Vector3(Random.Range(-10f, 10f), Random.Range(-10f, 10f), Random.Range(-10f, 10f));
+
+                var worldItem = WorldItem.SpawnWorldItem(instance, pos, ejectImpulse: ejectForce, ejectTorque: ejectTorque);
+                if (worldItem != null) spawned++;
+                else Debug.LogWarning($"<color=orange>[DevSpawn]</color> SpawnWorldItem {i} returned null for '{item.ItemName}'.");
             }
             catch (System.Exception e)
             {

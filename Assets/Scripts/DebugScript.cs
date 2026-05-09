@@ -78,7 +78,20 @@ public class DebugScript : MonoBehaviour
 
         ItemSO itemToSpawn = availableItems[itemsSOList.value];
         Vector3 pos = spawnPoint != null ? spawnPoint.position : Vector3.zero;
-        SpawnManager.Instance.SpawnItem(itemToSpawn, pos);
+
+        ItemInstance instance = itemToSpawn.CreateInstance();
+        if (instance is EquipmentInstance equipment)
+        {
+            equipment.SetPrimaryColor(Random.ColorHSV(0f, 1f, 0.5f, 1f, 0.5f, 1f));
+            if (equipment is WearableInstance wearable)
+                wearable.SetSecondaryColor(Random.ColorHSV(0f, 1f, 0.3f, 0.8f, 0.3f, 0.8f));
+        }
+
+        float rx = Random.Range(-1f, 1f);
+        float rz = Random.Range(-1f, 1f);
+        Vector3 ejectForce = new Vector3(rx * 2f, 5f, rz * 2f);
+        Vector3 ejectTorque = new Vector3(Random.Range(-10f, 10f), Random.Range(-10f, 10f), Random.Range(-10f, 10f));
+        WorldItem.SpawnWorldItem(instance, pos, ejectImpulse: ejectForce, ejectTorque: ejectTorque);
     }
 
     private void TestInstallFurniture()

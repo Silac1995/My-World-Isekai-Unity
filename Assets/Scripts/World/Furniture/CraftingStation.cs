@@ -61,12 +61,6 @@ public class CraftingStation : OccupiableFurniture
             return null;
         }
 
-        if (SpawnManager.Instance == null)
-        {
-            Debug.LogError($"<color=red>[Crafting]</color> SpawnManager.Instance est null !");
-            return null;
-        }
-
         // Position de sortie
         Vector3 spawnPos = _outputPoint != null ? _outputPoint.position : transform.position + Vector3.up * 0.5f;
 
@@ -75,8 +69,8 @@ public class CraftingStation : OccupiableFurniture
         if (primaryColor.a > 0f) instance.SetPrimaryColor(primaryColor);
         if (secondaryColor.a > 0f) instance.SetSecondaryColor(secondaryColor);
 
-        // 2. Spawn réseau via SpawnManager (visible par tous les clients)
-        SpawnManager.Instance.SpawnCopyOfItem(instance, spawnPos);
+        // 2. Spawn in the world — visible to all clients via NetworkObject replication.
+        WorldItem.SpawnWorldItem(instance, spawnPos);
 
         Debug.Log($"<color=green>[Crafting]</color> {crafter.CharacterName} a crafté {item.ItemName} à {FurnitureName} !");
         return instance;

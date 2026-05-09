@@ -73,7 +73,7 @@ Portable character profiles that travel across worlds. Characters are independen
 - `MapController.SnapshotActiveNPCs()` also calls `SnapshotActiveWorldItems()` to populate the list (skips items with `IsBeingCarried`)
 - `MapController.SpawnNPCsFromSnapshot()` also calls `SpawnWorldItemsFromSnapshot()` — looks up `ItemSO` by ID in `Resources/Data/Item`, rehydrates `ItemInstance` from JSON, calls `WorldItem.SpawnWorldItem(instance, pos, rot)`
 - `MapController.Hibernate()` serializes + despawns items the same way it does NPCs; `WakeUp()` triggers respawn whenever the map has saved items OR NPCs
-- `WorldItem.SpawnWorldItem(...)` parents the spawned GO under the containing map via `MapController.GetAnyMapAtPosition(pos)` (interior- and exterior-aware) — keeps the scene hierarchy clean and lets future map-scoped iteration work
+- **`WorldItem.SpawnWorldItem(ItemInstance, Vector3, Quaternion?, ...)`** is the **canonical spawn API** — all paths (save/load respawn, inventory drop, harvest yield, crafting, debug) route through this single method. It parents the spawned GO under the containing map via `MapController.GetAnyMapAtPosition(pos)` (interior- and exterior-aware). Prefab resolution: `ItemSO.WorldItemPrefab` first, then `SpawnManager.Instance.DefaultItemPrefab` as fallback.
 
 ## GameLauncher
 - Singleton coroutine orchestrator for the full game load sequence
