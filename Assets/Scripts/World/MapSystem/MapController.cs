@@ -1037,6 +1037,15 @@ namespace MWI.WorldSystem
 
                     storage.RestoreFromSaveData(entries);
 
+                    // 2026-05-09 lock-state restore: apply the persisted lock flag.
+                    // ApplyLockStateFromNetwork early-returns when the value matches
+                    // (_isLocked defaults to false), so this is a no-op for old saves
+                    // that don't carry the field (JSON bool default = false = unlocked).
+                    // When the value differs, it sets _isLocked and fires OnInventoryChanged,
+                    // which flows through StorageFurnitureNetworkSync.HandleServerInventoryChanged
+                    // → _isLockedSync.Value = true — clients receive it on connect.
+                    storage.ApplyLockStateFromNetwork(saved.IsLocked);
+
                     // 2026-05-08 unified storage-role restore: write the saved Role onto
                     // the storage's network sync so it propagates to clients on next tick.
                     // Old saves default to StorageRoleType.None — no behavioral change for
