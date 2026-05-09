@@ -7,7 +7,6 @@ updated: 2026-05-09
 sources:
   - Assets/Scripts/UI/WorldUI/UI_StorageFurniturePanel.cs
   - Assets/Scripts/UI/WorldUI/UI_StorageGrid.cs
-  - Assets/UI/Player HUD/UI_StorageFurniturePanel.prefab
   - docs/superpowers/specs/2026-05-09-storage-furniture-player-ui-design.md
 related:
   - "[[storage-furniture]]"
@@ -92,7 +91,7 @@ Player clicks chest slot
 
 ## Dependencies
 
-- **Upstream:** `Furniture` / `StorageFurniture` / `FurnitureInteractable` (the open path), `CharacterStoreInFurnitureAction` / `CharacterTakeFromFurnitureAction` (the action layer), `StorageFurnitureNetworkSync` (replication), `Character.CharacterEquipment` + `HandsController` (left side data), `PlayerUI` + `UI_PlayerHUD` (host canvas).
+- **Upstream:** [[storage-furniture]] (`Furniture` / `StorageFurniture` / `FurnitureInteractable` for the open path), [[character-actions]] (`CharacterStoreInFurnitureAction` / `CharacterTakeFromFurnitureAction` for the action layer), `StorageFurnitureNetworkSync` (replication), [[character-equipment]] (`Character.CharacterEquipment` + `HandsController` for left-side data), [[player-ui-hud]] (`PlayerUI` + `UI_PlayerHUD` host canvas).
 - **Downstream:** none. This is a leaf consumer.
 
 ## State & persistence
@@ -120,5 +119,7 @@ Player clicks chest slot
 
 - `docs/superpowers/specs/2026-05-09-storage-furniture-player-ui-design.md`
 - `docs/superpowers/plans/2026-05-09-storage-furniture-player-ui.md`
-- `wiki/systems/storage-furniture.md`
-- `wiki/systems/character-actions.md`
+- `Assets/Scripts/UI/WorldUI/UI_StorageFurniturePanel.cs`
+- `Assets/Scripts/UI/WorldUI/UI_StorageGrid.cs`
+- `Assets/Scripts/World/Furniture/StorageFurniture.cs`
+- `Assets/Scripts/UI/PlayerUI.cs`
