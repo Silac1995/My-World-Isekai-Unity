@@ -15,6 +15,13 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
     private PlayerUI _playerUI;
     private UI_PlayerTargeting _targeting;
 
+    /// <summary>
+    /// Closest in-range interactable currently tracked by the detector. Mirrors what the
+    /// prompt UI is rendering. Read by <see cref="PlayerController"/>'s E-key dispatch
+    /// (rule #33 — input owner reads detector data, never the reverse).
+    /// </summary>
+    public InteractableObject CurrentTarget => _currentInteractableObjectTarget;
+
     protected override void Awake()
     {
         base.Awake(); // Initialise le Character du parent
@@ -260,16 +267,47 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
     }
 
     /// <summary>
-    /// Triggers the standard interaction with a given target.
-    /// Called by PlayerInteractCommand when auto-navigate arrives at the target.
+    /// Canonical tap-E entry point. Called by <see cref="PlayerController"/>'s
+    /// HandleEKeyUp dispatch (rule #33 — input owner) and by
+    /// <see cref="MWI.CharacterControllers.Commands.PlayerInteractCommand"/> on auto-nav arrival.
+    /// Wraps the dialogue-NPC freeness gate and the
+    /// <see cref="InteractableObject.Interact"/> dispatch.
     /// </summary>
-    public void TriggerInteract(InteractableObject target)
+    public void TriggerTapInteract(InteractableObject target)
     {
         if (target == null) return;
 
         // Temporarily set the current target so ExecuteNormalInteract picks it up
         _currentInteractableObjectTarget = target;
         ExecuteNormalInteract();
+    }
+
+    /// <summary>
+    /// Opens the generic hold-interaction menu for a target if it has any
+    /// <see cref="InteractableObject.GetHoldInteractionOptions"/>. Returns true
+    /// if a menu was opened (so the caller can flip its E-menu-opened latch).
+    /// Called by <see cref="PlayerController"/>'s HandleEKeyHeld threshold branch
+    /// (rule #33 — input owner).
+    /// </summary>
+    public bool TriggerHoldMenu(InteractableObject target)
+    {
+        if (target == null) return false;
+        var options = target.GetHoldInteractionOptions(Character);
+        if (options == null || options.Count == 0) return false;
+        if (_playerUI == null) _playerUI = UnityEngine.Object.FindAnyObjectByType<PlayerUI>(FindObjectsInactive.Include);
+        if (_playerUI == null) return false;
+        _playerUI.OpenInteractionMenu(options);
+        return true;
+    }
+
+    /// <summary>
+    /// Drives the prompt-fill bar from <c>0..1</c>. Called every frame from
+    /// <see cref="PlayerController"/>.HandleEKeyHeld — the input owner ticks the
+    /// hold timer and pushes progress here.
+    /// </summary>
+    public void SetPromptHoldProgress(float t01)
+    {
+        if (currentPromptComponent != null) currentPromptComponent.SetFillAmount(Mathf.Clamp01(t01));
     }
 
     private void ExecuteNormalInteract()
