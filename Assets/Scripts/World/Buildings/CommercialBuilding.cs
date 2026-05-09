@@ -2974,4 +2974,129 @@ public abstract class CommercialBuilding : Building
     {
         HandleVacancyChanged();
     }
+
+    // ============================================================================
+    // DEV-MODE OVERRIDES — host-only, gated by DevModeManager
+    // ----------------------------------------------------------------------------
+    // These methods bypass the production owner / community-leader auth checks and
+    // let a host dev mutate state on any building. They are wrapped in
+    // #if UNITY_EDITOR || DEVELOPMENT_BUILD so they are stripped from release builds.
+    //
+    // Authorisation rationale: DevModeManager is host-only by hard policy
+    // (DevModeManager.TryEnable rejects non-host callers). The dev panel only ever
+    // runs on the server, so it can call these methods directly — no RPC, no client
+    // trust surface to defend. Each call asserts IsServer + DevModeManager.IsEnabled
+    // and emits an audit log line.
+    //
+    // Production owner-gated entry points (TryOpenHiring / TrySetAssignmentWage / …)
+    // are NOT modified; they keep their auth checks. The dev path is parallel.
+    // ============================================================================
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+    /// <summary>
+    /// Dev-only: set hiring state directly, bypassing the owner / community-leader
+    /// auth check applied by <see cref="TryOpenHiring"/> / <see cref="TryCloseHiring"/>.
+    /// No vacancy precondition (the production "open" path requires at least one
+    /// vacant job; the dev path lets you flip the bit on a fully-staffed building
+    /// for testing). Idempotent on no-change.
+    /// </summary>
+    public void DevForceSetHiring(bool open)
+    {
+        if (!DevAssertHostAndDevMode("DevForceSetHiring")) return;
+        if (_isHiring.Value == open) return;
+        _isHiring.Value = open;
+    }
+
+    /// <summary>
+    /// Dev-only: assign a <see cref="StorageRoleType"/> directly to a child
+    /// <see cref="StorageFurniture"/>, bypassing the owner auth check applied
+    /// by <see cref="TrySetStorageRoleServerRpc"/>. Still honours the
+    /// <see cref="SupportedStorageRoles"/> subtype filter so dev never writes
+    /// a role the building doesn't support (e.g. SellShelf on non-Shop).
+    /// Replication: writes through <see cref="StorageFurnitureNetworkSync.SetRoleServer"/>
+    /// — same NetworkVariable fan-out as the production path.
+    /// </summary>
+    public void DevForceSetStorageRole(StorageFurniture storage, StorageRoleType newRole)
+    {
+        if (!DevAssertHostAndDevMode("DevForceSetStorageRole")) return;
+        if (storage == null) return;
+
+        // Subtype filter — same as production.
+        bool roleSupported = false;
+        var supported = SupportedStorageRoles;
+        if (supported != null)
+        {
+            for (int i = 0; i < supported.Count; i++)
+            {
+                if (supported[i].Type == newRole) { roleSupported = true; break; }
+            }
+        }
+        if (!roleSupported)
+        {
+            Debug.LogWarning($"[CommercialBuilding] DevForceSetStorageRole: role {newRole} not in SupportedStorageRoles — ignored.");
+            return;
+        }
+
+        var sync = storage.GetComponent<StorageFurnitureNetworkSync>();
+        if (sync == null)
+        {
+            Debug.LogError($"[CommercialBuilding] DevForceSetStorageRole: storage '{storage.FurnitureName}' has no StorageFurnitureNetworkSync sibling — role write DROPPED.");
+            return;
+        }
+
+        sync.SetRoleServer(newRole);
+    }
+
+    /// <summary>
+    /// Dev-only: set assignment wage directly, bypassing the owner / community-leader
+    /// auth check applied by <see cref="TrySetAssignmentWage"/>. Same null-tolerance
+    /// for fields as the production method (null means "leave unchanged"). Returns
+    /// true if any field was modified.
+    /// </summary>
+    public bool DevForceSetAssignmentWage(Character worker, int? pieceRate = null,
+        int? minimumShift = null, int? fixedShift = null)
+    {
+        if (!DevAssertHostAndDevMode("DevForceSetAssignmentWage")) return false;
+        if (worker == null) return false;
+        var charJob = worker.CharacterJob;
+        if (charJob == null) return false;
+        // Mirror TrySetAssignmentWage's lookup verbatim, minus the auth gate.
+        foreach (var assn in charJob.ActiveJobs)
+        {
+            if (assn.Workplace == this && assn.AssignedJob != null)
+            {
+                return assn.SetWage(pieceRate, minimumShift, fixedShift);
+            }
+        }
+        Debug.LogWarning($"[CommercialBuilding] DevForceSetAssignmentWage: worker {worker.CharacterName} has no assignment at {name}.");
+        return false;
+    }
+
+    /// <summary>
+    /// Common precondition for every <c>DevForce*</c> entry point. Verifies we are
+    /// on the server and that DevMode is currently enabled, and emits an audit log
+    /// line. Returns false if either gate fails so the caller can early-out.
+    ///
+    /// <c>protected</c> so subclasses (e.g. <see cref="ShopBuilding"/>) can call it
+    /// from their own DevForce* helpers.
+    /// </summary>
+    protected bool DevAssertHostAndDevMode(string action)
+    {
+        if (!IsServer)
+        {
+            Debug.LogWarning($"<color=magenta>[DevMode]</color> {action} ignored — not on server.");
+            return false;
+        }
+        if (DevModeManager.Instance == null || !DevModeManager.Instance.IsEnabled)
+        {
+            Debug.LogWarning($"<color=magenta>[DevMode]</color> {action} ignored — DevMode not enabled.");
+            return false;
+        }
+        ulong sender = (Unity.Netcode.NetworkManager.Singleton != null)
+            ? Unity.Netcode.NetworkManager.Singleton.LocalClientId
+            : 0UL;
+        Debug.LogWarning($"<color=magenta>[DevMode]</color> {action} — buildingId={BuildingId} sender={sender}");
+        return true;
+    }
+#endif
 }

@@ -355,6 +355,17 @@ public class ShopBuilding : CommercialBuilding, IStockProvider
     public void AddCatalogEntryServerRpc(string itemId, int maxStock, int priceOverride, ServerRpcParams p = default)
     {
         if (!ValidateOwnerCaller(p)) { _netSync.SendUnauthorizedToastClientRpc(SingleClientRpcParams(p)); return; }
+        DoAddCatalogEntry(itemId, maxStock, priceOverride);
+    }
+
+    /// <summary>
+    /// Shared implementation of <see cref="AddCatalogEntryServerRpc"/> minus the
+    /// <see cref="ValidateOwnerCaller"/> auth gate. Called both from the production
+    /// RPC (after the gate) and from <c>DevForceAddCatalogEntry</c> (host-only,
+    /// gated by DevModeManager). Bit-for-bit identical to the original RPC body.
+    /// </summary>
+    private void DoAddCatalogEntry(string itemId, int maxStock, int priceOverride)
+    {
         var so = ResolveItemSO(itemId);
         if (so == null) { Debug.LogWarning($"[Shop] AddCatalogEntry: unknown itemId '{itemId}'"); return; }
         if (maxStock < 0) maxStock = 0;
@@ -371,6 +382,12 @@ public class ShopBuilding : CommercialBuilding, IStockProvider
     public void RemoveCatalogEntryServerRpc(string itemId, ServerRpcParams p = default)
     {
         if (!ValidateOwnerCaller(p)) { _netSync.SendUnauthorizedToastClientRpc(SingleClientRpcParams(p)); return; }
+        DoRemoveCatalogEntry(itemId);
+    }
+
+    /// <summary>Shared impl of <see cref="RemoveCatalogEntryServerRpc"/> minus auth. See <see cref="DoAddCatalogEntry"/>.</summary>
+    private void DoRemoveCatalogEntry(string itemId)
+    {
         for (int i = _catalog.Count - 1; i >= 0; i--)
         {
             if (_catalog[i].Item != null && _catalog[i].Item.ItemId == itemId)
@@ -387,6 +404,12 @@ public class ShopBuilding : CommercialBuilding, IStockProvider
     public void EditCatalogEntryServerRpc(string itemId, int newMaxStock, int newPriceOverride, ServerRpcParams p = default)
     {
         if (!ValidateOwnerCaller(p)) { _netSync.SendUnauthorizedToastClientRpc(SingleClientRpcParams(p)); return; }
+        DoEditCatalogEntry(itemId, newMaxStock, newPriceOverride);
+    }
+
+    /// <summary>Shared impl of <see cref="EditCatalogEntryServerRpc"/> minus auth. See <see cref="DoAddCatalogEntry"/>.</summary>
+    private void DoEditCatalogEntry(string itemId, int newMaxStock, int newPriceOverride)
+    {
         if (newMaxStock < 0) newMaxStock = 0;
         if (newPriceOverride < 0) newPriceOverride = 0;
         for (int i = 0; i < _catalog.Count; i++)
@@ -408,11 +431,24 @@ public class ShopBuilding : CommercialBuilding, IStockProvider
     // Owner-side assignment now goes through CommercialBuilding.TrySetStorageRoleServerRpc.
     // The Storages tab dropdown is the canonical UI surface; the old per-shelf checkbox
     // tab + its row are retired (see wiki/projects/management-panel-followups.md §1).
+    // Dev-mode override path: see CommercialBuilding.DevForceSetStorageRole.
 
     [ServerRpc(RequireOwnership = false)]
     public void WithdrawCashierTillServerRpc(NetworkObjectReference cashierRef, ServerRpcParams p = default)
     {
         if (!ValidateOwnerCaller(p)) { _netSync.SendUnauthorizedToastClientRpc(SingleClientRpcParams(p)); return; }
+        // Production path: deposit into the calling owner's wallet.
+        var recipient = ResolveCharacterFromClientId(p.Receive.SenderClientId);
+        DoWithdrawCashierTill(cashierRef, recipient);
+    }
+
+    /// <summary>
+    /// Shared impl of <see cref="WithdrawCashierTillServerRpc"/> minus auth. The
+    /// dev path passes an explicit recipient (typically the host's local Character)
+    /// instead of resolving from <c>SenderClientId</c>. See <see cref="DoAddCatalogEntry"/>.
+    /// </summary>
+    private void DoWithdrawCashierTill(NetworkObjectReference cashierRef, Character recipient)
+    {
         if (!cashierRef.TryGet(out NetworkObject cashierObj)) return;
         var cashier = cashierObj.GetComponent<Cashier>();
         if (cashier == null) return;
@@ -422,9 +458,7 @@ public class ShopBuilding : CommercialBuilding, IStockProvider
         if (balance <= 0) return;
         if (!cashier.DebitTill(currency, balance, "OwnerWithdraw")) return;
 
-        // For Phase 2b: deposit into owner wallet directly. Treasury redirect lands later.
-        var owner = ResolveCharacterFromClientId(p.Receive.SenderClientId);
-        owner?.CharacterWallet?.AddCoins(currency, balance, $"FromCashier_{cashier.FurnitureName}");
+        recipient?.CharacterWallet?.AddCoins(currency, balance, $"FromCashier_{cashier.FurnitureName}");
     }
 
     public override System.Collections.Generic.IReadOnlyList<MWI.UI.Management.IManagementTab> GetManagementTabs()
@@ -641,4 +675,57 @@ public class ShopBuilding : CommercialBuilding, IStockProvider
             _pendingSellShelfKeys = null;
         }
     }
+
+    // ============================================================================
+    // DEV-MODE OVERRIDES — host-only, gated by DevModeManager
+    // ----------------------------------------------------------------------------
+    // Each DevForce* peer mirrors the corresponding production ServerRpc minus the
+    // ValidateOwnerCaller auth gate. They route through the same Do* helpers so
+    // the production replication path (NetSync push + event invocation) is bit-for-bit
+    // identical between owner-driven and dev-driven mutations.
+    //
+    // Authorisation: DevAssertHostAndDevMode (inherited from CommercialBuilding) checks
+    // IsServer + DevModeManager.IsEnabled and emits the audit log line. Wrapped in
+    // #if UNITY_EDITOR || DEVELOPMENT_BUILD so they are stripped from release builds.
+    // ============================================================================
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+    /// <summary>Dev-only: <see cref="AddCatalogEntryServerRpc"/> minus owner auth.</summary>
+    public void DevForceAddCatalogEntry(string itemId, int maxStock, int priceOverride)
+    {
+        if (!DevAssertHostAndDevMode("DevForceAddCatalogEntry")) return;
+        DoAddCatalogEntry(itemId, maxStock, priceOverride);
+    }
+
+    /// <summary>Dev-only: <see cref="RemoveCatalogEntryServerRpc"/> minus owner auth.</summary>
+    public void DevForceRemoveCatalogEntry(string itemId)
+    {
+        if (!DevAssertHostAndDevMode("DevForceRemoveCatalogEntry")) return;
+        DoRemoveCatalogEntry(itemId);
+    }
+
+    /// <summary>Dev-only: <see cref="EditCatalogEntryServerRpc"/> minus owner auth.</summary>
+    public void DevForceEditCatalogEntry(string itemId, int newMaxStock, int newPriceOverride)
+    {
+        if (!DevAssertHostAndDevMode("DevForceEditCatalogEntry")) return;
+        DoEditCatalogEntry(itemId, newMaxStock, newPriceOverride);
+    }
+
+    // SellShelf assignment migrated to CommercialBuilding.TrySetStorageRoleServerRpc;
+    // dev-mode override is CommercialBuilding.DevForceSetStorageRole (added 2026-05-09).
+
+    /// <summary>
+    /// Dev-only: <see cref="WithdrawCashierTillServerRpc"/> minus owner auth.
+    /// Caller must specify an explicit recipient — the dev panel typically passes
+    /// the host's local Character (the dev's own pawn).
+    /// </summary>
+    public void DevForceWithdrawCashierTill(Cashier cashier, Character recipient)
+    {
+        if (!DevAssertHostAndDevMode("DevForceWithdrawCashierTill")) return;
+        if (cashier == null || recipient == null) return;
+        var net = cashier.GetComponent<NetworkObject>();
+        if (net == null) return;
+        DoWithdrawCashierTill(new NetworkObjectReference(net), recipient);
+    }
+#endif
 }
