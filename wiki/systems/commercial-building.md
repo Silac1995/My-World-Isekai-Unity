@@ -3,7 +3,7 @@ type: system
 title: "Commercial Building"
 tags: [building, commercial, jobs, tier-2]
 created: 2026-04-19
-updated: 2026-05-08
+updated: 2026-05-09
 sources: []
 related: ["[[building]]", "[[building-logistics-manager]]", "[[building-task-manager]]", "[[jobs-and-logistics]]", "[[shops]]", "[[crafting-loop]]", "[[worker-wages-and-performance]]", "[[quest-system]]", "[[tool-storage]]", "[[commercial-storage-roles]]", "[[help-wanted-and-hiring]]", "[[management-panel-architecture]]", "[[dev-mode]]", "[[kevin]]"]
 status: stable
@@ -136,6 +136,7 @@ Always call `base.GetManagementTabs()` first so the Hiring tab is preserved. See
 - If a subclass wants autonomous restock, **implementing `IStockProvider` is mandatory** — declaring `_itemsToSell` or `_inputStockTargets` alone does nothing until the contract is wired.
 
 ## Change log
+- 2026-05-09 (later) — Owner / employee restoration split. The combined `RestoreFromSaveData(List<string> ownerIds, List<EmployeeSaveEntry> employees)` was decomposed: the **owner** half lifted to base [[building]] (`Building.RestoreOwnersFromSaveData` + virtual `BindRestoredOwner` hook), commercial-side override calls `SetOwner(owner, ownerJob, autoAssignJob:false)` AND consumes the matching saved `EmployeeSaveEntry` from `_pendingEmployees` to recover the boss's actual job slot; the **employee** half stays here as `RestoreEmployeesFromSaveData(List<EmployeeSaveEntry>)`. Both subscribe to `Character.OnCharacterSpawned` AND `Character.OnCharacterIdReassigned` (the latter closes the host-player UUID timing window — see [[host-player-uuid-timing-on-load]]). Routed by `MapController.ApplyDynamicSaveDataToBuilding(Building, BuildingSaveData)` — owners FIRST so the override can claim the boss's employee entry before the employee pass runs. Order is critical for the auto-assigned-job suppression. — claude
 - 2026-05-09 — Removed dead `_toolStorageFurniture` Inspector SerializeField + its snapshot/rebind machinery (audit showed every prefab had it as `fileID: 0`). `ToolStorage` resolver simplified from four tiers to two (role-tagged → first-crate convention). `HelpWantedSign` and `ManagementFurniture` still use the three-tier lazy-rebind pattern. — claude
 - 2026-05-09 — Multi-tool-storage refactor: tool/inventory storages are now LISTS, not singletons. Added `ToolStorages` / `InventoryStorages` accessors + `FindToolStorageContaining` / `FindToolStorageWithFreeSpace` / `HasToolInAnyToolStorage` / `IsToolStorage` helpers. All consumers iterate the lists. `OnStorageRolesChanged` now fires on every peer via per-storage `OnRoleChanged` fan-out (`HandleChildStorageRoleChanged`), bound at `OnNetworkSpawn` and refreshed inside `GetStorageFurnitureCached`. — claude
 - 2026-05-08 — Added unified storage-role API: `SupportedStorageRoles` virtual + `GetStoragesWithRole` walker + `OnStorageRolesChanged` event + `[ServerRpc] TrySetStorageRoleServerRpc` (owner-only mutator). Base `GetManagementTabs()` now appends `StorageRolesTab` so every commercial subtype (Forge, Shop, House, …) gets the same per-storage role-assignment UI. `ToolStorage` getter promoted to a four-tier resolver — Tier 0 is now `GetStoragesWithRole(StorageRoleType.ToolStorage).FirstOrDefault()`, demoting the legacy `_toolStorageFurniture` Inspector field to Tier 1 fallback. See [[commercial-storage-roles]] for the full system page. — claude
