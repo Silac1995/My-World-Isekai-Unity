@@ -1,0 +1,35 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7f20d9c53fd041a41a03e34799ad03e4, type: 3}
+  m_Name: Deer
+  m_EditorClassIdentifier: Assembly-CSharp::CharacterArchetype
+  _archetypeName: Deer
+  _bodyType: 1
+  _defaultFootSurface: 0
+  _canEnterCombat: 0
+  _canEquipItems: 0
+  _canDialogue: 0
+  _canCraft: 0
+  _hasInventory: 0
+  _hasNeeds: 1
+  _isTameable: 1
+  _isMountable: 0
+  _tameDifficulty: 0.5
+  _movementModes: 3
+  _defaultSpeed: 3.5
+  _runSpeed: 6
+  _defaultWanderStyle: 3
+  _defaultBehaviourTree: {fileID: 0}
+  _animationProfile: {fileID: 0}
+  _visualPrefab: {fileID: 0}
+  _defaultInteractionRange: 3.5
+  _isTargetable: 1

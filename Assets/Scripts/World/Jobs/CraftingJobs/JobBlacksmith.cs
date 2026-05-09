@@ -1,5 +1,6 @@
 using System.Linq;
 using UnityEngine;
+using MWI.WorldSystem;
 
 /// <summary>
 /// Job de Forgeron : craft des armes et armures dans une ForgeBuilding.
@@ -8,6 +9,7 @@ using UnityEngine;
 public class JobBlacksmith : JobCrafter
 {
     public override string JobTitle => "Forgeron";
+    public override JobType Type => JobType.Blacksmith;
 
     private CraftingStation _currentStation;
     private CraftingOrder _currentOrder;
@@ -102,18 +104,19 @@ public class JobBlacksmith : JobCrafter
             return; // En attente de commandes
         }
 
-        // Trouver une station libre et compatible
-        foreach (var room in cb.Rooms)
+        // Trouver une station libre et compatible. Use cb.GetAllStations() (primary room-list
+        // walk + transform-tree fallback) instead of iterating cb.Rooms directly: stations
+        // spawned via TrySpawnDefaultFurniture sometimes land in the building's transform tree
+        // without registering into a Room's _furnitures list, and the room-only walk would miss
+        // them — which manifests as the blacksmith getting stuck in SearchingOrder forever
+        // even when ProducesItem(itemToCraft) returns true.
+        foreach (var station in cb.GetAllStations())
         {
-            foreach (var station in room.GetFurnitureOfType<CraftingStation>())
+            if (station.CanCraft(_currentOrder.ItemToCraft) && (station.IsFree() || station.Occupant == _worker))
             {
-                if (station.CanCraft(_currentOrder.ItemToCraft) && (station.IsFree() || station.Occupant == _worker))
-                {
-                    _currentStation = station;
-                    break;
-                }
+                _currentStation = station;
+                break;
             }
-            if (_currentStation != null) break;
         }
 
         if (_currentStation == null)
@@ -148,6 +151,9 @@ public class JobBlacksmith : JobCrafter
         _currentPhase = CraftPhase.MovingToStation;
     }
 
+    // One-shot per-station so we don't spam the warning every tick on a misconfigured prefab.
+    private bool _warnedNoStationInteractable = false;
+
     private void HandleMovementToStation(CharacterMovement movement)
     {
         if (_currentStation == null)
@@ -156,25 +162,62 @@ public class JobBlacksmith : JobCrafter
             return;
         }
 
-        Vector3 targetPos = _currentStation.InteractionPoint != null ? _currentStation.InteractionPoint.position : _currentStation.transform.position;
-        
-        if (!movement.HasPath || movement.RemainingDistance <= movement.StoppingDistance + 0.5f)
+        // Canonical proximity gate — see project rule on InteractableObject.IsCharacterInInteractionZone.
+        // The bounds-of-InteractionZone check is the single source of truth for "close enough to
+        // interact" across the whole codebase (BT, GOAP, server-side RPCs, player input). Looking up
+        // the InteractableObject sibling lets us reuse it here instead of doing distance math, which
+        // was the source of the previous "stuck moving" bug (3D distance sensitive to authored Y of
+        // the InteractionPoint Transform).
+        InteractableObject stationInteractable = _currentStation.GetComponent<InteractableObject>();
+
+        Vector3 targetPos = _currentStation.InteractionPoint != null
+            ? _currentStation.InteractionPoint.position
+            : _currentStation.transform.position;
+
+        bool arrived;
+        if (stationInteractable != null)
         {
-            if (Vector3.Distance(_worker.transform.position, targetPos) > movement.StoppingDistance + 0.5f)
+            arrived = stationInteractable.IsCharacterInInteractionZone(_worker);
+        }
+        else
+        {
+            // Fallback for stations without a paired InteractableObject (legacy prefabs). Warn once
+            // so the author can add a CraftingFurnitureInteractable sibling, but don't block the work.
+            if (!_warnedNoStationInteractable)
+            {
+                Debug.LogWarning(
+                    $"[JobBlacksmith] {_currentStation.FurnitureName} has no InteractableObject sibling — " +
+                    $"falling back to horizontal-distance arrival check. Add a CraftingFurnitureInteractable " +
+                    $"with an InteractionZone collider for the canonical proximity gate.",
+                    _currentStation);
+                _warnedNoStationInteractable = true;
+            }
+            Vector3 workerFlat = _worker.transform.position;
+            Vector3 targetFlat = targetPos;
+            workerFlat.y = 0f;
+            targetFlat.y = 0f;
+            arrived = Vector3.Distance(workerFlat, targetFlat) <= 1.5f;
+        }
+
+        if (!arrived)
+        {
+            // Don't spam SetDestination — only call it if we don't already have a path heading
+            // toward this target. NavMeshAgent rebuilding the same path every tick can stall the
+            // agent.
+            if (!movement.HasPath && !movement.PathPending)
             {
                 movement.SetDestination(targetPos);
             }
-            else
-            {
-                // Arrivé à la station
-                movement.ResetPath();
-                _currentStation.Use(_worker);
-
-                Color targetColor = Color.white; 
-                _worker.CharacterActions.ExecuteAction(new CharacterCraftAction(_worker, _currentOrder.ItemToCraft, targetColor, default));
-                _currentPhase = CraftPhase.ExecutingAction;
-            }
+            return;
         }
+
+        // Inside the InteractionZone. Stop, claim the station, kick off the craft animation.
+        movement.ResetPath();
+        _currentStation.Use(_worker);
+
+        Color targetColor = Color.white;
+        _worker.CharacterActions.ExecuteAction(new CharacterCraftAction(_worker, _currentOrder.ItemToCraft, targetColor, default));
+        _currentPhase = CraftPhase.ExecutingAction;
     }
 
     private void HandleCraftingExecution()
@@ -204,6 +247,11 @@ public class JobBlacksmith : JobCrafter
             }
 
             _manager.UpdateCraftingOrderProgress(_currentOrder, 1);
+
+            // Wage system hook: credit the worker's WorkLog with one shift unit per item crafted
+            // against an active CraftingOrder. Only reached when _currentOrder != null, so free-form
+            // crafts (no order) do NOT get credited — per spec.
+            TryCreditWorkLog(1);
         }
 
         if (RequiredSkill != null && _worker.CharacterSkills != null)
@@ -259,5 +307,25 @@ public class JobBlacksmith : JobCrafter
         _manager = null;
         _worker?.CharacterMovement?.ResetPath();
         base.Unassign();
+    }
+
+    /// <summary>
+    /// Wage system hook: credit the worker's WorkLog with shift units for items crafted.
+    /// Uses this.Type so subclasses (e.g., JobBlacksmith → JobType.Blacksmith) credit their own bucket.
+    /// CharacterWorkLog.LogShiftUnit enforces the "no overtime" rule (post-shift logs only touch lifetime).
+    /// </summary>
+    private void TryCreditWorkLog(int amount)
+    {
+        if (amount <= 0 || _workplace == null) return;
+        var worker = Worker;
+        if (worker == null) return;
+        var workLog = worker.CharacterWorkLog;
+        if (workLog == null) return;
+
+        // Stable BuildingId (GUID from Building.NetworkBuildingId), not GameObject name —
+        // matches CommercialBuilding.GetBuildingIdForWorklog so renaming the workplace
+        // never forks WorkPlaceRecord history.
+        string buildingId = _workplace.BuildingId;
+        workLog.LogShiftUnit(this.Type, buildingId, amount);
     }
 }

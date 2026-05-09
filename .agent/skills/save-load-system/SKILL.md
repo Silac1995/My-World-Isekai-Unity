@@ -1,53 +1,211 @@
----
-name: unity-save-load-system
-description: >
-  Implement a robust, modular save and load system using DTOs and atomic file operations. 
-  Triggers specifically on "Sleep" actions and is restricted to the Host in multiplayer.
----
+# Save/Load System
 
-# Unity Save / Load System
+## Purpose
+Portable character profiles that travel across worlds. Characters are independent local JSON files loaded into any session.
 
-A modular, production-ready save and load system for "My World Isekai". Covers architecture, data separation, async file I/O, atomic writes, versioning, and project-specific triggers (Sleep/Host-only).
+## Architecture
 
-## When to use this skill
-- When implementating or refactoring game state persistence.
-- When adding new saveable systems (Inventory, Stats, World State).
-- When ensuring save logic respects multiplayer host authority.
-- When integrating the "Sleep" action as a save trigger.
+### Interfaces
+- `ICharacterSaveData` (non-generic) — base for coordinator discovery: `SaveKey`, `LoadPriority`, `SerializeToJson()`, `DeserializeFromJson()`
+- `ICharacterSaveData<T>` (generic) — typed contract subsystems implement: `Serialize()`, `Deserialize(T)`
+- `IOfflineCatchUp` — macro-simulation catch-up (orthogonal to save/load)
+- `ISaveable` — world-scoped saves only (TimeManager, CommunityTracker, etc.)
 
-## How to use it
+### Key Classes
+- `CharacterDataCoordinator` — orchestrates export/import, lives on root Character GO
+- `CharacterProfileSaveData` — the portable profile DTO (characterGuid, originWorldGuid, componentStates, partyMembers, worldAssociations)
+- `SaveFileHandler` — atomic async file I/O to `Profiles/{characterGuid}.json` and `Worlds/{worldGuid}.json`
+- `CharacterSaveDataHelper` — static JSON bridge for ICharacterSaveData<T>
+- `SaveManager` — world save orchestration with `SaveLoadState` enum (Idle/Saving/Loading) and mutual exclusion
+- `GameLauncher` — singleton coroutine orchestrator for the full game load sequence
+- `ScreenFadeManager` — modular overlay system (ShowOverlay, UpdateStatus, ShowWarning, HideOverlay)
+- `GameSessionManager` — session flags, recreated per scene (no DontDestroyOnLoad), static flags survive
 
-### 1. Identify Saveable Systems
-Any system that needs to persist state must implement `ISaveable`.
-- See example: [ISaveable.cs](examples/ISaveable.cs)
+### Load Priority Order
+| Priority | Systems |
+|----------|---------|
+| 0 | CharacterProfile |
+| 10 | CharacterStats |
+| 15 | CharacterCombatLevel |
+| 20 | CharacterSkills, CharacterAbilities |
+| 30 | CharacterEquipment |
+| 35 | HandsController (carried-in-hand item — must run after CharacterEquipment so the weapon slot is restored first) |
+| 40 | CharacterNeeds, CharacterTraits |
+| 50 | CharacterRelation, CharacterBookKnowledge |
+| 60 | CharacterParty, CharacterCommunity, CharacterJob, CharacterSchedule |
+| 70 | CharacterMapTracker, CharacterCombat |
 
-### 2. Design Data Transfer Objects (DTOs)
-Never serialize `MonoBehaviour` directly. Use plain C# classes for state.
-- See example: [GameSaveData.cs](examples/GameSaveData.cs)
+**Note:** `HandsController` is a body-part visual controller (not a `CharacterSystem`), but it owns the in-hand `CarriedItem` gameplay state and therefore implements `ICharacterSaveData<HandsSaveData>`. Discovery is interface-based (`GetComponentsInChildren<ICharacterSaveData>(true)`), so subsystems do not need to inherit from `CharacterSystem` to be saved. If you add carry state to a different visual sibling in the future, port the contract.
 
-### 3. Implement Centralized I/O
-All file operations (Atomic Writes, Async) are handled by `SaveFileHandler`.
-- See example: [SaveFileHandler.cs](examples/SaveFileHandler.cs)
+## GUID-Based World Saves
+- World files stored as `Worlds/{worldGuid}.json` (replaces slot-based `world_0.json`)
+- `SaveFileHandler.GetAllWorlds()` scans the `Worlds/` directory and returns all available world saves
+- `SaveManager.CurrentWorldGuid` and `CurrentWorldName` track the active world at runtime
 
-### 4. Coordinate via SaveManager
-The `SaveManager` handles registration, trigger checks (Host/Player), and migration.
-- See example: [SaveManager.cs](examples/SaveManager.cs)
+## WorldAssociation
+- `CharacterProfileSaveData.worldAssociations` tracks the character's position per world (keyed by world GUID)
+- Updated in `CharacterDataCoordinator.SaveLocalProfileAsync()` whenever the character saves
+- Used by character selection UI to show whether a character has a save from the selected world
 
-### 5. Project-Specific Constraints
-- **Sleep Trigger**: Saves are triggered ONLY when a Player character sleeps.
-- **Host Only**: In multiplayer, ONLY the host can write save data to disk.
-- **IsPlayer Check**: Always verify `character.IsPlayer()` before triggering `SaveOnSleep`.
+## Active Map NPC Snapshots
+- `MapController.SnapshotActiveNPCs()` serializes live NPCs on active maps without despawning them
+- `MapController.ActiveControllers` — static `HashSet` that tracks currently active map controllers
+- `MapController.PendingSnapshots` — stores NPC snapshots for init-time consumption during save/load
+- `MapController.SpawnNPCsFromPendingSnapshot()` — respawns NPCs from pending snapshots after load
+- Ensures NPCs on active (non-hibernated) maps persist through save/load cycles
 
-## Examples
-- [ISaveable Implementation Pattern](examples/ISaveable.cs)
-- [Atomic Async File I/O](examples/SaveFileHandler.cs)
-- [Root Save Container (DTO)](examples/GameSaveData.cs)
-- [SaveManager Coordination & Triggers](examples/SaveManager.cs)
+### Full profile per NPC (`HibernatedNPCData.ProfileData`)
+- Each `HibernatedNPCData` now carries an optional `CharacterProfileSaveData ProfileData` field populated by `CharacterDataCoordinator.ExportProfile()` at snapshot time (both `SnapshotActiveNPCs` and `Hibernate`)
+- On respawn, `SpawnNPCsFromSnapshot` calls `coordinator.ImportProfile(npcData.ProfileData)` AFTER `netObj.Spawn(true)` — mirrors the party-NPC pattern in `GameLauncher.SpawnPartyMembers` so subsystems with NetworkVariables are live when their `DeserializeFromJson` fires
+- This is what makes NPC stats, equipment, skills, traits, abilities, relations, etc. survive save/load — without it only the flat fields (race + position + needs + identity) come back
+- Backward-compatible: legacy saves with `ProfileData == null` fall back to the flat-field restore path and emit a warning
+- Pre-existing follow-up: `SnapshotActiveNPCs` does not skip party NPCs whose leader is a player. Those NPCs are also stored in the leader profile's `partyMembers`. With full `ProfileData` blobs in both places this could cause double-spawn at load and needs to be addressed in a follow-up.
 
-## Verification Checklist
-- [ ] System implements `ISaveable` and registers in `Awake`.
-- [ ] `CaptureState` returns a serializable DTO.
-- [ ] Save triggers only via `PlayerSleep` (check `IsPlayer`).
-- [ ] Save logic check for `IsHost` in multiplayer contexts.
-- [ ] File writes are atomic (.tmp swap).
-- [ ] Operations are asynchronous to avoid frame drops.
+## Active Map Building Snapshots
+- `MapController.SnapshotActiveBuildings()` syncs live buildings into CommunityData without despawning
+- Skips preplaced buildings (those with empty `PlacedByCharacterId`)
+- `MapController.SpawnSavedBuildings()` respawns player-placed buildings on predefined maps during load
+- Both called by SaveManager/GameLauncher during save/load cycles
+
+## Active Map WorldItem Snapshots
+- Dropped `WorldItem`s ride on the same `MapSnapshot_{mapId}` payload as NPCs — no separate ISaveable
+- `MapSaveData.WorldItems` is a `List<WorldItemSaveData>` (ItemId + JsonData + Position + Rotation)
+- `MapController.SnapshotActiveNPCs()` also calls `SnapshotActiveWorldItems()` to populate the list (skips items with `IsBeingCarried`)
+- `MapController.SpawnNPCsFromSnapshot()` also calls `SpawnWorldItemsFromSnapshot()` — looks up `ItemSO` by ID in `Resources/Data/Item`, rehydrates `ItemInstance` from JSON, calls `WorldItem.SpawnWorldItem(instance, pos, rot)`
+- `MapController.Hibernate()` serializes + despawns items the same way it does NPCs; `WakeUp()` triggers respawn whenever the map has saved items OR NPCs
+- **`WorldItem.SpawnWorldItem(ItemInstance, Vector3, Quaternion?, ...)`** is the **canonical spawn API** — all paths (save/load respawn, inventory drop, harvest yield, crafting, debug) route through this single method. It parents the spawned GO under the containing map via `MapController.GetAnyMapAtPosition(pos)` (interior- and exterior-aware). Prefab resolution: `ItemSO.WorldItemPrefab` first, then `SpawnManager.Instance.DefaultItemPrefab` as fallback.
+
+## GameLauncher
+- Singleton coroutine orchestrator for the full game load sequence
+- Sets `GameSessionManager` static flags (GameSessionManager does NOT use DontDestroyOnLoad — recreated per scene)
+- Loads target scene, waits for player spawn
+- Imports the character profile, positions the player via `WorldAssociation`, spawns party NPCs
+- Spawns saved buildings on predefined maps via `SpawnSavedBuildings()`
+- Shows progress via `ScreenFadeManager.UpdateStatus()` throughout the load sequence
+- `ReturnToMainMenuWithError(string)` — handles critical failures, returns to main menu with error overlay
+- Entry point: `GameLauncher.Launch()`
+
+## ScreenFadeManager (Overlay System)
+- `ShowOverlay(float alpha, string status)` — fades in overlay, blocks input via raycastTarget
+- `UpdateStatus(string status)` — updates status text on existing overlay
+- `ShowWarning(string warning)` — shows warning text
+- `HideOverlay(float fadeDuration)` — fades out overlay
+- Used by SaveManager during `RequestSave()` and GameLauncher during load sequence
+
+## SaveManager State Machine
+- `SaveLoadState` enum: `Idle`, `Saving`, `Loading` — mutual exclusion prevents concurrent operations
+- `RequestSave(Character)` is the single entry point for all save operations
+- Coroutine-based: freeze game -> show overlay -> snapshot NPCs + buildings -> serialize ISaveables -> write files -> unfreeze -> hide overlay
+- `IsReady` / `OnReady` — settling-based readiness (waits for all ISaveables to register with no new registrations)
+- `ResetForNewSession()` — clears registrations, readiness, world info, and state. Also destroys CommunityTracker, WorldOffsetAllocator, BuildingInteriorRegistry, and NetworkManager singletons
+- NetworkManager must be explicitly destroyed (NGO auto-applies DontDestroyOnLoad)
+- Vector3 serialization requires `ReferenceLoopHandling.Ignore` in JsonSerializerSettings
+
+## Save Triggers
+- Bed/sleep: `RequestSave(playerCharacter)`
+- Map transition: `RequestSave(playerCharacter)`
+- Host shutdown: saves both world + character
+- All triggers go through `SaveManager.RequestSave()` which handles world save + character profile save
+- Crash/disconnect: no save — revert to last checkpoint
+
+## World Save Menu Flow
+- Main Menu → World Select → Character Select → `GameLauncher.Launch()`
+- **World creation:** name + optional seed
+- **Character creation:** random race/gender/visual (placeholder for future customization)
+- **Deletion:** confirmation popup for both worlds and characters via `DeleteConfirmPopup`
+
+## Adding a New Saveable Subsystem
+1. Create a DTO class in `Assets/Scripts/Character/SaveLoad/ProfileSaveData/`
+2. Implement `ICharacterSaveData<YourDTO>` on the subsystem
+3. Set `SaveKey` (unique string) and `LoadPriority` (see table above)
+4. Implement `Serialize()` and `Deserialize()`
+5. Add bridge methods: `string ICharacterSaveData.SerializeToJson() => CharacterSaveDataHelper.SerializeToJson(this);`
+6. Test via ContextMenu on CharacterDataCoordinator: Debug Save/Load
+
+## Party NPC Spawning on Load
+
+GameLauncher handles spawning party NPCs from `CharacterProfileSaveData.partyMembers` during the load sequence:
+
+### Prefab Resolution
+- `ResolveCharacterPrefab()` extracts `raceId` from the saved profile's `componentStates` via `ExtractRaceIdFromProfile()` to determine the correct NPC prefab
+- `ExtractVisualSeedFromProfile()` extracts the visual seed for appearance reconstruction
+
+### NetworkVariable Pre-Seeding
+- `NetworkCharacterId`, `NetworkCharacterName`, `NetworkRaceId`, `NetworkVisualSeed` are set BEFORE `Spawn()` — same pattern as `MapController.WakeUp()` for hibernated NPCs
+
+### Duplication Check
+- `Character.FindByUUID()` is called before spawning — if an NPC with the same UUID already exists (e.g., abandoned copy), reconnect instead of spawning a duplicate
+
+### Foreign World Position Handling
+- When a party NPC is in a world that is NOT their origin, `CharacterMapTracker.SkipPositionRestore = true` is set before `ImportProfile()`
+- This prevents saved position (from a different world) from overriding spawn position near the party leader
+
+### Party Re-Formation
+- After all NPCs are spawned and profiles imported, the leader calls `CreateParty()`
+- Each NPC then calls `JoinParty()` to reconstruct the party structure
+
+## Abandoned NPC System
+- When party leader disconnects: NPCs flagged `IsAbandoned` with `FormerPartyLeaderId`
+- Duplicate NPCs can coexist (portal copy + abandoned copy)
+- Reclaim interaction: abandoned NPC destroyed, portal copy stays
+- `FindByUUID()` prefers non-abandoned; `FindAbandonedByFormerLeader()` for reclaim
+
+## Wallet & WorkLog Persistence
+
+Two new `ICharacterSaveData<T>` implementations were added by the worker-wages-and-performance feature:
+
+| Subsystem | SaveKey | LoadPriority | DTO |
+|---|---|---|---|
+| `CharacterWallet` | `"CharacterWallet"` | `35` | `WalletSaveData` (list of `CurrencyBalanceEntry`) |
+| `CharacterWorkLog` | `"CharacterWorkLog"` | `65` | `WorkLogSaveData` (list of `WorkLogJobEntry` with `WorkPlaceSaveEntry` workplaces) |
+
+Auto-discovered by `CharacterDataCoordinator.GetComponentsInChildren<ICharacterSaveData>` — no explicit registration. Round-trip via `CharacterSaveDataHelper` (Newtonsoft) like all other subsystems.
+
+`CharacterWorkLog` only persists the **lifetime** career counter (`_careerByJob`). The transient per-shift counter and the active-shift end-time are NOT persisted — loading mid-shift is treated as a fresh start (the worker punches in again the next time their schedule fires).
+
+`JobAssignmentSaveEntry` was extended with four wage fields:
+
+```csharp
+public int currencyId;        // raw CurrencyId.Id
+public int pieceRate;
+public int minimumShiftWage;
+public int fixedShiftWage;
+```
+
+Backward-compatible — old saves without these fields deserialize to `0` / `CurrencyId.Default` and get re-seeded by `WageSystemService.SeedAssignmentDefaults` at next hire.
+
+See `.agent/skills/character-wallet/SKILL.md`, `.agent/skills/character-worklog/SKILL.md`, `.agent/skills/wage-system/SKILL.md`.
+
+## File Locations
+- `Assets/Scripts/Character/SaveLoad/ICharacterSaveData.cs`
+- `Assets/Scripts/Character/SaveLoad/CharacterSaveDataBase.cs`
+- `Assets/Scripts/Character/SaveLoad/CharacterDataCoordinator.cs`
+- `Assets/Scripts/Character/SaveLoad/ProfileSaveData/` — all DTOs
+- `Assets/Scripts/Core/SaveLoad/CharacterProfileSaveData.cs`
+- `Assets/Scripts/Core/SaveLoad/SaveFileHandler.cs`
+- `Assets/Scripts/Core/SaveLoad/GameSaveData.cs`
+- `Assets/Scripts/Character/Abandoned/ReclaimNPCInteraction.cs`
+- `Assets/Scripts/Core/GameLauncher.cs`
+- `Assets/Scripts/Core/SaveLoad/WorldAssociation.cs`
+- `Assets/Scripts/UI/WorldSelect/` — world select UI panel, world entry, world creation
+- `Assets/Scripts/UI/CharacterSelect/` — character select UI panel, character entry, character creation
+- `Assets/Scripts/UI/Common/DeleteConfirmPopup.cs`
+- `Assets/Scripts/UI/ScreenFadeManager.cs`
+- `Assets/Scripts/Core/Network/GameSessionManager.cs`
+
+## Dependencies
+- Newtonsoft.Json
+- NGO 2.10+
+- CharacterArchetype system (for archetypeId-based spawning)
+
+## Quest Persistence (2026-04-23)
+
+A new `ICharacterSaveData<QuestLogSaveData>` implementation: `CharacterQuestLog`, SaveKey `"CharacterQuestLog"`, LoadPriority `70` (after CharacterJob 60 + CharacterWorkLog 65).
+
+`QuestLogSaveData` flattens `_snapshots` + `_dormantSnapshots` into a single `activeQuests` list of `QuestSnapshotEntry` plus a `focusedQuestId`. On `Deserialize`:
+- Snapshots whose `originMapId == currentMapId` reconcile against the live `IQuest` (resolved via `BuildingManager.Instance.allBuildings → CommercialBuilding.GetQuestById`). Dropped silently if no longer resolvable.
+- Snapshots whose `originMapId` differs enter `_dormantSnapshots` and wake on the next `CharacterMapTracker.CurrentMapID` change.
+
+`QuestSnapshotEntry` implements `INetworkSerializable` for `[ClientRpc]` push.
+
+See `.agent/skills/quest-system/SKILL.md`.

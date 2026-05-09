@@ -19,7 +19,7 @@ public class UI_InteractionCharacterScript : UI_InteractionScript
     {
         base.Awake();
         if (_fightButton == null)
-            Debug.LogWarning($"<color=orange>[UI]</color> _fightButton n'est pas assigné sur {gameObject.name}");
+            Debug.LogWarning($"<color=orange>[UI]</color> _fightButton is not assigned on {gameObject.name}");
     }
 
     public void Initialize(Character initiator, Character target)
@@ -45,7 +45,7 @@ public class UI_InteractionCharacterScript : UI_InteractionScript
         initiator.CharacterInteraction.OnInteractionStateChanged += HandleInteractionChanged;
         target.CharacterInteraction.OnInteractionStateChanged += HandleInteractionChanged;
 
-        Debug.Log($"<color=cyan>[UI]</color> Initialisée pour {initiator.CharacterName} vs {target.CharacterName}");
+        Debug.Log($"<color=cyan>[UI]</color> Initialized for {initiator.CharacterName} vs {target.CharacterName}");
     }
 
     private void Update()

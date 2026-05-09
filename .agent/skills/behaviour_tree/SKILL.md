@@ -63,7 +63,18 @@ The architecture strictly separates pathfinding from visual positioning to preve
 - **Macro Navigation (`MoveToTargetBehaviour`)**: The general-purpose pathfinder. Used by the AI to cross the map or reach an area. It stops when the agent is "close enough" based on a distance threshold. It does not calculate visual Z-plane alignment.
 - **Micro Positioning (`MoveToInteractionBehaviour`)**: A specialized, highly-constrained state completely owned by `CharacterInteraction`. Triggered *only* after an interaction has begun. It overrides the NavMesh to guarantee a mathematically perfect 2.5D visual alignment (exact `Z` plane match, exact `4f` distance on `X`, and overlapping `InteractionZone` colliders) before popping the dialogue bubbles.
 
-### 6. Social Filtering (Worker Focus)
+### 6. PunchIn retry pattern (2026-05-02)
+
+`BTAction_Work.HandlePunchingIn` MUST verify `workplace.IsWorkerOnShift(self)` before advancing to `WorkPhase.Working`. The check covers two paths after `Action_PunchIn` is no longer the worker's `CurrentAction`:
+
+- **(a)** `Action_PunchIn` completed normally → `OnApplyEffect` ran → `WorkerStartingShift` registered the worker → `IsWorkerOnShift = true`. Advance to `WorkPhase.Working` and `HandleWorking` calls `jobInfo.Work()`.
+- **(b)** `Action_PunchIn` never ran (`CharacterActions.ExecuteAction` returned false because the worker was busy with another action) OR was preempted before `OnApplyEffect` fired. `IsWorkerOnShift = false` even though the BT thinks PunchIn finished.
+
+Without the gate, the BT used to advance to `Working` on path (b), `JobFarmer.Execute` ran with the worker NOT on the shift roster, `_currentGoal` was set, no plan formed (because `IsWorkerOnShift` gates several things downstream), and the worker pinged between Idle and Goal forever. **Symptom**: debug shows `Job Goal: PlantEmptyCells, Action: Planning / Idle` but `On shift` doesn't include this worker. Falling back to `MovingToTimeClock` retries `Interact` + `ExecuteAction` until PunchIn succeeds or the schedule ends.
+
+When adding any new BT action that advances state on the basis of "another action's completion side-effect", verify the side-effect actually landed before advancing — never trust `CurrentAction == null` to mean "PunchIn / X / Y succeeded".
+
+### 7. Social Filtering (Worker Focus)
 Social nodes (`BTCond_WantsToSocialize`, `NeedSocial`) autonomously scan for free targets (`Character.IsFree()`). 
 To ensure NPCs can do their jobs uninterrupted:
 - Social scans must actively filter out characters currently scheduled to work (`CharacterSchedule.CurrentActivity == ScheduleActivity.Work`).

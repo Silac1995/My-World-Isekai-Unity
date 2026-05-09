@@ -1,0 +1,14 @@
+# Ensure Markdown and text files are treated as text and use LF-friendly diffs.
+*.md            text eol=lf diff=markdown
+*.txt           text eol=lf
+*.yml           text eol=lf
+*.yaml          text eol=lf
+*.json          text eol=lf
+*.gitignore     text eol=lf
+*.gitattributes text eol=lf
+
+# Unity-specific — force LF for asset metadata to keep diffs clean.
+*.meta          text eol=lf
+*.asset         text eol=lf merge=unityyamlmerge
+*.prefab        text eol=lf merge=unityyamlmerge
+*.unity         text eol=lf merge=unityyamlmerge

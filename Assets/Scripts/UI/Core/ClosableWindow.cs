@@ -4,8 +4,8 @@ using UnityEngine.UI;
 namespace MWI.UI.Core
 {
     /// <summary>
-    /// Classe de base pour toutes les fenêtres UI qui peuvent être ouvertes et fermées.
-    /// Gère automatiquement la liaison avec un bouton de fermeture.
+    /// Base class for every UI window that can be opened and closed.
+    /// Automatically wires up the binding with a close button.
     /// </summary>
     public abstract class ClosableWindow : MonoBehaviour
     {
@@ -29,7 +29,7 @@ namespace MWI.UI.Core
         }
 
         /// <summary>
-        /// Affiche la fenêtre.
+        /// Shows the window.
         /// </summary>
         public virtual void Open()
         {
@@ -37,7 +37,7 @@ namespace MWI.UI.Core
         }
 
         /// <summary>
-        /// Masque la fenêtre.
+        /// Hides the window.
         /// </summary>
         public virtual void Close()
         {

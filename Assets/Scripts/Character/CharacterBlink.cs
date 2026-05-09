@@ -14,7 +14,7 @@ public class CharacterBlink : MonoBehaviour
     private Dictionary<SpriteRenderer, Material> materialCache = new Dictionary<SpriteRenderer, Material>();
     private Coroutine blinkCoroutine;
 
-    // IDs des propriétés du shader (plus performant que d'utiliser des strings à chaque fois)
+    // Shader property IDs (faster than using strings every time)
     private static readonly int BlinkFactorID = Shader.PropertyToID("_BlinkFactor");
     private static readonly int BlinkColorID = Shader.PropertyToID("_BlinkColor");
 
@@ -26,7 +26,7 @@ public class CharacterBlink : MonoBehaviour
 
     private void OnDestroy()
     {
-        // TRÈS IMPORTANT : Détruire les instances de matériaux créées pour éviter les fuites mémoire
+        // VERY IMPORTANT: destroy the material instances we created to avoid memory leaks
         foreach (var mat in materialCache.Values)
         {
             if (mat != null) Destroy(mat);
@@ -35,7 +35,7 @@ public class CharacterBlink : MonoBehaviour
     }
 
     /// <summary>
-    /// Lance un flash sur le personnage en utilisant la couleur définie dans le shader.
+    /// Triggers a flash on the character using the colour defined in the shader.
     /// </summary>
     [ContextMenu("Test Blink")]
     public void Blink()
@@ -68,7 +68,7 @@ public class CharacterBlink : MonoBehaviour
             elapsed += Time.deltaTime;
             float lerpVal = elapsed / duration;
             
-            // On descend graduellement de maxBlinkFactor à 0
+            // Gradually go down from maxBlinkFactor to 0
             float currentFactor = Mathf.Lerp(maxBlinkFactor, 0f, lerpVal);
             
             SetBlinkProperties(currentFactor, color);
@@ -76,7 +76,7 @@ public class CharacterBlink : MonoBehaviour
             yield return null;
         }
 
-        // Sécurité finale : on s'assure d'être à 0
+        // Final safety: make sure we're at 0
         SetBlinkProperties(0f, color);
 
         blinkCoroutine = null;
@@ -90,10 +90,10 @@ public class CharacterBlink : MonoBehaviour
         {
             if (sr == null) continue;
 
-            // On récupère ou crée l'instance du matériau
+            // Fetch or create the material instance
             if (!materialCache.TryGetValue(sr, out Material mat))
             {
-                // Accéder à sr.material crée une instance unique (clone)
+                // Accessing sr.material creates a unique instance (clone)
                 mat = sr.material;
                 materialCache[sr] = mat;
             }

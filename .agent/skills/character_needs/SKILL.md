@@ -50,3 +50,66 @@ Because Needs are simply Data Providers, the resolution happens naturally in Pri
 - `NeedJob` -> `GoapGoal("FindJob")` -> `GoapAction_AskForJob`.
 - `NeedToWearClothing` -> `GoapGoal("WearClothing")` -> `GoapAction_WearClothing`.
 - `NeedShopping` -> `GoapGoal("GoShopping")` -> `GoapAction_GoShopping`.
+- `NeedHunger` -> `GoapGoal({"isHungry": false})` -> two paths returned **disjointly** (one or the other, never both — see GOAP integration below):
+  - World-item (preempts): `[GoapAction_GoToWorldFood, GoapAction_PickupWorldFood, GoapAction_EatCarriedFood]`.
+  - Workplace storage (fallback): `[GoapAction_GoToFood, GoapAction_Eat]`.
+
+---
+
+## NeedHunger
+
+Phase-decay need that drains 25 per `TimeManager.OnPhaseChanged` tick (4× per in-game day, fully empty in 24 h).
+
+**As of 2026-04-26: server-authoritative.** The actual current value lives in a `NetworkVariable<float>` on `CharacterNeeds` (`NetworkVariableReadPermission.Everyone`, `NetworkVariableWritePermission.Server`). `NeedHunger` itself is a thin POCO bridge — it reads the NV through `CharacterNeeds.NetworkedHungerValue`, routes writes through the server (direct NV write if `IsServer`, else `RequestAdjustHungerRpc(delta)` ServerRpc), and bridges `NetworkVariable.OnValueChanged` to its public `Action<float>` events so HUD code is unchanged.
+
+### Public API
+- `OnValueChanged(float)` — fired on every networked value change (every peer).
+- `OnStarvingChanged(bool)` — fired whenever the starving flag transitions (every peer).
+- `IncreaseValue(float)`, `DecreaseValue(float)` — server: direct NV write. Client: ServerRpc.
+- `CurrentValue` (getter) — reads the NV. Setter: server-direct or ServerRpc.
+- `IsStarving` — recomputed every NV change; true when networked value ≤ 0.
+- `IsLow()` — true at or below 30.
+- `TrySubscribeToPhase()` / `UnsubscribeFromPhase()` — defensive TimeManager subscription. Now called in `CharacterNeeds.OnNetworkSpawn` (every peer); decay handler is gated by `IsServer` so only the server actually decays.
+- `BindNetworkBridge()` / `UnbindNetworkBridge()` — wires `NetworkVariable.OnValueChanged` → `OnValueChanged` / `OnStarvingChanged`. Idempotent. Subscribed in `OnNetworkSpawn`, unsubscribed in `OnNetworkDespawn`.
+- `SetCooldown()` — rearms the GOAP activation cooldown after eating.
+
+### Lifecycle
+- Constructed in `CharacterNeeds.Awake()` (moved from `Start()` so `GetNeed<NeedHunger>()` works inside `OnNetworkSpawn`, before HUD initialization).
+- Server seeds the NV to `DEFAULT_START` (80) in `CharacterNeeds.OnNetworkPreSpawn`. Save-restore (`Deserialize`) overwrites with the saved value if applicable.
+- Bridge bound in `CharacterNeeds.OnNetworkSpawn` (every peer); unbound in `OnNetworkDespawn`.
+- Phase decay subscribed in `OnNetworkSpawn`; the handler is server-gated.
+
+### Networking authority
+- **Server** runs phase decay, NPC GOAP eat effects, and player-character eat effects (via ServerRpc from the client).
+- **Clients** observe via `NetworkVariable.OnValueChanged` → `NeedHunger.OnValueChanged`.
+- **Eat path:** `FoodInstance.ApplyEffect` calls `hunger.IncreaseValue(amount)`. On the server this writes the NV directly. On a client (player E-key flow) it fires `RequestAdjustHungerRpc(amount)`. Either way the new value replicates to all peers.
+- **Pre-existing inventory/hands gap:** `Inventory.RemoveItem` and `HandsController.ClearCarriedItem` are NOT yet networked. When a client-owned player eats, the host does NOT see the bread leave the client's inventory or hands — that's a separate bug outside the hunger-sync fix. Hunger value is correctly synced; inventory state is not. Track separately if needed.
+
+### GOAP integration
+- `IsActive()` returns true when controller is `NPCController` AND `IsLow()` AND cooldown has elapsed.
+- `GetGoapGoal()` → `{"isHungry": false}` with urgency `MaxValue - CurrentValue`.
+- `GetGoapActions()` runs two scans, returns **at most one chain** (never both — keeps the planner from cross-linking):
+  1. **World-item scan (preempts).** Reads `_character.CharacterAwareness.GetVisibleInteractables()` and looks for the first non-carried `WorldItem` whose `ItemInstance is FoodInstance`. On hit returns `[GoapAction_GoToWorldFood, GoapAction_PickupWorldFood, GoapAction_EatCarriedFood]`. The world-item path wins because food on the ground next to the NPC is closer than walking to the workplace and avoids one wasteful round trip.
+  2. **Workplace storage scan (fallback).** Walks `CharacterJob.Workplace.GetItemsInStorageFurniture()` for any `FoodSO` item. On hit returns `[GoapAction_GoToFood, GoapAction_Eat]`.
+- Both paths share the single `_searchCooldown` bucket — there is no separate cooldown per path.
+- The two chains use **disjoint** intermediate world-state keys (`atFood` for the workplace path, `atWorldFood` + `carryingFood` for the world-item path) so the planner cannot cross-link a `GoapAction_GoToWorldFood` with a `GoapAction_Eat` (or vice versa). If you ever return both chains together, this disjointness is what makes that safe.
+
+### Persistence
+- `Serialize()` reads `NeedHunger.CurrentValue` which reads the NV — works on the server (the only place save runs).
+- `Deserialize(NeedsSaveData)` writes `matchingNeed.CurrentValue = entry.value`. On the server this writes the NV directly; the value replicates to all clients.
+- Macro-sim catch-up still mutates `HibernatedNPCData.SavedNeeds` (offline data) directly — that's not a live `NeedHunger` instance and is unaffected by the network-authority change.
+
+### Macro-simulation catch-up
+- `MacroSimulator.SimulateNPCCatchUp` has a NeedHunger branch that calls `MWI.Needs.HungerCatchUpMath.ApplyDecay` at a rate of 100/24 per hour (matching the online decay of 25 per phase × 4 phases/day).
+
+### Key files
+- `Assets/Scripts/Character/CharacterNeeds/NeedHunger.cs` — need implementation.
+- `Assets/Scripts/Character/CharacterNeeds/Pure/NeedHungerMath.cs` — pure math helpers (no Unity dependencies).
+- `Assets/Scripts/Character/CharacterNeeds/Pure/HungerCatchUpMath.cs` — offline catch-up formula.
+- `Assets/Resources/Data/Item/FoodSO.cs` — `ConsumableSO` subtype with `_hungerRestored` + `FoodCategory`.
+- `Assets/Scripts/Item/FoodInstance.cs` — `ConsumableInstance` subtype; `ApplyEffect` overrides to call `NeedHunger.IncreaseValue`.
+- `Assets/Scripts/AI/GOAP/Actions/GoapAction_GoToFood.cs` — workplace path: navigates to storage furniture with food.
+- `Assets/Scripts/AI/GOAP/Actions/GoapAction_Eat.cs` — workplace path: pulls FoodInstance from a furniture slot and runs `CharacterUseConsumableAction`.
+- `Assets/Scripts/AI/GOAP/Actions/GoapAction_GoToWorldFood.cs` — world-item path: navigates to a loose `WorldItem` whose instance is a `FoodInstance` (effect `atWorldFood = true`).
+- `Assets/Scripts/AI/GOAP/Actions/GoapAction_PickupWorldFood.cs` — world-item path: runs `CharacterPickUpItem` on the loose food (effect `carryingFood = true`).
+- `Assets/Scripts/AI/GOAP/Actions/GoapAction_EatCarriedFood.cs` — world-item path: scans hands first then inventory for a `FoodInstance`, runs `CharacterUseConsumableAction` (effect `isHungry = false`).

@@ -1,6 +1,7 @@
 using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
+using MWI.CharacterControllers.Commands;
 
 public class PlayerInteractionDetector : CharacterInteractionDetector
 {
@@ -12,6 +13,7 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
     private bool isHoldingE = false;
     private const float HOLD_THRESHOLD = 0.4f;
     private PlayerUI _playerUI;
+    private UI_PlayerTargeting _targeting;
 
     protected override void Awake()
     {
@@ -56,12 +58,34 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
     }
 
     /// <summary>
+    /// Ensures the _targeting reference is resolved.
+    /// </summary>
+    private void EnsureTargeting()
+    {
+        if (_targeting == null)
+            _targeting = UnityEngine.Object.FindAnyObjectByType<UI_PlayerTargeting>(FindObjectsInactive.Include);
+    }
+
+    /// <summary>
+    /// True only if this detector's Character is the LOCAL player's character.
+    /// Remote player Characters also have a PlayerController (so IsPlayer() returns true on every
+    /// machine), which would otherwise cause the interaction HUD to open for every player when
+    /// any player starts an interaction. In solo play the NetworkObject is not spawned, so we
+    /// fall back to IsPlayer() alone.
+    /// </summary>
+    private bool IsLocalPlayerCharacter()
+    {
+        if (!Character.IsPlayer()) return false;
+        return !Character.IsSpawned || Character.IsOwner;
+    }
+
+    /// <summary>
     /// Called when the interaction formally starts or ends.
     /// Opens the menu (locked) when the interaction begins, closes it when it ends.
     /// </summary>
     private void HandleInteractionStateChanged(Character target, bool started)
     {
-        if (!Character.IsPlayer()) return;
+        if (!IsLocalPlayerCharacter()) return;
 
         EnsurePlayerUI();
         if (_playerUI == null) return;
@@ -76,7 +100,7 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
             // Fallback: resolve from the interaction target's CharacterInteractable
             if (interactable == null && target != null)
             {
-                interactable = target.GetComponent<CharacterInteractable>();
+                interactable = target.CharacterInteractable;
             }
 
             if (interactable != null)
@@ -84,8 +108,11 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
                 var options = interactable.GetDialogueInteractionOptions(Character);
                 if (options != null && options.Count > 0)
                 {
-                    _playerUI.OpenInteractionMenu(options);
-                    _playerUI.SetInteractionMenuInteractable(false);
+                    // persistAcrossClicks: dialogue menu must stay open for the whole
+                    // CharacterInteraction — clicking an option re-locks the buttons but
+                    // does NOT close the menu. Closure happens only when the interaction
+                    // ends (the `else` branch below calls CloseInteractionMenu()).
+                    _playerUI.OpenInteractionMenu(options, persistAcrossClicks: true);
                     _playerUI.UpdateInteractionMenuTimer(1f);
                 }
             }
@@ -101,7 +128,7 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
     /// </summary>
     private void HandlePlayerTurnStarted(Character listener)
     {
-        if (!Character.IsPlayer()) return;
+        if (!IsLocalPlayerCharacter()) return;
 
         EnsurePlayerUI();
         if (_playerUI != null)
@@ -116,7 +143,7 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
     /// </summary>
     private void HandlePlayerTurnEnded(Character listener)
     {
-        if (!Character.IsPlayer()) return;
+        if (!IsLocalPlayerCharacter()) return;
 
         EnsurePlayerUI();
         if (_playerUI != null)
@@ -130,7 +157,7 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
     /// </summary>
     private void HandlePlayerTurnTimerUpdated(float normalizedValue)
     {
-        if (!Character.IsPlayer()) return;
+        if (!IsLocalPlayerCharacter()) return;
 
         EnsurePlayerUI();
         if (_playerUI != null)
@@ -153,14 +180,43 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
             return;
         }
 
+        // Dev mode suppresses gameplay input. Nearby-target tracking above still runs.
+        if (DevModeManager.SuppressPlayerInput)
+        {
+            return;
+        }
+
         if (_playerUI == null)
             _playerUI = UnityEngine.Object.FindAnyObjectByType<PlayerUI>(FindObjectsInactive.Include);
 
-        if (Input.GetKeyDown(KeyCode.E) && _currentInteractableObjectTarget != null)
+        EnsureTargeting();
+
+        // --- E KEY INTERACTION ---
+        // Determine the effective target for E-key:
+        // If a selection exists but is NOT in range, pressing E will auto-navigate to it.
+        InteractableObject selectedTarget = _targeting != null ? _targeting.SelectedInteractable : null;
+
+        if (Input.GetKeyDown(KeyCode.E))
         {
-            isHoldingE = true;
-            eHoldTime = 0f;
-            if (currentPromptComponent != null) currentPromptComponent.SetFillAmount(0f);
+            if (selectedTarget != null && !IsTargetInRange(selectedTarget))
+            {
+                // Selected target is not in InteractionZone — auto-navigate to it
+                var playerController = Character.GetComponent<PlayerController>();
+                if (playerController != null)
+                {
+                    Debug.Log($"<color=cyan>[PlayerInteractionDetector]</color> Selected target {selectedTarget.name} is out of range. Auto-navigating.");
+                    playerController.SetOrder(new PlayerInteractCommand(selectedTarget, this));
+                }
+                return;
+            }
+
+            // Normal E-press: target is in range (or no selection, using proximity)
+            if (_currentInteractableObjectTarget != null)
+            {
+                isHoldingE = true;
+                eHoldTime = 0f;
+                if (currentPromptComponent != null) currentPromptComponent.SetFillAmount(0f);
+            }
         }
 
         if (Input.GetKey(KeyCode.E) && isHoldingE)
@@ -171,6 +227,7 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
             if (eHoldTime >= HOLD_THRESHOLD)
             {
                 isHoldingE = false; // Stop tracking hold
+                if (_currentInteractableObjectTarget == null) { eHoldTime = 0f; return; }
                 var options = _currentInteractableObjectTarget.GetHoldInteractionOptions(Character);
                 if (options != null && options.Count > 0)
                 {
@@ -191,12 +248,36 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
         }
     }
 
+    /// <summary>
+    /// Checks whether the given interactable is currently in the player's nearbyInteractables list,
+    /// meaning the player's rigidbody is inside the target's InteractionZone.
+    /// Called by PlayerInteractCommand to determine arrival.
+    /// </summary>
+    public bool IsTargetInRange(InteractableObject target)
+    {
+        if (target == null) return false;
+        return nearbyInteractables.Contains(target);
+    }
+
+    /// <summary>
+    /// Triggers the standard interaction with a given target.
+    /// Called by PlayerInteractCommand when auto-navigate arrives at the target.
+    /// </summary>
+    public void TriggerInteract(InteractableObject target)
+    {
+        if (target == null) return;
+
+        // Temporarily set the current target so ExecuteNormalInteract picks it up
+        _currentInteractableObjectTarget = target;
+        ExecuteNormalInteract();
+    }
+
     private void ExecuteNormalInteract()
     {
         if (_currentInteractableObjectTarget == null) return;
         try
         {
-            // 1. SI C'EST UN PERSONNAGE, ON VÉRIFIE LES ÉTATS
+            // 1. IF IT'S A CHARACTER, CHECK THE STATES
             if (_currentInteractableObjectTarget is CharacterInteractable charInteractable)
             {
                 Character targetChar = charInteractable.Character;
@@ -204,8 +285,8 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
 
                 if (!Character.IsFree() || !targetChar.IsFree())
                 {
-                    Debug.LogWarning($"<color=yellow>[Interaction]</color> Interaction impossible : " +
-                        $"{(!Character.IsFree() ? "Le joueur est occupé" : "La cible est en combat/interaction")}");
+                    Debug.LogWarning($"<color=yellow>[Interaction]</color> Interaction not possible: " +
+                        $"{(!Character.IsFree() ? "the player is busy" : "the target is in combat/interaction")}");
                     return;
                 }
 
@@ -217,16 +298,16 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
                 }
             }
 
-            // 2. TOUS LES TYPES : on délègue à l'Interact() de chaque sous-classe
+            // 2. ALL TYPES: delegate to each subclass's Interact()
             _currentInteractableObjectTarget.Interact(Character);
         }
         catch (System.Exception ex)
         {
-            Debug.LogError($"<color=red>[Interaction Error]</color> Sur {_currentInteractableObjectTarget.name}: {ex.ToString()}");
+            Debug.LogError($"<color=red>[Interaction Error]</color> On {_currentInteractableObjectTarget.name}: {ex.ToString()}");
         }
     }
 
-    private void OpenInteractionMenu(List<InteractableObject.InteractionOption> options)
+    private void OpenInteractionMenu(List<InteractionOption> options)
     {
         if (_playerUI != null)
         {
@@ -242,26 +323,56 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
     {
         nearbyInteractables.RemoveAll(item => item == null);
 
+        EnsureTargeting();
+        InteractableObject selectedTarget = _targeting != null ? _targeting.SelectedInteractable : null;
+
+        // --- SELECTION MODE: If a target is selected via click/TAB, lock to it ---
+        if (selectedTarget != null)
+        {
+            bool selectedIsInRange = nearbyInteractables.Contains(selectedTarget);
+
+            if (selectedIsInRange)
+            {
+                // Selected target is in InteractionZone — lock to it
+                if (_currentInteractableObjectTarget != selectedTarget)
+                {
+                    // Clean up old target
+                    if (_currentInteractableObjectTarget != null)
+                    {
+                        _currentInteractableObjectTarget.OnCharacterExit(Character);
+                        DestroyPrompt();
+                        CloseMenuIfSafe();
+                    }
+
+                    _currentInteractableObjectTarget = selectedTarget;
+                    _currentInteractableObjectTarget.OnCharacterEnter(Character);
+                    CreatePrompt();
+                }
+                return; // Skip proximity-based auto-targeting
+            }
+            else
+            {
+                // Selected target is NOT in range — clear the prompt but keep the selection
+                if (_currentInteractableObjectTarget != null)
+                {
+                    _currentInteractableObjectTarget.OnCharacterExit(Character);
+                    _currentInteractableObjectTarget = null;
+                    DestroyPrompt();
+                    CloseMenuIfSafe();
+                }
+                return; // Don't fall through to proximity mode while a target is selected
+            }
+        }
+
+        // --- PROXIMITY MODE: No selection, use closest interactable in range ---
         if (nearbyInteractables.Count == 0)
         {
             if (_currentInteractableObjectTarget != null)
             {
                 _currentInteractableObjectTarget.OnCharacterExit(Character);
                 _currentInteractableObjectTarget = null;
-            
-                if (currentPromptUI != null)
-                {
-                    Destroy(currentPromptUI);
-                    currentPromptUI = null;
-                    currentPromptComponent = null;
-                }
-                
-                // Only close the menu if the player is NOT in an active interaction
-                // AND the menu hasn't been locked by the player already committing to an action
-                if (_playerUI != null && !Character.CharacterInteraction.IsInteracting && !_playerUI.IsInteractionMenuLocked())
-                {
-                    _playerUI.CloseInteractionMenu();
-                }
+                DestroyPrompt();
+                CloseMenuIfSafe();
             }
             return;
         }
@@ -272,7 +383,7 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
 
         if (closest == null)
         {
-            Debug.LogError("Aucune cible valide trouvée dans nearbyInteractables.", this);
+            Debug.LogError("No valid target found in nearbyInteractables.", this);
             return;
         }
 
@@ -281,73 +392,80 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
             if (_currentInteractableObjectTarget != null)
             {
                 _currentInteractableObjectTarget.OnCharacterExit(Character);
-                if (currentPromptUI != null)
-                {
-                    Destroy(currentPromptUI);
-                    currentPromptUI = null;
-                    currentPromptComponent = null;
-                }
-                if (_playerUI != null && !Character.CharacterInteraction.IsInteracting && !_playerUI.IsInteractionMenuLocked())
-                {
-                    _playerUI.CloseInteractionMenu();
-                }
+                DestroyPrompt();
+                CloseMenuIfSafe();
             }
 
             _currentInteractableObjectTarget = closest;
             _currentInteractableObjectTarget.OnCharacterEnter(Character);
-
-            if (interactionPromptPrefab == null)
-            {
-                Debug.LogError("interactionPromptPrefab est null. Assigne un prefab dans l'inspecteur ou via InitializePromptUI.", this);
-                return;
-            }
-
-            // 1. Trouver l'objet parent dans la scène
-            GameObject parentObj = GameObject.Find("WorldUIManager");
-
-            if (parentObj != null)
-            {
-                // 2. Instancier en passant le Transform du parent
-                // Le prefab sera automatiquement placé comme enfant de WorldUIManager
-                currentPromptUI = Instantiate(interactionPromptPrefab, parentObj.transform);
-            }
-            else
-            {
-                Debug.LogError("WorldUIManager non trouvé dans la scène !");
-            }
-
-            InteractionPromptUI promptUIComponent = currentPromptUI.GetComponent<InteractionPromptUI>();
-
-            if (promptUIComponent == null)
-            {
-                Debug.LogError("Le prefab interactionPromptPrefab n'a pas de composant InteractionPromptUI.", this);
-                Destroy(currentPromptUI);
-                currentPromptUI = null;
-                currentPromptComponent = null;
-                return;
-            }
-
-            currentPromptComponent = promptUIComponent;
-            currentPromptComponent.SetTarget(_currentInteractableObjectTarget.transform, "E");
-            string targetName = _currentInteractableObjectTarget.TryGetComponent(out CharacterInteractable characterInteractable) && characterInteractable.Character != null
-                ? characterInteractable.Character.name
-                : _currentInteractableObjectTarget.name;
-            //Debug.Log($"Prompt affiché sur {targetName}", this);
+            CreatePrompt();
         }
     }
+
+    #region Prompt Helpers
+
+    private void CreatePrompt()
+    {
+        if (interactionPromptPrefab == null)
+        {
+            Debug.LogError("interactionPromptPrefab is null. Assign a prefab in the inspector or via InitializePromptUI.", this);
+            return;
+        }
+
+        GameObject parentObj = GameObject.Find("WorldUIManager");
+        if (parentObj != null)
+        {
+            currentPromptUI = Instantiate(interactionPromptPrefab, parentObj.transform);
+        }
+        else
+        {
+            Debug.LogError("WorldUIManager not found in the scene!");
+            return;
+        }
+
+        InteractionPromptUI promptUIComponent = currentPromptUI.GetComponent<InteractionPromptUI>();
+        if (promptUIComponent == null)
+        {
+            Debug.LogError("The interactionPromptPrefab prefab has no InteractionPromptUI component.", this);
+            Destroy(currentPromptUI);
+            currentPromptUI = null;
+            currentPromptComponent = null;
+            return;
+        }
+
+        currentPromptComponent = promptUIComponent;
+        currentPromptComponent.SetTarget(_currentInteractableObjectTarget.transform, "E");
+    }
+
+    private void DestroyPrompt()
+    {
+        if (currentPromptUI != null)
+        {
+            Destroy(currentPromptUI);
+            currentPromptUI = null;
+            currentPromptComponent = null;
+        }
+    }
+
+    private void CloseMenuIfSafe()
+    {
+        if (_playerUI != null && !Character.CharacterInteraction.IsInteracting && !_playerUI.IsInteractionMenuLocked())
+        {
+            _playerUI.CloseInteractionMenu();
+        }
+    }
+
+    #endregion
 
     protected override void OnTriggerEnter(Collider other)
     {
         if (Character.TryGetComponent(out Unity.Netcode.NetworkObject netObj) && netObj.IsSpawned && !netObj.IsOwner) return;
         
-        // --- LA CORRECTION EST ICI ---
-        // On vérifie si le collider qui a détecté l'entrée est bien l'InteractionZone du joueur
-        // Si c'est l'Awareness ou un autre collider enfant, on ignore.
+        // Check that the collider event is from our InteractionZone, not from Awareness or other child colliders
         if (InteractionZone != null && !InteractionZone.bounds.Intersects(other.bounds))
         {
             return;
         }
-        // -----------------------------
 
         if (other.gameObject == gameObject) return;
 
@@ -364,7 +482,6 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
     {
         if (Character.TryGetComponent(out Unity.Netcode.NetworkObject netObj) && netObj.IsSpawned && !netObj.IsOwner) return;
 
-        // On applique la même logique pour la sortie
         if (other.TryGetComponent(out InteractableObject interactable))
         {
             if (nearbyInteractables.Contains(interactable))
@@ -373,15 +490,9 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
 
                 if (interactable == _currentInteractableObjectTarget)
                 {
-                    // Nettoyage UI...
                     _currentInteractableObjectTarget.OnCharacterExit(Character);
                     _currentInteractableObjectTarget = null;
-                    if (currentPromptUI != null)
-                    {
-                        Destroy(currentPromptUI);
-                        currentPromptUI = null;
-                        currentPromptComponent = null;
-                    }
+                    DestroyPrompt();
                     if (_playerUI != null && !Character.CharacterInteraction.IsInteracting)
                     {
                         _playerUI.CloseInteractionMenu();

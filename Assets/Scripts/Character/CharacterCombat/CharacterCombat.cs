@@ -4,7 +4,7 @@ using System.Linq;
 using Unity.Netcode;
 using UnityEngine;
 
-public class CharacterCombat : CharacterSystem
+public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveData>
 {
     [Header("Expertise & Memory")]
     [SerializeField] private List<CombatStyleExpertise> _knownStyles = new List<CombatStyleExpertise>();
@@ -17,6 +17,7 @@ public class CharacterCombat : CharacterSystem
     public event Action<bool> OnCombatModeChanged;
     public event Action<float, DamageType> OnDamageTaken;
     public event Action OnBattleLeft;
+    public event Action<BattleManager> OnBattleJoined;
 
     [Header("Initiative Scaling")]
     [SerializeField] private float _baseInitiativePerTick = 1f;
@@ -43,29 +44,62 @@ public class CharacterCombat : CharacterSystem
     public void SetActionIntent(Func<bool> action, Character target)
     {
         PlannedAction = action;
-        PlannedTarget = target;
-        
-        if (_character != null && _character.CharacterVisual != null)
-        {
-            _character.CharacterVisual.SetLookTarget(target);
-        }
-
-        if (target != null && IsInBattle && CurrentBattleManager != null && CurrentBattleManager.Coordinator != null)
-        {
-            CurrentBattleManager.Coordinator.RequestEngagement(_character, target);
-        }
+        // Route through SetPlannedTarget for the full targeting chain
+        // (look target, graph update, engagement evaluation)
+        SetPlannedTarget(target);
 
         OnActionIntentDecided?.Invoke(target, action);
     }
 
     public void ClearActionIntent()
     {
+        Debug.Log($"<color=cyan>[Combat]</color> {_character.CharacterName} ClearActionIntent → PlannedTarget: {PlannedTarget?.CharacterName ?? "null"} → null");
         PlannedAction = null;
         PlannedTarget = null;
-        
-        if (_character != null && _character.CharacterVisual != null)
+
+        // Only clear look target outside of battle.
+        // During combat, the character should keep facing their target between actions
+        // (prevents turning away during step-back after melee attacks).
+        if (_character != null && _character.CharacterVisual != null && !IsInBattle)
         {
             _character.CharacterVisual.ClearLookTarget();
+        }
+    }
+
+    /// <summary>
+    /// <summary>
+    /// Single entry point for ALL target changes (player click, NPC AI, BT, battle join).
+    /// Updates look target, targeting graph, evaluates engagements, and triggers reposition.
+    /// </summary>
+    public void SetPlannedTarget(Character target)
+    {
+        // Never self-target
+        if (target == _character) return;
+
+        PlannedTarget = target;
+
+        // Update look target so this character faces their chosen target
+        if (_character != null && _character.CharacterVisual != null)
+        {
+            if (target != null)
+                _character.CharacterVisual.SetLookTarget(target);
+            else
+                _character.CharacterVisual.ClearLookTarget();
+        }
+
+        // Update targeting graph + re-evaluate engagements immediately
+        if (target != null && IsInBattle && CurrentBattleManager != null)
+        {
+            CurrentBattleManager.SetTargeting(_character, target);
+            CurrentBattleManager.Coordinator?.EvaluateEngagements();
+
+            // Immediately start moving toward the target.
+            // CombatAILogic will refine the destination once it starts ticking.
+            if (_character.CharacterMovement != null)
+            {
+                _character.CharacterMovement.Resume();
+                _character.CharacterMovement.SetDestination(target.transform.position);
+            }
         }
     }
 
@@ -83,7 +117,7 @@ public class CharacterCombat : CharacterSystem
             }
         }
 
-        // Initialisation par défaut si possible
+        // Default initialization when possible
         if (_currentCombatStyleExpertise == null || _currentCombatStyleExpertise.Style == null)
         {
             _currentCombatStyleExpertise = _knownStyles.FirstOrDefault(s => s.WeaponType == WeaponType.Barehands);
@@ -97,10 +131,19 @@ public class CharacterCombat : CharacterSystem
 
     public void ConsumeInitiative()
     {
+        if (_character.Stats == null || _character.Stats.Initiative == null) return;
+        _character.Stats.Initiative.ResetInitiative();
+
+        // Sync reset to all clients so initiative ring visuals update for remote characters.
+        if (IsServer && IsSpawned)
+            SyncInitiativeResetClientRpc();
+    }
+
+    [Rpc(SendTo.NotServer)]
+    private void SyncInitiativeResetClientRpc()
+    {
         if (_character.Stats != null && _character.Stats.Initiative != null)
-        {
             _character.Stats.Initiative.ResetInitiative();
-        }
     }
 
     public void UpdateInitiativeTick(float tickAmount)
@@ -118,7 +161,7 @@ public class CharacterCombat : CharacterSystem
             if (Time.time - _lastCombatActionTime > COMBAT_MODE_TIMEOUT)
             {
                 ChangeCombatMode(false);
-                Debug.Log("<color=cyan>[Combat]</color> Mode Combat expire : DESACTIVE");
+                Debug.Log("<color=cyan>[Combat]</color> Combat Mode expired: DISABLED");
             }
         }
     }
@@ -136,7 +179,7 @@ public class CharacterCombat : CharacterSystem
 
         if (!enabled && _character.Stats != null && _character.Stats.Initiative != null)
         {
-            // Remplir l'initiative pour être prêt au prochain combat même en cas de raté
+            // Refill initiative to be ready for the next combat even on a miss
             _character.Stats.Initiative.IncreaseCurrentAmount(_character.Stats.Initiative.CurrentValue);
         }
     }
@@ -223,7 +266,10 @@ public class CharacterCombat : CharacterSystem
 
         if (_character.CharacterActions == null) return false;
 
-        if (target != null 
+        // Consume initiative on the executor (Owner predicts, Server validates+broadcasts)
+        ConsumeInitiative();
+
+        if (target != null
             && _currentCombatStyleExpertise?.Style is RangedCombatStyleSO rangedStyle)
         {
             float distToTarget = Vector3.Distance(_character.transform.position, target.transform.position);
@@ -255,12 +301,102 @@ public class CharacterCombat : CharacterSystem
     }
     #endregion
 
+    #region Ability Execution
+
+    /// <summary>
+    /// Uses an ability from the character's active ability slot.
+    /// Follows the same Owner-predict → Server-validate → Broadcast pattern as Attack().
+    /// </summary>
+    public bool UseAbility(int slotIndex, Character target = null)
+    {
+        if (!_character.IsAlive()) return false;
+        if (_character.CharacterAbilities == null) return false;
+
+        AbilityInstance ability = _character.CharacterAbilities.GetActiveSlot(slotIndex);
+        if (ability == null) return false;
+
+        ulong targetId = target != null && target.NetworkObject != null ? target.NetworkObject.NetworkObjectId : 0;
+
+        if (IsOwner)
+        {
+            bool success = ExecuteAbilityLocally(ability, target);
+            if (!success) return false;
+            if (!IsServer) RequestUseAbilityRpc(slotIndex, targetId);
+            else BroadcastUseAbilityRpc(slotIndex, targetId);
+            return true;
+        }
+        else if (IsServer)
+        {
+            bool success = ExecuteAbilityLocally(ability, target);
+            if (!success) return false;
+            BroadcastUseAbilityRpc(slotIndex, targetId);
+            return true;
+        }
+
+        return false;
+    }
+
+    private bool ExecuteAbilityLocally(AbilityInstance ability, Character target)
+    {
+        _lastCombatActionTime = Time.time;
+        ChangeCombatMode(true);
+
+        if (_character.CharacterActions == null) return false;
+
+        CharacterAction action = ability switch
+        {
+            PhysicalAbilityInstance physical => new CharacterPhysicalAbilityAction(_character, physical, target),
+            SpellInstance spell => new CharacterSpellCastAction(_character, spell, target),
+            _ => null
+        };
+
+        if (action == null) return false;
+        return _character.CharacterActions.ExecuteAction(action);
+    }
+
+    [Rpc(SendTo.Server)]
+    private void RequestUseAbilityRpc(int slotIndex, ulong targetNetworkObjectId)
+    {
+        if (!IsServer) return;
+
+        Character target = null;
+        if (targetNetworkObjectId > 0 && NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(targetNetworkObjectId, out var netObj))
+            target = netObj.GetComponent<Character>();
+
+        // Server validates and broadcasts
+        AbilityInstance ability = _character.CharacterAbilities?.GetActiveSlot(slotIndex);
+        if (ability == null) return;
+
+        if (ExecuteAbilityLocally(ability, target))
+        {
+            BroadcastUseAbilityRpc(slotIndex, targetNetworkObjectId);
+        }
+    }
+
+    [Rpc(SendTo.NotServer)]
+    private void BroadcastUseAbilityRpc(int slotIndex, ulong targetNetworkObjectId)
+    {
+        if (IsOwner) return; // Owner already predicted locally
+
+        Character target = null;
+        if (targetNetworkObjectId > 0 && NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(targetNetworkObjectId, out var netObj))
+            target = netObj.GetComponent<Character>();
+
+        AbilityInstance ability = _character.CharacterAbilities?.GetActiveSlot(slotIndex);
+        if (ability != null)
+        {
+            ExecuteAbilityLocally(ability, target);
+        }
+    }
+
+    #endregion
+
     #region Equipment Bridge
     public void OnWeaponChanged(WeaponInstance weapon)
     {
         WeaponType type = (weapon != null && weapon.ItemSO is WeaponSO weaponSO) ? weaponSO.WeaponType : WeaponType.Barehands;
         
-        // Trouver le meilleur style pour cette arme
+        // Find the best style for this weapon
         _currentCombatStyleExpertise = _knownStyles.FirstOrDefault(s => s.WeaponType == type);
         
         if (_currentCombatStyleExpertise == null)
@@ -280,22 +416,34 @@ public class CharacterCombat : CharacterSystem
 
         float speedValue = _character.Stats.Speed != null ? _character.Stats.Speed.Value : 0f;
         
-        // 1. Calcul de base
+        // 1. Base computation
         float rawGain = _baseInitiativePerTick + (speedValue * _speedMultiplierInitiative);
-        
-        // 2. On plafonne à 2.0 (On prend la valeur la plus petite entre le calcul et 2.0)
+
+        // 2. Cap at 2.0 (we take the smaller of the computed value and 2.0)
         float cappedGain = Mathf.Min(rawGain, 2.0f);
-        
-        // 3. On applique le Random Range sur la valeur plafonnée
+
+        // 3. Apply Random Range on the capped value
         float totalGain = cappedGain * UnityEngine.Random.Range(0.7f, 1.3f);
         
+        bool wasReady = _character.Stats.Initiative.IsReady();
         _character.Stats.Initiative.IncreaseCurrentAmount(totalGain);
+
+        // Passive trigger: OnInitiativeFull (fire once when initiative becomes ready)
+        if (!wasReady && _character.Stats.Initiative.IsReady())
+        {
+            _character.CharacterAbilities?.OnPassiveTriggerEvent(PassiveTriggerCondition.OnInitiativeFull, _character, null);
+        }
     }
 
     public void JoinBattle(BattleManager manager)
     {
         _currentBattleManager = manager;
         ChangeCombatMode(true);
+
+        // Passive trigger: OnBattleStart
+        _character.CharacterAbilities?.OnPassiveTriggerEvent(PassiveTriggerCondition.OnBattleStart, _character, null);
+
+        OnBattleJoined?.Invoke(manager);
     }
 
     public void JoinBattleAsAlly(Character friend)
@@ -304,10 +452,10 @@ public class CharacterCombat : CharacterSystem
         if (friend == null || !friend.CharacterCombat.IsInBattle) return;
         if (IsInBattle) return;
 
-        // --- SÉCURITÉ : On ne rejoint que si on est LIBRE ---
+        // --- SAFETY: We only join if we are FREE ---
         if (!_character.IsFree())
         {
-            Debug.Log($"<color=orange>[Combat]</color> {_character.CharacterName} est trop occupé pour rejoindre son ami {friend.CharacterName}.");
+            Debug.Log($"<color=orange>[Combat]</color> {_character.CharacterName} is too busy to join their ally {friend.CharacterName}.");
             return;
         }
 
@@ -319,11 +467,16 @@ public class CharacterCombat : CharacterSystem
 
     public void LeaveBattle()
     {
+        // Clear combat intent and look target BEFORE nulling the battle manager,
+        // so ClearActionIntent sees IsInBattle as false and properly clears everything.
         _currentBattleManager = null;
+        PlannedAction = null;
+        PlannedTarget = null;
+        _character.CharacterVisual?.ClearLookTarget();
+
         _lastCombatActionTime = Time.time;
 
-        // On ne force plus la sortie du mode combat ici. 
-        // Le timeout de 7 secondes dans Update() s'en chargera naturellement.
+        // The 7-second timeout in Update() will handle this naturally.
 
         OnBattleLeft?.Invoke();
     }
@@ -334,8 +487,8 @@ public class CharacterCombat : CharacterSystem
         
         if (!IsServer) return; // ONLY SERVER CAN SPAWN/MANAGE BATTLES
 
-        // --- PÉNALITÉ DE RELATION ---
-        // On baisse la relation des deux côtés de 10 points car un combat commence
+        // --- RELATIONSHIP PENALTY ---
+        // We lower the relation on both sides by 10 points because a combat is starting
         if (_character.CharacterRelation != null)
             _character.CharacterRelation.UpdateRelation(target, -10);
         
@@ -352,8 +505,8 @@ public class CharacterCombat : CharacterSystem
             return;
         }
 
-        // --- NOUVEAU : VÉRIFICATION DYNAMIQUE DE FUSION (BASÉE PHYSIQUE) ---
-        // On cherche un collider "BattleZone" à proximité (ex: 25m) pour éviter les registres statiques globaux
+        // --- NEW: DYNAMIC MERGE CHECK (PHYSICS-BASED) ---
+        // We look for a nearby "BattleZone" collider (e.g., 25m) to avoid global static registries
         BattleManager nearbyBattle = null;
         Character connectionFound = null;
         bool initiatorHasLink = false;
@@ -375,11 +528,13 @@ public class CharacterCombat : CharacterSystem
 
         foreach (var battle in detectedBattles)
         {
-            // On vérifie si l'initiateur a un lien
+            // We check whether the initiator has a link
             foreach (var p in battle.BattleTeams.SelectMany(t => t.CharacterList))
             {
                 bool isFriend = _character.CharacterRelation != null && _character.CharacterRelation.IsFriend(p);
-                bool sameParty = _character.CurrentParty != null && _character.CurrentParty == p.CurrentParty;
+                bool sameParty = _character.CharacterParty != null && _character.CharacterParty.IsInParty
+                    && p.CharacterParty != null && p.CharacterParty.IsInParty
+                    && _character.CharacterParty.PartyData.PartyId == p.CharacterParty.PartyData.PartyId;
 
                 if (isFriend || sameParty)
                 {
@@ -391,17 +546,19 @@ public class CharacterCombat : CharacterSystem
             }
             if (nearbyBattle != null) break;
 
-            // On vérifie si la cible a un lien
+            // We check whether the target has a link
             foreach (var p in battle.BattleTeams.SelectMany(t => t.CharacterList))
             {
                 bool isFriend = target.CharacterRelation != null && target.CharacterRelation.IsFriend(p);
-                bool sameParty = target.CurrentParty != null && target.CurrentParty == p.CurrentParty;
+                bool sameParty = target.CharacterParty != null && target.CharacterParty.IsInParty
+                    && p.CharacterParty != null && p.CharacterParty.IsInParty
+                    && target.CharacterParty.PartyData.PartyId == p.CharacterParty.PartyData.PartyId;
 
                 if (isFriend || sameParty)
                 {
                     nearbyBattle = battle;
                     connectionFound = p;
-                    initiatorHasLink = false; // Le lien appartient à la cible
+                    initiatorHasLink = false; // The link belongs to the target
                     break;
                 }
             }
@@ -410,17 +567,17 @@ public class CharacterCombat : CharacterSystem
 
         if (nearbyBattle != null)
         {
-            Debug.Log($"<color=orange>[Battle]</color> Fusion : {_character.CharacterName} et {target.CharacterName} rejoignent le combat de {connectionFound.CharacterName}");
-            
+            Debug.Log($"<color=orange>[Battle]</color> Merge: {_character.CharacterName} and {target.CharacterName} join the combat of {connectionFound.CharacterName}");
+
             if (initiatorHasLink)
             {
-                // L'initiateur rejoint son ami, la cible rejoint en face
+                // The initiator joins their ally, the target joins on the opposite side
                 nearbyBattle.AddParticipant(_character, connectionFound, asAlly: true);
                 nearbyBattle.AddParticipant(target, _character, asAlly: false);
             }
             else
             {
-                // La cible rejoint son ami, l'initiateur rejoint en face
+                // The target joins their ally, the initiator joins on the opposite side
                 nearbyBattle.AddParticipant(target, connectionFound, asAlly: true);
                 nearbyBattle.AddParticipant(_character, target, asAlly: false);
             }
@@ -438,7 +595,7 @@ public class CharacterCombat : CharacterSystem
 
         if (manager == null)
         {
-            Debug.LogError("<color=red>[Battle]</color> Le prefab n'a pas le script BattleManager !");
+            Debug.LogError("<color=red>[Battle]</color> The prefab does not have the BattleManager script!");
             Destroy(instanceGo);
             return;
         }
@@ -458,12 +615,15 @@ public class CharacterCombat : CharacterSystem
     public void ForceExitCombatMode()
     {
         _currentBattleManager = null;
+        PlannedAction = null;
+        PlannedTarget = null;
+        _character.CharacterVisual?.ClearLookTarget();
         ChangeCombatMode(false);
     }
 
     /// <summary>
-    /// Désactive uniquement la posture de combat (animator) sans quitter le BattleManager.
-    /// Utilisé pour éviter les glitches visuels lors de la mort/inconscience.
+    /// Disables only the combat stance (animator) without leaving the BattleManager.
+    /// Used to avoid visual glitches during death/unconsciousness.
     /// </summary>
     public void ExitCombatMode()
     {
@@ -478,7 +638,7 @@ public class CharacterCombat : CharacterSystem
     {
         if (_currentCombatStyleExpertise == null || _currentCombatStyleExpertise.Style == null) return;
         
-        // Seuls les styles melee ont un hitbox prefab
+        // Only melee styles have a hitbox prefab
         if (_currentCombatStyleExpertise.Style is not MeleeCombatStyleSO meleeStyle) return;
 
         // If we are Owner but not Server, we tell the Server that the impact frame has been reached 
@@ -513,13 +673,13 @@ public class CharacterCombat : CharacterSystem
         GameObject prefab = meleeStyle.HitboxPrefab;
         if (prefab == null) return;
 
-        // Positionnement à l'extrémité visuelle selon la direction et centré en Y
+        // Place at the visual extremity along the facing direction, centered on Y
         Vector3 spawnPos = _character.transform.position;
         if (_character.CharacterVisual != null)
         {
             Vector3 facingDir = _character.CharacterVisual.IsFacingRight ? Vector3.right : Vector3.left;
             spawnPos = _character.CharacterVisual.GetVisualExtremity(facingDir);
-            spawnPos.z = _character.transform.position.z; // Rester sur le même plan Z
+            spawnPos.z = _character.transform.position.z; // Stay on the same Z plane
         }
 
         _activeCombatStyleInstance = Instantiate(prefab, spawnPos, Quaternion.identity, _character.transform);
@@ -569,21 +729,25 @@ public class CharacterCombat : CharacterSystem
         {
             var animHandler = _character.CharacterVisual.CharacterAnimator;
 
-            // On n'applique le contrôleur de combat QUE si on est en mode combat
+            // We only apply the combat controller IF we are in combat mode
             if (_isCombatMode && _currentCombatStyleExpertise != null)
             {
                 var controller = _currentCombatStyleExpertise.GetCurrentAnimator();
                 if (controller != null)
                 {
                     animHandler.Animator.runtimeAnimatorController = controller;
+                    animHandler.CacheParameters();
+                    animHandler.CacheClipDurations();
                 }
             }
             else
             {
-                // Sinon on s'assure d'être en mode civil
+                // Otherwise we ensure we are in civil mode
                 if (animHandler.CivilAnimatorController != null)
                 {
                     animHandler.Animator.runtimeAnimatorController = animHandler.CivilAnimatorController;
+                    animHandler.CacheParameters();
+                    animHandler.CacheClipDurations();
                 }
             }
 
@@ -599,6 +763,32 @@ public class CharacterCombat : CharacterSystem
 
         // ONLY the Server executes the raw physical damage calculation and EXP
         if (!IsServer) return;
+
+        // Cinematic actor invincibility — bound actors take no damage during a scene.
+        // Phase 1: IsCinematicActor is a server-side bool (works on host). Phase 2 promotes
+        // to NetworkVariable<bool> so all clients respect it via existing replication.
+        // Null-safe: legacy characters without the subsystem fall through normally.
+        if (_character?.CharacterCinematicState != null && _character.CharacterCinematicState.IsCinematicActor)
+        {
+            Debug.Log($"<color=cyan>[Cinematic]</color> Damage skipped on '{_character.CharacterName}' — IsCinematicActor=true (scene={_character.CharacterCinematicState.ActiveSceneId}).");
+            return;
+        }
+
+        // Wake-on-attack: if asleep, force a wake. Character.ExitSleep is idempotent
+        // (it early-outs if !IsSleeping), so this is safe to fire on every damage event.
+        // The current sleep CharacterAction's OnCancel chain runs via the standard
+        // HandleCombatStateChanged → ClearCurrentAction path, releasing the bed slot.
+        try
+        {
+            if (_character != null && _character.IsSleeping)
+            {
+                _character.ExitSleep();
+            }
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogException(e);
+        }
 
         bool wasAlive = _character.IsAlive();
         float hpBefore = _character.Stats.Health.CurrentAmount;
@@ -617,21 +807,32 @@ public class CharacterCombat : CharacterSystem
             _character.CharacterVisual.CharacterBlink.Blink();
         }
 
+        // --- PASSIVE TRIGGERS: OnDamageTaken ---
+        _character.CharacterAbilities?.OnPassiveTriggerEvent(PassiveTriggerCondition.OnDamageTaken, source, _character);
+
+        // --- PASSIVE TRIGGERS: OnLowHPThreshold ---
+        _character.CharacterAbilities?.OnPassiveTriggerEvent(PassiveTriggerCondition.OnLowHPThreshold, source, _character);
+
         if (hpAfter <= 0)
         {
             _character.SetUnconscious(true);
+
+            // --- PASSIVE TRIGGERS: OnKill (notify the source) ---
+            if (wasAlive && source != null)
+            {
+                source.CharacterAbilities?.OnPassiveTriggerEvent(PassiveTriggerCondition.OnKill, source, _character);
+            }
         }
 
         // --- PROGRESSION EXP ---
+        bool isKill = wasAlive && !_character.IsAlive();
         if (source != null && source.CharacterCombatLevel != null && actualDamageDealt > 0)
         {
             int targetLevel = _character.CharacterCombatLevel != null ? _character.CharacterCombatLevel.CurrentLevel : 1;
             int targetYield = _character.CharacterCombatLevel != null ? _character.CharacterCombatLevel.BaseExpYield : 10;
-            
+
             float maxHp = Mathf.Max(1f, _character.Stats.Health.MaxValue);
             float damagePercentage = actualDamageDealt / maxHp;
-
-            bool isKill = wasAlive && !_character.IsAlive();
             
             int expGained = source.CharacterCombatLevel.CalculateCombatExp(targetLevel, isKill, damagePercentage, targetYield);
             source.CharacterCombatLevel.AddExperience(expGained);
@@ -680,4 +881,86 @@ public class CharacterCombat : CharacterSystem
             Debug.Log($"<color=yellow>[Combat]</color> Nouveau style débloqué : {style.StyleName}");
         }
     }
+
+    /// <summary>
+    /// Unlocks a known combat style at a specific starting level. Used by dev-mode spawn
+    /// and by save/load restore. XP starts at 0. No-op if the style is already known.
+    /// </summary>
+    public void UnlockCombatStyle(CombatStyleSO style, int level)
+    {
+        if (style == null) return;
+        if (_knownStyles.Exists(s => s.Style == style))
+        {
+            Debug.LogWarning($"<color=orange>[Combat]</color> {_character.CharacterName} already knows {style.StyleName} — ignoring dev-mode unlock.");
+            return;
+        }
+
+        _knownStyles.Add(new CombatStyleExpertise(style, level, 0f));
+        Debug.Log($"<color=yellow>[Combat]</color> {_character.CharacterName} learned {style.StyleName} at L{level} (dev-mode).");
+    }
+
+    #region ICharacterSaveData Implementation
+
+    public string SaveKey => "CharacterCombat";
+    public int LoadPriority => 70;
+
+    public CombatSaveData Serialize()
+    {
+        var data = new CombatSaveData();
+
+        foreach (var expertise in _knownStyles)
+        {
+            if (expertise.Style == null) continue;
+
+            data.knownStyles.Add(new CombatStyleSaveEntry
+            {
+                styleId = expertise.Style.name,
+                level = expertise.Level,
+                experience = expertise.Experience
+            });
+        }
+
+        if (_currentCombatStyleExpertise?.Style != null)
+        {
+            data.preferredStyleId = _currentCombatStyleExpertise.Style.name;
+        }
+
+        return data;
+    }
+
+    public void Deserialize(CombatSaveData data)
+    {
+        if (data == null) return;
+
+        _knownStyles.Clear();
+
+        foreach (var entry in data.knownStyles)
+        {
+            CombatStyleSO styleSO = Resources.Load<CombatStyleSO>($"Data/CombatStyle/{entry.styleId}");
+            if (styleSO == null)
+            {
+                Debug.LogWarning($"[CharacterCombat] Could not find CombatStyleSO '{entry.styleId}' during deserialization. Skipping.");
+                continue;
+            }
+
+            _knownStyles.Add(new CombatStyleExpertise(styleSO, entry.level, entry.experience));
+        }
+
+        // Restore preferred style
+        if (!string.IsNullOrEmpty(data.preferredStyleId))
+        {
+            _currentCombatStyleExpertise = _knownStyles.Find(s => s.Style != null && s.Style.name == data.preferredStyleId);
+        }
+
+        // Fallback to barehands if preferred style was not found
+        if (_currentCombatStyleExpertise == null)
+        {
+            _currentCombatStyleExpertise = _knownStyles.Find(s => s.WeaponType == WeaponType.Barehands);
+        }
+    }
+
+    string ICharacterSaveData.SerializeToJson() => CharacterSaveDataHelper.SerializeToJson(this);
+    void ICharacterSaveData.DeserializeFromJson(string json) => CharacterSaveDataHelper.DeserializeFromJson(this, json);
+
+    #endregion
 }

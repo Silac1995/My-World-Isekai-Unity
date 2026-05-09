@@ -10,6 +10,7 @@ TagManager:
   - Gatherable
   - Deposit
   - Debug_World
+  - Crop
   layers:
   - Default
   - TransparentFX
@@ -22,11 +23,11 @@ TagManager:
   - RigidBody
   - InteractionCollider
   - Environment
-  - 
-  - 
-  - 
-  - 
-  - 
+  - PartyGather
+  - Building
+  - Furniture
+  - SpeechZone
+  - Harvestable
   - 
   - 
   - 

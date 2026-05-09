@@ -1,12 +1,12 @@
 using UnityEngine;
 
 /// <summary>
-/// Bâtiment responsable d'accepter des commandes logistiques et de dépêcher des transporteurs pour déplacer
-/// les ressources à travers la ville.
+/// Building responsible for accepting logistics orders and dispatching transporters to move
+/// resources across the city.
 /// </summary>
 public class TransporterBuilding : CommercialBuilding
 {
-    // Selon la nomenclature existante, on peut réutiliser commercial
+    // Per existing nomenclature, we can reuse commercial
     public override BuildingType BuildingType => BuildingType.Commercial;
 
     [Header("Transporter Config")]
@@ -14,15 +14,15 @@ public class TransporterBuilding : CommercialBuilding
 
     protected override void InitializeJobs()
     {
-        // 1 Manager (pour prendre les commandes)
+        // 1 Manager (to take orders)
         _jobs.Add(new JobLogisticsManager("Head of Logistics"));
 
-        // N Transporters (pour transporter physiquement les caisses)
+        // N Transporters (to physically carry the crates)
         for (int i = 0; i < _transporterCount; i++)
         {
             _jobs.Add(new JobTransporter($"Transporter {i + 1}"));
         }
 
-        Debug.Log($"<color=green>[TransporterBuilding]</color> {buildingName} initialisé avec 1 Manager et {_transporterCount} Transporters.");
+        Debug.Log($"<color=green>[TransporterBuilding]</color> {buildingName} initialized with 1 Manager and {_transporterCount} Transporters.");
     }
 }

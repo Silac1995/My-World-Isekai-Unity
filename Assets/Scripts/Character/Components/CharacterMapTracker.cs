@@ -1,21 +1,30 @@
+using System;
 using Unity.Netcode;
 using Unity.Collections;
 using UnityEngine;
+using MWI.WorldSystem;
 
 [RequireComponent(typeof(Character))]
-public class CharacterMapTracker : NetworkBehaviour
+public class CharacterMapTracker : NetworkBehaviour, ICharacterSaveData<MapTrackerSaveData>
 {
     private Character _character;
 
     [Tooltip("The ID of the Map/Region this Character is currently in.")]
-    public NetworkVariable<FixedString32Bytes> CurrentMapID = new NetworkVariable<FixedString32Bytes>(
+    public NetworkVariable<FixedString128Bytes> CurrentMapID = new NetworkVariable<FixedString128Bytes>(
+        "",
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server
+    );
+
+    [Tooltip("The ID of the parent Region this Character is currently in (empty when outside any Region).")]
+    public NetworkVariable<FixedString128Bytes> CurrentRegionId = new NetworkVariable<FixedString128Bytes>(
         "",
         NetworkVariableReadPermission.Everyone,
         NetworkVariableWritePermission.Server
     );
 
     [Tooltip("The ID of the Map this Character considers Home.")]
-    public NetworkVariable<FixedString32Bytes> HomeMapId = new NetworkVariable<FixedString32Bytes>(
+    public NetworkVariable<FixedString128Bytes> HomeMapId = new NetworkVariable<FixedString128Bytes>(
         "",
         NetworkVariableReadPermission.Everyone,
         NetworkVariableWritePermission.Server
@@ -28,25 +37,102 @@ public class CharacterMapTracker : NetworkBehaviour
         NetworkVariableWritePermission.Server
     );
 
+    private float _nextRegionCheckTime = 0f;
+    private const float RegionCheckIntervalSeconds = 0.25f;
+
     private void Awake()
     {
         _character = GetComponent<Character>();
+    }
+
+    private void Update()
+    {
+        if (!IsServer) return;
+        if (Time.unscaledTime < _nextRegionCheckTime) return;
+        _nextRegionCheckTime = Time.unscaledTime + RegionCheckIntervalSeconds;
+
+        try
+        {
+            var region = Region.GetRegionAtPosition(transform.position);
+            string id = region != null ? region.ZoneId : "";
+            if (CurrentRegionId.Value.ToString() != id)
+            {
+                CurrentRegionId.Value = new FixedString128Bytes(id);
+            }
+        }
+        catch (Exception e)
+        {
+            Debug.LogException(e);
+        }
     }
 
     /// <summary>
     /// Called by the Client's CharacterMapTransitionAction AFTER it predicts the Warp locally.
     /// </summary>
     [ServerRpc(RequireOwnership = true)]
-    public void RequestTransitionServerRpc(FixedString32Bytes targetMapId, Vector3 targetPosition)
+    public void RequestTransitionServerRpc(FixedString128Bytes targetMapId, Vector3 targetPosition)
     {
+        string previousMapId = CurrentMapID.Value.ToString();
+        string targetMapIdStr = targetMapId.ToString();
+
+        Debug.Log($"<color=yellow>[MapTracker]</color> ServerRpc received: targetMapId='{targetMapIdStr}', clientPos={targetPosition}, previousMap='{previousMapId}'");
+
+        // Lazy-spawn interior if this transition targets a building interior
+        Vector3 resolvedPosition = ResolveInteriorPosition(targetMapIdStr, targetPosition);
+
+        Debug.Log($"<color=yellow>[MapTracker]</color> ResolvedPosition={resolvedPosition} (clientSent={targetPosition}, changed={resolvedPosition != targetPosition})");
+
         // 1. Authoritative Warp on Server
-        if (TryGetComponent(out CharacterMovement movement))
+        CharacterMovement movement = _character.GetComponentInChildren<CharacterMovement>();
+        if (movement != null)
         {
-            movement.Warp(targetPosition);
+            movement.ForceWarp(resolvedPosition);
+            Debug.Log($"<color=yellow>[MapTracker]</color> Server ForceWarp done. transform.position={transform.position}");
         }
 
-        // 2. Set new Map state
-        SetCurrentMap(targetMapId.ToString());
+        // 2. If the server resolved a different position (e.g. first interior visit),
+        //    tell the client to warp there. ClientNetworkTransform is owner-authoritative,
+        //    so only the client can move itself.
+        if (resolvedPosition != targetPosition)
+        {
+            Debug.Log($"<color=yellow>[MapTracker]</color> Sending WarpClientRpc({resolvedPosition})");
+            WarpClientRpc(resolvedPosition);
+        }
+        else
+        {
+            Debug.Log("<color=yellow>[MapTracker]</color> Positions match — no WarpClientRpc needed.");
+        }
+
+        // 3. Set new Map state
+        SetCurrentMap(targetMapIdStr);
+
+        // 4. Notify source and destination MapControllers for hibernation handoff
+        MapController.NotifyPlayerTransition(OwnerClientId, previousMapId, targetMapIdStr);
+    }
+
+    [ClientRpc]
+    private void WarpClientRpc(Vector3 position)
+    {
+        Debug.Log($"<color=lime>[MapTracker]</color> WarpClientRpc received: position={position}, IsOwner={IsOwner}");
+        if (!IsOwner) return;
+
+        CharacterMovement mov = _character.CharacterMovement;
+        if (mov != null)
+        {
+            Debug.Log($"<color=lime>[MapTracker]</color> Client ForceWarp to {position}. Before={transform.position}");
+            mov.ForceWarp(position);
+            Debug.Log($"<color=lime>[MapTracker]</color> Client ForceWarp done. After={transform.position}");
+        }
+        else
+        {
+            // Fallback: direct transform teleport
+            Debug.LogWarning($"<color=orange>[MapTracker]</color> No CharacterMovement found! Falling back to direct transform.position = {position}");
+            transform.position = position;
+        }
+
+        // Snap camera to avoid smooth pan across thousands of units
+        CameraFollow cam = Camera.main?.GetComponent<CameraFollow>();
+        cam?.SnapToTarget();
     }
 
     /// <summary>
@@ -55,15 +141,206 @@ public class CharacterMapTracker : NetworkBehaviour
     public void SetCurrentMap(string mapId)
     {
         if (!IsServer) return;
-        
+
+        string previousMapId = CurrentMapID.Value.ToString();
         CurrentMapID.Value = mapId;
 
         // --- RULE 20: Character Decoupling ---
-        // TODO: Integrate with ICharacterData to save the LastWorldID / LastCoordinates 
+        // TODO: Integrate with ICharacterData to save the LastWorldID / LastCoordinates
         // to the decoupled JSON/DAT file so if the player disconnects right now, they spawn here later.
         if (_character.IsPlayer())
         {
             Debug.Log($"<color=cyan>[MapTracker]</color> Player {_character.name} transitioned to Map '{mapId}'. (Coordinates Decoupling Placeholder)");
         }
     }
+
+    /// <summary>
+    /// Server-authoritative NPC transition with MapController notifications.
+    /// </summary>
+    public void SetCurrentMapWithNotify(string mapId, ulong clientId)
+    {
+        if (!IsServer) return;
+
+        string previousMapId = CurrentMapID.Value.ToString();
+        SetCurrentMap(mapId);
+        MapController.NotifyPlayerTransition(clientId, previousMapId, mapId);
+    }
+
+    /// <summary>
+    /// If the target map is a building interior that hasn't been spawned yet,
+    /// ensures it exists and returns the corrected spawn position.
+    /// </summary>
+    private Vector3 ResolveInteriorPosition(string targetMapId, Vector3 clientPosition)
+    {
+        if (BuildingInteriorRegistry.Instance == null) return clientPosition;
+
+        // Check if any registered interior matches this target map
+        // Interior map IDs follow the pattern: "{ExteriorMapId}_Interior_{BuildingId}"
+        // We need to find the record by InteriorMapId, not BuildingId
+        foreach (var buildingId in GetBuildingIdFromInteriorMapId(targetMapId))
+        {
+            if (BuildingInteriorRegistry.Instance.TryGetInterior(buildingId, out var record))
+            {
+                if (record.InteriorMapId == targetMapId)
+                {
+                    // Interior already exists — use entry position from MapController
+                    MapController interiorMap = MapController.GetByMapId(record.InteriorMapId);
+                    if (interiorMap != null && interiorMap.InteriorEntryPosition.Value != Vector3.zero)
+                    {
+                        return interiorMap.InteriorEntryPosition.Value;
+                    }
+                    // Fallback to raw origin
+                    Vector3 interiorOrigin = WorldOffsetAllocator.Instance.GetInteriorOffsetVector(record.SlotIndex);
+                    return interiorOrigin;
+                }
+            }
+        }
+
+        // Check if this looks like an interior map ID that needs lazy-spawning
+        if (targetMapId.Contains("_Interior_"))
+        {
+            string buildingId = ExtractBuildingId(targetMapId);
+            string exteriorMapId = ExtractExteriorMapId(targetMapId);
+
+            if (string.IsNullOrEmpty(buildingId))
+            {
+                Debug.LogError($"[CharacterMapTracker] Could not extract BuildingId from interior map ID '{targetMapId}'.");
+                return clientPosition;
+            }
+
+            // Find the door to get the prefabId and exterior door position
+            var door = FindDoorForBuilding(buildingId);
+            if (door == null)
+            {
+                Debug.LogError($"[CharacterMapTracker] Could not find BuildingInteriorDoor for building '{buildingId}' to lazy-spawn interior.");
+                return clientPosition;
+            }
+
+            // Use the door's exterior map ID if we couldn't extract one (e.g. fallback "World" prefix)
+            if (string.IsNullOrEmpty(exteriorMapId))
+            {
+                exteriorMapId = door.ExteriorMapId;
+            }
+
+            var record = BuildingInteriorRegistry.Instance.RegisterInterior(
+                buildingId, door.PrefabId, exteriorMapId, door.ReturnWorldPosition
+            );
+
+            if (record == null)
+            {
+                Debug.LogError($"[CharacterMapTracker] Failed to register interior for building '{buildingId}'.");
+                return clientPosition;
+            }
+
+            WorldSettingsData settings = Resources.Load<WorldSettingsData>("Data/World/WorldSettingsData");
+            if (settings == null)
+            {
+                Debug.LogError("[CharacterMapTracker] WorldSettingsData not found at 'Data/World/WorldSettingsData'.");
+                return clientPosition;
+            }
+
+            GameObject interiorPrefab = settings.GetInteriorPrefab(record.PrefabId);
+            if (interiorPrefab == null)
+            {
+                Debug.LogError($"[CharacterMapTracker] No InteriorPrefab found for PrefabId '{record.PrefabId}' in WorldSettingsData.");
+                return clientPosition;
+            }
+
+            MapController spawnedMap = BuildingInteriorSpawner.SpawnInterior(record, interiorPrefab);
+
+            // Use the entry position set by the spawner (near the exit door / spawn point)
+            if (spawnedMap != null && spawnedMap.InteriorEntryPosition.Value != Vector3.zero)
+            {
+                return spawnedMap.InteriorEntryPosition.Value;
+            }
+            // Fallback to raw origin
+            Vector3 interiorOrigin = WorldOffsetAllocator.Instance.GetInteriorOffsetVector(record.SlotIndex);
+            return interiorOrigin;
+        }
+
+        return clientPosition;
+    }
+
+    private static string ExtractBuildingId(string interiorMapId)
+    {
+        int idx = interiorMapId.LastIndexOf("_Interior_");
+        if (idx < 0) return null;
+        return interiorMapId.Substring(idx + "_Interior_".Length);
+    }
+
+    private static string ExtractExteriorMapId(string interiorMapId)
+    {
+        int idx = interiorMapId.LastIndexOf("_Interior_");
+        if (idx < 0) return null;
+        return interiorMapId.Substring(0, idx);
+    }
+
+    private static System.Collections.Generic.IEnumerable<string> GetBuildingIdFromInteriorMapId(string interiorMapId)
+    {
+        string buildingId = ExtractBuildingId(interiorMapId);
+        if (!string.IsNullOrEmpty(buildingId))
+        {
+            yield return buildingId;
+        }
+    }
+
+    private static BuildingInteriorDoor FindDoorForBuilding(string buildingId)
+    {
+        // Find the exterior door that references this building
+        var doors = UnityEngine.Object.FindObjectsByType<BuildingInteriorDoor>(FindObjectsSortMode.None);
+        foreach (var door in doors)
+        {
+            if (door.BuildingId == buildingId)
+            {
+                return door;
+            }
+        }
+        return null;
+    }
+
+    #region ICharacterSaveData Implementation
+
+    public string SaveKey => "CharacterMapTracker";
+    public int LoadPriority => 70;
+
+    public MapTrackerSaveData Serialize()
+    {
+        Vector3 pos = transform.position;
+        return new MapTrackerSaveData
+        {
+            currentMapId = CurrentMapID.Value.ToString(),
+            positionX = pos.x,
+            positionY = pos.y,
+            positionZ = pos.z
+        };
+    }
+
+    /// <summary>
+    /// When true, Deserialize will skip setting the transform position.
+    /// Set by GameLauncher for party NPCs in foreign worlds — their position
+    /// is managed by the launcher, not by saved map tracker data.
+    /// </summary>
+    [System.NonSerialized] public bool SkipPositionRestore;
+
+    public void Deserialize(MapTrackerSaveData data)
+    {
+        if (data == null) return;
+
+        // Position restore -- skip if flagged (e.g., party NPC in foreign world)
+        if (!SkipPositionRestore)
+        {
+            transform.position = new Vector3(data.positionX, data.positionY, data.positionZ);
+        }
+
+        // Map ID -- only set on server since it's a server-write NetworkVariable.
+        if (IsServer && !string.IsNullOrEmpty(data.currentMapId))
+        {
+            CurrentMapID.Value = data.currentMapId;
+        }
+    }
+
+    string ICharacterSaveData.SerializeToJson() => CharacterSaveDataHelper.SerializeToJson(this);
+    void ICharacterSaveData.DeserializeFromJson(string json) => CharacterSaveDataHelper.DeserializeFromJson(this, json);
+
+    #endregion
 }

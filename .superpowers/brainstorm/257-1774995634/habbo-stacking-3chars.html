@@ -1,0 +1,186 @@
+<h2>Habbo Hotel Style — 3 Characters</h2>
+<p class="subtitle">New bubble always at bottom. ALL existing bubbles pushed up. Click any character to make them speak.</p>
+
+<div style="display:flex; justify-content:center; margin:24px 0;">
+  <div style="position:relative; width:620px; height:550px; background:linear-gradient(180deg, #1a2a1a 0%, #2a3a2a 100%); border-radius:12px; overflow:hidden; border:1px solid #333;">
+
+    <!-- All bubbles live in this shared space, positioned absolutely -->
+    <div id="bubble-zone" style="position:absolute; bottom:100px; left:0; right:0; height:420px;"></div>
+
+    <!-- Character A -->
+    <div style="position:absolute; bottom:20px; left:120px; text-align:center;">
+      <div style="width:36px; height:54px; background:#5a8a5a; border-radius:8px 8px 4px 4px; margin:0 auto; cursor:pointer;" onclick="speak('a')"></div>
+      <div style="color:#7cb87c; font-size:11px; margin-top:4px; font-weight:bold;">Maren</div>
+    </div>
+
+    <!-- Character B -->
+    <div style="position:absolute; bottom:20px; left:290px; text-align:center;">
+      <div style="width:36px; height:54px; background:#5a5a8a; border-radius:8px 8px 4px 4px; margin:0 auto; cursor:pointer;" onclick="speak('b')"></div>
+      <div style="color:#7c7cb8; font-size:11px; margin-top:4px; font-weight:bold;">Alicia</div>
+    </div>
+
+    <!-- Character C -->
+    <div style="position:absolute; bottom:20px; left:460px; text-align:center;">
+      <div style="width:36px; height:54px; background:#8a5a5a; border-radius:8px 8px 4px 4px; margin:0 auto; cursor:pointer;" onclick="speak('c')"></div>
+      <div style="color:#b87c7c; font-size:11px; margin-top:4px; font-weight:bold;">Aurelia</div>
+    </div>
+
+    <!-- Legend -->
+    <div style="position:absolute; top:12px; left:12px; color:#888; font-size:11px; line-height:1.6;">
+      <div><span style="color:#7cb87c;">&#9632;</span> Maren</div>
+      <div><span style="color:#7c7cb8;">&#9632;</span> Alicia</div>
+      <div><span style="color:#b87c7c;">&#9632;</span> Aurelia</div>
+      <div style="margin-top:6px; color:#666;">Click a character to make them speak</div>
+      <div style="color:#666;">New bubble = bottom. Old bubbles pushed up.</div>
+    </div>
+  </div>
+</div>
+
+<div style="text-align:center; margin:12px 0; display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
+  <button onclick="speak('a')" style="padding:8px 18px; background:#5a8a5a; color:white; border:none; border-radius:6px; cursor:pointer; font-size:13px;">Maren speaks</button>
+  <button onclick="speak('b')" style="padding:8px 18px; background:#5a5a8a; color:white; border:none; border-radius:6px; cursor:pointer; font-size:13px;">Alicia speaks</button>
+  <button onclick="speak('c')" style="padding:8px 18px; background:#8a5a5a; color:white; border:none; border-radius:6px; cursor:pointer; font-size:13px;">Aurelia speaks</button>
+  <button onclick="clearAll()" style="padding:8px 18px; background:#555; color:white; border:none; border-radius:6px; cursor:pointer; font-size:13px;">Clear all</button>
+</div>
+
+<div class="section" style="margin-top:16px;">
+  <h3>Rules</h3>
+  <ul style="color:#ccc; line-height:1.8;">
+    <li><strong>New bubble always at the bottom</strong> — closest to the character who spoke</li>
+    <li><strong>ALL existing bubbles pushed up</strong> by the new bubble's height — regardless of owner</li>
+    <li>Bubbles <strong>never come back down</strong> — they stay where they were pushed</li>
+    <li>Same-character bubbles get a <strong>white separator line</strong></li>
+    <li>Different-character bubbles get <strong>empty space</strong> (no separator)</li>
+    <li>Each bubble <strong>expires independently</strong> after 8s — fades out, no gap closing</li>
+  </ul>
+</div>
+
+<script>
+const BUBBLE_HEIGHT = 40;
+const BUBBLE_GAP = 6;
+const CHAR_POSITIONS = { a: 120, b: 290, c: 460 };
+const CHAR_COLORS = { a: 'rgba(122,184,122,0.3)', b: 'rgba(122,122,184,0.3)', c: 'rgba(184,122,122,0.3)' };
+const CHAR_NAMES = { a: 'Maren', b: 'Alicia', c: 'Aurelia' };
+
+const messagesA = ["Hello everyone!", "Nice day isn't it?", "Anyone seen the blacksmith?", "I need a new sword."];
+const messagesB = ["Good morning!", "Sure thing!", "The forest is scary.", "Want to trade?"];
+const messagesC = ["Hey there!", "I just arrived.", "What's going on?", "Sounds fun!"];
+const allMessages = { a: messagesA, b: messagesB, c: messagesC };
+let msgIdx = { a: 0, b: 0, c: 0 };
+
+// Track all active bubbles globally
+let allBubbles = []; // {el, owner, bottom, height, id}
+let bubbleId = 0;
+let lastSpeaker = null;
+
+function speak(owner) {
+  const zone = document.getElementById('bubble-zone');
+  const msg = allMessages[owner][msgIdx[owner] % allMessages[owner].length];
+  msgIdx[owner]++;
+  bubbleId++;
+
+  const newHeight = BUBBLE_HEIGHT + BUBBLE_GAP;
+
+  // Push ALL existing bubbles up by the new bubble's height
+  allBubbles.forEach(b => {
+    b.bottom += newHeight;
+    b.el.style.bottom = b.bottom + 'px';
+    b.el.style.transition = 'bottom 0.3s ease, opacity 0.3s ease';
+  });
+
+  // Create new bubble at the bottom (Y=0), positioned at the speaker's X
+  const wrapper = document.createElement('div');
+  wrapper.style.cssText = `
+    position:absolute;
+    bottom:0px;
+    left:${CHAR_POSITIONS[owner] - 75}px;
+    width:180px;
+    opacity:0;
+    transform:translateY(10px);
+    transition:all 0.35s ease;
+  `;
+
+  // Add separator if same character spoke previously and their bubble is directly below
+  const prevSameChar = allBubbles.find(b => b.owner === owner && b.bottom === newHeight);
+
+  const bubble = document.createElement('div');
+  bubble.style.cssText = `
+    background:rgba(20,20,20,0.92);
+    border:1px solid ${CHAR_COLORS[owner]};
+    border-radius:10px;
+    padding:7px 13px;
+    text-align:center;
+  `;
+
+  // Check if previous bubble at bottom+newHeight belongs to same owner → separator
+  const justAbove = allBubbles.filter(b => Math.abs(b.bottom - newHeight) < 2 && b.owner === owner);
+  if (justAbove.length > 0) {
+    const sep = document.createElement('div');
+    sep.style.cssText = 'width:60%; height:1px; background:rgba(255,255,255,0.5); margin:0 auto 4px auto;';
+    wrapper.appendChild(sep);
+  }
+
+  const text = document.createElement('span');
+  text.style.cssText = 'color:white; font-size:12px; line-height:1.4;';
+  text.classList.add('typing');
+  text.dataset.fullText = msg;
+  text.textContent = '';
+  bubble.appendChild(text);
+  wrapper.appendChild(bubble);
+
+  // Name tag
+  const nameTag = document.createElement('div');
+  nameTag.style.cssText = `color:${CHAR_COLORS[owner].replace('0.3','0.8')}; font-size:9px; text-align:center; margin-top:2px;`;
+  nameTag.textContent = CHAR_NAMES[owner];
+  wrapper.appendChild(nameTag);
+
+  zone.appendChild(wrapper);
+
+  const entry = { el: wrapper, owner, bottom: 0, height: newHeight, id: bubbleId };
+  allBubbles.unshift(entry);
+  lastSpeaker = owner;
+
+  // Animate in
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      wrapper.style.opacity = '1';
+      wrapper.style.transform = 'translateY(0)';
+    });
+  });
+
+  // Type text
+  let charIdx = 0;
+  const typeInterval = setInterval(() => {
+    if (charIdx < msg.length && text.classList.contains('typing')) {
+      charIdx++;
+      text.textContent = msg.substring(0, charIdx);
+    } else {
+      clearInterval(typeInterval);
+      text.classList.remove('typing');
+    }
+  }, 45);
+
+  // Expire after 8s — fade out, don't close gap
+  const currentId = bubbleId;
+  setTimeout(() => {
+    const idx = allBubbles.findIndex(b => b.id === currentId);
+    if (idx !== -1) {
+      const b = allBubbles[idx];
+      b.el.style.opacity = '0';
+      b.el.style.pointerEvents = 'none';
+      setTimeout(() => {
+        b.el.remove();
+        allBubbles.splice(allBubbles.indexOf(b), 1);
+      }, 400);
+    }
+  }, 8000);
+}
+
+function clearAll() {
+  const zone = document.getElementById('bubble-zone');
+  zone.innerHTML = '';
+  allBubbles = [];
+  msgIdx = { a: 0, b: 0, c: 0 };
+  lastSpeaker = null;
+}
+</script>

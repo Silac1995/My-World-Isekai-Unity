@@ -1,0 +1,166 @@
+<h2>Cross-Character Speech Zone (Habbo Style)</h2>
+<p class="subtitle">Two NPCs within 15 units of each other — their bubbles avoid overlap by pushing up</p>
+
+<div style="display:flex; justify-content:center; margin:32px 0;">
+  <div style="position:relative; width:520px; height:480px; background:linear-gradient(180deg, #1a2a1a 0%, #2a3a2a 100%); border-radius:12px; overflow:hidden; border:1px solid #333;">
+
+    <!-- Speech zone radius indicator -->
+    <div style="position:absolute; bottom:60px; left:50%; transform:translateX(-50%); width:300px; height:150px; border:1px dashed rgba(255,255,100,0.2); border-radius:50%; display:flex; align-items:flex-end; justify-content:center; padding-bottom:4px;">
+      <span style="color:rgba(255,255,100,0.3); font-size:10px;">speech zone (15 units)</span>
+    </div>
+
+    <!-- Character A -->
+    <div style="position:absolute; bottom:20px; left:160px; text-align:center;">
+      <div id="bubbles-a" style="position:absolute; bottom:70px; left:50%; transform:translateX(-50%); display:flex; flex-direction:column-reverse; align-items:center; min-width:180px;"></div>
+      <div style="width:36px; height:54px; background:#5a8a5a; border-radius:8px 8px 4px 4px; margin:0 auto;"></div>
+      <div style="color:#7cb87c; font-size:11px; margin-top:4px; font-weight:bold;">Villager A</div>
+    </div>
+
+    <!-- Character B -->
+    <div style="position:absolute; bottom:20px; left:320px; text-align:center;">
+      <div id="bubbles-b" style="position:absolute; bottom:70px; left:50%; transform:translateX(-50%); display:flex; flex-direction:column-reverse; align-items:center; min-width:180px;"></div>
+      <div style="width:36px; height:54px; background:#5a5a8a; border-radius:8px 8px 4px 4px; margin:0 auto;"></div>
+      <div style="color:#7c7cb8; font-size:11px; margin-top:4px; font-weight:bold;">Villager B</div>
+    </div>
+
+    <!-- Legend -->
+    <div style="position:absolute; top:12px; left:12px; color:#888; font-size:11px; line-height:1.6;">
+      <div><span style="color:#7cb87c;">&#9632;</span> = Villager A's bubbles</div>
+      <div><span style="color:#7c7cb8;">&#9632;</span> = Villager B's bubbles</div>
+      <div style="margin-top:4px; color:#666;">White line = same character separator</div>
+      <div style="color:#666;">Empty gap = cross-character push</div>
+    </div>
+  </div>
+</div>
+
+<div style="text-align:center; margin:16px 0; display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
+  <button onclick="sayA()" style="padding:10px 20px; background:#5a8a5a; color:white; border:none; border-radius:6px; cursor:pointer; font-size:13px;">Villager A speaks</button>
+  <button onclick="sayB()" style="padding:10px 20px; background:#5a5a8a; color:white; border:none; border-radius:6px; cursor:pointer; font-size:13px;">Villager B speaks</button>
+  <button onclick="sayBoth()" style="padding:10px 20px; background:#8a6a5a; color:white; border:none; border-radius:6px; cursor:pointer; font-size:13px;">Both speak (rapid)</button>
+  <button onclick="clearAll()" style="padding:10px 20px; background:#555; color:white; border:none; border-radius:6px; cursor:pointer; font-size:13px;">Clear all</button>
+</div>
+
+<div class="section" style="margin-top:20px;">
+  <h3>How it works</h3>
+  <ul style="color:#ccc; line-height:1.8;">
+    <li>Each character has their own bubble stack (newest at bottom, closest to character)</li>
+    <li>When two characters are within <strong>15 world units</strong>, their stacks share vertical space</li>
+    <li>A new bubble from Character B <strong>pushes Character A's entire stack up</strong> by the height of B's new bubble (with empty gap, no separator)</li>
+    <li>When a bubble expires, it fades out — but pushed bubbles <strong>stay where they were pushed</strong> (no slide-back)</li>
+    <li>Same-character stacking still uses <strong>white separator lines</strong>; cross-character pushing uses <strong>empty space</strong></li>
+  </ul>
+</div>
+
+<script>
+const messagesA = ["Hello there!", "Nice weather today.", "Have you seen the blacksmith?", "I need a new sword."];
+const messagesB = ["Good morning!", "The forest is scary.", "I heard wolves last night.", "Want to trade?"];
+let idxA = 0, idxB = 0, bubbleId = 0;
+
+// Track all bubbles globally for cross-character collision
+let allBubbles = []; // {el, container, owner, height, baseOffset}
+
+function createBubble(container, owner, message, color, borderColor) {
+  bubbleId++;
+
+  // Auto-complete typing on same owner's last bubble
+  container.querySelectorAll('.typing').forEach(el => {
+    el.textContent = el.dataset.fullText;
+    el.classList.remove('typing');
+  });
+
+  const wrapper = document.createElement('div');
+  wrapper.id = 'bubble-' + bubbleId;
+  wrapper.dataset.owner = owner;
+  wrapper.style.cssText = 'opacity:0; transform:translateY(8px); transition:all 0.35s ease; width:100%;';
+
+  // Check if same owner has previous bubbles — add separator
+  const sameBubbles = container.querySelectorAll('[data-owner="' + owner + '"]');
+  if (sameBubbles.length > 0) {
+    const sep = document.createElement('div');
+    sep.style.cssText = 'width:60%; height:1px; background:rgba(255,255,255,0.5); margin:5px auto;';
+    wrapper.appendChild(sep);
+  }
+
+  const bubble = document.createElement('div');
+  bubble.style.cssText = `background:rgba(20,20,20,0.92); border:1px solid ${borderColor}; border-radius:10px; padding:7px 13px; max-width:170px; text-align:center; margin:0 auto;`;
+
+  const text = document.createElement('span');
+  text.style.cssText = 'color:white; font-size:12px; line-height:1.4;';
+  text.classList.add('typing');
+  text.dataset.fullText = message;
+  text.textContent = '';
+  bubble.appendChild(text);
+  wrapper.appendChild(bubble);
+
+  container.insertBefore(wrapper, container.firstChild);
+
+  // Push OTHER character's bubbles up (cross-character collision)
+  const otherOwner = owner === 'a' ? 'b' : 'a';
+  const otherContainer = owner === 'a' ? document.getElementById('bubbles-b') : document.getElementById('bubbles-a');
+  const pushHeight = 38; // approximate bubble height + gap
+
+  // Add empty spacer to other character's stack
+  if (otherContainer.children.length > 0) {
+    const spacer = document.createElement('div');
+    spacer.dataset.spacer = 'true';
+    spacer.dataset.fromOwner = owner;
+    spacer.style.cssText = `height:${pushHeight}px; width:100%; transition:height 0.35s ease;`;
+    otherContainer.appendChild(spacer); // append at top (column-reverse = visual top)
+  }
+
+  // Animate in
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      wrapper.style.opacity = '1';
+      wrapper.style.transform = 'translateY(0)';
+    });
+  });
+
+  // Type out text
+  let charIdx = 0;
+  const typeInterval = setInterval(() => {
+    if (charIdx < message.length && text.classList.contains('typing')) {
+      charIdx++;
+      text.textContent = message.substring(0, charIdx);
+    } else {
+      clearInterval(typeInterval);
+      text.classList.remove('typing');
+    }
+  }, 45);
+
+  // Auto-expire after 6s
+  const currentId = wrapper.id;
+  setTimeout(() => {
+    const el = document.getElementById(currentId);
+    if (el) {
+      el.style.opacity = '0';
+      el.style.transform = 'translateY(-8px)';
+      setTimeout(() => el.remove(), 350);
+    }
+  }, 6000);
+}
+
+function sayA() {
+  const msg = messagesA[idxA % messagesA.length];
+  idxA++;
+  createBubble(document.getElementById('bubbles-a'), 'a', msg, '#5a8a5a', 'rgba(122,184,122,0.3)');
+}
+
+function sayB() {
+  const msg = messagesB[idxB % messagesB.length];
+  idxB++;
+  createBubble(document.getElementById('bubbles-b'), 'b', msg, '#5a5a8a', 'rgba(122,122,184,0.3)');
+}
+
+function sayBoth() {
+  sayA();
+  setTimeout(() => sayB(), 400);
+}
+
+function clearAll() {
+  document.getElementById('bubbles-a').innerHTML = '';
+  document.getElementById('bubbles-b').innerHTML = '';
+  idxA = 0;
+  idxB = 0;
+}
+</script>

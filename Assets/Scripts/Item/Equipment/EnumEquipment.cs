@@ -41,7 +41,15 @@ public enum WeaponCategory
 
 public enum DamageType
 {
+    // Physical
     Blunt,
     Slashing,
-    Piercing
+    Piercing,
+
+    // Magical
+    Fire,
+    Ice,
+    Lightning,
+    Holy,
+    Dark
 }

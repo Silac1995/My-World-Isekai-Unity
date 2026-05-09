@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Linq;
+using System.Collections.Generic;
 
 public class SpawnManager : MonoBehaviour
 {
@@ -7,12 +8,25 @@ public class SpawnManager : MonoBehaviour
 
     [SerializeField] private GameObject spawnGameObject;
     [SerializeField] private GameObject _defaultItemPrefab;
+    [SerializeField] private RaceSO _defaultFallbackRace;
+
+    private struct PendingDevConfig
+    {
+        public CharacterPersonalitySO Personality;
+        public CharacterBehavioralTraitsSO Traits;
+        public List<(CombatStyleSO style, int level)> CombatStyles;
+        public List<(SkillSO skill, int level)> Skills;
+    }
+
+    private readonly Dictionary<int, PendingDevConfig> _pendingDevConfig = new Dictionary<int, PendingDevConfig>();
 
     public Vector3 DefaultSpawnPosition => spawnGameObject != null ? spawnGameObject.transform.position : Vector3.zero;
     public Quaternion DefaultSpawnRotation => spawnGameObject != null ? spawnGameObject.transform.rotation : Quaternion.identity;
-
-    [Header("Fallbacks")]
-    [SerializeField] private RaceSO _defaultFallbackRace;
+    /// <summary>
+    /// Generic WorldItem shell prefab used as the fallback by WorldItem.SpawnWorldItem when
+    /// an ItemSO has no per-item WorldItemPrefab assigned.
+    /// </summary>
+    public GameObject DefaultItemPrefab => _defaultItemPrefab;
 
     private CharacterPersonalitySO[] _availablePersonalities;
     private CharacterBehavioralTraitsSO[] _availableTraits;
@@ -28,6 +42,14 @@ public class SpawnManager : MonoBehaviour
 
         Instance = this;
         DontDestroyOnLoad(gameObject);
+
+        // Defensive: clear the pending dev-config dictionary on any NetworkManager shutdown so
+        // stale entries can't survive into the next session and collide with a reused NetworkObjectId.
+        if (Unity.Netcode.NetworkManager.Singleton != null)
+        {
+            Unity.Netcode.NetworkManager.Singleton.OnServerStopped += HandleNetworkStopped;
+            Unity.Netcode.NetworkManager.Singleton.OnClientStopped += HandleNetworkStopped;
+        }
 
         // Chargement des personnalités pour le spawn aléatoire
         _availablePersonalities = Resources.LoadAll<CharacterPersonalitySO>("Data/Personnality");
@@ -47,128 +69,16 @@ public class SpawnManager : MonoBehaviour
         }
     }
 
-    // --- Logique de Spawn d'Items ---
-
-    public ItemInstance SpawnItem(ItemSO data, Vector3 pos)
-    {
-        if (Unity.Netcode.NetworkManager.Singleton != null && !Unity.Netcode.NetworkManager.Singleton.IsServer)
-        {
-            Debug.LogError($"<color=red>[SpawnManager]</color> SpawnItem can only be called by the Server!");
-            return null;
-        }
-
-        // 1. On instancie TOUJOURS le prefab par défaut (la "coquille" WorldItem)
-        if (_defaultItemPrefab == null)
-        {
-            Debug.LogError("[SpawnManager] Le _defaultItemPrefab n'est pas assigné !");
-            return null;
-        }
-
-        GameObject worldItemGo = Instantiate(_defaultItemPrefab, pos, Quaternion.identity);
-
-        // 2. On renomme l'objet pour la hiérarchie
-        worldItemGo.name = $"WorldItem_{data.ItemName}";
-
-        // 3. Création de la donnée (Instance)
-        ItemInstance instance = data.CreateInstance();
-
-        // 4. Gestion des couleurs aléatoires pour les équipements
-        if (instance is EquipmentInstance equipment)
-        {
-            equipment.SetPrimaryColor(Random.ColorHSV(0f, 1f, 0.5f, 1f, 0.5f, 1f));
-            if (equipment is WearableInstance wearable)
-            {
-                wearable.SetSecondaryColor(Random.ColorHSV(0f, 1f, 0.3f, 0.8f, 0.3f, 0.8f));
-            }
-        }
-
-        // 5. Liaison avec le script WorldItem
-        if (worldItemGo.TryGetComponent(out WorldItem worldItemComponent))
-        {
-            worldItemComponent.Initialize(instance);
-
-            worldItemComponent.SetNetworkData(new NetworkItemData
-            {
-                ItemId = new Unity.Collections.FixedString64Bytes(data.ItemId),
-                JsonData = new Unity.Collections.FixedString4096Bytes(JsonUtility.ToJson(instance))
-            });
-
-            if (worldItemGo.TryGetComponent(out Unity.Netcode.NetworkObject netObj))
-            {
-                netObj.Spawn(true);
-            }
-            else
-            {
-                Debug.LogWarning($"<color=orange>[SpawnManager]</color> _defaultItemPrefab missing NetworkObject component!");
-            }
-
-            // --- NOUVELLE LOGIQUE D'ÉJECTION ---
-            if (worldItemGo.TryGetComponent(out Rigidbody rb))
-            {
-                // On calcule une direction aléatoire sur le plan horizontal (X, Z)
-                float randomX = Random.Range(-1f, 1f);
-                float randomZ = Random.Range(-1f, 1f);
-
-                // On définit la force : une poussée vers le haut (Y) et un peu sur les côtés
-                // Ajuste le 5f (hauteur) et le 2f (dispersion) selon tes besoins
-                Vector3 ejectForce = new Vector3(randomX * 2f, 5f, randomZ * 2f);
-
-                // On applique l'impulsion
-                rb.AddForce(ejectForce, ForceMode.Impulse);
-
-                // Optionnel : Ajoute un petit torque (rotation) pour que l'objet tourne sur lui-même en tombant
-                rb.AddTorque(new Vector3(Random.Range(-10, 10), Random.Range(-10, 10), Random.Range(-10, 10)));
-            }
-            // ------------------------------------
-
-            Debug.Log($"<color=green>[Spawn]</color> {instance.ItemSO.ItemName} éjecté !");
-        }
-
-        return instance;
-    }
-
-    public void SpawnCopyOfItem(ItemInstance existingInstance, Vector3 pos)
-    {
-        if (Unity.Netcode.NetworkManager.Singleton != null && !Unity.Netcode.NetworkManager.Singleton.IsServer)
-        {
-            Debug.LogError($"<color=red>[SpawnManager]</color> SpawnCopyOfItem can only be called by the Server!");
-            return;
-        }
-
-        if (existingInstance == null) return;
-
-        // On récupère le prefab depuis le SO de l'instance existante
-        GameObject prefabToSpawn = existingInstance.ItemSO.ItemPrefab != null
-                                    ? existingInstance.ItemSO.ItemPrefab
-                                    : _defaultItemPrefab;
-
-        GameObject go = Instantiate(prefabToSpawn, pos, Quaternion.identity);
-        go.name = $"WorldItem_{existingInstance.CustomizedName}_Copy";
-
-        // On applique les propriétés sauvegardées (couleurs, library)
-        existingInstance.InitializeWorldPrefab(go);
-
-        if (go.TryGetComponent(out WorldItem worldItem) || go.GetComponentInChildren<WorldItem>() != null)
-        {
-            if (worldItem == null) worldItem = go.GetComponentInChildren<WorldItem>();
-            worldItem.Initialize(existingInstance);
-
-            worldItem.SetNetworkData(new NetworkItemData
-            {
-                ItemId = new Unity.Collections.FixedString64Bytes(existingInstance.ItemSO.ItemId),
-                JsonData = new Unity.Collections.FixedString4096Bytes(JsonUtility.ToJson(existingInstance))
-            });
-
-            if (go.TryGetComponent(out Unity.Netcode.NetworkObject netObj))
-            {
-                netObj.Spawn(true);
-            }
-        }
-    }
-
     // --- Logique de Spawn de Personnages ---
 
-    public Character SpawnCharacter(Vector3 pos, RaceSO race, GameObject visualPrefab, bool isPlayer, CharacterPersonalitySO personality = null)
+    public Character SpawnCharacter(
+        Vector3 pos,
+        RaceSO race,
+        GameObject visualPrefab,
+        CharacterPersonalitySO personality = null,
+        CharacterBehavioralTraitsSO traits = null,
+        List<(CombatStyleSO style, int level)> combatStyles = null,
+        List<(SkillSO skill, int level)> skills = null)
     {
         Vector3 spawnPos = pos == Vector3.zero && spawnGameObject != null ? spawnGameObject.transform.position : pos;
 
@@ -195,19 +105,56 @@ public class SpawnManager : MonoBehaviour
                         character.NetworkRaceId.Value = new Unity.Collections.FixedString64Bytes(race.name);
                     }
 
+                    // Pre-generate deterministic data on server so all clients get the same values
+                    GenderType gender = character.CharacterBio != null && character.CharacterBio.IsMale ? GenderType.Male : GenderType.Female;
+                    if (race != null && race.NameGenerator != null)
+                        character.NetworkCharacterName.Value = new Unity.Collections.FixedString64Bytes(race.NameGenerator.GenerateName(gender));
+
+                    character.NetworkVisualSeed.Value = Random.Range(int.MinValue, int.MaxValue);
+
+                    if (personality != null || traits != null || (combatStyles != null && combatStyles.Count > 0) || (skills != null && skills.Count > 0))
+                    {
+                        // Key by Character.GetInstanceID, NOT netObj.NetworkObjectId. NetworkObjectId is
+                        // zero/undefined until Spawn(true) is called, but OnNetworkSpawn fires synchronously
+                        // inside Spawn on the server against the SAME Character instance — so GetInstanceID
+                        // is a stable key. Clients receive a replicated Character with a different
+                        // InstanceID, so their drain naturally no-ops (server-only intent preserved).
+                        _pendingDevConfig[character.GetInstanceID()] = new PendingDevConfig
+                        {
+                            Personality = personality,
+                            Traits = traits,
+                            CombatStyles = combatStyles,
+                            Skills = skills
+                        };
+                    }
+
                     // L'objet réseau va appeler InitializeSpawnedCharacter via OnNetworkSpawn.
-                    netObj.Spawn(true);
-                    
+                    try
+                    {
+                        netObj.Spawn(true);
+                    }
+                    catch (System.Exception ex)
+                    {
+                        // Prevent pending-config leak if the network spawn throws.
+                        _pendingDevConfig.Remove(character.GetInstanceID());
+                        Debug.LogException(ex);
+                        throw;
+                    }
+
                     return character;
                 }
             }
         }
 
-        if (!InitializeSpawnedCharacter(character, race, isPlayer, personality))
+        // Public SpawnManager.SpawnCharacter always spawns NPCs. The networked player-spawn path
+        // runs through Character.OnNetworkSpawn → InitializeSpawnedCharacter(isPlayerObject: true)
+        // and does not go through this method.
+        if (!InitializeSpawnedCharacter(character, race, isPlayerObject: false, personality: personality))
         {
             Destroy(characterPrefabObj);
             return null;
         }
+        ApplyDevExtras(character, traits, combatStyles, skills);
 
         return character;
     }
@@ -215,23 +162,56 @@ public class SpawnManager : MonoBehaviour
     public bool InitializeSpawnedCharacter(Character character, RaceSO race, bool isPlayerObject, bool isLocalOwner = false, CharacterPersonalitySO personality = null)
     {
         // Default Race fallback so that missing references don't break logic
-        if (race == null) 
+        if (race == null)
         {
             race = _defaultFallbackRace;
-            if (race == null) Debug.LogError("[SpawnManager] Fallback race is null! Assign it in the Inspector.");
+            if (race == null) Debug.LogWarning("[SpawnManager] Fallback race is missing in inspector!");
+        }
+
+        // --- DRAIN PENDING DEV CONFIG UP-FRONT ---
+        // Popping the entry now (instead of at the tail) ensures the dictionary
+        // never leaks if an init step below returns false and short-circuits.
+        PendingDevConfig? pendingDev = null;
+        int devConfigKey = character.GetInstanceID();
+        if (_pendingDevConfig.TryGetValue(devConfigKey, out var popped))
+        {
+            _pendingDevConfig.Remove(devConfigKey);
+            pendingDev = popped;
+        }
+
+        // Dev-mode personality override promoted into the parameter so the rest of the
+        // method uses it uniformly (random fallback still applies when no override).
+        if (pendingDev.HasValue && pendingDev.Value.Personality != null)
+        {
+            personality = pendingDev.Value.Personality;
+        }
+
+        // --- DETERMINISTIC SEED ---
+        // Use the networked seed so all clients produce identical random values.
+        // Offline (non-networked) spawns generate a fresh seed locally.
+        int seed = (character.IsSpawned && character.NetworkVisualSeed.Value != 0)
+            ? character.NetworkVisualSeed.Value
+            : Random.Range(int.MinValue, int.MaxValue);
+        System.Random rng = new System.Random(seed);
+
+        // --- NETWORKED NAME ---
+        // Apply the server-generated name before InitializeRace (which also generates names if empty)
+        if (character.IsSpawned && !character.NetworkCharacterName.Value.IsEmpty)
+        {
+            character.CharacterName = character.NetworkCharacterName.Value.ToString();
         }
 
         if (!SetupInteractionDetector(character.gameObject, isPlayerObject)) return false;
 
         if (!InitializeCharacter(character.gameObject, race, null)) return false;
 
-        // --- RANDOM NAMING ---
-        if (race != null && race.NameGenerator != null)
+        // --- NAMING (only if not already set from network) ---
+        if (string.IsNullOrEmpty(character.CharacterName) && race != null && race.NameGenerator != null)
         {
             GenderType charGender = character.CharacterBio != null && character.CharacterBio.IsMale ? GenderType.Male : GenderType.Female;
             character.CharacterName = race.NameGenerator.GenerateName(charGender);
         }
-        
+
         // Update the GameObject's name in the Unity Hierarchy
         if (string.IsNullOrEmpty(character.CharacterName))
         {
@@ -242,7 +222,7 @@ public class SpawnManager : MonoBehaviour
             character.gameObject.name = character.CharacterName;
         }
 
-        ApplyRandomColor(character);
+        ApplyRandomColor(character, rng);
 
         // Local ownership (UI & Camera) is now strictly handled by Character.SwitchToPlayer()
 
@@ -254,7 +234,7 @@ public class SpawnManager : MonoBehaviour
         // --- GESTION DE LA PERSONNALITÉ ---
         if (personality == null && _availablePersonalities != null && _availablePersonalities.Length > 0)
         {
-            personality = _availablePersonalities[Random.Range(0, _availablePersonalities.Length)];
+            personality = _availablePersonalities[rng.Next(0, _availablePersonalities.Length)];
         }
 
         if (character.CharacterProfile != null && personality != null)
@@ -264,75 +244,25 @@ public class SpawnManager : MonoBehaviour
         }
 
         // --- GESTION DES TRAITS COMPORTEMENTAUX ---
-        if (_availableTraits != null && _availableTraits.Length > 0 && character.CharacterTraits != null)
+        // Skip random trait assignment if a dev-mode trait override is queued for this character.
+        // Note: in the offline path (non-networked), the caller's ApplyDevExtras runs AFTER this
+        // method and will overwrite any random trait assignment done above. Two logs will appear
+        // for offline dev-spawns. This is acceptable — offline dev-spawn is a dev-only flow.
+        bool devTraitPending = pendingDev.HasValue && pendingDev.Value.Traits != null;
+        if (!devTraitPending && _availableTraits != null && _availableTraits.Length > 0 && character.CharacterTraits != null)
         {
-            CharacterBehavioralTraitsSO randomTrait = _availableTraits[Random.Range(0, _availableTraits.Length)];
+            CharacterBehavioralTraitsSO randomTrait = _availableTraits[rng.Next(0, _availableTraits.Length)];
             character.CharacterTraits.behavioralTraitsProfile = randomTrait;
             Debug.Log($"<color=cyan>[Spawn]</color> {character.CharacterName} a reçu le profil comportemental : {randomTrait.name}");
         }
 
-        // --- DEBUG : ASSIGNATION AUTOMATIQUE DE RÉSIDENCE ---
-        if (BuildingManager.Instance != null && BuildingManager.Instance.allBuildings != null)
+        // --- APPLY DEV-MODE OVERRIDES ---
+        // Takes priority over any random assignments done above.
+        // The entry was popped from _pendingDevConfig at the top of this method so the
+        // dictionary cannot leak if any earlier init step returned false and short-circuited.
+        if (pendingDev.HasValue)
         {
-            int totalBuildings = BuildingManager.Instance.allBuildings.Count;
-            if (totalBuildings == 0)
-            {
-                Debug.LogWarning($"<color=orange>[SpawnManager]</color> Aucun bâtiment n'est enregistré dans le BuildingManager ! {character.CharacterName} reste sans maison.");
-            }
-            else
-            {
-                bool buildingFound = false;
-                foreach (var b in BuildingManager.Instance.allBuildings)
-                {
-                    if (b is ResidentialBuilding resBuilding)
-                    {
-                        if (resBuilding.Owners.Count == 0)
-                        {
-                            if (character.CharacterLocations != null)
-                            {
-                                character.CharacterLocations.ReceiveOwnership(resBuilding);
-                                Debug.Log($"<color=green>[SpawnManager]</color> {character.CharacterName} est maintenant propriétaire de {resBuilding.BuildingName}.");
-                                buildingFound = true;
-                                break;
-                            }
-                            else
-                            {
-                                Debug.LogWarning($"<color=orange>[SpawnManager]</color> {character.CharacterName} n'a pas de composant CharacterLocations !");
-                            }
-                        }
-                        else
-                        {
-                            Debug.Log($"[SpawnManager] Bâtiment {resBuilding.BuildingName} ignoré car il a déjà {resBuilding.Owners.Count} propriétaire(s).");
-                        }
-                    }
-                    else
-                    {
-                        Debug.Log($"[SpawnManager] Bâtiment {b.BuildingName} ignoré car c'est un {b.BuildingType} (non résidentiel).");
-                    }
-                }
-
-                if (!buildingFound)
-                {
-                    Debug.LogWarning($"<color=orange>[SpawnManager]</color> Aucun bâtiment résidentiel libre trouvé parmi les {totalBuildings} bâtiments enregistrés.");
-                }
-            }
-        }
-        else
-        {
-            Debug.LogError("[SpawnManager] BuildingManager.Instance est null ou la liste des bâtiments est manquante.");
-        }
-
-        // --- LOGIQUE D'EMPLOI AUTOMATIQUE ---
-        if (!isPlayerObject && character.CharacterJob != null && BuildingManager.Instance != null && BuildingManager.Instance.allBuildings.Count > 0)
-        {
-            // 1. Tente d'abord de devenir propriétaire d'un bâtiment commercial libre
-            CommercialBuilding unownedCommercial = BuildingManager.Instance.FindUnownedCommercialBuilding();
-            if (unownedCommercial != null)
-            {
-                // Le SetOwner s'occupera de lui donner le JobLogisticsManager prioritairement
-                character.CharacterJob.BecomeOwner(unownedCommercial);
-                Debug.Log($"<color=green>[SpawnManager]</color> {character.CharacterName} a pris possession du bâtiment commercial libre : {unownedCommercial.BuildingName}.");
-            }
+            ApplyDevExtras(character, pendingDev.Value.Traits, pendingDev.Value.CombatStyles, pendingDev.Value.Skills);
         }
 
         return true;
@@ -384,16 +314,16 @@ public class SpawnManager : MonoBehaviour
         return true;
     }
 
-    private bool ApplyRandomColor(Character character)
+    private bool ApplyRandomColor(Character character, System.Random rng)
     {
         CharacterVisual cv = character.GetComponentInChildren<CharacterVisual>();
         if (cv == null) return false;
 
         try
         {
-            cv.BodyPartsController.HairController.SetGlobalHairColor(Random.ColorHSV());
-            cv.ApplyColor(CharacterVisual.VisualPart.Hair, Random.ColorHSV());
-            cv.BodyPartsController.EyesController.SetAllPupilsColor(Random.ColorHSV());
+            cv.BodyPartsController.HairController.SetGlobalHairColor(RandomColorHSV(rng));
+            cv.ApplyColor(CharacterVisual.VisualPart.Hair, RandomColorHSV(rng));
+            cv.BodyPartsController.EyesController.SetAllPupilsColor(RandomColorHSV(rng));
             cv.SkinColor = ColorUtils.HexToColor("E6CEBD");
         }
         catch (System.Exception ex)
@@ -403,5 +333,66 @@ public class SpawnManager : MonoBehaviour
         }
 
         return true;
+    }
+
+    private static Color RandomColorHSV(System.Random rng, float minS = 0f, float maxS = 1f, float minV = 0f, float maxV = 1f)
+    {
+        float h = (float)rng.NextDouble();
+        float s = minS + (float)(rng.NextDouble() * (maxS - minS));
+        float v = minV + (float)(rng.NextDouble() * (maxV - minV));
+        return Color.HSVToRGB(h, s, v);
+    }
+
+    private void HandleNetworkStopped(bool _)
+    {
+        if (_pendingDevConfig.Count > 0)
+        {
+            Debug.Log($"<color=cyan>[Spawn]</color> NetworkManager stopped — clearing {_pendingDevConfig.Count} pending dev-config entries.");
+            _pendingDevConfig.Clear();
+        }
+    }
+
+    private void OnDestroy()
+    {
+        if (Unity.Netcode.NetworkManager.Singleton != null)
+        {
+            Unity.Netcode.NetworkManager.Singleton.OnServerStopped -= HandleNetworkStopped;
+            Unity.Netcode.NetworkManager.Singleton.OnClientStopped -= HandleNetworkStopped;
+        }
+    }
+
+    private void ApplyDevExtras(
+        Character character,
+        CharacterBehavioralTraitsSO traits,
+        List<(CombatStyleSO style, int level)> combatStyles,
+        List<(SkillSO skill, int level)> skills)
+    {
+        if (character == null) return;
+
+        if (traits != null && character.CharacterTraits != null)
+        {
+            character.CharacterTraits.behavioralTraitsProfile = traits;
+            Debug.Log($"<color=cyan>[Spawn]</color> Dev-mode: {character.CharacterName} trait overridden to {traits.name}");
+        }
+
+        if (combatStyles != null && character.CharacterCombat != null)
+        {
+            foreach (var entry in combatStyles)
+            {
+                if (entry.style == null) continue;
+                character.CharacterCombat.UnlockCombatStyle(entry.style, entry.level);
+                Debug.Log($"<color=cyan>[Spawn]</color> Dev-mode: {character.CharacterName} combat style {entry.style.StyleName} L{entry.level}");
+            }
+        }
+
+        if (skills != null && character.CharacterSkills != null)
+        {
+            foreach (var entry in skills)
+            {
+                if (entry.skill == null) continue;
+                character.CharacterSkills.AddSkill(entry.skill, entry.level);
+                Debug.Log($"<color=cyan>[Spawn]</color> Dev-mode: {character.CharacterName} skill {entry.skill.SkillName} L{entry.level}");
+            }
+        }
     }
 }

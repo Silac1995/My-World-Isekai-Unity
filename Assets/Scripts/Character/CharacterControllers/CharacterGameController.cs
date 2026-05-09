@@ -11,13 +11,13 @@ public abstract class CharacterGameController : CharacterSystem
     protected float _actionCooldownTimer;
     private const float ACTION_RESUME_DELAY = 0.10f;
 
-    // --- Freeze : stoppe tout (mouvement, IA, animations) ---
+    // --- Freeze: stops everything (movement, AI, animations) ---
     private bool _isFrozen = false;
     public bool IsFrozen => _isFrozen;
 
     /// <summary>
-    /// Stoppe entièrement le NPC : mouvement, path, animations de locomotion.
-    /// Le behaviour stack est conservé mais ne tick plus.
+    /// Fully stops the NPC: movement, path, locomotion animations.
+    /// The behaviour stack is preserved but stops ticking.
     /// </summary>
     public virtual void Freeze()
     {
@@ -28,19 +28,18 @@ public abstract class CharacterGameController : CharacterSystem
     }
 
     /// <summary>
-    /// Reprend le fonctionnement normal du NPC.
+    /// Resumes normal NPC operation.
     /// </summary>
     public virtual void Unfreeze()
     {
         _isFrozen = false;
         _characterMovement?.Resume();
 
-        // Forcer le BT à ticker immédiatement pour éviter un délai visible
-        var bt = _character.GetComponent<NPCBehaviourTree>();
-        if (bt != null) bt.ForceNextTick();
+        // Force the BT to tick immediately to avoid a visible delay
+        if (_character.TryGet<NPCBehaviourTree>(out var bt)) bt.ForceNextTick();
     }
 
-    // --- PROPRIÉTÉS DE COMPATIBILITÉ (Pour corriger tes erreurs) ---
+    // --- COMPATIBILITY PROPERTIES ---
     public NavMeshAgent Agent => _characterMovement != null ? _characterMovement.Agent : null;
     public CharacterMovement CharacterMovement => _characterMovement;
     public Character Character => _character;
@@ -73,9 +72,16 @@ public abstract class CharacterGameController : CharacterSystem
 
     private void HandleActionStarted(CharacterAction action)
     {
-        _wasDoingAction = true;
-        _actionCooldownTimer = ACTION_RESUME_DELAY;
-        _characterMovement?.Stop();
+        // Walking actions (AllowsMovementDuringAction = true) keep the agent path-following;
+        // stationary actions (the default) stop it so the actor doesn't drift while doing things.
+        // Only stationary actions arm the post-action settling cooldown — walking actions never
+        // paused movement, so they have no jerk to settle out of.
+        if (!action.AllowsMovementDuringAction)
+        {
+            _wasDoingAction = true;
+            _actionCooldownTimer = ACTION_RESUME_DELAY;
+            _characterMovement?.Stop();
+        }
 
         if (action.ShouldPlayGenericActionAnimation)
         {
@@ -117,8 +123,12 @@ public abstract class CharacterGameController : CharacterSystem
 
     protected virtual void Update()
     {
-        // 1. Check if we are performing a specific CharacterAction (animation/logic sequence)
-        if (_character.CharacterActions.CurrentAction != null)
+        // 1. Check if we are performing a specific CharacterAction (animation/logic sequence).
+        //    Walking actions (AllowsMovementDuringAction = true) skip this gate so they can drive
+        //    the NavMeshAgent themselves; stationary actions (the default) hard-stop movement
+        //    every frame to keep the actor anchored while the action animation plays.
+        var currentAction = _character.CharacterActions.CurrentAction;
+        if (currentAction != null && !currentAction.AllowsMovementDuringAction)
         {
             _characterMovement?.Stop();
             UpdateVisuals(true); // Force speed 0 and skip flip
@@ -157,31 +167,37 @@ public abstract class CharacterGameController : CharacterSystem
     private void UpdateVisuals(bool forceIdle = false)
     {
         UpdateAnimations(forceIdle);
-        // Only flip if not doing an action and not forced idle
-        if (!forceIdle && _character.CharacterActions.CurrentAction == null)
+        // Only flip if not forced idle and (no action active OR the active action allows movement).
+        // Walking actions (AllowsMovementDuringAction = true) need flip to follow walk direction.
+        var currentAction = _character.CharacterActions.CurrentAction;
+        bool actionAllowsFlip = currentAction == null || currentAction.AllowsMovementDuringAction;
+        if (!forceIdle && actionAllowsFlip)
         {
             UpdateFlip();
         }
     }
 
-    // --- MÉTHODES UTILES ---
+    // --- UTILITY METHODS ---
 
     protected void SafeResume()
     {
-        if (_isFrozen) return; // Ne JAMAIS reprendre le mouvement si le cerveau est gelé !
+        if (_isFrozen) return; // NEVER resume movement if the brain is frozen!
 
-        // Une sécurité de fer : on ne Resume() QUE si on n'est pas en train de faire qqc 
-        // ET qu'on a fini le petit temps de settling.
-        if (_character.CharacterActions.CurrentAction != null || _wasDoingAction) 
+        // Hard safety: only call Resume() if we are not doing a stationary action
+        // AND the settling cooldown has finished. Walking actions (AllowsMovementDuringAction
+        // = true) are explicitly allowed to keep moving — Resume is fine there too.
+        var currentAction = _character.CharacterActions.CurrentAction;
+        bool stationaryActionActive = currentAction != null && !currentAction.AllowsMovementDuringAction;
+        if (stationaryActionActive || _wasDoingAction)
         {
-            _characterMovement.Stop(); // On double-lock en sécurité
+            _characterMovement.Stop(); // Double-lock as a safety net
             return;
         }
-        
+
         _characterMovement.Resume();
     }
 
-    // --- LOGIQUE VISUELLE ---
+    // --- VISUAL LOGIC ---
 
     protected virtual void UpdateAnimations(bool forceIdle = false)
     {
@@ -195,13 +211,13 @@ public abstract class CharacterGameController : CharacterSystem
             speed = 0f;
         }
 
-        // Envoi ? l'Animator
+        // Send to Animator
         if (_characterVisual != null && _characterVisual.CharacterAnimator != null)
         {
             _characterVisual.CharacterAnimator.SetAnimFloatSafely(CharacterAnimator.VelocityX, speed);
             _characterVisual.CharacterAnimator.SetAnimBoolSafely(CharacterAnimator.IsWalking, speed > 0f);
             
-            // Sol
+            // Grounded
             _characterVisual.CharacterAnimator.SetAnimBoolSafely(CharacterAnimator.IsGrounded, _characterMovement.IsGrounded());
         }
         else
@@ -209,12 +225,12 @@ public abstract class CharacterGameController : CharacterSystem
             Animator.SetFloat(CharacterAnimator.VelocityX, speed);
             Animator.SetBool(CharacterAnimator.IsWalking, speed > 0f);
 
-            // Sol
+            // Grounded
             Animator.SetBool(CharacterAnimator.IsGrounded, _characterMovement.IsGrounded());
         }
 
         // --- Walk Forward/Backward ---
-        // On délègue le calcul des paramètres de direction à CharacterVisual
+        // Delegate direction parameter calculation to CharacterVisual
         _characterVisual?.UpdateWalkingParameters(velocity);
     }
 
@@ -222,9 +238,9 @@ public abstract class CharacterGameController : CharacterSystem
     {
         if (_characterVisual == null || _characterMovement == null) return;
 
-        // --- SÉCURITÉ INTERACTION : On ne flip pas par vélocité quand on est "en place" ---
-        // Une fois positionné, c'est l'IA (InteractBehaviour) qui gère l'orientation 
-        // pour faire face à l'interlocuteur. On bloque la vélocité ici pour éviter les glitchs.
+        // --- INTERACTION SAFETY: Do not flip by velocity when the character is "in position" ---
+        // Once positioned, the AI (InteractBehaviour) handles orientation
+        // to face the interlocutor. We block velocity-based flipping here to avoid glitches.
         if (_character.CharacterInteraction != null && _character.CharacterInteraction.IsPositioned) return;
 
         Vector3 velocity = _characterMovement.GetVelocity();

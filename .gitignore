@@ -23,6 +23,9 @@
 # Recordings can get excessive in size
 /[Rr]ecordings/
 
+# ProfilerCaptures contain gigabyte-scale binary blobs and should never be committed.
+/[Pp]rofiler[Cc]aptures/
+
 # Uncomment this line if you wish to ignore the asset store tools plugin
 # /[Aa]ssets/AssetStoreTools*
 
@@ -97,3 +100,12 @@ InitTestScene*.unity*
 
 # Auto-generated scenes by play mode tests
 /[Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*
+
+# ---- LLM wiki / editor noise ----
+.DS_Store
+node_modules/
+.obsidian/workspace*
+.obsidian/appearance.json
+
+# ---- Superpowers brainstorm session files (local only) ----
+.superpowers/

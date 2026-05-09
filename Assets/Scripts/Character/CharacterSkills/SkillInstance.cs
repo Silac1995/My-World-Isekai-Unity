@@ -32,6 +32,27 @@ public class SkillInstance
         _totalXP = 0;
     }
 
+    /// <summary>
+    /// Constructor used by clients to reconstruct a full skill state from network data.
+    /// </summary>
+    public SkillInstance(SkillSO skill, int level, int currentXP, int totalXP)
+    {
+        _skillSO = skill;
+        _currentLevel = level;
+        _currentXP = currentXP;
+        _totalXP = totalXP;
+    }
+
+    /// <summary>
+    /// Applies authoritative state from the server without triggering events.
+    /// </summary>
+    public void UpdateFromNetwork(int level, int currentXP, int totalXP)
+    {
+        _currentLevel = level;
+        _currentXP = currentXP;
+        _totalXP = totalXP;
+    }
+
     public void AddXP(int amount)
     {
         if (amount <= 0 || _skillSO == null || _currentLevel >= MAX_LEVEL) return;

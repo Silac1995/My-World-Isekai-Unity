@@ -5,6 +5,7 @@ using UnityEngine.AI;
 using System.Collections.Generic;
 using MWI.Time;
 using MWI.AI;
+using MWI.WorldSystem;
 
 public enum CharacterBusyReason
 {
@@ -13,16 +14,20 @@ public enum CharacterBusyReason
     Unconscious,
     InCombat,
     Interacting,
-    Teaching,
     Crafting,
+    Teaching,
+    Building,
     DoingAction
 }
 
 [RequireComponent(typeof(CapsuleCollider), typeof(Rigidbody))]
 
-public class Character : NetworkBehaviour
+public class Character : NetworkBehaviour, MWI.Orders.IOrderIssuer
 {
     #region Serialized Fields
+    [Header("Archetype")]
+    [SerializeField] private CharacterArchetype _archetype;
+
     [Header("Basic Info")]
     [SerializeField] private string _characterName;
     [SerializeField] private GenderType _startingGender;
@@ -45,6 +50,7 @@ public class Character : NetworkBehaviour
     [SerializeField] private CharacterVisual _characterVisual;
     [SerializeField] private CharacterGameController _controller;
     [SerializeField] private CharacterEquipment _equipment;
+    [SerializeField] private CharacterTerrainEffects _terrainEffects;
     [SerializeField] private CharacterInteraction _characterInteraction;
     [SerializeField] private CharacterRelation _characterRelation;
     [SerializeField] private CharacterCombat _characterCombat;
@@ -57,17 +63,146 @@ public class Character : NetworkBehaviour
     [SerializeField] private CharacterCommunity _characterCommunity;
     [SerializeField] private CharacterInvitation _characterInvitation;
     [SerializeField] private CharacterJob _characterJob;
+    [SerializeField] private CharacterWallet _characterWallet;
+    [SerializeField] private CharacterWorkLog _characterWorkLog;
+    [SerializeField] private CharacterQuestLog _characterQuestLog;
     [SerializeField] private CharacterSchedule _characterSchedule;
     [SerializeField] private CharacterSkills _characterSkills;
     [SerializeField] private CharacterMentorship _characterMentorship;
     [SerializeField] private CharacterLocations _characterLocations;
     [SerializeField] private CharacterGoapController _characterGoap;
     [SerializeField] private CharacterCombatLevel _characterCombatLevel;
+    [SerializeField] private CharacterBlueprints _characterBlueprints;
+    [SerializeField] private CharacterAbilities _characterAbilities;
+    [SerializeField] private CharacterBookKnowledge _characterBookKnowledge;
+    [SerializeField] private BattleCircleManager _battleCircleManager;
+    [SerializeField] private FloatingTextSpawner _floatingTextSpawner;
+    [SerializeField] private CharacterAnimal _animal;
+    [SerializeField] private CharacterParty _characterParty;
+    [SerializeField] private MWI.Orders.CharacterOrders _characterOrders;
+    [SerializeField] private FurniturePlacementManager _furniturePlacementManager;
+    [SerializeField] private MWI.Farming.CropPlacementManager _cropPlacement;
+    [SerializeField] private MWI.Cinematics.CharacterCinematicState _cinematicState;
+    [SerializeField] private MWI.Ambition.CharacterAmbition _characterAmbition;
+    #endregion
+
+    #region Capability Registry
+    // ── Capability Registry ──────────────────────────────────────────
+    private readonly Dictionary<System.Type, CharacterSystem> _capabilitiesByType = new();
+    private readonly List<CharacterSystem> _allCapabilities = new();
+
+    /// <summary>Register a subsystem in the capability registry. Called by CharacterSystem.OnEnable.</summary>
+    public void Register(CharacterSystem system)
+    {
+        if (system == null) return;
+        var type = system.GetType();
+        _capabilitiesByType[type] = system;
+        if (!_allCapabilities.Contains(system))
+            _allCapabilities.Add(system);
+    }
+
+    /// <summary>Unregister a subsystem from the capability registry. Called by CharacterSystem.OnDisable.</summary>
+    public void Unregister(CharacterSystem system)
+    {
+        if (system == null) return;
+        _capabilitiesByType.Remove(system.GetType());
+        _allCapabilities.Remove(system);
+    }
+
+    /// <summary>Get a capability by exact type. Throws KeyNotFoundException if missing.</summary>
+    public T Get<T>() where T : CharacterSystem
+    {
+        if (_capabilitiesByType.TryGetValue(typeof(T), out var system))
+            return (T)system;
+        throw new System.Collections.Generic.KeyNotFoundException(
+            $"Capability {typeof(T).Name} not found on character '{CharacterName}'.");
+    }
+
+    /// <summary>Try to get a capability by exact type. Returns false if missing.</summary>
+    public bool TryGet<T>(out T system) where T : CharacterSystem
+    {
+        if (_capabilitiesByType.TryGetValue(typeof(T), out var s))
+        {
+            system = (T)s;
+            return true;
+        }
+        system = null;
+        return false;
+    }
+
+    /// <summary>Check if a capability exists by exact type.</summary>
+    public bool Has<T>() where T : CharacterSystem
+    {
+        return _capabilitiesByType.ContainsKey(typeof(T));
+    }
+
+    /// <summary>Get all capabilities implementing a given interface or base type. Linear scan.</summary>
+    public System.Collections.Generic.IEnumerable<T> GetAll<T>()
+    {
+        for (int i = 0; i < _allCapabilities.Count; i++)
+        {
+            if (_allCapabilities[i] is T match)
+                yield return match;
+        }
+    }
+    #endregion
+
+    #region IOrderIssuer
+    // ── IOrderIssuer ─────────────────────────────────────────────────
+    Character MWI.Orders.IOrderIssuer.AsCharacter => this;
+    string    MWI.Orders.IOrderIssuer.DisplayName => CharacterName;
+    ulong     MWI.Orders.IOrderIssuer.IssuerNetId => NetworkObject != null ? NetworkObject.NetworkObjectId : 0;
     #endregion
 
     #region Network Variables
     public NetworkVariable<Unity.Collections.FixedString64Bytes> NetworkRaceId = new NetworkVariable<Unity.Collections.FixedString64Bytes>(
         "",
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server
+    );
+
+    public NetworkVariable<Unity.Collections.FixedString64Bytes> NetworkCharacterName = new NetworkVariable<Unity.Collections.FixedString64Bytes>(
+        "",
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server
+    );
+
+    public NetworkVariable<int> NetworkVisualSeed = new NetworkVariable<int>(
+        0,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server
+    );
+
+    public NetworkVariable<Unity.Collections.FixedString64Bytes> NetworkCharacterId = new NetworkVariable<Unity.Collections.FixedString64Bytes>(
+        "",
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server
+    );
+
+    /// <summary>
+    /// Server-authoritative flag. True while the character is occupying a bed slot.
+    /// Replicates to all peers so client visuals can switch to sleep pose; gates
+    /// PlayerController.Update on the owning player. Not in ICharacterSaveData —
+    /// sleeping characters wake up out-of-bed on save/load.
+    /// </summary>
+    public NetworkVariable<bool> NetworkIsSleeping = new NetworkVariable<bool>(
+        false,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server
+    );
+
+    /// <summary>
+    /// Per-character target hours the player chose when entering the bed (1..168).
+    /// Server-authoritative. The bed UseSlot path / UI_BedSleepPrompt sets this
+    /// alongside <see cref="NetworkIsSleeping"/> = true. The TimeSkipController
+    /// auto-trigger watcher reads this from every connected player and fires
+    /// RequestSkip with hours = MIN(of all valid pending values) once every
+    /// player is asleep. 0 = "no target chosen yet" (skip auto-trigger).
+    /// Reset to 0 when the character ExitsSleep so a half-set state from a
+    /// previous bed session can't accidentally re-trigger.
+    /// </summary>
+    public NetworkVariable<int> NetworkPendingSkipHours = new NetworkVariable<int>(
+        0,
         NetworkVariableReadPermission.Everyone,
         NetworkVariableWritePermission.Server
     );
@@ -79,11 +214,11 @@ public class Character : NetworkBehaviour
     private NavMeshAgent _cachedNavMeshAgent;
     private bool _isDead;
     private bool _isUnconscious;
+    private bool _isBuilding;
     private TimeManager _timeManager;
-    private CharacterParty _currentParty;
     private CharacterPathingMemory _pathingMemory;
 
-    // Ressources statiques partagées
+    // Shared static resources
     private static GameObject _worldItemPrefab;
 
     private const string BATTLE_MANAGER_PATH = "Prefabs/BattleManagerPrefab";
@@ -92,48 +227,76 @@ public class Character : NetworkBehaviour
     #endregion
 
     #region Events
+    /// <summary>
+    /// Fires on the server after any Character completes OnNetworkSpawn.
+    /// Subscribers can use this to resolve references to newly-available characters
+    /// (e.g., dormant relationships, pending party invitations).
+    /// </summary>
+    public static event Action<Character> OnCharacterSpawned;
+
     public event Action<Character> OnDeath;
     public event Action<Character> OnIncapacitated;
     public event Action<Character> OnWakeUp;
     public event Action<bool> OnUnconsciousChanged;
+    public event System.Action<bool> OnSleepStateChanged;
     public event Action<bool> OnCombatStateChanged;
+    public event Action<bool> OnBuildingStateChanged;
     #endregion
 
     #region Properties
+    public CharacterArchetype Archetype => _archetype;
     public string CharacterName { get => _characterName; set => _characterName = value; }
     public CharacterBio CharacterBio => _characterBio;
-    public CharacterStats Stats => _stats ?? throw new NullReferenceException($"Stats manquantes sur {gameObject.name}");
+    public CharacterStats Stats { get { var s = TryGet<CharacterStats>(out var reg) ? reg : _stats; return s ?? throw new NullReferenceException($"Stats manquantes sur {gameObject.name}"); } }
     public RaceSO Race => _race;
 
     public float MovementSpeed => _stats?.MoveSpeed.CurrentValue ?? 0f;
     public Rigidbody Rigidbody => _rb;
     public CapsuleCollider Collider => _col;
 
-    public CharacterGameController Controller => _controller;
-    public CharacterMovement CharacterMovement => _characterMovement;
-    public CharacterVisual CharacterVisual => _characterVisual;
-    public CharacterActions CharacterActions => _characterActions;
-    public CharacterInteraction CharacterInteraction => _characterInteraction ?? throw new NullReferenceException($"CharacterInteraction non initialisé sur {gameObject.name}");
-    public CharacterEquipment CharacterEquipment => _equipment;
-    public CharacterRelation CharacterRelation => _characterRelation;
-    public CharacterParty CurrentParty => _currentParty;
-    public CharacterCommunity CharacterCommunity => _characterCommunity;
+    public CharacterGameController Controller => TryGet<CharacterGameController>(out var s0) ? s0 : _controller;
+    public CharacterMovement CharacterMovement => TryGet<CharacterMovement>(out var s1) ? s1 : _characterMovement;
+    public CharacterVisual CharacterVisual => TryGet<CharacterVisual>(out var s2) ? s2 : _characterVisual;
+    public CharacterActions CharacterActions => TryGet<CharacterActions>(out var s3) ? s3 : _characterActions;
+    public CharacterInteraction CharacterInteraction { get { var s = TryGet<CharacterInteraction>(out var reg) ? reg : _characterInteraction; return s ?? throw new NullReferenceException($"CharacterInteraction not initialised on {gameObject.name}"); } }
+    public CharacterEquipment CharacterEquipment => TryGet<CharacterEquipment>(out var s5) ? s5 : _equipment;
+    public CharacterTerrainEffects TerrainEffects => TryGet<CharacterTerrainEffects>(out var ste) ? ste : _terrainEffects;
+    public CharacterRelation CharacterRelation => TryGet<CharacterRelation>(out var s6) ? s6 : _characterRelation;
+    public CharacterParty CharacterParty => TryGet<CharacterParty>(out var s7) ? s7 : _characterParty;
+    public MWI.Orders.CharacterOrders CharacterOrders => TryGet<MWI.Orders.CharacterOrders>(out var sOrders) ? sOrders : _characterOrders;
+    public CharacterCommunity CharacterCommunity => TryGet<CharacterCommunity>(out var s8) ? s8 : _characterCommunity;
     public CharacterInteractable CharacterInteractable => _characterInteractable;
-    public CharacterCombat CharacterCombat => _characterCombat;
-    public CharacterNeeds CharacterNeeds => _characterNeeds;
-    public CharacterAwareness CharacterAwareness => _characterAwareness;
-    public CharacterSpeech CharacterSpeech => _characterSpeech;
-    public CharacterStatusManager StatusManager => _statusManager;
-    public CharacterProfile CharacterProfile => _characterProfile;
-    public CharacterTraits CharacterTraits => _characterTraits;
-    public CharacterInvitation CharacterInvitation => _characterInvitation;
-    public CharacterJob CharacterJob => _characterJob;
-    public CharacterSchedule CharacterSchedule => _characterSchedule;
-    public CharacterSkills CharacterSkills => _characterSkills;
-    public CharacterMentorship CharacterMentorship => _characterMentorship;
-    public CharacterLocations CharacterLocations => _characterLocations;
-    public CharacterGoapController CharacterGoap => _characterGoap;
-    public CharacterCombatLevel CharacterCombatLevel => _characterCombatLevel;
+    public CharacterCombat CharacterCombat => TryGet<CharacterCombat>(out var s10) ? s10 : _characterCombat;
+    public CharacterNeeds CharacterNeeds => TryGet<CharacterNeeds>(out var s11) ? s11 : _characterNeeds;
+    public CharacterAwareness CharacterAwareness => TryGet<CharacterAwareness>(out var s12) ? s12 : _characterAwareness;
+    public CharacterSpeech CharacterSpeech => TryGet<CharacterSpeech>(out var s13) ? s13 : _characterSpeech;
+    public CharacterStatusManager StatusManager => TryGet<CharacterStatusManager>(out var s14) ? s14 : _statusManager;
+    public CharacterProfile CharacterProfile => TryGet<CharacterProfile>(out var s15) ? s15 : _characterProfile;
+    public CharacterTraits CharacterTraits => TryGet<CharacterTraits>(out var s16) ? s16 : _characterTraits;
+    public CharacterInvitation CharacterInvitation => TryGet<CharacterInvitation>(out var s17) ? s17 : _characterInvitation;
+    public CharacterJob CharacterJob => TryGet<CharacterJob>(out var s18) ? s18 : _characterJob;
+    public CharacterWallet CharacterWallet => TryGet<CharacterWallet>(out var sWallet) ? sWallet : _characterWallet;
+    public CharacterWorkLog CharacterWorkLog => TryGet<CharacterWorkLog>(out var sWorkLog) ? sWorkLog : _characterWorkLog;
+    public CharacterQuestLog CharacterQuestLog => TryGet<CharacterQuestLog>(out var sQuestLog) ? sQuestLog : _characterQuestLog;
+    public CharacterSchedule CharacterSchedule => TryGet<CharacterSchedule>(out var s19) ? s19 : _characterSchedule;
+    public CharacterSkills CharacterSkills => TryGet<CharacterSkills>(out var s20) ? s20 : _characterSkills;
+    public CharacterMentorship CharacterMentorship => TryGet<CharacterMentorship>(out var s21) ? s21 : _characterMentorship;
+    public CharacterLocations CharacterLocations => TryGet<CharacterLocations>(out var s22) ? s22 : _characterLocations;
+    public CharacterGoapController CharacterGoap => TryGet<CharacterGoapController>(out var s23) ? s23 : _characterGoap;
+    public CharacterCombatLevel CharacterCombatLevel => TryGet<CharacterCombatLevel>(out var s24) ? s24 : _characterCombatLevel;
+    public CharacterBlueprints CharacterBlueprints => TryGet<CharacterBlueprints>(out var s25) ? s25 : _characterBlueprints;
+    public CharacterAbilities CharacterAbilities => TryGet<CharacterAbilities>(out var s26) ? s26 : _characterAbilities;
+    public CharacterBookKnowledge CharacterBookKnowledge => TryGet<CharacterBookKnowledge>(out var s27) ? s27 : _characterBookKnowledge;
+    public BattleCircleManager BattleCircleManager => TryGet<BattleCircleManager>(out var s28) ? s28 : _battleCircleManager;
+    public FloatingTextSpawner FloatingTextSpawner => TryGet<FloatingTextSpawner>(out var s29) ? s29 : _floatingTextSpawner;
+    public CharacterAnimal CharacterAnimal => TryGet<CharacterAnimal>(out var sAnimal) ? sAnimal : _animal;
+    public BuildingPlacementManager PlacementManager { get { var blueprints = TryGet<CharacterBlueprints>(out var reg) ? reg : _characterBlueprints; return blueprints != null ? blueprints.PlacementManager : null; } }
+    public FurniturePlacementManager FurniturePlacementManager => TryGet<FurniturePlacementManager>(out var s31) ? s31 : _furniturePlacementManager;
+    public MWI.Farming.CropPlacementManager CropPlacement => TryGet<MWI.Farming.CropPlacementManager>(out var s32) ? s32 : _cropPlacement;
+    public MWI.Cinematics.CharacterCinematicState CharacterCinematicState => TryGet<MWI.Cinematics.CharacterCinematicState>(out var sCinema) ? sCinema : _cinematicState;
+    public MWI.Ambition.CharacterAmbition CharacterAmbition =>
+        TryGet<MWI.Ambition.CharacterAmbition>(out var sAmb) ? sAmb : _characterAmbition;
+    public bool IsBuilding => _isBuilding;
 
     public NavMeshAgent NavMesh => _cachedNavMeshAgent;
     public TimeManager TimeManager => _timeManager != null ? _timeManager : TimeManager.Instance;
@@ -142,12 +305,97 @@ public class Character : NetworkBehaviour
     public Furniture OccupyingFurniture { get; private set; }
 
     public bool IsUnconscious => _isUnconscious;
+    public bool IsSleeping => NetworkIsSleeping.Value;
+
+    /// <summary>
+    /// Hours of sleep this player has chosen for the next time-skip cycle.
+    /// 0 = no target set. Read by TimeSkipController's auto-trigger watcher
+    /// to compute the closest target across all sleeping players.
+    /// </summary>
+    public int PendingSkipHours => NetworkPendingSkipHours.Value;
     public bool IsIncapacitated => _isDead || _isUnconscious;
     public Transform VisualRoot => _visualRoot;
     public GameObject CurrentVisualInstance => _currentVisualInstance;
     public RigTypeSO RigType => rigType;
+
+    /// <summary>
+    /// Persistent unique identifier for this character. Generated on first spawn, survives reconnects.
+    /// </summary>
+    public string CharacterId => NetworkCharacterId.Value.ToString();
+
+    // ── Skills (Phase 1 stub) ─────────────────────────────────────────
+    /// <summary>
+    /// Returns the actor's current level for a given skill, or 0 if the skill system is
+    /// not yet wired (Phase 1). Phase 2 wires this into the actual skill component.
+    /// Used by CharacterAction_FinishConstruction's per-tick consume-budget formula.
+    /// See docs/superpowers/specs/2026-05-06-building-construction-loop-design.md.
+    /// </summary>
+    public int GetSkillLevelOrZero(SkillId skill) => 0;
+
+    // ── Origin World ──────────────────────────────────────────────────
+    private string _originWorldGuid;
+    public string OriginWorldGuid
+    {
+        get => _originWorldGuid;
+        set => _originWorldGuid = value;
+    }
+
+    // ── Abandoned NPC tracking — set when a party leader disconnects ──
+    private bool _isAbandoned;
+    public bool IsAbandoned
+    {
+        get => _isAbandoned;
+        set => _isAbandoned = value;
+    }
+
+    private string _formerPartyLeaderId;
+    public string FormerPartyLeaderId
+    {
+        get => _formerPartyLeaderId;
+        set => _formerPartyLeaderId = value;
+    }
+
+    private string _formerPartyLeaderWorldGuid;
+    public string FormerPartyLeaderWorldGuid
+    {
+        get => _formerPartyLeaderWorldGuid;
+        set => _formerPartyLeaderWorldGuid = value;
+    }
     #endregion
 
+
+    /// <summary>
+    /// Finds a spawned Character by its persistent UUID. Returns null if not found.
+    /// </summary>
+    public static Character FindByUUID(string uuid)
+    {
+        if (string.IsNullOrEmpty(uuid)) return null;
+
+        Character fallback = null;
+        foreach (Character c in FindObjectsByType<Character>(FindObjectsSortMode.None))
+        {
+            if (c.CharacterId == uuid)
+            {
+                if (!c.IsAbandoned) return c;
+                fallback = c;
+            }
+        }
+        return fallback;
+    }
+
+    /// <summary>
+    /// Returns all abandoned characters whose former party leader matches the given ID.
+    /// </summary>
+    public static List<Character> FindAbandonedByFormerLeader(string formerLeaderId)
+    {
+        var results = new List<Character>();
+        foreach (Character c in FindObjectsByType<Character>(FindObjectsSortMode.None))
+        {
+            if (c.IsAbandoned && c.FormerPartyLeaderId == formerLeaderId)
+                results.Add(c);
+        }
+        return results;
+    }
 
     void Update()
     {
@@ -171,6 +419,25 @@ public class Character : NetworkBehaviour
     {
         base.OnNetworkSpawn();
 
+        // Generate a persistent UUID on the server if not already set (e.g., from save data)
+        if (IsServer && NetworkCharacterId.Value.IsEmpty)
+        {
+            NetworkCharacterId.Value = Guid.NewGuid().ToString("N");
+        }
+
+        // Stamp OriginWorldGuid from the current world on first spawn. Server-only; save-restore
+        // overwrites with the saved value afterwards via CharacterDataCoordinator.Deserialize. If
+        // SaveManager.CurrentWorldGuid isn't ready yet (early boot, tests), leave it empty — the
+        // next spawn in a world context will fill it.
+        if (IsServer && string.IsNullOrEmpty(_originWorldGuid))
+        {
+            string currentWorld = SaveManager.Instance != null ? SaveManager.Instance.CurrentWorldGuid : null;
+            if (!string.IsNullOrEmpty(currentWorld))
+            {
+                _originWorldGuid = currentWorld;
+            }
+        }
+
         // Very important: IsOwner is true for the Host for ALL NPCs in the scene.
         // We only want the local client's specific avatar to become a "Player" with UI and Camera,
         // but ALL instances of a PlayerObject must use PlayerController logic.
@@ -185,18 +452,27 @@ public class Character : NetworkBehaviour
             StartCoroutine(DelayedHostTeleport());
         }
 
+        // Subscribe to name changes so late-joining clients always get the correct name.
+        // On clients, the NetworkVariable value may not yet be populated at the exact
+        // moment OnNetworkSpawn fires, so this callback ensures the name is applied
+        // as soon as the server's value arrives (or on any subsequent rename).
+        NetworkCharacterName.OnValueChanged += OnNetworkNameChanged;
+        NetworkIsSleeping.OnValueChanged += HandleSleepStateChanged;
+
+        // Apply the current value immediately if already available (normal case)
+        if (!NetworkCharacterName.Value.IsEmpty)
+        {
+            _characterName = NetworkCharacterName.Value.ToString();
+        }
+
         // LOAD CUSTOMIZATION FROM NETWORK VARIABLES
         RaceSO networkRace = null;
         if (!NetworkRaceId.Value.IsEmpty)
         {
             if (GameSessionManager.Instance != null)
-            {
                 networkRace = GameSessionManager.Instance.GetRace(NetworkRaceId.Value.ToString());
-            }
             else
-            {
-                Debug.LogWarning("[Character] Cannot lookup race because GameSessionManager is missing in the scene!");
-            }
+                Debug.LogWarning("[Character] GameSessionManager not found. Cannot fetch network race.");
         }
 
         if (SpawnManager.Instance != null)
@@ -210,6 +486,30 @@ public class Character : NetworkBehaviour
             if (isPlayerObject) SwitchToPlayer();
             else SwitchToNPC();
         }
+
+        OnCharacterSpawned?.Invoke(this);
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        base.OnNetworkDespawn();
+        NetworkCharacterName.OnValueChanged -= OnNetworkNameChanged;
+        NetworkIsSleeping.OnValueChanged -= HandleSleepStateChanged;
+    }
+
+    private void OnNetworkNameChanged(Unity.Collections.FixedString64Bytes previous, Unity.Collections.FixedString64Bytes current)
+    {
+        if (!current.IsEmpty)
+        {
+            _characterName = current.ToString();
+            gameObject.name = _characterName;
+            Debug.Log($"[Character] Name synced from network: {_characterName}");
+        }
+    }
+
+    private void HandleSleepStateChanged(bool previous, bool current)
+    {
+        OnSleepStateChanged?.Invoke(current);
     }
 
     private System.Collections.IEnumerator DelayedHostTeleport()
@@ -236,13 +536,13 @@ public class Character : NetworkBehaviour
     {
         if (!ValidateRequiredComponents()) return;
 
-        // --- INITIALISATION DE LA BIO ---
-        // Si la bio n'est pas déjà assignée (ou pour s'assurer que le Character est lié)
+        // --- BIO INITIALISATION ---
+        // If the bio isn't already assigned (or to make sure the Character is linked)
         if (_characterBio == null || _characterBio.Character == null)
         {
-            // On utilise le constructeur qu'on a créé
+            // Use the constructor we created
             _characterBio = new CharacterBio(this, _startingGender, 1);
-            Debug.Log($"<color=white>[Bio]</color> Bio initialisée pour {_characterName} ({_startingGender})");
+            Debug.Log($"<color=white>[Bio]</color> Bio initialised for {_characterName} ({_startingGender})");
         }
 
         LoadResources();
@@ -261,8 +561,9 @@ public class Character : NetworkBehaviour
         if (_characterSkills == null) _characterSkills = GetComponent<CharacterSkills>();
         if (_characterMentorship == null) _characterMentorship = GetComponent<CharacterMentorship>();
         if (_characterLocations == null) _characterLocations = GetComponent<CharacterLocations>();
-        if (_characterGoap == null) _characterGoap = GetComponent<CharacterGoapController>();
+        if (_characterGoap == null) _characterGoap = GetComponentInChildren<CharacterGoapController>();
         if (_characterCombatLevel == null) _characterCombatLevel = GetComponent<CharacterCombatLevel>();
+        if (_characterBlueprints == null) _characterBlueprints = GetComponent<CharacterBlueprints>();
         if (_characterInteraction == null) _characterInteraction = GetComponent<CharacterInteraction>();
         if (_characterNeeds == null) _characterNeeds = GetComponent<CharacterNeeds>();
         if (_characterCombat == null) _characterCombat = GetComponent<CharacterCombat>();
@@ -271,7 +572,19 @@ public class Character : NetworkBehaviour
         if (_characterMovement == null) _characterMovement = GetComponent<CharacterMovement>();
         if (_characterVisual == null) _characterVisual = GetComponentInChildren<CharacterVisual>();
         if (_characterAwareness == null) _characterAwareness = GetComponentInChildren<CharacterAwareness>();
-        
+        if (_characterInteractable == null) _characterInteractable = GetComponentInChildren<CharacterInteractable>();
+        if (_characterAbilities == null) _characterAbilities = GetComponent<CharacterAbilities>();
+        if (_characterBookKnowledge == null) _characterBookKnowledge = GetComponent<CharacterBookKnowledge>();
+        if (_battleCircleManager == null) _battleCircleManager = GetComponentInChildren<BattleCircleManager>();
+        if (_floatingTextSpawner == null) _floatingTextSpawner = GetComponentInChildren<FloatingTextSpawner>();
+        if (_animal == null) _animal = GetComponentInChildren<CharacterAnimal>();
+        if (_characterParty == null) _characterParty = GetComponentInChildren<CharacterParty>();
+        if (_furniturePlacementManager == null) _furniturePlacementManager = GetComponentInChildren<FurniturePlacementManager>();
+        if (_characterOrders == null) _characterOrders = GetComponentInChildren<MWI.Orders.CharacterOrders>();
+        if (_terrainEffects == null) _terrainEffects = GetComponentInChildren<CharacterTerrainEffects>();
+        if (_characterAmbition == null)
+            _characterAmbition = GetComponentInChildren<MWI.Ambition.CharacterAmbition>();
+
         _cachedNavMeshAgent = GetComponent<NavMeshAgent>();
         _isDead = false;
         _isUnconscious = false;
@@ -296,7 +609,7 @@ public class Character : NetworkBehaviour
     {
         if (_rb != null && _col != null) return true;
 
-        Debug.LogError($"{name} : Références Rigidbody ou Collider manquantes !");
+        Debug.LogError($"{name} : missing Rigidbody or Collider references!");
         enabled = false;
         return false;
     }
@@ -334,10 +647,10 @@ public class Character : NetworkBehaviour
     {
         if (_characterVisual == null || _col == null) return;
 
-        // On exécute le calcul précis basé sur les sprites
+        // Run the precise sprite-based calculation
         _characterVisual.ResizeColliderToSprite();
 
-        // On s'assure que le Rigidbody n'est pas endormi pour appliquer le changement
+        // Make sure the Rigidbody isn't asleep so the change is applied
         if (_rb != null && !_rb.isKinematic)
         {
             _rb.WakeUp();
@@ -384,6 +697,12 @@ public class Character : NetworkBehaviour
             return false;
         }
 
+        if (_isBuilding)
+        {
+            reason = CharacterBusyReason.Building;
+            return false;
+        }
+
         if (_characterMentorship != null && _characterMentorship.IsCurrentlyTeaching)
         {
             reason = CharacterBusyReason.Teaching;
@@ -409,43 +728,17 @@ public class Character : NetworkBehaviour
         return IsFree(out _);
     }
 
+    public void SetBuildingState(bool active)
+    {
+        if (_isBuilding == active) return;
+        _isBuilding = active;
+        OnBuildingStateChanged?.Invoke(_isBuilding);
+    }
+
     #region Party Logic
-    public bool IsInParty() => _currentParty != null;
+    public bool IsInParty() => _characterParty != null && _characterParty.IsInParty;
 
-    public bool IsPartyLeader()
-    {
-        return IsInParty() && _currentParty.IsLeader(this);
-    }
-
-    public void CreateParty(string partyName)
-    {
-        if (_currentParty != null)
-        {
-            _currentParty.RemoveMember(this);
-        }
-        _currentParty = new CharacterParty(partyName, this);
-    }
-
-    public void SetParty(CharacterParty party)
-    {
-        _currentParty = party;
-    }
-
-    public void Invite(Character target)
-    {
-        if (target == null || target == this) return;
-        
-        if (_currentParty == null)
-        {
-            CreateParty($"{_characterName}'s Group");
-        }
-
-        if (IsPartyLeader())
-        {
-            // Pour l'instant on l'ajoute directement (intégration avec les interactions à venir)
-            _currentParty.AddMember(target);
-        }
-    }
+    public bool IsPartyLeader() => _characterParty != null && _characterParty.IsPartyLeader;
     #endregion
 
     public virtual void SetUnconscious(bool unconscious)
@@ -465,47 +758,47 @@ public class Character : NetworkBehaviour
 
         if (unconscious)
         {
-            // 1. Désactivation physique
-            if (_rb != null) 
+            // 1. Physics deactivation
+            if (_rb != null)
             {
                 _rb.isKinematic = true;
                 if (TryGetComponent<Unity.Netcode.Components.NetworkRigidbody>(out var netRb)) netRb.enabled = false;
             }
-            
-            // Si le personnage ne vole pas dans les airs suite à un knockback, on désactive immédiatement le collider au sol
+
+            // If the character isn't flying through the air from a knockback, disable the ground collider immediately
             if (_characterMovement != null && !_characterMovement.IsKnockedBack)
             {
                 if (_col != null) _col.enabled = false;
                 if (_rb != null) _rb.useGravity = false;
             }
 
-            // 4. Animation (Utilise le paramètre isDead pour le moment)
+            // 4. Animation (uses the isDead parameter for now)
             if (_characterVisual != null && _characterVisual.CharacterAnimator != null)
             {
                 _characterVisual.CharacterAnimator.SetDead(true);
             }
 
-            // 5. Désactivation NavMesh
+            // 5. NavMesh deactivation
             ConfigureNavMesh(false);
 
-            Debug.Log($"<color=orange>[Status]</color> {CharacterName} est maintenant inconscient.");
+            Debug.Log($"<color=orange>[Status]</color> {CharacterName} is now unconscious.");
             OnIncapacitated?.Invoke(this);
         }
         else
         {
-            // --- RÉVEIL ---
+            // --- WAKE UP ---
             if (_col != null) _col.enabled = true;
-            if (_rb != null) 
+            if (_rb != null)
             {
                 _rb.useGravity = true;
-                _rb.isKinematic = IsPlayer() ? false : true; // Rétablir selon le type de controller
+                _rb.isKinematic = IsPlayer() ? false : true; // Restore depending on the controller type
                 if (TryGetComponent<Unity.Netcode.Components.NetworkRigidbody>(out var netRb)) netRb.enabled = IsPlayer();
             }
 
             if (_controller != null)
             {
                 _controller.enabled = true;
-                _controller.Initialize(); // Repart sur Wander ou comportement par défaut
+                _controller.Initialize(); // Restart on Wander or default behaviour
             }
 
             if (_characterVisual != null && _characterVisual.CharacterAnimator != null)
@@ -513,10 +806,10 @@ public class Character : NetworkBehaviour
                 _characterVisual.CharacterAnimator.SetDead(false);
             }
 
-            // 5. Restauration NavMesh (Uniquement pour NPCs)
+            // 5. NavMesh restoration (NPCs only)
             ConfigureNavMesh(!IsPlayer());
 
-            Debug.Log($"<color=orange>[Status]</color> {CharacterName} a repris connaissance.");
+            Debug.Log($"<color=orange>[Status]</color> {CharacterName} regained consciousness.");
             OnWakeUp?.Invoke(this);
         }
     }
@@ -537,18 +830,18 @@ public class Character : NetworkBehaviour
             _characterCombat.ExitCombatMode();
 
         _isDead = true;
-        _isUnconscious = false; // La mort prime sur l'inconscience
+        _isUnconscious = false; // Death takes priority over unconsciousness
         OnDeath?.Invoke(this);
 
-        // 1. Désactivation physique
-        if (_rb != null) 
+        // 1. Physics deactivation
+        if (_rb != null)
         {
             _rb.isKinematic = true;
             if (TryGetComponent<Unity.Netcode.Components.NetworkRigidbody>(out var netRb)) netRb.enabled = false;
         }
 
-        // Le collider sera désactivé par CharacterMovement si on subit un knockback.
-        // Sinon, on le désactive tout de suite pour ne pas bloquer les autres joueurs (corps mort)
+        // The collider will be disabled by CharacterMovement if we suffer a knockback.
+        // Otherwise, disable it immediately so we don't block other players (dead body)
         if (_characterMovement != null && !_characterMovement.IsKnockedBack)
         {
             if (_col != null) _col.enabled = false;
@@ -562,7 +855,7 @@ public class Character : NetworkBehaviour
             _characterVisual.CharacterAnimator.SetDead(true);
         }
 
-        // 4. Désactivation NavMesh
+        // 4. NavMesh deactivation
         ConfigureNavMesh(false);
 
         OnIncapacitated?.Invoke(this);
@@ -618,6 +911,16 @@ public class Character : NetworkBehaviour
             netRb.enabled = !isNPC;
         }
 
+        if (TryGetComponent<Unity.Netcode.Components.NetworkTransform>(out var netTransform))
+        {
+            // Always sync Y so late-joining clients receive the correct height.
+            // For NPCs, raise the threshold to filter out NavMeshAgent micro-adjustments
+            // that cause visible vertical wobble on clients.
+            netTransform.SyncPositionY = true;
+            if (isNPC)
+                netTransform.PositionThreshold = 0.4f;
+        }
+
         if (_rb != null)
         {
             if (IsSpawned && !IsOwner)
@@ -666,6 +969,10 @@ public class Character : NetworkBehaviour
                 if (_cachedNavMeshAgent.isOnNavMesh) _cachedNavMeshAgent.isStopped = false;
                 _cachedNavMeshAgent.updatePosition = true;
                 _cachedNavMeshAgent.updateRotation = false;
+                
+                // Centrally enforce snappy movement and let visuals handle rotation via flipping
+                _cachedNavMeshAgent.acceleration = 50f;
+                _cachedNavMeshAgent.angularSpeed = 0f;
             }
             else
             {
@@ -717,13 +1024,13 @@ public class Character : NetworkBehaviour
         WorldItem worldItem = go.GetComponentInChildren<WorldItem>();
         if (worldItem != null) worldItem.Initialize(itemToDrop);
 
-        // Correction : Utilisation du pattern matching direct
+        // Fix: direct pattern matching
         if (itemToDrop is EquipmentInstance equipmentInstance)
         {
-            // On vérifie les couleurs personnalisées
+            // Check the customised colours
             if (equipmentInstance.HavePrimaryColor())
             {
-                // Note : Pour tes sprites 2D, utilise SpriteRenderer au lieu de MeshRenderer
+                // Note: for 2D sprites, use SpriteRenderer instead of MeshRenderer
                 SpriteRenderer visualRenderer = go.GetComponentInChildren<SpriteRenderer>();
                 if (visualRenderer != null)
                     visualRenderer.color = equipmentInstance.PrimaryColor;
@@ -734,12 +1041,41 @@ public class Character : NetworkBehaviour
 
     public void UseConsumable(ConsumableInstance consumable)
     {
-        // TODO: Implémenter
+        if (consumable == null)
+        {
+            Debug.LogWarning($"<color=orange>[Character]</color> {CharacterName} UseConsumable called with null instance.");
+            return;
+        }
+
+        try
+        {
+            consumable.ApplyEffect(this);
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogException(e);
+            return;
+        }
+
+        var so = consumable.ConsumableData;
+        if (so == null || !so.DestroyOnUse) return;
+
+        // Remove the item from wherever it lives (hands and/or inventory).
+        var hands = CharacterVisual?.BodyPartsController?.HandsController;
+        if (hands != null && hands.IsCarrying && hands.CarriedItem == consumable)
+        {
+            hands.ClearCarriedItem();
+        }
+
+        if (CharacterEquipment != null && CharacterEquipment.HaveInventory())
+        {
+            CharacterEquipment.GetInventory().RemoveItem(consumable, this);
+        }
     }
 
     public void EquipGear(EquipmentInstance equipment)
     {
-        // TODO: Implémenter
+        // TODO: Implement
     }
 
     public void SetTimeManager(TimeManager manager)
@@ -776,5 +1112,92 @@ public class Character : NetworkBehaviour
     public void SetOccupyingFurniture(Furniture furniture)
     {
         OccupyingFurniture = furniture;
+    }
+
+    /// <summary>
+    /// Server-only. Snap the character to the given anchor, disable navigation,
+    /// and flip <see cref="NetworkIsSleeping"/> to true. Called by
+    /// <see cref="BedFurniture.UseSlot"/>. Position is server-driven — clients
+    /// receive the snap via NetworkTransform, not via this method.
+    /// </summary>
+    public void EnterSleep(Transform anchor)
+    {
+        if (!IsServer)
+        {
+            Debug.LogWarning($"<color=orange>[Character]</color> EnterSleep called on non-server peer for {CharacterName}. Ignored.");
+            return;
+        }
+        if (anchor == null)
+        {
+            Debug.LogError($"<color=red>[Character]</color> EnterSleep called with null anchor for {CharacterName}.");
+            return;
+        }
+        if (NetworkIsSleeping.Value)
+        {
+            Debug.LogWarning($"<color=orange>[Character]</color> EnterSleep on {CharacterName} but already sleeping. Ignored.");
+            return;
+        }
+
+        transform.SetPositionAndRotation(anchor.position, anchor.rotation);
+        // ConfigureNavMesh(false) zeroes isStopped, calls ResetPath(), then disables the agent
+        // and unlocks physics in the correct order. Mirrors HandleUnconsciousStatus.
+        ConfigureNavMesh(false);
+        NetworkIsSleeping.Value = true;
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        Debug.Log($"<color=cyan>[Character]</color> {CharacterName} EnterSleep at {anchor.name} ({anchor.position}).");
+#endif
+    }
+
+    /// <summary>
+    /// Server-only. Re-enable navigation and flip <see cref="NetworkIsSleeping"/> to false.
+    /// The character stays at the anchor's last position; the next AI tick or player input
+    /// drives them away. Called by <see cref="BedFurniture.ReleaseSlot"/>.
+    /// </summary>
+    public void ExitSleep()
+    {
+        if (!IsServer)
+        {
+            Debug.LogWarning($"<color=orange>[Character]</color> ExitSleep called on non-server peer for {CharacterName}. Ignored.");
+            return;
+        }
+        if (!NetworkIsSleeping.Value)
+        {
+            // No-op on idempotent call; common during shutdown.
+            return;
+        }
+
+        // ConfigureNavMesh(true) zeroes velocity / forces kinematic BEFORE enabling the agent
+        // and skips enable on non-server non-owner clients. Players don't drive a NavMeshAgent,
+        // so mirror the !IsPlayer() gate used by HandleUnconsciousStatus on wake.
+        ConfigureNavMesh(!IsPlayer());
+        NetworkIsSleeping.Value = false;
+        // Reset the per-skip target so a stale value from this sleep session
+        // can't auto-fire the next skip when the player returns to bed.
+        NetworkPendingSkipHours.Value = 0;
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        Debug.Log($"<color=cyan>[Character]</color> {CharacterName} ExitSleep.");
+#endif
+    }
+
+    /// <summary>
+    /// Server-only. Sets the player's chosen skip duration for the upcoming
+    /// time-skip cycle. Called by the bed UseSlot path / UI_BedSleepPrompt
+    /// alongside (or just before) <see cref="EnterSleep"/>. Clamped to
+    /// [1, MWI.Time.TimeSkipController.MaxHours]. Replicates to all peers via
+    /// <see cref="NetworkPendingSkipHours"/> so the auto-trigger watcher can
+    /// read it from any server-side iteration of player Characters.
+    /// </summary>
+    public void SetPendingSkipHours(int hours)
+    {
+        if (!IsServer)
+        {
+            Debug.LogWarning($"<color=orange>[Character]</color> SetPendingSkipHours called on non-server peer for {CharacterName}. Ignored.");
+            return;
+        }
+        if (hours < 1) hours = 0;  // 0 = "no target set" (auto-trigger ignores)
+        else if (hours > MWI.Time.TimeSkipController.MaxHours) hours = MWI.Time.TimeSkipController.MaxHours;
+        NetworkPendingSkipHours.Value = hours;
     }
 }

@@ -6,7 +6,9 @@ public class DayNightCycle : MonoBehaviour
     [Header("Visual Settings")]
     [SerializeField] private Gradient _lightColor;
     [SerializeField] private AnimationCurve _intensityCurve;
-    
+    [SerializeField, Tooltip("Sun shadowStrength by time-of-day, sibling to _intensityCurve. Keep decoupled so dawn/dusk can do dim-sun-dramatic-shadows.")]
+    private AnimationCurve _shadowStrengthCurve;
+
     [Header("Control (Via TimeManager)")]
     [SerializeField] private TimeManager _timeManager;
     private Light _directionalLight;
@@ -103,6 +105,11 @@ public class DayNightCycle : MonoBehaviour
                 _directionalLight.intensity = Mathf.SmoothStep(0, 1.2f, dot * 2.5f);
             else
                 _directionalLight.intensity = 0;
+        }
+
+        if (_shadowStrengthCurve != null && _shadowStrengthCurve.length > 0)
+        {
+            _directionalLight.shadowStrength = Mathf.Clamp01(_shadowStrengthCurve.Evaluate(t));
         }
     }
 }

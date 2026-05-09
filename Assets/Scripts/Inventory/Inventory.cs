@@ -82,7 +82,7 @@ public class Inventory
     }
 
     /// <summary>
-    /// Vérifie si l'inventaire a de la place pour au moins un des items de la liste donnée.
+    /// Checks whether the inventory has room for at least one of the items in the given list.
     /// </summary>
     public bool HasFreeSpaceForAnyItemSO(List<ItemSO> itemSOs)
     {
@@ -96,7 +96,7 @@ public class Inventory
     }
 
     /// <summary>
-    /// Vérifie si l'inventaire contient au moins un des items de la liste donnée.
+    /// Checks whether the inventory contains at least one of the items in the given list.
     /// </summary>
     public bool HasAnyItemSO(List<ItemSO> itemSOs)
     {
@@ -126,7 +126,7 @@ public class Inventory
     }
 
     /// <summary>
-    /// Ajoute l'objet en passant le Character pour les mises à jour visuelles.
+    /// Adds the item, passing the Character for visual updates.
     /// </summary>
     public bool AddItem(ItemInstance item, Character character)
     {
@@ -150,7 +150,7 @@ public class Inventory
             {
                 slot.ItemInstance = item;
                 item.IsNewlyAdded = true;
-                Debug.Log($"[Inventory] Misc ajouté : {item.CustomizedName}");
+                Debug.Log($"[Inventory] Misc added: {item.CustomizedName}");
                 OnInventoryChanged?.Invoke();
                 return true;
             }
@@ -167,10 +167,10 @@ public class Inventory
                 slot.ItemInstance = item;
                 item.IsNewlyAdded = true;
 
-                // On utilise le paramètre character pour mettre à jour le visuel
+                // Use the character parameter to update the visual
                 UpdateWeaponVisuals(character);
 
-                Debug.Log($"[Inventory] Arme ajoutée : {item.CustomizedName}");
+                Debug.Log($"[Inventory] Weapon added: {item.CustomizedName}");
                 OnInventoryChanged?.Invoke();
                 return true;
             }
@@ -182,13 +182,13 @@ public class Inventory
     {
         if (character != null && character.CharacterEquipment != null)
         {
-            // Appelle la logique que nous avons crée pour le sac
+            // Calls the logic we created for the bag
             character.CharacterEquipment.UpdateWeaponVisualOnBag();
         }
     }
 
     /// <summary>
-    /// Retire un item et notifie le Character (utile si on retire une arme par exemple).
+    /// Removes an item and notifies the Character (useful when removing a weapon, for example).
     /// </summary>
     public bool RemoveItem(ItemInstance item, Character character)
     {
@@ -204,7 +204,7 @@ public class Inventory
                 if (isWeapon)
                     UpdateWeaponVisuals(character);
 
-                Debug.Log($"[Inventory] {item.CustomizedName} retiré.");
+                Debug.Log($"[Inventory] {item.CustomizedName} removed.");
                 OnInventoryChanged?.Invoke();
                 return true;
             }
@@ -227,7 +227,7 @@ public class Inventory
     }
 
     /// <summary>
-    /// Retire un item de l'inventaire et le fait spawn physiquement dans le monde à la position donnée.
+    /// Removes an item from the inventory and physically spawns it in the world at the given position.
     /// </summary>
     public bool DropItem(ItemInstance item, Vector3 dropPosition, Character characterForVisualUpdate = null)
     {
@@ -241,7 +241,7 @@ public class Inventory
     }
 
     /// <summary>
-    /// Retire un item au hasard de l'inventaire et le fait spawn dans le monde. (ex: sac troué)
+    /// Removes a random item from the inventory and spawns it in the world (e.g. torn bag).
     /// </summary>
     public ItemInstance DropRandomItem(Vector3 dropPosition, Character characterForVisualUpdate = null)
     {

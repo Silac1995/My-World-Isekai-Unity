@@ -1,0 +1,32 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b9e4df412478a694d88998d71e0d1de9, type: 3}
+  m_Name: Crate
+  m_EditorClassIdentifier: Assembly-CSharp::FurnitureItemSO
+  category_name: 
+  _spriteLibrary: {fileID: 0}
+  itemId: F02-Crate
+  itemName: Crate
+  description: Crate to store items.
+  icon: {fileID: 0}
+  item_prefab: {fileID: 5368253223231017792, guid: 3a4b4877e6aa64b40857f3c3704c8a91, type: 3}
+  worldItem_prefab: {fileID: 718778511601405242, guid: d05bd27244da29941a5703671cff1688, type: 3}
+  _weight: 1
+  _material: 0
+  _tier: 0
+  _castsShadow: 1
+  _blocksPathing: 1
+  _requiredCraftingSkill: {fileID: 0}
+  _requiredCraftingLevel: 1
+  _craftingDuration: 3
+  _craftingRecipe: []
+  _installedFurniturePrefab: {fileID: 5510196143857379223, guid: c5741fc63642989479b278096dc3acbf, type: 3}

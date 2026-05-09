@@ -68,6 +68,24 @@ Because the game supports Multiplayer, the exchange system is designed to handle
 - **Invitations**: Player A invites Player B. Player B receives a UI prompt. If Player B takes longer than 10 seconds to respond, the invitation Self-Destructs, freeing Player A.
 - **Turns**: The sequence is paused on *both* sides depending on whose turn it is. If Player A takes too long to select a dialogue option (e.g., more than 15-30 seconds), the interaction must forcefully Time Out and `EndInteraction()` to prevent greifing/locking Player B in place.
 
+## 4b. Time Scaling (GameSpeedController)
+
+All NPC dialogue pacing in `DialogueSequence` uses **scaled time** (`WaitForSeconds`, `Time.deltaTime`), not real-time, so it reacts to `GameSpeedController`:
+
+| Wait | Use | Behaviour |
+|---|---|---|
+| `WaitForSeconds(0.2f)` poll on `HasPendingInvitation` | Spinning until target answers an invitation | Scales — at 5× speed it polls 5× more often per real-second. |
+| `WaitForSeconds(2.0f)` post-invitation read pause | Lets the response bubble breathe before next exchange | At 5× speed → ~0.4s real; on pause → freezes (good — bubble stays readable). |
+| `WaitForSeconds(randomDelay)` (1.0–2.5s) inter-exchange beat | Natural breathing room between NPC lines | Scales — high speed = snappier banter; pause = freezes. |
+| `WaitForSeconds(2.0f)` end-of-conversation linger | Stops NPCs from instantly walking away | Scales the same way. |
+| `Time.deltaTime` player-turn timer accumulator (`PLAYER_WAIT_DELAY = 8s`) | Server-side guard so the player isn't allowed to stall a frozen NPC forever | Scales — note this means at 5× speed the player effectively has only ~1.6 real seconds to pick a dialogue option. The matching client-side `ClientTurnTimerRoutine` also uses `Time.deltaTime`, so the on-screen countdown matches. If this becomes punishing for human reaction time, switch *only* the player-turn timers to unscaled (`Time.unscaledDeltaTime` + `WaitForSecondsRealtime`) — keep the NPC delays scaled. |
+
+**Sister rule** in `CharacterSpeech`: typing speed (`TypeMessage`) and bubble lifetime (`ExpirationTimer`) are also scaled, while bubble entrance/exit fades, position lerp, and proximity alpha-fade stay unscaled. See `.agent/skills/speech-system/SKILL.md` for the full per-phase table.
+
+This is the project-specific application of CLAUDE.md rule 26: NPC speech and dialogue pacing are *simulation events* that happen to be displayed via the HUD — so they scale. Pure HUD transitions (fades, position tracking) stay unscaled.
+
+---
+
 ## 5. Overriding & Interruptions
 
 If an interaction is forcefully interrupted by a new one (e.g. Player forces an interaction on an NPC who was walking to start a different one):

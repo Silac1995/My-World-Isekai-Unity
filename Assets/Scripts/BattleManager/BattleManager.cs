@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -12,6 +13,21 @@ public class BattleManager : NetworkBehaviour
     [SerializeField] private Collider _battleZone;
     [SerializeField] private Unity.AI.Navigation.NavMeshModifierVolume _battleZoneModifier;
     [SerializeField] private LineRenderer _battleZoneLine;
+    [SerializeField] private ParticleSystem _battleZoneParticles;
+
+    [Header("Zone Particle Overrides")]
+    [Tooltip("Particles emitted per second along the zone border.")]
+    [SerializeField] private float _particleRate = 25f;
+    [Tooltip("Color tint applied to zone border particles.")]
+    [SerializeField] private Color _particleColor = new Color(1.2f, 0.9f, 0.4f, 0.5f);
+    [Tooltip("Min/max particle size.")]
+    [SerializeField] private Vector2 _particleSize = new Vector2(0.05f, 0.15f);
+    [Tooltip("Min/max particle lifetime in seconds.")]
+    [SerializeField] private Vector2 _particleLifetime = new Vector2(2f, 4f);
+    [Tooltip("Upward drift speed of particles.")]
+    [SerializeField] private Vector2 _particleDriftY = new Vector2(0.1f, 0.3f);
+
+    [Header("Zone Settings")]
     [SerializeField] private Vector3 _baseBattleZoneSize = new Vector3(25f, 35f, 10f);
     [SerializeField] private float _perParticipantGrowthRate = 0.3f;
     [SerializeField] private int _participantsPerTier = 6;
@@ -22,19 +38,21 @@ public class BattleManager : NetworkBehaviour
 
     private bool _isBattleEnded = false;
 
-    // --- NOUVEAUX CONTRÔLEURS DE DÉLÉGATION ---
+    // --- NEW DELEGATION CONTROLLERS ---
     private BattleZoneController _zoneController;
     private CombatEngagementCoordinator _engagementCoordinator;
 
-    // Liste pour le debug
+    // List used for debug
     [SerializeField] private List<Character> _allParticipants = new List<Character>();
 
-    [Header("Debug — Engagements actifs")]
+    [Header("Debug — Active engagements")]
     [SerializeField] private List<string> _debugEngagements = new List<string>();
 
     public List<BattleTeam> BattleTeams => _teams;
     public bool IsBattleEnded => _isBattleEnded;
     public CombatEngagementCoordinator Coordinator => _engagementCoordinator;
+
+    public event Action<Character> OnParticipantAdded;
 
     public void Initialize(Character initiator, Character target)
     {
@@ -42,7 +60,7 @@ public class BattleManager : NetworkBehaviour
 
         if (initiator == null || target == null) return;
 
-        // 1. Setup des équipes (On s'assure qu'il n'y en a QUE 2)
+        // 1. Team setup (we make sure there are ONLY 2)
         _teams.Clear();
         _battleTeamInitiator = new BattleTeam();
         _battleTeamTarget = new BattleTeam();
@@ -53,22 +71,27 @@ public class BattleManager : NetworkBehaviour
         _teams.Add(_battleTeamInitiator);
         _teams.Add(_battleTeamTarget);
 
-        _zoneController = new BattleZoneController(this, _battleZoneModifier, _battleZoneLine, _baseBattleZoneSize, _perParticipantGrowthRate, _participantsPerTier);
+        _zoneController = new BattleZoneController(this, _battleZoneModifier, _battleZoneLine, _battleZoneParticles, BuildParticleSettings(), _baseBattleZoneSize, _perParticipantGrowthRate, _participantsPerTier);
         _engagementCoordinator = new CombatEngagementCoordinator(this);
 
-        // 2. Création physique de la zone
+        // 2. Physical creation of the zone
         _zoneController.CreateBattleZone(initiator, target);
 
-        // 3. Inscription des participants
+        // 3. Inscription des participants (each gets a one-way best-target edge)
         RegisterParticipants();
 
-        // 4. Créer l'engagement initial entre l'initiateur et la cible
-        _engagementCoordinator.RequestEngagement(initiator, target);
+        // 4. Seed mutual targeting: the initial pair + any character whose best target
+        //    already targets them back. This creates multiple mutual pairs immediately
+        //    instead of waiting for the AI to decide (initiative starts at 0).
+        _engagementCoordinator.SetTargeting(initiator, target);
+        _engagementCoordinator.SetTargeting(target, initiator);
+        SeedMutualTargeting();
+        _engagementCoordinator.EvaluateEngagements();
 
         // 5. Rendu visuel UNIQUE (pas dans Update)
         _zoneController.DrawBattleZoneOutline();
 
-        Debug.Log($"<color=orange>[Battle]</color> Combat lance : {initiator.name} vs {target.name}");
+        Debug.Log($"<color=orange>[Battle]</color> Combat started: {initiator.name} vs {target.name}");
 
         var initNet = initiator.GetComponent<NetworkObject>();
         var targNet = target.GetComponent<NetworkObject>();
@@ -81,51 +104,83 @@ public class BattleManager : NetworkBehaviour
     [ClientRpc]
     private void InitializeClientRpc(NetworkObjectReference initiatorRef, NetworkObjectReference targetRef)
     {
-        if (IsServer) return; // Server already initialized
+        if (IsServer) return;
 
-        if (initiatorRef.TryGet(out NetworkObject iNet) && targetRef.TryGet(out NetworkObject tNet))
+        if (!initiatorRef.TryGet(out NetworkObject iNet) || !targetRef.TryGet(out NetworkObject tNet))
         {
-            Character initiator = iNet.GetComponent<Character>();
-            Character target = tNet.GetComponent<Character>();
-
-            _teams.Clear();
-            _battleTeamInitiator = new BattleTeam();
-            _battleTeamTarget = new BattleTeam();
-
-            _battleTeamInitiator.AddCharacter(initiator);
-            _battleTeamTarget.AddCharacter(target);
-
-            _teams.Add(_battleTeamInitiator);
-            _teams.Add(_battleTeamTarget);
-
-            _zoneController = new BattleZoneController(this, _battleZoneModifier, _battleZoneLine, _baseBattleZoneSize, _perParticipantGrowthRate, _participantsPerTier);
-            _engagementCoordinator = new CombatEngagementCoordinator(this);
-
-            _zoneController.CreateBattleZone(initiator, target);
-            RegisterParticipants(); // Client sets its own tracking!
-            _engagementCoordinator.RequestEngagement(initiator, target);
-            _zoneController.DrawBattleZoneOutline();
+            Debug.LogError($"<color=red>[Battle Client]</color> InitializeClientRpc: could not resolve NetworkObjects.");
+            return;
         }
+
+        Character initiator = iNet.GetComponent<Character>();
+        Character target = tNet.GetComponent<Character>();
+
+        // IDEMPOTENT: If coordinator was already lazily created by an earlier AddParticipantClientRpc,
+        // just merge the original combatants into the existing teams. Don't clear everything.
+        if (_engagementCoordinator != null && _teams.Count > 0)
+        {
+            Debug.Log($"<color=cyan>[Battle Client]</color> InitializeClientRpc (late merge): adding original {initiator?.CharacterName} + {target?.CharacterName}");
+            if (initiator != null && GetTeamOf(initiator) == null)
+            {
+                _battleTeamInitiator.AddCharacter(initiator);
+                RegisterCharacter(initiator);
+            }
+            if (target != null && GetTeamOf(target) == null)
+            {
+                _battleTeamTarget.AddCharacter(target);
+                RegisterCharacter(target);
+            }
+            _engagementCoordinator.SetTargeting(initiator, target);
+            _engagementCoordinator.SetTargeting(target, initiator);
+            _engagementCoordinator.EvaluateEngagements();
+            _zoneController?.CreateBattleZone(initiator, target);
+            _zoneController?.DrawBattleZoneOutline();
+            return;
+        }
+
+        // Normal first-time initialization on client
+        _teams.Clear();
+        _battleTeamInitiator = new BattleTeam();
+        _battleTeamTarget = new BattleTeam();
+
+        _battleTeamInitiator.AddCharacter(initiator);
+        _battleTeamTarget.AddCharacter(target);
+
+        _teams.Add(_battleTeamInitiator);
+        _teams.Add(_battleTeamTarget);
+
+        _zoneController = new BattleZoneController(this, _battleZoneModifier, _battleZoneLine, _battleZoneParticles, BuildParticleSettings(), _baseBattleZoneSize, _perParticipantGrowthRate, _participantsPerTier);
+        _engagementCoordinator = new CombatEngagementCoordinator(this);
+
+        _zoneController.CreateBattleZone(initiator, target);
+        RegisterParticipants();
+        _engagementCoordinator.SetTargeting(initiator, target);
+        _engagementCoordinator.SetTargeting(target, initiator);
+        _engagementCoordinator.EvaluateEngagements();
+        _zoneController.DrawBattleZoneOutline();
+        Debug.Log($"<color=cyan>[Battle Client]</color> InitializeClientRpc completed: {initiator?.CharacterName} vs {target?.CharacterName}");
     }
 
     private void Update()
     {
+        _zoneController?.Tick();
+
         if (_isBattleEnded) return;
 
-        // --- NOUVEAU : VERIFICATION DE FIN DE COMBAT EN CONTINU ---
-        // Seul le serveur valide la fin du combat.
+        // --- NEW: CONTINUOUS BATTLE-END CHECK ---
+        // Only the server validates the end of the battle.
         if (IsServer)
         {
             if (_battleTeamInitiator.IsTeamEliminated() || _battleTeamTarget.IsTeamEliminated())
             {
-                Debug.Log($"<color=red>[Battle]</color> Elimination globale détectée. Fin du combat.");
+                Debug.Log($"<color=red>[Battle]</color> Global elimination detected. Ending combat.");
                 EndBattle();
                 return;
             }
         }
 
-        // Ticks d'initiative autorisés sur TOUS les clients pour la prédiction locale !
-        // Gestion du temps de combat 
+        // Initiative ticks are allowed on ALL clients for local prediction!
+        // Combat time management
         _tickTimer += Time.deltaTime;
         float tickPeriod = 1f / _ticksPerSecond;
 
@@ -146,7 +201,7 @@ public class BattleManager : NetworkBehaviour
         }
 
 #if UNITY_EDITOR
-        // Debug : mise à jour de la liste d'engagements pour l'Inspector
+        // Debug: update the engagement list for the Inspector
         UpdateDebugEngagements();
 #endif
     }
@@ -174,7 +229,7 @@ public class BattleManager : NetworkBehaviour
 
     private void PerformBattleTick()
     {
-        _engagementCoordinator?.CleanupEngagements();
+        _engagementCoordinator?.EvaluateEngagements();
 
         foreach (var character in _allParticipants)
         {
@@ -203,6 +258,48 @@ public class BattleManager : NetworkBehaviour
         }
     }
 
+    /// <summary>
+    /// After all characters have one-way targeting from RegisterCharacter,
+    /// check for pairs that happen to target each other and make them mutual.
+    /// Also assigns targets to characters that don't have one yet.
+    /// This ensures engagements form immediately at battle start.
+    /// </summary>
+    private void SeedMutualTargeting()
+    {
+        // First: ensure every character has a target via the full SetPlannedTarget path
+        // (sets look target + updates graph). EvaluateEngagements is called per-target
+        // inside SetPlannedTarget but that's fine — it's a one-time init cost.
+        foreach (var character in _allParticipants)
+        {
+            if (character == null || !character.IsAlive()) continue;
+            if (character.CharacterCombat == null) continue;
+
+            Character bestTarget = _engagementCoordinator.GetBestTargetFor(character);
+            if (bestTarget != null)
+            {
+                character.CharacterCombat.SetPlannedTarget(bestTarget);
+            }
+        }
+
+        // Second pass: for characters whose target doesn't target them back yet,
+        // make the target reciprocate for instant mutual engagement.
+        foreach (var character in _allParticipants)
+        {
+            if (character == null || !character.IsAlive()) continue;
+            if (character.CharacterCombat == null) continue;
+
+            Character myTarget = character.CharacterCombat.PlannedTarget;
+            if (myTarget == null || myTarget.CharacterCombat == null) continue;
+
+            Character theirTarget = myTarget.CharacterCombat.PlannedTarget;
+            if (theirTarget == null)
+            {
+                // Target has no target yet — make them target us back for mutual
+                myTarget.CharacterCombat.SetPlannedTarget(character);
+            }
+        }
+    }
+
     private void RegisterCharacter(Character character)
     {
         if (_allParticipants.Contains(character)) return;
@@ -214,13 +311,12 @@ public class BattleManager : NetworkBehaviour
             character.CharacterCombat.JoinBattle(this);
             character.CharacterCombat.ConsumeInitiative();
 
-            if (!character.IsPlayer())
+            // Auto-target via SetPlannedTarget so the character gets a look target,
+            // graph entry, and can move immediately (not wait for initiative).
+            Character bestEnemy = _engagementCoordinator?.GetBestTargetFor(character);
+            if (bestEnemy != null)
             {
-                Character bestEnemy = _engagementCoordinator?.GetBestTargetFor(character);
-                if (bestEnemy != null)
-                {
-                    _engagementCoordinator?.RequestEngagement(character, bestEnemy);
-                }
+                character.CharacterCombat.SetPlannedTarget(bestEnemy);
             }
         }
 
@@ -230,7 +326,9 @@ public class BattleManager : NetworkBehaviour
         character.OnDeath += HandleCharacterIncapacitated;
 
         UpdateBattleZoneWith(character);
-        Debug.Log($"<color=white>[Battle]</color> {character.CharacterName} a rejoint le combat.");
+        Debug.Log($"<color=white>[Battle]</color> {character.CharacterName} joined combat. IsInBattle={character.CharacterCombat?.IsInBattle}. IsServer={IsServer}");
+
+        OnParticipantAdded?.Invoke(character);
     }
 
     public void AddParticipant(Character newParticipant, Character target, bool asAlly = false)
@@ -243,45 +341,125 @@ public class BattleManager : NetworkBehaviour
         ulong newParticipantId = newParticipant.NetworkObject != null ? newParticipant.NetworkObject.NetworkObjectId : 0;
         ulong targetId = target.NetworkObject != null ? target.NetworkObject.NetworkObjectId : 0;
 
+        // Compute the server-authoritative team index AFTER placement.
+        // This makes the client independent of GetTeamOf(target) which would fail if
+        // InitializeClientRpc hasn't arrived yet (RPC race condition).
+        BattleTeam assignedTeam = GetTeamOf(newParticipant);
+        int teamIndex = (assignedTeam == _battleTeamInitiator) ? 0 : 1;
+
         if (newParticipantId > 0 && targetId > 0)
         {
-            AddParticipantClientRpc(newParticipantId, targetId, asAlly);
+            AddParticipantClientRpc(newParticipantId, targetId, teamIndex);
         }
     }
 
     [ClientRpc]
-    private void AddParticipantClientRpc(ulong newParticipantId, ulong targetId, bool asAlly)
+    private void AddParticipantClientRpc(ulong newParticipantId, ulong targetId, int teamIndex)
     {
         if (IsServer) return;
 
-        if (Unity.Netcode.NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(newParticipantId, out var pObj) &&
-            Unity.Netcode.NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(targetId, out var tObj))
+        Debug.Log($"<color=cyan>[Battle Client]</color> AddParticipantClientRpc received. newId={newParticipantId} targetId={targetId} teamIndex={teamIndex}");
+
+        // LAZY INIT: If InitializeClientRpc hasn't arrived yet (RPC ordering race condition),
+        // create teams and coordinator now so the participant can be properly registered.
+        EnsureClientInitialized();
+
+        if (!Unity.Netcode.NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(newParticipantId, out var pObj) ||
+            !Unity.Netcode.NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(targetId, out var tObj))
         {
-            AddParticipantInternal(pObj.GetComponent<Character>(), tObj.GetComponent<Character>(), asAlly);
+            Debug.LogError($"<color=red>[Battle Client]</color> AddParticipantClientRpc: could not resolve NetworkObjects.");
+            return;
+        }
+
+        Character newParticipant = pObj.GetComponent<Character>();
+        Character target = tObj.GetComponent<Character>();
+
+        if (newParticipant == null || target == null)
+        {
+            Debug.LogError($"<color=red>[Battle Client]</color> AddParticipantClientRpc: Character component missing.");
+            return;
+        }
+
+        // Place new participant directly into the server-determined team by index.
+        // This avoids needing GetTeamOf(target) which fails when teams are empty or the target
+        // hasn't been registered yet from InitializeClientRpc.
+        BattleTeam team = (teamIndex == 0) ? _battleTeamInitiator : _battleTeamTarget;
+        if (!team.CharacterList.Contains(newParticipant))
+            team.AddCharacter(newParticipant);
+
+        // Ensure the target is in the OPPOSITE team if not already registered.
+        if (GetTeamOf(target) == null)
+        {
+            BattleTeam oppositeTeam = (teamIndex == 0) ? _battleTeamTarget : _battleTeamInitiator;
+            oppositeTeam.AddCharacter(target);
+            RegisterCharacter(target);
+        }
+
+        RegisterCharacter(newParticipant);
+
+        // Register targeting so EvaluateEngagements will create/update engagements.
+        _engagementCoordinator?.SetTargeting(newParticipant, target);
+
+        Debug.Log($"<color=cyan>[Battle Client]</color> {newParticipant.CharacterName} joined team {teamIndex} vs {target.CharacterName}. IsInBattle={newParticipant.CharacterCombat?.IsInBattle}");
+    }
+
+    /// <summary>
+    /// Lazily initializes teams and coordinator on the client if InitializeClientRpc
+    /// hasn't arrived yet. This handles the RPC ordering race condition where
+    /// AddParticipantClientRpc arrives before InitializeClientRpc.
+    /// </summary>
+    private void EnsureClientInitialized()
+    {
+        if (_engagementCoordinator == null)
+            _engagementCoordinator = new CombatEngagementCoordinator(this);
+        if (_zoneController == null)
+            _zoneController = new BattleZoneController(this, _battleZoneModifier, _battleZoneLine, _battleZoneParticles, BuildParticleSettings(), _baseBattleZoneSize, _perParticipantGrowthRate, _participantsPerTier);
+        if (_teams.Count == 0)
+        {
+            _battleTeamInitiator = new BattleTeam();
+            _battleTeamTarget = new BattleTeam();
+            _teams.Add(_battleTeamInitiator);
+            _teams.Add(_battleTeamTarget);
         }
     }
 
+    /// <summary>
+    /// Server-only internal method to place a participant in the correct team.
+    /// </summary>
     private void AddParticipantInternal(Character newParticipant, Character target, bool asAlly)
     {
         if (newParticipant == null || target == null || _isBattleEnded) return;
 
-        // On trouve l'équipe de la cible
         BattleTeam targetTeam = GetTeamOf(target);
         if (targetTeam == null) return;
 
         if (asAlly)
         {
-            // On le met dans la MÊME équipe que la cible
             targetTeam.AddCharacter(newParticipant);
         }
         else
         {
-            // On le met dans l'équipe ADVERSE de la cible
             BattleTeam enemyTeam = (targetTeam == _battleTeamInitiator) ? _battleTeamTarget : _battleTeamInitiator;
             enemyTeam.AddCharacter(newParticipant);
         }
 
         RegisterCharacter(newParticipant);
+
+        // Seed targeting via SetPlannedTarget (full chain: look target + graph + evaluate)
+        if (newParticipant.CharacterCombat != null)
+        {
+            Character bestTarget = _engagementCoordinator?.GetBestTargetFor(newParticipant);
+            if (bestTarget != null)
+            {
+                newParticipant.CharacterCombat.SetPlannedTarget(bestTarget);
+
+                // If target has no target yet, make them target back for instant mutual
+                if (bestTarget.CharacterCombat != null && bestTarget.CharacterCombat.PlannedTarget == null)
+                {
+                    bestTarget.CharacterCombat.SetPlannedTarget(newParticipant);
+                }
+            }
+        }
     }
 
     private void UpdateBattleZoneWith(Character character)
@@ -294,6 +472,18 @@ public class BattleManager : NetworkBehaviour
     }
 
     #region Helpers
+
+    private ZoneParticleSettings BuildParticleSettings()
+    {
+        return new ZoneParticleSettings
+        {
+            Rate     = _particleRate,
+            Color    = _particleColor,
+            Size     = _particleSize,
+            Lifetime = _particleLifetime,
+            DriftY   = _particleDriftY
+        };
+    }
     public BattleTeam GetTeamOf(Character character)
     {
         return _teams.FirstOrDefault(t => t.CharacterList.Contains(character));
@@ -304,23 +494,28 @@ public class BattleManager : NetworkBehaviour
         BattleTeam myTeam = GetTeamOf(character);
         if (myTeam == null) 
         {
-            Debug.LogWarning($"<color=red>[Battle]</color> {character.CharacterName} n'est dans aucune équipe ! Impossible de trouver son opposant.");
+            Debug.LogWarning($"<color=red>[Battle]</color> {character.CharacterName} is not in any team! Cannot find their opponent.");
             return null;
         }
         return (myTeam == _battleTeamInitiator) ? _battleTeamTarget : _battleTeamInitiator;
     }
 
     /// <summary>
-    /// Passthrough vers le coordinateur pour trouver le meilleur ennemi à cibler.
+    /// Passthrough to the coordinator to find the best enemy to target.
     /// </summary>
     public Character GetBestTargetFor(Character attacker)
     {
         return _engagementCoordinator?.GetBestTargetFor(attacker);
     }
 
-    public CombatEngagement RequestEngagement(Character attacker, Character target)
+    public void SetTargeting(Character attacker, Character target)
     {
-        return _engagementCoordinator?.RequestEngagement(attacker, target);
+        _engagementCoordinator?.SetTargeting(attacker, target);
+    }
+
+    public CombatEngagement GetEngagementOf(Character character)
+    {
+        return _engagementCoordinator?.GetEngagementOf(character);
     }
     #endregion
 
@@ -328,27 +523,27 @@ public class BattleManager : NetworkBehaviour
     {
         if (_isBattleEnded) return;
 
-        // --- NOUVEAU : DIAGNOSTIC DE FIN DE COMBAT ---
+        // --- NEW: BATTLE-END DIAGNOSTIC ---
         int initiatorAlive = _battleTeamInitiator.CharacterList.Count(c => c != null && c.IsAlive());
         int targetAlive = _battleTeamTarget.CharacterList.Count(c => c != null && c.IsAlive());
-        
+
         string initiatorNames = string.Join(", ", _battleTeamInitiator.CharacterList.Where(c => c != null && c.IsAlive()).Select(c => c.CharacterName));
         string targetNames = string.Join(", ", _battleTeamTarget.CharacterList.Where(c => c != null && c.IsAlive()).Select(c => c.CharacterName));
 
-        Debug.Log($"<color=white>[Battle Check]</color> {incapacitatedCharacter.CharacterName} tombe. " +
-                  $"Team Initiateur : {initiatorAlive}/{_battleTeamInitiator.CharacterList.Count} ({initiatorNames}) | " +
-                  $"Team Cible : {targetAlive}/{_battleTeamTarget.CharacterList.Count} ({targetNames})");
+        Debug.Log($"<color=white>[Battle Check]</color> {incapacitatedCharacter.CharacterName} is down. " +
+                  $"Initiator Team: {initiatorAlive}/{_battleTeamInitiator.CharacterList.Count} ({initiatorNames}) | " +
+                  $"Target Team: {targetAlive}/{_battleTeamTarget.CharacterList.Count} ({targetNames})");
 
-        // (La vérification globale d'élimination est maintenant gérée passivement dans l'Update)
+        // (The global elimination check is now handled passively in Update.)
 
-        // On libère simplement les slots d'engagements liés à ce personnage.
+        // We simply release the engagement slots tied to this character.
         RedirectIncapacitated(incapacitatedCharacter);
     }
 
     private void RedirectIncapacitated(Character victim)
     {
+        _engagementCoordinator?.RemoveFromGraph(victim);
         _engagementCoordinator?.CleanupEngagements();
-        // Le BT (BTCond_IsInCombat) se chargera naturellement de recibler au prochain tick.
     }
 
 
@@ -380,7 +575,7 @@ public class BattleManager : NetworkBehaviour
                 }
                 catch (System.Exception e)
                 {
-                    Debug.LogError($"<color=red>[Battle]</color> Exception non-critique durant LeaveBattle pour {character.CharacterName} : {e.Message}. Le nettoyage continue.");
+                    Debug.LogError($"<color=red>[Battle]</color> Non-critical exception during LeaveBattle for {character.CharacterName}: {e.Message}. Cleanup continues.");
                 }
                 
                 _engagementCoordinator?.LeaveCurrentEngagement(character);
@@ -389,7 +584,7 @@ public class BattleManager : NetworkBehaviour
         
         _engagementCoordinator?.ClearAll();
 
-        Debug.Log("<color=red>[Battle]</color> Le combat est TERMINÉ.");
+        Debug.Log("<color=red>[Battle]</color> Combat is OVER.");
         if (NetworkObject != null && NetworkObject.IsSpawned)
             NetworkObject.Despawn(true);
         else 

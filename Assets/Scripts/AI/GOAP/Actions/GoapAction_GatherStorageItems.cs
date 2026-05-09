@@ -28,6 +28,51 @@ public class GoapAction_GatherStorageItems : GoapAction
     private GatherState _currentState = GatherState.FindingItem;
     private Vector3 _targetPos;
 
+    // Furniture-first deposit. When non-null, the worker is heading to (or already
+    // at) a StorageFurniture slot and will queue CharacterStoreInFurnitureAction
+    // instead of CharacterDropItem in the DroppingOff state. Resolved per-item in
+    // DetermineStoragePosition() — re-evaluated after every successful deposit so
+    // that a multi-item delivery can fan out across several furniture pieces and
+    // fall back to the loose StorageZone drop only when nothing fits.
+    private StorageFurniture _targetFurniture;
+
+    // Real-time stamp captured when MovingToStorage begins targeting a furniture.
+    // If the worker hasn't arrived within FurnitureMoveTimeoutSeconds we give up on
+    // the furniture (typical cause: missing _interactionPoint on the prefab → trying
+    // to walk into the NavMeshObstacle carve). Falls back to the loose zone drop so
+    // the cycle can never softlock.
+    private float _furnitureMoveStartedAt = -1f;
+    private const float FurnitureMoveTimeoutSeconds = 5f;
+
+    // One-shot per-state-transition logging support (set NPCDebug.VerboseActions=true
+    // to surface state churn in the Console).
+    private GatherState _lastLoggedState = (GatherState)(-1);
+
+    // Furniture instances we already failed to reach during this action invocation.
+    // Survives only for the action's lifetime (cleared in Exit). Without this, the
+    // timeout fallback would re-pick the same unreachable furniture next tick because
+    // FindStorageFurnitureForItem doesn't consult PathingMemory.
+    private HashSet<StorageFurniture> _excludedFurniture;
+
+    // ── FindLooseWorldItem cache (perf, see wiki/projects/optimisation-backlog.md entry #2 / Bₐ).
+    // FindLooseWorldItem runs 3 Physics.OverlapBox + per-collider component scans + List
+    // alloc + AddRange on every IsValid() call. With 4 logistics managers + 2 harvesters
+    // each running this per Job.Execute tick, that's hundreds of redundant PhysX scans/sec.
+    // Cache the result per-action-instance for 0.5 s — long enough to absorb the Cₐ-throttled
+    // 0.3 s job tick. If another worker grabs our target before we get there, the action's
+    // existing failure-handling (target null, retry next tick) catches it.
+    private const float FindLooseCacheTTLSeconds = 0.5f;
+    private float _lastFindLooseTime = -1f;
+    private WorldItem _lastFindLooseResult;
+    private int _lastFindLooseFrame = -1;
+
+    // Reused PhysX overlap buffer + scratch list, shared across action instances (PhysX
+    // queries are main-thread, so a static is safe and avoids per-instance allocations).
+    // 128 covers typical zone clutter; saturation falls back to truncated scan with warning.
+    private const int OverlapBufferSize = 128;
+    private static readonly Collider[] s_overlapBuffer = new Collider[OverlapBufferSize];
+    private static readonly List<Collider> s_scratchCollidersList = new List<Collider>(OverlapBufferSize * 3);
+
     private enum GatherState
     {
         FindingItem,
@@ -78,6 +123,15 @@ public class GoapAction_GatherStorageItems : GoapAction
 
         var movement = worker.CharacterMovement;
         if (movement == null) return;
+
+        // One-shot transition log so you can see exactly which state is sticking.
+        // Gated behind NPCDebug.VerboseActions to avoid log spam in normal play.
+        if (NPCDebug.VerboseActions && _currentState != _lastLoggedState)
+        {
+            ItemInstance dbgCarried = GetCarriedItem(worker);
+            Debug.Log($"<color=#88aaff>[GatherDBG]</color> {worker.CharacterName} state {_lastLoggedState} → {_currentState} | targetFurniture={(_targetFurniture != null ? _targetFurniture.FurnitureName : "<none>")} | targetPos={_targetPos} | carrying={(dbgCarried != null ? dbgCarried.ItemSO.ItemName : "<none>")} | dist={Vector3.Distance(worker.transform.position, _targetPos):F2}");
+            _lastLoggedState = _currentState;
+        }
 
         switch (_currentState)
         {
@@ -179,26 +233,72 @@ public class GoapAction_GatherStorageItems : GoapAction
                 break;
 
             case GatherState.MovingToStorage:
-                Zone storageZone = _building.StorageZone != null ? _building.StorageZone : _building.MainRoom.GetComponent<Zone>();
-                Collider storageCol = storageZone != null ? storageZone.GetComponent<Collider>() : null;
-
-                HandleMovementTo(worker, _targetPos, out bool arrivedAtStorage, storageCol, true);
-
-                // [FIX]: Permit an early delivery if the character is physically inside the storage zone, 
-                // avoiding agents infinitely pushing each other at the exact _targetPos coordinate.
-                if (!arrivedAtStorage && storageCol != null)
+                bool arrivedAtStorage;
+                if (_targetFurniture != null)
                 {
-                    Vector3 flatWorkerPos = new Vector3(worker.transform.position.x, storageCol.bounds.center.y, worker.transform.position.z);
-                    Bounds safeBounds = storageCol.bounds;
-                    
-                    // We shrink the bounds by exactly the maximum drop offset (0.3 per side, so 0.6 total)
-                    // to guarantee the physical item won't fall outside the zone and trigger an infinite gather loop.
-                    safeBounds.Expand(-0.6f);
-                    
-                    if (safeBounds.Contains(flatWorkerPos))
+                    // Stamp the start time the first tick we enter MovingToStorage with a furniture target.
+                    if (_furnitureMoveStartedAt < 0f)
                     {
+                        _furnitureMoveStartedAt = Time.unscaledTime;
+                    }
+
+                    // Furniture target: there's no zone collider to early-exit on, so
+                    // arrival is a flat-XZ proximity check against the furniture's
+                    // interaction point. 1.5f matches HandleMovementTo's early-exit
+                    // threshold so behaviour stays consistent with the zone path.
+                    HandleMovementTo(worker, _targetPos, out arrivedAtStorage, null);
+
+                    if (!arrivedAtStorage)
+                    {
+                        Vector3 flatWorker = new Vector3(worker.transform.position.x, 0f, worker.transform.position.z);
+                        Vector3 flatTarget = new Vector3(_targetPos.x, 0f, _targetPos.z);
+                        if (Vector3.Distance(flatWorker, flatTarget) <= 1.5f)
+                        {
+                            worker.CharacterMovement.ResetPath();
+                            arrivedAtStorage = true;
+                        }
+                    }
+
+                    // Softlock guard: if we've spent too long pathing to a furniture without
+                    // arriving, abandon it and fall back to the loose zone drop. Most common
+                    // cause: the StorageFurniture has no _interactionPoint Transform assigned,
+                    // so GetInteractionPosition() returns the crate centre — which is inside
+                    // the NavMeshObstacle carve and unreachable.
+                    if (!arrivedAtStorage && Time.unscaledTime - _furnitureMoveStartedAt > FurnitureMoveTimeoutSeconds)
+                    {
+                        Debug.LogWarning($"<color=orange>[GOAP Storage]</color> {worker.CharacterName} could not reach {_targetFurniture.FurnitureName} after {FurnitureMoveTimeoutSeconds}s (stuck at dist={Vector3.Distance(worker.transform.position, _targetPos):F2}). Excluding it for the rest of this action. CHECK: does {_targetFurniture.FurnitureName} have an _interactionPoint Transform assigned in the prefab?");
+                        if (_excludedFurniture == null) _excludedFurniture = new HashSet<StorageFurniture>();
+                        _excludedFurniture.Add(_targetFurniture);
+                        worker.CharacterMovement.Stop();
                         worker.CharacterMovement.ResetPath();
-                        arrivedAtStorage = true;
+                        // Re-pick a target: next compatible furniture, or the zone if none.
+                        DetermineStoragePosition();
+                        // Stay in MovingToStorage; next tick walks to the new spot.
+                    }
+                }
+                else
+                {
+                    Zone storageZone = _building.StorageZone != null ? _building.StorageZone : _building.MainRoom.GetComponent<Zone>();
+                    Collider storageCol = storageZone != null ? storageZone.GetComponent<Collider>() : null;
+
+                    HandleMovementTo(worker, _targetPos, out arrivedAtStorage, storageCol, true);
+
+                    // [FIX]: Permit an early delivery if the character is physically inside the storage zone,
+                    // avoiding agents infinitely pushing each other at the exact _targetPos coordinate.
+                    if (!arrivedAtStorage && storageCol != null)
+                    {
+                        Vector3 flatWorkerPos = new Vector3(worker.transform.position.x, storageCol.bounds.center.y, worker.transform.position.z);
+                        Bounds safeBounds = storageCol.bounds;
+
+                        // We shrink the bounds by exactly the maximum drop offset (0.3 per side, so 0.6 total)
+                        // to guarantee the physical item won't fall outside the zone and trigger an infinite gather loop.
+                        safeBounds.Expand(-0.6f);
+
+                        if (safeBounds.Contains(flatWorkerPos))
+                        {
+                            worker.CharacterMovement.ResetPath();
+                            arrivedAtStorage = true;
+                        }
                     }
                 }
 
@@ -206,6 +306,7 @@ public class GoapAction_GatherStorageItems : GoapAction
                 {
                     _currentState = GatherState.DroppingOff;
                     _actionStarted = false;
+                    _furnitureMoveStartedAt = -1f; // ready for the next furniture leg
                 }
                 break;
 
@@ -216,19 +317,53 @@ public class GoapAction_GatherStorageItems : GoapAction
                     ItemInstance carriedItem = GetCarriedItem(worker);
                     if (carriedItem == null)
                     {
-                        // Plus rien en main ou dans le sac, on a fini la livraison physique. 
+                        // Plus rien en main ou dans le sac, on a fini la livraison physique.
                         // On retourne chercher s'il y a d'autres choses à ramasser.
                         _currentState = GatherState.FindingItem;
                         return;
                     }
 
-                    var dropAction = new CharacterDropItem(worker, carriedItem, true);
-                    
+                    // Furniture-first: if we walked here for a specific furniture and it
+                    // STILL has space for the item we're holding, queue the slot insert
+                    // instead of the loose drop. Re-validates lock + space because another
+                    // worker (or the player) may have filled the slot since we arrived.
+                    if (_targetFurniture != null
+                        && !_targetFurniture.IsLocked
+                        && _targetFurniture.HasFreeSpaceForItem(carriedItem))
+                    {
+                        var storeAction = new CharacterStoreInFurnitureAction(worker, carriedItem, _targetFurniture);
+
+                        if (worker.CharacterActions.ExecuteAction(storeAction))
+                        {
+                            _actionStarted = true;
+                            // Capture the furniture reference at queue time — _targetFurniture
+                            // may be re-pointed by FinishDropoff below before this lambda fires.
+                            StorageFurniture furnitureRef = _targetFurniture;
+                            storeAction.OnActionFinished += () => FinishDropoff(worker, carriedItem, furnitureRef);
+                        }
+                        else
+                        {
+                            // Action refused (already busy). Mirror the legacy drop fallback:
+                            // purge any phantom action and force-finish the logical state.
+                            if (worker.CharacterActions.CurrentAction != null)
+                            {
+                                worker.CharacterActions.ClearCurrentAction();
+                            }
+                            RemoveItemFromWorker(worker, carriedItem);
+                            FinishDropoff(worker, carriedItem, _targetFurniture);
+                        }
+                        return;
+                    }
+
+                    // No furniture target (or it filled up between MovingToStorage and now)
+                    // — fall back to the original loose-drop path inside StorageZone.
+                    var dropAction = new CharacterDropItem(worker, carriedItem);
+
                     // Si true: L'action a été acceptée et l'animation commence.
                     if (worker.CharacterActions.ExecuteAction(dropAction))
                     {
                         _actionStarted = true;
-                        dropAction.OnActionFinished += () => FinishDropoff(worker, carriedItem);
+                        dropAction.OnActionFinished += () => FinishDropoff(worker, carriedItem, null);
                     }
                     else
                     {
@@ -239,7 +374,7 @@ public class GoapAction_GatherStorageItems : GoapAction
                             worker.CharacterActions.ClearCurrentAction();
                         }
                         RemoveItemFromWorker(worker, carriedItem);
-                        FinishDropoff(worker, carriedItem);
+                        FinishDropoff(worker, carriedItem, null);
                     }
                 }
                 break;
@@ -248,6 +383,80 @@ public class GoapAction_GatherStorageItems : GoapAction
 
     private void DetermineStoragePosition()
     {
+        // Furniture-first preference: if the worker is currently carrying an item AND
+        // the building has a StorageFurniture that accepts it, head straight to the
+        // furniture's interaction point. Otherwise fall back to the loose StorageZone
+        // drop — same behaviour as before this refactor.
+        _targetFurniture = null;
+        _furnitureMoveStartedAt = -1f;
+
+        Character worker = _manager != null ? _manager.Worker : null;
+        ItemInstance carriedItem = worker != null ? GetCarriedItem(worker) : null;
+
+        if (carriedItem != null && _building != null)
+        {
+            bool isTool = _building.IsBuildingToolItem(carriedItem.ItemSO);
+            var toolStorages = _building.ToolStorages;
+
+            // Tool-priority pre-pass: iterate every role-assigned tool storage so building
+            // tools (e.g. a watering can the LogisticsManager just hauled in from the
+            // StorageZone or BuildingZone) consolidate in the tool drawer(s). Mirrors the
+            // same rule applied by CommercialBuilding.FindStorageFurnitureForItem.
+            if (isTool)
+            {
+                for (int i = 0; i < toolStorages.Count; i++)
+                {
+                    var s = toolStorages[i];
+                    if (s == null || s.IsLocked) continue;
+                    if (_excludedFurniture != null && _excludedFurniture.Contains(s)) continue;
+                    if (!s.HasFreeSpaceForItem(carriedItem)) continue;
+
+                    _targetFurniture = s;
+                    _targetPos = worker != null
+                        ? s.GetInteractionPosition(worker.transform.position)
+                        : s.GetInteractionPosition();
+                    return;
+                }
+                // Legacy fallback singleton (only when no role assignment exists yet).
+                if (toolStorages.Count == 0)
+                {
+                    var legacy = _building.ToolStorage;
+                    if (legacy != null
+                        && !legacy.IsLocked
+                        && (_excludedFurniture == null || !_excludedFurniture.Contains(legacy))
+                        && legacy.HasFreeSpaceForItem(carriedItem))
+                    {
+                        _targetFurniture = legacy;
+                        _targetPos = worker != null
+                            ? legacy.GetInteractionPosition(worker.transform.position)
+                            : legacy.GetInteractionPosition();
+                        return;
+                    }
+                }
+            }
+
+            // Walk furniture in declaration order, skipping any we've already failed to reach.
+            // Non-tool items skip every tool storage so general inventory can't fill the
+            // slots reserved for tools. IsToolStorage handles role-tagged AND legacy fallback
+            // storages in a single predicate.
+            foreach (var candidate in _building.GetFurnitureOfType<StorageFurniture>())
+            {
+                if (candidate == null || candidate.IsLocked) continue;
+                if (_excludedFurniture != null && _excludedFurniture.Contains(candidate)) continue;
+                if (!isTool && _building.IsToolStorage(candidate)) continue;
+                if (!candidate.HasFreeSpaceForItem(carriedItem)) continue;
+
+                _targetFurniture = candidate;
+                // Worker-aware overload: when the candidate has no _interactionPoint
+                // authored, this lands the target on the closest InteractionZone face
+                // to the worker — i.e. on the navmesh-walkable side.
+                _targetPos = worker != null
+                    ? candidate.GetInteractionPosition(worker.transform.position)
+                    : candidate.GetInteractionPosition();
+                return;
+            }
+        }
+
         Zone storageZone = _building.StorageZone ?? _building.MainRoom.GetComponent<Zone>();
         if (storageZone != null)
         {
@@ -264,11 +473,18 @@ public class GoapAction_GatherStorageItems : GoapAction
         }
     }
 
-    private void FinishDropoff(Character worker, ItemInstance item)
+    private void FinishDropoff(Character worker, ItemInstance item, StorageFurniture depositedInFurniture)
     {
         _building.AddToInventory(item);
-        Debug.Log($"<color=green>[Harvesting]</color> {worker.CharacterName} a rangé {item.ItemSO.ItemName} dans le stockage.");
-        
+        if (depositedInFurniture != null)
+        {
+            Debug.Log($"<color=green>[Harvesting]</color> {worker.CharacterName} a rangé {item.ItemSO.ItemName} dans {depositedInFurniture.FurnitureName}.");
+        }
+        else
+        {
+            Debug.Log($"<color=green>[Harvesting]</color> {worker.CharacterName} a rangé {item.ItemSO.ItemName} dans le stockage.");
+        }
+
         var bManager = _building?.LogisticsManager;
         if (bManager != null)
         {
@@ -277,11 +493,31 @@ public class GoapAction_GatherStorageItems : GoapAction
 
         // On libère le verrou d'action
         _actionStarted = false;
-        
-        // On reste dans l'état DroppingOff ! 
-        // Au prochain frame, le switch passera dans DroppingOff et appellera GetCarriedItem().
-        // S'il reste des objets dans le sac, ça relancera une action de drop !
-        // Si le sac est vide, le GetCarriedItem renverra null, et renverra vers FindingItem.
+
+        // Multi-item delivery support: peek at the next carried item BEFORE we stay
+        // in DroppingOff. If the previously-targeted furniture is now full / wrong-fit
+        // for the next item, re-run DetermineStoragePosition() and walk again. If the
+        // worker is empty-handed, the next DroppingOff tick falls through to FindingItem.
+        ItemInstance nextItem = GetCarriedItem(worker);
+        if (nextItem != null)
+        {
+            StorageFurniture nextFurniture = _building != null ? _building.FindStorageFurnitureForItem(nextItem) : null;
+
+            // If the next pick is a different furniture (or a zone-fallback now that
+            // storage furniture is full for that item type), we have to walk to the new
+            // spot — kick back to MovingToStorage so HandleMovementTo runs.
+            if (nextFurniture != _targetFurniture)
+            {
+                DetermineStoragePosition();
+                _currentState = GatherState.MovingToStorage;
+            }
+            // Same furniture (or both null = same loose-zone target): stay in
+            // DroppingOff — next tick we'll queue the next item without moving.
+        }
+
+        // On reste dans l'état DroppingOff (ou MovingToStorage si la cible a changé).
+        // Au prochain frame, le switch traitera l'item suivant ou retournera à FindingItem
+        // si le sac est vide.
     }
 
     private ItemInstance GetCarriedItem(Character worker)
@@ -371,51 +607,60 @@ public class GoapAction_GatherStorageItems : GoapAction
     private WorldItem FindLooseWorldItem(Character worker)
     {
         if (_building.BuildingZone == null) return null;
-        
+
+        // Cache hit: re-use the previous result if it's still fresh AND the cached item
+        // hasn't been picked up since (validate the WorldItem still exists and is loose).
+        // Cleared on Exit() so a new action invocation always starts cold.
+        if (UnityEngine.Time.time - _lastFindLooseTime < FindLooseCacheTTLSeconds)
+        {
+            if (_lastFindLooseResult == null) return null;
+            // Cached item still valid — same WorldItem might have been picked up by
+            // another worker; skip the cache if so to force a refresh.
+            if (_lastFindLooseResult.gameObject != null && !_lastFindLooseResult.IsBeingCarried)
+            {
+                return _lastFindLooseResult;
+            }
+        }
+
         BoxCollider boxCol = _building.BuildingZone.GetComponent<BoxCollider>();
         if (boxCol == null) return null;
-
-        Vector3 center = boxCol.transform.TransformPoint(boxCol.center);
-        Vector3 halfExtents = Vector3.Scale(boxCol.size, boxCol.transform.lossyScale) * 0.5f;
-
-        Collider[] colliders = Physics.OverlapBox(center, halfExtents, boxCol.transform.rotation, Physics.AllLayers, QueryTriggerInteraction.Collide);
 
         WorldItem nearest = null;
         float nearestDist = float.MaxValue;
 
         Zone storageZone = _building.StorageZone;
         BoxCollider storageCol = storageZone != null ? storageZone.GetComponent<BoxCollider>() : null;
-        
+
         Zone depositZone = null;
         if (_building is HarvestingBuilding harvestingBuilding)
         {
             depositZone = harvestingBuilding.DepositZone;
         }
         BoxCollider depositCol = depositZone != null ? depositZone.GetComponent<BoxCollider>() : null;
-        
+
         Zone deliveryZone = _building.DeliveryZone;
         BoxCollider deliveryCol = deliveryZone != null ? deliveryZone.GetComponent<BoxCollider>() : null;
 
-        List<Collider> allCols = new List<Collider>(colliders);
+        // Phase-A: items sitting in PickupZone are OUTBOUND staging — they were deliberately
+        // moved there by GoapAction_StageItemForPickup and must NOT be re-gathered back into
+        // storage (that would undo the staging every tick). Defensive skip below.
+        Zone pickupZone = _building.PickupZone;
+        BoxCollider pickupCol = pickupZone != null ? pickupZone.GetComponent<BoxCollider>() : null;
 
-        if (depositCol != null)
-        {
-            Vector3 dCenter = depositCol.transform.TransformPoint(depositCol.center);
-            Vector3 dHalfExtents = Vector3.Scale(depositCol.size, depositCol.transform.lossyScale) * 0.5f;
-            var dCols = Physics.OverlapBox(dCenter, dHalfExtents, depositCol.transform.rotation, Physics.AllLayers, QueryTriggerInteraction.Collide);
-            allCols.AddRange(dCols);
-        }
-        
-        if (deliveryCol != null)
-        {
-            Vector3 delCenter = deliveryCol.transform.TransformPoint(deliveryCol.center);
-            Vector3 delHalfExtents = Vector3.Scale(deliveryCol.size, deliveryCol.transform.lossyScale) * 0.5f;
-            var delCols = Physics.OverlapBox(delCenter, delHalfExtents, deliveryCol.transform.rotation, Physics.AllLayers, QueryTriggerInteraction.Collide);
-            allCols.AddRange(delCols);
-        }
+        // Reused scratch list across all 3 zone scans (NOT static-only; cleared each call).
+        // OverlapBoxNonAlloc against the shared buffer to avoid per-call Collider[] allocations.
+        // See wiki/projects/optimisation-backlog.md entry #2 / Bₐ.
+        s_scratchCollidersList.Clear();
 
-        foreach (var col in allCols)
+        AppendOverlapBoxColliders(boxCol, s_scratchCollidersList, "BuildingZone");
+        if (depositCol != null) AppendOverlapBoxColliders(depositCol, s_scratchCollidersList, "DepositZone");
+        if (deliveryCol != null) AppendOverlapBoxColliders(deliveryCol, s_scratchCollidersList, "DeliveryZone");
+
+        for (int i = 0; i < s_scratchCollidersList.Count; i++)
         {
+            var col = s_scratchCollidersList[i];
+            if (col == null) continue;
+
             var worldItem = col.GetComponent<WorldItem>() ?? col.GetComponentInParent<WorldItem>();
             if (worldItem == null || worldItem.ItemInstance == null || worldItem.IsBeingCarried) continue;
 
@@ -429,7 +674,14 @@ public class GoapAction_GatherStorageItems : GoapAction
                 if (storageCol.bounds.Contains(flatPos)) continue;
             }
 
-            // Optional: check if it belongs to crafting output. 
+            // Phase-A: items already staged in PickupZone are outbound reservations; skip.
+            if (pickupCol != null)
+            {
+                Vector3 flatPickup = new Vector3(worldItem.transform.position.x, pickupCol.bounds.center.y, worldItem.transform.position.z);
+                if (pickupCol.bounds.Contains(flatPickup)) continue;
+            }
+
+            // Optional: check if it belongs to crafting output.
             // Currently, any loose item in building zone gets stashed.
             float dist = Vector3.Distance(worker.transform.position, worldItem.transform.position);
             if (dist < nearestDist)
@@ -438,7 +690,34 @@ public class GoapAction_GatherStorageItems : GoapAction
                 nearestDist = dist;
             }
         }
+
+        s_scratchCollidersList.Clear();
+        _lastFindLooseTime = UnityEngine.Time.time;
+        _lastFindLooseResult = nearest;
         return nearest;
+    }
+
+    /// <summary>
+    /// Runs <see cref="Physics.OverlapBoxNonAlloc"/> against the shared static buffer
+    /// and appends the results into <paramref name="dest"/>. Logs a saturation warning
+    /// (rule #31) if the buffer fills exactly, signalling that <see cref="OverlapBufferSize"/>
+    /// should be bumped.
+    /// </summary>
+    private static void AppendOverlapBoxColliders(BoxCollider boxCol, List<Collider> dest, string zoneTag)
+    {
+        Vector3 center = boxCol.transform.TransformPoint(boxCol.center);
+        Vector3 halfExtents = Vector3.Scale(boxCol.size, boxCol.transform.lossyScale) * 0.5f;
+
+        int hitCount = Physics.OverlapBoxNonAlloc(center, halfExtents, s_overlapBuffer, boxCol.transform.rotation, Physics.AllLayers, QueryTriggerInteraction.Collide);
+        if (hitCount == OverlapBufferSize)
+        {
+            Debug.LogWarning($"[GoapAction_GatherStorageItems] {zoneTag} on '{boxCol.name}' saturated the OverlapBox buffer ({OverlapBufferSize}) — bump OverlapBufferSize. Items beyond #{OverlapBufferSize} truncated this scan.", boxCol);
+        }
+        for (int i = 0; i < hitCount; i++)
+        {
+            var col = s_overlapBuffer[i];
+            if (col != null) dest.Add(col);
+        }
     }
 
     public override void Exit(Character worker)
@@ -447,5 +726,12 @@ public class GoapAction_GatherStorageItems : GoapAction
         _actionStarted = false;
         _currentState = GatherState.FindingItem;
         _targetItem = null;
+        _targetFurniture = null;
+        _furnitureMoveStartedAt = -1f;
+        _excludedFurniture?.Clear();
+        _lastLoggedState = (GatherState)(-1);
+        // Reset the FindLooseWorldItem cache so the next invocation starts cold.
+        _lastFindLooseTime = -1f;
+        _lastFindLooseResult = null;
     }
 }

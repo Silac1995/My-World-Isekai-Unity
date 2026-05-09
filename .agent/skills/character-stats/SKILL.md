@@ -16,7 +16,7 @@ The system divides stats into three categories:
 2. **Primary Stats** (`CharacterHealth`, `CharacterStamina`, `CharacterMana`, `CharacterInitiative`)
    - Resource pools (with a `CurrentAmount` and `MaxAmount`).
    - Except for Initiative, the `MaxAmount` is derived from a linked Secondary Stat.
-3. **Tertiary Stats** (`PhysicalPower`, `CastingSpeed`, etc.)
+3. **Tertiary Stats** (`PhysicalPower`, `SpellCasting`, `CombatCasting`, etc.)
    - Purely derived combat numeric values.
    - Completely dependent on a specific Secondary Stat and a formula containing multipliers and offsets provided by `RaceSO`.
 
@@ -29,12 +29,12 @@ When a Secondary Stat is increased, it directly impacts specific Primary and Ter
 - **Role:** Pure physical scaling. Governs raw melee and physical ability damage output.
 
 ### 2. Agility
-- **Impacts Tertiary:** `Speed`, `DodgeChance`, `MoveSpeed`
-- **Role:** General body movement. Modifies animation/turn speed, evasion mechanics against physical attacks, and actual NavMesh traversal velocity.
+- **Impacts Tertiary:** `Speed`, `DodgeChance`, `MoveSpeed`, `CombatCasting`
+- **Role:** General body movement. Modifies animation/turn speed, evasion mechanics against physical attacks, actual NavMesh traversal velocity, and physical ability cast speed.
 
 ### 3. Dexterity
-- **Impacts Tertiary:** `Accuracy`, `CastingSpeed`, `CriticalHitChance`
-- **Role:** Fine motor skills. Modifies hit likelihood, how fast spells and intricate abilities cast, and the chance to strike weak points.
+- **Impacts Tertiary:** `Accuracy`, `SpellCasting`, `CriticalHitChance`
+- **Role:** Fine motor skills. Modifies hit likelihood, how fast spells cast, and the chance to strike weak points.
 
 ### 4. Intelligence
 - **Impacts Primary:** `Mana` (Max Mana Pool)
@@ -68,3 +68,14 @@ When `ApplyRaceStats(RaceSO race)` is called:
 - **Memory Management:** Every `CharacterTertiaryStats` and `CharacterPrimaryStats` derives from `CharacterBaseStats`. They all feature `OnValueChanged` events. Inside `CharacterStats.cs`, any listener applied (like `_onSecondaryStatChanged`) **must** be securely unsubscribed within `OnDestroy()` to avoid memory leaks if the gameObject is removed.
 - **Dynamic Percentage Handling:** When Primary stats (like Health) change their `MaxAmount` (because Endurance leveled up), their `CurrentAmount` automatically scales keeping the exact same percentage (e.g., if you had 50% HP, you still have 50% HP out of the new max pool).
 - **Stat Modifier Support:** Every stat supports a `StatModifier` wrapper for buffs and debuffs. Added modifiers dynamically recalculate `CurrentValue` against `BaseValue`, without permanently losing the root `BaseValue`.
+
+## Casting Stats
+
+Two tertiary stats govern ability cast times:
+
+- **SpellCasting** (class `SpellCasting`, linked to Dexterity): Reduces spell cast times. Renamed from the old `CastingSpeed`.
+- **CombatCasting** (class `CombatCasting`, linked to Agility): Reduces physical ability cast times.
+
+Both use the division-based formula: `baseCastTime / (1 + statValue)`. Each ability SO has a per-ability `_instantCastThreshold` (0-1 range). If the reduced cast time falls to that fraction of the base or below, the ability becomes instant (returns 0).
+
+**StatType enum:** `SpellCasting` and `CombatCasting` (replaces old `CastingSpeed`). Registered in `EnumStats.cs`, `StatModifier.cs`, and `CharacterStats.GetBaseStat()`.

@@ -1,0 +1,1139 @@
+using System;
+using System.Collections.Generic;
+using Unity.Netcode;
+using UnityEngine;
+using MWI.Time;
+
+namespace MWI.WorldSystem
+{
+    public enum CommunityTier
+    {
+        RoamingCamp = 0,
+        Settlement = 1,
+        EstablishedCity = 2,
+        AbandonedCity = 3
+    }
+
+    public enum BuildingState
+    {
+        UnderConstruction = 0,
+        Complete = 1,
+        Ruined = 2
+    }
+
+    /// <summary>
+    /// One employee assignment inside a CommercialBuilding. Persisted alongside
+    /// the building's owner so that crews survive hibernation and world save/load.
+    /// </summary>
+    [Serializable]
+    public class EmployeeSaveEntry
+    {
+        public string CharacterId;   // Worker's persistent UUID
+        public string JobType;       // Reflection-friendly type name (e.g. "JobBarman")
+    }
+
+    /// <summary>
+    /// One non-empty slot inside a saved <see cref="StorageFurniture"/>. Mirrors the
+    /// network sync wire format (<c>NetworkStorageSlotEntry</c>): we keep the same
+    /// JsonUtility-overwrite-then-rebind ItemSO trick so the live, the network, and
+    /// the disk paths share one serialization recipe.
+    /// </summary>
+    [Serializable]
+    public class StorageSlotSaveEntry
+    {
+        public int SlotIndex;     // Index in StorageFurniture._itemSlots
+        public string ItemId;     // ItemSO.ItemId — used to resolve the SO on load
+        public string JsonData;   // JsonUtility.ToJson(ItemInstance)
+    }
+
+    /// <summary>
+    /// Saved contents of one <see cref="StorageFurniture"/> living inside a building.
+    /// <para>
+    /// The <see cref="FurnitureKey"/> is a composite of the authored
+    /// <c>FurnitureItemSO.ItemId</c> and the building-local position, formatted as
+    /// <c>"{itemId}@{x:F2},{y:F2},{z:F2}"</c>. Locally-authored coords are stable
+    /// across save/load (the layout is server-only spawn data) so the key survives
+    /// list reorders in <c>_defaultFurnitureLayout</c> and supports multiple same-
+    /// typed storages per building (two crates of the same kind at different spots).
+    /// </para>
+    /// <para>
+    /// We do NOT persist <c>IsLocked</c> yet — it isn't replicated either, both gaps
+    /// will be addressed together when lock state becomes a network-visible concern.
+    /// </para>
+    /// </summary>
+    [Serializable]
+    public class StorageFurnitureSaveEntry
+    {
+        public string FurnitureKey;
+        public List<StorageSlotSaveEntry> Slots = new List<StorageSlotSaveEntry>();
+
+        /// <summary>
+        /// Owner-assigned <see cref="StorageRoleType"/> (Tool / Inventory / SellShelf / None).
+        /// Added 2026-05-08 with the unified storage-role system. Default
+        /// <see cref="StorageRoleType.None"/> for old saves that don't carry the field —
+        /// JSON deserialization fills enum defaults to 0, which maps to None.
+        /// </summary>
+        public StorageRoleType Role = StorageRoleType.None;
+    }
+
+    /// <summary>
+    /// Saved state of one <see cref="Cashier"/> furniture instance inside a building.
+    /// <para>
+    /// <see cref="FurnitureKey"/> uses the same composite scheme as
+    /// <see cref="StorageFurnitureSaveEntry"/> (FurnitureItemSO.ItemId + building-local
+    /// position rounded to 2 decimals) so it survives <c>_defaultFurnitureLayout</c>
+    /// reorders and supports multiple same-typed cashiers per building.
+    /// </para>
+    /// <para>
+    /// <see cref="Data"/> carries the gameplay-relevant payload (till balances + linkage
+    /// metadata). The shape is documented on <see cref="CashierSaveData"/> itself.
+    /// </para>
+    /// </summary>
+    [Serializable]
+    public class CashierSaveEntry
+    {
+        public string FurnitureKey;
+        public CashierSaveData Data;
+    }
+
+    [Serializable]
+    public class BuildingSaveData
+    {
+        public string BuildingId;        // GUID - unique per instance
+        public string PrefabId;          // Registry key, NOT a path
+        public Vector3 Position;
+        public Quaternion Rotation;
+        /// <summary>All owner UUIDs (Room/Building.OwnerIds). Replaces the old single-owner
+        /// OwnerNpcId field. For CommercialBuilding the boss is OwnerCharacterIds[0] by convention.</summary>
+        public List<string> OwnerCharacterIds = new List<string>();
+        public BuildingState State;      // UnderConstruction, Complete, Ruined
+        /// <summary>
+        /// Persisted progress meter snapshot (0–1). Pre-warms the UI on map wake-up so the meter
+        /// doesn't blink to 0 between MapController.WakeUp and the next ConstructionSiteScanner
+        /// tick. The next scanner tick is the source of truth — this is a UX hint only.
+        /// </summary>
+        public float ConstructionProgress;
+
+        /// <summary>
+        /// Per-requirement delivered counts (keyed by ItemSO AssetGuid for ordering-resilience).
+        /// Round-tripped on save/load; used to pre-warm Building._contributedMaterials.
+        /// Editor-only resolution (AssetDatabase) — runtime standalone builds save an empty list
+        /// and rely on WorldItem-on-ground persistence to rebuild the meter on first scanner tick.
+        /// </summary>
+        public List<DeliveredMaterialEntryDTO> DeliveredMaterials = new List<DeliveredMaterialEntryDTO>();
+
+        // Interior map data (null/-1 if no interior has been spawned yet)
+        public string InteriorMapId;
+        public int InteriorSlotIndex = -1;
+
+        // Who originally placed this building (distinct from CommercialBuilding.Owner who runs the business)
+        public string PlacedByCharacterId;
+
+        /// <summary>Saved employee → job assignments. Populated only for CommercialBuilding.</summary>
+        public List<EmployeeSaveEntry> Employees = new List<EmployeeSaveEntry>();
+
+        /// <summary>
+        /// Saved <see cref="StorageFurniture"/> contents (chests, shelves, crates, …).
+        /// Default-empty so older save files (no field) deserialize cleanly. Each entry
+        /// is keyed by <see cref="StorageFurnitureSaveEntry.FurnitureKey"/> — see that
+        /// type for the keying scheme.
+        /// </summary>
+        public List<StorageFurnitureSaveEntry> StorageFurnitures = new List<StorageFurnitureSaveEntry>();
+
+        /// <summary>
+        /// Saved <see cref="Cashier"/> furniture state (till balances + linkage). Default-empty
+        /// so older save files (no field) deserialize cleanly. Each entry is keyed by
+        /// <see cref="CashierSaveEntry.FurnitureKey"/> using the shared
+        /// <see cref="ComputeFurnitureKey"/> scheme.
+        /// </summary>
+        public List<CashierSaveEntry> Cashiers = new List<CashierSaveEntry>();
+
+        /// <summary>
+        /// <see cref="ShopBuilding"/>-only: snapshot of the runtime mutable
+        /// <c>ShopBuilding._catalog</c>. Empty for non-shop buildings. Lives on
+        /// <see cref="BuildingSaveData"/> rather than a derived class because the world JSON
+        /// pipeline does not preserve polymorphism (no <c>TypeNameHandling</c>); see
+        /// <see cref="ShopCatalogEntrySaveEntry"/>'s class doc for the rationale.
+        /// </summary>
+        public List<ShopCatalogEntrySaveEntry> ShopCatalog = new List<ShopCatalogEntrySaveEntry>();
+
+        /// <summary>
+        /// <see cref="ShopBuilding"/>-only: keys of every <see cref="StorageFurniture"/> the
+        /// shop owner has flagged as a customer-facing sell-shelf. Persisted as a list of
+        /// <see cref="ComputeFurnitureKey"/> strings — same scheme as <see cref="StorageFurnitures"/>
+        /// — so the load side resolves each saved key against the live storage instances spawned
+        /// inside the building's default-furniture pass.
+        /// </summary>
+        public List<string> SellShelfFurnitureKeys = new List<string>();
+
+        /// <summary>
+        /// Creates a BuildingSaveData entry from a live Building, storing position
+        /// relative to the given map center.
+        /// </summary>
+        public static BuildingSaveData FromBuilding(Building building, Vector3 mapCenter)
+        {
+            var data = new BuildingSaveData
+            {
+                BuildingId = building.BuildingId,
+                PrefabId = building.PrefabId,
+                Position = building.transform.position - mapCenter,
+                Rotation = building.transform.rotation,
+                State = building.CurrentState,
+                // Snapshot the live progress meter (0–1). Used as a UX pre-warm only — the next
+                // ConstructionSiteScanner tick reconciles against actual physical items present.
+                ConstructionProgress = building.ConstructionProgress.Value,
+                PlacedByCharacterId = building.PlacedByCharacterId.Value.ToString()
+            };
+
+            // Persist delivered-material snapshot (editor-only — AssetGuid is resolvable through
+            // AssetDatabase, which doesn't ship in standalone runtime builds). For Phase 1 we
+            // serialize an empty list at runtime; meter is rebuilt on first scanner tick from
+            // items physically on the footprint via the standard WorldItem save pipeline.
+            data.DeliveredMaterials = new List<DeliveredMaterialEntryDTO>();
+#if UNITY_EDITOR
+            try
+            {
+                foreach (var kv in building.ContributedMaterials)
+                {
+                    if (kv.Key == null) continue;
+                    string assetPath = UnityEditor.AssetDatabase.GetAssetPath(kv.Key);
+                    if (string.IsNullOrEmpty(assetPath)) continue;
+                    string guid = UnityEditor.AssetDatabase.AssetPathToGUID(assetPath);
+                    if (string.IsNullOrEmpty(guid)) continue;
+                    data.DeliveredMaterials.Add(new DeliveredMaterialEntryDTO
+                    {
+                        ItemAssetGuid = guid,
+                        Delivered = kv.Value
+                    });
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+                Debug.LogError($"<color=red>[BuildingSaveData:FromBuilding]</color> Failed to snapshot DeliveredMaterials for '{building.PrefabId}' (ID={building.BuildingId}). Snapshot left empty.");
+            }
+#endif
+
+            // Owner UUIDs (works for both Residential and Commercial).
+            // We read raw IDs (NOT Owners getter) so hibernated owners are preserved.
+            try
+            {
+                foreach (string id in building.OwnerIds)
+                {
+                    if (!string.IsNullOrEmpty(id))
+                        data.OwnerCharacterIds.Add(id);
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+            }
+
+            // Employees: only commercial buildings have a Jobs roster.
+            if (building is CommercialBuilding commercial)
+            {
+                foreach (var job in commercial.Jobs)
+                {
+                    if (job == null || !job.IsAssigned || job.Worker == null) continue;
+                    string workerId = job.Worker.CharacterId;
+                    if (string.IsNullOrEmpty(workerId)) continue;
+
+                    data.Employees.Add(new EmployeeSaveEntry
+                    {
+                        CharacterId = workerId,
+                        JobType = job.GetType().Name
+                    });
+                }
+            }
+
+            // Storage furniture contents — walk every StorageFurniture under this
+            // building (Building extends ComplexRoom, so GetFurnitureOfType recurses
+            // through every sub-room) and snapshot non-empty slots. Defensive per-slot
+            // try/catch: a single bad ItemInstance never blocks the whole save.
+            try
+            {
+                foreach (var storage in building.GetFurnitureOfType<StorageFurniture>())
+                {
+                    if (storage == null) continue;
+
+                    var entry = new StorageFurnitureSaveEntry
+                    {
+                        FurnitureKey = ComputeStorageFurnitureKey(storage, building.transform),
+                        Role = storage.Role,
+                    };
+
+                    var slots = storage.ItemSlots;
+                    if (slots != null)
+                    {
+                        for (int i = 0; i < slots.Count; i++)
+                        {
+                            var slot = slots[i];
+                            if (slot == null || slot.IsEmpty() || slot.ItemInstance == null) continue;
+                            var inst = slot.ItemInstance;
+                            if (inst.ItemSO == null) continue;
+
+                            string json;
+                            try
+                            {
+                                json = JsonUtility.ToJson(inst);
+                            }
+                            catch (Exception e)
+                            {
+                                Debug.LogException(e);
+                                Debug.LogError($"<color=red>[BuildingSaveData:FromBuilding]</color> Failed to serialize ItemInstance '{inst.ItemSO.ItemName}' at slot {i} on '{storage.name}' — entry skipped.");
+                                continue;
+                            }
+
+                            entry.Slots.Add(new StorageSlotSaveEntry
+                            {
+                                SlotIndex = i,
+                                ItemId = inst.ItemSO.ItemId,
+                                JsonData = json
+                            });
+                        }
+                    }
+
+                    // Always store the entry, even if Slots is empty — guarantees that
+                    // a previously stocked storage that was just emptied no longer has
+                    // stale items reappearing on the next load.
+                    data.StorageFurnitures.Add(entry);
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+            }
+
+            // Cashier furniture state (till balances + linkage) — same per-furniture try/catch
+            // policy as StorageFurnitures above (rule #31): one bad cashier never blocks the
+            // rest of the building's snapshot.
+            try
+            {
+                foreach (var cashier in building.GetFurnitureOfType<Cashier>())
+                {
+                    if (cashier == null) continue;
+                    try
+                    {
+                        var entry = new CashierSaveEntry
+                        {
+                            FurnitureKey = ComputeFurnitureKey(cashier, building.transform),
+                            Data = cashier.Serialize()
+                        };
+                        data.Cashiers.Add(entry);
+                    }
+                    catch (Exception eInner)
+                    {
+                        Debug.LogException(eInner);
+                        Debug.LogError($"<color=red>[BuildingSaveData:FromBuilding]</color> Failed to snapshot Cashier '{cashier.name}' on building '{building.BuildingName}' — entry skipped.");
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+            }
+
+            // ShopBuilding-only: snapshot the mutable catalog + sell-shelf flags. Lives on
+            // BuildingSaveData (not a subclass) because the world JSON serializer does not
+            // round-trip polymorphic types — see ShopCatalogEntrySaveEntry doc.
+            if (building is ShopBuilding shop)
+            {
+                try
+                {
+                    if (shop.Catalog != null)
+                    {
+                        foreach (var entry in shop.Catalog)
+                        {
+                            if (entry.Item == null) continue;
+                            data.ShopCatalog.Add(new ShopCatalogEntrySaveEntry
+                            {
+                                itemId = entry.Item.ItemId,
+                                maxStock = entry.MaxStock,
+                                priceOverride = entry.PriceOverride
+                            });
+                        }
+                    }
+                }
+                catch (Exception e)
+                {
+                    Debug.LogException(e);
+                    Debug.LogError($"<color=red>[BuildingSaveData:FromBuilding]</color> Failed to snapshot ShopCatalog for '{building.BuildingName}'.");
+                }
+
+                try
+                {
+                    if (shop.SellShelves != null)
+                    {
+                        foreach (var shelf in shop.SellShelves)
+                        {
+                            if (shelf == null) continue;
+                            string key = ComputeFurnitureKey(shelf, building.transform);
+                            if (!string.IsNullOrEmpty(key)) data.SellShelfFurnitureKeys.Add(key);
+                        }
+                    }
+                }
+                catch (Exception e)
+                {
+                    Debug.LogException(e);
+                    Debug.LogError($"<color=red>[BuildingSaveData:FromBuilding]</color> Failed to snapshot SellShelfFurnitureKeys for '{building.BuildingName}'.");
+                }
+            }
+
+            return data;
+        }
+
+        /// <summary>
+        /// <see cref="StorageFurniture"/>-typed back-compat wrapper. New call sites should use
+        /// <see cref="ComputeFurnitureKey(Furniture, Transform)"/> directly so any
+        /// <see cref="Furniture"/> subclass (Cashier, etc.) shares the same identity scheme.
+        /// </summary>
+        public static string ComputeStorageFurnitureKey(StorageFurniture storage, Transform buildingRoot)
+            => ComputeFurnitureKey(storage, buildingRoot);
+
+        /// <summary>
+        /// Composite key combining the furniture's <c>FurnitureItemSO.ItemId</c> with its
+        /// building-local position rounded to 2 decimals. Stable across layout reorders in
+        /// <c>_defaultFurnitureLayout</c> and supports multiple same-typed instances per building
+        /// (two crates of the same kind at different spots, two cashier counters, etc.).
+        ///
+        /// Falls back to the GameObject name when <see cref="Furniture.FurnitureItemSO"/> is
+        /// missing — e.g. test furniture authored outside the default-layout path. Per-locale
+        /// invariance is enforced via <see cref="System.Globalization.CultureInfo.InvariantCulture"/>
+        /// so saves round-trip identically regardless of host machine's regional settings.
+        /// </summary>
+        public static string ComputeFurnitureKey(Furniture furniture, Transform buildingRoot)
+        {
+            if (furniture == null) return string.Empty;
+
+            string idPart = furniture.FurnitureItemSO != null && !string.IsNullOrEmpty(furniture.FurnitureItemSO.ItemId)
+                ? furniture.FurnitureItemSO.ItemId
+                : furniture.name;
+
+            Vector3 local = buildingRoot != null
+                ? buildingRoot.InverseTransformPoint(furniture.transform.position)
+                : furniture.transform.localPosition;
+
+            var inv = System.Globalization.CultureInfo.InvariantCulture;
+            return string.Format(inv, "{0}@{1:F2},{2:F2},{3:F2}", idPart, local.x, local.y, local.z);
+        }
+    }
+
+    [Serializable]
+    public class BuildPermit
+    {
+        public string CharacterId;        // Who received the permit
+        public string GrantedByLeaderId;  // Which leader approved it
+        public int RemainingPlacements;   // How many buildings they can still place
+        public string MapId;              // Which zone this permit applies to
+    }
+
+    [Serializable]
+    public class PendingBuildingClaim
+    {
+        public string BuildingId;
+        public string OwnerCharacterId;
+        public int DayClaimed;            // Game day when claim was initiated
+        public int TimeoutDays = 7;       // Auto-claim after this many days
+    }
+
+    [Serializable]
+    public class ResourcePoolEntry
+    {
+        public string ResourceId;
+        public float CurrentAmount;
+        public float MaxAmount;             // Derived from HarvestableDensity * map area
+        public double LastHarvestedDay;     // For regeneration math
+    }
+
+    [Serializable]
+    public class CommunityData
+    {
+        public string MapId;
+        public int SlotIndex = -1; // -1 means no slot allocated yet
+        public CommunityTier Tier;
+
+        public Vector2Int OriginChunk;
+        /// <summary>
+        /// Exact world-space position where the MapController was spawned. Used on save/load
+        /// to respawn dynamic wild maps created via <see cref="MapRegistry.CreateMapAtPosition"/>.
+        /// For predefined (scene-authored) maps this stays Vector3.zero and is unused.
+        /// </summary>
+        public Vector3 SpawnPosition;
+        public string LeaderNpcId; // Primary leader UUID
+        public List<string> LeaderIds = new List<string>(); // All leaders (primary is first)
+
+        /// <summary>
+        /// Returns true if the given character ID is a recognized leader of this community.
+        /// </summary>
+        public bool IsLeader(string characterId)
+        {
+            if (string.IsNullOrEmpty(characterId)) return false;
+            return LeaderIds.Contains(characterId);
+        }
+
+        /// <summary>
+        /// Adds a leader to the community. If this is the first leader, also sets LeaderNpcId (primary).
+        /// </summary>
+        public void AddLeader(string characterId)
+        {
+            if (string.IsNullOrEmpty(characterId) || LeaderIds.Contains(characterId)) return;
+            LeaderIds.Add(characterId);
+            if (string.IsNullOrEmpty(LeaderNpcId))
+            {
+                LeaderNpcId = characterId;
+            }
+        }
+        
+        // Progression
+        public int DayStartedSustaining;
+        public int DayDroppedBelowThreshold = -1;
+
+        // Dynamic City Growth
+        public List<BuildingSaveData> ConstructedBuildings = new List<BuildingSaveData>();
+        public List<ResourcePoolEntry> ResourcePools = new List<ResourcePoolEntry>();
+
+        // Build Permits (granted by leaders to non-leaders)
+        public List<BuildPermit> BuildPermits = new List<BuildPermit>();
+
+        // Pending building claims (for buildings whose owner was absent at expansion time)
+        public List<PendingBuildingClaim> PendingBuildingClaims = new List<PendingBuildingClaim>();
+
+        public bool IsPredefinedMap;
+        [NonSerialized] public int CurrentDailyPopulation;
+        [NonSerialized] public bool IsHibernating;
+
+        /// <summary>
+        /// Grants a build permit allowing a character to place buildings in this zone.
+        /// </summary>
+        public void GrantPermit(string characterId, string leaderId, int count)
+        {
+            // Stack onto existing permit if one exists
+            var existing = BuildPermits.Find(p => p.CharacterId == characterId && p.MapId == MapId);
+            if (existing != null)
+            {
+                existing.RemainingPlacements += count;
+                return;
+            }
+
+            BuildPermits.Add(new BuildPermit
+            {
+                CharacterId = characterId,
+                GrantedByLeaderId = leaderId,
+                RemainingPlacements = count,
+                MapId = MapId
+            });
+        }
+
+        /// <summary>
+        /// Returns true if the character has an active build permit for this zone.
+        /// </summary>
+        public bool HasPermit(string characterId)
+        {
+            return BuildPermits.Exists(p => p.CharacterId == characterId && p.MapId == MapId && p.RemainingPlacements > 0);
+        }
+
+        /// <summary>
+        /// Consumes one placement from the character's permit. Returns true if successful.
+        /// </summary>
+        public bool ConsumePermit(string characterId)
+        {
+            var permit = BuildPermits.Find(p => p.CharacterId == characterId && p.MapId == MapId && p.RemainingPlacements > 0);
+            if (permit == null) return false;
+
+            permit.RemainingPlacements--;
+            if (permit.RemainingPlacements <= 0)
+            {
+                BuildPermits.Remove(permit);
+            }
+            return true;
+        }
+    }
+
+    [Serializable]
+    public class MapRegistrySaveData
+    {
+        public List<CommunityData> Communities = new List<CommunityData>();
+    }
+
+    /// <summary>
+    /// Server-side registry that tracks all CommunityData entries (one per map) and coordinates
+    /// building adoption + pending claim resolution. NPC-cluster auto-promotion has been removed;
+    /// map creation now happens explicitly via CreateMapAtPosition (building placement) or via
+    /// predefined map registration.
+    /// </summary>
+    public class MapRegistry : MonoBehaviour, ISaveable
+    {
+        public static MapRegistry Instance { get; private set; }
+
+        [SerializeField] private WorldSettingsData _settings;
+        [SerializeField] private GameObject _mapControllerPrefab;
+
+        [SerializeField] private List<CommunityData> _communities = new List<CommunityData>();
+
+        /// <summary>
+        /// Size (local extents) of the BoxCollider on the MapController prefab used for new
+        /// wild-map spawns. Used by <see cref="BuildingPlacementManager.ValidatePlacement"/>
+        /// to pre-check whether a new MapController would fit inside the target Region.
+        /// Returns Vector3.zero if the prefab or collider is unavailable.
+        /// </summary>
+        public Vector3 GetMapControllerPrefabSize()
+        {
+            if (_mapControllerPrefab == null)
+            {
+                _mapControllerPrefab = Resources.Load<GameObject>("Prefabs/World/MapController");
+            }
+            if (_mapControllerPrefab == null) return Vector3.zero;
+            var col = _mapControllerPrefab.GetComponent<BoxCollider>();
+            return col != null ? col.size : Vector3.zero;
+        }
+
+        /// <summary>
+        /// Finds the nearest exterior MapController whose center is within
+        /// <see cref="WorldSettingsData.MapMinSeparation"/> of <paramref name="worldPosition"/>
+        /// and lives in the same <see cref="Region"/>. Used by building placement to pick an
+        /// existing map to expand (envelop the new building) instead of spawning a new wild map.
+        /// Returns null if no such map exists → caller should fall back to CreateMapAtPosition.
+        /// </summary>
+        public MapController FindNearestMapInRegion(Vector3 worldPosition)
+        {
+            if (_settings == null) return null;
+            Region targetRegion = Region.GetRegionAtPosition(worldPosition);
+            float minSep = _settings.MapMinSeparation;
+            float bestSqr = minSep * minSep;
+            MapController best = null;
+
+            foreach (var m in UnityEngine.Object.FindObjectsByType<MapController>(FindObjectsSortMode.None))
+            {
+                if (m == null || m.Type == MapType.Interior) continue;
+                Region mapRegion = m.GetComponentInParent<Region>();
+                if (mapRegion != targetRegion) continue;
+                float sqr = (m.transform.position - worldPosition).sqrMagnitude;
+                if (sqr < bestSqr)
+                {
+                    bestSqr = sqr;
+                    best = m;
+                }
+            }
+            return best;
+        }
+
+        // IMPORTANT: Do not rename this literal. Save files on disk key on this string.
+        // See ADR-0001 (wiki/decisions/adr-0001-living-world-hierarchy-refactor.md).
+        public string SaveKey => "CommunityTracker_Data";
+
+        public CommunityData GetCommunity(string mapId)
+        {
+            return _communities.Find(c => c.MapId == mapId);
+        }
+
+        public void AddCommunity(CommunityData community)
+        {
+            if (GetCommunity(community.MapId) != null) return;
+            _communities.Add(community);
+        }
+
+        public IReadOnlyList<CommunityData> GetAllCommunities() => _communities;
+
+        /// <summary>
+        /// Server-only. Spawns a fresh exterior MapController centered on the given world position
+        /// and registers a matching CommunityData entry. Used by BuildingPlacementManager when a
+        /// building is placed outside any existing map and no nearby map can be joined.
+        /// </summary>
+        /// <returns>The newly spawned MapController, or null on failure.</returns>
+        public MapController CreateMapAtPosition(Vector3 worldPosition)
+        {
+            if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsServer)
+            {
+                Debug.LogError("<color=red>[MapRegistry:CreateMapAtPosition]</color> Must run on the server.");
+                return null;
+            }
+
+            if (_mapControllerPrefab == null)
+            {
+                _mapControllerPrefab = Resources.Load<GameObject>("Prefabs/World/MapController");
+                if (_mapControllerPrefab == null)
+                {
+                    Debug.LogError("<color=red>[MapRegistry:CreateMapAtPosition]</color> MapController prefab is not assigned and could not be loaded from Resources.");
+                    return null;
+                }
+            }
+
+            Region targetRegion = Region.GetRegionAtPosition(worldPosition);
+
+            float chunkSize = _settings != null ? _settings.ProximityChunkSize : 75f;
+            Vector2Int originChunk = new Vector2Int(
+                Mathf.FloorToInt(worldPosition.x / chunkSize),
+                Mathf.FloorToInt(worldPosition.z / chunkSize)
+            );
+
+            string mapId = $"Wild_{System.Guid.NewGuid().ToString("N").Substring(0, 8)}";
+            int slotIndex = WorldOffsetAllocator.Instance != null
+                ? WorldOffsetAllocator.Instance.AllocateSlotIndex()
+                : -1;
+            int currentDay = TimeManager.Instance != null ? TimeManager.Instance.CurrentDay : 0;
+
+            // Pre-register the CommunityData so MapController.Start() does not auto-create
+            // a RoamingCamp stub for this map. Tier is Settlement because a player (or NPC)
+            // actively founded it by placing a building.
+            CommunityData newCommunity = new CommunityData
+            {
+                MapId = mapId,
+                SlotIndex = slotIndex,
+                Tier = CommunityTier.Settlement,
+                OriginChunk = originChunk,
+                SpawnPosition = worldPosition,
+                DayStartedSustaining = currentDay,
+                IsPredefinedMap = false
+            };
+            AddCommunity(newCommunity);
+
+            GameObject mapObj;
+            try
+            {
+                mapObj = Instantiate(_mapControllerPrefab, worldPosition, Quaternion.identity);
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+                _communities.Remove(newCommunity);
+                return null;
+            }
+
+            MapController mapController = mapObj.GetComponent<MapController>();
+            if (mapController == null)
+            {
+                Debug.LogError("<color=red>[MapRegistry:CreateMapAtPosition]</color> Prefab is missing a MapController component.");
+                Destroy(mapObj);
+                _communities.Remove(newCommunity);
+                return null;
+            }
+
+            mapController.MapId = mapId;
+
+            // Wild maps are lean player-founded outposts — strip settlement-specific wiring
+            // from the prefab (Biome + JobYields) so MapController.SpawnVirtualBuildings
+            // (which iterates Biome.Harvestables to create VirtualResourceSupplier children)
+            // short-circuits on its `Biome == null` gate. If NPC logistics later moves in,
+            // a Biome can be assigned explicitly.
+            mapController.Biome = null;
+            mapController.JobYields = null;
+
+            NetworkObject netObj = mapObj.GetComponent<NetworkObject>();
+            if (netObj == null)
+            {
+                Debug.LogError("<color=red>[MapRegistry:CreateMapAtPosition]</color> Prefab is missing a NetworkObject component.");
+                Destroy(mapObj);
+                _communities.Remove(newCommunity);
+                return null;
+            }
+
+            try
+            {
+                netObj.Spawn();
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+                Destroy(mapObj);
+                _communities.Remove(newCommunity);
+                return null;
+            }
+
+            // Register with the containing Region so Region.Maps stays consistent, AND
+            // reparent under the Region transform via NGO-aware TrySetParent (Region is
+            // now a NetworkBehaviour with its own NetworkObject, so this parent change
+            // replicates cleanly to clients).
+            if (targetRegion != null)
+            {
+                targetRegion.RegisterMap(mapController);
+                bool parented = netObj.TrySetParent(targetRegion.transform, worldPositionStays: true);
+                if (!parented)
+                {
+                    Debug.LogWarning($"<color=yellow>[MapRegistry:CreateMapAtPosition]</color> NGO TrySetParent failed for map '{mapId}' under region '{targetRegion.ZoneId}'. Map remains at scene root but is still logically registered.");
+                }
+
+                // Shrink-to-fit: clamp the freshly-instantiated MapController's BoxCollider
+                // to the Region's bounds so it never leaks outside, even when spawned near
+                // a border. Tight Regions just get smaller maps.
+                var regionCol = targetRegion.GetComponent<BoxCollider>();
+                if (regionCol != null)
+                {
+                    mapController.ClampBoundsToRegion(regionCol.bounds);
+                }
+            }
+
+            Debug.Log($"<color=magenta>[MapRegistry:CreateMapAtPosition]</color> Wild map '{mapId}' spawned at {worldPosition} (slot={slotIndex}, chunk={originChunk}, region={(targetRegion != null ? targetRegion.ZoneId : "<open>")}).");
+            return mapController;
+        }
+
+        /// <summary>
+        /// Allows the recognized leader of a community to forcefully assign a job to a citizen.
+        /// </summary>
+        public bool ImposeJobOnCitizen(string mapId, string leaderId, Character citizen, Job job, CommercialBuilding building)
+        {
+            if (citizen == null || job == null || building == null) return false;
+
+            CommunityData comm = GetCommunity(mapId);
+            if (comm == null)
+            {
+                Debug.LogWarning($"<color=orange>[MapRegistry]</color> Cannot impose job. Map {mapId} not found.");
+                return false;
+            }
+
+            if (!comm.IsLeader(leaderId))
+            {
+                Debug.LogWarning($"<color=red>[MapRegistry]</color> Character {leaderId} is not a recognized leader of {mapId}. Cannot impose job.");
+                return false;
+            }
+
+            if (citizen.CharacterJob != null)
+            {
+                return citizen.CharacterJob.ForceAssignJob(job, building);
+            }
+            return false;
+        }
+
+        private void Awake()
+        {
+            if (Instance == null)
+            {
+                Instance = this;
+                transform.SetParent(null);
+                DontDestroyOnLoad(gameObject);
+            }
+            else
+            {
+                Destroy(gameObject);
+            }
+        }
+
+        private void Start()
+        {
+            if (_settings == null) _settings = Resources.Load<WorldSettingsData>("Data/World/WorldSettingsData");
+            if (_mapControllerPrefab == null) _mapControllerPrefab = Resources.Load<GameObject>("Prefabs/World/MapController");
+
+            // Defer ISaveable registration
+            Invoke(nameof(RegisterWithSaveManager), 0.5f);
+
+            if (TimeManager.Instance != null)
+            {
+                TimeManager.Instance.OnNewDay += HandleNewDay;
+            }
+        }
+
+        private void RegisterWithSaveManager()
+        {
+            if (SaveManager.Instance != null && NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer)
+            {
+                SaveManager.Instance.RegisterWorldSaveable(this);
+            }
+        }
+
+        private void OnDestroy()
+        {
+            if (SaveManager.Instance != null) SaveManager.Instance.UnregisterWorldSaveable(this);
+            if (TimeManager.Instance != null) TimeManager.Instance.OnNewDay -= HandleNewDay;
+        }
+
+        private void HandleNewDay()
+        {
+            if (!NetworkManager.Singleton.IsServer) return;
+            ProcessPendingBuildingClaims();
+        }
+
+        // ────────────────────── Building Adoption ──────────────────────
+
+        /// <summary>
+        /// Discovers existing buildings within the MapController's bounds and adopts them
+        /// into the community. Unowned buildings are auto-claimed. Owned buildings trigger
+        /// negotiation or are queued as pending claims if the owner is absent.
+        ///
+        /// PRESERVED API — currently has no caller after the Phase 1 cluster-promotion rip
+        /// (ADR-0001). It remains here because <see cref="CreateMapAtPosition"/> will invoke
+        /// it when a player-placed building triggers wild-map creation near existing
+        /// buildings. Do not delete without updating ADR-0001.
+        /// </summary>
+        private void AdoptExistingBuildings(MapController mapController, CommunityData comm)
+        {
+            if (mapController == null) return;
+
+            BoxCollider trigger = mapController.GetComponent<BoxCollider>();
+            if (trigger == null) return;
+
+            Collider[] colliders = Physics.OverlapBox(
+                trigger.bounds.center,
+                trigger.bounds.extents,
+                Quaternion.identity
+            );
+
+            int currentDay = TimeManager.Instance != null ? TimeManager.Instance.CurrentDay : 0;
+            HashSet<Building> processed = new HashSet<Building>();
+            int adoptedCount = 0;
+
+            foreach (var col in colliders)
+            {
+                Building building = col.GetComponent<Building>() ?? col.GetComponentInParent<Building>();
+                if (building == null || !processed.Add(building)) continue;
+
+                // Skip if already registered in any community
+                bool alreadyOwned = false;
+                foreach (var c in _communities)
+                {
+                    if (c.ConstructedBuildings.Exists(b => b.BuildingId == building.BuildingId))
+                    {
+                        alreadyOwned = true;
+                        break;
+                    }
+                }
+                if (alreadyOwned) continue;
+
+                string ownerId = building.PlacedByCharacterId.Value.ToString();
+
+                if (string.IsNullOrEmpty(ownerId))
+                {
+                    // No owner — auto-claim
+                    building.transform.SetParent(mapController.transform);
+                    comm.ConstructedBuildings.Add(BuildingSaveData.FromBuilding(building, mapController.transform.position));
+                    adoptedCount++;
+                }
+                else
+                {
+                    // Has an owner — try to negotiate or queue pending claim
+                    Character owner = Character.FindByUUID(ownerId);
+
+                    if (owner != null && owner.IsAlive())
+                    {
+                        // Owner is present — a leader will negotiate via invitation
+                        Character leader = FindLeaderCharacter(comm);
+                        if (leader != null)
+                        {
+                            var negotiation = new InteractionNegotiateBuildingClaim(building, comm, mapController);
+                            if (negotiation.CanExecute(leader, owner))
+                            {
+                                negotiation.Execute(leader, owner);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // Owner is absent — queue pending claim with timeout
+                        comm.PendingBuildingClaims.Add(new PendingBuildingClaim
+                        {
+                            BuildingId = building.BuildingId,
+                            OwnerCharacterId = ownerId,
+                            DayClaimed = currentDay,
+                            TimeoutDays = 7
+                        });
+                        Debug.Log($"<color=yellow>[MapRegistry]</color> Queued pending claim for building '{building.BuildingName}' (owner absent). Auto-claim in 7 days.");
+                    }
+                }
+            }
+
+            if (adoptedCount > 0)
+            {
+                Debug.Log($"<color=green>[MapRegistry]</color> Adopted {adoptedCount} unowned building(s) into Settlement '{comm.MapId}'.");
+            }
+        }
+
+        /// <summary>
+        /// Finds the live Character object for the primary leader of a community.
+        /// </summary>
+        private Character FindLeaderCharacter(CommunityData comm)
+        {
+            if (string.IsNullOrEmpty(comm.LeaderNpcId)) return null;
+            return Character.FindByUUID(comm.LeaderNpcId);
+        }
+
+        /// <summary>
+        /// Processes pending building claims across all communities.
+        /// Auto-claims buildings whose timeout has expired.
+        /// Attempts negotiation if the owner has returned.
+        /// </summary>
+        private void ProcessPendingBuildingClaims()
+        {
+            int currentDay = TimeManager.Instance != null ? TimeManager.Instance.CurrentDay : 0;
+
+            foreach (var comm in _communities)
+            {
+                if (comm.PendingBuildingClaims == null || comm.PendingBuildingClaims.Count == 0) continue;
+
+                MapController map = MapController.GetByMapId(comm.MapId);
+
+                for (int i = comm.PendingBuildingClaims.Count - 1; i >= 0; i--)
+                {
+                    var claim = comm.PendingBuildingClaims[i];
+
+                    // Check if the building was already claimed by other means
+                    if (comm.ConstructedBuildings.Exists(b => b.BuildingId == claim.BuildingId))
+                    {
+                        comm.PendingBuildingClaims.RemoveAt(i);
+                        continue;
+                    }
+
+                    // Auto-claim after timeout
+                    if (currentDay - claim.DayClaimed >= claim.TimeoutDays)
+                    {
+                        AutoClaimPendingBuilding(claim, comm, map);
+                        comm.PendingBuildingClaims.RemoveAt(i);
+                        continue;
+                    }
+
+                    // If the owner has returned, attempt negotiation
+                    Character owner = Character.FindByUUID(claim.OwnerCharacterId);
+                    if (owner != null && owner.IsAlive() && map != null)
+                    {
+                        Character leader = FindLeaderCharacter(comm);
+                        Building building = FindLiveBuildingById(claim.BuildingId);
+                        if (leader != null && building != null)
+                        {
+                            var negotiation = new InteractionNegotiateBuildingClaim(building, comm, map);
+                            if (negotiation.CanExecute(leader, owner))
+                            {
+                                negotiation.Execute(leader, owner);
+                                comm.PendingBuildingClaims.RemoveAt(i);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Auto-claims a building after the pending claim timeout expires.
+        /// </summary>
+        private void AutoClaimPendingBuilding(PendingBuildingClaim claim, CommunityData comm, MapController map)
+        {
+            Building building = FindLiveBuildingById(claim.BuildingId);
+            if (building == null)
+            {
+                Debug.LogWarning($"<color=orange>[MapRegistry]</color> Pending claim auto-expired but building '{claim.BuildingId}' no longer exists.");
+                return;
+            }
+
+            if (map != null)
+            {
+                building.transform.SetParent(map.transform);
+            }
+
+            comm.ConstructedBuildings.Add(BuildingSaveData.FromBuilding(building, map != null ? map.transform.position : Vector3.zero));
+            Debug.Log($"<color=green>[MapRegistry]</color> Auto-claimed building '{building.BuildingName}' into community '{comm.MapId}' (owner timeout).");
+        }
+
+        /// <summary>
+        /// Finds a live Building instance by its BuildingId across all spawned buildings.
+        /// </summary>
+        private Building FindLiveBuildingById(string buildingId)
+        {
+            if (BuildingManager.Instance == null) return null;
+            return BuildingManager.Instance.FindBuildingById(buildingId);
+        }
+
+        #region ISaveable Implementation
+
+        public object CaptureState()
+        {
+            return new MapRegistrySaveData
+            {
+                Communities = new List<CommunityData>(_communities)
+            };
+        }
+
+        public void RestoreState(object state)
+        {
+            if (state is MapRegistrySaveData data)
+            {
+                _communities = data.Communities ?? new List<CommunityData>();
+                // Legacy CommunityTrackerSaveData may have contained PendingClusters;
+                // those are silently discarded by JSON deserialization. Log so this is traceable.
+                Debug.Log($"<color=cyan>[MapRegistry:RestoreState]</color> Restored {_communities.Count} communities. Legacy cluster data (if any) discarded.");
+
+                // Dynamic wild maps (created via CreateMapAtPosition) live only as runtime
+                // GameObjects — the scene doesn't hold them. Respawn them now from the
+                // CommunityData snapshot. Deferred by 1.5s so scene-placed MapControllers
+                // have time to OnNetworkSpawn and register in _mapRegistry first — otherwise
+                // our "skip if MapId already exists" guard would miss them.
+                CancelInvoke(nameof(RespawnDynamicMapsDeferred));
+                Invoke(nameof(RespawnDynamicMapsDeferred), 1.5f);
+            }
+        }
+
+        /// <summary>
+        /// Server-only. Respawns MapControllers for every non-predefined community that
+        /// doesn't already have a live MapController in <see cref="MapController._mapRegistry"/>.
+        /// Used by <see cref="RestoreState"/> to recreate wild maps after a save/load cycle.
+        /// </summary>
+        private void RespawnDynamicMapsDeferred()
+        {
+            if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsServer) return;
+            if (_mapControllerPrefab == null)
+            {
+                _mapControllerPrefab = Resources.Load<GameObject>("Prefabs/World/MapController");
+                if (_mapControllerPrefab == null)
+                {
+                    Debug.LogError("<color=red>[MapRegistry:RespawnDynamicMaps]</color> MapController prefab not assigned — cannot respawn wild maps.");
+                    return;
+                }
+            }
+
+            int respawned = 0;
+            int skippedExisting = 0;
+            foreach (var comm in _communities)
+            {
+                if (comm == null || comm.IsPredefinedMap) continue;
+                if (string.IsNullOrEmpty(comm.MapId)) continue;
+
+                // Skip if a live MapController with this MapId already exists (scene-authored
+                // or already respawned).
+                if (MapController.GetByMapId(comm.MapId) != null)
+                {
+                    skippedExisting++;
+                    continue;
+                }
+
+                try
+                {
+                    GameObject mapObj = Instantiate(_mapControllerPrefab, comm.SpawnPosition, Quaternion.identity);
+                    MapController mapController = mapObj.GetComponent<MapController>();
+                    NetworkObject netObj = mapObj.GetComponent<NetworkObject>();
+                    if (mapController == null || netObj == null)
+                    {
+                        Debug.LogError($"<color=red>[MapRegistry:RespawnDynamicMaps]</color> Prefab is missing MapController or NetworkObject for '{comm.MapId}'.");
+                        Destroy(mapObj);
+                        continue;
+                    }
+
+                    mapController.MapId = comm.MapId;
+                    // Wild-map semantics — no Biome/JobYields (matches CreateMapAtPosition).
+                    mapController.Biome = null;
+                    mapController.JobYields = null;
+
+                    netObj.Spawn();
+
+                    // Re-establish Region parenting if the position falls inside an authored region.
+                    Region parentRegion = Region.GetRegionAtPosition(comm.SpawnPosition);
+                    if (parentRegion != null)
+                    {
+                        parentRegion.RegisterMap(mapController);
+                        netObj.TrySetParent(parentRegion.transform, worldPositionStays: true);
+                    }
+
+                    // Respawn the buildings saved in this community. GameLauncher only does this
+                    // for predefined maps on world load; dynamic wild maps need the call here.
+                    mapController.SpawnSavedBuildings();
+
+                    respawned++;
+                    int buildingCount = comm.ConstructedBuildings?.Count ?? 0;
+                    Debug.Log($"<color=green>[MapRegistry:RespawnDynamicMaps]</color> Respawned '{comm.MapId}' at {comm.SpawnPosition} (region={parentRegion?.ZoneId ?? "<open>"}, buildings={buildingCount}).");
+                }
+                catch (Exception e)
+                {
+                    Debug.LogException(e);
+                }
+            }
+
+            Debug.Log($"<color=cyan>[MapRegistry:RespawnDynamicMaps]</color> Done. Respawned={respawned}, SkippedExisting={skippedExisting}, TotalCommunities={_communities.Count}.");
+        }
+
+        #endregion
+    }
+}

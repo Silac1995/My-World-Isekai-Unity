@@ -27,7 +27,7 @@ public class UI_CharacterStats : UI_WindowBase
         StatType.Health, StatType.Stamina, StatType.Mana, StatType.Initiative,
         StatType.Strength, StatType.Agility, StatType.Dexterity, StatType.Intelligence, StatType.Endurance, StatType.Charisma,
         StatType.PhysicalPower, StatType.MagicalPower, StatType.Speed, StatType.Dodge, StatType.Accuracy, 
-        StatType.CastingSpeed, StatType.ManaRegen, StatType.StaminaRegen, StatType.CriticalChance
+        StatType.SpellCasting, StatType.CombatCasting, StatType.ManaRegen, StatType.StaminaRegen, StatType.CriticalChance
     };
 
     public void Initialize(Character character)

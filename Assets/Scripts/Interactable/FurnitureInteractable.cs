@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -8,9 +9,17 @@ using UnityEngine;
 public class FurnitureInteractable : InteractableObject
 {
     [SerializeField] private Furniture _furniture;
+    [SerializeField] private MWI.UI.Notifications.ToastNotificationChannel _toastChannel;
 
     public Furniture Furniture => _furniture;
-    public bool IsOccupied => _furniture != null && _furniture.IsOccupied;
+
+    /// <summary>
+    /// True only when the underlying furniture is <see cref="IOccupiable"/> AND a
+    /// character is currently bound. Non-occupiable furniture (sign, management desk,
+    /// storage) is never reported as "occupied" — they have no occupancy state to
+    /// query post the 2026-05-08 ISP refactor.
+    /// </summary>
+    public bool IsOccupied => _furniture is IOccupiable occ && occ.IsOccupied;
 
     protected virtual void Awake()
     {
@@ -22,14 +31,17 @@ public class FurnitureInteractable : InteractableObject
     {
         if (interactor == null || _furniture == null) return;
 
-        if (IsOccupied)
+        // Pre-flight guard for occupiable furniture only — non-occupiable types fall
+        // straight through to OnInteract.
+        if (_furniture is IOccupiable occ && occ.IsOccupied)
         {
-            Debug.Log($"<color=orange>[Furniture]</color> {_furniture.FurnitureName} est déjà occupé par {_furniture.Occupant.CharacterName}.");
+            Debug.Log($"<color=orange>[Furniture]</color> {_furniture.FurnitureName} est déjà occupé par {occ.Occupant.CharacterName}.");
             return;
         }
 
-        // Occuper le meuble
-        if (_furniture.Use(interactor))
+        // Universal dispatch — OccupiableFurniture.OnInteract delegates to Use();
+        // bespoke types (DisplayText / Management) override OnInteract directly.
+        if (_furniture.OnInteract(interactor))
         {
             OnFurnitureUsed(interactor);
         }
@@ -45,13 +57,46 @@ public class FurnitureInteractable : InteractableObject
     }
 
     /// <summary>
-    /// Libère le meuble et le personnage.
+    /// Libère le meuble et le personnage. No-op when the furniture isn't occupiable.
     /// </summary>
     public virtual void Release()
     {
-        if (_furniture != null)
+        if (_furniture is IOccupiable occ)
         {
-            _furniture.Release();
+            occ.Release();
         }
+    }
+
+    public override List<InteractionOption> GetHoldInteractionOptions(Character interactor)
+    {
+        var options = new List<InteractionOption>();
+
+        // "Pick Up" option — only for furniture that has a FurnitureItemSO assigned
+        if (_furniture != null && _furniture.FurnitureItemSO != null)
+        {
+            bool isDisabled = _furniture is IOccupiable occ && occ.IsOccupied;
+            var hands = interactor.CharacterVisual?.BodyPartsController?.HandsController;
+            if (hands != null && !hands.AreHandsFree()) isDisabled = true;
+
+            options.Add(new InteractionOption
+            {
+                Name = "Pick Up",
+                IsDisabled = isDisabled,
+                Action = () =>
+                {
+                    var action = new CharacterPickUpFurnitureAction(interactor, _furniture);
+                    if (!interactor.CharacterActions.ExecuteAction(action))
+                    {
+                        _toastChannel?.Raise(new MWI.UI.Notifications.ToastNotificationPayload(
+                            message: $"Cannot pick up {_furniture.FurnitureName}",
+                            type: MWI.UI.Notifications.ToastType.Warning,
+                            duration: 3f
+                        ));
+                    }
+                }
+            });
+        }
+
+        return options.Count > 0 ? options : null;
     }
 }

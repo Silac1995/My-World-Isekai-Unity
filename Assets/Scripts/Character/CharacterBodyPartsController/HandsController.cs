@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.U2D.Animation;
 
-public class HandsController : MonoBehaviour
+public class HandsController : MonoBehaviour, ICharacterSaveData<HandsSaveData>
 {
     [Header("References")]
     [SerializeField] private CharacterBodyPartsController _bodyPartsController;
@@ -18,6 +18,9 @@ public class HandsController : MonoBehaviour
     private ItemInstance _carriedItem;
     private GameObject _carriedVisual;
 
+    // Held by Deserialize when hands aren't initialized yet; consumed by Initialize.
+    private ItemInstance _pendingRestoreItem;
+
     public List<CharacterHand> Hands => _hands;
 
     /// <summary>Item actuellement porté dans les mains (null si rien)</summary>
@@ -26,6 +29,20 @@ public class HandsController : MonoBehaviour
     /// <summary>Le personnage porte-t-il un item ?</summary>
     public bool IsCarrying => _carriedItem != null;
 
+    /// <summary>
+    /// Clears the currently carried item without spawning a WorldItem (unlike CharacterDropItem).
+    /// Used by consume-from-hand flow (food, potion). The item is destroyed, not dropped.
+    /// </summary>
+    public void ClearCarriedItem()
+    {
+        _carriedItem = null;
+        if (_carriedVisual != null)
+        {
+            Destroy(_carriedVisual);
+            _carriedVisual = null;
+        }
+    }
+
     public void Initialize()
     {
         RetrieveHandObjects();
@@ -33,6 +50,15 @@ public class HandsController : MonoBehaviour
         // Auto-find Character si non assigné
         if (_character == null)
             _character = GetComponentInParent<Character>();
+
+        // If Deserialize ran before the visual hierarchy was ready, finish the
+        // carry-restore now that the hand bones exist.
+        if (_pendingRestoreItem != null)
+        {
+            ItemInstance toRestore = _pendingRestoreItem;
+            _pendingRestoreItem = null;
+            ApplyRestoredCarry(toRestore);
+        }
     }
 
     private void RetrieveHandObjects()
@@ -327,6 +353,132 @@ public class HandsController : MonoBehaviour
             col.enabled = false;
         }
 
+        // CRITICAL: strip the visual clone's NetworkObject + NetworkBehaviours.
+        //
+        // The WorldItem prefab carries a NetworkObject (used by real dropped instances).
+        // For the carried visual we never call Spawn() — but the clone is parented under
+        // the player's hand bone, which lives under the player's NetworkObject. NGO's
+        // SceneEventData.SortParentedNetworkObjects walks every spawned root NO's
+        // GetComponentsInChildren<NetworkObject>() during initial-sync to a late joiner,
+        // and Serialize NREs on this never-spawned NO at NetworkObject.cs:3172 because
+        // NetworkManagerOwner is null (never went through SpawnInternal). Symptom:
+        // host picks up a watering can → client cannot join until the host drops it.
+        //
+        // Order: NetworkBehaviours first, then NetworkObject (the latter has DisallowMultipleComponent
+        // editor metadata but DestroyImmediate at runtime is unconstrained). After this strip,
+        // _carriedVisual is a pure visual GameObject with no networking surface.
+        //
+        // See memory: feedback_no_networkobject_in_visual_clone.md
+        StripNetworkComponents(_carriedVisual);
+
         rightHand?.SetPose("fist");
     }
+
+    /// <summary>
+    /// Removes every NetworkBehaviour (including the Initialize-completed WorldItem) and
+    /// the NetworkObject from a visual-only clone. Used by AttachVisualToHand so the
+    /// carried-visual WorldItem prefab clone never poisons NGO's scene-sync child walk.
+    /// </summary>
+    private static void StripNetworkComponents(GameObject root)
+    {
+        if (root == null) return;
+        var behaviours = root.GetComponentsInChildren<Unity.Netcode.NetworkBehaviour>(true);
+        for (int i = 0; i < behaviours.Length; i++)
+        {
+            if (behaviours[i] != null) DestroyImmediate(behaviours[i]);
+        }
+        var netObjects = root.GetComponentsInChildren<Unity.Netcode.NetworkObject>(true);
+        for (int i = 0; i < netObjects.Length; i++)
+        {
+            if (netObjects[i] != null) DestroyImmediate(netObjects[i]);
+        }
+    }
+
+    // ================================================================
+    // === ICharacterSaveData IMPLEMENTATION ===
+    // ================================================================
+
+    public string SaveKey => "HandsController";
+
+    // Runs after CharacterEquipment (priority 30) so the weapon slot is restored
+    // first. AreHandsFree() then reflects the post-equip state correctly.
+    public int LoadPriority => 35;
+
+    public HandsSaveData Serialize()
+    {
+        var data = new HandsSaveData();
+
+        if (_carriedItem != null && _carriedItem.ItemSO != null)
+        {
+            data.carriedItemId = _carriedItem.ItemSO.ItemId;
+            data.carriedItemJson = JsonUtility.ToJson(_carriedItem);
+        }
+
+        return data;
+    }
+
+    public void Deserialize(HandsSaveData data)
+    {
+        // Always start from a clean slate so a save with empty hands clears any
+        // pre-load carry state (e.g. a default item placed during prefab spawn).
+        ClearCarriedItem();
+        _pendingRestoreItem = null;
+
+        if (data == null || string.IsNullOrEmpty(data.carriedItemId))
+            return;
+
+        ItemInstance restored;
+        try
+        {
+            ItemSO[] allItems = Resources.LoadAll<ItemSO>("Data/Item");
+            ItemSO so = System.Array.Find(allItems, match => match.ItemId == data.carriedItemId);
+            if (so == null)
+            {
+                Debug.LogWarning($"<color=orange>[HandsController.Deserialize]</color> ItemSO not found for id '{data.carriedItemId}'. Carried item will be lost.");
+                return;
+            }
+
+            restored = so.CreateInstance();
+            if (!string.IsNullOrEmpty(data.carriedItemJson))
+            {
+                JsonUtility.FromJsonOverwrite(data.carriedItemJson, restored);
+                restored.ItemSO = so;
+            }
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogError($"<color=red>[HandsController.Deserialize]</color> Failed to rebuild carried item '{data.carriedItemId}': {ex.Message}");
+            return;
+        }
+
+        // If hands haven't been scanned yet, defer the visual attach until Initialize().
+        if (_hands == null || _hands.Count == 0)
+        {
+            _pendingRestoreItem = restored;
+            if (_debugMode)
+                Debug.Log($"<color=cyan>[HandsController.Deserialize]</color> Hands not yet initialized — deferring carry restore for {restored.ItemSO.ItemName}.");
+            return;
+        }
+
+        ApplyRestoredCarry(restored);
+    }
+
+    /// <summary>
+    /// Restore a saved carry item, bypassing the AreHandsFree() weapon check
+    /// (the saved state is the source of truth at this point).
+    /// </summary>
+    private void ApplyRestoredCarry(ItemInstance item)
+    {
+        if (item == null) return;
+
+        _carriedItem = item;
+        AttachVisualToHand(item);
+
+        if (_debugMode)
+            Debug.Log($"<color=green>[HandsController.Deserialize]</color> Restored carry: {_character?.CharacterName} is holding {item.ItemSO.ItemName}.");
+    }
+
+    // Non-generic bridge (explicit interface impl)
+    string ICharacterSaveData.SerializeToJson() => CharacterSaveDataHelper.SerializeToJson(this);
+    void ICharacterSaveData.DeserializeFromJson(string json) => CharacterSaveDataHelper.DeserializeFromJson(this, json);
 }

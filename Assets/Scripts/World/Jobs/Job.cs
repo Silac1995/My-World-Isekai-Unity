@@ -76,6 +76,22 @@ public abstract class Job
     public abstract void Execute();
 
     /// <summary>
+    /// How often (in simulation seconds) <see cref="BTAction_Work.HandleWorking"/>
+    /// should call <see cref="Execute"/> for this job. Default is 0.1 s (matches the
+    /// BT tick rate, i.e. every BT tick — historical behaviour).
+    ///
+    /// Heavy-planning jobs (LogisticsManager, Harvester) override to a longer interval
+    /// to stagger GOAP planning + dispatcher work, since their per-tick logic is
+    /// idempotent on a stable state and the actual reactivity comes from the
+    /// underlying GOAP plan / event-driven dispatcher (see
+    /// wiki/projects/optimisation-backlog.md entry #2 / Cₐ + B).
+    ///
+    /// Time-sensitive jobs (Vendor for customer queue, Crafter for animation timing)
+    /// keep the default 0.1 s.
+    /// </summary>
+    public virtual float ExecuteIntervalSeconds => 0.1f;
+
+    /// <summary>
     /// Conditions pour que ce job puisse s'exécuter.
     /// Override dans les sous-classes pour ajouter des conditions spécifiques.
     /// </summary>

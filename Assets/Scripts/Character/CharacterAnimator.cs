@@ -72,20 +72,20 @@ public class CharacterAnimator : MonoBehaviour
     }
 
     /// <summary>
-    /// Force la synchronisation des paramètres essentiels (mort, combat, etc.)
-    /// Utile après un changement de Controller.
+    /// Forces synchronisation of essential parameters (dead, combat, etc.).
+    /// Useful after a Controller change.
     /// </summary>
     public void SyncParameters(Character character, bool isCombat)
     {
         if (_animator == null || character == null) return;
 
-        // On ré-applique l'état de vie/mort
+        // Re-apply the alive/dead state
         SetAnimBoolSafely(IsDead, !character.IsAlive());
-        
-        // On ré-applique l'état de combat
+
+        // Re-apply the combat state
         SetAnimBoolSafely(IsCombat, isCombat);
 
-        // On remet la vélocité à zéro si mort pour éviter de glisser dans la mauvaise anim
+        // Reset velocity to zero if dead to avoid sliding into the wrong anim
         if (!character.IsAlive())
         {
             StopLocomotion();

@@ -40,6 +40,13 @@ The project visualizes characters as 2D Sprites (Billboards) navigating a 3D X/Z
 - **Rule:** Uncheck/disable `updateRotation` on the `NavMeshAgent`. 
 - **Rule:** Do not allow the `NavMeshAgent` to rotate the physical `Transform` of the Character. Rotation must be handled manually by the `CharacterVisuals` system, which reads the `NavMeshAgent.velocity.x` to flip the sprite's `SpriteRenderer` left or right smoothly without physically re-orienting the 3D collider.
 
+## NavMeshObstacle sources
+
+- **Buildings**: `Building.cs` triggers a full `NavMeshSurface.BuildNavMesh()` rebake on spawn so building geometry is precisely included.
+- **WorldItems**: each carries a `NavMeshObstacle` (carve=true) enabled by the server on first ground contact, propagated to clients via `_obstacleActive` `NetworkVariable<bool>`. Items opt out via `ItemSO.BlocksPathing = false`. No global rebake — runtime carving only. See `.agent/skills/item_system/SKILL.md` for tuning details.
+
+If your agent is failing to path around an item: confirm the item's `ItemSO.BlocksPathing` is true and that `_obstacleActive` is true on the peer that owns the agent.
+
 ### 5. Integration with the Pathing System
 `NavMeshAgent` natively uses `NavMeshPathStatus.PathPartial` or `PathInvalid` to signal failure, but does not remember targets.
 - **Rule:** Never implement raw distance, bounding box checks, or path validation inside individual Movement/GOAP scripts.

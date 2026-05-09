@@ -3,8 +3,8 @@ using UnityEngine;
 namespace MWI.AI
 {
     /// <summary>
-    /// Condition : un ami ou coÃ©quipier est en combat et a besoin d'aide.
-    /// Reproduit la logique d'entraide de NPCController.HandleCharacterDetected().
+    /// Condition: a friend or teammate is in combat and needs help.
+    /// Reproduces the assist logic from NPCController.HandleCharacterDetected().
     /// </summary>
     public class BTCond_FriendInDanger : BTNode
     {
@@ -35,7 +35,9 @@ namespace MWI.AI
                     continue;
 
                 bool isFriend = self.CharacterRelation.IsFriend(target);
-                bool sameParty = self.CurrentParty != null && self.CurrentParty == target.CurrentParty;
+                bool sameParty = self.CharacterParty != null && self.CharacterParty.IsInParty
+                    && target.CharacterParty != null && target.CharacterParty.IsInParty
+                    && self.CharacterParty.PartyData.PartyId == target.CharacterParty.PartyData.PartyId;
 
                 // Loyalty trait
                 bool isAcquaintance = self.CharacterRelation.GetRelationshipWith(target)?.RelationValue >= 0;

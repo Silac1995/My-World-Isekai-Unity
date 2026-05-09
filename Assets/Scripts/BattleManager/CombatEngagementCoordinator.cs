@@ -6,6 +6,7 @@ public class CombatEngagementCoordinator
 {
     private BattleManager _manager;
     private List<CombatEngagement> _activeEngagements = new List<CombatEngagement>();
+    private Dictionary<Character, Character> _targetingGraph = new Dictionary<Character, Character>();
 
     public IReadOnlyList<CombatEngagement> ActiveEngagements => _activeEngagements;
 
@@ -14,9 +15,378 @@ public class CombatEngagementCoordinator
         _manager = manager;
     }
 
-    public void ClearAll()
+    // ───────────────────────────────────────────────
+    //  Targeting Graph API
+    // ───────────────────────────────────────────────
+
+    /// <summary>
+    /// Updates the targeting graph when a character changes targets.
+    /// Called by BattleManager.SetTargeting, which is invoked from CharacterCombat
+    /// and CombatAILogic when intent changes.
+    /// </summary>
+    public void SetTargeting(Character attacker, Character target)
     {
-        _activeEngagements.Clear();
+        if (attacker == null) return;
+
+        if (target == null)
+        {
+            _targetingGraph.Remove(attacker);
+        }
+        else
+        {
+            _targetingGraph[attacker] = target;
+        }
+    }
+
+    /// <summary>
+    /// Returns who this character is currently targeting, or null.
+    /// </summary>
+    public Character GetTargetOf(Character character)
+    {
+        if (character == null) return null;
+        _targetingGraph.TryGetValue(character, out Character target);
+        return target;
+    }
+
+    /// <summary>
+    /// Removes a character from the targeting graph entirely (both as attacker and as target).
+    /// Called when a character dies or leaves battle.
+    /// </summary>
+    public void RemoveFromGraph(Character character)
+    {
+        if (character == null) return;
+
+        // 1. Remove the dead character's own outgoing edge
+        _targetingGraph.Remove(character);
+
+        // 2. Clear targeting entries for characters that were targeting the dead one
+        //    They lose their stale target but remain in the graph for re-targeting next tick
+        var attackersToUpdate = _targetingGraph
+            .Where(kvp => kvp.Value == character)
+            .Select(kvp => kvp.Key)
+            .ToList();
+
+        foreach (var attacker in attackersToUpdate)
+        {
+            _targetingGraph.Remove(attacker);
+        }
+
+        // 3. Remove only the dead character from their engagement
+        //    Attackers' engagement status will be reconciled by the next EvaluateEngagements tick
+        LeaveCurrentEngagement(character);
+    }
+
+    // ───────────────────────────────────────────────
+    //  Core Algorithm — called once per battle tick
+    // ───────────────────────────────────────────────
+
+    /// <summary>
+    /// Evaluates the targeting graph and reconciles engagements.
+    /// Uses Union-Find to build connected components from mutual targeting pairs,
+    /// then joins one-way targeters into existing components.
+    /// </summary>
+    public void EvaluateEngagements()
+    {
+        // Snapshot the graph to avoid "collection modified during enumeration"
+        // (SetTargeting can be called indirectly during reconciliation)
+        var graphSnapshot = new Dictionary<Character, Character>(_targetingGraph);
+
+        // DEBUG: Log targeting graph state
+        if (graphSnapshot.Count > 0)
+        {
+            string graphStr = string.Join(" | ", graphSnapshot.Select(kvp => $"{kvp.Key?.CharacterName ?? "?"} -> {kvp.Value?.CharacterName ?? "?"}"));
+            Debug.Log($"<color=cyan>[Engagement]</color> Graph ({graphSnapshot.Count}): {graphStr}");
+        }
+
+        // Step 1: Find all mutual pairs (A targets B AND B targets A)
+        var mutualPairs = new HashSet<(Character, Character)>();
+        foreach (var kvp in graphSnapshot)
+        {
+            Character a = kvp.Key;
+            Character b = kvp.Value;
+            if (b != null && graphSnapshot.TryGetValue(b, out Character bTarget) && bTarget == a)
+            {
+                // Canonical ordering to avoid duplicate pairs
+                var pair = a.GetInstanceID() < b.GetInstanceID() ? (a, b) : (b, a);
+                mutualPairs.Add(pair);
+            }
+        }
+
+        // Step 2: Build connected components using Union-Find
+        // ONLY mutual pairs form the engagement seeds. One-way edges join
+        // you into your target's component but do NOT bridge separate mutual groups.
+        var unionFind = new Dictionary<Character, Character>();
+
+        // Seed with mutual pairs — each mutual pair is its own component
+        foreach (var (a, b) in mutualPairs)
+        {
+            EnsureInUnionFind(unionFind, a);
+            EnsureInUnionFind(unionFind, b);
+            Union(unionFind, a, b);
+        }
+
+        // Join edges: one-way targeters join their target's component.
+        // Only added if the attacker is NOT already part of a mutual pair
+        // (to avoid bridging two separate mutual-pair groups).
+        foreach (var kvp in graphSnapshot)
+        {
+            Character attacker = kvp.Key;
+            Character target = kvp.Value;
+
+            // Skip if attacker is already seeded (part of a mutual pair)
+            if (unionFind.ContainsKey(attacker)) continue;
+
+            // Only join if target is in a mutual-pair component
+            if (target != null && unionFind.ContainsKey(target))
+            {
+                EnsureInUnionFind(unionFind, attacker);
+                Union(unionFind, attacker, target);
+            }
+        }
+
+        // Step 3: Collect components by root
+        // Snapshot keys first — Find() uses path compression which modifies the dictionary
+        var allMembers = new List<Character>(unionFind.Keys);
+        var components = new Dictionary<Character, List<Character>>();
+        foreach (Character member in allMembers)
+        {
+            Character root = Find(unionFind, member);
+            if (!components.ContainsKey(root))
+                components[root] = new List<Character>();
+            components[root].Add(member);
+        }
+
+        // Step 4: Reconcile computed components against existing engagements
+        ReconcileEngagements(components);
+
+        // Step 5: Clean up empty or finished engagements
+        _activeEngagements.RemoveAll(e => e.IsFinished());
+
+        // Step 6: Separate overlapping engagements so they don't stack on top of each other
+        if (_activeEngagements.Count > 1)
+            SeparateEngagements();
+
+        // DEBUG: Log engagement state
+        if (mutualPairs.Count > 0 || _activeEngagements.Count > 0)
+        {
+            Debug.Log($"<color=cyan>[Engagement]</color> Mutuals: {mutualPairs.Count}, Components: {components.Count}, Active engagements: {_activeEngagements.Count}");
+        }
+    }
+
+    // ───────────────────────────────────────────────
+    //  Union-Find Helpers
+    // ───────────────────────────────────────────────
+
+    private void EnsureInUnionFind(Dictionary<Character, Character> uf, Character c)
+    {
+        if (!uf.ContainsKey(c))
+            uf[c] = c;
+    }
+
+    private Character Find(Dictionary<Character, Character> uf, Character c)
+    {
+        // Path compression
+        while (uf[c] != c)
+        {
+            uf[c] = uf[uf[c]];
+            c = uf[c];
+        }
+        return c;
+    }
+
+    private void Union(Dictionary<Character, Character> uf, Character a, Character b)
+    {
+        Character rootA = Find(uf, a);
+        Character rootB = Find(uf, b);
+        if (rootA != rootB)
+        {
+            uf[rootA] = rootB;
+        }
+    }
+
+    // ───────────────────────────────────────────────
+    //  Reconciliation
+    // ───────────────────────────────────────────────
+
+    /// <summary>
+    /// Compares computed connected components against existing engagements
+    /// and creates, merges, or syncs as needed.
+    /// </summary>
+    private void ReconcileEngagements(Dictionary<Character, List<Character>> components)
+    {
+        // Collect all characters that appear in any computed component
+        var handledCharacters = new HashSet<Character>();
+        foreach (var kvp in components)
+        {
+            foreach (var c in kvp.Value)
+                handledCharacters.Add(c);
+        }
+
+        foreach (var kvp in components)
+        {
+            List<Character> component = kvp.Value;
+            if (component.Count == 0) continue;
+
+            // Find all existing engagements that contain at least one member of this component
+            var overlapping = new List<CombatEngagement>();
+            foreach (var engagement in _activeEngagements)
+            {
+                bool hasOverlap = component.Any(c =>
+                    engagement.GroupA.Members.Contains(c) ||
+                    engagement.GroupB.Members.Contains(c));
+
+                if (hasOverlap)
+                    overlapping.Add(engagement);
+            }
+
+            if (overlapping.Count == 0)
+            {
+                // No existing engagement — create a new one
+                CreateEngagementForComponent(component);
+            }
+            else if (overlapping.Count == 1)
+            {
+                // Exactly one existing engagement — sync its members
+                SyncEngagementMembers(overlapping[0], component);
+            }
+            else
+            {
+                // Multiple existing engagements overlap this component — merge into the largest
+                CombatEngagement largest = overlapping.OrderByDescending(e =>
+                    e.GroupA.Members.Count + e.GroupB.Members.Count).First();
+
+                foreach (var other in overlapping)
+                {
+                    if (other == largest) continue;
+
+                    // Move all members from the smaller engagement to the largest
+                    var allMembers = other.GroupA.Members.Concat(other.GroupB.Members).ToList();
+                    foreach (var member in allMembers)
+                    {
+                        other.LeaveEngagement(member);
+                        largest.JoinEngagement(member);
+                    }
+
+                    // Remove the emptied engagement
+                    _activeEngagements.Remove(other);
+                }
+
+                // Now sync the merged engagement with the full component
+                SyncEngagementMembers(largest, component);
+            }
+        }
+
+        // Remove characters no longer in any component from their engagements
+        // This prevents stale engagements when both members stop targeting each other
+        foreach (var engagement in _activeEngagements)
+        {
+            var allMembers = engagement.GroupA.Members.Concat(engagement.GroupB.Members).ToList();
+            foreach (Character member in allMembers)
+            {
+                if (!handledCharacters.Contains(member))
+                    engagement.LeaveEngagement(member);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Creates a new engagement for a connected component of characters.
+    /// The component must contain characters from at least two opposing teams.
+    /// </summary>
+    private void CreateEngagementForComponent(List<Character> component)
+    {
+        // Determine the two teams present in this component
+        BattleTeam teamA = null;
+        BattleTeam teamB = null;
+
+        foreach (var character in component)
+        {
+            BattleTeam team = _manager.GetTeamOf(character);
+            if (team == null) continue;
+
+            if (teamA == null)
+            {
+                teamA = team;
+            }
+            else if (teamB == null && team != teamA)
+            {
+                teamB = team;
+                break;
+            }
+        }
+
+        // Need at least two opposing teams to form an engagement
+        if (teamA == null || teamB == null) return;
+
+        var engagement = new CombatEngagement(_manager, teamA, teamB);
+        foreach (var character in component)
+        {
+            engagement.JoinEngagement(character);
+        }
+
+        // Set anchor point at the midpoint between each team's center
+        Vector3 midpoint = CalculateMidpoint(component, teamA, teamB);
+        engagement.SetAnchorPoint(midpoint);
+
+        _activeEngagements.Add(engagement);
+
+        Debug.Log($"<color=cyan>[Engagement]</color> New engagement created with {component.Count} characters.");
+    }
+
+    /// <summary>
+    /// Syncs an existing engagement's members with the computed component.
+    /// Adds missing characters and removes characters that no longer belong.
+    /// </summary>
+    private void SyncEngagementMembers(CombatEngagement engagement, List<Character> component)
+    {
+        // Add characters that should be in this engagement but aren't
+        foreach (var character in component)
+        {
+            bool inGroupA = engagement.GroupA.Members.Contains(character);
+            bool inGroupB = engagement.GroupB.Members.Contains(character);
+
+            if (!inGroupA && !inGroupB)
+            {
+                engagement.JoinEngagement(character);
+            }
+        }
+
+        // Remove characters that are in the engagement but not in the component
+        var currentMembers = engagement.GroupA.Members
+            .Concat(engagement.GroupB.Members)
+            .ToList();
+
+        foreach (var member in currentMembers)
+        {
+            if (!component.Contains(member))
+            {
+                engagement.LeaveEngagement(member);
+            }
+        }
+    }
+
+    // ───────────────────────────────────────────────
+    //  Queries
+    // ───────────────────────────────────────────────
+
+    /// <summary>
+    /// Returns the engagement a character currently belongs to, or null.
+    /// Used by CombatAILogic and CombatTacticalPacer.
+    /// </summary>
+    public CombatEngagement GetEngagementOf(Character character)
+    {
+        if (character == null) return null;
+
+        foreach (var engagement in _activeEngagements)
+        {
+            if (engagement.GroupA.Members.Contains(character) ||
+                engagement.GroupB.Members.Contains(character))
+            {
+                return engagement;
+            }
+        }
+
+        return null;
     }
 
     public Character GetBestTargetFor(Character attacker)
@@ -27,7 +397,7 @@ public class CombatEngagementCoordinator
         BattleTeam opponentTeam = _manager.GetOpponentTeamOf(attacker);
         if (opponentTeam == null) return null;
 
-        List<Character> aliveEnemies = opponentTeam.CharacterList.Where(e => e != null && e.IsAlive()).ToList();
+        List<Character> aliveEnemies = opponentTeam.CharacterList.Where(e => e != null && e != attacker && e.IsAlive()).ToList();
         if (aliveEnemies.Count == 0) return null;
 
         List<Character> availableTargets = new List<Character>();
@@ -35,8 +405,8 @@ public class CombatEngagementCoordinator
 
         foreach (var enemy in aliveEnemies)
         {
-            CombatEngagement enemyEngagement = _activeEngagements.Find(e => e.GroupA.Members.Contains(enemy) || e.GroupB.Members.Contains(enemy));
-            
+            CombatEngagement enemyEngagement = GetEngagementOf(enemy);
+
             if (enemyEngagement == null || !enemyEngagement.IsFullFor(myTeam))
             {
                 availableTargets.Add(enemy);
@@ -52,7 +422,12 @@ public class CombatEngagementCoordinator
             return GetClosestFromList(attacker.transform.position, availableTargets);
         }
 
-        return fullTargets[Random.Range(0, fullTargets.Count)];
+        if (fullTargets.Count > 0)
+        {
+            return fullTargets[Random.Range(0, fullTargets.Count)];
+        }
+
+        return null;
     }
 
     private Character GetClosestFromList(Vector3 position, List<Character> characters)
@@ -71,129 +446,55 @@ public class CombatEngagementCoordinator
         return closest;
     }
 
-    public CombatEngagement RequestEngagement(Character attacker, Character target)
+    // ───────────────────────────────────────────────
+    //  Engagement Spatial Separation
+    // ───────────────────────────────────────────────
+
+    private const float MIN_ENGAGEMENT_SEPARATION = 12f; // Minimum distance between engagement anchors
+    private const float SEPARATION_PUSH_SPEED = 2f;      // How fast anchors push apart per tick
+
+    /// <summary>
+    /// Pushes engagement anchors apart so engagements don't visually overlap.
+    /// Uses simple pairwise repulsion: if two anchors are closer than MIN_ENGAGEMENT_SEPARATION,
+    /// they're pushed away from each other along the line between them.
+    /// </summary>
+    private void SeparateEngagements()
     {
-        if (target == null || attacker == null) return null;
-
-        LeaveCurrentEngagement(attacker);
-
-        CombatEngagement engagement = _activeEngagements.Find(e => 
-            e.GroupA.Members.Contains(target) || e.GroupB.Members.Contains(target)
-        );
-
-        BattleTeam attackerTeam = _manager.GetTeamOf(attacker);
-        BattleTeam targetTeam = _manager.GetTeamOf(target);
-
-        if (engagement == null)
+        for (int i = 0; i < _activeEngagements.Count; i++)
         {
-            float mergeDistance = 10f;
-            float bestDist = float.MaxValue;
-
-            foreach (var existing in _activeEngagements)
+            for (int j = i + 1; j < _activeEngagements.Count; j++)
             {
-                if (existing.TeamA != targetTeam && existing.TeamB != targetTeam) continue;
-                if (existing.IsFullFor(attackerTeam)) continue;
+                var engA = _activeEngagements[i];
+                var engB = _activeEngagements[j];
 
-                Vector3 engagementCenter = Vector3.zero;
-                bool hasCenter = false;
-                
-                if (existing.GroupA.TryGetCenter(out Vector3 centerA) && existing.GroupB.TryGetCenter(out Vector3 centerB))
-                {
-                    engagementCenter = (centerA + centerB) / 2f;
-                    hasCenter = true;
-                }
-                else if (existing.GroupA.TryGetCenter(out Vector3 cA))
-                {
-                    engagementCenter = cA;
-                    hasCenter = true;
-                }
-                else if (existing.GroupB.TryGetCenter(out Vector3 cB))
-                {
-                    engagementCenter = cB;
-                    hasCenter = true;
-                }
+                Vector3 anchorA = engA.AnchorPoint;
+                Vector3 anchorB = engB.AnchorPoint;
 
-                if (hasCenter)
+                float dist = Vector3.Distance(anchorA, anchorB);
+                if (dist < MIN_ENGAGEMENT_SEPARATION && dist > 0.01f)
                 {
-                    float dist = Vector3.Distance(target.transform.position, engagementCenter);
-                    if (dist < mergeDistance && dist < bestDist)
-                    {
-                        bestDist = dist;
-                        engagement = existing;
-                    }
+                    // Push apart along the line between anchors
+                    Vector3 dir = (anchorB - anchorA).normalized;
+                    float overlap = MIN_ENGAGEMENT_SEPARATION - dist;
+                    float pushAmount = Mathf.Min(overlap * 0.5f, SEPARATION_PUSH_SPEED);
+
+                    engA.SetAnchorPoint(anchorA - dir * pushAmount);
+                    engB.SetAnchorPoint(anchorB + dir * pushAmount);
+                }
+                else if (dist <= 0.01f)
+                {
+                    // Perfectly overlapping — push in a deterministic direction
+                    Vector3 offset = new Vector3(MIN_ENGAGEMENT_SEPARATION * 0.5f, 0, 0);
+                    engA.SetAnchorPoint(anchorA - offset);
+                    engB.SetAnchorPoint(anchorB + offset);
                 }
             }
         }
-
-        if (engagement == null)
-        {
-            if (targetTeam != null && attackerTeam != null)
-            {
-                engagement = new CombatEngagement(_manager, targetTeam, attackerTeam);
-                engagement.JoinEngagement(target); 
-                _activeEngagements.Add(engagement);
-            }
-        }
-
-        if (engagement != null)
-        {
-            engagement.JoinEngagement(attacker);
-            engagement.JoinEngagement(target);
-
-            if (engagement.NeedsSplit())
-            {
-                SplitEngagement(engagement);
-            }
-        }
-
-        return engagement;
     }
 
-    private void SplitEngagement(CombatEngagement originalEngagement)
-    {
-        if (originalEngagement == null) return;
-
-        CombatEngagement newEngagement = new CombatEngagement(_manager, originalEngagement.TeamA, originalEngagement.TeamB);
-        _activeEngagements.Add(newEngagement);
-
-        List<Character> groupAKeep = new List<Character>();
-        List<Character> groupAMove = new List<Character>();
-        for (int i = 0; i < originalEngagement.GroupA.Members.Count; i++)
-        {
-            if (i < originalEngagement.GroupA.Members.Count / 2)
-                groupAKeep.Add(originalEngagement.GroupA.Members[i]);
-            else
-                groupAMove.Add(originalEngagement.GroupA.Members[i]);
-        }
-
-        List<Character> groupBKeep = new List<Character>();
-        List<Character> groupBMove = new List<Character>();
-        for (int i = 0; i < originalEngagement.GroupB.Members.Count; i++)
-        {
-            if (i < originalEngagement.GroupB.Members.Count / 2)
-                groupBKeep.Add(originalEngagement.GroupB.Members[i]);
-            else
-                groupBMove.Add(originalEngagement.GroupB.Members[i]);
-        }
-
-        foreach (var c in groupAMove)
-        {
-            originalEngagement.LeaveEngagement(c);
-            newEngagement.JoinEngagement(c);
-        }
-        foreach (var c in groupBMove)
-        {
-            originalEngagement.LeaveEngagement(c);
-            newEngagement.JoinEngagement(c);
-        }
-
-        Debug.Log($"<color=cyan>[Battle]</color> Escarmouche trop grande : elle est divisée en deux.");
-
-        ForceRetarget(newEngagement);
-        ForceRetarget(originalEngagement);
-    }
-
-    private void ForceRetarget(CombatEngagement engagement) { }
+    // ───────────────────────────────────────────────
+    //  Lifecycle
+    // ───────────────────────────────────────────────
 
     public void LeaveCurrentEngagement(Character attacker)
     {
@@ -206,5 +507,40 @@ public class CombatEngagementCoordinator
     public void CleanupEngagements()
     {
         _activeEngagements.RemoveAll(e => e.IsFinished());
+    }
+
+    public void ClearAll()
+    {
+        _activeEngagements.Clear();
+        _targetingGraph.Clear();
+    }
+
+    // ───────────────────────────────────────────────
+    //  Helpers
+    // ───────────────────────────────────────────────
+
+    /// <summary>
+    /// Calculates the midpoint between two teams' centers of mass.
+    /// Uses per-team averaging to avoid bias toward the larger team in asymmetric fights.
+    /// </summary>
+    private Vector3 CalculateMidpoint(List<Character> members, BattleTeam teamA, BattleTeam teamB)
+    {
+        if (members == null || members.Count == 0) return Vector3.zero;
+
+        Vector3 sumA = Vector3.zero, sumB = Vector3.zero;
+        int countA = 0, countB = 0;
+
+        foreach (Character member in members)
+        {
+            if (member == null) continue;
+
+            BattleTeam team = _manager.GetTeamOf(member);
+            if (team == teamA) { sumA += member.transform.position; countA++; }
+            else { sumB += member.transform.position; countB++; }
+        }
+
+        Vector3 centerA = countA > 0 ? sumA / countA : Vector3.zero;
+        Vector3 centerB = countB > 0 ? sumB / countB : Vector3.zero;
+        return (centerA + centerB) / 2f;
     }
 }

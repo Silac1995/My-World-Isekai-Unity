@@ -6,6 +6,7 @@ public class CharacterStatusManager : CharacterSystem
     [Header("Automatic Effects")]
     [SerializeField] private CharacterStatusEffect _unconsciousEffect;
     [SerializeField] private CharacterStatusEffect _outOfCombatEffect;
+    [SerializeField] private CharacterStatusEffect _outOfBreathEffect;
 
     private List<CharacterStatusEffectInstance> _activeEffects = new List<CharacterStatusEffectInstance>();
     private List<CharacterStatusEffectInstance> _effectsToRemove = new List<CharacterStatusEffectInstance>();
@@ -50,16 +51,19 @@ public class CharacterStatusManager : CharacterSystem
             // We reached the max stacks. Replace the oldest instance with the new one.
             var oldestInstance = existingInstances[0];
             RemoveEffect(oldestInstance);
-            Debug.Log($"<color=cyan>[StatusManager]</color> Effet remplacé (Max stacks atteint) : {effectAsset.StatusEffectName} sur {_character.name}");
+            Debug.Log($"<color=cyan>[StatusManager]</color> Effect replaced (max stacks reached): {effectAsset.StatusEffectName} on {_character.name}");
         }
 
         var instance = new CharacterStatusEffectInstance(effectAsset, caster, _character);
         _activeEffects.Add(instance);
         instance.Apply();
         
-        Debug.Log($"<color=cyan>[StatusManager]</color> Effet appliqué : {effectAsset.StatusEffectName} sur {_character.name}");
+        Debug.Log($"<color=cyan>[StatusManager]</color> Effect applied: {effectAsset.StatusEffectName} on {_character.name}");
 
         OnStatusEffectAdded?.Invoke(instance);
+
+        // Passive trigger: OnStatusEffectApplied
+        _character.CharacterAbilities?.OnPassiveTriggerEvent(PassiveTriggerCondition.OnStatusEffectApplied, caster, _character);
     }
 
     public void RemoveEffect(CharacterStatusEffectInstance instance)
@@ -68,7 +72,7 @@ public class CharacterStatusManager : CharacterSystem
 
         if (_activeEffects.Remove(instance))
         {
-            Debug.Log($"<color=cyan>[StatusManager]</color> Effet retiré : {instance.StatusEffectName} sur {_character.name}");
+            Debug.Log($"<color=cyan>[StatusManager]</color> Effect removed: {instance.StatusEffectName} on {_character.name}");
             OnStatusEffectRemoved?.Invoke(instance);
             instance.Remove();
         }
@@ -110,7 +114,16 @@ public class CharacterStatusManager : CharacterSystem
 
         if (_character == null || _character.Stats == null) return;
 
-        // Seuil d'arrêt Regen Hors Combat : 50% de la vie max
+        // Out of Breath: remove when stamina fully recovers
+        if (_outOfBreathEffect != null && HasEffect(_outOfBreathEffect))
+        {
+            if (_character.Stats.Stamina != null && _character.Stats.Stamina.CurrentAmount >= _character.Stats.Stamina.MaxValue)
+            {
+                RemoveEffect(_outOfBreathEffect);
+            }
+        }
+
+        // Out-of-combat regen stop threshold: 50% of max health
         if (_outOfCombatEffect != null && HasEffect(_outOfCombatEffect))
         {
             if (_character.Stats.Health.CurrentAmount >= _character.Stats.Health.MaxValue * 0.5f)
@@ -119,7 +132,7 @@ public class CharacterStatusManager : CharacterSystem
             }
         }
 
-        // Seuil de réveil : 30% de la vie max. 
+        // Wake-up threshold: 30% of max health.
         if (_character.IsUnconscious && _character.Stats.Health.CurrentAmount >= _character.Stats.Health.MaxValue * 0.3f)
         {
             _character.WakeUp();
@@ -130,7 +143,7 @@ public class CharacterStatusManager : CharacterSystem
     {
         if (_character.IsUnconscious)
         {
-            // On n'applique la regen que si on n'est pas en combat (IsInBattle)
+            // Only apply regen if we're not in combat (IsInBattle)
             bool isInBattle = _character.CharacterCombat != null && _character.CharacterCombat.IsInBattle;
             
             if (!isInBattle && _unconsciousEffect != null && !HasEffect(_unconsciousEffect))
@@ -152,7 +165,7 @@ public class CharacterStatusManager : CharacterSystem
 
         bool isInBattle = _character.CharacterCombat != null && _character.CharacterCombat.IsInBattle;
         
-        // --- GESTION REGEN INCONSCIENT (SORTIE DE COMBAT) ---
+        // --- UNCONSCIOUS REGEN HANDLING (LEAVING COMBAT) ---
         if (!isInBattle && _character.IsUnconscious)
         {
              if (_unconsciousEffect != null && !HasEffect(_unconsciousEffect))
@@ -184,16 +197,25 @@ public class CharacterStatusManager : CharacterSystem
         }
     }
 
+    public void ApplyOutOfBreathEffect()
+    {
+        if (_outOfBreathEffect != null && !HasEffect(_outOfBreathEffect))
+        {
+            ApplyEffect(_outOfBreathEffect);
+            Debug.Log($"<color=cyan>[StatusManager]</color> {_character.CharacterName} is Out of Breath!");
+        }
+    }
+
     private void HandleBattleLeft()
     {
-        // Quand on quitte le combat (manager null), si on est inconscient, 
-        // on lance la regen IMMEDIATEMENT sans attendre les 7s de timeout du mode combat.
+        // When leaving combat (manager null), if we're unconscious,
+        // start regen IMMEDIATELY without waiting for the 7s combat-mode timeout.
         if (_character.IsUnconscious)
         {
             if (_unconsciousEffect != null && !HasEffect(_unconsciousEffect))
             {
                 ApplyEffect(_unconsciousEffect);
-                Debug.Log($"<color=cyan>[StatusManager]</color> Régénération lancée immédiatement après la fin du combat pour {_character.CharacterName}.");
+                Debug.Log($"<color=cyan>[StatusManager]</color> Regeneration started immediately after combat ended for {_character.CharacterName}.");
             }
         }
     }

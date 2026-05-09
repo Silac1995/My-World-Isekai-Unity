@@ -1,0 +1,605 @@
+using UnityEngine;
+using Unity.Netcode;
+using MWI.WorldSystem;
+using MWI.UI.Notifications;
+
+namespace MWI.WorldSystem
+{
+    /// <summary>
+    /// Handles the building placement lifecycle for any Character (Player or NPC).
+    /// For Player: drives the ghost visual, mouse-based positioning, and click-to-place.
+    /// Validation (range + obstacle) is shared so NPCs can reuse the same rules.
+    /// Server-authoritative: the actual building is spawned via ServerRpc.
+    /// </summary>
+    public class BuildingPlacementManager : CharacterSystem
+    {
+        [Header("Settings")]
+        [SerializeField] private LayerMask _groundLayer;
+        [SerializeField] private LayerMask _obstacleLayer;
+        [SerializeField] private Material _ghostMaterialValid;
+        [SerializeField] private Material _ghostMaterialInvalid;
+
+        [Header("Notifications")]
+        [SerializeField] private ToastNotificationChannel _toastChannel;
+
+        [SerializeField] private WorldSettingsData _settings;
+        private GameObject _ghostInstance;
+        private string _activePrefabId;
+        private Building _ghostBuildingComponent;
+        private bool _isPlacementActive;
+        private bool _isInstantMode;
+        private bool _permissionToastShown; // Prevents spamming toast every frame
+        private bool _outOfRegionToastShown; // Same spam-guard for the out-of-region toast
+
+        public bool IsPlacementActive => _isPlacementActive;
+
+        // ────────────────────── Initialization ──────────────────────
+
+        public void Initialize(Character character)
+        {
+            _character = character;
+
+            EnsureSettings();
+        }
+
+        public void SetSettings(WorldSettingsData settings)
+        {
+            _settings = settings;
+        }
+
+        /// <summary>
+        /// Toggles instant build mode. When enabled, placed buildings skip construction requirements.
+        /// </summary>
+        public void SetInstantMode(bool instant)
+        {
+            _isInstantMode = instant;
+        }
+
+        // ────────────────────── Placement Lifecycle ──────────────────────
+
+        public void StartPlacement(string prefabId)
+        {
+            // We only clear the ghost/selection to stay in building mode (keep UI open)
+            ClearGhost();
+            EnsureSettings();
+
+            if (_settings == null)
+            {
+                Debug.LogError("[BuildingPlacementManager] WorldSettingsData could not be loaded.");
+                return;
+            }
+
+            var entry = _settings.BuildingRegistry.Find(e => e.PrefabId == prefabId);
+            if (entry.BuildingPrefab == null)
+            {
+                Debug.LogWarning($"[BuildingPlacementManager] No prefab found for PrefabId '{prefabId}'.");
+                return;
+            }
+
+            _activePrefabId = prefabId;
+            _ghostInstance = Instantiate(entry.BuildingPrefab);
+            _ghostBuildingComponent = _ghostInstance.GetComponent<Building>();
+
+            // Disable physics on ghost — it's purely visual
+            // Disable colliders entirely instead of setting isTrigger (concave MeshColliders don't support triggers)
+            if (_ghostInstance.TryGetComponent(out Rigidbody rb)) rb.isKinematic = true;
+            foreach (var col in _ghostInstance.GetComponentsInChildren<Collider>()) col.enabled = false;
+
+            // Disable any NetworkObject on the ghost to prevent network errors
+            if (_ghostInstance.TryGetComponent(out NetworkObject netObj)) netObj.enabled = false;
+
+            // Move ghost to Ignore Raycast layer so its colliders don't interfere
+            // with the OverlapBox obstacle check (which includes the Building layer)
+            SetLayerRecursive(_ghostInstance, LayerMask.NameToLayer("Ignore Raycast"));
+
+            _ghostInstance.name = "PlacementGhost_" + prefabId;
+            _isPlacementActive = true;
+
+            // Force the ghost to preview the SCAFFOLD visual (UnderConstruction). The user is
+            // about to place a construction site, so showing the completed visual misleads.
+            // Direct toggle on the ghost — ApplyConstructionVisuals is private + state-driven.
+            ApplyGhostScaffoldPreview();
+
+            // Spawn a translucent footprint outline so the player can see where the BuildingZone
+            // will land. Updated each frame from UpdateGhostPosition.
+            CreateFootprintOutline();
+
+            // Ensure character state is set (in case it was started without the UI, though unlikely now)
+            if (_character != null && !_character.IsBuilding)
+                _character.SetBuildingState(true);
+
+            ApplyGhostMaterials(_ghostMaterialValid);
+        }
+
+        /// <summary>
+        /// Toggle the ghost's _constructionVisualRoot ON and _completedVisualRoot OFF so the
+        /// player previews the scaffolding (matches the actual UnderConstruction state the
+        /// building will spawn into). Falls back gracefully if the prefab doesn't author both
+        /// roots (older prefabs).
+        /// </summary>
+        private void ApplyGhostScaffoldPreview()
+        {
+            if (_ghostBuildingComponent == null) return;
+
+            // Use reflection so this stays decoupled from Building's protected SerializeFields.
+            var bType = typeof(Building);
+            var conField = bType.GetField("_constructionVisualRoot", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var cmpField = bType.GetField("_completedVisualRoot", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var conRoot = conField?.GetValue(_ghostBuildingComponent) as GameObject;
+            var cmpRoot = cmpField?.GetValue(_ghostBuildingComponent) as GameObject;
+
+            if (conRoot != null) conRoot.SetActive(true);
+            if (cmpRoot != null) cmpRoot.SetActive(false);
+        }
+
+        /// <summary>
+        /// Creates a translucent footprint outline child under the ghost matching the
+        /// BuildingZone BoxCollider's size. Visible only during placement.
+        /// </summary>
+        private void CreateFootprintOutline()
+        {
+            if (_ghostInstance == null || _ghostBuildingComponent == null) return;
+            if (!(_ghostBuildingComponent.BuildingZone is BoxCollider box)) return;
+
+            _footprintOutline = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            _footprintOutline.name = "PlacementFootprintOutline";
+            // Strip the box collider primitive Unity adds — purely visual.
+            var qCol = _footprintOutline.GetComponent<Collider>();
+            if (qCol != null) Destroy(qCol);
+            _footprintOutline.transform.SetParent(_ghostInstance.transform, worldPositionStays: false);
+            // Place at the BOTTOM face of the BuildingZone, lifted 0.02 to avoid Z-fight with the
+            // ground. box.center is in local space; the bottom is center.y - size.y * 0.5.
+            float bottomY = box.center.y - (box.size.y * 0.5f) + 0.02f;
+            _footprintOutline.transform.localPosition = new Vector3(box.center.x, bottomY, box.center.z);
+            _footprintOutline.transform.localRotation = Quaternion.Euler(90f, 0f, 0f); // lay flat (Quad faces +Z by default)
+            _footprintOutline.transform.localScale = new Vector3(box.size.x, box.size.z, 1f);
+            // Use the valid material as a tint hint; ApplyGhostMaterials below repaints both renderers.
+            // No new material asset required.
+        }
+
+        private GameObject _footprintOutline;
+
+        public void CancelPlacement()
+        {
+            ClearGhost();
+            
+            if (_character != null)
+                _character.SetBuildingState(false);
+        }
+
+        private void ClearGhost()
+        {
+            if (_ghostInstance != null)
+            {
+                Destroy(_ghostInstance);
+                _ghostInstance = null;
+            }
+            _isPlacementActive = false;
+            _activePrefabId = string.Empty;
+            _ghostBuildingComponent = null;
+            _permissionToastShown = false;
+        }
+
+        protected override void HandleIncapacitated(Character character)
+        {
+            base.HandleIncapacitated(character);
+            CancelPlacement();
+        }
+
+        protected override void HandleCombatStateChanged(bool inCombat)
+        {
+            base.HandleCombatStateChanged(inCombat);
+            if (inCombat)
+            {
+                CancelPlacement();
+            }
+        }
+
+        // ────────────────────── Frame Update (Player only) ──────────────────────
+
+        private void Update()
+        {
+            if (!_isPlacementActive || !IsOwner) return;
+
+            UpdateGhostPosition();
+            HandleInput();
+        }
+
+        private void UpdateGhostPosition()
+        {
+            if (_ghostInstance == null || Camera.main == null) return;
+
+            Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+            if (Physics.Raycast(ray, out RaycastHit hit, 100f, _groundLayer))
+            {
+                _ghostInstance.transform.position = hit.point;
+
+                bool insideRegion = IsInsideRegion(hit.point);
+                bool hasPermission = HasCommunityPlacementPermission(hit.point);
+                bool isValid = ValidatePlacement(hit.point);
+                ApplyGhostMaterials(isValid ? _ghostMaterialValid : _ghostMaterialInvalid);
+
+                // Toast: outside any Region takes precedence over permission toast.
+                if (!insideRegion && !_outOfRegionToastShown)
+                {
+                    _outOfRegionToastShown = true;
+                    _permissionToastShown = false;
+                    if (_toastChannel != null)
+                    {
+                        _toastChannel.Raise(new ToastNotificationPayload(
+                            message: "You can't build outside a Region. Move closer to a settlement or explored area.",
+                            type: ToastType.Warning,
+                            duration: 4f
+                        ));
+                    }
+                }
+                else if (insideRegion)
+                {
+                    _outOfRegionToastShown = false;
+
+                    if (!hasPermission && !_permissionToastShown)
+                    {
+                        _permissionToastShown = true;
+                        if (_toastChannel != null)
+                        {
+                            _toastChannel.Raise(new ToastNotificationPayload(
+                                message: "You don't have permission to build here. Ask a community leader for a Build Permit.",
+                                type: ToastType.Warning,
+                                duration: 4f
+                            ));
+                        }
+                    }
+                    else if (hasPermission)
+                    {
+                        _permissionToastShown = false;
+                    }
+                }
+            }
+        }
+
+        private void HandleInput()
+        {
+            // Left-Click: Confirm placement
+            if (Input.GetMouseButtonDown(0))
+            {
+                if (_ghostInstance != null && ValidatePlacement(_ghostInstance.transform.position))
+                {
+                    Debug.Log($"<color=magenta>[BuildingPlacementManager.Click]</color> sending placement RPC | _isInstantMode={_isInstantMode} prefab={_activePrefabId}");
+                    RequestPlacementServerRpc(
+                        _activePrefabId,
+                        _ghostInstance.transform.position,
+                        _ghostInstance.transform.rotation,
+                        _isInstantMode
+                    );
+                    // We call ClearGhost instead of CancelPlacement to keep the UI open
+                    ClearGhost();
+                }
+            }
+
+            // Right-Click: Cancel current selection but keep building mode active
+            if (Input.GetMouseButtonDown(1))
+            {
+                ClearGhost();
+            }
+
+            // Escape: Exit building mode completely
+            if (Input.GetKeyDown(KeyCode.Escape))
+            {
+                CancelPlacement();
+            }
+        }
+
+        // ────────────────────── Validation (shared with NPC systems) ──────────────────────
+
+        /// <summary>
+        /// Validates whether a building can be placed at the given position.
+        /// Checks range from the owning character and obstacle overlap.
+        /// This is intentionally public so NPC AI can call it directly.
+        /// </summary>
+        public bool ValidatePlacement(Vector3 position)
+        {
+            if (_character == null || _character.CharacterBlueprints == null) return false;
+
+            // 1. Range check — uses MaxPlacementRange from CharacterBlueprints
+            float dist = Vector3.Distance(_character.transform.position, position);
+            if (dist > _character.CharacterBlueprints.MaxPlacementRange) return false;
+
+            // 2. Obstacle overlap check using the building's zone collider
+            if (_ghostBuildingComponent != null && _ghostBuildingComponent.BuildingZone is BoxCollider box)
+            {
+                Vector3 center = _ghostInstance.transform.TransformPoint(box.center);
+                // Slightly smaller than real size to avoid false positives from grazing edges
+                Vector3 halfExtents = Vector3.Scale(box.size, _ghostInstance.transform.lossyScale) * 0.45f;
+
+                Collider[] overlaps = Physics.OverlapBox(center, halfExtents, _ghostInstance.transform.rotation, _obstacleLayer);
+                if (overlaps.Length > 0) return false;
+            }
+
+            // 3. Must be inside an authored Region. Buildings outside any Region are rejected —
+            //    every placement must land in a spatial scope that owns persistence and (future)
+            //    navmesh tiling.
+            if (!IsInsideRegion(position)) return false;
+
+            // 4. Community zone permission check
+            if (!HasCommunityPlacementPermission(position)) return false;
+
+            // MapController adapts to the placement — no fit / separation rejection:
+            //   * If the click is inside an existing map -> the building joins it.
+            //   * If the click is near a map in the same Region -> that map EXPANDS
+            //     to envelop the new building (handled in RegisterBuildingWithMap).
+            //   * If the click is far from all maps -> a new wild map is spawned and
+            //     CLAMPS to the Region's bounds (handled in MapRegistry.CreateMapAtPosition).
+            // Small / tight Regions just produce smaller maps. Nothing rejects here.
+
+            return true;
+        }
+
+        /// <summary>Public so NPC AI + server validation can reuse the same gate.</summary>
+        public static bool IsInsideRegion(Vector3 worldPosition)
+            => Region.GetRegionAtPosition(worldPosition) != null;
+
+        /// <summary>
+        /// Returns the building's footprint size (world-space, axis-aligned) used as a
+        /// margin when expanding the containing MapController. Falls back to a
+        /// conservative 10-unit default if the building has no BoxCollider-based zone.
+        /// </summary>
+        private static Vector3 GetBuildingFootprintSize(Building building)
+        {
+            if (building != null && building.BuildingZone is BoxCollider box)
+            {
+                return Vector3.Scale(box.size, building.transform.lossyScale);
+            }
+            return new Vector3(10f, 10f, 10f);
+        }
+
+        // ────────────────────── Visual Helpers ──────────────────────
+
+        private static void SetLayerRecursive(GameObject obj, int layer)
+        {
+            obj.layer = layer;
+            foreach (Transform child in obj.transform)
+                SetLayerRecursive(child.gameObject, layer);
+        }
+
+        private void ApplyGhostMaterials(Material mat)
+        {
+            if (mat == null || _ghostInstance == null) return;
+            foreach (var renderer in _ghostInstance.GetComponentsInChildren<Renderer>())
+            {
+                renderer.material = mat;
+            }
+        }
+
+        /// <summary>
+        /// Checks whether the placing character has permission to build inside a community zone.
+        /// Open world (no map) always returns true. Leaders and permit-holders are allowed.
+        /// </summary>
+        private bool HasCommunityPlacementPermission(Vector3 position)
+        {
+            MapController map = MapController.GetMapAtPosition(position);
+            if (map == null) return true; // Open world — no restriction
+
+            if (MapRegistry.Instance == null) return true;
+            CommunityData community = MapRegistry.Instance.GetCommunity(map.MapId);
+            if (community == null) return true; // Map with no community data — allow
+
+            // If the community has no leaders at all, there's no authority to deny placement
+            if (community.LeaderIds.Count == 0) return true;
+
+            string characterId = _character != null ? _character.CharacterId : "";
+
+            // Leaders can always place
+            if (community.IsLeader(characterId)) return true;
+
+            // Non-leaders need a build permit
+            if (community.HasPermit(characterId)) return true;
+
+            return false;
+        }
+
+        // ────────────────────── Server-Authoritative Spawn ──────────────────────
+
+        [ServerRpc]
+        private void RequestPlacementServerRpc(string prefabId, Vector3 position, Quaternion rotation, bool instant)
+        {
+            Debug.Log($"<color=magenta>[BuildingPlacementManager.SRpc]</color> prefabId={prefabId} instant={instant} pos={position}");
+
+            EnsureSettings();
+            if (_settings == null) return;
+
+            // Server-side out-of-Region re-validation (client already gates this but trust nothing).
+            if (!IsInsideRegion(position))
+            {
+                Debug.LogWarning($"<color=red>[BuildingPlacementManager]</color> Server rejected placement at {position}: outside any Region.");
+                return;
+            }
+
+            // Server-side permission re-validation
+            if (!HasCommunityPlacementPermission(position))
+            {
+                Debug.LogWarning($"<color=red>[BuildingPlacementManager]</color> Server rejected placement: no permission for community zone.");
+                return;
+            }
+
+            // Consume a build permit if applicable (leaders don't need permits)
+            MapController map = MapController.GetMapAtPosition(position);
+            if (map != null && MapRegistry.Instance != null && _character != null)
+            {
+                CommunityData community = MapRegistry.Instance.GetCommunity(map.MapId);
+                if (community != null && !community.IsLeader(_character.CharacterId))
+                {
+                    community.ConsumePermit(_character.CharacterId);
+                }
+            }
+
+            var entry = _settings.BuildingRegistry.Find(e => e.PrefabId == prefabId);
+            if (entry.BuildingPrefab == null) return;
+
+            GameObject buildingObj = Instantiate(entry.BuildingPrefab, position, rotation);
+
+            // Set PrefabId + PlacedByCharacterId BEFORE Spawn so the value is included in the
+            // initial NetworkVariable payload AND is observable inside Building.OnNetworkSpawn.
+            // Building.OnNetworkSpawn uses an empty PlacedByCharacterId to distinguish
+            // scene-authored buildings (which need a deterministic ID) from runtime-placed ones.
+            var placedBuilding = buildingObj.GetComponent<Building>();
+            if (placedBuilding != null)
+            {
+                placedBuilding.PrefabId = prefabId;
+                if (_character != null)
+                {
+                    placedBuilding.PlacedByCharacterId.Value = _character.CharacterId;
+                }
+            }
+
+            // Spawn on the network
+            var netObj = buildingObj.GetComponent<NetworkObject>();
+            if (netObj != null)
+            {
+                netObj.Spawn();
+            }
+            else
+            {
+                Debug.LogError($"[BuildingPlacementManager] Prefab for '{prefabId}' is missing a NetworkObject component! It will only exist on the Server/Host.");
+                // Destroy to prevent desync where host has a building that clients don't see
+                Destroy(buildingObj);
+                return;
+            }
+
+            // If instant mode, skip construction requirements
+            if (instant)
+            {
+                if (placedBuilding != null)
+                {
+                    placedBuilding.BuildInstantly();
+                }
+            }
+
+            // Register with MapController for hibernation persistence
+            RegisterBuildingWithMap(buildingObj, position);
+        }
+
+        /// <summary>
+        /// Finds the MapController containing the position, parents the building to it,
+        /// and adds it to the community's ConstructedBuildings for hibernation persistence.
+        /// </summary>
+        private void RegisterBuildingWithMap(GameObject buildingObj, Vector3 worldPosition)
+        {
+            Building building = buildingObj.GetComponent<Building>();
+            if (building == null) return;
+
+            // PlacedByCharacterId is now set BEFORE Spawn (see RequestPlacementServerRpc) so
+            // Building.OnNetworkSpawn can observe it. No need to set it again here.
+
+            Debug.Log($"<color=yellow>[BuildingPlacementManager:Register]</color> Trying to find MapController for building '{building.BuildingName}' at {worldPosition}.");
+
+            // 1. Is the placement inside the trigger bounds of an existing exterior map?
+            MapController map = MapController.GetMapAtPosition(worldPosition);
+
+            // 2. Bounds fallback — catches maps that GetMapAtPosition skips (e.g. registry lag).
+            if (map == null)
+            {
+                var allMaps = UnityEngine.Object.FindObjectsByType<MapController>(FindObjectsSortMode.None);
+                foreach (var m in allMaps)
+                {
+                    if (m == null || m.Type == MapType.Interior) continue;
+                    var col = m.GetComponent<BoxCollider>();
+                    if (col != null && col.bounds.Contains(worldPosition))
+                    {
+                        map = m;
+                        Debug.Log($"<color=yellow>[BuildingPlacementManager:Register]</color> Found map '{m.MapId}' via bounds fallback (Type={m.Type}).");
+                        break;
+                    }
+                }
+            }
+
+            // 3. No enclosing map yet. Placement is guaranteed inside a Region
+            //    (ValidatePlacement + server re-validate gates on IsInsideRegion).
+            //    Prefer to EXPAND a nearby existing map (same region, within MinSep) to envelop
+            //    this new building — keeps communities contiguous and avoids spawning
+            //    many micro-maps. Otherwise, spawn a new wild map (shrink-to-fit clamped by
+            //    Region bounds, handled inside CreateMapAtPosition).
+            if (map == null)
+            {
+                Region parentRegion = Region.GetRegionAtPosition(worldPosition);
+                if (parentRegion == null || MapRegistry.Instance == null)
+                {
+                    // Should be impossible (validation gate above), but fail safely.
+                    Debug.LogError($"<color=red>[BuildingPlacementManager:Register]</color> Reached RegisterBuildingWithMap with no parent Region for '{building.BuildingName}' at {worldPosition}. ValidatePlacement was bypassed.");
+                    return;
+                }
+
+                // 3a. Prefer expanding a nearby same-region map over spawning a new one.
+                MapController nearby = MapRegistry.Instance.FindNearestMapInRegion(worldPosition);
+                if (nearby != null)
+                {
+                    var regionCol = parentRegion.GetComponent<BoxCollider>();
+                    if (regionCol != null)
+                    {
+                        Vector3 footprint = GetBuildingFootprintSize(building);
+                        nearby.ExpandBoundsToInclude(worldPosition, footprint, regionCol.bounds);
+                    }
+                    map = nearby;
+                    Debug.Log($"<color=yellow>[BuildingPlacementManager:Register]</color> Expanded existing map '{nearby.MapId}' to envelop '{building.BuildingName}' at {worldPosition}.");
+                }
+                else
+                {
+                    // 3b. Spawn a new wild map, clamped to the Region.
+                    Debug.Log($"<color=yellow>[BuildingPlacementManager:Register]</color> Inside Region '{parentRegion.ZoneId}' with no nearby map. Creating a new wild map at {worldPosition}.");
+                    try
+                    {
+                        map = MapRegistry.Instance.CreateMapAtPosition(worldPosition);
+                    }
+                    catch (System.Exception e)
+                    {
+                        Debug.LogException(e);
+                    }
+                }
+            }
+
+            if (map == null)
+            {
+                Debug.LogWarning($"<color=yellow>[BuildingPlacementManager:Register]</color> Failed to find or create a MapController for building '{building.BuildingName}' at {worldPosition}. Building will not survive hibernation.");
+                return;
+            }
+
+            Debug.Log($"<color=green>[BuildingPlacementManager:Register]</color> Building '{building.BuildingName}' registered with map '{map.MapId}'.");
+
+            // Parent to the MapController (must be a NetworkObject for NGO parenting rules)
+            buildingObj.transform.SetParent(map.transform);
+
+            // Add to CommunityData.ConstructedBuildings
+            if (MapRegistry.Instance != null)
+            {
+                CommunityData community = MapRegistry.Instance.GetCommunity(map.MapId);
+                if (community != null)
+                {
+                    if (!community.ConstructedBuildings.Exists(b => b.BuildingId == building.BuildingId))
+                    {
+                        var saveData = BuildingSaveData.FromBuilding(building, map.transform.position);
+                        community.ConstructedBuildings.Add(saveData);
+                        Debug.Log($"<color=green>[BuildingPlacementManager]</color> Building '{building.BuildingName}' registered with map '{map.MapId}'. Total buildings: {community.ConstructedBuildings.Count}");
+                    }
+                }
+                else
+                {
+                    Debug.LogWarning($"<color=orange>[BuildingPlacementManager]</color> MapController '{map.MapId}' has no CommunityData. Building will not survive hibernation.");
+                }
+            }
+        }
+
+        // ────────────────────── Utilities ──────────────────────
+
+        private void EnsureSettings()
+        {
+            if (_settings == null)
+            {
+                _settings = Resources.Load<WorldSettingsData>("Data/World/WorldSettingsData");
+            }
+        }
+
+        private void OnDestroy()
+        {
+            CancelPlacement();
+        }
+    }
+}

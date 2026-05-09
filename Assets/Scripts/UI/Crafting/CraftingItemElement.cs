@@ -5,7 +5,7 @@ using TMPro;
 namespace MWI.UI.Crafting
 {
     /// <summary>
-    /// Script attaché au prefab UI d'un item craftable (une ligne/un bouton dans la fenêtre).
+    /// Script attached to the UI prefab of a craftable item (one row/button inside the window).
     /// </summary>
     public class CraftingItemElement : MonoBehaviour
     {
@@ -39,7 +39,7 @@ namespace MWI.UI.Crafting
         }
 
         /// <summary>
-        /// Initialise l'élément UI avec les données de l'item à crafter.
+        /// Initializes the UI element with the data of the item to craft.
         /// </summary>
         public void Initialize(ItemSO item, CraftingStation station, Character user)
         {
@@ -52,10 +52,10 @@ namespace MWI.UI.Crafting
                 if (_itemNameText != null) _itemNameText.text = _itemSO.ItemName;
                 if (_itemIcon != null) _itemIcon.sprite = _itemSO.Icon;
 
-                // 1. Vérifie si la station de craft est compatible 
+                // 1. Check whether the crafting station is compatible
                 bool canCraft = _station.CanCraft(_itemSO);
 
-                // 2. Vérifie si le personnage possède les compétences nécessaires
+                // 2. Check whether the character has the required skills
                 if (canCraft && _itemSO.RequiredCraftingSkill != null)
                 {
                     if (_user.CharacterSkills == null || !_user.CharacterSkills.HasRequiredSkillLevel(_itemSO.RequiredCraftingSkill, _itemSO.RequiredCraftingLevel))
@@ -65,13 +65,13 @@ namespace MWI.UI.Crafting
                     }
                 }
 
-                // 3. (Futur) Vérifie les ingrédients de la recette dans l'inventaire
+                // 3. (Future) Check the recipe ingredients in the inventory
                 // if (canCraft)
                 // {
                 //     foreach (var ingredient in _itemSO.CraftingRecipe) ...
                 // }
 
-                // Active ou désactive le bouton en fonction des autorisations (Station, Stats, Ingrédients)
+                // Enable or disable the button based on the authorisations (Station, Stats, Ingredients)
                 if (_craftButton != null)
                 {
                     _craftButton.interactable = canCraft;
@@ -80,19 +80,19 @@ namespace MWI.UI.Crafting
         }
 
         /// <summary>
-        /// Appelé quand le joueur clique sur le bouton "Craft".
+        /// Called when the player clicks the "Craft" button.
         /// </summary>
         private void OnCraftButtonClicked()
         {
             if (_station == null || _itemSO == null) return;
 
-            // Déclenche le craft via le système d'actions centralisé
+            // Trigger the craft via the centralized action system
             if (_user != null && _user.CharacterActions != null)
             {
                 _user.CharacterActions.ExecuteAction(new CharacterCraftAction(_user, _itemSO, _primaryColor, _secondaryColor));
             }
 
-            // TODO : Ajouter un son, un flash visuel, ou désactiver le bouton le temps de l'animation
+            // TODO: Add a sound, a visual flash, or disable the button for the duration of the animation
         }
     }
 }

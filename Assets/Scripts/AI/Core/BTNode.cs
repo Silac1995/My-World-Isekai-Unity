@@ -1,30 +1,30 @@
 namespace MWI.AI
 {
     /// <summary>
-    /// Classe abstraite de base pour tous les noeuds du Behaviour Tree.
-    /// Gère le lifecycle Enter/Execute/Exit automatiquement.
+    /// Abstract base class for all Behaviour Tree nodes.
+    /// Handles the Enter/Execute/Exit lifecycle automatically.
     /// </summary>
     public abstract class BTNode
     {
         private bool _isRunning = false;
 
         /// <summary>
-        /// Appelé une seule fois quand le node commence à s'exécuter.
+        /// Called once when the node starts executing.
         /// </summary>
         protected virtual void OnEnter(Blackboard bb) { }
 
         /// <summary>
-        /// Appelé quand le node s'arrête (succès, échec, ou interruption).
+        /// Called when the node stops (success, failure, or interruption).
         /// </summary>
         protected virtual void OnExit(Blackboard bb) { }
 
         /// <summary>
-        /// Logique principale du node. Retourne Running, Success, ou Failure.
+        /// Main node logic. Returns Running, Success, or Failure.
         /// </summary>
         protected abstract BTNodeStatus OnExecute(Blackboard bb);
 
         /// <summary>
-        /// Point d'entrée principal. Gère automatiquement OnEnter/OnExit.
+        /// Main entry point. Handles OnEnter/OnExit automatically.
         /// </summary>
         public BTNodeStatus Execute(Blackboard bb)
         {
@@ -46,7 +46,7 @@ namespace MWI.AI
         }
 
         /// <summary>
-        /// Force l'arrêt du node (ex: quand un Selector change de branche).
+        /// Forces the node to stop (e.g. when a Selector switches branches).
         /// </summary>
         public void Abort(Blackboard bb)
         {

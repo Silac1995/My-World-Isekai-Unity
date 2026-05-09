@@ -21,11 +21,34 @@ public class JobHarvester : Job
     public override JobCategory Category => JobCategory.Harvester;
     public override JobType Type => _jobType;
 
+    // Heavy-planning job: GOAP plan + per-tick task scans against the building's
+    // BuildingTaskManager. Reactivity comes from the GOAP plan itself (which still
+    // ticks per-frame inside CharacterMovement / CharacterActions); 3.3 Hz here is
+    // plenty for the planning layer. See wiki/projects/optimisation-backlog.md
+    // entry #2 / Cₐ.
+    public override float ExecuteIntervalSeconds => 0.3f;
+
     // GOAP
     private GoapGoal _harvestGoal;
     private List<GoapAction> _availableActions;
+    // Pre-filtered subset of _availableActions where IsValid(worker) is true at planning time.
+    // GoapPlanner.Plan does NOT call IsValid — it only matches Preconditions/Effects against the
+    // world-state dict and picks the lowest-cost chain. Without this filter, two actions with
+    // identical Preconditions+Effects but different Cost (e.g. HarvestResources@1 vs
+    // DestroyHarvestable@5) make the planner always pick the cheaper one, even when its IsValid
+    // returns false (no claimable HarvestResourceTask). The action then completes immediately in
+    // Execute → planner replans → picks it again → infinite Idle/HarvestResources loop. Mirrors
+    // JobLogisticsManager._scratchValidActions.
+    private List<GoapAction> _scratchValidActions = new List<GoapAction>(6);
     private Queue<GoapAction> _currentPlan;
     private GoapAction _currentAction;
+
+    // Per-tick allocation pool (see PlanNextActions). Without these, each tick allocated a
+    // new worldState dict, a new List of 5 new GoapAction objects, and two new GoapGoal instances
+    // with their own dicts — a dominant GC source under heavy worker load.
+    private readonly Dictionary<string, bool> _scratchWorldState = new Dictionary<string, bool>(6);
+    private GoapGoal _cachedIdleGoal;
+    private GoapGoal _cachedHarvestAndDepositGoal;
 
     public override string CurrentActionName => _currentAction != null ? _currentAction.ActionName : "Planning / Idle";
     public override string CurrentGoalName => _harvestGoal != null ? _harvestGoal.GoalName : "No Goal";
@@ -50,7 +73,8 @@ public class JobHarvester : Job
             // Vérifier que l'action est encore valide
             if (!_currentAction.IsValid(_worker))
             {
-                Debug.Log($"<color=orange>[JobHarvester]</color> {_worker.CharacterName} : action {_currentAction.ActionName} invalide, replanification...");
+                if (NPCDebug.VerboseJobs)
+                    Debug.Log($"<color=orange>[JobHarvester]</color> {_worker.CharacterName} : action {_currentAction.ActionName} invalide, replanification...");
                 _currentAction.Exit(_worker);
                 _currentAction = null;
                 _currentPlan = null;
@@ -61,7 +85,8 @@ public class JobHarvester : Job
 
             if (_currentAction.IsComplete)
             {
-                Debug.Log($"<color=cyan>[JobHarvester]</color> {_worker.CharacterName} : action {_currentAction.ActionName} terminée.");
+                if (NPCDebug.VerboseJobs)
+                    Debug.Log($"<color=cyan>[JobHarvester]</color> {_worker.CharacterName} : action {_currentAction.ActionName} terminée.");
                 _currentAction.Exit(_worker);
                 _currentAction = null;
 
@@ -158,67 +183,100 @@ public class JobHarvester : Job
                 return interactable != null && !_worker.PathingMemory.IsBlacklisted(interactable.gameObject.GetInstanceID());
             });
 
-            canHarvest = building.TaskManager.HasAvailableOrClaimedTask<HarvestResourceTask>(_worker, task => 
+            canHarvest = building.TaskManager.HasAvailableOrClaimedTask<HarvestResourceTask>(_worker, task =>
             {
                 var interactable = task.Target as Harvestable;
                 if (interactable == null || _worker.PathingMemory.IsBlacklisted(interactable.gameObject.GetInstanceID())) return false;
-                
-                return interactable.HasAnyOutput(building.GetWantedItems());
+                return interactable.HasAnyYieldOutput(building.GetWantedItems());
             });
 
-            hasValidHarvestTasks = building.TaskManager.HasAnyTaskOfType<HarvestResourceTask>(task => 
+            // Also count destroy tasks — without this, a building whose only sources of
+            // wanted items are destruction-only nodes (e.g. apple trees that drop wood on
+            // chop) would have hasValidHarvestTasks = false, the planner would pick Idle,
+            // and workers would never start the destroy chain. The DestroyHarvestableTask's
+            // own IsValid check still gates on AllowNpcDestruction so designer opt-out works.
+            bool canDestroy = building.TaskManager.HasAvailableOrClaimedTask<DestroyHarvestableTask>(_worker, task =>
             {
                 var interactable = task.Target as Harvestable;
-                return interactable != null && interactable.HasAnyOutput(building.GetWantedItems());
+                if (interactable == null || _worker.PathingMemory.IsBlacklisted(interactable.gameObject.GetInstanceID())) return false;
+                if (!interactable.AllowDestruction || !interactable.AllowNpcDestruction) return false;
+                return interactable.HasAnyDestructionOutput(building.GetWantedItems());
             });
+            canHarvest = canHarvest || canDestroy;
+
+            bool hasValidYieldTasks = building.TaskManager.HasAnyTaskOfType<HarvestResourceTask>(task =>
+            {
+                var interactable = task.Target as Harvestable;
+                return interactable != null && interactable.HasAnyYieldOutput(building.GetWantedItems());
+            });
+            bool hasValidDestroyTasks = building.TaskManager.HasAnyTaskOfType<DestroyHarvestableTask>(task =>
+            {
+                var interactable = task.Target as Harvestable;
+                return interactable != null
+                    && interactable.AllowDestruction
+                    && interactable.AllowNpcDestruction
+                    && interactable.HasAnyDestructionOutput(building.GetWantedItems());
+            });
+            hasValidHarvestTasks = hasValidYieldTasks || hasValidDestroyTasks;
         }
 
-        var worldState = new Dictionary<string, bool>
-        {
-            { "hasHarvestZone", hasValidHarvestTasks }, // True only if tasks exist, forces ExploreForResources
-            { "looseItemExists", looseItemExists },
-            { "hasResources", hasResourcesForGoap },
-            { "hasDepositedResources", false },
-            { "needsToWork", needsToWork },
-            { "isIdling", false }
-        };
+        // Reuse the scratch world-state dict (cleared + repopulated each tick — zero allocation after warm-up).
+        _scratchWorldState.Clear();
+        _scratchWorldState["hasHarvestZone"] = hasValidHarvestTasks; // True only if tasks exist, forces ExploreForResources
+        _scratchWorldState["looseItemExists"] = looseItemExists;
+        _scratchWorldState["hasResources"] = hasResourcesForGoap;
+        _scratchWorldState["hasDepositedResources"] = false;
+        _scratchWorldState["needsToWork"] = needsToWork;
+        _scratchWorldState["isIdling"] = false;
 
-        // Créer les actions fraîches (chaque instance est stateful)
-        _availableActions = new List<GoapAction>
-        {
-            new GoapAction_ExploreForHarvestables(building),
-            new GoapAction_HarvestResources(building),
-            new GoapAction_PickupLooseItem(building),
-            new GoapAction_DepositResources(building),
-            new GoapAction_IdleInBuilding(building)
-        };
+        // Action instances are stateful (per-plan _currentTarget/_isComplete), so we must
+        // create fresh ones each plan. But the LIST wrapper and the GoapGoals are stable —
+        // pool those to avoid per-tick allocations.
+        if (_availableActions == null) _availableActions = new List<GoapAction>(5);
+        _availableActions.Clear();
+        _availableActions.Add(new GoapAction_ExploreForHarvestables(building));
+        _availableActions.Add(new GoapAction_HarvestResources(building));
+        // Destruction-path fallback. Higher Cost (5f vs 1f for harvest) so the planner only
+        // picks this when there's no harvest alternative — gated server-side on
+        // Harvestable.AllowNpcDestruction (designer opt-in per node).
+        _availableActions.Add(new GoapAction_DestroyHarvestable(building));
+        _availableActions.Add(new GoapAction_PickupLooseItem(building));
+        _availableActions.Add(new GoapAction_DepositResources(building));
+        _availableActions.Add(new GoapAction_IdleInBuilding(building));
 
-        // Définir l'objectif prioritaire
-        GoapGoal targetGoal;
-        
+        // Cache both goals (their DesiredState dicts are constant).
+        if (_cachedIdleGoal == null)
+            _cachedIdleGoal = new GoapGoal("Idle", new Dictionary<string, bool> { { "isIdling", true } }, priority: 1);
+        if (_cachedHarvestAndDepositGoal == null)
+            _cachedHarvestAndDepositGoal = new GoapGoal("HarvestAndDeposit", new Dictionary<string, bool> { { "hasDepositedResources", true } }, priority: 1);
+
         bool trulyFinishedWork = allResourcesHarvested && !hasAtLeastOneResource;
         bool stuckWaitingForTrees = building.HasHarvestableZone && !canHarvest && !looseItemExists && !hasAtLeastOneResource;
 
-        if (trulyFinishedWork || stuckWaitingForTrees)
-        {
-            targetGoal = new GoapGoal("Idle", new Dictionary<string, bool> { { "isIdling", true } }, priority: 1);
-        }
-        else
-        {
-            targetGoal = new GoapGoal("HarvestAndDeposit", new Dictionary<string, bool> { { "hasDepositedResources", true } }, priority: 1);
-        }
+        GoapGoal targetGoal = (trulyFinishedWork || stuckWaitingForTrees)
+            ? _cachedIdleGoal
+            : _cachedHarvestAndDepositGoal;
 
         _harvestGoal = targetGoal; // On sauvegarde l'objectif courant pour l'UI de Debug
-        
+
+        // Pre-filter actions by IsValid(_worker) — see _scratchValidActions field comment.
+        _scratchValidActions.Clear();
+        for (int i = 0; i < _availableActions.Count; i++)
+        {
+            var a = _availableActions[i];
+            if (a.IsValid(_worker)) _scratchValidActions.Add(a);
+        }
+
         // Planifier
-        _currentPlan = GoapPlanner.Plan(worldState, _availableActions, targetGoal);
+        _currentPlan = GoapPlanner.Plan(_scratchWorldState, _scratchValidActions, targetGoal);
 
         if (_currentPlan != null && _currentPlan.Count > 0)
         {
             _currentAction = _currentPlan.Dequeue();
-            Debug.Log($"<color=green>[JobHarvester]</color> {_worker.CharacterName} : nouveau plan ! Première action → {_currentAction.ActionName}");
+            if (NPCDebug.VerboseJobs)
+                Debug.Log($"<color=green>[JobHarvester]</color> {_worker.CharacterName} : nouveau plan ! Première action → {_currentAction.ActionName}");
         }
-        else
+        else if (NPCDebug.VerboseJobs)
         {
             Debug.Log($"<color=orange>[JobHarvester]</color> {_worker.CharacterName} : impossible de planifier.");
         }

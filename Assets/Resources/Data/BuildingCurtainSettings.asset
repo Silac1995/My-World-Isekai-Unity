@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1709956ec235f5b44a53a2161a6f4aa6, type: 3}
+  m_Name: BuildingCurtainSettings
+  m_EditorClassIdentifier: Assembly-CSharp::BuildingCurtainSettings
+  EmissionRate: 6
+  MaxParticles: 40
+  StartLifetime: 5
+  StartSize: 0.1
+  RiseSpeedMin: 1.5
+  RiseSpeedMax: 2.5
+  Tint: {r: 0.5, g: 0.9, b: 1, a: 1}
+  AlphaMax: 0.752
+  FadeInEnd: 0.485
+  FadeOutStart: 0.35
+  WallMaterial: {fileID: 2100000, guid: 6cdae32f5fe23394ebb09e2b131193e4, type: 2}
+  WallHeight: 5
+  WallAlphaBottom: 0.5
+  WallAlphaTop: 0.255
+  WallColor: {r: 0.5, g: 0.9, b: 1, a: 1}

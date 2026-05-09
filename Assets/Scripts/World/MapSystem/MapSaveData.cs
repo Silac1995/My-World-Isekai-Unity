@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using MWI.Terrain;
 
 namespace MWI.WorldSystem
 {
@@ -14,6 +15,22 @@ namespace MWI.WorldSystem
         public string MapId;
         public double LastHibernationTime; // Absolute time in Days (CurrentDay + CurrentTime01)
         public List<HibernatedNPCData> HibernatedNPCs = new List<HibernatedNPCData>();
+        public List<WorldItemSaveData> WorldItems = new List<WorldItemSaveData>();
+        public TerrainCellSaveData[] TerrainCells;
+        public double TerrainLastUpdateTime;
+    }
+
+    /// <summary>
+    /// Serialized state of a dropped WorldItem on a map. Holds enough to recreate the
+    /// item via WorldItem.SpawnWorldItem(ItemInstance, position, rotation) on respawn.
+    /// </summary>
+    [Serializable]
+    public class WorldItemSaveData
+    {
+        public string ItemId;       // ItemSO.ItemId — looked up in Resources/Data/Item on respawn
+        public string JsonData;     // JsonUtility.ToJson(ItemInstance) — preserves durability, colors, etc.
+        public Vector3 Position;
+        public Quaternion Rotation;
     }
 
     [Serializable]
@@ -29,6 +46,9 @@ namespace MWI.WorldSystem
         public string CharacterId;
         public string PrefabName; // Quick way to know what to spawn
         public uint PrefabHash; // Proper NGO GUID matching
+
+        // Party
+        public string PartyId;
 
         // V1 Simple Data: Position and Basic State
         public Vector3 Position;
@@ -59,9 +79,26 @@ namespace MWI.WorldSystem
         // V2 Needs
         public List<HibernatedNeedData> SavedNeeds = new List<HibernatedNeedData>();
         
-        // V2 Map Growth Knowledge
+        // Character Knowledge
         public List<string> UnlockedBuildingIds = new List<string>();
-        
-        // TODO for V2: Insert Inventory list, GOAP state snippet, Need levels, etc.
+
+        // Character Identity & Visuals (required for proper respawn)
+        public string RaceId;           // NetworkRaceId — needed for visual preset + name generation
+        public string CharacterName;    // NetworkCharacterName — display name
+        public int VisualSeed;          // NetworkVisualSeed — deterministic visual variation
+
+        // Abandoned NPC tracking — set when a party leader disconnects
+        public bool IsAbandoned;
+        public string FormerPartyLeaderId;
+        public string FormerPartyLeaderWorldGuid;
+
+        // Full character profile (stats, equipment, relations, skills, traits, abilities, …)
+        // captured via CharacterDataCoordinator.ExportProfile and replayed via ImportProfile
+        // on respawn. Null on legacy saves; consumers must fall back to the flat fields above.
+        public CharacterProfileSaveData ProfileData;
+
+        // Sleep state at the moment of hibernation — set from Character.IsSleeping.
+        // Used by MacroSimulator.ApplySleepRestoreHours to restore NeedSleep during a TimeSkip.
+        public bool IsSleeping;
     }
 }

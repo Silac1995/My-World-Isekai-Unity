@@ -130,6 +130,17 @@ namespace MWI.WorldSystem
         }
 
         /// <summary>
+        /// Converts a Slot Index into an absolute XYZ World offset for interior maps.
+        /// Uses a Y offset to vertically separate interiors from ground-level maps.
+        /// </summary>
+        public Vector3 GetInteriorOffsetVector(int slotIndex)
+        {
+            float distance = _settings != null ? _settings.SlotOffsetDistance : 10000f;
+            float interiorY = _settings != null ? _settings.InteriorYOffset : 5000f;
+            return new Vector3(slotIndex * distance, interiorY, slotIndex * distance);
+        }
+
+        /// <summary>
         /// Releases a slot back into the recycling pool.
         /// CAUTION: Do not release Abandoned Cities - only roaming camps or settlements that dissolve completely.
         /// </summary>

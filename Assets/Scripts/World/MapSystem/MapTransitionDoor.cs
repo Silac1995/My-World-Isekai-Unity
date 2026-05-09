@@ -1,12 +1,14 @@
 using Unity.Netcode;
 using UnityEngine;
+using MWI.WorldSystem;
+using MWI.UI.Notifications;
 
 public class MapTransitionDoor : InteractableObject
 {
     [Header("Transition Settings")]
     public string TargetMapId;
     public Transform TargetSpawnPoint; // Alternatively use a direct coordinate if preferred
-    public Vector3 TargetPositionOffset; 
+    public Vector3 TargetPositionOffset;
     public float FadeDuration = 0.5f;
 
     public override void Interact(Character interactor)
@@ -19,9 +21,173 @@ public class MapTransitionDoor : InteractableObject
             return;
         }
 
+        // --- Door Lock / Broken Check ---
+        DoorLock doorLock = GetComponent<DoorLock>();
+        DoorHealth doorHealth = GetComponent<DoorHealth>();
+
+        // Broken doors are always passable (lock bypassed)
+        bool isBroken = doorHealth != null && doorHealth.IsSpawned && doorHealth.IsBroken.Value;
+
+        if (!isBroken && doorLock != null && doorLock.IsSpawned && doorLock.IsLocked.Value)
+        {
+            // Check if interactor has a matching key
+            KeyInstance key = interactor.CharacterEquipment?.FindKeyForLock(doorLock.LockId, doorLock.RequiredTier);
+            if (key != null)
+            {
+                // Unlock the door (don't walk through yet)
+                if (doorLock.IsSpawned)
+                    doorLock.RequestUnlockServerRpc();
+                return;
+            }
+            else
+            {
+                // No key — jiggle + feedback
+                if (doorLock.IsSpawned)
+                    doorLock.RequestJiggleServerRpc();
+
+                // Toast notification for the local player who is attempting to interact
+                if (interactor.IsOwner && interactor.IsPlayer())
+                {
+                    UI_Toast.Show("the door is locked");
+                }
+
+                return;
+            }
+        }
+
+        string targetMapId = TargetMapId;
         Vector3 dest = TargetSpawnPoint != null ? TargetSpawnPoint.position : transform.position + TargetPositionOffset;
 
-        var transitionAction = new CharacterMapTransitionAction(interactor, this, TargetMapId, dest, FadeDuration);
+        // If this door has no TargetMapId (e.g. remote client where server-set fields didn't replicate),
+        // resolve exit info from the parent MapController's replicated NetworkVariables.
+        // NOTE: We cannot check MapController.IsInteriorOffset here — it's a plain bool that
+        // doesn't replicate via NGO. Instead, we check if ExteriorMapId is non-empty (only set
+        // on interior MapControllers by BuildingInteriorSpawner).
+        if (string.IsNullOrEmpty(targetMapId))
+        {
+            // Try parent first (MapController on root, door is a child)
+            var parentMap = GetComponentInParent<MapController>();
+            // Fallback: MapController might be a sibling — search from the root
+            if (parentMap == null)
+            {
+                parentMap = transform.root.GetComponentInChildren<MapController>();
+            }
+
+            if (parentMap != null)
+            {
+                string exteriorMap = parentMap.ExteriorMapId.Value.ToString();
+                if (!string.IsNullOrEmpty(exteriorMap))
+                {
+                    targetMapId = exteriorMap;
+                    dest = parentMap.ExteriorReturnPosition.Value;
+                    Debug.Log($"<color=cyan>[MapTransitionDoor]</color> Resolved exit from MapController NetworkVars: targetMapId='{targetMapId}', dest={dest}");
+                }
+                else
+                {
+                    Debug.LogWarning($"<color=orange>[MapTransitionDoor]</color> Found MapController '{parentMap.MapId}' but ExteriorMapId is empty. NetworkVariable may not have replicated yet.");
+                }
+            }
+            else
+            {
+                Debug.LogWarning($"<color=orange>[MapTransitionDoor]</color> No MapController found in hierarchy for exit door '{name}'.");
+            }
+        }
+
+        // Guard: don't start a transition with no target — prevents empty ServerRpc spam
+        if (string.IsNullOrEmpty(targetMapId))
+        {
+            Debug.LogWarning($"<color=orange>[MapTransitionDoor]</color> '{name}' has no TargetMapId after resolution. Aborting transition.");
+            return;
+        }
+
+        Debug.Log($"<color=cyan>[MapTransitionDoor]</color> {GetType().Name} '{name}' Interact: TargetMapId='{targetMapId}', doorPos={transform.position}, TargetSpawnPoint={(TargetSpawnPoint != null ? TargetSpawnPoint.name : "null")}, TargetPositionOffset={TargetPositionOffset}, dest={dest}");
+
+        // --- Party Leader Gathering Check ---
+        // Skip gathering when inside an Interior — party members are outside and can't reach the gather zone.
+        // We check the door's own parent MapController (hierarchy-based, always correct on host & client)
+        // rather than CharacterMapTracker.CurrentMapID which depends on NetworkVariable replication.
+        if (interactor.CharacterParty != null && interactor.CharacterParty.IsInParty && interactor.CharacterParty.IsPartyLeader)
+        {
+            var doorMap = GetComponentInParent<MapController>();
+            if (doorMap == null) doorMap = transform.root.GetComponentInChildren<MapController>();
+            bool isInInterior = doorMap != null && doorMap.Type == MapType.Interior;
+
+            if (!isInInterior)
+            {
+                MapController targetMap = MapController.GetByMapId(targetMapId);
+                if (targetMap != null && (targetMap.Type == MapType.Region || targetMap.Type == MapType.Dungeon))
+                {
+                    interactor.CharacterParty.StartGathering(targetMapId, dest);
+                    return;
+                }
+            }
+        }
+
+        var transitionAction = new CharacterMapTransitionAction(interactor, this, targetMapId, dest, FadeDuration);
         interactor.CharacterActions.ExecuteAction(transitionAction);
+    }
+
+    public override System.Collections.Generic.List<InteractionOption> GetHoldInteractionOptions(Character interactor)
+    {
+        var options = new System.Collections.Generic.List<InteractionOption>();
+
+        DoorLock doorLock = GetComponent<DoorLock>();
+        DoorHealth doorHealth = GetComponent<DoorHealth>();
+
+        bool isBroken = doorHealth != null && doorHealth.IsSpawned && doorHealth.IsBroken.Value;
+        bool isLocked = doorLock != null && doorLock.IsSpawned && doorLock.IsLocked.Value;
+        bool canPass = isBroken || !isLocked;
+
+        // --- Enter / Leave (always shown, disabled when locked) ---
+        string enterLabel = "Enter";
+        var parentMap = GetComponentInParent<MapController>();
+        if (parentMap != null && parentMap.IsSpawned)
+        {
+            string extMap = parentMap.ExteriorMapId.Value.ToString();
+            if (!string.IsNullOrEmpty(extMap))
+                enterLabel = "Leave";
+        }
+
+        var door = this;
+        options.Add(new InteractionOption
+        {
+            Name = enterLabel,
+            Action = () => door.Interact(interactor)
+        });
+
+        // --- Lock / Unlock (single button, shown if DoorLock exists) ---
+        if (doorLock != null && doorLock.IsSpawned)
+        {
+            string lockLabel = isLocked ? "Unlock" : "Lock";
+            // TODO: Re-enable key check after testing
+            // KeyInstance key = interactor.CharacterEquipment?.FindKeyForLock(doorLock.LockId, doorLock.RequiredTier);
+            // bool canToggle = key != null && !isBroken;
+
+            options.Add(new InteractionOption
+            {
+                Name = lockLabel,
+                ToggleName = isLocked ? "Lock" : "Unlock",
+                Action = () =>
+                {
+                    if (doorLock.IsLocked.Value)
+                        doorLock.RequestUnlockServerRpc();
+                    else
+                        doorLock.RequestLockServerRpc();
+                }
+            });
+        }
+
+        // --- Repair (shown if DoorHealth exists, disabled when not broken) ---
+        if (doorHealth != null && doorHealth.IsSpawned)
+        {
+            options.Add(new InteractionOption
+            {
+                Name = "Repair",
+                Action = () => doorHealth.RequestRepairServerRpc(),
+                IsDisabled = !isBroken
+            });
+        }
+
+        return options.Count > 0 ? options : null;
     }
 }

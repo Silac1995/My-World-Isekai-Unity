@@ -32,4 +32,23 @@ If an AI or combat system uses an `if` statement to process a tick, it will only
 At extremely high time scales, whole animations might start and finish in the *exact same frame*. This means Animation Events (e.g., spawn hitbox -> despawn hitbox) might execute sequentially without allowing Unity's `FixedUpdate` (Physics engine) to run even once. `OnTriggerEnter` will miss completely.
 **Rule:** Combat hitboxes must perform an instantaneous `Physics.Overlap` check exactly upon initialization to guarantee hits at high game speeds.
 
+### 5. Absolute Time Synchronization (Late-Joiner Sync)
+
+`GameSpeedController` also owns the network synchronization of the absolute in-game time (day + normalized time). `TimeManager` itself is a plain `MonoBehaviour` (not networked), so `GameSpeedController` bridges the gap with two additional `NetworkVariable`s:
+
+- `NetworkVariable<int> _serverDay` — current in-game day (server-write, everyone-read)
+- `NetworkVariable<float> _serverTime01` — normalized time 0–1 (server-write, everyone-read)
+
+**Server pushes time to these variables:**
+- On `OnNetworkSpawn` (initial value for late-joiners)
+- On every `OnHourChanged` and `OnNewDay` event from `TimeManager`
+- Every **10 real-time seconds** via `Update()` using `Time.unscaledTime` (drift correction between hour boundaries)
+
+**Clients apply corrections:**
+- On `OnNetworkSpawn` — immediate sync to the host's current time (late-joiner fix)
+- On `OnValueChanged` — drift correction if the delta exceeds `TimeDriftThreshold` (0.002 ≈ 2.88 in-game minutes)
+- Corrections call `TimeManager.SyncFromNetwork(day, time01)`, which silently updates the clock **without firing events** (prevents server-only subscribers like saves or community tracking from triggering on clients)
+
+**Rule:** Never call `TimeManager.SyncFromNetwork()` from outside `GameSpeedController`. It is the sole authority for network time corrections.
+
 [Note: View `examples/time_scaling_patterns.md` for proper implementation of accumulated ticks and instant hitboxes.]

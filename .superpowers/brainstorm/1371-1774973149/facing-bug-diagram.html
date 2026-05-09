@@ -1,0 +1,140 @@
+<h2>The Facing Bug: 1v5 Scenario</h2>
+<p class="subtitle">The solo character flips left-right because multiple systems fight over facing direction</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">Current Behavior (Buggy)</div>
+    <div class="mockup-body" style="position:relative;height:400px;background:#1a1a2e;overflow:hidden;">
+      <!-- Battle arena -->
+      <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:90%;height:80%;border:2px dashed rgba(255,255,255,0.15);border-radius:12px;"></div>
+
+      <!-- Solo defender in center-left -->
+      <div id="defender" style="position:absolute;top:45%;left:30%;text-align:center;">
+        <div style="font-size:40px;animation:flip 0.6s infinite alternate;">&#x1F9D1;&#x200D;&#x2694;&#xFE0F;</div>
+        <div style="color:#ff6b6b;font-weight:bold;font-size:13px;margin-top:4px;">DEFENDER</div>
+        <div style="color:#ff6b6b;font-size:11px;opacity:0.8;">Flipping rapidly!</div>
+        <!-- Flip arrows -->
+        <div style="position:absolute;top:-15px;left:-20px;right:-20px;text-align:center;">
+          <span style="color:#ff6b6b;font-size:20px;animation:fadeFlip 0.6s infinite alternate;">&larr; &rarr;</span>
+        </div>
+      </div>
+
+      <!-- 5 Attackers on the right side, surrounding -->
+      <div style="position:absolute;top:15%;left:62%;text-align:center;">
+        <div style="font-size:30px;">&#x1F9DF;</div>
+        <div style="color:#4ecdc4;font-size:11px;">ATK 1</div>
+        <div style="position:absolute;left:-60px;top:10px;width:60px;height:0;border-top:2px dashed #4ecdc4;opacity:0.5;"></div>
+      </div>
+      <div style="position:absolute;top:32%;left:72%;text-align:center;">
+        <div style="font-size:30px;">&#x1F9DF;</div>
+        <div style="color:#4ecdc4;font-size:11px;">ATK 2</div>
+        <div style="position:absolute;left:-80px;top:10px;width:80px;height:0;border-top:2px dashed #4ecdc4;opacity:0.5;transform:rotate(10deg);"></div>
+      </div>
+      <div style="position:absolute;top:52%;left:75%;text-align:center;">
+        <div style="font-size:30px;">&#x1F9DF;</div>
+        <div style="color:#4ecdc4;font-size:11px;">ATK 3</div>
+        <div style="position:absolute;left:-90px;top:10px;width:90px;height:0;border-top:2px dashed #4ecdc4;opacity:0.5;"></div>
+      </div>
+      <div style="position:absolute;top:70%;left:68%;text-align:center;">
+        <div style="font-size:30px;">&#x1F9DF;</div>
+        <div style="color:#4ecdc4;font-size:11px;">ATK 4</div>
+        <div style="position:absolute;left:-75px;top:10px;width:75px;height:0;border-top:2px dashed #4ecdc4;opacity:0.5;transform:rotate(-10deg);"></div>
+      </div>
+      <div style="position:absolute;top:82%;left:55%;text-align:center;">
+        <div style="font-size:30px;">&#x1F9DF;</div>
+        <div style="color:#4ecdc4;font-size:11px;">ATK 5</div>
+        <div style="position:absolute;left:-50px;top:10px;width:50px;height:0;border-top:2px dashed #4ecdc4;opacity:0.5;transform:rotate(-20deg);"></div>
+      </div>
+
+      <!-- Bug explanation -->
+      <div style="position:absolute;bottom:10px;left:10px;right:10px;background:rgba(255,107,107,0.15);border:1px solid rgba(255,107,107,0.3);border-radius:8px;padding:8px 12px;">
+        <div style="color:#ff6b6b;font-size:12px;"><strong>BUG:</strong> Each tick, ATK 1-5 call SetPlannedTarget(defender). The defender's look target gets overwritten, causing facing to oscillate between attacker positions on opposite sides.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">Expected Behavior (Fixed)</div>
+    <div class="mockup-body" style="position:relative;height:400px;background:#1a1a2e;overflow:hidden;">
+      <!-- Battle arena -->
+      <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:90%;height:80%;border:2px dashed rgba(255,255,255,0.15);border-radius:12px;"></div>
+
+      <!-- Solo defender facing right consistently -->
+      <div style="position:absolute;top:45%;left:30%;text-align:center;">
+        <div style="font-size:40px;">&#x1F9D1;&#x200D;&#x2694;&#xFE0F;</div>
+        <div style="color:#45e68a;font-weight:bold;font-size:13px;margin-top:4px;">DEFENDER</div>
+        <div style="color:#45e68a;font-size:11px;opacity:0.8;">Facing ATK 1 (his target)</div>
+        <!-- Stable arrow pointing right -->
+        <div style="position:absolute;top:-15px;left:10px;right:-30px;text-align:right;">
+          <span style="color:#45e68a;font-size:20px;">&rarr;</span>
+        </div>
+      </div>
+
+      <!-- Target highlight on ATK 1 -->
+      <div style="position:absolute;top:15%;left:62%;text-align:center;">
+        <div style="position:absolute;inset:-8px;border:2px solid #45e68a;border-radius:50%;animation:pulse 1.5s infinite;"></div>
+        <div style="font-size:30px;">&#x1F9DF;</div>
+        <div style="color:#45e68a;font-size:11px;font-weight:bold;">ATK 1 (target)</div>
+        <div style="position:absolute;left:-60px;top:10px;width:60px;height:0;border-top:2px solid #45e68a;"></div>
+      </div>
+      <div style="position:absolute;top:32%;left:72%;text-align:center;">
+        <div style="font-size:30px;">&#x1F9DF;</div>
+        <div style="color:#4ecdc4;font-size:11px;">ATK 2</div>
+        <div style="position:absolute;left:-80px;top:10px;width:80px;height:0;border-top:2px dashed #4ecdc4;opacity:0.3;transform:rotate(10deg);"></div>
+      </div>
+      <div style="position:absolute;top:52%;left:75%;text-align:center;">
+        <div style="font-size:30px;">&#x1F9DF;</div>
+        <div style="color:#4ecdc4;font-size:11px;">ATK 3</div>
+        <div style="position:absolute;left:-90px;top:10px;width:90px;height:0;border-top:2px dashed #4ecdc4;opacity:0.3;"></div>
+      </div>
+      <div style="position:absolute;top:70%;left:68%;text-align:center;">
+        <div style="font-size:30px;">&#x1F9DF;</div>
+        <div style="color:#4ecdc4;font-size:11px;">ATK 4</div>
+        <div style="position:absolute;left:-75px;top:10px;width:75px;height:0;border-top:2px dashed #4ecdc4;opacity:0.3;transform:rotate(-10deg);"></div>
+      </div>
+      <div style="position:absolute;top:82%;left:55%;text-align:center;">
+        <div style="font-size:30px;">&#x1F9DF;</div>
+        <div style="color:#4ecdc4;font-size:11px;">ATK 5</div>
+        <div style="position:absolute;left:-50px;top:10px;width:50px;height:0;border-top:2px dashed #4ecdc4;opacity:0.3;transform:rotate(-20deg);"></div>
+      </div>
+
+      <!-- Fix explanation -->
+      <div style="position:absolute;bottom:10px;left:10px;right:10px;background:rgba(69,230,138,0.15);border:1px solid rgba(69,230,138,0.3);border-radius:8px;padding:8px 12px;">
+        <div style="color:#45e68a;font-size:12px;"><strong>FIX:</strong> Defender's facing is locked to HIS chosen target (ATK 1). Only the defender's own AI can change who he faces. Attackers targeting him do NOT override his look direction.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:24px;">
+  <h3>Root Cause: Three Systems Fight Over Facing</h3>
+  <div style="display:flex;gap:16px;flex-wrap:wrap;">
+    <div style="flex:1;min-width:200px;background:rgba(255,107,107,0.1);border:1px solid rgba(255,107,107,0.2);border-radius:8px;padding:12px;">
+      <div style="color:#ff6b6b;font-weight:bold;font-size:13px;">1. CombatAILogic.UpdateFlip()</div>
+      <div style="color:#ccc;font-size:12px;margin-top:4px;">Every frame, flips character toward its current AI target direction</div>
+    </div>
+    <div style="flex:1;min-width:200px;background:rgba(255,107,107,0.1);border:1px solid rgba(255,107,107,0.2);border-radius:8px;padding:12px;">
+      <div style="color:#ff6b6b;font-weight:bold;font-size:13px;">2. CharacterVisual.LateUpdate()</div>
+      <div style="color:#ccc;font-size:12px;margin-top:4px;">If _lookTarget is set, faces that target every frame in LateUpdate</div>
+    </div>
+    <div style="flex:1;min-width:200px;background:rgba(255,107,107,0.1);border:1px solid rgba(255,107,107,0.2);border-radius:8px;padding:12px;">
+      <div style="color:#ff6b6b;font-weight:bold;font-size:13px;">3. SetPlannedTarget()</div>
+      <div style="color:#ccc;font-size:12px;margin-top:4px;">Called by each attacker, overwrites _lookTarget via SetActionIntent &rarr; SetLookTarget</div>
+    </div>
+  </div>
+</div>
+
+<style>
+@keyframes flip {
+  0% { transform: scaleX(1); }
+  100% { transform: scaleX(-1); }
+}
+@keyframes fadeFlip {
+  0% { opacity: 0.3; }
+  100% { opacity: 1; }
+}
+@keyframes pulse {
+  0%, 100% { opacity: 0.3; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+</style>

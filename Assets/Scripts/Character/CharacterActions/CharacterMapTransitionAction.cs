@@ -7,52 +7,75 @@ public class CharacterMapTransitionAction : CharacterAction
     private readonly MapTransitionDoor _door;
     private readonly string _targetMapId;
     private readonly Vector3 _targetPosition;
+    private readonly float _fadeDuration;
 
-    public CharacterMapTransitionAction(Character character, MapTransitionDoor door, string targetMapId, Vector3 targetPosition, float fadeDuration) 
+    public CharacterMapTransitionAction(Character character, MapTransitionDoor door, string targetMapId, Vector3 targetPosition, float fadeDuration)
         : base(character, duration: fadeDuration)
     {
         _character = character;
         _door = door;
         _targetMapId = targetMapId;
         _targetPosition = targetPosition;
+        _fadeDuration = fadeDuration;
     }
 
     public override void OnStart()
     {
-        // Stop the character to prevent walking away during transition
-        if (_character.TryGetComponent(out CharacterMovement movement))
+        _character.CharacterMovement?.Stop();
+
+        // Fade to black for the local player only (not NPCs, even on host where IsOwner is true)
+        if (IsLocalPlayerCharacter())
         {
-            movement.Stop();
+            ScreenFadeManager.Instance?.FadeOut(_fadeDuration * 0.5f);
         }
     }
 
     public override void OnApplyEffect()
     {
+        Debug.Log($"<color=cyan>[MapTransition]</color> OnApplyEffect: IsOwner={_character.IsOwner}, IsLocalPlayer={_character.IsLocalPlayer}, IsServer={_character.IsServer}, targetMapId='{_targetMapId}', targetPos={_targetPosition}");
+
         // Prediction: Client warps instantly for seamless feel
-        if (_character.IsOwner || _character.IsLocalPlayer)
+        if (IsLocalPlayerCharacter())
         {
-            if (_character.TryGetComponent(out CharacterMovement movement))
+            // Reset selected interactable when map changes (entering/leaving house)
+            var targeting = Object.FindAnyObjectByType<UI_PlayerTargeting>(FindObjectsInactive.Include);
+            if (targeting != null)
             {
-                movement.Warp(_targetPosition);
+                targeting.ClearSelection();
             }
-            
+
+            // Only predict warp if we know the real position (repeat visits).
+            // On first visit, _targetPosition is Vector3.zero — let the server
+            // resolve the correct interior position and warp via WarpClientRpc.
+            if (_targetPosition != Vector3.zero)
+            {
+                Debug.Log($"<color=cyan>[MapTransition]</color> Client predicting ForceWarp to {_targetPosition}");
+                _character.CharacterMovement?.ForceWarp(_targetPosition);
+                SnapCamera();
+            }
+            else
+            {
+                Debug.Log("<color=cyan>[MapTransition]</color> First visit — skipping client warp, waiting for server WarpClientRpc.");
+            }
+
             // Send authoritative request cleanly via separated Tracker component
             if (_character.TryGetComponent(out CharacterMapTracker tracker))
             {
+                Debug.Log($"<color=cyan>[MapTransition]</color> Sending RequestTransitionServerRpc('{_targetMapId}', {_targetPosition})");
                 tracker.RequestTransitionServerRpc(_targetMapId, _targetPosition);
             }
-            else 
+            else
             {
                 Debug.LogError($"[MapSystem] {_character.name} missing CharacterMapTracker for ServerRpc!");
             }
+
+            // Fade back in after warp
+            ScreenFadeManager.Instance?.FadeIn(_fadeDuration * 0.5f);
         }
         else if (_character.IsServer) // NPC logic, no prediction needed, just direct mutate
         {
-            if (_character.TryGetComponent(out CharacterMovement movement))
-            {
-                movement.Warp(_targetPosition);
-            }
-            
+            _character.CharacterMovement?.ForceWarp(_targetPosition);
+
             if (_character.TryGetComponent(out CharacterMapTracker tracker))
             {
                 tracker.SetCurrentMap(_targetMapId);
@@ -62,10 +85,26 @@ public class CharacterMapTransitionAction : CharacterAction
 
     public override void OnCancel()
     {
-        // Restore movement if interrupted (e.g., attacked)
-        if (_character.TryGetComponent(out CharacterMovement movement))
+        _character.CharacterMovement?.Resume();
+
+        // Cancel any active fade if the action was interrupted
+        if (IsLocalPlayerCharacter())
         {
-            movement.Resume();
+            ScreenFadeManager.Instance?.FadeIn(0.1f);
         }
+    }
+
+    /// <summary>
+    /// True only for the actual local player character — not NPCs on host (which have IsOwner=true).
+    /// </summary>
+    private bool IsLocalPlayerCharacter()
+    {
+        return _character.IsPlayer() && (_character.IsOwner || _character.IsLocalPlayer);
+    }
+
+    private void SnapCamera()
+    {
+        CameraFollow cam = Camera.main?.GetComponent<CameraFollow>();
+        cam?.SnapToTarget();
     }
 }

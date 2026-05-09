@@ -1,23 +1,25 @@
 using UnityEngine;
 
 /// <summary>
-/// Meuble de type siège (chaise, tabouret, banc, trône...).
-/// Un personnage peut s'y asseoir.
+/// Seat-type furniture (chair, stool, bench, throne...).
+/// A character can sit on it. Single-occupant — inherits the base
+/// <see cref="OccupiableFurniture.Use"/> / <see cref="OccupiableFurniture.Release"/>
+/// directly (no per-slot list like <see cref="BedFurniture"/>).
 /// </summary>
-public class ChairFurniture : Furniture
+public class ChairFurniture : OccupiableFurniture
 {
     [Header("Chair")]
     [SerializeField] private Transform _seatPoint;
     [SerializeField] private bool _faceForward = true;
 
     /// <summary>
-    /// Position exacte où le personnage s'assoit.
-    /// Si non défini, utilise le point d'interaction du meuble.
+    /// Exact position where the character sits.
+    /// If not defined, uses the furniture's interaction point.
     /// </summary>
     public Vector3 SeatPosition => _seatPoint != null ? _seatPoint.position : GetInteractionPosition();
 
     /// <summary>
-    /// Direction vers laquelle le personnage regarde une fois assis.
+    /// Direction the character faces once seated.
     /// </summary>
     public Vector3 SeatForward => _seatPoint != null ? _seatPoint.forward : transform.forward;
     public bool FaceForward => _faceForward;

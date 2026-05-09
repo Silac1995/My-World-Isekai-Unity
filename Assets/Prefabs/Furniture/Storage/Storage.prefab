@@ -1,0 +1,121 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1001 &9222316652166392548
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: -29948673811202421, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
+      propertyPath: _furniture
+      value: 
+      objectReference: {fileID: 1238873623446116431}
+    - target: {fileID: -29948673811202421, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
+      propertyPath: _toastChannel
+      value: 
+      objectReference: {fileID: 11400000, guid: ea961c82479cb974997317e89f3aa9b6, type: 2}
+    - target: {fileID: -29948673811202421, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
+      propertyPath: _rootgameObject
+      value: 
+      objectReference: {fileID: 5278517008172668549}
+    - target: {fileID: 3944396133495831649, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
+      propertyPath: m_Name
+      value: Storage
+      objectReference: {fileID: 0}
+    - target: {fileID: 6445648937218201084, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
+      propertyPath: GlobalObjectIdHash
+      value: 1343884016
+      objectReference: {fileID: 0}
+    - target: {fileID: 8021854465056481327, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8021854465056481327, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8021854465056481327, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8021854465056481327, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 8021854465056481327, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8021854465056481327, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8021854465056481327, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8021854465056481327, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8021854465056481327, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8021854465056481327, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 3944396133495831649, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1238873623446116431}
+    - targetCorrespondingSourceObject: {fileID: 3944396133495831649, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 2349871234560987654}
+  m_SourcePrefab: {fileID: 100100000, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
+--- !u!1 &5278517008172668549 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 3944396133495831649, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
+  m_PrefabInstance: {fileID: 9222316652166392548}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &1238873623446116431
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5278517008172668549}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e465ff53b055c5445b743f4fb3b33afa, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::StorageFurniture
+  _furnitureName: Default Storage
+  _furnitureTag: 4
+  _interactionPoint: {fileID: 0}
+  _sizeInCells: {x: 0, y: 0}
+  _furnitureItemSO: {fileID: 0}
+  _miscCapacity: 8
+  _weaponCapacity: 0
+  _wearableCapacity: 0
+  _anyCapacity: 0
+  _isLocked: 0
+--- !u!114 &2349871234560987654
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5278517008172668549}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a7c9e5b1d4f3e9a48b2c1f7e3d8a5b6c, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::StorageFurnitureNetworkSync
+  _storage: {fileID: 1238873623446116431}

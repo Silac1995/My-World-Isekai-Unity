@@ -2,8 +2,8 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// Bâtiment de type Bar.
-/// Nécessite un Barman (prépare les boissons) et des Serveurs (servent les clients).
+/// Bar-type building.
+/// Requires a Barman (prepares the drinks) and Servers (serve the customers).
 /// </summary>
 public class BarBuilding : CommercialBuilding
 {
@@ -22,11 +22,11 @@ public class BarBuilding : CommercialBuilding
             _jobs.Add(new JobServer());
         }
 
-        Debug.Log($"<color=magenta>[Bar]</color> {buildingName} initialisé avec 1 Barman et {_serverCount} Serveurs.");
+        Debug.Log($"<color=magenta>[Bar]</color> {buildingName} initialized with 1 Barman and {_serverCount} Servers.");
     }
 
     /// <summary>
-    /// Récupère le barman de ce bar.
+    /// Returns the barman of this bar.
     /// </summary>
     public JobBarman GetBarman()
     {
@@ -38,7 +38,7 @@ public class BarBuilding : CommercialBuilding
     }
 
     /// <summary>
-    /// Récupère tous les serveurs de ce bar.
+    /// Returns all servers of this bar.
     /// </summary>
     public IEnumerable<JobServer> GetServers()
     {

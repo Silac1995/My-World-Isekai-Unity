@@ -20,7 +20,7 @@ public class MeleeWeaponInstance : WeaponInstance
     public bool NeedSharpening => _sharpness < _maxSharpness * 0.3f;
 
     /// <summary>
-    /// Dégrade l'aiguisage après chaque attaque melee.
+    /// Degrades the sharpness after each melee attack.
     /// </summary>
     public void DegradeSharpness(float amount = 0.01f)
     {
@@ -28,7 +28,7 @@ public class MeleeWeaponInstance : WeaponInstance
     }
 
     /// <summary>
-    /// Restaure l'aiguisage (ex: forgeron, pierre à aiguiser).
+    /// Restores the sharpness (e.g. blacksmith, sharpening stone).
     /// </summary>
     public void Sharpen(float amount)
     {

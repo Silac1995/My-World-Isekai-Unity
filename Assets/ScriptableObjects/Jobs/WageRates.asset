@@ -1,0 +1,63 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 98657274547ee0e4aa9c99be02d19503, type: 3}
+  m_Name: WageRates
+  m_EditorClassIdentifier: Assembly-CSharp::WageRatesSO
+  _entries:
+  - JobType: 1
+    PieceRate: 2
+    MinimumShiftWage: 10
+    FixedShiftWage: 0
+  - JobType: 2
+    PieceRate: 3
+    MinimumShiftWage: 12
+    FixedShiftWage: 0
+  - JobType: 3
+    PieceRate: 2
+    MinimumShiftWage: 10
+    FixedShiftWage: 0
+  - JobType: 12
+    PieceRate: 2
+    MinimumShiftWage: 10
+    FixedShiftWage: 0
+  - JobType: 6
+    PieceRate: 3
+    MinimumShiftWage: 12
+    FixedShiftWage: 0
+  - JobType: 4
+    PieceRate: 4
+    MinimumShiftWage: 15
+    FixedShiftWage: 0
+  - JobType: 5
+    PieceRate: 2
+    MinimumShiftWage: 10
+    FixedShiftWage: 0
+  - JobType: 11
+    PieceRate: 2
+    MinimumShiftWage: 10
+    FixedShiftWage: 0
+  - JobType: 10
+    PieceRate: 0
+    MinimumShiftWage: 0
+    FixedShiftWage: 18
+  - JobType: 9
+    PieceRate: 0
+    MinimumShiftWage: 0
+    FixedShiftWage: 14
+  - JobType: 7
+    PieceRate: 0
+    MinimumShiftWage: 0
+    FixedShiftWage: 16
+  - JobType: 8
+    PieceRate: 0
+    MinimumShiftWage: 0
+    FixedShiftWage: 22

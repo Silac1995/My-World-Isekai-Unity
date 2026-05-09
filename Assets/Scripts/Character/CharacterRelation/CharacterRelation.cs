@@ -28,10 +28,16 @@ public struct RelationSyncData : INetworkSerializable, IEquatable<RelationSyncDa
     }
 }
 
-public class CharacterRelation : CharacterSystem
+public class CharacterRelation : CharacterSystem, ICharacterSaveData<RelationSaveData>
 {
     [SerializeField] private List<Relationship> _relationships = new List<Relationship>();
-    
+
+    /// <summary>
+    /// Dormant relationship entries loaded from save data whose target characters
+    /// are not present in the current world. Re-serialized on next save.
+    /// </summary>
+    private List<RelationshipSaveEntry> _dormantRelationships = new List<RelationshipSaveEntry>();
+
     private NetworkList<RelationSyncData> _networkRelations;
 
     [Header("Notifications")]
@@ -42,6 +48,18 @@ public class CharacterRelation : CharacterSystem
     public List<Relationship> Relationships => _relationships;
 
     public event Action OnRelationsUpdated;
+
+    protected override void OnEnable()
+    {
+        base.OnEnable();
+        Character.OnCharacterSpawned += HandleCharacterSpawned;
+    }
+
+    protected override void OnDisable()
+    {
+        Character.OnCharacterSpawned -= HandleCharacterSpawned;
+        base.OnDisable();
+    }
 
     protected override void Awake()
     {
@@ -69,6 +87,50 @@ public class CharacterRelation : CharacterSystem
         if (_networkRelations != null)
         {
             _networkRelations.OnListChanged -= HandleNetworkRelationsChanged;
+        }
+    }
+
+    /// <summary>
+    /// When a character spawns, check if any dormant relationships reference it.
+    /// If so, resolve them into live Relationship instances.
+    /// </summary>
+    private void HandleCharacterSpawned(Character spawnedCharacter)
+    {
+        if (_dormantRelationships.Count == 0) return;
+        if (spawnedCharacter == null || spawnedCharacter == _character) return;
+
+        bool resolved = false;
+
+        for (int i = _dormantRelationships.Count - 1; i >= 0; i--)
+        {
+            var dormant = _dormantRelationships[i];
+
+            if (dormant.targetCharacterId == spawnedCharacter.CharacterId)
+            {
+                // Avoid duplicating an already-live relationship
+                Relationship existing = _relationships.Find(r => r.RelatedCharacter == spawnedCharacter);
+                if (existing == null)
+                {
+                    var rel = new Relationship(_character, spawnedCharacter, dormant.relationValue, (RelationshipType)dormant.relationshipType);
+                    if (dormant.hasMet) rel.SetAsMet();
+                    _relationships.Add(rel);
+
+                    if (IsServer)
+                    {
+                        UpdateNetworkList(rel);
+                    }
+
+                    Debug.Log($"<color=cyan>[Relation]</color> Dormant relationship resolved: {_character.CharacterName} -> {spawnedCharacter.CharacterName} (value: {dormant.relationValue})");
+                }
+
+                _dormantRelationships.RemoveAt(i);
+                resolved = true;
+            }
+        }
+
+        if (resolved)
+        {
+            OnRelationsUpdated?.Invoke();
         }
     }
 
@@ -284,6 +346,89 @@ public class CharacterRelation : CharacterSystem
         return newRel;
     }
 
+    // --- ICharacterSaveData<RelationSaveData> IMPLEMENTATION ---
+
+    public string SaveKey => "CharacterRelation";
+    public int LoadPriority => 50;
+
+    public RelationSaveData Serialize()
+    {
+        var data = new RelationSaveData();
+
+        // Serialize live relationships
+        foreach (var rel in _relationships)
+        {
+            if (rel.RelatedCharacter == null) continue;
+
+            var entry = new RelationshipSaveEntry
+            {
+                targetCharacterId = rel.RelatedCharacter.CharacterId,
+                targetWorldGuid = rel.RelatedCharacter.OriginWorldGuid ?? "",
+                relationshipType = (int)rel.RelationType,
+                relationValue = rel.RelationValue,
+                hasMet = rel.HasMet
+            };
+            data.relationships.Add(entry);
+        }
+
+        // Re-serialize dormant relationships that were not resolved this session
+        foreach (var dormant in _dormantRelationships)
+        {
+            // Avoid duplicates — skip if already serialized from a live relationship
+            bool alreadySerialized = data.relationships.Exists(e => e.targetCharacterId == dormant.targetCharacterId);
+            if (!alreadySerialized)
+            {
+                data.relationships.Add(dormant);
+            }
+        }
+
+        return data;
+    }
+
+    public void Deserialize(RelationSaveData data)
+    {
+        if (data == null || data.relationships == null) return;
+
+        _dormantRelationships.Clear();
+
+        foreach (var entry in data.relationships)
+        {
+            // Attempt to find the target character in the current world
+            Character target = Character.FindByUUID(entry.targetCharacterId);
+
+            if (target != null)
+            {
+                // Resolve immediately — create a live relationship
+                Relationship existing = _relationships.Find(r => r.RelatedCharacter == target);
+                if (existing == null)
+                {
+                    var rel = new Relationship(_character, target, entry.relationValue, (RelationshipType)entry.relationshipType);
+                    if (entry.hasMet) rel.SetAsMet();
+                    _relationships.Add(rel);
+                }
+                else
+                {
+                    existing.RelationValue = entry.relationValue;
+                    existing.SetRelationshipType((RelationshipType)entry.relationshipType);
+                    if (entry.hasMet) existing.SetAsMet();
+                    else existing.SetAsNotMet();
+                }
+            }
+            else
+            {
+                // Store as dormant — target not present in current world
+                _dormantRelationships.Add(entry);
+            }
+        }
+
+        OnRelationsUpdated?.Invoke();
+    }
+
+    string ICharacterSaveData.SerializeToJson() => CharacterSaveDataHelper.SerializeToJson(this);
+    void ICharacterSaveData.DeserializeFromJson(string json) => CharacterSaveDataHelper.DeserializeFromJson(this, json);
+
+    // --- RELATION LOGIC ---
+
     public void UpdateRelation(Character target, int amount)
     {
         if (!IsServer) return;
@@ -324,7 +469,7 @@ public class CharacterRelation : CharacterSystem
             rel.DecreaseRelationValue(-roundedAmount);
         }
 
-        Debug.Log($"<color=white>[Sentiment]</color> L'avis de {_character.CharacterName} sur {target.CharacterName} est maintenant de {rel.RelationValue} ({rel.RelationType}) [Modif: {amount} -> {roundedAmount}]");
+        // Debug.Log($"<color=white>[Sentiment]</color> L'avis de {_character.CharacterName} sur {target.CharacterName} est maintenant de {rel.RelationValue} ({rel.RelationType}) [Modif: {amount} -> {roundedAmount}]");
 
         OnRelationsUpdated?.Invoke();
 

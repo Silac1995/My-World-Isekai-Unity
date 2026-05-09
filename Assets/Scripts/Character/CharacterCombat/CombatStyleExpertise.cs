@@ -14,7 +14,7 @@ public class CombatStyleExpertise
     public float Experience => _experience;
     public SkillTier CurrentTier => SkillTierExtensions.GetTierForLevel(_level);
 
-    // Propriété pour un accès rapide (recommandé)
+    // Property for quick access (recommended)
     public WeaponType WeaponType => _style != null ? _style.WeaponType : WeaponType.None;
 
     public CombatStyleExpertise(CombatStyleSO style)
@@ -24,10 +24,20 @@ public class CombatStyleExpertise
         _experience = 0f;
     }
 
-    // La méthode demandée
+    /// <summary>
+    /// Restore constructor used by the save/load system to rebuild expertise state.
+    /// </summary>
+    public CombatStyleExpertise(CombatStyleSO style, int level, float experience)
+    {
+        _style = style;
+        _level = Mathf.Clamp(level, 1, MAX_LEVEL);
+        _experience = _level >= MAX_LEVEL ? 0f : Mathf.Max(0f, experience);
+    }
+
+    // The requested method
     public WeaponType GetWeaponType()
     {
-        if (_style == null) return WeaponType.None; // Ou une valeur par défaut de ton Enum
+        if (_style == null) return WeaponType.None; // Or a default value of your Enum
         return _style.WeaponType;
     }
 
@@ -62,7 +72,7 @@ public class CombatStyleExpertise
 
         if (leveledUp)
         {
-            Debug.Log($"<color=yellow>[Combat]</color> Style {_style.StyleName} level UP ! (Niv. {_level})");
+            Debug.Log($"<color=yellow>[Combat]</color> Style {_style.StyleName} level UP! (Lv. {_level})");
         }
     }
 }

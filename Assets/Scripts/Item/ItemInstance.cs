@@ -1,17 +1,36 @@
-﻿using UnityEngine;
+using UnityEngine;
 using UnityEngine.U2D.Animation;
 
 [System.Serializable]
 public abstract class ItemInstance
 {
-    [SerializeField] protected ItemSO _itemSO; // Chang� en protected
+    [SerializeField] protected ItemSO _itemSO;
     [SerializeField] protected string _customizedName;
     public bool IsNewlyAdded { get; set; } = false;
 
     [SerializeField] private Color _primaryColor = new Color(0, 0, 0, 0);
     [SerializeField] private Color _secondaryColor = new Color(0, 0, 0, 0);
 
-    // Constructeur prot�g� car la classe est abstraite
+    // NOTE: must stay [SerializeField] — JsonUtility.ToJson / FromJsonOverwrite skip plain
+    // private fields, and the existing CharacterEquipment + StorageFurniture save paths rely
+    // on ItemInstance round-tripping through JsonUtility. Removing the attribute would silently
+    // drop OwnerBuildingId across every save/load cycle.
+    [SerializeField] private string _ownerBuildingId = "";
+
+    /// <summary>
+    /// Stable BuildingId of the CommercialBuilding whose tool storage owns this item. Stamped by
+    /// GoapAction_FetchToolFromStorage on pickup; cleared by GoapAction_ReturnToolToStorage on
+    /// return (or by StorageFurniture.AddItem when the item lands back in its origin storage,
+    /// covering the player path). Used by CharacterJob.CanPunchOut to gate shift end.
+    /// Empty string = item is not owned by any tool storage.
+    /// DO NOT introduce a parallel ID scheme — always use Building.BuildingId as the value.
+    /// </summary>
+    public string OwnerBuildingId
+    {
+        get => _ownerBuildingId ?? "";
+        set => _ownerBuildingId = value ?? "";
+    }
+
     protected ItemInstance(ItemSO data)
     {
         _itemSO = data;
@@ -43,8 +62,9 @@ public abstract class ItemInstance
     {
         if (instantiatedObject == null || _itemSO == null) return;
 
+        // On cherche le conteneur Visual
         Transform visualTransform = instantiatedObject.transform.Find("Visual");
-        if (visualTransform == null) return;
+        if (visualTransform == null) visualTransform = instantiatedObject.transform;
 
         string[] visualParts = { "Line", "Color_Main", "Color_Primary", "Color_Secondary" };
 
@@ -53,21 +73,17 @@ public abstract class ItemInstance
             Transform part = visualTransform.Find(partName);
             if (part == null) continue;
 
-            // 1. On s'assure que la library est � jour (si pr�sente sur l'enfant)
             if (part.TryGetComponent(out SpriteLibrary library))
             {
                 library.spriteLibraryAsset = _itemSO.SpriteLibraryAsset;
             }
 
-            // 2. FORCE la cat�gorie avec celle du ScriptableObject
             if (part.TryGetComponent(out SpriteResolver resolver))
             {
                 string currentLabel = resolver.GetLabel();
-                // On r�-applique explicitement la cat�gorie du SO
                 resolver.SetCategoryAndLabel(_itemSO.CategoryName, currentLabel);
             }
 
-            // 3. Couleurs
             if (part.TryGetComponent(out SpriteRenderer sRenderer))
             {
                 if (partName == "Color_Primary" && HavePrimaryColor())
@@ -83,9 +99,8 @@ public abstract class ItemInstance
         if (worldObject == null || _itemSO == null) return;
 
         Transform visualTransform = worldObject.transform.Find("Visual");
-        if (visualTransform == null) return;
+        if (visualTransform == null) visualTransform = worldObject.transform;
 
-        // On d�finit nos parties et on s'en sert aussi comme Labels
         string[] visualParts = { "Line", "Color_Main", "Color_Primary", "Color_Secondary" };
 
         foreach (string partName in visualParts)
@@ -93,31 +108,26 @@ public abstract class ItemInstance
             Transform part = visualTransform.Find(partName);
             if (part == null) continue;
 
-            // 1. Initialisation de la Library
             if (part.TryGetComponent(out SpriteLibrary library))
             {
                 library.spriteLibraryAsset = _itemSO.SpriteLibraryAsset;
             }
 
-            // 2. Initialisation du Resolver (Cat�gorie ET Label)
             if (part.TryGetComponent(out SpriteResolver resolver))
             {
-                // On utilise partName ("Line", "Color_Main", etc.) comme Label
-                // car c'est ainsi que tes sprites sont nomm�s dans ta Sprite Library Asset
                 resolver.SetCategoryAndLabel(_itemSO.CategoryName, partName);
-
-                // On force la mise � jour visuelle imm�diate
                 resolver.ResolveSpriteToSpriteRenderer();
             }
 
-            // 3. Application des couleurs
             if (part.TryGetComponent(out SpriteRenderer sRenderer))
             {
                 if (partName == "Color_Primary" && HavePrimaryColor())
-                    sRenderer.color = PrimaryColor;
+                    sRenderer.color = _primaryColor;
                 else if (partName == "Color_Secondary" && HaveSecondaryColor())
-                    sRenderer.color = SecondaryColor;
+                    sRenderer.color = _secondaryColor;
             }
         }
     }
+
+
 }

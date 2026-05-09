@@ -58,12 +58,14 @@ public class UI_TargetIndicator : MonoBehaviour
         }
 
         // Evaluate new target
-        _currentTarget = targetTransform != null ? targetTransform.GetComponent<Character>() : null;
+        _currentTarget = targetTransform != null ? targetTransform.GetComponentInParent<Character>() : null;
 
         if (_currentTarget != null && _currentTarget.Stats?.Health != null)
         {
             _currentTarget.Stats.Health.OnAmountChanged += HandleHealthChanged;
-            UpdateHealthVisualUI(_currentTarget.Stats.Health.CurrentValue, _currentTarget.Stats.Health.MaxValue);
+            
+            // FIX: Use CurrentAmount (Current HP) instead of CurrentValue (Max HP) for initial sync
+            UpdateHealthVisualUI(_currentTarget.Stats.Health.CurrentAmount, _currentTarget.Stats.Health.MaxValue);
         }
         else
         {

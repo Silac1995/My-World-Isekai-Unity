@@ -29,7 +29,8 @@ When an `ItemInstance` is dropped from the inventory, it materializes a local `W
 - The script assigns the SO's child `ItemPrefab` to the `_visualRoot` Node.
 - **Performance Rule**: To avoid expensive `GetComponentInChildren<>` lookups during AI Navigation and Interaction checks, `WorldItem` natively exposes `public ItemInteractable ItemInteractable { get; }` which is serialized in the inspector.
 - **Destruction Rule**: When picking up an item from the scene/world, **always destroy it IN THE `Assets/Scripts/Character/CharacterActions/CharacterPickUpItem.cs`**. NOWHERE ELSE! > **NEVER** manually call `Object.Destroy()` on a `WorldItem` or its GameObject from external AI/GOAP scripts. This bypasses the inventory system and causes ghost item duplication. To remove an item from the floor, you **MUST** execute a `CharacterPickUpItem` action and let it resolve the destruction natively. If you reserve an item with `TryCollect()` but the subsequent action fails to execute, you **MUST** call `CancelCollect()` to free the item for other characters.
-- **Spawning Rule**: To SPAWN an item in the world through `Assets/Scripts/Item/WorldItem.cs`, in the `Assets/Scripts/Item/ItemInstance.cs` there are methods to keep the `ItemInstance` parameters. If it's a brand new item, it MUST be instantiated through `Assets/Resources/Data/Item/ItemSO.cs` using the methods that take color and other parameters.
+- **Network Despawn Rule**: `CharacterPickUpItem.OnApplyEffect()` uses `character.CharacterActions.RequestDespawnServerRpc(netObj)` to despawn the WorldItem's NetworkObject. **Never call `netObj.Despawn()` directly** in an action — `OnApplyEffect` runs on the owner (which may be a client), but only the server can Despawn. Always route through the ServerRpc on `CharacterActions`.
+- **Spawning Rule**: All server-side WorldItem spawns use the single canonical API `WorldItem.SpawnWorldItem(ItemInstance, Vector3, Quaternion?, ejectImpulse, ejectTorque)` in `Assets/Scripts/Item/WorldItem.cs`. A convenience overload `SpawnWorldItem(ItemSO, Vector3, Quaternion?)` creates a default instance and delegates to it. Prefab resolution: `ItemSO.WorldItemPrefab` (per-item authored shell) → `SpawnManager.Instance.DefaultItemPrefab` (generic shell fallback when WorldItemPrefab is null). The `ejectImpulse`/`ejectTorque` optional parameters support crafting/debug scatter without a separate code path. `SpawnManager.SpawnItem` and `SpawnManager.SpawnCopyOfItem` have been removed — do not call them.
 - **Interaction Distance**: To interact with an object, to get in range, always use the `InteractionZone`.
 - The script bridges the memory data of the `ItemInstance` and the physical colors via `WearableHandlerBase` (for complex clothing) or a direct call to `InitializeWorldPrefab` (for a simple object like an apple).
 
@@ -38,3 +39,89 @@ This is the Hub component responsible for attaching an `ItemInstance` to the cha
 - **Layer System (`Layer`)**: The character has multiple clothing layers (`UnderwearLayer`, `ClothingLayer`, `ArmorLayer`). Equipping an item requires finding the right `TargetLayer` and injecting the instance into it.
 - **The Special Case of the Bag (`BagInstance`)**: A bag is a `WearableType.Bag`. When equipped, `CharacterEquipment` awakens the sockets physically attached to the character's back (`_bagSockets`), then visually instantiates the weapons located **inside** this `Inventory` linked to the bag.
 - > **Equip vs Unequip**: The use of `character.DropItem` is the pivotal function. It simultaneously manages stripping the player's local visual and spawning the `WorldItem` where the drop took place.
+
+### 6. Item Tier System
+All items have a base `int _tier` field on `ItemSO` (default 0 = untiered). Tier is used for gating mechanics:
+- **Keys**: `KeySO.Tier >= DoorLock.RequiredTier` to open a door.
+- **Locksmith skill**: Skill tier determines the max key tier that can be copied.
+
+### 7. Keys (`KeySO` / `KeyInstance`)
+Keys are a specialized item type for the door lock system.
+
+#### KeySO (`Assets/Data/Item/KeySO.cs`)
+- Extends `MiscSO` with a `string _lockId` field.
+- `_lockId` is for **static doors only** (dungeons, quest doors). **Leave empty** for building keys — the LockId is assigned at runtime.
+- Inherits `int Tier` from `ItemSO`.
+
+#### KeyInstance (`Assets/Scripts/Item/KeyInstance.cs`)
+- Extends `MiscInstance` with a runtime `_runtimeLockId` override.
+- `string LockId` property: returns `_runtimeLockId` if set, else falls back to `KeySO.LockId`.
+- `SetLockId(string lockId)`: Call this when creating keys for specific building instances (e.g., `key.SetLockId(building.BuildingId)`).
+- **Key lookup**: `CharacterEquipment.FindKeyForLock(string lockId, int requiredTier)` scans inventory slots and hands (`HandsController.CarriedItem`), matching on `KeyInstance.LockId == lockId && KeySO.Tier >= requiredTier`.
+
+### 8. Crafting: Reference-Only Ingredients
+`CraftingIngredient` has a `bool IsReferenceOnly` field (default `false`).
+- When `true`, the ingredient is **not consumed** during crafting — it's used as a reference input.
+- Primary use case: key copying recipes where the original key is a reference input (not consumed), and only raw materials are consumed.
+
+## WorldItem Physics & Pathing
+
+**Physics state**
+- WorldItems are non-kinematic Rigidbodies on the **RigidBody** layer (layer 8).
+- Layer matrix: RigidBody ↔ Default (characters) is **enabled** — characters can physically push items aside (this is what prevents drop-at-feet stuck cases).
+- Default mass = 2, linear damping = 3, angular damping = 4 (tuned for the project's 11 units = 1.67m scale).
+- Items are gravity-affected, sleep automatically when settled.
+- The `FreezeOnGround` mechanism has been removed (was the root cause of drop-at-feet stuck bugs).
+
+**AI pathing**
+- Each WorldItem prefab carries a `NavMeshObstacle` (carve=true), **disabled at spawn**.
+- The server-side `OnCollisionEnter` enables it on first contact (with anything — ground, another item, a wall).
+- Activation propagates to all peers via `_obstacleActive` (`NetworkVariable<bool>`, server-write, everyone-read). Each peer's local `OnObstacleActiveChanged` enables their own `NavMeshObstacle` so each navmesh carves correctly. Late-joiners apply the current value in `OnNetworkSpawn`.
+- Items can opt out via `ItemSO.BlocksPathing = false` (use for trash, coins).
+
+**Tuning (NavMeshObstacle)**
+- `Move Threshold = 0.1` — small character-bumps don't trigger re-carve.
+- `Time To Stationary = 0.5s` — tumbling items wait until still before re-carving.
+- `Carve Only Stationary = true` — moving items contribute nothing to the navmesh.
+
+**Performance posture**
+- Settled items cost ~0 (Rigidbody Sleep + carving's stationary handling).
+- Drop event = one carve-create. Pickup event = one carve-destroy. No per-frame cost.
+- If carving cost ever becomes a problem (hundreds of items in a hot area), the lever is distance-based NavMeshObstacle hibernation with hysteresis. Not implemented today.
+
+**Carried items**
+- `HandsController.AttachVisualToHand` instantiates the WorldItem prefab as a hand visual but immediately sets `Rigidbody.isKinematic = true` and disables all colliders. The carried clone never collides with anything, so its `NavMeshObstacle` never activates.
+
+### 5. Carrying in Hands (`HandsController`)
+When an item cannot be stored in the inventory (bag full or missing), the character can carry a single item in their hands.
+- **Priority**: The system always prioritizes the inventory. Hands are a "last resort" for carrying world objects.
+- **Visual Attachment**: Managed by `HandsController.cs`. It instantiates the `WorldItemPrefab` at the right hand's finger bone (identified via `SpriteSkin` or `bone_Fingers_R`).
+- **Sorting Logic**: To ensure the item appears naturally "inside" the hand, its `SortingGroup` is set to `handSortingOrder - 1`, placing it behind the fingers.
+- **Animations**: Carrying an item forces the hand into a `"fist"` pose. The item visual is automatically destroyed, and the hand returns to `"normal"` when dropped.
+- **Safety Measures**: Items in hands are automatically dropped when the character enters a combat state or becomes incapacitated (Unconscious/Death) to ensure hands are free for combat or physics-driven death anims.
+- **Physics**: Carried visuals have their `Rigidbody` set to kinematic and colliders disabled to avoid character movement glitches.
+
+### 6. Book System
+
+Books are a specialized item type for reading content and learning abilities/skills.
+
+#### Data Layer
+- **`BookSO`** (`Assets/Data/Item/BookSO.cs`): Extends `MiscSO`, implements `IAbilitySource`. Contains `_pages` (list of text), `_teachesAbility`, `_teachesSkill`, `_readingDifficulty`, and `_isWritable`.
+- **`BookInstance`** (`Assets/Scripts/Item/BookInstance.cs`): Extends `MiscInstance`. Dual identity system:
+  - `_instanceUid`: Unique per physical book item (for inventory tracking).
+  - `_contentId`: Shared across copies of the same content (for reading progress). Pre-authored books use the SO asset name; custom-written books get a unique GUID.
+- **Custom books**: `FinalizeWriting()` allows player-authored content with custom pages, teaching references, and author name. Custom refs resolve lazily from serialized IDs via `Resources.Load`.
+
+#### Character System
+- **`CharacterBookKnowledge`** (`Assets/Scripts/Character/CharacterBookKnowledge.cs`): `CharacterSystem` + `ISaveable`. Tracks `BookReadingEntry` per `contentId`.
+  - `GetReadingSpeed()`: `BASE_READING_RATE * (1 + Intelligence * 0.05)`.
+  - `AddProgress()`: Increments progress, triggers `OnBookCompleted()` when full.
+  - `OnBookCompleted()`: Calls `CharacterAbilities.LearnAbility()` and/or logs skill learning.
+  - `Update()`: Ticks the active `CharacterReadBookAction` if present.
+- **`CharacterReadBookAction`** (`Assets/Scripts/Character/CharacterActions/CharacterReadBookAction.cs`): Continuous action (`Duration = float.MaxValue`). Ticked by `CharacterBookKnowledge.Update()`. Progress saved to reading log on cancel.
+
+#### Key Rules
+- Book copies share reading progress via `contentId` — reading one copy progresses all copies of the same content.
+- Books are NOT consumed on completion.
+- Reading speed scales with Intelligence.
+- `Character.CharacterBookKnowledge` property added to `Character.cs` with auto-resolution in initialization.

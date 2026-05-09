@@ -1,0 +1,590 @@
+using System.Collections.Generic;
+using TMPro;
+using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
+
+/// <summary>
+/// Spawn tab of the dev-mode panel. Owns all dropdowns, multi-entry rows, the
+/// Count field, and the Armed toggle. When armed, left-click on the Environment
+/// layer spawns N configured NPCs at the cursor.
+/// </summary>
+public class DevSpawnModule : MonoBehaviour
+{
+    [Header("Core dropdowns")]
+    [SerializeField] private TMP_Dropdown _raceDropdown;
+    [SerializeField] private TMP_Dropdown _prefabDropdown;
+    [SerializeField] private TMP_Dropdown _personalityDropdown;
+    [SerializeField] private TMP_Dropdown _traitDropdown;
+
+    [Header("Item dropdown (Item sub-tab)")]
+    [Tooltip("Item list shown by the Item sub-tab. Selecting any item drops it (or N copies) at the click point. The Character sub-tab ignores this dropdown.")]
+    [SerializeField] private TMP_Dropdown _itemDropdown;
+
+    [Header("Sub-tabs (Character / Item)")]
+    [SerializeField] private Button _charSubTabButton;
+    [SerializeField] private Button _itemSubTabButton;
+    [SerializeField] private GameObject _charSubPanel;
+    [SerializeField] private GameObject _itemSubPanel;
+
+    [Header("Combat styles list")]
+    [SerializeField] private Transform _combatStylesContainer;
+    [SerializeField] private Button _addCombatStyleButton;
+
+    [Header("Skills list")]
+    [SerializeField] private Transform _skillsContainer;
+    [SerializeField] private Button _addSkillButton;
+
+    [Header("Count & Armed")]
+    [SerializeField] private TMP_InputField _countField;
+    [SerializeField] private Toggle _armedToggle;
+
+    [Header("Row prefab")]
+    [Tooltip("Prefab with DevSpawnRow script. Shared between combat and skill lists.")]
+    [SerializeField] private DevSpawnRow _rowPrefab;
+
+    // --- Cached catalogs (Resources) ---
+    private List<RaceSO> _races = new List<RaceSO>();
+    private List<GameObject> _racePrefabs = new List<GameObject>();
+    private List<CharacterPersonalitySO> _personalities = new List<CharacterPersonalitySO>();
+    private List<CharacterBehavioralTraitsSO> _traits = new List<CharacterBehavioralTraitsSO>();
+    private List<CombatStyleSO> _combatStyles = new List<CombatStyleSO>();
+    private List<SkillSO> _skills = new List<SkillSO>();
+    private List<ItemSO> _items = new List<ItemSO>();
+
+    private readonly List<DevSpawnRow> _combatRows = new List<DevSpawnRow>();
+    private readonly List<DevSpawnRow> _skillRows = new List<DevSpawnRow>();
+
+    private enum SpawnSubTab { Character, Item }
+    private SpawnSubTab _activeSubTab = SpawnSubTab.Character;
+
+    private const int ENVIRONMENT_LAYER_MASK_FALLBACK = ~0; // used only if Environment layer missing
+    private int _environmentLayerMask;
+
+    private void Start()
+    {
+        LoadCatalogs();
+        PopulateCoreDropdowns();
+        WireListeners();
+        SetupEnvironmentLayerMask();
+    }
+
+    private void OnDestroy()
+    {
+        UnwireListeners();
+    }
+
+    // ─── Catalog loading ─────────────────────────────────────────────
+
+    private void LoadCatalogs()
+    {
+        _races.Clear();
+        if (GameSessionManager.Instance != null && GameSessionManager.Instance.AvailableRaces != null)
+        {
+            _races.AddRange(GameSessionManager.Instance.AvailableRaces);
+        }
+
+        _personalities.Clear();
+        _personalities.AddRange(Resources.LoadAll<CharacterPersonalitySO>("Data/Personnality"));
+
+        _traits.Clear();
+        _traits.AddRange(Resources.LoadAll<CharacterBehavioralTraitsSO>("Data/Behavioural Traits"));
+
+        _combatStyles.Clear();
+        _combatStyles.AddRange(Resources.LoadAll<CombatStyleSO>("Data/CombatStyle"));
+
+        _skills.Clear();
+        _skills.AddRange(Resources.LoadAll<SkillSO>("Data/Skills"));
+
+        // Items — alphabetised by display name for usability in the override dropdown.
+        _items.Clear();
+        _items.AddRange(Resources.LoadAll<ItemSO>("Data/Item"));
+        _items.Sort((a, b) =>
+        {
+            string an = (a != null && a.ItemName != null) ? a.ItemName : string.Empty;
+            string bn = (b != null && b.ItemName != null) ? b.ItemName : string.Empty;
+            return string.Compare(an, bn, System.StringComparison.OrdinalIgnoreCase);
+        });
+
+        Debug.Log($"<color=cyan>[DevSpawn]</color> Catalogs loaded — races:{_races.Count} personalities:{_personalities.Count} traits:{_traits.Count} combat:{_combatStyles.Count} skills:{_skills.Count} items:{_items.Count}");
+    }
+
+    private void PopulateCoreDropdowns()
+    {
+        if (_raceDropdown != null)
+        {
+            _raceDropdown.ClearOptions();
+            var names = new List<string>();
+            foreach (var r in _races) names.Add(r.raceName);
+            _raceDropdown.AddOptions(names);
+            _raceDropdown.value = 0;
+            _raceDropdown.RefreshShownValue();
+            RefreshPrefabDropdown();
+        }
+
+        if (_personalityDropdown != null)
+        {
+            var names = new List<string> { "Random" };
+            foreach (var p in _personalities) names.Add(p.PersonalityName);
+            _personalityDropdown.ClearOptions();
+            _personalityDropdown.AddOptions(names);
+            _personalityDropdown.value = 0;
+            _personalityDropdown.RefreshShownValue();
+        }
+
+        if (_traitDropdown != null)
+        {
+            var names = new List<string> { "Random" };
+            foreach (var t in _traits) names.Add(t.name);
+            _traitDropdown.ClearOptions();
+            _traitDropdown.AddOptions(names);
+            _traitDropdown.value = 0;
+            _traitDropdown.RefreshShownValue();
+        }
+
+        if (_itemDropdown != null)
+        {
+            // Sub-tab determines mode now — the dropdown is just a list of items (no sentinel).
+            var names = new List<string>();
+            foreach (var it in _items)
+            {
+                if (it == null) continue;
+                names.Add(string.IsNullOrEmpty(it.ItemName) ? it.name : it.ItemName);
+            }
+            _itemDropdown.ClearOptions();
+            _itemDropdown.AddOptions(names);
+            _itemDropdown.value = 0;
+            _itemDropdown.RefreshShownValue();
+        }
+    }
+
+    private void RefreshPrefabDropdown()
+    {
+        if (_prefabDropdown == null) return;
+
+        _racePrefabs.Clear();
+        var names = new List<string>();
+
+        if (_raceDropdown != null && _races.Count > 0)
+        {
+            var race = _races[Mathf.Clamp(_raceDropdown.value, 0, _races.Count - 1)];
+            foreach (var prefab in race.character_prefabs)
+            {
+                if (prefab != null)
+                {
+                    _racePrefabs.Add(prefab);
+                    names.Add(prefab.name);
+                }
+            }
+        }
+
+        _prefabDropdown.ClearOptions();
+        _prefabDropdown.AddOptions(names);
+        _prefabDropdown.value = 0;
+        _prefabDropdown.RefreshShownValue();
+    }
+
+    // ─── Sub-tab navigation ───────────────────────────────────────────
+
+    private void ShowCharacterSubTab()
+    {
+        _activeSubTab = SpawnSubTab.Character;
+        if (_charSubPanel != null) _charSubPanel.SetActive(true);
+        if (_itemSubPanel != null) _itemSubPanel.SetActive(false);
+        UpdateSubTabVisuals();
+    }
+
+    private void ShowItemSubTab()
+    {
+        _activeSubTab = SpawnSubTab.Item;
+        if (_charSubPanel != null) _charSubPanel.SetActive(false);
+        if (_itemSubPanel != null) _itemSubPanel.SetActive(true);
+        UpdateSubTabVisuals();
+    }
+
+    /// <summary>
+    /// Disables the active sub-tab button so it reads as "selected" while the inactive one
+    /// stays clickable. Cheap visual cue without an extra style asset or selection sprite.
+    /// </summary>
+    private void UpdateSubTabVisuals()
+    {
+        if (_charSubTabButton != null) _charSubTabButton.interactable = (_activeSubTab != SpawnSubTab.Character);
+        if (_itemSubTabButton != null) _itemSubTabButton.interactable = (_activeSubTab != SpawnSubTab.Item);
+    }
+
+    // ─── Listener wiring ─────────────────────────────────────────────
+
+    private void WireListeners()
+    {
+        if (_raceDropdown != null) _raceDropdown.onValueChanged.AddListener(HandleRaceChanged);
+        if (_addCombatStyleButton != null) _addCombatStyleButton.onClick.AddListener(AddCombatRow);
+        if (_addSkillButton != null) _addSkillButton.onClick.AddListener(AddSkillRow);
+        if (_armedToggle != null) _armedToggle.onValueChanged.AddListener(HandleArmedChanged);
+
+        if (_charSubTabButton != null) _charSubTabButton.onClick.AddListener(ShowCharacterSubTab);
+        if (_itemSubTabButton != null) _itemSubTabButton.onClick.AddListener(ShowItemSubTab);
+
+        if (DevModeManager.Instance != null)
+        {
+            DevModeManager.Instance.OnDevModeChanged += HandleDevModeChanged;
+            DevModeManager.Instance.OnClickConsumerChanged += HandleClickConsumerChanged;
+        }
+
+        // Default to character sub-tab on startup.
+        ShowCharacterSubTab();
+    }
+
+    private void UnwireListeners()
+    {
+        if (_raceDropdown != null) _raceDropdown.onValueChanged.RemoveListener(HandleRaceChanged);
+        if (_addCombatStyleButton != null) _addCombatStyleButton.onClick.RemoveListener(AddCombatRow);
+        if (_addSkillButton != null) _addSkillButton.onClick.RemoveListener(AddSkillRow);
+        if (_armedToggle != null) _armedToggle.onValueChanged.RemoveListener(HandleArmedChanged);
+
+        if (_charSubTabButton != null) _charSubTabButton.onClick.RemoveListener(ShowCharacterSubTab);
+        if (_itemSubTabButton != null) _itemSubTabButton.onClick.RemoveListener(ShowItemSubTab);
+
+        if (DevModeManager.Instance != null)
+        {
+            DevModeManager.Instance.OnDevModeChanged -= HandleDevModeChanged;
+            DevModeManager.Instance.OnClickConsumerChanged -= HandleClickConsumerChanged;
+        }
+
+        foreach (var row in _combatRows) if (row != null) row.OnRemoveClicked -= HandleCombatRowRemove;
+        foreach (var row in _skillRows) if (row != null) row.OnRemoveClicked -= HandleSkillRowRemove;
+    }
+
+    private void HandleRaceChanged(int _) => RefreshPrefabDropdown();
+
+    private void HandleDevModeChanged(bool isEnabled)
+    {
+        if (!isEnabled && _armedToggle != null && _armedToggle.isOn)
+        {
+            _armedToggle.isOn = false;
+        }
+    }
+
+    private void HandleClickConsumerChanged()
+    {
+        if (DevModeManager.Instance == null) return;
+        if (DevModeManager.Instance.ActiveClickConsumer == this) return;
+        // Another module claimed the click stream — disarm our toggle.
+        if (_armedToggle != null && _armedToggle.isOn) _armedToggle.isOn = false;
+    }
+
+    // ─── Row management ───────────────────────────────────────────────
+
+    private void AddCombatRow()
+    {
+        if (_rowPrefab == null || _combatStylesContainer == null) return;
+        var row = Instantiate(_rowPrefab, _combatStylesContainer);
+        var names = new List<string>();
+        foreach (var s in _combatStyles) names.Add(s.StyleName);
+        row.Populate(names, defaultLevel: 1);
+        row.OnRemoveClicked += HandleCombatRowRemove;
+        _combatRows.Add(row);
+    }
+
+    private void HandleCombatRowRemove(DevSpawnRow row)
+    {
+        _combatRows.Remove(row);
+        row.OnRemoveClicked -= HandleCombatRowRemove;
+        Destroy(row.gameObject);
+    }
+
+    private void AddSkillRow()
+    {
+        if (_rowPrefab == null || _skillsContainer == null) return;
+        var row = Instantiate(_rowPrefab, _skillsContainer);
+        var names = new List<string>();
+        foreach (var s in _skills) names.Add(s.SkillName);
+        row.Populate(names, defaultLevel: 1);
+        row.OnRemoveClicked += HandleSkillRowRemove;
+        _skillRows.Add(row);
+    }
+
+    private void HandleSkillRowRemove(DevSpawnRow row)
+    {
+        _skillRows.Remove(row);
+        row.OnRemoveClicked -= HandleSkillRowRemove;
+        Destroy(row.gameObject);
+    }
+
+    // ─── Click-to-spawn ──────────────────────────────────────────────
+
+    private void SetupEnvironmentLayerMask()
+    {
+        int envLayer = LayerMask.NameToLayer("Environment");
+        if (envLayer < 0)
+        {
+            Debug.LogWarning("<color=orange>[DevSpawn]</color> 'Environment' layer not found — falling back to all layers.");
+            _environmentLayerMask = ENVIRONMENT_LAYER_MASK_FALLBACK;
+        }
+        else
+        {
+            _environmentLayerMask = 1 << envLayer;
+        }
+    }
+
+    private void HandleArmedChanged(bool armed)
+    {
+        Debug.Log($"<color=cyan>[DevSpawn]</color> Armed: {armed}");
+        if (DevModeManager.Instance == null) return;
+        if (armed) DevModeManager.Instance.SetClickConsumer(this);
+        else DevModeManager.Instance.ClearClickConsumer(this);
+    }
+
+    private void Update()
+    {
+        if (DevModeManager.Instance == null || !DevModeManager.Instance.IsEnabled) return;
+
+        // Armed click-loop (legacy path — kept for discoverability via the toggle).
+        // Global shortcuts (Ctrl+Click / Space+Click / ESC) are handled by DevModeManager so
+        // they keep working regardless of which tab's content is currently active.
+        if (_armedToggle == null || !_armedToggle.isOn) return;
+        if (DevModeManager.Instance.ActiveClickConsumer != this) return;
+
+        // Escape disarms the toggle in armed mode (also handled globally by DevModeManager).
+        if (Input.GetKeyDown(KeyCode.Escape))
+        {
+            _armedToggle.isOn = false;
+            return;
+        }
+
+        // If Space or Ctrl is held, DevModeManager handles the click — don't double-fire here.
+        if (Input.GetKey(KeyCode.Space)) return;
+        if (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)) return;
+
+        if (!Input.GetMouseButtonDown(0)) return;
+
+        if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
+        {
+            return;
+        }
+
+        if (TryRaycastEnvironment(out Vector3 hitPoint))
+        {
+            SpawnAt(hitPoint);
+        }
+    }
+
+    // ─── Shortcut API (invoked by DevModeManager) ─────────────────────
+
+    /// <summary>
+    /// Raycasts the environment and spawns using the panel's current configuration. Returns true
+    /// on successful spawn. Public so <see cref="DevModeManager"/> can invoke it as a global shortcut.
+    /// </summary>
+    public bool TrySpawnAtCursor()
+    {
+        if (TryRaycastEnvironment(out Vector3 hitPoint))
+        {
+            SpawnAt(hitPoint);
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>Disarm the armed toggle if on (invoked by DevModeManager's ESC shortcut).</summary>
+    public void DisarmToggle()
+    {
+        if (_armedToggle != null && _armedToggle.isOn) _armedToggle.isOn = false;
+    }
+
+    /// <summary>True iff the armed Spawn toggle is currently on.</summary>
+    public bool IsArmed => _armedToggle != null && _armedToggle.isOn;
+
+    private bool TryRaycastEnvironment(out Vector3 hitPoint)
+    {
+        hitPoint = default;
+        Camera cam = Camera.main;
+        if (cam == null)
+        {
+            Debug.LogWarning("<color=orange>[DevSpawn]</color> Camera.main is null — cannot spawn.");
+            return false;
+        }
+
+        Ray ray = cam.ScreenPointToRay(Input.mousePosition);
+        if (!Physics.Raycast(ray, out RaycastHit hit, 500f, _environmentLayerMask))
+        {
+            return false;
+        }
+
+        hitPoint = hit.point;
+        return true;
+    }
+
+    private void SpawnAt(Vector3 anchor)
+    {
+        // Sub-tab determines spawn type: Item sub-tab routes to SpawnItemBatch using the
+        // currently-selected item; Character sub-tab falls through to NPC spawn below.
+        if (_activeSubTab == SpawnSubTab.Item)
+        {
+            if (_itemDropdown != null && _items != null
+                && _itemDropdown.value >= 0 && _itemDropdown.value < _items.Count
+                && _items[_itemDropdown.value] != null)
+            {
+                SpawnItemBatch(anchor, _items[_itemDropdown.value]);
+            }
+            else
+            {
+                Debug.LogWarning("<color=orange>[DevSpawn]</color> Item sub-tab active but no valid item selected.");
+            }
+            return;
+        }
+
+        if (_races.Count == 0 || _racePrefabs.Count == 0)
+        {
+            Debug.LogError("<color=red>[DevSpawn]</color> No race or prefab available.");
+            return;
+        }
+
+        RaceSO race = _races[Mathf.Clamp(_raceDropdown.value, 0, _races.Count - 1)];
+        GameObject prefab = _racePrefabs[Mathf.Clamp(_prefabDropdown.value, 0, _racePrefabs.Count - 1)];
+
+        int n = 1;
+        if (_countField != null && int.TryParse(_countField.text, out int parsed)) n = Mathf.Max(1, parsed);
+
+        float radius = 4f * Mathf.Sqrt(n);
+
+        for (int i = 0; i < n; i++)
+        {
+            Vector3 pos = anchor;
+            if (n > 1)
+            {
+                Vector2 offset = Random.insideUnitCircle * radius;
+                pos += new Vector3(offset.x, 0f, offset.y);
+            }
+
+            CharacterPersonalitySO personality = ResolvePersonality();
+            CharacterBehavioralTraitsSO trait = ResolveTrait();
+            List<(CombatStyleSO, int)> combatList = BuildCombatList();
+            List<(SkillSO, int)> skillList = BuildSkillList();
+
+            var character = SpawnManager.Instance.SpawnCharacter(
+                pos: pos,
+                race: race,
+                visualPrefab: prefab,
+                personality: personality,
+                traits: trait,
+                combatStyles: combatList,
+                skills: skillList
+            );
+
+            if (character == null)
+            {
+                Debug.LogError($"<color=red>[DevSpawn]</color> Spawn {i} returned null.");
+            }
+        }
+
+        Debug.Log($"<color=green>[DevSpawn]</color> Spawned {n} NPC(s) near {anchor} (radius {radius:F2}u).");
+    }
+
+    /// <summary>
+    /// Drops N copies of <paramref name="item"/> around <paramref name="anchor"/> using the same
+    /// scatter formula as character spawning (radius = 4 * sqrt(N)). Server-only — bails with a
+    /// clear log if invoked on a client. SpawnManager.SpawnItem also enforces this internally.
+    /// </summary>
+    private void SpawnItemBatch(Vector3 anchor, ItemSO item)
+    {
+        if (item == null)
+        {
+            Debug.LogError("<color=red>[DevSpawn]</color> SpawnItemBatch called with null item.");
+            return;
+        }
+
+        // WorldItem.SpawnWorldItem enforces server authority internally; surface the origin early.
+        if (Unity.Netcode.NetworkManager.Singleton != null && !Unity.Netcode.NetworkManager.Singleton.IsServer)
+        {
+            Debug.LogWarning("<color=orange>[DevSpawn]</color> Item spawn requested on a client — host-only operation, ignoring.");
+            return;
+        }
+
+        int n = 1;
+        if (_countField != null && int.TryParse(_countField.text, out int parsed)) n = Mathf.Max(1, parsed);
+
+        float radius = 4f * Mathf.Sqrt(n);
+        int spawned = 0;
+
+        for (int i = 0; i < n; i++)
+        {
+            Vector3 pos = anchor;
+            if (n > 1)
+            {
+                Vector2 offset = Random.insideUnitCircle * radius;
+                pos += new Vector3(offset.x, 0f, offset.y);
+            }
+
+            try
+            {
+                ItemInstance instance = item.CreateInstance();
+                if (instance is EquipmentInstance equipment)
+                {
+                    equipment.SetPrimaryColor(Random.ColorHSV(0f, 1f, 0.5f, 1f, 0.5f, 1f));
+                    if (equipment is WearableInstance wearable)
+                        wearable.SetSecondaryColor(Random.ColorHSV(0f, 1f, 0.3f, 0.8f, 0.3f, 0.8f));
+                }
+
+                float rx = Random.Range(-1f, 1f);
+                float rz = Random.Range(-1f, 1f);
+                Vector3 ejectForce = new Vector3(rx * 2f, 5f, rz * 2f);
+                Vector3 ejectTorque = new Vector3(Random.Range(-10f, 10f), Random.Range(-10f, 10f), Random.Range(-10f, 10f));
+
+                var worldItem = WorldItem.SpawnWorldItem(instance, pos, ejectImpulse: ejectForce, ejectTorque: ejectTorque);
+                if (worldItem != null) spawned++;
+                else Debug.LogWarning($"<color=orange>[DevSpawn]</color> SpawnWorldItem {i} returned null for '{item.ItemName}'.");
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogException(e);
+            }
+        }
+
+        Debug.Log($"<color=green>[DevSpawn]</color> Spawned {spawned}/{n} '{item.ItemName}' near {anchor} (radius {radius:F2}u).");
+    }
+
+    private CharacterPersonalitySO ResolvePersonality()
+    {
+        if (_personalityDropdown == null || _personalities.Count == 0) return null;
+        int v = _personalityDropdown.value;
+        if (v == 0) return null; // Random — SpawnManager handles it
+        int idx = v - 1;
+        return (idx >= 0 && idx < _personalities.Count) ? _personalities[idx] : null;
+    }
+
+    private CharacterBehavioralTraitsSO ResolveTrait()
+    {
+        if (_traitDropdown == null || _traits.Count == 0) return null;
+        int v = _traitDropdown.value;
+        if (v == 0) return null;
+        int idx = v - 1;
+        return (idx >= 0 && idx < _traits.Count) ? _traits[idx] : null;
+    }
+
+    private List<(CombatStyleSO, int)> BuildCombatList()
+    {
+        if (_combatRows.Count == 0) return null;
+        var list = new List<(CombatStyleSO, int)>();
+        foreach (var row in _combatRows)
+        {
+            if (row == null) continue;
+            int i = row.SelectedIndex;
+            if (i < 0 || i >= _combatStyles.Count) continue;
+            list.Add((_combatStyles[i], row.Level));
+        }
+        return list.Count > 0 ? list : null;
+    }
+
+    private List<(SkillSO, int)> BuildSkillList()
+    {
+        if (_skillRows.Count == 0) return null;
+        var list = new List<(SkillSO, int)>();
+        foreach (var row in _skillRows)
+        {
+            if (row == null) continue;
+            int i = row.SelectedIndex;
+            if (i < 0 || i >= _skills.Count) continue;
+            list.Add((_skills[i], row.Level));
+        }
+        return list.Count > 0 ? list : null;
+    }
+}

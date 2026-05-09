@@ -4,9 +4,9 @@ using UnityEngine.AI;
 namespace MWI.AI
 {
     /// <summary>
-    /// Implémentation native de l'exploration (Wander) pour le Behaviour Tree.
-    /// Ne dépend plus de l'ancien IAIBehaviour (WanderBehaviour) pour éviter 
-    /// les conflits de Coroutines sous-jacentes.
+    /// Native Wander implementation for the Behaviour Tree.
+    /// No longer depends on the old IAIBehaviour (WanderBehaviour) to avoid
+    /// underlying Coroutine conflicts.
     /// </summary>
     public class BTAction_Wander : BTNode
     {
@@ -50,7 +50,7 @@ namespace MWI.AI
             // Wait until NavMesh thread answers
             if (_framesSincePathRequest > 5)
             {
-                // Vérifier si on est arrivé à destination
+                // Check whether we reached the destination
                 if (!movement.PathPending && (!movement.HasPath || movement.RemainingDistance <= movement.StoppingDistance + 0.5f))
                 {
                     StartWaiting(bb.Self);
@@ -58,7 +58,7 @@ namespace MWI.AI
                 }
             }
 
-            // Détection anti-glissement sur les bords
+            // Anti-sliding detection at the edges
             if (NavMesh.FindClosestEdge(self.transform.position, out NavMeshHit hit, NavMesh.AllAreas))
             {
                 if (hit.distance < FORCE_NEW_DEST_DIST)
@@ -132,7 +132,7 @@ namespace MWI.AI
 
             bool pathFound = false;
 
-            // Essayer jusqu'à 5 fois de trouver un point atteignable (PathComplete)
+            // Try up to 5 times to find a reachable point (PathComplete)
             for (int i = 0; i < 5; i++)
             {
                 Vector3 randomPos;

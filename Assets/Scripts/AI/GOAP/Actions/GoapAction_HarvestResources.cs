@@ -70,8 +70,57 @@ public class GoapAction_HarvestResources : GoapAction
             if (!handsFree && !bagHasSpace) return false;
         }
 
-        return true;
+        // Reject the action up front when no matching HarvestResourceTask is reachable for
+        // this worker. Without this check, the planner picks Harvest (cost 1) over Destroy
+        // (cost 5) whenever it's "valid", the action fails to claim anything in Execute,
+        // _isComplete = true, planner replans, picks Harvest again — workers loop between
+        // Idle (when stuckWaitingForTrees flips on) and HarvestResources without ever
+        // running. Mirrors the symmetric guard in GoapAction_DestroyHarvestable.IsValid.
+        var taskMgr = _building.TaskManager;
+        if (taskMgr == null) return false;
+        var wanted = _building.GetWantedItems();
+        if (wanted == null || wanted.Count == 0) return false;
+
+        bool found = taskMgr.HasAvailableOrClaimedTask<HarvestResourceTask>(worker, task =>
+        {
+            var h = task.Target as Harvestable;
+            if (h == null) return false;
+            if (worker.PathingMemory.IsBlacklisted(h.gameObject.GetInstanceID())) return false;
+            return h.HasAnyYieldOutput(wanted);
+        });
+
+        // Throttled diagnostic: when worldState's hasUnfilledHarvestTask is true but the
+        // predicate-filtered version returns false, surface WHY each HarvestResourceTask
+        // failed (blacklisted, no yield match, or task target null/invalid). 1 Hz per worker.
+        if (!found)
+        {
+            float now = UnityEngine.Time.unscaledTime;
+            if (now - _lastIsValidDumpTime > 1f)
+            {
+                _lastIsValidDumpTime = now;
+                int total = 0, blacklisted = 0, noYieldMatch = 0, taskInvalid = 0, nullTarget = 0;
+                var av = taskMgr.AvailableTasks;
+                for (int i = 0; i < av.Count; i++)
+                {
+                    if (!(av[i] is HarvestResourceTask hrt)) continue;
+                    total++;
+                    if (!hrt.IsValid()) { taskInvalid++; continue; }
+                    var h = hrt.Target as Harvestable;
+                    if (h == null) { nullTarget++; continue; }
+                    if (worker.PathingMemory.IsBlacklisted(h.gameObject.GetInstanceID())) { blacklisted++; continue; }
+                    if (!h.HasAnyYieldOutput(wanted)) { noYieldMatch++; continue; }
+                }
+                Debug.Log(
+                    $"<color=red>[HarvestResources.IsValid]</color> {worker.CharacterName} REJECTED: " +
+                    $"total HarvestResourceTask in Available={total}, taskInvalid={taskInvalid}, " +
+                    $"nullTarget={nullTarget}, blacklisted={blacklisted}, noYieldMatch={noYieldMatch}. " +
+                    $"wanted=[{string.Join(",", System.Linq.Enumerable.Select(wanted, w => w?.ItemName ?? "null"))}].");
+            }
+        }
+        return found;
     }
+
+    private float _lastIsValidDumpTime = -10f;
 
     public override void Execute(Character worker)
     {
@@ -79,7 +128,8 @@ public class GoapAction_HarvestResources : GoapAction
 
         if (!_building.HasHarvestableZone)
         {
-            Debug.Log($"<color=orange>[GOAP Harvest]</color> {worker.CharacterName} : la zone de récolte a disparu !");
+            if (NPCDebug.VerboseActions)
+                Debug.Log($"<color=orange>[GOAP Harvest]</color> {worker.CharacterName} : la zone de récolte a disparu !");
             _isComplete = true;
             return;
         }
@@ -94,15 +144,19 @@ public class GoapAction_HarvestResources : GoapAction
         // Phase 1 : Trouver un objet à récolter (Arbre, etc.)
         if (_currentTarget == null && _assignedTask == null)
         {
-            _assignedTask = _building.TaskManager?.ClaimBestTask<HarvestResourceTask>(worker, task => 
+            // Pre-existing claim from quest-system auto-claim (CommercialBuilding.WorkerStartingShift)
+            // takes precedence — see GoapAction_DestroyHarvestable for the full reasoning.
+            System.Predicate<HarvestResourceTask> filter = task =>
             {
                 var interactable = task.Target as Harvestable;
-                if (interactable == null || worker.PathingMemory.IsBlacklisted(interactable.gameObject.GetInstanceID())) 
+                if (interactable == null || worker.PathingMemory.IsBlacklisted(interactable.gameObject.GetInstanceID()))
                     return false;
-                
                 return interactable.HasAnyOutput(_building.GetWantedItems());
-            });
-            
+            };
+            _assignedTask = _building.TaskManager?.FindClaimedTaskByWorker<HarvestResourceTask>(worker, filter);
+            if (_assignedTask == null)
+                _assignedTask = _building.TaskManager?.ClaimBestTask<HarvestResourceTask>(worker, filter);
+
             if (_assignedTask != null)
             {
                 _currentTarget = _assignedTask.Target as Harvestable;
@@ -110,7 +164,8 @@ public class GoapAction_HarvestResources : GoapAction
 
             if (_currentTarget == null || _assignedTask == null)
             {
-                Debug.Log($"<color=orange>[GOAP Harvest]</color> {worker.CharacterName} : No available tasks right now (maybe all are claimed). Returning to Planner.");
+                if (NPCDebug.VerboseActions)
+                    Debug.Log($"<color=orange>[GOAP Harvest]</color> {worker.CharacterName} : No available tasks right now (maybe all are claimed). Returning to Planner.");
                 _isComplete = true;
                 return;
             }
@@ -130,7 +185,8 @@ public class GoapAction_HarvestResources : GoapAction
             // NEW: Abort if object was destroyed mid-walk
             if (_currentTarget == null)
             {
-                Debug.Log($"<color=red>[GOAP Harvest]</color> {worker.CharacterName} : La cible Harvestable a disparu pendant le trajet !");
+                if (NPCDebug.VerboseActions)
+                    Debug.Log($"<color=red>[GOAP Harvest]</color> {worker.CharacterName} : La cible Harvestable a disparu pendant le trajet !");
                 _building.TaskManager?.UnclaimTask(_assignedTask, worker);
                 _assignedTask = null;
                 _currentTarget = null;
@@ -150,9 +206,12 @@ public class GoapAction_HarvestResources : GoapAction
                     }
                     else
                     {
-                        // Fallback : On vérifie si on est assez proche du centre (1.5f)
+                        // Fallback distance must match the underlying CharacterHarvestAction range
+                        // tolerance so GOAP and Action agree on "close enough". Was 1.5f, bumped to
+                        // 2.5f after a tolerance-mismatch loop on small InteractionZone bounds —
+                        // see GoapAction_DestroyHarvestable for the full reasoning.
                         float dist = Vector3.Distance(worker.transform.position, _currentTarget.InteractionZone.bounds.ClosestPoint(worker.transform.position));
-                        if (dist <= 1.5f)
+                        if (dist <= 2.5f)
                         {
                             isAtTarget = true;
                         }
@@ -161,6 +220,30 @@ public class GoapAction_HarvestResources : GoapAction
                 else
                 {
                     isAtTarget = Vector3.Distance(worker.transform.position, _currentTarget.transform.position) <= 3f;
+                }
+
+                // Arrived-but-just-outside-zone softlock guard. The Harvestable's NavMesh
+                // Obstacle carve pushes the navmesh agent's natural stopping point a bit
+                // outside the strict 2.5u radius (carve perimeter + agent radius), so the
+                // strict checks above can fail repeatedly even though the worker has
+                // genuinely arrived. Without this guard, NavMeshUtility.HasPathFailed flips
+                // true on each retry and PathingMemory accumulates failures → after 3 the
+                // tree gets blacklisted and the worker abandons it forever (until OnNewDay
+                // / OnHourChanged clears it). Same pattern applied to FetchSeed +
+                // FetchToolFromStorage + ReturnToolToStorage.
+                if (!isAtTarget)
+                {
+                    bool agentArrived = !movement.HasPath
+                        || movement.RemainingDistance <= movement.StoppingDistance + 0.5f;
+                    if (agentArrived)
+                    {
+                        Vector3 a = new Vector3(worker.transform.position.x, 0f, worker.transform.position.z);
+                        Vector3 b = new Vector3(_currentTarget.transform.position.x, 0f, _currentTarget.transform.position.z);
+                        if (Vector3.Distance(a, b) <= 4f)
+                        {
+                            isAtTarget = true;
+                        }
+                    }
                 }
 
                 if (isAtTarget)
@@ -173,7 +256,8 @@ public class GoapAction_HarvestResources : GoapAction
 
                     _harvestAction.OnActionFinished += () =>
                     {
-                        Debug.Log($"<color=cyan>[GOAP Harvest]</color> {worker.CharacterName} a fini de récolter.");
+                        if (NPCDebug.VerboseActions)
+                            Debug.Log($"<color=cyan>[GOAP Harvest]</color> {worker.CharacterName} a fini de récolter.");
                         
                         // Si le component ne permet plus d'être récolté, on complète la tâche
                         if (_currentTarget != null && !_currentTarget.CanHarvest())
@@ -191,7 +275,8 @@ public class GoapAction_HarvestResources : GoapAction
 
                     if (!worker.CharacterActions.ExecuteAction(_harvestAction))
                     {
-                        Debug.Log($"<color=orange>[GOAP Harvest]</color> {worker.CharacterName} ne peut pas lancer la récolte.");
+                        if (NPCDebug.VerboseActions)
+                            Debug.Log($"<color=orange>[GOAP Harvest]</color> {worker.CharacterName} ne peut pas lancer la récolte.");
                         _building.TaskManager?.UnclaimTask(_assignedTask, worker);
                         _assignedTask = null;
                         _isComplete = true;
@@ -200,7 +285,8 @@ public class GoapAction_HarvestResources : GoapAction
                 else if (!movement.HasPath || movement.RemainingDistance <= movement.StoppingDistance + 0.2f)
                 {
                     // If we reached the end of the path but are still not in valid range, we are blocked physically
-                    Debug.Log($"<color=red>[GOAP Harvest]</color> {worker.CharacterName} est bloqué ou ne peut pas atteindre {_currentTarget.gameObject.name}. (Dist: {Vector3.Distance(worker.transform.position, _currentTarget.transform.position)})");
+                    if (NPCDebug.VerboseActions)
+                        Debug.Log($"<color=red>[GOAP Harvest]</color> {worker.CharacterName} est bloqué ou ne peut pas atteindre {_currentTarget.gameObject.name}. (Dist: {Vector3.Distance(worker.transform.position, _currentTarget.transform.position)})");
                     if (_currentTarget != null)
                     {
                         worker.PathingMemory.RecordFailure(_currentTarget.gameObject.GetInstanceID());
@@ -219,8 +305,9 @@ public class GoapAction_HarvestResources : GoapAction
         {
             if (worker.CharacterActions.CurrentAction != _harvestAction)
             {
-                Debug.Log($"<color=red>[GOAP Harvest]</color> {worker.CharacterName} : La récolte a été interrompue. Action annulée et on réinitialise l'objectif.");
-                _isComplete = true; 
+                if (NPCDebug.VerboseActions)
+                    Debug.Log($"<color=red>[GOAP Harvest]</color> {worker.CharacterName} : La récolte a été interrompue. Action annulée et on réinitialise l'objectif.");
+                _isComplete = true;
             }
         }
     }

@@ -56,8 +56,11 @@ public class RaceSO : ScriptableObject
     public float BaseAccuracyOffset = 0f;
     public float AccuracyMultiplier = 1f;
 
-    public float BaseCastingSpeedOffset = 0f;
-    public float CastingSpeedMultiplier = 1f;
+    public float BaseSpellCastingOffset = 0f;
+    public float SpellCastingMultiplier = 1f;
+
+    public float BaseCombatCastingOffset = 0f;
+    public float CombatCastingMultiplier = 1f;
 
     public float BaseMagicalPowerOffset = 0f;
     public float MagicalPowerMultiplier = 1f;

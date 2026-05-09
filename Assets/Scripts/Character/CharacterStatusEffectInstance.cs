@@ -13,6 +13,9 @@ public class CharacterStatusEffectInstance
     private Character caster;
     private Character target;
     private CharacterStatusEffect sourceAsset;
+    private bool _isSuspended = false;
+    private float _suspendCheckTimer = 0f;
+    private const float SUSPEND_CHECK_INTERVAL = 1f;
 
     public string StatusEffectName => statusEffectName;
     public CharacterStatusEffect SourceAsset => sourceAsset;
@@ -24,6 +27,7 @@ public class CharacterStatusEffectInstance
     public string Description => description;
     public Character Caster => caster;
     public Character Target => target;
+    public bool IsSuspended => _isSuspended;
 
     public CharacterStatusEffectInstance(CharacterStatusEffect effectAsset, Character caster, Character target)
     {
@@ -86,14 +90,39 @@ public class CharacterStatusEffectInstance
 
     public bool Tick(float deltaTime)
     {
-        // Internal ticks (for DOTs)
-        foreach (var instance in statusEffectInstances)
+        // 1. Evaluate suspend condition (once per second — anti-chatter)
+        if (sourceAsset.HasSuspendCondition && target != null)
         {
-            instance.Tick(deltaTime);
+            _suspendCheckTimer += deltaTime;
+            if (_suspendCheckTimer >= SUSPEND_CHECK_INTERVAL)
+            {
+                _suspendCheckTimer = 0f;
+                bool shouldSuspend = sourceAsset.SuspendCondition.Evaluate(target.Stats);
+
+                if (shouldSuspend && !_isSuspended)
+                {
+                    _isSuspended = true;
+                    foreach (var effect in statusEffectInstances)
+                        effect.Suspend();
+                }
+                else if (!shouldSuspend && _isSuspended)
+                {
+                    _isSuspended = false;
+                    foreach (var effect in statusEffectInstances)
+                        effect.Resume();
+                }
+            }
         }
 
-        if (isPermanent) return false;
+        // 2. Tick child effects (only if NOT suspended)
+        if (!_isSuspended)
+        {
+            foreach (var instance in statusEffectInstances)
+                instance.Tick(deltaTime);
+        }
 
+        // 3. Duration ALWAYS decrements
+        if (isPermanent) return false;
         remainingDuration -= deltaTime;
         return remainingDuration <= 0;
     }

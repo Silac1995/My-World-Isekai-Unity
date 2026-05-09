@@ -6,7 +6,7 @@ using MWI.UI.Core;
 namespace MWI.UI.Crafting
 {
     /// <summary>
-    /// Fenêtre de craft qui affiche la liste des objets craftables d'une CraftingStation.
+    /// Crafting window that displays the list of items craftable by a CraftingStation.
     /// </summary>
     public class CraftingWindow : ClosableWindow
     {
@@ -22,11 +22,11 @@ namespace MWI.UI.Crafting
 
         protected override void Awake()
         {
-            base.Awake(); // S'assure que le _closeButton se bind
+            base.Awake(); // Ensures _closeButton gets bound
         }
 
         /// <summary>
-        /// Ouvre la fenêtre et charge les objets craftables de la station.
+        /// Opens the window and loads the station's craftable items.
         /// </summary>
         public void OpenForStation(CraftingFurnitureInteractable interactable, Character user)
         {
@@ -38,22 +38,22 @@ namespace MWI.UI.Crafting
             _currentStation = station;
             _currentUser = user;
 
-            // 1. Ouvrir la fenêtre
+            // 1. Open the window
             Open();
 
-            // 2. Mettre à jour le titre
+            // 2. Update the title
             if (_stationNameText != null)
             {
                 _stationNameText.text = station.FurnitureName;
             }
 
-            // 3. Nettoyer les anciens items
+            // 3. Clear the previous items
             ClearItems();
 
-            // 4. Peupler la liste avec les items craftables de la station
+            // 4. Populate the list with the station's craftable items
             if (_itemElementPrefab == null || _itemsContainer == null)
             {
-                Debug.LogError("<color=red>[Crafting UI]</color> Il manque le prefab ou le conteneur dans CraftingWindow !");
+                Debug.LogError("<color=red>[Crafting UI]</color> Missing prefab or container in CraftingWindow!");
                 return;
             }
 
@@ -61,11 +61,11 @@ namespace MWI.UI.Crafting
             {
                 if (itemSO == null) continue;
 
-                // Instancie le prefab en tant qu'enfant du conteneur, 
-                // mais avec false pour garder les propriétés locales du prefab et éviter les bugs de LayoutGroup
+                // Instantiate the prefab as a child of the container,
+                // with worldPositionStays=false to preserve the prefab's local transforms and avoid LayoutGroup bugs
                 GameObject newElementGo = Instantiate(_itemElementPrefab, _itemsContainer, false);
-                
-                // --- FIX : Réinitialiser le RectTransform pour les LayoutGroups ---
+
+                // --- FIX: Reset the RectTransform for LayoutGroups ---
                 RectTransform rt = newElementGo.GetComponent<RectTransform>();
                 if (rt != null)
                 {
@@ -73,11 +73,11 @@ namespace MWI.UI.Crafting
                     rt.localPosition = new Vector3(rt.localPosition.x, rt.localPosition.y, 0f); // Reset Z
                     rt.localRotation = Quaternion.identity;
                 }
-                // ------------------------------------------------------------------
+                // -----------------------------------------------------
 
                 _instantiatedItems.Add(newElementGo);
 
-                // Initialise le composant avec les données
+                // Initialize the component with the data
                 if (newElementGo.TryGetComponent(out CraftingItemElement itemElement))
                 {
                     itemElement.Initialize(itemSO, station, user);

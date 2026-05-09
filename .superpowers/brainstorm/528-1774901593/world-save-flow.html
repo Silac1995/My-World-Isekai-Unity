@@ -1,0 +1,92 @@
+<h2>World Save Menu — Full Flow</h2>
+<p class="subtitle">Does this flow match your vision?</p>
+
+<div class="mockup">
+  <div class="mockup-header">Game Launch Flow</div>
+  <div class="mockup-body" style="padding: 24px; font-family: monospace; font-size: 14px; line-height: 2.2;">
+    <div style="text-align: center;">
+      <div style="background: #2a2a3a; padding: 12px 24px; border-radius: 8px; display: inline-block; margin-bottom: 16px; border: 2px solid #6c63ff;">
+        <strong>MAIN MENU</strong>
+      </div>
+      <div style="color: #6c63ff; font-size: 20px;">&#8595;</div>
+      <div style="color: #888; margin-bottom: 8px;">Player clicks "Start Game"</div>
+      <div style="color: #6c63ff; font-size: 20px;">&#8595;</div>
+
+      <div style="background: #2a2a3a; padding: 16px 24px; border-radius: 8px; display: inline-block; margin-bottom: 16px; border: 2px solid #4CAF50;">
+        <strong>WORLD SELECT</strong><br>
+        <span style="color: #aaa; font-size: 12px;">List of saved worlds + "Create New World" button</span><br>
+        <span style="color: #aaa; font-size: 12px;">Each entry: Name + Last Played</span><br>
+        <span style="color: #e57373; font-size: 12px;">Delete button per world (with confirmation)</span>
+      </div>
+      <div style="color: #6c63ff; font-size: 20px;">&#8595;</div>
+
+      <div style="display: flex; gap: 40px; justify-content: center; margin-bottom: 16px;">
+        <div style="text-align: center;">
+          <div style="background: #1a3a1a; padding: 12px 20px; border-radius: 8px; border: 1px solid #4CAF50;">
+            <strong>CREATE WORLD</strong><br>
+            <span style="color: #aaa; font-size: 12px;">Name input + Seed input (optional)</span><br>
+            <span style="color: #aaa; font-size: 12px;">Confirm button</span>
+          </div>
+        </div>
+        <div style="text-align: center;">
+          <div style="background: #1a2a3a; padding: 12px 20px; border-radius: 8px; border: 1px solid #42A5F5;">
+            <strong>PICK EXISTING WORLD</strong><br>
+            <span style="color: #aaa; font-size: 12px;">Click a world entry</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="color: #6c63ff; font-size: 20px;">&#8595;</div>
+
+      <div style="background: #2a2a3a; padding: 16px 24px; border-radius: 8px; display: inline-block; margin-bottom: 16px; border: 2px solid #FF9800;">
+        <strong>CHARACTER SELECT</strong><br>
+        <span style="color: #aaa; font-size: 12px;">List of saved characters + "Create Random Character" button</span><br>
+        <span style="color: #aaa; font-size: 12px;">Each entry: Name</span><br>
+        <span style="color: #81C784; font-size: 12px;">If from this world: "Has a save from this world"</span><br>
+        <span style="color: #e57373; font-size: 12px;">Delete button per character (with confirmation)</span>
+      </div>
+      <div style="color: #6c63ff; font-size: 20px;">&#8595;</div>
+
+      <div style="display: flex; gap: 40px; justify-content: center; margin-bottom: 16px;">
+        <div style="text-align: center;">
+          <div style="background: #3a2a1a; padding: 12px 20px; border-radius: 8px; border: 1px solid #FF9800;">
+            <strong>CREATE RANDOM</strong><br>
+            <span style="color: #aaa; font-size: 12px;">Name input + Confirm</span><br>
+            <span style="color: #aaa; font-size: 12px;">Random race/stats/visual</span>
+          </div>
+        </div>
+        <div style="text-align: center;">
+          <div style="background: #1a2a3a; padding: 12px 20px; border-radius: 8px; border: 1px solid #42A5F5;">
+            <strong>PICK EXISTING</strong><br>
+            <span style="color: #aaa; font-size: 12px;">Click a character entry</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="color: #6c63ff; font-size: 20px;">&#8595;</div>
+
+      <div style="background: #2a2a3a; padding: 12px 24px; border-radius: 8px; display: inline-block; border: 2px solid #6c63ff;">
+        <strong>LOAD INTO GAME</strong><br>
+        <span style="color: #81C784; font-size: 12px;">If character from this world → resume position</span><br>
+        <span style="color: #42A5F5; font-size: 12px;">If new to this world → spawn at default location</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="approve" onclick="toggleSelect(this)">
+    <div class="letter">&#10003;</div>
+    <div class="content">
+      <h3>This flow looks right</h3>
+      <p>Move on to the design details</p>
+    </div>
+  </div>
+  <div class="option" data-choice="changes" onclick="toggleSelect(this)">
+    <div class="letter">&#9998;</div>
+    <div class="content">
+      <h3>Needs changes</h3>
+      <p>Tell me what to adjust in the terminal</p>
+    </div>
+  </div>
+</div>

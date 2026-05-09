@@ -1,0 +1,76 @@
+using UnityEngine;
+using UnityEngine.U2D.Animation;
+
+[CreateAssetMenu(fileName = "ItemSO", menuName = "Scriptable Objects/ItemSO")]
+public abstract class ItemSO : ScriptableObject
+{
+    [Header("Item Info")]
+    [SerializeField] private string category_name;
+    [SerializeField] protected SpriteLibraryAsset _spriteLibrary;
+    [SerializeField] private string itemId;
+    [SerializeField] private string itemName;
+    [SerializeField, TextArea] private string description;
+    [SerializeField] private Sprite icon;
+    [SerializeField] protected GameObject item_prefab;
+    [SerializeField] protected GameObject worldItem_prefab;
+    [SerializeField] private ItemWeight _weight = ItemWeight.Medium;
+    [SerializeField] private ItemMaterial _material = ItemMaterial.None;
+
+    [Header("Tier")]
+    [Tooltip("Item tier level. 0 = untiered. Higher tiers unlock progression-gated content.")]
+    [SerializeField] private int _tier = 0;
+
+    [Header("Economy")]
+    [Tooltip("Default shop sell price. ShopItemEntry.PriceOverride wins when > 0.")]
+    [SerializeField] private int _basePrice = 0;
+    public int BasePrice => _basePrice;
+
+    public string ItemId => itemId;
+    public string ItemName => itemName;
+    public string Description => description;
+    public Sprite Icon => icon;
+    public string CategoryName => category_name;
+    public GameObject ItemPrefab => item_prefab;
+    public GameObject WorldItemPrefab => worldItem_prefab;
+    public SpriteLibraryAsset SpriteLibraryAsset => _spriteLibrary;
+    public ItemWeight Weight => _weight;
+    public ItemMaterial Material => _material;
+    public int Tier => _tier;
+    public abstract System.Type InstanceType { get; }
+
+    [Header("Rendering")]
+    [Tooltip("If false, this item's world-prefab SpriteRenderer will have ShadowCastingMode.Off. Use for small/noisy sprites (rings, potions) whose alpha-tested shadows look bad at grazing sun.")]
+    [SerializeField] private bool _castsShadow = true;
+
+    public bool CastsShadow => _castsShadow;
+
+    [Header("Pathing")]
+    [Tooltip("If true, this item gets a NavMeshObstacle when it lands so AI agents path around it. " +
+             "Set to false for trivial items (trash, coins, single grain) that shouldn't litter the navmesh.")]
+    [SerializeField] private bool _blocksPathing = true;
+
+    public bool BlocksPathing => _blocksPathing;
+
+    [Header("Crafting Requirements")]
+    [SerializeField] private SkillSO _requiredCraftingSkill;
+    [SerializeField] private int _requiredCraftingLevel = 1;
+    [SerializeField] private float _craftingDuration = 3f;
+    [SerializeField] private System.Collections.Generic.List<CraftingIngredient> _craftingRecipe = new System.Collections.Generic.List<CraftingIngredient>();
+
+    public SkillSO RequiredCraftingSkill => _requiredCraftingSkill;
+    public int RequiredCraftingLevel => _requiredCraftingLevel;
+    public float CraftingDuration => _craftingDuration;
+    public System.Collections.Generic.List<CraftingIngredient> CraftingRecipe => _craftingRecipe;
+
+    // Changed from 'virtual' to 'abstract' — body removed.
+    public abstract ItemInstance CreateInstance();
+}
+
+[System.Serializable]
+public struct CraftingIngredient
+{
+    public ItemSO Item;
+    public int Amount;
+    [Tooltip("If true, the item is required as a reference but not consumed (e.g., original key for copying).")]
+    public bool IsReferenceOnly;
+}

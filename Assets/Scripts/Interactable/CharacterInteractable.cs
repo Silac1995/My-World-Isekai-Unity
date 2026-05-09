@@ -57,6 +57,55 @@ public class CharacterInteractable : InteractableObject
             }
         });
 
+        // Party invitation — only if interactor is a party leader (or has Leadership and can create one)
+        if (interactor.CharacterParty != null)
+        {
+            CharacterParty interactorParty = interactor.CharacterParty;
+            bool isLeader = interactorParty.IsPartyLeader;
+            bool canCreateAndInvite = !interactorParty.IsInParty
+                && interactorParty.LeadershipSkill != null
+                && interactor.CharacterSkills != null
+                && interactor.CharacterSkills.HasSkill(interactorParty.LeadershipSkill);
+
+            if (isLeader || canCreateAndInvite)
+            {
+                var invitation = new PartyInvitation(interactorParty.LeadershipSkill);
+                if (invitation.CanExecute(interactor, _character))
+                {
+                    Character targetRef = _character;
+                    options.Add(new InteractionOption
+                    {
+                        Name = "Invite to Party",
+                        Action = () =>
+                        {
+                            ulong targetNetId = targetRef.NetworkObject != null
+                                ? targetRef.NetworkObject.NetworkObjectId : 0;
+                            interactorParty.RequestInviteToPartyServerRpc(targetNetId);
+                        }
+                    });
+                }
+            }
+        }
+
+        // Collect from capability providers (new extensible pattern)
+        options.AddRange(GetCapabilityInteractionOptions(interactor));
+
+        return options;
+    }
+
+    /// <summary>
+    /// Collects interaction options from all capability providers on this character.
+    /// This is the new extensible approach — capabilities advertise their own options.
+    /// </summary>
+    public List<InteractionOption> GetCapabilityInteractionOptions(Character interactor)
+    {
+        var options = new List<InteractionOption>();
+        foreach (var provider in _character.GetAll<IInteractionProvider>())
+        {
+            var providerOptions = provider.GetInteractionOptions(interactor);
+            if (providerOptions != null)
+                options.AddRange(providerOptions);
+        }
         return options;
     }
 

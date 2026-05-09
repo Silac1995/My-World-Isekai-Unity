@@ -1,4 +1,3 @@
-using System.Linq;
 using UnityEngine;
 
 /// <summary>
@@ -69,24 +68,22 @@ public class CharacterHarvestAction : CharacterAction
             return;
         }
 
-        // Récolter l'item (retourne le ItemSO)
-        _harvestedItem = _target.Harvest(character);
+        var actions = character.CharacterActions;
+        if (actions == null) return;
 
-        if (_harvestedItem != null)
+        // When a networked client runs this action, the server is the only peer allowed
+        // to spawn WorldItems and mutate the (scene-shared) Harvestable state — delegate
+        // via RPC. Offline mode (IsSpawned == false) falls through to the local path.
+        bool isNetworkedClient = actions.IsSpawned && !actions.IsServer;
+        if (isNetworkedClient)
         {
-            // Spawn le WorldItem au sol devant le personnage
-            Vector3 spawnPos = character.transform.position + character.transform.forward * 0.5f + Vector3.up * 0.3f;
-            WorldItem spawnedItem = WorldItem.SpawnWorldItem(_harvestedItem, spawnPos);
-            
-            // Inscrire la ressource au sol comme tâche pour le bâtiment
-            if (spawnedItem != null && character.CharacterJob != null)
-            {
-                var workAssignment = character.CharacterJob.ActiveJobs.FirstOrDefault(j => j.AssignedJob is JobHarvester);
-                if (workAssignment != null && workAssignment.Workplace != null)
-                {
-                    workAssignment.Workplace.TaskManager?.RegisterTask(new PickupLooseItemTask(spawnedItem));
-                }
-            }
+            actions.RequestHarvestServerRpc(_target.transform.position);
+        }
+        else
+        {
+            // Server (host/NPC) or offline: run directly so local callers that inspect
+            // HarvestedItem after OnApplyEffect keep working.
+            _harvestedItem = actions.ApplyHarvestOnServer(_target);
         }
     }
 

@@ -1,7 +1,10 @@
-﻿using UnityEngine;
+using UnityEngine;
 
 public class CameraFollow : MonoBehaviour
 {
+    [Header("Camera Position")]
+    [SerializeField] private float minZPosition = 60f;
+
     [Header("Zoom Settings")]
     [SerializeField] private float minOffsetY = 13f;
     [SerializeField] private float maxOffsetY = 18f;
@@ -10,6 +13,10 @@ public class CameraFollow : MonoBehaviour
     [SerializeField] private float zoomSpeed = 2f;
     [SerializeField] private float zoomSmoothing = 8f;
     [SerializeField] private float followSmoothing = 0.15f;
+    
+    [Header("Building Mode")]
+    [SerializeField] private float buildingOffsetY = 25f;
+    [SerializeField] private float buildingOffsetZ = -30f;
 
     [Header("Camera Rotation")]
     [Range(0f, 90f)]
@@ -30,6 +37,7 @@ public class CameraFollow : MonoBehaviour
     private Camera _camera;
     private float _targetZoom = 0.5f;
     private float _currentZoom = 0.5f;
+    private float _previousZoom = 0.5f;
     private Vector3 _smoothVelocity;
     private float _currentOcclusionT = 1f; // 1 = position normale, 0 = au plus pres du perso
 
@@ -41,33 +49,61 @@ public class CameraFollow : MonoBehaviour
             _camera.transparencySortMode = TransparencySortMode.CustomAxis;
             _camera.transparencySortAxis = new Vector3(0, 0, 1);
         }
+
+        if (playerUI == null)
+        {
+            playerUI = Object.FindFirstObjectByType<PlayerUI>();
+        }
     }
 
     private void LateUpdate()
     {
         if (target == null) return;
 
-        // Zoom via scroll
+        // Zoom via scroll - Disabled during building mode
+        bool isBuilding = character != null && character.IsBuilding;
+        bool devMode = DevModeManager.SuppressPlayerInput;
         float scroll = Input.GetAxis("Mouse ScrollWheel");
-        if (Mathf.Abs(scroll) > 0.01f)
-        {
-            _targetZoom = Mathf.Clamp01(_targetZoom - scroll * zoomSpeed);
-        }
+
+        // Dev mode lifts the upper clamp so the camera can pull back without limit.
+        // Lower bound (zoomed in) stays at 0 so we don't invert the Y/Z offsets.
+        _targetZoom = devMode
+            ? Mathf.Max(0f, _targetZoom - scroll * zoomSpeed)
+            : Mathf.Clamp01(_targetZoom - scroll * zoomSpeed);
 
         _currentZoom = Mathf.Lerp(_currentZoom, _targetZoom, Time.deltaTime * zoomSmoothing);
 
-        // Interpolation des offsets selon le zoom
-        float offsetY = Mathf.Lerp(minOffsetY, maxOffsetY, _currentZoom);
-        float offsetZ = Mathf.Lerp(minOffsetZ, maxOffsetZ, _currentZoom);
+        float offsetY, offsetZ;
 
-        // Calcul de la position Z avec offset
-        float targetZ = target.position.z + offsetZ;
+        if (devMode)
+        {
+            // LerpUnclamped extrapolates past maxOffsetY/Z when _currentZoom > 1, giving
+            // unbounded zoom-out for god-mode flying. Building mode is intentionally
+            // ignored here — dev mode takes precedence.
+            offsetY = Mathf.LerpUnclamped(minOffsetY, maxOffsetY, _currentZoom);
+            offsetZ = Mathf.LerpUnclamped(minOffsetZ, maxOffsetZ, _currentZoom);
+        }
+        else if (isBuilding)
+        {
+            // When building, we use the specific building offsets
+            offsetY = Mathf.Lerp(minOffsetY, buildingOffsetY, _currentZoom);
+            offsetZ = Mathf.Lerp(minOffsetZ, buildingOffsetZ, _currentZoom);
+        }
+        else
+        {
+            // Normal zoom interpolation
+            offsetY = Mathf.Lerp(minOffsetY, maxOffsetY, _currentZoom);
+            offsetZ = Mathf.Lerp(minOffsetZ, maxOffsetZ, _currentZoom);
+        }
+
+        // Calcul de la position Z avec offset. On retire l'ancienne limite pour suivre librement.
+        float desiredZ = target.position.z + offsetZ;
 
         // Position cible ideale (sans occlusion)
         Vector3 idealPos = new Vector3(
             target.position.x,
             target.position.y + offsetY,
-            targetZ
+            desiredZ
         );
 
         // --- OCCLUSION AVOIDANCE ---
@@ -125,12 +161,72 @@ public class CameraFollow : MonoBehaviour
 
     public void SetTarget(Transform newTarget, GameObject go)
     {
+        if (character != null)
+        {
+            character.OnBuildingStateChanged -= HandleBuildingStateChanged;
+        }
+
         target = newTarget;
         if (go != null)
         {
             character = go.GetComponent<Character>();
+            if (character != null)
+            {
+                character.OnBuildingStateChanged += HandleBuildingStateChanged;
+                // Sync initial state
+                HandleBuildingStateChanged(character.IsBuilding);
+            }
+            
             CharacterEquipmentUI uiEquip = Object.FindFirstObjectByType<CharacterEquipmentUI>();
             if (uiEquip != null) uiEquip.SetupUI(character);
+        }
+        else
+        {
+            character = null;
+        }
+    }
+
+    private void HandleBuildingStateChanged(bool active)
+    {
+        if (active)
+        {
+            _previousZoom = _targetZoom;
+            _targetZoom = 1f; // We reuse 1f to represent "Fully using the building offsets"
+        }
+        else
+        {
+            _targetZoom = _previousZoom;
+        }
+    }
+
+    /// <summary>
+    /// Instantly teleports the camera to the correct follow position,
+    /// bypassing SmoothDamp. Call this after ForceWarp / map transitions
+    /// to avoid the camera slowly panning across thousands of units.
+    /// </summary>
+    public void SnapToTarget()
+    {
+        if (target == null) return;
+
+        float offsetY = Mathf.Lerp(minOffsetY, maxOffsetY, _currentZoom);
+        float offsetZ = Mathf.Lerp(minOffsetZ, maxOffsetZ, _currentZoom);
+
+        transform.position = new Vector3(
+            target.position.x,
+            target.position.y + offsetY,
+            target.position.z + offsetZ
+        );
+
+        // Reset SmoothDamp velocity so it doesn't overshoot after the snap
+        _smoothVelocity = Vector3.zero;
+        _currentOcclusionT = 1f;
+    }
+
+    private void OnDestroy()
+    {
+        if (character != null)
+        {
+            character.OnBuildingStateChanged -= HandleBuildingStateChanged;
         }
     }
 }

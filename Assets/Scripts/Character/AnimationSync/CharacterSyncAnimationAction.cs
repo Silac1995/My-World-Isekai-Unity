@@ -2,8 +2,8 @@ using System;
 using UnityEngine;
 
 /// <summary>
-/// Action qui synchronise une animation entre deux personnages.
-/// Utilise AnimSync pour coordonner les animations.
+/// Action that synchronizes an animation between two characters.
+/// Uses AnimSync to coordinate the animations.
 /// </summary>
 public class CharacterSyncAnimationAction : CharacterAction
 {
@@ -13,12 +13,12 @@ public class CharacterSyncAnimationAction : CharacterAction
     private Action<Character, Character> _onSyncEndedHandler;
 
     /// <summary>
-    /// Crée une action de synchronisation d'animation.
+    /// Creates an animation synchronization action.
     /// </summary>
-    /// <param name="character">Le personnage initiateur</param>
-    /// <param name="partner">Le partenaire avec qui synchroniser</param>
-    /// <param name="triggerName">Nom du trigger d'animation à déclencher</param>
-    /// <param name="duration">Durée de l'animation (0 = auto-détection)</param>
+    /// <param name="character">The initiating character</param>
+    /// <param name="partner">The partner to synchronize with</param>
+    /// <param name="triggerName">Name of the animation trigger to fire</param>
+    /// <param name="duration">Duration of the animation (0 = auto-detection)</param>
     public CharacterSyncAnimationAction(Character character, Character partner, string triggerName, float duration = 0f)
         : base(character, duration)
     {
@@ -30,19 +30,19 @@ public class CharacterSyncAnimationAction : CharacterAction
     {
         if (_partner == null || !_partner.IsAlive())
         {
-            Debug.LogWarning("[CharacterSyncAnimationAction] Le partenaire est null ou mort !");
+            Debug.LogWarning("[CharacterSyncAnimationAction] The partner is null or dead!");
             return false;
         }
 
         if (!character.IsFree() || !_partner.IsFree())
         {
-            Debug.LogWarning("[CharacterSyncAnimationAction] Un des personnages n'est pas libre !");
+            Debug.LogWarning("[CharacterSyncAnimationAction] One of the characters is not free!");
             return false;
         }
 
         if (AnimSync.IsCharacterSyncing(character) || AnimSync.IsCharacterSyncing(_partner))
         {
-            Debug.LogWarning("[CharacterSyncAnimationAction] Un des personnages est déjà en synchronisation !");
+            Debug.LogWarning("[CharacterSyncAnimationAction] One of the characters is already synchronizing!");
             return false;
         }
 
@@ -54,7 +54,7 @@ public class CharacterSyncAnimationAction : CharacterAction
         _animSync = character.GetComponent<AnimSync>();
         if (_animSync == null)
         {
-            Debug.LogWarning("[CharacterSyncAnimationAction] Aucun AnimSync sur le personnage initiateur.");
+            Debug.LogWarning("[CharacterSyncAnimationAction] No AnimSync on the initiating character.");
             Finish();
             return;
         }
@@ -63,7 +63,7 @@ public class CharacterSyncAnimationAction : CharacterAction
         _animSync.OnSyncEnded += _onSyncEndedHandler;
         _animSync.StartSync(_partner, _triggerName, Duration);
 
-        Debug.Log($"<color=cyan>[SyncAction]</color> {character.CharacterName} synchronise l'animation '{_triggerName}' avec {_partner.CharacterName}");
+        Debug.Log($"<color=cyan>[SyncAction]</color> {character.CharacterName} synchronizes the animation '{_triggerName}' with {_partner.CharacterName}");
     }
 
     public override void OnCancel()
@@ -73,7 +73,7 @@ public class CharacterSyncAnimationAction : CharacterAction
 
     public override void OnApplyEffect()
     {
-        // L'effet est appliqué à la fin de la sync via OnSyncEnded
+        // The effect is applied at the end of the sync via OnSyncEnded
     }
 
     private void OnSyncEndedInternal(Character _, Character __)
@@ -83,7 +83,7 @@ public class CharacterSyncAnimationAction : CharacterAction
     }
 
     /// <summary>
-    /// Désabonne de OnSyncEnded une seule fois pour éviter fuites et double Finish().
+    /// Unsubscribes from OnSyncEnded only once to avoid leaks and double Finish() calls.
     /// </summary>
     private void UnsubscribeFromAnimSync()
     {

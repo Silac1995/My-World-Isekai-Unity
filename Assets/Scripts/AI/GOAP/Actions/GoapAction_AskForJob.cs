@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// Action GOAP : Demander un job à un patron.
+/// GOAP action: ask a boss for a job.
 /// </summary>
 public class GoapAction_AskForJob : GoapAction
 {
@@ -61,7 +61,7 @@ public class GoapAction_AskForJob : GoapAction
                 return;
             }
 
-            // On attend patiemment que le boss soit libre au lieu de replanifier à l'infini
+            // Wait patiently for the boss to become free instead of replanning infinitely.
             if (!boss.IsFree())
             {
                 if (!_isWaitingForBoss)
@@ -71,7 +71,7 @@ public class GoapAction_AskForJob : GoapAction
                 }
                 else if (UnityEngine.Time.time - _waitStartTime > 10f)
                 {
-                    Debug.LogWarning($"<color=orange>[Interaction]</color> {worker.CharacterName} a attendu trop longtemps pour parler à {boss.CharacterName}. Abandon du Job.");
+                    Debug.LogWarning($"<color=orange>[Interaction]</color> {worker.CharacterName} waited too long to speak with {boss.CharacterName}. Giving up on the job.");
                     _isComplete = true; // Give up
                 }
                 return;

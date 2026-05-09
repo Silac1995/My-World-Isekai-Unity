@@ -1,19 +1,27 @@
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 /// <summary>
-/// Représente une "mêlée" ou une "escarmouche" locale entre deux groupes de combattants.
-/// Gère la spatialisation réciproque (Group A encercle le centre de Group B, et vice versa).
+/// Represents a local "melee" or "skirmish" between two groups of fighters.
+/// Handles reciprocal spatialization (Group A surrounds the center of Group B, and vice versa).
 /// </summary>
 public class CombatEngagement
 {
     public const int MAX_PARTICIPANTS_PER_SIDE = 6;
 
-    // Les deux camps qui composent cette escarmouche
+    /// <summary>
+    /// Maximum distance a participant should stray from the engagement anchor point.
+    /// Used by tactical pacing and formation systems to keep fighters within the engagement area.
+    /// </summary>
+    private const float LEASH_RADIUS = 15f;
+    public float LeashRadius => LEASH_RADIUS;
+
+    // The two sides making up this skirmish
     public EngagementGroup GroupA { get; private set; }
     public EngagementGroup GroupB { get; private set; }
 
-    // On garde la notion d'équipes globales pour savoir qui va où
+    // We keep the notion of global teams to know who goes where
     private BattleTeam _teamA;
     private BattleTeam _teamB;
 
@@ -21,6 +29,17 @@ public class CombatEngagement
     public BattleTeam TeamB => _teamB;
 
     public BattleManager Manager { get; private set; }
+
+    /// <summary>
+    /// The spatial anchor point for this engagement. Used by formations and tactical positioning.
+    /// Set when the engagement is created or when characters reorganize.
+    /// </summary>
+    public Vector3 AnchorPoint { get; private set; }
+
+    public void SetAnchorPoint(Vector3 point)
+    {
+        AnchorPoint = point;
+    }
 
     public CombatEngagement(BattleManager manager, BattleTeam teamA, BattleTeam teamB)
     {
@@ -33,25 +52,25 @@ public class CombatEngagement
     }
 
     /// <summary>
-    /// Un personnage rejoint l'escarmouche. Il est placé dans le groupe
-    /// correspondant à son équipe dans le BattleManager.
+    /// A character joins the skirmish. They are placed in the group
+    /// matching their team in the BattleManager.
     /// </summary>
     public void JoinEngagement(Character participant)
     {
         if (_teamA.ContainsCharacter(participant))
         {
             GroupA.AddMember(participant);
-            // Debug.Log($"<color=cyan>[Engagement]</color> {participant.CharacterName} rejoint le Group A de l'escarmouche.");
+            // Debug.Log($"<color=cyan>[Engagement]</color> {participant.CharacterName} joins Group A of the skirmish.");
         }
         else if (_teamB.ContainsCharacter(participant))
         {
             GroupB.AddMember(participant);
-            // Debug.Log($"<color=cyan>[Engagement]</color> {participant.CharacterName} rejoint le Group B de l'escarmouche.");
+            // Debug.Log($"<color=cyan>[Engagement]</color> {participant.CharacterName} joins Group B of the skirmish.");
         }
     }
 
     /// <summary>
-    /// Le personnage quitte l'engagement.
+    /// The character leaves the engagement.
     /// </summary>
     public void LeaveEngagement(Character participant)
     {
@@ -60,7 +79,7 @@ public class CombatEngagement
     }
 
     /// <summary>
-    /// L'engagement a-t-il encore un sens ? (L'un des deux camps est vide ou mort)
+    /// Does the engagement still make sense? (One of the two sides is empty or dead)
     /// </summary>
     public bool IsFinished()
     {
@@ -68,9 +87,9 @@ public class CombatEngagement
     }
 
     /// <summary>
-    /// Vérifie si l'engagement est plein pour une équipe spécifique.
-    /// Si le camp adverse n'a qu'un seul personnage, l'engagement n'est jamais considéré comme plein
-    /// car on ne peut pas le diviser.
+    /// Checks whether the engagement is full for a specific team.
+    /// If the opposing side has only one character, the engagement is never considered full
+    /// because it cannot be split.
     /// </summary>
     public bool IsFullFor(BattleTeam team)
     {
@@ -88,8 +107,8 @@ public class CombatEngagement
     }
 
     /// <summary>
-    /// Vérifie si l'engagement doit être séparé en deux (une des deux équipes dépasse la limite,
-    /// et l'autre équipe a plus d'un combattant).
+    /// Checks whether the engagement should be split in two (one of the two teams exceeds the limit,
+    /// and the other team has more than one fighter).
     /// </summary>
     public bool NeedsSplit()
     {
@@ -102,36 +121,56 @@ public class CombatEngagement
     }
 
     /// <summary>
-    /// Donne la coordonnée de front assignée à ce combattant.
-    /// Il est positionné par SA formation, autour du centre du GROUPE ADVERSE.
+    /// Returns the front-line coordinate assigned to this fighter.
+    /// They are positioned by THEIR formation, around the center of the OPPOSING GROUP.
     /// </summary>
     public Vector3 GetAssignedPosition(Character participant)
     {
         if (participant == null) return Vector3.zero;
 
-        // Si je suis dans l'Equipe A, je me place par rapport au centre du Groupe B
-        if (_teamA.ContainsCharacter(participant))
-        {
-            if (GroupB.TryGetCenter(out Vector3 targetCenter))
-            {
-                return GroupA.Formation.GetWorldPosition(participant, targetCenter);
-            }
-        }
-        else if (_teamB.ContainsCharacter(participant))
-        {
-            if (GroupA.TryGetCenter(out Vector3 targetCenter))
-            {
-                return GroupB.Formation.GetWorldPosition(participant, targetCenter);
-            }
-        }
+        bool inGroupA = GroupA.Members.Contains(participant);
+        EngagementGroup myGroup = inGroupA ? GroupA : GroupB;
+        EngagementGroup opponentGroup = inGroupA ? GroupB : GroupA;
 
-        // Fallback: Si je n'arrive pas à calculer (l'autre équipe n'a pas de centre), je reste sur place
-        return participant.transform.position;
+        if (!opponentGroup.TryGetCenter(out Vector3 opponentCenter))
+            opponentCenter = AnchorPoint;
+
+        // GroupA on left (-1), GroupB on right (+1)
+        float teamSideSign = inGroupA ? -1f : 1f;
+
+        return myGroup.Formation.GetOrganicPosition(
+            participant, myGroup.Members, opponentCenter, AnchorPoint, teamSideSign);
     }
 
     /// <summary>
-    /// Renvoie l'ennemi le plus proche dans le groupe opposé.
-    /// Pratique pour l'IA si sa cible meurt au sein du même engagement.
+    /// Returns the ratio of alive members on the character's side vs the opposing side.
+    /// A ratio > 1 means the character's side outnumbers the opponents.
+    /// Returns float.MaxValue if no opponents are alive.
+    /// </summary>
+    public float GetOutnumberRatio(Character character)
+    {
+        bool inGroupA = GroupA.Members.Contains(character);
+        int myCount = inGroupA ? GroupA.AliveCount : GroupB.AliveCount;
+        int theirCount = inGroupA ? GroupB.AliveCount : GroupA.AliveCount;
+
+        if (theirCount == 0) return float.MaxValue;
+        return (float)myCount / theirCount;
+    }
+
+    /// <summary>
+    /// Returns the center position of the opposing group for the given character.
+    /// Falls back to the engagement anchor point if the opponent group has no alive members.
+    /// </summary>
+    public Vector3 GetOpponentCenter(Character character)
+    {
+        bool inGroupA = GroupA.Members.Contains(character);
+        EngagementGroup opponents = inGroupA ? GroupB : GroupA;
+        return opponents.TryGetCenter(out Vector3 center) ? center : AnchorPoint;
+    }
+
+    /// <summary>
+    /// Returns the closest enemy in the opposing group.
+    /// Useful for AI when its target dies within the same engagement.
     /// </summary>
     public Character GetClosestOpponent(Character participant)
     {

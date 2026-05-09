@@ -14,7 +14,7 @@ public class BattleTeam
     }
 
     /// <summary>
-    /// Vérifie si le personnage donné appartient à cette équipe (est un allié).
+    /// Checks whether the given character belongs to this team (is an ally).
     /// </summary>
     public bool IsAlly(Character character)
     {
@@ -23,12 +23,12 @@ public class BattleTeam
     }
 
     /// <summary>
-    /// Vérifie si le personnage fait partie d'une équipe ADVERSE dans le même combat.
+    /// Checks whether the character belongs to an OPPOSING team in the same combat.
     /// </summary>
     public bool IsOpponent(Character character, BattleManager manager)
     {
         if (character == null || manager == null) return false;
-        // On vérifie si n'importe quelle AUTRE équipe de ce manager contient le personnage
+        // We check if ANY OTHER team in this manager contains the character
         return manager.BattleTeams.Any(team => team != this && team.IsAlly(character));
     }
 

@@ -101,14 +101,15 @@ All HUD windows inherit from `UI_WindowBase`, which provides centralized logic f
 ---
 
 ### Dynamic Interaction Menu
-The `PlayerUI` handles displaying context-sensitive actions through `OpenInteractionMenu(List<InteractionOption> options)`.
+The `PlayerUI` handles displaying context-sensitive actions through `OpenInteractionMenu(List<InteractionOption> options, bool persistAcrossClicks = false)`.
 
 **Usage**:
-- **Extended World Actions**: Triggered by the `PlayerInteractionDetector` when the player *holds* the interaction key. Shows actions like "Greet", "Follow", "Carry".
-- **Turn-based Dialogue**: Triggered when `OnPlayerTurnStarted` fires during a conversation. Shows choices like "Talk" or "Insult".
+- **Extended World Actions** (one-shot): Triggered by `PlayerInteractionDetector` when the player *holds* the interaction key. Shows actions like "Greet", "Follow", "Carry". Call with `persistAcrossClicks: false` (default) — the menu closes as soon as the player clicks any option.
+- **Turn-based Dialogue** (persistent): Triggered from `HandleInteractionStateChanged(..., started: true)` when a `CharacterInteraction` formally begins. Call with `persistAcrossClicks: true` — the menu stays visible for the entire interaction, buttons re-lock after each click, and closure happens only when the `CharacterInteraction` terminates (the `started: false` branch calls `CloseInteractionMenu()`).
 
 **Implementation Details**:
-- Action callbacks defined in the `InteractionOption` are executed directly when the corresponding UI button is clicked. 
+- `persistAcrossClicks` is forwarded to `UI_InteractionMenu.Initialize(options, lockByDefault: ...)`. When `true`, the menu also starts with all buttons locked, awaiting `SetInteractionMenuInteractable(true)` on `OnPlayerTurnStarted`.
+- Action callbacks defined in the `InteractionOption` are executed directly when the corresponding UI button is clicked.
 - For dialogue, the action should call `interactor.CharacterInteraction.PerformInteraction(action)` to register the player's choice and advance the turn logic.
 
 ---
@@ -128,14 +129,51 @@ Distinct from the passive `ToastNotificationSystem`, the `UI_InvitationPrompt` i
 
 ---
 
+### Pause Menu
+
+`PlayerUI` holds a serialized reference to `MWI.UI.PauseMenuController` (`_pauseMenu`), auto-assigned in `Awake()` via `GetComponentInChildren<PauseMenuController>(true)`.
+
+**Key Properties:**
+- `Character CharacterComponent` — read-only accessor for the bound character (used by `PauseMenuController` to check placement state)
+- `bool IsInitialized` — whether a character is currently bound
+- `void TogglePauseMenu()` — toggles the pause menu open/close
+
+See `.agent/skills/pause-menu/SKILL.md` for full system documentation.
+
+---
+
 ### Combat & Targeting UI
 In combat (or specialized click-to-move states), the HUD takes over input handling using specific manager components:
 
-- **`UI_PlayerTargeting`**: Manages the Point-and-Click system on screen space. Casts rays on `Input.GetMouseButtonDown(0)` to select `InteractableObject`s or `Character`s, isolating targeting visual logic from the `PlayerController`.
-- **`UI_CombatActionMenu`**: An initiative-driven HUD piece that pops up when a player's `CharacterInitiative.IsReady()` flag is met. It handles action selections (e.g., "Melee Attack", "Ranged Attack") based on the player's active Combat Mode and passes the intent back to `CharacterCombat.Attack()`.
+- **`UI_PlayerTargeting`**: Manages the unified Point-and-Click + TAB targeting system.
+  - **Unified Resolution**: Both click and TAB converge through `SelectInteractable(InteractableObject)`. Click uses `ResolveInteractableFromHit(Collider)` to extract the correct `InteractableObject` from a raycast hit (resolving characters via the `Character.CharacterInteractable` facade property, never `GetComponent`).
+  - **LookTarget Consistency**: When targeting a character, always sets `LookTarget` to the **root Character transform** (not the `CharacterInteractable` child transform). This ensures `GetComponentInChildren<Collider>()` in `UpdateIndicatorTracking` finds the same collider (root CapsuleCollider) regardless of how the target was selected, preventing indicator height mismatches.
+  - **Battle Target Lock**: During battle, `SelectInteractable` rejects non-battle participants (characters whose `GetTeamOf` returns null) and non-character interactables. Selecting a battle participant calls `CharacterCombat.SetPlannedTarget()` to redirect combat AI.
+  - **Battle ClearSelection**: Clicking the ground during battle redirects the indicator to the current `PlannedTarget` (or `GetBestTargetFor` fallback) instead of fully clearing. Outside battle, it clears normally.
+  - **Target Indicator Positioning**: Uses `col.bounds.max.y + _yOffset` for characters (anchored to top of collider bounds), falling back to `target.position + Vector3.up * _yOffset` for non-character targets.
+- **`UI_CombatActionMenu`**: An initiative-driven HUD piece visible when `IsInBattle` is true.
+  - **Attack Button**: Toggles the action intent. If queued, clicking cancels via `ClearActionIntent()`. If not queued, it validates `PlannedTarget` (must be alive AND in the battle via `GetTeamOf` check), falls back to `GetBestTargetFor`, and queues via `SetActionIntent` with a **dynamic closure** (`() => Attack(_characterCombat.PlannedTarget)`) so retargeting after queuing is respected.
+  - **Visual Feedback**: Button text shows `"[Queued]"` in blue when `HasPlannedAction` is true. Switches between "Melee Attack" and "Ranged Attack" based on `CurrentCombatStyleExpertise`.
 
 ---
 
 ## Stats Integration
 - `OnValueChanged(oldMax, newMax)`: Fired when the max value changes.
 - `OnAmountChanged(oldAmount, newAmount)`: Fired when current resource changes.
+
+## Quest HUD (2026-04-23)
+
+Three new MonoBehaviours under `Assets/Scripts/UI/Quest/`, registered on `PlayerUI`:
+
+- **`UI_QuestTracker`** — top-right minimal widget. Title + InstructionLine with `(N / M)` progress suffix. Hidden when no active quests. Bound to `Character.CharacterQuestLog.OnFocusedChanged` + `OnQuestProgressChanged` + `OnQuestAdded`.
+- **`UI_QuestLogWindow`** (extends `UI_WindowBase`) — 2-column list/details panel. Toggled by L key (configurable `_questLogToggleKey`) in `PlayerUI.Update`. Set Focused / Abandon buttons mutate via `CharacterQuestLog`.
+- **`QuestWorldMarkerRenderer`** — spawns one of three prefabs per quest target: diamond (object), beacon (movement), zone-fill (region). Filter: `quest.OriginMapId == localPlayer.CharacterMapTracker.CurrentMapID.Value.ToString()`.
+
+All three are wired by `PlayerUI.Initialize(playerCharacter)`; `Character.SwitchToNPC` clears them via the existing PlayerUI lifecycle pattern.
+
+Wiring in GameScene (live as of Task 26):
+- `UI_QuestTracker` and `UI_QuestLogWindow` are **scene GameObjects** under `UI_PlayerHUD` (bare-component placeholders — author TMP children + layout in Unity Editor as needed).
+- `QuestWorldMarkerRenderer` is a scene GameObject under `UI_PlayerHUD` with the 3 marker prefabs wired into `_diamondPrefab` / `_beaconPrefab` / `_zoneFillPrefab`.
+- Marker prefab assets at `Assets/Prefabs/UI/Quest/`: `QuestMarker_Diamond.prefab`, `QuestMarker_Beacon.prefab`, `QuestZone_Fill.prefab` — all share `QuestMarker_Gold.mat` (URP/Unlit). Placeholder Unity-primitive meshes; designers replace freely.
+
+See `.agent/skills/quest-system/SKILL.md`.

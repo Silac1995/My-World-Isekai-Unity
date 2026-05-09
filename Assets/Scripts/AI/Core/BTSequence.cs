@@ -3,10 +3,10 @@ using System.Collections.Generic;
 namespace MWI.AI
 {
     /// <summary>
-    /// Sequence (AND logique) : exécute chaque enfant dans l'ordre.
-    /// Retourne Failure dès qu'un enfant échoue.
-    /// Retourne Success quand TOUS les enfants réussissent.
-    /// Retourne Running si l'enfant courant est Running.
+    /// Sequence (logical AND): executes each child in order.
+    /// Returns Failure as soon as a child fails.
+    /// Returns Success when ALL children succeed.
+    /// Returns Running if the current child is Running.
     /// </summary>
     public class BTSequence : BTNode
     {
@@ -43,18 +43,18 @@ namespace MWI.AI
                     return BTNodeStatus.Failure;
                 }
 
-                // Success → passer au suivant
+                // Success -> move on to the next
                 _currentIndex++;
             }
 
-            // Tous les enfants ont réussi
+            // All children succeeded
             _currentIndex = 0;
             return BTNodeStatus.Success;
         }
 
         protected override void OnExit(Blackboard bb)
         {
-            // Abort l'enfant courant s'il était encore Running
+            // Abort the current child if it was still Running
             if (_currentIndex < _children.Count)
             {
                 _children[_currentIndex].Abort(bb);

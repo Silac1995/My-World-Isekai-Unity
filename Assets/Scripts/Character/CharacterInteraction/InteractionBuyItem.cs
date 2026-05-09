@@ -3,6 +3,12 @@ using UnityEngine;
 /// <summary>
 /// Interaction déclenchée par un client envers un Vendeur,
 /// ou du Vendeur envers le client (quand appelé de la file).
+///
+/// Network note: stock checks read through <see cref="CommercialBuilding.InventoryTotalCount"/>
+/// and <see cref="CommercialBuilding.GetInventoryCountsByItemSO"/>, both of which are backed by
+/// a replicated NetworkList. Reading <c>_shop.Inventory.Count</c> directly would return 0 on
+/// every non-host peer (server-only list) and a remote player initiating the interaction would
+/// be told the shop is empty even when it isn't.
 /// </summary>
 public class InteractionBuyItem : ICharacterInteractionAction
 {
@@ -18,17 +24,33 @@ public class InteractionBuyItem : ICharacterInteractionAction
     public bool CanExecute(Character source, Character target)
     {
         // source = Le vendeur, target = le client (ou inversement)
-        return _shop != null && _shop.Inventory.Count > 0;
+        return _shop != null && _shop.InventoryTotalCount > 0;
     }
 
     public void Execute(Character source, Character target)
     {
         Debug.Log($"<color=yellow>[InteractionBuyItem]</color> Début de transaction entre {source.CharacterName} et {target.CharacterName}.");
 
-        // Vendre le premier item de l'inventaire
-        if (_shop.Inventory.Count > 0)
+        if (_shop == null) return;
+
+        // Pick the first ItemSO present in the replicated count view (works on both server and client).
+        // The server-side _inventory list still holds the actual ItemInstance — SellItem(itemSO) below
+        // resolves it server-authoritatively, so a client-initiated call only needs the SO to know what
+        // to ask for. (The full transfer-item-to-buyer + transfer-coins flow remains a TODO; this fix
+        // unblocks the multiplayer entry point so the call can even reach Execute.)
+        var counts = _shop.GetInventoryCountsByItemSO();
+        ItemSO itemToSell = null;
+        foreach (var kvp in counts)
         {
-            var itemToSell = _shop.Inventory[0].ItemSO;
+            if (kvp.Value > 0) { itemToSell = kvp.Key; break; }
+        }
+
+        if (itemToSell != null)
+        {
+            // SellItem mutates the server-only _inventory + replicated count list.
+            // Calling on a client will return null because _inventory is empty there — that's fine
+            // for the current TODO state; future work will route this through a ServerRpc so a
+            // client buyer can actually trigger the transaction server-side.
             var soldItem = _shop.SellItem(itemToSell);
 
             if (soldItem != null)

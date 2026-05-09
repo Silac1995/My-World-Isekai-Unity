@@ -1,0 +1,183 @@
+<h2>Terrain & Weather Architecture: Two Approaches</h2>
+<p class="subtitle">Both use the Hybrid Zone+Cell model you approved. The difference is how the systems are structured.</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Layered Architecture (Bottom-Up)</h3>
+      <p>Each concern is a standalone system. They communicate via events — minimal coupling.</p>
+      <div style="font-family:monospace; font-size:12px; line-height:2; padding:12px; background:rgba(255,255,255,0.03); border-radius:6px; margin:8px 0;">
+        <div><strong style="color:#63d297;">Layer 5 — Effects</strong></div>
+        <div>&nbsp;&nbsp;FootstepAudioResolver · CharacterTerrainEffects (speed/damage/slip)</div>
+        <div style="color:#555;">↑ reads terrain state</div>
+        <div><strong style="color:#63d297;">Layer 4 — Growth</strong></div>
+        <div>&nbsp;&nbsp;VegetationGrowthSystem (wild) · CropSystem (plowed)</div>
+        <div style="color:#555;">↑ reads moisture + fertility</div>
+        <div><strong style="color:#63d297;">Layer 3 — Weather ↔ Terrain</strong></div>
+        <div>&nbsp;&nbsp;TerrainWeatherProcessor (WeatherFront passes over cells → updates moisture, temp)</div>
+        <div style="color:#555;">↑ WeatherFront position + cell grid</div>
+        <div><strong style="color:#63d297;">Layer 2 — Weather Movement</strong></div>
+        <div>&nbsp;&nbsp;WeatherFront (GameObject) · GlobalWindController · BiomeRegion (bounds + spawn rules)</div>
+        <div style="color:#555;">↑ driven by global wind + local wind</div>
+        <div><strong style="color:#63d297;">Layer 1 — Terrain Foundation</strong></div>
+        <div>&nbsp;&nbsp;TerrainType (enum/SO) · TerrainCellGrid · TerrainZone (base type)</div>
+      </div>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul>
+          <li>Each layer can be built and tested independently</li>
+          <li>Easy to add new terrain types or weather types without touching other layers</li>
+          <li>MacroSimulator only needs Layer 1 + math formulas — no GameObjects</li>
+          <li>Follows your existing SOLID patterns</li>
+          <li>Footstep audio is just a consumer — completely decoupled from weather</li>
+        </ul></div>
+        <div class="cons"><h4>Cons</h4><ul>
+          <li>More files/classes upfront</li>
+          <li>Event wiring between layers needs careful setup</li>
+        </ul></div>
+      </div>
+      <p style="margin-top:12px; padding:8px 12px; background:rgba(99,210,151,0.1); border-left:3px solid #63d297; border-radius:4px;">
+        <strong>Recommended</strong> — Matches your project's architecture philosophy. Each system has one job. Easy to implement incrementally (Layer 1 first, then 2, etc.)
+      </p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Unified Manager (Top-Down)</h3>
+      <p>A single <code>TerrainWeatherManager</code> orchestrates everything — terrain, weather, growth, effects.</p>
+      <div style="font-family:monospace; font-size:12px; line-height:2; padding:12px; background:rgba(255,255,255,0.03); border-radius:6px; margin:8px 0;">
+        <div><strong>TerrainWeatherManager</strong></div>
+        <div>&nbsp;&nbsp;├── manages TerrainCellGrid</div>
+        <div>&nbsp;&nbsp;├── spawns/moves WeatherFronts</div>
+        <div>&nbsp;&nbsp;├── runs growth ticks</div>
+        <div>&nbsp;&nbsp;├── applies character effects</div>
+        <div>&nbsp;&nbsp;└── handles footstep lookups</div>
+      </div>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul>
+          <li>Fewer files — everything in one place</li>
+          <li>Simple to understand initially</li>
+        </ul></div>
+        <div class="cons"><h4>Cons</h4><ul>
+          <li>God-class risk — one manager doing 5 jobs</li>
+          <li>Violates SRP from your project rules</li>
+          <li>Hard to test individual concerns</li>
+          <li>Adding new terrain types or effects means modifying the manager</li>
+          <li>Offline simulation tightly coupled to runtime logic</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:32px;">
+  <h3>System Overview (Approach A)</h3>
+  <div class="mockup">
+    <div class="mockup-header">Full System Map — World Scale → Cell Scale</div>
+    <div class="mockup-body" style="font-family:monospace; font-size:12px; line-height:1.8; padding:16px;">
+      <div style="color:#63d297; font-weight:bold;">WORLD LEVEL</div>
+      <div>┌─────────────────────────────────────────────┐</div>
+      <div>│ <strong>GlobalWindController</strong> (singleton)            │</div>
+      <div>│  direction: Vector2, strength: float         │</div>
+      <div>│  seasonal variation, random gusts             │</div>
+      <div>└──────────────┬──────────────────────────────┘</div>
+      <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│ pushes</div>
+      <div style="color:#63d297; font-weight:bold;">BIOME REGION LEVEL</div>
+      <div>┌─────────────────────────────────────────────┐</div>
+      <div>│ <strong>BiomeRegion</strong> (per region on world map)       │</div>
+      <div>│  climateProfile: temp range, precip chance    │</div>
+      <div>│  bounds: defines where fronts can travel      │</div>
+      <div>│  spawns WeatherFronts based on climate rules  │</div>
+      <div>│                                               │</div>
+      <div>│  ☁ <strong>WeatherFront</strong> (Rain)  ☁ <strong>WeatherFront</strong> (Clear) │</div>
+      <div>│    localWind + globalWind = movement vector    │</div>
+      <div>│    radius, intensity, temperature modifier     │</div>
+      <div>└──────────────┬──────────────────────────────┘</div>
+      <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│ overlaps</div>
+      <div style="color:#63d297; font-weight:bold;">MAP LEVEL (when active)</div>
+      <div>┌─────────────────────────────────────────────┐</div>
+      <div>│ <strong>MapController</strong> + <strong>TerrainCellGrid</strong>             │</div>
+      <div>│                                               │</div>
+      <div>│  TerrainZone(Fertile)  TerrainZone(Stone)     │</div>
+      <div>│  ┌──┬──┬──┬──┐        ┌──┬──┬──┬──┐          │</div>
+      <div>│  │🌱│🌱│🌾│🌱│        │ite│ite│ite│ite│          │</div>
+      <div>│  │🌱│🌿│🌱│💧│        │ite│ite│ite│ite│          │</div>
+      <div>│  │🌾│🌱│🌱│🌱│        │ite│ite│ite│ite│          │</div>
+      <div>│  └──┴──┴──┴──┘        └──┴──┴──┴──┘          │</div>
+      <div>│  Each cell: baseType, currentType, moisture,  │</div>
+      <div>│             temperature, fertility, saturation │</div>
+      <div>└──────────────┬──────────────────────────────┘</div>
+      <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│ characters walk on</div>
+      <div style="color:#63d297; font-weight:bold;">CHARACTER LEVEL</div>
+      <div>┌─────────────────────────────────────────────┐</div>
+      <div>│ <strong>CharacterTerrainEffects</strong> (subsystem)         │</div>
+      <div>│  reads cell under feet → applies speed/dmg    │</div>
+      <div>│ <strong>FootstepAudioResolver</strong>                      │</div>
+      <div>│  terrain type × foot type → audio clip        │</div>
+      <div>└─────────────────────────────────────────────┘</div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:24px;">
+  <h3>Footstep Audio Matrix</h3>
+  <div class="mockup">
+    <div class="mockup-header">Ground Type × Foot Type → Sound</div>
+    <div class="mockup-body" style="padding:16px;">
+      <table style="width:100%; border-collapse:collapse; font-size:12px;">
+        <tr style="border-bottom:1px solid #333;">
+          <th style="padding:6px; text-align:left;"></th>
+          <th style="padding:6px;">Bare Feet</th>
+          <th style="padding:6px;">Leather Boots</th>
+          <th style="padding:6px;">Metal Boots</th>
+          <th style="padding:6px;">Hooves</th>
+        </tr>
+        <tr style="border-bottom:1px solid #222;">
+          <td style="padding:6px; font-weight:bold; color:#63d297;">Grass/Fertile</td>
+          <td style="padding:6px;">soft rustle</td>
+          <td style="padding:6px;">muffled thud</td>
+          <td style="padding:6px;">crunching</td>
+          <td style="padding:6px;">soft thump</td>
+        </tr>
+        <tr style="border-bottom:1px solid #222;">
+          <td style="padding:6px; font-weight:bold; color:#c4a356;">Dirt/Mud</td>
+          <td style="padding:6px;">squelch</td>
+          <td style="padding:6px;">wet thud</td>
+          <td style="padding:6px;">heavy squelch</td>
+          <td style="padding:6px;">splat</td>
+        </tr>
+        <tr style="border-bottom:1px solid #222;">
+          <td style="padding:6px; font-weight:bold; color:#aaa;">Stone</td>
+          <td style="padding:6px;">light tap</td>
+          <td style="padding:6px;">click</td>
+          <td style="padding:6px;">clang</td>
+          <td style="padding:6px;">clip-clop</td>
+        </tr>
+        <tr style="border-bottom:1px solid #222;">
+          <td style="padding:6px; font-weight:bold; color:#d4e4ff;">Snow</td>
+          <td style="padding:6px;">crunch</td>
+          <td style="padding:6px;">deep crunch</td>
+          <td style="padding:6px;">heavy crunch</td>
+          <td style="padding:6px;">powdery crunch</td>
+        </tr>
+        <tr style="border-bottom:1px solid #222;">
+          <td style="padding:6px; font-weight:bold; color:#88c0ff;">Ice</td>
+          <td style="padding:6px;">scrape</td>
+          <td style="padding:6px;">scratch</td>
+          <td style="padding:6px;">metallic scrape</td>
+          <td style="padding:6px;">sharp click</td>
+        </tr>
+        <tr>
+          <td style="padding:6px; font-weight:bold; color:#b87333;">Wood Floor</td>
+          <td style="padding:6px;">soft pad</td>
+          <td style="padding:6px;">creak</td>
+          <td style="padding:6px;">heavy thud</td>
+          <td style="padding:6px;">hollow clop</td>
+        </tr>
+      </table>
+      <p style="margin-top:8px; color:#888; font-size:11px;">Each cell = an AudioClip array (variations for randomization). Foot type comes from CharacterEquipment boot slot.</p>
+    </div>
+  </div>
+</div>

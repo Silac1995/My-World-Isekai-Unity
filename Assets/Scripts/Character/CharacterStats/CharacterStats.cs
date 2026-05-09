@@ -4,7 +4,7 @@ using Unity.VisualScripting.Antlr3.Runtime.Misc;
 using UnityEngine;
 
 [System.Serializable]
-public class CharacterStats : CharacterSystem, ISaveable
+public class CharacterStats : CharacterSystem, ICharacterSaveData<CharacterStats.StatsSaveData>
 {
     public event Action OnStatsUpdated;
 
@@ -34,7 +34,8 @@ public class CharacterStats : CharacterSystem, ISaveable
     [SerializeField] private Speed speed;
     [SerializeField] private DodgeChance dodgeChance;
     [SerializeField] private Accuracy accuracy;
-    [SerializeField] private CastingSpeed castingSpeed;
+    [SerializeField] private SpellCasting spellCasting;
+    [SerializeField] private CombatCasting combatCasting;
     [SerializeField] private MagicalPower magicalPower;
     [SerializeField] private ManaRegenRate manaRegenRate;
     [SerializeField] private StaminaRegenRate staminaRegenRate;
@@ -63,7 +64,8 @@ public class CharacterStats : CharacterSystem, ISaveable
     public Speed Speed => speed;
     public DodgeChance DodgeChance => dodgeChance;
     public Accuracy Accuracy => accuracy;
-    public CastingSpeed CastingSpeed => castingSpeed;
+    public SpellCasting SpellCasting => spellCasting;
+    public CombatCasting CombatCasting => combatCasting;
     public MagicalPower MagicalPower => magicalPower;
     public ManaRegenRate ManaRegenRate => manaRegenRate;
     public StaminaRegenRate StaminaRegenRate => staminaRegenRate;
@@ -78,6 +80,19 @@ public class CharacterStats : CharacterSystem, ISaveable
         CreateStats();
         SubscribeToSecondaryStats();
         RecalculateTertiaryStats();
+    }
+
+    private void Update()
+    {
+        if (stamina == null || staminaRegenRate == null) return;
+        if (stamina.IsFull()) return;
+        if (character != null && !character.IsAlive()) return;
+
+        float regenAmount = staminaRegenRate.Value * Time.deltaTime;
+        if (regenAmount > 0f)
+        {
+            stamina.IncreaseCurrentAmount(regenAmount);
+        }
     }
 
     private void SubscribeToSecondaryStats()
@@ -126,7 +141,8 @@ public class CharacterStats : CharacterSystem, ISaveable
         speed = new Speed(this, agility, 1f);
         dodgeChance = new DodgeChance(this, agility, 1f);
         accuracy = new Accuracy(this, dexterity, 1f);
-        castingSpeed = new CastingSpeed(this, dexterity, 1f);
+        spellCasting = new SpellCasting(this, dexterity, 1f);
+        combatCasting = new CombatCasting(this, agility, 1f);
         magicalPower = new MagicalPower(this, intelligence, 1f);
         manaRegenRate = new ManaRegenRate(this, intelligence, 1f);
         staminaRegenRate = new StaminaRegenRate(this, endurance, 1f);
@@ -145,7 +161,7 @@ public class CharacterStats : CharacterSystem, ISaveable
         Strength.SetBaseValue(strength);
         Agility.SetBaseValue(agility);
 
-        // Recalcul des stats dérivées (primaires dynamiques et tertiaires)
+        // Recalculate the derived stats (dynamic primaries and tertiaries)
         RecalculateTertiaryStats();
     }
 
@@ -172,7 +188,8 @@ public class CharacterStats : CharacterSystem, ISaveable
         Speed.UpdateScaling(race.SpeedMultiplier, race.BaseSpeedOffset);
         DodgeChance.UpdateScaling(race.DodgeChanceMultiplier, race.BaseDodgeChanceOffset);
         Accuracy.UpdateScaling(race.AccuracyMultiplier, race.BaseAccuracyOffset);
-        CastingSpeed.UpdateScaling(race.CastingSpeedMultiplier, race.BaseCastingSpeedOffset);
+        SpellCasting.UpdateScaling(race.SpellCastingMultiplier, race.BaseSpellCastingOffset);
+        CombatCasting.UpdateScaling(race.CombatCastingMultiplier, race.BaseCombatCastingOffset);
         MagicalPower.UpdateScaling(race.MagicalPowerMultiplier, race.BaseMagicalPowerOffset);
         ManaRegenRate.UpdateScaling(race.ManaRegenRateMultiplier, race.BaseManaRegenRateOffset);
         StaminaRegenRate.UpdateScaling(race.StaminaRegenRateMultiplier, race.BaseStaminaRegenRateOffset);
@@ -188,24 +205,25 @@ public class CharacterStats : CharacterSystem, ISaveable
 
     public void RecalculateTertiaryStats()
     {
-        // Primaires dynamiques
+        // Dynamic primaries
         health.UpdateFromLinkedStat();
         mana.UpdateFromLinkedStat();
         stamina.UpdateFromLinkedStat();
 
-        // Tertiaires
+        // Tertiaries
         physicalPower.UpdateFromLinkedStat();
         speed.UpdateFromLinkedStat();
         dodgeChance.UpdateFromLinkedStat();
         accuracy.UpdateFromLinkedStat();
-        castingSpeed.UpdateFromLinkedStat();
+        spellCasting.UpdateFromLinkedStat();
+        combatCasting.UpdateFromLinkedStat();
         magicalPower.UpdateFromLinkedStat();
         manaRegenRate.UpdateFromLinkedStat();
         staminaRegenRate.UpdateFromLinkedStat();
         criticalHitChance.UpdateFromLinkedStat();
         moveSpeed.UpdateFromLinkedStat();
 
-        Debug.Log("<color=green>[Stats]</color> Statistiques dynamiques (Primaires & Tertiaires) recalculées.");
+        Debug.Log("<color=green>[Stats]</color> Dynamic stats (Primaries & Tertiaries) recalculated.");
         
         OnStatsUpdated?.Invoke();
     }
@@ -228,7 +246,8 @@ public class CharacterStats : CharacterSystem, ISaveable
             StatType.Speed => speed,
             StatType.Dodge => dodgeChance,
             StatType.Accuracy => accuracy,
-            StatType.CastingSpeed => castingSpeed,
+            StatType.SpellCasting => spellCasting,
+            StatType.CombatCasting => combatCasting,
             StatType.MagicalPower => magicalPower,
             StatType.ManaRegen => manaRegenRate,
             StatType.StaminaRegen => staminaRegenRate,
@@ -251,8 +270,9 @@ public class CharacterStats : CharacterSystem, ISaveable
         }
     }
 
-    // --- ISAVEABLE IMPLEMENTATION ---
+    // --- ICharacterSaveData IMPLEMENTATION ---
     public string SaveKey => "CharacterStats";
+    public int LoadPriority => 10;
 
     [System.Serializable]
     public struct StatsSaveData
@@ -269,7 +289,7 @@ public class CharacterStats : CharacterSystem, ISaveable
         public float currentStamina;
     }
 
-    public object CaptureState()
+    public StatsSaveData Serialize()
     {
         return new StatsSaveData
         {
@@ -286,24 +306,24 @@ public class CharacterStats : CharacterSystem, ISaveable
         };
     }
 
-    public void RestoreState(object state)
+    public void Deserialize(StatsSaveData data)
     {
-        // state will be passed dynamically with the exactly captured type
-        if (state is StatsSaveData data)
-        {
-            strength.SetBaseValue(data.strength);
-            agility.SetBaseValue(data.agility);
-            dexterity.SetBaseValue(data.dexterity);
-            intelligence.SetBaseValue(data.intelligence);
-            endurance.SetBaseValue(data.endurance);
-            charisma.SetBaseValue(data.charisma);
+        strength.SetBaseValue(data.strength);
+        agility.SetBaseValue(data.agility);
+        dexterity.SetBaseValue(data.dexterity);
+        intelligence.SetBaseValue(data.intelligence);
+        endurance.SetBaseValue(data.endurance);
+        charisma.SetBaseValue(data.charisma);
 
-            // Recalculate max values BEFORE setting current amount limits
-            RecalculateTertiaryStats();
+        // Recalculate max values BEFORE setting current amount limits
+        RecalculateTertiaryStats();
 
-            health.CurrentAmount = data.currentHealth;
-            mana.CurrentAmount = data.currentMana;
-            stamina.CurrentAmount = data.currentStamina;
-        }
+        health.CurrentAmount = data.currentHealth;
+        mana.CurrentAmount = data.currentMana;
+        stamina.CurrentAmount = data.currentStamina;
     }
+
+    // Non-generic bridge (explicit interface impl)
+    string ICharacterSaveData.SerializeToJson() => CharacterSaveDataHelper.SerializeToJson(this);
+    void ICharacterSaveData.DeserializeFromJson(string json) => CharacterSaveDataHelper.DeserializeFromJson(this, json);
 }

@@ -1,7 +1,7 @@
 using UnityEngine;
 
 /// <summary>
-/// Arme à distance qui nécessite un temps de charge avant de tirer (ex: arc).
+/// Ranged weapon that requires a charge time before firing (e.g. bow).
 /// </summary>
 [System.Serializable]
 public class ChargingWeaponInstance : RangedWeaponInstance
@@ -17,7 +17,7 @@ public class ChargingWeaponInstance : RangedWeaponInstance
     public override bool CanFire() => _isCharged;
 
     /// <summary>
-    /// Démarre ou continue la charge. Retourne true quand la charge est complète.
+    /// Starts or continues charging. Returns true when the charge is complete.
     /// </summary>
     public bool Charge(float deltaTime, float chargingTime)
     {
@@ -33,7 +33,7 @@ public class ChargingWeaponInstance : RangedWeaponInstance
     }
 
     /// <summary>
-    /// Réinitialise la charge après un tir.
+    /// Resets the charge after a shot.
     /// </summary>
     public void ResetCharge()
     {

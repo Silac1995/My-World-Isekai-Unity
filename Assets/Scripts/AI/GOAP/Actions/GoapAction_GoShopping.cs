@@ -1,138 +1,121 @@
 using System.Collections.Generic;
-using UnityEngine;
 using System.Linq;
+using MWI.Economy;
+using UnityEngine;
 
 public class GoapAction_GoShopping : GoapAction
 {
     public override string ActionName => "GoShopping";
 
-    public override Dictionary<string, bool> Preconditions => new Dictionary<string, bool>();
-
-    public override Dictionary<string, bool> Effects => new Dictionary<string, bool>
-    {
-        { "shoppingDone", true }
-    };
-
+    public override Dictionary<string, bool> Preconditions => new();
+    public override Dictionary<string, bool> Effects => new() { { "shoppingDone", true } };
     public override float Cost => 2f;
 
-    private ItemSO _desiredItem;
-    private bool _isComplete = false;
-    private bool _isMoving = false;
-    private bool _hasJoinedQueue = false;
-    private bool _wasInteracting = false;
-    private ShopBuilding _shop;
-    private Vector3 _lastTargetPos = Vector3.positiveInfinity;
-    private float _lastRouteRequestTime = 0f;
-    
+    private readonly ItemSO _desiredItem;
+    private bool _isComplete;
+    private bool _isMoving;
+    private bool _actionEnqueued;
+    private bool _actionFinished;
+    private ShopBuilding _chosenShop;
+    private Cashier _chosenCashier;
+    private CharacterAction_BuyFromShop _enqueuedAction;
+
     public override bool IsComplete => _isComplete;
 
-    public GoapAction_GoShopping(ItemSO desiredItem)
-    {
-        _desiredItem = desiredItem;
-    }
+    public GoapAction_GoShopping(ItemSO desiredItem) { _desiredItem = desiredItem; }
 
     public override bool IsValid(Character worker)
     {
         if (_isComplete) return false;
-        if (_shop != null) return true;
+        if (_chosenShop != null && _chosenCashier != null)
+            return _chosenCashier.IsAvailableForCustomer || _actionEnqueued;
 
-        _shop = FindShop();
-        return _shop != null;
+        var shop = FindShopWithItem(_desiredItem);
+        if (shop == null) return false;
+
+        var entry = shop.GetCatalogEntry(_desiredItem);
+        if (!entry.HasValue) return false;
+
+        int price = ShopBuilding.ResolvePrice(entry.Value);
+        if (price > 0 && !worker.CharacterWallet.CanAfford(CurrencyId.Default, price)) return false;
+
+        bool hasBagSpace = worker.CharacterEquipment != null && worker.CharacterEquipment.HasFreeSpaceForItemSO(_desiredItem);
+        bool handsFree = worker.CharacterVisual?.BodyPartsController?.HandsController?.AreHandsFree() == true;
+        if (!hasBagSpace && !handsFree) return false;
+
+        var cashier = shop.GetFirstAvailableCashier();
+        if (cashier == null) return false;
+
+        _chosenShop = shop;
+        _chosenCashier = cashier;
+        return true;
     }
 
     public override void Execute(Character worker)
     {
         if (_isComplete) return;
-
-        if (_shop == null)
-        {
-            _isComplete = true;
-            return;
-        }
+        if (_chosenShop == null || _chosenCashier == null) { _isComplete = true; return; }
 
         var movement = worker.CharacterMovement;
-        if (movement == null)
+        if (movement == null) { _isComplete = true; return; }
+
+        var dest = _chosenCashier.GetInteractionPosition(worker.transform.position);
+        if (Vector3.Distance(worker.transform.position, dest) > 1.5f)
         {
-            _isComplete = true;
+            if (!_isMoving) { movement.SetDestination(dest); _isMoving = true; }
             return;
         }
+        if (_isMoving) { movement.Stop(); _isMoving = false; }
 
-        if (!_hasJoinedQueue)
+        if (!_actionEnqueued)
         {
-            Vector3 targetPos = _shop.transform.position;
-            Vector3 currentPos = worker.transform.position;
-            currentPos.y = 0; targetPos.y = 0;
-            
-            float distance = Vector3.Distance(currentPos, targetPos);
+            if (!_chosenCashier.IsAvailableForCustomer) { _isComplete = true; return; }
 
-            if (distance > 3f)
-            {
-                bool hasPathFailed = (UnityEngine.Time.unscaledTime - _lastRouteRequestTime > 0.2f) && (movement.PathStatus == UnityEngine.AI.NavMeshPathStatus.PathInvalid || (!movement.HasPath && !movement.PathPending));
-
-                if (!_isMoving || Vector3.Distance(_lastTargetPos, targetPos) > 1f || hasPathFailed)
-                {
-                    movement.SetDestination(_shop.transform.position);
-                    _lastTargetPos = targetPos;
-                    _lastRouteRequestTime = UnityEngine.Time.unscaledTime;
-                    _isMoving = true;
-                }
-                return;
-            }
-
-            if (_isMoving)
-            {
-                movement.Stop();
-                _isMoving = false;
-                _lastTargetPos = Vector3.positiveInfinity;
-            }
-
-            if (!worker.CharacterInteraction.IsInteracting)
-            {
-                _shop.JoinQueue(worker);
-                _hasJoinedQueue = true;
-            }
+            _enqueuedAction = new CharacterAction_BuyFromShop(
+                worker, _chosenCashier, new List<ItemSO> { _desiredItem }, CharacterAction_BuyFromShop.BuyMode.NPC);
+            _enqueuedAction.OnActionFinished += () => _actionFinished = true;
+            worker.CharacterActions.ExecuteAction(_enqueuedAction);
+            _actionEnqueued = true;
         }
-        else
-        {
-            // Client is in queue or interacting
-            if (worker.CharacterInteraction.IsInteracting)
-            {
-                _wasInteracting = true;
-                return;
-            }
 
-            if (_wasInteracting)
-            {
-                // Interaction just finished
-                _isComplete = true;
-                return;
-            }
-
-            // Fallback: If there is no vendor assigned/working, maybe leave?
-            // JobVendor vendor = _shop.GetVendor();
-            // if (vendor == null) _isComplete = true;
-        }
+        if (_actionFinished) _isComplete = true;
     }
 
     public override void Exit(Character worker)
     {
         _isComplete = false;
         _isMoving = false;
-        _wasInteracting = false;
-        if (_hasJoinedQueue && _shop != null)
-        {
-            // Optionally could leave queue here if needed, but shop probably clears it
-        }
-        _hasJoinedQueue = false;
-        _shop = null;
+        _actionEnqueued = false;
+        _actionFinished = false;
+        _chosenShop = null;
+        _chosenCashier = null;
+        _enqueuedAction = null;
         worker.CharacterMovement?.Stop();
     }
 
-    private ShopBuilding FindShop()
+    private static ShopBuilding FindShopWithItem(ItemSO item)
     {
         if (BuildingManager.Instance == null) return null;
         return BuildingManager.Instance.allBuildings
             .OfType<ShopBuilding>()
-            .FirstOrDefault(s => s.ItemsToSell.Contains(_desiredItem) && s.HasItemInStock(_desiredItem));
+            .FirstOrDefault(s =>
+            {
+                var entry = s.GetCatalogEntry(item);
+                if (!entry.HasValue) return false;
+                if (s.GetFirstAvailableCashier() == null) return false;
+
+                // At least one matching instance must be on a sell-shelf.
+                for (int i = 0; i < s.SellShelves.Count; i++)
+                {
+                    var shelf = s.SellShelves[i];
+                    if (shelf == null) continue;
+                    for (int sl = 0; sl < shelf.Capacity; sl++)
+                    {
+                        var slot = shelf.GetItemSlot(sl);
+                        if (slot != null && !slot.IsEmpty() && slot.ItemInstance.ItemSO == item) return true;
+                    }
+                }
+                return false;
+            });
     }
 }

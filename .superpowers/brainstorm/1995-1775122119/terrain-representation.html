@@ -1,0 +1,91 @@
+<h2>Terrain Representation: Which approach?</h2>
+<p class="subtitle">How terrain types are physically laid out on maps — considering weather transforms, plant growth, and footstep detection</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Zone-Based (Painted Regions)</h3>
+      <p>Large collider areas define terrain type. Weather transforms entire zones at once.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul>
+          <li>Simple — few objects per map</li>
+          <li>Easy to author in the editor</li>
+          <li>Low performance cost</li>
+          <li>Matches your existing ZoneType system</li>
+        </ul></div>
+        <div class="cons"><h4>Cons</h4><ul>
+          <li>No granularity — rain turns ALL dirt to mud at once</li>
+          <li>Can't have a small puddle next to dry ground</li>
+          <li>Plant growth limited to "zone has plants" — no specific positions</li>
+          <li>Weather transitions feel artificial (instant flip)</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Hybrid: Zone Base + Cell Overlay</h3>
+      <p>Zones define the <strong>base terrain</strong> (what this area naturally is). A lightweight cell grid tracks <strong>current state</strong> per tile — weather gradually transforms cells within a zone. Wind direction affects which cells transform first.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul>
+          <li>Gradual weather transitions — mud spreads from low points, snow accumulates</li>
+          <li>Wind pushes snow/rain directionally across cells</li>
+          <li>Temperature thresholds per-cell: snow melts in sun-exposed cells first</li>
+          <li>Plant growth at specific cell positions (fertile cells)</li>
+          <li>Footstep detection is a simple cell lookup</li>
+          <li>Offline simulation: MacroSimulator can math-forward cell states</li>
+        </ul></div>
+        <div class="cons"><h4>Cons</h4><ul>
+          <li>More memory per map (cell grid)</li>
+          <li>More complex to implement</li>
+          <li>Need to define cell resolution (how big is each cell?)</li>
+        </ul></div>
+      </div>
+      <p style="margin-top:12px; padding:8px 12px; background:rgba(99,210,151,0.1); border-left:3px solid #63d297; border-radius:4px;">
+        <strong>Recommended</strong> — Best fit for wind/temperature atmosphere. Zone = "what this ground naturally is", Cell = "what it currently is right now". Weather gradually transforms cells, not instant zone flips.
+      </p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Full Tile Grid (No Zones)</h3>
+      <p>Every cell is independently authored. No zone concept — pure per-tile terrain.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul>
+          <li>Maximum granularity</li>
+          <li>Each tile fully independent</li>
+        </ul></div>
+        <div class="cons"><h4>Cons</h4><ul>
+          <li>Huge authoring burden — every map cell must be painted</li>
+          <li>No concept of "natural state" — after weather passes, what does it revert to?</li>
+          <li>Doesn't leverage your existing zone system at all</li>
+          <li>Overkill for most maps</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:24px;">
+  <h3>How the Hybrid (B) works with your atmosphere</h3>
+  <div class="mockup">
+    <div class="mockup-header">Example: Rain event on a Dirt zone</div>
+    <div class="mockup-body" style="font-family:monospace; font-size:13px; line-height:1.8; padding:16px;">
+      <div><strong>Atmosphere State:</strong> Temperature=12C, Wind=(NE, 8 m/s), Precipitation=Rain</div>
+      <div style="margin-top:8px;"><strong>Zone Base Type:</strong> Dirt</div>
+      <div style="margin-top:8px;"><strong>Cell Transform Rule:</strong> Dirt + Rain + Saturation &gt; 0.7 → Mud</div>
+      <div style="margin-top:12px;">
+        <span style="color:#888;">t=0min</span>&nbsp; <span style="background:#c4a356;padding:2px 6px;border-radius:3px;color:#fff;">Dirt</span><span style="background:#c4a356;padding:2px 6px;border-radius:3px;color:#fff;">Dirt</span><span style="background:#c4a356;padding:2px 6px;border-radius:3px;color:#fff;">Dirt</span><span style="background:#c4a356;padding:2px 6px;border-radius:3px;color:#fff;">Dirt</span><span style="background:#c4a356;padding:2px 6px;border-radius:3px;color:#fff;">Dirt</span><br/>
+        <span style="color:#888;">t=5min</span>&nbsp; <span style="background:#c4a356;padding:2px 6px;border-radius:3px;color:#fff;">Dirt</span><span style="background:#8B6914;padding:2px 6px;border-radius:3px;color:#fff;">Mud</span><span style="background:#c4a356;padding:2px 6px;border-radius:3px;color:#fff;">Dirt</span><span style="background:#c4a356;padding:2px 6px;border-radius:3px;color:#fff;">Dirt</span><span style="background:#c4a356;padding:2px 6px;border-radius:3px;color:#fff;">Dirt</span> <span style="color:#63d297;">← low elevation saturates first</span><br/>
+        <span style="color:#888;">t=15min</span> <span style="background:#8B6914;padding:2px 6px;border-radius:3px;color:#fff;">Mud</span><span style="background:#8B6914;padding:2px 6px;border-radius:3px;color:#fff;">Mud</span><span style="background:#8B6914;padding:2px 6px;border-radius:3px;color:#fff;">Mud</span><span style="background:#c4a356;padding:2px 6px;border-radius:3px;color:#fff;">Dirt</span><span style="background:#c4a356;padding:2px 6px;border-radius:3px;color:#fff;">Dirt</span> <span style="color:#63d297;">← wind pushes rain NE→SW</span><br/>
+        <span style="color:#888;">t=30min</span> <span style="background:#8B6914;padding:2px 6px;border-radius:3px;color:#fff;">Mud</span><span style="background:#8B6914;padding:2px 6px;border-radius:3px;color:#fff;">Mud</span><span style="background:#8B6914;padding:2px 6px;border-radius:3px;color:#fff;">Mud</span><span style="background:#8B6914;padding:2px 6px;border-radius:3px;color:#fff;">Mud</span><span style="background:#8B6914;padding:2px 6px;border-radius:3px;color:#fff;">Mud</span> <span style="color:#63d297;">← fully saturated</span><br/>
+      </div>
+      <div style="margin-top:12px;"><strong>Rain stops → Drying:</strong> Temperature + Wind speed determine evaporation rate. Cells revert to zone base type (Dirt) as saturation drops below threshold.</div>
+    </div>
+  </div>
+</div>

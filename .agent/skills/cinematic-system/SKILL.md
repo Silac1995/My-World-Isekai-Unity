@@ -1,0 +1,296 @@
+---
+name: cinematic-system
+description: Server-side runtime for scripted cinematic scenes — polymorphic step model, role binding, director coroutine, IsCinematicActor flag, public TryPlay facade. Phase 1 foundation.
+---
+
+# Cinematic System (Phase 1)
+
+Server-side runtime for Fire Emblem / Persona / Vandal Hearts style scripted scenes. A cinematic is an ordered list of typed steps (Speak / Move / Wait / Trigger in Phase 1) authored as a `CinematicSceneSO` ScriptableObject, executed by a `CinematicDirector` coroutine. Bound actors are flagged `IsCinematicActor` and are invincible + input-locked while a scene runs.
+
+**Phase 1 status:** server-side / single-player foundation. **Not** yet networked, persisted, or editor-tooled — those land in Phase 2/3/4.
+
+## When to use this skill
+
+- Authoring a `CinematicSceneSO` asset in `Assets/Resources/Data/Cinematics/`.
+- Triggering a scene from code via `Cinematics.TryPlay(...)`.
+- Adding a new step type (`CinematicStep` subclass).
+- Adding a new role selector (`RoleSelectorSO` subclass).
+- Adding a new in-timeline effect (`CinematicEffectSO` subclass).
+- Debugging a stuck or misbehaving scene.
+
+## Core types
+
+| Type | Path | Role |
+|------|------|------|
+| `CinematicSceneSO` | `Assets/Scripts/Cinematics/Core/CinematicSceneSO.cs` | Top-level scene asset. Holds identity (`SceneId` GUID), trigger metadata, role list, `[SerializeReference] List<CinematicStep>` timeline. |
+| `ICinematicStep` / `CinematicStep` | `Assets/Scripts/Cinematics/Core/ICinematicStep.cs` | Step contract: `OnEnter / OnTick / OnExit / IsComplete`. New step types subclass `CinematicStep`. |
+| `CinematicContext` | `Assets/Scripts/Cinematics/Core/CinematicContext.cs` | Runtime context threaded through every step callback. `BoundRoles`, `TriggeringPlayer`, `OtherParticipant`, `GetActor(roleId)`. |
+| `CinematicDirector` | `Assets/Scripts/Cinematics/Core/CinematicDirector.cs` | Per-scene `MonoBehaviour` (Phase 2 promotes to `NetworkBehaviour`). `Initialize(scene, ctx)` + `RunScene()` start the step-loop coroutine. |
+| `Cinematics` | `Assets/Scripts/Cinematics/Core/Cinematics.cs` | Public static facade. `Cinematics.TryPlay(scene, triggeringPlayer, otherParticipant?) : bool`. |
+| `RoleSlot` + `RoleSelectorSO` | `Assets/Scripts/Cinematics/Roles/` | Role binding. Phase 1 ships three selectors: `Selector_TriggeringPlayer`, `Selector_OtherParticipant`, `Selector_CharacterByName`. Phase 2 adds archetype + radius-based selectors. |
+| `CharacterCinematicState` | `Assets/Scripts/Character/CharacterCinematicState/CharacterCinematicState.cs` | Per-Character subsystem. `IsCinematicActor` flag (Phase 1 local bool; Phase 2 NetworkVariable), `_playedSceneIds` + `_pendingSceneIds` history. |
+| `CharacterAction_CinematicMoveTo` | `Assets/Scripts/Cinematics/Actions/CharacterAction_CinematicMoveTo.cs` | `CharacterAction` subclass for `MoveActorStep`. Routes through `CharacterActions.ExecuteAction` per rule #22. |
+
+## Phase 1 step catalogue
+
+| Step | What it does | Key fields |
+|------|--------------|------------|
+| `WaitStep` | Sim-time delay. | `_durationSec` |
+| `SpeakStep` | Speaker role says ONE line. **Advance behaviour mirrors `DialogueManager`**: if any player is bound as an actor → waits for that player to press Space / Left-Click. If no players (NPC-only scene) → auto-advances 1.5s after typing finishes. Length-aware safety timeout. Supports `[role:X].getName` placeholders. Use for one-off beats. | `_speakerRoleId`, `_lineText`, `_typingSpeedOverride` |
+| `DialogueStep` | Multi-line conversation authored INLINE in the cinematic. Holds its own `List<CinematicDialogueLine>`. Each line names its speaker by Role Id, has a TextArea for content, and a per-line typing-speed override. Same authoring shape as the legacy `DialogueSO._lines` but role-id-based instead of 1-indexed — no external asset, no mapping list. **Per-line advance behaviour same as `SpeakStep`**: player-bound → wait for press; NPC-only → auto-advance after dwell. `[role:X].getName` placeholders. Use for back-and-forth conversations. | `_lines : List<CinematicDialogueLine>` |
+| `MoveActorStep` | Actor walks to a target (role / world position). Routes through `CharacterAction_CinematicMoveTo`. Blocking by default. | `_actorRoleId`, `_targetMode`, `_targetRoleId` / `_targetPos`, `_stoppingDist`, `_blocking`, `_timeoutSec` |
+| `TriggerStep` | Fires a `CinematicEffectSO` and/or a `UnityEvent`. Fire-and-forget. | `_effect`, `_eventHook` |
+
+## How to trigger a cinematic
+
+### From code (any server-side hook — quest reward, BT action, scripted event, NPC-to-NPC trigger)
+
+```csharp
+using MWI.Cinematics;
+
+// Player-driven (most common): triggering player + optional NPC participant.
+Cinematics.TryPlay(scene, triggeringPlayer: player, otherParticipant: wilfred);
+
+// NPC-to-NPC ("two villagers gossip while distant players watch from afar"). Pass
+// the first NPC as triggeringPlayer (the parameter name kept "Player" suffix for
+// backwards-compat — it accepts ANY Character).
+Cinematics.TryPlay(scene_NpcGossip, triggeringPlayer: npcA, otherParticipant: npcB);
+
+// Position-only (ambient world cinematic with no anchoring character). Pass an
+// explicit overrideOrigin Vector3.
+Cinematics.TryPlay(scene_AmbientShrine, overrideOrigin: shrineTransform.position);
+```
+
+**`TryPlay` accepts any `Character` as the first argument** — the system never enforces that it's a player, so NPC-to-NPC scenes work via the same entry point. At least one of `triggeringPlayer`, `otherParticipant`, or `overrideOrigin` must be non-null so the director has a trigger origin (used for spatial selectors and future camera focus).
+
+The function resolves all roles (hard-fails on required + unbound, silently skips optional + unbound), marks every bound actor as `IsCinematicActor=true`, spawns a `CinematicDirector` GameObject under `CinematicDirectors/`, and starts the step loop. The `otherParticipant` argument feeds `CinematicContext.OtherParticipant` and resolves any role using `Selector_OtherParticipant`.
+
+**Players watching NPC-to-NPC scenes from afar**: nearby players are NOT added to `BoundRoles` and don't get `IsCinematicActor` set, but they see the actor NPCs animate / speak via existing `CharacterMovement` + `CharacterSpeech` network replication. No special bystander handling needed — the visuals come along for free.
+
+### From the Inspector while in Play mode (Phase 1 quick test)
+
+Right-click the `CinematicSceneSO` asset header in the Inspector → **`Play in Active Scene`**. The `[ContextMenu]` finds a player Character in the active scene to use as `TriggeringPlayer`, falls back to the first Character if no player is around, and calls `TryPlay`. No external scripts (DevModeManager modules, DebugScript, etc.) needed.
+
+> **Don't use `DebugScript`** for cinematic testing — it's marked `[Obsolete]`. The new debug surface is `DevModeManager` (F3 toggle, module-based panel). Phase 4 will add a proper `DevCinematicModule` tab; until then the in-Inspector ContextMenu is the supported quick-test path.
+
+## How character ↔ role binding works (vs. the legacy `DialogueManager` model)
+
+Legacy `DialogueManager._testParticipants` is a flat `List<Character>`. Lines reference participants by **1-based index**: `_characterIndex = 1` means "participant[0] speaks". Designer drags Characters into the list to assign.
+
+The cinematic system replaces this with **named roles + polymorphic selectors**:
+
+| Legacy `DialogueManager` | New cinematic system |
+|--------------------------|----------------------|
+| `_testParticipants[0]` (1-indexed) | `_roles[0].RoleId = "Hero"` |
+| `_testParticipants[1]` | `_roles[1].RoleId = "Wilfred"` |
+| Drag `Character` into list at design time | Pick a `RoleSelectorSO` asset that resolves the Character at runtime |
+| `DialogueLine._characterIndex = 1` | `SpeakStep._speakerRoleId = "Hero"` |
+| `[index1].getName` placeholder | `[role:Hero].getName` placeholder |
+
+Why named roles over indices:
+- A scene authored once works for any pair of (player, NPC) without editing the asset per-instance.
+- Self-documenting: `_speakerRoleId = "Wilfred"` reads better than `_characterIndex = 2`.
+- Runtime binding lets the same scene fire from multiple trigger contexts (any player, any matching NPC).
+
+Phase 1 ships five selectors:
+
+| Selector | Resolves to | Authoring inputs | Use case |
+|----------|-------------|------------------|----------|
+| `Selector_TriggeringPlayer` | `ctx.TriggeringPlayer` (the player who fired the cinematic) | none | The "Hero" / player avatar role. |
+| `Selector_OtherParticipant` | `ctx.OtherParticipant` (passed as 2nd arg to `TryPlay`) | none | The NPC the player is interacting with — typically the Talk target. Caller supplies via `Cinematics.TryPlay(scene, player, npc)`. |
+| `Selector_CharacterByName` | First `Character` in the scene whose `CharacterName == _characterName` | `_characterName : string` | Named NPC ("Wilfred", "Tavern Keeper") — the closest analogue to dragging a specific character into `_testParticipants`. Best for casual/named NPCs where the name is stable. |
+| `Selector_CharacterById` | `Character.FindByUUID(_characterId)` — the **persistent** UUID from `Profiles/{guid}.json` | `_characterId : string`, `_displayHint : string` | **Predefined / main / story-critical characters** with stable UUIDs. Survives renames / localization / duplicate names. Worse authoring UX (paste a 32-char hex) but unambiguous. |
+| `Selector_PartyMember` | The Nth member of the triggering player's (or other participant's) party | `_partyOf : PartyOf`, `_memberIndex : int` | Companion roles in a multi-actor scene. Index 0 = leader (the player), 1 = first follower, 2 = second follower, etc. |
+
+Phase 2 adds archetype-based selectors (`Selector_NearestArchetype`, `Selector_RandomInRadius`, `Selector_SpecificCharacter` with full archetype reference) for procedural / generic-NPC scenes.
+
+### Picking by name vs by UUID — when to use which
+
+| Concern | `Selector_CharacterByName` | `Selector_CharacterById` |
+|---------|----------------------------|--------------------------|
+| Authoring UX | Type a name ("Wilfred"). Easy. | Paste a UUID (32-char hex). Painful. |
+| Rename-resilient | ❌ — breaks if the character's `CharacterName` is changed. | ✅ — UUID is stable forever. |
+| Localization-safe | ❌ — `CharacterName` may be a localized string. | ✅ — UUID is non-localized. |
+| Multiple characters with the same name | ❌ — picks first found, non-deterministic. | ✅ — UUID is unique by definition. |
+| Persists across save/load | Depends on whether the name is stable. | ✅ — UUID is the save-file key. |
+
+**Use `Selector_CharacterByName` for**: casual / generic NPCs, prototyping, scenes where the name is also the canonical identifier (and won't change).
+
+**Use `Selector_CharacterById` for**: main characters, story-critical NPCs, anything you'd hate to break by renaming, anything where two characters might share a name (twins, generic guards, identical clones).
+
+### Where to find a character's UUID
+
+The `Character.CharacterId` is generated on first spawn and persists from then on. To copy it for a `Selector_CharacterById`:
+
+1. **Profile filename**: `Profiles/{the-uuid-here}.json` — the filename IS the UUID.
+2. **Runtime inspection**: in Play mode, select the Character GameObject and read `CharacterId` from the inspector (or via the dev panel's character inspector if implemented).
+3. **Debug log**: every cinematic logs `'CharacterName' is now cinematic actor (scene=X, role=Y)` — but the CharacterId isn't logged by default. Phase 4's editor will add a "Copy UUID" button on the Character inspector.
+
+For a brand-new character that hasn't been spawned yet (and therefore doesn't have a UUID), you can't reference them by ID — fall back to `Selector_CharacterByName` or wait for Phase 2's archetype-based selectors.
+
+### Worked example: NPC-to-NPC scene (players watch from afar)
+
+Scenario: two villagers (Wilfred and Aria) gossip in the town square. The cinematic plays automatically when the world clock hits a certain hour. Distant players see them gesture, hear the speech bubbles, but aren't bound as actors.
+
+**Roles**:
+
+| Role Id | Selector | Notes |
+|---------|----------|-------|
+| `Speaker1` | `Selector_OtherParticipant.asset` | (or `CharacterByName`/`CharacterById` — anything that resolves to an NPC) |
+| `Speaker2` | `Selector_CharacterByName.asset` (`_characterName = "Aria"`) | |
+
+**Trigger** from a server-side scheduler / event:
+
+```csharp
+// Two NPCs chosen — first goes as triggeringPlayer (becomes ctx.TriggeringPlayer),
+// second as otherParticipant (becomes ctx.OtherParticipant). The naming is legacy;
+// neither needs to be a player.
+Cinematics.TryPlay(scene_VillageGossip, wilfred, aria);
+```
+
+**Timeline**: a single `DialogueStep` whose `_lines` list holds the back-and-forth — entries alternate between `Speaker Role Id = "Speaker1"` and `"Speaker2"`. Plays the whole conversation as one step; players nearby see/hear it organically via `CharacterSpeech` replication.
+
+### Worked example: a 5-actor party cinematic
+
+Scenario: the player approaches Wilfred with their party of 3 followers (Aria, Bjorn, Cara). The cinematic features all five characters.
+
+**Roles** (Cast section):
+
+| Role Id | Selector asset | Notes |
+|---------|----------------|-------|
+| `Hero` | `Selector_TriggeringPlayer.asset` | The player. |
+| `Aria` | `Selector_PartyMember.asset` (memberIndex = 1) | First follower. |
+| `Bjorn` | `Selector_PartyMember.asset` (memberIndex = 2) | Second follower. Mark `IsOptional` so the scene plays gracefully with a 2-follower party. |
+| `Cara` | `Selector_PartyMember.asset` (memberIndex = 3) | Third follower. Likewise optional. |
+| `Wilfred` | `Selector_OtherParticipant.asset` | The NPC the player Talked to. Caller passes the NPC as the 2nd arg of `Cinematics.TryPlay(scene, player, wilfred)`. |
+
+The selector assets are reusable — you only need ONE `Selector_PartyMember.asset` per index value (one for index 1, one for index 2, one for index 3), shared across all your party-cinematic scenes.
+
+**Timeline** (Steps section): each `SpeakStep` references a role by `Role Id`:
+
+```
+SpeakStep   speaker=Wilfred  text="So you've come, [role:Hero].getName."
+SpeakStep   speaker=Hero     text="Aye. My companions are with me."
+SpeakStep   speaker=Aria     text="Ready when you are."
+SpeakStep   speaker=Bjorn    text="By the gods, finally."
+SpeakStep   speaker=Cara     text="Let's not waste daylight."
+SpeakStep   speaker=Wilfred  text="Then follow me."
+MoveActorStep  actor=Wilfred  target=WorldPos(...)  blocking=true
+```
+
+Optional-flagged followers (Bjorn, Cara) silently skip if missing — their `SpeakStep`s log a warning ("speaker role 'Bjorn' could not be resolved") and the director moves to the next step. To make the dialog itself adapt to party size, Phase 3's `ConditionalStep` will let you skip whole branches when an optional role is unbound.
+
+## How to author a scene asset (Phase 1, no full editor window yet)
+
+1. Project window → right-click in `Assets/Resources/Data/Cinematics/` → `Create → MWI → Cinematics → Scene`.
+2. Inspector:
+   - **Identity**: leave `_sceneId` GUID untouched, set `_displayName` for editor labelling.
+   - **Triggering / Lifecycle headers** (Phase 2): leave defaults (`AnyPlayer` / `OncePerWorld` / `AllMustPress` / 5s grace / priority 50). The runtime ignores these in Phase 1.
+   - **Cast**: click `+` on Roles. For each entry:
+     - `Role Id` — short identifier referenced by steps (e.g. `Hero`, `Wilfred`, `Witness`).
+     - `Display Name` — editor / debug label. **Falls back to `Role Id` if empty** (NOT to the character's name; the character is resolved at runtime).
+     - `Selector` — drop a `RoleSelectorSO` asset (Phase 1 ships `Selector_TriggeringPlayer.asset` only; create one via `Create → MWI → Cinematics → Selectors → Triggering Player`).
+     - `Is Optional` — required (default) hard-fails the cinematic if unbound; optional silently skips.
+     - `Is Primary Actor` — Phase 2 `OncePerNpc` keying. Set to true on the role that "owns" the scene (typically the talked-to NPC).
+   - **Timeline**: click `+` on Steps → use the **type-picker dropdown on the right side of each new element** to select Speak / Wait / Move / Trigger. The custom property drawer (`Assets/Scripts/Cinematics/Editor/CinematicStepDrawer.cs`) makes the picker visible inline so you don't need to right-click into Unity's hidden managed-reference menu.
+     - `SpeakStep`: speakerRoleId, lineText (supports `[role:X].getName` placeholders), typingSpeedOverride (0 = default). One line per step.
+     - `DialogueStep`: a multi-line conversation in one step. Click `+` on `_lines` and fill each entry: `Speaker Role Id` (string matching a Cast role), `Line Text` (TextArea), `Typing Speed Override` (0 = default). Same authoring shape as legacy `DialogueSO._lines` but role-id-based — no external asset to drag in, no 1-indexed mapping. Use this for back-and-forth conversations.
+     - `WaitStep`: durationSec.
+     - `MoveActorStep`: actorRoleId, targetMode (Role / WorldPos), target ref, stoppingDist (default 1.5 Unity units ≈ 0.23m), blocking, timeoutSec.
+     - `TriggerStep`: effect (drag a `CinematicEffectSO` asset, e.g. `Effect_RaiseEvent`), eventHook (UnityEvent in the inspector).
+
+## How to add a new step type
+
+1. Create `Assets/Scripts/Cinematics/Steps/MyStep.cs`.
+2. Inherit from `CinematicStep`. Mark `[System.Serializable]`.
+3. Override only what you need: `OnEnter / OnTick / OnExit / IsComplete`.
+4. Use `[SerializeField]` for designer-facing fields. Use `ActorRoleId` (via `new ActorRoleId(_roleStringId)`) for actor references.
+5. Add `Debug.Log` at OnEnter and any branching point per rule #27.
+6. Try/catch fallible operations per rule #31. The director already wraps step callbacks, but defensive guards inside the step prevent cascade failure.
+7. The step automatically appears in the `[SerializeReference]` dropdown on `CinematicSceneSO._steps`.
+
+Example skeleton:
+
+```csharp
+[System.Serializable]
+public class MyStep : CinematicStep
+{
+    [SerializeField] private string _someParam;
+
+    public override void OnEnter(CinematicContext ctx) { /* … */ }
+    public override bool IsComplete(CinematicContext ctx) => /* … */;
+}
+```
+
+## How to add a new role selector
+
+1. Create `Assets/Scripts/Cinematics/Roles/Selector_MyRule.cs`.
+2. Inherit from `RoleSelectorSO`, add `[CreateAssetMenu(menuName = "MWI/Cinematics/Selectors/My Rule")]`.
+3. Override `Resolve(CinematicContext ctx) → Character` (return null if unbindable).
+4. Author an asset of the new SO and drop it into `RoleSlot._selector`.
+
+## How to add a new effect
+
+1. Create `Assets/Scripts/Cinematics/Effects/Effect_MyThing.cs`.
+2. Inherit from `CinematicEffectSO`, add `[CreateAssetMenu(menuName = "MWI/Cinematics/Effects/My Thing")]`.
+3. Override `Apply(CinematicContext ctx)`. Use `ctx.GetActor(roleId)` to access bound characters.
+4. Designers reference the effect asset from a `TriggerStep._effect` field.
+
+## Integration touchpoints (existing systems)
+
+- **`Character.CharacterCinematicState`** — added in Phase 1, all systems read this for the `IsCinematicActor` flag.
+- **`CharacterCombat.TakeDamage`** — skips damage when `target.CharacterCinematicState.IsCinematicActor` (Phase 1 server-side; Phase 2 promotes the flag to `NetworkVariable<bool>` so all clients respect it).
+- **`PlayerController.Update`** — early-returns when `self.IsCinematicActor`, blocking movement / combat / sleep / hotkey input. UI input lives in other components and is unaffected.
+- **`CharacterActions.ExecuteAction`** — the standard action lane. `MoveActorStep` enqueues through this per rule #22; future Phase 3 `ExecuteActionStep` will use the same lane.
+- **Existing `DialogueManager` / `DialogueSO`** — untouched in Phase 1. Phase 4 migration wraps `DialogueManager.StartDialogue` to delegate through the cinematic system, but legacy assets keep working.
+
+## Advance behaviour (Phase 1)
+
+Mirrors `DialogueManager`'s pattern intentionally:
+
+| Scene composition | Speak / Dialogue step advances when |
+|-------------------|-------------------------------------|
+| ≥ 1 bound player | The player presses **Space** or **Left-Click**. Held until pressed. |
+| NPC-only (no players bound) | **1.5s after typing finishes** (auto). |
+
+Wiring: `PlayerController.Update()` checks `IsCinematicActor` → if true, blocks normal input but forwards Space / Left-Click to `CinematicAdvance.NotifyAdvanceRequested()`. Steps poll `CinematicAdvance.WasAdvanceRequestedThisFrame()` once per tick.
+
+The press is consumed once per frame regardless of how many actors are bound — pressing Space once advances one line, not N.
+
+Phase 2 replaces this with the full `AllMustPress` protocol: each participating client sends a ServerRpc on press, the server tallies per-line, and a configurable grace timer kicks in when the first press lands. Phase 1's single-frame static-flag approach is enough for server-only / single-player demos.
+
+## Common gotchas
+
+- **`Time.time` / `Time.deltaTime` won't compile inside `namespace MWI.Cinematics`.** The C# resolver walks the enclosing namespace tree (`MWI.Cinematics → MWI → global`) before applying `using` directives, and the sibling `MWI.Time` namespace shadows `UnityEngine.Time`. Workaround: every cinematic file that touches Unity's clock has `using UTime = UnityEngine.Time;` at the top and uses `UTime.time` / `UTime.deltaTime`. Match this convention in any new file. (Or fully qualify `UnityEngine.Time.time`.)
+- **Empty timeline elements when adding steps.** Unity's default `[SerializeReference]` UX hides the type-picker dropdown. The custom drawer at `Assets/Scripts/Cinematics/Editor/CinematicStepDrawer.cs` adds a visible dropdown next to each entry's foldout. If you see only "Element 0 (no step type set)" with nothing else, check that `CinematicStepDrawer.cs` exists and Unity has compiled the Editor folder.
+- **Cinematic stalls forever.** `SpeakStep` has a length-aware safety timeout (`PHASE1_TYPING_TIMEOUT_BASE_SEC + char_count * PHASE1_TYPING_TIMEOUT_PER_CHAR`). If you see the timeout warning, the speaker's `CharacterSpeech._speechBubbleStack` is probably unwired on the prefab.
+- **`ExecuteAction` returns false.** The actor is already running another action. `MoveActorStep` logs a warning and instant-completes (skips the move) rather than hanging the cinematic. Sequence steps so actors are free at the moment a `MoveActorStep` runs.
+- **`IsCinematicActor` not visible to clients.** Phase 1 limitation — the flag is a server-side bool. Phase 2 promotes to `NetworkVariable<bool>`. Until then, MP scenes work because all combat/input authority is on the server, but client-side visuals (animator, UI) cannot react to the flag.
+- **Required role unbindable → scene aborts.** Set `RoleSlot._isOptional = true` for "skip-if-missing" roles. The Phase 1 plan only ships `Selector_TriggeringPlayer`; multi-actor scenes need `Selector_OtherParticipant` (Phase 2).
+- **`Display Name` vs character name.** `RoleSlot._displayName` is the editor / debug label for the *role*. If empty, it falls back to `Role Id` — NOT the resolved Character's name. The character's real name only appears in placeholder substitution (`[role:Hero].getName` → `Character.CharacterName`).
+- **Rule #22 violation risk.** Never call `CharacterMovement.SetDestination` directly from a step. Always go through a `CharacterAction` subclass enqueued via `CharacterActions.ExecuteAction`.
+- **Non-blocking `MoveActorStep` orphans the action on step exit.** Intentional (background-walk semantics). Phase 2 will register orphans on `CinematicContext` for scene-level abort. For Phase 1, accept that an aborted scene with a non-blocking move in flight will let the actor walk to arrival or `_timeoutSec` (default 30s).
+
+## Phase 1 deferred to later phases
+
+| Feature | Phase |
+|---------|-------|
+| `NetworkVariable<bool>` for `IsCinematicActor`, `ServerRpc` / `ClientRpc` for advance protocol | 2 |
+| `CinematicWorldState` `ISaveable` + `ICharacterSaveData<CinematicHistorySaveData>` | 2 |
+| `Surface_OnInteractionAction` (Talk), `Surface_OnSpatialZone`, `Surface_Scripted`, `Surface_Debug` | 2 |
+| `CinematicRegistry` server-side service (eligibility queries, per-character runtime assignment) | 2 |
+| 4 PlayModes (`OncePerWorld` / `OncePerPlayer` / `OncePerNpc` / `Repeatable`) | 2 |
+| `Selector_OtherParticipant`, `Selector_NearestArchetype`, `Selector_RandomInRadius`, `Selector_SpecificCharacter` | 2 |
+| AI BT yield gate on `IsCinematicActor` | 2 |
+| `ChoiceStep`, `ParallelStep`, `CameraFocusStep`, `ExecuteActionStep` | 3 |
+| 5 action recipes, 6 effects (incl. `Effect_GiveQuest` / `Effect_RemoveQuest`), 6 eligibility rules | 3 |
+| Custom Unity Editor — Cinematic Scene Editor + Browser + Validator | 4 |
+| `DialogueManager` migration | 4 |
+| SKILL.md / wiki updates with phase-2-current details | rolling |
+
+## See also
+
+- Spec: `docs/superpowers/specs/2026-04-30-cinematic-system-design.md`
+- Plan: `docs/superpowers/plans/2026-04-30-cinematic-system-phase-1-foundation.md`
+- Architecture: `wiki/systems/cinematic-system.md`
+- Legacy primitive: `.agent/skills/dialogue-system/SKILL.md` (Phase 4 wraps `DialogueManager` through this system)

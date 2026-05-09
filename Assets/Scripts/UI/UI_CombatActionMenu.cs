@@ -98,10 +98,23 @@ public class UI_CombatActionMenu : MonoBehaviour
             return;
         }
 
-        Character target = _characterCombat.CurrentBattleManager?.GetBestTargetFor(_character);
-        
-        // Instead of executing immediately, we lock the intent.
-        _characterCombat.SetActionIntent(() => _characterCombat.Attack(target), target);
+        // Prefer the player's manually selected target, but only if it's a valid battle participant.
+        // If the selected target is outside the battle (e.g. a chest or NPC not in the fight),
+        // fall back to the coordinator's best enemy.
+        Character initialTarget = _characterCombat.PlannedTarget;
+        var bm = _characterCombat.CurrentBattleManager;
+
+        if (initialTarget != null && bm != null && (bm.GetTeamOf(initialTarget) == null || !initialTarget.IsAlive()))
+        {
+            initialTarget = null;
+        }
+
+        initialTarget ??= bm?.GetBestTargetFor(_character);
+
+        if (initialTarget == null) return;
+
+        // Update PlannedTarget so both the closure and the combat AI use the validated target.
+        _characterCombat.SetActionIntent(() => _characterCombat.Attack(_characterCombat.PlannedTarget), initialTarget);
     }
 
     private void Unsubscribe()

@@ -10,7 +10,11 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 3944396133495831649, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
       propertyPath: m_Name
-      value: Furniture_prefab
+      value: Bed
+      objectReference: {fileID: 0}
+    - target: {fileID: 6445648937218201084, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
+      propertyPath: GlobalObjectIdHash
+      value: 2625293049
       objectReference: {fileID: 0}
     - target: {fileID: 8021854465056481327, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
       propertyPath: m_LocalPosition.x

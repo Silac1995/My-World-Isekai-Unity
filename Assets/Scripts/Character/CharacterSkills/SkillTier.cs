@@ -36,4 +36,22 @@ public static class SkillTierExtensions
             default: return 1.0f;
         }
     }
+
+    /// <summary>
+    /// Returns the maximum key tier a locksmith of this skill tier can copy.
+    /// Legendary locksmiths can copy any tier (returns int.MaxValue).
+    /// </summary>
+    public static int GetMaxCopyableTier(this SkillTier tier)
+    {
+        switch (tier)
+        {
+            case SkillTier.Novice: return 1;
+            case SkillTier.Intermediate: return 2;
+            case SkillTier.Advanced: return 3;
+            case SkillTier.Professional: return 4;
+            case SkillTier.Master: return 5;
+            case SkillTier.Legendary: return int.MaxValue;
+            default: return 1;
+        }
+    }
 }

@@ -28,6 +28,11 @@ public class GoapAction_DepositResources : GoapAction
     private bool _isDepositing = false;
     private float _lastRouteRequestTime;
 
+    // Throttled stuck-state log (1 Hz). Surfaces 'stopped moving while doing the harvest
+    // deposit resources' symptom — pinpoints whether the agent has no path, is being
+    // pushed off the navmesh, or arrived but ProcessSequentialDeposit can't drop.
+    private float _lastStuckLogTime = -10f;
+
     public override bool IsComplete => _isComplete;
 
     public GoapAction_DepositResources(HarvestingBuilding building)
@@ -87,6 +92,7 @@ public class GoapAction_DepositResources : GoapAction
                     bool blacklisted = worker.PathingMemory.RecordFailure(depositZone.gameObject.GetInstanceID());
                     if (blacklisted)
                     {
+                        Debug.LogWarning($"<color=red>[Deposit]</color> {worker.CharacterName} BLACKLISTED DepositZone after 3 failed pathing attempts. _isComplete=true. Worker will replan but the next plan will hit the same block.");
                         movement.Stop();
                         movement.ResetPath();
                         _isMoving = false;
@@ -101,9 +107,27 @@ public class GoapAction_DepositResources : GoapAction
             {
                 // Navigate to the center of the zone rather than the edge to ensure the item stays in
                 movement.SetDestination(targetCenter);
-                
+
                 _lastRouteRequestTime = UnityEngine.Time.unscaledTime;
                 _isMoving = true;
+            }
+
+            // Stuck-state diagnostic. 1 Hz per worker. Lets us see whether the agent has
+            // no path, is on a path but not advancing (RemainingDistance frozen), or
+            // RouteRequestTime is stale (path failure detection should have already kicked
+            // in). Surfaces the deposit-freeze without changing semantics.
+            float now = UnityEngine.Time.unscaledTime;
+            if (now - _lastStuckLogTime > 1f)
+            {
+                _lastStuckLogTime = now;
+                var hands = worker.CharacterVisual?.BodyPartsController?.HandsController;
+                string carriedName = hands?.CarriedItem?.ItemSO?.ItemName ?? "<none>";
+                int blacklistFails = worker.PathingMemory.GetFailCount(depositZone.gameObject.GetInstanceID());
+                Debug.Log(
+                    $"<color=orange>[Deposit]</color> {worker.CharacterName} not in zone yet. " +
+                    $"distXZ={Vector3.Distance(workerPosFlat, targetPosFlat):F2} HasPath={movement.HasPath} " +
+                    $"RemDist={movement.RemainingDistance:F2} StopDist={movement.StoppingDistance:F2} " +
+                    $"carrying='{carriedName}' isMoving={_isMoving} pathFails={blacklistFails}/3.");
             }
         }
         else
@@ -113,13 +137,13 @@ public class GoapAction_DepositResources : GoapAction
                 movement.Stop();
                 movement.ResetPath();
                 _isMoving = false;
-                _isDepositing = true;
             }
 
-            if (_isDepositing)
-            {
-                ProcessSequentialDeposit(worker);
-            }
+            // Flip unconditionally when in range — previously gated on _isMoving,
+            // which stranded harvesters that started the action already inside the
+            // deposit zone (replan, short-distance plan, spawn adjacent, etc.).
+            _isDepositing = true;
+            ProcessSequentialDeposit(worker);
         }
     }
 
@@ -130,8 +154,9 @@ public class GoapAction_DepositResources : GoapAction
     /// </summary>
     private void ProcessSequentialDeposit(Character worker)
     {
-        // 1. Si une action de drop est DÉJÀ en cours, on attend qu'elle finisse.
-        if (worker.CharacterActions.CurrentAction is CharacterDropItem)
+        // 1. Si une action de drop OU de store-in-furniture est DÉJÀ en cours, on attend qu'elle finisse.
+        var current = worker.CharacterActions.CurrentAction;
+        if (current is CharacterDropItem || current is CharacterStoreInFurnitureAction)
         {
             return;
         }
@@ -145,12 +170,40 @@ public class GoapAction_DepositResources : GoapAction
             if (handsController.CarriedItem != null && acceptedItems.Contains(handsController.CarriedItem.ItemSO))
             {
                 ItemInstance carriedItem = handsController.CarriedItem;
-                
-                var dropAction = new CharacterDropItem(worker, carriedItem, true);
-                dropAction.OnActionFinished += () => 
+
+                // Furniture-first (opportunistic): only redirect to a StorageFurniture if it's
+                // within trivial walking distance (~5 Unity units ≈ 0.76m) of the deposit zone.
+                // The harvester is already standing at the deposit point — we DON'T want them
+                // walking furniture-to-furniture in this action; that would interleave with
+                // travel-back-to-tree and break harvester throughput. The LogisticsManager's
+                // GoapAction_GatherStorageItems is what does the long-distance organization.
+                StorageFurniture furniture = TryFindNearbyFurniture(worker, carriedItem);
+                if (furniture != null)
                 {
-                    _building.RegisterHarvestedItem(carriedItem.ItemSO);
-                    Debug.Log($"<color=green>[GOAP Deposit]</color> {worker.CharacterName} a physiquement lâché {carriedItem.ItemSO.ItemName} (mains).");
+                    var storeAction = new CharacterStoreInFurnitureAction(worker, carriedItem, furniture);
+                    storeAction.OnActionFinished += () =>
+                    {
+                        _building.RegisterHarvestedItem(carriedItem);
+                        TryCreditWorkLog(worker, _building, carriedItem.ItemSO, 1);
+                        if (NPCDebug.VerboseActions)
+                            Debug.Log($"<color=green>[GOAP Deposit]</color> {worker.CharacterName} a rangé {carriedItem.ItemSO.ItemName} dans {furniture.FurnitureName} (mains).");
+                    };
+                    worker.CharacterActions.ExecuteAction(storeAction);
+                    return;
+                }
+
+                var dropAction = new CharacterDropItem(worker, carriedItem);
+                dropAction.OnActionFinished += () =>
+                {
+                    // Pass the full ItemInstance — HarvestingBuilding.RegisterHarvestedItem will add it
+                    // to logical inventory directly (the deposit-zone-overlaps-storage-zone case bypasses
+                    // the normal Logistics-Manager-pickup→drop flow that would have called AddToInventory).
+                    _building.RegisterHarvestedItem(carriedItem);
+                    // Wage system hook: credit the worker's WorkLog with the deficit-bounded portion.
+                    // Each drop is one unit (one ItemInstance per CharacterDropItem call).
+                    TryCreditWorkLog(worker, _building, carriedItem.ItemSO, 1);
+                    if (NPCDebug.VerboseActions)
+                        Debug.Log($"<color=green>[GOAP Deposit]</color> {worker.CharacterName} a physiquement lâché {carriedItem.ItemSO.ItemName} (mains).");
                 };
 
                 worker.CharacterActions.ExecuteAction(dropAction);
@@ -175,11 +228,33 @@ public class GoapAction_DepositResources : GoapAction
 
                 if (acceptedItems.Contains(item.ItemSO))
                 {
-                    var dropAction = new CharacterDropItem(worker, item, true);
-                    dropAction.OnActionFinished += () => 
+                    // Same opportunistic furniture preference as the hands-drop above.
+                    StorageFurniture furniture = TryFindNearbyFurniture(worker, item);
+                    if (furniture != null)
                     {
-                        _building.RegisterHarvestedItem(item.ItemSO);
-                        Debug.Log($"<color=green>[GOAP Deposit]</color> {worker.CharacterName} a physiquement lâché {item.ItemSO.ItemName} (sac).");
+                        var storeAction = new CharacterStoreInFurnitureAction(worker, item, furniture);
+                        storeAction.OnActionFinished += () =>
+                        {
+                            _building.RegisterHarvestedItem(item);
+                            TryCreditWorkLog(worker, _building, item.ItemSO, 1);
+                            if (NPCDebug.VerboseActions)
+                                Debug.Log($"<color=green>[GOAP Deposit]</color> {worker.CharacterName} a rangé {item.ItemSO.ItemName} dans {furniture.FurnitureName} (sac).");
+                        };
+                        worker.CharacterActions.ExecuteAction(storeAction);
+                        return;
+                    }
+
+                    var dropAction = new CharacterDropItem(worker, item);
+                    dropAction.OnActionFinished += () =>
+                    {
+                        // Pass the ItemInstance so HarvestingBuilding can add it to logical inventory
+                        // directly — see comment on the hands-drop path above.
+                        _building.RegisterHarvestedItem(item);
+                        // Wage system hook: credit the worker's WorkLog with the deficit-bounded portion.
+                        // Each drop is one unit (one ItemInstance per CharacterDropItem call).
+                        TryCreditWorkLog(worker, _building, item.ItemSO, 1);
+                        if (NPCDebug.VerboseActions)
+                            Debug.Log($"<color=green>[GOAP Deposit]</color> {worker.CharacterName} a physiquement lâché {item.ItemSO.ItemName} (sac).");
                     };
 
                     worker.CharacterActions.ExecuteAction(dropAction);
@@ -190,7 +265,8 @@ public class GoapAction_DepositResources : GoapAction
 
         // 4. Si le code arrive ici, c'est que `CurrentAction` n'est pas un Drop ET qu'aucun item valide n'a été trouvé.
         // Cela signifie que nous avons fini de tout vider.
-        Debug.Log($"<color=cyan>[GOAP Deposit]</color> {worker.CharacterName} a terminé de déposer toutes ses ressources valides.");
+        if (NPCDebug.VerboseActions)
+            Debug.Log($"<color=cyan>[GOAP Deposit]</color> {worker.CharacterName} a terminé de déposer toutes ses ressources valides.");
         _isComplete = true;
     }
 
@@ -201,5 +277,113 @@ public class GoapAction_DepositResources : GoapAction
         _isDepositing = false;
         worker.CharacterMovement?.Stop();
         worker.CharacterMovement?.ResetPath();
+    }
+
+    // === Furniture-first (opportunistic) helper ============================
+
+    /// <summary>
+    /// Returns a <see cref="StorageFurniture"/> that accepts <paramref name="item"/> AND
+    /// is within ~5 Unity units (≈0.76m) of the worker — close enough that diverting
+    /// the deposit there costs only a step or two of extra walk. Anything farther
+    /// returns null so the caller drops at the deposit zone, preserving harvester
+    /// throughput. The LogisticsManager handles the long-haul organization later
+    /// via <c>GoapAction_GatherStorageItems</c>.
+    /// </summary>
+    private StorageFurniture TryFindNearbyFurniture(Character worker, ItemInstance item)
+    {
+        if (worker == null || item == null || _building == null) return null;
+        var furniture = _building.FindStorageFurnitureForItem(item);
+        if (furniture == null) return null;
+        if (Vector3.Distance(worker.transform.position, furniture.GetInteractionPosition(worker.transform.position)) > 5f) return null;
+        return furniture;
+    }
+
+    // === Wage system: harvester credit on deposit ===========================
+
+    /// <summary>
+    /// Credit the harvester's WorkLog for a deposit, bounded by the building's outstanding deficit
+    /// for the item (if the building is an IStockProvider). No deficit info -> full credit.
+    /// Only Woodcutter / Miner / Forager / Farmer assignments are credited via this path.
+    /// </summary>
+    private static void TryCreditWorkLog(Character worker, CommercialBuilding building, ItemSO item, int depositedQty)
+    {
+        if (worker == null || building == null || item == null || depositedQty <= 0) return;
+
+        var workLog = worker.CharacterWorkLog;
+        if (workLog == null) return;
+        var charJob = worker.CharacterJob;
+        if (charJob == null) return;
+
+        // Find this worker's assignment at this building so we know the JobType.
+        MWI.WorldSystem.JobType jobType = MWI.WorldSystem.JobType.None;
+        foreach (var assn in charJob.ActiveJobs)
+        {
+            if (assn.Workplace == building && assn.AssignedJob != null)
+            {
+                jobType = assn.AssignedJob.Type;
+                break;
+            }
+        }
+        if (jobType == MWI.WorldSystem.JobType.None) return;
+        if (!IsHarvesterFamily(jobType)) return; // not a harvester deposit; no credit
+
+        // Compute deficit-before-deposit if the building is an IStockProvider.
+        // <0 from ComputeDeficitForItem signals "no IStockProvider info" -> full credit.
+        int deficit = ComputeDeficitForItem(building, item);
+        int credit = deficit < 0
+            ? depositedQty // no deficit info -> full credit
+            : MWI.Jobs.Wages.HarvesterCreditCalculator.GetCreditedAmount(depositedQty, deficit);
+        if (credit <= 0) return;
+
+        // Use the stable BuildingId (GUID from Building.NetworkBuildingId), not the
+        // GameObject name — matches CommercialBuilding.GetBuildingIdForWorklog so a
+        // rename never forks WorkPlaceRecord history.
+        string buildingId = building.BuildingId;
+        workLog.LogShiftUnit(jobType, buildingId, credit);
+    }
+
+    private static bool IsHarvesterFamily(MWI.WorldSystem.JobType jobType)
+    {
+        switch (jobType)
+        {
+            case MWI.WorldSystem.JobType.Woodcutter:
+            case MWI.WorldSystem.JobType.Miner:
+            case MWI.WorldSystem.JobType.Forager:
+            case MWI.WorldSystem.JobType.Farmer:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    /// <summary>
+    /// Returns the building's outstanding deficit for the given item (target min - current stock),
+    /// or -1 if the building is not an IStockProvider (caller should treat this as "no cap, full credit").
+    /// Returns 0 if the building is an IStockProvider but doesn't list this item as a target
+    /// (no credit — the building doesn't want this item).
+    /// </summary>
+    private static int ComputeDeficitForItem(CommercialBuilding building, ItemSO item)
+    {
+        var provider = building as IStockProvider;
+        if (provider == null) return -1;
+
+        int targetMin = 0;
+        bool foundTarget = false;
+        foreach (var target in provider.GetStockTargets())
+        {
+            if (target.ItemToStock == item)
+            {
+                targetMin = target.MinStock;
+                foundTarget = true;
+                break;
+            }
+        }
+        if (!foundTarget) return 0; // building doesn't want this item: no credit
+
+        // Current stock count for this item — read just before the deposit lands.
+        // CommercialBuilding.GetItemCount(ItemSO) is the inventory accessor.
+        int currentStock = building.GetItemCount(item);
+        int deficit = targetMin - currentStock;
+        return Mathf.Max(0, deficit);
     }
 }

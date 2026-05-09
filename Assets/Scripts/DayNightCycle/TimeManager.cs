@@ -1,6 +1,5 @@
 using UnityEngine;
 using System;
-using Unity.Netcode;
 
 namespace MWI.Time
 {
@@ -21,6 +20,10 @@ namespace MWI.Time
         [SerializeField] private int _eveningStart = 18;
         [SerializeField] private int _nightStart = 21;
 
+        [Header("Year Settings")]
+        [SerializeField, Tooltip("Number of in-game days per year. Drives CurrentYearProgress01 used by seasonal visuals (foliage color etc.).")]
+        private int _daysPerYear = 28;
+
         private float _currentTime; // 0 to 1
         private DayPhase _currentPhase;
         private int _lastHour;
@@ -31,9 +34,31 @@ namespace MWI.Time
         public DayPhase CurrentPhase => _currentPhase;
         
         /// <summary>
-        /// Le jour actuel du jeu (commence à 1).
+        /// Current in-game day (starts at 1).
         /// </summary>
         public int CurrentDay { get; private set; } = 1;
+
+        /// <summary>Number of in-game days per year. Inspector-tunable.</summary>
+        public int DaysPerYear => _daysPerYear;
+
+        /// <summary>
+        /// Continuous [0..1) year-progress derived from <see cref="CurrentDay"/>. Day 1 = 0,
+        /// midyear = 0.5, end of year wraps back to 0. Used by foliage gradient sampling
+        /// and any other "where are we in the year" visual driven by day-resolution data.
+        /// </summary>
+        public float CurrentYearProgress01 => ComputeYearProgress01(CurrentDay, _daysPerYear);
+
+        /// <summary>
+        /// Pure helper exposed for unit-testing without instantiating a MonoBehaviour.
+        /// Defensive against zero / negative <paramref name="daysPerYear"/> (returns 0).
+        /// </summary>
+        public static float ComputeYearProgress01(int currentDay, int daysPerYear)
+        {
+            if (daysPerYear <= 0) return 0f;
+            int dayInYear = (currentDay - 1) % daysPerYear;
+            if (dayInYear < 0) dayInYear += daysPerYear;
+            return dayInYear / (float)daysPerYear;
+        }
 
         public event Action<DayPhase> OnPhaseChanged;
         public event Action OnNewDay;
@@ -88,18 +113,12 @@ namespace MWI.Time
                 OnNewDay?.Invoke();
             }
 
-            // Détection du changement d'heure
+            // Detect hour change
             int currentHour = CurrentHour;
             if (currentHour != _lastHour)
             {
                 _lastHour = currentHour;
                 OnHourChanged?.Invoke(currentHour);
-
-                // Periodic atomic save (only if server/host)
-                if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer && SaveManager.Instance != null)
-                {
-                    _ = SaveManager.Instance.SaveWorldAsync();
-                }
             }
 
             UpdatePhase(false);
@@ -135,12 +154,29 @@ namespace MWI.Time
             }
         }
 
+        /// <summary>
+        /// Called by GameSpeedController on clients to sync time from the server.
+        /// Silently corrects day and time without firing events — events will fire
+        /// naturally from ProgressTime() as the clock continues to tick.
+        /// This prevents server-only subscribers (saves, community tracker, etc.)
+        /// from being triggered on clients during a network correction.
+        /// </summary>
+        public void SyncFromNetwork(int day, float time01)
+        {
+            CurrentDay = day;
+            _currentTime = time01;
+            _lastHour = CurrentHour;
+
+            // Force-update the phase visually (lighting, skybox) without firing events
+            UpdatePhase(true);
+        }
+
         // Helper to skip time (for debugging or sleeping)
         public void SkipToHour(int hour)
         {
             int clampedHour = Mathf.Clamp(hour, 0, 23);
 
-            // Si on saute à une heure inférieure à l'heure actuelle, on a passé minuit (passage au lendemain).
+            // If we skip to an earlier hour, we crossed midnight (advance to next day).
             if (clampedHour < CurrentHour)
             {
                 CurrentDay++;
@@ -156,6 +192,33 @@ namespace MWI.Time
             }
 
             UpdatePhase(true);
+        }
+
+        /// <summary>
+        /// Advance the in-game clock by exactly one hour. Fires <see cref="OnHourChanged"/>,
+        /// <see cref="OnNewDay"/> on rollover, and <see cref="OnPhaseChanged"/> on phase
+        /// boundary — same event semantics as the live <c>ProgressTime()</c> path. Called
+        /// by the TimeSkipController per loop iteration. Subscribers cannot tell the
+        /// difference between a real hour and a skip hour.
+        /// </summary>
+        public void AdvanceOneHour()
+        {
+            _currentTime += 1f / 24f;
+            if (_currentTime >= 1f)
+            {
+                _currentTime -= 1f;
+                CurrentDay++;
+                OnNewDay?.Invoke();
+            }
+
+            int newHour = CurrentHour;
+            if (newHour != _lastHour)
+            {
+                _lastHour = newHour;
+                OnHourChanged?.Invoke(newHour);
+            }
+
+            UpdatePhase(false);
         }
 
         #region ISaveable Implementation
