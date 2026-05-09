@@ -141,6 +141,15 @@ public class Building : ComplexRoom
     /// </summary>
     private bool _defaultFurnitureSpawned;
 
+    /// <summary>
+    /// Set true at the end of <see cref="Start"/>, after the
+    /// <c>_currentState.OnValueChanged += HandleStateChanged</c> subscription is wired.
+    /// Gates <see cref="BuildInstantly"/>'s deferral coroutine: if false, BuildInstantly
+    /// must wait one or more frames until Start has run, otherwise the state-flip writes
+    /// have no subscriber to drive the post-completion cascade. Per-peer state, not networked.
+    /// </summary>
+    private bool _isStarted;
+
     [Header("Identity (Dynamic)")]
     [SerializeField] protected string _prefabId; // Registry lookup ID (e.g. "Shop_Armor_A")
     
@@ -500,6 +509,11 @@ public class Building : ComplexRoom
         // on subsequent changes, not on the initial state replicated via NetworkVariable spawn payload.
         Debug.Log($"<color=cyan>[Building.Start]</color> {buildingName} _currentState.Value={_currentState.Value} → calling ApplyConstructionVisuals. IsServer={IsServer}");
         ApplyConstructionVisuals(_currentState.Value);
+
+        // Marker for BuildInstantly's deferral coroutine: subscription is wired, future state
+        // writes will dispatch to HandleStateChanged. Set LAST so anything queued for "after
+        // Start" sees a fully initialised Building.
+        _isStarted = true;
     }
 
     /// <summary>
@@ -1089,17 +1103,89 @@ public class Building : ComplexRoom
 
     /// <summary>
     /// Forcibly builds the building instantly, bypassing all material requirements.
+    ///
+    /// Server-only. Unifies with the construction-loop completion path (<see cref="Finalize"/>)
+    /// by writing the same NetworkVariable state flip and letting <see cref="HandleStateChanged"/>
+    /// drive the entire post-completion cascade (visual swap, navmesh carve, default-furniture
+    /// spawn, leftover eviction, <see cref="OnConstructionComplete"/> event). Single source of
+    /// truth at the OnValueChanged subscriber.
+    ///
+    /// Lifecycle note: <see cref="BuildingPlacementManager"/>'s instant-mode path calls this
+    /// SYNCHRONOUSLY right after <c>NetworkObject.Spawn()</c> returns — i.e. before <see cref="Start"/>
+    /// has run. The <c>_currentState.OnValueChanged += HandleStateChanged</c> subscription only
+    /// gets wired in <see cref="Start"/> (per Unity NetworkBehaviour conventions for this
+    /// codebase), so a same-frame state flip would have no subscriber and the cascade would
+    /// silently no-op. To stay on the unified `state-flip → OnValueChanged → HandleStateChanged`
+    /// path, we DEFER the state flip via a coroutine that polls <see cref="_isStarted"/> until
+    /// Start has run. When called after Start (e.g. debug "force complete" on an existing
+    /// building, save-load restore), the deferral is skipped and we flip immediately.
+    ///
+    /// Idempotent: a second call after the building reaches Complete is a no-op. Multiple calls
+    /// before Start spawn redundant coroutines that each early-exit on the state check.
     /// </summary>
     public virtual void BuildInstantly()
     {
-        if (!IsServer) return; // Modification of state must happen on server
+        if (!IsServer) return;
         if (_currentState.Value == MWI.WorldSystem.BuildingState.Complete) return;
 
-        Debug.Log($"<color=red>[Building.BuildInstantly]</color> {buildingName} BYPASSING construction loop — caller stack trace below:\n{System.Environment.StackTrace}");
+        Debug.Log($"<color=red>[Building.BuildInstantly]</color> {buildingName} BYPASSING construction loop — _isStarted={_isStarted} | reqs={_constructionRequirements?.Count ?? 0} | currentState={_currentState.Value}");
 
+        if (_isStarted)
+        {
+            // Subscription is already wired — flip the state and let HandleStateChanged run
+            // the cascade. Same path as the construction-loop's Building.Finalize.
+            DoInstantBuildStateFlip();
+        }
+        else
+        {
+            // BuildingPlacementManager called us synchronously after Spawn(), before Start.
+            // Defer the state flip until Start sets _isStarted. The cascade will then run
+            // through HandleStateChanged → identical to the construction-loop completion path.
+            StartCoroutine(BuildInstantlyAfterStart());
+        }
+    }
+
+    /// <summary>
+    /// Coroutine helper for <see cref="BuildInstantly"/>. Waits frame-by-frame until
+    /// <see cref="_isStarted"/> is set (end of <see cref="Start"/>), then performs the
+    /// state flip so <see cref="HandleStateChanged"/> drives the cascade.
+    /// </summary>
+    private System.Collections.IEnumerator BuildInstantlyAfterStart()
+    {
+        // Defensive bound: Start should run within 1 frame of OnNetworkSpawn under normal Unity
+        // lifecycle. The bound prevents a runaway coroutine if the GameObject ends up disabled
+        // or destroyed mid-deferral (Unity stops coroutines on destroy automatically; the bound
+        // is a paranoid backstop).
+        const int maxFrames = 600;
+        int frames = 0;
+        while (!_isStarted && frames < maxFrames)
+        {
+            yield return null;
+            frames++;
+        }
+
+        if (!_isStarted)
+        {
+            Debug.LogError($"<color=red>[Building.BuildInstantly]</color> {buildingName} deferral timed out after {maxFrames} frames — Start never ran. Cascade will not fire.", this);
+            yield break;
+        }
+
+        Debug.Log($"<color=red>[Building.BuildInstantly]</color> {buildingName} deferral resolved after {frames} frame(s); flipping state now.");
+        DoInstantBuildStateFlip();
+    }
+
+    /// <summary>
+    /// Server-only state flip shared between the synchronous and deferred branches of
+    /// <see cref="BuildInstantly"/>. After this returns, <see cref="HandleStateChanged"/>
+    /// runs the post-completion cascade (visual swap → navmesh carve → furniture spawn →
+    /// leftover eviction → <see cref="OnConstructionComplete"/>) on every peer.
+    /// </summary>
+    private void DoInstantBuildStateFlip()
+    {
+        if (_currentState.Value == MWI.WorldSystem.BuildingState.Complete) return;
         _currentState.Value = MWI.WorldSystem.BuildingState.Complete;
+        if (ConstructionProgress.Value < 1f) ConstructionProgress.Value = 1f;
         _contributedMaterials.Clear();
-        // OnConstructionComplete will be triggered by state change callback
     }
 
     /// <summary>

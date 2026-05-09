@@ -46,8 +46,22 @@ public class ShopBuilding : CommercialBuilding, IStockProvider
     private List<ShopItemEntry> _catalog;
     public IReadOnlyList<ShopItemEntry> Catalog => _catalog;
 
-    private List<StorageFurniture> _sellShelves = new List<StorageFurniture>();
-    public IReadOnlyList<StorageFurniture> SellShelves => _sellShelves;
+    /// <summary>
+    /// Customer-facing sell-shelves. Wraps the unified storage-role system —
+    /// a sell-shelf is just a <see cref="StorageFurniture"/> with
+    /// <see cref="StorageFurniture.Role"/> == <see cref="StorageRoleType.SellShelf"/>.
+    /// Phase 2c (2026-05-08) refactor: dropped the dedicated <c>_sellShelves</c>
+    /// list + <c>SetSellShelfFlagServerRpc</c>. Owner-driven assignment now goes
+    /// through <see cref="CommercialBuilding.TrySetStorageRoleServerRpc"/>;
+    /// changes fire <see cref="CommercialBuilding.OnStorageRolesChanged"/>.
+    /// Old saves' <c>SellShelfFurnitureKeys</c> migrate into role assignments
+    /// during <see cref="OnFurnituresLoaded"/>.
+    /// </summary>
+    public IReadOnlyList<StorageFurniture> SellShelves => GetStoragesWithRole(StorageRoleType.SellShelf);
+
+    /// <inheritdoc/>
+    public override System.Collections.Generic.IReadOnlyList<StorageRoleDescriptor> SupportedStorageRoles
+        => StorageRoleCatalog.Shop;
 
     private List<Cashier> _cashiers = new List<Cashier>();
     public IReadOnlyList<Cashier> Cashiers => _cashiers;
@@ -56,7 +70,6 @@ public class ShopBuilding : CommercialBuilding, IStockProvider
     public ShopBuildingNetSync NetSync => _netSync;
 
     public event System.Action OnCatalogChanged;
-    public event System.Action OnSellShelvesChanged;
     public event System.Action OnCashiersChanged;
 
     /// <inheritdoc/>
@@ -108,6 +121,20 @@ public class ShopBuilding : CommercialBuilding, IStockProvider
     /// Seeds the runtime mutable <see cref="_catalog"/> from the inspector-authored
     /// <see cref="_seedCatalog"/> on first spawn. Guarded by null-check so re-spawning on
     /// map change (or late client join) does not blow away runtime edits.
+    ///
+    /// Server-only late-bind for <see cref="Cashier"/> children (added 2026-05-08): the
+    /// <c>Building._defaultFurnitureLayout</c> spawn pipeline uses <c>Instantiate</c> +
+    /// <c>SetParent</c> as separate calls, so <see cref="Cashier.Awake"/> runs BEFORE
+    /// the parent transform is set and <c>GetComponentInParent&lt;CommercialBuilding&gt;</c>
+    /// returns null. <see cref="Cashier.OnEnable"/> sees <c>LinkedShop == null</c> and
+    /// silently no-ops — meaning a designer-authored Cashier inside a Shop prefab never
+    /// registered, and the <see cref="JobVendor"/> pool slot never appeared.
+    ///
+    /// We close that race by walking the Cashier descendants once the building's
+    /// <c>NetworkObject</c> is server-spawned (so <c>IsServer</c> is true and
+    /// <see cref="RegisterCashier"/>'s gate passes) and calling
+    /// <see cref="Cashier.TryRegisterWithShop"/> on each. Idempotent — already-registered
+    /// cashiers short-circuit via the <c>_cashiers.Contains</c> guard.
     /// </summary>
     public override void OnNetworkSpawn()
     {
@@ -117,6 +144,17 @@ public class ShopBuilding : CommercialBuilding, IStockProvider
         {
             _catalog = new List<ShopItemEntry>(_seedCatalog?.Count ?? 0);
             if (_seedCatalog != null) _catalog.AddRange(_seedCatalog);
+        }
+
+        if (IsServer)
+        {
+            var cashierChildren = GetComponentsInChildren<Cashier>(includeInactive: true);
+            for (int i = 0; i < cashierChildren.Length; i++)
+            {
+                var c = cashierChildren[i];
+                if (c == null) continue;
+                c.TryRegisterWithShop();
+            }
         }
     }
 
@@ -366,28 +404,10 @@ public class ShopBuilding : CommercialBuilding, IStockProvider
         }
     }
 
-    [ServerRpc(RequireOwnership = false)]
-    public void SetSellShelfFlagServerRpc(NetworkObjectReference shelfRef, bool isSellShelf, ServerRpcParams p = default)
-    {
-        if (!ValidateOwnerCaller(p)) { _netSync.SendUnauthorizedToastClientRpc(SingleClientRpcParams(p)); return; }
-        if (!shelfRef.TryGet(out NetworkObject shelfObj)) return;
-        var storage = shelfObj.GetComponent<StorageFurniture>();
-        if (storage == null) return;
-
-        bool currentlyListed = _sellShelves.Contains(storage);
-        if (isSellShelf && !currentlyListed)
-        {
-            _sellShelves.Add(storage);
-            _netSync.PushSellShelfAddedServer(shelfRef);
-            OnSellShelvesChanged?.Invoke();
-        }
-        else if (!isSellShelf && currentlyListed)
-        {
-            _sellShelves.Remove(storage);
-            _netSync.PushSellShelfRemovedServer(shelfRef);
-            OnSellShelvesChanged?.Invoke();
-        }
-    }
+    // SetSellShelfFlagServerRpc deleted in the 2026-05-08 unified storage-role refactor.
+    // Owner-side assignment now goes through CommercialBuilding.TrySetStorageRoleServerRpc.
+    // The Storages tab dropdown is the canonical UI surface; the old per-shelf checkbox
+    // tab + its row are retired (see wiki/projects/management-panel-followups.md §1).
 
     [ServerRpc(RequireOwnership = false)]
     public void WithdrawCashierTillServerRpc(NetworkObjectReference cashierRef, ServerRpcParams p = default)
@@ -409,9 +429,11 @@ public class ShopBuilding : CommercialBuilding, IStockProvider
 
     public override System.Collections.Generic.IReadOnlyList<MWI.UI.Management.IManagementTab> GetManagementTabs()
     {
+        // Base now provides Hiring + Storages (the unified storage-role tab — Sell-Shelf
+        // is one option in its dropdown for ShopBuilding via SupportedStorageRoles).
+        // Phase 2c (2026-05-08) dropped the dedicated ShopShelvesTab.
         var tabs = new System.Collections.Generic.List<MWI.UI.Management.IManagementTab>(base.GetManagementTabs());
         tabs.Add(new MWI.UI.Management.ShopCatalogTab(this));
-        tabs.Add(new MWI.UI.Management.ShopShelvesTab(this));
         tabs.Add(new MWI.UI.Management.ShopCashiersTab(this));
         return tabs;
     }
@@ -583,9 +605,15 @@ public class ShopBuilding : CommercialBuilding, IStockProvider
                     string liveKey = MWI.WorldSystem.BuildingSaveData.ComputeFurnitureKey(storage, transform);
                     if (liveKey == savedKey)
                     {
-                        if (!_sellShelves.Contains(storage))
+                        // 2026-05-08 unified storage-role refactor: instead of stuffing the
+                        // legacy _sellShelves list, write the role onto the storage's NetSync.
+                        // Only writes if the role isn't already SellShelf (e.g. saved data may
+                        // have ALSO populated StorageFurnitureSaveEntry.Role — first writer wins
+                        // and the second is a no-op via NetworkVariable equality).
+                        var sync = storage.GetComponent<StorageFurnitureNetworkSync>();
+                        if (sync != null && storage.Role != StorageRoleType.SellShelf)
                         {
-                            _sellShelves.Add(storage);
+                            sync.SetRoleServer(StorageRoleType.SellShelf);
                             resolved++;
                         }
                         matched = true;
@@ -598,7 +626,8 @@ public class ShopBuilding : CommercialBuilding, IStockProvider
                 }
             }
 
-            if (resolved > 0) OnSellShelvesChanged?.Invoke();
+            // OnStorageRolesChanged fires per-write inside the role NetworkVariable's
+            // OnValueChanged handler chain; no aggregate fire here needed.
         }
         catch (System.Exception e)
         {

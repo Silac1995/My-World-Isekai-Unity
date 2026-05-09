@@ -23,14 +23,49 @@ public class StorageFurniture : Furniture
     [Header("Storage State")]
     [SerializeField] private bool _isLocked = false;
 
+    [Header("Role (commercial-building owner-assignable)")]
+    [Tooltip("Initial role at scene-spawn / on a fresh save. The runtime value is server-authoritative + replicated via the sibling StorageFurnitureNetworkSync; this field is the seed before network spawn AND the fallback when the storage isn't networked.")]
+    [SerializeField] private StorageRoleType _initialRole = StorageRoleType.None;
+
     private List<ItemSlot> _itemSlots;
+
+    /// <summary>
+    /// Runtime role mirror. Authoritative copy lives on the sibling
+    /// <see cref="StorageFurnitureNetworkSync"/>'s <c>NetworkVariable&lt;StorageRoleType&gt;</c>;
+    /// the sync component pushes value-changes here via
+    /// <see cref="ApplyRoleFromNetwork"/> so consumers can read the role from
+    /// the plain <see cref="StorageFurniture"/> reference without knowing about
+    /// the NetworkBehaviour sibling.
+    /// </summary>
+    private StorageRoleType _runtimeRole;
 
     /// <summary>Fired whenever slot contents (or lock state) change.</summary>
     public event Action OnInventoryChanged;
 
+    /// <summary>Fired whenever <see cref="Role"/> changes (server-driven via the sync component).</summary>
+    public event Action<StorageRoleType> OnRoleChanged;
+
     public IReadOnlyList<ItemSlot> ItemSlots => _itemSlots;
     public int Capacity => _itemSlots?.Count ?? 0;
     public bool IsLocked => _isLocked;
+
+    /// <summary>The owner-assigned storage role (or <see cref="StorageRoleType.None"/>).</summary>
+    public StorageRoleType Role => _runtimeRole;
+
+    /// <summary>Inspector-authored seed for <see cref="Role"/>. Read by the sync component on first server spawn.</summary>
+    public StorageRoleType InitialRole => _initialRole;
+
+    /// <summary>
+    /// Internal — called by <see cref="StorageFurnitureNetworkSync"/> when the
+    /// replicated role changes (server-write or client-receive). Updates the
+    /// local mirror and fires <see cref="OnRoleChanged"/>.
+    /// </summary>
+    internal void ApplyRoleFromNetwork(StorageRoleType newRole)
+    {
+        if (_runtimeRole == newRole) return;
+        _runtimeRole = newRole;
+        OnRoleChanged?.Invoke(newRole);
+    }
 
     public bool IsFull
     {
@@ -112,18 +147,19 @@ public class StorageFurniture : Furniture
     {
         if (item == null || _itemSlots == null || _isLocked) return false;
 
-        // Tool-storage hook: if this storage IS the tool storage of the parent CommercialBuilding,
-        // and the incoming item is stamped with that same building's BuildingId on its
-        // OwnerBuildingId field, clear the stamp. Covers BOTH the GOAP-driven return path
-        // (GoapAction_ReturnToolToStorage stamps on fetch, returns here) AND the player-driven
-        // drop-in path (player walks to the chest and drops a tool via the existing player UI —
-        // no GOAP involved). The clear MUST happen before the slot iteration so the cleared
-        // field is what gets persisted into the slot's ItemInstance.
+        // Tool-storage hook: if this storage is acting as a tool storage of the parent
+        // CommercialBuilding (role-assigned OR legacy singleton fallback) AND the incoming
+        // item is stamped with that same building's BuildingId on its OwnerBuildingId field,
+        // clear the stamp. Covers BOTH the GOAP-driven return path (GoapAction_ReturnToolToStorage
+        // stamps on fetch, returns here) AND the player-driven drop-in path (player walks to
+        // the chest and drops a tool via the existing player UI — no GOAP involved). The clear
+        // MUST happen before the slot iteration so the cleared field is what gets persisted
+        // into the slot's ItemInstance.
         if (!string.IsNullOrEmpty(item.OwnerBuildingId))
         {
             var owningBuilding = GetComponentInParent<CommercialBuilding>();
             if (owningBuilding != null
-                && owningBuilding.ToolStorage == this
+                && owningBuilding.IsToolStorage(this)
                 && item.OwnerBuildingId == owningBuilding.BuildingId)
             {
                 item.OwnerBuildingId = "";

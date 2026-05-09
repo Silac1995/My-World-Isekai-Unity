@@ -26,10 +26,6 @@ public abstract class CommercialBuilding : Building
              "exterior door — authored, not networked, so no NetworkVariable cost.")]
     [SerializeField] protected Zone _pickupZone;
 
-    [Header("Tool Storage")]
-    [Tooltip("Designer reference to a StorageFurniture inside this building that workers fetch tools from / return tools to. Null = building has no tool storage; tool-needing GOAP actions will fail-cleanly.")]
-    [SerializeField] private StorageFurniture _toolStorageFurniture;
-
     [Header("Hiring")]
     [Tooltip("Designer reference to a DisplayTextFurniture inside this building. When set, opening hiring auto-writes formatted vacancy text; closing hiring reverts to the closed-state text. Null = no auto-managed sign (hiring still works, just no in-world sign).")]
     [SerializeField] private DisplayTextFurniture _helpWantedFurniture;
@@ -48,8 +44,8 @@ public abstract class CommercialBuilding : Building
     public bool IsHiring => _isHiring.Value;
 
     // ── Lazy furniture-ref resolution ──────────────────────────────
-    // Inspector refs (_toolStorageFurniture / _helpWantedFurniture / _managementFurniture)
-    // point at nested NO furniture children of the building prefab. base.Awake() runs
+    // Inspector refs (_helpWantedFurniture / _managementFurniture) point at nested NO
+    // furniture children of the building prefab. base.Awake() runs
     // ConvertNestedNetworkFurnitureToLayout which DESTROYS those originals; OnNetworkSpawn
     // then re-spawns them as top-level NOs from _defaultFurnitureLayout. After destruction
     // the serialized fields become Unity-fake-null and never auto-rebind to the new instances.
@@ -58,10 +54,6 @@ public abstract class CommercialBuilding : Building
     // access. Position match disambiguates two children sharing the same FurnitureItemSO
     // (e.g. two crates: one for tools, one for general storage).
     private const float FurnitureRefMatchEpsilon = 0.05f;
-
-    private FurnitureItemSO _toolStorageRefSO;
-    private Vector3 _toolStorageRefLocalPos;
-    private bool _toolStorageRefSnapshotted;
 
     private FurnitureItemSO _helpWantedRefSO;
     private Vector3 _helpWantedRefLocalPos;
@@ -179,46 +171,141 @@ public abstract class CommercialBuilding : Building
     /// <summary>
     /// The StorageFurniture acting as this building's tool storage. Resolution order:
     /// <list type="number">
-    /// <item>If <c>_toolStorageFurniture</c> is still alive, return it.</item>
-    /// <item>Snapshot-based rebind to the inspector-assigned crate (FurnitureItemSO + local
-    ///   position match), captured before <c>base.Awake</c> destroyed the original.</item>
-    /// <item>Convention fallback: the FIRST <see cref="StorageFurniture"/> child in the
-    ///   building. Designers don't have to assign anything — by default, the first crate in
-    ///   the prefab becomes the tool storage. Caching is automatic so subsequent accesses
-    ///   are O(1).</item>
+    /// <item><b>Role-assigned</b>: any <see cref="StorageFurniture"/> child whose
+    ///   <see cref="StorageFurniture.Role"/> is <see cref="StorageRoleType.ToolStorage"/>.
+    ///   Multiple matches → first-found in child-walk order. Set per-storage at design
+    ///   time via <see cref="StorageFurniture.InitialRole"/>, or at runtime via the
+    ///   management panel dropdown.</item>
+    /// <item><b>Convention fallback</b>: the FIRST <see cref="StorageFurniture"/> child in
+    ///   the building. Designers don't have to assign anything — by default, the first
+    ///   crate in the prefab becomes the tool storage. Lets pre-role-system buildings keep
+    ///   working without explicit role tagging.</item>
     /// </list>
     /// Returns null only when the building has no <see cref="StorageFurniture"/> children at
     /// all, in which case <see cref="HasToolStorage"/> is false and tool-needing GOAP actions
-    /// fail-cleanly.
+    /// fail-cleanly. Prefer the list accessors / helpers (<see cref="ToolStorages"/>,
+    /// <see cref="FindToolStorageContaining"/>, <see cref="FindToolStorageWithFreeSpace"/>,
+    /// <see cref="HasToolInAnyToolStorage"/>) in new code — this getter exists for
+    /// "first-found / convention" callers only.
     /// </summary>
     public StorageFurniture ToolStorage
     {
         get
         {
-            // Tier 1: cached field still alive.
-            if (_toolStorageFurniture != null) return _toolStorageFurniture;
+            // Tier 0: owner-assigned role wins.
+            var roleAssigned = GetStoragesWithRole(StorageRoleType.ToolStorage);
+            if (roleAssigned != null && roleAssigned.Count > 0 && roleAssigned[0] != null)
+                return roleAssigned[0];
 
-            // Tier 2: snapshot-based rebind to the inspector-assigned crate.
-            if (_toolStorageRefSnapshotted)
-            {
-                var rebound = ResolveLazyFurnitureRef(
-                    ref _toolStorageFurniture,
-                    _toolStorageRefSO,
-                    _toolStorageRefLocalPos,
-                    true);
-                if (rebound != null) return rebound;
-            }
-
-            // Tier 3: first-crate convention fallback.
-            var firstStorage = GetComponentInChildren<StorageFurniture>(includeInactive: false);
-            if (firstStorage != null) _toolStorageFurniture = firstStorage;
-            return _toolStorageFurniture;
+            // Tier 1: first-crate convention fallback.
+            return GetComponentInChildren<StorageFurniture>(includeInactive: false);
         }
     }
 
     /// <summary>True if the building has a tool storage furniture assigned (or any
     /// <see cref="StorageFurniture"/> child for the convention fallback).</summary>
-    public bool HasToolStorage => ToolStorage != null;
+    public bool HasToolStorage => ToolStorages.Count > 0 || ToolStorage != null;
+
+    /// <summary>
+    /// All <see cref="StorageFurniture"/> children whose <see cref="StorageFurniture.Role"/>
+    /// is <see cref="StorageRoleType.ToolStorage"/>. Multiple storages can share the role —
+    /// e.g. a forge with two tool crates. Use <see cref="FindToolStorageContaining"/>,
+    /// <see cref="FindToolStorageWithFreeSpace"/>, or <see cref="HasToolInAnyToolStorage"/>
+    /// for the common iteration patterns; the singleton <see cref="ToolStorage"/> accessor
+    /// is preserved as a "first-found / legacy fallback" helper.
+    /// Allocates the underlying list per call (rare path — UI / logistics re-eval only).
+    /// </summary>
+    public IReadOnlyList<StorageFurniture> ToolStorages => GetStoragesWithRole(StorageRoleType.ToolStorage);
+
+    /// <summary>
+    /// All <see cref="StorageFurniture"/> children whose <see cref="StorageFurniture.Role"/>
+    /// is <see cref="StorageRoleType.InventoryStorage"/>. Multiple storages can share the
+    /// role. Logistics consumers should iterate this list rather than relying on a singleton.
+    /// </summary>
+    public IReadOnlyList<StorageFurniture> InventoryStorages => GetStoragesWithRole(StorageRoleType.InventoryStorage);
+
+    /// <summary>
+    /// First tool storage (in child-walk order) whose slots contain at least one instance
+    /// whose <see cref="ItemSO"/> matches <paramref name="tool"/>. Falls back to the
+    /// convention <see cref="ToolStorage"/> resolver (first-crate child) if no role-assigned
+    /// tool storage carries the item. Returns null when no tool storage holds the item.
+    /// </summary>
+    public StorageFurniture FindToolStorageContaining(ItemSO tool)
+    {
+        if (tool == null) return null;
+        var roleStorages = ToolStorages;
+        for (int i = 0; i < roleStorages.Count; i++)
+        {
+            if (StorageContainsItem(roleStorages[i], tool)) return roleStorages[i];
+        }
+        // Convention fallback — only consulted if no role-assigned tool storage matches.
+        // Mirrors the first-crate behaviour of the singleton ToolStorage accessor for
+        // buildings that never tagged any storage with _initialRole.
+        if (roleStorages.Count == 0)
+        {
+            var convention = ToolStorage;
+            if (convention != null && StorageContainsItem(convention, tool)) return convention;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// First tool storage (in child-walk order) that is unlocked AND not full. Falls back to
+    /// the convention <see cref="ToolStorage"/> resolver if no role-assigned tool storage
+    /// exists. Returns null when every tool storage is locked or full.
+    /// </summary>
+    public StorageFurniture FindToolStorageWithFreeSpace()
+    {
+        var roleStorages = ToolStorages;
+        for (int i = 0; i < roleStorages.Count; i++)
+        {
+            var s = roleStorages[i];
+            if (s != null && !s.IsLocked && !s.IsFull) return s;
+        }
+        if (roleStorages.Count == 0)
+        {
+            var convention = ToolStorage;
+            if (convention != null && !convention.IsLocked && !convention.IsFull) return convention;
+        }
+        return null;
+    }
+
+    /// <summary>True if any tool storage carries at least one instance of <paramref name="tool"/>.</summary>
+    public bool HasToolInAnyToolStorage(ItemSO tool) => FindToolStorageContaining(tool) != null;
+
+    /// <summary>
+    /// True if <paramref name="storage"/> is acting as a tool storage for this building.
+    /// Role-assigned storages always count; the convention <see cref="ToolStorage"/> resolver
+    /// (first-crate child) only counts when no role-assigned tool storage exists. Used by
+    /// hooks like <see cref="StorageFurniture.AddItem"/> that need to know "should I clear
+    /// the OwnerBuildingId stamp because this is a homecoming for a tool?".
+    /// </summary>
+    public bool IsToolStorage(StorageFurniture storage)
+    {
+        if (storage == null) return false;
+        var roleStorages = ToolStorages;
+        if (roleStorages.Count > 0)
+        {
+            for (int i = 0; i < roleStorages.Count; i++)
+                if (roleStorages[i] == storage) return true;
+            return false;
+        }
+        // No role-assigned tool storages — fall back to the convention singleton.
+        return ToolStorage == storage;
+    }
+
+    private static bool StorageContainsItem(StorageFurniture storage, ItemSO item)
+    {
+        if (storage == null || storage.ItemSlots == null) return false;
+        var slots = storage.ItemSlots;
+        for (int i = 0; i < slots.Count; i++)
+        {
+            var slot = slots[i];
+            if (slot == null || slot.IsEmpty() || slot.ItemInstance == null) continue;
+            if (slot.ItemInstance.ItemSO == item) return true;
+        }
+        return false;
+    }
 
     /// <summary>
     /// Subclass extension point: the <see cref="ItemSO"/>s this building treats as "tools" for
@@ -344,7 +431,8 @@ public abstract class CommercialBuilding : Building
         // children). After destruction the serialized fields become Unity-fake-null
         // and the public accessors need this snapshot to lazily rebind to the
         // re-spawned instances by (FurnitureItemSO + localPosition) match.
-        SnapshotFurnitureRef(_toolStorageFurniture, out _toolStorageRefSO, out _toolStorageRefLocalPos, out _toolStorageRefSnapshotted);
+        // Tool storage no longer needs this — its resolver uses role-tag (Tier 0) +
+        // first-crate convention (Tier 1) and never touches an Inspector field.
         SnapshotFurnitureRef(_helpWantedFurniture, out _helpWantedRefSO, out _helpWantedRefLocalPos, out _helpWantedRefSnapshotted);
         SnapshotFurnitureRef(_managementFurniture, out _managementRefSO, out _managementRefLocalPos, out _managementRefSnapshotted);
 
@@ -413,6 +501,11 @@ public abstract class CommercialBuilding : Building
         {
             HandleHiringStateChanged(_isHiring.Value);
         }
+
+        // Per-storage role-change fan-out for cross-client management-panel refresh.
+        // Walking the cache here also primes the storage-furniture cache and binds
+        // OnRoleChanged subscriptions on every peer (server + clients).
+        RefreshStorageRoleSubscriptions(GetStorageFurnitureCached());
     }
 
     /// <summary>
@@ -986,6 +1079,7 @@ public abstract class CommercialBuilding : Building
         UnsubscribeJobWorkerBindListener();
         UnsubscribeRestoreListener();
         _isHiring.OnValueChanged -= HandleIsHiringChanged;
+        UnsubscribeAllStorageRoleEvents();
         base.OnNetworkDespawn();
     }
 
@@ -1940,9 +2034,81 @@ public abstract class CommercialBuilding : Building
             _cachedStorageFurniture.Add(furniture);
         }
 
+        // Re-bind per-storage role-change subscriptions on every cache rebuild. The cache
+        // chokepoint also covers runtime furniture placement / pickup (FurnitureManager
+        // calls InvalidateStorageFurnitureCache on every register/unregister), so any
+        // newly-placed storage gets its OnRoleChanged event subscribed within the next
+        // GetStorageFurnitureCached call. Idempotent — safe to call repeatedly.
+        RefreshStorageRoleSubscriptions(_cachedStorageFurniture);
+
         _storageFurnitureCacheValidUntil = Time.time + FurnitureCacheTTLSeconds;
         return _cachedStorageFurniture;
     }
+
+    // ============================================================================
+    // PER-STORAGE ROLE SUBSCRIPTION FAN-OUT
+    // Each child StorageFurniture's OnRoleChanged event fires on every peer (it's
+    // driven by the StorageFurnitureNetworkSync NetworkVariable's OnValueChanged).
+    // We forward those per-storage events to the building-level
+    // OnStorageRolesChanged event so subscribers (StorageRolesTabView, future
+    // logistics-eval listeners) refresh on remote owner edits — not just on the
+    // host. Subscriptions are kept in sync via RefreshStorageRoleSubscriptions on
+    // every storage-cache rebuild + on OnNetworkSpawn / OnNetworkDespawn.
+    // ============================================================================
+
+    private readonly List<StorageFurniture> _storageRoleSubscribed = new();
+
+    private void RefreshStorageRoleSubscriptions(IReadOnlyList<StorageFurniture> currentSet)
+    {
+        // Drop subscriptions to storages that disappeared (destroyed or removed from the
+        // building). Backwards iteration so RemoveAt(i) is safe.
+        for (int i = _storageRoleSubscribed.Count - 1; i >= 0; i--)
+        {
+            var s = _storageRoleSubscribed[i];
+            bool stillPresent = false;
+            if (s != null && currentSet != null)
+            {
+                for (int j = 0; j < currentSet.Count; j++)
+                {
+                    if (currentSet[j] == s) { stillPresent = true; break; }
+                }
+            }
+            if (!stillPresent)
+            {
+                if (s != null) s.OnRoleChanged -= HandleChildStorageRoleChanged;
+                _storageRoleSubscribed.RemoveAt(i);
+            }
+        }
+        // Add subscriptions for any new storages.
+        if (currentSet != null)
+        {
+            for (int i = 0; i < currentSet.Count; i++)
+            {
+                var s = currentSet[i];
+                if (s == null) continue;
+                bool already = false;
+                for (int j = 0; j < _storageRoleSubscribed.Count; j++)
+                {
+                    if (_storageRoleSubscribed[j] == s) { already = true; break; }
+                }
+                if (already) continue;
+                s.OnRoleChanged += HandleChildStorageRoleChanged;
+                _storageRoleSubscribed.Add(s);
+            }
+        }
+    }
+
+    private void UnsubscribeAllStorageRoleEvents()
+    {
+        for (int i = 0; i < _storageRoleSubscribed.Count; i++)
+        {
+            var s = _storageRoleSubscribed[i];
+            if (s != null) s.OnRoleChanged -= HandleChildStorageRoleChanged;
+        }
+        _storageRoleSubscribed.Clear();
+    }
+
+    private void HandleChildStorageRoleChanged(StorageRoleType _) => OnStorageRolesChanged?.Invoke();
 
     /// <summary>
     /// Force the next StorageFurniture lookup to re-walk rooms. Call after a known
@@ -1983,25 +2149,38 @@ public abstract class CommercialBuilding : Building
     {
         if (item == null) return null;
 
-        var toolStorage = ToolStorage;
         bool isTool = IsBuildingToolItem(item.ItemSO);
+        var toolStorages = ToolStorages;
 
-        // Tool-priority pre-pass: building tools route to ToolStorage first when it has
-        // free space. Keeps watering cans / axes / etc. consolidated in the tool drawer
-        // instead of getting first-fit-scattered into general inventory chests.
-        if (isTool && toolStorage != null && !toolStorage.IsLocked && toolStorage.HasFreeSpaceForItem(item))
+        // Tool-priority pre-pass: iterate every role-assigned tool storage so tools route
+        // into the consolidated tool drawer(s) before getting first-fit-scattered into
+        // general inventory chests. Multiple tool storages allowed — first non-locked +
+        // has-free-space wins. Falls back to legacy singleton when no role assignment
+        // exists yet (designer-time defaults).
+        if (isTool)
         {
-            return toolStorage;
+            for (int i = 0; i < toolStorages.Count; i++)
+            {
+                var s = toolStorages[i];
+                if (s == null || s.IsLocked) continue;
+                if (s.HasFreeSpaceForItem(item)) return s;
+            }
+            if (toolStorages.Count == 0)
+            {
+                var legacy = ToolStorage;
+                if (legacy != null && !legacy.IsLocked && legacy.HasFreeSpaceForItem(item)) return legacy;
+            }
         }
 
-        // First-fit by furniture order. Non-tool items SKIP the tool storage so general
-        // inventory (seeds, produce) can't fill the slot reserved for tools.
+        // First-fit by furniture order. Non-tool items SKIP every tool storage so general
+        // inventory (seeds, produce) can't fill the slots reserved for tools. IsToolStorage
+        // is the unified "role-tagged OR legacy-singleton" predicate.
         var cached = GetStorageFurnitureCached();
         for (int i = 0; i < cached.Count; i++)
         {
             var furniture = cached[i];
             if (furniture == null || furniture.IsLocked) continue;
-            if (!isTool && furniture == toolStorage) continue;
+            if (!isTool && IsToolStorage(furniture)) continue;
             if (furniture.HasFreeSpaceForItem(item)) return furniture;
         }
         return null;
@@ -2572,7 +2751,127 @@ public abstract class CommercialBuilding : Building
     /// </summary>
     public virtual System.Collections.Generic.IReadOnlyList<MWI.UI.Management.IManagementTab> GetManagementTabs()
     {
-        return new MWI.UI.Management.IManagementTab[] { new MWI.UI.Management.HiringTab(this) };
+        return new MWI.UI.Management.IManagementTab[]
+        {
+            new MWI.UI.Management.HiringTab(this),
+            new MWI.UI.Management.StorageRolesTab(this),
+        };
+    }
+
+    // ============================================================================
+    // STORAGE ROLE SYSTEM (unified — replaces ShopBuilding._sellShelves and the
+    // designer-only ToolStorage / HelpWantedSign / ManagementFurniture singletons
+    // for owner-driven runtime reassignment). Authored 2026-05-08 — see
+    // wiki/projects/management-panel-followups.md §1 for the full design.
+    //
+    // Per-storage exclusivity: each StorageFurniture child carries one
+    // StorageRoleType (or None). Multiple storages can independently share the
+    // same role (e.g. 3 sell-shelves). Building-side query is "give me all
+    // storages with role X" → list. Owner-driven mutation: TrySetStorageRoleServerRpc
+    // with caller-identity validation against _owner.
+    // ============================================================================
+
+    /// <summary>
+    /// Subclass extension point: which <see cref="StorageRoleType"/> values are valid for
+    /// storages inside this building. The base returns
+    /// <see cref="StorageRoleCatalog.Generic"/> (None / Tool / Inventory).
+    /// <see cref="ShopBuilding"/> overrides to <see cref="StorageRoleCatalog.Shop"/> to
+    /// also expose Sell-Shelf in the dropdown.
+    /// </summary>
+    public virtual System.Collections.Generic.IReadOnlyList<StorageRoleDescriptor> SupportedStorageRoles
+        => StorageRoleCatalog.Generic;
+
+    /// <summary>
+    /// Fired whenever a storage child's role changes (server-driven via the
+    /// per-storage NetworkVariable). Consumers (the management UI, logistics
+    /// re-evaluators, etc.) subscribe to refresh their views. Server-side.
+    /// </summary>
+    public event System.Action OnStorageRolesChanged;
+
+    /// <summary>
+    /// Walks every <see cref="StorageFurniture"/> child (recursive, includes inactive)
+    /// and returns those whose <see cref="StorageFurniture.Role"/> matches
+    /// <paramref name="type"/>. Allocates a fresh list per call — not a hot path
+    /// (called on UI refresh + logistics re-evaluation, both rare).
+    /// </summary>
+    public System.Collections.Generic.IReadOnlyList<StorageFurniture> GetStoragesWithRole(StorageRoleType type)
+    {
+        var result = new System.Collections.Generic.List<StorageFurniture>();
+        var children = GetComponentsInChildren<StorageFurniture>(includeInactive: true);
+        for (int i = 0; i < children.Length; i++)
+        {
+            var s = children[i];
+            if (s != null && s.Role == type) result.Add(s);
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Owner-only — called by the management UI's role-dropdown change handler.
+    /// Validates the caller is this building's owner, resolves the storage from
+    /// its NetworkObject reference, then writes the new role through the storage's
+    /// sibling <see cref="StorageFurnitureNetworkSync.SetRoleServer"/>. Rejected
+    /// calls fire a single-target unauthorized toast.
+    /// </summary>
+    [ServerRpc(RequireOwnership = false)]
+    public void TrySetStorageRoleServerRpc(NetworkObjectReference furnitureRef, StorageRoleType newRole, ServerRpcParams p = default)
+    {
+        // Caller-identity validation. Mirror of the ShopBuilding ownership check pattern.
+        Character caller = null;
+        if (NetworkManager.Singleton != null
+            && NetworkManager.Singleton.ConnectedClients.TryGetValue(p.Receive.SenderClientId, out var nc)
+            && nc?.PlayerObject != null)
+        {
+            caller = nc.PlayerObject.GetComponent<Character>();
+        }
+        if (caller == null || Owner == null || caller != Owner)
+        {
+            Debug.LogWarning($"[CommercialBuilding] {buildingName}: TrySetStorageRoleServerRpc rejected — caller is not the owner.");
+            return;
+        }
+
+        // Subtype filter: roles outside SupportedStorageRoles are silently ignored
+        // (a non-Shop building's owner can't assign SellShelf, even if a remote client
+        // somehow sends one). Validates against the descriptor list, not the enum range.
+        bool roleSupported = false;
+        var supported = SupportedStorageRoles;
+        if (supported != null)
+        {
+            for (int i = 0; i < supported.Count; i++)
+            {
+                if (supported[i].Type == newRole) { roleSupported = true; break; }
+            }
+        }
+        if (!roleSupported)
+        {
+            Debug.LogWarning($"[CommercialBuilding] {buildingName}: role {newRole} is not in SupportedStorageRoles — rejecting.");
+            return;
+        }
+
+        if (!furnitureRef.TryGet(out NetworkObject netObj) || netObj == null) return;
+        var storage = netObj.GetComponent<StorageFurniture>();
+        if (storage == null)
+        {
+            Debug.LogWarning($"[CommercialBuilding] {buildingName}: TrySetStorageRoleServerRpc target is not a StorageFurniture.");
+            return;
+        }
+
+        var sync = storage.GetComponent<StorageFurnitureNetworkSync>();
+        if (sync == null)
+        {
+            // Hard-fail visibility: a missing sync is a structural bug (the prefab is
+            // missing a required network component) and silently swallowing it caused a
+            // playtest where the dropdown appeared to do nothing. Promote to LogError so
+            // it's not lost in the noise next time.
+            Debug.LogError($"[CommercialBuilding] {buildingName}: storage '{storage.FurnitureName}' has no StorageFurnitureNetworkSync sibling — role write DROPPED. Check the prefab — base StorageFurniture variants must inherit the sync component.");
+            return;
+        }
+
+        sync.SetRoleServer(newRole);
+        // OnStorageRolesChanged is invoked via the per-storage NetworkVariable fan-out
+        // (StorageFurnitureNetworkSync.HandleRoleChanged → StorageFurniture.OnRoleChanged →
+        // CommercialBuilding.HandleChildStorageRoleChanged). Firing it here would only
+        // reach the host — the per-storage path reaches every peer.
     }
 
     /// <summary>

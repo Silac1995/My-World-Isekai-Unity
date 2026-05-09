@@ -49,6 +49,19 @@ public class StorageFurnitureNetworkSync : NetworkBehaviour
     private NetworkList<NetworkStorageSlotEntry> _networkSlots;
 
     /// <summary>
+    /// Replicated owner-assigned role for this storage. Authored 2026-05-08 as
+    /// part of the unified storage-role system (see
+    /// <c>wiki/projects/management-panel-followups.md</c> §1). Default is
+    /// <see cref="StorageRoleType.None"/> at construction; on first server
+    /// spawn we seed it from <see cref="StorageFurniture.InitialRole"/>.
+    /// Owner-driven mutations route through <see cref="SetRoleServer"/>.
+    /// Clients mirror the value into <see cref="StorageFurniture.ApplyRoleFromNetwork"/>
+    /// on every change so consumers can read <c>storage.Role</c> without
+    /// knowing about this NetworkBehaviour sibling.
+    /// </summary>
+    private NetworkVariable<StorageRoleType> _networkRole;
+
+    /// <summary>
     /// Reusable buffer for rewriting client-side slots in
     /// <see cref="ApplyFullStateOnClient"/> — avoids one allocation per change.
     /// </summary>
@@ -69,6 +82,15 @@ public class StorageFurnitureNetworkSync : NetworkBehaviour
         // is just an initial allocation — NetworkList resizes as needed.
         _networkSlots = new NetworkList<NetworkStorageSlotEntry>(
             null,
+            NetworkVariableReadPermission.Everyone,
+            NetworkVariableWritePermission.Server
+        );
+
+        // Same constraint applies to the role NetworkVariable — must exist
+        // before the spawn handshake. Default value is None; the server
+        // overwrites it from StorageFurniture.InitialRole in OnNetworkSpawn.
+        _networkRole = new NetworkVariable<StorageRoleType>(
+            StorageRoleType.None,
             NetworkVariableReadPermission.Everyone,
             NetworkVariableWritePermission.Server
         );
@@ -94,6 +116,19 @@ public class StorageFurnitureNetworkSync : NetworkBehaviour
             // in StorageFurniture.Awake() (which runs before OnNetworkSpawn
             // on the same GameObject), so this is safe.
             RebuildNetworkListFromStorage();
+
+            // Seed the role NetworkVariable from the inspector-authored default.
+            // Save-load runs AFTER OnNetworkSpawn — if a save entry has a non-default
+            // role, MapController.RestoreStorageFurnitureContents will call
+            // SetRoleServer(saved.Role) which overwrites this seed. So this line is
+            // safe whether or not a save is being applied.
+            _networkRole.Value = _storage.InitialRole;
+            // Mirror the seed into the local StorageFurniture so server-side reads
+            // of storage.Role return the right value before any client connects.
+            _storage.ApplyRoleFromNetwork(_networkRole.Value);
+            // Subscribe to value changes so server-side mutations (via SetRoleServer)
+            // also fire OnRoleChanged on the host's StorageFurniture.
+            _networkRole.OnValueChanged += HandleRoleChanged;
         }
         else
         {
@@ -101,6 +136,10 @@ public class StorageFurnitureNetworkSync : NetworkBehaviour
             // explicit catch-up pass for late-joiner safety.
             _networkSlots.OnListChanged += HandleClientListChanged;
             ApplyFullStateOnClient();
+
+            // Subscribe to role changes + apply current value once for late-join parity.
+            _networkRole.OnValueChanged += HandleRoleChanged;
+            _storage.ApplyRoleFromNetwork(_networkRole.Value);
         }
     }
 
@@ -115,7 +154,32 @@ public class StorageFurnitureNetworkSync : NetworkBehaviour
             _networkSlots.OnListChanged -= HandleClientListChanged;
         }
 
+        if (_networkRole != null)
+        {
+            _networkRole.OnValueChanged -= HandleRoleChanged;
+        }
+
         base.OnNetworkDespawn();
+    }
+
+    private void HandleRoleChanged(StorageRoleType prev, StorageRoleType next)
+    {
+        if (_storage == null) return;
+        _storage.ApplyRoleFromNetwork(next);
+    }
+
+    /// <summary>
+    /// Server-only — write the new role to the replicated <see cref="_networkRole"/>.
+    /// Clients pick up the change via <see cref="HandleRoleChanged"/>. No-op on
+    /// non-server peers (the NetworkVariable's write permission also rejects).
+    /// Called by <see cref="CommercialBuilding.TrySetStorageRoleServerRpc"/> after
+    /// owner-validation.
+    /// </summary>
+    public void SetRoleServer(StorageRoleType newRole)
+    {
+        if (!IsServer || _networkRole == null) return;
+        if (_networkRole.Value == newRole) return;
+        _networkRole.Value = newRole;
     }
 
     // =========================================================================
