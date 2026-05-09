@@ -402,13 +402,33 @@ public class PlayerController : CharacterGameController
             _eMenuOpened = true;
     }
 
-    /// <summary>On E release, if the menu wasn't opened (tap), run the immediate Interact path.</summary>
+    /// <summary>
+    /// On E release (tap): consolidated dispatch (rule #33 — only PlayerController
+    /// reads E input). Resolves target as selected-from-targeting OR detector's
+    /// current proximity target. Selected-but-out-of-range routes through
+    /// PlayerInteractCommand for auto-nav. Otherwise delegates to the detector's
+    /// canonical TriggerTapInteract helper (which encapsulates the dialogue-NPC
+    /// freeness gate + InteractableObject.Interact dispatch).
+    /// </summary>
     private void HandleEKeyUp()
     {
         if (_eMenuOpened) return;
+        _detector?.SetPromptHoldProgress(0f);
 
-        var nearest = GetNearestVisibleInteractable();
-        if (nearest != null) nearest.Interact(_character);
+        EnsureTargeting();
+        var selected = _targeting?.SelectedInteractable;
+        var target = selected ?? _detector?.CurrentTarget;
+        if (target == null) return;
+
+        // Selected target is out of range → auto-nav to it (existing UX, was at
+        // PlayerInteractionDetector.cs:201-210 prior to dedup).
+        if (selected != null && _detector != null && !_detector.IsTargetInRange(selected))
+        {
+            SetOrder(new MWI.CharacterControllers.Commands.PlayerInteractCommand(selected, _detector));
+            return;
+        }
+
+        if (_detector != null) _detector.TriggerTapInteract(target);
     }
 
     private void OnInteractionMenuClosed() => _eMenuOpened = false;
@@ -435,25 +455,6 @@ public class PlayerController : CharacterGameController
             if (d < bestDist) { bestDist = d; best = h; }
         }
         return best;
-    }
-
-    private InteractableObject GetNearestVisibleInteractable()
-    {
-        var awareness = _character.CharacterAwareness;
-        if (awareness == null) return null;
-        var visible = awareness.GetVisibleInteractables();
-        if (visible == null || visible.Count == 0) return null;
-        InteractableObject closest = null;
-        float closestDist = float.MaxValue;
-        for (int i = 0; i < visible.Count; i++)
-        {
-            var obj = visible[i];
-            if (obj == null) continue;
-            if (!obj.IsCharacterInInteractionZone(_character)) continue;
-            float d = Vector3.Distance(_character.transform.position, obj.transform.position);
-            if (d < closestDist) { closestDist = d; closest = obj; }
-        }
-        return closest;
     }
 
     /// <summary>
