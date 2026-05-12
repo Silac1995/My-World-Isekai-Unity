@@ -36,6 +36,12 @@ namespace MWI.UI.Shop
         {
             var canvas = GetComponent<UnityEngine.Canvas>();
             if (canvas == null) canvas = gameObject.AddComponent<UnityEngine.Canvas>();
+            // Force-set renderMode — the prefab was authored via MCP, which can leave a
+            // Canvas with renderMode = WorldSpace baked into the asset. Parenting under
+            // PlayerUI.HudCanvas doesn't reset that — Canvas.renderMode is its own field
+            // independent of parent inheritance. Explicit assignment here guarantees the
+            // HUD overlay behaviour regardless of how the prefab is authored.
+            canvas.renderMode = UnityEngine.RenderMode.ScreenSpaceOverlay;
             canvas.overrideSorting = true;
             canvas.sortingOrder = 50;
 
