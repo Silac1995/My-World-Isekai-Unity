@@ -142,15 +142,28 @@ Used for resource nodes (trees, rocks, ore veins).
 
 ## Player Input & Interaction Menus
 
-The `PlayerInteractionDetector` evaluates player input to differentiate between quick interactions and extended actions:
+**Input ownership (Rule #33):** `PlayerController.Update()` is the **only** reader of E-key (`Input.GetKey*`) for player-character control. `PlayerInteractionDetector` is a proximity tracker + prompt renderer + helper API only — it does **not** read any keyboard input. It exposes a small public API for the controller to call:
+
+| Member | Purpose |
+|---|---|
+| `CurrentTarget` (inherited from `CharacterInteractionDetector`) | The current proximity target — what the prompt UI is rendering |
+| `IsTargetInRange(target)` | Trigger-collider data API, used by `PlayerInteractCommand` and `PlayerController.HandleEKeyUp` |
+| `TriggerTapInteract(target)` (renamed from `TriggerInteract`) | Canonical tap-E entry: wraps the dialogue-NPC freeness gate + `target.Interact(Character)` |
+| `TriggerHoldMenu(target)` returns `bool` | Generic hold-E menu open via `target.GetHoldInteractionOptions(Character)` |
+| `SetPromptHoldProgress(t01)` | Drives `currentPromptComponent.SetFillAmount` from the controller's hold timer |
+| `UpdateClosestTarget()` runs in `LateUpdate` | Proximity bookkeeping — stable snapshot for the next `Update`'s input read |
 
 ### 1. Tap E (Quick Action)
-- Automatically delegates to the interactable's `Interact()` method.
+- `PlayerController.HandleEKeyUp` resolves `target = _targeting?.SelectedInteractable ?? _detector?.CurrentTarget`.
+- Selected-but-out-of-range → enqueue `PlayerInteractCommand` for NavMesh auto-nav.
+- In-range → call `_detector.TriggerTapInteract(target)` which delegates to the interactable's `Interact()` method.
 - For a `CharacterInteractable`, this defaults to sending an `InteractionStartDialogue` invitation (requesting a conversation).
 
 ### 2. Hold E (Extended Options)
-- Pressing and holding "E" fills up a progress bar managed by `InteractionPromptUI`.
-- Once the hold threshold is reached, instead of firing `Interact()`, it pulls `GetHoldInteractionOptions()` from the target.
+- `PlayerController.HandleEKeyHeld` ticks `_eHeldStartTime → t01` and pushes the value to `_detector.SetPromptHoldProgress(t01)`, which drives the prompt-fill bar via `InteractionPromptUI`.
+- Once `t01 >= 1f` (the hold threshold), the controller dispatches in two priorities:
+  - **Priority A**: harvestable-specific menu (`UI_HarvestInteractionMenu`) via `GetNearestVisibleHarvestable()` (awareness-based).
+  - **Priority B**: generic interactable hold-menu via `_detector.TriggerHoldMenu(currentTarget)` — pulls `GetHoldInteractionOptions()` from the target and routes through `PlayerUI.OpenInteractionMenu`.
 - These options (e.g., *Follow Me*, *Greet*) are displayed dynamically in a radial or list context menu via the `PlayerUI`.
 
 ### Door Hold Menu (Lock / Unlock / Repair)
@@ -180,8 +193,8 @@ The system is layered across three components:
 | Layer | Component | Responsibility |
 |-------|-----------|---------------|
 | **UI Input** | `UI_PlayerTargeting` | Click raycast → stores `SelectedInteractable`, manages `LookTarget` |
-| **Interaction** | `PlayerInteractionDetector` | Reads selection, locks E-key to selected target, issues auto-navigate |
-| **Controller** | `PlayerController` | TAB key cycles through visible interactables via `CharacterAwareness` |
+| **Proximity** | `PlayerInteractionDetector` | Trigger-collider bookkeeping (`nearbyInteractables`), `CurrentTarget` data, prompt rendering, dialogue-event handlers. Exposes helper API consumed by the controller. **No `Input.*` reads (rule #33).** |
+| **Controller** | `PlayerController` | Single owner of E-key input. Resolves tap target (`selected ?? CurrentTarget`), routes out-of-range via `PlayerInteractCommand`, in-range via `_detector.TriggerTapInteract`. TAB cycling and hold-E dispatch also live here. |
 
 ### Click-to-Select
 - `UI_PlayerTargeting.UpdateTargeting()` raycasts on left-click.
@@ -197,10 +210,11 @@ The system is layered across three components:
 - Calls `UI_PlayerTargeting.SelectInteractable()`.
 
 ### E-Key Interaction with Selection
-When a selection exists in `UI_PlayerTargeting`:
-1. **Target IS in `nearbyInteractables`** (player's rigidbody is inside target's InteractionZone) → interact immediately, same as before.
-2. **Target is NOT in `nearbyInteractables`** → pressing E issues a `PlayerInteractCommand` (IPlayerCommand) that auto-navigates the player via NavMeshAgent to the target. On arrival (when `nearbyInteractables` contains the target), it triggers the interaction automatically.
-3. **No selection** → falls back to existing proximity-based closest-target behavior.
+
+`PlayerController.HandleEKeyUp` (rule #33 owner) resolves selection and proximity:
+1. **Target IS in range** (`_detector.IsTargetInRange(selected)`) → call `_detector.TriggerTapInteract(target)` which fires the interactable's `Interact()` immediately.
+2. **Target is NOT in range** → `SetOrder(new PlayerInteractCommand(selected, _detector))` issues NavMeshAgent auto-nav. On arrival, `PlayerInteractCommand.Tick` calls `_detector.TriggerTapInteract(target)` to fire the interaction.
+3. **No selection** → falls back to `_detector.CurrentTarget` (proximity-based closest target rendered by the prompt UI).
 
 ### Rules
 - **Never bypass the InteractionZone check — call `interactable.IsCharacterInInteractionZone(character)`.** Even with a selected target, the player's rigidbody MUST physically be inside the target's InteractionZone before the interaction fires. This is Core Rule #1 and applies to selection, proximity, auto-navigate arrival, and every other code path.

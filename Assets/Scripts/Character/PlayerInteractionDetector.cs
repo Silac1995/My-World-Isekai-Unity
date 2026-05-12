@@ -1,7 +1,6 @@
 using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
-using MWI.CharacterControllers.Commands;
 
 public class PlayerInteractionDetector : CharacterInteractionDetector
 {
@@ -9,9 +8,10 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
     [SerializeField] private List<InteractableObject> nearbyInteractables = new List<InteractableObject>();
     private GameObject currentPromptUI;
     private InteractionPromptUI currentPromptComponent;
-    private float eHoldTime = 0f;
-    private bool isHoldingE = false;
-    private const float HOLD_THRESHOLD = 0.4f;
+    // _playerUI is read by dialogue handlers (HandleInteractionStateChanged etc.) and
+    // by TriggerHoldMenu. _targeting is read by UpdateClosestTarget's SELECTION-MODE
+    // branch to lock the prompt to a TAB-selected target when in range. Neither
+    // reads Input.* — both are pure data lookups, so they don't violate rule #33.
     private PlayerUI _playerUI;
     private UI_PlayerTargeting _targeting;
 
@@ -166,86 +166,17 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
         }
     }
 
-    private void Update()
+    /// <summary>
+    /// Proximity tracking only. All E-key input dispatch lives in
+    /// <see cref="PlayerController"/> per rule #33 — this class no longer reads
+    /// any keyboard input. <see cref="UpdateClosestTarget"/> runs in LateUpdate
+    /// so PlayerController's input read in Update sees the previous frame's
+    /// proximity snapshot — stable, no input/render race.
+    /// </summary>
+    private void LateUpdate()
     {
         if (Character.TryGetComponent(out Unity.Netcode.NetworkObject netObj) && netObj.IsSpawned && !netObj.IsOwner) return;
-
         UpdateClosestTarget();
-
-        // Prevent interacting if the player is currently typing in an input field (e.g. chat)
-        if (UnityEngine.EventSystems.EventSystem.current != null &&
-            UnityEngine.EventSystems.EventSystem.current.currentSelectedGameObject != null &&
-            UnityEngine.EventSystems.EventSystem.current.currentSelectedGameObject.GetComponent<TMPro.TMP_InputField>() != null)
-        {
-            return;
-        }
-
-        // Dev mode suppresses gameplay input. Nearby-target tracking above still runs.
-        if (DevModeManager.SuppressPlayerInput)
-        {
-            return;
-        }
-
-        if (_playerUI == null)
-            _playerUI = UnityEngine.Object.FindAnyObjectByType<PlayerUI>(FindObjectsInactive.Include);
-
-        EnsureTargeting();
-
-        // --- E KEY INTERACTION ---
-        // Determine the effective target for E-key:
-        // If a selection exists but is NOT in range, pressing E will auto-navigate to it.
-        InteractableObject selectedTarget = _targeting != null ? _targeting.SelectedInteractable : null;
-
-        if (Input.GetKeyDown(KeyCode.E))
-        {
-            if (selectedTarget != null && !IsTargetInRange(selectedTarget))
-            {
-                // Selected target is not in InteractionZone — auto-navigate to it
-                var playerController = Character.GetComponent<PlayerController>();
-                if (playerController != null)
-                {
-                    Debug.Log($"<color=cyan>[PlayerInteractionDetector]</color> Selected target {selectedTarget.name} is out of range. Auto-navigating.");
-                    playerController.SetOrder(new PlayerInteractCommand(selectedTarget, this));
-                }
-                return;
-            }
-
-            // Normal E-press: target is in range (or no selection, using proximity)
-            if (_currentInteractableObjectTarget != null)
-            {
-                isHoldingE = true;
-                eHoldTime = 0f;
-                if (currentPromptComponent != null) currentPromptComponent.SetFillAmount(0f);
-            }
-        }
-
-        if (Input.GetKey(KeyCode.E) && isHoldingE)
-        {
-            eHoldTime += Time.deltaTime;
-            if (currentPromptComponent != null) currentPromptComponent.SetFillAmount(eHoldTime / HOLD_THRESHOLD);
-
-            if (eHoldTime >= HOLD_THRESHOLD)
-            {
-                isHoldingE = false; // Stop tracking hold
-                if (_currentInteractableObjectTarget == null) { eHoldTime = 0f; return; }
-                var options = _currentInteractableObjectTarget.GetHoldInteractionOptions(Character);
-                if (options != null && options.Count > 0)
-                {
-                    if (_playerUI != null) _playerUI.OpenInteractionMenu(options);
-                }
-                else
-                {
-                    ExecuteNormalInteract();
-                }
-            }
-        }
-
-        if (Input.GetKeyUp(KeyCode.E) && isHoldingE)
-        {
-            isHoldingE = false; // Released before threshold
-            if (currentPromptComponent != null) currentPromptComponent.SetFillAmount(0f);
-            ExecuteNormalInteract();
-        }
     }
 
     /// <summary>
@@ -260,16 +191,47 @@ public class PlayerInteractionDetector : CharacterInteractionDetector
     }
 
     /// <summary>
-    /// Triggers the standard interaction with a given target.
-    /// Called by PlayerInteractCommand when auto-navigate arrives at the target.
+    /// Canonical tap-E entry point. Called by <see cref="PlayerController"/>'s
+    /// HandleEKeyUp dispatch (rule #33 — input owner) and by
+    /// <see cref="MWI.CharacterControllers.Commands.PlayerInteractCommand"/> on auto-nav arrival.
+    /// Wraps the dialogue-NPC freeness gate and the
+    /// <see cref="InteractableObject.Interact"/> dispatch.
     /// </summary>
-    public void TriggerInteract(InteractableObject target)
+    public void TriggerTapInteract(InteractableObject target)
     {
         if (target == null) return;
 
         // Temporarily set the current target so ExecuteNormalInteract picks it up
         _currentInteractableObjectTarget = target;
         ExecuteNormalInteract();
+    }
+
+    /// <summary>
+    /// Opens the generic hold-interaction menu for a target if it has any
+    /// <see cref="InteractableObject.GetHoldInteractionOptions"/>. Returns true
+    /// if a menu was opened (so the caller can flip its E-menu-opened latch).
+    /// Called by <see cref="PlayerController"/>'s HandleEKeyHeld threshold branch
+    /// (rule #33 — input owner).
+    /// </summary>
+    public bool TriggerHoldMenu(InteractableObject target)
+    {
+        if (target == null) return false;
+        var options = target.GetHoldInteractionOptions(Character);
+        if (options == null || options.Count == 0) return false;
+        if (_playerUI == null) _playerUI = UnityEngine.Object.FindAnyObjectByType<PlayerUI>(FindObjectsInactive.Include);
+        if (_playerUI == null) return false;
+        _playerUI.OpenInteractionMenu(options);
+        return true;
+    }
+
+    /// <summary>
+    /// Drives the prompt-fill bar from <c>0..1</c>. Called every frame from
+    /// <see cref="PlayerController"/>.HandleEKeyHeld — the input owner ticks the
+    /// hold timer and pushes progress here.
+    /// </summary>
+    public void SetPromptHoldProgress(float t01)
+    {
+        if (currentPromptComponent != null) currentPromptComponent.SetFillAmount(Mathf.Clamp01(t01));
     }
 
     private void ExecuteNormalInteract()

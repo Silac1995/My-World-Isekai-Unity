@@ -41,7 +41,7 @@ namespace MWI.CharacterControllers.Commands
             {
                 Debug.Log($"<color=green>[PlayerInteractCmd]</color> Arrived at {_target.name}. Triggering interaction.");
                 movement.Stop();
-                _detector.TriggerInteract(_target);
+                _detector.TriggerTapInteract(_target);
                 _hasInteracted = true;
                 return true;
             }

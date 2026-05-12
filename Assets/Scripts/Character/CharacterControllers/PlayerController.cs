@@ -15,6 +15,23 @@ public class PlayerController : CharacterGameController
     // --- TAB Targeting ---
     private UI_PlayerTargeting _targeting;
 
+    // --- Interactable detection (proximity + prompt + helper API) ---
+    [SerializeField] private PlayerInteractionDetector _detector;
+
+    /// <summary>
+    /// Auto-resolve the PlayerInteractionDetector reference. Called once per object
+    /// lifetime; mirrors the Character facade pattern (CLAUDE.md: subsystem references
+    /// auto-assign in Awake via GetComponentInChildren as a fallback). _character is
+    /// already populated by base.Awake() (CharacterSystem.Awake — sets _character via
+    /// GetComponentInParent<Character>).
+    /// </summary>
+    protected override void Awake()
+    {
+        base.Awake();
+        if (_detector == null && _character != null)
+            _detector = _character.GetComponentInChildren<PlayerInteractionDetector>(true);
+    }
+
     public void SetOrder(IPlayerCommand newOrder)
     {
         if (_currentOrder != null) _currentOrder.OnCancelled(this);
@@ -355,27 +372,63 @@ public class PlayerController : CharacterGameController
         // Else: defer to KeyHeld / KeyUp for tap-vs-hold harvestable dispatch.
     }
 
-    /// <summary>While E is held, open the interaction menu once the hold threshold is crossed.</summary>
+    /// <summary>
+    /// While E is held: drive the prompt-fill bar via the detector, then once the
+    /// hold threshold is crossed dispatch a hold-menu. Two priorities:
+    /// (A) harvestable-specific menu (UI_HarvestInteractionMenu) — preserves existing UX,
+    /// (B) generic interactable hold-menu via _detector.TriggerHoldMenu — moved out of
+    /// PlayerInteractionDetector per rule #33 (input owner = PlayerController).
+    /// </summary>
     private void HandleEKeyHeld()
     {
         if (_eMenuOpened) return;
-        if (UnityEngine.Time.unscaledTime - _eHeldStartTime < E_HOLD_THRESHOLD) return;
 
-        var nearest = GetNearestVisibleHarvestable();
-        if (nearest != null)
+        float t01 = (UnityEngine.Time.unscaledTime - _eHeldStartTime) / E_HOLD_THRESHOLD;
+        _detector?.SetPromptHoldProgress(Mathf.Clamp01(t01));
+        if (t01 < 1f) return;
+
+        // Priority A: harvestable-specific menu.
+        var harvestable = GetNearestVisibleHarvestable();
+        if (harvestable != null)
         {
-            MWI.UI.Interaction.UI_HarvestInteractionMenu.Open(_character, nearest, OnInteractionMenuClosed);
+            MWI.UI.Interaction.UI_HarvestInteractionMenu.Open(_character, harvestable, OnInteractionMenuClosed);
             _eMenuOpened = true;
+            return;
         }
+
+        // Priority B: generic interactable hold-menu via detector helper.
+        var generic = _detector?.CurrentTarget;
+        if (generic != null && _detector.TriggerHoldMenu(generic))
+            _eMenuOpened = true;
     }
 
-    /// <summary>On E release, if the menu wasn't opened (tap), run the immediate Interact path.</summary>
+    /// <summary>
+    /// On E release (tap): consolidated dispatch (rule #33 — only PlayerController
+    /// reads E input). Resolves target as selected-from-targeting OR detector's
+    /// current proximity target. Selected-but-out-of-range routes through
+    /// PlayerInteractCommand for auto-nav. Otherwise delegates to the detector's
+    /// canonical TriggerTapInteract helper (which encapsulates the dialogue-NPC
+    /// freeness gate + InteractableObject.Interact dispatch).
+    /// </summary>
     private void HandleEKeyUp()
     {
         if (_eMenuOpened) return;
+        _detector?.SetPromptHoldProgress(0f);
 
-        var nearest = GetNearestVisibleInteractable();
-        if (nearest != null) nearest.Interact(_character);
+        EnsureTargeting();
+        var selected = _targeting?.SelectedInteractable;
+        var target = selected ?? _detector?.CurrentTarget;
+        if (target == null) return;
+
+        // Selected target is out of range → auto-nav to it (existing UX, was at
+        // PlayerInteractionDetector.cs:201-210 prior to dedup).
+        if (selected != null && _detector != null && !_detector.IsTargetInRange(selected))
+        {
+            SetOrder(new MWI.CharacterControllers.Commands.PlayerInteractCommand(selected, _detector));
+            return;
+        }
+
+        if (_detector != null) _detector.TriggerTapInteract(target);
     }
 
     private void OnInteractionMenuClosed() => _eMenuOpened = false;
@@ -402,25 +455,6 @@ public class PlayerController : CharacterGameController
             if (d < bestDist) { bestDist = d; best = h; }
         }
         return best;
-    }
-
-    private InteractableObject GetNearestVisibleInteractable()
-    {
-        var awareness = _character.CharacterAwareness;
-        if (awareness == null) return null;
-        var visible = awareness.GetVisibleInteractables();
-        if (visible == null || visible.Count == 0) return null;
-        InteractableObject closest = null;
-        float closestDist = float.MaxValue;
-        for (int i = 0; i < visible.Count; i++)
-        {
-            var obj = visible[i];
-            if (obj == null) continue;
-            if (!obj.IsCharacterInInteractionZone(_character)) continue;
-            float d = Vector3.Distance(_character.transform.position, obj.transform.position);
-            if (d < closestDist) { closestDist = d; closest = obj; }
-        }
-        return closest;
     }
 
     /// <summary>
