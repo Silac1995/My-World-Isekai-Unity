@@ -88,6 +88,48 @@ namespace MWI.Farming
             _activeHarvestables.Remove(LinearIndex(x, z));
         }
 
+        /// <summary>
+        /// True if the proposed footprint (centered on <paramref name="anchorX"/>,
+        /// <paramref name="anchorZ"/> with size <paramref name="gridSize"/>) intersects any
+        /// existing planted harvestable's footprint OR any cell that already has a
+        /// <c>PlantedCropId</c> set. Used by <see cref="CharacterAction_PlaceCrop.CanExecute"/>
+        /// + <see cref="CropPlacementManager"/> to keep large trees from overlapping each other
+        /// and from being planted on top of single-cell crops (and vice-versa).
+        /// </summary>
+        public bool IsFootprintOccupied(int anchorX, int anchorZ, Vector2Int gridSize, Harvestable except = null)
+        {
+            if (_grid == null) return false;
+            Harvestable.ComputeFootprintBounds(anchorX, anchorZ, gridSize,
+                out int newMinX, out int newMaxX, out int newMinZ, out int newMaxZ);
+
+            // (1) Any cell in the proposed footprint already has a crop planted? Catches the
+            // "new plant's footprint contains an existing single-cell crop's anchor" case
+            // independently of the active-harvestables registry (PostWakeSweep / map reload
+            // races) and works even for cells whose anchor never registered (defensive).
+            for (int z = newMinZ; z <= newMaxZ; z++)
+            for (int x = newMinX; x <= newMaxX; x++)
+            {
+                if (x < 0 || z < 0 || x >= _grid.Width || z >= _grid.Depth) continue;
+                ref var cell = ref _grid.GetCellRef(x, z);
+                if (!string.IsNullOrEmpty(cell.PlantedCropId)) return true;
+            }
+
+            // (2) Any existing harvestable's footprint overlaps the proposed footprint?
+            // Catches the "new plant's anchor lands inside an existing tree's canopy area
+            // but the cell itself is empty" case — necessary because only the anchor cell
+            // of an existing multi-cell crop has PlantedCropId set in the current schema.
+            var newSize = new Vector2Int(Mathf.Max(1, gridSize.x), Mathf.Max(1, gridSize.y));
+            foreach (var kvp in _activeHarvestables)
+            {
+                var h = kvp.Value;
+                if (h == null || h == except) continue;
+                if (Harvestable.FootprintsOverlap(h.CellX, h.CellZ, h.GridSize,
+                                                  anchorX, anchorZ, newSize))
+                    return true;
+            }
+            return false;
+        }
+
         // ────────────────────── Server: spawn at plant-time ──────────────────────
 
         /// <summary>

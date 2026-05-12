@@ -16,8 +16,6 @@ MonoBehaviour:
   _displayName: Apple Tree
   _harvestOutputs:
   - Item: {fileID: 11400000, guid: 6eadabb584f662d49bea83caa241bdba, type: 2}
-    Count: 2
-  - Item: {fileID: 11400000, guid: f6b04bb5c96c35d4d8c4cb7bc34515b5, type: 2}
     Count: 1
   _requiredHarvestTool: {fileID: 0}
   _harvestDuration: 1.5
@@ -30,10 +28,13 @@ MonoBehaviour:
   _destructionEntries:
   - Item: {fileID: 11400000, guid: a3f0471c4178efd4b9b5efdb38aea516, type: 2}
     Count: 2
+  - Item: {fileID: 11400000, guid: f6b04bb5c96c35d4d8c4cb7bc34515b5, type: 2}
+    Count: 2
   _destructionDuration: 3
   _readySprite: {fileID: 0}
   _depletedSprite: {fileID: 0}
-  _harvestablePrefab: {fileID: 8874080723789279744, guid: b8fb13f2f1ea6534cb428a3bc7bd0e3d, type: 3}
+  _harvestablePrefab: {fileID: 6380323322868796152, guid: b8fb13f2f1ea6534cb428a3bc7bd0e3d, type: 3}
+  _gridSize: {x: 2, y: 1}
   _daysToMature: 3
   _minMoistureForGrowth: 0.3
   _plantDuration: 2
@@ -44,15 +45,15 @@ MonoBehaviour:
   _produceCount: 1
   _destructionOutputs: []
   _destructionOutputCount: 1
-  _trunkSprite: {fileID: 10905, guid: 0000000000000000f000000000000000, type: 0}
-  _foliageSprite: {fileID: 10905, guid: 0000000000000000f000000000000000, type: 0}
+  _trunkSprite: {fileID: -14841955, guid: c538d3014f865c244921295f03d468bf, type: 3}
+  _foliageSprite: {fileID: -1095306415, guid: 3dada3d0499f8a942ac81d3a12947c6e, type: 3}
   _foliageColorOverYear:
     serializedVersion: 2
-    key0: {r: 0.55, g: 0.85, b: 0.45, a: 1}
-    key1: {r: 0.2, g: 0.55, b: 0.2, a: 1}
-    key2: {r: 0.95, g: 0.55, b: 0.2, a: 0.05}
-    key3: {r: 0.65, g: 0.3, b: 0.1, a: 0.05}
-    key4: {r: 0.55, g: 0.85, b: 0.45, a: 1}
+    key0: {r: 0.53286725, g: 0.7169812, b: 0.4565682, a: 1}
+    key1: {r: 0.3504361, g: 0.5943396, b: 0.3504361, a: 1}
+    key2: {r: 0.95, g: 0.55, b: 0.2, a: 1}
+    key3: {r: 0.65, g: 0.3, b: 0.1, a: 0}
+    key4: {r: 0.55, g: 0.85, b: 0.45, a: 0}
     key5: {r: 0, g: 0, b: 0, a: 0}
     key6: {r: 0, g: 0, b: 0, a: 0}
     key7: {r: 0, g: 0, b: 0, a: 0}
@@ -66,22 +67,22 @@ MonoBehaviour:
     ctime7: 0
     atime0: 0
     atime1: 51117
-    atime2: 55705
-    atime3: 62258
-    atime4: 65535
+    atime2: 65535
+    atime3: 0
+    atime4: 0
     atime5: 0
     atime6: 0
     atime7: 0
     m_Mode: 0
     m_ColorSpace: -1
     m_NumColorKeys: 5
-    m_NumAlphaKeys: 5
+    m_NumAlphaKeys: 3
   _fruitSpriteVariants:
-  - {fileID: 10905, guid: 0000000000000000f000000000000000, type: 0}
+  - {fileID: 21300000, guid: 61dfa8131484db845913b935d1a7535c, type: 3}
   _fruitSpawnArea:
     serializedVersion: 2
-    x: -0.4
-    y: -0.2
-    width: 0.8
-    height: 0.6
-  _fruitScale: {x: 0.4, y: 0.4}
+    x: 0
+    y: 0
+    width: 0
+    height: 0
+  _fruitScale: {x: 1.5, y: 1.5}

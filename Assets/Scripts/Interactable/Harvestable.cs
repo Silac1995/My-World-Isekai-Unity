@@ -191,6 +191,43 @@ public class Harvestable : InteractableObject
     public float DestructionDuration => _destructionDuration;
     public HarvestableSO SO => _so;
 
+    /// <summary>Cell footprint on the XZ plane this harvestable reserves at placement time.
+    /// Reads from the assigned SO (default (1,1) when no SO). Centered on the anchor cell.
+    /// Drives <see cref="MWI.Farming.FarmGrowthSystem.IsFootprintOccupied"/> so neighbouring
+    /// crops can't plant within the canopy area of a large tree.</summary>
+    public Vector2Int GridSize => _so != null ? _so.GridSize : new Vector2Int(1, 1);
+
+    /// <summary>Computes the inclusive cell-index bounds of a footprint centered on
+    /// (<paramref name="anchorX"/>, <paramref name="anchorZ"/>) with the given grid size.
+    /// Convention: floor-biased centering so a size-1 footprint covers exactly the anchor,
+    /// size-2 biases one cell left/below, size-3 is symmetrically centered, etc. The output
+    /// rect is inclusive on both ends (use &lt;= when iterating).</summary>
+    public static void ComputeFootprintBounds(int anchorX, int anchorZ, Vector2Int gridSize,
+                                              out int minX, out int maxX, out int minZ, out int maxZ)
+    {
+        int w = Mathf.Max(1, gridSize.x);
+        int h = Mathf.Max(1, gridSize.y);
+        int halfLowX = w / 2;
+        int halfHighX = (w - 1) - halfLowX;
+        int halfLowZ = h / 2;
+        int halfHighZ = (h - 1) - halfLowZ;
+        minX = anchorX - halfLowX;
+        maxX = anchorX + halfHighX;
+        minZ = anchorZ - halfLowZ;
+        maxZ = anchorZ + halfHighZ;
+    }
+
+    /// <summary>True iff two footprints share at least one cell. Both footprints are
+    /// expressed as (anchor, gridSize) — uses the same floor-biased centering convention as
+    /// <see cref="ComputeFootprintBounds"/>.</summary>
+    public static bool FootprintsOverlap(int anchorAX, int anchorAZ, Vector2Int sizeA,
+                                         int anchorBX, int anchorBZ, Vector2Int sizeB)
+    {
+        ComputeFootprintBounds(anchorAX, anchorAZ, sizeA, out int aMinX, out int aMaxX, out int aMinZ, out int aMaxZ);
+        ComputeFootprintBounds(anchorBX, anchorBZ, sizeB, out int bMinX, out int bMaxX, out int bMinZ, out int bMaxZ);
+        return aMaxX >= bMinX && bMaxX >= aMinX && aMaxZ >= bMinZ && bMaxZ >= aMinZ;
+    }
+
     /// <summary>True if this harvestable opts in to destruction. Reads via the resolved CropSO
     /// when the harvestable is crop-aware (so non-host clients see the correct value); falls
     /// back to the inline serialised field for wild scenery.</summary>
@@ -841,6 +878,24 @@ public class Harvestable : InteractableObject
         ApplyVisual();
     }
 
+    /// <summary>
+    /// Public, idempotent hook for callers that bypass <see cref="InitializeAtStage"/> but
+    /// still need the inline serialized cache to mirror the assigned <see cref="HarvestableSO"/>.
+    /// Notable caller: <see cref="HarvestableNetSync"/>'s scene-placed bootstrap — it fills
+    /// NetVars but doesn't run the full Initialize flow (no cell coupling, no NetVar resets).
+    /// Without this hook, a scene-placed crop tree would use the prefab's stale inline
+    /// override values for <see cref="Harvest"/> outputs / <see cref="CanHarvestWith"/> tool /
+    /// <see cref="_maxHarvestCount"/> instead of the SO's authored values. Server-only is
+    /// fine: <see cref="Harvest"/> runs server-side and clients consult the SO directly via
+    /// <see cref="ResolveCropFromNet"/> for menu rendering.
+    /// </summary>
+    public void HydrateInlineFieldsFromSO()
+    {
+        if (_so == null) return;
+        CopySOToInlineFields(_so);
+        if (_so is CropSO c) _crop = c;
+    }
+
     /// <summary>Copy SO-driven runtime values into the inline serialised mirror so the
     /// existing inline-field-driven paths keep working without per-call SO lookups. CropSO
     /// extensions (PlantDuration, RegrowDays, …) are not mirrored — they're read directly
@@ -868,7 +923,11 @@ public class Harvestable : InteractableObject
 
         // CropSO-specific runtime overrides for cell-coupled crops:
         // 1 yield per harvest, depletable, no auto-respawn (FarmGrowthSystem owns the cycle).
-        if (so is CropSO)
+        // TreeHarvestableSO is exempt — trees produce N fruits per refill (SO.MaxHarvestCount),
+        // each fruit harvested individually, then the perennial refill cycle restocks the full
+        // set. Without this exemption, planted apple trees would only show 1 visible fruit
+        // (and deplete after one pick) regardless of the SO's authored MaxHarvestCount.
+        if (so is CropSO && !(so is MWI.Farming.TreeHarvestableSO))
         {
             _maxHarvestCount = 1;
             _isDepletable = true;
@@ -991,6 +1050,32 @@ public class Harvestable : InteractableObject
     public void SetRequiredHarvestToolForTests(ItemSO tool) => _requiredHarvestTool = tool;
     public void SetAllowDestructionForTests(bool b) => _allowDestruction = b;
     public void SetRequiredDestructionToolForTests(ItemSO tool) => _requiredDestructionTool = tool;
+
+    [ContextMenu("DEV: Compute GridSize From BoxCollider")]
+    private void Dev_ComputeGridSizeFromBoxCollider()
+    {
+        if (_so == null) { Debug.LogError("[Harvestable] No SO assigned — cannot write GridSize."); return; }
+        var box = GetComponent<BoxCollider>();
+        if (box == null) { Debug.LogError("[Harvestable] No BoxCollider on this prefab."); return; }
+
+        var grid = FindObjectOfType<MWI.Terrain.TerrainCellGrid>();
+        float cellSize = grid != null ? grid.CellSize : 4f;
+
+        Vector3 lossy = transform.lossyScale;
+        float worldX = Mathf.Abs(box.size.x * lossy.x);
+        float worldZ = Mathf.Abs(box.size.z * lossy.z);
+        int cellsX = Mathf.Max(1, Mathf.CeilToInt(worldX / cellSize));
+        int cellsZ = Mathf.Max(1, Mathf.CeilToInt(worldZ / cellSize));
+        var newSize = new Vector2Int(cellsX, cellsZ);
+
+        var fi = typeof(MWI.Interactables.HarvestableSO).GetField("_gridSize",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        if (fi == null) { Debug.LogError("[Harvestable] _gridSize field not found via reflection."); return; }
+        fi.SetValue(_so, newSize);
+        UnityEditor.EditorUtility.SetDirty(_so);
+        UnityEditor.AssetDatabase.SaveAssetIfDirty(_so);
+        Debug.Log($"[Harvestable] Set {_so.name}.GridSize = {newSize} from BoxCollider size {box.size} × lossyScale {lossy} ÷ TerrainCellGrid.CellSize {cellSize:F2}.");
+    }
 
     [ContextMenu("DEV: Destroy via local player")]
     private void Dev_DestroyViaLocalPlayer()

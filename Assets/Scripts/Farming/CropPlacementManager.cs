@@ -228,6 +228,24 @@ namespace MWI.Farming
                     _invalidReason = $"cell already has crop '{cell.PlantedCropId}'";
                     return false;
                 }
+
+                // Footprint reservation: the crop's GridSize spans more than one cell for
+                // large trees, so we reject if any existing harvestable's footprint overlaps
+                // even when the anchor cell itself is empty. Hosts the same predicate the
+                // server-side CanExecute uses, so the ghost goes red before the click lands.
+                if (_activeCrop != null && _activeCrop.GridSize != new Vector2Int(1, 1))
+                {
+                    var map = MapController.GetMapAtPosition(_character.transform.position);
+                    var grid = map != null ? map.GetComponent<TerrainCellGrid>() : null;
+                    var farmSystem = map != null ? map.GetComponent<FarmGrowthSystem>() : null;
+                    if (grid != null && farmSystem != null
+                        && grid.WorldToGrid(cellWorldPos, out int cellX, out int cellZ)
+                        && farmSystem.IsFootprintOccupied(cellX, cellZ, _activeCrop.GridSize))
+                    {
+                        _invalidReason = $"'{_activeCrop.Id}' footprint ({_activeCrop.GridSize.x}×{_activeCrop.GridSize.y}) overlaps an existing planted harvestable";
+                        return false;
+                    }
+                }
             }
             _invalidReason = null;
             return true;
@@ -367,6 +385,17 @@ namespace MWI.Farming
             if (!string.IsNullOrEmpty(cell.PlantedCropId))
             {
                 Debug.LogWarning($"[CropPlacement.Server] Bail — cell ({x},{z}) already has crop '{cell.PlantedCropId}' (race lost).");
+                return;
+            }
+
+            // Footprint reservation, server-authoritative re-check. The client-side ghost
+            // already rejects overlap, but the server must repeat the check to defeat both
+            // race conditions (two players planting near each other in the same tick) and
+            // a malicious client crafting a ServerRpc that bypasses ghost validation.
+            var farmSystem = map.GetComponent<FarmGrowthSystem>();
+            if (farmSystem != null && farmSystem.IsFootprintOccupied(x, z, crop.GridSize))
+            {
+                Debug.LogWarning($"[CropPlacement.Server] Bail — footprint of '{cropId}' (size {crop.GridSize}) anchored at ({x},{z}) overlaps an existing planted harvestable.");
                 return;
             }
 

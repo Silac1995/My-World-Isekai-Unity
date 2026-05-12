@@ -54,7 +54,42 @@ public class HarvestableNetSync : NetworkBehaviour
         CropIdNet.OnValueChanged += HandleCropIdChange;
         RemainingYield.OnValueChanged += HandleAnyChange;
 
+        if (IsServer) BootstrapScenePlacedCropTree();
+
         if (_harvestable != null) _harvestable.OnNetSyncChanged();
+    }
+
+    /// <summary>
+    /// Server-only. Scene-authored crop-tree prefabs (dragged into a scene at edit time) never
+    /// go through <see cref="Harvestable.InitializeAtStage"/>, so the NetVars stay at their
+    /// declaration defaults — CurrentStage=0, RemainingYield=0, CropIdNet empty. For a CropSO-
+    /// driven tree this leaves every peer rendering a stage-0 sapling forever with no fruits.
+    /// We detect that case (CropIdNet still empty + SO is a CropSO + not cell-coupled) and
+    /// bootstrap the NetVars to a mature, full-yield state so a scene-dragged apple tree just
+    /// works. Skipped for cell-coupled harvestables — <see cref="MWI.Farming.FarmGrowthSystem"/>
+    /// already wrote the NetVars via InitializeAtStage before this Spawn fired, so CropIdNet
+    /// is non-empty and this method is a no-op.
+    /// </summary>
+    private void BootstrapScenePlacedCropTree()
+    {
+        if (_harvestable == null) return;
+        if (_harvestable.IsCellCoupled) return;
+        if (CropIdNet.Value.Length > 0) return;
+        if (!(_harvestable.SO is MWI.Farming.CropSO crop)) return;
+
+        // Mirror the SO's authoring into Harvestable's inline serialized cache. The prefab
+        // ships with inline override values (_harvestOutputs / _destructionOutputs / tools /
+        // _maxHarvestCount) that can drift from the SO over time — runtime paths like
+        // Harvest() and CanHarvestWith() read the inline cache, so without this sync a
+        // scene-placed crop tree's harvest yields the prefab's stale overrides instead of
+        // the SO's current authoring. InitializeAtStage normally handles this for planted
+        // crops; the scene-placed path skips InitializeAtStage so we hydrate explicitly.
+        _harvestable.HydrateInlineFieldsFromSO();
+
+        CropIdNet.Value = new FixedString64Bytes(crop.Id ?? string.Empty);
+        CurrentStage.Value = crop.DaysToMature;
+        RemainingYield.Value = (byte)Mathf.Min(byte.MaxValue, crop.MaxHarvestCount);
+        // IsDepleted defaults to false — already correct.
     }
 
     public override void OnNetworkDespawn()

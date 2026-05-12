@@ -55,6 +55,10 @@ namespace MWI.Interactables
         [Tooltip("Prefab to instantiate when this harvestable is spawned at runtime (planted crop, dynamic ore vein, …). Optional — wild scene-authored harvestables don't need this.")]
         [SerializeField] private GameObject _harvestablePrefab;
 
+        [Header("Cell Footprint (placement-time reservation)")]
+        [Tooltip("Number of TerrainCellGrid cells this harvestable occupies on the XZ plane, centered on the anchor (plant) cell. (1,1) = single-cell crop (wheat, flower). Larger values reserve a footprint so neighbouring crops can't plant within that area — keeps large trees from overlapping. Recommended: derive from the prefab's BoxCollider via Harvestable's 'DEV: Compute GridSize From BoxCollider' context menu, then tune.")]
+        [SerializeField] private Vector2Int _gridSize = new Vector2Int(1, 1);
+
         // ── Read-only accessors ──────────────────────────────────────────
 
         public string Id => _id;
@@ -79,6 +83,11 @@ namespace MWI.Interactables
 
         public GameObject HarvestablePrefab => _harvestablePrefab;
 
+        /// <summary>Cell footprint on the XZ plane, centered on the anchor cell. Defaults to (1,1).
+        /// Drives placement-time reservation so a large crop (apple tree) blocks neighbouring
+        /// plantings from landing inside its canopy area. Values clamped to ≥ 1.</summary>
+        public Vector2Int GridSize => new Vector2Int(Mathf.Max(1, _gridSize.x), Mathf.Max(1, _gridSize.y));
+
 #if UNITY_EDITOR
         // Editor-only setters used by tests + the OnValidate migrations in subclasses.
         // Direct field access stays private so designer-side authoring goes through the
@@ -92,6 +101,7 @@ namespace MWI.Interactables
         public void SetMaxHarvestCountForTests(int n) => _maxHarvestCount = n;
         public void SetIsDepletableForTests(bool b) => _isDepletable = b;
         public void SetRespawnDelayDaysForTests(int d) => _respawnDelayDays = d;
+        public void SetGridSizeForTests(Vector2Int v) => _gridSize = v;
 #endif
     }
 }

@@ -52,6 +52,49 @@ The crop's matching `SeedSO` should be added to `_harvestOutputs` for self-seedi
 
 5. **Create the seed item.** `Project → Create → Game → Items → Seed`. Save in `Assets/Resources/Data/Items/`. Set `_cropToPlant` to the `CropSO`. The seed item works automatically when the player holds it and presses E.
 
+## Add a new tree-crop variant (apple, cherry, oak, …)
+
+Tree crops use `TreeHarvestableSO : CropSO` (not plain `CropSO`) + the 3-layer visual (`Trunk`, `Foliage`, `FruitContainer`). Every tree variant **inherits from** `CropHarvestable_Tree Default.prefab` — do not rebuild the layered structure in the variant.
+
+1. **Duplicate `AppleTreeSO.asset` as a template.** In `Assets/Resources/Data/Farming/Crops/Tree/`, right-click → Duplicate, rename to e.g. `CherryTreeSO.asset`. Open it and edit:
+   - `Id` → unique lowercase id (e.g. `cherry_tree`).
+   - `DisplayName`, `HarvestOutputs`, `DestructionOutputs`, `RequiredHarvestTool`, `RequiredDestructionTool` — variant content.
+   - `TrunkSprite`, `FoliageSprite`, `FruitSpriteVariants` — variant sprites.
+   - `FoliageColorOverYear` — seasonal gradient (alpha 0 = leafless / bare branches).
+   - `FruitScale` — Vector2, per-fruit scale relative to authored sprite size.
+   - `FruitSpawnArea` — **leave at `Rect.zero` unless you have a reason not to.** When zero, `HarvestableLayeredVisual.SpawnFruits` activates the area-weighted mesh-triangle sampler: fruit positions land inside the foliage sprite's tight mesh silhouette (no transparent-corner escapees). An explicit non-zero rect bypasses the mesh sampler and uses uniform-random-in-rect.
+   - `_maxHarvestCount` — number of visible fruits per refill (5 for apple). TreeHarvestableSO is exempt from CropSO's `_maxHarvestCount = 1` clamp in `Harvestable.CopySOToInlineFields`, so SO authoring is honoured.
+
+2. **Create the prefab variant.** In `Assets/Prefabs/Farming/`, right-click `CropHarvestable_Tree Default.prefab` → Create → Prefab Variant. Rename to `CropHarvestable_CherryTree.prefab`. Open it and override:
+   - `Harvestable._so` → the new SO.
+   - Root `Transform.localScale` → desired tree size (apple uses `2.5`).
+   - Optionally pre-assign the Trunk's `SpriteRenderer.m_Sprite` and Foliage's `SpriteRenderer.m_Sprite` to the variant sprites for editor-time preview. **Runtime overwrites these from the SO via `HarvestableLayeredVisual.AssignStaticSprites`.**
+   - The variant should NOT add a duplicate `HarvestableLayeredVisual` — it inherits from Tree Default.
+   - **`_gridSize` on the SO**: number of `TerrainCellGrid` cells the tree reserves on placement, centered on the plant cell. Defaults to `(1, 1)` (single-cell). Right-click the `Harvestable` component in the prefab Inspector → **DEV: Compute GridSize From BoxCollider** to auto-fill from `BoxCollider.size × lossyScale ÷ TerrainCellGrid.CellSize` (ceil). Apple tree: 14 × 2.5 / 4 = 8.75 → `(9, 9)`. Tune up/down for aesthetic spacing — larger = trees can't be packed close enough to overlap canopies.
+   - Do NOT override `_harvestOutputs` / `_destructionOutputs` / `_requiredHarvestTool` / `_maxHarvestCount` / `_isDepletable` / `_respawnDelayDays` / `_allowDestruction` / `_allowNpcDestruction` / `_requiredDestructionTool` / `_destructionDuration` / `_harvestDuration` / `_readySprite` / `_depletedSprite` — these are all SO-mirrored at runtime by `CopySOToInlineFields`. Authoring them on the variant creates a stale override that gets clobbered at spawn (planted via `InitializeAtStage` or scene-placed via `HarvestableNetSync.BootstrapScenePlacedCropTree`'s call to `HydrateInlineFieldsFromSO`).
+
+3. **Drag the prefab onto the SO's `_harvestablePrefab` field.** Verify by reading the SO YAML — the reference fileID must point at the variant's root GameObject, not a deleted child or dangling stripped object.
+
+4. **Register the prefab in the NetworkManager's NetworkPrefabsList** (or whatever your project uses) so NGO can spawn it.
+
+5. **Create the seed item.** `Project → Create → Game → Items → Seed`. Set `_cropToPlant` to the new tree SO. Drop it in `Assets/Resources/Data/Item/Seed/Item_Seed_<Variant>.asset`.
+
+6. **Add the tree SO to `FarmingBuilding._cropsToGrow`** on any farming-building variants that should auto-plant it. The produce auto-registration in `FarmingBuilding.AutoRegisterCropProduceAsWantedResources` handles the wanted-resource registration.
+
+## Debug a tree visual issue
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| No visual on plant | `SO._harvestablePrefab` GO-fileID dangling (variant reparented and Unity re-assigned the root id) | Re-link via Unity Inspector OR `assets-modify` via reflection on `_harvestablePrefab` (field lives on base `HarvestableSO`, MCP Reflector doesn't walk inherited fields for `pathPatches`/`jsonPatch` — use `script-execute` with `BindingFlags.NonPublic`) |
+| Tree spawns but no `HarvestableLayeredVisual` running | Variant reparent dropped `m_AddedComponents` | Add the component back to Tree Default (the variant base), wire `_trunkRenderer` / `_foliageRenderer` / `_fruitContainer` |
+| Only 1 fruit visible on a mature tree | `Harvestable.CopySOToInlineFields` clamping `_maxHarvestCount = 1` for the SO | Verify the SO is a `TreeHarvestableSO` (not plain `CropSO`). The 2026-05-12 exemption only fires for the Tree subclass. |
+| All fruits clustered in one tiny spot | `_fruitSpawnArea` set to a small rect (legacy `(-0.4, -0.2, 0.8, 0.6)` authoring) and mesh sampler disabled | Set `_fruitSpawnArea = Rect.zero` so the mesh sampler activates. Replanting required — `SpawnFruits` runs once per `OnNetworkSpawn`. |
+| Fruits land in transparent corners outside the leaf silhouette | Mesh sampler skipped (sprite has no tight mesh, OR designer set explicit non-zero rect) | Verify sprite import mode is Multiple with tight-mesh sub-sprite (`spriteSheet.sprites[*].vertices` non-empty in `.png.meta`). For a Single-mode sprite the mesh is a quad — replace with a tight-mesh import. |
+| Foliage shows during sapling stage | Pre-2026-05-12 build (no maturity gate) | Update — `RefreshFoliageVisibility` gates `_foliageRenderer.enabled` on `IsMature()`. |
+| Scene-placed tree harvests yield different items than planted (e.g. 3 apples instead of 2) | Inline `_harvestOutputs` override on the prefab + no `HydrateInlineFieldsFromSO` call | Pre-2026-05-12 build. Update — `HarvestableNetSync.BootstrapScenePlacedCropTree` now mirrors SO → inline. Replant or restart scene to re-run the bootstrap. |
+| Two large trees end up overlapping their canopies when fully grown | `HarvestableSO._gridSize = (1, 1)` default (single-cell footprint) | Set `_gridSize` to the cell-count that matches the tree's BoxCollider — easiest path is the prefab Inspector context menu `Harvestable → DEV: Compute GridSize From BoxCollider`, which reads the collider, divides by `TerrainCellGrid.CellSize`, and writes the result back to the SO. Then replant. Apple tree ships at `(9, 9)` out of the box. |
+| Crop ghost won't land near a tree even though the cell looks empty | Tree's footprint extends past its anchor cell; `FarmGrowthSystem.IsFootprintOccupied` rejecting placement | Working as intended. Designer can shrink the tree's `_gridSize` if the spacing is too aggressive, or move further away. The ghost's `_invalidReason` field reports the conflict. |
+
 ## Add a non-crop resource node (ore vein, mine, dynamic stone outcropping, …)
 
 Use this recipe when the node has **no growth/maturity semantics** — it's "always ready" until depleted, then regrows after N days. No seasons, no moisture gating, no plant action. The unified system (post-2026-04-29) handles this through a plain `HarvestableSO` (no `CropSO` subclass).
@@ -148,11 +191,17 @@ Root cause class: `FarmGrowthSystem.PostWakeSweep` mis-classified `startDepleted
 
 ## Debug the Hold-E menu not opening
 
-1. **Prefab at the right path?** `Resources/UI/UI_InteractionMenu.prefab` MUST exist. Without it, console shows `[UI_InteractionMenu] Prefab not found at Resources/UI/UI_InteractionMenu.` and hold-E silently no-ops. Tap-E (yield path) still works.
+As of the 2026-05-12 unification, the hold-E menu rides the project-wide `UI_InteractionMenu` button bar (the same one used by doors / beds / mentorship). The dedicated harvest UI (`UI_HarvestInteractionMenu` + `HarvestInteractionOption` + `UI_HarvestInteractionOptionRow`) was deleted.
 
-2. **`_rowPrefab` / `_rowParent` wired on the menu prefab?** Both serialised fields must point to valid components. If `_rowParent` is null, `Rebuild` returns early without building any rows.
+1. **`Harvestable.GetHoldInteractionOptions(Character)` returning non-null?** This is the contract `PlayerController.HandleEKeyHeld` / `PlayerInteractionDetector` call after the 0.4 s hold. If it returns null or empty, no menu — the tap-E `Interact()` path fires instead.
+   - Wild scenery: needs `_harvestOutputs` populated (yield row) and/or `_allowDestruction = true` with `_destructionOutputs` populated (destroy row).
+   - Crop-aware: needs the client to have resolved the `CropSO` from `_netSync.CropIdNet`. See "Hold-E menu is empty on the client" below.
 
-3. **Hold threshold tuning.** `PlayerController.E_HOLD_THRESHOLD` is `0.4f` (unscaled time). Adjust if the menu opens too eagerly or too slowly.
+2. **`PlayerUI._interactionMenu` wired in the HUD prefab?** Without it, `PlayerUI.OpenInteractionMenu` logs `PlayerUI: UI_InteractionMenu component not assigned!` and hold-E silently no-ops.
+
+3. **Hold threshold tuning.** `PlayerController.E_HOLD_THRESHOLD` is `0.4f` (unscaled time). `PlayerInteractionDetector.HOLD_THRESHOLD` is also `0.4f` (matching constant). Adjust if the menu opens too eagerly or too slowly — both call sites need updating in lock-step.
+
+4. **Rich rendering (icon / output preview / reason) absent on a designer-richer button prefab?** `UI_InteractionMenu.FindRichSlots` looks for children named `Icon` (Image), `Subtext` (TMP_Text), `Reason` (TMP_Text). Names are exact-match; a child named `IconImage` or `subtext` will be missed. Hierarchy depth is irrelevant (uses `GetComponentsInChildren`).
 
 ## Manual smoke test the destruction action without the menu
 
@@ -196,7 +245,7 @@ This section captures the bugs surfaced during the 2026-04-29 multiplayer integr
 
 1. **Console flooded with `[TerrainTypeRegistry] Not initialized`?** — Lazy auto-init was reverted or broken. Confirm `TerrainTypeRegistry.Get` and `CropRegistry.Get` both call `Initialize()` if their backing dict is null. See `Assets/Scripts/Terrain/TerrainTypeRegistry.cs` and `Assets/Scripts/Farming/Pure/CropRegistry.cs` for the pattern.
 
-2. **Hold-E menu is empty on the client (host shows rows fine)?** — On the client, `CropHarvestable.GetInteractionOptions` short-circuits if `ResolveCropFromNet()` returns null. Check:
+2. **Hold-E menu is empty on the client (host shows rows fine)?** — On the client, `Harvestable.GetHoldInteractionOptions` short-circuits if `ResolveCropFromNet()` returns null (crop-aware path) AND the inline-field path is also empty (which it always is on a client for a runtime-spawned crop). Check:
    - `CropRegistry.Get("apple_tree")` returns non-null on the client (lazy-init must have fired). Add a temporary `Debug.LogWarning($"[CropRegistry.Get] _initialised={_initialised}, count={_byId.Count}")` if in doubt.
    - `_netSync.CropIdNet.Value` is non-empty on the client. If it's empty, the server's spawn payload didn't carry the crop id — verify `FarmGrowthSystem.SpawnCropHarvestableAt` calls `InitializeFromCell` BEFORE `Spawn` (NetVar values must be set on the local instance before NGO serialises the spawn message).
    - `crop.HarvestOutputs.Count > 0` on the client. If 0, the CropSO asset may be unmigrated (legacy `_produceItem` field still populated, new `_harvestOutputs` empty). In the editor, OnValidate auto-migrates. For built clients, the `HarvestOutputs` getter does a runtime lazy migration (`_produceItem != null → push to _harvestOutputs`).

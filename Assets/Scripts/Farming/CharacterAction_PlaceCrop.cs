@@ -41,9 +41,23 @@ namespace MWI.Farming
                 return false;
             }
             ref var cell = ref grid.GetCellRef(_cellX, _cellZ);
-            bool canExec = string.IsNullOrEmpty(cell.PlantedCropId);
-            if (!canExec) Debug.LogWarning($"[PlantAction] CanExecute=false — cell ({_cellX},{_cellZ}) already has crop '{cell.PlantedCropId}'.");
-            return canExec;
+            if (!string.IsNullOrEmpty(cell.PlantedCropId))
+            {
+                Debug.LogWarning($"[PlantAction] CanExecute=false — cell ({_cellX},{_cellZ}) already has crop '{cell.PlantedCropId}'.");
+                return false;
+            }
+
+            // Footprint reservation: a multi-cell crop (e.g. apple tree, GridSize=(9,9)) must
+            // not overlap any existing planted harvestable's footprint, even if the anchor
+            // cell itself is empty. Single-cell crops degrade to the single-cell check above.
+            var farmSystem = _map.GetComponent<FarmGrowthSystem>();
+            if (farmSystem != null && farmSystem.IsFootprintOccupied(_cellX, _cellZ, _crop.GridSize))
+            {
+                Debug.LogWarning($"[PlantAction] CanExecute=false — footprint of '{_crop.Id}' (size {_crop.GridSize}) anchored at ({_cellX},{_cellZ}) overlaps an existing planted harvestable.");
+                return false;
+            }
+
+            return true;
         }
 
         public override void OnStart()

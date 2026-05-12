@@ -162,6 +162,66 @@ This subclass inherits the full farming pipeline (DaysToMature, MinMoistureForGr
 | Fruit count | `HarvestableSO.MaxHarvestCount` | None — same SO on every peer |
 | Fruit position + sprite per fruit | `NetworkObjectId`-seeded RNG | None — deterministic across peers |
 
+**Foliage maturity gate (2026-05-12).** `_foliageRenderer.enabled` is now driven by `RefreshFoliageVisibility()` and toggles on the same `IsMature()` predicate that gates the fruit pass — saplings render trunk-only, foliage pops in at maturity. Wired to `HarvestableNetSync.CurrentStage.OnValueChanged` (new `HandleStageChanged` subscriber) so the transition fires deterministically on every peer. `Harvestable.OnStateChanged` also re-evaluates so perennial refill / depletion don't desync. `AssignStaticSprites` no longer touches `_foliageRenderer.enabled` — visibility ownership belongs solely to `RefreshFoliageVisibility`.
+
+**Mesh-triangle fruit sampling (2026-05-12).** `SpawnFruits` uses an area-weighted triangle sampler over the foliage sprite's tight mesh (`sprite.vertices` + `sprite.triangles`) when `_fruitSpawnArea == Rect.zero`. Fruits land *inside* the leaf silhouette — no transparent-corner escapees. Implementation lives in the private `FoliageMeshSampler` readonly struct (built once per tree at spawn via `TryBuildFoliageMeshSampler`): precomputes `float[] cumulativeAreas`, captures the FruitContainer↔Foliage local-position offset + Foliage local scale, returns a Vector2 in FruitContainer local space per `Sample()` call. One `Array.BinarySearch` + one barycentric mix per sample; allocation-free per call. Determinism contract still holds — same `NetworkObjectId` seed produces the same triangle / sprite sequence on every peer. Falls back to rect sampling when (a) the designer authored an explicit non-zero `_fruitSpawnArea`, or (b) the sprite has no usable mesh (Single-mode quad, atlas frame with empty `vertices`/`triangles`).
+
+**`ResolveFoliageBoundsAsRect` sibling-offset compensation (2026-05-12).** The rect-fallback path now adds the FruitContainer↔Foliage local-position delta + multiplies by Foliage's local scale, so a designer who explicitly leaves `_fruitSpawnArea` at `Rect.zero` (without a tight mesh available) gets a rect that actually covers the visible leaves regardless of how Foliage is parked relative to FruitContainer.
+
+**`CropHarvestable_Tree Default.prefab` is the canonical variant base for trees (2026-05-12).** Holds the Trunk / Foliage / FruitContainer child hierarchy + the `HarvestableLayeredVisual` component with its three field refs wired (`_trunkRenderer`, `_foliageRenderer`, `_fruitContainer`). Every tree variant (`CropHarvestable_AppleTree`, future cherry / oak / pine / etc.) is a `PrefabVariant` of Tree Default that overrides only the variant-specific fields (`Harvestable._so`, root `m_LocalScale`). When adding a new tree variant, **do not duplicate the layered structure into the variant** — let it inherit. **Reparenting via raw YAML is destructive in Unity** (the `m_AddedComponents` list of the variant gets dropped during import — `HarvestableLayeredVisual` and any other variant-added components are silently lost; the prefab's main-asset GO fileID also changes, so any external `GameObject`-typed reference to the variant goes dangling). If you must reparent, do it in the Unity Editor's Prefab Mode (right-click → Reparent Prefab) or via Unity MCP (`gameobject-component-add` + `gameobject-component-modify` to wire fields), then verify (1) no external `_harvestablePrefab` / `WorldItemPrefab` / etc. references to the variant's root went dangling and (2) the variant still owns its expected `m_AddedGameObjects` / `m_AddedComponents` entries.
+
+### 11. `TreeHarvestableSO` exempt from CropSO's `_maxHarvestCount = 1` override (2026-05-12)
+
+`Harvestable.CopySOToInlineFields` now reads:
+
+```csharp
+if (so is CropSO && !(so is MWI.Farming.TreeHarvestableSO))
+{
+    _maxHarvestCount = 1;
+    _isDepletable = true;
+    _respawnDelayDays = 0;
+}
+```
+
+Plain `CropSO` (wheat, flower) keeps the one-shot clamp — designed for crops where one harvest = one yield = depleted. **`TreeHarvestableSO` is exempt** because trees produce N visible fruits per refill (`SO.MaxHarvestCount`, e.g. 5 apples), each harvested individually, then perennial refill restocks the full set. Without the exemption, every planted tree visibly clamped to one fruit and depleted in one pick regardless of SO authoring. Other subclasses (`HarvestableSO` non-crop ore, future `BerryBushSO` if multi-yield) follow their own SO authoring already because they don't inherit `CropSO`.
+
+### 12. `HydrateInlineFieldsFromSO` + scene-placed bootstrap (2026-05-12)
+
+The two configuration surfaces (inline serialised fields on `Harvestable.cs` vs `HarvestableSO`) have historically been kept in sync only by `InitializeAtStage` → `CopySOToInlineFields`. Scene-placed crop-tree prefabs (dragged into the scene at edit time, *not* runtime-spawned via `FarmGrowthSystem.SpawnHarvestableAt`) skip `InitializeAtStage` entirely, so the prefab's inline overrides for `_harvestOutputs` / `_destructionOutputs` / `_requiredHarvestTool` / `_maxHarvestCount` / etc. were authoritative at runtime even when an SO was assigned. Result: stale inline values would drift from the SO and runtime paths (`Harvest()`, `CanHarvestWith()`, `RemainingYield`) read the wrong source of truth. A scene-placed apple tree would harvest the prefab's `Apple ×3` override instead of the SO's `Apple ×2` authoring.
+
+Fix: new public hook `Harvestable.HydrateInlineFieldsFromSO()` wraps `CopySOToInlineFields` + caches `_crop`. `HarvestableNetSync.BootstrapScenePlacedCropTree` (server-only, runs on `OnNetworkSpawn` for scene-placed crop trees — detected via `CropIdNet.Value.Length == 0` + `SO is CropSO` + `!IsCellCoupled`) now calls it *before* setting NetVars. Inline mirrors SO on the server side; clients consult the SO directly via `ResolveCropFromNet` for menu rendering, so client-side `_harvestOutputs` staleness doesn't matter.
+
+When adding a new code path that bypasses `InitializeAtStage` but still needs the inline cache to match the SO, call `harvestable.HydrateInlineFieldsFromSO()`. Do *not* manually copy fields callsite-by-callsite — the SO has 10+ mirrored fields and the list grows.
+
+**Designer cleanup hint:** with this in place, the variant's `m_Modifications` overrides for SO-mirrored fields (`_harvestOutputs`, `_destructionOutputs`, `_requiredHarvestTool`, `_maxHarvestCount`, `_isDepletable`, `_respawnDelayDays`, `_allowDestruction`, `_allowNpcDestruction`, `_requiredDestructionTool`, `_destructionDuration`, `_harvestDuration`, `_readySprite`, `_depletedSprite`) are redundant — they get clobbered at spawn regardless. Right-click each in the Inspector's override panel → Revert to slim the variant. Long-term we could also have `Harvest()` / `CanHarvestWith()` / etc. prefer SO values when an SO is set, making the inline cache a true fallback only — but that's a deeper refactor.
+
+### 13. Cell footprint reservation (2026-05-12)
+
+Single-cell crops (wheat, flower) ship a 1×1 footprint. Tree-shaped crops (apple, future cherry / oak / etc.) reserve a multi-cell footprint centered on the plant cell so two large trees can't be planted close enough for their canopies to overlap. Authored on **`HarvestableSO._gridSize : Vector2Int`** (default `(1, 1)`, clamped to ≥ 1 via the `GridSize` accessor). Lives on the base class so non-crop harvestables (ore nodes, future dynamic mines) inherit the same footprint mechanism without subclass work.
+
+**Centering convention.** Floor-biased: size-1 covers the anchor, size-3 is symmetric ±1, size-9 ±4, **even sizes bias one cell left/below the anchor** (size-2 → `anchorX-1..anchorX`; size-4 → `anchorX-2..anchorX+1`). Pure helpers `Harvestable.ComputeFootprintBounds(...)` + `Harvestable.FootprintsOverlap(...)` are the canonical math — call these instead of reinventing.
+
+**Validation predicate.** `FarmGrowthSystem.IsFootprintOccupied(anchorX, anchorZ, gridSize, except?)` is the single source of truth. It runs **two** checks because the schema only marks the anchor cell with `PlantedCropId`:
+- Walk the proposed footprint cells. Reject if any has `PlantedCropId` set — catches "new footprint contains an existing single-cell anchor".
+- Walk `_activeHarvestables`. Reject if any registered harvestable's footprint rectangle overlaps the proposed footprint — catches "new anchor lands inside an existing tree's canopy area but the cell itself is empty".
+
+The `except` parameter lets the caller skip a specific harvestable (currently unused — reserved for future "move crop" / "drag to relocate" UX).
+
+**Three validation entry points** all call the predicate:
+1. `CharacterAction_PlaceCrop.CanExecute` — server-side gate, runs right before the cell mutation.
+2. `CropPlacementManager.ValidateCell` — client-side ghost predicate. Skips the registry lookup when `_activeCrop.GridSize == (1, 1)` to avoid the per-frame `MapController.GetMapAtPosition` cost during ghost movement.
+3. `CropPlacementManager.RequestPlaceCropServerRpc` — server-authoritative re-check. Defeats race conditions (two players planting near each other) + malicious clients crafting an RPC that bypasses ghost validation.
+
+**`[ContextMenu("DEV: Compute GridSize From BoxCollider")]` on `Harvestable`** is the designer convenience. Reads the prefab's `BoxCollider.size` × `transform.lossyScale` ÷ `TerrainCellGrid.CellSize` (defaults to 4f if no grid in scene), rounds up to whole cells, writes back to the assigned SO's `_gridSize` field via reflection (the field lives on base `HarvestableSO` so the in-Editor Reflector's `pathPatches` / `jsonPatch` won't reach it). Apple tree: 14 × 2.5 / 4 = 8.75 → 9 → `(9, 9)`.
+
+**Schema decision: anchor-cell-only marking.** Non-anchor footprint cells stay unmarked. Pros: no `TerrainCell` schema change, no sentinel-id needed for non-anchor cells, no FarmGrowthSystem code-path changes for daily growth iteration, no save/load migration. Cons: the validation predicate has to walk `_activeHarvestables` rather than just check cell state — `O(N)` where N is active harvestables, fine for typical farm sizes. **Cleanup** (`Harvestable.OnDepleted` / `OnDestroyed`) still only touches the anchor cell — registry unregistration via `FarmGrowthSystem.UnregisterHarvestable` releases the footprint naturally on the next placement attempt.
+
+**Open questions / future work:**
+- "Move crop" or "drag-relocate" UX would need to pass `except` to `IsFootprintOccupied` so a tree doesn't block itself when validating its new anchor.
+- Players might want a visual ghost showing the full footprint rectangle while placing (not just the anchor cell ghost). Out of v1 scope.
+- For very large numbers of active harvestables (>200 per map), the `O(N)` registry walk becomes worth caching. Defer until profiler shows it.
+- The `BoxCollider`-derived footprint is a designer suggestion, not authoritative. Designers can override `_gridSize` manually if they want trees that overlap visually but not gameplay-wise (e.g. a dense forest aesthetic).
+
 ### 10. `DestroyForOutputs` returns spawned drops; pickup-task registration is the caller's job
 
 `Harvestable.DestroyForOutputs(destroyer)` returns `List<WorldItem>` of the spawned destruction items so the **caller** (typically `CharacterActions.ApplyDestroyOnServer`) can register a `PickupLooseItemTask` on the destroyer's harvesting workplace for each drop. Mirrors what `ApplyHarvestOnServer` already does on the harvest path. Without this follow-up the harvester's GOAP planner never sees `looseItemExists=true` after a chop and the wood sits orphaned. If you add a new code path that calls `DestroyForOutputs` directly from somewhere other than `ApplyDestroyOnServer`, you MUST replicate the task-registration pass — or just route through `CharacterActions.ApplyDestroyOnServer(target)` and inherit it for free.
@@ -194,7 +254,7 @@ Assets/Scripts/Interactable/HarvestableNetSync.cs
 Assets/Scripts/Interactable/HarvestableLayeredVisual.cs
 Assets/Scripts/Interactable/HarvestOutputEntry.cs
 Assets/Scripts/Interactable/HarvestableCategory.cs
-Assets/Scripts/Interactable/HarvestInteractionOption.cs
+Assets/Scripts/Interactable/InteractionOption.cs   // (2026-05-12) shared hold-E payload; Harvestable.GetHoldInteractionOptions populates the optional Icon / Subtext / DisabledReason fields. Old HarvestInteractionOption struct deleted in same pass.
 Assets/Scripts/Farming/Pure/CropSO.cs
 Assets/Scripts/Farming/Pure/CropRegistry.cs
 Assets/Scripts/Farming/Pure/MWI.Farming.Pure.asmdef
