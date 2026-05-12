@@ -56,7 +56,17 @@ namespace MWI.UI.Shop
             {
                 var prefab = Resources.Load<GameObject>("UI/UI_ShopBuyPanel");
                 if (prefab == null) { Debug.LogError("[UI_ShopBuyPanel] prefab not found at Resources/UI/UI_ShopBuyPanel"); return; }
-                var go = Instantiate(prefab);
+
+                // Parent under PlayerUI.HudCanvas so the child Canvas inherits the HUD's
+                // RenderMode (ScreenSpaceOverlay) — without this, the standalone Canvas
+                // defaults to WorldSpace and the panel renders in the game world.
+                // Matches UI_OwnerManagementPanel.cs:84-89 pattern.
+                if (PlayerUI.Instance == null || PlayerUI.Instance.HudCanvas == null)
+                {
+                    Debug.LogWarning("[UI_ShopBuyPanel] PlayerUI HUD canvas unavailable — cannot parent panel.");
+                    return;
+                }
+                var go = Instantiate(prefab, PlayerUI.Instance.HudCanvas.transform, false);
                 _instance = go.GetComponent<UI_ShopBuyPanel>();
             }
             _instance.Bind(cashier, customer);
