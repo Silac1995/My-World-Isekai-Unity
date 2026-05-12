@@ -402,6 +402,22 @@ Every subsystem exposed on `Character.cs` (lines 202-244). Properties delegate t
 
 ## Recent changes
 
+- **2026-05-09 — Rule #33 E-key dedup** (spec: `docs/superpowers/specs/2026-05-09-shop-buy-panel-and-interact-deduplication-design.md`, audit: `docs/superpowers/audits/2026-05-09-interact-dedup-audit.md`, gotcha: [wiki/gotchas/double-interact-rule-33-violation.md](../../wiki/gotchas/double-interact-rule-33-violation.md)):
+  - `PlayerController` is now the **only** `Input.GetKey*(KeyCode.E)` reader for player-character control. Every E tap fires exactly one `InteractableObject.Interact()` call.
+  - `PlayerInteractionDetector` reduced to proximity tracker + prompt renderer + helper API. Its old `Update()` E-key block (selected-out-of-range auto-nav, hold timer, tap dispatch) is deleted; proximity tracking moved to `LateUpdate` so PlayerController's `Update`-time input read sees a stable snapshot.
+  - **New detector public API** (all called by `PlayerController` or by `PlayerInteractCommand`):
+    - `CurrentTarget` — inherited from base `CharacterInteractionDetector`; the prompt-rendered proximity target.
+    - `IsTargetInRange(target)` — preserved trigger-collider check.
+    - `TriggerTapInteract(target)` (renamed from `TriggerInteract`) — canonical tap-E entry. Wraps the dialogue-NPC freeness gate inside `ExecuteNormalInteract` + `target.Interact(Character)`.
+    - `TriggerHoldMenu(target)` returns `bool` — generic hold-E menu open via `GetHoldInteractionOptions(Character)`.
+    - `SetPromptHoldProgress(t01)` — driven each frame by `PlayerController.HandleEKeyHeld` for the prompt-fill bar.
+  - **`PlayerController.HandleEKeyUp` rewrite**: resolves `target = _targeting?.SelectedInteractable ?? _detector?.CurrentTarget`. Out-of-range selected → `SetOrder(new PlayerInteractCommand(selected, _detector))` for auto-nav. In-range → `_detector.TriggerTapInteract(target)`.
+  - **`PlayerController.HandleEKeyHeld` extension**: drives `_detector.SetPromptHoldProgress(Mathf.Clamp01(t01))` each frame, then at threshold dispatches Priority A (harvestable-specific `UI_HarvestInteractionMenu`) or Priority B (generic `_detector.TriggerHoldMenu(CurrentTarget)`).
+  - **`PlayerController` gains `_detector` serialized field**, auto-resolved in `Awake` via `_character.GetComponentInChildren<PlayerInteractionDetector>(true)` — matches the Character facade pattern (CLAUDE.md "Character GameObject Hierarchy").
+  - `PlayerInteractCommand.cs:44` updated to call `_detector.TriggerTapInteract(_target)`.
+  - **Out-of-scope notes** (flagged in audit, not fixed): per-frame LINQ alloc in `UpdateClosestTarget`; `FurniturePlacementManager.cs:185` reads `Input.GetKey` outside `PlayerController` (latent rule-#33 outlier for ghost rotation during placement); `UI_ShopBuyPanel.Awake` mirrors `UI_StorageFurniturePanel.Awake` without setting `Canvas.renderMode` (parity preserved).
+  - **Related**: `UI_ShopBuyPanel.cs` gained a defensive `Awake` Canvas + GraphicRaycaster guard mirroring `UI_StorageFurniturePanel:58-71`. The corresponding prefab assets (`Assets/Resources/UI/UI_ShopBuyPanel.prefab` + `UI_ShopBuyRow.prefab`) are pending — Unity MCP server reconnection required to author them.
+
 - **2026-05-06 — `CharacterAction_Continuous` abstract base added** (spec: `docs/superpowers/specs/2026-05-06-building-construction-loop-design.md`, wiki: `wiki/systems/construction.md`):
   - Sibling of `CharacterAction` for **condition-terminated** rather than timer-terminated actions. `OnTick()` returns true to finish; `TickIntervalSeconds` (default 1 Hz) configurable per subclass; `OnApplyEffect` sealed to no-op.
   - Default `AllowsMovementDuringAction = false` (inherited) — any movement intent (player WASD, NPC re-route) cancels via the existing `CharacterGameController` path.
