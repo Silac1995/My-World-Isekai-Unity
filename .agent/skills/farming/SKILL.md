@@ -191,17 +191,24 @@ Root cause class: `FarmGrowthSystem.PostWakeSweep` mis-classified `startDepleted
 
 ## Debug the Hold-E menu not opening
 
-As of the 2026-05-12 unification, the hold-E menu rides the project-wide `UI_InteractionMenu` button bar (the same one used by doors / beds / mentorship). The dedicated harvest UI (`UI_HarvestInteractionMenu` + `HarvestInteractionOption` + `UI_HarvestInteractionOptionRow`) was deleted.
+The hold-E flow lives in `PlayerController.HandleEKeyHeld` (rule #33 — single input owner; `PlayerInteractionDetector` no longer reads `Input.GetKey*`). At the `E_HOLD_THRESHOLD` (0.4 s, unscaled), the controller dispatches in two priorities:
 
-1. **`Harvestable.GetHoldInteractionOptions(Character)` returning non-null?** This is the contract `PlayerController.HandleEKeyHeld` / `PlayerInteractionDetector` call after the 0.4 s hold. If it returns null or empty, no menu — the tap-E `Interact()` path fires instead.
-   - Wild scenery: needs `_harvestOutputs` populated (yield row) and/or `_allowDestruction = true` with `_destructionOutputs` populated (destroy row).
-   - Crop-aware: needs the client to have resolved the `CropSO` from `_netSync.CropIdNet`. See "Hold-E menu is empty on the client" below.
+1. **Priority A — harvestable-specific:** `GetNearestVisibleHarvestable()` (awareness list + `IsCharacterInInteractionZone` filter) → `UI_HarvestInteractionMenu.Open(_character, harvestable, OnInteractionMenuClosed)`. Rows are built by `Harvestable.GetInteractionOptions(Character) → IList<HarvestInteractionOption>` and rendered by `UI_HarvestInteractionOptionRow` (icon + output preview + greyed-with-reason).
+2. **Priority B — generic interactable:** `_detector.CurrentTarget` → `_detector.TriggerHoldMenu(target)` → `target.GetHoldInteractionOptions(Character) → List<InteractionOption>` → `PlayerUI.OpenInteractionMenu` (plain text-button bar — used by doors, beds, mentorship, …).
 
-2. **`PlayerUI._interactionMenu` wired in the HUD prefab?** Without it, `PlayerUI.OpenInteractionMenu` logs `PlayerUI: UI_InteractionMenu component not assigned!` and hold-E silently no-ops.
+Common failure modes for the harvest path (Priority A):
 
-3. **Hold threshold tuning.** `PlayerController.E_HOLD_THRESHOLD` is `0.4f` (unscaled time). `PlayerInteractionDetector.HOLD_THRESHOLD` is also `0.4f` (matching constant). Adjust if the menu opens too eagerly or too slowly — both call sites need updating in lock-step.
+1. **`Resources/UI/UI_HarvestInteractionMenu.prefab` missing?** `UI_HarvestInteractionMenu.EnsureInstance` logs `[UI_HarvestInteractionMenu] Prefab not found at Resources/UI/UI_HarvestInteractionMenu.` and silently no-ops. Tap-E (yield path) still works because `Harvestable.Interact()` is independent of the menu UI.
 
-4. **Rich rendering (icon / output preview / reason) absent on a designer-richer button prefab?** `UI_InteractionMenu.FindRichSlots` looks for children named `Icon` (Image), `Subtext` (TMP_Text), `Reason` (TMP_Text). Names are exact-match; a child named `IconImage` or `subtext` will be missed. Hierarchy depth is irrelevant (uses `GetComponentsInChildren`).
+2. **`_rowPrefab` / `_rowParent` wired on the menu prefab?** Both serialised fields must point to valid components. If `_rowParent` is null, `Rebuild` returns early without building any rows.
+
+3. **`Harvestable.GetInteractionOptions(Character)` returning an empty list?** Priority A skips when the list is empty, fall-through to Priority B then nothing. The builder needs:
+   - Wild scenery: `_harvestOutputs` populated (yield row) and/or `_allowDestruction = true` with `_destructionOutputs` populated (destroy row).
+   - Crop-aware: the client has resolved the `CropSO` from `_netSync.CropIdNet`. See "Hold-E menu is empty on the client" below.
+
+4. **`GetNearestVisibleHarvestable` returning null when a tree is right in front of the player?** The awareness list is candidate set; the proximity filter is `IsCharacterInInteractionZone` on each candidate. If the harvestable's `_interactionZone` collider doesn't enclose `character.transform.position`, it's not eligible — re-author the zone (rule: see `interactable-system` SKILL, Core Rule #1).
+
+5. **Hold threshold tuning.** `PlayerController.E_HOLD_THRESHOLD` is `0.4f` (unscaled time). Adjust to taste.
 
 ## Manual smoke test the destruction action without the menu
 

@@ -642,7 +642,16 @@ public class Harvestable : InteractableObject
     public void SetReady()
     {
         ResetHarvestState();
-        if (_netSync != null) _netSync.IsDepleted.Value = false;
+        if (_netSync != null)
+        {
+            _netSync.IsDepleted.Value = false;
+            // Re-roll the fruit layout seed so a perennial tree (apple, cherry, …) shows a
+            // different apple arrangement each refill cycle instead of the same one forever.
+            // Server-only write; clients receive via NGO and re-position their fruit instances
+            // in HarvestableLayeredVisual.HandleFruitSeedChanged. Determinism is preserved —
+            // every peer gets the same NetVar value and combines it with NetworkObjectId.
+            _netSync.FruitRandomSeed.Value = Random.Range(int.MinValue, int.MaxValue);
+        }
         RaiseStateChanged();
     }
 

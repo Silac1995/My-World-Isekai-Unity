@@ -40,6 +40,14 @@ public class HarvestableNetSync : NetworkBehaviour
     /// would clip; revisit if that ever happens (no current designer wants > 255 fruits).</summary>
     public NetworkVariable<byte> RemainingYield = new NetworkVariable<byte>(0);
 
+    /// <summary>Server-replicated seed mixed with <see cref="NetworkObject.NetworkObjectId"/>
+    /// to deterministically position runtime-spawned fruits. Re-rolled on every refill
+    /// (<see cref="Harvestable.SetReady"/>) so a perennial tree shows a fresh apple layout
+    /// each cycle rather than the same arrangement forever. <see cref="HarvestableLayeredVisual"/>
+    /// subscribes to <see cref="OnValueChanged"/> and re-positions the existing fruit
+    /// instances (no destroy/respawn) when this flips.</summary>
+    public NetworkVariable<int> FruitRandomSeed = new NetworkVariable<int>(0);
+
     private Harvestable _harvestable;
 
     private void Awake()
@@ -53,6 +61,9 @@ public class HarvestableNetSync : NetworkBehaviour
         IsDepleted.OnValueChanged += HandleAnyChange;
         CropIdNet.OnValueChanged += HandleCropIdChange;
         RemainingYield.OnValueChanged += HandleAnyChange;
+        // FruitRandomSeed is subscribed by HarvestableLayeredVisual directly — keep it off the
+        // generic HandleAnyChange bridge so we don't trigger ApplyVisual / sprite refreshes
+        // on a refill seed re-roll (the layered visual is the sole consumer).
 
         if (IsServer) BootstrapScenePlacedCropTree();
 

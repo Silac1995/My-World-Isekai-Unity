@@ -36,6 +36,9 @@ namespace MWI.Farming
         [Tooltip("Local-space rect (in the foliage Transform's frame) where fruits may spawn. Leave at Rect.zero to use the foliage sprite's own bounds.")]
         [SerializeField] private Rect _fruitSpawnArea = Rect.zero;
         [SerializeField] private Vector2 _fruitScale = Vector2.one;
+        [Tooltip("Fractional inset toward the foliage center applied to every fruit position so a fruit sprite anchored at the leaf-mesh boundary doesn't extend visually past the silhouette. 0 = no inset (sample reaches the literal mesh edge); 0.1 = 10% pull toward sprite center (sensible default for large foliage sprites with smooth outlines); 0.5 = collapsed to center. Clamped to [0, 0.5).")]
+        [Range(0f, 0.5f)]
+        [SerializeField] private float _fruitPadding = 0.1f;
 
         public Sprite TrunkSprite => _trunkSprite;
         public Sprite FoliageSprite => _foliageSprite;
@@ -43,5 +46,9 @@ namespace MWI.Farming
         public Sprite[] FruitSpriteVariants => _fruitSpriteVariants;
         public Rect FruitSpawnArea => _fruitSpawnArea;
         public Vector2 FruitScale => _fruitScale;
+        /// <summary>Fractional inset toward the foliage center applied to every fruit position
+        /// (mesh + rect sampling paths). Keeps fruit sprites from visually overhanging the leaf
+        /// silhouette. Clamped to [0, 0.5).</summary>
+        public float FruitPadding => Mathf.Clamp(_fruitPadding, 0f, 0.499f);
     }
 }

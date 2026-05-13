@@ -146,7 +146,11 @@ This subclass inherits the full farming pipeline (DaysToMature, MinMoistureForGr
 - `TimeManager.CurrentYearProgress01` + `ComputeYearProgress01` static helper (defensive against zero/negative `_daysPerYear`).
 - `HarvestableNetSync.RemainingYield : NetworkVariable<byte>` — server-write, byte-cap. Pushed by `Harvestable.Harvest` / `ResetHarvestState` / `InitializeAtStage`.
 
-**Determinism contract.** Fruit positions and per-anchor sprite picks are derived from `NetworkObjectId` via `Random.InitState`. Capture `Random.state` before, restore after. Every peer must see identical apple layout. If you change the spawn order or RNG calls, you break this — bump only with a deliberate "regenerate everywhere" plan.
+**Determinism contract.** Fruit positions are derived from `seed = NetworkObjectId XOR HarvestableNetSync.FruitRandomSeed.Value` via `Random.InitState` (capture / restore `Random.state` around it). `NetworkObjectId` is identical on every peer; `FruitRandomSeed` is a server-replicated NetVar that the server re-rolls on each `Harvestable.SetReady` (perennial refill) so a tree shows a fresh apple arrangement each cycle instead of repeating the same layout. Per-fruit sprite-variant assignments are seeded by the same RNG stream but **only changed at spawn time, not on refill** — `RepositionFruits` still consumes the sprite-index `Random.Range` per fruit to stay in lockstep with `SpawnFruits`' 3-draws-per-fruit sequence (positions and sprite indices stay aligned with the same seed). If you change the per-fruit Random call count or their order in either `SpawnFruits` or `RepositionFruits`, you break this — they must mirror each other and the wiki/agent docs must be bumped with the change.
+
+**Fruit padding (2026-05-12).** `TreeHarvestableSO._fruitPadding : float` (`Range(0, 0.5)`, default `0.1`) is a fractional inset toward the foliage center applied to every fruit position. Mesh sampler scales the sprite-local point by `(1 - padding)` before adding the FruitContainer offset; rect sampler shrinks the spawn `Rect` by `padding * size * 0.5` on each side. Prevents the "fruit sprite anchored at the leaf-mesh boundary overhangs the silhouette" case for large foliage sprites with smooth outlines. Authored on `TreeHarvestableSO`, not the base `HarvestableSO`, because only the tree visual consumes it.
+
+**Per-refill re-randomization (2026-05-12).** `HarvestableNetSync.FruitRandomSeed` is **NOT** bridged through `HandleAnyChange` (the generic `OnNetSyncChanged → ApplyVisual` bridge). It's subscribed directly by `HarvestableLayeredVisual` so a refill seed re-roll triggers only the position pass via `RepositionFruits`, not a full visual refresh that would re-trigger `ApplyVisual`'s scale lerp + sprite-swap path. When adding new NetVars to `HarvestableNetSync`, decide deliberately whether they belong on the generic bridge (anything driving `ApplyVisual`) or off it (visual-specific consumers that subscribe themselves).
 
 **Crop-aware maturity gate.** `ResolveVisibleFruitCount` returns 0 if the SO is a `CropSO` and `_netSync.CurrentStage.Value < crop.DaysToMature` — fruit hidden until mature. Fruits are still spawned at full count; they're just disabled until growth completes.
 
@@ -254,7 +258,7 @@ Assets/Scripts/Interactable/HarvestableNetSync.cs
 Assets/Scripts/Interactable/HarvestableLayeredVisual.cs
 Assets/Scripts/Interactable/HarvestOutputEntry.cs
 Assets/Scripts/Interactable/HarvestableCategory.cs
-Assets/Scripts/Interactable/InteractionOption.cs   // (2026-05-12) shared hold-E payload; Harvestable.GetHoldInteractionOptions populates the optional Icon / Subtext / DisabledReason fields. Old HarvestInteractionOption struct deleted in same pass.
+Assets/Scripts/Interactable/HarvestInteractionOption.cs
 Assets/Scripts/Farming/Pure/CropSO.cs
 Assets/Scripts/Farming/Pure/CropRegistry.cs
 Assets/Scripts/Farming/Pure/MWI.Farming.Pure.asmdef
