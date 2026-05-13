@@ -10,7 +10,6 @@ public class UI_SessionManager : MonoBehaviour
 
     [Header("UI Panels")]
     [SerializeField] private GameObject _sessionButtonsPanel;
-    [SerializeField] private GameObject _debugPanel;
 
     [Header("Notifications")]
     [SerializeField] private MWI.UI.Notifications.ToastNotificationChannel _toastChannel;
@@ -20,12 +19,9 @@ public class UI_SessionManager : MonoBehaviour
         UnsubscribeFromNetwork();
     }
 
-    private bool _isSolo;
-
     public void Click_StartSolo()
     {
         UpdateConnectionParameters();
-        _isSolo = true;
         SubscribeToNetwork();
         ShowToast("Starting Solo Session...", MWI.UI.Notifications.ToastType.Info);
         GameSessionManager.Instance?.StartSolo();
@@ -34,7 +30,6 @@ public class UI_SessionManager : MonoBehaviour
     public void Click_JoinMultiplayer()
     {
         UpdateConnectionParameters();
-        _isSolo = false;
         SubscribeToNetwork();
         ShowToast($"Connecting to {GameSessionManager.TargetIP}:{GameSessionManager.TargetPort}...", MWI.UI.Notifications.ToastType.Info);
         GameSessionManager.Instance?.JoinMultiplayer();
@@ -63,7 +58,6 @@ public class UI_SessionManager : MonoBehaviour
 
         ShowToast("Connected!", MWI.UI.Notifications.ToastType.Success);
         HideSessionButtons();
-        if (_isSolo && _debugPanel != null) _debugPanel.SetActive(true);
     }
 
     private void OnClientDisconnected(ulong clientId)
