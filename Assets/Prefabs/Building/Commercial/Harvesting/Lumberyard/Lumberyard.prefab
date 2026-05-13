@@ -830,6 +830,107 @@ MonoBehaviour:
   zoneName: Deposit Zone
   _boundsTarget: {fileID: 0}
   _boundsTargets: []
+--- !u!1001 &2117803981488681324
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 426415073984036635}
+    m_Modifications:
+    - target: {fileID: 1443532931149506909, guid: c5741fc63642989479b278096dc3acbf, type: 3}
+      propertyPath: m_Name
+      value: Crate
+      objectReference: {fileID: 0}
+    - target: {fileID: 4102538900043588738, guid: c5741fc63642989479b278096dc3acbf, type: 3}
+      propertyPath: '_displayAnchors.Array.data[0]'
+      value: 
+      objectReference: {fileID: 0}
+    - target: {fileID: 4102538900043588738, guid: c5741fc63642989479b278096dc3acbf, type: 3}
+      propertyPath: '_displayAnchors.Array.data[1]'
+      value: 
+      objectReference: {fileID: 0}
+    - target: {fileID: 4102538900043588738, guid: c5741fc63642989479b278096dc3acbf, type: 3}
+      propertyPath: '_displayAnchors.Array.data[2]'
+      value: 
+      objectReference: {fileID: 0}
+    - target: {fileID: 4102538900043588738, guid: c5741fc63642989479b278096dc3acbf, type: 3}
+      propertyPath: '_displayAnchors.Array.data[3]'
+      value: 
+      objectReference: {fileID: 0}
+    - target: {fileID: 4102538900043588738, guid: c5741fc63642989479b278096dc3acbf, type: 3}
+      propertyPath: '_displayAnchors.Array.data[4]'
+      value: 
+      objectReference: {fileID: 0}
+    - target: {fileID: 4102538900043588738, guid: c5741fc63642989479b278096dc3acbf, type: 3}
+      propertyPath: '_displayAnchors.Array.data[5]'
+      value: 
+      objectReference: {fileID: 0}
+    - target: {fileID: 5510196143857379223, guid: c5741fc63642989479b278096dc3acbf, type: 3}
+      propertyPath: _interactionPoint
+      value: 
+      objectReference: {fileID: 0}
+    - target: {fileID: 5613280421520176403, guid: c5741fc63642989479b278096dc3acbf, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 7.0556493
+      objectReference: {fileID: 0}
+    - target: {fileID: 5613280421520176403, guid: c5741fc63642989479b278096dc3acbf, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: -0.43226755
+      objectReference: {fileID: 0}
+    - target: {fileID: 5613280421520176403, guid: c5741fc63642989479b278096dc3acbf, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: -9.764673
+      objectReference: {fileID: 0}
+    - target: {fileID: 5613280421520176403, guid: c5741fc63642989479b278096dc3acbf, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 5613280421520176403, guid: c5741fc63642989479b278096dc3acbf, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5613280421520176403, guid: c5741fc63642989479b278096dc3acbf, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5613280421520176403, guid: c5741fc63642989479b278096dc3acbf, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5613280421520176403, guid: c5741fc63642989479b278096dc3acbf, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5613280421520176403, guid: c5741fc63642989479b278096dc3acbf, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5613280421520176403, guid: c5741fc63642989479b278096dc3acbf, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: c5741fc63642989479b278096dc3acbf, type: 3}
+--- !u!4 &5802205656707957887 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 5613280421520176403, guid: c5741fc63642989479b278096dc3acbf, type: 3}
+  m_PrefabInstance: {fileID: 2117803981488681324}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &5844499905981372155 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 5510196143857379223, guid: c5741fc63642989479b278096dc3acbf, type: 3}
+  m_PrefabInstance: {fileID: 2117803981488681324}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e465ff53b055c5445b743f4fb3b33afa, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::StorageFurniture
 --- !u!1001 &8992601480692979103
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1169,6 +1270,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 8729890495040055940, guid: 0266b0096947362429f7d224956a5096, type: 3}
       insertIndex: -1
       addedObject: {fileID: 9049257460201760166}
+    - targetCorrespondingSourceObject: {fileID: 8729890495040055940, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 5802205656707957887}
     m_AddedComponents:
     - targetCorrespondingSourceObject: {fileID: 6528054620988570630, guid: 0266b0096947362429f7d224956a5096, type: 3}
       insertIndex: -1
@@ -2120,6 +2224,7 @@ MonoBehaviour:
   _furnitures:
   - {fileID: 8023935534103100732}
   - {fileID: 3444409792592955385}
+  - {fileID: 5844499905981372155}
 --- !u!114 &7001359032268188454
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2167,6 +2272,7 @@ MonoBehaviour:
   - Item: {fileID: 11400000, guid: a3f0471c4178efd4b9b5efdb38aea516, type: 2}
     Amount: 2
     IsReferenceOnly: 0
+  _spawnAsComplete: 0
   _constructionVisualRoot: {fileID: 7801831813967746626}
   _completedVisualRoot: {fileID: 7956832615276565182}
   _constructionFootprintMaterial: {fileID: 2100000, guid: b31318f4e14d2614fbd7f82168f4e968, type: 2}
@@ -2180,11 +2286,7 @@ MonoBehaviour:
     UpdateTraits:
       MinSecondsBetweenUpdates: 0
       MaxSecondsBetweenUpdates: 0
-  _defaultFurnitureLayout:
-  - ItemSO: {fileID: 11400000, guid: c48f624b69e3054479bf2af6637b5355, type: 2}
-    LocalPosition: {x: 0, y: 0, z: -3}
-    LocalEulerAngles: {x: 0, y: 0, z: 0}
-    TargetRoom: {fileID: 4782189456039868823}
+  _defaultFurnitureLayout: []
   _prefabId: B000-Lumberyard
   NetworkBuildingId:
     UpdateTraits:
@@ -2339,7 +2441,6 @@ MonoBehaviour:
     ownedBuildings: []
   _storageZone: {fileID: 4309535885151927115}
   _pickupZone: {fileID: 0}
-  _toolStorageFurniture: {fileID: 0}
   _helpWantedFurniture: {fileID: 0}
   _managementFurniture: {fileID: 3444409792592955385}
   _initialHiringOpen: 1

@@ -108,7 +108,9 @@
       "Bash(awk -F/ '{print $1\"/\"$2}')",
       "Bash(echo \"---exit $?---\")",
       "Bash(cmd /c \"rmdir /s /q .claude\\\\worktrees\\\\affectionate-ellis-9d1790\")",
-      "PowerShell(Get-Process | Where-Object { $_.Name -match 'Unity|Code|antigravity|cursor|rider|jetbrains|explorer' } | Select-Object Name,Id | Format-Table -AutoSize)"
+      "PowerShell(Get-Process | Where-Object { $_.Name -match 'Unity|Code|antigravity|cursor|rider|jetbrains|explorer' } | Select-Object Name,Id | Format-Table -AutoSize)",
+      "Bash(git worktree *)",
+      "Bash(xargs -I{} git branch -D \"{}\")"
     ],
     "additionalDirectories": [
       "\\tmp"

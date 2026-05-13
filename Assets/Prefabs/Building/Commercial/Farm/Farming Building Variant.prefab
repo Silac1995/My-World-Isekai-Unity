@@ -1051,11 +1051,11 @@ PrefabInstance:
     - target: {fileID: 6218087504859813128, guid: d941949b730fb1843991b09d42aa29bf, type: 3}
       propertyPath: '_furnitures.Array.data[2]'
       value: 
-      objectReference: {fileID: 1061310942577652097}
+      objectReference: {fileID: 9205726073751855139}
     - target: {fileID: 6218087504859813128, guid: d941949b730fb1843991b09d42aa29bf, type: 3}
       propertyPath: '_furnitures.Array.data[3]'
       value: 
-      objectReference: {fileID: 9205726073751855139}
+      objectReference: {fileID: 1061310942577652097}
     - target: {fileID: 6812237598739333191, guid: d941949b730fb1843991b09d42aa29bf, type: 3}
       propertyPath: _gridDepth
       value: 13

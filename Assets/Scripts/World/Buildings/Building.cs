@@ -1393,6 +1393,34 @@ public class Building : ComplexRoom
     }
 
     /// <summary>
+    /// Returns true when <paramref name="furniture"/> matches an entry in <see cref="_defaultFurnitureLayout"/>
+    /// by both <see cref="Furniture.FurnitureItemSO"/> and building-local position (within
+    /// <paramref name="positionEpsilon"/>). Used by <c>BuildingSaveData.FromBuilding</c> to
+    /// avoid persisting prefab-authored / auto-absorbed furniture as if it were player-placed
+    /// (which would cause double-spawn on load: once by <see cref="TrySpawnDefaultFurniture"/>
+    /// and once by <c>MapController.RestorePlacedFurnitureForBuilding</c>).
+    ///
+    /// Position match is required (not just ItemSO equality) because the same FurnitureItemSO
+    /// can legitimately exist multiple times in <c>_defaultFurnitureLayout</c> AND as a runtime
+    /// player placement at a different spot — e.g. two chests of the same kind.
+    /// </summary>
+    public bool IsDefaultLayoutFurniture(Furniture furniture, float positionEpsilon = 0.05f)
+    {
+        if (furniture == null || furniture.FurnitureItemSO == null || _defaultFurnitureLayout == null)
+            return false;
+
+        Vector3 localPos = transform.InverseTransformPoint(furniture.transform.position);
+        for (int i = 0; i < _defaultFurnitureLayout.Count; i++)
+        {
+            var slot = _defaultFurnitureLayout[i];
+            if (slot == null || slot.ItemSO != furniture.FurnitureItemSO) continue;
+            if (Vector3.Distance(slot.LocalPosition, localPos) < positionEpsilon)
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>
     /// Server-only. Instantiates and Spawn()s entries in <see cref="_defaultFurnitureLayout"/>
     /// that don't already have a matching Furniture child on this building. The per-slot match
     /// (by FurnitureItemSO) replaces the earlier "any Furniture child present → skip all" guard,
@@ -1788,6 +1816,42 @@ public class Building : ComplexRoom
 
         // Always restore the meter, even if DeliveredMaterials is empty — UX pre-warm.
         ConstructionProgress.Value = Mathf.Clamp01(data.ConstructionProgress);
+
+        // 2026-05-13 — Save-restore subscription-timing fix:
+        //
+        // The state flip above fires _currentState.OnValueChanged, but that subscription
+        // (`_currentState.OnValueChanged += HandleStateChanged`) is wired in Start, which
+        // has NOT yet run when RestoreFromSaveData is called from MapController.
+        // ApplyDynamicSaveDataToBuilding — the spawn+restore happens synchronously in one
+        // frame; Start runs on Unity's next pass. Result: HandleStateChanged never fires,
+        // and its post-Complete cascade (TrySpawnDefaultFurniture, ConfigureNavMeshObstacles)
+        // silently no-ops — every prefab-authored default furniture (e.g. Lumberyard's
+        // crate at _defaultFurnitureLayout[0]) vanishes on load, and the NavMesh isn't
+        // carved.
+        //
+        // BuildInstantly solves the same race via a coroutine that polls _isStarted; we
+        // can't use that pattern here because the storage-content restore in
+        // MapController.RestoreStorageFurnitureContents needs the spawned furniture in the
+        // SAME synchronous frame (it walks GetFurnitureOfType<StorageFurniture>() right
+        // after this call). So we manually invoke the server-only side effects of the
+        // post-Complete branch of HandleStateChanged here. Idempotent: TrySpawnDefaultFurniture
+        // is guarded by _defaultFurnitureSpawned; ConfigureNavMeshObstacles is a safe
+        // rebuild.
+        //
+        // We deliberately do NOT mirror the full HandleStateChanged body — EvictLeftoversToPerimeter
+        // is a one-time construction-loop side effect (saved WorldItems on the footprint
+        // come back via the separate world-item save pipeline), and OnConstructionComplete
+        // would falsely tell subscribers (quest hooks etc.) that the building just finished
+        // construction. Visual swap is handled by Start.ApplyConstructionVisuals which reads
+        // the now-correct _currentState.Value when Start eventually runs.
+        if (_currentState.Value == MWI.WorldSystem.BuildingState.Complete && !_isStarted)
+        {
+            try { TrySpawnDefaultFurniture(); }
+            catch (System.Exception e) { Debug.LogException(e, this); }
+
+            try { ConfigureNavMeshObstacles(); }
+            catch (System.Exception e) { Debug.LogException(e, this); }
+        }
 
 #if UNITY_EDITOR
         if (data.DeliveredMaterials == null || data.DeliveredMaterials.Count == 0) return;

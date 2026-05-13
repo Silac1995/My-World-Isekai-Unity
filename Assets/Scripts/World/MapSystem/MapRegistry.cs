@@ -96,6 +96,27 @@ namespace MWI.WorldSystem
         public CashierSaveData Data;
     }
 
+    /// <summary>
+    /// One <see cref="Furniture"/> instance that was added to a building at runtime
+    /// (via <see cref="CharacterPlaceFurnitureAction"/> — player or NPC) and is therefore
+    /// NOT covered by the building prefab's <c>_defaultFurnitureLayout</c>. Persisted so
+    /// the furniture re-spawns on world load — without this, every player-placed chest /
+    /// crafting station / etc. silently disappears on save→load. Default-layout slots are
+    /// excluded by <c>BuildingSaveData.FromBuilding</c> to avoid duplicate spawns.
+    /// </summary>
+    [Serializable]
+    public class PlacedFurnitureSaveEntry
+    {
+        /// <summary>FurnitureItemSO.ItemId — resolved on load via Resources.LoadAll&lt;ItemSO&gt;("Data/Item").</summary>
+        public string ItemId;
+
+        /// <summary>Position relative to the building root, in building-local space. Mirrors <c>DefaultFurnitureSlot.LocalPosition</c>.</summary>
+        public Vector3 LocalPosition;
+
+        /// <summary>Rotation relative to the building root, in building-local space (Euler degrees). Mirrors <c>DefaultFurnitureSlot.LocalEulerAngles</c>.</summary>
+        public Vector3 LocalEulerAngles;
+    }
+
     [Serializable]
     public class BuildingSaveData
     {
@@ -139,6 +160,15 @@ namespace MWI.WorldSystem
         /// type for the keying scheme.
         /// </summary>
         public List<StorageFurnitureSaveEntry> StorageFurnitures = new List<StorageFurnitureSaveEntry>();
+
+        /// <summary>
+        /// Furniture added to this building at runtime by player/NPC placement (anything
+        /// not in the prefab's <c>_defaultFurnitureLayout</c>). Default-empty so old saves
+        /// deserialize cleanly. Restored by <c>MapController.RestorePlacedFurnitureForBuilding</c>
+        /// BEFORE <see cref="StorageFurnitures"/> contents are bound, so per-storage key
+        /// lookup finds the freshly-spawned instances.
+        /// </summary>
+        public List<PlacedFurnitureSaveEntry> PlacedFurnitures = new List<PlacedFurnitureSaveEntry>();
 
         /// <summary>
         /// Saved <see cref="Cashier"/> furniture state (till balances + linkage). Default-empty
@@ -302,6 +332,43 @@ namespace MWI.WorldSystem
             catch (Exception e)
             {
                 Debug.LogException(e);
+            }
+
+            // Player/NPC-placed furniture roster — anything spawned at runtime via
+            // CharacterPlaceFurnitureAction that is NOT covered by the prefab's
+            // _defaultFurnitureLayout. Without this, every player-placed chest / station
+            // silently disappears on save→load (the building re-spawns from prefab, and
+            // only default-layout slots get re-instantiated). StorageFurnitures only
+            // persists CONTENTS, not EXISTENCE — see PlacedFurnitureSaveEntry doc.
+            try
+            {
+                foreach (var furniture in building.GetFurnitureOfType<Furniture>())
+                {
+                    if (furniture == null || furniture.FurnitureItemSO == null) continue;
+                    if (string.IsNullOrEmpty(furniture.FurnitureItemSO.ItemId)) continue;
+
+                    // Dedup against default-layout: anything authored on the prefab (or
+                    // auto-absorbed from nested NetworkObject children at Awake via
+                    // ConvertNestedNetworkFurnitureToLayout) is re-spawned by
+                    // TrySpawnDefaultFurniture in Building.OnNetworkSpawn — persisting
+                    // it here would double-spawn on load.
+                    if (building.IsDefaultLayoutFurniture(furniture)) continue;
+
+                    Vector3 localPos = building.transform.InverseTransformPoint(furniture.transform.position);
+                    Vector3 localEuler = (Quaternion.Inverse(building.transform.rotation) * furniture.transform.rotation).eulerAngles;
+
+                    data.PlacedFurnitures.Add(new PlacedFurnitureSaveEntry
+                    {
+                        ItemId = furniture.FurnitureItemSO.ItemId,
+                        LocalPosition = localPos,
+                        LocalEulerAngles = localEuler
+                    });
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+                Debug.LogError($"<color=red>[BuildingSaveData:FromBuilding]</color> Failed to snapshot PlacedFurnitures for '{building.BuildingName}'.");
             }
 
             // Cashier furniture state (till balances + linkage) — same per-furniture try/catch

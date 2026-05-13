@@ -3,7 +3,7 @@ type: gotcha
 title: "BuildInstantly runs before Start's OnValueChanged subscription"
 tags: [building, construction, network-lifecycle, navmesh, furniture]
 created: 2026-05-08
-updated: 2026-05-08
+updated: 2026-05-13
 sources:
   - "[Building.cs](../../Assets/Scripts/World/Buildings/Building.cs) — `BuildInstantly` (line ~1093), `Start` (~464), `OnNetworkSpawn` (~311), `HandleStateChanged` (~880)"
   - "[BuildingPlacementManager.cs](../../Assets/Scripts/World/Buildings/BuildingPlacementManager.cs) — instant-mode placement path"
@@ -95,6 +95,7 @@ The 600-frame paranoid backstop catches the pathological case of Start never run
 - [[navmesh]]
 
 ## Links
+- [[save-restore-state-flip-no-subscriber]] — **same root cause**, save/load variant. The save-restore call site can't tolerate a one-frame delay (its synchronous content-restore step depends on furniture being live in the same call), so it uses a manual-cascade fix instead of this page's coroutine-defer.
 - [[furnituremanager-replace-style-rescan]] — sibling FurnitureManager hazard around spawn-cascade ordering.
 
 ## Sources

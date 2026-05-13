@@ -836,6 +836,10 @@ namespace MWI.WorldSystem
                     saveEntry.OwnerCharacterIds = refreshed.OwnerCharacterIds;
                     saveEntry.Employees = refreshed.Employees;
                     saveEntry.StorageFurnitures = refreshed.StorageFurnitures;
+                    // Player/NPC-placed furniture roster — without this, mid-game saves
+                    // drop every runtime-placed chest / station the same way the load
+                    // path used to before the 2026-05-13 fix.
+                    saveEntry.PlacedFurnitures = refreshed.PlacedFurnitures;
                     // Construction loop fields — without these the meter resets to 0 on reload.
                     saveEntry.ConstructionProgress = refreshed.ConstructionProgress;
                     saveEntry.DeliveredMaterials = refreshed.DeliveredMaterials;
@@ -968,9 +972,30 @@ namespace MWI.WorldSystem
             if (building is CommercialBuilding commercial)
                 commercial.RestoreEmployeesFromSaveData(bSave.Employees);
 
-            // Storage furniture contents. TrySpawnDefaultFurniture has run inside
-            // OnNetworkSpawn for new spawns; for preplaced overlays the scene-authored
-            // furniture is already live.
+            // 2026-05-13 — RestoreFromSaveData now runs FIRST so the building's state is
+            // flipped to its saved value (e.g. Complete) BEFORE any furniture-restore step
+            // walks the live furniture set. This matters because OnNetworkSpawn auto-derives
+            // state from _constructionRequirements.Count (writing UnderConstruction for any
+            // prefab with reqs and _spawnAsComplete=false), and that initial state gates
+            // Building.TrySpawnDefaultFurniture in OnNetworkSpawn — meaning the prefab-
+            // authored default furniture doesn't spawn until state flips to Complete. The
+            // flip happens inside RestoreFromSaveData; the same method now manually fires
+            // TrySpawnDefaultFurniture + NavMesh carve (HandleStateChanged subscription
+            // isn't yet wired because Start runs on the next Unity frame). After this
+            // returns, all prefab-authored default furniture is live in the scene.
+            building.RestoreFromSaveData(bSave);
+
+            // Player/NPC-placed furniture (chests, crafting stations, etc.) that lives
+            // outside the prefab's _defaultFurnitureLayout. Runs AFTER RestoreFromSaveData
+            // so the state is Complete (the method's internal gate honours that). Without
+            // this step, every runtime-placed chest silently disappears on save→load —
+            // only the prefab's default-layout slots re-spawn.
+            RestorePlacedFurnitureForBuilding(building, bSave);
+
+            // Storage furniture contents. By now both default-layout AND player-placed
+            // storages exist (default via the manual cascade inside RestoreFromSaveData
+            // when _isStarted=false; player-placed via RestorePlacedFurnitureForBuilding
+            // above). Per-storage key lookup finds them all.
             RestoreStorageFurnitureContents(building, bSave);
 
             // Cashier till + linkage.
@@ -983,12 +1008,143 @@ namespace MWI.WorldSystem
                 shopBuilding.RestoreShopFromSaveData(bSave);
                 shopBuilding.OnFurnituresLoaded();
             }
+        }
 
-            // Construction progress + delivered-material snapshot. Editor builds replay
-            // ContributeMaterial via AssetGuid resolution; standalone runtime restores only
-            // the meter value (UX pre-warm) and lets the next ConstructionSiteScanner tick
-            // reconcile from physical items.
-            building.RestoreFromSaveData(bSave);
+        /// <summary>
+        /// Server-only. Re-instantiates every player/NPC-placed furniture entry from
+        /// <paramref name="bSave"/>.<see cref="BuildingSaveData.PlacedFurnitures"/> as
+        /// children of <paramref name="building"/>. Without this, runtime-placed
+        /// furniture (chests, crafting stations, etc.) silently disappear on save→load
+        /// — the building re-spawns from prefab and only the prefab's
+        /// <c>_defaultFurnitureLayout</c> slots get re-instantiated by
+        /// <c>Building.TrySpawnDefaultFurniture</c>.
+        ///
+        /// <para>
+        /// <b>Ordering:</b> MUST run BEFORE <see cref="RestoreStorageFurnitureContents"/>
+        /// so per-storage key lookup sees the freshly-spawned instances.
+        /// </para>
+        ///
+        /// <para>
+        /// Mirrors <c>Building.SpawnDefaultFurnitureSlot</c>: <c>Instantiate</c> at world
+        /// position, <c>NetworkObject.Spawn()</c>, parent under the building root (only
+        /// valid NO ancestor — <c>Room_Main</c> is a <c>NetworkBehaviour</c> on a non-NO),
+        /// register via <c>FurnitureManager.RegisterSpawnedFurnitureUnchecked</c>
+        /// (server-authoritative restore — same trust model as the level designer).
+        /// </para>
+        ///
+        /// <para>
+        /// Per rule #31: per-entry <c>try/catch</c> ensures one bad placement never
+        /// blocks the rest of the building's restore. Unresolvable ItemIds are logged
+        /// loudly (LogError) — the furniture is lost, not silently dropped.
+        /// </para>
+        /// </summary>
+        private void RestorePlacedFurnitureForBuilding(Building building, BuildingSaveData bSave)
+        {
+            if (building == null || bSave == null || bSave.PlacedFurnitures == null || bSave.PlacedFurnitures.Count == 0)
+                return;
+            if (!IsServer) return;
+
+            // Don't spawn furniture into a still-under-construction building — visuals
+            // would overlap the scaffolding and grid registration may race with the
+            // construction visual swap. The next save→load cycle (after Complete) will
+            // restore them.
+            if (building.CurrentState != BuildingState.Complete)
+            {
+                Debug.Log($"<color=cyan>[MapController:RestorePlacedFurniture]</color> Skipping '{building.BuildingName}' — state={building.CurrentState}, deferred to next post-Complete save.");
+                return;
+            }
+
+            // Cache the ItemSO catalog ONCE per building rather than per-entry — same
+            // pattern as RestoreStorageFurnitureContents below.
+            ItemSO[] allItems = Resources.LoadAll<ItemSO>("Data/Item");
+            Room mainRoom = building.MainRoom as Room;
+            int restored = 0;
+
+            foreach (var entry in bSave.PlacedFurnitures)
+            {
+                if (entry == null || string.IsNullOrEmpty(entry.ItemId)) continue;
+
+                GameObject spawnedGo = null;
+                NetworkObject spawnedNet = null;
+                try
+                {
+                    // Resolve ItemId → FurnitureItemSO.
+                    FurnitureItemSO furnitureItemSO = null;
+                    for (int i = 0; i < allItems.Length; i++)
+                    {
+                        if (allItems[i] is FurnitureItemSO fso && fso.ItemId == entry.ItemId)
+                        {
+                            furnitureItemSO = fso;
+                            break;
+                        }
+                    }
+                    if (furnitureItemSO == null)
+                    {
+                        Debug.LogError($"<color=red>[MapController:RestorePlacedFurniture]</color> Could not resolve FurnitureItemSO id='{entry.ItemId}' on building '{building.BuildingName}'. Entry LOST.");
+                        continue;
+                    }
+                    if (furnitureItemSO.InstalledFurniturePrefab == null)
+                    {
+                        Debug.LogError($"<color=red>[MapController:RestorePlacedFurniture]</color> FurnitureItemSO '{entry.ItemId}' has no InstalledFurniturePrefab on building '{building.BuildingName}'. Entry LOST.");
+                        continue;
+                    }
+
+                    Vector3 worldPos = building.transform.TransformPoint(entry.LocalPosition);
+                    Quaternion worldRot = building.transform.rotation * Quaternion.Euler(entry.LocalEulerAngles);
+
+                    Furniture instance = Instantiate(furnitureItemSO.InstalledFurniturePrefab, worldPos, worldRot);
+                    spawnedGo = instance.gameObject;
+
+                    spawnedNet = instance.GetComponent<NetworkObject>();
+                    if (spawnedNet != null && !spawnedNet.IsSpawned)
+                    {
+                        spawnedNet.Spawn();
+                    }
+
+                    // Parent under the building root — the only valid NetworkObject ancestor.
+                    // Parenting under Room_Main (a NetworkBehaviour on a non-NO) throws
+                    // NGO's InvalidParentException. Same parenting rule as
+                    // Building.SpawnDefaultFurnitureSlot.
+                    instance.transform.SetParent(building.transform, worldPositionStays: true);
+
+                    // Unchecked register: this is a restore of previously-validated player
+                    // placement, not new runtime input. Bypasses CanPlaceFurniture so a
+                    // changed FurnitureGrid layout (very rare) doesn't reject the entry.
+                    if (mainRoom != null && mainRoom.FurnitureManager != null)
+                    {
+                        mainRoom.FurnitureManager.RegisterSpawnedFurnitureUnchecked(instance, worldPos);
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"<color=orange>[MapController:RestorePlacedFurniture]</color> Building '{building.BuildingName}' has no MainRoom.FurnitureManager — restored furniture '{entry.ItemId}' spawned but not grid-registered.");
+                    }
+
+                    restored++;
+                }
+                catch (System.Exception ex)
+                {
+                    Debug.LogException(ex);
+                    Debug.LogError($"<color=red>[MapController:RestorePlacedFurniture]</color> Failed to restore placed furniture '{entry.ItemId}' at local {entry.LocalPosition} on '{building.BuildingName}'.");
+
+                    // Same cleanup-on-failure pattern as Building.SpawnDefaultFurnitureSlot:
+                    // a half-spawned NetworkObject left in SpawnManager.SpawnedObjectsList
+                    // NRE's the next client scene-sync.
+                    if (spawnedNet != null && spawnedNet.IsSpawned)
+                    {
+                        try { spawnedNet.Despawn(destroy: true); }
+                        catch (System.Exception cleanupEx) { Debug.LogException(cleanupEx); }
+                    }
+                    else if (spawnedGo != null)
+                    {
+                        Destroy(spawnedGo);
+                    }
+                }
+            }
+
+            if (restored > 0)
+            {
+                Debug.Log($"<color=green>[MapController:RestorePlacedFurniture]</color> Building '{building.BuildingName}' on '{MapId}': restored {restored} placed furniture(s) from save data.");
+            }
         }
 
         /// <summary>
@@ -1544,10 +1700,14 @@ namespace MWI.WorldSystem
                         saveEntry.OwnerCharacterIds = refreshed.OwnerCharacterIds;
                         saveEntry.Employees = refreshed.Employees;
                         saveEntry.StorageFurnitures = refreshed.StorageFurnitures;
+                        // Player/NPC-placed furniture roster — without this, hibernation
+                        // drops every runtime-placed chest / station (same root cause as
+                        // the save-path gap fixed 2026-05-13).
+                        saveEntry.PlacedFurnitures = refreshed.PlacedFurnitures;
                         // Construction loop fields — without these the meter resets to 0 on reload.
                         saveEntry.ConstructionProgress = refreshed.ConstructionProgress;
                         saveEntry.DeliveredMaterials = refreshed.DeliveredMaterials;
-                        Debug.Log($"<color=orange>[MapController:Hibernate]</color> Updated existing save entry for '{building.BuildingName}'. State={saveEntry.State}, progress={saveEntry.ConstructionProgress:F2}, owners={saveEntry.OwnerCharacterIds.Count}, employees={saveEntry.Employees.Count}, storages={saveEntry.StorageFurnitures.Count}");
+                        Debug.Log($"<color=orange>[MapController:Hibernate]</color> Updated existing save entry for '{building.BuildingName}'. State={saveEntry.State}, progress={saveEntry.ConstructionProgress:F2}, owners={saveEntry.OwnerCharacterIds.Count}, employees={saveEntry.Employees.Count}, storages={saveEntry.StorageFurnitures.Count}, placed={saveEntry.PlacedFurnitures.Count}");
                     }
                     else
                     {

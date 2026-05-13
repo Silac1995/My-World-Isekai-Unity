@@ -1,6 +1,6 @@
 ---
 name: dev-mode
-description: Host-only god-mode developer tool. F3 toggle (editor/dev), /devmode on|off in chat (release). Modules: Spawn (click-to-spawn NPCs with full configuration), Select (click-to-select Characters + IDevAction plug-in; first action assigns building ownership).
+description: Host-only god-mode developer tool. F3 toggle (editor/dev), /devmode on|off in chat (release). Modules: Spawn (click-to-spawn NPCs with full configuration), Select (click-to-select Characters + IDevAction plug-in; first action assigns building ownership), Game Speed (preset + custom Time.timeScale via GameSpeedController).
 ---
 
 # Dev Mode System
@@ -198,6 +198,55 @@ Enabled when a Character is selected. On `Execute`, claims the click slot and wa
 
 ESC cancels. Another module claiming the click slot also cancels. Selection is preserved after success so further actions can chain.
 
+## Game Speed Module
+
+`DevGameSpeedModule` — dev-side surface for the networked [`GameSpeedController`](../game-speed-controller/SKILL.md). Mirrors the production `UI_GameSpeedController` preset buttons (0× / 1× / 2× / 4× / 8×) and adds a free-form custom-speed input field so devs can stress-test slow-mo (0.25×) or extreme fast-forward (16×+) without rebuilding.
+
+**Fields (`DevModePanel.prefab` → Speed tab content):**
+
+| Field | Widget | Speed |
+|---|---|---|
+| Pause | `Button` | 0× |
+| Normal | `Button` | 1× |
+| Fast | `Button` | 2× |
+| Super Fast | `Button` | 4× |
+| Giga | `Button` | 8× |
+| Custom value | `TMP_InputField` | any positive float (parsed with `InvariantCulture` so `0.5` works regardless of OS locale) |
+| Apply Custom | `Button` | reads the input field |
+| Current Speed | `TMP_Text` | read-only label, updated from `OnSpeedChanged` |
+| Active color | `Color` (Inspector) | tint applied to the active preset button |
+| Inactive color | `Color` (Inspector) | tint applied to the inactive preset buttons |
+
+**Flow**
+
+1. Every click (preset or Apply Custom) routes through `GameSpeedController.Instance.RequestSpeedChange(speed)`.
+2. `RequestSpeedChange` handles the server-vs-client split internally: the host writes `_serverTimeScale.Value`, a client routes via `[Rpc(SendTo.Server)]`. The dev module makes no assumption about who is calling it — the controller decides.
+3. The module subscribes to `OnSpeedChanged` in `OnEnable` and unsubscribes in `OnDisable`, so each tab activation reattaches the listener and refreshes the visual state from the current `Time.timeScale`.
+4. **Fallback path:** when `GameSpeedController.Instance` is null (solo scene playback with no networked DayNightCycle prefab, or the prefab hasn't spawned yet), the module writes `Time.timeScale` directly and refreshes its own visuals. `RequestSpeedChange` itself does the same when `!IsSpawned`; the module's branch covers the case where the singleton doesn't exist at all.
+5. Custom-value parsing is locale-safe (`InvariantCulture`) so `0.5`, `1.5`, `16` all work on every locale. Bad input logs a warning and leaves speed unchanged.
+6. Speed clamps at `0` (no negative values, same contract as `GameSpeedController.RequestSpeedChange`).
+
+**Why this lives in dev mode instead of always-on UI** — the production `UI_GameSpeedController` is part of the player HUD with a fixed 5-button vocabulary. The dev module exists so iteration can run outside that vocabulary (slow-mo for visual inspection, 16× for stress-testing tick catch-up), without polluting the player HUD or risking a player accidentally locking the session into a broken speed. Project rule #26 still holds: any animation inside the dev panel itself must use `Time.unscaledDeltaTime` so it keeps working at 0× / 8×.
+
+**Prefab wiring**
+
+Already wired in `Assets/Resources/UI/DevModePanel.prefab` (2026-05-13):
+- `ContentRoot/TabBar/SpeedTabButton` — new tab button (label "Speed"), cloned from `TimeSkipTabButton`.
+- `ContentRoot/SpeedTab` — content GameObject with `VerticalLayoutGroup` (cloned from `TimeSkipTab`); children: `Header`, `PauseButton`, `NormalButton`, `FastButton`, `SuperFastButton`, `GigaButton`, `Label_Custom`, `CustomField` (`TMP_InputField`, `ContentType.DecimalNumber`, placeholder "e.g. 0.25, 1.5, 16"), `ApplyCustomButton`, `CurrentSpeedLabel`.
+- `DevGameSpeedModule` attached to `SpeedTab` with all `[SerializeField]` refs assigned.
+- New `TabEntry` appended to `DevModePanel._tabs` so `DevModePanel.SwitchTab` picks it up automatically.
+
+If you ever need to rebuild it from scratch (e.g. after a destructive prefab merge), the recipe is:
+
+1. Clone `TimeSkipTabButton` under `ContentRoot/TabBar`, rename `SpeedTabButton`, change its label to "Speed".
+2. Clone `TimeSkipTab` under `ContentRoot`, rename `SpeedTab`. Remove the cloned `DevTimeSkipModule` and delete its child UI.
+3. Attach `DevGameSpeedModule` to the new `SpeedTab`.
+4. Clone `TimeSkipTab/SkipButton` 6× → `PauseButton`, `NormalButton`, `FastButton`, `SuperFastButton`, `GigaButton`, `ApplyCustomButton`. Update each label.
+5. Clone `TimeSkipTab/HoursInput` → `CustomField` (set `ContentType.DecimalNumber`).
+6. Clone `TimeSkipTab/StatusLabel` 3× → `Header`, `Label_Custom`, `CurrentSpeedLabel`.
+7. Wire all `[SerializeField]` refs on `DevGameSpeedModule`.
+8. Append a new entry to `DevModePanel._tabs` with `TabButton = SpeedTabButton.Button`, `Content = SpeedTab`.
+
 ## 8. Integration Points
 
 Files touched by the dev-mode slice:
@@ -209,6 +258,8 @@ Files touched by the dev-mode slice:
 | `Assets/Scripts/Debug/DevMode/DevChatCommands.cs` | `/devmode on\|off` parser; single `Handle(rawInput)` entry point |
 | `Assets/Scripts/Debug/DevMode/Modules/DevSpawnModule.cs` | Click-to-spawn module UI + click handler |
 | `Assets/Scripts/Debug/DevMode/Modules/DevSpawnRow.cs` | Multi-entry row (combat style or skill + level) |
+| `Assets/Scripts/Debug/DevMode/Modules/DevGameSpeedModule.cs` | Game-speed tab: preset buttons + custom value, routed through `GameSpeedController` |
+| `Assets/Scripts/DayNightCycle/GameSpeedController.cs` | Server-authoritative `Time.timeScale` + day/time sync (consumed by the dev module via `RequestSpeedChange` / `OnSpeedChanged`) |
 | `Assets/Resources/UI/DevModePanel.prefab` | Panel prefab with `ContentRoot` and modules as children |
 | `Assets/Resources/UI/DevSpawnRow.prefab` | Reusable row prefab for combat style / skill lists |
 | `Assets/Scripts/SpawnManager.cs` | Extended `SpawnCharacter` signature + `PendingDevConfig` dict + `ApplyDevExtras` server path |
@@ -244,7 +295,6 @@ Planned modules, each to be added as a new child GameObject under `DevModePanel.
 | Module | Notes |
 |---|---|
 | Freecam | Detach camera from player, WASD + mouse look, speed slider. Must not interact with `Time.timeScale`. |
-| Sim-pause | Toggles `GameSpeedController` to 0 without breaking UI (project rule 26: UI uses unscaled time). |
 | NPC selection / edit | Click existing NPC -> panel showing needs, stats, inventory; edit live. |
 | Item grant | Dropdown + count -> add directly to target inventory via `CharacterAction`. |
 | Teleport | Click on map or enter coords -> teleport selected character. |

@@ -215,6 +215,34 @@ Slot contents survive `MapController.Hibernate` / `WakeUp` AND game-session relo
 
 **Authoring rule for storages with `_defaultFurnitureLayout`:** the FurnitureKey depends on the storage's building-local position. If you change `LocalPosition` on a `_defaultFurnitureLayout` slot **after** a world save was written, the saved entry's key won't match any live storage on next load — its contents will be silently dropped. This is the same brittleness as renaming a save field. Treat `_defaultFurnitureLayout` slot positions as part of the save schema once a build ships.
 
+#### Placed-furniture roster (`BuildingSaveData.PlacedFurnitures`, 2026-05-13)
+**The complement to `StorageFurnitures`.** `StorageFurnitures` persists slot CONTENTS keyed by furniture position; `PlacedFurnitures` persists the furniture EXISTENCE itself for anything spawned at runtime via `CharacterPlaceFurnitureAction` (player path or NPC path). Without this, every player-placed chest / crafting station / cashier / etc. silently disappears on save→load because `Building.TrySpawnDefaultFurniture` only re-instantiates items in `_defaultFurnitureLayout`.
+
+- **Save-side (`BuildingSaveData.FromBuilding`):** walks `building.GetFurnitureOfType<Furniture>()` and skips anything matched by `Building.IsDefaultLayoutFurniture(furniture)` (same FurnitureItemSO + LocalPosition within 0.05u epsilon). Surviving entries become `PlacedFurnitureSaveEntry { ItemId, LocalPosition, LocalEulerAngles }`. Per-furniture try/catch (rule #31). Furniture absorbed into `_defaultFurnitureLayout` at Awake via `ConvertNestedNetworkFurnitureToLayout` is automatically excluded because the absorption happens before save runs.
+- **Restore-side (`MapController.RestorePlacedFurnitureForBuilding`):** invoked from `ApplyDynamicSaveDataToBuilding` **BEFORE** `RestoreStorageFurnitureContents` so per-storage key lookup finds the freshly-spawned instances. Server-only, gated to `building.CurrentState == BuildingState.Complete` (don't restore furniture into a still-under-construction building). For each entry: resolve `ItemId` → `FurnitureItemSO` via `Resources.LoadAll<ItemSO>("Data/Item")`, `Instantiate(InstalledFurniturePrefab)` at the saved world position, `NetworkObject.Spawn()`, parent under the building root (NGO requires a NetworkObject ancestor — same parenting rule as `Building.SpawnDefaultFurnitureSlot`), register via `FurnitureManager.RegisterSpawnedFurnitureUnchecked` on `MainRoom` (server-authoritative restore — bypasses `CanPlaceFurniture`). Same cleanup-on-failure path as `SpawnDefaultFurnitureSlot`: half-spawned NetworkObjects get Despawn'd to avoid corrupting `SpawnManager.SpawnedObjectsList`.
+- **No duplicate-spawn risk:** `TrySpawnDefaultFurniture` only iterates `_defaultFurnitureLayout`, which excludes the player-placed roster. `RestorePlacedFurnitureForBuilding` iterates only `PlacedFurnitures`. The two paths spawn disjoint sets.
+- **Refresh-path parity:** both `MapController.SnapshotActiveBuildings` (mid-game save) and `MapController.Hibernate` (player-leaves wake-cycle) copy `refreshed.PlacedFurnitures` onto the existing save entry — same trap that bit `ConstructionProgress` / `DeliveredMaterials` on 2026-05-07 (commit `ff98c2b7`). Without this, mid-game saves would drop the field.
+- **Backward compatibility:** `BuildingSaveData.PlacedFurnitures` defaults to an empty list, so save files written before this feature deserialize cleanly (the missing field is treated as an empty list — no migration code).
+
+**Why this matters (2026-05-13 bug fix):** Before this addition, HarvestingBuilding / CraftingBuilding / FarmingBuilding lost every player-placed storage on save→load. Shop buildings appeared to work only because their SellShelves are nested NetworkObject children of the prefab, absorbed into `_defaultFurnitureLayout` at Awake by `ConvertNestedNetworkFurnitureToLayout`. Player-placed storages in Shop buildings had the same bug. This fix makes player placement first-class across every CommercialBuilding subclass.
+
+#### Save-restore ordering + subscription-timing fix (2026-05-13)
+`MapController.ApplyDynamicSaveDataToBuilding` orchestrates the per-building restore. Order is **load-bearing** — getting it wrong silently drops state. The full sequence:
+
+1. `building.RestoreOwnersFromSaveData(bSave.OwnerCharacterIds)` — owner UUIDs queued + bound via `Character.OnCharacterSpawned` / `OnCharacterIdReassigned`.
+2. `commercial.RestoreEmployeesFromSaveData(bSave.Employees)` — only for `CommercialBuilding`.
+3. **`building.RestoreFromSaveData(bSave)`** — flips state to `bSave.State` (e.g. `Complete`) AND manually invokes `TrySpawnDefaultFurniture()` + `ConfigureNavMeshObstacles()` when state ends Complete and `_isStarted == false`. **This step now happens BEFORE the per-furniture restore steps** (was last in old order).
+4. `RestorePlacedFurnitureForBuilding` — spawns player-placed furniture (state is Complete by now).
+5. `RestoreStorageFurnitureContents` — per-storage key lookup against the now-live default + placed furniture.
+6. `RestoreCashierContents` — same shape for `Cashier`.
+7. ShopBuilding hooks (`RestoreShopFromSaveData`, `OnFurnituresLoaded`).
+
+**Why the manual cascade inside `RestoreFromSaveData`?** `Building.OnNetworkSpawn` auto-derives `_currentState.Value = UnderConstruction` for any prefab with non-empty `_constructionRequirements` and `_spawnAsComplete = false`. The state-flip inside `RestoreFromSaveData` to `Complete` would normally fire `_currentState.OnValueChanged → HandleStateChanged` which runs the post-Complete cascade (`TrySpawnDefaultFurniture`, NavMesh carve, `OnConstructionComplete`, leftover evict). **But that subscription is wired in `Start()`, which Unity hasn't dispatched yet** — `SpawnSavedBuildings → Spawn → ApplyDynamicSaveDataToBuilding → RestoreFromSaveData` is all one synchronous frame. Without a subscriber, the cascade silently no-ops. Default furniture vanishes (Lumberyard crate, Forge anvil, etc.), NavMesh isn't carved, and the per-storage content restore in step 5 finds zero matching live storages.
+
+The fix mirrors the BuildInstantly subscription-timing pattern (see [[buildinstantly-pre-start-lifecycle-race]] in the wiki) but uses a **manual cascade** instead of coroutine-defer — because steps 4-7 below run synchronously in the same call and need furniture live NOW, not next frame. `_defaultFurnitureSpawned` guards make the manual call idempotent against the legitimate Start-subscribed path. We deliberately do NOT call `EvictLeftoversToPerimeter` (one-time construction-loop side effect — saved WorldItems restore separately) or fire `OnConstructionComplete` (would falsely tell quest hooks the building just completed).
+
+**Gotcha catalogue:** [[save-restore-state-flip-no-subscriber]] documents this in the wiki for cross-system reference.
+
 #### Storage Roles (unified per-storage role system, 2026-05-08)
 Every `StorageFurniture` carries one runtime `StorageRoleType` value (`None` / `ToolStorage` / `InventoryStorage` / `SellShelf`). Per-storage exclusivity: a storage can hold **exactly one** role, but multiple storages can independently share the same role (e.g. three sell-shelves, one tool bin, two inventory bins). The role is owner-mutable at runtime through the management panel and persists in save data.
 
@@ -550,14 +578,17 @@ Wiring checklist:
 
 ```
 BuildingSaveData
-├─ ConstructionProgress : float                          [NEW]
-└─ DeliveredMaterials   : List<DeliveredMaterialEntryDTO> [NEW]
-                          { string ItemAssetGuid, int Delivered }
+├─ ConstructionProgress : float                              [2026-05-07]
+├─ DeliveredMaterials   : List<DeliveredMaterialEntryDTO>    [2026-05-07]
+│                         { string ItemAssetGuid, int Delivered }
+└─ PlacedFurnitures     : List<PlacedFurnitureSaveEntry>     [2026-05-13]
+                          { string ItemId, Vector3 LocalPosition, Vector3 LocalEulerAngles }
 ```
 
 - DTO references `ItemSO` by **AssetGuid** so the snapshot survives a designer-time edit to `_constructionRequirements` ordering.
 - AssetGuid resolution is editor-only (`AssetDatabase.AssetPathToGUID` is `UNITY_EDITOR`-gated). Runtime saves on a built player will write empty GUIDs — Phase 1 hibernation pre-warm only matters in-editor; the next scanner tick after wake authoritatively recomputes the meter from actual physical `WorldItem`s in the zone.
-- The snapshot is a UX pre-warm (so the meter doesn't blink to 0 between map-wake and the next scanner tick). The next scanner tick is the source of truth and overwrites it.
+- The construction snapshot is a UX pre-warm (so the meter doesn't blink to 0 between map-wake and the next scanner tick). The next scanner tick is the source of truth and overwrites it.
+- `PlacedFurnitures` carries the player/NPC-placed furniture roster — see `Placed-furniture roster` section above for the full save/restore contract. Identified by `Furniture.FurnitureItemSO.ItemId`; resolved on load via `Resources.LoadAll<ItemSO>("Data/Item")`.
 
 ### Networking & multiplayer matrix (Rule #18 / #19)
 
@@ -585,7 +616,7 @@ BuildingSaveData
 - **`[ServerRpc(RequireOwnership=false)]` legacy attribute** — `Building.RequestStartFinishConstructionServerRpc` uses the old `[ServerRpc]` form. Attempting `[Rpc(SendTo.Server)]` failed to dispatch in our NGO version. Building NetworkObject is server-owned, so any client invoking the RPC is by definition not the owner — `RequireOwnership=false` is the standard escape. Method name MUST end in `ServerRpc` for the legacy attribute to dispatch.
 - **Continuous action visual proxy uses a 600s sentinel** — `CharacterActions.ExecuteAction` calls `BroadcastActionVisualsClientRpc(duration=600f)` for `CharacterAction_Continuous`, because continuous actions don't have a real duration. On finish (Finalize, stall timeout, manual cancel) the server **must** call `CancelActionVisualsClientRpc` so peers tear down the proxy immediately — without it the proxy lingers 600s.
 - **HUD progress bar reads `Progress`, not `Duration`** — `CharacterAction_Continuous.Progress` is a virtual getter (default 0). Override on `CharacterAction_FinishConstruction` returns `Building.ConstructionProgress.Value`. `CharacterActions.GetActionProgress` checks the override BEFORE falling back to `elapsed/duration` (which would div-by-0 or read the 600s sentinel — both wrong).
-- **Save/load progress restoration through refresh paths** — `MapController.SnapshotActiveBuildings` (manual save) and `MapController.Hibernate` (player-leaves wake-cycle) both walk the registered building list and refresh existing `BuildingSaveData` entries from the live `Building`. Both paths must copy `ConstructionProgress` AND `DeliveredMaterials` from the refreshed entry. Without this (the 2026-05-07 fix `ff98c2b7`), mid-build progress reset to 0 on every save/load cycle.
+- **Save/load progress restoration through refresh paths** — `MapController.SnapshotActiveBuildings` (manual save) and `MapController.Hibernate` (player-leaves wake-cycle) both walk the registered building list and refresh existing `BuildingSaveData` entries from the live `Building`. Both paths must copy `ConstructionProgress` AND `DeliveredMaterials` AND `PlacedFurnitures` from the refreshed entry. Without this (the 2026-05-07 fix `ff98c2b7` extended on 2026-05-13 for `PlacedFurnitures`), mid-build progress / player-placed furniture reset to 0 / disappear on every save/load cycle.
 - **`_spawnAsComplete` designer checkbox** — `[SerializeField] bool _spawnAsComplete` on Building. When true, `OnNetworkSpawn` flips state directly to `Complete` regardless of `_constructionRequirements` content. Use for scene-authored buildings that should ship as already-built environment (player home, NPC shops, tutorial structures). Empty `_constructionRequirements` already auto-promotes to Complete; the checkbox is for prefabs that DO have requirements but don't want to load as scaffolds.
 - **`Building.Finalize()` shadows `object.Finalize`** — declared as `public new void Finalize()`. The GC finalizer slot is untouched (Building has no `~Building()`). Don't add one without renaming this.
 - **Default furniture is deferred until `Complete`** — `TrySpawnDefaultFurniture` early-exits during `UnderConstruction`. The state-change handler invokes it once on the transition; subsequent state changes (Damaged, Demolished, future) must not re-spawn.
