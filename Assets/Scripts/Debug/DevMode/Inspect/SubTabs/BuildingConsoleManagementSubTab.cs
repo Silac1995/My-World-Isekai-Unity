@@ -5,6 +5,7 @@ using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.UI;
 
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
 /// <summary>
 /// DEV-ONLY mutator surface for the Building inspector. Builds widgets at runtime
 /// because the dev panel is host-only and uses programmatic UGUI throughout.
@@ -551,3 +552,4 @@ public sealed class BuildingConsoleManagementSubTab : BuildingSubTab
         return Array.Find(all, x => x != null && x.ItemId == id);
     }
 }
+#endif
