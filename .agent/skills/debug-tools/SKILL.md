@@ -56,6 +56,18 @@ public interface IInspectorView
 - `Update()` calls `activeSubTab.Refresh(character)` each frame — only the visible sub-tab pays the render cost.
 - Tab switching deactivates the old content GO, activates the new one.
 
+**Identity copy buttons (added 2026-05-09).** A sibling `IdentityCopyRow` GameObject (sibling index 1, between `Header` and `TabBar`) hosts 3 always-visible `Button`s wired to serialized fields on the view:
+
+| Field | Button label | Action |
+|-------|--------------|--------|
+| `_copyUidButton` | `Copy UID` | `GUIUtility.systemCopyBuffer = _target.CharacterId` (the persistent profile GUID — what [[save-load]]'s `CharacterProfileSaveData.characterGuid` round-trips, and what `Character.FindByUUID` resolves) |
+| `_copyWorldGuidButton` | `Copy World` | `GUIUtility.systemCopyBuffer = _target.OriginWorldGuid` (the world GUID set in `Character.OnNetworkSpawn` and persisted via `CharacterProfileSaveData.originWorldGuid`) |
+| `_copyAllButton` | `Copy All` | Three-line block: `Name: <name>\nCharacterId: <uid>\nOriginWorldGuid: <world>` |
+
+Each handler is wrapped in `try/catch` (per rule 31) and emits one `Debug.Log` per click. `SetTarget` / `Clear` flip every button's `interactable` so the row greys out when nothing is selected.
+
+The row is **always visible** — putting these buttons on the view root rather than inside `IdentitySubTab` means devs don't have to click into a sub-tab first to copy the IDs while debugging save / hibernation issues. The author may choose either placement on future inspector views; the deciding factor is "does the data need to be reachable while inspecting any sub-tab".
+
 ### 3. Sub-Tab Base — `CharacterSubTab`
 
 ```csharp

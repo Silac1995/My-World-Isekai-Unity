@@ -95,7 +95,8 @@
       "Bash(git ls-files *)",
       "Bash(git -C \"c:/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity\" add \"Assets/Scripts/Character/CharacterJob/CharacterJob.cs\")",
       "Bash(git -C 'c:/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity' commit -m 'feat\\(jobs\\): seed default wages at hire time via WageSystemService *)",
-      "Bash(claude:*)"
+      "Bash(claude:*)",
+      "PowerShell(Copy-Item -Path \"C:\\\\Users\\\\Kevin\\\\Unity\\\\Unity Projects\\\\Git\\\\MWI - Version Control\\\\My-World-Isekai-Unity\\\\Assets\\\\Resources\\\\UI\\\\DevModePanel.prefab\" -Destination \"C:\\\\Users\\\\Kevin\\\\Unity\\\\Unity Projects\\\\Git\\\\MWI - Version Control\\\\My-World-Isekai-Unity\\\\.claude\\\\worktrees\\\\unruffled-morse-bc0d44\\\\Assets\\\\Resources\\\\UI\\\\DevModePanel.prefab\" -Force; if \\($?\\) { \\(Get-Item \"C:\\\\Users\\\\Kevin\\\\Unity\\\\Unity Projects\\\\Git\\\\MWI - Version Control\\\\My-World-Isekai-Unity\\\\.claude\\\\worktrees\\\\unruffled-morse-bc0d44\\\\Assets\\\\Resources\\\\UI\\\\DevModePanel.prefab\"\\).Length })"
     ],
     "additionalDirectories": [
       "\\tmp"

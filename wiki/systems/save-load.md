@@ -7,9 +7,11 @@ updated: 2026-05-09
 sources: []
 related:
   - "[[character]]"
+  - "[[character-profile]]"
   - "[[world]]"
   - "[[network]]"
   - "[[world-time-skip]]"
+  - "[[dev-mode]]"
   - "[[kevin]]"
 status: stable
 confidence: high

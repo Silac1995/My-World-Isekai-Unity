@@ -5,7 +5,7 @@ tags: [character, personality, save-load, tier-2, stub]
 created: 2026-04-19
 updated: 2026-05-09
 sources: []
-related: ["[[character]]", "[[character-relation]]", "[[save-load]]", "[[host-player-uuid-timing-on-load]]", "[[kevin]]"]
+related: ["[[character]]", "[[character-relation]]", "[[save-load]]", "[[host-player-uuid-timing-on-load]]", "[[dev-mode]]", "[[kevin]]"]
 status: wip
 confidence: medium
 primary_agent: character-system-specialist
@@ -38,12 +38,16 @@ The persistent `characterGuid` field on `CharacterProfileSaveData` is what makes
 
 This asymmetry breaks any server-side resolver that calls `Character.FindByUUID(savedId)` between Steps 5 and 6 — the host appears un-found, and the pending-list subscription on `OnCharacterSpawned` never re-fires after the GUID changes. Mitigation: `CharacterDataCoordinator.ImportProfile` raises a separate `Character.OnCharacterIdReassigned` event when the GUID actually changes, and saved-data resolvers (`Building.RestoreOwnersFromSaveData`, `CommercialBuilding.RestoreEmployeesFromSaveData`) subscribe to BOTH events. See the gotcha at [[host-player-uuid-timing-on-load]] for the full trace.
 
+## Debugging hooks
+- The `CharacterInspectorView` in [[dev-mode]] exposes 3 always-visible identity copy buttons that put the inspected character's `CharacterId`, `OriginWorldGuid`, or a combined `Name + UID + OriginWorld` block onto `GUIUtility.systemCopyBuffer`. Use them to seed `Character.FindByUUID` calls, search save files for a profile, or attach to a bug report touching identity-keyed lookups. The buttons render to the right of the `_headerLabel` (sibling index 1 row) in the Inspect tab and grey out when no character is selected.
+
 ## Open questions
 - [ ] Exact compatibility scoring formula — SKILL describes outcomes, not math.
 - [ ] What personality axes exist? (Openness, extroversion, etc., or custom enum?)
 - [ ] No SKILL.md — tracked in [[TODO-skills]].
 
 ## Change log
+- 2026-05-09 (later) — Cross-linked [[dev-mode]] now that `CharacterInspectorView` surfaces `characterGuid` + `originWorldGuid` via clipboard copy buttons (debugging hook section added). — claude
 - 2026-05-09 — Documented host-vs-NPC identity timing; added the new `Character.OnCharacterIdReassigned` event raised from `ImportProfile`. The previous-vs-new GUID compare in `ImportProfile` ensures NPCs (whose pre-spawn-set GUID matches the imported profile GUID) do not spuriously fire the event. — claude
 - 2026-04-19 — Stub. — Claude / [[kevin]]
 
