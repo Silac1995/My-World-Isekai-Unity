@@ -190,7 +190,14 @@ public class BuildingInspectorView : MonoBehaviour, IBuildingInspectorView
         var overviewTab = overviewHost.AddComponent<BuildingOverviewSubTab>();
         overviewTab.SetContentLabel(_content);
 
+        // Tab buttons.
+        var overviewBtn = CreateTabButton(tabBarGO.transform, "Overview");
+        _subTabs.Add((overviewBtn, overviewHost, overviewTab));
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
         // Console Management host — full-stretch, same top inset. ScrollRect inside.
+        // Dev-only: BuildingConsoleManagementSubTab is gated to editor/development builds
+        // because every widget calls a DevForce* method that is itself dev-only-gated.
         var consoleHost = CreateUIChild(parent, "ConsoleManagementContent", siblingIndex: 3);
         ConfigureContentHostStretch(consoleHost, topInset: TopInset);
         AddScrollRect(consoleHost, out var consoleContent);
@@ -200,8 +207,6 @@ public class BuildingInspectorView : MonoBehaviour, IBuildingInspectorView
         consoleContent.AddComponent<BuildingConsoleManagementSubTab>();
         var consoleTab = consoleContent.GetComponent<BuildingConsoleManagementSubTab>();
 
-        // Tab buttons.
-        var overviewBtn = CreateTabButton(tabBarGO.transform, "Overview");
         var consoleBtn = CreateTabButton(tabBarGO.transform, "[DEV] Console Management");
         // Tint the dev tab button red so it's impossible to confuse with a production surface.
         var consoleImg = consoleBtn.GetComponent<Image>();
@@ -209,8 +214,8 @@ public class BuildingInspectorView : MonoBehaviour, IBuildingInspectorView
         var consoleLabelText = consoleBtn.GetComponentInChildren<TMP_Text>();
         if (consoleLabelText != null) consoleLabelText.color = new Color(1f, 0.7f, 0.7f, 1f);
 
-        _subTabs.Add((overviewBtn, overviewHost, overviewTab));
         _subTabs.Add((consoleBtn, consoleHost, consoleTab));
+#endif
 
         for (int i = 0; i < _subTabs.Count; i++)
         {
