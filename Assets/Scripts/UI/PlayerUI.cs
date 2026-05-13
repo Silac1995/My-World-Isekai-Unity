@@ -38,6 +38,7 @@ public class PlayerUI : MonoBehaviour
     [Header("UI Windows")]
     [SerializeField] private CharacterEquipmentUI _equipmentUI;
     [SerializeField] private UI_StorageFurniturePanel _storagePanel;
+    [SerializeField] private MWI.UI.Shop.UI_ShopBuyPanel _shopBuyPanel;
     [SerializeField] private UI_CharacterRelations _relationsUI;
     [SerializeField] private UI_CharacterStats _statsUI;
     [SerializeField] private MWI.UI.Building.UI_BuildingPlacementMenu _buildingUI;
@@ -357,6 +358,33 @@ public class PlayerUI : MonoBehaviour
     {
         if (_storagePanel == null) return;
         if (_storagePanel.gameObject.activeSelf) _storagePanel.CloseWindow();
+    }
+
+    /// <summary>
+    /// Open the shop buy panel for <paramref name="cashier"/>, bound to
+    /// <paramref name="customer"/>'s wallet + the cashier's linked shop catalog/shelves.
+    /// Called from <see cref="MWI.World.Furniture.CashierNetSync.OpenBuyPanelClientRpc"/>
+    /// on the customer-owning client. Re-binds cleanly if the panel is already open.
+    /// </summary>
+    public void OpenShopBuyPanel(Cashier cashier, Character customer)
+    {
+        if (_shopBuyPanel == null)
+        {
+            Debug.LogWarning("PlayerUI: UI_ShopBuyPanel component not assigned!");
+            return;
+        }
+        _shopBuyPanel.Initialize(cashier, customer);
+    }
+
+    /// <summary>
+    /// Close the shop buy panel if it is currently open. Safe to call when the panel
+    /// is already closed. Called from
+    /// <see cref="MWI.World.Furniture.CashierNetSync.CloseBuyPanelClientRpc"/>.
+    /// </summary>
+    public void CloseShopBuyPanel()
+    {
+        if (_shopBuyPanel == null) return;
+        if (_shopBuyPanel.gameObject.activeSelf) _shopBuyPanel.CloseWindow();
     }
 
     /// <summary>

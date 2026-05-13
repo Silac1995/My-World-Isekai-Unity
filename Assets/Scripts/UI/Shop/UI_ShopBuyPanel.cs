@@ -9,13 +9,17 @@ using UnityEngine.UI;
 namespace MWI.UI.Shop
 {
     /// <summary>
-    /// Player-facing shop buy panel. Opens via OpenBuyPanelClientRpc; reads
-    /// authoritative state from ShopBuilding (catalog) + per-shelf StorageFurniture
-    /// (stock) + CharacterWallet. Reactive — refreshes on any of those events.
+    /// Player-facing shop buy panel. Lives as a scene child of UI_PlayerHUD per the
+    /// canonical HUD pattern (mirrors <see cref="UI_StorageFurniturePanel"/>). Opened
+    /// by <see cref="PlayerUI.OpenShopBuyPanel"/> from <c>CashierNetSync.OpenBuyPanelClientRpc</c>;
+    /// closed by <see cref="UI_WindowBase.CloseWindow"/> (auto-wired close button) or
+    /// <see cref="PlayerUI.CloseShopBuyPanel"/>.
     ///
-    /// All mutations server-authoritative through Cashier.NetSync ServerRpcs.
+    /// Reads authoritative state from ShopBuilding (catalog) + per-shelf StorageFurniture
+    /// (stock) + CharacterWallet. Reactive — refreshes on any of those events. All
+    /// mutations go through Cashier.NetSync ServerRpcs.
     /// </summary>
-    public class UI_ShopBuyPanel : MonoBehaviour
+    public class UI_ShopBuyPanel : UI_WindowBase
     {
         [Header("Wiring")]
         [SerializeField] private TMP_Text _titleText;
@@ -26,22 +30,25 @@ namespace MWI.UI.Shop
         [SerializeField] private Transform _rowsParent;
         [SerializeField] private GameObject _rowPrefab;   // prefab carrying a UI_ShopBuyRow component
 
+        private Cashier _cashier;
+        private Character _customer;
+        private ShopBuilding _shop;
+        private readonly Dictionary<ItemSO, int> _quantities = new();
+        private readonly List<UI_ShopBuyRow> _rows = new();
+
         /// <summary>
         /// Programmatically ensure the panel root has its own Canvas + GraphicRaycaster
-        /// so it renders and raycasts independently of whatever scene canvas it ends up
-        /// under — Resources.Load → Instantiate places the prefab at the scene root by
-        /// default. Mirrors the defensive guard in UI_StorageFurniturePanel.cs:58-71.
+        /// so it renders/raycasts independently of the parent HUD canvas — defends
+        /// against prefab override propagation quirks where the nested UI_PlayerHUD
+        /// instance might not pick up Canvas/sortingOrder values authored on this prefab.
+        /// Mirrors <see cref="UI_StorageFurniturePanel"/>'s guard.
         /// </summary>
-        private void Awake()
+        protected override void Awake()
         {
+            base.Awake();
+
             var canvas = GetComponent<UnityEngine.Canvas>();
             if (canvas == null) canvas = gameObject.AddComponent<UnityEngine.Canvas>();
-            // Force-set renderMode — the prefab was authored via MCP, which can leave a
-            // Canvas with renderMode = WorldSpace baked into the asset. Parenting under
-            // PlayerUI.HudCanvas doesn't reset that — Canvas.renderMode is its own field
-            // independent of parent inheritance. Explicit assignment here guarantees the
-            // HUD overlay behaviour regardless of how the prefab is authored.
-            canvas.renderMode = UnityEngine.RenderMode.ScreenSpaceOverlay;
             canvas.overrideSorting = true;
             canvas.sortingOrder = 50;
 
@@ -49,69 +56,68 @@ namespace MWI.UI.Shop
                 gameObject.AddComponent<UnityEngine.UI.GraphicRaycaster>();
         }
 
-        private static UI_ShopBuyPanel _instance;
-        private Cashier _cashier;
-        private Character _customer;
-        private ShopBuilding _shop;
-        private readonly Dictionary<ItemSO, int> _quantities = new();
-        private readonly List<UI_ShopBuyRow> _rows = new();
-
-        public static void Open(Cashier cashier, Character customer)
+        /// <summary>
+        /// Called by <see cref="PlayerUI.OpenShopBuyPanel"/>. Activates the panel, wires
+        /// up subscriptions, and paints the initial state. Calling this while already
+        /// open re-binds to the new target cleanly.
+        /// </summary>
+        public void Initialize(Cashier cashier, Character customer)
         {
-            if (_instance == null)
+            if (cashier == null || customer == null)
             {
-                var prefab = Resources.Load<GameObject>("UI/UI_ShopBuyPanel");
-                if (prefab == null) { Debug.LogError("[UI_ShopBuyPanel] prefab not found at Resources/UI/UI_ShopBuyPanel"); return; }
-
-                // Parent under PlayerUI.HudCanvas so the child Canvas inherits the HUD's
-                // RenderMode (ScreenSpaceOverlay) — without this, the standalone Canvas
-                // defaults to WorldSpace and the panel renders in the game world.
-                // Matches UI_OwnerManagementPanel.cs:84-89 pattern.
-                if (PlayerUI.Instance == null || PlayerUI.Instance.HudCanvas == null)
-                {
-                    Debug.LogWarning("[UI_ShopBuyPanel] PlayerUI HUD canvas unavailable — cannot parent panel.");
-                    return;
-                }
-                var go = Instantiate(prefab, PlayerUI.Instance.HudCanvas.transform, false);
-                _instance = go.GetComponent<UI_ShopBuyPanel>();
+                Debug.LogWarning("<color=orange>[UI_ShopBuyPanel]</color> Initialize called with null cashier or customer.");
+                return;
             }
-            _instance.Bind(cashier, customer);
-            _instance.gameObject.SetActive(true);
-        }
 
-        public static void Close()
-        {
-            if (_instance == null) return;
-            _instance.Unbind();
-            _instance.gameObject.SetActive(false);
-        }
+            UnsubscribeAll();
+            for (int i = 0; i < _rows.Count; i++) Destroy(_rows[i].gameObject);
+            _rows.Clear();
+            _quantities.Clear();
 
-        private void Bind(Cashier cashier, Character customer)
-        {
             _cashier = cashier;
             _customer = customer;
             _shop = cashier.LinkedShop;
-            if (_shop == null) { Debug.LogError("[UI_ShopBuyPanel] cashier has no LinkedShop"); Close(); return; }
+            if (_shop == null)
+            {
+                Debug.LogError("[UI_ShopBuyPanel] cashier has no LinkedShop");
+                CloseWindow();
+                return;
+            }
 
-            _titleText.text = $"Shop: {_shop.BuildingName}";
+            if (_titleText != null) _titleText.text = $"Shop: {_shop.BuildingName}";
+
+            _confirmButton.onClick.RemoveAllListeners();
+            _cancelButton.onClick.RemoveAllListeners();
             _confirmButton.onClick.AddListener(OnConfirmClicked);
             _cancelButton.onClick.AddListener(OnCancelClicked);
 
             SubscribeAll();
             RebuildRows();
             Refresh();
+
+            OpenWindow();
         }
 
-        private void Unbind()
+        /// <summary>
+        /// Closes the panel: unsubscribes events, clears rows, then defers to
+        /// <see cref="UI_WindowBase.CloseWindow"/> for the SetActive(false). Called by
+        /// the inherited close button (auto-wired in <see cref="UI_WindowBase.Awake"/>),
+        /// the cancel button, the lock-released subscriber, and
+        /// <see cref="PlayerUI.CloseShopBuyPanel"/>.
+        /// </summary>
+        public override void CloseWindow()
         {
-            _confirmButton.onClick.RemoveListener(OnConfirmClicked);
-            _cancelButton.onClick.RemoveListener(OnCancelClicked);
             UnsubscribeAll();
-
-            for (int i = 0; i < _rows.Count; i++) Destroy(_rows[i].gameObject);
+            if (_confirmButton != null) _confirmButton.onClick.RemoveListener(OnConfirmClicked);
+            if (_cancelButton != null) _cancelButton.onClick.RemoveListener(OnCancelClicked);
+            for (int i = 0; i < _rows.Count; i++) if (_rows[i] != null) Destroy(_rows[i].gameObject);
             _rows.Clear();
             _quantities.Clear();
-            _cashier = null; _customer = null; _shop = null;
+            _cashier = null;
+            _customer = null;
+            _shop = null;
+
+            base.CloseWindow();
         }
 
         private void SubscribeAll()
@@ -171,12 +177,13 @@ namespace MWI.UI.Shop
         }
 
         private void OnWalletChanged(CurrencyId currency, int oldValue, int newValue) => Refresh();
+
         private void OnLockChanged(ulong previous, ulong current)
         {
             if (current == 0 && _customer != null)
             {
                 MWI.UI.Notifications.UI_Toast.Show("Vendor left — purchase cancelled.", MWI.UI.Notifications.ToastType.Warning);
-                Close();
+                CloseWindow();
             }
         }
 
@@ -199,9 +206,9 @@ namespace MWI.UI.Shop
             }
 
             int wallet = _customer.CharacterWallet.GetBalance(CurrencyId.Default);
-            _walletText.text = $"Wallet: {wallet} g";
-            _totalText.text = $"Total: {total} g";
-            _confirmButton.interactable = total <= wallet && _quantities.Count > 0;
+            if (_walletText != null) _walletText.text = $"Wallet: {wallet} g";
+            if (_totalText != null) _totalText.text = $"Total: {total} g";
+            if (_confirmButton != null) _confirmButton.interactable = total <= wallet && _quantities.Count > 0;
         }
 
         private int AggregateStockAcrossShelves(ItemSO item)
@@ -238,14 +245,16 @@ namespace MWI.UI.Shop
 
         private void OnCancelClicked()
         {
-            if (_cashier?.NetSync == null) { Close(); return; }
+            if (_cashier?.NetSync == null) { CloseWindow(); return; }
             _cashier.NetSync.CancelPlayerTransactionServerRpc();
         }
 
-        private void OnDestroy()
+        private void OnDisable() => UnsubscribeAll();
+
+        protected override void OnDestroy()
         {
             UnsubscribeAll();
-            if (_instance == this) _instance = null;
+            base.OnDestroy();
         }
     }
 }

@@ -101,13 +101,18 @@ public class CashierNetSync : NetworkBehaviour
         var cashier = cashierObj.GetComponent<Cashier>();
         if (customer == null || cashier == null) return;
         if (!customer.IsOwner) return;     // only the owning client opens the UI (rule #19)
-        MWI.UI.Shop.UI_ShopBuyPanel.Open(cashier, customer);
+        if (PlayerUI.Instance == null)
+        {
+            Debug.LogWarning("[CashierNetSync] PlayerUI.Instance is null — cannot open shop buy panel.");
+            return;
+        }
+        PlayerUI.Instance.OpenShopBuyPanel(cashier, customer);
     }
 
     [ClientRpc]
     public void CloseBuyPanelClientRpc(ulong customerNetworkObjectId, ClientRpcParams p = default)
     {
-        MWI.UI.Shop.UI_ShopBuyPanel.Close();
+        PlayerUI.Instance?.CloseShopBuyPanel();
     }
 
     [ClientRpc]
