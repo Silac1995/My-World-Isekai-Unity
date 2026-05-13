@@ -109,3 +109,6 @@ node_modules/
 
 # ---- Superpowers brainstorm session files (local only) ----
 .superpowers/
+
+# ---- Claude Code agent worktrees (local only) ----
+.claude/worktrees/
