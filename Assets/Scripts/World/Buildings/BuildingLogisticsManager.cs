@@ -511,6 +511,139 @@ public class BuildingLogisticsManager : MonoBehaviour
 
     public void RetryUnplacedOrders(Character worker = null) => _dispatcher.RetryUnplacedOrders(worker);
 
+    /// <summary>
+    /// Shift-punch storage-role assignment pass. Called by
+    /// <see cref="CommercialBuilding.WorkerStartingShift"/> every time a worker punches
+    /// in. Walks every <see cref="StorageFurniture"/> in the building (deterministic
+    /// order: MainRoom first, then SubRooms; FurnitureManager registration order
+    /// within each room) and applies the unified role-priority rule:
+    /// <list type="bullet">
+    ///   <item>If the building requires tools (<see cref="CommercialBuilding.GetToolStockItems"/>
+    ///         yields anything) → first storage = <see cref="StorageRoleType.ToolStorage"/>,
+    ///         all the rest = <see cref="StorageRoleType.InventoryStorage"/>.</item>
+    ///   <item>Else if the building is a <see cref="ShopBuilding"/> → first storage =
+    ///         <see cref="StorageRoleType.SellShelf"/>, all the rest =
+    ///         <see cref="StorageRoleType.InventoryStorage"/>.</item>
+    ///   <item>Otherwise → all storages = <see cref="StorageRoleType.InventoryStorage"/>.</item>
+    /// </list>
+    /// Tool-storage priority overrides shelf priority: a shop that somehow has required
+    /// tools still picks <see cref="StorageRoleType.ToolStorage"/> first, the shelf
+    /// falls back to <see cref="StorageRoleType.InventoryStorage"/> like every other
+    /// non-first storage.
+    /// <para>
+    /// **Idempotent.** Each storage's current <see cref="StorageFurniture.Role"/> is
+    /// compared against the policy verdict and the write only happens on a mismatch.
+    /// Re-running on the same building (second worker on the same shift, repeat
+    /// punch-ins) converges to the same answer with zero replication traffic.
+    /// </para>
+    /// <para>
+    /// **Server-authoritative.** Mutates state via the existing
+    /// <see cref="StorageFurnitureNetworkSync.SetRoleServer"/> path which writes to a
+    /// <see cref="Unity.Netcode.NetworkVariable{T}"/> — clients pick the new role up
+    /// through the standard <c>OnValueChanged</c> callback that fans out to
+    /// <see cref="CommercialBuilding.OnStorageRolesChanged"/>. Skips work on remote
+    /// clients (defence-in-depth — <see cref="CommercialBuilding.WorkerStartingShift"/>
+    /// already guards, but a logistics-layer safety net is cheap).
+    /// </para>
+    /// <para>
+    /// Storages whose role does not appear in
+    /// <see cref="CommercialBuilding.SupportedStorageRoles"/> for the desired verdict
+    /// are skipped with a warning — covers misauthored subclasses (e.g. a base
+    /// <see cref="CommercialBuilding"/> with no <see cref="StorageRoleType.SellShelf"/>
+    /// support but the rule somehow chose it).
+    /// </para>
+    /// </summary>
+    public void AssignStorageRolesForShift()
+    {
+        if (_building == null) return;
+
+        // Server-only mutator. Solo / offline path keeps working because
+        // NetworkManager.Singleton is null or !IsListening — same guard idiom as
+        // CommercialBuilding.WorkerStartingShift.
+        if (Unity.Netcode.NetworkManager.Singleton != null
+            && Unity.Netcode.NetworkManager.Singleton.IsListening
+            && !Unity.Netcode.NetworkManager.Singleton.IsServer)
+        {
+            return;
+        }
+
+        var storages = _building.GetStorageFurnitureOrdered();
+        if (storages == null || storages.Count == 0) return;
+
+        // Policy verdict: does the building require tools?
+        bool requiresTools = false;
+        var toolItems = _building.GetToolStockItems();
+        if (toolItems != null)
+        {
+            foreach (var t in toolItems)
+            {
+                if (t != null) { requiresTools = true; break; }
+            }
+        }
+
+        // First-storage role per the rule. Tool-priority overrides shelf-priority.
+        bool isShop = _building is ShopBuilding;
+        StorageRoleType firstRole;
+        if (requiresTools)        firstRole = StorageRoleType.ToolStorage;
+        else if (isShop)          firstRole = StorageRoleType.SellShelf;
+        else                      firstRole = StorageRoleType.InventoryStorage;
+        StorageRoleType restRole  = StorageRoleType.InventoryStorage;
+
+        var supported = _building.SupportedStorageRoles;
+
+        for (int i = 0; i < storages.Count; i++)
+        {
+            var storage = storages[i];
+            if (storage == null) continue;
+
+            StorageRoleType desired = (i == 0) ? firstRole : restRole;
+
+            // Subtype filter: skip if the desired role isn't supported by this building.
+            // Covers misauthored subclasses (no SellShelf support but rule chose it, etc.).
+            if (!IsRoleSupported(supported, desired))
+            {
+                if (NPCDebug.VerboseJobs)
+                {
+                    Debug.LogWarning($"[Logistics] {_building.BuildingName}: AssignStorageRolesForShift wants {desired} for storage[{i}] but it's not in SupportedStorageRoles — skipping.");
+                }
+                continue;
+            }
+
+            // Idempotency: skip the write when the storage is already in the desired
+            // state. Prevents replication churn when a second worker punches in or the
+            // first worker re-enters after a brief absence.
+            if (storage.Role == desired) continue;
+
+            // The replicated NetworkVariable lives on a sibling
+            // StorageFurnitureNetworkSync. Resolve it once per storage and route the
+            // write through SetRoleServer (server-only, fans out to every peer via
+            // OnValueChanged → CommercialBuilding.OnStorageRolesChanged).
+            var sync = storage.GetComponent<StorageFurnitureNetworkSync>();
+            if (sync == null)
+            {
+                Debug.LogError($"[Logistics] {_building.BuildingName}: storage[{i}] '{storage.name}' has no StorageFurnitureNetworkSync — cannot assign role {desired}. Add the component to the storage prefab.");
+                continue;
+            }
+
+            sync.SetRoleServer(desired);
+
+            if (NPCDebug.VerboseJobs)
+            {
+                Debug.Log($"<color=#66ccff>[Logistics]</color> {_building.BuildingName}: storage[{i}] '{storage.name}' role {storage.Role} → {desired} (requiresTools={requiresTools}, isShop={isShop}).");
+            }
+        }
+    }
+
+    private static bool IsRoleSupported(System.Collections.Generic.IReadOnlyList<StorageRoleDescriptor> supported, StorageRoleType role)
+    {
+        if (supported == null) return false;
+        for (int i = 0; i < supported.Count; i++)
+        {
+            if (supported[i].Type == role) return true;
+        }
+        return false;
+    }
+
     // =========================================================================
     // PUBLIC API — PENDING QUEUE ACCESS (used by GoapAction_PlaceOrder)
     // =========================================================================

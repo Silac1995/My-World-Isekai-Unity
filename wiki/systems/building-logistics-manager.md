@@ -3,7 +3,7 @@ type: system
 title: "Building Logistics Manager"
 tags: [logistics, jobs, orders, tier-2]
 created: 2026-04-19
-updated: 2026-04-27
+updated: 2026-05-14
 sources: []
 related:
   - "[[jobs-and-logistics]]"
@@ -255,6 +255,7 @@ All five lists are per-building runtime state. Map hibernation does not currentl
 - [[character-relation]] — expiration penalties.
 
 ## Change log
+- 2026-05-14 — New public method `AssignStorageRolesForShift()` (server-only). Called from `CommercialBuilding.WorkerStartingShift` on every actual shift entry. Walks `_building.GetStorageFurnitureOrdered()` and applies the unified rule (tool-priority → shelf-priority on shops → inventory default). Idempotent — skips writes when current `storage.Role` already matches the verdict. Writes through `StorageFurnitureNetworkSync.SetRoleServer` (the same replicated path used by the management panel's `TrySetStorageRoleServerRpc`), so no new RPCs / no new NetworkVariables. The desired role is filtered against `_building.SupportedStorageRoles` so subclasses without `SellShelf` support don't get the shelf branch. See [[commercial-storage-roles]] for the full rule + ordering contract. — claude
 - 2026-04-27 — **Performance pass: dirty-flag dispatcher gating (Tier 3 B)**. `LogisticsOrderBook` now owns a `_dispatchDirty` flag set by every `Add*` / `Remove*` mutation method (active orders, placed buy orders, placed/active transport orders, active crafting orders, pending queue). New public API: `IsDispatchDirty`, `MarkDispatchDirty()`, `ClearDispatchDirty()`. `LogisticsTransportDispatcher.ProcessActiveBuyOrders` and `RetryUnplacedOrders` now early-exit when the flag is clean; `ProcessActiveBuyOrders` clears the flag at the end of a successful pass. `BuildingLogisticsManager.MarkDispatchDirty()` is the public pass-through called by inventory mutations on `CommercialBuilding` (`AddToInventory`, `TakeFromInventory`, `RemoveExactItemFromInventory`). Dispatcher work goes from 40 calls/sec on stable state to near-zero. Initial state = dirty (covers warm-start / load-from-save). Network-safe (server-only state). C (incremental reservation tracking) explicitly skipped — was redundant once B landed. See [[performance-conventions]] Pattern 1 for the canonical shape; [[optimisation-backlog]] for measurements + Tier 4. — claude
 - 2026-04-23 — Quest integration: `BuyOrder`, `TransportOrder`, `CraftingOrder` now implement `MWI.Quests.IQuest` directly (Hybrid C). `LogisticsOrderBook` fires `OnBuyOrderAdded` / `OnTransportOrderAdded` / `OnCraftingOrderAdded` + `OnAnyOrderRemoved` events. `CraftingOrder.Workshop` parameter added (optional, default null; `LogisticsTransportDispatcher` call sites updated to pass `_building`). See [[quest-system]]. — claude
 - 2026-04-23 — Added optional `PickupZone` routing for transporters + NavMesh upfront reachability probe on `MoveToItem` / `MoveToDestination` + `BuyOrder.PathUnreachableCount` loop breaker + new `GoapAction_StageItemForPickup` on source-side `JobLogisticsManager`. Fixes transporter stalling when `StorageZone` is unreachable. — claude

@@ -284,6 +284,19 @@ Every `StorageFurniture` carries one runtime `StorageRoleType` value (`None` / `
 - `ShopBuilding.SellShelves` is now `GetStoragesWithRole(StorageRoleType.SellShelf)`. The dedicated `_sellShelves : NetworkList<NetworkObjectReference>`, `OnSellShelvesChanged` event, and `SetSellShelfFlagServerRpc` ServerRpc were deleted on 2026-05-08.
 - Subclassing `CommercialBuilding` with new role catalogs (e.g. `WorkshopBuilding` adding `MaterialBin`): extend `StorageRoleType` enum + `StorageRoleCatalog` + override `SupportedStorageRoles`. The dropdown UI auto-renders the new option.
 
+**Shift-punch storage-role assignment (2026-05-14):**
+`BuildingLogisticsManager.AssignStorageRolesForShift()` is called from `CommercialBuilding.WorkerStartingShift` (server-only, inside the `!IsWorkerOnShift` branch — one call per actual shift entry). It walks `_building.GetStorageFurnitureOrdered()` (deterministic: MainRoom first → SubRooms; FurnitureManager registration order within each room) and applies the unified rule:
+
+1. If `GetToolStockItems()` yields anything → storage[0] = `ToolStorage`, storage[1..] = `InventoryStorage`.
+2. Else if `_building is ShopBuilding` → storage[0] = `SellShelf`, storage[1..] = `InventoryStorage`.
+3. Else → all storages = `InventoryStorage`.
+
+Tool-storage priority **overrides** shelf priority — a shop that ever returns tool items from `GetToolStockItems()` gets the tool branch.
+
+**Idempotency:** per-storage write is gated by `if (storage.Role == desired) continue;` — replays cost zero replication traffic. **Server-only:** writes route through the existing `StorageFurnitureNetworkSync.SetRoleServer` (same path as `TrySetStorageRoleServerRpc`); the NetVar fans out via `OnValueChanged` → `OnRoleChanged` → `CommercialBuilding.OnStorageRolesChanged`. **Subtype-safe:** if the desired role isn't in `SupportedStorageRoles` (e.g. base `CommercialBuilding` and rule chose `SellShelf` somehow), the write is skipped with a `NPCDebug.VerboseJobs`-gated warning. **Owner-override caveat:** today the rule re-runs on every shift-punch and will **overwrite** an owner's manual role choice on the next punch-in. If you want a "designer-locked" or "owner-locked" mode, layer a flag on `StorageFurniture` (e.g. `_roleLocked`) and have the assignment pass skip locked storages. Not implemented yet — flag in the open-questions follow-up if it becomes a problem.
+
+To extend the rule for new subclasses, override `GetToolStockItems()` on the building (yields the items it treats as tools) — the tool branch is triggered by any non-empty result. The `ShopBuilding` branch is hard-coded by `is ShopBuilding`; if you add a parallel role family in the future, extend `AssignStorageRolesForShift` to accept a polymorphic "role priority resolver" (sketch: `virtual StorageRoleType ResolveFirstStorageRole()` on `CommercialBuilding`).
+
 #### `StorageVisualDisplay` (optional renderer)
 Add this component next to `StorageFurniture` only when contents should be visible (shelves, open crates, weapon racks). Configure:
 - `_displayAnchors` — `List<Transform>`. Anchors are consumed by the **first non-empty slots iterated in slot order** (misc → weapon → wearable → any), so a shelf with 5 anchors over an 8-misc + 8-wearable storage will display the first 5 stored items regardless of slot index. Authors don't need to match anchor count to capacity — extras stay unused; fewer-than-capacity is fine.

@@ -3,7 +3,7 @@ type: system
 title: "Storage Furniture"
 tags: [building, furniture, inventory, logistics, storage, tier-1]
 created: 2026-04-25
-updated: 2026-05-09
+updated: 2026-05-14
 sources: []
 related: ["[[furniture-grid]]", "[[building]]", "[[commercial-building]]", "[[building-logistics-manager]]", "[[inventory]]", "[[item-instance]]", "[[ai-goap]]", "[[jobs-and-logistics]]", "[[network]]", "[[save-load]]"]
 status: wip
@@ -136,6 +136,7 @@ GoapAction_LocateItem scans GetItemsInStorageFurniture() FIRST
 - 2026-04-25 — Shipped `StorageFurnitureNetworkSync` (sibling NetworkBehaviour authored on `Storage.prefab`, inherited by every variant). Server now replicates slot contents via `NetworkList<NetworkStorageSlotEntry>`; clients mirror through new `StorageFurniture.ApplySyncedSlotsFromNetwork` and fire `OnInventoryChanged` locally so `StorageVisualDisplay` rebuilds on every peer. Lock state and save/restore are still TODO. — claude
 - 2026-04-25 — `StorageVisualDisplay` switched from instantiating `WorldItemPrefab` (the full networked wrapper) to instantiating `ItemPrefab` (the visual sub-prefab) + adding a `SortingGroup` at the spawned root. Reason: the cloned `NetworkObject` interfered with parenting/visibility on clients, so visuals only appeared on the host. The new pipeline has zero `NetworkObject`s in the cloned chain — visuals render identically on host and clients. Distance gating fully removed (deferred to per-peer culling tracked in [[optimisation-backlog]]). — claude
 - 2026-05-09 — Player-side UI surface added — see [[storage-furniture-ui]] for the new HUD panel that wires `Furniture.OnInteract` to `CharacterStoreInFurnitureAction` / `CharacterTakeFromFurnitureAction`. — claude
+- 2026-05-14 — `Role` is now also written by the new shift-punch storage-role assignment pass — see [[commercial-storage-roles]] and `BuildingLogisticsManager.AssignStorageRolesForShift`. No code change on `StorageFurniture` itself; the new pass routes through the existing `StorageFurnitureNetworkSync.SetRoleServer` mutator. — claude
 - 2026-04-25 — Shipped save/restore for slot contents. New types `StorageSlotSaveEntry`, `StorageFurnitureSaveEntry`, and `BuildingSaveData.StorageFurnitures` (default-empty for backward-compat) in [MapRegistry.cs](../../Assets/Scripts/World/MapSystem/MapRegistry.cs). New static helper `BuildingSaveData.ComputeStorageFurnitureKey` for the composite (FurnitureItemSO.ItemId @ building-local-position) furniture key. `StorageFurniture.RestoreFromSaveData` is the new server-only restore entry point. `MapController.RestoreStorageFurnitureContents` is invoked from both `SpawnSavedBuildings` and `WakeUp` after the building's default-furniture spawn finishes. The same `OnInventoryChanged` flow used at runtime drives the network-sync rewrite, so late-joining clients see restored state on connect — no extra networking code needed. `IsLocked` persistence still pending alongside lock-state replication. — claude
 
 ## Sources

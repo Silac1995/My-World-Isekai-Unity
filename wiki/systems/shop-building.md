@@ -3,7 +3,7 @@ type: system
 title: "Shop Building"
 tags: [shops, building, tier-2]
 created: 2026-04-19
-updated: 2026-04-21
+updated: 2026-05-14
 sources: []
 related: ["[[shops]]", "[[building]]", "[[commercial-building]]", "[[building-logistics-manager]]", "[[jobs-and-logistics]]", "[[kevin]]"]
 status: stable
@@ -25,6 +25,7 @@ As of the 2026-04-21 refactor, `ShopBuilding` implements `IStockProvider` — it
 Full details in [[shops]] and [[building-logistics-manager]].
 
 ## Change log
+- 2026-05-14 — Shift-punch storage-role assignment now also targets shops: on every worker punch-in, the first storage is auto-assigned `SellShelf` and the rest `InventoryStorage` — unless the shop's `GetToolStockItems()` yields anything, in which case the tool-priority rule wins (first → `ToolStorage`). Logic lives in `BuildingLogisticsManager.AssignStorageRolesForShift`; see [[commercial-storage-roles]]. — claude
 - 2026-04-21 — Shop now implements IStockProvider; restock goes through unified CheckStockTargets + LogisticsPolicy. — claude
 - 2026-04-19 — Stub. — Claude / [[kevin]]
 

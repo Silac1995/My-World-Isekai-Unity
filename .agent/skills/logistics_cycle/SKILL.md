@@ -92,6 +92,9 @@ OnWorkerPunchIn  →  CheckStockTargets  →  RequestStock  →  FindSupplierFor
 **Missing-`TransporterBuilding` failure** is now `Debug.LogError` with full source/dest/item/qty context (was a silent `LogWarning` pre-refactor). If you see it and no `TransporterBuilding` exists on the map, the whole delivery chain is dead — build or stream one in.
 
 ### 2. The Supply Chain Flow
+
+**2a. Shift-punch storage-role assignment (2026-05-14).** Before any of the order-flow below runs, `CommercialBuilding.WorkerStartingShift` invokes `BuildingLogisticsManager.AssignStorageRolesForShift()` (server-only, one call per actual shift entry). This walks every storage in the building in deterministic order and assigns roles via the unified rule (tool-priority → shelf-priority on shops → inventory default). Idempotent and server-only. See [[commercial-storage-roles]] / `building_system/SKILL.md` "Shift-punch storage-role assignment" for the full rule. The rest of the supply-chain pass below assumes this has already executed.
+
 The lifecycle of an item moving between buildings involves several state changes:
 1. **Detection**: `BuildingLogisticsManager.OnWorkerPunchIn()` delegates to `LogisticsStockEvaluator`, which runs `CheckStockTargets(IStockProvider)` for every `IStockProvider` (shops *and* crafting workshops) and `CheckCraftingIngredients(CraftingBuilding)` for aggregated commission demand. Virtual stock below the policy's reorder point creates a `BuyOrder`, adds it to `_placedBuyOrders` (virtual stock), and enqueues a `PendingOrder`.
 2. **Placement**: The active `JobLogisticsManager` worker physically walks to the supplier and initiates `InteractionPlaceOrder`. Supplier accepts, adds to `_activeOrders`. Handshake occurs.

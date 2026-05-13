@@ -1461,6 +1461,26 @@ public abstract class CommercialBuilding : Building
 
             Debug.Log($"<color=green>[Building]</color> {worker.CharacterName} punched in at {buildingName}.");
 
+            // Shift-punch storage-role assignment pass (server-only). Every worker punching
+            // in re-runs the rule; idempotent — only writes when a storage's current role
+            // disagrees with the policy verdict. See
+            // BuildingLogisticsManager.AssignStorageRolesForShift for the rule
+            // (tool-storage priority → shelf priority on shops → inventory default).
+            // Wrapped in try/catch (rule #31) so a logistics-layer fault never blocks the
+            // wage / roster / quest path that follows.
+            try
+            {
+                if (LogisticsManager != null)
+                {
+                    LogisticsManager.AssignStorageRolesForShift();
+                }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogException(e);
+                Debug.LogError($"[CommercialBuilding] {buildingName}: AssignStorageRolesForShift threw during WorkerStartingShift(worker={worker.CharacterName}). Continuing.");
+            }
+
             // Trigger the logistics logic if this is the manager.
             if (worker.CharacterJob != null)
             {
@@ -2124,6 +2144,22 @@ public abstract class CommercialBuilding : Building
     {
         _storageFurnitureCacheValidUntil = -1f;
     }
+
+    /// <summary>
+    /// Returns a deterministically-ordered, read-only view of every
+    /// <see cref="StorageFurniture"/> in this building (MainRoom first, then SubRooms
+    /// in registration order; within each room, the FurnitureManager registration
+    /// order). Backed by the internal storage cache — refreshed lazily on TTL expiry
+    /// or after <see cref="InvalidateStorageFurnitureCache"/>. The returned list is
+    /// a SHARED reference; callers must treat it as read-only and must not retain
+    /// it across frames.
+    /// <para>
+    /// Exposed primarily for the logistics layer's shift-punch storage-role
+    /// assignment pass (<see cref="BuildingLogisticsManager.AssignStorageRolesForShift"/>),
+    /// which needs both the cache and a stable ordering ("first storage" / "rest").
+    /// </para>
+    /// </summary>
+    public IReadOnlyList<StorageFurniture> GetStorageFurnitureOrdered() => GetStorageFurnitureCached();
 
     /// <summary>
     /// Invalidate the StorageFurniture cache after the default furniture layout spawns,
