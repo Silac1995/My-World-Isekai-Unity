@@ -3,7 +3,7 @@ type: system
 title: "Shops"
 tags: [shops, economy, commerce, tier-1]
 created: 2026-04-18
-updated: 2026-04-18
+updated: 2026-05-13
 sources: []
 related:
   - "[[building]]"
@@ -11,6 +11,8 @@ related:
   - "[[items]]"
   - "[[character]]"
   - "[[ai]]"
+  - "[[player-ui]]"
+  - "[[tmp-inputfield-needs-text-subtree]]"
   - "[[kevin]]"
 status: stable
 confidence: high
@@ -165,11 +167,28 @@ Every queued customer: emit "shop is closed" notification → leave
 ## Child sub-pages (to be written in Batch 2)
 
 - [[shop-building]] — `ShopBuilding` class, Items To Sell, Inventory.
-- [[shop-queue]] — `Customer Queue`, `WaitInQueueBehaviour`, `ClearQueue` kick.
-- [[shop-vendor]] — `JobVendor`, sale execution, shift handling.
+- [[shop-queue]] — `Customer Queue`, `WaitInQueueBehaviour`, `ClearQueue` kick. **Note: replaced by per-cashier transaction lock per the 2026-05-07 refactor.**
+- [[shop-vendor]] — `JobVendor`, sale execution, shift handling. **Note: refactored to pool model per the 2026-05-07 refactor.**
 - [[shop-customer-ai]] — need-driven shopping, GOAP wiring.
 
+## Player buy UI (2026-05-13)
+
+The player-facing buy flow lives in `MWI.UI.Shop.UI_ShopBuyPanel` (and per-row `UI_ShopBuyRow`), implemented as a [[player-ui]] HUD window — scene child of `UI_PlayerHUD/Canvas`, wired via `[SerializeField] _shopBuyPanel` on `PlayerUI`, inheriting from `UI_WindowBase` for the auto-wired close button.
+
+**Open flow**: customer taps E on a `CashierInteractable` → `CashierNetSync.RequestStartBuyServerRpc` → server enqueues `CharacterAction_BuyFromShop` (Player mode) + targeted `OpenBuyPanelClientRpc` → on the owning client `PlayerUI.Instance.OpenShopBuyPanel(cashier, customer)` → `_shopBuyPanel.Initialize(cashier, customer)`.
+
+**Render contract**: the panel iterates `_shop.Catalog` (NOT `SellShelves`) to build rows. Each row's stock is aggregated across `SellShelves` matching the catalog `ItemSO`. Items present in shelves but NOT in the catalog are invisible to buyers (intentional — catalog defines what is FOR SALE). Items in catalog with no shelf stock show "0 in stock" greyed-out.
+
+**Confirm path**: row stepper writes to `_quantities`, footer total reflects `ShopBuilding.ResolvePrice(entry) * qty`. Confirm posts `Cashier.SubmitPlayerSelectionServerRpc(payload)` → server `ApplyPlayerSelection` → next `CharacterAction_BuyFromShop.OnTick` commits (atomic transfer + wallet debit + till credit + lock release).
+
+**Prefab paths**:
+- `Assets/UI/Player HUD/UI_ShopBuyPanel.prefab` (root + Panel/HeaderRow/ScrollView/FooterRow tree, embedded under `UI_PlayerHUD/Canvas`)
+- `Assets/UI/Player HUD/UI_ShopBuyRow.prefab` (catalog row template with icon, name, price, stock, +/- stepper, subtotal)
+
+**Stale references on this page**: `InteractionBuyItem` is preserved for future character↔character trading but no longer used by `ShopBuilding`. `Customer Queue` / `JoinQueue` / `ClearQueue` are gone — see the 2026-05-07 spec for the cashier per-transaction-lock model.
+
 ## Change log
+- 2026-05-13 — Added Player buy UI section: `UI_ShopBuyPanel` adopts the canonical HUD-window pattern (UI_WindowBase + scene child of `UI_PlayerHUD/Canvas` + SerializeField on PlayerUI). Prefabs authored at `Assets/UI/Player HUD/`. Flagged stale queue/JobVendor references that predate the 2026-05-07 cashier refactor. — Claude / [[kevin]]
 - 2026-04-18 — Initial documentation pass. — Claude / [[kevin]]
 
 ## Sources

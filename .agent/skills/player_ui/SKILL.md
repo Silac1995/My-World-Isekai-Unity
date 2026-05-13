@@ -126,6 +126,21 @@ Distinct from the passive `ToastNotificationSystem`, the `UI_InvitationPrompt` i
 - **`UI_CharacterEquipment`**: Manages the inventory interaction logic. Uses `UI_NotificationClearer` to handle badges natively.
 - **`UI_CharacterRelations`**: Dynamically displays a list of `UI_RelationshipSlot` instances based on `CharacterRelation` events.
 - **`UI_CharacterStats`**: Dynamically maps and displays primary, secondary, and tertiary `CharacterStats` using `UI_StatSlot` components.
+- **`UI_StorageFurniturePanel`**: Chest-exchange window. Opened by `PlayerUI.OpenStoragePanel(storage, interactor)` from `StorageFurniture.OnInteract`. Canonical HUD-window pattern exemplar.
+- **`UI_ShopBuyPanel`**: Player-facing shop buy panel. Opened by `PlayerUI.OpenShopBuyPanel(cashier, customer)` from `CashierNetSync.OpenBuyPanelClientRpc`. Iterates `_shop.Catalog` for rows; aggregates stock across `SellShelves` per row item. Confirm routes through `Cashier.SubmitPlayerSelectionServerRpc`. Row prefab `UI_ShopBuyRow` handles icon + name + price + stock + +/- stepper + subtotal.
+
+#### Canonical HUD-window pattern
+
+Apply this recipe for every panel that overlays the HUD (storage panel, shop buy panel, future inventory windows, etc.):
+
+1. **Inherit `UI_WindowBase`** — auto-wires the close button + `OpenWindow/CloseWindow` lifecycle.
+2. **Place the prefab at `Assets/UI/Player HUD/`** and embed it as a **deactivated child of `UI_PlayerHUD/Canvas`** in the scene. Do NOT `Resources.Load + Instantiate` at runtime — that's the modal-popup pattern (`UI_OwnerManagementPanel`), reserved for windows that aren't part of the persistent HUD tree.
+3. **PlayerUI holds a `SerializeField`** to the panel instance + an `OpenXxxPanel(...)` / `CloseXxxPanel()` method pair that calls `panel.Initialize(...)` / `panel.CloseWindow()`. The trigger callsite (a ServerRpc, a `Furniture.OnInteract`, etc.) routes through `PlayerUI.Instance.OpenXxxPanel(...)` — never the panel's static API.
+4. **Defensive `Awake` guard** in the panel script: force `Canvas + GraphicRaycaster` with `overrideSorting=true sortingOrder=50`. Inheriting `UI_WindowBase`, override as `protected override void Awake() { base.Awake(); /* canvas guard */ }`.
+5. **RectTransform**: centered with fixed size (storage / shop use 720×540). ScrollRect Viewport stretches to fill its parent (`anchorMin (0,0) → anchorMax (1,1)`, pivot `(0,1)`); Content top-stretches in Viewport (`anchorMin (0,1) → anchorMax (1,1)`, pivot `(0.5, 1)`) with `VerticalLayoutGroup` + `ContentSizeFitter` for dynamic row stacks.
+
+#### Authoring caveat — `TMP_InputField` via MCP / reflection
+`AddComponent<TMP_InputField>` does **not** create the `Text Area / Text` subtree that Unity's editor menu does. The field stores its value but has no `TMP_Text` renderer bound → input appears empty. When authoring an InputField prefab via MCP tooling, also create the subtree manually and wire `textViewport` + `textComponent`. See `wiki/gotchas/tmp-inputfield-needs-text-subtree.md` for the precise structure and the `script-execute` workaround for the `m_TextViewport` property-patch no-op.
 
 ---
 
