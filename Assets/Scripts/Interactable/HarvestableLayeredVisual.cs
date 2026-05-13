@@ -112,32 +112,16 @@ public class HarvestableLayeredVisual : NetworkBehaviour
         int count = Mathf.Min(_treeSO.MaxHarvestCount, byte.MaxValue);
         if (count <= 0) return;
 
-        // Build either a triangle-area sampler (when the designer left FruitSpawnArea at
-        // Rect.zero — preferred path, fruits stay inside the leaves silhouette and never
-        // appear in transparent corners) or fall back to uniform random inside an explicit
-        // designer-authored rect. Mesh sampler uses the foliage sprite's tight mesh.
-        Rect explicitArea = _treeSO.FruitSpawnArea;
-        FoliageMeshSampler meshSampler = default;
-        bool useMeshSampler = explicitArea == Rect.zero
-                              && TryBuildFoliageMeshSampler(out meshSampler);
-
-        // Deterministic seed: NetworkObjectId is identical on every peer.
+        SamplerKit kit = BuildSamplerKit();
         var prevState = Random.state;
-        Random.InitState((int)NetworkObject.NetworkObjectId);
-
-        Rect rectArea = useMeshSampler
-            ? default
-            : (explicitArea != Rect.zero ? explicitArea : ResolveFoliageBoundsAsRect());
+        Random.InitState(ComputeFruitSeed());
 
         for (int i = 0; i < count; i++)
         {
             var go = new GameObject($"Fruit{i}");
             go.transform.SetParent(_fruitContainer, worldPositionStays: false);
 
-            Vector2 localXY = useMeshSampler
-                ? meshSampler.Sample()
-                : new Vector2(Random.Range(rectArea.xMin, rectArea.xMax),
-                              Random.Range(rectArea.yMin, rectArea.yMax));
+            Vector2 localXY = SampleFruitPosition(in kit);
 
             // Slight per-fruit Z offset so any overlap has a deterministic depth order.
             go.transform.localPosition = new Vector3(localXY.x, localXY.y, -0.001f * (i + 1));
@@ -152,6 +136,101 @@ public class HarvestableLayeredVisual : NetworkBehaviour
         }
 
         Random.state = prevState;
+    }
+
+    /// <summary>
+    /// Re-positions the existing fruit GameObjects in place using the current
+    /// <see cref="HarvestableNetSync.FruitRandomSeed"/>. Called when a perennial tree refills
+    /// so each cycle shows a fresh apple layout instead of repeating the same arrangement
+    /// forever. Sprite-variant assignments are NOT changed — the i-th apple keeps its sprite
+    /// variant across refills, only the position shifts. We still draw a `Random.Range` per
+    /// fruit for the sprite-index slot we ignore, keeping the RNG sequence in lockstep with
+    /// <see cref="SpawnFruits"/>'s 3-draws-per-fruit pattern so the same seed always produces
+    /// the same positions regardless of which method consumed the stream.
+    /// </summary>
+    private void RepositionFruits()
+    {
+        if (_fruitInstances.Count == 0) return;
+        if (_treeSO == null || _treeSO.FruitSpriteVariants == null || _treeSO.FruitSpriteVariants.Length == 0) return;
+
+        SamplerKit kit = BuildSamplerKit();
+        var prevState = Random.state;
+        Random.InitState(ComputeFruitSeed());
+
+        for (int i = 0; i < _fruitInstances.Count; i++)
+        {
+            Vector2 localXY = SampleFruitPosition(in kit);
+            // Burn the sprite-index draw to stay aligned with SpawnFruits' 3-draws-per-fruit
+            // sequence — keeps the (seed → positions) mapping stable whether the first call
+            // was SpawnFruits or RepositionFruits.
+            Random.Range(0, _treeSO.FruitSpriteVariants.Length);
+
+            var inst = _fruitInstances[i];
+            if (inst != null)
+                inst.transform.localPosition = new Vector3(localXY.x, localXY.y, -0.001f * (i + 1));
+        }
+
+        Random.state = prevState;
+    }
+
+    /// <summary>Seed = <c>NetworkObjectId ^ FruitRandomSeed</c>. NetworkObjectId is identical
+    /// on every peer; FruitRandomSeed is a server-replicated NetVar that the server re-rolls
+    /// on each <see cref="Harvestable.SetReady"/> (perennial refill). Combining the two keeps
+    /// the layout deterministic across peers AND fresh per refill cycle.</summary>
+    private int ComputeFruitSeed()
+    {
+        int idHash = unchecked((int)NetworkObject.NetworkObjectId);
+        int seedNet = _netSync != null ? _netSync.FruitRandomSeed.Value : 0;
+        return idHash ^ seedNet;
+    }
+
+    /// <summary>Holds the once-per-spawn / once-per-reposition sampler configuration so
+    /// <see cref="SpawnFruits"/> and <see cref="RepositionFruits"/> can share the picker
+    /// without duplicating the rect-vs-mesh branch + padding-inset logic.</summary>
+    private struct SamplerKit
+    {
+        public bool UseMesh;
+        public FoliageMeshSampler MeshSampler;
+        public Rect RectArea;
+    }
+
+    private SamplerKit BuildSamplerKit()
+    {
+        var kit = new SamplerKit();
+        Rect explicitArea = _treeSO.FruitSpawnArea;
+        if (explicitArea == Rect.zero && TryBuildFoliageMeshSampler(out var mesh))
+        {
+            kit.UseMesh = true;
+            kit.MeshSampler = mesh;
+            return kit;
+        }
+
+        kit.UseMesh = false;
+        kit.RectArea = explicitArea != Rect.zero ? explicitArea : ResolveFoliageBoundsAsRect();
+
+        // Apply fruit padding (inset toward center) on the rect path. Mesh sampler applies
+        // the same padding internally on its sprite-local coordinates before the offset.
+        float p = _treeSO.FruitPadding;
+        if (p > 0f)
+        {
+            float insetW = kit.RectArea.width * p * 0.5f;
+            float insetH = kit.RectArea.height * p * 0.5f;
+            kit.RectArea = new Rect(
+                kit.RectArea.x + insetW,
+                kit.RectArea.y + insetH,
+                Mathf.Max(0.001f, kit.RectArea.width - insetW * 2f),
+                Mathf.Max(0.001f, kit.RectArea.height - insetH * 2f));
+        }
+        return kit;
+    }
+
+    private Vector2 SampleFruitPosition(in SamplerKit kit)
+    {
+        return kit.UseMesh
+            ? kit.MeshSampler.Sample()
+            : new Vector2(
+                Random.Range(kit.RectArea.xMin, kit.RectArea.xMax),
+                Random.Range(kit.RectArea.yMin, kit.RectArea.yMax));
     }
 
     /// <summary>
@@ -195,7 +274,8 @@ public class HarvestableLayeredVisual : NetworkBehaviour
             scale = _foliageRenderer.transform.localScale;
         }
 
-        sampler = new FoliageMeshSampler(verts, tris, cum, total, offset, scale);
+        float padding = _treeSO != null ? _treeSO.FruitPadding : 0f;
+        sampler = new FoliageMeshSampler(verts, tris, cum, total, offset, scale, padding);
         return true;
     }
 
@@ -210,9 +290,10 @@ public class HarvestableLayeredVisual : NetworkBehaviour
         private readonly float _total;
         private readonly Vector3 _offset;
         private readonly Vector3 _scale;
+        private readonly float _padding;
 
         public FoliageMeshSampler(Vector2[] verts, ushort[] tris, float[] cum, float total,
-                                  Vector3 offset, Vector3 scale)
+                                  Vector3 offset, Vector3 scale, float padding)
         {
             _verts = verts;
             _tris = tris;
@@ -220,6 +301,7 @@ public class HarvestableLayeredVisual : NetworkBehaviour
             _total = total;
             _offset = offset;
             _scale = scale;
+            _padding = padding;
         }
 
         public Vector2 Sample()
@@ -242,6 +324,11 @@ public class HarvestableLayeredVisual : NetworkBehaviour
             if (u + v > 1f) { u = 1f - u; v = 1f - v; }
             float w = 1f - u - v;
             Vector2 inSprite = va * w + vb * u + vc * v;
+
+            // Inset toward the foliage sprite's pivot (its center for a 0.5,0.5-pivot sprite)
+            // by _padding fraction. Keeps fruit sprite extents from visually overhanging the
+            // leaf silhouette when a sample lands right at the mesh boundary.
+            inSprite *= (1f - _padding);
 
             return new Vector2(
                 inSprite.x * _scale.x + _offset.x,
@@ -303,6 +390,7 @@ public class HarvestableLayeredVisual : NetworkBehaviour
         {
             _netSync.RemainingYield.OnValueChanged += HandleYieldChanged;
             _netSync.CurrentStage.OnValueChanged += HandleStageChanged;
+            _netSync.FruitRandomSeed.OnValueChanged += HandleFruitSeedChanged;
         }
     }
 
@@ -316,8 +404,11 @@ public class HarvestableLayeredVisual : NetworkBehaviour
         {
             _netSync.RemainingYield.OnValueChanged -= HandleYieldChanged;
             _netSync.CurrentStage.OnValueChanged -= HandleStageChanged;
+            _netSync.FruitRandomSeed.OnValueChanged -= HandleFruitSeedChanged;
         }
     }
+
+    private void HandleFruitSeedChanged(int _, int __) => RepositionFruits();
 
     private void HandleStateChanged(Harvestable _)
     {
