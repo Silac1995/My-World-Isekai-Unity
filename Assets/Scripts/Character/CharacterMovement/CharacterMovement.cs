@@ -268,6 +268,11 @@ public class CharacterMovement : CharacterSystem
     public void SetDesiredDirection(Vector3 direction, float speed)
     {
         if (_knockbackTimer > 0) return;
+        // Occupied-furniture lockout — a seated character (vendor at cashier, NPC asleep
+        // in bed, …) cannot self-propel. Forced leaves (combat / unconscious / death) clear
+        // OccupyingFurniture via AutoLeaveOccupiedFurniture BEFORE any downstream movement
+        // intent fires, so this gate is open by the time combat AI tries to chase a target.
+        if (_character != null && _character.OccupyingFurniture != null) return;
 
         // If the player provides directional input while the character is forced-stopped (e.g. from an interaction)
         // This acts as a manual override to break out of the stopped state.
@@ -294,6 +299,10 @@ public class CharacterMovement : CharacterSystem
     public void SetDestination(Vector3 target, float speed)
     {
         if (_knockbackTimer > 0) return;
+        // Occupied-furniture lockout (same rationale as SetDesiredDirection above). NPCs use
+        // SetDestination almost exclusively; gating here covers JobVendor / GOAP / BT pathing
+        // attempts while the character is seated.
+        if (_character != null && _character.OccupyingFurniture != null) return;
         if (_agent == null || !_agent.isOnNavMesh) return;
 
         // --- SECURITE BORD DE NAVMESH ---

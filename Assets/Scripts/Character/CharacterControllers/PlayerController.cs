@@ -510,6 +510,27 @@ public class PlayerController : CharacterGameController
 
     public void Move()
     {
+        // Occupied-furniture lockout: while seated (cashier, chair, …) the player cannot
+        // self-propel. Voluntary leave goes through CashierInteractable's three-branch
+        // routing (Branch 1) or any explicit ClearCurrentAction (Z for sleep, combat,
+        // unconscious, death). The CharacterAction_OccupyFurniture refactor (2026-05-14)
+        // replaced Cashier.ServerTickAutoOccupy proximity auto-seat — see
+        // docs/superpowers/specs/2026-05-14-furniture-occupancy-via-characteraction-design.md.
+        // OccupyingFurniture is replicated via Character.NetworkOccupyingFurnitureNetId so
+        // this gate fires correctly on every peer (rule #19b late-joiner audit).
+        if (_character != null && _character.OccupyingFurniture != null)
+        {
+            // Drain NavMesh state if a right-click order was already queued before the seat
+            // was taken (the order survives the seat but must not actively path while seated).
+            if (_wasNavMeshActiveLastFrame)
+            {
+                _character.ConfigureNavMesh(false);
+                _characterMovement.Stop();
+                _wasNavMeshActiveLastFrame = false;
+            }
+            return;
+        }
+
         bool needsNavMesh = _currentOrder != null;
 
         if (needsNavMesh && !_wasNavMeshActiveLastFrame)
