@@ -144,4 +144,18 @@ public class BedFurniture : OccupiableFurniture
             if (!_slots[i].IsFree) ReleaseSlot(i);
         }
     }
+
+    /// <summary>
+    /// Per-character override — releases only <paramref name="c"/>'s slot, leaving
+    /// any other sleepers in the bed undisturbed. Critical for shared beds: without
+    /// this override, the base <see cref="OccupiableFurniture.Leave"/> would delegate
+    /// to <see cref="Release"/>, which evicts every slot.
+    /// </summary>
+    public override bool Leave(Character c)
+    {
+        int idx = GetSlotIndexFor(c);
+        if (idx < 0) return false;
+        ReleaseSlot(idx);
+        return true;
+    }
 }

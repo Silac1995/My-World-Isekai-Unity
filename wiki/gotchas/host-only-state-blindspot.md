@@ -1,7 +1,7 @@
 ---
 type: gotcha
 title: "Host-only state blindspot — every new feature must run the client-side audit before 'done'"
-tags: [networking, ngo, multiplayer, client-sync, audit, recurring-pattern]
+tags: [networking, ngo, multiplayer, client-sync, audit, recurring-pattern, state-machine]
 created: 2026-05-14
 updated: 2026-05-14
 sources:
@@ -137,6 +137,14 @@ If these three statements can't be made truthfully, **the feature is not done**.
 - **Root cause:** `OccupiableFurniture._occupant` is a plain C# field; the only writer is `Use()` called from `ServerTickAutoOccupy` (server-only). `NotifyOccupiedClientRpc` existed but its body was empty (visual-hook placeholder, not state transport).
 - **Fix:** added `OccupantNetworkObjectId` `NetworkVariable<ulong>` on `CashierNetSync` written by `Cashier.Use`/`Release`; overrode `Cashier.Occupant` to resolve the id via `SpawnedObjects` on non-server peers; added `OnNetworkSpawn` server-side backfill.
 - **What the audit would have caught:** Step 1 — `_occupant` reader includes `CashierInteractable.Interact` (client pre-gate). Step 2 — no replication channel existed. Step 4 — the pre-gate explicitly reads the field; would have surfaced immediately.
+
+### Cashier vendor seat leak — replication is sound, but no eviction trigger fires (2026-05-14, late same day)
+
+- **Symptom:** vendor seated at cashier → vendor takes damage / enters battle / goes off-shift → cashier still shows `Occupant != null` → players still see `IsAvailableForCustomer == true` → buy panel opens with effectively no vendor present, customer transaction starts against an absent vendor.
+- **Root cause (NOT a replication gap — a state-write gap):** the previous fix (NetVar + `OnNetworkSpawn` backfill) made the *replication path* correct, but `Cashier.Release` was never called when the seated vendor lost the ability to vend. `ServerTickAutoOccupy` was one-way: it auto-seats but never auto-releases. Combat firing `Character.OnCombatStateChanged` only feeds `CharacterActions.HandleCombatStateChanged` (clears the running action); the cashier seat is held on the furniture component, not on a `CharacterAction`, so nothing unwound it.
+- **Fix:** added `ServerTickValidateOccupant()` as the symmetric inverse of `ServerTickAutoOccupy`. Same 1 Hz server tick, same auth gate. Eviction conditions: `!Occupant.IsAlive()`, `CharacterCombat.IsInBattle`, off-shift, no longer JobVendor of this shop, or moved out of seat radius. Any one fires `Release()`, which already handles NetVar replication + customer-lock abort.
+- **What the audit would have caught (audit checklist v2 — state-write triggers):** Step 1 of the audit asks "who writes this state?". A complete answer includes every transition: not just "who seats them", but also "who unseats them". The old answer listed only `Use` / `ServerTickAutoOccupy`. The leak comes from the asymmetry — every transition needs both directions enumerated.
+- **Generalised rule:** whenever you add a state field with a server-side **setter**, also explicitly enumerate every condition under which the field must be **cleared**, and wire a clear-path for each. The default assumption is "the inverse transition is not free — someone has to fire it". State machines without an explicit eviction half ALWAYS leak.
 
 ### Cashier current customer (2026-05-14, latent)
 

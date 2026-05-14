@@ -334,6 +334,15 @@ public class Character : NetworkBehaviour, MWI.Orders.IOrderIssuer
 
     public Furniture OccupyingFurniture { get; private set; }
 
+    /// <summary>
+    /// Fires when <see cref="OccupyingFurniture"/> changes — including null transitions
+    /// (sat-down: prev=null,next=furn; stood-up: prev=furn,next=null; moved between two
+    /// furnitures: prev=A,next=B). Use this from any <see cref="CharacterSystem"/> via
+    /// the <c>HandleOccupyingFurnitureChanged</c> hook to react to seat/sleep changes
+    /// without having to know which furniture subclass fired the change.
+    /// </summary>
+    public event Action<Furniture, Furniture> OnOccupyingFurnitureChanged;
+
     public bool IsUnconscious => _isUnconscious;
     public bool IsSleeping => NetworkIsSleeping.Value;
 
@@ -811,6 +820,9 @@ public class Character : NetworkBehaviour, MWI.Orders.IOrderIssuer
             // 5. NavMesh deactivation
             ConfigureNavMesh(false);
 
+            // Auto-leave any occupied furniture before incapacitation event fires.
+            AutoLeaveOccupiedFurniture("became unconscious");
+
             Debug.Log($"<color=orange>[Status]</color> {CharacterName} is now unconscious.");
             OnIncapacitated?.Invoke(this);
         }
@@ -849,6 +861,12 @@ public class Character : NetworkBehaviour, MWI.Orders.IOrderIssuer
 
     public void SetCombatState(bool inCombat)
     {
+        // Auto-leave any occupied furniture on combat-entry. Order: leave first,
+        // event fires second, so subsystem handlers see OccupyingFurniture == null
+        // when they react to the combat state change. Sleeping characters are
+        // already handled by CharacterCombat.TakeDamage -> ExitSleep upstream,
+        // so OccupyingFurniture is null here for them and this is a no-op.
+        if (inCombat) AutoLeaveOccupiedFurniture("entered combat");
         OnCombatStateChanged?.Invoke(inCombat);
     }
 
@@ -861,6 +879,10 @@ public class Character : NetworkBehaviour, MWI.Orders.IOrderIssuer
 
         _isDead = true;
         _isUnconscious = false; // Death takes priority over unconsciousness
+
+        // Auto-leave any occupied furniture before death event fires.
+        AutoLeaveOccupiedFurniture("died");
+
         OnDeath?.Invoke(this);
 
         // 1. Physics deactivation
@@ -1141,7 +1163,31 @@ public class Character : NetworkBehaviour, MWI.Orders.IOrderIssuer
 
     public void SetOccupyingFurniture(Furniture furniture)
     {
+        var prev = OccupyingFurniture;
+        if (prev == furniture) return;
         OccupyingFurniture = furniture;
+        OnOccupyingFurnitureChanged?.Invoke(prev, furniture);
+    }
+
+    /// <summary>
+    /// Server-side helper: if this character is currently occupying an
+    /// <see cref="OccupiableFurniture"/>, call its per-character
+    /// <c>Leave(this)</c> so the seat is released without evicting any other
+    /// occupants (critical for multi-slot beds). Safe to call when
+    /// <see cref="OccupyingFurniture"/> is null or non-occupiable — no-op.
+    ///
+    /// Centralised entry point so future triggers (e.g. job change, schedule
+    /// flip, knockback out of range) can call one method instead of duplicating
+    /// the cast + null-check. Also makes the auto-leave reason traceable in logs.
+    /// </summary>
+    public bool AutoLeaveOccupiedFurniture(string reason)
+    {
+        if (OccupyingFurniture is OccupiableFurniture occ)
+        {
+            Debug.Log($"<color=cyan>[Character]</color> {CharacterName} auto-leaving {occ.FurnitureName}: {reason}.");
+            return occ.Leave(this);
+        }
+        return false;
     }
 
     /// <summary>

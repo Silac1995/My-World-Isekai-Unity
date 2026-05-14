@@ -3,7 +3,7 @@ type: system
 title: "Character"
 tags: [character, facade, gameplay, tier-1]
 created: 2026-04-18
-updated: 2026-05-09
+updated: 2026-05-14
 sources: []
 related:
   - "[[combat]]"
@@ -118,7 +118,8 @@ Lifecycle:
 - `character.SetUnconscious(bool)`
 - `character.Die()`
 - `character.WakeUp()`
-- Events: `OnIncapacitated`, `OnDeath`, `OnWakeUp`, `OnCombatStateChanged`.
+- `character.AutoLeaveOccupiedFurniture(string reason)` — centralised helper that calls `OccupiableFurniture.Leave(this)` on the current `OccupyingFurniture`, log-traced. Called internally on combat-enter, incapacitate, and death; new triggers should call this rather than reach into furniture state directly.
+- Events: `OnIncapacitated`, `OnDeath`, `OnWakeUp`, `OnCombatStateChanged`, `OnOccupyingFurnitureChanged(Furniture prev, Furniture next)`.
 
 Identity (static, server-only):
 - `Character.OnCharacterSpawned : Action<Character>` — fires once per Character at NGO spawn. Subscribers that resolve references to newly-available characters (relationships, orders, deferred party invitations) hook this.
@@ -239,6 +240,7 @@ Input (player) or AI tick (NPC)
 - [ ] `CharacterAnimator.cs` / `CharacterAwareness.cs` / `CharacterBlink.cs` sit on the root — should they migrate to child GameObjects for consistency with the subsystem pattern?
 
 ## Change log
+- 2026-05-14 — Added `OnOccupyingFurnitureChanged(Furniture prev, Furniture next)` event + matching `CharacterSystem.HandleOccupyingFurnitureChanged` hook + `Character.AutoLeaveOccupiedFurniture(reason)` centralised helper. Auto-leave wired on combat-entry, `SetUnconscious(true)`, and `Die()`. Generalises the cashier-specific vendor-eviction pattern shipped earlier the same day to every `OccupiableFurniture` (Chair, Bed, future). Multi-slot beds protected by new `OccupiableFurniture.Leave(Character)` per-character method (BedFurniture overrides to release only the caller's slot). — claude
 - 2026-05-09 — added `Character.OnCharacterIdReassigned` static event, fired from `CharacterDataCoordinator.ImportProfile` when `NetworkCharacterId.Value` actually changes. Closes the host-player UUID timing window where save-restore resolvers that keyed by `CharacterId` (`Building.RestoreOwnersFromSaveData`, `CommercialBuilding.RestoreEmployeesFromSaveData`) saw the host's spawn-time fresh GUID instead of the saved profile GUID and silently dropped the host. NPCs were unaffected because their UUID is set before NGO spawn fires `OnCharacterSpawned`. New event is gated by a previous-vs-new-id compare so re-importing a profile with the same GUID is a no-op. See [[host-player-uuid-timing-on-load]]. — claude
 - 2026-05-06 — added `CharacterAction_Continuous` abstract base for condition-terminated (vs timer-terminated) actions. New dispatcher branch in `CharacterActions.ExecuteAction` (`ActionContinuousTickRoutine`) — must come BEFORE the `Duration <= 0` branch since base ctor passes `duration: 0f`. First concrete subclass: `CharacterAction_FinishConstruction` (see [[construction]]). Added `Character.GetSkillLevelOrZero(SkillId)` Phase 1 stub for future builder-skill plug-in. — claude
 - 2026-04-18 — Initial documentation pass (wiki bootstrap). — Claude / [[kevin]]

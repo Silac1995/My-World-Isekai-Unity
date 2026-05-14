@@ -29,6 +29,7 @@ public abstract class CharacterSystem : NetworkBehaviour
             _character.OnWakeUp += HandleWakeUp;
             _character.OnDeath += HandleDeath;
             _character.OnCombatStateChanged += HandleCombatStateChanged;
+            _character.OnOccupyingFurnitureChanged += HandleOccupyingFurnitureChanged;
             _character.Register(this);
         }
     }
@@ -42,6 +43,7 @@ public abstract class CharacterSystem : NetworkBehaviour
             _character.OnWakeUp -= HandleWakeUp;
             _character.OnDeath -= HandleDeath;
             _character.OnCombatStateChanged -= HandleCombatStateChanged;
+            _character.OnOccupyingFurnitureChanged -= HandleOccupyingFurnitureChanged;
         }
     }
 
@@ -65,4 +67,13 @@ public abstract class CharacterSystem : NetworkBehaviour
     /// Ideal for stopping movement or cancelling an interaction.
     /// </summary>
     protected virtual void HandleCombatStateChanged(bool inCombat) { }
+
+    /// <summary>
+    /// Called when the character's <see cref="Character.OccupyingFurniture"/>
+    /// changes — sit-down (prev=null,next=furn), stand-up (prev=furn,next=null),
+    /// or seat swap (prev=A,next=B). Use to disable/re-enable subsystems that
+    /// shouldn't run while seated (navmesh, certain animator states, …) without
+    /// having to inspect the specific furniture type.
+    /// </summary>
+    protected virtual void HandleOccupyingFurnitureChanged(Furniture previous, Furniture current) { }
 }

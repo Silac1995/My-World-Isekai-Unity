@@ -61,6 +61,24 @@ If a shop isn't working, verify this chain:
 
 The legacy `NotifyOccupiedClientRpc` / `NotifyReleasedClientRpc` are kept as no-op visual hooks; do not rely on them for state transport.
 
+### Vendor seat is a symmetric state machine — Validate + AutoOccupy
+
+`Cashier` ticks at 1 Hz (server only) and runs **both halves** of the seat state machine in `Update()`:
+
+- `ServerTickValidateOccupant()` evicts the seated vendor when they can no longer vend.
+- `ServerTickAutoOccupy()` seats a fresh on-shift vendor in range.
+
+Eviction conditions (any one fires `Release()`):
+- Occupant destroyed / dead / unconscious — `!Occupant.IsAlive()` also covers map-hibernation despawn since destroyed Unity refs compare null.
+- Vendor pulled into a battle — `Occupant.CharacterCombat.IsInBattle`.
+- Vendor's job is no longer `JobVendor` for this cashier's shop.
+- Vendor's schedule is no longer `ScheduleActivity.Work`.
+- Vendor walked / was knocked out of the auto-seat radius.
+
+`Release()` handles all replication and side-effects in one place: it clears `_occupant` on the base class, writes `OccupantNetworkObjectId = 0`, fires `NotifyReleasedClientRpc`, and aborts any in-flight customer transaction via `AbortActiveTransactionServerOnly("vendor walked off")`. Adding a new eviction trigger means adding a branch inside `ServerTickValidateOccupant` — never resubscribing to character events from the furniture (the seat is held on the cashier, not on a running `CharacterAction`, so `Character.OnCombatStateChanged` does not unwind it on its own).
+
+Why a tick validator instead of pure event subscription: vendor combat/incapacitation/death events DO now fire from `Character` and auto-call `OccupiableFurniture.Leave(this)` via the central `AutoLeaveOccupiedFurniture` helper (see `character_core/SKILL.md` §3.b). The cashier-side tick is **defense-in-depth** for the three triggers `Character` has no event for: vendor walked / was knocked out of the seat radius, schedule flipped to non-Work, or job was reassigned to a non-`JobVendor` of this shop. The 1 Hz symmetric tick costs O(1) per cashier per second, runs server-only, allocates nothing, and closes the last gaps. Per rule #34 this is the symmetric inverse of an existing tick, not idempotent polling on stable state.
+
 ## Multiplayer panel-binding contract
 
 `UI_ShopBuyPanel.Initialize` reads `cashier.LinkedShop` (which is `Cashier._linkedBuilding as ShopBuilding`). On a joining client, the Cashier furniture is spawned via the `Building._defaultFurnitureLayout` pipeline — `Instantiate` runs first, then `SetParent` re-parents under the shop's NetworkObject. `Cashier.Awake`'s `GetComponentInParent<CommercialBuilding>()` therefore returns `null` until NGO's `AutoObjectParentSync` applies the re-parent, leaving `LinkedShop` null even after `OnNetworkSpawn` fires on the NetSync.

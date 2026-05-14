@@ -48,7 +48,7 @@ Examples:
 
 ### CharacterSystem Pipeline (Decoupled Modules)
 All core character systems (`CharacterMovement`, `CharacterVisual`, `CharacterInteraction`, `CharacterActions`, `CharacterGameController`, `CharacterGoapController`, `NPCBehaviourTree`, `CharacterCombat`) now inherit from the abstract class **`CharacterSystem`**.
-This abstract base automatically caches `_character` during `Awake` and subscribes to essential lifecycle events (`OnIncapacitated`, `OnDeath`, `OnWakeUp`, `OnCombatStateChanged`). `Character.cs` no longer explicitly micro-manages the shutdown of its modules; each subsystem gracefully handles its own cleanup by overriding `HandleIncapacitated(Character)` or `HandleCombatStateChanged(bool)`.
+This abstract base automatically caches `_character` during `Awake` and subscribes to essential lifecycle events (`OnIncapacitated`, `OnDeath`, `OnWakeUp`, `OnCombatStateChanged`, `OnOccupyingFurnitureChanged`). `Character.cs` no longer explicitly micro-manages the shutdown of its modules; each subsystem gracefully handles its own cleanup by overriding `HandleIncapacitated(Character)`, `HandleCombatStateChanged(bool)`, or `HandleOccupyingFurnitureChanged(Furniture previous, Furniture current)`.
 
 ### System-to-System Communication (Inspector Linking)
 > [!IMPORTANT]
@@ -69,12 +69,25 @@ This is the ultimate safety method. `Character` scrutinizes all of its child com
 `Character` is responsible for major state changes. You must never manually tinker with HP or the collider to "kill" someone.
 
 - **SetUnconscious(true)**:
+  - Calls `AutoLeaveOccupiedFurniture("became unconscious")` first so the seat is released before any subsystem reacts.
   - Triggers the `OnIncapacitated` event.
   - Subsystems inheriting from `CharacterSystem` independently react to power down (e.g., `CharacterMovement.Stop()`, `NPCBehaviourTree.CancelOrder()`, `CharacterVisual.ClearLookTarget()`).
   - The entity becomes physically inert (Rigidbody switches to Kinematic so falls are managed).
 - **Die()**:
+  - Calls `AutoLeaveOccupiedFurniture("died")` first.
   - Performs the same routine (fires `OnDeath` and `OnIncapacitated`).
   - But death (`_isDead = true`) permanently overrides the rest.
+- **SetCombatState(true)**:
+  - Calls `AutoLeaveOccupiedFurniture("entered combat")` so seated vendors / chair-sitters stand up before combat reactions fire.
+  - Triggers `OnCombatStateChanged(true)`.
+
+### 3.b Occupying-Furniture State
+
+`Character.OccupyingFurniture` (read-only property) is the single source of truth for "is this character currently sitting/manning/sleeping in a piece of furniture". Set server-side via `SetOccupyingFurniture(Furniture)` — only `OccupiableFurniture.Use` / `Leave` / `Release` call it.
+
+- `OnOccupyingFurnitureChanged(prev, next)` fires on every transition (sit-down, stand-up, swap).
+- `AutoLeaveOccupiedFurniture(string reason)` is the central helper that calls `OccupiableFurniture.Leave(this)` on the current furniture, log-traced. Used internally by combat/incap/death; any future trigger (job change, schedule flip, knockback out of range) should call this method rather than duplicating the cast + null-check.
+- `OccupiableFurniture.Leave(Character c)` is the **per-character** inverse of `Use(Character)`. Single-slot furniture (Cashier, Chair) default to delegating to `Release()`. `BedFurniture` overrides to release **only** the caller's slot — never delegate auto-leave to the parameterless `Release()`, which evicts every slot in a shared bed.
 
 ## 4. Context Switching (The Brain)
 **A Player is exactly like an NPC character.** They share the exact same `Character` object, underlying components, stats, and game logic. A character in your game can switch from an autonomous civilian AI (NPC) to a Player-controlled Avatar with a snap of a finger just by swapping the active controller.

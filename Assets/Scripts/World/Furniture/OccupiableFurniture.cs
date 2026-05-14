@@ -83,6 +83,37 @@ public abstract class OccupiableFurniture : Furniture, IOccupiable
     }
 
     /// <summary>
+    /// Per-character inverse of <see cref="Use(Character)"/>. Releases <b>only</b> the
+    /// given character's hold on this furniture (occupant or reservation), leaving any
+    /// other occupants intact.
+    ///
+    /// Single-slot subclasses (Cashier, ChairFurniture, …) inherit the default
+    /// implementation which delegates to <see cref="Release"/> when <paramref name="c"/>
+    /// is the current occupant. Multi-slot subclasses (<see cref="BedFurniture"/>) MUST
+    /// override to release only the caller's slot — otherwise calling
+    /// <c>furniture.Release()</c> would evict every sleeping person from a shared bed
+    /// whenever one of them entered combat.
+    ///
+    /// Returns <c>true</c> if a hold was released, <c>false</c> if <paramref name="c"/>
+    /// was not occupying / reserving this furniture.
+    /// </summary>
+    public virtual bool Leave(Character c)
+    {
+        if (c == null) return false;
+        if (_occupant == c)
+        {
+            Release();
+            return true;
+        }
+        if (_reservedBy == c)
+        {
+            _reservedBy = null;
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>
     /// Vérifie si le meuble est totalement libre (ni occupé, ni réservé).
     /// </summary>
     public virtual bool IsFree()
