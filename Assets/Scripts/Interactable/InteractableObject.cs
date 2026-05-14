@@ -24,9 +24,21 @@ public abstract class InteractableObject : MonoBehaviour
 
     /// <summary>
     /// Canonical proximity gate. Returns true iff the given character's world-space
-    /// position sits inside this interactable's <see cref="InteractionZone"/> (AABB
-    /// containment). One-sided containment per the Interactable System rule —
-    /// NOT a mutual zone-vs-zone overlap.
+    /// X/Z position sits inside this interactable's <see cref="InteractionZone"/>
+    /// projected on the ground plane. One-sided containment per the Interactable
+    /// System rule — NOT a mutual zone-vs-zone overlap.
+    ///
+    /// **2D X-Z check, not 3D AABB.** Matches the established construction-loop
+    /// convention (<c>BuildingInteractable</c> "2D X-Z proximity check" in
+    /// wiki/CLAUDE.md). The 3D variant was Y-fragile: characters stand at
+    /// <c>transform.position.y ≈ 0</c> (feet on ground), which sits exactly on
+    /// <c>bounds.min.y</c> for most interactable colliders authored from y=0
+    /// upward — float precision on networked transforms then tipped the value a
+    /// hair below zero on joining clients, false-negativing the gate even when
+    /// the character was visually inside the zone. The 2D projection eliminates
+    /// that whole class of failure with no downside: every interactable in this
+    /// project is floor-anchored and characters always walk on the ground, so Y
+    /// containment was never carrying useful information.
     ///
     /// Reads <see cref="Character.transform.position"/> (not <c>Character.Rigidbody.position</c>)
     /// so the check matches what <c>ClientNetworkTransform</c> syncs directly to the server.
@@ -43,7 +55,10 @@ public abstract class InteractableObject : MonoBehaviour
     public virtual bool IsCharacterInInteractionZone(Character character)
     {
         if (character == null || _interactionZone == null) return false;
-        return _interactionZone.bounds.Contains(character.transform.position);
+        var pos = character.transform.position;
+        var b = _interactionZone.bounds;
+        return pos.x >= b.min.x && pos.x <= b.max.x
+            && pos.z >= b.min.z && pos.z <= b.max.z;
     }
 
     // We pass the Character that triggers the action
