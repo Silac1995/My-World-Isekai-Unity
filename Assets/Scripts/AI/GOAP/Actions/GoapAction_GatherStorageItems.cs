@@ -258,19 +258,19 @@ public class GoapAction_GatherStorageItems : GoapAction
 
                     if (!arrivedAtStorage)
                     {
-                        var interactable = _targetFurniture.GetComponent<InteractableObject>();
-                        if (interactable != null && interactable.InteractionZone != null)
+                        var furnitureInteractable = _targetFurniture.GetComponent<InteractableObject>();
+                        if (furnitureInteractable != null && furnitureInteractable.InteractionZone != null)
                         {
-                            if (interactable.IsCharacterInInteractionZone(worker))
+                            if (furnitureInteractable.IsCharacterInInteractionZone(worker))
                             {
-                                worker.CharacterMovement.ResetPath();
+                                movement.ResetPath();
                                 arrivedAtStorage = true;
                             }
                             else
                             {
-                                var movement = worker.CharacterMovement;
-                                bool pathExhausted = movement == null
-                                    || !movement.HasPath
+                                // `movement` is the outer-scope CharacterMovement from Execute's top;
+                                // already null-checked there, no need to re-check here.
+                                bool pathExhausted = !movement.HasPath
                                     || movement.RemainingDistance <= movement.StoppingDistance + 0.5f;
                                 if (pathExhausted)
                                 {
@@ -278,7 +278,7 @@ public class GoapAction_GatherStorageItems : GoapAction
                                     Vector3 flatTarget = new Vector3(_targetPos.x, 0f, _targetPos.z);
                                     if (Vector3.Distance(flatWorker, flatTarget) <= 2f)
                                     {
-                                        worker.CharacterMovement.ResetPath();
+                                        movement.ResetPath();
                                         arrivedAtStorage = true;
                                     }
                                 }
@@ -290,7 +290,7 @@ public class GoapAction_GatherStorageItems : GoapAction
                             Vector3 flatTarget = new Vector3(_targetPos.x, 0f, _targetPos.z);
                             if (Vector3.Distance(flatWorker, flatTarget) <= 1.5f)
                             {
-                                worker.CharacterMovement.ResetPath();
+                                movement.ResetPath();
                                 arrivedAtStorage = true;
                             }
                         }
