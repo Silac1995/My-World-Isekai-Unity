@@ -63,6 +63,8 @@ namespace MWI.UI.Shop
         /// </summary>
         public void Initialize(Cashier cashier, Character customer)
         {
+            Debug.Log($"<color=magenta>[UI_ShopBuyPanel]</color> Initialize ENTRY. cashier={(cashier != null ? cashier.FurnitureName : "null")}, customer={(customer != null ? customer.CharacterName : "null")}, cashier.LinkedShop={(cashier != null && cashier.LinkedShop != null ? cashier.LinkedShop.BuildingName : "null")}, cashier.LinkedBuilding={(cashier != null && cashier.LinkedBuilding != null ? cashier.LinkedBuilding.name : "null")}.", this);
+
             if (cashier == null || customer == null)
             {
                 Debug.LogWarning("<color=orange>[UI_ShopBuyPanel]</color> Initialize called with null cashier or customer.");
@@ -79,7 +81,17 @@ namespace MWI.UI.Shop
             _shop = cashier.LinkedShop;
             if (_shop == null)
             {
-                Debug.LogError("[UI_ShopBuyPanel] cashier has no LinkedShop");
+                // Late-bind fallback: on a joining client the Cashier may have spawned before
+                // its parent ShopBuilding finished parenting, so the Awake-time
+                // GetComponentInParent<CommercialBuilding>() returned null. Trigger the same
+                // idempotent re-resolution path that ShopBuilding.OnNetworkSpawn uses.
+                Debug.LogWarning($"<color=orange>[UI_ShopBuyPanel]</color> cashier.LinkedShop was null at Initialize — attempting TryRegisterWithShop fallback.");
+                cashier.TryRegisterWithShop();
+                _shop = cashier.LinkedShop;
+            }
+            if (_shop == null)
+            {
+                Debug.LogError("[UI_ShopBuyPanel] cashier has no LinkedShop after fallback — aborting Initialize.");
                 CloseWindow();
                 return;
             }
@@ -96,6 +108,7 @@ namespace MWI.UI.Shop
             Refresh();
 
             OpenWindow();
+            Debug.Log($"<color=magenta>[UI_ShopBuyPanel]</color> Initialize completed: OpenWindow called. gameObject.activeSelf={gameObject.activeSelf}, activeInHierarchy={gameObject.activeInHierarchy}.", this);
         }
 
         /// <summary>
