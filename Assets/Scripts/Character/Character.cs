@@ -206,6 +206,29 @@ public class Character : NetworkBehaviour, MWI.Orders.IOrderIssuer
         NetworkVariableReadPermission.Everyone,
         NetworkVariableWritePermission.Server
     );
+
+    /// <summary>
+    /// Server-replicated NetworkObjectId of the furniture this character currently occupies
+    /// (0 = none). Mirrors the in-memory <see cref="OccupyingFurniture"/> reference so client
+    /// peers can read it for movement gates and interaction routing.
+    ///
+    /// Pre-2026-05-14 the property was a plain server-only field — non-host clients of a
+    /// seated player saw <c>null</c>, which broke any literal <c>OccupyingFurniture != null</c>
+    /// gate they ran. Replicating fixes the rule #19b host-only-state blindspot. Server-write
+    /// only; clients resolve the Furniture through <c>SpawnManager</c> in the getter.
+    ///
+    /// Resolution caveat: occupiable furniture without its own NetworkObject (Bed, Chair —
+    /// baked into a building prefab per the no-nested-NO rule) writes the parent building's
+    /// NetworkObjectId here. The getter then returns the first Furniture component under that
+    /// building, which is identity-exact for Cashier and identity-approximate (boolean
+    /// non-null) for multi-furniture buildings. Beds/Chairs may earn their own NetVar later
+    /// — out of scope for this refactor.
+    /// </summary>
+    public NetworkVariable<ulong> NetworkOccupyingFurnitureNetId = new NetworkVariable<ulong>(
+        0,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server
+    );
     #endregion
 
     #region Private Fields
@@ -332,14 +355,50 @@ public class Character : NetworkBehaviour, MWI.Orders.IOrderIssuer
     public TimeManager TimeManager => _timeManager != null ? _timeManager : TimeManager.Instance;
     public CharacterPathingMemory PathingMemory => _pathingMemory;
 
-    public Furniture OccupyingFurniture { get; private set; }
+    private Furniture _occupyingFurniture;
+
+    /// <summary>
+    /// Furniture this character is currently occupying (Bed / Chair / Cashier / …), or null.
+    /// Server-authoritative — set inside <see cref="OccupiableFurniture.Use"/> and mirrored
+    /// to clients via <see cref="NetworkOccupyingFurnitureNetId"/>. On non-server peers the
+    /// in-memory field would otherwise stay null because <c>Use</c> only runs on the seating
+    /// peer; the getter resolves the NetVar so every peer can gate on this property
+    /// (rule #19b client-side audit).
+    /// </summary>
+    public Furniture OccupyingFurniture
+    {
+        get
+        {
+            if (IsServer) return _occupyingFurniture;
+            return ResolveFurnitureByNetworkObjectId(NetworkOccupyingFurnitureNetId.Value);
+        }
+    }
+
+    private static Furniture ResolveFurnitureByNetworkObjectId(ulong networkObjectId)
+    {
+        if (networkObjectId == 0) return null;
+        var nm = NetworkManager.Singleton;
+        if (nm == null || nm.SpawnManager == null) return null;
+        if (!nm.SpawnManager.SpawnedObjects.TryGetValue(networkObjectId, out var obj)) return null;
+        if (obj == null) return null;
+        // Cashier: NetworkObject lives on the same GameObject as the Furniture component → exact.
+        var direct = obj.GetComponent<Furniture>();
+        if (direct != null) return direct;
+        // Bed/Chair: no NetworkObject of their own per the no-nested-NO rule. The NetVar then
+        // carries the parent building's NetworkObjectId — return the first Furniture child as
+        // a best-effort fallback. Multi-furniture buildings get identity-approximate, boolean-
+        // non-null behaviour, which is sufficient for every gate in scope (movement, IsOccupying).
+        return obj.GetComponentInChildren<Furniture>();
+    }
 
     /// <summary>
     /// Fires when <see cref="OccupyingFurniture"/> changes — including null transitions
     /// (sat-down: prev=null,next=furn; stood-up: prev=furn,next=null; moved between two
     /// furnitures: prev=A,next=B). Use this from any <see cref="CharacterSystem"/> via
     /// the <c>HandleOccupyingFurnitureChanged</c> hook to react to seat/sleep changes
-    /// without having to know which furniture subclass fired the change.
+    /// without having to know which furniture subclass fired the change. Server-side
+    /// callers fire it from <see cref="SetOccupyingFurniture"/>; client-side peers see
+    /// it fire from the <see cref="NetworkOccupyingFurnitureNetId"/> OnValueChanged hook.
     /// </summary>
     public event Action<Furniture, Furniture> OnOccupyingFurnitureChanged;
 
@@ -497,6 +556,7 @@ public class Character : NetworkBehaviour, MWI.Orders.IOrderIssuer
         // as soon as the server's value arrives (or on any subsequent rename).
         NetworkCharacterName.OnValueChanged += OnNetworkNameChanged;
         NetworkIsSleeping.OnValueChanged += HandleSleepStateChanged;
+        NetworkOccupyingFurnitureNetId.OnValueChanged += OnNetworkOccupyingFurnitureNetIdChanged;
 
         // Apply the current value immediately if already available (normal case)
         if (!NetworkCharacterName.Value.IsEmpty)
@@ -534,6 +594,7 @@ public class Character : NetworkBehaviour, MWI.Orders.IOrderIssuer
         base.OnNetworkDespawn();
         NetworkCharacterName.OnValueChanged -= OnNetworkNameChanged;
         NetworkIsSleeping.OnValueChanged -= HandleSleepStateChanged;
+        NetworkOccupyingFurnitureNetId.OnValueChanged -= OnNetworkOccupyingFurnitureNetIdChanged;
     }
 
     private void OnNetworkNameChanged(Unity.Collections.FixedString64Bytes previous, Unity.Collections.FixedString64Bytes current)
@@ -1165,8 +1226,42 @@ public class Character : NetworkBehaviour, MWI.Orders.IOrderIssuer
     {
         var prev = OccupyingFurniture;
         if (prev == furniture) return;
-        OccupyingFurniture = furniture;
+
+        _occupyingFurniture = furniture;
+
+        // Mirror to the replicated NetVar so client peers (including the seated player's own
+        // owner client) see the change and read OccupyingFurniture authoritatively. Server-only
+        // write — NetworkVariableWritePermission.Server enforces this at the NGO layer too.
+        if (IsServer)
+        {
+            ulong netId = 0;
+            if (furniture != null)
+            {
+                var furnNetObj = furniture.GetComponentInParent<NetworkObject>();
+                netId = furnNetObj != null ? furnNetObj.NetworkObjectId : 0;
+            }
+            if (NetworkOccupyingFurnitureNetId.Value != netId)
+            {
+                NetworkOccupyingFurnitureNetId.Value = netId;
+            }
+        }
+
         OnOccupyingFurnitureChanged?.Invoke(prev, furniture);
+    }
+
+    /// <summary>
+    /// Client-side mirror of <see cref="SetOccupyingFurniture"/>'s event fire. Subscribed
+    /// in <c>OnNetworkSpawn</c>, unsubscribed in <c>OnNetworkDespawn</c>. The server already
+    /// fires <see cref="OnOccupyingFurnitureChanged"/> synchronously in
+    /// <see cref="SetOccupyingFurniture"/>, so this handler short-circuits on the server to
+    /// avoid duplicate fires.
+    /// </summary>
+    private void OnNetworkOccupyingFurnitureNetIdChanged(ulong previousId, ulong currentId)
+    {
+        if (IsServer) return;
+        var prev = ResolveFurnitureByNetworkObjectId(previousId);
+        var curr = ResolveFurnitureByNetworkObjectId(currentId);
+        OnOccupyingFurnitureChanged?.Invoke(prev, curr);
     }
 
     /// <summary>
