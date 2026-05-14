@@ -153,6 +153,20 @@ Used for resource nodes (trees, rocks, ore veins).
 | `SetPromptHoldProgress(t01)` | Drives `currentPromptComponent.SetFillAmount` from the controller's hold timer |
 | `UpdateClosestTarget()` runs in `LateUpdate` | Proximity bookkeeping — stable snapshot for the next `Update`'s input read |
 
+### 0. HandleEKeyDown priority order (consumable-vs-interact guard)
+The down-handler resolves the immediate intent in this order. The first match wins and returns; the rest of the press is either handled by KeyHeld/KeyUp or discarded.
+
+| # | Trigger | Action |
+|---|---------|--------|
+| 1 | `SeedSO` in hands | `CropPlacement.StartPlacement` |
+| 2 | `WateringCanSO` in hands | `CropPlacement.StartWatering` |
+| 3 | `CropPlacement.IsActive` | no-op (manager owns LMB/RMB/ESC) |
+| 4 | **Interactable intent** — `_detector.CurrentTarget != null` OR `_targeting.SelectedInteractable != null` | defer to KeyHeld/KeyUp (tap-vs-hold). **No `_eMenuOpened = true`** so the held/up path can run. |
+| 5 | `ConsumableInstance` in hands | `CharacterUseConsumableAction` (gated by `CurrentAction == null`) |
+| else | no immediate intent | defer to KeyHeld/KeyUp |
+
+**Why priority 4 sits above priority 5 (the "bread + interactable both fire on E" fix):** pressing E *at* something should never accidentally consume the food the player is holding. Consume is the **fallback** when there is no interactable to address. Without this guard, a held `ConsumableInstance` would short-circuit the down handler, then `PlayerInteractionDetector`'s legacy `Input.GetKeyDown` listener (now removed per rule #33) would still fire the interact path on the same frame — the player would eat the bread *and* open the shop.
+
 ### 1. Tap E (Quick Action)
 - `PlayerController.HandleEKeyUp` resolves `target = _targeting?.SelectedInteractable ?? _detector?.CurrentTarget`.
 - Selected-but-out-of-range → enqueue `PlayerInteractCommand` for NavMesh auto-nav.
@@ -161,10 +175,12 @@ Used for resource nodes (trees, rocks, ore veins).
 
 ### 2. Hold E (Extended Options)
 - `PlayerController.HandleEKeyHeld` ticks `_eHeldStartTime → t01` and pushes the value to `_detector.SetPromptHoldProgress(t01)`, which drives the prompt-fill bar via `InteractionPromptUI`.
-- Once `t01 >= 1f` (the hold threshold), the controller dispatches in two priorities:
+- Once `t01 >= 1f` (the hold threshold), the controller **flips `_eMenuOpened = true` first** so the subsequent KeyUp early-exits without firing the tap path, **then** dispatches in two priorities:
   - **Priority A**: harvestable-specific menu (`UI_HarvestInteractionMenu`) via `GetNearestVisibleHarvestable()` (awareness-based).
   - **Priority B**: generic interactable hold-menu via `_detector.TriggerHoldMenu(currentTarget)` — pulls `GetHoldInteractionOptions()` from the target and routes through `PlayerUI.OpenInteractionMenu`.
 - These options (e.g., *Follow Me*, *Greet*) are displayed dynamically in a radial or list context menu via the `PlayerUI`.
+
+**"Hold doesn't tap" guarantee:** flipping `_eMenuOpened` at threshold-cross is unconditional — it does NOT depend on a menu actually opening. So holding E past 0.4s on a target with no `GetHoldInteractionOptions` (e.g. a generic door) consumes the press cleanly: no menu, no tap on release. Without this, a generic door + 0.5s hold would still fire `target.Interact(Character)` on release because `_eMenuOpened` would have stayed `false`. `OnInteractionMenuClosed` resets the flag for the harvestable menu; the generic branch and the no-menu branch rely on the next `HandleEKeyDown` to reset it (line: `_eMenuOpened = false;`).
 
 ### Door Hold Menu (Lock / Unlock / Repair)
 `MapTransitionDoor` and `BuildingInteriorDoor` override `GetHoldInteractionOptions()` to provide door-specific actions when the player holds E:

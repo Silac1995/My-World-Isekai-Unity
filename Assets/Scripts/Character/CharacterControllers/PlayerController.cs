@@ -361,7 +361,18 @@ public class PlayerController : CharacterGameController
             return;
         }
 
-        // Priority 4: consumable in hand. Existing behaviour preserved.
+        // Priority 4: any interactable intent (in-range proximity OR selected target) takes
+        // precedence over consume. This is the canonical fix for the "bread + interactable
+        // both fire on E" bug: pressing E "at" something should never accidentally eat the
+        // food the player is holding. Defer to KeyHeld / KeyUp for tap-vs-hold dispatch
+        // (selected-but-out-of-range routes through HandleEKeyUp's auto-nav branch).
+        EnsureTargeting();
+        bool hasInteractableIntent =
+            (_detector != null && _detector.CurrentTarget != null)
+            || (_targeting != null && _targeting.SelectedInteractable != null);
+        if (hasInteractableIntent) return;
+
+        // Priority 5: consumable in hand (only reached when there is no interactable intent).
         if (hands != null && hands.IsCarrying && hands.CarriedItem is ConsumableInstance consumable)
         {
             if (_character.CharacterActions == null || _character.CharacterActions.CurrentAction != null) return;
@@ -387,19 +398,26 @@ public class PlayerController : CharacterGameController
         _detector?.SetPromptHoldProgress(Mathf.Clamp01(t01));
         if (t01 < 1f) return;
 
+        // Threshold crossed → this press is consumed by the hold cycle regardless of
+        // whether a menu actually opens. Without this, holding E on a target that has
+        // no GetHoldInteractionOptions (e.g. a generic door) would also trigger the
+        // tap path on release — i.e. "hold also taps". Flip the latch FIRST so
+        // HandleEKeyUp's `if (_eMenuOpened) return;` suppresses the tap.
+        _eMenuOpened = true;
+        _detector?.SetPromptHoldProgress(0f);
+
         // Priority A: harvestable-specific menu.
         var harvestable = GetNearestVisibleHarvestable();
         if (harvestable != null)
         {
             MWI.UI.Interaction.UI_HarvestInteractionMenu.Open(_character, harvestable, OnInteractionMenuClosed);
-            _eMenuOpened = true;
             return;
         }
 
-        // Priority B: generic interactable hold-menu via detector helper.
+        // Priority B: generic interactable hold-menu via detector helper. Failure to
+        // open a menu does NOT roll back _eMenuOpened — the hold still consumed the press.
         var generic = _detector?.CurrentTarget;
-        if (generic != null && _detector.TriggerHoldMenu(generic))
-            _eMenuOpened = true;
+        if (generic != null) _detector.TriggerHoldMenu(generic);
     }
 
     /// <summary>
@@ -412,8 +430,10 @@ public class PlayerController : CharacterGameController
     /// </summary>
     private void HandleEKeyUp()
     {
-        if (_eMenuOpened) return;
+        // Always clear the fill bar on release — covers "released before threshold" and
+        // belt-and-braces if a held-cycle skipped the reset (the threshold branch also clears).
         _detector?.SetPromptHoldProgress(0f);
+        if (_eMenuOpened) return;
 
         EnsureTargeting();
         var selected = _targeting?.SelectedInteractable;
