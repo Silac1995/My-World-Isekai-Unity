@@ -107,8 +107,11 @@ public class StorageFurniture : Furniture
         return true;
     }
 
-    protected virtual void Awake()
+    protected override void Awake()
     {
+        // Chain to Furniture.Awake first so the interaction-point safety net runs even
+        // for storage prefabs whose _interactionPoint was authored as null.
+        base.Awake();
         InitializeItemSlots();
     }
 

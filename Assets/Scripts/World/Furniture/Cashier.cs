@@ -94,8 +94,11 @@ public class Cashier : OccupiableFurniture
 
     private bool _registered;
 
-    protected void Awake()
+    protected override void Awake()
     {
+        // Chain to Furniture.Awake first so the interaction-point safety net runs on cashiers
+        // whose _interactionPoint was authored as null.
+        base.Awake();
         _linkedBuilding = GetComponentInParent<CommercialBuilding>();
         _netSync = GetComponent<CashierNetSync>();
     }

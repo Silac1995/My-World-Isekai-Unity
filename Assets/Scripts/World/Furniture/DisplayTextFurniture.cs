@@ -28,8 +28,11 @@ public class DisplayTextFurniture : Furniture
     /// <summary>Fires whenever <see cref="DisplayText"/> changes (server + clients).</summary>
     public event System.Action<string> OnDisplayTextChanged;
 
-    protected virtual void Awake()
+    protected override void Awake()
     {
+        // Chain to Furniture.Awake first so the interaction-point safety net runs on
+        // display-text furniture whose _interactionPoint was authored as null.
+        base.Awake();
         _netSync = GetComponent<DisplayTextFurnitureNetSync>();
         if (_netSync != null)
         {

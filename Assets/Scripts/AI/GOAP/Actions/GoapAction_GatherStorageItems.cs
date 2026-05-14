@@ -242,20 +242,57 @@ public class GoapAction_GatherStorageItems : GoapAction
                         _furnitureMoveStartedAt = Time.unscaledTime;
                     }
 
-                    // Furniture target: there's no zone collider to early-exit on, so
-                    // arrival is a flat-XZ proximity check against the furniture's
-                    // interaction point. 1.5f matches HandleMovementTo's early-exit
-                    // threshold so behaviour stays consistent with the zone path.
+                    // Arrival precedence (matches the canonical pattern in
+                    // GoapAction_FetchToolFromStorage / GoapAction_ReturnToolToStorage):
+                    //   1. HandleMovementTo's own early-exit (NavMeshAgent at destination).
+                    //   2. Interactable System Core Rule #1 — InteractableObject.IsCharacterInInteractionZone
+                    //      is the single source of truth for "close enough to interact". Robust to
+                    //      _interactionPoint being inside the NavMeshObstacle carve (the worker stops
+                    //      at the carve edge, typically still inside the zone bounds).
+                    //   3. Arrived-but-just-outside softlock — if the path is exhausted and we're
+                    //      within 2f flat-XZ of _targetPos, accept arrival. Covers the case where
+                    //      the agent stops a hair outside the zone bounds.
+                    //   4. Legacy 1.5f flat-XZ check — only when no FurnitureInteractable.InteractionZone
+                    //      is authored at all. Retained as a safety net for any legacy prefab.
                     HandleMovementTo(worker, _targetPos, out arrivedAtStorage, null);
 
                     if (!arrivedAtStorage)
                     {
-                        Vector3 flatWorker = new Vector3(worker.transform.position.x, 0f, worker.transform.position.z);
-                        Vector3 flatTarget = new Vector3(_targetPos.x, 0f, _targetPos.z);
-                        if (Vector3.Distance(flatWorker, flatTarget) <= 1.5f)
+                        var interactable = _targetFurniture.GetComponent<InteractableObject>();
+                        if (interactable != null && interactable.InteractionZone != null)
                         {
-                            worker.CharacterMovement.ResetPath();
-                            arrivedAtStorage = true;
+                            if (interactable.IsCharacterInInteractionZone(worker))
+                            {
+                                worker.CharacterMovement.ResetPath();
+                                arrivedAtStorage = true;
+                            }
+                            else
+                            {
+                                var movement = worker.CharacterMovement;
+                                bool pathExhausted = movement == null
+                                    || !movement.HasPath
+                                    || movement.RemainingDistance <= movement.StoppingDistance + 0.5f;
+                                if (pathExhausted)
+                                {
+                                    Vector3 flatWorker = new Vector3(worker.transform.position.x, 0f, worker.transform.position.z);
+                                    Vector3 flatTarget = new Vector3(_targetPos.x, 0f, _targetPos.z);
+                                    if (Vector3.Distance(flatWorker, flatTarget) <= 2f)
+                                    {
+                                        worker.CharacterMovement.ResetPath();
+                                        arrivedAtStorage = true;
+                                    }
+                                }
+                            }
+                        }
+                        else
+                        {
+                            Vector3 flatWorker = new Vector3(worker.transform.position.x, 0f, worker.transform.position.z);
+                            Vector3 flatTarget = new Vector3(_targetPos.x, 0f, _targetPos.z);
+                            if (Vector3.Distance(flatWorker, flatTarget) <= 1.5f)
+                            {
+                                worker.CharacterMovement.ResetPath();
+                                arrivedAtStorage = true;
+                            }
                         }
                     }
 
@@ -462,11 +499,15 @@ public class GoapAction_GatherStorageItems : GoapAction
             // Non-tool items skip every tool storage so general inventory can't fill the
             // slots reserved for tools. IsToolStorage handles role-tagged AND legacy fallback
             // storages in a single predicate.
+            // SellShelves are reserved exclusively for catalog items handled by the shop-shelf
+            // pre-pass above — the generic walk MUST skip them so a non-catalog item doesn't
+            // first-fit-land on the sale display. Mirrors CommercialBuilding.FindStorageFurnitureForItem.
             foreach (var candidate in _building.GetFurnitureOfType<StorageFurniture>())
             {
                 if (candidate == null || candidate.IsLocked) continue;
                 if (_excludedFurniture != null && _excludedFurniture.Contains(candidate)) continue;
                 if (!isTool && _building.IsToolStorage(candidate)) continue;
+                if (candidate.Role == StorageRoleType.SellShelf) continue;
                 if (!candidate.HasFreeSpaceForItem(carriedItem)) continue;
 
                 _targetFurniture = candidate;

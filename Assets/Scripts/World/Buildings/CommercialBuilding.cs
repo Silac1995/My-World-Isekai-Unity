@@ -2299,12 +2299,17 @@ public abstract class CommercialBuilding : Building
         // First-fit by furniture order. Non-tool items SKIP every tool storage so general
         // inventory (seeds, produce) can't fill the slots reserved for tools. IsToolStorage
         // is the unified "role-tagged OR legacy-singleton" predicate.
+        // SellShelves are reserved exclusively for catalog items handled by the shop-shelf
+        // pre-pass above — the generic walk MUST skip them so a non-catalog item (e.g. a
+        // weapon the player dropped in a bread shop) doesn't land on the sale display.
+        // Mirrors the tool-storage exclusion (non-tool ↔ tool storage axis).
         var cached = GetStorageFurnitureCached();
         for (int i = 0; i < cached.Count; i++)
         {
             var furniture = cached[i];
             if (furniture == null || furniture.IsLocked) continue;
             if (!isTool && IsToolStorage(furniture)) continue;
+            if (furniture.Role == StorageRoleType.SellShelf) continue;
             if (furniture.HasFreeSpaceForItem(item)) return furniture;
         }
         return null;

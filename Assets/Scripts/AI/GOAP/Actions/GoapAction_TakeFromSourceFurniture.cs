@@ -126,15 +126,49 @@ namespace MWI.AI
 
                     if (!arrived)
                     {
-                        // Single-point target: HandleMovementTo's collider-based early-exit
-                        // can't fire (no collider). Mirror GoapAction_StageItemForPickup's
-                        // 1.5f flat-XZ proximity check so behaviour stays consistent.
-                        Vector3 flatWorker = new Vector3(worker.transform.position.x, 0f, worker.transform.position.z);
-                        Vector3 flatTarget = new Vector3(_targetPos.x, 0f, _targetPos.z);
-                        if (Vector3.Distance(flatWorker, flatTarget) <= 1.5f)
+                        // Arrival precedence (matches GoapAction_FetchToolFromStorage /
+                        // GoapAction_ReturnToolToStorage / GoapAction_GatherStorageItems):
+                        //   1. Interactable Core Rule #1 — IsCharacterInInteractionZone is the
+                        //      canonical "close enough to interact" gate. Robust to the precise
+                        //      _interactionPoint being inside the NavMeshObstacle carve (worker
+                        //      stops at the carve edge, typically still inside the zone bounds).
+                        //   2. Arrived-but-just-outside softlock — path exhausted within 2f of
+                        //      _targetPos counts as arrival.
+                        //   3. Legacy 1.5f flat-XZ fallback when no FurnitureInteractable.
+                        var interactable = furniture.GetComponent<InteractableObject>();
+                        if (interactable != null && interactable.InteractionZone != null)
                         {
-                            movement.ResetPath();
-                            arrived = true;
+                            if (interactable.IsCharacterInInteractionZone(worker))
+                            {
+                                movement.ResetPath();
+                                arrived = true;
+                            }
+                            else
+                            {
+                                bool pathExhausted = movement == null
+                                    || !movement.HasPath
+                                    || movement.RemainingDistance <= movement.StoppingDistance + 0.5f;
+                                if (pathExhausted)
+                                {
+                                    Vector3 flatWorker = new Vector3(worker.transform.position.x, 0f, worker.transform.position.z);
+                                    Vector3 flatTarget = new Vector3(_targetPos.x, 0f, _targetPos.z);
+                                    if (Vector3.Distance(flatWorker, flatTarget) <= 2f)
+                                    {
+                                        movement.ResetPath();
+                                        arrived = true;
+                                    }
+                                }
+                            }
+                        }
+                        else
+                        {
+                            Vector3 flatWorker = new Vector3(worker.transform.position.x, 0f, worker.transform.position.z);
+                            Vector3 flatTarget = new Vector3(_targetPos.x, 0f, _targetPos.z);
+                            if (Vector3.Distance(flatWorker, flatTarget) <= 1.5f)
+                            {
+                                movement.ResetPath();
+                                arrived = true;
+                            }
                         }
                     }
 

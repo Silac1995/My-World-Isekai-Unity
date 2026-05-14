@@ -224,6 +224,44 @@ public class Furniture : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Runtime safety net for furniture that ships without a reachable interaction target.
+    /// <see cref="GetInteractionPosition(Vector3)"/> resolution order is:
+    /// (1) authored <see cref="_interactionPoint"/>, (2) attached
+    /// <see cref="FurnitureInteractable"/>'s <c>InteractionZone</c> bounds closest-point,
+    /// (3) <c>transform.position</c>. Branch (3) sits inside the <c>NavMeshObstacle</c> carve
+    /// and is unreachable — workers stall in front of the furniture and the
+    /// <c>GoapAction_GatherStorageItems</c> 5s softlock fallback fires (dropping items on the
+    /// floor instead of storing them).
+    /// <para>
+    /// Per-prefab authoring is the preferred fix, but legacy prefabs and runtime-placed
+    /// furniture (which bypass the editor <see cref="Reset"/> hook) can ship without either
+    /// an authored Transform or a configured <see cref="FurnitureInteractable.InteractionZone"/>.
+    /// This Awake closes that hole by auto-spawning the child when both upstream resolution
+    /// branches would fail. The child is local-only (no network sync needed — both server and
+    /// clients run Awake on their own copies, the renderer-bounds geometry is identical on
+    /// both peers, so they each land at the same local +Z offset).
+    /// </para>
+    /// Per CLAUDE.md rule #34: this runs once per furniture spawn, not per frame — single
+    /// renderer scan + single GameObject allocation is acceptable.
+    /// <para>
+    /// <b>Subclass contract:</b> declared <c>protected virtual</c> so subclasses can extend
+    /// it. Subclasses that override <c>Awake</c> MUST call <c>base.Awake()</c> as the first
+    /// line — otherwise this safety net is silently bypassed and the missing-interaction-point
+    /// bug reappears on the subclass. Current subclass overrides: <see cref="StorageFurniture"/>,
+    /// <see cref="Cashier"/>, <see cref="DisplayTextFurniture"/>.
+    /// </para>
+    /// </summary>
+    protected virtual void Awake()
+    {
+        if (_interactionPoint != null) return;
+
+        var interactable = GetComponent<FurnitureInteractable>();
+        if (interactable != null && interactable.InteractionZone != null) return;
+
+        AutoCreateInteractionPoint();
+    }
+
 #if UNITY_EDITOR
     private void OnDrawGizmosSelected()
     {
