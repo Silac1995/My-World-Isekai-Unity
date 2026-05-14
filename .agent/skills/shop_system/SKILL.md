@@ -32,12 +32,15 @@ Vendors are the face of the shop. Their GOAP/BT behavior traps them behind the c
 - If the Vendor's shift ends (`WorkerEndingShift`), if they are the last vendor in the building, they must forcibly **Clear the Queue**, effectively kicking out remaining customers and telling them the shop is closed.
 
 ### 4. Buying (`Customer NPCs`)
-NPCs driven by needs (e.g., `NeedItem`, `NeedFood`) trigger a Shopping behavior.
-- The NPC paths to the nearest Shop selling the item they want.
-- Upon arrival, they ask the Shop: "Are any Vendors free?"
-  - **Yes**: They walk straight to the Vendor.
-  - **No**: They enqueue themselves in the Shop's `Customer Queue` and switch to a waiting behavior (`WaitInQueueBehaviour`), standing patiently in a line area.
-- Once called by a Vendor, they walk up and execute `InteractionBuyItem`, where money is deducted, and the item transfers from the Shop's `Inventory` to the NPC's Inventory.
+NPCs driven by needs trigger a shopping behavior. Currently shipping consumers:
+- **`NeedShopping`** → `GoapAction_GoShopping(ItemSO)` → `CharacterAction_BuyFromShop(BuyMode.NPC)`. Used by the generic "I want this specific item" flow.
+- **`NeedHunger`** → `GoapAction_BuyFood(shop, cashier, foodSO)` → `CharacterAction_BuyFromShop(BuyMode.NPC)`. New as of 2026-05-15: hungry NPCs scan every `ShopBuilding` for `FoodSO` catalog entries they can afford, pick the highest `HungerRestored`/`price` ratio, and buy a single item. The shop-buy is the default — ground pickup is gated to the emergency hunger window (`CurrentValue ≤ 10`). See `character-needs/SKILL.md §NeedHunger` for the full path.
+
+Common shape:
+- The NPC paths to a `Cashier` (selected at planning time so the choice is replan-stable). `Cashier.IsAvailableForCustomer` is the gate.
+- Server-only — GOAP and `CharacterAction_BuyFromShop` continuous-action paths short-circuit on non-server peers.
+- Same buy commit as the player flow (cashier lock → wallet debit → till credit → sell-shelf pull → deliver to customer inventory).
+- Late-joining clients see the walk, till change, wallet change, and inventory change all via existing replication — no new RPCs added by hunger or by the generic shopping path.
 
 ### 5. B2B logistics buys (2026-05-09)
 When another building's `LogisticsStockEvaluator` runs `RequestStock`, it scans same-map `ShopBuilding`s **before** falling through to `FindSupplierFor` (producer path). If a shop carries the item, has the stock on `SellShelves`, and the buyer's [[commercial-treasury|Treasury]] can afford the unit price × quantity, the purchase commits atomically server-side:

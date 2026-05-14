@@ -15,6 +15,14 @@ namespace MWI.Needs
         public const float DEFAULT_MAX = 100f;
         public const float DEFAULT_LOW_THRESHOLD = 30f;
 
+        /// <summary>
+        /// Hunger value at or below which the NPC is in "extreme necessity" — i.e., the
+        /// need is at ≥ 90% of MaxValue. Used by <see cref="NeedHunger.GetGoapActions"/>
+        /// to gate the emergency ground-pickup fallback: NPCs only stoop to eating loose
+        /// food off the ground when they are this close to starving.
+        /// </summary>
+        public const float DEFAULT_EMERGENCY_THRESHOLD = 10f;
+
         private float _currentValue;
         private float _maxValue = DEFAULT_MAX;
         private float _lowThreshold = DEFAULT_LOW_THRESHOLD;

@@ -3,7 +3,7 @@ type: system
 title: "Shops"
 tags: [shops, economy, commerce, tier-1]
 created: 2026-04-18
-updated: 2026-05-14
+updated: 2026-05-15
 sources: []
 related:
   - "[[building]]"
@@ -29,6 +29,7 @@ depends_on:
   - "[[ai]]"
 depended_on_by:
   - "[[world]]"
+  - "[[character-needs]]"
 ---
 
 # Shops
@@ -193,6 +194,7 @@ Server-side role routing is necessary because `CharacterJob._activeJobs` is not 
 **Stale references on this page**: `InteractionBuyItem` is preserved for future character↔character trading but no longer used by `ShopBuilding`. `Customer Queue` / `JoinQueue` / `ClearQueue` are gone — see the 2026-05-07 spec for the cashier per-transaction-lock model.
 
 ## Change log
+- 2026-05-15 — Hungry NPCs now buy from shops. [[character-needs]] `NeedHunger` registers a new `GoapAction_BuyFood` that scans every `ShopBuilding` for affordable `FoodSO` catalog entries, picks the best HungerRestored/price ratio, and queues `CharacterAction_BuyFromShop(BuyMode.NPC)` against a chosen `Cashier`. Same buy commit as players (cashier lock → wallet debit → till credit → sell-shelf pull → deliver). No new RPCs. Workplace-storage and ground-pickup paths are no longer the default — the ground path is now reserved for hunger emergencies (need ≥ 90%). — claude
 - 2026-05-14 — Tap-E on a `CashierInteractable` rewired to two branches: seated occupant → `RequestLeaveOccupiedFurnitureServerRpc`; everyone else → new `CashierNetSync.RequestUseCashierServerRpc` with server-side role routing (vendor → `CharacterAction_OccupyFurniture`; customer → `CharacterAction_BuyFromShop`). Closes the remote-client player-vendor regression that surfaced when `Cashier.ServerTickAutoOccupy` was removed (CharacterJob._activeJobs is not NetVar-replicated). See [[shop-vendor]] + [[host-only-state-blindspot]]. — claude
 - 2026-05-13 — Added Player buy UI section: `UI_ShopBuyPanel` adopts the canonical HUD-window pattern (UI_WindowBase + scene child of `UI_PlayerHUD/Canvas` + SerializeField on PlayerUI). Prefabs authored at `Assets/UI/Player HUD/`. Flagged stale queue/JobVendor references that predate the 2026-05-07 cashier refactor. — Claude / [[kevin]]
 - 2026-04-18 — Initial documentation pass. — Claude / [[kevin]]

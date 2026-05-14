@@ -3,7 +3,7 @@ type: system
 title: "Character Needs"
 tags: [character, needs, ai, tier-2]
 created: 2026-04-18
-updated: 2026-04-26
+updated: 2026-05-15
 sources: []
 related:
   - "[[character]]"
@@ -20,6 +20,7 @@ secondary_agents:
 owner_code_path: "Assets/Scripts/Character/CharacterNeeds/"
 depends_on:
   - "[[character]]"
+  - "[[shops]]"
 depended_on_by:
   - "[[ai]]"
   - "[[world]]"
@@ -73,19 +74,20 @@ Phase-decay need (25 per `TimeManager.OnPhaseChanged`, 4× per in-game day → f
 - `OnStarvingChanged(bool)` — fired on transitions, on every peer.
 - `OnValueChanged(float)` — fired on every networked value change, on every peer.
 - `IncreaseValue(float)` / `DecreaseValue(float)` — server: direct write. Client: ServerRpc.
-- `IsLow()` — true at or below 30.
+- `IsLow()` — true at or below 30 (the GOAP activation threshold).
+- **Emergency threshold:** `NeedHungerMath.DEFAULT_EMERGENCY_THRESHOLD = 10` (need ≥ 90%). Used to gate the ground-pickup fallback inside `GetGoapActions`.
 - `TrySubscribeToPhase()` / `UnsubscribeFromPhase()` — defensive TimeManager subscription. Decay handler gated by `IsServer` to prevent double-decay.
 - `BindNetworkBridge()` / `UnbindNetworkBridge()` — wires NV.OnValueChanged → public events. Called in `OnNetworkSpawn` / `OnNetworkDespawn`.
 - `SetCooldown()` — rearms the GOAP activation cooldown after eating.
 
 **Spawn-order fix:** `CharacterNeeds` registration was moved from `Start()` to `Awake()` so `GetNeed<NeedHunger>()` works inside `OnNetworkSpawn`, before `PlayerUI.Initialize → UI_HungerBar.Initialize` fires. Previously the local-owner client's HUD initialised with `null` and displayed `0/0`.
 
-**GOAP resolver — two paths (added 2026-04-26):** `NeedHunger.GetGoapActions()` returns one of two **disjoint** chains, never both. The world-item path preempts because food on the ground next to the NPC is closer than walking back to the workplace.
+**GOAP resolver — shop-first with emergency-only ground fallback (rewritten 2026-05-15):** `NeedHunger.GetGoapActions()` returns one chain at a time. The default route is to buy food from a shop; the loose-food-on-the-ground route is reserved for extreme hunger.
 
-1. **World-item path (preempts).** Scans `_character.CharacterAwareness.GetVisibleInteractables()` for the first non-carried `WorldItem` whose `ItemInstance is FoodInstance`. Chain: `[GoapAction_GoToWorldFood → GoapAction_PickupWorldFood → GoapAction_EatCarriedFood]`. Effect keys: `atWorldFood` → `carryingFood` → `isHungry=false`.
-2. **Workplace storage path (fallback).** Walks `CharacterJob.Workplace.GetItemsInStorageFurniture()` for the first `FoodSO`. Chain: `[GoapAction_GoToFood → GoapAction_Eat]`. Effect keys: `atFood` → `isHungry=false`.
+1. **Shop path (default).** `TryFindShopFood` walks every `ShopBuilding` registered with `BuildingManager.allBuildings`, iterates each shop's `Catalog` for entries whose `ItemSO is FoodSO`, then filters by: cashier available, wallet can afford `ShopBuilding.ResolvePrice(entry)`, at least one matching `ItemInstance` is on a sell-shelf, and the NPC has inventory or hands space. The candidate with the highest `FoodSO.HungerRestored / price` (most filling per coin) wins; price ≤ 0 entries get a very large constant score so they always win. Chain: `[GoapAction_BuyFood(shop, cashier, foodSO) → GoapAction_EatCarriedFood]`. Effect keys: `carryingFood` → `isHungry=false`. `GoapAction_BuyFood` queues the same `CharacterAction_BuyFromShop(BuyMode.NPC)` the player buy uses.
+2. **Ground pickup (emergency only).** Only runs when `CurrentValue ≤ NeedHungerMath.DEFAULT_EMERGENCY_THRESHOLD` (10 — the need is at ≥ 90%). Scans `_character.CharacterAwareness.GetVisibleInteractables()` for the first non-carried `WorldItem` whose `ItemInstance is FoodInstance`. Chain: `[GoapAction_GoToWorldFood → GoapAction_PickupWorldFood → GoapAction_EatCarriedFood]`. Effect keys: `atWorldFood` → `carryingFood` → `isHungry=false`.
 
-The two chains use disjoint intermediate state keys — even if both were ever returned together (currently they aren't), the planner could not cross-link a `GoToWorldFood` to a workplace `Eat`.
+The legacy workplace-storage path (`GoapAction_GoToFood` + `GoapAction_Eat`) is retired from `NeedHunger`: NPCs no longer self-serve from their employer's storage furniture. The action classes are kept in the codebase pending a future personal/owned-storage concept. See `[[shops]]` for the buy commit pipeline.
 
 For procedural details (decay formula, full GOAP integration, macro-sim catch-up, ServerRpc surface) see [.agent/skills/character_needs/SKILL.md](../../.agent/skills/character_needs/SKILL.md).
 
@@ -153,6 +155,7 @@ for each HibernatedNPCData:
 - 2026-04-26 — added NeedHunger (phase-tick decay, IsStarving event) + FoodSO consumable subtype + GoapAction_GoToFood/Eat — claude
 - 2026-04-26 — NeedHunger made server-authoritative via `NetworkVariable<float>` on `CharacterNeeds`; eat path routes through `RequestAdjustHungerRpc`; need registration moved from Start→Awake to fix `0/0` HUD bug on local-owner clients — claude
 - 2026-04-26 — NeedHunger gained a second food source: loose `WorldItem`s in awareness radius. New chain `[GoapAction_GoToWorldFood → GoapAction_PickupWorldFood → GoapAction_EatCarriedFood]` preempts the workplace-storage chain when ground food is detected. Disjoint state keys (`atWorldFood` / `carryingFood` vs `atFood`) prevent planner cross-linking — claude
+- 2026-05-15 — NeedHunger food-acquisition rewired: shop-buy is now the default path via new `GoapAction_BuyFood` (chains `[GoapAction_BuyFood → GoapAction_EatCarriedFood]` and reuses `CharacterAction_BuyFromShop(BuyMode.NPC)`). The ground-pickup chain is gated behind a new emergency threshold (`NeedHungerMath.DEFAULT_EMERGENCY_THRESHOLD = 10`, i.e. need ≥ 90%). The workplace-storage path was retired — NPCs no longer self-serve from their employer's storage. Action classes `GoapAction_GoToFood` / `GoapAction_Eat` remain in the codebase pending a personal/owned-storage concept — claude
 
 ## Sources
 - [.agent/skills/character_needs/SKILL.md](../../.agent/skills/character_needs/SKILL.md)
@@ -162,9 +165,11 @@ for each HibernatedNPCData:
 - [Assets/Scripts/Character/CharacterNeeds/Pure/HungerCatchUpMath.cs](../../Assets/Scripts/Character/CharacterNeeds/Pure/HungerCatchUpMath.cs)
 - [Assets/Resources/Data/Item/FoodSO.cs](../../Assets/Resources/Data/Item/FoodSO.cs)
 - [Assets/Scripts/Item/FoodInstance.cs](../../Assets/Scripts/Item/FoodInstance.cs)
-- [Assets/Scripts/AI/GOAP/Actions/GoapAction_GoToFood.cs](../../Assets/Scripts/AI/GOAP/Actions/GoapAction_GoToFood.cs)
-- [Assets/Scripts/AI/GOAP/Actions/GoapAction_Eat.cs](../../Assets/Scripts/AI/GOAP/Actions/GoapAction_Eat.cs)
-- [Assets/Scripts/AI/GOAP/Actions/GoapAction_GoToWorldFood.cs](../../Assets/Scripts/AI/GOAP/Actions/GoapAction_GoToWorldFood.cs)
-- [Assets/Scripts/AI/GOAP/Actions/GoapAction_PickupWorldFood.cs](../../Assets/Scripts/AI/GOAP/Actions/GoapAction_PickupWorldFood.cs)
-- [Assets/Scripts/AI/GOAP/Actions/GoapAction_EatCarriedFood.cs](../../Assets/Scripts/AI/GOAP/Actions/GoapAction_EatCarriedFood.cs)
+- [Assets/Scripts/AI/GOAP/Actions/GoapAction_BuyFood.cs](../../Assets/Scripts/AI/GOAP/Actions/GoapAction_BuyFood.cs) — shop path (registered by NeedHunger)
+- [Assets/Scripts/AI/GOAP/Actions/GoapAction_EatCarriedFood.cs](../../Assets/Scripts/AI/GOAP/Actions/GoapAction_EatCarriedFood.cs) — terminator for both surviving paths
+- [Assets/Scripts/AI/GOAP/Actions/GoapAction_GoToWorldFood.cs](../../Assets/Scripts/AI/GOAP/Actions/GoapAction_GoToWorldFood.cs) — emergency ground path
+- [Assets/Scripts/AI/GOAP/Actions/GoapAction_PickupWorldFood.cs](../../Assets/Scripts/AI/GOAP/Actions/GoapAction_PickupWorldFood.cs) — emergency ground path
+- [Assets/Scripts/AI/GOAP/Actions/GoapAction_GoToFood.cs](../../Assets/Scripts/AI/GOAP/Actions/GoapAction_GoToFood.cs) — retired from NeedHunger; kept pending personal-storage concept
+- [Assets/Scripts/AI/GOAP/Actions/GoapAction_Eat.cs](../../Assets/Scripts/AI/GOAP/Actions/GoapAction_Eat.cs) — retired from NeedHunger; kept pending personal-storage concept
+- [Assets/Scripts/Character/CharacterActions/CharacterAction_BuyFromShop.cs](../../Assets/Scripts/Character/CharacterActions/CharacterAction_BuyFromShop.cs) — shared buy pipeline (BuyMode.NPC reused by GoapAction_BuyFood)
 - [[ai]] and [[world]] (parents-of-interest).
