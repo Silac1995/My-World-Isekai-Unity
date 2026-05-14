@@ -534,15 +534,20 @@ public class CharacterActions : CharacterSystem
     /// server-side via <see cref="InteractableObject.IsCharacterInInteractionZone"/> (anti-cheat /
     /// spawn-race) and rejects if the character is already occupying a different furniture.
     ///
-    /// Uses <see cref="NetworkBehaviourReference"/> rather than world-position resolution
-    /// because <see cref="OccupiableFurniture"/> subclasses are NetworkBehaviours — the
-    /// reference is exact, no co-location disambiguation needed (cf. bed multi-slot which
-    /// uses position because BedFurniture has no NO of its own).
-    ///
-    /// Mirrors the validation shape of <see cref="RequestSleepOnFurnitureServerRpc"/>.
+    /// Resolution: <paramref name="furnitureRef"/> targets any NetworkBehaviour reachable from
+    /// the furniture — the same GameObject for Cashier (its own NB) or the parent building's
+    /// NB for Bed/Chair (no per-furniture NO per the no-nested-NO rule). The server resolves
+    /// in three steps:
+    /// <list type="number">
+    ///   <item>The NB carries OccupiableFurniture directly → exact target (Cashier).</item>
+    ///   <item>Otherwise, walk the NB's GameObject for an OccupiableFurniture sibling.</item>
+    ///   <item>Otherwise, walk children (under the building) and pick the closest to
+    ///   <paramref name="furnitureWorldPosition"/> — same disambiguation pattern as
+    ///   <see cref="RequestSleepOnFurnitureServerRpc"/> with <see cref="FindClosestBedUnder"/>.</item>
+    /// </list>
     /// </summary>
     [Rpc(SendTo.Server)]
-    public void RequestOccupyFurnitureServerRpc(NetworkBehaviourReference furnitureRef)
+    public void RequestOccupyFurnitureServerRpc(NetworkBehaviourReference furnitureRef, Vector3 furnitureWorldPosition)
     {
         if (_character == null)
         {
@@ -556,16 +561,17 @@ public class CharacterActions : CharacterSystem
             return;
         }
 
-        var target = nb as OccupiableFurniture;
+        OccupiableFurniture target = nb as OccupiableFurniture;
+        if (target == null) target = nb.GetComponent<OccupiableFurniture>();
         if (target == null)
         {
-            // Allow callers that pass any NetworkBehaviour on the furniture GameObject (e.g.
-            // a sibling NetSync); fall back to the OccupiableFurniture component on the same GO.
-            target = nb.GetComponent<OccupiableFurniture>();
+            // Bed/Chair path — the NB is the parent building; walk children and pick the
+            // closest by world position.
+            target = FindClosestOccupiableUnder(nb, furnitureWorldPosition);
         }
         if (target == null)
         {
-            Debug.LogWarning("[CharacterActions] Server: RequestOccupyFurniture: resolved NetworkBehaviour does not carry an OccupiableFurniture.");
+            Debug.LogWarning("[CharacterActions] Server: RequestOccupyFurniture: no OccupiableFurniture resolvable from reference + position.");
             return;
         }
 
@@ -590,6 +596,27 @@ public class CharacterActions : CharacterSystem
         }
 
         Debug.Log($"<color=green>[CharacterActions]</color> Server: RequestOccupyFurniture: enqueued for {_character.CharacterName} on {target.FurnitureName}.");
+    }
+
+    private static OccupiableFurniture FindClosestOccupiableUnder(NetworkBehaviour parent, Vector3 worldPosition)
+    {
+        if (parent == null) return null;
+        var occupiables = parent.GetComponentsInChildren<OccupiableFurniture>();
+        if (occupiables == null || occupiables.Length == 0) return null;
+        if (occupiables.Length == 1) return occupiables[0];
+
+        OccupiableFurniture best = null;
+        float bestDistSq = float.MaxValue;
+        for (int i = 0; i < occupiables.Length; i++)
+        {
+            float distSq = (occupiables[i].transform.position - worldPosition).sqrMagnitude;
+            if (distSq < bestDistSq)
+            {
+                bestDistSq = distSq;
+                best = occupiables[i];
+            }
+        }
+        return best;
     }
 
     /// <summary>

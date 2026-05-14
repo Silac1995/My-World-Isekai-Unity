@@ -122,21 +122,56 @@ public abstract class OccupiableFurniture : Furniture, IOccupiable
     }
 
     /// <summary>
-    /// Universal interactable dispatch — for occupiable furniture, E-press binds the
-    /// interactor as the occupant via <see cref="Use"/>. Subclasses with bespoke
-    /// interaction semantics (e.g. opening a UI without occupying) can override
-    /// further; the base behavior here matches the legacy
-    /// <c>FurnitureInteractable.Interact → _furniture.Use</c> path so chairs / beds /
-    /// cashiers / crafting stations still seat the interactor on tap-E.
+    /// Universal interactable dispatch — tap-E binds the interactor as the occupant by
+    /// queueing <see cref="CharacterAction_OccupyFurniture"/>. NPCs / host paths run
+    /// server-side and queue directly; player-owner client paths relay through the
+    /// canonical <see cref="CharacterActions.RequestOccupyFurnitureServerRpc"/> which
+    /// re-validates proximity and authoritatively queues the action.
+    ///
+    /// Furniture with a bespoke E-press handler (e.g. <see cref="Cashier"/> via
+    /// <c>CashierInteractable</c>, <see cref="BedFurniture"/> via the sleep flow,
+    /// <c>CraftingStation</c> via the craft flow) override this entirely and route
+    /// through their own action — Use is called inside those actions instead of here.
+    ///
+    /// Pre-2026-05-14 this called <see cref="Use"/> directly, bypassing the action system
+    /// and breaking the uniform "every gameplay effect goes through CharacterAction" rule
+    /// (rule #22). See docs/superpowers/specs/2026-05-14-furniture-occupancy-via-characteraction-design.md.
     /// </summary>
     public override bool OnInteract(Character interactor)
     {
         if (interactor == null) return false;
-        if (IsOccupied)
+        if (IsOccupied && Occupant != interactor) return false;
+        if (interactor.CharacterActions == null) return false;
+
+        // Use the interactor's NetworkObject to decide local server vs client (every Character
+        // has one; not every Furniture does — Bed/Chair are baked into a building prefab and
+        // have no per-furniture NetworkObject per the no-nested-NO rule).
+        var charNetObj = interactor.GetComponent<Unity.Netcode.NetworkObject>();
+        bool isServer = charNetObj != null && charNetObj.NetworkManager != null && charNetObj.NetworkManager.IsServer;
+
+        if (isServer)
         {
-            // Already-occupied case is logged inside Use() too — no double log here.
+            // NPC / host path — queue the action directly on the server-authoritative actor.
+            // Continuous actions are server-only; ExecuteAction returns true on success.
+            return interactor.CharacterActions.ExecuteAction(new CharacterAction_OccupyFurniture(interactor, this));
+        }
+
+        // Client owner path — relay through the canonical ServerRpc which re-validates
+        // proximity and authoritatively queues the action. The reference targets ANY
+        // NetworkBehaviour reachable from this furniture: Cashier carries its own NB, but
+        // Bed/Chair live as plain children under a building's NB. The position passed
+        // alongside lets the server disambiguate multi-furniture buildings (same pattern
+        // as RequestSleepOnFurnitureServerRpc with FindClosestBedUnder).
+        var nb = GetComponent<Unity.Netcode.NetworkBehaviour>();
+        if (nb == null) nb = GetComponentInParent<Unity.Netcode.NetworkBehaviour>();
+        if (nb == null)
+        {
+            Debug.LogWarning($"[OccupiableFurniture] OnInteract: no NetworkBehaviour reachable from {FurnitureName} — cannot send ServerRpc. Tap-E ignored on client.");
             return false;
         }
-        return Use(interactor);
+        interactor.CharacterActions.RequestOccupyFurnitureServerRpc(
+            new Unity.Netcode.NetworkBehaviourReference(nb),
+            transform.position);
+        return true;
     }
 }
