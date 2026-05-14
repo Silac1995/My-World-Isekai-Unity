@@ -512,6 +512,51 @@ public class Harvestable : InteractableObject
         return list;
     }
 
+    /// <summary>
+    /// Hold-E menu adapter — routes harvestable options through the global
+    /// <see cref="InteractableObject.GetHoldInteractionOptions"/> contract so the
+    /// shared <c>PlayerUI.OpenInteractionMenu</c> renders them identically to
+    /// every other interactable's hold-menu (doors, NPCs, etc.). The richer
+    /// <see cref="GetInteractionOptions"/> remains the single source of truth
+    /// (Label / IsAvailable / UnavailableReason / ActionFactory) — this method
+    /// only flattens its rows into the simpler <see cref="InteractionOption"/>
+    /// shape (Name + IsDisabled + Action). UnavailableReason is appended to the
+    /// label in parentheses so the player still sees the missing-tool hint
+    /// without the dedicated harvest-menu rich row UI.
+    /// </summary>
+    public override List<InteractionOption> GetHoldInteractionOptions(Character interactor)
+    {
+        var rich = GetInteractionOptions(interactor);
+        if (rich == null || rich.Count == 0) return null;
+
+        var result = new List<InteractionOption>(rich.Count);
+        for (int i = 0; i < rich.Count; i++)
+        {
+            var opt = rich[i];
+            string displayName = opt.IsAvailable || string.IsNullOrEmpty(opt.UnavailableReason)
+                ? opt.Label
+                : $"{opt.Label} ({opt.UnavailableReason})";
+
+            // Capture by local so each lambda binds to the correct row.
+            var capturedFactory = opt.ActionFactory;
+            var capturedActor = interactor;
+
+            result.Add(new InteractionOption
+            {
+                Name = displayName,
+                IsDisabled = !opt.IsAvailable,
+                Action = () =>
+                {
+                    if (capturedActor == null || capturedFactory == null) return;
+                    var action = capturedFactory(capturedActor);
+                    if (action != null && capturedActor.CharacterActions != null)
+                        capturedActor.CharacterActions.ExecuteAction(action);
+                }
+            });
+        }
+        return result;
+    }
+
     private static HarvestOutputEntry FirstNonEmptyEntry(List<HarvestOutputEntry> entries)
     {
         if (entries == null) return default;

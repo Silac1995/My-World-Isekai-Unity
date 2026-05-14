@@ -385,10 +385,13 @@ public class PlayerController : CharacterGameController
 
     /// <summary>
     /// While E is held: drive the prompt-fill bar via the detector, then once the
-    /// hold threshold is crossed dispatch a hold-menu. Two priorities:
-    /// (A) harvestable-specific menu (UI_HarvestInteractionMenu) — preserves existing UX,
-    /// (B) generic interactable hold-menu via _detector.TriggerHoldMenu — moved out of
-    /// PlayerInteractionDetector per rule #33 (input owner = PlayerController).
+    /// hold threshold is crossed open the unified hold-menu through
+    /// <see cref="PlayerInteractionDetector.TriggerHoldMenu"/>. ALL interactable
+    /// types (harvestables, doors, NPCs, …) route through the shared
+    /// <c>PlayerUI.OpenInteractionMenu</c> via the
+    /// <see cref="InteractableObject.GetHoldInteractionOptions"/> contract —
+    /// harvestables provide their rows via the override on <c>Harvestable</c>
+    /// that flattens <c>GetInteractionOptions</c> into the global shape.
     /// </summary>
     private void HandleEKeyHeld()
     {
@@ -406,18 +409,11 @@ public class PlayerController : CharacterGameController
         _eMenuOpened = true;
         _detector?.SetPromptHoldProgress(0f);
 
-        // Priority A: harvestable-specific menu.
-        var harvestable = GetNearestVisibleHarvestable();
-        if (harvestable != null)
-        {
-            MWI.UI.Interaction.UI_HarvestInteractionMenu.Open(_character, harvestable, OnInteractionMenuClosed);
-            return;
-        }
-
-        // Priority B: generic interactable hold-menu via detector helper. Failure to
-        // open a menu does NOT roll back _eMenuOpened — the hold still consumed the press.
-        var generic = _detector?.CurrentTarget;
-        if (generic != null) _detector.TriggerHoldMenu(generic);
+        // Unified hold-menu dispatch. Failure to open a menu (target has no
+        // GetHoldInteractionOptions rows) does NOT roll back _eMenuOpened —
+        // the hold still consumed the press.
+        var target = _detector?.CurrentTarget;
+        if (target != null) _detector.TriggerHoldMenu(target);
     }
 
     /// <summary>
@@ -449,32 +445,6 @@ public class PlayerController : CharacterGameController
         }
 
         if (_detector != null) _detector.TriggerTapInteract(target);
-    }
-
-    private void OnInteractionMenuClosed() => _eMenuOpened = false;
-
-    // Awareness/sight is the candidate set, but only interactables whose InteractionZone
-    // currently contains the player are eligible — hold-E and tap-E are both proximity-gated
-    // actions, not "anything I can see". Without this filter the menu would happily open for
-    // a harvestable miles away as long as it survived in the awareness list. Uses the canonical
-    // proximity API on InteractableObject (rule: see InteractableObject.IsCharacterInInteractionZone).
-    private Harvestable GetNearestVisibleHarvestable()
-    {
-        var awareness = _character.CharacterAwareness;
-        if (awareness == null) return null;
-        var visible = awareness.GetVisibleInteractables<Harvestable>();
-        if (visible == null || visible.Count == 0) return null;
-        Harvestable best = null;
-        float bestDist = float.MaxValue;
-        for (int i = 0; i < visible.Count; i++)
-        {
-            var h = visible[i];
-            if (h == null) continue;
-            if (!h.IsCharacterInInteractionZone(_character)) continue;
-            float d = Vector3.Distance(_character.transform.position, h.transform.position);
-            if (d < bestDist) { bestDist = d; best = h; }
-        }
-        return best;
     }
 
     /// <summary>
