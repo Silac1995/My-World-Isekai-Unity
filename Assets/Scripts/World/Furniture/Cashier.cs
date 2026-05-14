@@ -62,24 +62,9 @@ public class Cashier : OccupiableFurniture
         get
         {
             if (_netSync == null || _netSync.IsServer || !_netSync.IsSpawned) return base.Occupant;
-            ulong id = _netSync.OccupantNetworkObjectId.Value;
-            var resolved = ResolveCharacterByNetworkObjectId(id);
-            if (resolved == null && _diagnosticLoggedOnce == false)
-            {
-                _diagnosticLoggedOnce = true;
-                var nm = Unity.Netcode.NetworkManager.Singleton;
-                int spawnedCount = nm != null && nm.SpawnManager != null ? nm.SpawnManager.SpawnedObjects.Count : -1;
-                bool inTable = nm != null && nm.SpawnManager != null && nm.SpawnManager.SpawnedObjects.ContainsKey(id);
-                Debug.LogWarning($"<color=orange>[Cashier]</color> Client Occupant resolve returned null on {FurnitureName}: NetVar id={id}, NetSync.IsSpawned={_netSync.IsSpawned}, IsServer={_netSync.IsServer}, SpawnedObjects.Count={spawnedCount}, contains-id={inTable}. (One-shot log per Cashier instance.)", this);
-            }
-            return resolved;
+            return ResolveCharacterByNetworkObjectId(_netSync.OccupantNetworkObjectId.Value);
         }
     }
-
-    // One-shot diagnostic so we only log the first time a client tries to resolve
-    // an occupant id that does not map back to a spawned Character. Cleared by Awake
-    // so it resets on scene reload / hot-reload.
-    private bool _diagnosticLoggedOnce;
 
     public bool IsAvailableForCustomer =>
         CurrentCustomer == null

@@ -35,29 +35,23 @@ public class CashierInteractable : InteractableObject
 
     public override void Interact(Character interactor)
     {
-        Debug.Log($"<color=magenta>[CashierInteract]</color> Interact ENTRY. cashier={(_cashier != null ? _cashier.FurnitureName : "null")}, interactor={(interactor != null ? interactor.CharacterName : "null")}, interactor.IsOwner={(interactor != null ? interactor.IsOwner.ToString() : "n/a")}.", this);
-        if (interactor == null || _cashier == null) { Debug.Log("<color=magenta>[CashierInteract]</color> Early-return: null interactor or cashier."); return; }
-        if (!IsCharacterInInteractionZone(interactor)) { Debug.Log($"<color=magenta>[CashierInteract]</color> Early-return: interactor not in zone (interactor pos={interactor.transform.position}, zone bounds={(InteractionZone != null ? InteractionZone.bounds.ToString() : "null")})."); return; }
+        if (interactor == null || _cashier == null) return;
+        if (!IsCharacterInInteractionZone(interactor)) return;
 
-        var occ = _cashier.Occupant;
-        var cur = _cashier.CurrentCustomer;
-        Debug.Log($"<color=magenta>[CashierInteract]</color> Pre-gate state on this peer: Occupant={(occ != null ? occ.CharacterName : "null")}, CurrentCustomer={(cur != null ? cur.CharacterName : "null")}, RequiresVendor={_cashier.RequiresVendor}, NetSync.IsServer={(_cashier.NetSync != null ? _cashier.NetSync.IsServer.ToString() : "n/a")}, NetSync.IsSpawned={(_cashier.NetSync != null ? _cashier.NetSync.IsSpawned.ToString() : "n/a")}.", this);
-
-        // Local pre-gate (immediate toast on the offending client).
-        if (_cashier.RequiresVendor && occ == null)
+        // Local pre-gate (immediate toast on the offending client). Occupant and
+        // CurrentCustomer go through Cashier's NetVar-resolving overrides so this
+        // mirrors the server state on every peer (rule #19).
+        if (_cashier.RequiresVendor && _cashier.Occupant == null)
         {
-            Debug.Log("<color=magenta>[CashierInteract]</color> Pre-gate FAILED: no vendor — showing toast.");
             UI_Toast.Show("No vendor on duty.", ToastType.Warning);
             return;
         }
-        if (cur != null && cur != interactor)
+        if (_cashier.CurrentCustomer != null && _cashier.CurrentCustomer != interactor)
         {
-            Debug.Log($"<color=magenta>[CashierInteract]</color> Pre-gate FAILED: vendor busy with {cur.CharacterName} (interactor is {interactor.CharacterName}) — showing toast.");
             UI_Toast.Show("Shop vendor is busy with another customer.", ToastType.Warning);
             return;
         }
 
-        Debug.Log("<color=magenta>[CashierInteract]</color> Pre-gate PASSED — sending RequestStartBuyServerRpc.");
         // Server-relay. The server re-validates and may still send a busy toast back if a race occurred.
         _cashier.NetSync.RequestStartBuyServerRpc(new NetworkBehaviourReference(interactor));
     }

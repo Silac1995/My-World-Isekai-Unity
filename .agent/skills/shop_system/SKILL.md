@@ -57,4 +57,14 @@ If a shop isn't working, verify this chain:
 
 `Cashier.Occupant` (override) and `Cashier.CurrentCustomer` resolve those ids through `NetworkManager.SpawnManager.SpawnedObjects` on non-server peers, returning the local in-memory field on the server. Every consumer (`CashierInteractable` pre-gate, `ShopCashiersTabRow` / `ShopCashiersTabView` management UI, `IsAvailableForCustomer`) reads through these properties — never the private field — so host and client see identical occupancy state.
 
+`CashierNetSync.OnNetworkSpawn` runs a server-side backfill: if the cashier already has an occupant when its NetSync component first comes online (save/load restore, hot-reload, or pre-NetSync-spawn race), the current id is pushed into the NetVar so the NGO initial-state sync delivers the truth to every joining peer.
+
 The legacy `NotifyOccupiedClientRpc` / `NotifyReleasedClientRpc` are kept as no-op visual hooks; do not rely on them for state transport.
+
+## Multiplayer panel-binding contract
+
+`UI_ShopBuyPanel.Initialize` reads `cashier.LinkedShop` (which is `Cashier._linkedBuilding as ShopBuilding`). On a joining client, the Cashier furniture is spawned via the `Building._defaultFurnitureLayout` pipeline — `Instantiate` runs first, then `SetParent` re-parents under the shop's NetworkObject. `Cashier.Awake`'s `GetComponentInParent<CommercialBuilding>()` therefore returns `null` until NGO's `AutoObjectParentSync` applies the re-parent, leaving `LinkedShop` null even after `OnNetworkSpawn` fires on the NetSync.
+
+`UI_ShopBuyPanel.Initialize` defends against this race with a one-shot late-bind: if `_shop == null` on entry, it calls `cashier.TryRegisterWithShop()` (the idempotent re-resolution path `ShopBuilding.OnNetworkSpawn` uses server-side) and re-reads `LinkedShop`. Only after that fallback fails does the panel error out and close. Without this fallback, the joining-client buy panel silently `CloseWindow`s and the user sees "nothing happens" when pressing E on a vendor-seated cashier.
+
+See [[host-only-state-blindspot]] for the broader recurring class of bugs this falls under, and the audit checklist that catches them before shipping.

@@ -46,9 +46,11 @@ public bool IsCharacterInInteractionZone(Character character);
 ```
 
 Semantics:
-- Returns `true` iff `character.transform.position` is contained by this interactable's `InteractionZone` bounds.
+- Returns `true` iff `character.transform.position` is contained by this interactable's `InteractionZone` bounds **on the X-Z plane** (Y is intentionally ignored).
 - Null-safe: returns `false` if `character` or `_interactionZone` is null.
 - Reads `character.transform.position` — never a distance threshold, never a mutual zone overlap.
+
+**Why X-Z only, not full 3D AABB:** Characters stand with `transform.position.y == 0` (feet on the ground), which puts them exactly on `bounds.min.y` for every InteractionZone collider authored from y=0 upward. Float precision on networked transforms (`ClientNetworkTransform` rounding, physics gravity penetration) pushes the value a hair below zero on a joining client, false-negativing the gate even when the character is visually inside the zone — observed as the 2026-05-14 cashier-on-client repro where every E-press fell into `Early-return: interactor not in zone` despite the player being on the counter. Every interactable in this project is floor-anchored and every character walks on the ground, so Y was never carrying useful gating information. The 2D projection matches the existing construction-loop convention documented in `wiki/CLAUDE.md`.
 
 **Why `transform.position` and not `Rigidbody.position`:** `ClientNetworkTransform` syncs `transform.position` directly to the server each tick. On the server, a client-owned player's Rigidbody is kinematic; `Rigidbody.position` only catches up to `transform.position` on the next `FixedUpdate`. A server-authoritative RPC validating the client's proximity (e.g. `RequestPunchAtTimeClockServerRpc`) runs at an arbitrary point in the frame, so reading `rb.position` can false-negative a genuinely-inside-the-zone client by up to one physics tick. `transform.position` is the same value the client saw when it clicked, so server and client agree.
 
