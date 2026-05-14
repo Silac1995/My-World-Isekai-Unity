@@ -65,8 +65,8 @@ public class CashierNetSync : NetworkBehaviour
     {
         base.OnNetworkSpawn();
         // Server-side backfill: a vendor may already be seated (via
-        // ServerTickAutoOccupy, save/load, or a pre-NetSync-spawn race)
-        // by the time this NetSync's NetworkVariables come online. Push
+        // CharacterAction_OccupyFurniture, save/load, or a pre-NetSync-spawn
+        // race) by the time this NetSync's NetworkVariables come online. Push
         // the current occupant id into the replicated NetVar so any
         // client that connects after this point — and the late-join
         // initial-state sync NGO performs at connect — sees the truth.

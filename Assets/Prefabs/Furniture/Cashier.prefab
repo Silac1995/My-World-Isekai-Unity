@@ -570,7 +570,6 @@ MonoBehaviour:
   _sizeInCells: {x: 0, y: 0}
   _furnitureItemSO: {fileID: 11400000, guid: 8284fbb57b324859ba824d32a939779b, type: 2}
   _requiresVendor: 1
-  _autoSeatRadius: 1.5
 --- !u!65 &3300390440150053122 stripped
 BoxCollider:
   m_CorrespondingSourceObject: {fileID: 531118714130877921, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}

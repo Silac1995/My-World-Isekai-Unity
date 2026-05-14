@@ -12,6 +12,15 @@ using UnityEngine;
 /// • CurrentCustomer — customer mid-transaction (the lock).
 /// • Till — money held by this cashier (per-currency).
 ///
+/// Vendor seating is driven by <see cref="CharacterAction_OccupyFurniture"/> — players
+/// and NPCs queue the same continuous action through their <see cref="CharacterActions"/>
+/// facade (<see cref="JobVendor"/>.Execute for NPCs on arrival, <see cref="CashierInteractable"/>
+/// three-branch E-press routing for players). The Cashier itself is a pure react-to-actions
+/// component — <see cref="Use"/>/<see cref="Release"/> are the only seat mutators and
+/// replicate via <see cref="CashierNetSync.OccupantNetworkObjectId"/>. The Cashier.ServerTickAutoOccupy
+/// proximity tick was removed 2026-05-14 (see
+/// docs/superpowers/specs/2026-05-14-furniture-occupancy-via-characteraction-design.md).
+///
 /// Server-authoritative — all mutations gated on IsServer and replicated via
 /// the sibling CashierNetSync component.
 /// </summary>
@@ -23,9 +32,6 @@ public class Cashier : OccupiableFurniture
     [Tooltip("If false, this is an automatic distributor — no vendor required to serve customers.")]
     [SerializeField] private bool _requiresVendor = true;
     public bool RequiresVendor => _requiresVendor;
-
-    [Tooltip("Radius around InteractionPoint within which an on-shift vendor auto-seats.")]
-    [SerializeField] private float _autoSeatRadius = 1.5f;
 
     private CommercialBuilding _linkedBuilding;
     public CommercialBuilding LinkedBuilding => _linkedBuilding;
@@ -86,9 +92,6 @@ public class Cashier : OccupiableFurniture
     private CashierNetSync _netSync;
     public CashierNetSync NetSync => _netSync;
 
-    private float _autoSeatTimer;
-    private const float AUTO_SEAT_TICK_INTERVAL = 1f;
-    private static readonly Collider[] _scratchColliders = new Collider[16]; // server-only writes
     private bool _registered;
 
     protected void Awake()
@@ -149,43 +152,6 @@ public class Cashier : OccupiableFurniture
         if (_netSync != null && _netSync.IsServer && _till.Count > 0)
         {
             DropTillCoinsAsWorldItems();
-        }
-    }
-
-    private void Update()
-    {
-        if (_netSync == null || !_netSync.IsServer) return;
-        _autoSeatTimer += Time.unscaledDeltaTime;
-        if (_autoSeatTimer >= AUTO_SEAT_TICK_INTERVAL)
-        {
-            _autoSeatTimer = 0f;
-            ServerTickAutoOccupy();
-        }
-    }
-
-    private void ServerTickAutoOccupy()
-    {
-        if (Occupant != null) return;
-        if (_currentCustomer != null) return;
-
-        // Find any character within InteractionPoint range whose CharacterJob is a
-        // JobVendor of this shop and who is currently on shift.
-        int n = Physics.OverlapSphereNonAlloc(GetInteractionPosition(), _autoSeatRadius, _scratchColliders);
-        for (int i = 0; i < n; i++)
-        {
-            var collider = _scratchColliders[i];
-            if (collider == null) continue;
-            var character = collider.GetComponentInParent<Character>();
-            if (character == null) continue;
-            if (character.CharacterJob == null) continue;
-            if (character.CharacterJob.CurrentJob is not JobVendor jv) continue;
-            if (jv.Workplace != _linkedBuilding) continue;
-            // On-shift check: project uses ScheduleActivity.Work as the on-shift signal
-            // (CharacterSchedule has no IsOnWorkShiftNow boolean).
-            if (character.CharacterSchedule == null
-                || character.CharacterSchedule.CurrentActivity != ScheduleActivity.Work) continue;
-            Use(character);
-            break;
         }
     }
 
