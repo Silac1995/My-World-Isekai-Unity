@@ -91,13 +91,32 @@ public class GoapAction_RestockSellShelves : GoapAction
         if (_shop == null) return false;
         if (_actionStarted) return true;
 
-        // Holding a sale item already — finish staging it before re-planning.
+        // Holding a sale item already — finish staging it before re-planning. This
+        // path must run regardless of the dirty flag: the carried item came from a
+        // prior tick's scan that DID find work, and bailing here would strand the
+        // item in hands.
         ItemInstance carried = GetCarriedItem(worker);
         if (carried != null && _shop.GetCatalogEntry(carried.ItemSO) != null) return true;
 
-        // Anything worth moving? Check on every IsValid so a second worker on the
-        // same shift sees the up-to-date slot state.
-        return FindMisplacedSaleItem(worker, out _sourceFurniture, out _sourceItem, out _targetShelf);
+        // Dirty-flag gate (rule #34): on a stable shop (no inventory mutation, no
+        // catalog edit, no role flip, no per-storage slot change since the last
+        // clean walk) IsValid short-circuits with a single field read. Matches the
+        // canonical LogisticsOrderBook._dispatchDirty shape.
+        var logistics = _shop.LogisticsManager;
+        if (logistics != null && !logistics.IsRestockDirty()) return false;
+
+        // Walk the slot graph. This is the expensive path:
+        //   GetItemsInStorageFurniture()  (slot enumeration across rooms)
+        //   × FindShelfWithSpace(...)     (HasFreeSpaceForItem per SellShelf)
+        // Cleared below only if the walk proves zero candidates; if a candidate is
+        // found we leave the flag dirty so further candidates (after this one is
+        // moved) are still re-scanned on the next tick.
+        bool foundCandidate = FindMisplacedSaleItem(worker, out _sourceFurniture, out _sourceItem, out _targetShelf);
+        if (!foundCandidate && logistics != null)
+        {
+            logistics.ClearRestockDirty();
+        }
+        return foundCandidate;
     }
 
     public override void Execute(Character worker)
@@ -305,6 +324,18 @@ public class GoapAction_RestockSellShelves : GoapAction
                             Debug.Log($"<color=green>[Restock]</color> {worker.CharacterName} moved {storedInstance.ItemSO.ItemName} → {shelfRef.FurnitureName}.");
                             _isComplete = true;
                             _actionStarted = false;
+                            // Re-mark dirty so the next planner tick re-evaluates: there might
+                            // be more catalog items still misplaced after this one. The
+                            // CharacterStoreInFurnitureAction itself already mutates
+                            // StorageFurniture.OnInventoryChanged on both source and
+                            // destination — that fires our per-storage hook — but doing it
+                            // explicitly here makes the contract obvious and survives any
+                            // future refactor that decouples the slot transfer from the
+                            // event. Idempotent with the event-driven set.
+                            if (_shop != null && _shop.LogisticsManager != null)
+                            {
+                                _shop.LogisticsManager.MarkRestockDirty();
+                            }
                         };
                     }
                     else

@@ -1824,7 +1824,13 @@ public abstract class CommercialBuilding : Building
         MirrorInventoryAdd(item.ItemSO);
         // Inventory mutation can enable a previously-insufficient dispatch — wake the dispatcher.
         // See wiki/projects/optimisation-backlog.md entry #2 / B.
-        if (LogisticsManager != null) LogisticsManager.MarkDispatchDirty();
+        if (LogisticsManager != null)
+        {
+            LogisticsManager.MarkDispatchDirty();
+            // Same trigger wakes the shelf-restock evaluator: a new item could be a
+            // catalog item misplaced in non-SellShelf storage on its way in.
+            LogisticsManager.MarkRestockDirty();
+        }
         // Per-tick reachable from JobTransporter.NotifyDeliveryProgress / crafting completion / harvest deposit.
         // Gated to avoid the Windows console-buffer progressive-freeze documented in
         // wiki/gotchas/host-progressive-freeze-debug-log-spam.md.
@@ -1839,7 +1845,11 @@ public abstract class CommercialBuilding : Building
         {
             _inventory.Remove(item);
             MirrorInventoryRemove(item.ItemSO);
-            if (LogisticsManager != null) LogisticsManager.MarkDispatchDirty();
+            if (LogisticsManager != null)
+            {
+                LogisticsManager.MarkDispatchDirty();
+                LogisticsManager.MarkRestockDirty();
+            }
             return item;
         }
         return null;
@@ -1851,7 +1861,11 @@ public abstract class CommercialBuilding : Building
         {
             _inventory.Remove(exactItem);
             MirrorInventoryRemove(exactItem.ItemSO);
-            if (LogisticsManager != null) LogisticsManager.MarkDispatchDirty();
+            if (LogisticsManager != null)
+            {
+                LogisticsManager.MarkDispatchDirty();
+                LogisticsManager.MarkRestockDirty();
+            }
             return true;
         }
         return false;
@@ -2081,6 +2095,16 @@ public abstract class CommercialBuilding : Building
         // newly-placed storage gets its OnRoleChanged event subscribed within the next
         // GetStorageFurnitureCached call. Idempotent — safe to call repeatedly.
         RefreshStorageRoleSubscriptions(_cachedStorageFurniture);
+
+        // Mirror the per-storage role subscription refresh for the logistics-layer
+        // restock-dirty flag (GoapAction_RestockSellShelves IsValid gate). Same
+        // chokepoint, same set — keeps the bind/unbind logic centralised so newly-placed
+        // / removed storages are tracked without per-callsite plumbing. Safe even before
+        // _logisticsManager is wired (Awake order); the null-check below handles it.
+        if (_logisticsManager != null)
+        {
+            _logisticsManager.RefreshStorageContentSubscriptions(_cachedStorageFurniture);
+        }
 
         _storageFurnitureCacheValidUntil = Time.time + FurnitureCacheTTLSeconds;
         return _cachedStorageFurniture;

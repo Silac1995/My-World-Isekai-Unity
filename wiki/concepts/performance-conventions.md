@@ -61,7 +61,7 @@ Every pattern below has a real-code anchor in the project so future Claude can `
 
 **Use when:** a method runs at tick rate doing work that's idempotent on stable state.
 
-**Where to find it:** [`LogisticsOrderBook._dispatchDirty`](../../Assets/Scripts/World/Buildings/Logistics/LogisticsOrderBook.cs) + [`LogisticsTransportDispatcher.ProcessActiveBuyOrders`](../../Assets/Scripts/World/Buildings/Logistics/LogisticsTransportDispatcher.cs).
+**Where to find it:** [`LogisticsOrderBook._dispatchDirty`](../../Assets/Scripts/World/Buildings/Logistics/LogisticsOrderBook.cs) + [`LogisticsTransportDispatcher.ProcessActiveBuyOrders`](../../Assets/Scripts/World/Buildings/Logistics/LogisticsTransportDispatcher.cs). Sibling case: [`BuildingLogisticsManager._restockDirty`](../../Assets/Scripts/World/Buildings/BuildingLogisticsManager.cs) gates [`GoapAction_RestockSellShelves.IsValid`](../../Assets/Scripts/AI/GOAP/Actions/GoapAction_RestockSellShelves.cs) — same shape, distinct concern (two dirty flags for two distinct callers is correct).
 
 **Shape:**
 ```csharp

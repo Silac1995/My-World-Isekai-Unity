@@ -135,6 +135,9 @@ public class BuildingLogisticsManager : MonoBehaviour
         _orderBook = new LogisticsOrderBook();
         _dispatcher = new LogisticsTransportDispatcher(_building, _orderBook, this);
         _evaluator = new LogisticsStockEvaluator(_building, _orderBook, this);
+
+        // Building-level restock-dirty hooks (subscribe once per lifetime; mirrored by OnDestroy).
+        SubscribeRestockDirtyHooks();
     }
 
     private void Start()
@@ -152,6 +155,9 @@ public class BuildingLogisticsManager : MonoBehaviour
             TimeManager.Instance.OnNewDay -= CheckExpiredOrders;
         }
 
+        // Unbind restock-dirty hooks (both building-level and per-storage) per rule #16.
+        UnsubscribeRestockDirtyHooks();
+
         if (_orderBook == null) return;
 
         foreach (var order in _orderBook.ActiveOrders.ToList())
@@ -163,6 +169,104 @@ public class BuildingLogisticsManager : MonoBehaviour
             CancelBuyOrder(order);
         }
     }
+
+    // =========================================================================
+    // RESTOCK DIRTY HOOK WIRING
+    // =========================================================================
+
+    /// <summary>
+    /// Per-storage subscription bookkeeping for <see cref="StorageFurniture.OnInventoryChanged"/>.
+    /// Refreshed via <see cref="RefreshStorageContentSubscriptions"/> on every
+    /// <see cref="CommercialBuilding.GetStorageFurnitureCached"/> rebuild — same chokepoint
+    /// pattern used by the storage role-subscription fan-out, so newly-placed storages and
+    /// removed storages stay in sync without per-callsite plumbing.
+    /// </summary>
+    private readonly List<StorageFurniture> _restockContentSubscribed = new List<StorageFurniture>();
+
+    private void SubscribeRestockDirtyHooks()
+    {
+        if (_building == null) return;
+
+        _building.OnStorageRolesChanged += HandleBuildingChangedForRestock;
+
+        if (_building is ShopBuilding shop)
+        {
+            shop.OnCatalogChanged += HandleBuildingChangedForRestock;
+        }
+    }
+
+    private void UnsubscribeRestockDirtyHooks()
+    {
+        if (_building != null)
+        {
+            _building.OnStorageRolesChanged -= HandleBuildingChangedForRestock;
+            if (_building is ShopBuilding shop)
+            {
+                shop.OnCatalogChanged -= HandleBuildingChangedForRestock;
+            }
+        }
+
+        // Drop any lingering per-storage subscriptions.
+        for (int i = 0; i < _restockContentSubscribed.Count; i++)
+        {
+            var s = _restockContentSubscribed[i];
+            if (s != null) s.OnInventoryChanged -= HandleStorageContentChangedForRestock;
+        }
+        _restockContentSubscribed.Clear();
+    }
+
+    /// <summary>
+    /// Re-bind <see cref="StorageFurniture.OnInventoryChanged"/> subscriptions to the
+    /// current set of building storages. Called from
+    /// <see cref="CommercialBuilding.GetStorageFurnitureCached"/> right after the role
+    /// subscription refresh — same chokepoint, same set. Idempotent; safe to call
+    /// every rebuild. Allocation-free on the steady-state path (no add / no drop).
+    /// </summary>
+    internal void RefreshStorageContentSubscriptions(IReadOnlyList<StorageFurniture> currentSet)
+    {
+        // Drop subscriptions to storages no longer present (destroyed / removed).
+        for (int i = _restockContentSubscribed.Count - 1; i >= 0; i--)
+        {
+            var s = _restockContentSubscribed[i];
+            bool stillPresent = false;
+            if (s != null && currentSet != null)
+            {
+                for (int j = 0; j < currentSet.Count; j++)
+                {
+                    if (currentSet[j] == s) { stillPresent = true; break; }
+                }
+            }
+            if (!stillPresent)
+            {
+                if (s != null) s.OnInventoryChanged -= HandleStorageContentChangedForRestock;
+                _restockContentSubscribed.RemoveAt(i);
+            }
+        }
+        // Add subscriptions for newly-present storages.
+        if (currentSet != null)
+        {
+            for (int i = 0; i < currentSet.Count; i++)
+            {
+                var s = currentSet[i];
+                if (s == null) continue;
+                bool already = false;
+                for (int j = 0; j < _restockContentSubscribed.Count; j++)
+                {
+                    if (_restockContentSubscribed[j] == s) { already = true; break; }
+                }
+                if (already) continue;
+                s.OnInventoryChanged += HandleStorageContentChangedForRestock;
+                _restockContentSubscribed.Add(s);
+            }
+        }
+    }
+
+    // Single shared handler for all "building-level" triggers (catalog edits + role flips).
+    // No allocations, no logging — pure flag write.
+    private void HandleBuildingChangedForRestock() => _restockDirty = true;
+
+    // Per-storage content-change handler. Same allocation-free pure flag write.
+    private void HandleStorageContentChangedForRestock() => _restockDirty = true;
 
     /// <summary>
     /// Resolve <see cref="_logisticsPolicy"/> to a non-null value. Priority:
@@ -259,6 +363,53 @@ public class BuildingLogisticsManager : MonoBehaviour
         if (_orderBook == null) return;
         _orderBook.MarkDispatchDirty();
     }
+
+    // =========================================================================
+    // RESTOCK DIRTY FLAG — server-only, gates GoapAction_RestockSellShelves
+    // -------------------------------------------------------------------------
+    // GoapAction_RestockSellShelves.IsValid runs at the BT/GOAP planner tick rate
+    // for every worker employed at a ShopBuilding. On a stable inventory + stable
+    // catalog its inner walk does the expensive
+    //   _shop.GetItemsInStorageFurniture()  (slot enumeration across rooms)
+    //   × FindShelfWithSpace(...)            (HasFreeSpaceForItem per SellShelf)
+    // every tick and returns false ~100% of the time. This flag lets the planner
+    // early-exit when nothing relevant changed since the last full scan.
+    //
+    // Initial value = true so the first IsValid after Awake / load-from-save
+    // runs the full walk (covers warm-start, first punch-in, etc).
+    //
+    // Lifecycle:
+    //  - Set:   inventory mutations on the owning CommercialBuilding (Add/Take/
+    //           RemoveExact*), any StorageFurniture.OnInventoryChanged on this
+    //           building's storages, the building-level OnStorageRolesChanged,
+    //           ShopBuilding.OnCatalogChanged (catalog add/remove/edit), the
+    //           tail of AssignStorageRolesForShift if any role actually changed,
+    //           and the tail of a successful RestockSellShelves Execute that
+    //           actually moved an item.
+    //  - Clear: GoapAction_RestockSellShelves.IsValid after the full scan
+    //           proves zero candidates exist. Called exactly once.
+    //
+    // Server-only: clients never run GOAP, so the flag is never read off-server.
+    // Mirror the dispatcher dirty flag's pattern; deliberately a sibling, not a
+    // replacement — distinct concerns warrant distinct flags.
+    // =========================================================================
+
+    private bool _restockDirty = true;
+
+    /// <summary>True when something has changed that may invalidate the previous
+    /// "nothing to restock" verdict. Read by <see cref="GoapAction_RestockSellShelves"/>'s
+    /// IsValid as a single-field early-exit gate.</summary>
+    public bool IsRestockDirty() => _restockDirty;
+
+    /// <summary>Mark the restock scan as dirty so the next
+    /// <see cref="GoapAction_RestockSellShelves"/> IsValid does the full walk.
+    /// Idempotent — calling twice in a row is the same as once. No allocations.</summary>
+    public void MarkRestockDirty() => _restockDirty = true;
+
+    /// <summary>Called by <see cref="GoapAction_RestockSellShelves.IsValid"/>
+    /// once a scan proves there is nothing left to restock. Subsequent IsValid
+    /// calls short-circuit until something marks the flag dirty again.</summary>
+    public void ClearRestockDirty() => _restockDirty = false;
 
     // =========================================================================
     // PUBLIC API — ORDER PLACEMENT (server-authoritative)
@@ -591,6 +742,8 @@ public class BuildingLogisticsManager : MonoBehaviour
 
         var supported = _building.SupportedStorageRoles;
 
+        bool anyRoleWritten = false;
+
         for (int i = 0; i < storages.Count; i++)
         {
             var storage = storages[i];
@@ -621,11 +774,22 @@ public class BuildingLogisticsManager : MonoBehaviour
             StorageRoleType previousRole = storage.Role;
             bool wrote = _building.TrySetStorageRoleServer(storage, desired);
 
-            if (wrote && NPCDebug.VerboseJobs)
+            if (wrote)
             {
-                Debug.Log($"<color=#66ccff>[Logistics]</color> {_building.BuildingName}: storage[{i}] '{storage.name}' role {previousRole} → {desired} (requiresTools={requiresTools}, isShop={isShop}).");
+                anyRoleWritten = true;
+                if (NPCDebug.VerboseJobs)
+                {
+                    Debug.Log($"<color=#66ccff>[Logistics]</color> {_building.BuildingName}: storage[{i}] '{storage.name}' role {previousRole} → {desired} (requiresTools={requiresTools}, isShop={isShop}).");
+                }
             }
         }
+
+        // Each successful role flip already fires OnStorageRolesChanged → our
+        // HandleBuildingChangedForRestock subscription marks the flag. But for the
+        // first-punch-in case (initial dirty=true from Awake → cleared by an earlier
+        // IsValid no-op walk, then shift-start writes new roles), make sure the next
+        // tick re-evaluates against the freshly-assigned shelf roles.
+        if (anyRoleWritten) MarkRestockDirty();
     }
 
     private static bool IsRoleSupported(System.Collections.Generic.IReadOnlyList<StorageRoleDescriptor> supported, StorageRoleType role)
