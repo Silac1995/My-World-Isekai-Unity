@@ -400,6 +400,22 @@ PrefabInstance:
       propertyPath: m_Name
       value: Commercial Console
       objectReference: {fileID: 0}
+    - target: {fileID: 4152849107241869529, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
+      propertyPath: m_Center.y
+      value: 3.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 4152849107241869529, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
+      propertyPath: m_Extents.x
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4152849107241869529, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
+      propertyPath: m_Extents.y
+      value: 3.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 4152849107241869529, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
+      propertyPath: m_Extents.z
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 6445648937218201084, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
       propertyPath: GlobalObjectIdHash
       value: 2321023905

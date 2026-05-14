@@ -405,7 +405,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 531118714130877921, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
       propertyPath: m_Size.z
-      value: 8
+      value: 15
       objectReference: {fileID: 0}
     - target: {fileID: 531118714130877921, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
       propertyPath: m_Center.y
@@ -540,6 +540,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CashierNetSync
   ShowTopMostFoldoutHeaderGroup: 1
   CurrentCustomerNetworkObjectId:
+    UpdateTraits:
+      MinSecondsBetweenUpdates: 0
+      MaxSecondsBetweenUpdates: 0
+    m_InternalValue: 0
+  OccupantNetworkObjectId:
     UpdateTraits:
       MinSecondsBetweenUpdates: 0
       MaxSecondsBetweenUpdates: 0
