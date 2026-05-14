@@ -483,8 +483,22 @@ public class FarmingBuilding : HarvestingBuilding, IStockProvider
                 return HasItemInBuildingOrStorage(seedSO);
             }
         }
+        // Throttled designer-fix nudge. Without a SeedSO in HarvestOutputs, PlantScan
+        // silently reports noSeed=N for every cell — there is no way for a farmer to
+        // plant this crop even if seeds physically sit in a storage furniture. The
+        // self-seeding HarvestOutputs link is how the system discovers which seed
+        // belongs to which crop. Fix: drag the matching SeedSO into the CropSO's
+        // _harvestOutputs list (designer-only edit per .agent/skills/farming/SKILL.md).
+        float now = UnityEngine.Time.unscaledTime;
+        if (now - _lastSeedAuthoringWarnTime > 5f)
+        {
+            _lastSeedAuthoringWarnTime = now;
+            Debug.LogWarning($"<color=orange>[FarmingBuilding]</color> {buildingName}: CropSO '{crop.name}' (Id='{crop.Id}') has NO SeedSO entry in _harvestOutputs whose CropToPlant matches itself. PlantScan will report noSeed=N forever. Designer fix: open the CropSO asset and add the matching SeedSO to its _harvestOutputs list.");
+        }
         return false;
     }
+
+    private float _lastSeedAuthoringWarnTime = -10f;
 
     /// <summary>
     /// True if the requested item exists either in the building's logical <c>_inventory</c>

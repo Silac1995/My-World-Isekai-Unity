@@ -197,8 +197,20 @@ public abstract class CommercialBuilding : Building
             if (roleAssigned != null && roleAssigned.Count > 0 && roleAssigned[0] != null)
                 return roleAssigned[0];
 
-            // Tier 1: first-crate convention fallback.
-            return GetComponentInChildren<StorageFurniture>(includeInactive: false);
+            // Tier 1: first-crate convention fallback — ONLY for storages with no explicit role.
+            // Without this guard, a chest the owner has explicitly tagged (InventoryStorage,
+            // SellShelf, …) would still be classified as a tool storage by convention. That
+            // broke the deposit-routing in FindStorageFurnitureForItem (line ~2224 `if (!isTool
+            // && IsToolStorage(furniture)) continue;`) for any building whose only chest was
+            // toggled to a non-tool role: seeds / produce would be skipped at the chest and
+            // dropped loose at the StorageZone instead.
+            var children = GetComponentsInChildren<StorageFurniture>(includeInactive: false);
+            for (int i = 0; i < children.Length; i++)
+            {
+                if (children[i] != null && children[i].Role == StorageRoleType.None)
+                    return children[i];
+            }
+            return null;
         }
     }
 
@@ -290,7 +302,11 @@ public abstract class CommercialBuilding : Building
                 if (roleStorages[i] == storage) return true;
             return false;
         }
-        // No role-assigned tool storages — fall back to the convention singleton.
+        // No role-assigned tool storages — fall back to the convention singleton, but ONLY
+        // when the candidate has no explicit role of its own. A chest the owner has tagged
+        // InventoryStorage / SellShelf is NOT a tool storage by accident of being first in
+        // child-walk order. See the matching guard inside the ToolStorage getter for why.
+        if (storage.Role != StorageRoleType.None) return false;
         return ToolStorage == storage;
     }
 
