@@ -61,6 +61,46 @@ public class CashierNetSync : NetworkBehaviour
             NetworkVariableWritePermission.Server);
     }
 
+    public override void OnNetworkSpawn()
+    {
+        base.OnNetworkSpawn();
+        // Server-side backfill: a vendor may already be seated (via
+        // ServerTickAutoOccupy, save/load, or a pre-NetSync-spawn race)
+        // by the time this NetSync's NetworkVariables come online. Push
+        // the current occupant id into the replicated NetVar so any
+        // client that connects after this point — and the late-join
+        // initial-state sync NGO performs at connect — sees the truth.
+        if (IsServer && _cashier != null)
+        {
+            var seated = _cashier.Occupant;
+            if (seated != null)
+            {
+                OccupantNetworkObjectId.Value = seated.NetworkObjectId;
+                Debug.Log($"<color=cyan>[CashierNetSync]</color> OnNetworkSpawn backfill: {_cashier.FurnitureName} OccupantNetworkObjectId set to {seated.NetworkObjectId} ({seated.CharacterName}).", this);
+            }
+        }
+
+        OccupantNetworkObjectId.OnValueChanged += HandleOccupantChanged;
+        // Fire once with the value we already have (NetVar initial sync delivers
+        // values via the spawn message, NOT via OnValueChanged — so on a late-
+        // joining client OnValueChanged never fires for the pre-sync value).
+        if (!IsServer)
+        {
+            Debug.Log($"<color=cyan>[CashierNetSync]</color> Client OnNetworkSpawn: {_cashier?.FurnitureName} initial OccupantNetworkObjectId={OccupantNetworkObjectId.Value}, CurrentCustomerNetworkObjectId={CurrentCustomerNetworkObjectId.Value}.", this);
+        }
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        OccupantNetworkObjectId.OnValueChanged -= HandleOccupantChanged;
+        base.OnNetworkDespawn();
+    }
+
+    private void HandleOccupantChanged(ulong previous, ulong current)
+    {
+        Debug.Log($"<color=cyan>[CashierNetSync]</color> {(_cashier != null ? _cashier.FurnitureName : name)} OccupantNetworkObjectId {previous} -> {current} (IsServer={IsServer}).", this);
+    }
+
     // ----- Server-side helpers -----
 
     public void SetCurrentCustomerServer(ulong networkObjectId)

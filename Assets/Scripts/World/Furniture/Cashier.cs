@@ -62,9 +62,24 @@ public class Cashier : OccupiableFurniture
         get
         {
             if (_netSync == null || _netSync.IsServer || !_netSync.IsSpawned) return base.Occupant;
-            return ResolveCharacterByNetworkObjectId(_netSync.OccupantNetworkObjectId.Value);
+            ulong id = _netSync.OccupantNetworkObjectId.Value;
+            var resolved = ResolveCharacterByNetworkObjectId(id);
+            if (resolved == null && _diagnosticLoggedOnce == false)
+            {
+                _diagnosticLoggedOnce = true;
+                var nm = Unity.Netcode.NetworkManager.Singleton;
+                int spawnedCount = nm != null && nm.SpawnManager != null ? nm.SpawnManager.SpawnedObjects.Count : -1;
+                bool inTable = nm != null && nm.SpawnManager != null && nm.SpawnManager.SpawnedObjects.ContainsKey(id);
+                Debug.LogWarning($"<color=orange>[Cashier]</color> Client Occupant resolve returned null on {FurnitureName}: NetVar id={id}, NetSync.IsSpawned={_netSync.IsSpawned}, IsServer={_netSync.IsServer}, SpawnedObjects.Count={spawnedCount}, contains-id={inTable}. (One-shot log per Cashier instance.)", this);
+            }
+            return resolved;
         }
     }
+
+    // One-shot diagnostic so we only log the first time a client tries to resolve
+    // an occupant id that does not map back to a spawned Character. Cleared by Awake
+    // so it resets on scene reload / hot-reload.
+    private bool _diagnosticLoggedOnce;
 
     public bool IsAvailableForCustomer =>
         CurrentCustomer == null
@@ -225,6 +240,7 @@ public class Cashier : OccupiableFurniture
             // reserved visual-effect hook per CashierNetSync's documented contract.
             _netSync.SetOccupantServer(vendor.NetworkObjectId);
             _netSync.NotifyOccupiedClientRpc(vendor.NetworkObjectId);
+            Debug.Log($"<color=cyan>[Cashier]</color> Use server: {FurnitureName} occupant -> {vendor.CharacterName} (NetworkObjectId={vendor.NetworkObjectId}). NetVar now = {_netSync.OccupantNetworkObjectId.Value}, NetSync.IsSpawned={_netSync.IsSpawned}.", this);
         }
         return true;
     }
