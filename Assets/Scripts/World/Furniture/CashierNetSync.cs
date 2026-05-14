@@ -155,18 +155,20 @@ public class CashierNetSync : NetworkBehaviour
     [ClientRpc]
     public void OpenBuyPanelClientRpc(ulong customerNetworkObjectId, ulong cashierNetworkObjectId, ClientRpcParams p = default)
     {
-        if (NetworkManager.Singleton == null) return;
-        if (!NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(customerNetworkObjectId, out var customerObj)) return;
-        if (!NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(cashierNetworkObjectId, out var cashierObj)) return;
+        Debug.Log($"<color=magenta>[CashierNetSync]</color> OpenBuyPanelClientRpc ENTRY on this peer. customerId={customerNetworkObjectId}, cashierId={cashierNetworkObjectId}, IsServer={IsServer}, LocalClientId={(NetworkManager.Singleton != null ? NetworkManager.Singleton.LocalClientId.ToString() : "?")}.", this);
+        if (NetworkManager.Singleton == null) { Debug.LogWarning("[CashierNetSync] OpenBuyPanel: NetworkManager.Singleton null."); return; }
+        if (!NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(customerNetworkObjectId, out var customerObj)) { Debug.LogWarning($"[CashierNetSync] OpenBuyPanel: customer {customerNetworkObjectId} NOT in SpawnedObjects on this peer."); return; }
+        if (!NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(cashierNetworkObjectId, out var cashierObj)) { Debug.LogWarning($"[CashierNetSync] OpenBuyPanel: cashier {cashierNetworkObjectId} NOT in SpawnedObjects on this peer."); return; }
         var customer = customerObj.GetComponent<Character>();
         var cashier = cashierObj.GetComponent<Cashier>();
-        if (customer == null || cashier == null) return;
-        if (!customer.IsOwner) return;     // only the owning client opens the UI (rule #19)
+        if (customer == null || cashier == null) { Debug.LogWarning("[CashierNetSync] OpenBuyPanel: customer/cashier component missing."); return; }
+        if (!customer.IsOwner) { Debug.Log($"<color=magenta>[CashierNetSync]</color> OpenBuyPanel: not the owning peer for {customer.CharacterName} (customer.OwnerClientId={customer.OwnerClientId}). Returning."); return; }
         if (PlayerUI.Instance == null)
         {
             Debug.LogWarning("[CashierNetSync] PlayerUI.Instance is null — cannot open shop buy panel.");
             return;
         }
+        Debug.Log($"<color=magenta>[CashierNetSync]</color> OpenBuyPanel: owner peer confirmed — opening UI for {customer.CharacterName}.");
         PlayerUI.Instance.OpenShopBuyPanel(cashier, customer);
     }
 
@@ -196,19 +198,22 @@ public class CashierNetSync : NetworkBehaviour
     [ServerRpc(RequireOwnership = false)]
     public void RequestStartBuyServerRpc(NetworkBehaviourReference customerRef, ServerRpcParams p = default)
     {
-        if (!customerRef.TryGet(out Character customer)) return;
+        Debug.Log($"<color=magenta>[CashierNetSync]</color> RequestStartBuyServerRpc ENTRY. sender={p.Receive.SenderClientId}, customerRefValid={customerRef.TryGet(out Character _peek)}, IsServer={IsServer}.", this);
+        if (!customerRef.TryGet(out Character customer)) { Debug.LogWarning("[CashierNetSync] RequestStartBuy: customerRef.TryGet failed on server."); return; }
         if (customer.OwnerClientId != p.Receive.SenderClientId)
         {
-            Debug.LogWarning($"[Cashier] RequestStartBuy: sender {p.Receive.SenderClientId} does not own customer {customer.NetworkObjectId}.");
+            Debug.LogWarning($"[Cashier] RequestStartBuy: sender {p.Receive.SenderClientId} does not own customer {customer.NetworkObjectId} (owner={customer.OwnerClientId}).");
             return;
         }
         if (!_cashier.IsAvailableForCustomer)
         {
+            Debug.Log($"<color=magenta>[CashierNetSync]</color> RequestStartBuy: cashier NOT available (server Occupant={(_cashier.Occupant != null ? _cashier.Occupant.CharacterName : "null")}, CurrentCustomer={(_cashier.CurrentCustomer != null ? _cashier.CurrentCustomer.CharacterName : "null")}). Sending busy toast to caller {p.Receive.SenderClientId}.");
             ClientRpcParams toCaller = new() { Send = new ClientRpcSendParams { TargetClientIds = new[] { p.Receive.SenderClientId } } };
             SendBusyToastClientRpc(toCaller);
             return;
         }
 
+        Debug.Log($"<color=magenta>[CashierNetSync]</color> RequestStartBuy: creating BuyFromShop action for {customer.CharacterName} (OwnerClientId={customer.OwnerClientId}).");
         var action = new CharacterAction_BuyFromShop(
             customer, _cashier, new System.Collections.Generic.List<ItemSO>(), CharacterAction_BuyFromShop.BuyMode.Player);
         SetActiveActionServer(action);
