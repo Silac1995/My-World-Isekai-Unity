@@ -90,6 +90,4 @@ All player paths route through `IsCharacterInInteractionZone` (2D X-Z canonical 
 
 ## Verdict
 
-All six checkpoints pass on code review. Late-joiner repro is the runtime confirmation gate — to be completed before the refactor branch is declared done. Run the manual repro per section 3 above and either:
-- Mark the audit `PASSED` here and proceed to merge; or
-- Capture the failure mode and append a remediation task.
+**PASSED — 2026-05-14 — repro performed via MPPM (Unity Multiplayer Play Mode).** Host editor (Player 1) seated vendor NPC at cashier via the new `CharacterAction_OccupyFurniture` (`[Furniture] … utilise …` + `[Cashier] Use server: …` traced, no `[OccupyFurniture] failed to seat` warnings). Joining client (Player 2) saw `cashier.Occupant == vendor` via `CashierNetSync.OccupantNetworkObjectId` AND `vendor.OccupyingFurniture == cashier` via the new `Character.NetworkOccupyingFurnitureNetId`. Customer flow (tap-E from remote-client customer → buy panel) and vendor flow (tap-E from remote-client assigned vendor → seat taken; tap-E again → leave) both confirmed. Movement lockout while seated also confirmed. All six rule #19b checkpoints validated end-to-end. Refactor cleared to merge / ship.
