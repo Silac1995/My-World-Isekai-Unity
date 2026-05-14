@@ -161,6 +161,50 @@ public class CharacterActions : CharacterSystem
     }
 
     /// <summary>
+    /// Sent by the server to the owning client after a store-to-furniture action has
+    /// successfully added the item to a <see cref="StorageFurniture"/> on the server
+    /// (which replicates via <see cref="StorageFurnitureNetworkSync"/>'s NetworkList).
+    /// The owner must now remove the item from its local source — either a bag slot
+    /// (<paramref name="sourceSlotIndex"/> &gt;= 0) or the hands controller
+    /// (<paramref name="sourceSlotIndex"/> == -1).
+    ///
+    /// Inverse of <see cref="ReceiveItemPickupClientRpc"/>: used when bag-inventory
+    /// contents flow from a client-authoritative source to a server-authoritative
+    /// destination. Sized as one int because bag-inventory contents aren't in
+    /// CharacterEquipment._networkEquipment — the client is the source of truth for
+    /// its own bag/hands and only the server knows whether the chest accepted the item.
+    ///
+    /// Host path: loopback ClientRpc, removes from the host's own (server-side) bag/hands.
+    /// </summary>
+    [Rpc(SendTo.Owner)]
+    public void RemoveFromInventoryAfterStoreClientRpc(int sourceSlotIndex)
+    {
+        if (sourceSlotIndex < 0)
+        {
+            // Hands path.
+            var hands = _character.CharacterVisual?.BodyPartsController?.HandsController;
+            if (hands != null && hands.IsCarrying)
+            {
+                hands.DropCarriedItem(); // clears hands + destroys held visual; does not spawn a WorldItem
+            }
+            return;
+        }
+
+        // Bag slot path.
+        var equip = _character.CharacterEquipment;
+        if (equip == null || !equip.HaveInventory()) return;
+        var inv = equip.GetInventory();
+        if (inv == null) return;
+        if (sourceSlotIndex >= inv.ItemSlots.Count) return;
+        var slot = inv.ItemSlots[sourceSlotIndex];
+        if (slot == null || slot.IsEmpty() || slot.ItemInstance == null) return;
+
+        // Use Inventory.RemoveItem so OnInventoryChanged fires (refreshes the UI panel
+        // bag side and any weapon visuals on the bag).
+        inv.RemoveItem(slot.ItemInstance, _character);
+    }
+
+    /// <summary>
     /// Generic server-side despawn for any NetworkObject.
     /// Used by CharacterPickUpItem and other actions that need to remove
     /// a networked object from a client context.

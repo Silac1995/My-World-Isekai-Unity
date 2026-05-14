@@ -320,29 +320,38 @@ public class UI_StorageFurniturePanel : UI_WindowBase
             && _interactor.CharacterActions.CurrentAction == null;
     }
 
-    // Click handlers receive (slotIndex, item). The slot index is forwarded to the
-    // ServerRpc so the server resolves the item against its authoritative slot copy
-    // — never trusts the client-passed ItemInstance directly.
+    // Click handlers receive (slotIndex, item). Bag-inventory contents aren't replicated
+    // by CharacterEquipment._networkEquipment, so the server's view of the client's bag /
+    // hands is empty for remote clients. We send the item's identity (ItemSO id + JSON)
+    // along with the slot index in the ServerRpc; the server reconstructs the
+    // ItemInstance, validates the chest, queues the action, and the action then either
+    // routes the source-removal back to the owner via ClientRpc (remote client) or
+    // looks up the slot directly on the server-side bag (host). See
+    // CharacterStoreInFurnitureAction for the full breakdown.
     private void OnBagSlotClicked(int slotIndex, ItemInstance item)
     {
-        if (item == null || _interactor == null || _targetSync == null) return;
+        if (item == null || item.ItemSO == null || _interactor == null || _targetSync == null) return;
         if (_interactor.CharacterActions == null) return;
         if (_interactor.CharacterActions.CurrentAction != null) return;
 
+        var itemId = new Unity.Collections.FixedString64Bytes(item.ItemSO.ItemId);
+        var itemJson = new Unity.Collections.FixedString4096Bytes(JsonUtility.ToJson(item));
         _targetSync.RequestStoreFromBagServerRpc(
-            new Unity.Netcode.NetworkBehaviourReference(_interactor), slotIndex);
+            new Unity.Netcode.NetworkBehaviourReference(_interactor), slotIndex, itemId, itemJson);
     }
 
     private void OnHandsSlotClicked()
     {
         if (_interactor == null || _targetSync == null) return;
         var hands = _interactor.CharacterVisual?.BodyPartsController?.HandsController;
-        if (hands == null || hands.CarriedItem == null) return;
+        if (hands == null || hands.CarriedItem == null || hands.CarriedItem.ItemSO == null) return;
         if (_interactor.CharacterActions == null) return;
         if (_interactor.CharacterActions.CurrentAction != null) return;
 
+        var itemId = new Unity.Collections.FixedString64Bytes(hands.CarriedItem.ItemSO.ItemId);
+        var itemJson = new Unity.Collections.FixedString4096Bytes(JsonUtility.ToJson(hands.CarriedItem));
         _targetSync.RequestStoreFromHandsServerRpc(
-            new Unity.Netcode.NetworkBehaviourReference(_interactor));
+            new Unity.Netcode.NetworkBehaviourReference(_interactor), itemId, itemJson);
     }
 
     private void OnChestSlotClicked(int slotIndex, ItemInstance item)

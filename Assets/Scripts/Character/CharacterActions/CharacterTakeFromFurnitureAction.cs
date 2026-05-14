@@ -1,4 +1,5 @@
 using System;
+using Unity.Collections;
 using UnityEngine;
 
 /// <summary>
@@ -8,8 +9,20 @@ using UnityEngine;
 /// (<c>GoapAction_StageItemForPickup</c>) when a reserved transport instance
 /// lives inside a furniture slot rather than as a loose <see cref="WorldItem"/>.
 ///
-/// Server-authoritative — slot mutation only lands on the server. Clients see
-/// the standard pickup-style animation through the regular broadcast path.
+/// Server-authoritative for the chest side — slot mutation only lands on the
+/// server and replicates via <see cref="StorageFurnitureNetworkSync"/>'s NetworkList.
+///
+/// <para><b>Multiplayer note (2026-05-14):</b> Bag-inventory contents are NOT
+/// replicated by <c>CharacterEquipment._networkEquipment</c> (which only covers
+/// weapon / bag-shell / wearable slots). When this action runs on the server
+/// (the player-UI path goes client → <see cref="StorageFurnitureNetworkSync.RequestTakeServerRpc"/>
+/// → server <c>ExecuteAction</c>) and the taker's Character is owned by a remote
+/// client, mutating the server-side <c>_bag.Inventory.ItemSlots</c> would be
+/// invisible to the owner. The delivery is routed through
+/// <see cref="CharacterActions.ReceiveItemPickupClientRpc"/> so the owner adds
+/// the item to its own local inventory. Mirrors the same branch in
+/// <c>WorldItem.RequestInteractServerRpc</c>. Host customers / NPC takers have
+/// <c>IsOwnedByServer == true</c> and stay on the direct add-to-inventory path.</para>
 /// </summary>
 public class CharacterTakeFromFurnitureAction : CharacterAction
 {
@@ -88,6 +101,26 @@ public class CharacterTakeFromFurnitureAction : CharacterAction
         if (!_furniture.RemoveItem(_item))
         {
             Debug.LogWarning($"<color=orange>[TakeFromFurniture]</color> {character.CharacterName} could not extract {_item?.CustomizedName} from {_furniture.FurnitureName} (already gone).");
+            return;
+        }
+
+        // Multiplayer authority gate. See class summary. When this is running on the
+        // server for a remote-client-owned character, hand the item off to the owner
+        // via ReceiveItemPickupClientRpc — the owner runs PickUpItem on its own
+        // inventory. Host / NPC / offline / client-local execution all fall through
+        // to the existing direct AddItem path below (IsOwnedByServer == true for
+        // host + NPCs; IsServer == false on a client running its own action).
+        var actions = character.CharacterActions;
+        if (actions != null && actions.IsServer && character.IsSpawned && !character.IsOwnedByServer)
+        {
+            var itemData = new NetworkItemData
+            {
+                ItemId = new FixedString64Bytes(_item.ItemSO.ItemId),
+                JsonData = new FixedString4096Bytes(JsonUtility.ToJson(_item))
+            };
+            actions.ReceiveItemPickupClientRpc(itemData);
+            _taken = true;
+            Debug.Log($"<color=green>[TakeFromFurniture]</color> {character.CharacterName} took {_item.CustomizedName} from {_furniture.FurnitureName} (routed via ClientRpc to remote owner, client {character.OwnerClientId}).");
             return;
         }
 

@@ -203,46 +203,100 @@ public class StorageFurnitureNetworkSync : NetworkBehaviour
 
     /// <summary>
     /// Player UI: store the item the character is currently carrying in hands into this storage.
-    /// Server resolves the carried item via <see cref="HandsController.CarriedItem"/>.
+    ///
+    /// <para><b>Item payload:</b> the client supplies the ItemSO id + JSON of the item it
+    /// believes is in its hands. Bag-inventory contents (and the hand slot) are NOT in
+    /// <c>CharacterEquipment._networkEquipment</c>, so the server cannot read the client's
+    /// hands authoritatively — the client is the source of truth and supplies the identity.
+    /// Server reconstructs the <see cref="ItemInstance"/> via
+    /// <see cref="ItemSO.CreateInstance"/> + <c>JsonUtility.FromJsonOverwrite</c>, validates
+    /// the chest, then queues <see cref="CharacterStoreInFurnitureAction"/> with
+    /// <see cref="CharacterStoreInFurnitureAction.SourceHands"/> so the action's
+    /// remote-client path fires the ack ClientRpc that clears the owner's hands.</para>
     /// </summary>
     [Rpc(SendTo.Server)]
-    public void RequestStoreFromHandsServerRpc(NetworkBehaviourReference characterRef)
+    public void RequestStoreFromHandsServerRpc(NetworkBehaviourReference characterRef, FixedString64Bytes itemId, FixedString4096Bytes itemJson)
     {
         if (_storage == null) return;
         if (!characterRef.TryGet(out Character character) || character == null) return;
-        var hands = character.CharacterVisual?.BodyPartsController?.HandsController;
-        if (hands == null) return;
-        ItemInstance carried = hands.CarriedItem;
-        if (carried == null) return;
         if (character.CharacterActions == null) return;
         if (character.CharacterActions.CurrentAction != null) return;
 
-        var action = new CharacterStoreInFurnitureAction(character, carried, _storage);
+        ItemInstance item = TryReconstructStoredItem(itemId, itemJson);
+        if (item == null) return;
+
+        if (_storage.IsLocked) return;
+        if (!_storage.HasFreeSpaceForItem(item)) return;
+
+        var action = new CharacterStoreInFurnitureAction(character, item, _storage, CharacterStoreInFurnitureAction.SourceHands);
         character.CharacterActions.ExecuteAction(action);
     }
 
     /// <summary>
     /// Player UI: store an item from a specific bag inventory slot into this storage.
-    /// Server reads the slot from <see cref="CharacterEquipment.GetInventory"/> on its
-    /// authoritative inventory copy.
+    ///
+    /// <para><b>Item payload:</b> the client supplies the ItemSO id + JSON of the item at
+    /// <paramref name="bagSlotIndex"/> on its OWN bag (bag-inventory contents aren't
+    /// server-replicated, so the server's shadow copy is empty for remote clients —
+    /// the slot index alone is insufficient). Server reconstructs the
+    /// <see cref="ItemInstance"/> from the payload, validates the chest, and queues
+    /// <see cref="CharacterStoreInFurnitureAction"/> with the slot index. The action's
+    /// remote-client path fires the ack ClientRpc that removes from the owner's bag
+    /// at <paramref name="bagSlotIndex"/>; the host path looks up the slot directly
+    /// in the server-side bag (which IS host's bag) and removes that ItemInstance.</para>
     /// </summary>
     [Rpc(SendTo.Server)]
-    public void RequestStoreFromBagServerRpc(NetworkBehaviourReference characterRef, int bagSlotIndex)
+    public void RequestStoreFromBagServerRpc(NetworkBehaviourReference characterRef, int bagSlotIndex, FixedString64Bytes itemId, FixedString4096Bytes itemJson)
     {
         if (_storage == null) return;
         if (!characterRef.TryGet(out Character character) || character == null) return;
-        var equip = character.CharacterEquipment;
-        if (equip == null || !equip.HaveInventory()) return;
-        var inv = equip.GetInventory();
-        if (inv == null) return;
-        if (bagSlotIndex < 0 || bagSlotIndex >= inv.ItemSlots.Count) return;
-        var slot = inv.ItemSlots[bagSlotIndex];
-        if (slot == null || slot.IsEmpty() || slot.ItemInstance == null) return;
         if (character.CharacterActions == null) return;
         if (character.CharacterActions.CurrentAction != null) return;
+        if (bagSlotIndex < 0) return; // basic sanity; remote-client bag bounds are owner-side
 
-        var action = new CharacterStoreInFurnitureAction(character, slot.ItemInstance, _storage);
+        ItemInstance item = TryReconstructStoredItem(itemId, itemJson);
+        if (item == null) return;
+
+        if (_storage.IsLocked) return;
+        if (!_storage.HasFreeSpaceForItem(item)) return;
+
+        var action = new CharacterStoreInFurnitureAction(character, item, _storage, bagSlotIndex);
         character.CharacterActions.ExecuteAction(action);
+    }
+
+    /// <summary>
+    /// Server-side helper: rebuild an <see cref="ItemInstance"/> from the RPC payload sent
+    /// by a player-UI store request. Resolves the ItemSO via Resources, runs the same
+    /// <c>CreateInstance</c> + <c>JsonUtility.FromJsonOverwrite</c> dance as
+    /// <see cref="WorldItem.ApplyNetworkData"/> and <see cref="TryDeserializeEntry"/>
+    /// (preserves polymorphism — <see cref="WeaponInstance"/> / <see cref="WearableInstance"/>
+    /// / etc. — because the concrete type comes from the SO factory). Returns null if the
+    /// SO can't be resolved or the JSON fails to parse; the caller logs and bails.
+    /// </summary>
+    private static ItemInstance TryReconstructStoredItem(FixedString64Bytes itemId, FixedString4096Bytes itemJson)
+    {
+        if (itemId.IsEmpty) return null;
+        string id = itemId.ToString();
+        try
+        {
+            ItemSO[] all = Resources.LoadAll<ItemSO>("Data/Item");
+            ItemSO so = System.Array.Find(all, x => x != null && x.ItemId == id);
+            if (so == null)
+            {
+                Debug.LogError($"<color=red>[StorageFurnitureNetworkSync]</color> Cannot resolve ItemSO id '{id}' from Resources/Data/Item for store request.");
+                return null;
+            }
+            ItemInstance inst = so.CreateInstance();
+            JsonUtility.FromJsonOverwrite(itemJson.ToString(), inst);
+            inst.ItemSO = so;
+            return inst;
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogException(e);
+            Debug.LogError($"<color=red>[StorageFurnitureNetworkSync]</color> Failed to reconstruct stored item id '{id}'.");
+            return null;
+        }
     }
 
     /// <summary>

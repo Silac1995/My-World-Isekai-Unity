@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using MWI.Economy;
+using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -230,6 +231,26 @@ public class CharacterAction_BuyFromShop : CharacterAction_Continuous
 
     private void DeliverToCustomer(ItemInstance instance)
     {
+        // Multiplayer authority gate. Bag-inventory contents are NOT replicated by
+        // CharacterEquipment._networkEquipment (which only covers weapon / bag-shell /
+        // wearable slots). When the customer's Character is owned by a remote client,
+        // mutating the server-side _bag.Inventory.ItemSlots is invisible to the owner.
+        // Hand the delivery off to the owner via ReceiveItemPickupClientRpc — the
+        // owner runs PickUpItem on its own local inventory. Mirrors the same branch
+        // in WorldItem.RequestInteractServerRpc. NPCs and the host both have
+        // IsOwnedByServer == true so they keep the direct-PickUpItem path.
+        if (character.IsSpawned && !character.IsOwnedByServer && character.CharacterActions != null)
+        {
+            var itemData = new NetworkItemData
+            {
+                ItemId = new FixedString64Bytes(instance.ItemSO.ItemId),
+                JsonData = new FixedString4096Bytes(JsonUtility.ToJson(instance))
+            };
+            character.CharacterActions.ReceiveItemPickupClientRpc(itemData);
+            Debug.Log($"<color=green>[BuyFromShop]</color> Routed delivery of {instance.ItemSO.ItemName} to remote owner (client {character.OwnerClientId}).");
+            return;
+        }
+
         if (character.CharacterEquipment.PickUpItem(instance)) return;
 
         SpawnAsWorldItemNextToCharacter(instance);

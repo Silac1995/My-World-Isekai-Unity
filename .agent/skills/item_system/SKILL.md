@@ -40,6 +40,60 @@ This is the Hub component responsible for attaching an `ItemInstance` to the cha
 - **The Special Case of the Bag (`BagInstance`)**: A bag is a `WearableType.Bag`. When equipped, `CharacterEquipment` awakens the sockets physically attached to the character's back (`_bagSockets`), then visually instantiates the weapons located **inside** this `Inventory` linked to the bag.
 - > **Equip vs Unequip**: The use of `character.DropItem` is the pivotal function. It simultaneously manages stripping the player's local visual and spawning the `WorldItem` where the drop took place.
 
+#### Bag-inventory replication authority
+**`CharacterEquipment._networkEquipment`** (a `NetworkList<NetworkEquipmentSyncData>`, server-write / everyone-read) replicates the **equipment slots only**: weapon = slot 0, bag shell = slot 1, wearables = slot 100+. **The items inside the bag's `Inventory.ItemSlots` are not in this list.** Bag-inventory contents are server-only state on the server peer and client-only state on the owning client; the two copies drift unless explicitly synced.
+
+The canonical sync channel for bag-inventory **additions** is **`CharacterActions.ReceiveItemPickupClientRpc(NetworkItemData)`** (`[Rpc(SendTo.Owner)]`). The owner reconstructs the `ItemInstance` via `ItemSO.CreateInstance()` + `JsonUtility.FromJsonOverwrite` (preserves `WeaponInstance` / `WearableInstance` / etc. polymorphism) and calls `PickUpItem` locally.
+
+**When you write a server-side path that adds an item to a character's bag** (shop delivery, storage take, quest reward, etc.), gate the direct `PickUpItem` / `Inventory.AddItem` call with the ownership check used by `WorldItem.RequestInteractServerRpc`:
+
+```csharp
+// On the server, for a remote-client-owned character → route through ClientRpc.
+if (actions != null && actions.IsServer && character.IsSpawned && !character.IsOwnedByServer)
+{
+    var itemData = new NetworkItemData
+    {
+        ItemId = new FixedString64Bytes(item.ItemSO.ItemId),
+        JsonData = new FixedString4096Bytes(JsonUtility.ToJson(item))
+    };
+    actions.ReceiveItemPickupClientRpc(itemData);
+    return;
+}
+// Host / NPC / offline / client-local execution: direct PickUpItem works.
+character.CharacterEquipment.PickUpItem(item);
+```
+
+Reference implementations:
+- `WorldItem.RequestInteractServerRpc` — original pattern (2025).
+- `CharacterAction_BuyFromShop.DeliverToCustomer` — shop purchase (2026-05-14).
+- `CharacterTakeFromFurnitureAction.OnApplyEffect` — chest take (2026-05-14).
+
+#### Inverse direction — store-to-chest from a client-side source
+The inverse flow (client's bag/hands → server-authoritative chest) needs the **mirror** of the above: the client supplies the item identity in the RPC payload, the server validates + adds to the chest, and the server sends an ack ClientRpc back to the owner to remove the item from its local source.
+
+Replication channel for the ack: **`CharacterActions.RemoveFromInventoryAfterStoreClientRpc(int sourceSlotIndex)`** (`[Rpc(SendTo.Owner)]`). `sourceSlotIndex == -1` removes from hands; `>= 0` removes from the bag at that slot.
+
+**When you write a server-side path that adds an item from a client-owned character into a chest / shelf / shop inventory** (player-UI store, donation, etc.), include the item identity + source slot in the ServerRpc:
+
+```csharp
+// Client UI side — capture identity from the clicked slot:
+var itemId = new FixedString64Bytes(item.ItemSO.ItemId);
+var itemJson = new FixedString4096Bytes(JsonUtility.ToJson(item));
+_targetSync.RequestStoreFromBagServerRpc(new NetworkBehaviourReference(character), slotIndex, itemId, itemJson);
+
+// Server side — reconstruct, validate destination, queue action with slot index:
+ItemInstance item = TryReconstructStoredItem(itemId, itemJson);   // SO factory + JsonUtility.FromJsonOverwrite
+if (!_storage.HasFreeSpaceForItem(item)) return;
+var action = new CharacterStoreInFurnitureAction(character, item, _storage, slotIndex /* or SourceHands = -1 */);
+character.CharacterActions.ExecuteAction(action);
+// The action's OnApplyEffect detects remote-client ownership and fires
+// CharacterActions.RemoveFromInventoryAfterStoreClientRpc(slotIndex) back to the owner.
+```
+
+Reference implementations:
+- `StorageFurnitureNetworkSync.RequestStoreFromBagServerRpc` / `RequestStoreFromHandsServerRpc` — chest store (2026-05-14).
+- `CharacterStoreInFurnitureAction.OnApplyEffect` — three-way source resolution (remote-client / host slot-index / NPC by-reference legacy).
+
 ### 6. Item Tier System
 All items have a base `int _tier` field on `ItemSO` (default 0 = untiered). Tier is used for gating mechanics:
 - **Keys**: `KeySO.Tier >= DoorLock.RequiredTier` to open a door.

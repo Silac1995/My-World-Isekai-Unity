@@ -68,3 +68,16 @@ The legacy `NotifyOccupiedClientRpc` / `NotifyReleasedClientRpc` are kept as no-
 `UI_ShopBuyPanel.Initialize` defends against this race with a one-shot late-bind: if `_shop == null` on entry, it calls `cashier.TryRegisterWithShop()` (the idempotent re-resolution path `ShopBuilding.OnNetworkSpawn` uses server-side) and re-reads `LinkedShop`. Only after that fallback fails does the panel error out and close. Without this fallback, the joining-client buy panel silently `CloseWindow`s and the user sees "nothing happens" when pressing E on a vendor-seated cashier.
 
 See [[host-only-state-blindspot]] for the broader recurring class of bugs this falls under, and the audit checklist that catches them before shipping.
+
+## Multiplayer item-delivery authority (2026-05-14)
+
+`CharacterAction_BuyFromShop.DeliverToCustomer` is server-only (the action is a `CharacterAction_Continuous`, and `CharacterActions.ExecuteAction` short-circuits non-server peers for continuous actions). It used to call `character.CharacterEquipment.PickUpItem(instance)` unconditionally on the server. That works for NPC customers and host customers (both have `Character.IsOwnedByServer == true`), but for a remote-client customer the bag-inventory mutation lands only on the server's shadow copy — the owning client's `_bag.Inventory.ItemSlots` is never touched, so the item silently disappears.
+
+The fix mirrors the same ownership branch in `WorldItem.RequestInteractServerRpc`: when the customer's Character is spawned and **not** owned by the server, build a `NetworkItemData` from the pulled `ItemInstance` and call `character.CharacterActions.ReceiveItemPickupClientRpc(itemData)`. The owner client deserializes the item via `ItemSO.CreateInstance()` + `JsonUtility.FromJsonOverwrite` (preserves `WeaponInstance` / `WearableInstance` / etc. polymorphism) and runs `PickUpItem` locally. The NPC / host path is unchanged.
+
+**Cost / risk**: the routed-through-owner path has no callback for `PickUpItem` failure. If the client's bag is full **and** their hands are full, the item is lost. Same risk shape as `WorldItem.RequestInteractServerRpc` (which despawns optimistically before the ClientRpc lands). The shop UI's Confirm gate reads client-side bag space and pre-rejects when the bag won't accept the purchase, so the failure mode is rare in practice.
+
+**Audit checklist when changing this path again** — re-run the six questions in [[host-only-state-blindspot]] and specifically verify:
+- Item delivered into the owner client's UI inventory (open the bag panel on the joining client after Confirm).
+- After portal-gate return / save, the bought item persists in the client's character profile.
+- The buy panel's Confirm button greys when client-side bag has no space.
