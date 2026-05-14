@@ -39,6 +39,23 @@ NPCs driven by needs (e.g., `NeedItem`, `NeedFood`) trigger a Shopping behavior.
   - **No**: They enqueue themselves in the Shop's `Customer Queue` and switch to a waiting behavior (`WaitInQueueBehaviour`), standing patiently in a line area.
 - Once called by a Vendor, they walk up and execute `InteractionBuyItem`, where money is deducted, and the item transfers from the Shop's `Inventory` to the NPC's Inventory.
 
+### 5. B2B logistics buys (2026-05-09)
+When another building's `LogisticsStockEvaluator` runs `RequestStock`, it scans same-map `ShopBuilding`s **before** falling through to `FindSupplierFor` (producer path). If a shop carries the item, has the stock on `SellShelves`, and the buyer's [[commercial-treasury|Treasury]] can afford the unit price × quantity, the purchase commits atomically server-side:
+
+1. `_building.TryDebitTreasury(currency, totalCost, ...)` — drains buyer's largest treasury safe first.
+2. `shop.Cashiers[0].CreditTill(currency, totalCost, ...)` — payment lands in the shop's first Cashier till, symmetric with human / NPC personal buys.
+3. `MoveSellShelfItemsToShopInventory` — the matched `ItemInstance`s are removed from the sell-shelf slots and added to `shop.Inventory` so the existing dispatcher reservation path picks them up.
+4. A new `BuyOrder { Source = shop, IsPlaced = true }` is registered on both order books (buyer for tracking, shop for dispatch). `IsPlaced = true` skips the buyer's `GoapAction_PlaceOrder` walk (background commit — no NPC negotiates the order in person).
+
+The shop's NPC `JobLogisticsManager` then ticks `ProcessActiveBuyOrders` as normal, finds the items in `shop.Inventory`, and dispatches a transporter. **Constraint**: the shop must have a hired LogisticsManager NPC, otherwise no dispatch tick runs. Same constraint applies to producer-side fulfilment today.
+
+Race protection: if a human / NPC personal buy or another B2B commit eats some items between `CountItemOnSellShelves` and `MoveSellShelfItemsToShopInventory`, the missing units are atomically refunded (till debit + treasury credit) and the order shrinks to what actually moved. Full architecture page: [[commercial-treasury]].
+
+**MVP limitations** (tracked as follow-ups on [[commercial-treasury]]):
+- No refund-on-expiration if the BuyOrder times out before delivery.
+- First-found-shop wins (no closest / cheapest / owner-allied sorting yet).
+- Same-map only.
+
 ## Flow Priority (Checklist for Debugging)
 If a shop isn't working, verify this chain:
 1. Does the Shop have a `JobLogisticsManager`?

@@ -299,6 +299,16 @@ Tool-storage priority **overrides** shelf priority — a shop that ever returns 
 
 To extend the rule for new subclasses, override `GetToolStockItems()` on the building (yields the items it treats as tools) — the tool branch is triggered by any non-empty result. The `ShopBuilding` branch is hard-coded by `is ShopBuilding`; if you add a parallel role family in the future, extend `AssignStorageRolesForShift` to accept a polymorphic "role priority resolver" (sketch: `virtual StorageRoleType ResolveFirstStorageRole()` on `CommercialBuilding`).
 
+#### Treasury & SafeFurniture (2026-05-09)
+
+Per-building currency reserve that funds B2B shop purchases. Parallel furniture family to `StorageFurniture` — see [[commercial-treasury]] for the full architecture page.
+
+- **`SafeFurniture`** holds per-`CurrencyId` integer balance + a `SafeRoleType` (None / Treasury). Sibling `SafeFurnitureNetworkSync` replicates both via `NetworkVariable<SafeRoleType>` + `NetworkList<BuildingTreasuryEntry>`. Designer Inspector field `_initialRole` defaults to `Treasury` so pre-placed safes are usable immediately.
+- **Aggregator on `CommercialBuilding`** — `Safes` / `TreasurySafes` getters + `GetTreasuryBalance` / `CanAffordFromTreasury` / `TryDebitTreasury` (drains largest treasury safe first) / `CreditTreasury` (credits largest treasury safe). `OnTreasuryChanged` event fans out per-safe `OnBalanceChanged` / `OnRoleChanged` via `RefreshSafeSubscriptions` set up in `OnNetworkSpawn`. **No NetworkList on the building itself** — replication lives on each safe's sync component.
+- **Auto-assign** — `BuildingLogisticsManager.AssignSafeRolesForShift()` (sibling of `AssignStorageRolesForShift`, called from `WorkerStartingShift`) flips every `Role == None` safe to `Treasury` on every NPC LogisticsManager shift-punch. Idempotent.
+- **Save / load** — `SafeFurnitureSaveEntry { FurnitureKey, Balances, Role }` on `BuildingSaveData.Safes`. Default-empty for back-compat. Captured in `BuildingSaveData.FromBuilding` for every Building subtype (homes can hold safes). Restored in `MapController.RestoreSafeContents` after `RestoreCashierContents` — balances via `SafeFurniture.RestoreFromSaveData`, role via the sibling `SafeFurnitureNetworkSync.SetRoleServer`.
+- **B2B spending path** — `LogisticsStockEvaluator.TryB2BPurchaseFromShop` consults `GetTreasuryBalance` / `TryDebitTreasury` before posting a producer BuyOrder. See [[logistics_cycle]] and [[shop_system]] SKILL files for the spend-side details.
+
 #### `StorageVisualDisplay` (optional renderer)
 Add this component next to `StorageFurniture` only when contents should be visible (shelves, open crates, weapon racks). Configure:
 - `_displayAnchors` — `List<Transform>`. Anchors are consumed by the **first non-empty slots iterated in slot order** (misc → weapon → wearable → any), so a shelf with 5 anchors over an 8-misc + 8-wearable storage will display the first 5 stored items regardless of slot index. Authors don't need to match anchor count to capacity — extras stay unused; fewer-than-capacity is fine.

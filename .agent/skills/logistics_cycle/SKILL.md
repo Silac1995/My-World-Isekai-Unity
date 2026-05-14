@@ -170,6 +170,27 @@ Planner cost ordering: `PlaceOrder 0.1 < StageForPickup 0.2 < RestockSellShelves
 
 **Server-only** — `CharacterTakeFromFurnitureAction.OnApplyEffect` and `CharacterStoreInFurnitureAction.OnApplyEffect` run server-side, so slot mutations land in the right place. Clients see standard pickup / drop animations through the existing broadcast path.
 
+### 3c-ter. B2B shop-buy preference scan (2026-05-09)
+
+When `LogisticsStockEvaluator.RequestStock(itemSO, qty)` is called, it now consults same-map shops **before** falling through to `FindSupplierFor` (producer path). Method `TryB2BPurchaseFromShop(itemSO, qty)`:
+
+1. Iterates `BuildingManager.Instance.allBuildings`, filters to `ShopBuilding` on the same `MapController.MapId` as the buyer.
+2. For each shop: checks `shop.GetCatalogEntry(itemSO)` for sale-pricing, aggregates stock across `shop.SellShelves` (must be ≥ `qty`), computes `totalCost = qty × ShopBuilding.ResolvePrice(catalogEntry)`, and verifies `_building.CanAffordFromTreasury(currency, totalCost)`. Skips shops with no `Cashier` (no till to receive payment).
+3. On first match → **atomic commit**:
+   - `_building.TryDebitTreasury(currency, totalCost, ...)` (drains largest treasury safe first — see [[commercial-treasury]]).
+   - `cashier.CreditTill(currency, totalCost, ...)` — payment lands in the shop's first cashier till.
+   - `MoveSellShelfItemsToShopInventory` — removes `qty` matching `ItemInstance`s from shelf slots, adds them to `shop.Inventory`. The existing `LogisticsTransportDispatcher.ProcessActiveBuyOrders` reservation path (which scans `_building.Inventory`) then picks them up unchanged.
+   - `new BuyOrder(itemSO, qty, shop, _building, 3, _building.Owner, null)` with `IsPlaced = true`. Registered on **both** order books: buyer's `_placedBuyOrders` for tracking + shop's `_activeOrders` for dispatch. `IsPlaced = true` skips the buyer's `GoapAction_PlaceOrder` walk (background commit — locked product decision 2026-05-09).
+4. Returns `true` → `RequestStock` short-circuits before `FindSupplierFor`.
+
+Race detection: if `MoveSellShelfItemsToShopInventory` moves fewer items than requested (concurrent human/NPC buy), the shortfall is refunded atomically (till debit + treasury credit) and the order shrinks. Zero-moved → order abandoned, scan continues.
+
+**Constraint mirrored from producer path**: the shop must have a hired LogisticsManager NPC, otherwise `ProcessActiveBuyOrders` never ticks and the BuyOrder sits undispatched.
+
+**MVP gaps** (tracked on [[commercial-treasury]]): no refund-on-expiration; first-found-shop wins; same-map only.
+
+See [[commercial-treasury]] for the full Safe + Treasury + B2B architecture page; see [[shop_system]] for the cashier-till credit side.
+
 ### 3d. Furniture-first pickup (transporter side)
 
 Mirror of section 3c on the inbound transporter cycle. Today, when a reserved transport item lives in a `StorageFurniture` slot rather than as a loose `WorldItem` in `StorageZone`, the transporter walks to the source, idles for a few ticks, and finally picks the item up from `StorageZone` only after the source's `JobLogisticsManager` runs `GoapAction_StageItemForPickup` to move it out. The furniture-first pickup path lets the transporter pull the item directly from the slot — no wait — falling back to the loose path only when nothing is in a slot.
