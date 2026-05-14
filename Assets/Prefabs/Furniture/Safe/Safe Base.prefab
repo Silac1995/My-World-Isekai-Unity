@@ -1,0 +1,106 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1001 &3687305503450951197
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: 3944396133495831649, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
+      propertyPath: m_Name
+      value: Safe Base
+      objectReference: {fileID: 0}
+    - target: {fileID: 6445648937218201084, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
+      propertyPath: GlobalObjectIdHash
+      value: 487174100
+      objectReference: {fileID: 0}
+    - target: {fileID: 8021854465056481327, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8021854465056481327, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8021854465056481327, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8021854465056481327, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 8021854465056481327, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8021854465056481327, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8021854465056481327, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8021854465056481327, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8021854465056481327, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8021854465056481327, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 3944396133495831649, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 3691399994749125352}
+    - targetCorrespondingSourceObject: {fileID: 3944396133495831649, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: -7716982771774593734}
+  m_SourcePrefab: {fileID: 100100000, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
+--- !u!1 &402719992786195068 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 3944396133495831649, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
+  m_PrefabInstance: {fileID: 3687305503450951197}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &3691399994749125352
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 402719992786195068}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 02ea792519b09294dbeb3741275c9b76, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SafeFurniture
+  _furnitureName: Safe
+  _furnitureTag: 0
+  _interactionPoint: {fileID: 0}
+  _sizeInCells: {x: 0, y: 0}
+  _furnitureItemSO: {fileID: 11400000, guid: c88320c7e3a23534f8ae8858c45f72d0, type: 2}
+  _initialRole: 1
+  _initialBalances: []
+--- !u!114 &-7716982771774593734
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 402719992786195068}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9d6ba5ebf792026498a27115cb7784ce, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SafeFurnitureNetworkSync
+  ShowTopMostFoldoutHeaderGroup: 1

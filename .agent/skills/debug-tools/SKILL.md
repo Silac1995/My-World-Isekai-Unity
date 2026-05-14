@@ -117,6 +117,27 @@ The view GameObject is added to the prefab by the **`DevHarvestableInspectorBuil
 
 **Selectability gotcha:** `CropHarvestable_Default.prefab` sits on the **`Harvestable`** layer (index 15 in `ProjectSettings/TagManager.asset` — renamed from `Crop` on 2026-04-29 to reflect that crop harvestables and wilderness harvestables share the layer). `_defaultInteriorLayers` was extended to `RigidBody + Furniture + Harvestable` so Ctrl+Click hits any harvestable. Wilderness prefabs (`Tree.prefab`, `Gatherable.prefab`) currently sit on `Default` and are **not** selectable until their root layer is changed to `Harvestable` (or another layer in the mask).
 
+### 4d. Cashier Inspector — `CashierInspectorView`
+
+`CashierInspectorView : MonoBehaviour, IInspectorView` (`Assets/Scripts/Debug/DevMode/Inspect/CashierInspectorView.cs`).
+
+- `CanInspect(target)` returns true for `CashierInteractable` **or** `FurnitureInteractable` whose `Furniture` is a `Cashier` — handles both the dedicated Cashier interactable (the normal selection path) and the generic furniture interactable fallback if a prefab variant uses it.
+- `SetTarget` resolves the live `Cashier` from either route; furniture name is used as the header label.
+- `Update()` re-renders every frame (cheap — only the active view is enabled).
+- Renders six sections, top to bottom:
+  1. **Identity** — concrete type, GO name, `FurnitureName`, layer + index, world position.
+  2. **Cashier state** — `RequiresVendor`, `IsOccupied`, seated `Occupant` (vendor), `CurrentCustomer`, `IsAvailableForCustomer`. All read via the rule-#19-safe getters on `Cashier` so the vendor / customer are correct on every peer (server returns the in-memory field; clients resolve the replicated NetworkObjectId through `NetworkManager.SpawnManager.SpawnedObjects`).
+  3. **Till** — reads the replicated `CashierNetSync.TillBalances` `NetworkList` (visible on every peer) and prints `Currency #<id>: <amount>` per entry. Falls back to the server-only `_till` dictionary only when NetSync is not yet spawned (very early in the bind / spawn race).
+  4. **Linked Building** — `LinkedBuilding` type / name / `BuildingId` + an `Is ShopBuilding` flag.
+  5. **Network sync** — `NetSync.IsSpawned` / `IsServer (this peer)`, sibling `NetworkObject.NetworkObjectId`, `OccupantNetworkObjectId.Value`, `CurrentCustomerNetworkObjectId.Value`, `LinkedBuildingRef` resolution status, and the count of replicated till entries.
+  6. **Active action** — `NetSync.ActiveAction` mode + customer when set. Server-only field; the view surfaces an explicit hint on clients so the empty section isn't confusing mid-transaction.
+- Optional **"Inspect Parent Building"** navigation button mirrors `StorageFurnitureInspectorView` — wires to `DevSelectionModule.SetSelectedBuilding(_target.LinkedBuilding)` (falls back to `GetComponentInParent<Building>()`). Greyed out when the linked building is unresolved.
+- Read-only by design — never mutates cashier, till, or transaction state.
+
+The view GameObject is added to the prefab by the **`DevCashierInspectorBuilder`** Editor utility (menu `Tools/DevMode/Build Cashier Inspector`, with destructive rebuild variant). It places the new GO under `DevModePanel/ContentRoot/InspectContent/Views`, sibling to the existing inspector views, and wires the `_headerLabel` + `_content` serialized fields. The optional nav-button fields (`_selectionModule`, `_inspectParentBuildingButton`, `_inspectParentBuildingLabel`) are not built by the editor utility — wire them manually in the prefab inspector if you want the parent-building navigation shortcut. `DevInspectModule` auto-discovers the view at `Awake` — no further wiring required.
+
+**Selectability:** Cashier prefabs sit on the `Furniture` layer (the same layer storage furniture uses), so `_defaultInteriorLayers = RigidBody + Furniture + Harvestable` already covers them — no mask change needed.
+
 ### 4d. Building Inspector — `BuildingInspectorView` + `BuildingSubTab` + Console Management
 
 `BuildingInspectorView : MonoBehaviour, IBuildingInspectorView` (`Assets/Scripts/Debug/DevMode/Inspect/BuildingInspectorView.cs`).
@@ -283,6 +304,8 @@ These scripts predate Dev Mode and remain independent. They self-manage their ow
 Assets/Editor/DevMode/
   DevInspectTabBuilder.cs                  ← builds the Inspect tab hierarchy + 10 character sub-tabs
   DevStorageFurnitureInspectorBuilder.cs   ← adds the StorageFurnitureInspectorView GO under Views
+  DevHarvestableInspectorBuilder.cs        ← adds the HarvestableInspectorView GO under Views
+  DevCashierInspectorBuilder.cs            ← adds the CashierInspectorView GO under Views
 
 Assets/Scripts/Debug/DevMode/
   DevModeManager.cs               ← now owns global shortcuts (Ctrl+Click / Alt+Click / Space+LMB / ESC)
@@ -300,6 +323,8 @@ Assets/Scripts/Debug/DevMode/
     DevInspectModule.cs             ← root dispatcher
     CharacterInspectorView.cs       ← character view (10 sub-tabs)
     StorageFurnitureInspectorView.cs ← storage view (chest / shelf / barrel / wardrobe slot listing)
+    HarvestableInspectorView.cs      ← harvestable view (wilderness + crop, terrain-cell read-out)
+    CashierInspectorView.cs          ← cashier view (vendor / customer / till / linked building / NetSync)
     CharacterAIDebugFormatter.cs    ← shared AI debug strings
     SubTabs/
       CharacterSubTab.cs            ← abstract base
@@ -335,6 +360,8 @@ Assets/Scripts/
 - **One-shot Editor builders.**
   - `Assets/Editor/DevMode/DevInspectTabBuilder.cs` — `[MenuItem("Tools/DevMode/Build Inspect Tab")]`. Builds the Inspect tab hierarchy + 10 character sub-tabs inside the DevModePanel prefab and wires every `SerializedObject` field. Idempotent; destructive `Rebuild` variant with confirmation dialog.
   - `Assets/Editor/DevMode/DevStorageFurnitureInspectorBuilder.cs` — `[MenuItem("Tools/DevMode/Build Storage Furniture Inspector")]`. Adds the `StorageFurnitureInspectorView` GameObject under `InspectContent/Views`, sibling to `CharacterInspectorView`, and wires `_headerLabel` + `_content`. Same idempotent + destructive pair.
+  - `Assets/Editor/DevMode/DevHarvestableInspectorBuilder.cs` — `[MenuItem("Tools/DevMode/Build Harvestable Inspector")]`. Adds the `HarvestableInspectorView` GameObject under `InspectContent/Views`. Same idempotent + destructive pair.
+  - `Assets/Editor/DevMode/DevCashierInspectorBuilder.cs` — `[MenuItem("Tools/DevMode/Build Cashier Inspector")]`. Adds the `CashierInspectorView` GameObject under `InspectContent/Views` and wires `_headerLabel` + `_content`. Optional nav-button fields (`_selectionModule`, `_inspectParentBuildingButton`, `_inspectParentBuildingLabel`) are left for manual wiring. Same idempotent + destructive pair.
 
   Prefer extending these builders when you add a new view or sub-tab — it keeps prefab regeneration reproducible and source-controlled.
 - **Host-only.** `DevInspectModule`, like all Dev Mode modules, only runs on the host. Read-only sub-tabs (Overview, Storage, Harvestable, Character) must read from local state only. Mutator sub-tabs (`BuildingConsoleManagementSubTab`) may call server-only methods directly — but only because dev mode is host-only by hard policy (`DevModeManager.TryEnable` rejects non-host callers). Never add RPCs or `[Rpc(SendTo.Server)]` calls in a sub-tab; if you need a path that bypasses production auth, add a host-only `DevForce*` server method on the target class wrapped in `#if UNITY_EDITOR || DEVELOPMENT_BUILD`, gated by an `IsServer + DevModeManager.IsEnabled` assertion + audit log line, and call it directly.

@@ -134,25 +134,14 @@ public class FarmingBuilding : HarvestingBuilding, IStockProvider
             var crop = _cropsToGrow[i];
             if (crop == null) continue;
 
-            var outputs = crop.HarvestOutputs;
-            if (outputs == null) continue;
-
-            for (int j = 0; j < outputs.Count; j++)
+            // Seed discovery goes through SeedRegistry (decoupled from HarvestOutputs as of
+            // 2026-05-14 — see SeedRegistry.cs). Designers can configure the crop's
+            // HarvestOutputs and DestructionOutputs purely for gameplay yield without
+            // having to also list the seed there for the planting pipeline.
+            var seed = MWI.Farming.SeedRegistry.GetSeedFor(crop);
+            if (seed != null && _seedMaxStock > 0)
             {
-                var entry = outputs[j];
-                if (entry.Item == null) continue;
-
-                // Item is typed as ScriptableObject on HarvestableOutputEntry (Pure-asmdef
-                // constraint). SeedSO inherits ScriptableObject, so the type-test is direct.
-                // Non-seed entries are skipped — see the method-level note about why produce
-                // outputs are not emitted as stock targets.
-                if (entry.Item is SeedSO seedSO && seedSO.CropToPlant == crop)
-                {
-                    if (_seedMaxStock > 0)
-                    {
-                        yield return new StockTarget(seedSO, _seedMaxStock);
-                    }
-                }
+                yield return new StockTarget(seed, _seedMaxStock);
             }
         }
 
@@ -475,25 +464,20 @@ public class FarmingBuilding : HarvestingBuilding, IStockProvider
 
     private bool HasSeedInInventory(CropSO crop)
     {
-        for (int j = 0; j < crop.HarvestOutputs.Count; j++)
-        {
-            var entry = crop.HarvestOutputs[j];
-            if (entry.Item is SeedSO seedSO && seedSO.CropToPlant == crop)
-            {
-                return HasItemInBuildingOrStorage(seedSO);
-            }
-        }
-        // Throttled designer-fix nudge. Without a SeedSO in HarvestOutputs, PlantScan
-        // silently reports noSeed=N for every cell — there is no way for a farmer to
-        // plant this crop even if seeds physically sit in a storage furniture. The
-        // self-seeding HarvestOutputs link is how the system discovers which seed
-        // belongs to which crop. Fix: drag the matching SeedSO into the CropSO's
-        // _harvestOutputs list (designer-only edit per .agent/skills/farming/SKILL.md).
+        var seed = SeedRegistry.GetSeedFor(crop);
+        if (seed != null) return HasItemInBuildingOrStorage(seed);
+
+        // Throttled designer-fix nudge. The SeedRegistry indexes seeds by their
+        // SeedSO._cropToPlant back-link — a null result means no SeedSO asset under
+        // Resources/Data/Item/Seed/ points at this crop. PlantScan will report
+        // noSeed=N forever. Designer fix: open the matching SeedSO asset and set
+        // its _cropToPlant field to this CropSO (one-way link is sufficient; the
+        // SeedRegistry handles reverse lookup at boot).
         float now = UnityEngine.Time.unscaledTime;
         if (now - _lastSeedAuthoringWarnTime > 5f)
         {
             _lastSeedAuthoringWarnTime = now;
-            Debug.LogWarning($"<color=orange>[FarmingBuilding]</color> {buildingName}: CropSO '{crop.name}' (Id='{crop.Id}') has NO SeedSO entry in _harvestOutputs whose CropToPlant matches itself. PlantScan will report noSeed=N forever. Designer fix: open the CropSO asset and add the matching SeedSO to its _harvestOutputs list.");
+            Debug.LogWarning($"<color=orange>[FarmingBuilding]</color> {buildingName}: SeedRegistry has no SeedSO whose CropToPlant equals CropSO '{crop.name}' (Id='{crop.Id}'). PlantScan will report noSeed=N forever. Designer fix: open the matching SeedSO asset (typically under Assets/Resources/Data/Item/Seed/) and set its _cropToPlant field to this CropSO.");
         }
         return false;
     }
@@ -604,18 +588,12 @@ public class FarmingBuilding : HarvestingBuilding, IStockProvider
     }
 
     /// <summary>True if a SeedSO that grows <paramref name="crop"/> physically exists
-    /// in this building's inventory or any child StorageFurniture.</summary>
+    /// in this building's inventory or any child StorageFurniture. Seed discovery goes
+    /// through <see cref="SeedRegistry.GetSeedFor"/>, decoupled from harvest yield.</summary>
     private bool SeedForCropExists(CropSO crop)
     {
-        for (int j = 0; j < crop.HarvestOutputs.Count; j++)
-        {
-            var entry = crop.HarvestOutputs[j];
-            if (entry.Item is SeedSO seedSO && seedSO.CropToPlant == crop)
-            {
-                if (HasItemInBuildingOrStorage(seedSO)) return true;
-            }
-        }
-        return false;
+        var seed = SeedRegistry.GetSeedFor(crop);
+        return seed != null && HasItemInBuildingOrStorage(seed);
     }
 
     private bool HasExistingPlantTaskForCell(int cellX, int cellZ)

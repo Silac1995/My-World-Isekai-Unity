@@ -120,14 +120,11 @@ public class GoapAction_FetchSeed : GoapAction
 
     private static SeedSO ResolveSeedFor(CropSO crop)
     {
-        if (crop == null || crop.HarvestOutputs == null) return null;
-        for (int j = 0; j < crop.HarvestOutputs.Count; j++)
-        {
-            var entry = crop.HarvestOutputs[j];
-            if (entry.Item is SeedSO seedSO && seedSO.CropToPlant == crop)
-                return seedSO;
-        }
-        return null;
+        // Seed discovery goes through SeedRegistry (decoupled from HarvestOutputs as
+        // of 2026-05-14 — see SeedRegistry.cs). Allows tree crops to keep their seeds
+        // in DestructionOutputs (or nowhere; the seed asset's _cropToPlant back-link
+        // is sufficient) while still feeding the planting pipeline.
+        return MWI.Farming.SeedRegistry.GetSeedFor(crop);
     }
 
     public override void Execute(Character worker)

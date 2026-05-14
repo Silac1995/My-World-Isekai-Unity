@@ -110,7 +110,15 @@
       "Bash(cmd /c \"rmdir /s /q .claude\\\\worktrees\\\\affectionate-ellis-9d1790\")",
       "PowerShell(Get-Process | Where-Object { $_.Name -match 'Unity|Code|antigravity|cursor|rider|jetbrains|explorer' } | Select-Object Name,Id | Format-Table -AutoSize)",
       "Bash(git worktree *)",
-      "Bash(xargs -I{} git branch -D \"{}\")"
+      "Bash(xargs -I{} git branch -D \"{}\")",
+      "Bash(gh repo *)",
+      "Bash(git cherry-pick *)",
+      "Bash(git -C '/c/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity' add Assets/Scripts/World/Furniture/SafeRoleType.cs Assets/Scripts/World/Furniture/SafeRoleType.cs.meta Assets/Scripts/World/Furniture/SafeFurniture.cs Assets/Scripts/World/Furniture/SafeFurniture.cs.meta Assets/Scripts/World/Furniture/SafeFurnitureNetworkSync.cs Assets/Scripts/World/Furniture/SafeFurnitureNetworkSync.cs.meta Assets/Scripts/World/Buildings/BuildingTreasuryEntry.cs Assets/Scripts/World/Buildings/BuildingTreasuryEntry.cs.meta Assets/Scripts/World/Buildings/CommercialBuilding.cs Assets/Scripts/World/MapSystem/MapRegistry.cs Assets/Scripts/World/MapSystem/MapController.cs)",
+      "Bash(git -C '/c/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity' commit -m ' *)",
+      "Bash(git -C '/c/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity' add Assets/Scripts/World/Buildings/BuildingLogisticsManager.cs Assets/Scripts/World/Buildings/CommercialBuilding.cs)",
+      "Bash(git -C '/c/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity' add Assets/Scripts/World/Buildings/Logistics/LogisticsStockEvaluator.cs)",
+      "Bash(git -C \"/c/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity\" add wiki/systems/commercial-treasury.md)",
+      "Bash(git -C '/c/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity' add .agent/skills/building_system/SKILL.md .agent/skills/shop_system/SKILL.md .agent/skills/logistics_cycle/SKILL.md)"
     ],
     "additionalDirectories": [
       "\\tmp"

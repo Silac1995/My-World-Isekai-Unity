@@ -988,6 +988,14 @@ PrefabInstance:
       propertyPath: m_Center.y
       value: 7.5
       objectReference: {fileID: 0}
+    - target: {fileID: 2596863188970600716, guid: d941949b730fb1843991b09d42aa29bf, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 13
+      objectReference: {fileID: 0}
+    - target: {fileID: 2596863188970600716, guid: d941949b730fb1843991b09d42aa29bf, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: -5
+      objectReference: {fileID: 0}
     - target: {fileID: 3275823743319916358, guid: d941949b730fb1843991b09d42aa29bf, type: 3}
       propertyPath: m_LocalPosition.x
       value: 1
@@ -1042,7 +1050,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6218087504859813128, guid: d941949b730fb1843991b09d42aa29bf, type: 3}
       propertyPath: _furnitures.Array.size
-      value: 4
+      value: 5
       objectReference: {fileID: 0}
     - target: {fileID: 6218087504859813128, guid: d941949b730fb1843991b09d42aa29bf, type: 3}
       propertyPath: '_furnitures.Array.data[1]'
@@ -1051,9 +1059,13 @@ PrefabInstance:
     - target: {fileID: 6218087504859813128, guid: d941949b730fb1843991b09d42aa29bf, type: 3}
       propertyPath: '_furnitures.Array.data[2]'
       value: 
-      objectReference: {fileID: 9205726073751855139}
+      objectReference: {fileID: 2813645711975947936}
     - target: {fileID: 6218087504859813128, guid: d941949b730fb1843991b09d42aa29bf, type: 3}
       propertyPath: '_furnitures.Array.data[3]'
+      value: 
+      objectReference: {fileID: 9205726073751855139}
+    - target: {fileID: 6218087504859813128, guid: d941949b730fb1843991b09d42aa29bf, type: 3}
+      propertyPath: '_furnitures.Array.data[4]'
       value: 
       objectReference: {fileID: 1061310942577652097}
     - target: {fileID: 6812237598739333191, guid: d941949b730fb1843991b09d42aa29bf, type: 3}
@@ -4325,6 +4337,17 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 8358957988346440447, guid: d941949b730fb1843991b09d42aa29bf, type: 3}
   m_PrefabInstance: {fileID: 7802254215568206710}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &2813645711975947936 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 5425499448889062870, guid: d941949b730fb1843991b09d42aa29bf, type: 3}
+  m_PrefabInstance: {fileID: 7802254215568206710}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 02ea792519b09294dbeb3741275c9b76, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SafeFurniture
 --- !u!4 &6719286638165457982 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 3564774228829787976, guid: d941949b730fb1843991b09d42aa29bf, type: 3}

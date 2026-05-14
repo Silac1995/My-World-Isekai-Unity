@@ -432,7 +432,7 @@ PrefabInstance:
       objectReference: {fileID: 1816767246673045903}
     - target: {fileID: 531118714130877921, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
       propertyPath: m_Size.x
-      value: 14
+      value: 20
       objectReference: {fileID: 0}
     - target: {fileID: 531118714130877921, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
       propertyPath: m_Size.y
@@ -440,7 +440,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 531118714130877921, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
       propertyPath: m_Size.z
-      value: 5
+      value: 10
+      objectReference: {fileID: 0}
+    - target: {fileID: 531118714130877921, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
+      propertyPath: m_Enabled
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 531118714130877921, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
       propertyPath: m_Center.y
@@ -448,7 +452,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 531118714130877921, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
       propertyPath: m_Center.z
-      value: 0
+      value: -1.5
       objectReference: {fileID: 0}
     - target: {fileID: 3535583793416524095, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
       propertyPath: m_IsKinematic
@@ -464,11 +468,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6445648937218201084, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
       propertyPath: GlobalObjectIdHash
-      value: 973683674
+      value: 2662764226
       objectReference: {fileID: 0}
     - target: {fileID: 7017326305566719231, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
       propertyPath: m_Size.x
-      value: 20
+      value: 14
       objectReference: {fileID: 0}
     - target: {fileID: 7017326305566719231, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
       propertyPath: m_Size.y
@@ -476,7 +480,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7017326305566719231, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
       propertyPath: m_Size.z
-      value: 8
+      value: 5
       objectReference: {fileID: 0}
     - target: {fileID: 7017326305566719231, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
       propertyPath: m_Enabled
@@ -488,11 +492,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7017326305566719231, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
       propertyPath: m_Center.z
-      value: -2.5
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 7017326305566719231, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
       propertyPath: m_IsTrigger
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 8021854465056481327, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
       propertyPath: m_LocalPosition.x
@@ -579,7 +583,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CraftingFurnitureInteractable
   interactionPrompt: Press E to interact
-  _interactionZone: {fileID: 5020580868277413162}
+  _interactionZone: {fileID: 2562771403712992308}
   _rootgameObject: {fileID: 1329527029119559092}
   _rigidbody: {fileID: 1575916895901223146}
   _furniture: {fileID: 4748126588462873856}
@@ -648,9 +652,9 @@ Rigidbody:
   m_CorrespondingSourceObject: {fileID: 3535583793416524095, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
   m_PrefabInstance: {fileID: 2652095350139181525}
   m_PrefabAsset: {fileID: 0}
---- !u!65 &5020580868277413162 stripped
+--- !u!65 &2562771403712992308 stripped
 BoxCollider:
-  m_CorrespondingSourceObject: {fileID: 7017326305566719231, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
+  m_CorrespondingSourceObject: {fileID: 531118714130877921, guid: da2d16b2186bab1459c9765ff8ee60e4, type: 3}
   m_PrefabInstance: {fileID: 2652095350139181525}
   m_PrefabAsset: {fileID: 0}
 --- !u!4 &5448643654028655098 stripped

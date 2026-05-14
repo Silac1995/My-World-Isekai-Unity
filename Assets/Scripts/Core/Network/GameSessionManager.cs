@@ -117,6 +117,7 @@ public class GameSessionManager : MonoBehaviour
             // calling here is safe even if some other code path has already run them.
             MWI.Terrain.TerrainTypeRegistry.Initialize();
             MWI.Farming.CropRegistry.Initialize();
+            MWI.Farming.SeedRegistry.Initialize();
         }
 
         if (NetworkManager.Singleton.IsServer)

@@ -11,7 +11,7 @@ When a `FarmingBuilding` lists a `CropSO` in `_cropsToGrow`, two things happen a
 1. **Produce is auto-registered as a `WantedResource`** at default cap 50. `FarmingBuilding.AutoRegisterCropProduceAsWantedResources()` runs from `Start` BEFORE `base.Start`, walks `crop.HarvestOutputs`, and calls `TryRegisterWantedResource` on the first non-`SeedSO` entry. Without this, the very first `ScanHarvestingArea` finds `_wantedResources` empty and never registers `HarvestResourceTask`s — mature crops sit harvestable-but-not-tasked. Designers can still author specific entries in the inspector to override the default cap.
 2. **PlantScan + WaterScan re-run mid-shift** via `RefreshScansThrottled()` (1 Hz per building, server-only) called from `JobFarmer.PlanNextActions`. Catches inventory + cell mutations that previously waited until next `OnNewDay`: a player drops a seed in a chest, NPC logistics inbound delivers seeds, debug spawn — all visible to the farmer's GOAP within ~1 s.
 
-The crop's matching `SeedSO` should be added to `_harvestOutputs` for self-seeding (designer-only edit). `Apple_Tree` / `Wheat` / `Flower` already do this.
+Each crop's matching `SeedSO` must have its `_cropToPlant` field set to the CropSO (designer-only edit on the SeedSO asset, NOT the CropSO). `SeedRegistry` discovers the relationship at boot via a `Resources.LoadAll<SeedSO>("Data/Item/Seed")` walk, indexed by `_cropToPlant`. `Wheat` / `Flower` may additionally list their SeedSO in `_harvestOutputs` if you want a "self-seeding" yield (harvest gives both wheat AND a wheat seed) — that's a yield decision, not a discovery requirement. Tree crops (`AppleTreeSO`) typically put seeds in `_destructionOutputs` only.
 
 ## Add a new crop
 
@@ -133,6 +133,35 @@ The destruction surface lives on base `Harvestable`, not just `CropHarvestable` 
 3. Save. No farming code needed.
 
 In Play Mode, the player holding an axe can hold E next to the tree → menu → "Destroy" → 5 wood drops + tree despawns.
+
+## Debug a farmer that won't plant despite seeds visibly in storage
+
+Symptom: PlantScan logs `registered=0 (noSeed=N)` for every cell, JobFarmer Idle dump shows `hasUnfilledPlantTask=False` + `hasMatchingSeedInStorage=False`, but the chest visibly holds the seed item.
+
+Root cause class: no `SeedSO` asset under `Assets/Resources/Data/Item/Seed/` has its `_cropToPlant` field pointing at the CropSO that PlantScan picked for the cell. `FarmingBuilding.HasSeedInInventory(crop)` resolves the seed via `SeedRegistry.GetSeedFor(crop)` (a `Resources.LoadAll<SeedSO>("Data/Item/Seed")` at boot indexed by `SeedSO.CropToPlant`); when the lookup misses, the gate returns false — *regardless of how many seeds physically sit in storage*. The SeedSO's back-link is the **only** discovery path.
+
+> **Decoupled 2026-05-14.** Pre-2026-05-14 the discovery walked `crop.HarvestOutputs` looking for a SeedSO entry. That coupled seed-discovery to harvest-yield semantics — for tree crops where saplings drop on destruction (not on apple-harvest), you had to either pollute HarvestOutputs with a spurious seed entry or accept that farmers never plant. The current path indexes by `SeedSO._cropToPlant` so designers can keep HarvestOutputs and DestructionOutputs purely for yield meaning.
+
+Diagnosis:
+
+1. **Look for the throttled warning** (added 2026-05-14): `[FarmingBuilding] {name}: SeedRegistry has no SeedSO whose CropToPlant equals CropSO 'X' (Id='y'). PlantScan will report noSeed=N forever.` — fires every 5 s when `HasSeedInInventory` returns false. Tells you exactly which CropSO has no seed asset pointing at it.
+
+2. **Check SeedRegistry boot log** at game start: `[SeedRegistry] Initialised with N seed(s).` — if N is lower than expected, walk `Assets/Resources/Data/Item/Seed/` and confirm each SeedSO asset has its `_cropToPlant` field populated. Per-asset warning: `[SeedRegistry] Seed 'X' has no CropToPlant — skipping.`
+
+3. **Manual verification** in Play Mode:
+   ```csharp
+   var crop = MWI.Farming.CropRegistry.Get("apple_tree");
+   var seed = MWI.Farming.SeedRegistry.GetSeedFor(crop);
+   Debug.Log($"crop='{crop?.name}', seed='{seed?.name}', seed._cropToPlant='{seed?.CropToPlant?.name}'");
+   ```
+
+Fix:
+
+1. Open the SeedSO asset (e.g. `Assets/Resources/Data/Item/Seed/Item_Seed_AppleSapling.asset`).
+2. Set `_cropToPlant` to the matching CropSO (e.g. `AppleTreeSO`).
+3. Save. Restart Play Mode so `SeedRegistry.Initialize` re-walks the folder (or call `MWI.Farming.SeedRegistry.Clear()` then `Initialize()` from a debug script to skip the restart).
+
+The CropSO's `_harvestOutputs` and `_destructionOutputs` lists do not need to mention the seed — they're now purely about yield. Apple Tree v2 ships with `HarvestOutputs = [Apple ×1]` and `DestructionOutputs = [Wood ×2, AppleSapling ×2]`; the seed asset's back-link is what feeds PlantScan.
 
 ## Debug a crop that won't grow
 
