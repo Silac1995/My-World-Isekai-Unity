@@ -3,7 +3,7 @@ type: system
 title: "Shops"
 tags: [shops, economy, commerce, tier-1]
 created: 2026-04-18
-updated: 2026-05-13
+updated: 2026-05-14
 sources: []
 related:
   - "[[building]]"
@@ -175,7 +175,12 @@ Every queued customer: emit "shop is closed" notification → leave
 
 The player-facing buy flow lives in `MWI.UI.Shop.UI_ShopBuyPanel` (and per-row `UI_ShopBuyRow`), implemented as a [[player-ui]] HUD window — scene child of `UI_PlayerHUD/Canvas`, wired via `[SerializeField] _shopBuyPanel` on `PlayerUI`, inheriting from `UI_WindowBase` for the auto-wired close button.
 
-**Open flow**: customer taps E on a `CashierInteractable` → `CashierNetSync.RequestStartBuyServerRpc` → server enqueues `CharacterAction_BuyFromShop` (Player mode) + targeted `OpenBuyPanelClientRpc` → on the owning client `PlayerUI.Instance.OpenShopBuyPanel(cashier, customer)` → `_shopBuyPanel.Initialize(cashier, customer)`.
+**Open flow (refactored 2026-05-14)**: tap-E on a `CashierInteractable` routes through one of two paths.
+
+1. **Seated occupant** (`Cashier.Occupant == interactor`, resolved via `CashierNetSync.OccupantNetworkObjectId`) → `CharacterActions.RequestLeaveOccupiedFurnitureServerRpc` → server `ClearCurrentAction` → the `CharacterAction_OccupyFurniture.OnCancel` fires `Leave` and releases the seat (the "vendor stepping away from the counter" path).
+2. **Anyone else** → single `CashierNetSync.RequestUseCashierServerRpc(NetworkBehaviourReference customerRef)` with server-side role routing. Server checks `Cashier.IsCharacterAllowedToOccupy(customer)` (which requires `JobVendor` for the linked shop when `RequiresVendor`); if the seat is free and the gate passes → queue `CharacterAction_OccupyFurniture` (vendor path). Otherwise → queue `CharacterAction_BuyFromShop` (Player mode) + targeted `OpenBuyPanelClientRpc` → on the owning client `PlayerUI.Instance.OpenShopBuyPanel(cashier, customer)` → `_shopBuyPanel.Initialize(cashier, customer)`.
+
+Server-side role routing is necessary because `CharacterJob._activeJobs` is not NetVar-replicated — remote-client owners can't determine their own role locally (see [[host-only-state-blindspot]] for the case study). `RequestStartBuyServerRpc` still exists as the legacy direct buy entry but is no longer used by the player UI tap-E path.
 
 **Render contract**: the panel iterates `_shop.Catalog` (NOT `SellShelves`) to build rows. Each row's stock is aggregated across `SellShelves` matching the catalog `ItemSO`. Items present in shelves but NOT in the catalog are invisible to buyers (intentional — catalog defines what is FOR SALE). Items in catalog with no shelf stock show "0 in stock" greyed-out.
 
@@ -188,6 +193,7 @@ The player-facing buy flow lives in `MWI.UI.Shop.UI_ShopBuyPanel` (and per-row `
 **Stale references on this page**: `InteractionBuyItem` is preserved for future character↔character trading but no longer used by `ShopBuilding`. `Customer Queue` / `JoinQueue` / `ClearQueue` are gone — see the 2026-05-07 spec for the cashier per-transaction-lock model.
 
 ## Change log
+- 2026-05-14 — Tap-E on a `CashierInteractable` rewired to two branches: seated occupant → `RequestLeaveOccupiedFurnitureServerRpc`; everyone else → new `CashierNetSync.RequestUseCashierServerRpc` with server-side role routing (vendor → `CharacterAction_OccupyFurniture`; customer → `CharacterAction_BuyFromShop`). Closes the remote-client player-vendor regression that surfaced when `Cashier.ServerTickAutoOccupy` was removed (CharacterJob._activeJobs is not NetVar-replicated). See [[shop-vendor]] + [[host-only-state-blindspot]]. — claude
 - 2026-05-13 — Added Player buy UI section: `UI_ShopBuyPanel` adopts the canonical HUD-window pattern (UI_WindowBase + scene child of `UI_PlayerHUD/Canvas` + SerializeField on PlayerUI). Prefabs authored at `Assets/UI/Player HUD/`. Flagged stale queue/JobVendor references that predate the 2026-05-07 cashier refactor. — Claude / [[kevin]]
 - 2026-04-18 — Initial documentation pass. — Claude / [[kevin]]
 

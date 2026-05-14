@@ -3,7 +3,7 @@ type: system
 title: "Character Job"
 tags: [character, jobs, employment, tier-2, stub]
 created: 2026-04-19
-updated: 2026-04-29
+updated: 2026-05-14
 sources: []
 related: ["[[character]]", "[[jobs-and-logistics]]", "[[character-schedule]]", "[[worker-wages-and-performance]]", "[[tool-storage]]", "[[kevin]]"]
 status: stable
@@ -41,8 +41,10 @@ Per-character employment state. Holds one or more `JobAssignment` entries, owner
 ## Open questions
 - [ ] Maximum concurrent jobs per character — unlimited or capped?
 - [ ] Ownership cascade — if a Boss quits their own building, what happens?
+- [ ] **`_activeJobs` is not NetVar-replicated** — clients of remote-owned characters cannot read `CharacterJob.CurrentJob` or `Workplace`. Surfaced 2026-05-14 during the cashier-occupy refactor: client-side role gates like "is this player the assigned vendor for this shop?" can't fire on remote clients. Worked around by server-side routing (`CashierNetSync.RequestUseCashierServerRpc` decides vendor-vs-customer authoritatively) — see [[host-only-state-blindspot]] for the case study. A focused replication (e.g. `NetworkVariable<int> CurrentJobTypeId` + `NetworkVariable<ulong> CurrentWorkplaceNetId`, or a compact `NetworkList<JobReplicationData>`) becomes warranted if more UI / pre-gates start to need client-side reads. Costs to weigh: per-character bandwidth, structural complexity vs. number of consumers. Until then, the rule is "decide role on the server, return the answer via a ClientRpc-style response or implicit through the queued action".
 
 ## Change log
+- 2026-05-14 — Logged the `_activeJobs` NetVar replication gap as an open question. Originally surfaced when `Cashier.ServerTickAutoOccupy` was removed and the client-side three-branch routing in `CashierInteractable.Interact` couldn't see the player's own JobVendor assignment. The cashier refactor worked around it via server-side role routing in `CashierNetSync.RequestUseCashierServerRpc`. — claude
 - 2026-04-30 — Section B "Manage Hiring..." menu entry now gated on `!workplace.HasManagementFurniture`. Entry only appears as a fallback when no in-world `ManagementFurniture` desk is wired. See [[help-wanted-and-hiring]] Plan 2.5. — claude
 - 2026-04-29 — Added `CanPunchOut()` gate + `QuitJob` auto-return for the [[tool-storage]] primitive (Plan 1 of Farmer rollout). Gate iterates `_activeJobs` and aggregates unreturned tools across all workplaces. `QuitJob` is scoped to the leaving workplace only — tools owned by other concurrent workplaces stay stamped. Storage-unreachable fallback clears `OwnerBuildingId` so workers aren't permanently gated. — claude
 - 2026-04-27 — **Performance pass: `Job.ExecuteIntervalSeconds` cadence stagger (Tier 3 Cₐ)**. New `virtual float Job.ExecuteIntervalSeconds => 0.1f` on the base class. `JobLogisticsManager` and `JobHarvester` override to `0.3f` (3.3 Hz). `BTAction_Work.HandleWorking` tracks `_lastExecuteTime` per-NPC (instance field, reset in `OnEnter`) and only calls `jobInfo.Work()` when interval elapsed. BT itself unchanged (still 10 Hz). Heavy-job Execute call rate dropped: LogisticsManager 40/sec → 13/sec; Harvester 20/sec → 7/sec. Pairs with [[building-logistics-manager]] dirty-flag gating — the throttled call usually finds the dispatcher clean and skips. — claude
