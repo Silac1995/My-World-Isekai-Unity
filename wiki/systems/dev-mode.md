@@ -3,7 +3,7 @@ type: system
 title: "Dev Mode"
 tags: [debug, host-only, dev-tools, tier-2]
 created: 2026-04-21
-updated: 2026-05-13
+updated: 2026-05-14
 sources: []
 related:
   - "[[engine-plumbing]]"
@@ -276,6 +276,7 @@ No gameplay system declares a hard dependency on dev mode — it is strictly add
 - [ ] Move wilderness `Harvestable` prefabs (`Tree.prefab`, `Gatherable.prefab`) onto the `Harvestable` layer (currently they sit on `Default`) so Ctrl+Click selects them too. Currently only `CropHarvestable` is selectable because it's the only harvestable family on the `Harvestable` layer.
 
 ## Change log
+- 2026-05-14 — `BuildingOverviewSubTab` Furniture section now prints `role=<X>` after the type-name suffix for any `StorageFurniture`. Reflects role changes from every trigger — player UI mutator, NPC shift-punch auto-assignment (`BuildingLogisticsManager.AssignStorageRolesForShift`), dev-mode `DevForceSetStorageRole`, save-restore. Polls every frame via `BuildingInspectorView.Update`, so the next replication tick is picked up automatically. Playtest-confirmed. See [[commercial-storage-roles]]. — claude
 - 2026-04-21 — Initial page. Documents F3/chat activation, input gating, click arbitration, Spawn + Select modules, `IDevAction` contract, `DevActionAssignBuilding`, god-mode WASD speed + unbounded zoom. — Claude / [[kevin]]
 - 2026-04-23 — Added Inspect tab (IInspectorView + CharacterInspectorView + 10 sub-tabs); generalized DevSelectionModule to InteractableObject; extracted CharacterAIDebugFormatter; updated Key classes, Public API, Data flow, Dependencies, Open questions, Sources. — claude
 - 2026-04-23 — Inspect tab prefab wired via DevInspectTabBuilder Editor utility. Global shortcuts (Ctrl+Click, Space+LMB, ESC) relocated to DevModeManager so they work on any tab. Social / SkillsTraits / Economy / Knowledge sub-tab rendering polished: relationship details with HasMet flag, behavioural profile name + personality description + compatibility lists, per-CurrencyId and per-JobType enumeration + flat Workplaces list sorted by score, full Schedule rendering with active-now highlight. — claude
