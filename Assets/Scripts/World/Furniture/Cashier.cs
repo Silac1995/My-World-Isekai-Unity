@@ -32,11 +32,52 @@ public class Cashier : OccupiableFurniture
     public ShopBuilding LinkedShop => _linkedBuilding as ShopBuilding;
 
     private Character _currentCustomer;
-    public Character CurrentCustomer => _currentCustomer;
+
+    /// <summary>
+    /// Current customer mid-transaction. Server returns the in-memory field set by
+    /// <see cref="TryAcquireCustomerLock"/>. Clients resolve <see cref="CashierNetSync.CurrentCustomerNetworkObjectId"/>
+    /// via the NetworkManager spawn table — the field itself is only ever written on
+    /// the server (rule #19), so without this resolution clients would see the cashier
+    /// as permanently uncontested and skip the local pre-gate.
+    /// </summary>
+    public Character CurrentCustomer
+    {
+        get
+        {
+            if (_netSync == null || _netSync.IsServer || !_netSync.IsSpawned) return _currentCustomer;
+            return ResolveCharacterByNetworkObjectId(_netSync.CurrentCustomerNetworkObjectId.Value);
+        }
+    }
+
+    /// <summary>
+    /// Vendor currently seated at the cashier. On the server the base field is
+    /// authoritative; on clients it is forever null because <see cref="OccupiableFurniture.Use"/>
+    /// only runs on the seating peer. We resolve the replicated
+    /// <see cref="CashierNetSync.OccupantNetworkObjectId"/> instead, matching the
+    /// server's <see cref="OccupiableFurniture.Occupant"/>. Fixes the multiplayer
+    /// "No vendor on duty" pre-gate that previously fired on every non-host peer.
+    /// </summary>
+    public override Character Occupant
+    {
+        get
+        {
+            if (_netSync == null || _netSync.IsServer || !_netSync.IsSpawned) return base.Occupant;
+            return ResolveCharacterByNetworkObjectId(_netSync.OccupantNetworkObjectId.Value);
+        }
+    }
 
     public bool IsAvailableForCustomer =>
-        _currentCustomer == null
+        CurrentCustomer == null
         && (!_requiresVendor || Occupant != null);
+
+    private static Character ResolveCharacterByNetworkObjectId(ulong networkObjectId)
+    {
+        if (networkObjectId == 0) return null;
+        var nm = NetworkManager.Singleton;
+        if (nm == null || nm.SpawnManager == null) return null;
+        if (!nm.SpawnManager.SpawnedObjects.TryGetValue(networkObjectId, out var obj)) return null;
+        return obj != null ? obj.GetComponent<Character>() : null;
+    }
 
     private readonly Dictionary<CurrencyId, int> _till = new();
     public int GetTillBalance(CurrencyId c) => _till.TryGetValue(c, out var v) ? v : 0;
@@ -178,7 +219,13 @@ public class Cashier : OccupiableFurniture
     {
         if (!base.Use(vendor)) return false;
         if (_netSync != null && _netSync.IsServer)
+        {
+            // Replicate occupancy to every peer so client pre-gates and management
+            // UI mirror the server state (rule #19). The ClientRpc is kept as a
+            // reserved visual-effect hook per CashierNetSync's documented contract.
+            _netSync.SetOccupantServer(vendor.NetworkObjectId);
             _netSync.NotifyOccupiedClientRpc(vendor.NetworkObjectId);
+        }
         return true;
     }
 
@@ -188,6 +235,7 @@ public class Cashier : OccupiableFurniture
         base.Release();
         if (wasOccupied && _netSync != null && _netSync.IsServer)
         {
+            _netSync.SetOccupantServer(0);
             _netSync.NotifyReleasedClientRpc();
             if (_currentCustomer != null)
                 AbortActiveTransactionServerOnly("vendor walked off");

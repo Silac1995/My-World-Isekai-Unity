@@ -47,3 +47,14 @@ If a shop isn't working, verify this chain:
 4. Is there an active `JobVendor` standing at the counter?
 5. Did the Customer successfully query `ShopBuilding.JoinQueue()`?
 6. Did the Vendor call them out of the queue?
+
+## Multiplayer occupancy contract
+
+`Cashier` inherits `_occupant` from `OccupiableFurniture`, but that field is server-only — `ServerTickAutoOccupy` seats the vendor via `Use()` on the host peer, and the base class has no replication channel. `CashierNetSync` therefore owns two `NetworkVariable<ulong>` mirrors written from the server-side paths of `Cashier`:
+
+- `OccupantNetworkObjectId` — vendor (set in `Use`, cleared in `Release`).
+- `CurrentCustomerNetworkObjectId` — customer mid-transaction (set in `TryAcquireCustomerLock`, cleared in `ReleaseCustomerLock`).
+
+`Cashier.Occupant` (override) and `Cashier.CurrentCustomer` resolve those ids through `NetworkManager.SpawnManager.SpawnedObjects` on non-server peers, returning the local in-memory field on the server. Every consumer (`CashierInteractable` pre-gate, `ShopCashiersTabRow` / `ShopCashiersTabView` management UI, `IsAvailableForCustomer`) reads through these properties — never the private field — so host and client see identical occupancy state.
+
+The legacy `NotifyOccupiedClientRpc` / `NotifyReleasedClientRpc` are kept as no-op visual hooks; do not rely on them for state transport.

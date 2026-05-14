@@ -23,9 +23,17 @@ public abstract class OccupiableFurniture : Furniture, IOccupiable
     private Character _occupant;
     private Character _reservedBy;
 
-    public Character Occupant => _occupant;
+    /// <summary>
+    /// The active occupant on this peer. Marked <c>virtual</c> so subclasses with their own
+    /// replication channel can override the read path — e.g. <see cref="Cashier"/> resolves
+    /// the occupant from a sibling <c>CashierNetSync</c> NetworkVariable on client peers,
+    /// because the server-only <see cref="Use"/> assignment never reaches clients otherwise
+    /// (rule #19). Base implementation returns the in-memory field, which is correct on the
+    /// server and on every subclass that does not need cross-peer visibility.
+    /// </summary>
+    public virtual Character Occupant => _occupant;
     public Character ReservedBy => _reservedBy;
-    public bool IsOccupied => _occupant != null;
+    public virtual bool IsOccupied => Occupant != null;
 
     /// <summary>
     /// Réserve le meuble pour un personnage en approche. Advisory only — see <see cref="IOccupiable"/>.

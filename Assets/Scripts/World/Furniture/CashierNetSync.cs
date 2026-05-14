@@ -30,6 +30,21 @@ public class CashierNetSync : NetworkBehaviour
         NetworkVariableReadPermission.Everyone,
         NetworkVariableWritePermission.Server);
 
+    /// <summary>
+    /// Replicated mirror of <see cref="Cashier.Occupant"/>. The base
+    /// <see cref="OccupiableFurniture._occupant"/> field is server-only (only the peer
+    /// running <c>Use()</c> sets it), so client peers used to see the cashier as
+    /// permanently vacant and the player pre-gate fired "No vendor on duty" even when
+    /// a vendor was seated on the host (rule #19 violation).
+    ///
+    /// Set server-side in <see cref="Cashier.Use"/> / <see cref="Cashier.Release"/>;
+    /// read on every peer via <see cref="Cashier.Occupant"/> override. 0 = vacant.
+    /// </summary>
+    public NetworkVariable<ulong> OccupantNetworkObjectId = new(
+        0,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server);
+
     public NetworkList<CashierTillEntry> TillBalances;
 
     public NetworkVariable<NetworkObjectReference> LinkedBuildingRef = new(
@@ -52,6 +67,12 @@ public class CashierNetSync : NetworkBehaviour
     {
         if (!IsServer) return;
         CurrentCustomerNetworkObjectId.Value = networkObjectId;
+    }
+
+    public void SetOccupantServer(ulong networkObjectId)
+    {
+        if (!IsServer) return;
+        OccupantNetworkObjectId.Value = networkObjectId;
     }
 
     public void SetLinkedBuildingServer(NetworkObjectReference reference)
