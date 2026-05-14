@@ -561,8 +561,13 @@ public class CharacterActions : CharacterSystem
             return;
         }
 
-        OccupiableFurniture target = nb as OccupiableFurniture;
-        if (target == null) target = nb.GetComponent<OccupiableFurniture>();
+        // OccupiableFurniture extends Furniture : MonoBehaviour, NOT NetworkBehaviour — the
+        // two are sibling branches off MonoBehaviour, so a direct `nb as OccupiableFurniture`
+        // is rejected by the C# compiler (no reference-conversion path). Always resolve via
+        // GetComponent on the same GameObject first; this is the Cashier-style path where
+        // NetworkBehaviour (CashierNetSync) and OccupiableFurniture (Cashier) live on the
+        // same GO.
+        OccupiableFurniture target = nb.GetComponent<OccupiableFurniture>();
         if (target == null)
         {
             // Bed/Chair path — the NB is the parent building; walk children and pick the
