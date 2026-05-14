@@ -770,7 +770,17 @@ public sealed class BuildingOverviewSubTab : BuildingSubTab
                 string fname = !string.IsNullOrEmpty(f.FurnitureName) ? f.FurnitureName : f.gameObject.name;
                 sb.Append("  • <color=#888888>[").Append(roomName).Append("]</color> ");
                 sb.Append(fname);
-                sb.Append(" <color=#666666>(").Append(f.GetType().Name).AppendLine(")</color>");
+                sb.Append(" <color=#666666>(").Append(f.GetType().Name).Append(")</color>");
+                // For StorageFurniture, append the current Role so dev-mode inspect
+                // reflects both player-UI dropdown changes and NPC shift-punch
+                // auto-assignment writes (BuildingLogisticsManager.AssignStorageRolesForShift).
+                // DoRefresh is called every frame by BuildingInspectorView.Update, so a
+                // role flip on the next replication tick is picked up automatically.
+                if (f is StorageFurniture sf)
+                {
+                    sb.Append(" <color=#FFB060>role=").Append(sf.Role).Append("</color>");
+                }
+                sb.AppendLine();
             }
         }
         if (total == 0)

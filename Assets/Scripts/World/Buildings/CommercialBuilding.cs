@@ -2913,6 +2913,56 @@ public abstract class CommercialBuilding : Building
             return;
         }
 
+        // Route through the single canonical mutator so the player RPC path and the
+        // NPC shift-punch path (BuildingLogisticsManager.AssignStorageRolesForShift)
+        // converge on identical side-effects.
+        DoSetStorageRole(storage, newRole);
+    }
+
+    /// <summary>
+    /// Canonical server-only storage-role mutator. ALL programmatic role writes —
+    /// player UI (via <see cref="TrySetStorageRoleServerRpc"/>) and NPC shift-punch
+    /// auto-assignment (via <see cref="BuildingLogisticsManager.AssignStorageRolesForShift"/>)
+    /// — funnel through this method so they share identical validation, identical
+    /// replication, identical event fan-out. Server-side only.
+    /// <para>
+    /// Responsibilities:
+    /// <list type="number">
+    ///   <item>Idempotency guard — skip the write when the storage is already at the
+    ///         desired role (cheap, but also short-circuits replication churn from
+    ///         repeat punch-ins of the second worker on the same shift).</item>
+    ///   <item>Resolve the sibling <see cref="StorageFurnitureNetworkSync"/>;
+    ///         <see cref="Debug.LogError"/> + abort on miss (a missing sync is a
+    ///         structural prefab bug and silently dropping the write masks it).</item>
+    ///   <item>Write through <see cref="StorageFurnitureNetworkSync.SetRoleServer"/> —
+    ///         which writes the replicated NetworkVariable. The per-storage
+    ///         <c>OnValueChanged</c> fan-out then reaches every peer through
+    ///         <see cref="StorageFurniture.OnRoleChanged"/> →
+    ///         <see cref="HandleChildStorageRoleChanged"/> →
+    ///         <see cref="OnStorageRolesChanged"/>. No client-side reconstruction RPC.</item>
+    /// </list>
+    /// </para>
+    /// <para>
+    /// Why not just call <see cref="StorageFurnitureNetworkSync.SetRoleServer"/> directly?
+    /// Future invariants land here (e.g. invalidating logistics caches when a storage
+    /// switches to/from ToolStorage, broadcasting a one-shot audit log, etc.). Centralising
+    /// every role write in one method means we never have to chase down call sites again.
+    /// </para>
+    /// </summary>
+    private void DoSetStorageRole(StorageFurniture storage, StorageRoleType newRole)
+    {
+        if (storage == null) return;
+        if (!IsServer)
+        {
+            Debug.LogError($"[CommercialBuilding] {buildingName}: DoSetStorageRole called on non-server peer — server authority violation. Route through TrySetStorageRoleServerRpc.");
+            return;
+        }
+
+        // Idempotency — re-running on a same-state building emits zero writes and
+        // zero spurious "changed" events. The downstream SetRoleServer also guards,
+        // but the early-out here keeps the call sites self-documenting.
+        if (storage.Role == newRole) return;
+
         var sync = storage.GetComponent<StorageFurnitureNetworkSync>();
         if (sync == null)
         {
@@ -2929,6 +2979,42 @@ public abstract class CommercialBuilding : Building
         // (StorageFurnitureNetworkSync.HandleRoleChanged → StorageFurniture.OnRoleChanged →
         // CommercialBuilding.HandleChildStorageRoleChanged). Firing it here would only
         // reach the host — the per-storage path reaches every peer.
+    }
+
+    /// <summary>
+    /// Server-only internal entry point for non-player callers (e.g.
+    /// <see cref="BuildingLogisticsManager.AssignStorageRolesForShift"/>). Performs the
+    /// same role validation as <see cref="TrySetStorageRoleServerRpc"/> (subtype filter
+    /// against <see cref="SupportedStorageRoles"/>) and routes through
+    /// <see cref="DoSetStorageRole"/>. Returns true if the write happened (state actually
+    /// changed), false otherwise — idempotent same-state calls return false with no
+    /// side-effects.
+    /// </summary>
+    internal bool TrySetStorageRoleServer(StorageFurniture storage, StorageRoleType newRole)
+    {
+        if (storage == null) return false;
+        if (!IsServer) return false;
+        if (storage.Role == newRole) return false; // idempotent — surface unchanged
+
+        // Subtype filter: roles outside SupportedStorageRoles are rejected — same as
+        // the player RPC. Validates against the descriptor list, not the enum range.
+        bool roleSupported = false;
+        var supported = SupportedStorageRoles;
+        if (supported != null)
+        {
+            for (int i = 0; i < supported.Count; i++)
+            {
+                if (supported[i].Type == newRole) { roleSupported = true; break; }
+            }
+        }
+        if (!roleSupported)
+        {
+            Debug.LogWarning($"[CommercialBuilding] {buildingName}: TrySetStorageRoleServer rejected role {newRole} — not in SupportedStorageRoles.");
+            return false;
+        }
+
+        DoSetStorageRole(storage, newRole);
+        return true;
     }
 
     /// <summary>

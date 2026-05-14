@@ -609,27 +609,21 @@ public class BuildingLogisticsManager : MonoBehaviour
                 continue;
             }
 
-            // Idempotency: skip the write when the storage is already in the desired
-            // state. Prevents replication churn when a second worker punches in or the
-            // first worker re-enters after a brief absence.
-            if (storage.Role == desired) continue;
+            // Route through the canonical CommercialBuilding.TrySetStorageRoleServer
+            // helper so this NPC path and the player UI path (TrySetStorageRoleServerRpc)
+            // share IDENTICAL side-effects: subtype filter, idempotency guard, the
+            // SetRoleServer write, and the OnValueChanged → OnStorageRolesChanged
+            // fan-out that refreshes the management panel on every peer.
+            //
+            // Returns false on same-state (idempotent), on unsupported role (subtype
+            // filter), or on missing StorageFurnitureNetworkSync sibling. All three
+            // surface their own diagnostics inside the helper — no log here.
+            StorageRoleType previousRole = storage.Role;
+            bool wrote = _building.TrySetStorageRoleServer(storage, desired);
 
-            // The replicated NetworkVariable lives on a sibling
-            // StorageFurnitureNetworkSync. Resolve it once per storage and route the
-            // write through SetRoleServer (server-only, fans out to every peer via
-            // OnValueChanged → CommercialBuilding.OnStorageRolesChanged).
-            var sync = storage.GetComponent<StorageFurnitureNetworkSync>();
-            if (sync == null)
+            if (wrote && NPCDebug.VerboseJobs)
             {
-                Debug.LogError($"[Logistics] {_building.BuildingName}: storage[{i}] '{storage.name}' has no StorageFurnitureNetworkSync — cannot assign role {desired}. Add the component to the storage prefab.");
-                continue;
-            }
-
-            sync.SetRoleServer(desired);
-
-            if (NPCDebug.VerboseJobs)
-            {
-                Debug.Log($"<color=#66ccff>[Logistics]</color> {_building.BuildingName}: storage[{i}] '{storage.name}' role {storage.Role} → {desired} (requiresTools={requiresTools}, isShop={isShop}).");
+                Debug.Log($"<color=#66ccff>[Logistics]</color> {_building.BuildingName}: storage[{i}] '{storage.name}' role {previousRole} → {desired} (requiresTools={requiresTools}, isShop={isShop}).");
             }
         }
     }
