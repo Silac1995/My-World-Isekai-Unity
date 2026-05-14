@@ -528,6 +528,86 @@ public class CharacterActions : CharacterSystem
         Debug.Log($"<color=green>[CharacterActions]</color> Server: RequestSleepOnFurniture: enqueued for {_character.CharacterName} on {bed.FurnitureName} slot {slotIndex} (desiredHours={desiredHours}).");
     }
 
+    /// <summary>
+    /// Client → Server: enqueue <see cref="CharacterAction_OccupyFurniture"/> for the local
+    /// player Character on the resolved <see cref="OccupiableFurniture"/>. Validates proximity
+    /// server-side via <see cref="InteractableObject.IsCharacterInInteractionZone"/> (anti-cheat /
+    /// spawn-race) and rejects if the character is already occupying a different furniture.
+    ///
+    /// Uses <see cref="NetworkBehaviourReference"/> rather than world-position resolution
+    /// because <see cref="OccupiableFurniture"/> subclasses are NetworkBehaviours — the
+    /// reference is exact, no co-location disambiguation needed (cf. bed multi-slot which
+    /// uses position because BedFurniture has no NO of its own).
+    ///
+    /// Mirrors the validation shape of <see cref="RequestSleepOnFurnitureServerRpc"/>.
+    /// </summary>
+    [Rpc(SendTo.Server)]
+    public void RequestOccupyFurnitureServerRpc(NetworkBehaviourReference furnitureRef)
+    {
+        if (_character == null)
+        {
+            Debug.LogWarning("[CharacterActions] Server: RequestOccupyFurniture: _character is null.");
+            return;
+        }
+
+        if (!furnitureRef.TryGet(out NetworkBehaviour nb))
+        {
+            Debug.LogWarning("[CharacterActions] Server: RequestOccupyFurniture: furnitureRef did not resolve to a NetworkBehaviour.");
+            return;
+        }
+
+        var target = nb as OccupiableFurniture;
+        if (target == null)
+        {
+            // Allow callers that pass any NetworkBehaviour on the furniture GameObject (e.g.
+            // a sibling NetSync); fall back to the OccupiableFurniture component on the same GO.
+            target = nb.GetComponent<OccupiableFurniture>();
+        }
+        if (target == null)
+        {
+            Debug.LogWarning("[CharacterActions] Server: RequestOccupyFurniture: resolved NetworkBehaviour does not carry an OccupiableFurniture.");
+            return;
+        }
+
+        var interactable = target.GetComponent<InteractableObject>();
+        if (interactable != null && !interactable.IsCharacterInInteractionZone(_character))
+        {
+            Debug.LogWarning($"[CharacterActions] Server: RequestOccupyFurniture: {_character.CharacterName} not in interaction zone of {target.FurnitureName}.");
+            return;
+        }
+
+        if (_character.OccupyingFurniture != null && _character.OccupyingFurniture != target)
+        {
+            Debug.LogWarning($"[CharacterActions] Server: RequestOccupyFurniture: {_character.CharacterName} already occupying {_character.OccupyingFurniture.name}; rejected.");
+            return;
+        }
+
+        var action = new CharacterAction_OccupyFurniture(_character, target);
+        if (!ExecuteAction(action))
+        {
+            Debug.LogWarning($"[CharacterActions] Server: RequestOccupyFurniture: ExecuteAction rejected for {_character.CharacterName} on {target.FurnitureName}.");
+            return;
+        }
+
+        Debug.Log($"<color=green>[CharacterActions]</color> Server: RequestOccupyFurniture: enqueued for {_character.CharacterName} on {target.FurnitureName}.");
+    }
+
+    /// <summary>
+    /// Client → Server: leave whatever furniture this character is currently occupying.
+    /// Server-side: if <see cref="Character.OccupyingFurniture"/> is non-null, clear the
+    /// current action — <see cref="CharacterAction_OccupyFurniture.OnCancel"/> calls
+    /// <see cref="OccupiableFurniture.Leave"/> on the target and releases the seat.
+    /// Idempotent — no-op if nothing to leave.
+    /// </summary>
+    [Rpc(SendTo.Server)]
+    public void RequestLeaveOccupiedFurnitureServerRpc()
+    {
+        if (_character == null) return;
+        if (_character.OccupyingFurniture == null) return;
+        ClearCurrentAction();
+        Debug.Log($"<color=green>[CharacterActions]</color> Server: RequestLeaveOccupiedFurniture: cleared current action for {_character.CharacterName}.");
+    }
+
     private static BedFurniture FindClosestBedUnder(NetworkObject parent, Vector3 worldPosition)
     {
         var beds = parent.GetComponentsInChildren<BedFurniture>();
