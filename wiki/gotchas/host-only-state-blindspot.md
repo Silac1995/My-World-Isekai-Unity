@@ -10,15 +10,26 @@ sources:
   - "[Assets/Scripts/World/Furniture/CashierNetSync.cs](../../Assets/Scripts/World/Furniture/CashierNetSync.cs)"
   - "[Assets/Scripts/Interactable/InteractableObject.cs](../../Assets/Scripts/Interactable/InteractableObject.cs)"
   - "[Assets/Scripts/UI/Shop/UI_ShopBuyPanel.cs](../../Assets/Scripts/UI/Shop/UI_ShopBuyPanel.cs)"
+  - "[Assets/Scripts/Character/CharacterEquipment/CharacterEquipment.cs](../../Assets/Scripts/Character/CharacterEquipment/CharacterEquipment.cs)"
+  - "[Assets/Scripts/Character/CharacterActions/CharacterAction_BuyFromShop.cs](../../Assets/Scripts/Character/CharacterActions/CharacterAction_BuyFromShop.cs)"
+  - "[Assets/Scripts/Character/CharacterActions/CharacterTakeFromFurnitureAction.cs](../../Assets/Scripts/Character/CharacterActions/CharacterTakeFromFurnitureAction.cs)"
+  - "[Assets/Scripts/Character/CharacterActions/CharacterStoreInFurnitureAction.cs](../../Assets/Scripts/Character/CharacterActions/CharacterStoreInFurnitureAction.cs)"
+  - "[Assets/Scripts/Character/CharacterActions/CharacterActions.cs](../../Assets/Scripts/Character/CharacterActions/CharacterActions.cs)"
+  - "[Assets/Scripts/World/Furniture/StorageFurnitureNetworkSync.cs](../../Assets/Scripts/World/Furniture/StorageFurnitureNetworkSync.cs)"
+  - "[Assets/Scripts/Item/WorldItem.cs](../../Assets/Scripts/Item/WorldItem.cs)"
   - "[.agent/skills/shop_system/SKILL.md](../../.agent/skills/shop_system/SKILL.md)"
+  - "[.agent/skills/item_system/SKILL.md](../../.agent/skills/item_system/SKILL.md)"
   - "[.agent/skills/interactable-system/SKILL.md](../../.agent/skills/interactable-system/SKILL.md)"
   - "2026-05-14 conversation with Kevin (cashier on-client interaction debugging — peeled four layers of host/client desync to root)"
+  - "2026-05-14 conversation with Kevin (remote-client bag inventory desync — shop buy, chest take, chest store all silently dropped items)"
 related:
   - "[[static-registry-late-joiner-race]]"
   - "[[host-player-uuid-timing-on-load]]"
   - "[[network-architecture]]"
   - "[[shops]]"
   - "[[interactable-system]]"
+  - "[[character-equipment]]"
+  - "[[storage-furniture]]"
 status: open
 confidence: high
 ---
@@ -144,6 +155,20 @@ If these three statements can't be made truthfully, **the feature is not done**.
 - **Symptom:** client presses E next to cashier → silent early-return, no toast, no panel. Host works fine in identical position.
 - **Root cause:** `Bounds.Contains(player.transform.position)` was full 3D AABB. Player y == 0 sits exactly on `bounds.min.y` for floor-authored InteractionZones. Float precision on `ClientNetworkTransform` rounded the value a hair below zero on the joining client.
 - **Fix:** dropped Y from the check; gate is now 2D X-Z containment, matching the construction-loop convention.
+
+### Bag-inventory state not replicated — buy / take / store all silent on remote clients (2026-05-14)
+
+This is a **new shape** of the pattern: the field IS legitimately split between host-only and client-only state, but the **mutation methods** were called only on the server, so the owner client never saw the change. Three flows were broken simultaneously on a joining client, all root-causing to the same architectural fact.
+
+- **Symptom A — shop buy:** joining client presses Confirm in the buy panel → wallet debited, item disappears from the sell-shelf, but **never appears in the client's bag**. Host works fine.
+- **Symptom B — chest take:** joining client clicks a chest slot → item disappears from chest grid but **never appears in client's bag**. Host works fine.
+- **Symptom C — chest store (bag → chest):** joining client clicks a bag slot in the storage panel → **nothing happens** server-side. Host works fine. (`RequestStoreFromBagServerRpc` early-returned because `inv.ItemSlots[slotIndex].IsEmpty()` on the server-side shadow copy.)
+- **Root cause:** `CharacterEquipment._networkEquipment` (a `NetworkList<NetworkEquipmentSyncData>`) replicates the **equipment slots only**: weapon (slot 0), bag *shell* (slot 1), wearables (slots 100+). The **items inside the bag's `Inventory.ItemSlots` are not in any replication channel**. They live as two independent copies — server-side on the server peer (populated for the host's character because host == server; mostly empty for remote-client characters), and client-side on the owning client (populated at session start by `CharacterEquipment.Deserialize` from the local profile). Pre-existing mutations from the host's perspective worked because both copies are the same C# object on the host; remote-client mutations through server-side actions only touched the server's shadow.
+- **Fix:** mirror `WorldItem.RequestInteractServerRpc`'s ownership branch for both directions:
+  - **Server → client direction (buy + take):** in the action's server-side path, gate on `character.IsSpawned && !character.IsOwnedByServer`. For remote-client characters, build a `NetworkItemData` (ItemSO id + `JsonUtility.ToJson(instance)`) and call `character.CharacterActions.ReceiveItemPickupClientRpc(...)`. The owner reconstructs the item via `ItemSO.CreateInstance()` + `JsonUtility.FromJsonOverwrite` (preserves `WeaponInstance` / `WearableInstance` polymorphism) and calls `PickUpItem` locally. Host + NPC characters keep the existing direct path.
+  - **Client → server direction (store):** the client UI now sends the item payload (id + JSON) **plus** the source slot index (or `-1` for hands) inside the ServerRpc. The server reconstructs the `ItemInstance`, validates the chest (lock + capacity), and queues `CharacterStoreInFurnitureAction` with the slot index. The action's `OnApplyEffect` has three resolution modes: remote-client (server `AddItem` → ack via `RemoveFromInventoryAfterStoreClientRpc(slotIndex)`), host-with-slot (server looks up its own bag slot directly and uses that ItemInstance reference for the chest insertion), and the legacy by-reference path (`_sourceSlotIndex == -2`, used by GOAP NPC deposits — unchanged).
+- **What the audit would have caught:** Step 1 — `_bag.Inventory.ItemSlots` reader includes the client's UI panels (bag side of the storage panel, inventory HUD); writer must reach the owner. Step 2 — no replication channel exists for bag-inventory contents, and the chosen pattern is NOT to add one but to route mutations to the owner via ClientRpc (avoiding a per-item NetworkList and matching the WorldItem flow). Step 3 — late-joiner is fine because the client loads its own profile locally at session start; subsequent mutations route through the ClientRpc / ServerRpc-with-payload pattern.
+- **New rule that comes from this case:** when a state field is **deliberately not replicated** (some "shared C# state" lives on both peers independently — like bag inventory contents, or hands controller carry state), **every server-side mutation that needs to be visible on the owner client must route through a ClientRpc to that owner**. Direct mutation of the server's shadow copy is silently lost. Match the inverse direction: **every client→server delivery of such state must include the payload in the RPC** because the server cannot read the client's authoritative copy. The canonical reference implementations are `WorldItem.RequestInteractServerRpc` (pickup), `CharacterAction_BuyFromShop.DeliverToCustomer`, `CharacterTakeFromFurnitureAction.OnApplyEffect`, `StorageFurnitureNetworkSync.RequestStoreFrom{Bag,Hands}ServerRpc`, and `CharacterStoreInFurnitureAction.OnApplyEffect`. See [.agent/skills/item_system/SKILL.md](../../.agent/skills/item_system/SKILL.md) §"Bag-inventory replication authority" for the canonical code snippets and decision tree.
 
 ### Static registry not initialised on joining client (2026-04-29)
 

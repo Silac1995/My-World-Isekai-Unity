@@ -3,7 +3,7 @@ type: system
 title: "Character Equipment"
 tags: [character, equipment, items, tier-2]
 created: 2026-04-19
-updated: 2026-04-27
+updated: 2026-05-14
 sources: []
 related:
   - "[[items]]"
@@ -109,8 +109,31 @@ character.CharacterEquipment.FindKeyForLock(door.LockId, door.RequiredTier)
 - The **carried in-hand item** (`HandsController.CarriedItem` — food, log, stone, key, …) is **distinct from the equipped weapon** and persists via its own contract: `HandsSaveData`, `SaveKey = "HandsController"`, `LoadPriority = 35` (deliberately runs after `CharacterEquipment` so the weapon slot is restored first and `AreHandsFree()` reflects the post-equip state). If the visual hand bones aren't initialized when `Deserialize` runs, the restore is deferred and consumed by `HandsController.Initialize()`.
 - Back-socket runtime visuals are rebuilt on load.
 
+## Replication contract — what's networked vs not
+
+The `NetworkList<NetworkEquipmentSyncData> _networkEquipment` on `CharacterEquipment` replicates the **equipment slots only**:
+
+| Slot id | Contents | Replicated |
+|---------|----------|------------|
+| 0 | Equipped weapon (`WeaponInstance`) | ✅ via `_networkEquipment` |
+| 1 | Equipped bag *shell* (`BagInstance`) | ✅ via `_networkEquipment` |
+| 100+ | Wearables (underwear=100+, clothing=200+, armor=300+) | ✅ via `_networkEquipment` |
+| (inside the bag) | `_bag.Inventory.ItemSlots` items | ❌ **NOT replicated** |
+| (in hands) | `HandsController.CarriedItem` | ❌ **NOT replicated** |
+
+Bag-inventory contents and the carried-in-hand item are **deliberately not in any NetworkVariable / NetworkList**. They are persisted via `CharacterProfileSaveData` (loaded locally at session start) and mutated independently on each peer.
+
+**Rule** (`[[host-only-state-blindspot]]` — see also `.agent/skills/item_system/SKILL.md` §"Bag-inventory replication authority"): any **server-side** code path that adds an item to a character's bag (shop delivery, chest take, quest reward) **must** branch on `character.IsSpawned && !character.IsOwnedByServer` and route delivery through `CharacterActions.ReceiveItemPickupClientRpc(NetworkItemData)` for remote-client characters; the owner reconstructs the item via `ItemSO.CreateInstance()` + `JsonUtility.FromJsonOverwrite` (preserves polymorphism) and runs `PickUpItem` locally. The inverse direction (client → server, e.g. store-to-chest) must include the item payload (`ItemSO.ItemId` + `JsonUtility.ToJson(instance)`) in the ServerRpc; the server reconstructs and the action then either runs server-side for host (slot lookup against server's own bag) or `[Rpc(SendTo.Owner)] RemoveFromInventoryAfterStoreClientRpc` back to a remote client owner.
+
+Reference implementations:
+- `WorldItem.RequestInteractServerRpc` — pickup, 2025.
+- `CharacterAction_BuyFromShop.DeliverToCustomer` — shop delivery, 2026-05-14.
+- `CharacterTakeFromFurnitureAction.OnApplyEffect` — chest take, 2026-05-14.
+- `StorageFurnitureNetworkSync.RequestStoreFrom{Bag,Hands}ServerRpc` + `CharacterStoreInFurnitureAction.OnApplyEffect` — chest store, 2026-05-14.
+
 ## Known gotchas
 
+- **Bag-inventory contents are not networked** — see "Replication contract" above. The most common shipping bug is calling `inv.AddItem` / `inv.RemoveItem` server-side on a remote-client character and seeing the change silently lost.
 - **Use `character.DropItem`**, not manual unequip + spawn — `DropItem` atomically strips the visual and spawns a `WorldItem`.
 - **Bag socket awakening** — happens only when the bag is equipped; never when a bag is in inventory.
 - **Key lookup scans hands** — a player carrying a key in hand (`CarriedItem`) can open doors without equipping it formally.
@@ -129,7 +152,9 @@ character.CharacterEquipment.FindKeyForLock(door.LockId, door.RequiredTier)
 - 2026-04-22 — Added cross-refs to [[visuals]] (Spine skin composition + socket resolution) and [[character-dismemberment]] (prosthetics + amputated-slot guard). Bumped `depends_on` with [[visuals]]. — Claude / [[kevin]]
 - 2026-04-26 — `CharacterEquipmentUI` now exposes a "drop carried item" button (`_dropHandsItemButton`) for the `HandsController.CarriedItem` slot, alongside the existing inventory + unequip slots. The same drop is also bound to **G** in `PlayerController` (project rule #33 — input ownership). Both routes enqueue the existing `CharacterDropItem` action; no new gameplay path. — Claude / [[kevin]]
 - 2026-04-27 — `HandsController` now implements `ICharacterSaveData<HandsSaveData>` (`SaveKey = "HandsController"`, `LoadPriority = 35`). Fixes a save/load bug where the in-hand carried item silently disappeared on reload — `_carriedItem` was runtime-only and not covered by `EquipmentSaveData`. Restore is deferred to `Initialize()` if the hand visual isn't ready when `Deserialize` runs. Bag inventory persistence verified unchanged (already serialized via `EquipmentSaveData.bagInventoryItems`). Networking gap (carry state not replicated to observers) noted in Open questions. — Claude / [[kevin]]
+- 2026-05-14 — Documented the **bag-inventory replication contract** (new "Replication contract" section). The `_networkEquipment` `NetworkList` replicates equipment slots only; bag-inventory contents and `HandsController.CarriedItem` are deliberately not networked. Three shipping flows (shop buy delivery, chest take, chest store) had been silently mutating the server-side shadow copy for remote clients and now route through `CharacterActions.ReceiveItemPickupClientRpc` (server→owner) or include the item payload in their ServerRpc + use `RemoveFromInventoryAfterStoreClientRpc` for the owner-side removal (client→server). Same pattern as `WorldItem.RequestInteractServerRpc`. See [[host-only-state-blindspot]] §"Bag-inventory state not replicated" and `.agent/skills/item_system/SKILL.md` §"Bag-inventory replication authority". — Claude / [[kevin]]
 
 ## Sources
 - [.agent/skills/item_system/SKILL.md](../../.agent/skills/item_system/SKILL.md) §4, §6, §7.
 - [[items]] parent.
+- [[host-only-state-blindspot]] — bag-inventory replication is the canonical example of the audit's "not actually a single replicated field" sub-case.
