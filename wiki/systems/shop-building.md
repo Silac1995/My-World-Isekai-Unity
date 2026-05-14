@@ -25,6 +25,7 @@ As of the 2026-04-21 refactor, `ShopBuilding` implements `IStockProvider` — it
 Full details in [[shops]] and [[building-logistics-manager]].
 
 ## Change log
+- 2026-05-14 — Sell-shelf restock loop closed: (1) routing — `FindStorageFurnitureForItem` adds a SellShelf pre-pass for catalog items so supplier deliveries land on a shelf directly; (2) heal — new `GoapAction_RestockSellShelves` (cost 0.3f, in `JobLogisticsManager` plan) sweeps every non-SellShelf storage for catalog items and transfers them onto a shelf with free space. The logistics-manager NPC therefore physically rebalances misplaced stock on every shift. Reservation-aware (defers to `GoapAction_StageItemForPickup` for items already reserved by an outbound transport). See [[building-logistics-manager]]. — claude
 - 2026-05-14 — Shift-punch storage-role assignment now also targets shops: on every worker punch-in, the first storage is auto-assigned `SellShelf` and the rest `InventoryStorage` — unless the shop's `GetToolStockItems()` yields anything, in which case the tool-priority rule wins (first → `ToolStorage`). Logic lives in `BuildingLogisticsManager.AssignStorageRolesForShift`; see [[commercial-storage-roles]]. — claude
 - 2026-04-21 — Shop now implements IStockProvider; restock goes through unified CheckStockTargets + LogisticsPolicy. — claude
 - 2026-04-19 — Stub. — Claude / [[kevin]]

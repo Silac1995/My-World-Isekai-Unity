@@ -435,6 +435,29 @@ public class GoapAction_GatherStorageItems : GoapAction
                 }
             }
 
+            // Shop-shelf priority pre-pass: if this building is a ShopBuilding AND the
+            // carried item is in its sale catalog, prefer a SellShelf before the generic
+            // first-fit walk. Mirror of CommercialBuilding.FindStorageFurnitureForItem.
+            // Tool items already routed above; only triggers when isTool=false.
+            if (!isTool && _building is ShopBuilding shop && shop.GetCatalogEntry(carriedItem.ItemSO) != null)
+            {
+                var sellShelves = _building.GetStoragesWithRole(StorageRoleType.SellShelf);
+                for (int i = 0; i < sellShelves.Count; i++)
+                {
+                    var shelf = sellShelves[i];
+                    if (shelf == null || shelf.IsLocked) continue;
+                    if (_excludedFurniture != null && _excludedFurniture.Contains(shelf)) continue;
+                    if (!shelf.HasFreeSpaceForItem(carriedItem)) continue;
+
+                    _targetFurniture = shelf;
+                    _targetPos = worker != null
+                        ? shelf.GetInteractionPosition(worker.transform.position)
+                        : shelf.GetInteractionPosition();
+                    return;
+                }
+                // Shelves full / locked / excluded — fall through to generic first-fit.
+            }
+
             // Walk furniture in declaration order, skipping any we've already failed to reach.
             // Non-tool items skip every tool storage so general inventory can't fill the
             // slots reserved for tools. IsToolStorage handles role-tagged AND legacy fallback

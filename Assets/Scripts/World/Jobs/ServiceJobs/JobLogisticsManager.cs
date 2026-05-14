@@ -185,10 +185,14 @@ public class JobLogisticsManager : Job
         // Mirror the JobHarvester / JobTransporter pattern: reuse the List wrapper to save the
         // single allocation, but Clear() and re-add fresh action instances each plan so state
         // can never leak. The 4 ctors per plan are negligible vs. the GoapPlanner work.
-        if (_availableActions == null) _availableActions = new List<GoapAction>(4);
+        if (_availableActions == null) _availableActions = new List<GoapAction>(5);
         _availableActions.Clear();
         _availableActions.Add(new GoapAction_PlaceOrder(this));
         _availableActions.Add(new GoapAction_StageItemForPickup(this));
+        // Shop-only intra-building rebalance (cost 0.3f). Heals state where supplier
+        // deliveries (or designer-placed seed stock) landed in InventoryStorage instead
+        // of a SellShelf. IsValid early-exits when _workplace is not a ShopBuilding.
+        _availableActions.Add(new GoapAction_RestockSellShelves(this));
         _availableActions.Add(new GoapAction_GatherStorageItems(this));
         _availableActions.Add(new GoapAction_IdleInCommercialBuilding(_workplace as CommercialBuilding));
 

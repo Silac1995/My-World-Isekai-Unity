@@ -2229,6 +2229,25 @@ public abstract class CommercialBuilding : Building
             }
         }
 
+        // Shop-shelf priority pre-pass (post tools): if THIS building is a ShopBuilding
+        // AND the item is in its sale catalog, route it onto a SellShelf before falling
+        // through to generic InventoryStorage. Without this, supplier deliveries of sale
+        // goods land in the first free InventoryStorage chest and never reach the shelf,
+        // forcing GoapAction_RestockSellShelves to move them later. Catalog membership is
+        // checked via ShopBuilding.GetCatalogEntry — null result = not for sale, skip.
+        // Tool items already routed above; this branch only triggers when isTool=false.
+        if (!isTool && this is ShopBuilding shop && shop.GetCatalogEntry(item.ItemSO) != null)
+        {
+            var sellShelves = GetStoragesWithRole(StorageRoleType.SellShelf);
+            for (int i = 0; i < sellShelves.Count; i++)
+            {
+                var shelf = sellShelves[i];
+                if (shelf == null || shelf.IsLocked) continue;
+                if (shelf.HasFreeSpaceForItem(item)) return shelf;
+            }
+            // Shelves all full / locked / absent — fall through to generic first-fit.
+        }
+
         // First-fit by furniture order. Non-tool items SKIP every tool storage so general
         // inventory (seeds, produce) can't fill the slots reserved for tools. IsToolStorage
         // is the unified "role-tagged OR legacy-singleton" predicate.
