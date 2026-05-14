@@ -210,6 +210,14 @@ public class LogisticsStockEvaluator
     {
         if (itemSO == null || quantityToOrder <= 0) return;
 
+        // B2B preference scan (2026-05-09): before falling through to the producer-based
+        // BuyOrder path, see if a same-map ShopBuilding sells this item, has the stock,
+        // and the buyer's Treasury can afford it. On match the purchase is committed
+        // atomically (debit treasury → credit shop till → move items from sell-shelf
+        // into shop inventory → enqueue BuyOrder with IsPlaced=true). The standard
+        // transporter dispatch then ships items from shop to buyer.
+        if (TryB2BPurchaseFromShop(itemSO, quantityToOrder)) return;
+
         var supplier = FindSupplierFor(itemSO);
         if (supplier == null)
         {
@@ -288,5 +296,215 @@ public class LogisticsStockEvaluator
             Debug.LogError($"[LogisticsStockEvaluator] {_building?.BuildingName}: FindSupplierFor threw while iterating BuildingManager.allBuildings. Returning null.");
         }
         return null;
+    }
+
+    // ============================================================================
+    // B2B SHOP PURCHASE (2026-05-09)
+    //
+    // Before posting a producer-based BuyOrder, see if a same-map ShopBuilding
+    // can fulfil the demand from its existing sell-shelf stock. When a match
+    // exists and the buyer's Treasury covers the cost:
+    //   1. Atomically debit the buyer's Treasury (via the aggregator).
+    //   2. Credit the shop's first Cashier till — symmetric with human/NPC
+    //      personal purchases (Phase 2b chose Cashier till as the till
+    //      destination for B2B too — see commercial-treasury.md design).
+    //   3. Move the matched ItemInstances from the shop's sell-shelves into
+    //      the shop's Inventory list. The standard
+    //      LogisticsTransportDispatcher.ProcessActiveBuyOrders path picks them
+    //      up from there (it scans _building.Inventory), creates a
+    //      TransportOrder, and dispatches a transporter to ship them.
+    //   4. Add the BuyOrder to BOTH order books (buyer side + shop side) with
+    //      IsPlaced=true so the buyer-side GoapAction_PlaceOrder never runs
+    //      for this order — "Background commit" was the locked design choice
+    //      (no NPC walking to the shop to negotiate; the order is server-
+    //      committed and the only physical movement is the transporter
+    //      shipping the items).
+    //
+    // Refund-on-expiration is NOT implemented in this MVP — if the BuyOrder
+    // expires via DecreaseRemainingDays before the transporter completes
+    // delivery, the buyer's coins stay in the shop's till and the items stay
+    // in the shop's inventory. Acceptable starting point; refund pass tracked
+    // as follow-up in the Treasury wiki page.
+    // ============================================================================
+
+    /// <summary>
+    /// Same-map ShopBuilding scan + atomic B2B commit. Returns <c>true</c> when an order
+    /// was successfully placed (consumer of <see cref="RequestStock"/> short-circuits the
+    /// producer-based path). Returns <c>false</c> when no shop match was found or the
+    /// Treasury can't afford the cheapest one.
+    /// </summary>
+    private bool TryB2BPurchaseFromShop(ItemSO itemSO, int quantityToOrder)
+    {
+        if (itemSO == null || quantityToOrder <= 0) return false;
+        if (BuildingManager.Instance == null) return false;
+        if (_building == null) return false;
+
+        var currency = MWI.Economy.CurrencyId.Default;
+        bool logFlow = _facade != null && _facade.LogLogisticsFlow;
+
+        // Cache buyer's map id once for the same-map filter. Building doesn't expose a
+        // direct MapId property; the canonical resolver is GetComponentInParent<MapController>
+        // (mirrors the pattern used in CommercialBuilding.StampOriginIds).
+        var buyerMapController = _building.GetComponentInParent<MWI.WorldSystem.MapController>();
+        string buyerMapId = buyerMapController != null ? buyerMapController.MapId : string.Empty;
+        if (string.IsNullOrEmpty(buyerMapId))
+        {
+            if (logFlow)
+            {
+                Debug.Log($"<color=#ff8866>[LogisticsDBG]</color> B2B → buyer '{_building.BuildingName}' has no MapController parent; skipping shop scan.");
+            }
+            return false;
+        }
+
+        try
+        {
+            foreach (var b in BuildingManager.Instance.allBuildings)
+            {
+                if (b == null || b == _building) continue;
+                if (!(b is ShopBuilding shop)) continue;
+
+                // Same-map scope (locked product decision 2026-05-09).
+                var shopMapController = shop.GetComponentInParent<MWI.WorldSystem.MapController>();
+                string shopMapId = shopMapController != null ? shopMapController.MapId : string.Empty;
+                if (!string.Equals(shopMapId, buyerMapId)) continue;
+
+                var catalogEntry = shop.GetCatalogEntry(itemSO);
+                if (!catalogEntry.HasValue) continue; // shop doesn't sell this item
+
+                int stock = CountItemOnSellShelves(shop, itemSO);
+                if (stock < quantityToOrder) continue; // not enough stock
+
+                int unitPrice = ShopBuilding.ResolvePrice(catalogEntry.Value);
+                int totalCost = unitPrice * quantityToOrder;
+                if (totalCost <= 0) continue; // free item — fall through to producer path
+
+                if (!_building.CanAffordFromTreasury(currency, totalCost))
+                {
+                    if (logFlow)
+                    {
+                        Debug.Log($"<color=#ff8866>[LogisticsDBG]</color> B2B → shop '{shop.BuildingName}' has {stock}× {itemSO.ItemName} (need {quantityToOrder} @ {unitPrice}g = {totalCost}g) but treasury={_building.GetTreasuryBalance(currency)}g. Skipping.");
+                    }
+                    continue;
+                }
+
+                // Pick a cashier to receive the till credit. Prefer the first cashier
+                // that exists at all; future polish: round-robin / least-balance / etc.
+                var cashier = (shop.Cashiers != null && shop.Cashiers.Count > 0) ? shop.Cashiers[0] : null;
+                if (cashier == null)
+                {
+                    if (logFlow)
+                    {
+                        Debug.LogWarning($"[LogisticsDBG] B2B → shop '{shop.BuildingName}' has stock + buyer can afford, but shop has no Cashier to receive till credit. Skipping.");
+                    }
+                    continue;
+                }
+
+                // ATOMIC COMMIT.
+                if (!_building.TryDebitTreasury(currency, totalCost,
+                        $"B2B_Purchase_{itemSO.ItemName}_x{quantityToOrder}_from_{shop.BuildingName}"))
+                {
+                    // Shouldn't happen — CanAffordFromTreasury guarded the entry.
+                    Debug.LogError($"[LogisticsStockEvaluator] {_building.BuildingName}: B2B treasury debit failed AFTER CanAffordFromTreasury returned true (item={itemSO.ItemName}, total={totalCost}). Treasury state may be inconsistent.");
+                    continue;
+                }
+                cashier.CreditTill(currency, totalCost,
+                    $"B2B_PurchaseFrom_{_building.BuildingName}_{itemSO.ItemName}_x{quantityToOrder}");
+
+                // Move items from sell-shelves into shop.Inventory so the existing
+                // transport-dispatcher reservation path (which scans _building.Inventory)
+                // can pick them up. Items stay tracked as the shop's logical stock until
+                // a TransportOrder pulls them.
+                int movedCount = MoveSellShelfItemsToShopInventory(shop, itemSO, quantityToOrder);
+                if (movedCount < quantityToOrder)
+                {
+                    // Shouldn't happen — CountItemOnSellShelves verified availability at
+                    // top of this iteration. If we land here a race elided some items
+                    // (another B2B / human buy at the exact same tick) and we need to
+                    // refund what we couldn't fulfil.
+                    int shortfall = quantityToOrder - movedCount;
+                    int refund = shortfall * unitPrice;
+                    Debug.LogWarning($"[LogisticsStockEvaluator] {_building.BuildingName}: B2B race detected — committed for {quantityToOrder} but only {movedCount} items moved. Refunding {refund}g.");
+                    cashier.DebitTill(currency, refund, $"B2B_Refund_{_building.BuildingName}_partial");
+                    _building.CreditTreasury(currency, refund, $"B2B_Refund_partial_from_{shop.BuildingName}");
+                    if (movedCount <= 0) continue; // nothing to ship — try next shop
+                    quantityToOrder = movedCount; // shrink the order to what we actually have
+                    totalCost = quantityToOrder * unitPrice;
+                }
+
+                // Create + register the BuyOrder. IsPlaced=true skips the buyer-side
+                // GoapAction_PlaceOrder GOAP walk (background commit, no NPC dance).
+                var buyOrder = new BuyOrder(itemSO, quantityToOrder, shop, _building, 3, _building.Owner, null);
+                buyOrder.IsPlaced = true;
+
+                _orderBook.AddPlacedBuyOrder(buyOrder); // buyer side tracking
+                if (shop.LogisticsManager != null)
+                {
+                    shop.LogisticsManager.OrderBook.AddActiveOrder(buyOrder); // shop side (dispatch source)
+                }
+                else
+                {
+                    Debug.LogWarning($"[LogisticsStockEvaluator] {_building.BuildingName}: B2B shop '{shop.BuildingName}' has no LogisticsManager — its dispatcher will not run. Order added to buyer side only; transporter may not ship.");
+                }
+
+                Debug.Log($"<color=#aaffaa>[B2B]</color> {_building.BuildingName} ← {shop.BuildingName}: bought {quantityToOrder}× {itemSO.ItemName} for {totalCost}g (unit={unitPrice}g). IsPlaced=true, awaiting transport.");
+                return true;
+            }
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogException(e);
+            Debug.LogError($"[LogisticsStockEvaluator] {_building.BuildingName}: TryB2BPurchaseFromShop threw while scanning shops for {itemSO?.ItemName}. Falling through to producer path.");
+            return false;
+        }
+
+        return false;
+    }
+
+    private static int CountItemOnSellShelves(ShopBuilding shop, ItemSO itemSO)
+    {
+        if (shop == null || itemSO == null) return 0;
+        var shelves = shop.SellShelves;
+        if (shelves == null) return 0;
+        int count = 0;
+        for (int i = 0; i < shelves.Count; i++)
+        {
+            var shelf = shelves[i];
+            if (shelf == null) continue;
+            int cap = shelf.Capacity;
+            for (int s = 0; s < cap; s++)
+            {
+                var slot = shelf.GetItemSlot(s);
+                if (slot == null || slot.IsEmpty()) continue;
+                if (slot.ItemInstance != null && slot.ItemInstance.ItemSO == itemSO) count++;
+            }
+        }
+        return count;
+    }
+
+    private static int MoveSellShelfItemsToShopInventory(ShopBuilding shop, ItemSO itemSO, int desired)
+    {
+        if (shop == null || itemSO == null || desired <= 0) return 0;
+        var shelves = shop.SellShelves;
+        if (shelves == null) return 0;
+        int moved = 0;
+        for (int i = 0; i < shelves.Count && moved < desired; i++)
+        {
+            var shelf = shelves[i];
+            if (shelf == null) continue;
+            int cap = shelf.Capacity;
+            for (int s = 0; s < cap && moved < desired; s++)
+            {
+                var slot = shelf.GetItemSlot(s);
+                if (slot == null || slot.IsEmpty()) continue;
+                if (slot.ItemInstance == null || slot.ItemInstance.ItemSO != itemSO) continue;
+                var inst = slot.ItemInstance;
+                if (shelf.RemoveItem(inst))
+                {
+                    shop.AddToInventory(inst);
+                    moved++;
+                }
+            }
+        }
+        return moved;
     }
 }
