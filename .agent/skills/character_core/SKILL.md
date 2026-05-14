@@ -85,9 +85,40 @@ This is the ultimate safety method. `Character` scrutinizes all of its child com
 
 `Character.OccupyingFurniture` (read-only property) is the single source of truth for "is this character currently sitting/manning/sleeping in a piece of furniture". Set server-side via `SetOccupyingFurniture(Furniture)` — only `OccupiableFurniture.Use` / `Leave` / `Release` call it.
 
+- **Replication (2026-05-14):** `Character.NetworkOccupyingFurnitureNetId` is a `NetworkVariable<ulong>` (EveryoneRead / ServerWrite) carrying the furniture's parent NetworkObjectId. The property getter resolves it via `NetworkManager.Singleton.SpawnManager.SpawnedObjects` on clients; `GetComponent<Furniture>()` fast-path for furniture that owns its NO (Cashier), then `GetComponentInChildren<Furniture>()` fallback for furniture under a building NO (Bed/Chair). `OnValueChanged` fires `OnOccupyingFurnitureChanged` on remote peers so any `CharacterSystem.HandleOccupyingFurnitureChanged` listener stays accurate cross-peer. Required so the literal "OccupyingFurniture != null ⇒ no movement" gate fires correctly on every peer (rule #19b).
 - `OnOccupyingFurnitureChanged(prev, next)` fires on every transition (sit-down, stand-up, swap).
 - `AutoLeaveOccupiedFurniture(string reason)` is the central helper that calls `OccupiableFurniture.Leave(this)` on the current furniture, log-traced. Used internally by combat/incap/death; any future trigger (job change, schedule flip, knockback out of range) should call this method rather than duplicating the cast + null-check.
 - `OccupiableFurniture.Leave(Character c)` is the **per-character** inverse of `Use(Character)`. Single-slot furniture (Cashier, Chair) default to delegating to `Release()`. `BedFurniture` overrides to release **only** the caller's slot — never delegate auto-leave to the parameterless `Release()`, which evicts every slot in a shared bed.
+
+### 3.c Furniture Occupancy via CharacterAction (2026-05-14)
+
+The occupy/leave lifecycle is **action-driven** — same `CharacterAction_OccupyFurniture` queued from both player and NPC paths. Controller swaps (PlayerController ↔ NPCController) are no-ops for seating state because the action runs on `CharacterActions`, which lives on the Character regardless of who drives it.
+
+**Action contract:**
+- `CharacterAction_OccupyFurniture : CharacterAction_Continuous`. Server-only execution (continuous actions are rejected on clients at `CharacterActions.cs:73`).
+- `OnStart` → `_target.Use(character)`; `OnTick` → validate, return true on invalidation; `OnCancel` → `_target.Leave(character)` (idempotent).
+- `IsReplicatedInternally = false` → standard 600s-sentinel visual proxy fires on every peer so movement gates can rely on `_currentAction != null` as a fallback signal.
+- `ShouldPlayGenericActionAnimation = false` — the character idles at the StandingPoint, no `isDoingAction` animator trigger.
+
+**Entry points (uniform across player + NPC):**
+- `OccupiableFurniture.OnInteract` (default tap-E): server path queues directly; client-owner relays via `CharacterActions.RequestOccupyFurnitureServerRpc(NetworkBehaviourReference, Vector3)`. The position carry-along disambiguates multi-furniture-per-building cases (Bed/Chair) the same way `RequestSleepOnFurnitureServerRpc` does with `FindClosestBedUnder`.
+- `CashierInteractable.Interact`: bespoke E-press handler. Branch 1 (seated occupant → leave). Branches 2+3 collapse into `CashierNetSync.RequestUseCashierServerRpc` — server-side role routing decides vendor (occupy) vs customer (buy).
+- `JobVendor.Execute` step 3: NPC arrives at the InteractionPoint → server-side `ExecuteAction(new CharacterAction_OccupyFurniture(...))`.
+
+**Authorization gate:**
+- `OccupiableFurniture.IsCharacterAllowedToOccupy(Character)` — virtual, default true. `Cashier` overrides to require the assigned `JobVendor` for the linked shop when `RequiresVendor`. Server-side authoritative; `CharacterJob._activeJobs` is not NetVar-replicated, so the gate intentionally lives on the server side (called from `CanExecute` + the ServerRpc handlers).
+
+**Voluntary leave paths:**
+- Player E-press on the seated cashier → Branch 1 of `CashierInteractable.Interact` → `RequestLeaveOccupiedFurnitureServerRpc` → `ClearCurrentAction` → `OnCancel` → `Leave`.
+- `JobVendor.Unassign`: routes through `ClearCurrentAction` for the seated case so future listeners fire; defensive direct `Leave` as belt-and-suspenders.
+
+**Forced leave paths (already shipped):**
+- `Character.AutoLeaveOccupiedFurniture("…")` called from `SetCombatState(true)`, `SetUnconscious(true)`, `Die()` — runs **before** the matching event so subscribers see `OccupyingFurniture == null`. The subsequent `ClearCurrentActionLocally` fires `OnCancel` which calls `Leave` again — idempotent.
+
+**Movement lockout:**
+- `PlayerController.Move`, `CharacterMovement.SetDestination`, `CharacterMovement.SetDesiredDirection` all early-return on `OccupyingFurniture != null`. Reads the replicated value from §3.b, so the gate fires correctly on every peer.
+
+**Replaced (deleted 2026-05-14):** `Cashier.ServerTickAutoOccupy` — proximity-driven server tick that bypassed the action system. See [docs/superpowers/specs/2026-05-14-furniture-occupancy-via-characteraction-design.md](../../../docs/superpowers/specs/2026-05-14-furniture-occupancy-via-characteraction-design.md).
 
 ## 4. Context Switching (The Brain)
 **A Player is exactly like an NPC character.** They share the exact same `Character` object, underlying components, stats, and game logic. A character in your game can switch from an autonomous civilian AI (NPC) to a Player-controlled Avatar with a snap of a finger just by swapping the active controller.

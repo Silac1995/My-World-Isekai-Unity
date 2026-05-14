@@ -50,7 +50,7 @@ If a shop isn't working, verify this chain:
 
 ## Multiplayer occupancy contract
 
-`Cashier` inherits `_occupant` from `OccupiableFurniture`, but that field is server-only — `ServerTickAutoOccupy` seats the vendor via `Use()` on the host peer, and the base class has no replication channel. `CashierNetSync` therefore owns two `NetworkVariable<ulong>` mirrors written from the server-side paths of `Cashier`:
+`Cashier` inherits `_occupant` from `OccupiableFurniture`, but that field is server-only — the new `CharacterAction_OccupyFurniture` (queued from `JobVendor.Execute` for NPCs and `CashierNetSync.RequestUseCashierServerRpc` for players) seats the vendor via `Use()` on the server peer, and the base class has no replication channel. `CashierNetSync` therefore owns two `NetworkVariable<ulong>` mirrors written from the server-side paths of `Cashier`:
 
 - `OccupantNetworkObjectId` — vendor (set in `Use`, cleared in `Release`).
 - `CurrentCustomerNetworkObjectId` — customer mid-transaction (set in `TryAcquireCustomerLock`, cleared in `ReleaseCustomerLock`).
@@ -65,7 +65,24 @@ The legacy `NotifyOccupiedClientRpc` / `NotifyReleasedClientRpc` are kept as no-
 
 When a vendor enters combat, is incapacitated, or dies, the seat is released by the central `Character.AutoLeaveOccupiedFurniture(reason)` helper called from `SetCombatState(true)` / `SetUnconscious(true)` / `Die()` (see `character_core/SKILL.md` §3.b). It calls `OccupiableFurniture.Leave(this)`, which on `Cashier` delegates to `Release()` and handles all replication + in-flight transaction abort. **Do not add cashier-side polling for these triggers** — they are handled centrally.
 
-> **Known architectural issue, deferred refactor:** today `Cashier.ServerTickAutoOccupy` seats any on-shift vendor that wanders within `_autoSeatRadius` of the cashier — no explicit interaction required. This is wrong by design: occupancy must be driven by a `CharacterAction` (`CharacterAction_OccupyFurniture`-style) that goes through the canonical `InteractableObject.IsCharacterInInteractionZone` proximity gate + `CharacterActions.ExecuteAction` owner-predict/server-broadcast pipeline. While occupied, the character should be movement-locked and unable to enqueue other actions; leaving is its own `CharacterAction` (or `ClearCurrentAction`) — forced-leave from combat/damage still bypasses the action and goes through `Character.AutoLeaveOccupiedFurniture` directly. The refactor will also remove `ServerTickAutoOccupy`. Until then, NPCs seat by proximity and players have no explicit occupy path.
+### Occupy via CharacterAction (2026-05-14 refactor)
+
+Vendor seating is now action-driven. The deleted `Cashier.ServerTickAutoOccupy` proximity tick is replaced by the shared `CharacterAction_OccupyFurniture` (continuous, server-only). See [character_core/SKILL.md §3.c](../character_core/SKILL.md) for the full action contract; the cashier-specific surface is:
+
+- **`CashierNetSync.RequestUseCashierServerRpc(NetworkBehaviourReference customerRef)`** — unified E-press intent from `CashierInteractable.Interact`. Server validates ownership + proximity, then role-routes:
+  - `_cashier.Occupant == null && _cashier.IsCharacterAllowedToOccupy(customer)` → queue `CharacterAction_OccupyFurniture` (vendor path).
+  - Otherwise → queue `CharacterAction_BuyFromShop` (customer path).
+  - Targeted toasts back to the caller distinguish "No vendor on duty" vs "busy with another customer".
+
+  Server-side routing is required because `CharacterJob._activeJobs` is not NetVar-replicated — remote-client owners can't read their own `CurrentJob` locally. The role gate lives on `Cashier.IsCharacterAllowedToOccupy` (override of `OccupiableFurniture.IsCharacterAllowedToOccupy`) which checks `JobVendor.Workplace == _linkedBuilding`.
+
+- **`CashierInteractable.Interact`** — Branch 1: seated occupant (`_cashier.Occupant == interactor`, NetVar-resolved) → `RequestLeaveOccupiedFurnitureServerRpc` (`ClearCurrentAction` server-side, `OnCancel` releases via `Leave`). Branch 2 + 3 unified → `RequestUseCashierServerRpc`. The local "busy" toast stays for snappy UX (CurrentCustomer is NetVar-resolved); the "no vendor" toast moved server-side so it doesn't misfire for player-vendors taking their own cashier.
+
+- **`JobVendor.Execute` (NPC parity, rule #22):** server-side `ExecuteAction(new CharacterAction_OccupyFurniture(_worker, _heldCashier))` after the worker walks into the cashier's interaction zone. Same action as players queue — controller swaps no-op for seating state.
+
+Movement is locked while the action is current via the replicated `Character.OccupyingFurniture` (new NetVar on Character, see [character_core/SKILL.md §3.b](../character_core/SKILL.md)). Forced-leave (combat/incap/death) still routes through `Character.AutoLeaveOccupiedFurniture` and runs **before** `ClearCurrentActionLocally`, so `OnCancel`'s `Leave` call is idempotent.
+
+See [docs/superpowers/specs/2026-05-14-furniture-occupancy-via-characteraction-design.md](../../../docs/superpowers/specs/2026-05-14-furniture-occupancy-via-characteraction-design.md) for the full design rationale.
 
 ## Multiplayer panel-binding contract
 

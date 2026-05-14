@@ -71,6 +71,14 @@ Every `CommercialBuilding` that needs supply management has a `BuildingLogistics
 - **ShopBuilding Override**: Vendors go to a specific `VendorPoint` Transform (counter), all others wander in the building zone.
 - **BTVendorBehaviour**: If a `VendorPoint` exists, the vendor paths to it before serving. If not, they wander in the building zone.
 
+### 8. JobVendor — seating via CharacterAction (2026-05-14)
+
+`JobVendor` runs a pool model: the shop has N vendor slots (one per cashier with `RequiresVendor`); each shift each assigned worker independently picks any free cashier, races to claim it via `Reserve`, and walks to the InteractionPoint.
+
+**Seating step (new — replaces deleted `Cashier.ServerTickAutoOccupy`):** after arrival, `Execute()` step 3 queues `CharacterAction_OccupyFurniture` on the worker's `CharacterActions` server-side. Next tick step 1 sees `Occupant == _worker` and idles until customer interactions arrive. `Unassign()` routes the seated case through `ClearCurrentAction` so the action's `OnCancel` fires (downstream animation / audio / schedule listeners), with a defensive direct `Leave()` belt-and-suspenders.
+
+**Player↔NPC parity (rule #22):** players and NPCs queue the same `CharacterAction_OccupyFurniture`. NPCs do it here in `Execute`; players do it via `CashierInteractable.Interact` → `CashierNetSync.RequestUseCashierServerRpc` → server-side role gate. Controller swaps between PlayerController and NPCController are no-ops for seating state — the action runs on `CharacterActions`, which lives on the Character regardless of who drives it. See [character_core/SKILL.md §3.c](../character_core/SKILL.md) and [shop_system/SKILL.md](../shop_system/SKILL.md).
+
 ## How to Create a New Job?
 In the future, if the AI Agent needs to create a "Blacksmith":
 1. Write the abstract `JobCrafter` code, then `JobBlacksmith` inheriting from `JobCrafter`. Define its schedule, its `SkillSO`/`SkillTier` prerequisites, and its BT node `BTAction_PerformCraft`.
