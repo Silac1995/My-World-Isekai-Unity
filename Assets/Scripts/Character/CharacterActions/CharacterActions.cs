@@ -588,6 +588,12 @@ public class CharacterActions : CharacterSystem
             return;
         }
 
+        if (!target.IsCharacterAllowedToOccupy(_character))
+        {
+            Debug.LogWarning($"[CharacterActions] Server: RequestOccupyFurniture: {_character.CharacterName} not authorized to occupy {target.FurnitureName} (role gate).");
+            return;
+        }
+
         var action = new CharacterAction_OccupyFurniture(_character, target);
         if (!ExecuteAction(action))
         {

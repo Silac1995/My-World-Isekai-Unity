@@ -58,6 +58,9 @@ public sealed class CharacterAction_OccupyFurniture : CharacterAction_Continuous
         // Allow re-entry by the same character (defensive — should already be rejected upstream),
         // but reject if someone else is in the seat.
         if (_target.IsOccupied && _target.Occupant != character) return false;
+        // Role authorization (server-side gate). Default OccupiableFurniture.IsCharacterAllowedToOccupy
+        // returns true; Cashier overrides to require the assigned JobVendor when RequiresVendor.
+        if (!_target.IsCharacterAllowedToOccupy(character)) return false;
         return true;
     }
 

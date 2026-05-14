@@ -181,6 +181,25 @@ public class Cashier : OccupiableFurniture
         _till.Clear();
     }
 
+    /// <summary>
+    /// Server-side role gate for seating. <see cref="RequiresVendor"/> cashiers only accept
+    /// the assigned <see cref="JobVendor"/> worker for this shop. Distributors (RequiresVendor =
+    /// false) accept anyone. Pre-2026-05-14 this gate lived in <c>ServerTickAutoOccupy</c>'s
+    /// on-shift scan; it now lives here so every occupancy path (player E-press via
+    /// CashierInteractable, NPC JobVendor.Execute, generic OccupiableFurniture.OnInteract)
+    /// is authoritatively gated by the same predicate.
+    ///
+    /// Note: <c>CharacterJob._activeJobs</c> is server-side only — this method MUST run on
+    /// the server to read the correct value.
+    /// </summary>
+    public override bool IsCharacterAllowedToOccupy(Character character)
+    {
+        if (!base.IsCharacterAllowedToOccupy(character)) return false;
+        if (!_requiresVendor) return true; // distributor — anyone can use
+        if (character.CharacterJob == null) return false;
+        return character.CharacterJob.CurrentJob is JobVendor jv && jv.Workplace == _linkedBuilding;
+    }
+
     public override bool Use(Character vendor)
     {
         if (!base.Use(vendor)) return false;

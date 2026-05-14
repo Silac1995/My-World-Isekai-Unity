@@ -122,6 +122,20 @@ public abstract class OccupiableFurniture : Furniture, IOccupiable
     }
 
     /// <summary>
+    /// Role-based authorization for taking this seat. Default = true (anyone can sit on a
+    /// chair). Subclasses with a job-specific gate override — e.g. <see cref="Cashier"/>
+    /// requires the character to be the assigned <see cref="JobVendor"/> when the cashier
+    /// has <c>RequiresVendor = true</c>.
+    ///
+    /// Called server-side from <see cref="CharacterAction_OccupyFurniture.CanExecute"/> and
+    /// from <see cref="CharacterActions.RequestOccupyFurnitureServerRpc"/>. Server-only
+    /// authoritative — client-side reads of CharacterJob state are not guaranteed to be
+    /// populated for remote-client player owners (the system is not currently NetVar-replicated),
+    /// so this gate intentionally lives on the server.
+    /// </summary>
+    public virtual bool IsCharacterAllowedToOccupy(Character character) => character != null;
+
+    /// <summary>
     /// Universal interactable dispatch — tap-E binds the interactor as the occupant by
     /// queueing <see cref="CharacterAction_OccupyFurniture"/>. NPCs / host paths run
     /// server-side and queue directly; player-owner client paths relay through the

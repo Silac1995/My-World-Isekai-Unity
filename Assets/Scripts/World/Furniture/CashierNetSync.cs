@@ -190,6 +190,74 @@ public class CashierNetSync : NetworkBehaviour
         customer.CharacterActions.ExecuteAction(action);
     }
 
+    /// <summary>
+    /// Client → Server: unified "use this cashier" intent with server-side role routing.
+    /// The CLIENT cannot read <c>CharacterJob.CurrentJob</c> for remote-owned characters
+    /// (the active-jobs list is server-side only — there is no NetworkVariable replication
+    /// of the job assignment yet, see wiki/projects/optimisation-backlog.md). To preserve
+    /// player↔NPC parity (rule #22) on remote clients, the client just signals "I want
+    /// to use this cashier somehow" and the server decides:
+    /// <list type="bullet">
+    ///   <item>Seat is free AND <see cref="Cashier.IsCharacterAllowedToOccupy"/> returns
+    ///   true → queue <see cref="CharacterAction_OccupyFurniture"/> (the vendor path).</item>
+    ///   <item>Otherwise → start the buy flow exactly like
+    ///   <see cref="RequestStartBuyServerRpc"/>.</item>
+    /// </list>
+    /// Authored 2026-05-14 alongside the CharacterAction_OccupyFurniture refactor.
+    /// </summary>
+    [ServerRpc(RequireOwnership = false)]
+    public void RequestUseCashierServerRpc(NetworkBehaviourReference customerRef, ServerRpcParams p = default)
+    {
+        if (!customerRef.TryGet(out Character customer)) return;
+        if (customer.OwnerClientId != p.Receive.SenderClientId)
+        {
+            Debug.LogWarning($"[Cashier] RequestUseCashier: sender {p.Receive.SenderClientId} does not own customer {customer.NetworkObjectId}.");
+            return;
+        }
+
+        var interactable = _cashier.GetComponent<InteractableObject>();
+        if (interactable != null && !interactable.IsCharacterInInteractionZone(customer))
+        {
+            Debug.LogWarning($"[Cashier] RequestUseCashier: {customer.CharacterName} not in interaction zone of {_cashier.FurnitureName}.");
+            return;
+        }
+
+        // Role routing — vendor path takes precedence over customer path when both could apply.
+        if (_cashier.Occupant == null && _cashier.IsCharacterAllowedToOccupy(customer))
+        {
+            if (customer.CharacterActions == null)
+            {
+                Debug.LogWarning($"[Cashier] RequestUseCashier: customer {customer.CharacterName} has no CharacterActions.");
+                return;
+            }
+            customer.CharacterActions.ExecuteAction(new CharacterAction_OccupyFurniture(customer, _cashier));
+            return;
+        }
+
+        // Customer path — same body as RequestStartBuyServerRpc (proximity already validated
+        // above; ownership already validated above).
+        if (!_cashier.IsAvailableForCustomer)
+        {
+            ClientRpcParams toCaller = new() { Send = new ClientRpcSendParams { TargetClientIds = new[] { p.Receive.SenderClientId } } };
+            // Send a more accurate toast when the root cause is "no vendor on duty" rather
+            // than "vendor is busy" — IsAvailableForCustomer is false for either reason.
+            if (_cashier.RequiresVendor && _cashier.Occupant == null)
+            {
+                ToastClientRpc("No vendor on duty.", MWI.UI.Notifications.ToastType.Warning, toCaller);
+            }
+            else
+            {
+                SendBusyToastClientRpc(toCaller);
+            }
+            return;
+        }
+
+        var buyAction = new CharacterAction_BuyFromShop(
+            customer, _cashier, new System.Collections.Generic.List<ItemSO>(), CharacterAction_BuyFromShop.BuyMode.Player);
+        SetActiveActionServer(buyAction);
+        customer.CharacterActions.ExecuteAction(buyAction);
+    }
+
     [ServerRpc(RequireOwnership = false)]
     public void SubmitPlayerSelectionServerRpc(BuySelectionPayload payload, ServerRpcParams p = default)
     {
