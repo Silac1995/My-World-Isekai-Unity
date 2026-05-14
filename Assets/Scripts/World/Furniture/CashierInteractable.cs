@@ -37,10 +37,34 @@ public class CashierInteractable : InteractableObject
     {
         if (interactor == null || _cashier == null) return;
         if (!IsCharacterInInteractionZone(interactor)) return;
+        if (interactor.CharacterActions == null) return;
 
-        // Local pre-gate (immediate toast on the offending client). Occupant and
-        // CurrentCustomer go through Cashier's NetVar-resolving overrides so this
-        // mirrors the server state on every peer (rule #19).
+        // Branch 1 — already seated on THIS cashier → leave (vendor stepping away from
+        // the counter). Cashier.Occupant resolves via CashierNetSync.OccupantNetworkObjectId
+        // on clients, so this branch fires correctly on every peer including a fresh
+        // late-joiner (rule #19b).
+        if (_cashier.Occupant == interactor)
+        {
+            interactor.CharacterActions.RequestLeaveOccupiedFurnitureServerRpc();
+            return;
+        }
+
+        // Branch 2 — this character is the assigned vendor for this shop and the seat is
+        // free → take the cashier. Player↔NPC parity (rule #22): JobVendor.Execute queues
+        // the same CharacterAction_OccupyFurniture for NPCs.
+        if (_cashier.RequiresVendor
+            && _cashier.Occupant == null
+            && interactor.CharacterJob != null
+            && interactor.CharacterJob.CurrentJob is JobVendor jv
+            && jv.Workplace == _cashier.LinkedBuilding)
+        {
+            interactor.CharacterActions.RequestOccupyFurnitureServerRpc(
+                new NetworkBehaviourReference(_cashier),
+                _cashier.transform.position);
+            return;
+        }
+
+        // Branch 3 — customer flow: existing local pre-gate + buy ServerRpc.
         if (_cashier.RequiresVendor && _cashier.Occupant == null)
         {
             UI_Toast.Show("No vendor on duty.", ToastType.Warning);
