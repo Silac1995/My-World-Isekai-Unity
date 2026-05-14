@@ -159,64 +159,8 @@ public class Cashier : OccupiableFurniture
         if (_autoSeatTimer >= AUTO_SEAT_TICK_INTERVAL)
         {
             _autoSeatTimer = 0f;
-            // Validate first, then auto-occupy. The two halves form a symmetric
-            // state machine: ValidateOccupant evicts vendors who can no longer
-            // vend (combat, off-shift, dead, walked off, reassigned, …);
-            // AutoOccupy seats a fresh on-shift vendor in range.
-            ServerTickValidateOccupant();
             ServerTickAutoOccupy();
         }
-    }
-
-    /// <summary>
-    /// Server-only inverse of <see cref="ServerTickAutoOccupy"/>. Releases the seated
-    /// vendor when they are no longer fit to vend.
-    ///
-    /// Triggered conditions (any one fires <see cref="Release"/>):
-    /// - Occupant destroyed / dead / unconscious (also catches map-hibernation despawn — destroyed
-    ///   Unity objects evaluate as null here).
-    /// - Vendor pulled into a battle (<c>CharacterCombat.IsInBattle</c>).
-    /// - Vendor's job is no longer <see cref="JobVendor"/> on this cashier's shop.
-    /// - Vendor is off-shift (<c>CharacterSchedule.CurrentActivity != Work</c>).
-    /// - Vendor walked / was knocked out of the auto-seat radius.
-    ///
-    /// Why a tick validator instead of subscribing to every event (combat,
-    /// schedule-change, death, knockback): the seat is held on the cashier furniture,
-    /// not on a running <c>CharacterAction</c>, so <c>Character.OnCombatStateChanged</c>
-    /// only feeds <c>CharacterActions.ClearCurrentAction</c> — nothing unwinds the seat.
-    /// The auto-seat half already runs at 1 Hz; the inverse half closes the state machine
-    /// in one place with zero subscription plumbing. Per rule #34, this is the symmetric
-    /// other half of the auto-seat polling tick, not "polling on stable state".
-    /// </summary>
-    private void ServerTickValidateOccupant()
-    {
-        var vendor = Occupant;
-        if (vendor == null) return;
-
-        string reason = null;
-        if (!vendor.IsAlive())
-            reason = "vendor incapacitated/dead";
-        else if (vendor.CharacterCombat != null && vendor.CharacterCombat.IsInBattle)
-            reason = "vendor pulled into battle";
-        else if (vendor.CharacterJob == null
-                 || vendor.CharacterJob.CurrentJob is not JobVendor jv
-                 || jv.Workplace != _linkedBuilding)
-            reason = "vendor no longer assigned as vendor of this shop";
-        else if (vendor.CharacterSchedule == null
-                 || vendor.CharacterSchedule.CurrentActivity != ScheduleActivity.Work)
-            reason = "vendor went off shift";
-        else if ((vendor.transform.position - GetInteractionPosition()).sqrMagnitude
-                 > _autoSeatRadius * _autoSeatRadius)
-            reason = "vendor walked out of seat radius";
-
-        if (reason == null) return;
-
-        Debug.Log($"<color=cyan>[Cashier]</color> ServerTickValidateOccupant releasing {vendor.CharacterName} from {FurnitureName}: {reason}.");
-        // Release() handles replication (NetVar + ClientRpc) and aborts any in-flight
-        // customer transaction via AbortActiveTransactionServerOnly. The audit
-        // checklist (host-only-state-blindspot.md) passes by piggybacking on the
-        // existing OccupantNetworkObjectId channel — no new replication needed.
-        Release();
     }
 
     private void ServerTickAutoOccupy()

@@ -22,13 +22,16 @@ depended_on_by: ["[[shops]]"]
 ## Shift end
 If the vendor is the **last** one working, `ShopBuilding.ClearQueue()` kicks remaining customers. Vendor then `WorkerEndingShift`.
 
-## Seat eviction — `ServerTickValidateOccupant`
+## Seat eviction (forced) — central `Character.AutoLeaveOccupiedFurniture`
 
-`Cashier` runs a server-side 1 Hz state machine in two halves: `ServerTickAutoOccupy` (seats a fresh on-shift vendor in range) and `ServerTickValidateOccupant` (evicts the seated vendor when they can no longer vend). Together they prevent the seat from leaking when a vendor enters battle, dies, goes off-shift, has their job reassigned, or walks out of the seat radius. `Release()` handles replication + in-flight transaction abort in one path. See `.agent/skills/shop_system/SKILL.md` "Vendor seat is a symmetric state machine" for the full contract.
+Forced seat release on combat / incapacitate / death is centralised on `Character` (see `[[character]]` §3.b and `character_core/SKILL.md`). The cashier no longer polls for these conditions.
+
+> **Deferred refactor:** the existing `Cashier.ServerTickAutoOccupy` proximity auto-seat is architecturally wrong — vendors should occupy the cashier through a `CharacterAction` queued from `JobVendor` (and from player E-press), not by passively wandering within range. The refactor will also introduce a leave action and movement/action lockout while occupied. Tracking: separate session.
 
 ## Change log
 - 2026-04-19 — Stub. — Claude / [[kevin]]
 - 2026-05-14 — Document `ServerTickValidateOccupant` (vendor seat eviction half of the cashier auto-seat state machine). Fixes the "vendor in combat, customer can still open buy panel" leak. — claude
+- 2026-05-14 (later) — Reverted `ServerTickValidateOccupant`. Validator's radius check fired during shopping (vendor's transform oscillated within the auto-seat radius), aborting active transactions every second. Forced eviction now goes through central `Character.AutoLeaveOccupiedFurniture` only. Auto-seat-by-proximity itself is architecturally wrong (vendor was occupying without ever interacting with the cashier) and is deferred to a `CharacterAction`-driven refactor. — claude
 
 ## Sources
 - [[shops]] §3.

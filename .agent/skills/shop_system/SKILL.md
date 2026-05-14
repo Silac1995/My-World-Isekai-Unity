@@ -61,23 +61,11 @@ If a shop isn't working, verify this chain:
 
 The legacy `NotifyOccupiedClientRpc` / `NotifyReleasedClientRpc` are kept as no-op visual hooks; do not rely on them for state transport.
 
-### Vendor seat is a symmetric state machine — Validate + AutoOccupy
+### Forced seat eviction goes through Character, not the cashier
 
-`Cashier` ticks at 1 Hz (server only) and runs **both halves** of the seat state machine in `Update()`:
+When a vendor enters combat, is incapacitated, or dies, the seat is released by the central `Character.AutoLeaveOccupiedFurniture(reason)` helper called from `SetCombatState(true)` / `SetUnconscious(true)` / `Die()` (see `character_core/SKILL.md` §3.b). It calls `OccupiableFurniture.Leave(this)`, which on `Cashier` delegates to `Release()` and handles all replication + in-flight transaction abort. **Do not add cashier-side polling for these triggers** — they are handled centrally.
 
-- `ServerTickValidateOccupant()` evicts the seated vendor when they can no longer vend.
-- `ServerTickAutoOccupy()` seats a fresh on-shift vendor in range.
-
-Eviction conditions (any one fires `Release()`):
-- Occupant destroyed / dead / unconscious — `!Occupant.IsAlive()` also covers map-hibernation despawn since destroyed Unity refs compare null.
-- Vendor pulled into a battle — `Occupant.CharacterCombat.IsInBattle`.
-- Vendor's job is no longer `JobVendor` for this cashier's shop.
-- Vendor's schedule is no longer `ScheduleActivity.Work`.
-- Vendor walked / was knocked out of the auto-seat radius.
-
-`Release()` handles all replication and side-effects in one place: it clears `_occupant` on the base class, writes `OccupantNetworkObjectId = 0`, fires `NotifyReleasedClientRpc`, and aborts any in-flight customer transaction via `AbortActiveTransactionServerOnly("vendor walked off")`. Adding a new eviction trigger means adding a branch inside `ServerTickValidateOccupant` — never resubscribing to character events from the furniture (the seat is held on the cashier, not on a running `CharacterAction`, so `Character.OnCombatStateChanged` does not unwind it on its own).
-
-Why a tick validator instead of pure event subscription: vendor combat/incapacitation/death events DO now fire from `Character` and auto-call `OccupiableFurniture.Leave(this)` via the central `AutoLeaveOccupiedFurniture` helper (see `character_core/SKILL.md` §3.b). The cashier-side tick is **defense-in-depth** for the three triggers `Character` has no event for: vendor walked / was knocked out of the seat radius, schedule flipped to non-Work, or job was reassigned to a non-`JobVendor` of this shop. The 1 Hz symmetric tick costs O(1) per cashier per second, runs server-only, allocates nothing, and closes the last gaps. Per rule #34 this is the symmetric inverse of an existing tick, not idempotent polling on stable state.
+> **Known architectural issue, deferred refactor:** today `Cashier.ServerTickAutoOccupy` seats any on-shift vendor that wanders within `_autoSeatRadius` of the cashier — no explicit interaction required. This is wrong by design: occupancy must be driven by a `CharacterAction` (`CharacterAction_OccupyFurniture`-style) that goes through the canonical `InteractableObject.IsCharacterInInteractionZone` proximity gate + `CharacterActions.ExecuteAction` owner-predict/server-broadcast pipeline. While occupied, the character should be movement-locked and unable to enqueue other actions; leaving is its own `CharacterAction` (or `ClearCurrentAction`) — forced-leave from combat/damage still bypasses the action and goes through `Character.AutoLeaveOccupiedFurniture` directly. The refactor will also remove `ServerTickAutoOccupy`. Until then, NPCs seat by proximity and players have no explicit occupy path.
 
 ## Multiplayer panel-binding contract
 
