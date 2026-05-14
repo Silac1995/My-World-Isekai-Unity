@@ -802,6 +802,65 @@ public class BuildingLogisticsManager : MonoBehaviour
         return false;
     }
 
+    /// <summary>
+    /// Sibling of <see cref="AssignStorageRolesForShift"/> for the new
+    /// <see cref="SafeFurniture"/> primitive (2026-05-09). Walks every safe child
+    /// of the building; any safe whose <see cref="SafeFurniture.Role"/> is
+    /// <see cref="SafeRoleType.None"/> is flipped to
+    /// <see cref="SafeRoleType.Treasury"/> through the sibling
+    /// <see cref="SafeFurnitureNetworkSync.SetRoleServer"/>. Idempotent — safes
+    /// already at Treasury are skipped.
+    ///
+    /// <para>
+    /// Called from <see cref="CommercialBuilding.WorkerStartingShift"/> after the
+    /// existing <see cref="AssignStorageRolesForShift"/> pass. Server-only
+    /// (defence-in-depth — the caller already gates).
+    /// </para>
+    /// </summary>
+    public void AssignSafeRolesForShift()
+    {
+        if (_building == null) return;
+
+        if (Unity.Netcode.NetworkManager.Singleton != null
+            && Unity.Netcode.NetworkManager.Singleton.IsListening
+            && !Unity.Netcode.NetworkManager.Singleton.IsServer)
+        {
+            return;
+        }
+
+        var safes = _building.Safes;
+        if (safes == null || safes.Count == 0) return;
+
+        int flipped = 0;
+        for (int i = 0; i < safes.Count; i++)
+        {
+            var safe = safes[i];
+            if (safe == null) continue;
+            if (safe.Role != SafeRoleType.None) continue;
+
+            var sync = safe.GetComponent<SafeFurnitureNetworkSync>();
+            if (sync == null)
+            {
+                if (NPCDebug.VerboseJobs)
+                    Debug.LogWarning($"[Logistics] {_building.BuildingName}: AssignSafeRolesForShift skipped safe[{i}] '{safe.name}' — missing SafeFurnitureNetworkSync sibling.");
+                continue;
+            }
+
+            sync.SetRoleServer(SafeRoleType.Treasury);
+            flipped++;
+            if (NPCDebug.VerboseJobs)
+            {
+                Debug.Log($"<color=#66ccff>[Logistics]</color> {_building.BuildingName}: safe[{i}] '{safe.name}' role None → Treasury (auto-assign on shift-punch).");
+            }
+        }
+
+        if (flipped > 0)
+        {
+            // The aggregate OnTreasuryChanged event already fires per safe's role flip via
+            // CommercialBuilding.HandleSafeRoleChanged; no extra notification needed.
+        }
+    }
+
     // =========================================================================
     // PUBLIC API — PENDING QUEUE ACCESS (used by GoapAction_PlaceOrder)
     // =========================================================================

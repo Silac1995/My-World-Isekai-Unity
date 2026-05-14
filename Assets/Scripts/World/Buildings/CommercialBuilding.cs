@@ -1504,6 +1504,23 @@ public abstract class CommercialBuilding : Building
                 Debug.LogError($"[CommercialBuilding] {buildingName}: AssignStorageRolesForShift threw during WorkerStartingShift(worker={worker.CharacterName}). Continuing.");
             }
 
+            // Sibling pass for the unified B2B Treasury (2026-05-09): every Safe with
+            // Role == None gets flipped to Treasury so it begins contributing to the
+            // building's spendable funds. Same idempotency / server-only / try-catch
+            // discipline as the storage-roles call above.
+            try
+            {
+                if (LogisticsManager != null)
+                {
+                    LogisticsManager.AssignSafeRolesForShift();
+                }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogException(e);
+                Debug.LogError($"[CommercialBuilding] {buildingName}: AssignSafeRolesForShift threw during WorkerStartingShift(worker={worker.CharacterName}). Continuing.");
+            }
+
             // Trigger the logistics logic if this is the manager.
             if (worker.CharacterJob != null)
             {
