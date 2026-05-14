@@ -135,14 +135,58 @@ NetworkList<NetworkEquipmentSyncData> // contains:
 
 Methods: `UpdateNetworkSlot()`, `OnEquipmentListChanged()`, `ApplyEquipmentData()`, `FullSyncFromNetwork()`
 
+**⚠️ Bag-inventory contents are NOT in this NetworkList.** Items inside `_bag.Inventory.ItemSlots` and `HandsController.CarriedItem` are deliberately not replicated — they live as independent per-peer copies (server-side + owner-side), loaded at session start from `CharacterProfileSaveData`. Server-side mutations on a remote-client character are invisible to the owner; any server-side path that adds an item to a client's bag MUST route through the canonical ClientRpc pattern.
+
+**Replication pattern — server → client (delivery into bag):**
+```csharp
+// CharacterAction_BuyFromShop.DeliverToCustomer / CharacterTakeFromFurnitureAction.OnApplyEffect
+if (character.IsSpawned && !character.IsOwnedByServer)
+{
+    var itemData = new NetworkItemData
+    {
+        ItemId = new FixedString64Bytes(item.ItemSO.ItemId),
+        JsonData = new FixedString4096Bytes(JsonUtility.ToJson(item))
+    };
+    character.CharacterActions.ReceiveItemPickupClientRpc(itemData);   // [Rpc(SendTo.Owner)]
+    return;
+}
+// Host / NPC path: direct PickUpItem on the server-side bag (which IS host's bag).
+character.CharacterEquipment.PickUpItem(item);
+```
+
+**Replication pattern — client → server (deposit out of bag):**
+```csharp
+// UI client side — include item payload + source slot index in the ServerRpc:
+_targetSync.RequestStoreFromBagServerRpc(
+    new NetworkBehaviourReference(character), slotIndex,
+    new FixedString64Bytes(item.ItemSO.ItemId),
+    new FixedString4096Bytes(JsonUtility.ToJson(item)));
+
+// Server side — reconstruct, validate destination, queue action with slot index:
+ItemInstance item = TryReconstructStoredItem(itemId, itemJson);
+var action = new CharacterStoreInFurnitureAction(character, item, _storage, slotIndex /* or SourceHands = -1 */);
+character.CharacterActions.ExecuteAction(action);
+// The action's OnApplyEffect detects remote-client ownership and fires
+// CharacterActions.RemoveFromInventoryAfterStoreClientRpc(slotIndex) to clear the owner.
+```
+
+Reference implementations:
+- `WorldItem.RequestInteractServerRpc` — original pattern (pickup).
+- `CharacterAction_BuyFromShop.DeliverToCustomer` — shop purchase (2026-05-14).
+- `CharacterTakeFromFurnitureAction.OnApplyEffect` — chest take (2026-05-14).
+- `StorageFurnitureNetworkSync.RequestStoreFrom{Bag,Hands}ServerRpc` + `CharacterStoreInFurnitureAction.OnApplyEffect` — chest store (2026-05-14).
+
+See also: `wiki/gotchas/host-only-state-blindspot.md` §"Bag-inventory state not replicated" for the audit case study, and `.agent/skills/item_system/SKILL.md` §"Bag-inventory replication authority" for the canonical procedural docs.
+
 ### 10. CharacterActions (Item Operations)
 
 | Action | Purpose | Network |
 |--------|---------|---------|
 | `CharacterPickUpItem` | Pick up WorldItem | `RequestDespawnServerRpc()` |
 | `CharacterDropItem` | Drop from inventory/hands | `RequestItemDropServerRpc()` |
-| `CharacterStoreInFurnitureAction` | Worker → `StorageFurniture` slot. **No `WorldItem` spawned** — slot data is logical-only. | Server-authoritative (slot mutation runs on server only) |
-| `CharacterTakeFromFurnitureAction` | `StorageFurniture` slot → worker hands. | Server-authoritative |
+| `CharacterStoreInFurnitureAction` | Worker → `StorageFurniture` slot. **No `WorldItem` spawned** — slot data is logical-only. | 3-way OnApplyEffect: remote-client (server AddItem → `RemoveFromInventoryAfterStoreClientRpc` ack to owner), host slot-index (server bag-slot lookup), legacy by-reference (-2, GOAP NPC deposits — unchanged). |
+| `CharacterTakeFromFurnitureAction` | `StorageFurniture` slot → worker hands/bag. | Server-authoritative for chest side (NetworkList). Bag side routes via `ReceiveItemPickupClientRpc` for remote-client takers. |
+| `CharacterAction_BuyFromShop.DeliverToCustomer` | Shop purchase delivery | Same client-routed pattern as `CharacterTakeFromFurnitureAction`. |
 
 Flow: Owner triggers animation → `OnApplyEffect()` → server validates → spawn/despawn WorldItem (or slot mutation for the furniture variants)
 
