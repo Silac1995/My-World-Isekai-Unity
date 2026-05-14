@@ -522,6 +522,12 @@ public abstract class CommercialBuilding : Building
         // Walking the cache here also primes the storage-furniture cache and binds
         // OnRoleChanged subscriptions on every peer (server + clients).
         RefreshStorageRoleSubscriptions(GetStorageFurnitureCached());
+
+        // Mirror pattern for safes: subscribe to per-safe balance + role events so
+        // OnTreasuryChanged fires when any child safe changes. Fires on every peer
+        // (server + clients) since both sides receive replication-driven event
+        // callbacks on the SafeFurniture instances.
+        RefreshSafeSubscriptions();
     }
 
     /// <summary>
@@ -1101,6 +1107,7 @@ public abstract class CommercialBuilding : Building
         UnsubscribeEmployeeRestoreListener();
         _isHiring.OnValueChanged -= HandleIsHiringChanged;
         UnsubscribeAllStorageRoleEvents();
+        UnsubscribeAllSafeEvents();
         base.OnNetworkDespawn();
     }
 
@@ -2857,6 +2864,201 @@ public abstract class CommercialBuilding : Building
             new MWI.UI.Management.StorageRolesTab(this),
         };
     }
+
+    // ============================================================================
+    // TREASURY AGGREGATOR (per-building money — funds B2B shop purchases, future
+    // operational costs). NOT stored on the building directly: the data lives in
+    // SafeFurniture children whose Role == SafeRoleType.Treasury. This building
+    // surface is a thin aggregator that sums balances across safes and fans out
+    // a single OnTreasuryChanged event when any safe changes.
+    //
+    // Authored 2026-05-09 as the financial backbone of the unified B2B shop-buy
+    // logistics path. See wiki/systems/commercial-treasury.md and
+    // .agent/skills/shop_system/SKILL.md for the full design.
+    // ============================================================================
+
+    /// <summary>Fired on every peer when the aggregate treasury balance changes
+    /// (any treasury safe balance changes OR any safe's role transitions in/out of Treasury).</summary>
+    public event System.Action OnTreasuryChanged;
+
+    // Track safes we've subscribed to so we can cleanly unsubscribe on
+    // role-change / despawn (mirrors the storage-role subscription pattern).
+    private readonly HashSet<SafeFurniture> _subscribedSafes = new HashSet<SafeFurniture>();
+
+    /// <summary>
+    /// Every <see cref="SafeFurniture"/> child of this building, regardless of role.
+    /// Allocates per call — not a hot path (called by management UI + treasury queries).
+    /// </summary>
+    public IReadOnlyList<SafeFurniture> Safes
+    {
+        get
+        {
+            var children = GetComponentsInChildren<SafeFurniture>(includeInactive: true);
+            var result = new List<SafeFurniture>(children.Length);
+            for (int i = 0; i < children.Length; i++)
+            {
+                if (children[i] != null) result.Add(children[i]);
+            }
+            return result;
+        }
+    }
+
+    /// <summary>
+    /// Safes whose role == <see cref="SafeRoleType.Treasury"/>. Their aggregate balance is
+    /// the building's spendable money for B2B shop purchases.
+    /// </summary>
+    public IReadOnlyList<SafeFurniture> TreasurySafes
+    {
+        get
+        {
+            var children = GetComponentsInChildren<SafeFurniture>(includeInactive: true);
+            var result = new List<SafeFurniture>();
+            for (int i = 0; i < children.Length; i++)
+            {
+                var s = children[i];
+                if (s != null && s.Role == SafeRoleType.Treasury) result.Add(s);
+            }
+            return result;
+        }
+    }
+
+    /// <summary>Aggregate balance across every <see cref="TreasurySafes"/> instance. Server + client safe.</summary>
+    public int GetTreasuryBalance(MWI.Economy.CurrencyId currency)
+    {
+        var safes = TreasurySafes;
+        int sum = 0;
+        for (int i = 0; i < safes.Count; i++)
+        {
+            sum += safes[i].GetBalance(currency);
+        }
+        return sum;
+    }
+
+    /// <summary>Predicate. Server + client safe.</summary>
+    public bool CanAffordFromTreasury(MWI.Economy.CurrencyId currency, int amount)
+        => amount <= 0 || GetTreasuryBalance(currency) >= amount;
+
+    /// <summary>
+    /// Server-only — atomically debits <paramref name="amount"/> from the aggregate treasury,
+    /// drawing greedily from the largest treasury safe first (so we deplete one safe at a time
+    /// rather than chip every safe by a small amount — easier for the player to read). Returns
+    /// false if total funds are insufficient; nothing is debited in that case.
+    /// </summary>
+    public bool TryDebitTreasury(MWI.Economy.CurrencyId currency, int amount, string reason)
+    {
+        if (!IsServer) return false;
+        if (amount <= 0) return true;
+        if (!CanAffordFromTreasury(currency, amount)) return false;
+
+        // Sort treasury safes by balance descending so we drain the fattest one first.
+        var safes = new List<SafeFurniture>(TreasurySafes);
+        safes.Sort((a, b) => b.GetBalance(currency).CompareTo(a.GetBalance(currency)));
+
+        int remaining = amount;
+        for (int i = 0; i < safes.Count && remaining > 0; i++)
+        {
+            var safe = safes[i];
+            int available = safe.GetBalance(currency);
+            if (available <= 0) continue;
+            int take = available < remaining ? available : remaining;
+            if (safe.TryDebit(currency, take, reason))
+            {
+                remaining -= take;
+            }
+        }
+
+        if (remaining > 0)
+        {
+            // Shouldn't happen — CanAffordFromTreasury guarded the entry. Log and refuse so
+            // callers don't silently believe the debit succeeded.
+            Debug.LogError($"[Treasury] {buildingName}: TryDebitTreasury post-guard mismatch (remaining={remaining} after debiting across {safes.Count} safes, reason='{reason}'). Treasury state may be inconsistent.");
+            return false;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Server-only — credits <paramref name="amount"/> to the LARGEST treasury safe (single
+    /// destination, so the credit is visible and atomic). Falls back to the first treasury
+    /// safe if all are empty. Logs an error and returns when no treasury safe exists (the
+    /// money has nowhere to land — callers should check <c>TreasurySafes.Count &gt; 0</c> first).
+    /// </summary>
+    public void CreditTreasury(MWI.Economy.CurrencyId currency, int amount, string reason)
+    {
+        if (!IsServer) return;
+        if (amount <= 0)
+        {
+            Debug.LogError($"[Treasury] {buildingName}: CreditTreasury rejected non-positive amount {amount} (reason='{reason}').");
+            return;
+        }
+        var safes = TreasurySafes;
+        if (safes.Count == 0)
+        {
+            Debug.LogWarning($"[Treasury] {buildingName}: CreditTreasury({amount}, '{reason}') skipped — building has no Treasury-role safe to receive funds.");
+            return;
+        }
+        SafeFurniture pick = safes[0];
+        int best = pick.GetBalance(currency);
+        for (int i = 1; i < safes.Count; i++)
+        {
+            int bal = safes[i].GetBalance(currency);
+            if (bal > best) { best = bal; pick = safes[i]; }
+        }
+        pick.Credit(currency, amount, reason);
+    }
+
+    /// <summary>
+    /// (Re-)subscribe to per-safe events so <see cref="OnTreasuryChanged"/> fires whenever any
+    /// child safe's balance or role changes. Called from <see cref="OnNetworkSpawn"/> after the
+    /// storage-role subscription pass; safe to call again later if safes are added/removed at
+    /// runtime (it diffs against <see cref="_subscribedSafes"/>).
+    /// </summary>
+    private void RefreshSafeSubscriptions()
+    {
+        var live = new HashSet<SafeFurniture>(GetComponentsInChildren<SafeFurniture>(includeInactive: true));
+
+        // Unsubscribe from safes that disappeared.
+        var stale = new List<SafeFurniture>();
+        foreach (var s in _subscribedSafes)
+        {
+            if (s == null || !live.Contains(s)) stale.Add(s);
+        }
+        for (int i = 0; i < stale.Count; i++)
+        {
+            var s = stale[i];
+            if (s != null)
+            {
+                s.OnBalanceChanged -= HandleSafeBalanceChanged;
+                s.OnRoleChanged    -= HandleSafeRoleChanged;
+            }
+            _subscribedSafes.Remove(s);
+        }
+
+        // Subscribe to safes that are new.
+        foreach (var s in live)
+        {
+            if (s == null) continue;
+            if (_subscribedSafes.Add(s))
+            {
+                s.OnBalanceChanged += HandleSafeBalanceChanged;
+                s.OnRoleChanged    += HandleSafeRoleChanged;
+            }
+        }
+    }
+
+    private void UnsubscribeAllSafeEvents()
+    {
+        foreach (var s in _subscribedSafes)
+        {
+            if (s == null) continue;
+            s.OnBalanceChanged -= HandleSafeBalanceChanged;
+            s.OnRoleChanged    -= HandleSafeRoleChanged;
+        }
+        _subscribedSafes.Clear();
+    }
+
+    private void HandleSafeBalanceChanged()       => OnTreasuryChanged?.Invoke();
+    private void HandleSafeRoleChanged(SafeRoleType _) => OnTreasuryChanged?.Invoke();
 
     // ============================================================================
     // STORAGE ROLE SYSTEM (unified — replaces ShopBuilding._sellShelves and the

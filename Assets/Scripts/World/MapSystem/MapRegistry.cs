@@ -97,6 +97,28 @@ namespace MWI.WorldSystem
     }
 
     /// <summary>
+    /// Saved state of one <see cref="SafeFurniture"/> instance inside a building.
+    /// Authored 2026-05-09 for the unified B2B shop-buy logistics path: every
+    /// commercial building (and homes, future variants) can carry one or more
+    /// safes; their balances aggregate into the building's Treasury.
+    /// <para>
+    /// <see cref="FurnitureKey"/> uses the same composite scheme as
+    /// <see cref="StorageFurnitureSaveEntry"/> (FurnitureItemSO.ItemId + building-local
+    /// position rounded to 2 decimals) so it survives <c>_defaultFurnitureLayout</c>
+    /// reorders and supports multiple safes per building.
+    /// </para>
+    /// </summary>
+    [Serializable]
+    public class SafeFurnitureSaveEntry
+    {
+        public string FurnitureKey;
+        public List<CurrencyBalanceEntry> Balances = new List<CurrencyBalanceEntry>();
+        /// <summary>Owner-assigned <see cref="SafeRoleType"/> (None / Treasury). Default
+        /// <see cref="SafeRoleType.None"/> for old saves — JSON enum defaults to 0.</summary>
+        public SafeRoleType Role = SafeRoleType.None;
+    }
+
+    /// <summary>
     /// One <see cref="Furniture"/> instance that was added to a building at runtime
     /// (via <see cref="CharacterPlaceFurnitureAction"/> — player or NPC) and is therefore
     /// NOT covered by the building prefab's <c>_defaultFurnitureLayout</c>. Persisted so
@@ -177,6 +199,15 @@ namespace MWI.WorldSystem
         /// <see cref="ComputeFurnitureKey"/> scheme.
         /// </summary>
         public List<CashierSaveEntry> Cashiers = new List<CashierSaveEntry>();
+
+        /// <summary>
+        /// Saved <see cref="SafeFurniture"/> state (per-currency balance + role). Default-empty
+        /// so older save files (no field) deserialize cleanly. Each entry is keyed by
+        /// <see cref="SafeFurnitureSaveEntry.FurnitureKey"/>. Authored 2026-05-09 for the
+        /// unified B2B shop-buy logistics path; aggregated into the building's Treasury at
+        /// runtime via <c>CommercialBuilding.GetTreasuryBalance</c>.
+        /// </summary>
+        public List<SafeFurnitureSaveEntry> Safes = new List<SafeFurnitureSaveEntry>();
 
         /// <summary>
         /// <see cref="ShopBuilding"/>-only: snapshot of the runtime mutable
@@ -392,6 +423,36 @@ namespace MWI.WorldSystem
                     {
                         Debug.LogException(eInner);
                         Debug.LogError($"<color=red>[BuildingSaveData:FromBuilding]</color> Failed to snapshot Cashier '{cashier.name}' on building '{building.BuildingName}' — entry skipped.");
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+            }
+
+            // SafeFurniture state (per-currency balance + role) — same per-furniture try/catch
+            // policy as StorageFurnitures / Cashiers above (rule #31). Authored 2026-05-09
+            // for the unified B2B shop-buy logistics path. Captured for ALL Building subtypes
+            // (not just commercial) because a home can hold a personal safe.
+            try
+            {
+                foreach (var safe in building.GetFurnitureOfType<SafeFurniture>())
+                {
+                    if (safe == null) continue;
+                    try
+                    {
+                        data.Safes.Add(new SafeFurnitureSaveEntry
+                        {
+                            FurnitureKey = ComputeFurnitureKey(safe, building.transform),
+                            Balances = safe.CaptureBalancesForSave(),
+                            Role = safe.Role,
+                        });
+                    }
+                    catch (Exception eInner)
+                    {
+                        Debug.LogException(eInner);
+                        Debug.LogError($"<color=red>[BuildingSaveData:FromBuilding]</color> Failed to snapshot SafeFurniture '{safe.name}' on building '{building.BuildingName}' — entry skipped.");
                     }
                 }
             }

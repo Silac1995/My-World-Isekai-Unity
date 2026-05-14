@@ -1001,6 +1001,10 @@ namespace MWI.WorldSystem
             // Cashier till + linkage.
             RestoreCashierContents(building, bSave);
 
+            // Safe balances + role (currency-only furniture). Aggregated by CommercialBuilding
+            // into the Treasury for B2B shop-buy logistics. Authored 2026-05-09.
+            RestoreSafeContents(building, bSave);
+
             // ShopBuilding-only: catalog restore is immediate; sell-shelf resolution is
             // deferred via OnFurnituresLoaded().
             if (building is ShopBuilding shopBuilding)
@@ -1332,6 +1336,60 @@ namespace MWI.WorldSystem
             if (restoredCount > 0)
             {
                 Debug.Log($"<color=green>[MapController:RestoreCashier]</color> Building '{building.BuildingName}' on '{MapId}': restored {restoredCount} cashier(s) from save.");
+            }
+        }
+
+        /// <summary>
+        /// Restore per-safe currency balances + role from <see cref="BuildingSaveData.Safes"/>.
+        /// Mirrors <see cref="RestoreCashierContents"/> structurally — server-only, per-entry
+        /// try/catch, per-furniture key lookup. Authored 2026-05-09 for the unified B2B
+        /// shop-buy logistics path.
+        ///
+        /// Role is written through <c>SafeFurnitureNetworkSync.SetRoleServer</c> so the
+        /// replicated NetworkVariable fans out to clients; balances are restored on the
+        /// SafeFurniture directly, with its <c>OnBalanceChanged</c> event driving the
+        /// sync component to rebuild the replicated NetworkList for clients.
+        /// </summary>
+        private void RestoreSafeContents(Building building, BuildingSaveData bSave)
+        {
+            if (building == null || bSave == null || bSave.Safes == null || bSave.Safes.Count == 0)
+                return;
+
+            int restoredCount = 0;
+
+            foreach (var safe in building.GetFurnitureOfType<SafeFurniture>())
+            {
+                if (safe == null) continue;
+                try
+                {
+                    string liveKey = BuildingSaveData.ComputeFurnitureKey(safe, building.transform);
+                    var saved = bSave.Safes.Find(s => s != null && s.FurnitureKey == liveKey);
+                    if (saved == null) continue; // Newly-added safe on a previously-saved building.
+
+                    // Balance restore: SafeFurniture.RestoreFromSaveData rebuilds the dict
+                    // and fires OnBalanceChanged → sync component rebuilds the NetworkList.
+                    safe.RestoreFromSaveData(saved.Balances);
+
+                    // Role restore: route through the sibling NetSync so OnValueChanged
+                    // fan-out reaches every client and the local SafeFurniture mirror updates.
+                    if (saved.Role != SafeRoleType.None)
+                    {
+                        var sync = safe.GetComponent<SafeFurnitureNetworkSync>();
+                        if (sync != null) sync.SetRoleServer(saved.Role);
+                    }
+
+                    restoredCount++;
+                }
+                catch (System.Exception ex)
+                {
+                    Debug.LogException(ex);
+                    Debug.LogError($"<color=red>[MapController:RestoreSafe]</color> Failed to restore safe on building '{building.BuildingName}'.");
+                }
+            }
+
+            if (restoredCount > 0)
+            {
+                Debug.Log($"<color=green>[MapController:RestoreSafe]</color> Building '{building.BuildingName}' on '{MapId}': restored {restoredCount} safe(s) from save.");
             }
         }
 
