@@ -82,6 +82,24 @@ public class JobVendor : Job
                     _isMovingToCashier = false;
                     // Next tick: step 1 sees Occupant == _worker and idles.
                 }
+                return;
+            }
+
+            // Path-loss recovery: if we're not in zone yet AND the agent has dropped its
+            // path (silent SetDestination no-op on tick 1 because OccupyingFurniture from
+            // the time-clock was still set, NavMeshAgent was briefly off-mesh, or another
+            // BT branch — e.g. a NeedHunger-driven GoapAction_BuyFood plan — switched away
+            // and back), re-issue SetDestination. Without this the vendor sits frozen
+            // because _isMovingToCashier is sticky and branch 4 (the original SetDestination
+            // call site) is gated behind it. See [[interactable-proximity-distance-anti-pattern]].
+            var movement = _worker.CharacterMovement;
+            if (!inZone && movement != null && !movement.HasPath)
+            {
+                // SetDestination internally gates on knockback timer, OccupyingFurniture,
+                // and isOnNavMesh — if any of those still hold, the call silently no-ops
+                // and we re-try next tick. The pattern is self-healing.
+                movement.SetDestination(
+                    _heldCashier.GetInteractionPosition(_worker.transform.position));
             }
             return;
         }

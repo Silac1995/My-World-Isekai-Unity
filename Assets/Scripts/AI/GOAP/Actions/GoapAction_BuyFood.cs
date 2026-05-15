@@ -135,7 +135,11 @@ public class GoapAction_BuyFood : GoapAction
 
         if (!inZone)
         {
-            if (!_isMoving)
+            // Re-fire SetDestination whenever _isMoving was never raised OR the agent
+            // dropped its path (BT branch switched away and back, knockback, brief
+            // OccupyingFurniture, transient NavMesh exit). The sticky _isMoving flag
+            // alone is not enough — see [[interactable-proximity-distance-anti-pattern]].
+            if (!_isMoving || !movement.HasPath)
             {
                 movement.SetDestination(_cashier.GetInteractionPosition(worker.transform.position));
                 _isMoving = true;

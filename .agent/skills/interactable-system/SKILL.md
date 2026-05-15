@@ -102,6 +102,22 @@ if (interactable != null && interactable.InteractionZone != null)
 
 Canonical implementations (copy from these): `GoapAction_FetchSeed`, `GoapAction_ReturnToolToStorage`, `GoapAction_FetchToolFromStorage`, `GoapAction_BuyFood`, `GoapAction_GoShopping`, `GoapAction_GatherStorageItems`, `GoapAction_TakeFromSourceFurniture`.
 
+**Path-loss recovery** (the second half of the bug class — the JobVendor regression of 2026-05-15): once the worker is en route (`_isMoving = true` / `_isMovingToCashier = true`), the "still walking" branch must also re-fire `SetDestination` when `movement.HasPath` is false. A BT branch switch (e.g. `NeedHunger` triggering a fresh `GoapAction_BuyFood` plan that preempts the work branch), a knockback, a brief `OccupyingFurniture`, or a transient `isOnNavMesh = false` can leave the NavMeshAgent with no destination while the sticky flag stays `true`. Without `|| !movement.HasPath`, the worker stands frozen in the en-route state forever. Pattern:
+
+```csharp
+if (!inZone)
+{
+    if (!_isMoving || !movement.HasPath)
+    {
+        movement.SetDestination(target.GetInteractionPosition(worker.transform.position));
+        _isMoving = true;
+    }
+    return;
+}
+```
+
+The same shape applies to `JobVendor.Execute` branch 3 — it tests for `!movement.HasPath` and re-issues `SetDestination` against the held cashier's interaction point.
+
 **When authoring an InteractionZone collider for a new interactable**: size it generously — at least a few times the NavMeshAgent's stopping distance, ideally a ring around the body of the interactable rather than the body itself. The NavMesh-sampled landing point should always fall inside the zone. If you have to add a "1.5 m grace radius" inside a `Vector3.Distance` check to make NPCs interact, the zone is too small — fix the zone, not the check.
 
 See [CLAUDE.md rule #36](../../../CLAUDE.md) for the full project rule + reminder checklist.

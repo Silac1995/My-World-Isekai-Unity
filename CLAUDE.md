@@ -172,7 +172,22 @@ The Character entity uses a **Facade + Child Hierarchy** pattern:
                                  new Vector3(ip.x, 0f, ip.z)) <= 1.5f;
    }
 
-   if (!inZone) { /* walk */ if (!_isMoving) { movement.SetDestination(...); _isMoving = true; } return; }
+   if (!inZone)
+   {
+       // Re-fire SetDestination when the agent dropped its path. The sticky `_isMoving`
+       // flag alone is not enough: the BT can switch away from this branch (e.g. a
+       // NeedHunger-driven GoapAction_BuyFood plan preempts the work branch) and on
+       // return, the agent's destination has been cleared while `_isMoving` is still
+       // true. Without the `|| !movement.HasPath` re-fire, the NPC stands frozen
+       // forever in the "en route" state with no actual path. Same shape lives on
+       // JobVendor.Execute branch 3 (vendor walking to a cashier).
+       if (!_isMoving || !movement.HasPath)
+       {
+           movement.SetDestination(target.GetInteractionPosition(worker.transform.position));
+           _isMoving = true;
+       }
+       return;
+   }
    // arrived: enqueue the CharacterAction / fire the interaction.
    ```
 
@@ -183,5 +198,6 @@ The Character entity uses a **Facade + Child Hierarchy** pattern:
    **Reminder for every new NPC↔interactable behaviour:** before pressing Save, walk through this checklist:
    1. Does the target expose `InteractableObject.InteractionZone`? If yes, gate on `IsCharacterInInteractionZone`. If no, add one — don't paper over with `Vector3.Distance`.
    2. Is there a softlock guard for "path landed just outside the zone"? Mirror the `HasPath`/`RemainingDistance` block above.
-   3. Is the movement gate the only proximity check? `CharacterActions.ExecuteAction` already re-validates `IsCharacterInInteractionZone` server-side as anti-cheat — your gate must agree with the server's gate, or the action will be queued and immediately rejected.
-   4. If this action is also reachable by a player command (rule #33), the same zone is used by the `Interact` path on the `Interactable` — keep them symmetric so the NPC and the human see the same "can interact" surface.
+   3. Is the "still walking" branch resilient to **path-loss** (BT branch switch / knockback / brief `OccupyingFurniture` / transient NavMesh exit)? Sticky flags like `_isMoving` / `_isMovingToCashier` must be paired with a `!movement.HasPath` re-fire of `SetDestination`, otherwise the worker freezes in the en-route state forever — this is what bit `JobVendor` on 2026-05-15 the moment `NeedHunger` started preempting the work branch.
+   4. Is the movement gate the only proximity check? `CharacterActions.ExecuteAction` already re-validates `IsCharacterInInteractionZone` server-side as anti-cheat — your gate must agree with the server's gate, or the action will be queued and immediately rejected.
+   5. If this action is also reachable by a player command (rule #33), the same zone is used by the `Interact` path on the `Interactable` — keep them symmetric so the NPC and the human see the same "can interact" surface.

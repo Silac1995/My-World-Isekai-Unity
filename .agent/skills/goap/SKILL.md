@@ -135,7 +135,18 @@ When writing `GoapAction`s or Behaviour Tree wrappers (like `BTAction_PunchOut`)
       inZone = Vector3.Distance(new Vector3(wp.x, 0f, wp.z),
                                 new Vector3(ip.x, 0f, ip.z)) <= 1.5f;
   }
-  if (!inZone) { if (!_isMoving) { movement.SetDestination(target.GetInteractionPosition(...)); _isMoving = true; } return; }
+  if (!inZone)
+  {
+      // Re-fire SetDestination when the agent dropped its path (BT branch switch,
+      // knockback, brief OccupyingFurniture, transient NavMesh exit). Sticky
+      // `_isMoving` alone is NOT enough — that's the JobVendor regression of 2026-05-15.
+      if (!_isMoving || !movement.HasPath)
+      {
+          movement.SetDestination(target.GetInteractionPosition(worker.transform.position));
+          _isMoving = true;
+      }
+      return;
+  }
   // arrived → enqueue CharacterAction / fire interaction
   ```
   When designing a new interactable, author the `InteractionZone` collider generously (a few times the agent's stopping distance) so the NavMesh-sampled landing always falls inside it. `GetInteractionPosition` is a *navigation hint*, never the arrival truth.

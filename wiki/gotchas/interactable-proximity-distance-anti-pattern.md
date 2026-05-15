@@ -79,7 +79,11 @@ else
 
 if (!inZone)
 {
-    if (!_isMoving)
+    // Re-fire SetDestination if the agent dropped its path (BT branch switch,
+    // knockback, brief OccupyingFurniture, transient NavMesh exit). The sticky
+    // `_isMoving` flag alone is not enough — see "Companion bug: path-loss
+    // recovery" below.
+    if (!_isMoving || !movement.HasPath)
     {
         movement.SetDestination(target.GetInteractionPosition(worker.transform.position));
         _isMoving = true;
@@ -88,6 +92,16 @@ if (!inZone)
 }
 // arrived → enqueue CharacterAction / fire interaction
 ```
+
+### Companion bug: path-loss while in the en-route state (the JobVendor regression)
+
+Once a worker is "en route" (`_isMoving = true` or `_isMovingToCashier = true`), the gate above only re-fires `SetDestination` when `!movement.HasPath` is also true. **Both halves are required.** The sticky flag alone causes a second softlock:
+
+1. Tick N: worker reserves the target, `SetDestination` succeeds, flag flips to `true`.
+2. Tick N+k: another BT branch (e.g. `NeedHunger` triggering a fresh `GoapAction_BuyFood` plan) preempts the work branch. The OnExit / `CancelPlan` path can leave the NavMeshAgent with no destination (or a stale one).
+3. Tick N+k+1: the BT returns to the work branch, the en-route check fires, `inZone == false`, the gate sees `_isMoving == true` and *returns without re-issuing `SetDestination`*. Worker stands frozen forever.
+
+This is exactly what bit `JobVendor.Execute` on 2026-05-15 the moment `NeedHunger` started actively switching the BT branch on vendor NPCs (commit `36b6afec`'s downstream effect). The fix is the `|| !movement.HasPath` re-fire above; same pattern is required on every action that holds an en-route sticky flag — currently `GoapAction_BuyFood`, `GoapAction_GoShopping`, `JobVendor`, and structurally also `GoapAction_FetchSeed` / `ReturnToolToStorage` / `FetchToolFromStorage` / `GatherStorageItems` / `TakeFromSourceFurniture` (latent — those workers' BT rarely switches branches mid-walk today).
 
 ## Designer-side companion rule — author InteractionZone colliders generously
 The `InteractionZone` collider on every new `InteractableObject` must be sized **at least a few times the NavMeshAgent's stopping distance**, ideally a ring around the body of the interactable rather than the body itself. The NavMesh-sampled landing point (which can be up to 5 m off the interaction-point hint) needs to land **inside** the zone for the containment test to succeed without falling through to the softlock guard. If a real-world workflow requires "1.5 m grace radius inside the action code" to make NPCs interact, the **zone is too small** — enlarge the zone on the prefab, never widen the action's distance check. Same physical zone is read by the server-side anti-cheat re-check in `CharacterActions.ExecuteAction`, so the NPC-side gate and the server-side gate stay symmetric (see [[host-only-state-blindspot]] question 6).
