@@ -57,7 +57,11 @@ public class GoapAction_BuyFood : GoapAction
     public override bool IsValid(Character worker)
     {
         if (_isComplete) return false;
-        if (_shop == null || _cashier == null || _foodSO == null) return false;
+        if (_shop == null || _cashier == null || _foodSO == null)
+        {
+            Debug.LogWarning($"<color=orange>[BuyFood/IsValid]</color> {worker?.CharacterName}: null reference (shop={(_shop != null)}, cashier={(_cashier != null)}, foodSO={(_foodSO != null)}).");
+            return false;
+        }
         if (worker == null) return false;
 
         // Once we've enqueued the buy CharacterAction, ride out its lifetime — the
@@ -65,24 +69,40 @@ public class GoapAction_BuyFood : GoapAction
         // mid-purchase (same pattern as GoapAction_GoShopping).
         if (_actionEnqueued) return true;
 
-        if (!_cashier.IsAvailableForCustomer) return false;
+        if (!_cashier.IsAvailableForCustomer)
+        {
+            Debug.LogWarning($"<color=orange>[BuyFood/IsValid]</color> {worker.CharacterName}: cashier '{_cashier.FurnitureName}' not available for customer (CurrentCustomer={_cashier.CurrentCustomer?.CharacterName ?? "null"}, Occupant={_cashier.Occupant?.CharacterName ?? "null"}).");
+            return false;
+        }
 
         // Wallet check. price = 0 is legal (free sample / dev catalog) — only block when
         // the worker can't actually afford a non-free entry.
         var entry = _shop.GetCatalogEntry(_foodSO);
-        if (!entry.HasValue) return false;
+        if (!entry.HasValue) { Debug.LogWarning($"<color=orange>[BuyFood/IsValid]</color> {worker.CharacterName}: catalog entry missing for '{_foodSO.name}' at '{_shop.BuildingName}'."); return false; }
         int price = ShopBuilding.ResolvePrice(entry.Value);
         if (price > 0 && (worker.CharacterWallet == null ||
-                          !worker.CharacterWallet.CanAfford(CurrencyId.Default, price))) return false;
+                          !worker.CharacterWallet.CanAfford(CurrencyId.Default, price)))
+        {
+            Debug.LogWarning($"<color=orange>[BuyFood/IsValid]</color> {worker.CharacterName}: can't afford '{_foodSO.name}' (price={price}, balance={worker.CharacterWallet?.GetBalance(CurrencyId.Default) ?? 0}).");
+            return false;
+        }
 
         // Inventory/hands room for the food we are about to receive.
         bool hasBagSpace = worker.CharacterEquipment != null &&
                            worker.CharacterEquipment.HasFreeSpaceForItemSO(_foodSO);
         bool handsFree = worker.CharacterVisual?.BodyPartsController?.HandsController?.AreHandsFree() == true;
-        if (!hasBagSpace && !handsFree) return false;
+        if (!hasBagSpace && !handsFree)
+        {
+            Debug.LogWarning($"<color=orange>[BuyFood/IsValid]</color> {worker.CharacterName}: no inventory or hands space for '{_foodSO.name}'.");
+            return false;
+        }
 
         // Stock check — the shelf may have been emptied since NeedHunger picked us.
-        if (!ShopHasItemInStock(_shop, _foodSO)) return false;
+        if (!ShopHasItemInStock(_shop, _foodSO))
+        {
+            Debug.LogWarning($"<color=orange>[BuyFood/IsValid]</color> {worker.CharacterName}: '{_foodSO.name}' no longer on a sell-shelf at '{_shop.BuildingName}'.");
+            return false;
+        }
 
         return true;
     }
@@ -93,12 +113,23 @@ public class GoapAction_BuyFood : GoapAction
         if (worker == null) { _isComplete = true; return; }
 
         var movement = worker.CharacterMovement;
-        if (movement == null) { _isComplete = true; return; }
+        if (movement == null)
+        {
+            Debug.LogError($"<color=red>[BuyFood/Execute]</color> {worker.CharacterName}: CharacterMovement is null.");
+            _isComplete = true;
+            return;
+        }
 
         Vector3 dest = _cashier.GetInteractionPosition(worker.transform.position);
-        if (Vector3.Distance(worker.transform.position, dest) > 1.5f)
+        float distance = Vector3.Distance(worker.transform.position, dest);
+        if (distance > 1.5f)
         {
-            if (!_isMoving) { movement.SetDestination(dest); _isMoving = true; }
+            if (!_isMoving)
+            {
+                Debug.Log($"<color=cyan>[BuyFood/Execute]</color> {worker.CharacterName} walking to cashier '{_cashier.FurnitureName}' at {dest} (distance={distance:F2}, worker.pos={worker.transform.position}, occupiedFurniture={worker.OccupyingFurniture?.name ?? "null"}).");
+                movement.SetDestination(dest);
+                _isMoving = true;
+            }
             return;
         }
         if (_isMoving) { movement.Stop(); _isMoving = false; }
@@ -106,8 +137,14 @@ public class GoapAction_BuyFood : GoapAction
         if (!_actionEnqueued)
         {
             // Re-check at the moment of enqueue — another NPC may have just locked the cashier.
-            if (!_cashier.IsAvailableForCustomer) { _isComplete = true; return; }
+            if (!_cashier.IsAvailableForCustomer)
+            {
+                Debug.LogWarning($"<color=orange>[BuyFood/Execute]</color> {worker.CharacterName}: cashier '{_cashier.FurnitureName}' became unavailable just as we arrived — aborting.");
+                _isComplete = true;
+                return;
+            }
 
+            Debug.Log($"<color=green>[BuyFood/Execute]</color> {worker.CharacterName} arrived at cashier '{_cashier.FurnitureName}' — enqueuing CharacterAction_BuyFromShop for '{_foodSO.name}'.");
             _enqueuedAction = new CharacterAction_BuyFromShop(
                 worker,
                 _cashier,
