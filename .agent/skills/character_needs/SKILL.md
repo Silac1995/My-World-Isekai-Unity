@@ -48,7 +48,9 @@ Because Needs are simply Data Providers, the resolution happens naturally in Pri
 ### 4. Existing Needs & Actions
 - `NeedSocial` -> `GoapGoal("Socialize")` -> `GoapAction_Socialize`.
 - `NeedJob` -> `GoapGoal("FindJob")` -> `GoapAction_AskForJob`.
-- `NeedToWearClothing` -> `GoapGoal("WearClothing")` -> `GoapAction_WearClothing`.
+- `NeedToWearClothing` -> `GoapGoal({"isNaked": false})` -> shop-first, ground-pickup fallback (one chain at a time — see NeedToWearClothing block below):
+  - **Shop (default):** `[GoapAction_BuyClothing, GoapAction_EquipCarriedClothing]` — NPC walks to a `Cashier` and buys a `WearableSO` matching the highest-urgency missing slot (Pants for groin / Armor for chest) via `CharacterAction_BuyFromShop(BuyMode.NPC)`, then equips it via `CharacterEquipAction`.
+  - **Ground pickup (fallback):** the legacy monolithic `GoapAction_WearClothing` — scans `CharacterAwareness` for a loose `WorldItem` with a `WearableInstance`. Used when no shop carries an affordable matching wearable.
 - `NeedShopping` -> `GoapGoal("GoShopping")` -> `GoapAction_GoShopping`.
 - `NeedHunger` -> `GoapGoal({"isHungry": false})` -> shop-first, ground-emergency-only (one chain at a time — see GOAP integration below):
   - **Shop (default):** `[GoapAction_BuyFood, GoapAction_EatCarriedFood]` — NPC walks to a `Cashier` and buys a `FoodSO` from the shop's catalog via `CharacterAction_BuyFromShop(BuyMode.NPC)`.
@@ -126,3 +128,40 @@ NPCs satisfy hunger by **buying food from a shop** (default) and only fall back 
 - `Assets/Scripts/AI/GOAP/Actions/GoapAction_GoToWorldFood.cs` — **emergency ground path**: navigates to a loose `WorldItem` whose instance is a `FoodInstance` (effect `atWorldFood = true`).
 - `Assets/Scripts/AI/GOAP/Actions/GoapAction_PickupWorldFood.cs` — **emergency ground path**: runs `CharacterPickUpItem` on the loose food (effect `carryingFood = true`).
 - `Assets/Scripts/AI/GOAP/Actions/GoapAction_GoToFood.cs` / `GoapAction_Eat.cs` — **retired** for hunger as of the shop-buy migration; left in the codebase pending a future personal/owned-storage concept. Not registered by `NeedHunger`.
+
+---
+
+## NeedToWearClothing
+
+Triggers when the character's chest or groin slot is empty across all three wearable layers (Underwear / Clothing / Armor). Urgency = 100 (groin exposed) or 60 (chest only). Goal is `{"isNaked": false}`.
+
+### GOAP integration
+
+NPCs satisfy this need by **buying clothing from a shop** (default) and only fall back to **picking clothing off the ground** when no shop carries an affordable matching wearable. The legacy monolithic `GoapAction_WearClothing` is preserved as the fallback chain.
+
+- `IsActive()` returns true when controller is non-player AND (`CharacterEquipment.IsChestExposed()` OR `CharacterEquipment.IsGroinExposed()`) AND `CurrentAction is not CharacterEquipAction`.
+- `GetGoapGoal()` → `{"isNaked": false}` with urgency 100 (Pants needed) or 60 (Armor only).
+- `GetGoapActions()` runs at most two scans and returns the first chain that matches:
+  1. **Shop scan (`TryFindShopClothing`, default).** Walks every `ShopBuilding` registered with `BuildingManager.allBuildings`. For each missing slot in priority order (`Pants` for groin, then `Armor` for chest — matches the urgency math), iterates each shop's `Catalog` for `ItemSO is WearableSO ws && ws.WearableType == slot`, then filters by: cashier available (`GetFirstAvailableCashier`), wallet covers `ShopBuilding.ResolvePrice(entry)`, at least one matching `ItemInstance` is on a sell-shelf (`ShopHasItemInStock`), and inventory or hands space free (`HasFreeSpaceForItemSO` / `AreHandsFree`). **Scoring picks the cheapest in-slot** — the more-urgent slot wins ties because the priority loop returns on first hit. On a hit returns `[GoapAction_BuyClothing(shop, cashier, wearableSO), GoapAction_EquipCarriedClothing]`.
+  2. **Ground-pickup fallback.** Returns the existing monolithic `[GoapAction_WearClothing]` (scans `CharacterAwareness` for ground `WorldItem`s, walks, queues `CharacterEquipAction`).
+- Movement gate inside `GoapAction_BuyClothing` follows CLAUDE.md rule #36 (InteractionZone containment + softlock guard + path-loss recovery).
+- The two chains share the goal key `isNaked` but use disjoint intermediate keys (`carryingClothing` for the shop chain, none for the monolithic ground action), so the planner cannot cross-link them.
+
+### Multiplayer audit (six-question, per rule #19b)
+1. **Writers/readers:** `CharacterEquipment` slot state and `CharacterWallet` balances are server-written via the existing `CharacterAction_BuyFromShop` and `CharacterEquipAction` paths. GOAP planning runs server-only.
+2. **Replication:** No new NetworkVariables or RPCs. Wallet via `CharacterWallet.BroadcastBalanceChangeClientRpc`, till via `CashierNetSync`, sell-shelf via existing slot replication, item delivery via `CharacterEquipment.PickUpItem` (server-owned) or `ReceiveItemPickupClientRpc` (remote owner). `CharacterEquipment.Equip` already replicates via the existing equipment-system path used by the player flow.
+3. **Late-joiner:** sees the walk, till update, wallet update, inventory change, then the equip — all via existing replication.
+4. **Client pre-gate:** none — `IsActive` excludes `PlayerController` already (via the controller check inherited from `CharacterNeed`).
+5. **Awake races:** none added — `GoapAction_BuyClothing` is a plain C# class instantiated by `NeedToWearClothing.GetGoapActions`.
+6. **Proximity:** cashier proximity via `Cashier.GetInteractionPosition` + `InteractableObject.IsCharacterInInteractionZone` (rule #36).
+
+### Key files
+- `Assets/Scripts/Character/CharacterNeeds/NeedToWearClothing.cs` — need implementation; owns `TryFindShopClothing`.
+- `Assets/Scripts/AI/GOAP/Actions/GoapAction_BuyClothing.cs` — **shop path**: walks to a `Cashier`, runs `CharacterAction_BuyFromShop(BuyMode.NPC)` for the chosen `WearableSO` (effect `carryingClothing = true`).
+- `Assets/Scripts/AI/GOAP/Actions/GoapAction_EquipCarriedClothing.cs` — terminator for the shop chain: scans hands first then inventory for a `WearableInstance`, prefers one matching a currently-exposed slot, runs `CharacterEquipAction` (effect `isNaked = false`).
+- `Assets/Scripts/AI/GOAP/Actions/GoapAction_WearClothing.cs` — **ground-pickup fallback**: monolithic find-walk-equip against loose `WorldItem`s in `CharacterAwareness`.
+- `Assets/Resources/Data/Item/WearableSO.cs` — `EquipmentSO` subtype with `WearableType` + `WearableLayerEnum`.
+- `Assets/Scripts/Item/Equipment/WearableInstance.cs` — runtime instance.
+- `Assets/Scripts/Item/Equipment/EnumEquipment.cs` — `WearableType` enum (Helmet, Armor, Gloves, Pants, Boots, Bag).
+- `Assets/Scripts/Character/CharacterEquipment/CharacterEquipment.cs` — exposes `IsChestExposed()` / `IsGroinExposed()` / `Equip()`.
+- `Assets/Scripts/Character/CharacterActions/CharacterEquipAction.cs` — the underlying equip CharacterAction (0.8s animation).

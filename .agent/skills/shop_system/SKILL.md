@@ -35,6 +35,7 @@ Vendors are the face of the shop. Their GOAP/BT behavior traps them behind the c
 NPCs driven by needs trigger a shopping behavior. Currently shipping consumers:
 - **`NeedShopping`** → `GoapAction_GoShopping(ItemSO)` → `CharacterAction_BuyFromShop(BuyMode.NPC)`. Used by the generic "I want this specific item" flow.
 - **`NeedHunger`** → `GoapAction_BuyFood(shop, cashier, foodSO)` → `CharacterAction_BuyFromShop(BuyMode.NPC)`. New as of 2026-05-15: hungry NPCs scan every `ShopBuilding` for `FoodSO` catalog entries they can afford, pick the highest `HungerRestored`/`price` ratio, and buy a single item. The shop-buy is the default — ground pickup is gated to the emergency hunger window (`CurrentValue ≤ 10`). See `character-needs/SKILL.md §NeedHunger` for the full path.
+- **`NeedToWearClothing`** → `GoapAction_BuyClothing(shop, cashier, wearableSO)` → `GoapAction_EquipCarriedClothing` → `CharacterAction_BuyFromShop(BuyMode.NPC)` → `CharacterEquipAction`. New as of 2026-05-15: underdressed NPCs scan every `ShopBuilding` for `WearableSO` entries matching the highest-urgency missing slot (Pants for groin, then Armor for chest), pick the cheapest in-slot, buy and equip. The shop-buy is the default — the existing monolithic `GoapAction_WearClothing` (ground-pickup) is the fallback when no shop carries an affordable matching wearable. See `character-needs/SKILL.md §NeedToWearClothing` for the full path.
 
 Common shape:
 - The NPC paths to a `Cashier` (selected at planning time so the choice is replan-stable). `Cashier.IsAvailableForCustomer` is the gate.

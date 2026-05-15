@@ -92,6 +92,19 @@ The legacy workplace-storage path (`GoapAction_GoToFood` + `GoapAction_Eat`) is 
 
 For procedural details (decay formula, full GOAP integration, macro-sim catch-up, ServerRpc surface) see [.agent/skills/character_needs/SKILL.md](../../.agent/skills/character_needs/SKILL.md).
 
+### NeedToWearClothing (shop-buy migration added 2026-05-15)
+
+Slot-presence need: active when `CharacterEquipment.IsChestExposed()` OR `IsGroinExposed()` returns true across all three wearable layers (Underwear / Clothing / Armor). Urgency is 100 (groin exposed) or 60 (chest only). Goal is `{"isNaked": false}`.
+
+**GOAP resolver — shop-first with ground-pickup fallback (rewritten 2026-05-15):** `NeedToWearClothing.GetGoapActions()` returns one chain at a time, mirroring the `NeedHunger` shape:
+
+1. **Shop path (default).** `TryFindShopClothing` walks `BuildingManager.allBuildings` and, for each missing slot in priority order (`Pants` first if groin exposed, then `Armor` if chest exposed — matches the urgency math), iterates each shop's `Catalog` for `ItemSO is WearableSO ws && ws.WearableType == slot`. Filters: cashier available, wallet covers `ShopBuilding.ResolvePrice(entry)`, sell-shelf stock present, inventory or hands space free. Scoring picks the cheapest in-slot. Chain: `[GoapAction_BuyClothing(shop, cashier, wearableSO) → GoapAction_EquipCarriedClothing]`. Effect keys: `carryingClothing` → `isNaked=false`. The buy reuses `CharacterAction_BuyFromShop(BuyMode.NPC)`; the equip reuses `CharacterEquipAction` (same path the player uses).
+2. **Ground-pickup fallback.** The pre-existing monolithic `GoapAction_WearClothing` — scans `CharacterAwareness.GetVisibleInteractables<ItemInteractable>()` for a loose `WearableInstance` matching a missing type, walks, queues `CharacterEquipAction`. Used only when no shop carries an affordable matching wearable.
+
+Movement gate inside `GoapAction_BuyClothing` follows CLAUDE.md rule #36 (`IsCharacterInInteractionZone` containment + softlock guard + path-loss recovery — see [[interactable-proximity-distance-anti-pattern]]).
+
+For full GOAP integration, multiplayer audit, and key files see [.agent/skills/character_needs/SKILL.md §NeedToWearClothing](../../.agent/skills/character_needs/SKILL.md).
+
 ## Data flow
 
 ```
@@ -157,6 +170,7 @@ for each HibernatedNPCData:
 - 2026-04-26 — NeedHunger made server-authoritative via `NetworkVariable<float>` on `CharacterNeeds`; eat path routes through `RequestAdjustHungerRpc`; need registration moved from Start→Awake to fix `0/0` HUD bug on local-owner clients — claude
 - 2026-04-26 — NeedHunger gained a second food source: loose `WorldItem`s in awareness radius. New chain `[GoapAction_GoToWorldFood → GoapAction_PickupWorldFood → GoapAction_EatCarriedFood]` preempts the workplace-storage chain when ground food is detected. Disjoint state keys (`atWorldFood` / `carryingFood` vs `atFood`) prevent planner cross-linking — claude
 - 2026-05-15 — NeedHunger food-acquisition rewired: shop-buy is now the default path via new `GoapAction_BuyFood` (chains `[GoapAction_BuyFood → GoapAction_EatCarriedFood]` and reuses `CharacterAction_BuyFromShop(BuyMode.NPC)`). The ground-pickup chain is gated behind a new emergency threshold (`NeedHungerMath.DEFAULT_EMERGENCY_THRESHOLD = 10`, i.e. need ≥ 90%). The workplace-storage path was retired — NPCs no longer self-serve from their employer's storage. Action classes `GoapAction_GoToFood` / `GoapAction_Eat` remain in the codebase pending a personal/owned-storage concept — claude
+- 2026-05-15 — NeedToWearClothing clothing-acquisition rewired: shop-buy is now the default path via new `GoapAction_BuyClothing` + `GoapAction_EquipCarriedClothing` (chains `[GoapAction_BuyClothing → GoapAction_EquipCarriedClothing]` and reuses `CharacterAction_BuyFromShop(BuyMode.NPC)` + `CharacterEquipAction`). The legacy monolithic `GoapAction_WearClothing` (ground pickup from `CharacterAwareness`) is preserved as the fallback chain — used only when no shop carries an affordable matching wearable. Scoring prefers the most-urgent missing slot (Pants > Armor, matching the existing urgency math), then cheapest in slot. Movement gate inside `GoapAction_BuyClothing` follows CLAUDE.md rule #36 (InteractionZone containment + softlock guard + path-loss recovery). Mirrors the NeedHunger shop-buy migration — claude
 
 ## Sources
 - [.agent/skills/character_needs/SKILL.md](../../.agent/skills/character_needs/SKILL.md)
@@ -172,5 +186,10 @@ for each HibernatedNPCData:
 - [Assets/Scripts/AI/GOAP/Actions/GoapAction_PickupWorldFood.cs](../../Assets/Scripts/AI/GOAP/Actions/GoapAction_PickupWorldFood.cs) — emergency ground path
 - [Assets/Scripts/AI/GOAP/Actions/GoapAction_GoToFood.cs](../../Assets/Scripts/AI/GOAP/Actions/GoapAction_GoToFood.cs) — retired from NeedHunger; kept pending personal-storage concept
 - [Assets/Scripts/AI/GOAP/Actions/GoapAction_Eat.cs](../../Assets/Scripts/AI/GOAP/Actions/GoapAction_Eat.cs) — retired from NeedHunger; kept pending personal-storage concept
-- [Assets/Scripts/Character/CharacterActions/CharacterAction_BuyFromShop.cs](../../Assets/Scripts/Character/CharacterActions/CharacterAction_BuyFromShop.cs) — shared buy pipeline (BuyMode.NPC reused by GoapAction_BuyFood)
+- [Assets/Scripts/Character/CharacterActions/CharacterAction_BuyFromShop.cs](../../Assets/Scripts/Character/CharacterActions/CharacterAction_BuyFromShop.cs) — shared buy pipeline (BuyMode.NPC reused by GoapAction_BuyFood + GoapAction_BuyClothing)
+- [Assets/Scripts/Character/CharacterNeeds/NeedToWearClothing.cs](../../Assets/Scripts/Character/CharacterNeeds/NeedToWearClothing.cs) — need implementation; shop-first / ground-fallback as of 2026-05-15.
+- [Assets/Scripts/AI/GOAP/Actions/GoapAction_BuyClothing.cs](../../Assets/Scripts/AI/GOAP/Actions/GoapAction_BuyClothing.cs) — shop path (registered by NeedToWearClothing). Mirror of GoapAction_BuyFood.
+- [Assets/Scripts/AI/GOAP/Actions/GoapAction_EquipCarriedClothing.cs](../../Assets/Scripts/AI/GOAP/Actions/GoapAction_EquipCarriedClothing.cs) — terminator for the shop chain; runs CharacterEquipAction.
+- [Assets/Scripts/AI/GOAP/Actions/GoapAction_WearClothing.cs](../../Assets/Scripts/AI/GOAP/Actions/GoapAction_WearClothing.cs) — ground-pickup fallback (legacy monolithic action).
+- [Assets/Resources/Data/Item/WearableSO.cs](../../Assets/Resources/Data/Item/WearableSO.cs) — EquipmentSO subtype carrying WearableType + WearableLayerEnum.
 - [[ai]] and [[world]] (parents-of-interest).
