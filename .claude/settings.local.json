@@ -118,7 +118,13 @@
       "Bash(git -C '/c/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity' add Assets/Scripts/World/Buildings/BuildingLogisticsManager.cs Assets/Scripts/World/Buildings/CommercialBuilding.cs)",
       "Bash(git -C '/c/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity' add Assets/Scripts/World/Buildings/Logistics/LogisticsStockEvaluator.cs)",
       "Bash(git -C \"/c/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity\" add wiki/systems/commercial-treasury.md)",
-      "Bash(git -C '/c/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity' add .agent/skills/building_system/SKILL.md .agent/skills/shop_system/SKILL.md .agent/skills/logistics_cycle/SKILL.md)"
+      "Bash(git -C '/c/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity' add .agent/skills/building_system/SKILL.md .agent/skills/shop_system/SKILL.md .agent/skills/logistics_cycle/SKILL.md)",
+      "PowerShell(Get-ChildItem \"$env:USERPROFILE\\\\AppData\\\\LocalLow\" -Directory | ForEach-Object { Get-ChildItem $_.FullName -Directory -ErrorAction SilentlyContinue } | Select-Object FullName | ForEach-Object { $_.FullName })",
+      "mcp__plugin_context-mode_context-mode__ctx_execute_file",
+      "mcp__plugin_context-mode_context-mode__ctx_search",
+      "mcp__plugin_context-mode_context-mode__ctx_execute",
+      "Bash(git -c core.quotepath=off log --all --oneline --diff-filter=D --name-only -- '*Ambition*')",
+      "mcp__plugin_claude-mem_mcp-search__get_observations"
     ],
     "additionalDirectories": [
       "\\tmp"

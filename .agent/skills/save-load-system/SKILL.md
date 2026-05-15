@@ -13,7 +13,7 @@ Portable character profiles that travel across worlds. Characters are independen
 
 ### Key Classes
 - `CharacterDataCoordinator` — orchestrates export/import, lives on root Character GO
-- `CharacterProfileSaveData` — the portable profile DTO (characterGuid, originWorldGuid, componentStates, partyMembers, worldAssociations)
+- `CharacterProfileSaveData` — the portable profile DTO (characterGuid, originWorldGuid, componentStates, partyMembers, worldAssociations). **Invariant:** `partyMembers` (`List<CharacterProfileSaveData>`) is annotated `[System.NonSerialized]` so Unity's reflection serializer does not walk the self-referencing type cycle. Newtonsoft.Json (the actual round-trip path used by `SaveFileHandler` with default settings) ignores `[NonSerialized]` and still persists the field. Without the annotation, Unity hits its depth-10 serialization limit whenever the type is reached through any `[SerializeField]` chain (the live case being `WildernessZone._wildlife : List<HibernatedNPCData>` → `HibernatedNPCData.ProfileData`); editor only logs a warning, **standalone Mono build crashes natively during scene load**. Full diagnostic in [Unity-serialized self-referencing type crashes standalone build on load](../../wiki/gotchas/unity-serializer-self-cycle-build-crash.md). Apply the same rule to any new save DTO with a self-cycle or A→B→A cycle.
 - `SaveFileHandler` — atomic async file I/O to `Profiles/{characterGuid}.json` and `Worlds/{worldGuid}.json`
 - `CharacterSaveDataHelper` — static JSON bridge for ICharacterSaveData<T>
 - `SaveManager` — world save orchestration with `SaveLoadState` enum (Idle/Saving/Loading) and mutual exclusion
