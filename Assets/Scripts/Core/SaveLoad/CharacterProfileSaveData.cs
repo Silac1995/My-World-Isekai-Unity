@@ -22,7 +22,13 @@ public class CharacterProfileSaveData
     // All subsystem states, keyed by ICharacterSaveData.SaveKey
     public Dictionary<string, string> componentStates = new Dictionary<string, string>();
 
-    // Party NPC members (fully serialized, players excluded)
+    // Party NPC members. [NonSerialized] stops Unity's reflection serializer from
+    // walking the CharacterProfileSaveData -> partyMembers -> CharacterProfileSaveData
+    // type cycle (hits Unity's depth-10 limit; standalone Mono build crashes natively
+    // during scene load). Newtonsoft.Json (used by SaveFileHandler with default
+    // IgnoreSerializableAttribute=true) ignores [NonSerialized] and still round-trips
+    // this field via the JSON profile, so party persistence is preserved.
+    [System.NonSerialized]
     public List<CharacterProfileSaveData> partyMembers = new List<CharacterProfileSaveData>();
 
     // Worlds this character has visited, with last position per world

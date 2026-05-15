@@ -72,7 +72,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 1594388405883346693}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: b787ca49f61d2a84f9ad18ddd7df1f9d, type: 3}
+  m_Script: {fileID: 11500000, guid: 545c5d99d29f47f28aa81b0fb23e3c10, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MWI.Ambition.CharacterAmbition
   ShowTopMostFoldoutHeaderGroup: 1
