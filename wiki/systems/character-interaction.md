@@ -3,13 +3,14 @@ type: system
 title: "Character Interaction"
 tags: [character, social, dialogue, tier-2]
 created: 2026-04-18
-updated: 2026-05-02
+updated: 2026-05-15
 sources: []
 related:
   - "[[character]]"
   - "[[social]]"
   - "[[dialogue]]"
   - "[[kevin]]"
+  - "[[interactable-proximity-distance-anti-pattern]]"
 status: stable
 confidence: high
 primary_agent: character-social-architect

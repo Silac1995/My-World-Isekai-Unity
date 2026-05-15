@@ -12,6 +12,7 @@ related:
   - "[[shops]]"
   - "[[world-time-skip]]"
   - "[[kevin]]"
+  - "[[interactable-proximity-distance-anti-pattern]]"
 status: stable
 confidence: high
 primary_agent: character-system-specialist

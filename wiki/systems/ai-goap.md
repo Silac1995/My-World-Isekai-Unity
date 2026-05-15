@@ -3,7 +3,7 @@ type: system
 title: "AI GOAP"
 tags: [ai, goap, planning, npc, tier-2]
 created: 2026-04-19
-updated: 2026-04-27
+updated: 2026-05-15
 sources: []
 related:
   - "[[ai]]"
@@ -12,6 +12,8 @@ related:
   - "[[jobs-and-logistics]]"
   - "[[social]]"
   - "[[kevin]]"
+  - "[[interactable-proximity-distance-anti-pattern]]"
+  - "[[chain-action-isvalid-pre-filter]]"
 status: stable
 confidence: high
 primary_agent: npc-ai-specialist
