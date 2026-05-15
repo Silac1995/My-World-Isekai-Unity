@@ -201,3 +201,51 @@ The Character entity uses a **Facade + Child Hierarchy** pattern:
    3. Is the "still walking" branch resilient to **path-loss** (BT branch switch / knockback / brief `OccupyingFurniture` / transient NavMesh exit)? Sticky flags like `_isMoving` / `_isMovingToCashier` must be paired with a `!movement.HasPath` re-fire of `SetDestination`, otherwise the worker freezes in the en-route state forever — this is what bit `JobVendor` on 2026-05-15 the moment `NeedHunger` started preempting the work branch.
    4. Is the movement gate the only proximity check? `CharacterActions.ExecuteAction` already re-validates `IsCharacterInInteractionZone` server-side as anti-cheat — your gate must agree with the server's gate, or the action will be queued and immediately rejected.
    5. If this action is also reachable by a player command (rule #33), the same zone is used by the `Interact` path on the `Interactable` — keep them symmetric so the NPC and the human see the same "can interact" surface.
+
+## Standalone Build Crash Diagnostics
+
+37. **For any native crash in the standalone player (`Crash!!!` in `Player.log`, no managed exception, addresses inside `UnityPlayer.dll`), copying `UnityPlayer_Win64_player_development_mono_x64.pdb` from the Unity install to the build folder is the FIRST diagnostic step, not the tenth.** Without managed function names in the stack trace, every other diagnostic step is guessing. The cost is 30 seconds; the savings are hours. See [wiki/gotchas/material-buildproperties-standalone-crash.md](wiki/gotchas/material-buildproperties-standalone-crash.md) for the May 2026 incident this rule was extracted from.
+
+    **Setup (Development Build, Mono Standalone):**
+    ```powershell
+    $pdbSrc = "C:\Program Files\Unity\Hub\Editor\<UNITY_VERSION>\Editor\Data\PlaybackEngines\WindowsStandaloneSupport\Variations\win64_player_development_mono\UnityPlayer_Win64_player_development_mono_x64.pdb"
+    Copy-Item $pdbSrc -Destination "<path to build folder containing UnityPlayer.dll>"
+    # Also copy UnityCrashHandler64.pdb from the same Variations folder.
+    ```
+    **Keep the embedded PDB filename** (`UnityPlayer_Win64_player_development_mono_x64.pdb`, NOT renamed to `UnityPlayer.pdb`) — dbghelp matches by GUID embedded in the DLL's debug-directory record, but the filename has to match what the DLL points to. Renaming defeats it.
+
+    **Build Settings:** ☑ Development Build, ☑ Script Debugging (Mono debugger hooks present so dbghelp can correlate). Set programmatically via `EditorUserBuildSettings.development = true; EditorUserBuildSettings.allowDebugging = true;` if you don't want to click. For Release builds, use `WindowsPlayer_player_Release_mono_x64.pdb` from the same `Variations/` folder.
+
+    **Re-run the existing build (no rebuild needed)** — dbghelp loads the PDB at crash time. The next `OUTPUTTING STACK TRACE` section will have managed function names like `ShaderPropertySheet::UpdateTextureInfo` instead of `(function-name not available)`.
+
+## Editor vs Build Serialization Tolerance
+
+38. **The Unity Editor's asset loader is lenient; the standalone Mono build's native loader is strict.** Any asset that the Editor "loads with a warning" can crash the standalone build natively at scene load with no managed exception. Categories that have bitten this project:
+
+    - **Materials with broken/dangling texture references** (`_MainTex` GUID points to a deleted texture) — Editor renders magenta + warns, build crashes in `Material::BuildProperties → UpdateTextureInfo`.
+    - **Materials with `m_InvalidKeywords`** (the material has a keyword the shader no longer declares) — Editor strips silently, build can crash on property-sheet build.
+    - **Materials with `Infinity` values in serialized Color/Vector properties** (e.g. `_CameraFadeParams: {r: 0, g: Infinity, b: 0, a: 0}`) — Editor handles, Mono build's native binary deserializer can choke on it.
+    - **ScriptableObjects in `Resources/` with `m_Script: {fileID: 0}` or a script GUID that doesn't exist** — Editor warns "Script attached to '...' is missing or no valid script is attached," build's Resources/ preload at startup can crash.
+    - **Prefabs with `MonoBehaviour` components whose script GUID no longer resolves to a `.cs` file** — Editor logs "The referenced script on this Behaviour is missing," build can crash on `AwakeFromLoadQueue`.
+    - **`[SerializeReference]` polymorphic fields holding a type that was renamed/deleted** — Editor shows `Missing managed reference`, build deref crashes on first access.
+    - **`CharacterProfileSaveData.partyMembers`-style self-referential type cycle** without `[NonSerialized]` — Editor logs "Serialization depth limit 10 exceeded," build chains warnings into a native crash during scene deserialization.
+
+    **Implications:**
+    - **A clean Editor Console does NOT mean a healthy build.** Every "warning" the Editor logs about asset deserialization is a potential build crash. Treat them as build-blocking until proven otherwise.
+    - **The Editor's `AssetDatabase` resolves references on demand and falls back to null; the build's pre-baked fileID/GUID tables don't have a fallback path.** If a reference can't resolve, the build either skips it (best case) or segfaults (worst case).
+    - **Resources/ folder content is pre-loaded en masse at app start in the build** (not the Editor). Any single corrupt asset in `Resources/` is a boot-time crash. Scan `Resources/` after any asset deletion or script rename.
+    - **OnValidate doesn't run in the build.** Anything the Editor "auto-heals" via OnValidate (clamps, defaults, missing-ref repair) flows straight into Awake unmodified in the standalone player.
+
+    **Before shipping or after any asset/script rename or deletion, run the broken-reference scan in this Roslyn snippet** (drop into a temporary Editor script):
+    ```csharp
+    foreach (var p in Directory.GetFiles("Assets", "*.asset", SearchOption.AllDirectories)) {
+        var obj = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(p.Replace('\\','/'));
+        if (obj == null) Debug.LogError($"[ASSET_NULL_LOAD] {p}");
+        else if (obj is ScriptableObject so && MonoScript.FromScriptableObject(so)?.GetClass() == null)
+            Debug.LogError($"[ASSET_MISSING_TYPE] {p}");
+    }
+    // Mirror this scan for *.prefab to catch missing-script MonoBehaviours, and walk
+    // SerializedObject iterators on every material's m_SavedProperties.m_TexEnvs to
+    // catch broken texture refs (objectReferenceValue == null && objectReferenceInstanceIDValue != 0).
+    ```
+    Pair this scan with the `UnityPlayer.pdb` setup in rule #37 so the next standalone crash arrives with a managed-name stack trace ready to read.
