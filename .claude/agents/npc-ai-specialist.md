@@ -94,15 +94,20 @@ IsComplete                 // Done?
 2. `Replan()` — collect goals from needs, sort by priority, find cheapest plan
 3. `ExecutePlan()` — tick current action, dequeue on completion, invalidate on `!IsValid()`
 
-### 6. All 20 GOAP Actions
+### 6. Canonical GOAP Actions (non-exhaustive)
 
 | Action | Purpose |
 |--------|---------|
 | `GoapAction_Socialize` | Find target, start dialogue |
 | `GoapAction_AskForJob` | Move to boss, request employment |
 | `GoapAction_GoToBoss` | Navigate to job location boss |
-| `GoapAction_WearClothing` | Equip clothing from inventory |
-| `GoapAction_GoShopping` | Navigate to shop, buy item |
+| `GoapAction_WearClothing` | **Ground-pickup fallback** for `NeedToWearClothing`: scans `CharacterAwareness` for loose `WearableInstance`s, walks, runs `CharacterEquipAction`. Monolithic. Registered as the fallback chain only — primary path is `GoapAction_BuyClothing`. |
+| `GoapAction_BuyClothing` | **Shop path** for `NeedToWearClothing` (2026-05-15). Walks to a chosen `Cashier`, runs `CharacterAction_BuyFromShop(BuyMode.NPC)` for a chosen `WearableSO` (cheapest-in-slot, Pants > Armor priority by urgency). Effect `carryingClothing:true`. Movement gate is the canonical CLAUDE.md rule #36 pattern. Sibling of `GoapAction_BuyFood`. |
+| `GoapAction_EquipCarriedClothing` | Terminator for the shop clothing chain. Scans hands then inventory for a `WearableInstance` (prefers one matching a currently-exposed slot), runs `CharacterEquipAction`. Effect `isNaked:false`. Sibling of `GoapAction_EatCarriedFood`. |
+| `GoapAction_BuyFood` | **Shop path** for `NeedHunger` (2026-05-15). Walks to a chosen `Cashier`, runs `CharacterAction_BuyFromShop(BuyMode.NPC)` for a chosen `FoodSO` (highest `HungerRestored/price` ratio). Effect `carryingFood:true`. Movement gate is the canonical CLAUDE.md rule #36 pattern (InteractionZone containment + softlock guard + path-loss recovery — pattern was first exposed and fixed by this action). |
+| `GoapAction_EatCarriedFood` | Terminator for the shop hunger chain AND the emergency-ground-pickup chain. Scans hands then inventory for a `FoodInstance`, runs `CharacterUseConsumableAction`. Effect `isHungry:false`. |
+| `GoapAction_GoToWorldFood` / `GoapAction_PickupWorldFood` | **Emergency ground-pickup chain** for `NeedHunger`. Only registered when `CurrentValue ≤ NeedHungerMath.DEFAULT_EMERGENCY_THRESHOLD` (10 — need ≥ 90%). Effect keys `atWorldFood` → `carryingFood`. |
+| `GoapAction_GoShopping` | **Generic shop-buy** for `NeedShopping` (single fixed `ItemSO`). Same movement-gate pattern as `BuyFood` / `BuyClothing`. Effect `shoppingDone:true`. |
 | `GoapAction_LocateItem` | **Furniture-first scan**: walks `source.GetItemsInStorageFurniture()` first, sets `JobTransporter.TargetSourceFurniture` + `TargetItemFromFurniture` on hit. Falls back to CharacterAwareness scan + `GetWorldItemsInStorage`. Audit branch (logical-but-not-physical) preserves slot-stored items via a `GetItemsInStorageFurniture()` check before triggering `RefreshStorageInventory` + cancel. |
 | `GoapAction_MoveToItem` | Navigate to item location. **Mutual-exclusion guard**: `IsValid` returns false when `JobTransporter.TargetSourceFurniture != null` (the furniture path runs `GoapAction_TakeFromSourceFurniture` instead). |
 | `GoapAction_PickupItem` | Pick up reserved transport item from a `WorldItem`. **Mutual-exclusion guard**: `IsValid` returns false when `TargetSourceFurniture != null`. Self-heals when `source.RemoveExactItemFromInventory` returns false but the `WorldItem.ItemInstance` is still in `CurrentOrder.ReservedItems`; proceeds with pickup + warn-logs. Only reports `ReportMissingReservedItem` + cancel when both the logical inventory AND the reservation are gone. |
@@ -128,9 +133,9 @@ Needs are **read-only state sensors** — they DO NOT execute logic. They provid
 |------|-------------|---------|------|---------|
 | `NeedSocial` | Value < 30 + cooldown elapsed | `100 - value` | `Socialize` | `GoapAction_Socialize` |
 | `NeedJob` | !HasJob + not player + cooldown | 60 (fixed) | `FindJob` | `GoToBoss` → `AskForJob` |
-| `NeedToWearClothing` | Chest/groin exposed | 60-100 | `WearClothing` | `GoapAction_WearClothing` |
+| `NeedToWearClothing` | Chest/groin exposed | 60-100 (Pants > Armor) | `{"isNaked": false}` | **Shop (default)**: `GoapAction_BuyClothing` → `GoapAction_EquipCarriedClothing`. **Ground fallback**: `GoapAction_WearClothing`. Returned disjointly; shop chain uses key `carryingClothing`, ground chain uses none. |
 | `NeedShopping` | Has desired item + not player | 55 (fixed) | `GoShopping` | `GoapAction_GoShopping` |
-| `NeedHunger` | `IsLow()` (≤30) + NPC + cooldown elapsed | `MaxValue - CurrentValue` | `{"isHungry": false}` | World-food (preempts): `GoapAction_GoToWorldFood` → `GoapAction_PickupWorldFood` → `GoapAction_EatCarriedFood`. Workplace fallback: `GoapAction_GoToFood` → `GoapAction_Eat`. Disjoint state keys. |
+| `NeedHunger` | `IsLow()` (≤30) + NPC + cooldown elapsed | `MaxValue - CurrentValue` | `{"isHungry": false}` | **Shop (default)**: `GoapAction_BuyFood` → `GoapAction_EatCarriedFood`. **Emergency ground pickup** (only at `CurrentValue ≤ 10`): `GoapAction_GoToWorldFood` → `GoapAction_PickupWorldFood` → `GoapAction_EatCarriedFood`. Returned disjointly. Workplace-storage path retired. |
 
 **Decay**: `NeedSocial` loses 45 points per day via `TimeManager.OnNewDay`. Offline decay formula in `MacroSimulator`.
 
