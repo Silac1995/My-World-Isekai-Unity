@@ -134,3 +134,54 @@ The Character entity uses a **Facade + Child Hierarchy** pattern:
 ## ECS / DOTS Adoption Gate
 
 35. **Unity ECS / Entities is installed (`com.unity.feature.ecs@1.0.0`) but the project is GameObject-based.** For any new system, the **default is MonoBehaviour** — ECS is the exception, not the baseline. Before choosing the shape of a new system, apply the decision gate at [wiki/concepts/unity-ecs.md](wiki/concepts/unity-ecs.md) (full reference: [wiki/references/unity-ecs-manual.md](wiki/references/unity-ecs-manual.md), local mirror at `raw/articles/unity-ecs-manual/`). ECS qualifies *only* when ALL of these hold: (a) iterating ~1k+ entities per frame or per tick, (b) no NGO replication required (or pure server-side simulation), (c) no Inspector / prefab / `ICharacterVisual` / Spine binding, (d) no Character / Building / Item / Network entanglement, (e) profiler-confirmed bottleneck *or* projected scale where plain `[BurstCompile]` + `NativeArray<T>` cannot keep up. The middle path — **Burst + Jobs without ECS** (`[BurstCompile] IJob` / `IJobParallelFor` over `NativeArray<T>`) — handles most "this is too slow" situations and **must be tried before reaching for ECS**. Permanent non-fits: Character, Buildings, Items, UI, dialogue, combat actions, character orders, anything Inspector-authored or NGO-replicated. Half-and-half hybrid pipelines cost more than they save — when in doubt, stay GameObject.
+
+## Interactable Proximity (NPC ↔ Interactable)
+
+36. **NPC "am I close enough to interact?" is `InteractableObject.IsCharacterInInteractionZone(worker)` — NEVER raw `Vector3.Distance(worker, GetInteractionPosition(...)) < N`.** This applies to every `GoapAction.Execute`, every `CharacterAction.OnStart` / `OnTick`, every `BTAction` movement gate, and every `IPlayerCommand` that walks a character to a target before doing something to it. The naive `Vector3.Distance` check is a load-bearing bug, not a shortcut: `CharacterMovement.SetDestination` internally calls `NavMesh.SamplePosition(target, 5m, …)`, which routinely lands the agent **several metres off the requested interaction point** because the interactable's own collider blocks the NavMesh directly under it (cashier counter, chest, crafting station, bed, door, etc.). The agent stops at the sampled landing point — but the gate is still measuring against the original off-mesh dest, so the distance never falls below the threshold, `_isMoving` stays `true`, `SetDestination` is never re-issued, and the NPC stands frozen forever in front of the object it wanted to use. The user-visible symptom is "NPC walks up, then just stares at the cashier / chest / crafting station." This bit us on `GoapAction_BuyFood` on 2026-05-15; the same shape lurks in any new action that copies the simple-distance pattern.
+
+   **Canonical gate (mirror this verbatim — see `GoapAction_FetchSeed`, `GoapAction_ReturnToolToStorage`, `GoapAction_FetchToolFromStorage`, `GoapAction_BuyFood`, `GoapAction_GoShopping`, `GoapAction_GatherStorageItems`, `GoapAction_TakeFromSourceFurniture`):**
+
+   ```csharp
+   var interactable = target.GetComponent<InteractableObject>(); // e.g. CashierInteractable, FurnitureInteractable
+   bool inZone;
+   if (interactable != null && interactable.InteractionZone != null)
+   {
+       inZone = interactable.IsCharacterInInteractionZone(worker);
+       if (!inZone)
+       {
+           // Softlock guard: path landed just outside the zone (SamplePosition pulled
+           // the landing off the in-mesh interaction point). Without this, _isMoving
+           // stays true forever and the worker never re-SetsDestination → frozen NPC.
+           bool arrived = !movement.HasPath
+               || movement.RemainingDistance <= movement.StoppingDistance + 0.5f;
+           if (arrived)
+           {
+               Vector3 ip = target.GetInteractionPosition(worker.transform.position);
+               Vector3 wp = worker.transform.position;
+               if (Vector3.Distance(new Vector3(wp.x, 0f, wp.z),
+                                    new Vector3(ip.x, 0f, ip.z)) <= 2f) inZone = true;
+           }
+       }
+   }
+   else
+   {
+       // No InteractionZone collider on this target → fall back to flat-XZ distance.
+       Vector3 ip = target.GetInteractionPosition(worker.transform.position);
+       Vector3 wp = worker.transform.position;
+       inZone = Vector3.Distance(new Vector3(wp.x, 0f, wp.z),
+                                 new Vector3(ip.x, 0f, ip.z)) <= 1.5f;
+   }
+
+   if (!inZone) { /* walk */ if (!_isMoving) { movement.SetDestination(...); _isMoving = true; } return; }
+   // arrived: enqueue the CharacterAction / fire the interaction.
+   ```
+
+   **When designing a new interactable** (`Cashier`-shaped, `Furniture`-shaped, `WorldItem`-shaped, anything an NPC walks up to): the `InteractionZone` collider on the matching `InteractableObject` is the authoritative "you can interact from here" gate. Author it generously — a few times the agent's stopping distance is normal — so the NavMesh-sampled landing point always falls inside it. The "interaction point" returned by `GetInteractionPosition` is a *navigation hint*, not the arrival truth; if the NavMesh can't reach it, the zone-overlap test must still succeed.
+
+   **Companion rule (anti-spam):** wrap movement-gate `Debug.Log`s behind `NPCDebug.VerboseActions` (or equivalent) — every BT tick re-evaluates the gate, and an ungated log line per tick per NPC is the documented progressive-freeze pattern (rule #34).
+
+   **Reminder for every new NPC↔interactable behaviour:** before pressing Save, walk through this checklist:
+   1. Does the target expose `InteractableObject.InteractionZone`? If yes, gate on `IsCharacterInInteractionZone`. If no, add one — don't paper over with `Vector3.Distance`.
+   2. Is there a softlock guard for "path landed just outside the zone"? Mirror the `HasPath`/`RemainingDistance` block above.
+   3. Is the movement gate the only proximity check? `CharacterActions.ExecuteAction` already re-validates `IsCharacterInInteractionZone` server-side as anti-cheat — your gate must agree with the server's gate, or the action will be queued and immediately rejected.
+   4. If this action is also reachable by a player command (rule #33), the same zone is used by the `Interact` path on the `Interactable` — keep them symmetric so the NPC and the human see the same "can interact" surface.

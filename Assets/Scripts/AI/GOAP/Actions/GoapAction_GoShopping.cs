@@ -59,10 +59,45 @@ public class GoapAction_GoShopping : GoapAction
         var movement = worker.CharacterMovement;
         if (movement == null) { _isComplete = true; return; }
 
-        var dest = _chosenCashier.GetInteractionPosition(worker.transform.position);
-        if (Vector3.Distance(worker.transform.position, dest) > 1.5f)
+        // Movement gate: InteractionZone containment + softlock guard, NOT raw distance
+        // to GetInteractionPosition. NavMesh.SamplePosition can pull the agent's landing
+        // several metres off the interaction point (cashier mesh blocks NavMesh beneath it),
+        // and a naive distance check then never resolves. See goap/SKILL.md "Interactable
+        // Core Rule #1" + CLAUDE.md rule #36. Mirror of GoapAction_FetchSeed / BuyFood.
+        var interactable = _chosenCashier.GetComponent<InteractableObject>();
+        bool inZone;
+        if (interactable != null && interactable.InteractionZone != null)
         {
-            if (!_isMoving) { movement.SetDestination(dest); _isMoving = true; }
+            inZone = interactable.IsCharacterInInteractionZone(worker);
+            if (!inZone)
+            {
+                bool arrived = !movement.HasPath
+                    || movement.RemainingDistance <= movement.StoppingDistance + 0.5f;
+                if (arrived)
+                {
+                    Vector3 ip = _chosenCashier.GetInteractionPosition(worker.transform.position);
+                    Vector3 wp = worker.transform.position;
+                    if (Vector3.Distance(new Vector3(wp.x, 0f, wp.z),
+                                         new Vector3(ip.x, 0f, ip.z)) <= 2f)
+                        inZone = true;
+                }
+            }
+        }
+        else
+        {
+            Vector3 ip = _chosenCashier.GetInteractionPosition(worker.transform.position);
+            Vector3 wp = worker.transform.position;
+            inZone = Vector3.Distance(new Vector3(wp.x, 0f, wp.z),
+                                      new Vector3(ip.x, 0f, ip.z)) <= 1.5f;
+        }
+
+        if (!inZone)
+        {
+            if (!_isMoving)
+            {
+                movement.SetDestination(_chosenCashier.GetInteractionPosition(worker.transform.position));
+                _isMoving = true;
+            }
             return;
         }
         if (_isMoving) { movement.Stop(); _isMoving = false; }

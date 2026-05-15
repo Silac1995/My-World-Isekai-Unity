@@ -108,7 +108,37 @@ When writing `GoapAction`s or Behaviour Tree wrappers (like `BTAction_PunchOut`)
 - **Interaction Bounds Validation:** When navigating to a `WorldItem` for interaction, do **not** use `bounds.ClosestPoint(...)` for the destination. The `NavMeshAgent` deceleration will stop the agent just short of the bounds, causing `bounds.Intersects(...)` to randomly flap and the character to stutter endlessly. Always sequence the destination directly to the center (`targetPos`) of the item so the agent naturally deeply pierces the interaction boundary as it slows to a halt.
 
 ### 7. Strict Architectural Rules
-- **Interaction Distance**: To interact with an object or get in range, **always** use the `InteractionZone` (its colliders or explicit properties).
+- **Interaction Distance — `IsCharacterInInteractionZone`, not `Vector3.Distance`** (CLAUDE.md rule #36, interactable-system Core Rule #1): every `GoapAction.Execute` movement gate must call `interactable.IsCharacterInInteractionZone(worker)` against the target's `InteractableObject`, plus a softlock guard for "NavMesh-sampled landing fell just outside the zone". The naive `Vector3.Distance(worker, GetInteractionPosition(...)) < N` check is a load-bearing bug — `CharacterMovement.SetDestination` runs `NavMesh.SamplePosition(target, 5m, …)`, which routinely lands the agent several metres off the interaction point because the interactable's collider blocks the NavMesh under it. The dest never falls inside the threshold, `_isMoving` stays `true`, NPC freezes in front of the target. **Mirror the canonical block verbatim** — copy from `GoapAction_FetchSeed`, `GoapAction_ReturnToolToStorage`, `GoapAction_BuyFood`, or `GoapAction_GoShopping`:
+  ```csharp
+  var interactable = target.GetComponent<InteractableObject>();
+  bool inZone;
+  if (interactable != null && interactable.InteractionZone != null)
+  {
+      inZone = interactable.IsCharacterInInteractionZone(worker);
+      if (!inZone)
+      {
+          bool arrived = !movement.HasPath
+              || movement.RemainingDistance <= movement.StoppingDistance + 0.5f;
+          if (arrived)
+          {
+              Vector3 ip = target.GetInteractionPosition(worker.transform.position);
+              Vector3 wp = worker.transform.position;
+              if (Vector3.Distance(new Vector3(wp.x, 0f, wp.z),
+                                   new Vector3(ip.x, 0f, ip.z)) <= 2f) inZone = true;
+          }
+      }
+  }
+  else
+  {
+      Vector3 ip = target.GetInteractionPosition(worker.transform.position);
+      Vector3 wp = worker.transform.position;
+      inZone = Vector3.Distance(new Vector3(wp.x, 0f, wp.z),
+                                new Vector3(ip.x, 0f, ip.z)) <= 1.5f;
+  }
+  if (!inZone) { if (!_isMoving) { movement.SetDestination(target.GetInteractionPosition(...)); _isMoving = true; } return; }
+  // arrived → enqueue CharacterAction / fire interaction
+  ```
+  When designing a new interactable, author the `InteractionZone` collider generously (a few times the agent's stopping distance) so the NavMesh-sampled landing always falls inside it. `GetInteractionPosition` is a *navigation hint*, never the arrival truth.
 - **Physical Destruction**: When picking up an item from the scene/world, you must **always destroy it IN THE `Assets/Scripts/Character/CharacterActions/CharacterPickUpItem.cs`**. NOWHERE ELSE. Never call Destroy manually from GOAP actions.
 - **Spawning Rules**: To SPAWN an item in the world through `Assets/Scripts/Item/WorldItem.cs`:
     - If it's an existing item, use the methods in `Assets/Scripts/Item/ItemInstance.cs` to keep the ItemInstance parameters intact.

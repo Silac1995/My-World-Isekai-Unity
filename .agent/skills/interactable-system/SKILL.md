@@ -71,6 +71,41 @@ public override bool CanExecute()
 
 If the method returns `false`, the interaction must not proceed. There is no fallback, no grace distance, no "close enough" override. Move the character inside the zone, or cancel the interaction.
 
+### Movement gate for GOAP / BT actions — the same method, plus a softlock guard
+
+When an NPC needs to walk to an interactable before acting on it, the arrival gate is **still** `IsCharacterInInteractionZone(worker)`, **not** `Vector3.Distance(worker, GetInteractionPosition(...)) < N`. The naive distance check is a load-bearing bug: `CharacterMovement.SetDestination` runs `NavMesh.SamplePosition(target, 5m, …)` and the agent lands at the sampled NavMesh point, not the original `GetInteractionPosition` value — and the original is usually *inside the interactable's mesh*, several metres off any NavMesh. The distance never falls under the threshold, `_isMoving` stays `true`, `SetDestination` is never re-issued, NPC stands frozen.
+
+The arrival truth is "is the worker overlapping the zone collider", with a softlock guard for "path landed just outside the zone":
+
+```csharp
+var interactable = target.GetComponent<InteractableObject>();
+bool inZone;
+if (interactable != null && interactable.InteractionZone != null)
+{
+    inZone = interactable.IsCharacterInInteractionZone(worker);
+    if (!inZone)
+    {
+        // NavMesh path target landed off-zone; once the agent stopped, fall back
+        // to a 2 m flat-XZ distance check to the interaction-point hint.
+        bool arrived = !movement.HasPath
+            || movement.RemainingDistance <= movement.StoppingDistance + 0.5f;
+        if (arrived)
+        {
+            Vector3 ip = target.GetInteractionPosition(worker.transform.position);
+            Vector3 wp = worker.transform.position;
+            if (Vector3.Distance(new Vector3(wp.x, 0f, wp.z),
+                                 new Vector3(ip.x, 0f, ip.z)) <= 2f) inZone = true;
+        }
+    }
+}
+```
+
+Canonical implementations (copy from these): `GoapAction_FetchSeed`, `GoapAction_ReturnToolToStorage`, `GoapAction_FetchToolFromStorage`, `GoapAction_BuyFood`, `GoapAction_GoShopping`, `GoapAction_GatherStorageItems`, `GoapAction_TakeFromSourceFurniture`.
+
+**When authoring an InteractionZone collider for a new interactable**: size it generously — at least a few times the NavMeshAgent's stopping distance, ideally a ring around the body of the interactable rather than the body itself. The NavMesh-sampled landing point should always fall inside the zone. If you have to add a "1.5 m grace radius" inside a `Vector3.Distance` check to make NPCs interact, the zone is too small — fix the zone, not the check.
+
+See [CLAUDE.md rule #36](../../../CLAUDE.md) for the full project rule + reminder checklist.
+
 ### Re-validate at apply time for any `CharacterAction` with non-zero duration
 
 `CharacterAction.CanExecute()` is called once before the action starts. Anything with a duration window (animation, channel, multi-tick craft) leaves room for the character to drift out of the zone between `OnStart` and `OnApplyEffect` — knockback, station picked up by another worker, station despawned, parent building hibernated. Without a re-check, the action would still produce its effect (item spawn, stat change, world mutation) even though the character is no longer at the interactable.
