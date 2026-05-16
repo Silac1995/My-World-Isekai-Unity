@@ -105,6 +105,13 @@ namespace MWI.UI.Furniture
 
         public CurrencyId Currency => _currency;
 
+        // Submit-button availability rule (Stardew-style clamp-on-submit):
+        // Buttons are enabled whenever both (a) the user has typed > 0 AND (b) the source
+        // has > 0 to move. We DO NOT disable when typed-amount > source-balance — instead,
+        // OnDepositClicked / OnWithdrawClicked clamp the typed amount down to the source
+        // balance before invoking the submit callback. This is what lets a player type
+        // "9999" and click Deposit to "deposit everything I've got" without first reading
+        // their wallet total or pressing MAX.
         private void RefreshSubmitAvailability()
         {
             int safeBal = _getSafeBalance != null ? _getSafeBalance() : 0;
@@ -113,14 +120,17 @@ namespace MWI.UI.Furniture
             int wd = ParseAmount(_withdrawInput);
 
             if (_depositSubmitButton != null)
-                _depositSubmitButton.interactable = dep > 0 && dep <= walletBal;
+                _depositSubmitButton.interactable = dep > 0 && walletBal > 0;
             if (_withdrawSubmitButton != null)
-                _withdrawSubmitButton.interactable = wd > 0 && wd <= safeBal;
+                _withdrawSubmitButton.interactable = wd > 0 && safeBal > 0;
         }
 
         private void OnDepositClicked()
         {
-            int amount = ParseAmount(_depositInput);
+            int typed = ParseAmount(_depositInput);
+            int max = _getWalletBalance != null ? _getWalletBalance() : 0;
+            // Clamp: if the user typed more than they actually have, submit what they have.
+            int amount = Mathf.Min(typed, max);
             if (amount <= 0) return;
             _onDepositSubmit?.Invoke(amount);
             if (_depositInput != null) _depositInput.text = "0";
@@ -128,7 +138,10 @@ namespace MWI.UI.Furniture
 
         private void OnWithdrawClicked()
         {
-            int amount = ParseAmount(_withdrawInput);
+            int typed = ParseAmount(_withdrawInput);
+            int max = _getSafeBalance != null ? _getSafeBalance() : 0;
+            // Clamp: if the user typed more than the safe holds, withdraw the safe's balance.
+            int amount = Mathf.Min(typed, max);
             if (amount <= 0) return;
             _onWithdrawSubmit?.Invoke(amount);
             if (_withdrawInput != null) _withdrawInput.text = "0";
