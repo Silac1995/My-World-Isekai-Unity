@@ -57,23 +57,18 @@ namespace MWI.UI.Furniture
         private const float AutoClosePollInterval = 1f;
 
         /// <summary>
-        /// Programmatically ensure the panel root has its own Canvas + GraphicRaycaster
-        /// so it renders/raycasts independently of the parent HUD canvas — mirrors the
-        /// defensive pattern in <c>UI_StorageFurniturePanel.Awake</c>.
+        /// Awake just chains to the base. We DO NOT add a Canvas/GraphicRaycaster on the
+        /// panel root — that would create a second Canvas at runtime because the inherited
+        /// <c>Canvas</c> child GameObject (from UI_WindowBase.prefab variant chain) already
+        /// supplies them. Having two Canvases (root + child) at different hierarchy levels
+        /// produces conflicting render-mode/sorting state and was the root cause of the
+        /// "panel visible in Scene view but invisible in Game view" symptom (2026-05-16).
+        /// The panel's content (header / row container / status label) lives inside the
+        /// inherited Canvas child's hierarchy; that single Canvas is the only render surface.
         /// </summary>
         protected override void Awake()
         {
             base.Awake();
-
-            var canvas = GetComponent<Canvas>();
-            if (canvas == null) canvas = gameObject.AddComponent<Canvas>();
-            canvas.overrideSorting = true;
-            canvas.sortingOrder = 50;
-
-            if (GetComponent<GraphicRaycaster>() == null)
-            {
-                gameObject.AddComponent<GraphicRaycaster>();
-            }
         }
 
         /// <summary>
