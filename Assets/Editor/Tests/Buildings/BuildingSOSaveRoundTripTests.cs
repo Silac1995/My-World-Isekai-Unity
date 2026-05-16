@@ -69,4 +69,27 @@ namespace MWI.Tests.Buildings
             }
         }
     }
+
+    public class BuildingCommercialSOTests
+    {
+        [Test]
+        public void BuildingCommercialSO_default_BaseTreasury_is_zero()
+        {
+            var so = ScriptableObject.CreateInstance<BuildingCommercialSO>();
+            try { Assert.AreEqual(0, so.BaseTreasury); }
+            finally { Object.DestroyImmediate(so); }
+        }
+
+        [Test]
+        public void BuildingCommercialSO_is_assignable_to_BuildingSO_field()
+        {
+            var so = ScriptableObject.CreateInstance<BuildingCommercialSO>();
+            try
+            {
+                BuildingSO asBase = so;
+                Assert.IsNotNull(asBase, "Subclass must be substitutable for base (SOLID LSP — rule #11).");
+            }
+            finally { Object.DestroyImmediate(so); }
+        }
+    }
 }
